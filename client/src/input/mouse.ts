@@ -11,9 +11,10 @@
 // - Ctrl+right (no creature there) uses the top item at once in both modes (even on a
 //   ladder: a corpse lying there opens); Shift+right opens the menu in both (also on a
 //   creature).
-// Map, left button: Shift+left looks; a plain press walks on release or moves the top item
-// if dragged; a double click (menu mode) does the tile's default action, like the classic
-// right click.
+// Map, left button: Shift+left looks; a plain press walks there (at once on a tile without
+// an item to drag, else on release) or moves the top item if dragged; held (docs/17 MOV-3)
+// it walks toward the cursor; a double click (menu mode) does the tile's default action,
+// like the classic right click.
 import type { ControlsMode } from "../state/controls.ts";
 
 /** What a mouse button pressed on a map tile asks for. */
@@ -59,4 +60,84 @@ export function itemContext(
   if (mods.shiftKey) return "menu";
   if (mods.ctrlKey) return "use";
   return controls === "menu" ? "menu" : "use";
+}
+
+/**
+ * How long a plain left press on the map stays a click (docs/17 MOV-3): held longer, it
+ * walks toward the cursor, Diablo 2 style, tile by tile.
+ */
+export const HOLD_WALK_MS = 200;
+
+/** What a plain left press on a map tile may turn into (the Game decides, per tile). */
+export interface PressOptions {
+  /** Moving it DRAG_START_PX first drags the tile's top item (it has one to move). */
+  drag: boolean;
+  /**
+   * Held HOLD_WALK_MS (or moved that far first, when there is nothing to drag) it walks
+   * toward the cursor.
+   */
+  hold: boolean;
+}
+
+/** What the Game says of a plain left press on a tile (GameCanvasOptions.pressTile). */
+export interface PressAnswer extends PressOptions {
+  /** The walk there already started on the press: its release is no click. */
+  walked: boolean;
+}
+
+/** What a pointer event did to a left press: it became a drag or a hold. */
+export type PressChange = "drag" | "hold" | undefined;
+
+/**
+ * A plain left press on the map, by the rules of docs/17 MOV-3: released before
+ * HOLD_WALK_MS without moving `dragPx` it is a click; moved that far first, it drags the
+ * top item (`drag`) or, with nothing to drag, walks toward the cursor (`hold`); held still
+ * HOLD_WALK_MS it walks toward the cursor too, and moving it then only steers. Pure: the
+ * canvas feeds it the pointer's moves and the frame time.
+ */
+export class LeftPress {
+  private state: "down" | "drag" | "hold" | "up" = "down";
+
+  constructor(
+    private readonly at: number,
+    private readonly x: number,
+    private readonly y: number,
+    private readonly can: PressOptions,
+    private readonly dragPx: number,
+  ) {}
+
+  /** Walking toward the cursor: moves steer, the release ends it. */
+  get holding(): boolean {
+    return this.state === "hold";
+  }
+
+  /** The pointer moved to (x, y), in the units of `dragPx`. */
+  move(x: number, y: number): PressChange {
+    if (this.state !== "down") return undefined;
+    if (Math.hypot(x - this.x, y - this.y) < this.dragPx) return undefined;
+    if (this.can.drag) {
+      this.state = "drag";
+      return "drag";
+    }
+    if (this.can.hold) {
+      this.state = "hold";
+      return "hold";
+    }
+    return undefined;
+  }
+
+  /** A frame at `now`: the press became a hold once it was held still HOLD_WALK_MS. */
+  tick(now: number): PressChange {
+    if (this.state !== "down" || !this.can.hold || now - this.at < HOLD_WALK_MS) return undefined;
+    this.state = "hold";
+    return "hold";
+  }
+
+  /** The button went up: "click" (none of the above), "hold" (a hold ends) or undefined. */
+  up(): "click" | "hold" | undefined {
+    const was = this.state;
+    this.state = "up";
+    if (was === "down") return "click";
+    return was === "hold" ? "hold" : undefined;
+  }
 }

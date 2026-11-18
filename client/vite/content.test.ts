@@ -227,6 +227,9 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
     const fixed = Object.values(content.items).filter((d) => d.fixed);
     expect(fixed.length).toBeGreaterThan(0);
     expect(byId.get("backpack")?.fixed).toBeUndefined();
+    // The market board says so: the cursor offers its use (docs/17 MOV-7).
+    expect(byId.get("market_board")?.board).toBe(true);
+    expect(byId.get("oak_tree")?.board).toBeUndefined();
   });
 
   it("files every dialog option under one topic per NPC, with no conflicts", () => {

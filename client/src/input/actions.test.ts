@@ -1,13 +1,43 @@
 import { EquipmentSlot } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ItemRef } from "../state/items.ts";
-import { ItemPicker, itemActions, itemPrimary, sameLoc, sameRef, tileActions } from "./actions.ts";
+import {
+  ItemPicker,
+  defaultAction,
+  itemActions,
+  itemPrimary,
+  sameLoc,
+  sameRef,
+  tileActions,
+} from "./actions.ts";
 
 const onTile = (x: number, itemId = 10, stackIndex = 1): ItemRef => ({
   loc: { kind: "pos", pos: { x, y: 5, z: 7 } },
   itemId,
   stackIndex,
   count: 1,
+});
+
+describe("defaultAction (the text beside the cursor, docs/17 MOV-7)", () => {
+  it("is the menu's first button, but never just looking", () => {
+    expect(defaultAction({ creature: { npc: false, self: false }, known: true })).toBe("attack");
+    expect(defaultAction({ creature: { npc: true, self: false }, known: true })).toBe("talk");
+    expect(defaultAction({ known: true, door: true, climb: true })).toBe("climb");
+    expect(defaultAction({ item: { container: true, fixed: true }, known: true })).toBe("open");
+    expect(defaultAction({ item: { container: false, food: true }, known: true })).toBe("eat");
+    expect(defaultAction({ known: true, door: true })).toBe("use");
+    expect(defaultAction({ known: true })).toBeUndefined();
+    expect(defaultAction({ creature: { npc: false, self: true }, known: true })).toBeUndefined();
+    expect(defaultAction({ known: false })).toBeUndefined();
+  });
+
+  it("says nothing of a fixture that does nothing when used (a tree), but a station's use", () => {
+    expect(defaultAction({ item: { container: false, fixed: true }, known: true })).toBeUndefined();
+    expect(
+      defaultAction({ item: { container: false, fixed: true, usable: true }, known: true }),
+    ).toBe("use");
+    expect(defaultAction({ item: { container: false }, known: true })).toBe("use"); // loose
+  });
 });
 
 describe("tileActions", () => {

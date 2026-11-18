@@ -63,6 +63,8 @@ export interface ItemDef {
   requires?: { level: number; vocations: string[] };
   /** `pickupable: false`: a map fixture nobody carries (a station, a board). */
   fixed?: true;
+  /** `market_board: true` (T5.3): using it opens the global market. */
+  board?: true;
 }
 
 /** The `weapon` block of an item (data/items). */

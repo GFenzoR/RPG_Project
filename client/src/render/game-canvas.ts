@@ -4,9 +4,10 @@
 // no smoothing, no fractional scale; by default the largest that shows 15x11). It
 // draws the creatures interleaved with the item stacks (ground → items → creatures, row by
 // row), then effects and floating texts on top, then names and health bars. Input goes
-// back to the caller as tile clicks (left: walk) and creature clicks (right: attack). The
-// player zooms in or out by whole scales (render/zoom.ts: pinch, the +/- buttons,
-// Ctrl+wheel): the canvas stays cut to the map's box and centred on the own creature.
+// back to the caller as tile clicks (left: walk) and creature clicks (right: attack); the
+// left button held walks toward the cursor (docs/17 MOV-3). The player zooms in or out by
+// whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas stays cut
+// to the map's box and centred on the own creature.
 // docs/17: a click on a tall creature's head picks it (ART-2, render/creature-hits.ts); a
 // creature mostly hidden by a taller one in front is drawn again see-through; what stands on
 // a table or a crate is raised (ART-8); ambient particles drift over the map (ART-7, A13,
@@ -61,7 +62,10 @@ import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
-import { mapPress } from "../input/mouse.ts";
+import { LeftPress, mapPress } from "../input/mouse.ts";
+import type { PressAnswer } from "../input/mouse.ts";
+import type { WalkMark } from "../state/steering.ts";
+import { MARK_COLORS, MARK_SQUASH, markRing } from "./walk-mark.ts";
 import type { ControlsMode } from "../state/controls.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -120,6 +124,11 @@ export interface GameCanvas {
   tileToClient(x: number, y: number): { x: number; y: number };
   /** The tile of the own floor under page coordinates, or undefined outside the canvas. */
   clientToTile(clientX: number, clientY: number): Pos | undefined;
+  /**
+   * The point of the own floor under page coordinates, in fractional tiles (tile x spans
+   * [x, x + 1)), also outside the canvas (the mouse held on the map, docs/17 MOV-3).
+   */
+  worldAt(clientX: number, clientY: number): { x: number; y: number } | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
   /** Where any sprite of the atlas is (an NPC's portrait in its dialog), real art or not. */
@@ -169,6 +178,27 @@ export interface GameCanvasOptions {
   doorAt?(x: number, y: number, z: number): boolean;
   /** The left button was pressed on a tile and dragged (move its top item). */
   dragTile(x: number, y: number, z: number, e: PointerEvent): void;
+  /**
+   * docs/17 MOV-3, MOV-7: the left button went down on a tile (no Shift): whether a drag
+   * moves its item, whether holding it walks toward the cursor, and whether the walk there
+   * already started (then its release is no click). Without it: a click on release, a drag
+   * moves the item, no hold.
+   */
+  pressTile?(x: number, y: number, z: number): PressAnswer;
+  /**
+   * docs/17 MOV-3: the left button is held on the map: walk toward the cursor, at page
+   * coordinates (cx, cy); called again each time it moves.
+   */
+  holdAt?(cx: number, cy: number): void;
+  /** The held left button was let go (or the hold was lost): stop walking toward it. */
+  holdEnd?(): void;
+  /** docs/17 MOV-7: the last click-to-walk's mark (a ring on its tile for MARK_MS). */
+  walkMark?(): WalkMark | undefined;
+  /**
+   * docs/17 MOV-7, UI-5: the default action on a tile, shown beside a resting mouse
+   * ("" = nothing to show).
+   */
+  hoverText?(x: number, y: number, z: number): string;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -188,6 +218,12 @@ const TOUCH_MENU_MS = 1500;
 
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
+
+/** How often the text beside the cursor is asked again while the tile under it stays. */
+const HINT_REFRESH_MS = 250;
+
+/** Where the text beside the cursor goes, from the cursor (CSS px). */
+const HINT_OFFSET = { x: 14, y: 18 } as const;
 
 /** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
 const MARK_HALF = MARK_BOX.w / 2;
@@ -372,7 +408,10 @@ export async function createGameCanvas(
   const labels = new Container({ label: "labels" });
   // Caves are dark (ART-7): a light map over the map, under effects and names.
   const lights = new LightLayer(glowTexture());
-  app.stage.addChild(view.root, lights.view, effectLayer, labels, textLayer);
+  // docs/17 MOV-7: the ring of a click-to-walk, over the light (seen in a cave too).
+  const walkMark = new Graphics({ label: "walk mark" });
+  let walkMarkDrawn = false;
+  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, textLayer);
   /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
   let lightTile = 0;
   const addFireLight = (x: number, y: number, radius: number): void =>
@@ -798,6 +837,28 @@ export async function createGameCanvas(
     }
   };
 
+  /** The ring of the last click-to-walk while it lasts (docs/17 MOV-7). */
+  const drawWalkMark = (now: number, z: number): void => {
+    const mark = opts.walkMark?.();
+    const ring = mark && mark.pos.z === z ? markRing(now - mark.at) : undefined;
+    if (!mark || !ring) {
+      if (walkMarkDrawn) walkMark.clear();
+      walkMarkDrawn = false;
+      return;
+    }
+    const c = tileToScreen(cam, mark.pos.x + 0.5, mark.pos.y + 0.5, T);
+    const r = ring.radius * tilePixels(cam, T);
+    walkMark
+      .clear()
+      .ellipse(Math.round(c.x), Math.round(c.y), r, r * MARK_SQUASH)
+      .stroke({
+        width: Math.max(1, scale),
+        color: mark.reachable ? MARK_COLORS.reachable : MARK_COLORS.blocked,
+        alpha: ring.alpha,
+      });
+    walkMarkDrawn = true;
+  };
+
   // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
   // effects play their atlas frames; drawn while the world state keeps them (it expires them).
   const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer });
@@ -921,6 +982,7 @@ export async function createGameCanvas(
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
     world.expire(now);
+    drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale);
     if (isDark(self.pos.z)) {
       lightTile = tilePixels(cam, T);
@@ -939,8 +1001,12 @@ export async function createGameCanvas(
 
   app.ticker.add(() => {
     const now = performance.now();
+    // A left press held still long enough walks toward the cursor (docs/17 MOV-3), in
+    // time for this frame's step.
+    if (press?.lp.tick(now) === "hold") startHold(press);
     opts.frame(now);
     draw(now);
+    showHint(now);
   });
 
   const toCanvas = (clientX: number, clientY: number): { x: number; y: number } => {
@@ -1042,15 +1108,79 @@ export async function createGameCanvas(
     opts.longPressTile(touchAim.x, touchAim.y, touchAim.z, e.clientX, e.clientY);
   });
 
-  // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
-  // creature on the tile, or use the tile (a ladder climbs); Ctrl+right uses its top item
-  // even on a ladder. The rule is input/mouse.ts mapPress.
-  let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
+  // Left: a click walks (on a tile without an item to drag, from the press on), shift+click
+  // looks, a drag moves the top item, a press held walks toward the cursor (docs/17 MOV-3,
+  // input/mouse.ts LeftPress). Right: attack the creature on the tile, or use the tile (a
+  // ladder climbs); Ctrl+right uses its top item even on a ladder. The rule is
+  // input/mouse.ts mapPress.
+  interface Press {
+    x: number;
+    y: number;
+    z: number;
+    lp: LeftPress;
+    /** The walk there started on the press: the release is no click. */
+    walked: boolean;
+    pointerId: number;
+    /** Where the cursor is now (page coordinates). */
+    cx: number;
+    cy: number;
+  }
+  let press: Press | undefined;
+  /** Captures the pointer so the hold goes on outside the canvas, and walks toward it. */
+  const startHold = (p: Press): void => {
+    try {
+      canvas.setPointerCapture(p.pointerId);
+    } catch {
+      // The pointer is gone already (lostpointercapture or the next move ends the hold).
+    }
+    hideHint();
+    opts.holdAt?.(p.cx, p.cy);
+  };
+  const endHold = (): void => {
+    const p = press;
+    press = undefined;
+    if (p?.lp.holding) opts.holdEnd?.();
+  };
+
+  // docs/17 MOV-7, UI-5: the default action on the tile under a resting mouse, beside it.
+  // Its text is a CSS attr(): not text of the page (no locator or screen reader finds it).
+  const hint = document.createElement("div");
+  hint.className = "map-hint";
+  hint.setAttribute("aria-hidden", "true");
+  hint.hidden = true;
+  document.body.appendChild(hint);
+  let hover: { x: number; y: number } | undefined;
+  let hintTile: Pos | undefined;
+  let hintAt = Number.NEGATIVE_INFINITY;
+  const hideHint = (): void => {
+    hintTile = undefined;
+    if (!hint.hidden) hint.hidden = true;
+  };
+  const showHint = (now: number): void => {
+    if (!hover || press || !opts.hoverText) {
+      hideHint();
+      return;
+    }
+    const tile = tileUnder(hover.x, hover.y);
+    if (!tile) {
+      hideHint();
+      return;
+    }
+    if (hintTile && samePos(tile, hintTile) && now - hintAt < HINT_REFRESH_MS) return;
+    hintTile = tile;
+    hintAt = now;
+    const text = opts.hoverText(tile.x, tile.y, tile.z);
+    if (hint.dataset["text"] !== text) hint.dataset["text"] = text;
+    const hidden = text === "";
+    if (hint.hidden !== hidden) hint.hidden = hidden;
+  };
+
   canvas.addEventListener("pointerdown", (e) => {
     if (isTouchPointer(e.pointerType)) {
       touchDown(e);
       return;
     }
+    hideHint();
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
@@ -1069,19 +1199,46 @@ export async function createGameCanvas(
       opts.useTile(inDoor ? at.x : tile.x, inDoor ? at.y : tile.y, z, act.top);
     else if (act.kind === "menu") opts.menuTile?.(at.x, at.y, z, e.clientX, e.clientY);
     else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
-    else if (act.kind === "press") press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
+    else if (act.kind === "press") {
+      endHold(); // a press left over (its release went elsewhere)
+      const can = opts.pressTile?.(tile.x, tile.y, z) ?? { walked: false, drag: true, hold: false };
+      press = {
+        x: tile.x,
+        y: tile.y,
+        z,
+        lp: new LeftPress(performance.now(), p.x, p.y, can, DRAG_START_PX),
+        walked: can.walked,
+        pointerId: e.pointerId,
+        cx: e.clientX,
+        cy: e.clientY,
+      };
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
     if (isTouchPointer(e.pointerType)) {
       onGestures(gestures.move(e.pointerId, e.clientX, e.clientY, e.timeStamp), e);
       return;
     }
+    hover = { x: e.clientX, y: e.clientY };
+    hint.style.transform = `translate(${e.clientX + HINT_OFFSET.x}px, ${e.clientY + HINT_OFFSET.y}px)`;
     if (!press) return;
+    if ((e.buttons & 1) === 0) {
+      endHold(); // the button went up where no pointerup reached the canvas
+      return;
+    }
+    press.cx = e.clientX;
+    press.cy = e.clientY;
+    if (press.lp.holding) {
+      opts.holdAt?.(e.clientX, e.clientY);
+      return;
+    }
     const p = toCanvas(e.clientX, e.clientY);
-    if (Math.hypot(p.x - press.px, p.y - press.py) < DRAG_START_PX) return;
-    const from = press;
-    press = undefined;
-    opts.dragTile(from.x, from.y, from.z, e);
+    const change = press.lp.move(p.x, p.y);
+    if (change === "drag") {
+      const from = press;
+      press = undefined;
+      opts.dragTile(from.x, from.y, from.z, e);
+    } else if (change === "hold") startHold(press);
   });
   canvas.addEventListener("pointerup", (e) => {
     if (isTouchPointer(e.pointerType)) {
@@ -1090,11 +1247,21 @@ export async function createGameCanvas(
     }
     if (!press || e.button !== 0) return;
     const from = press;
+    const end = from.lp.up();
     press = undefined;
-    opts.clickTile(from.x, from.y, from.z);
+    if (end === "hold") opts.holdEnd?.();
+    else if (end === "click" && !from.walked) opts.clickTile(from.x, from.y, from.z);
+  });
+  // A hold captures the pointer: it ends with its pointerup, or here if the capture is lost
+  // (the window lost the focus, the canvas went away).
+  canvas.addEventListener("lostpointercapture", () => {
+    if (press?.lp.holding) endHold();
   });
   canvas.addEventListener("pointerleave", () => {
-    press = undefined;
+    hover = undefined;
+    hideHint();
+    // A hold has the pointer captured: it goes on outside the canvas.
+    if (press && !press.lp.holding) press = undefined;
   });
   // docs/17 UI-6: a double click does the tile's default action (the Game decides whether
   // it counts: only in the menu controls, and never right after a finger).
@@ -1140,6 +1307,11 @@ export async function createGameCanvas(
       const tile = screenToTile(cam, p.x, p.y, T);
       return { x: tile.x, y: tile.y, z: self.pos.z };
     },
+    worldAt(clientX, clientY) {
+      if (!world.self) return undefined;
+      const p = toCanvas(clientX, clientY);
+      return screenToWorld(cam, p.x, p.y, T);
+    },
     markIcon(mark) {
       const path = markPath(mark);
       return path ? atlas.icon(path) : undefined;
@@ -1161,6 +1333,7 @@ export async function createGameCanvas(
     },
     destroy() {
       clearTimeout(longPressTimer);
+      hint.remove();
       gestures.reset();
       observer.disconnect();
       window.removeEventListener("resize", resize);

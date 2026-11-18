@@ -181,6 +181,25 @@ export function stepChoices(d: Direction): Direction[] {
   return [d, h, v];
 }
 
+/** tan(22.5°): the edge between a straight sector and a diagonal one of the eight directions. */
+const OCTANT_EDGE = Math.SQRT2 - 1;
+
+/**
+ * The direction (of 8) toward a point `(dx, dy)` tiles away from the centre of the own tile,
+ * by its angle: each direction takes the 45° around it (docs/17 MOV-3, the mouse held on the
+ * map). UNSPECIFIED while the point is on the own tile (less than half a tile on both axes).
+ */
+export function towardDirection(dx: number, dy: number): Direction {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax < 0.5 && ay < 0.5) return Direction.UNSPECIFIED;
+  const h = dx > 0 ? Direction.EAST : Direction.WEST;
+  const v = dy > 0 ? Direction.SOUTH : Direction.NORTH;
+  if (ay <= ax * OCTANT_EDGE) return h;
+  if (ax <= ay * OCTANT_EDGE) return v;
+  return combine(h, v) ?? h;
+}
+
 /** The diagonal between two perpendicular directions (north + east = north-east), if any. */
 export function combine(a: Direction, b: Direction): Direction | undefined {
   const [ax, ay] = delta(a);

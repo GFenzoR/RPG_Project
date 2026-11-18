@@ -935,3 +935,11 @@ client.guild.rank_powers.vice: "Invites, kicks members and changes the message o
 client.guild.rank_powers.member: "Talks on the guild channel and may leave at any time."
 client.guild.invite_rank: "Only the leader and the vice leaders invite."
 client.guild.motd_rank: "Only the leader and the vice leaders change the message of the day."
+# docs/17 MOV-7, UI-5: the default action beside the mouse resting on the map.
+client.action.attack: "Attack {name}"
+client.action.talk: "Talk to {name}"
+client.action.use: "Use {name}"
+client.action.open: "Open {name}"
+client.action.use_with: "Use {name} with…"
+client.action.eat: "Eat {name}"
+client.action.equip: "Equip {name}"

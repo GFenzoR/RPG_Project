@@ -935,3 +935,11 @@ client.guild.rank_powers.vice: "Invita, expulsa miembros y cambia el mensaje del
 client.guild.rank_powers.member: "Habla por el canal del gremio y puede salir cuando quiera."
 client.guild.invite_rank: "Solo el líder y los vicelíderes invitan."
 client.guild.motd_rank: "Solo el líder y los vicelíderes cambian el mensaje del día."
+# docs/17 MOV-7, UI-5: the default action beside the mouse resting on the map.
+client.action.attack: "Atacar a {name}"
+client.action.talk: "Hablar con {name}"
+client.action.use: "Usar {name}"
+client.action.open: "Abrir {name}"
+client.action.use_with: "Usar {name} con…"
+client.action.eat: "Comer {name}"
+client.action.equip: "Equipar {name}"
