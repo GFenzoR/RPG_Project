@@ -493,6 +493,9 @@ func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	// An invisible caster appears before its heal flies from its tile (cast would end the
+	// invisibility after it, the old order of the attacks, A9).
+	w.reveal(ctx, p)
 	w.projectile(p.pos, o.pos, ElementHoly)
 	if o.health < o.maxHealth && p.party != nil && o.party == p.party {
 		w.contribute(ctx, p) // T3.3: healing a wounded member counts for shared experience

@@ -333,7 +333,8 @@ server/
   invisible es `goneTeleport`). Ningún cliente recibe un ataque de o a una criatura que
   no conoce: el `fakeClient` de los tests lleva la cuenta de las que conoce por lo que
   recibe (`follow`) y el harness falla el test si alguno recibió uno así, en todos los
-  tests de `session` (los clientes que entran con `join`/`joinChar` o mandan `input`).
+  tests de `session` (los clientes que entran con `join`, `joinChar` o `joinCmd`, o que
+  mandan `input`; un login a mano en un test pasa por `h.joinCmd`, no por `w.Join`).
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

@@ -221,11 +221,17 @@ func (h *harness) join(name string, pos *world.Pos) (*fakeClient, *session.Playe
 	return h.joinChar(c)
 }
 
+// joinCmd is w.Join with cl watched: a test that logs a client in by hand (a relogin,
+// a second session) goes through it, so the end-of-test check covers that client too.
+func (h *harness) joinCmd(c session.Character, cl *fakeClient) game.Command {
+	h.watch(cl)
+	return h.w.Join(c, cl)
+}
+
 func (h *harness) joinChar(c session.Character) (*fakeClient, *session.Player) {
 	h.t.Helper()
 	cl := &fakeClient{}
-	h.watch(cl)
-	h.sim.Command(h.w.Join(c, cl))
+	h.sim.Command(h.joinCmd(c, cl))
 	h.sim.Step()
 	p := h.w.PlayerByCharacter(c.ID)
 	if p == nil {

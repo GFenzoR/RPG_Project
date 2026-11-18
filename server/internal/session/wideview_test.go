@@ -255,7 +255,7 @@ func TestObserversShareOneMessage(t *testing.T) {
 		at   world.Pos
 	}{{"Ana", acl, pos(36, 30)}, {"Bob", bcl, pos(30, 36)}} {
 		nextChar++
-		h.sim.Command(h.w.Join(session.Character{ID: nextChar, AccountID: nextChar, Name: j.name, Vocation: "guardian",
+		h.sim.Command(h.joinCmd(session.Character{ID: nextChar, AccountID: nextChar, Name: j.name, Vocation: "guardian",
 			Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: j.at}, j.cl))
 	}
 	h.sim.Step()

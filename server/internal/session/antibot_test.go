@@ -259,7 +259,7 @@ func TestPresenceByGMAndRelogin(t *testing.T) {
 	a.sim.RunFor(time.Hour) // offline too
 	a.takeJobs()
 	c2 := &fakeClient{}
-	a.sim.Command(a.w.Join(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Player",
+	a.sim.Command(a.joinCmd(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Player",
 		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: pos(5, 5)}, c2))
 	a.sim.Step()
 	again := a.presence(c2)
@@ -447,7 +447,7 @@ func TestPresenceLeftoverCheckIsRandom(t *testing.T) {
 	a.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
 	a.sim.RunFor(8 * time.Hour)
 	c2 := &fakeClient{}
-	a.sim.Command(a.w.Join(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Leaver",
+	a.sim.Command(a.joinCmd(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Leaver",
 		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: pos(5, 5)}, c2))
 	a.sim.Step()
 	a.takeJobs()

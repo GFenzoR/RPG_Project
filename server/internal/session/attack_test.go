@@ -535,3 +535,38 @@ func TestAttackEventsInvisible(t *testing.T) {
 		}
 	})
 }
+
+// An invisible player who heals another appears to those around before the heal flies
+// from its tile, in the order of the attacks: nobody sees a projectile leave a tile that
+// looks empty.
+func TestHealOtherRevealsFirst(t *testing.T) {
+	h := condHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) {
+		c.Spells["mend"] = &content.Spell{ID: "mend", Words: "test mend", Vocations: []string{"guardian"}, Level: 1, Mana: 1,
+			Group: "healing", Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 10}, Range: 3}}}
+	})
+	cl, p := h.join("Ghost", at(10, 10))
+	_, f := h.join("Friend", at(12, 10))
+	ocl, _ := h.join("Watcher", at(14, 13))
+	h.castNow(cl, cast("veil"))
+	if !p.Invisible() {
+		t.Fatal("the veil did not hide the player")
+	}
+	ocl.take()
+	h.castNow(cl, castAt("mend", f.ID()))
+	if p.Invisible() {
+		t.Fatal("healing another did not end the invisibility")
+	}
+	evs := ocl.take()
+	appear, shot := -1, -1
+	for i, e := range evs {
+		if appear < 0 && e.GetCreatureAppear().GetCreature().GetId() == p.ID() {
+			appear = i
+		}
+		if shot < 0 && samePos(e.GetProjectile().GetFrom(), pos(10, 10)) {
+			shot = i
+		}
+	}
+	if appear < 0 || shot < 0 || appear > shot {
+		t.Errorf("the watcher got the caster at event %d and the heal at %d: %v", appear, shot, kinds(evs))
+	}
+}
