@@ -134,6 +134,26 @@ const WINDOWS: Record<string, unknown> = {
       battle: { open: true, dock: true, collapsed: true },
     },
   },
+  // docs/17 UI-5: the inventory alone in the dock, an item held over it.
+  inventory: {
+    v: 1,
+    order: ["inventory", "battle", "skills", "party"],
+    z: [],
+    win: {
+      inventory: { open: true, dock: true, collapsed: false },
+      battle: { open: true, dock: true, collapsed: true },
+    },
+  },
+  // The inventory floating over the map, wider (hud-fullscreen floats every window).
+  inventoryfloat: {
+    v: 1,
+    order: ["battle", "inventory", "skills", "party"],
+    z: ["inventory"],
+    win: {
+      battle: { open: true, dock: true, collapsed: false },
+      inventory: { open: true, dock: false, collapsed: false, x: 40, y: 24, w: 420 },
+    },
+  },
   options: {
     v: 1,
     order: ["battle", "inventory", "skills", "party"],
@@ -157,6 +177,15 @@ const WINDOWS: Record<string, unknown> = {
     },
   },
 };
+/** Scenes about the inventory: on a phone or a tablet they open its tab. */
+const INVENTORY_TAB = ["inventory", "tooltip", "tooltipcoin"];
+/** What the mouse is over in a scene's screenshot. */
+const HOVERS: Record<string, string> = {
+  tooltip: '[data-testid="slot-right_hand"] [data-tip-item]',
+  tooltipcoin: '[data-container][data-docked] [data-item="copper_coin"]',
+  // docs/17 UI-5: a slot that does not take the held sword tints red under the pointer.
+  inventory: '[data-testid="slot-left_hand"]',
+};
 const SCENES = [
   "game",
   "windows",
@@ -168,7 +197,10 @@ const SCENES = [
   "shop",
   "dialog18",
   "itemmenu",
+  "inventory",
+  "inventoryfloat",
   "tooltip",
+  "tooltipcoin",
   "guild",
   "danger",
   "death",
@@ -212,7 +244,15 @@ try {
         localStorage.clear();
         if (w) localStorage.setItem("rpg.windows", JSON.stringify(w));
       }, windows ?? null);
-      const sceneParam = ["windows", "options", "tooltip", "guild", "scale"].includes(scene)
+      const sceneParam = [
+        "windows",
+        "options",
+        "tooltip",
+        "tooltipcoin",
+        "inventoryfloat",
+        "guild",
+        "scale",
+      ].includes(scene)
         ? "game"
         : scene;
       // docs/17 UI-3: the interface at 125 % with the text at 115 %.
@@ -224,12 +264,22 @@ try {
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
-      if (scene === "tooltip") {
-        // docs/17 UI-6: the card of an item of the backpack, under a resting mouse.
-        const cell = page.locator("[data-tip-item]").nth(3);
-        if (await cell.isVisible()) {
-          await cell.hover();
-          await page.waitForTimeout(600);
+      // Phones and tablets: the inventory scenes show the inventory tab.
+      if (INVENTORY_TAB.includes(scene)) {
+        const tab = page.locator('[data-testid="panel-tabs"] [data-tab="inventory"]');
+        if (await tab.isVisible()) {
+          await tab.click();
+          await page.waitForTimeout(150);
+        }
+      }
+      // docs/17 UI-6: the card of an item under the mouse, at once (the Diablo II idea):
+      // the sword in the right hand (stats, a requirement), the coins in the backpack (gold).
+      const hover = HOVERS[scene];
+      if (hover) {
+        const el = page.locator(hover).first();
+        if (await el.isVisible()) {
+          await el.hover();
+          await page.waitForTimeout(150);
         }
       }
       await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });

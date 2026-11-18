@@ -3,8 +3,8 @@
 // server, Postgres or a character (docs/08). Only built with RPG_UI_PREVIEW=1
 // (vite.config.ts): it never ships.
 //
-//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|server|groundtip|danger|death|
-//     login|characters&lang=es|en[&ui=1.25&text=1.15]
+//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|
+//     danger|death|login|characters&lang=es|en[&ui=1.25&text=1.15]
 //
 // The windows' state comes from localStorage (rpg.windows), as in the game: the screenshot
 // script (e2e/ui-preview.ts) writes it for each scene.
@@ -36,6 +36,7 @@ import {
   withDeath,
   withDialog,
   withGroundTip,
+  withHeld,
   withItemMenu,
   withManyOptions,
   withServerWindows,
@@ -172,6 +173,7 @@ function Preview(props: { game: Game }): JSX.Element {
       x: Math.round(window.innerWidth * 0.35),
       y: Math.round(window.innerHeight * 0.55),
     });
+  if (scene === "inventory") s = withHeld(content, s);
   if (scene === "groundtip")
     s = withGroundTip(content, s, {
       x: Math.round(window.innerWidth * 0.3),

@@ -93,24 +93,25 @@ export function baseScene(content: ClientContent, now: number): Scene {
     [EquipmentSlot.FEET, item("tarred_boots")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
-  ui.containers = [
-    {
-      id: 1,
-      itemId: itemNumber(content, "backpack"),
-      capacity: 20,
-      hasParent: false,
-      items: [
-        item("rope"),
-        item("pickaxe"),
-        item("ship_biscuit", 7),
-        item("raw_fish", 12),
-        item("copper_coin", 86),
-        item("felling_axe"),
-        // A quest item: the gold ring of its colour (docs/17 UI-6).
-        item("smuggler_tally", 3),
-      ],
-    },
-  ];
+  // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
+  ui.backpack = {
+    id: 1,
+    itemId: itemNumber(content, "backpack"),
+    capacity: 20,
+    hasParent: false,
+    items: [
+      item("rope"),
+      item("pickaxe"),
+      item("ship_biscuit", 7),
+      item("raw_fish", 12),
+      item("copper_coin", 86),
+      item("felling_axe"),
+      // A quest item: the gold ring of its colour (docs/17 UI-6).
+      item("smuggler_tally", 3),
+      item("boarding_saber"),
+    ],
+  };
+  ui.containers = [];
   ui.battle = [
     creature(11, CreatureKind.MONSTER, "", "wolf", 64),
     creature(12, CreatureKind.MONSTER, "", "wolf", 100),
