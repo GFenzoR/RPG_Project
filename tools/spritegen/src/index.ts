@@ -83,6 +83,14 @@ export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|death)_(n|e|s|w)_[0-9]+$/;
 
 /**
+ * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other
+ * looks <sprite>/var_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
+ * <sprite>/wall_<mask> and a cast shadow <sprite>/shadow. Valid when data/ uses <sprite>.
+ */
+export const TILE_PART =
+  /^(.+)\/(?:var_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
+
+/**
  * Client interface icons, which the client finds by path (no data/ file names them):
  * ui/<group>/<id>, such as the PvP marks ui/marks/aggressor (client/src/render/marks.ts).
  */
@@ -106,10 +114,11 @@ export function checkPaths(root: string): string[] {
       !used.has(p) &&
       !OUTFIT_FRAME.test(p) &&
       !EFFECT_FRAME.test(p) &&
-      !used.has(ANIM_FRAME.exec(p)?.[1] ?? "")
+      !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
+      !used.has(TILE_PART.exec(p)?.[1] ?? "")
     )
       problems.push(
-        `${p}: no sprite field in data/ uses this path (and it is not an outfit, animation or effect frame)`,
+        `${p}: no sprite field in data/ uses this path (and it is not an outfit, animation, effect or tile art frame)`,
       );
   }
   const strips = new Map<string, number[]>();

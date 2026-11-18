@@ -13,14 +13,6 @@
 # not listed here. That includes the frames no data/ file names: outfit frames
 # (outfits/<id>/<dir>_<n>) and the combat and spell effect strips (effects/<name>/<n>).
 sprites:
-  # Ground
-  ground/grass: { source: vendor/dungeon-crawl/dngn/floor/grass/grass0.png }
-  ground/sand: { source: vendor/dungeon-crawl/dngn/floor/sand1.png }
-  ground/dirt: { source: vendor/dungeon-crawl/dngn/floor/dirt0.png }
-  ground/stone_floor: { source: vendor/dungeon-crawl/dngn/floor/cobble_blood1.png }
-  ground/water_shallow: { source: vendor/dungeon-crawl/dngn/water/shallow_water.png }
-  ground/water_shoal: { source: vendor/dungeon-crawl/dngn/water/shallow_water_disturbance.png }
-  ground/wet_sand: { source: vendor/dungeon-crawl/dngn/floor/grass/grass_full.png }
 
   # Items
   armor/patched_tunic: { source: vendor/dungeon-crawl/item/armour/robe1.png }
@@ -56,7 +48,6 @@ sprites:
   materials/spider_silk: { source: vendor/dungeon-crawl/item/weapon/ranged/throwing_net.png }
   materials/iron_ore: { source: vendor/dungeon-crawl/item/weapon/ranged/rock.png }
   materials/rough_stone: { source: vendor/dungeon-crawl/item/misc/misc_stone_inert.png }
-  decor/iron_vein: { source: vendor/dungeon-crawl/dngn/wall/orc5.png }
   materials/tarnished_locket: { source: vendor/dungeon-crawl/item/amulet/bone_gray.png }
   quest/bosun_logbook: { source: vendor/dungeon-crawl/item/book/dark_brown.png }
 
@@ -66,24 +57,18 @@ sprites:
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
   food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
   weapons/forged_shortsword: { source: vendor/dungeon-crawl/item/weapon/short_sword1.png }
-  decor/birch_tree: { source: vendor/dungeon-crawl/dngn/trees/tree2_yellow.png }
   decor/smelting_forge: { source: vendor/dungeon-crawl/dngn/altars/makhleb_flame1.png }
   decor/cooking_hearth: { source: vendor/dungeon-crawl/dngn/gateways/return_vestibule.png }
 
   # Items: Isla del Bosque (T3.6)
   quest/sealed_coffer: { source: vendor/dungeon-crawl/item/misc/misc_box.png }
-  decor/elm_tree: { source: vendor/dungeon-crawl/dngn/trees/mangrove3.png }
   shields/elmwood_shield: { source: vendor/dungeon-crawl/item/armour/shields/large_shield1.png }
   armor/stagleather_coat: { source: vendor/dungeon-crawl/item/armour/cloak1_leather.png }
   weapons/thornwood_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/urand_wyrmbane.png }
 
   # Creatures
-  decor/oak_tree: { source: vendor/dungeon-crawl/dngn/trees/mangrove1.png }
-  decor/bush: { source: vendor/dungeon-crawl/mon/fungi_plants/bush2.png }
   decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
   decor/stairs_up: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_up.png }
-  walls/stone_wall: { source: vendor/dungeon-crawl/dngn/wall/brick_gray0.png }
-  walls/rock_wall: { source: vendor/dungeon-crawl/dngn/wall/lab-rock0.png }
   decor/creature_remains: { source: vendor/dungeon-crawl/mon/undead/crawling_corpse.png }
   creatures/bilge_rat: { source: vendor/dungeon-crawl/mon/undead/zombies/zombie_rat.png }
   creatures/tide_crab: { source: vendor/dungeon-crawl/mon/animals/fire_crab.png }
@@ -104,7 +89,6 @@ sprites:
   quest/ember_root: { source: vendor/dungeon-crawl/item/misc/runes/rune_gehenna.png }
   quest/delver_chart: { source: vendor/dungeon-crawl/item/scroll/scroll-brown.png }
   quest/forge_seal: { source: vendor/dungeon-crawl/item/misc/misc_disc.png }
-  decor/ember_vein: { source: vendor/dungeon-crawl/dngn/wall/hell05.png }
   weapons/embersteel_sabre: { source: vendor/dungeon-crawl/item/weapon/falchion3.png }
   weapons/embersteel_axe: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_wrath_of_trog.png }
   weapons/wyrmfang_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_sword_of_cerebov.png }
@@ -115,10 +99,6 @@ sprites:
 
   # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine and the practice
   # gate of the sandbox island, shut and open.
-  doors/forge_gate: { source: vendor/dungeon-crawl/dngn/doors/runed_door.png }
-  doors/forge_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
-  doors/pruebas_gate: { source: vendor/dungeon-crawl/dngn/doors/closed_door.png }
-  doors/pruebas_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
 
   creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
   creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }
@@ -466,3 +446,23 @@ animations:
   creatures/bristleback_boar: { facing: left }
   creatures/bramble_stag: { facing: left }
   npcs/forge_echo: { flying: true }
+
+# Map tile art (docs/17 ART-3, ART-4, ART-7; tools/spritepack tiles.ts). Ground looks
+# (<sprite>/var_<n>), animation frames (<sprite>/frame_<n>), wall pieces (<sprite>/wall_<mask>)
+# and cast shadows (<sprite>/shadow) are found by name; this section adds what names cannot
+# say: ms and sync of an animation (world: in step; tile: a phase per tile; random: a rare
+# glint), a centred anchor (bc), joins_walls for a door set in a wall, and the share of
+# the main look (weight, default 0.7).
+tiles:
+  ground/water_shallow: { ms: 240, sync: world }
+  ground/water_shoal: { ms: 240, sync: world }
+  ground/lava: { ms: 280, sync: world }
+  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }
+  decor/elm_tree: { anchor: bc, ms: 850, sync: tile }
+  decor/birch_tree: { anchor: bc, ms: 700, sync: tile }
+  decor/pine_tree: { anchor: bc, ms: 900, sync: tile }
+  decor/bush: { ms: 750, sync: tile }
+  doors/pruebas_gate: { joins_walls: true }
+  doors/pruebas_gate_open: { joins_walls: true }
+  doors/forge_gate: { joins_walls: true }
+  doors/forge_gate_open: { joins_walls: true }
