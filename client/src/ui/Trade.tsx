@@ -13,6 +13,8 @@ interface Props {
   content: ClientContent;
   game: Game | undefined;
   ui: GameUi;
+  /** Inside a GameWindow (the desktop): the frame's title bar names and closes it. */
+  framed?: boolean | undefined;
 }
 
 /** A small item icon from the atlas (a two-letter box until the canvas is up). */
@@ -103,10 +105,16 @@ export function TradeWindow(props: Props): JSX.Element | null {
   if (!tr) return null;
   if (tr.invited) {
     return (
-      <section class="trade" data-testid="trade" aria-label={t("client.trade.title")}>
-        <header>
-          <h2>{t("client.trade.title")}</h2>
-        </header>
+      <section
+        class="trade"
+        data-testid={props.framed ? undefined : "trade"}
+        aria-label={t("client.trade.title")}
+      >
+        {!props.framed && (
+          <header>
+            <h2>{t("client.trade.title")}</h2>
+          </header>
+        )}
         <p data-testid="trade-invitation">{t("client.trade.invited", { name: tr.partnerName })}</p>
         <OfferList {...props} items={tr.partner} own={false} testid="trade-partner" />
         <div class="actions">
@@ -127,19 +135,25 @@ export function TradeWindow(props: Props): JSX.Element | null {
   const items = offerable(ui, props.content);
   const full = tr.own.length >= tr.maxItems;
   return (
-    <section class="trade" data-testid="trade" aria-label={t("client.trade.title")}>
-      <header>
-        <h2>{t("client.trade.title")}</h2>
-        <button
-          type="button"
-          class="close"
-          aria-label={t("client.trade.cancel")}
-          title={t("client.trade.cancel")}
-          onClick={() => game?.tradeCancel()}
-        >
-          ×
-        </button>
-      </header>
+    <section
+      class="trade"
+      data-testid={props.framed ? undefined : "trade"}
+      aria-label={t("client.trade.title")}
+    >
+      {!props.framed && (
+        <header>
+          <h2>{t("client.trade.title")}</h2>
+          <button
+            type="button"
+            class="close"
+            aria-label={t("client.trade.cancel")}
+            title={t("client.trade.cancel")}
+            onClick={() => game?.tradeCancel()}
+          >
+            ×
+          </button>
+        </header>
+      )}
       {!tr.negotiating && (
         <p class="waiting">{t("client.trade.waiting", { name: tr.partnerName })}</p>
       )}

@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  KEY_STEP,
+  MAX_CONTAINER_PLACES,
+  MIN_SIZE,
   WINDOW_IDS,
   WINDOW_KEYS,
   clampPlace,
+  clampSize,
+  containerKeys,
   closeWindow,
   collapseWindow,
   defaultWindows,
@@ -12,13 +17,21 @@ import {
   floatingWindows,
   focusWindow,
   loadWindows,
+  moveInDock,
   openWindow,
+  placeOf,
+  resetWindows,
+  resizeWindow,
   saveWindows,
+  serverWindows,
+  syncWindows,
   toggleWindow,
   topWindow,
   windowForHighlight,
   windowKey,
+  windowNudge,
 } from "./windows.ts";
+import type { NudgeContext } from "./windows.ts";
 
 describe("default windows", () => {
   it("opens the battle list and the equipment in the dock, as in Tibia", () => {
@@ -155,5 +168,166 @@ describe("keys", () => {
     expect(windowForHighlight("skills")).toBe("skills");
     expect(windowForHighlight("hotbar")).toBeUndefined();
     expect(windowForHighlight(undefined)).toBeUndefined();
+  });
+});
+
+describe("the server's windows and the containers (docs/17 UI-5)", () => {
+  it("follow the server: open what it opens, on top or in the dock, and close the rest", () => {
+    let s = syncWindows(defaultWindows(), ["dialog", "container-backpack"]);
+    expect(floatingWindows(s)).toEqual(["dialog"]);
+    // A container opens in the dock, under what is there.
+    expect(dockedWindows(s)).toEqual(["battle", "inventory", "container-backpack"]);
+    s = syncWindows(s, ["dialog", "shop", "container-backpack"]);
+    expect(topWindow(s)).toBe("shop");
+    expect(syncWindows(s, ["dialog", "shop", "container-backpack"])).toBe(s);
+    s = syncWindows(s, ["container-backpack"]);
+    expect(floatingWindows(s)).toEqual([]);
+    expect(placeOf(s, "dialog")).toMatchObject({ open: false, dock: false });
+    // Toolbar windows are never the server's to close.
+    expect(syncWindows(s, ["inventory", "container-backpack"]).win.inventory.open).toBe(true);
+  });
+
+  it("keep where the player put them, also closed and after a reload", () => {
+    let s = syncWindows(defaultWindows(), ["market", "container-bag"]);
+    s = floatWindow(s, "container-bag", 300, 120);
+    s = dockWindow(s, "market", "battle");
+    s = resizeWindow(s, "container-bag", 260.4, 180);
+    s = syncWindows(s, []);
+    const back = syncWindows(loadWindows(saveWindows(s)), ["market", "container-bag"]);
+    expect(placeOf(back, "container-bag")).toMatchObject({
+      open: true,
+      dock: false,
+      x: 300,
+      y: 120,
+      w: 260,
+      h: 180,
+    });
+    expect(dockedWindows(back)).toEqual(["market", "battle", "inventory"]);
+    // Saved closed: the server opens them again.
+    const loaded = loadWindows(saveWindows(back));
+    expect(placeOf(loaded, "market").open).toBe(false);
+  });
+
+  it("Escape closes a floating server window on top like any other", () => {
+    let s = openWindow(defaultWindows(), "guild");
+    s = syncWindows(s, ["market"]);
+    s = windowKey(s, { code: "Escape" }) ?? s;
+    expect(placeOf(s, "market").open).toBe(false);
+    expect(topWindow(s)).toBe("guild");
+  });
+
+  it("forget unknown keys and old containers past the limit", () => {
+    const others: Record<string, unknown> = { chat: { dock: true }, "container-x y": {} };
+    for (let i = 0; i < MAX_CONTAINER_PLACES + 5; i++) others[`container-bag${i}`] = { dock: true };
+    const s = loadWindows(JSON.stringify({ v: 2, win: {}, others }));
+    expect(Object.keys(s.others)).toHaveLength(MAX_CONTAINER_PLACES);
+    expect("chat" in s.others).toBe(false);
+  });
+
+  it("reset keeps the open ones open, at their default places", () => {
+    let s = syncWindows(defaultWindows(), ["dialog", "container-bag"]);
+    s = floatWindow(s, "container-bag", 10, 10);
+    s = resetWindows(s);
+    expect(placeOf(s, "container-bag")).toMatchObject({ open: true, dock: true });
+    expect(placeOf(s, "dialog").open).toBe(true);
+    expect(topWindow(s)).toBe("options");
+  });
+
+  it("give each open container a key that stays while it is open", () => {
+    let keys = containerKeys(new Map(), [
+      { id: 7, item: "backpack" },
+      { id: 9, item: "backpack" },
+      { id: 4, item: "bag" },
+    ]);
+    expect([...keys]).toEqual([
+      [7, "container-backpack"],
+      [9, "container-backpack-2"],
+      [4, "container-bag"],
+    ]);
+    // The first backpack closes: the second keeps its key (and its place).
+    keys = containerKeys(keys, [
+      { id: 9, item: "backpack" },
+      { id: 4, item: "bag" },
+    ]);
+    expect(keys.get(9)).toBe("container-backpack-2");
+    keys = containerKeys(keys, [
+      { id: 9, item: "backpack" },
+      { id: 12, item: "backpack" },
+    ]);
+    expect(keys.get(12)).toBe("container-backpack");
+  });
+});
+
+describe("size and keyboard (docs/17 UI-1, UI-5)", () => {
+  const area = { width: 1000, height: 700 };
+  const ctx = (x: number, y: number, width = 200, height = 150): NudgeContext => ({
+    rect: { x, y, width, height },
+    area,
+    floatAt: { x: 500, y: 40 },
+  });
+
+  it("never makes a window smaller than its minimum or larger than the area", () => {
+    expect(clampSize(10, 10, area)).toEqual({ width: MIN_SIZE.width, height: MIN_SIZE.height });
+    expect(clampSize(5000, 300.6, area)).toEqual({ width: 1000, height: 301 });
+  });
+
+  it("a docked window keeps the dock's width: only its height changes", () => {
+    const s = resizeWindow(defaultWindows(), "inventory", 400, 220);
+    expect(s.win.inventory).toMatchObject({ w: undefined, h: 220 });
+  });
+
+  it("moves a floating window with the arrows and resizes it with Shift", () => {
+    let s = floatWindow(defaultWindows(), "inventory", 100, 100);
+    s = windowNudge(s, "inventory", { key: "ArrowRight" }, ctx(100, 100)) ?? s;
+    expect(s.win.inventory).toMatchObject({ x: 100 + KEY_STEP, y: 100 });
+    s = windowNudge(s, "inventory", { key: "ArrowUp" }, ctx(0, 0)) ?? s;
+    expect(s.win.inventory.y).toBe(0); // never above the top
+    s = windowNudge(s, "inventory", { key: "ArrowDown", shiftKey: true }, ctx(0, 0)) ?? s;
+    expect(s.win.inventory).toMatchObject({ w: 200, h: 150 + KEY_STEP });
+    expect(windowNudge(s, "inventory", { key: "KeyW" }, ctx(0, 0))).toBeUndefined();
+    // Alt+Left is the browser's (back): never taken.
+    expect(windowNudge(s, "inventory", { key: "ArrowLeft", altKey: true }, ctx(0, 0))).toBe(
+      undefined,
+    );
+  });
+
+  it("moves a docked window up and down the dock, and Enter floats or docks it", () => {
+    let s = openWindow(defaultWindows(), "skills");
+    s = windowNudge(s, "skills", { key: "ArrowUp" }, ctx(0, 0)) ?? s;
+    expect(dockedWindows(s)).toEqual(["battle", "skills", "inventory"]);
+    s = moveInDock(s, "battle", 2);
+    expect(dockedWindows(s)).toEqual(["skills", "inventory", "battle"]);
+    expect(moveInDock(s, "battle", 1)).toBe(s);
+    s = windowNudge(s, "inventory", { key: "Enter" }, ctx(0, 0)) ?? s;
+    expect(s.win.inventory).toMatchObject({ dock: false, x: 500, y: 40 });
+    s = windowNudge(s, "inventory", { key: " " }, ctx(500, 40)) ?? s;
+    expect(dockedWindows(s)).toEqual(["skills", "battle", "inventory"]);
+  });
+});
+
+describe("which server windows show", () => {
+  const none = {
+    dialog: false,
+    shop: false,
+    station: false,
+    market: false,
+    house: false,
+    trade: false,
+  };
+  it("keeps the old precedence: the shop with its dialog, the rest wait for the dialog", () => {
+    expect(serverWindows({ ...none, shop: true }, [])).toEqual([]);
+    expect(serverWindows({ ...none, dialog: true, shop: true, station: true }, [])).toEqual([
+      "dialog",
+      "shop",
+    ]);
+    expect(serverWindows({ ...none, market: true, house: true, trade: true }, [])).toEqual([
+      "market",
+      "trade",
+    ]);
+    expect(serverWindows({ ...none, station: true, house: true }, ["container-bag"])).toEqual([
+      "crafting",
+      "house",
+      "container-bag",
+    ]);
   });
 });

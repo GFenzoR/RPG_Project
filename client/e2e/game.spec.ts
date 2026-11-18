@@ -336,8 +336,12 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "09b-item-tooltip");
   await page.mouse.move(1, 1);
   await expect(tooltip).toBeHidden();
-  const backpackWindow = inventory.locator('[data-container-item="backpack"]');
+  // docs/17 UI-5: on a desktop the backpack opens in a window of its own (docked under the
+  // equipment, with its own title bar), not inside the inventory window.
+  const backpackWindow = page.locator('[data-container-item="backpack"]');
   await expect(backpackWindow).toBeVisible();
+  await expect(page.getByTestId("window-container-backpack")).toBeVisible();
+  await expect(inventory.locator('[data-container-item="backpack"]')).toHaveCount(0);
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
   await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
   await expect(page.getByTestId("game-log")).toContainText("Ves: mochila (24 lugares)");
@@ -2554,9 +2558,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   for (const page of [a, b]) {
     const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
     await slot.locator("[data-item]").dblclick();
-    await expect(
-      page.getByTestId("inventory").locator('[data-container-item="backpack"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-container-item="backpack"]')).toBeVisible();
   }
 
   // Trade: the seller invites from the battle list, the buyer joins; fish for 50 coins.

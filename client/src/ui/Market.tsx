@@ -17,6 +17,8 @@ interface Props {
   content: ClientContent;
   game: Game | undefined;
   ui: GameUi;
+  /** Inside a GameWindow (the desktop): the frame's title bar names and closes it. */
+  framed?: boolean | undefined;
 }
 
 /** The value of a named field of a submitted form ("" when missing). */
@@ -95,22 +97,34 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
   const r = m.rules;
   const marketable = Object.entries(content.items).filter(([, d]) => d.marketable);
   return (
-    <section class="market" data-testid="market" aria-label={t("client.market.title")}>
-      <header>
-        <h2>{t("client.market.title")}</h2>
-        <span class="money" data-testid="market-money">
-          {t("client.shop.money", { money: m.money })}
-        </span>
-        <button
-          type="button"
-          class="close"
-          aria-label={t("client.market.close")}
-          title={t("client.market.close")}
-          onClick={() => game?.marketClose()}
-        >
-          ×
-        </button>
-      </header>
+    <section
+      class="market"
+      data-testid={props.framed ? undefined : "market"}
+      aria-label={t("client.market.title")}
+    >
+      {props.framed ? (
+        <p class="market-money">
+          <span class="money" data-testid="market-money">
+            {t("client.shop.money", { money: m.money })}
+          </span>
+        </p>
+      ) : (
+        <header>
+          <h2>{t("client.market.title")}</h2>
+          <span class="money" data-testid="market-money">
+            {t("client.shop.money", { money: m.money })}
+          </span>
+          <button
+            type="button"
+            class="close"
+            aria-label={t("client.market.close")}
+            title={t("client.market.close")}
+            onClick={() => game?.marketClose()}
+          >
+            ×
+          </button>
+        </header>
+      )}
 
       {m.readOnly && (
         <p class="read-only" data-testid="market-read-only" role="alert">

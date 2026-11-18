@@ -5,7 +5,7 @@
 // - tablets and phones (T5.6): the compact header and the side panel as tabs or a drawer.
 // It draws what the Game publishes (GameUi) and sends intents through it. App.tsx's
 // GameScreen creates the Game; the UI preview (src/preview) feeds this a made-up GameUi.
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren, JSX, Ref } from "preact";
 import { CreatureKind, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
@@ -16,11 +16,11 @@ import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { typingInField } from "../input/keyboard.ts";
 import { motionReduced } from "../state/ui-prefs.ts";
-import { InventoryPanel } from "./Inventory.tsx";
+import { ContainerView, InventoryPanel, itemName } from "./Inventory.tsx";
 import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
-import { DialogWindow } from "./Dialog.tsx";
-import { CraftingWindow } from "./Crafting.tsx";
+import { DialogBox, DialogWindow, ShopWindow } from "./Dialog.tsx";
+import { CraftingWindow, stationTitle } from "./Crafting.tsx";
 import { TradeWindow } from "./Trade.tsx";
 import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
@@ -42,28 +42,39 @@ import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
 import { ZoomButtons } from "./ZoomButtons.tsx";
 import { coarsePointer } from "../state/touch-prefs.ts";
 import { GameWindow } from "./GameWindow.tsx";
+import type { IconName } from "./icons.tsx";
+import { SplitPrompt } from "./SplitPrompt.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { Vitals, lowHealth } from "./Vitals.tsx";
 import {
   WINDOWS_STORAGE_KEY,
+  WINDOW_IDS,
   WINDOW_KEYS,
   WINDOW_TITLE,
   clampPlace,
+  clampSize,
   closeWindow,
   collapseWindow,
-  defaultWindows,
+  containerKeys,
   dockWindow,
   floatWindow,
   floatingWindows,
   focusWindow,
+  isToolWindow,
   loadWindows,
   openWindow,
+  placeOf,
+  resetWindows,
+  resizeWindow,
   saveWindows,
+  serverWindows,
+  syncWindows,
   toggleWindow,
   windowForHighlight,
   windowKey,
+  windowNudge,
 } from "./windows.ts";
-import type { WindowId, WindowsState } from "./windows.ts";
+import type { ContainerKey, WinKey, WindowId, WindowsState } from "./windows.ts";
 
 /** The pieces of the desktop Options window (main.tsx builds them: they outlive a game). */
 export interface GameSettings {
@@ -75,6 +86,15 @@ export interface GameSettings {
   controls: JSX.Element;
   reducedMotion: boolean;
   setReducedMotion(on: boolean): void;
+  /**
+   * docs/17 UI-3, UI-9: the interface scale, the text size and the camera shake (Options →
+   * Interface; main.tsx keeps them).
+   */
+  interfaceOptions?: JSX.Element | undefined;
+  /** The interface scale (1 = 100 %): the CSS zoom of the dock, the windows and the hotbar. */
+  uiScale?: number | undefined;
+  /** The camera shakes on a heavy hit (off with reduced motion whatever this says). */
+  cameraShake?: boolean | undefined;
 }
 
 /** What the screen shows before the first batch of the server. */
@@ -159,7 +179,51 @@ export function GameView(props: GameViewProps): JSX.Element {
   const tabbed = layout.panel !== "sidebar";
   // Desktop: the windows of the toolbar (docs/17 UI-5), remembered per device.
   const windowed = !tabbed;
-  const win = useWindows(props.storage);
+  const zoom = props.settings?.uiScale ?? 1;
+  // The server's windows close through it (docs/17 UI-5): the dialog, the station...
+  const serverClose = useRef<(id: WinKey) => void>(() => {});
+  const win = useWindows(props.storage, serverClose, zoom);
+  // One window per open container, with a key that stays while it is open (its place).
+  const containerKeysRef = useRef(new Map<number, ContainerKey>());
+  const ckeys = windowed
+    ? containerKeys(
+        containerKeysRef.current,
+        ui.containers.map((c) => ({ id: c.id, item: props.content.items[c.itemId]?.id ?? "item" })),
+      )
+    : new Map<number, ContainerKey>();
+  containerKeysRef.current = ckeys;
+  const serverOpen =
+    windowed && props.entered
+      ? serverWindows(
+          {
+            dialog: ui.dialog !== undefined,
+            shop: ui.shop !== undefined,
+            station: ui.station !== undefined,
+            market: ui.market !== undefined,
+            house: ui.house !== undefined,
+            trade: ui.trade !== undefined,
+          },
+          [...ckeys.values()],
+        )
+      : [];
+  const serverOpenKey = serverOpen.join("|");
+  // Before the paint: a window the server opened shows in the same frame.
+  useLayoutEffect(() => {
+    if (windowed) win.update((s) => syncWindows(s, serverOpen));
+  }, [serverOpenKey, windowed]);
+  serverClose.current = (id) => {
+    if (id === "dialog" || id === "shop") game?.closeDialog();
+    else if (id === "crafting") game?.closeStation();
+    else if (id === "market") game?.marketClose();
+    else if (id === "house") game?.houseClose();
+    else if (id === "trade") game?.tradeCancel();
+    else
+      for (const [cid, key] of ckeys)
+        if (key === id) {
+          game?.closeContainer(cid);
+          break;
+        }
+  };
   const [guildTab, setGuildTab] = useState<GuildTab>("summary");
   const [chatTab, setChatTab] = useState<"chat" | "log">("chat");
   const [logSeen, setLogSeen] = useState(0);
@@ -403,7 +467,9 @@ export function GameView(props: GameViewProps): JSX.Element {
     </section>
   );
   const party = <PartyPanel t={t} game={game} ui={ui} />;
-  const inventory = <InventoryPanel t={t} content={props.content} game={game} ui={ui} />;
+  const inventory = (
+    <InventoryPanel t={t} content={props.content} game={game} ui={ui} containers={!windowed} />
+  );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
   const chat = <ChatPanel t={t} content={props.content} game={game} ui={ui} />;
@@ -498,17 +564,23 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && ui.picked && (
         <PickBanner t={t} content={props.content} picked={ui.picked} game={game} />
       )}
-      {props.entered && (
+      {/* The server's windows: on the desktop they are GameWindows of their own (below);
+          on tablets and phones, sheets over the map. */}
+      {props.entered && !windowed && (
         <DialogWindow t={t} content={props.content} game={game} ui={ui} compact={tabbed} />
       )}
-      {props.entered && !ui.dialog && (
+      {props.entered && !windowed && !ui.dialog && (
         <CraftingWindow t={t} content={props.content} game={game} ui={ui} />
       )}
-      {props.entered && !ui.dialog && (
+      {props.entered && !windowed && !ui.dialog && (
         <MarketWindow t={t} content={props.content} game={game} ui={ui} />
       )}
-      {props.entered && !ui.dialog && !ui.market && <HouseWindow t={t} game={game} ui={ui} />}
-      {props.entered && <TradeWindow t={t} content={props.content} game={game} ui={ui} />}
+      {props.entered && !windowed && !ui.dialog && !ui.market && (
+        <HouseWindow t={t} game={game} ui={ui} />
+      )}
+      {props.entered && !windowed && (
+        <TradeWindow t={t} content={props.content} game={game} ui={ui} />
+      )}
       {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
@@ -526,12 +598,21 @@ export function GameView(props: GameViewProps): JSX.Element {
           insets={gameBox.current ? paddingInsets(getComputedStyle(gameBox.current)) : undefined}
         />
       )}
+      {ui.split && (
+        <SplitPrompt
+          key={`${ui.split.x},${ui.split.y}`}
+          t={t}
+          content={props.content}
+          split={ui.split}
+          game={game}
+        />
+      )}
       <ItemTooltip
         t={t}
         content={props.content}
         game={game}
         ui={ui}
-        blocked={ui.menu !== undefined || ui.picked !== undefined}
+        blocked={ui.menu !== undefined || ui.picked !== undefined || ui.split !== undefined}
       />
     </>
   );
@@ -540,7 +621,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   // the viewport, so switching between them (a window resized across a breakpoint) must
   // not replace that element.
   if (windowed) {
-    const body = (id: WindowId): JSX.Element => {
+    const toolBody = (id: WindowId): JSX.Element => {
       switch (id) {
         case "battle":
           return (
@@ -565,33 +646,138 @@ export function GameView(props: GameViewProps): JSX.Element {
           return <HelpBody t={t} />;
       }
     };
-    const frame = (id: WindowId, stack: number): JSX.Element => (
-      <GameWindow
-        key={id}
-        t={t}
-        id={id}
-        icon={windowIcon(id)}
-        title={t(WINDOW_TITLE[id])}
-        place={win.state.win[id]}
-        stack={stack}
-        closing={win.closing.has(id)}
-        testid={id === "options" ? "options" : `window-${id}`}
-        size={WINDOW_SIZE[id]}
-        badge={id === "guild" && ui.guildInvitations.length > 0}
-        onClose={() => win.close(id)}
-        onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
-        onFocus={() => win.update((s) => focusWindow(s, id))}
-        onGrab={(e, el) => win.grab(id, e, el)}
-      >
-        {body(id)}
-      </GameWindow>
-    );
-    const shownDocked = [...win.state.order].filter(
-      (id) => win.state.win[id].dock && (win.state.win[id].open || win.closing.has(id)),
-    );
+    const common = { t, content: props.content, game, ui, framed: true } as const;
+    /** What a window shows: its title, icon and body (undefined: nothing to show now). */
+    const windowOf = (id: WinKey): ShownWindow | undefined => {
+      if (isToolWindow(id))
+        return {
+          title: t(WINDOW_TITLE[id]),
+          icon: windowIcon(id),
+          body: toolBody(id),
+          testid: id === "options" ? "options" : `window-${id}`,
+          size: WINDOW_SIZE[id],
+        };
+      const d = ui.dialog;
+      switch (id) {
+        case "dialog":
+          return d
+            ? {
+                title: d.npcContentId ? t(`npc.${d.npcContentId}.name`) : t("client.dialog.title"),
+                icon: "talk",
+                // A new node starts with an empty filter.
+                body: <DialogBox key={`${d.id}:${d.text}`} {...common} dialog={d} />,
+                testid: "dialog",
+                closeLabel: t("client.dialog.close"),
+              }
+            : undefined;
+        case "shop":
+          return d && ui.shop
+            ? {
+                title: t("client.shop.title"),
+                icon: "market",
+                body: <ShopWindow key={ui.shop.dialogId} {...common} shop={ui.shop} />,
+                testid: "shop",
+                closable: false,
+              }
+            : undefined;
+        case "crafting":
+          return ui.station && !d
+            ? {
+                title: stationTitle(t, props.content, ui.station.itemId),
+                icon: "craft",
+                body: <CraftingWindow {...common} />,
+                testid: "crafting",
+                closeLabel: t("client.dialog.close"),
+              }
+            : undefined;
+        case "market":
+          return ui.market && !d
+            ? {
+                title: t("client.market.title"),
+                icon: "market",
+                body: <MarketWindow {...common} />,
+                testid: "market",
+                closeLabel: t("client.market.close"),
+              }
+            : undefined;
+        case "house":
+          return ui.house && !d && !ui.market
+            ? {
+                title: t(ui.house.name),
+                icon: "house",
+                body: <HouseWindow t={t} game={game} ui={ui} framed />,
+                testid: "house",
+                titleTestid: "house-name",
+                closeLabel: t("client.house.close"),
+              }
+            : undefined;
+        case "trade":
+          return ui.trade
+            ? {
+                title: t("client.trade.title"),
+                icon: "trade",
+                body: <TradeWindow {...common} />,
+                testid: "trade",
+                closeLabel: t("client.trade.cancel"),
+              }
+            : undefined;
+      }
+      let cid: number | undefined;
+      for (const [c, key] of ckeys) if (key === id) cid = c;
+      const c = ui.containers.find((o) => o.id === cid);
+      return c
+        ? {
+            title: itemName(props.content, t, c.itemId),
+            icon: "inventory",
+            // In .inventory: the slots and items look as under the equipment.
+            body: (
+              <div class="inventory container-window">
+                <ContainerView {...common} container={c} />
+              </div>
+            ),
+            size: "narrow",
+            closeLabel: t("client.inventory.close"),
+          }
+        : undefined;
+    };
+    const frame = (id: WinKey, stack: number): JSX.Element | null => {
+      const w = windowOf(id);
+      if (!w) return null; // the server closed it: the next sync closes the window too
+      return (
+        <GameWindow
+          key={id}
+          t={t}
+          id={id}
+          icon={w.icon}
+          title={w.title}
+          place={placeOf(win.state, id)}
+          stack={stack}
+          zoom={zoom}
+          closing={win.closing.has(id)}
+          testid={w.testid ?? `window-${id}`}
+          titleTestid={w.titleTestid}
+          size={w.size}
+          closable={w.closable}
+          closeLabel={w.closeLabel}
+          badge={id === "guild" && ui.guildInvitations.length > 0}
+          onClose={() => win.close(id)}
+          onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
+          onFocus={() => win.update((s) => focusWindow(s, id))}
+          onGrab={(e, el) => win.grab(id, e, el)}
+          onResize={(e, el) => win.resize(id, e, el)}
+          onMoveKey={(e, el) => win.moveKey(id, e, el)}
+        >
+          {w.body}
+        </GameWindow>
+      );
+    };
+    const shownDocked = win.state.order.filter((id) => {
+      const p = placeOf(win.state, id);
+      return p.dock && (p.open || win.closing.has(id));
+    });
     const shownFloating = floatingWindows(win.state);
     for (const id of win.closing)
-      if (!win.state.win[id].dock && !shownFloating.includes(id)) shownFloating.push(id);
+      if (!placeOf(win.state, id).dock && !shownFloating.includes(id)) shownFloating.push(id);
     return (
       <div
         ref={gameBox}
@@ -604,7 +790,12 @@ export function GameView(props: GameViewProps): JSX.Element {
         data-pad={props.touchPad ? "" : undefined}
         data-touch={touch ? "" : undefined}
       >
-        <div class="game-body" key="body" ref={win.bodyRef}>
+        <div
+          class="game-body"
+          key="body"
+          ref={win.bodyRef}
+          data-shop={ui.dialog && ui.shop ? "" : undefined}
+        >
           <div class="viewport" key="viewport" ref={props.host} data-low={low ? "" : undefined}>
             {overMap}
           </div>
@@ -751,6 +942,19 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
 }
 
+/** What a window shows (GameView windowOf): its title bar and its body. */
+interface ShownWindow {
+  title: string;
+  icon: IconName;
+  body: JSX.Element;
+  testid?: string | undefined;
+  titleTestid?: string | undefined;
+  size?: "narrow" | "normal" | "wide" | undefined;
+  closable?: boolean | undefined;
+  /** The close button's name when it is not "Close <title>" (what it did before). */
+  closeLabel?: string | undefined;
+}
+
 /** Width of each floating window (client.css .gwin[data-size]). */
 const WINDOW_SIZE: Record<WindowId, "narrow" | "normal" | "wide"> = {
   battle: "narrow",
@@ -774,32 +978,51 @@ const CLOSE_MS = 100;
 interface WindowsApi {
   state: WindowsState;
   /** Windows fading out: still drawn, already closed for the toolbar. */
-  closing: ReadonlySet<WindowId>;
+  closing: ReadonlySet<WinKey>;
   update(f: (s: WindowsState) => WindowsState): void;
   toggle(id: WindowId): void;
-  close(id: WindowId): void;
+  /** Closes a window: a toolbar window fades out, a server's asks the server. */
+  close(id: WinKey): void;
   key(e: KeyboardEvent): void;
   reset(): void;
-  grab(id: WindowId, e: PointerEvent, el: HTMLElement): void;
+  grab(id: WinKey, e: PointerEvent, el: HTMLElement): void;
+  /** The resize grip: the window follows the pointer's corner (a docked one, its height). */
+  resize(id: WinKey, e: PointerEvent, el: HTMLElement): void;
+  /** A key on the move handle (ui/windows.ts windowNudge): true when it was the window's. */
+  moveKey(id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean;
   /** .game-body: floating windows are placed in it. */
   bodyRef: Ref<HTMLDivElement>;
   /** The dock: a window dropped on it docks. */
   dockRef: Ref<HTMLElement>;
 }
 
+/** Every window the state knows (the toolbar's, the server's, the containers'). */
+const knownWindows = (s: WindowsState): WinKey[] => [
+  ...WINDOW_IDS,
+  ...(Object.keys(s.others) as WinKey[]),
+];
+
 /**
- * The desktop windows: their state (ui/windows.ts) saved on every change, the close fade
- * and dragging a title bar (a floating window follows the pointer; a docked one leaves a
- * ghost; dropped on the dock it docks before the window under the pointer).
+ * The desktop windows: their state (ui/windows.ts) saved on every change, the close fade,
+ * dragging a title bar (a floating window follows the pointer; a docked one leaves a
+ * ghost; dropped on the dock it docks before the window under the pointer), the resize grip
+ * and the keys of the move handle. Positions and sizes are screen px; with the interface
+ * scale (`zoom`) a window's own lengths are those divided by it.
  */
-function useWindows(storage: Storage | undefined): WindowsApi {
+function useWindows(
+  storage: Storage | undefined,
+  serverClose: { current: (id: WinKey) => void },
+  zoom: number,
+): WindowsApi {
   const [state, setState] = useState<WindowsState>(() =>
     loadWindows(readStorage(storage, WINDOWS_STORAGE_KEY)),
   );
-  const [closing, setClosing] = useState<ReadonlySet<WindowId>>(() => new Set());
-  const timers = useRef(new Map<WindowId, ReturnType<typeof setTimeout>>());
+  const [closing, setClosing] = useState<ReadonlySet<WinKey>>(() => new Set());
+  const timers = useRef(new Map<WinKey, ReturnType<typeof setTimeout>>());
   const stateRef = useRef(state);
   stateRef.current = state;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom > 0 ? zoom : 1;
   const bodyRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -812,7 +1035,7 @@ function useWindows(storage: Storage | undefined): WindowsApi {
   useEffect(() => () => timers.current.forEach((t) => clearTimeout(t)), []);
 
   const update = (f: (s: WindowsState) => WindowsState): void => setState((s) => f(s));
-  const stopClosing = (id: WindowId): void => {
+  const stopClosing = (id: WinKey): void => {
     const timer = timers.current.get(id);
     if (timer === undefined) return;
     clearTimeout(timer);
@@ -823,7 +1046,12 @@ function useWindows(storage: Storage | undefined): WindowsApi {
       return n;
     });
   };
-  const close = (id: WindowId): void => {
+  const close = (id: WinKey): void => {
+    // The server's windows close when the server says so (syncWindows).
+    if (!isToolWindow(id)) {
+      serverClose.current(id);
+      return;
+    }
     if (!stateRef.current.win[id].open || timers.current.has(id)) return;
     if (motionReduced(document.documentElement)) {
       update((s) => closeWindow(s, id));
@@ -854,11 +1082,9 @@ function useWindows(storage: Storage | undefined): WindowsApi {
   const key = (e: KeyboardEvent): void => {
     const next = windowKey(stateRef.current, e);
     if (!next) return;
-    // Closing goes through the fade; opening is immediate.
+    // Closing goes through the fade (or the server); opening is immediate.
     const s = stateRef.current;
-    const closed = (Object.keys(s.win) as WindowId[]).find(
-      (id) => s.win[id].open && !next.win[id].open,
-    );
+    const closed = knownWindows(s).find((id) => placeOf(s, id).open && !placeOf(next, id).open);
     if (closed) close(closed);
     else update(() => next);
   };
@@ -866,22 +1092,22 @@ function useWindows(storage: Storage | undefined): WindowsApi {
     timers.current.forEach((t) => clearTimeout(t));
     timers.current.clear();
     setClosing(new Set());
-    // Keep the options open: the reset button is in it.
-    update(() => openWindow(defaultWindows(), "options"));
+    // Keep the options open (the reset button is in it) and the server's windows open.
+    update((s) => resetWindows(s));
   };
 
-  const grab = (id: WindowId, e: PointerEvent, el: HTMLElement): void => {
+  const grab = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
     const bodyEl = bodyRef.current;
     if (e.button !== 0 || !bodyEl) return;
     e.preventDefault();
-    const docked = stateRef.current.win[id].dock;
+    const docked = placeOf(stateRef.current, id).dock;
     const area = bodyEl.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     const off = { x: e.clientX - r.left, y: e.clientY - r.top };
     const size = { width: r.width, height: Math.min(r.height, 160) };
     let moving: HTMLElement | undefined;
     let place = { x: r.left - area.left, y: r.top - area.top };
-    let before: WindowId | undefined;
+    let before: WinKey | undefined;
     let overDock = false;
     const marks = (): HTMLElement[] =>
       [...(dockRef.current?.querySelectorAll<HTMLElement>(".dock-stack > .gwin") ?? [])].filter(
@@ -907,8 +1133,10 @@ function useWindows(storage: Storage | undefined): WindowsApi {
         document.body.classList.add("dragging-window");
       }
       place = clampPlace(ev.clientX - area.left - off.x, ev.clientY - area.top - off.y, size, area);
-      moving.style.left = `${place.x}px`;
-      moving.style.top = `${place.y}px`;
+      // The ghost is not scaled; a floating window is (its own px are screen px / zoom).
+      const k = moving === el ? zoomRef.current : 1;
+      moving.style.left = `${place.x / k}px`;
+      moving.style.top = `${place.y / k}px`;
       const dock = dockRef.current?.getBoundingClientRect();
       overDock =
         dock !== undefined &&
@@ -923,7 +1151,7 @@ function useWindows(storage: Storage | undefined): WindowsApi {
           const b = w.getBoundingClientRect();
           return ev.clientY < b.top + b.height / 2;
         });
-        before = next?.dataset["window"] as WindowId | undefined;
+        before = next?.dataset["window"] as WinKey | undefined;
         if (next) next.dataset["dropBefore"] = "";
         else {
           const stack = dockRef.current?.querySelector<HTMLElement>(".dock-stack");
@@ -952,7 +1180,81 @@ function useWindows(storage: Storage | undefined): WindowsApi {
     window.addEventListener("pointercancel", onUp);
   };
 
-  return { state, closing, update, toggle, close, key, reset, grab, bodyRef, dockRef };
+  const resize = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
+    const bodyEl = bodyRef.current;
+    if (e.button !== 0 || !bodyEl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const docked = placeOf(stateRef.current, id).dock;
+    const area = bodyEl.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    // As far as the area goes from where the window starts.
+    const room = { width: area.right - r.left, height: area.bottom - r.top };
+    let size = { width: r.width, height: r.height };
+    let moved = false;
+    const onMove = (ev: PointerEvent): void => {
+      size = clampSize(r.width + ev.clientX - e.clientX, r.height + ev.clientY - e.clientY, room);
+      const k = zoomRef.current;
+      if (!docked) el.style.width = `${size.width / k}px`;
+      el.style.height = `${size.height / k}px`;
+      el.style.maxHeight = "none";
+      if (!moved) document.body.classList.add("resizing-window");
+      moved = true;
+    };
+    const onUp = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (!moved) return;
+      document.body.classList.remove("resizing-window");
+      update((s) => resizeWindow(s, id, size.width, size.height));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  const moveKey = (id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean => {
+    const bodyEl = bodyRef.current;
+    if (!bodyEl) return false;
+    const area = bodyEl.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const dock = dockRef.current?.getBoundingClientRect();
+    // Leaving the dock from the keyboard, it floats just left of the dock, at its height.
+    const floatAt = clampPlace(
+      (dock ? dock.left : area.right) - area.left - r.width - 16,
+      r.top - area.top,
+      r,
+      area,
+    );
+    const next = windowNudge(stateRef.current, id, e, {
+      rect: { x: r.left - area.left, y: r.top - area.top, width: r.width, height: r.height },
+      area: { width: area.width, height: area.height },
+      floatAt,
+    });
+    if (!next) return false;
+    update(() => next);
+    // Docking or floating moves the window to another parent: keep the focus on its handle.
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`.gwin[data-window="${id}"] .gwin-move`)?.focus(),
+    );
+    return true;
+  };
+
+  return {
+    state,
+    closing,
+    update,
+    toggle,
+    close,
+    key,
+    reset,
+    grab,
+    resize,
+    moveKey,
+    bodyRef,
+    dockRef,
+  };
 }
 
 function readStorage(storage: Storage | undefined, key: string): string | null {
@@ -1060,6 +1362,7 @@ function OptionsBody(props: {
               />
               {t("client.options.reduced_motion")}
             </label>
+            {settings.interfaceOptions}
             <button type="button" data-testid="windows-reset" onClick={() => props.onReset()}>
               {t("client.options.reset_windows")}
             </button>

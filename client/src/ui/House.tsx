@@ -14,6 +14,8 @@ interface Props {
   t: Translate;
   game: Game | undefined;
   ui: GameUi;
+  /** Inside a GameWindow (the desktop): the frame's title bar names and closes it. */
+  framed?: boolean | undefined;
 }
 
 export function HouseWindow(props: Props & { now?: number }): JSX.Element | null {
@@ -23,19 +25,26 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
   const now = props.now ?? Date.now();
   const can = houseActions(h);
   return (
-    <section class="house" data-testid="house" aria-label={t("client.house.title")}>
-      <header>
-        <h2 data-testid="house-name">{t(h.name)}</h2>
-        <button
-          type="button"
-          class="close"
-          aria-label={t("client.house.close")}
-          title={t("client.house.close")}
-          onClick={() => game?.houseClose()}
-        >
-          ×
-        </button>
-      </header>
+    <section
+      class="house"
+      data-testid={props.framed ? undefined : "house"}
+      aria-label={t("client.house.title")}
+    >
+      {/* Framed, the window's title is the house's name (data-testid house-name). */}
+      {!props.framed && (
+        <header>
+          <h2 data-testid="house-name">{t(h.name)}</h2>
+          <button
+            type="button"
+            class="close"
+            aria-label={t("client.house.close")}
+            title={t("client.house.close")}
+            onClick={() => game?.houseClose()}
+          >
+            ×
+          </button>
+        </header>
+      )}
       {h.readOnly && (
         <p class="read-only" data-testid="house-read-only" role="alert">
           {t("client.house.read_only")}

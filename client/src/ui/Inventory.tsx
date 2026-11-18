@@ -1,6 +1,9 @@
 // Inventory (T1.8): the equipment slots and the open container windows. Items are
 // dragged with the pointer (Game.pressItem) and dropped on a slot, a container cell or
-// the map; shift+click looks at an item. Since docs/17 UI-6 a right click opens its menu
+// the map; shift+click looks at an item and shift+drag moves part of a stack (it asks how
+// many where it is dropped). On the desktop each container is a window of its own
+// (docs/17 UI-5: ContainerView in a GameWindow); on tablets and phones they stay under
+// the equipment. An empty slot shows what it takes (ui/slots/<slot>, own pixel art). Since docs/17 UI-6 a right click opens its menu
 // with its card (or uses it, in the classic controls: Game.itemContextMenu), a double
 // click does its default action (open, use with, eat, equip, use) and hovering shows its
 // card (ui/ItemTooltip.tsx reads data-tip-item). The server validates every move: this UI
@@ -13,7 +16,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { sameRef } from "../input/actions.ts";
 import { formatOz } from "../state/items.ts";
 import type { ItemRef } from "../state/items.ts";
-import type { ItemView } from "../state/world.ts";
+import type { ContainerState, ItemView } from "../state/world.ts";
 
 /** Equipment grid, row by row (undefined = empty cell). */
 const LAYOUT: (EquipmentSlot | undefined)[] = [
@@ -31,7 +34,7 @@ const LAYOUT: (EquipmentSlot | undefined)[] = [
   undefined,
 ];
 
-const SLOT_KEYS: Record<number, string> = {
+export const SLOT_KEYS: Record<number, string> = {
   [EquipmentSlot.HEAD]: "head",
   [EquipmentSlot.NECK]: "neck",
   [EquipmentSlot.BACKPACK]: "backpack",
@@ -49,9 +52,12 @@ interface Props {
   content: ClientContent;
   game: Game | undefined;
   ui: GameUi;
+  /** The open containers under the equipment (tablets and phones); false on the desktop,
+   * where each is a window of its own. */
+  containers?: boolean | undefined;
 }
 
-export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
+export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX.Element {
   return (
     <section
       class="inventory"
@@ -72,6 +78,7 @@ export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
               data-slot={slot}
               data-testid={`slot-${SLOT_KEYS[slot] ?? slot}`}
               title={t(`client.inventory.slot.${SLOT_KEYS[slot] ?? ""}`)}
+              style={ui.inventory.has(slot) ? undefined : emptySlotStyle(game, slot)}
             >
               <ItemCell
                 t={t}
@@ -98,50 +105,89 @@ export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
           })}
         </p>
       )}
-      {ui.containers.map((c) => (
-        <div
-          key={c.id}
-          class="container"
-          data-testid="container"
-          data-container-item={content.items[c.itemId]?.id ?? ""}
-        >
-          <header>
-            <span>{itemName(content, t, c.itemId)}</span>
-            <button
-              type="button"
-              aria-label={t("client.inventory.close")}
-              title={t("client.inventory.close")}
-              onClick={() => game?.closeContainer(c.id)}
-            >
-              ×
-            </button>
-          </header>
-          <div class="cells">
-            {Array.from({ length: Math.max(c.capacity, c.items.length) }, (_, i) => (
-              <div key={i} class="slot" data-drop="container" data-container={c.id} data-index={i}>
-                <ItemCell
-                  t={t}
-                  content={content}
-                  game={game}
-                  item={c.items[i]}
-                  picked={ui.picked}
-                  itemRef={(it) => ({
-                    loc: { kind: "container", id: c.id, index: i },
-                    itemId: it.itemId,
-                    stackIndex: i,
-                    count: it.count,
-                  })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+      {containers !== false &&
+        ui.containers.map((c) => (
+          <ContainerView key={c.id} t={t} content={content} game={game} ui={ui} container={c} />
+        ))}
     </section>
   );
 }
 
-function itemName(content: ClientContent, t: Translate, itemId: number): string {
+/**
+ * One open container: its cells (as many as it holds, or its items if more). With `framed`
+ * it is the body of its own GameWindow (the desktop), whose title bar names and closes it.
+ */
+export function ContainerView(props: {
+  t: Translate;
+  content: ClientContent;
+  game: Game | undefined;
+  ui: GameUi;
+  container: ContainerState;
+  framed?: boolean | undefined;
+}): JSX.Element {
+  const { t, content, game, ui, container: c } = props;
+  return (
+    <div
+      class={props.framed ? "container framed" : "container"}
+      data-testid="container"
+      data-container-item={content.items[c.itemId]?.id ?? ""}
+      data-container={c.id}
+    >
+      {!props.framed && (
+        <header>
+          <span>{itemName(content, t, c.itemId)}</span>
+          <button
+            type="button"
+            aria-label={t("client.inventory.close")}
+            title={t("client.inventory.close")}
+            onClick={() => game?.closeContainer(c.id)}
+          >
+            ×
+          </button>
+        </header>
+      )}
+      <div class="cells">
+        {Array.from({ length: Math.max(c.capacity, c.items.length) }, (_, i) => (
+          <div key={i} class="slot" data-drop="container" data-container={c.id} data-index={i}>
+            <ItemCell
+              t={t}
+              content={content}
+              game={game}
+              item={c.items[i]}
+              picked={ui.picked}
+              itemRef={(it) => ({
+                loc: { kind: "container", id: c.id, index: i },
+                itemId: it.itemId,
+                stackIndex: i,
+                count: it.count,
+              })}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The faded silhouette of what an empty equipment slot takes (docs/17 UI-5): the atlas
+ * sprite ui/slots/<slot> as the slot's background, 1 CSS px per sprite px like the item
+ * icons; nothing until the atlas is up (or without the sprite).
+ */
+export function emptySlotStyle(
+  game: Pick<Game, "spriteIcon"> | undefined,
+  slot: EquipmentSlot,
+): JSX.CSSProperties | undefined {
+  const key = SLOT_KEYS[slot];
+  const icon = key ? game?.spriteIcon(`ui/slots/${key}`) : undefined;
+  if (!icon || icon.width !== 32 || icon.height !== 32) return undefined;
+  return {
+    "--slot-icon": `url(${icon.url})`,
+    "--slot-icon-pos": `-${icon.x}px -${icon.y}px`,
+  };
+}
+
+export function itemName(content: ClientContent, t: Translate, itemId: number): string {
   const def = content.items[itemId];
   return def ? t(`item.${def.id}.name`) : String(itemId);
 }
@@ -178,6 +224,7 @@ function ItemCell(props: {
         item.count > 1 ? props.t("client.log.item_count", { count: item.count, name }) : name
       }
       data-item={props.content.items[item.itemId]?.id ?? item.itemId}
+      data-quest={props.content.items[item.itemId]?.quest ? "" : undefined}
       // docs/17 UI-6: the card on hover and on keyboard focus (ui/ItemTooltip.tsx).
       data-tip-item={item.itemId}
       data-tip-count={item.count}
@@ -185,8 +232,8 @@ function ItemCell(props: {
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
-        if (e.shiftKey) game?.lookAt(ref);
-        else game?.pressItem(ref, e);
+        // Shift: a click looks, a drag moves part of a stack (Game.pressItem).
+        game?.pressItem(ref, e);
       }}
       onDblClick={(e) => {
         if (e.shiftKey) return;
