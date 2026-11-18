@@ -733,7 +733,7 @@ export async function createGameCanvas(
       }
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now);
-    for (const id of [...animStates.keys()]) if (!seen.has(id)) animStates.delete(id);
+    for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
     world.expire(now);
     effects.draw(now, self.pos.z, cam, scale);
