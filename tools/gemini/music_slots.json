@@ -1,0 +1,42 @@
+{
+  "about": "Music slots asked through music_queue.py. The prompt of each ask is music_style.prompt(slot, n): the slot's text, the house style and, from the second take on, the variation line. Our own content only: never a game, composer or work (prompt_guard.py). First used by the main session on 2026-11-17 (14 tracks, build/music-gemini/).",
+  "house": "Instrumental only: no vocals, no lyrics, no spoken words (a wordless choir pad is fine where asked). Original composition for a dark medieval fantasy role-playing game set on cursed islands. Acoustic, organic instruments with a dusty, reverb-drenched, slightly lo-fi production; no electronic beats, no synth leads, no modern pop or cinematic trailer sound. Loopable background music: steady texture from start to end, no long fade-in or fade-out, no big ending. Around three minutes.",
+  "variation": "A different take from any earlier one: new melody and arrangement.",
+  "slots": [
+    {
+      "id": "title",
+      "use": "main menu",
+      "text": "Main menu theme. Brooding and lonely, about 65 bpm, minor key. A solo fingerpicked nylon-string acoustic guitar carries a slow, sparse melody over a low cello drone; soft distant wordless choir swells now and then; a feeling of an old, cursed world waiting."
+    },
+    {
+      "id": "town_puerto",
+      "use": "Puerto, the harbour town",
+      "text": "Harbour town theme. Melancholic and calm but haunted, about 70 bpm, minor key. Fingerpicked acoustic guitar (slightly detuned, twelve-string colour) with gentle open chords, a quiet sea-wind ambience bed, an occasional low wooden flute phrase, lots of room reverb."
+    },
+    {
+      "id": "bosque",
+      "use": "the forest island",
+      "text": "Dark forest wilderness. Quiet but unsettling, about 60 bpm. Ambient low string drones, wind through old trees, sparse plucked dulcimer notes, a distant wordless choir that comes and goes, creaking wood textures; mostly atmosphere with very little melody."
+    },
+    {
+      "id": "volcan",
+      "use": "the volcanic island",
+      "text": "Volcanic ash island. Ominous and oppressive, about 55 bpm. Deep rumbling drones, slow heavy hand drums far away, low brass swells, metallic scrapes and hisses, a dry heat-haze feeling; sparse and heavy."
+    },
+    {
+      "id": "cave",
+      "use": "mines and caves (underground floors)",
+      "text": "Underground mines and caverns. Tense and very sparse. Cavernous reverb, water drips, deep sub drones, faint metallic chimes, slow dissonant string clusters swelling and fading, the sense of something waiting in the dark."
+    },
+    {
+      "id": "combat",
+      "use": "fights",
+      "text": "Dungeon fight. Tense and driving, about 110 bpm, minor key. Low taiko and frame drums, a staccato low-strings ostinato, dark choir hits on the accents, a grim medieval colour; keep the energy steady so it loops."
+    },
+    {
+      "id": "boss_forge",
+      "use": "the forge guardian",
+      "text": "Boss fight against an ancient guardian of a volcanic forge. Grim and epic, about 100 bpm. Heavy pounding percussion with anvil-like metal hits, grinding low brass, a dark choir, relentless and loopable."
+    }
+  ]
+}

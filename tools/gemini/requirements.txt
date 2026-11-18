@@ -1,0 +1,9 @@
+# Dev-only tools that drive the owner's Gemini (tools/CLAUDE.md, "gemini"). Never a
+# dependency of the game, the server or the client.
+#   pip install -r tools/gemini/requirements.txt && python -m playwright install --help
+# The tests (make test-gemini) need only Pillow; the drivers need Playwright (they
+# attach to the owner's Chrome, they never download a browser); music_convert.py
+# needs an ffmpeg with libopus, on PATH or from imageio-ffmpeg.
+Pillow>=10.0
+playwright>=1.45
+imageio-ffmpeg>=0.5
