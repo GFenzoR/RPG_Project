@@ -22,7 +22,7 @@ import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, weatheredWood, iron, darkIron, rope, paper, redCloth, moss } = PALETTE;
+const { wood, darkWood, weatheredWood, darkIron, rope, moss } = PALETTE;
 
 // ---- ground ------------------------------------------------------------------------------
 
@@ -297,49 +297,6 @@ function cargoCrate(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
-/** 32x64 notice board on two posts, with a little roof and pinned notes. */
-function marketBoard(img: Image, rand: Rng): void {
-  // Posts.
-  for (const x0 of [5, 24]) {
-    eachInRect(x0, 18, 3, 44, (x, y) => {
-      px(img, x, y, shadeOf(darkWood, [0.8, 0.5, 0.25][x - x0] ?? 0));
-    });
-  }
-  // Board: horizontal planks inside a dark frame.
-  eachInRect(2, 19, 28, 25, (x, y) => {
-    const yy = (y - 19) % 6;
-    const level = yy === 5 ? 0.15 : yy === 0 ? 0.62 : 0.5 + (hash2(x >> 2, y, 7) - 0.5) * 0.25;
-    px(img, x, y, shadeOf(wood, level));
-  });
-  rect(img, 2, 19, 28, 1, darkWood.base);
-  rect(img, 2, 43, 28, 2, darkWood.shadow);
-  rect(img, 2, 19, 1, 26, darkWood.base);
-  rect(img, 29, 19, 1, 26, darkWood.deep);
-  // Roof: a short plank lid seen from above and its front edge.
-  box(img, 0, 12, 32, 4, 3, darkWood);
-  for (const x of [8, 16, 24]) line(img, x, 13, x, 15, darkWood.shadow);
-  // Notes.
-  const notes: [number, number, number, number][] = [
-    [5, 22, 8, 9],
-    [15, 21, 7, 7],
-    [23, 23, 5, 8],
-    [7, 33, 9, 8],
-    [18, 31, 8, 10],
-  ];
-  notes.forEach(([x, y, w, h], i) => {
-    rect(img, x, y, w, h, paper.base);
-    rect(img, x, y, w, 1, paper.light);
-    rect(img, x + w - 1, y + 1, 1, h - 1, paper.shadow);
-    rect(img, x, y + h - 1, w, 1, paper.shadow);
-    for (let ty = y + 2; ty < y + h - 2; ty += 2) {
-      const len = 2 + Math.floor(rand() * (w - 3));
-      line(img, x + 1, ty, x + len, ty, paper.deep);
-    }
-    px(img, x + (w >> 1), y, i % 2 === 0 ? redCloth.base : iron.light); // pin
-  });
-  outline(img, { amount: 0.5 });
-}
-
 /** A wooden bollard with a mushroom cap and a coil of rope, for tying boats. */
 function mooringPost(img: Image, _rand: Rng, seed: number): void {
   const cx = 16;
@@ -487,7 +444,6 @@ export const TERRAIN: RecipeBook = {
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
   "decor/signpost": { kind: "object", draw: signpost },
   "decor/cargo_crate": { kind: "object", draw: cargoCrate },
-  "decor/market_board": { kind: "object", height: 64, draw: marketBoard },
   "decor/mooring_post": { kind: "object", draw: mooringPost },
   "decor/boulder": { kind: "object", draw: boulder },
 };
