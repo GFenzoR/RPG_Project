@@ -1770,14 +1770,17 @@ export class Game {
    */
   private decideStep(now: number): void {
     if (!this.world.canStep(now)) return;
-    const key = this.keys.take() ?? this.pad.take();
+    const fromKeys = this.keys.take();
+    const key = fromKeys ?? this.pad.take();
+    const fresh = fromKeys !== undefined ? this.keys.fresh : this.pad.fresh;
     const stepped = this.padStepped;
     this.padStepped = undefined;
     const self = this.world.self;
     // MOV-2: standing still, a short tap (key or pad) toward another way only turns.
     if (key === undefined || key === stepped || !self) this.turnTap.clear();
     else {
-      const tap = this.turnTap.decide(key, this.world.standingStill(now), self.dir, now);
+      const still = this.world.standingStill(now);
+      const tap = this.turnTap.decide(key, still, self.dir, now, fresh);
       if (tap === "turn") this.sendStep(this.world.turn(key));
       if (tap === "turn" || tap === "wait") return;
     }

@@ -72,6 +72,37 @@ describe("TurnTap (MOV-2)", () => {
     expect(u.decide(E, true, E, 200)).toBe("walk");
   });
 
+  it("a second tap before TURN_TAP_MS walks, instead of waiting with the first", () => {
+    // The player taps to turn and taps again so soon that no frame saw the key let go:
+    // the second press is a new tap (fresh), and the player faces that way now.
+    const t = new TurnTap();
+    expect(t.decide(E, true, S, 0, true)).toBe("turn");
+    expect(t.decide(E, true, E, 10, true)).toBe("walk");
+    // Held, the same key is not fresh: it waits as before.
+    const u = new TurnTap();
+    expect(u.decide(E, true, S, 0, true)).toBe("turn");
+    expect(u.decide(E, true, E, 10, false)).toBe("wait");
+  });
+
+  it("MovementKeys tells a new press from a key still held (or the OS auto-repeat)", () => {
+    const k = new MovementKeys();
+    k.down("ArrowRight");
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(true);
+    expect(k.take()).toBe(E); // still held
+    expect(k.fresh).toBe(false);
+    k.down("ArrowRight"); // the OS auto-repeat: still the same press
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(false);
+    k.up("ArrowRight");
+    k.down("ArrowRight"); // let go and pressed again between two frames
+    k.up("ArrowRight");
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(true);
+    expect(k.take()).toBeUndefined();
+    expect(k.fresh).toBe(false);
+  });
+
   it("walks at once facing that way already, or while walking", () => {
     const t = new TurnTap();
     expect(t.decide(S, true, S, 0)).toBe("walk");

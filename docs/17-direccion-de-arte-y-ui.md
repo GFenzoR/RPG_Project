@@ -1285,7 +1285,9 @@ protocolo no cambian.
 - **El toque corto que solo gira (MOV-2).** Quieto, una tecla o el pad hacia un lado al que
   no se mira gira al personaje en el acto (`Turn`) y camina solo si sigue apretado 80 ms
   (`TURN_TAP_MS`, `input/keyboard.ts` `TurnTap`). Mirando ya hacia ese lado, o caminando,
-  camina enseguida, como antes. Ctrl+flecha siempre solo gira (con WASD no: Ctrl+W cierra
+  camina enseguida, como antes. Un segundo toque que llega antes de esos 80 ms (soltar y
+  volver a apretar entre dos cuadros) es un paso, no la misma tecla mantenida: antes se
+  perdía (lo encontró el E2E del lote 8, que da los dos toques en ~10 ms). Ctrl+flecha siempre solo gira (con WASD no: Ctrl+W cierra
   la pestaña). Un botón del pad activado con el teclado sigue siendo un paso. El E2E da un
   paso como lo daría un jugador: un toque para girar si hace falta y otro para caminar
   (`client/e2e/keys.ts`), y comprueba que el toque que gira no mueve.

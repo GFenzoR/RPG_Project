@@ -2003,7 +2003,9 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   });
   page.on("pageerror", (e) => errors.push(e.message));
   // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled, and
-  // on the media elements the music streams on (the second each one starts from).
+  // on the media elements the music streams on (the second each one starts from). An
+  // element with no file is the engine's play-and-pause within the first gesture (WebKit
+  // lets it play later: StreamLike.bless), not a track starting.
   await page.addInitScript(() => {
     const w = window as unknown as { __audioStarts: number; __musicFrom: number[] };
     w.__audioStarts = 0;
@@ -2015,7 +2017,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     };
     const play = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
-      w.__musicFrom.push(this.currentTime);
+      if (this.getAttribute("src") !== null) w.__musicFrom.push(this.currentTime);
       return play.call(this);
     };
   });
@@ -2260,15 +2262,19 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
     await openWindow(page, "help");
     const help = page.getByTestId("controls-help");
-    await expect(help.locator("p")).toContainText("Camina con las flechas");
+    await expect(help.locator("p.controls-text")).toContainText("Camina con las flechas");
+    await expect(help.locator("p.help-windows")).toContainText("Ventanas");
     await shot(page, "44-controls-help-960");
-    // The help wraps inside its window, and the window stays inside the screen.
+    // The help (the controls and the windows' paragraph) wraps inside its window, and the
+    // window stays inside the screen.
     const fits = await help
       .locator("p")
-      .evaluate(
-        (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
+      .evaluateAll((ps) =>
+        ps.map(
+          (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
+        ),
       );
-    expect(fits).toBe(true);
+    expect(fits).toEqual([true, true]);
     expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
     await closeWindow(page, "help");
     let prov: { id: number; x: number; y: number } | undefined;

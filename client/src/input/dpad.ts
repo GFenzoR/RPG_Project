@@ -68,6 +68,7 @@ export function dpadDirection(dx: number, dy: number, deadzone: number): Directi
 export class HeldDirection {
   private held: Direction | undefined;
   private tapped: Direction | undefined;
+  private fresh_ = false;
 
   press(d: Direction): void {
     if (this.held !== d) this.tapped = d;
@@ -95,7 +96,13 @@ export class HeldDirection {
   /** The direction to walk now: a press since the last call, else the one still held. */
   take(): Direction | undefined {
     const d = this.tapped ?? this.held;
+    this.fresh_ = this.tapped !== undefined;
     this.tapped = undefined;
     return d;
+  }
+
+  /** Whether the last take() answered a press since the call before, not a finger held. */
+  get fresh(): boolean {
+    return this.fresh_;
   }
 }
