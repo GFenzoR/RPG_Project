@@ -904,7 +904,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   caminando, `walk` como antes. Ctrl+flecha (`turnKeyDirection`, WASD no) solo gira. Un
   botón del pad activado con el teclado (`padStep`) es un paso siempre. En el E2E, un paso
   es `stepKey` / `stepToward` (`e2e/keys.ts`): un toque para girar si hace falta (y
-  comprueba que no se movió) y otro para caminar; `__rpgClient.self()` trae `dir`. Falta que el
+  comprueba que no se movió) y otro para caminar; `faceKey` solo gira (los tests de tecla
+  mantenida de `movement.spec.ts` giran antes de medir); `__rpgClient.self()` trae `dir`. Falta que el
   dueño decida si un cambio de dirección con las teclas solapadas debe dar ese paso
   diagonal (docs/14).
 - **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y
