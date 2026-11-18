@@ -12,7 +12,7 @@ import {
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { STEP_LEAD_MS } from "./motion.ts";
-import { ROUTE_REPLANS, Steering } from "./steering.ts";
+import { NO_WAY_MS, ROUTE_REPLANS, Steering } from "./steering.ts";
 import type { StepChoice } from "./steering.ts";
 import { WorldState } from "./world.ts";
 import type { CreatureState } from "./world.ts";
@@ -368,6 +368,29 @@ describe("Steering: the mouse held on the map (docs/17 MOV-3)", () => {
     for (let i = 1; i < sent.length; i++)
       if (sent[i] === Direction.WEST && sent[i - 1] === Direction.EAST) back++;
     expect(back).toBe(0);
+  });
+
+  it("does not search again every frame while held toward a tile out of reach", () => {
+    // Walled in with the tile below; the cursor on the free ground past the wall.
+    const w = world(["#####", "#@#..", "#.#..", "###.."]);
+    const s = steer();
+    let looks = 0;
+    const free = w.free.bind(w);
+    w.free = (x, y, z) => {
+      looks++;
+      return free(x, y, z);
+    };
+    const held = cursor(w, 3, 0);
+    s.next(w, 0, held(0));
+    const search = looks; // the step ahead, the A* over the pocket, the turn
+    expect(search).toBeGreaterThan(8);
+    let frames = 0;
+    for (let t = 10; t < NO_WAY_MS; t += 10, frames++) s.next(w, t, held(t));
+    // Each frame only tries the step ahead and the turn: no A* again.
+    expect(looks - search).toBeLessThanOrEqual(2 * frames);
+    const before = looks;
+    s.next(w, NO_WAY_MS + 10, held(NO_WAY_MS + 10));
+    expect(looks - before).toBe(search); // after NO_WAY_MS it searches again
   });
 
   it("turns toward the cursor when no way leads there", () => {

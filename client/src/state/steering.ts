@@ -24,6 +24,13 @@ export type StepChoice = NonNullable<ReturnType<WorldState["chooseStep"]>>;
  */
 export const ROUTE_REPLANS = 10;
 
+/**
+ * How long a search toward the held cursor that found no way is not tried again from the
+ * same tile to the same one: the mouse held against a wall decides every frame (canStep
+ * stays open while the player stands), and an A* over the known area each frame is waste.
+ */
+export const NO_WAY_MS = 250;
+
 /** How long the mark of a click-to-walk shows (docs/17 MOV-7: a ring of 300 ms). */
 export const MARK_MS = 300;
 
@@ -79,6 +86,8 @@ export class Steering {
   private route: Route | undefined;
   /** The last click-to-walk's mark (MOV-7), for MARK_MS. */
   mark: WalkMark | undefined;
+  /** The last search toward the held cursor that found no way (NO_WAY_MS). */
+  private noWay: { from: Pos; goal: Pos; at: number } | undefined;
 
   constructor(private readonly cfg: SteerConfig) {}
 
@@ -173,7 +182,10 @@ export class Steering {
       if (seq !== undefined) return { kind: "walk", dir: d, seq };
     }
     const goal = { x: Math.floor(at.x), y: Math.floor(at.y), z: s.pos.z };
-    const steps = this.plan(world, s.pos, goal, []);
+    const n = this.noWay;
+    const known = n && now - n.at < NO_WAY_MS && samePos(n.from, s.pos) && samePos(n.goal, goal);
+    const steps = known ? undefined : this.plan(world, s.pos, goal, []);
+    if (!known && !steps?.length) this.noWay = { from: s.pos, goal, at: now };
     if (steps && steps.length > 0) {
       this.route = { goal, steps, from: s.pos, replans: 0, avoid: [], stale: false, heading: dir };
       const next = this.follow(world, now);
