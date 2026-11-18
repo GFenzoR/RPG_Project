@@ -183,6 +183,8 @@ export function GameView(props: GameViewProps): JSX.Element {
     if (tabFor) setTab(tabFor);
     const w = windowForHighlight(highlight);
     if (w) win.update((s) => openWindow(s, w));
+    // The chat sits behind the log tab on desktop: a step about the chat shows it.
+    if (highlight === "chat") setChatTab("chat");
   }, [highlight]);
 
   // The level-up notice stays on screen for a few seconds.
