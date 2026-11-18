@@ -16,6 +16,53 @@ mkdirSync(shots, { recursive: true });
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(shots, `${name}.png`) });
 
+/**
+ * A9 (docs/17 ANI-7): waits for a creature to start an attack pose (its clip or lunge) or
+ * to fall dead, and takes screenshot `name` while it lasts. The page notices the pose on
+ * the frame it starts; the shot counts only if the same pose is still on after it (an
+ * attack lasts 250-360 ms, a fall 400-750), else it waits for the next one.
+ */
+async function shotPose(
+  page: Page,
+  name: string,
+  kind: "attack" | "death",
+  timeout: number,
+): Promise<void> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
+    const seen = await page
+      .waitForFunction(
+        (k) => {
+          const p = window.__rpgClient?.poses();
+          if (!p) return undefined;
+          if (k === "death")
+            return p.dying[0] !== undefined ? { id: p.dying[0], t0: 0 } : undefined;
+          const a = p.attacking.find((x) => x.ms < 60);
+          return a ? { id: a.id, t0: performance.now() - a.ms } : undefined;
+        },
+        kind,
+        { timeout: left, polling: "raf" },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => undefined);
+    if (!seen) continue;
+    await shot(page, name);
+    const still = await page.evaluate(
+      ({ k, id, t0 }) => {
+        const p = window.__rpgClient?.poses();
+        if (k === "death") return p?.dying.includes(id) ?? false;
+        return (p?.attacking ?? []).some(
+          (a) => a.id === id && Math.abs(performance.now() - a.ms - t0) < 5,
+        );
+      },
+      { k: kind, id: seen.id, t0: seen.t0 },
+    );
+    if (still) return;
+  }
+}
+
 /** Random letters with no vowels, so a name never contains a reserved word. */
 function randomLetters(n: number): string {
   const pool = "bcdfghjklmnpqrstvwxz";
@@ -362,6 +409,9 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     })
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
+  // A9: an attack pose, the own player's swing or the wolf's lunge, from the server's
+  // CreatureAttack (docs/17 ANI-7).
+  await shotPose(page, "07b-attack-pose", "attack", 30_000);
 
   // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
   // progress.
@@ -401,8 +451,8 @@ const WOLF_WAIT = { x: 1056, y: 1052 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
   // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
-  // --repeat-each) killed them all.
-  test.setTimeout(180_000);
+  // --repeat-each) killed them all; killing one at the end (A9) can take another.
+  test.setTimeout(330_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -563,6 +613,18 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // The cast spent mana and started the cooldown shade on F1.
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
   await hotbar.screenshot({ path: join(shots, "12-hotbar.png") });
+
+  // A9: bolts (and fists) until a wolf dies, and its fall on screen: the server's
+  // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
+  let fell = false;
+  const fall = shotPose(page, "11b-death", "death", 150_000).then(() => {
+    fell = true;
+  });
+  while (!fell) {
+    if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) await targetWolf();
+    await page.keyboard.press("F1");
+    await Promise.race([fall, page.waitForTimeout(500)]);
+  }
 
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");

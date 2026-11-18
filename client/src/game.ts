@@ -194,6 +194,13 @@ export interface ClientTestHooks {
   itemNumber(id: string): number | undefined;
   /** Projectiles and effects (IDs) drawn less than `ms` ago. */
   magic(ms: number): { projectiles: number; effects: number[] };
+  /** A9: the CreatureAttack events of the last `ms` (attacker, kind, target). */
+  attacks(ms: number): { id: number; kind: number; targetId: number }[];
+  /**
+   * A9 (docs/17 ANI-7): creatures in an attack pose now (`ms` into it, `of` its length)
+   * and the ones falling dead.
+   */
+  poses(): { attacking: { id: number; ms: number; of: number }[]; dying: number[] };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -1567,6 +1574,13 @@ export class Game {
           effects: world.effects.filter((e) => now - e.start < ms).map((e) => e.effectId),
         };
       },
+      attacks: (ms) => {
+        const now = performance.now();
+        return world.attacks
+          .filter((a) => now - a.start < ms)
+          .map((a) => ({ id: a.id, kind: a.kind, targetId: a.targetId }));
+      },
+      poses: () => canvas.poses(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)

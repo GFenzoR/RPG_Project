@@ -21,7 +21,9 @@ export interface PresenceState {
 }
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
+  AttackKind,
   Cosmetics,
+  DisappearReason,
   Creature,
   Skull,
   EquipmentSlot,
@@ -150,6 +152,27 @@ export interface ProjectileState {
   start: number;
 }
 
+/**
+ * A CreatureAttack (A9, docs/05 "Quién ataca y por qué sale una criatura"): creature `id`
+ * attacked `targetId` (0: an area, or a target out of the window) towards `to`.
+ */
+export interface AttackState {
+  id: number;
+  kind: AttackKind;
+  targetId: number;
+  to: Pos;
+  /** An area spell's radius around `to`; 0 for one target. */
+  radius: number;
+  start: number;
+}
+
+/** Why a creature left the view (CreatureDisappear.reason), kept a moment for the canvas. */
+export interface DepartureState {
+  id: number;
+  reason: DisappearReason;
+  start: number;
+}
+
 /** A number rising from a tile: damage, healing, experience. */
 export interface FloatingTextState {
   pos: Pos;
@@ -256,6 +279,9 @@ export const PROJECTILE_MS = 250;
 /** How long effects and floating texts live, ms. */
 export const EFFECT_MS = 600;
 export const FLOATING_TEXT_MS = 1000;
+/** How long attacks (for the hits of their batch) and departures are kept, ms. */
+export const ATTACK_MS = FLOATING_TEXT_MS;
+export const DEPARTURE_MS = 1000;
 
 /** Removes, in place and keeping the order, the entries that started `ms` or more before now. */
 export function dropFinished(list: { start: number }[], now: number, ms: number): void {
@@ -401,6 +427,14 @@ export class WorldState implements TileSource {
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
   projectiles: ProjectileState[] = [];
+  /**
+   * Welcome.attack_events: the server says who attacks whom (`attacks`) and why a
+   * creature leaves (`departures`), A9. False for an older server: the canvas works the
+   * fights out from effects and projectiles (render/creature-events.ts).
+   */
+  attackEvents = false;
+  attacks: AttackState[] = [];
+  departures: DepartureState[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
@@ -541,6 +575,7 @@ export class WorldState implements TileSource {
         this.selfId = msg.value.creatureId;
         this.maxQueued = msg.value.maxQueuedSteps;
         this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
+        this.attackEvents = msg.value.attackEvents;
         break;
       case "fullMapView":
         this.chunks.clear();
@@ -565,6 +600,7 @@ export class WorldState implements TileSource {
         break;
       case "creatureDisappear":
         this.creatures.delete(msg.value.id);
+        this.departures.push({ id: msg.value.id, reason: msg.value.reason, start: now });
         if (this.target === msg.value.id) this.target = undefined;
         break;
       case "creatureHealth": {
@@ -574,6 +610,16 @@ export class WorldState implements TileSource {
       }
       case "effect":
         this.effects.push({ pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now });
+        break;
+      case "creatureAttack":
+        this.attacks.push({
+          id: msg.value.id,
+          kind: msg.value.kind,
+          targetId: msg.value.targetId,
+          to: posOf(msg.value.to),
+          radius: msg.value.radius,
+          start: now,
+        });
         break;
       case "projectile":
         this.projectiles.push({
@@ -1063,13 +1109,25 @@ export class WorldState implements TileSource {
   }
 
   /**
-   * Forgets effects, floating texts and projectiles that finished. In place: the canvas
-   * calls this every frame, and a new array per frame would be garbage (docs/07).
+   * Forgets effects, floating texts, projectiles, attacks and departures that finished. In
+   * place: the canvas calls this every frame, and a new array per frame would be garbage
+   * (docs/07).
    */
   expire(now: number): void {
     dropFinished(this.effects, now, EFFECT_MS);
     dropFinished(this.floatingTexts, now, FLOATING_TEXT_MS);
     dropFinished(this.projectiles, now, PROJECTILE_MS);
+    dropFinished(this.attacks, now, ATTACK_MS);
+    dropFinished(this.departures, now, DEPARTURE_MS);
+  }
+
+  /** Why creature id last left the view, while it is kept (DEPARTURE_MS). */
+  departureOf(id: number): DisappearReason | undefined {
+    for (let i = this.departures.length - 1; i >= 0; i--) {
+      const d = this.departures[i];
+      if (d?.id === id) return d.reason;
+    }
+    return undefined;
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */

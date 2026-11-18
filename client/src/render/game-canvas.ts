@@ -20,10 +20,13 @@ import {
   Atlas,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
+  LUNGE_BACK_MS,
+  LUNGE_OUT_MS,
   MISSING_TEXTURE,
   MapView,
   extrasByChunk,
   animate,
+  clipMs,
   entityZIndex,
   newAnimInput,
   newAnimState,
@@ -44,7 +47,14 @@ import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer } from "./particles.ts";
 import type { ParticleView } from "./particles.ts";
-import { isBlowEffect, meleeAttacker, pushOf } from "./creature-events.ts";
+import {
+  attackDir,
+  attackerOf,
+  isBlowEffect,
+  leavesDying,
+  meleeAttacker,
+  pushFrom,
+} from "./creature-events.ts";
 import type { Fighter } from "./creature-events.ts";
 import { devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
@@ -144,6 +154,11 @@ export interface GameCanvas {
   readonly shown: ViewTiles;
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
+  /**
+   * E2E: the creatures in an attack pose now (its clip or lunge; `ms` since it started,
+   * `of` its length) and the ones falling dead (docs/17 ANI-2, ANI-7).
+   */
+  poses(): { attacking: { id: number; ms: number; of: number }[]; dying: number[] };
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -619,13 +634,53 @@ export async function createGameCanvas(
     return pose.done;
   };
 
-  // Who attacks and who gets hit (render/creature-events.ts): the effects, projectiles and
-  // damage numbers that arrived since the last frame start lunges, flashes and pushes.
+  // Who attacks and who gets hit (render/creature-events.ts): what arrived since the last
+  // frame starts attack clips or lunges, flashes and pushes. A server with attack events
+  // (A9) names the attacker and its target; for an older one the client works it out from
+  // the effects, projectiles and damage numbers.
   let seenEvents = Number.NEGATIVE_INFINITY;
   const fighters = (): Iterable<Fighter> => world.creatures.values();
   const react = (now: number): void => {
     let newest = seenEvents;
     const z = world.self?.pos.z;
+    if (world.attackEvents) {
+      for (const a of world.attacks) {
+        if (a.start <= seenEvents) continue;
+        newest = Math.max(newest, a.start);
+        const by = world.creatures.get(a.id);
+        if (!by || by.pos.z !== z) continue;
+        const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
+        const [dx, dy] = attackDir(by, target, a.to);
+        startAttack(stateOf(by.id, now), now, dx, dy);
+      }
+    } else newest = Math.max(newest, inferAttacks(now, z));
+    for (const f of world.floatingTexts) {
+      if (f.start <= seenEvents) continue;
+      newest = Math.max(newest, f.start);
+      if (f.kind !== FloatingTextKind.DAMAGE || f.pos.z !== z) continue;
+      const victim = world.creatureAt(f.pos.x, f.pos.y, f.pos.z);
+      if (!victim) continue;
+      let from: Pos | undefined;
+      if (world.attackEvents) {
+        const a = attackerOf(victim, world.attacks, f.start);
+        from = a && (a.radius > 0 ? a.to : world.creatures.get(a.id)?.pos);
+      } else {
+        const shot = world.projectiles.find((p) => p.start === f.start && samePos(p.to, f.pos));
+        from = shot
+          ? shot.from
+          : meleeAttacker(victim, fighters(), world.selfId, world.target)?.pos;
+      }
+      const [dx, dy] = pushFrom(victim, from);
+      startHit(stateOf(victim.id, now), now, dx, dy);
+    }
+    seenEvents = newest;
+  };
+  /**
+   * An older server's fights: the attackers of its projectiles and blows, guessed. Returns
+   * the newest time it looked at.
+   */
+  const inferAttacks = (now: number, z: number | undefined): number => {
+    let newest = seenEvents;
     for (const p of world.projectiles) {
       if (p.start <= seenEvents) continue;
       newest = Math.max(newest, p.start);
@@ -642,20 +697,7 @@ export async function createGameCanvas(
       if (victim && by)
         startAttack(stateOf(by.id, now), now, victim.pos.x - by.pos.x, victim.pos.y - by.pos.y);
     }
-    for (const f of world.floatingTexts) {
-      if (f.start <= seenEvents) continue;
-      newest = Math.max(newest, f.start);
-      if (f.kind !== FloatingTextKind.DAMAGE || f.pos.z !== z) continue;
-      const victim = world.creatureAt(f.pos.x, f.pos.y, f.pos.z);
-      if (!victim) continue;
-      const shot = world.projectiles.find((p) => p.start === f.start && samePos(p.to, f.pos));
-      const by = shot
-        ? world.creatureAt(shot.from.x, shot.from.y, shot.from.z)
-        : meleeAttacker(victim, fighters(), world.selfId, world.target);
-      const [dx, dy] = pushOf(victim, by);
-      startHit(stateOf(victim.id, now), now, dx, dy);
-    }
-    seenEvents = newest;
+    return newest;
   };
 
   // Fallback body without a sprite: a coloured block with a mark on the side it faces.
@@ -789,10 +831,11 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Deaths (ANI-2, ANI-5): a creature that leaves the view with an empty health bar died
-  // there (the server sends CreatureHealth 0 before CreatureDisappear; ANI-7 would say so
-  // outright). Its body stays where it fell, without name or bar, while its death plays,
-  // over the corpse the server already put on the tile.
+  // Deaths (ANI-2, ANI-5, ANI-7): a creature that leaves the view because it died
+  // (CreatureDisappear.reason DEATH; from an older server, with an empty health bar:
+  // render/creature-events.ts leavesDying) stays where it fell, without name or bar, while
+  // its death plays (an LPC body its clip, a single image the procedural fall), over the
+  // corpse the server already put on the tile. Any other way out of the view drops it.
   interface Ghost {
     body: Container;
     figure: CreatureBody;
@@ -815,7 +858,8 @@ export async function createGameCanvas(
     animStates.delete(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
-    if (!s || !s.figure || !state || s.drawnHealth > 0 || dir === undefined) {
+    const dying = s !== undefined && leavesDying(world.departureOf(id), s.drawnHealth);
+    if (!s || !s.figure || !state || !dying || dir === undefined) {
       dropSprite(id);
       return;
     }
@@ -1300,6 +1344,17 @@ export async function createGameCanvas(
     },
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));
+    },
+    poses() {
+      const now = performance.now();
+      const attacking: { id: number; ms: number; of: number }[] = [];
+      for (const [id, st] of animStates) {
+        const of =
+          clipMs(sprites.get(id)?.figure?.clips.meta, "attack") || LUNGE_OUT_MS + LUNGE_BACK_MS;
+        const ms = now - st.attackAt;
+        if (ms >= 0 && ms < of) attacking.push({ id, ms, of });
+      }
+      return { attacking, dying: [...ghosts.keys()] };
     },
     element: canvas,
     clientToTile(clientX, clientY) {
