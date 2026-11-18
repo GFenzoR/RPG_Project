@@ -456,8 +456,8 @@ frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`ti
 siguen igual.
 
 ### ANI-7 Lo que falta del servidor
-**Código hecho (A9, 2026-11-18); falta el E2E del lote** (las capturas `07b-attack-pose`
-y `11b-death` no se sacaron todavía). El servidor dice quién ataca a quién y por qué sale
+**Hecho (A9, 2026-11-18;** E2E del lote 7 con las capturas `07b-attack-pose` y
+`11b-death` revisadas). El servidor dice quién ataca a quién y por qué sale
 una criatura (docs/05, "Quién ataca y por qué sale una criatura"; `server/internal/
 session/attack.go`), y el cliente anima con eso (`client/src/render/creature-events.ts` y
 `game-canvas.ts`):
@@ -1205,7 +1205,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
-| A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **código hecho** (2026-11-18); el ✅ espera al E2E del lote y a revisar con Read las capturas `07b-attack-pose` y `11b-death` | servidor, proto, cliente | A8 |
+| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas) | servidor, proto, cliente | A8 |
 | A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
