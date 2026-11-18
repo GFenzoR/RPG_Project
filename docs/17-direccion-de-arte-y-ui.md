@@ -35,6 +35,16 @@ Decisiones del dueño del mismo día (ya están en `00-vision.md`, `CLAUDE.md` y
 - La vista llega **hasta 31x21 casillas**.
 - Se puede usar arte y música **generados con su cuenta de Gemini**, registrados en
   `assets/CREDITS.md` con su prompt y sin nombrar otros juegos, artistas ni obras (SRC-5).
+- **Pantalla completa y menús flotantes** (2026-11-18, textual): "me gusta la de diablo con
+  esas gráficas góticas, y me gusta también la de tibia pero no quiero que se vea como que
+  estas viendo el mapa a traves de una ventana o un cuadro, quiero que el juego se vea full
+  screen, como Diablo 2 o como Ragnarok Online, en donde los menús 'flotan' y puedes
+  moverlos donde te acomoden". Y dos respuestas suyas del mismo día: el HUD es una **barra
+  gótica abajo** (el orbe de vida abajo a la izquierda, el de maná abajo a la derecha y en el
+  medio la barra de experiencia, la hotbar F1–F12 y los botones de menú), la única pieza
+  fija; y las ventanas son **libres con imán**: cada una se suelta donde sea y recuerda su
+  lugar, y cerca de un borde de la pantalla, del techo de la barra o del borde de otra
+  ventana se pega para alinearse. Hecho en A14 (§7).
 - **La regla legal no cambia.** De Tibia copiamos mecánicas, y de Tibia y Diablo
   aprendemos estilo. Nunca copiamos sus sprites, nombres, mapas, textos ni fuentes. Nada de
   este doc se dibujó mirando un sprite concreto de esos juegos, y ninguna tarea que salga
@@ -995,25 +1005,37 @@ recortar y pasar a woff2 con su nombre.
   de la interfaz aparte ("Hecho: lo que quedaba de A3, A4 y A5").
 
 ### UI-4 Layout de escritorio y "ver más pantalla"
-**Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
-de abajo: los orbes, la botonera y el chat van en la columna derecha (el dock) y no hay
-HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080 con
-15x11. Con la vista ancha (A7, "Hecho: A7" en §7) la escala por defecto cambió: 1920x1080
-va a 2x con 24x16 casillas.
+**Hoy (A14, pantalla completa, "Hecho: A14" en §7):** lo que pidió el dueño el 2026-11-18
+("Lo que pidió el dueño", arriba): el mapa ocupa toda la pantalla, sin marco ni columna;
+abajo, la barra gótica, lo único fijo; todas las ventanas flotan y se acomodan donde el
+jugador quiera, con imán. Antes (A3, "Hecho: A2 y A3") los orbes, la botonera, las
+ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock).
 ```
-┌──────────────────────────────────────────────────────────┬──────────────┐
-│ [avisos: arriba al centro, sin tomar clicks]              │ Columna      │
-│                                                          │ (230 px,     │
-│                 MAPA: de 15x11 a 31x21 casillas          │  se oculta)  │
-│                                                          │ · Batalla    │
-│ [chat flotante abajo a la izquierda: semitransparente,   │ · Grupo      │
-│  de 1 a 8 líneas, pestañas de canal, se pliega]          │ · ventanas   │
-│                                                          │   acopladas  │
-├─────┬──────────────────────────────────────────────┬─────┴──────────────┤
-│Vida │ [condiciones]  ═════ barra de XP ═════        │ Maná               │
-│orbe │ F1 … F12              [I][K][P][G][M][A][⚙]   │ orbe               │
-└─────┴──────────────────────────────────────────────┴────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│[Batalla]  [Grupo]          [avisos, intercambio]          [Gremio] [Inventario]│
+│                                                                    [Contene-] │
+│[Habilidades]          MAPA a pantalla completa                     [ dores  ] │
+│                    (el jugador al centro, sobre la barra)                    │
+│ ┌placa┐ [Chat translúcido]   [Diálogo / tienda / estación abajo al centro]    │
+│ │nombre│                                                                      │
+│ ╭─────╮════ barra de experiencia ═══════════════════════════════════ ╭─────╮ │
+│ │ Vida│ F1 … F12 (hotbar)                       [I][K][B][P][G][O]  │Maná │ │
+│ ╰─────╯                                         [⚙][?][M][Salir]    ╰─────╯ │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+- **La barra** (88 px a la escala 100 %, `client/src/ui/HudBar.tsx`): piedra en sillares
+  bajo una banda de hierro con remaches y filo dorado; los orbes en engastes de hierro que
+  salen de la barra, con dos pináculos cada uno; pilares de hierro a los lados del medio y
+  una cresta de pináculos al centro. Sobre el orbe de vida, una placa con nombre, nivel,
+  experiencia y condiciones. La escala de la interfaz la agranda como a las ventanas; a
+  960 px de ancho entra igual (la hotbar pagina sus slots con flechas).
+- **El mapa** es la pantalla sobre la barra: el jugador queda al centro de esa área y nada
+  del mapa se esconde bajo la barra. La vista ajustada siempre la cubre a escala entera
+  (tabla de abajo).
+- **Las ventanas** flotan sobre el mapa y nunca bajan de la barra ni salen de la pantalla
+  (UI-5).
+
+**El plan de antes (UI-4 original, A3),** que A3 cambió por el dock y A14 retomó a su modo:
 - **Se va el encabezado de hoy:**
   - nombre, nivel y experiencia pasan al HUD (sobre la barra de XP, o al pasar el mouse por
     los orbes);
@@ -1036,8 +1058,8 @@ va a 2x con 24x16 casillas.
     parejos con un desenfoque mínimo. Es una opción de Opciones → Gráficos, apagada por
     defecto.
 
-  Ejemplos con la columna visible (230 px) y el HUD (88 px), en CSS px con el escalado del
-  sistema al 100 %:
+  Ejemplos del plan, con la columna visible (230 px) y el HUD (88 px), en CSS px con el
+  escalado del sistema al 100 % (los de hoy, a pantalla completa, en "Hecho: A14"):
 
   | Ventana | Por defecto | Alejando | Con la opción 1,5x |
   |---|---|---|---|
@@ -1077,6 +1099,9 @@ va a 2x con 24x16 casillas.
   (z-index).
   - Escape cierra la ventana de arriba.
   - Se acopla a la columna (estilo Tibia: se pliega a su título) o flota sobre el mapa.
+    **Desde A14 no se acopla:** flota siempre, se suelta en cualquier lugar y un imán la
+    alinea con los bordes de la pantalla, el techo de la barra y los bordes de las otras
+    ventanas (a menos de 10 px). Se pliega a su título como antes.
   - Recuerda posición, tamaño y si estaba plegada en `localStorage` `rpg.windows`
     (comodidad de cada jugador: si se pierde, vuelve al valor por defecto).
   - Tiene un tamaño mínimo y nunca queda fuera de la pantalla.
@@ -1257,9 +1282,13 @@ Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones 
 | Golpe fuerte al jugador | sacudida de cámara de 2 px | 120 ms | **apagada**, y es opción aparte como en D2R |
 
 ### UI-10 Chat
-**Hoy (A3):** el chat quedó abajo del dock, con el log como segunda pestaña ("Registro"),
-y no flota sobre el mapa. Mientras el log no se ve, todos los mensajes del servidor flotan
-sobre el mapa (no solo los importantes).
+**Hoy (A14):** flota sobre el mapa abajo a la izquierda, sobre la barra y a la derecha de la
+placa del personaje, como en Ragnarok Online: translúcido (la piedra al 50 %) y casi opaco
+con el mouse encima o mientras se escribe. Es una ventana más (se mueve, se pliega, cambia
+de tamaño, con imán), pero nunca se cierra. El log sigue como segunda pestaña
+("Registro"), ahora en la barra de título. Mientras el log no se ve, todos los mensajes del
+servidor flotan sobre el mapa (no solo los importantes). Antes (A3) iba abajo del dock.
+Las pestañas por canal y la opacidad configurable siguen pendientes.
 - Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
   Comercio, Sistema).
 - Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
@@ -1426,6 +1455,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
 | A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; los efectos al pisar después ("Hecho: disparar, conjurar, desvanecerse, pasos y girar"); falta la niebla (ART-7) | cliente | A10 |
+| A14 ✅ | Pantalla completa (pedido del dueño del 2026-11-18): el mapa en toda la pantalla, la barra gótica de abajo con los orbes, la experiencia, la hotbar y la botonera, y todas las ventanas flotantes con imán ("Hecho: A14") | cliente | A3, A7 |
 
 ### Hecho: disparar, conjurar, desvanecerse, pasos y girar (2026-11-18, rama `feat/lpc-actions`)
 Lo que quedaba de ANI (A9) y de MOV (A6). Solo cliente y herramientas: el servidor y el
@@ -1896,6 +1926,72 @@ Cambios respecto de UI-4:
   ancha se elige un objetivo a 15 casillas, pero no se le pega desde donde no lo nota.
 - **Sin hacer:** la escala 1,5x "sharp-bilinear" y repetir `make bots` contra un servidor
   real (la medición fue en proceso, `TestCrowdBandwidth`). Están en docs/14.
+
+### Hecho: A14, pantalla completa, ventanas flotantes y la barra gótica (2026-11-18, rama `feat/hud-fullscreen`)
+Lo pidió el dueño el 2026-11-18 ("Lo que pidió el dueño", arriba: la cita y sus dos
+respuestas). Solo cliente y solo escritorio: tablets y teléfonos siguen con las pestañas y
+el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico está en
+`client/CLAUDE.md`, "Notas de la pantalla completa" y "Zoom del mapa".
+- **Pantalla completa (UI-4).** Se fueron el dock (la columna derecha) y el marco del
+  mapa. El mapa es toda la pantalla sobre la barra de abajo: el jugador queda al centro de
+  esa área y la vista ajustada siempre la cubre a escala entera, sin franjas vacías. En
+  teléfonos sigue la regla de antes (nunca menos de 15x11); en escritorio cubrir manda.
+  En CSS px al 100 %:
+
+  | Ventana | Caja del mapa | Por defecto | Alejando hasta |
+  |---|---|---|---|
+  | 1920x1080 | 1920x992 | 2x: 30x15,5 | 1x: 31x21 |
+  | 2560x1440 | 2560x1352 | 3x: 26,7x14,1 | 2x: 31x21 |
+  | 1280x800 (la del E2E) | 1280x712 | 2x: 20x11,1 | 1x: 31x21 |
+  | 1280x720 | 1280x632 | 2x: 20x9,9 | 1x: 31x19,75 |
+  | 960x700 (la app) | 960x612 | 1x: 30x19,1 | — |
+
+  A 1280x720 la vista ajustada muestra menos filas que las 11 clásicas: la otra opción
+  era 1x con franjas oscuras a los lados, que es justo lo que el dueño no quiere. Alejando
+  se ve casi toda la ventana.
+- **La barra gótica (UI-4, respuesta del dueño).** Orbe de vida abajo a la izquierda, de
+  maná abajo a la derecha, cada uno en un engaste de hierro con remaches y dos pináculos que
+  sale por encima de la barra; en el medio la barra de experiencia y, en un pozo tallado,
+  la hotbar F1–F12 y la botonera (I K B P G O, opciones, ayuda, mercado y salir: dos filas
+  de cinco, o una fila con los íconos a 2x desde 1600 px). Sobre el orbe de vida, una placa
+  con nombre, nivel, experiencia y condiciones. Es lo único fijo. Los orbes conservan el
+  llenado, el fantasma y el latido con poca vida (UI-9); los test ids (`health`, `mana`,
+  `level`, `experience`, `conditions`, `toolbar-<id>`, `options-button`, `logout`) y las
+  teclas no cambian. Crece con la escala de la interfaz y entra a 960 px (la hotbar pagina:
+  6 slots a la vista).
+- **Ventanas libres con imán (UI-5, respuesta del dueño).** Batalla, inventario,
+  habilidades, grupo, gremio, apariencia, opciones, ayuda, el chat, los contenedores y las
+  del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio) flotan. Cada una se
+  suelta donde sea y recuerda su lugar; a menos de 10 px de un borde de la pantalla, del
+  techo de la barra o de un borde de otra ventana (de lado o alineada con él) se pega. Nunca
+  queda fuera de la pantalla ni debajo de la barra, tampoco después de achicar la ventana
+  del navegador o subir la escala. Las flechas del ✥ también sienten el imán. Lugares de
+  fábrica: batalla arriba a la izquierda con el grupo a su lado y las habilidades debajo;
+  inventario arriba a la derecha con gremio y apariencia a su lado y los contenedores
+  debajo; el chat abajo a la izquierda; opciones y ayuda al medio; el intercambio arriba al
+  centro; diálogo, tienda, crafteo, mercado y casa abajo al centro, sobre la barra (la
+  tienda a la izquierda del diálogo, los dos sin pisar la columna del inventario).
+  "Restablecer ventanas" las devuelve ahí. Un `rpg.windows` guardado con el dock se sigue
+  leyendo: lo acoplado vuelve a su lugar de fábrica, lo que flotaba conserva el suyo.
+  Escape cierra la de arriba (la última abierta o tocada); en una pantalla recién abierta
+  sigue abriendo Opciones.
+- **El chat (UI-10)** flota translúcido, como en Ragnarok Online, y se aclara con el mouse
+  encima o al escribir; nunca se cierra (se pliega), y sus pestañas Chat y Registro van en
+  su barra de título.
+- **Arte gótico (UI-2), propio.** Marcos más ricos: hierro oscuro con un filo dorado por
+  dentro, barra de título tallada y una escuadra de oro con un granate en cada esquina; la
+  barra en piedra de sillares con su banda de hierro y remaches. Las piezas (esquina,
+  pináculo, remache) son pixel art propio escrito como texto en
+  `client/src/ui/ornaments.ts`, como los íconos, en el espíritu de piedra, hierro y oro
+  viejo de §1, sin calcar nada de Diablo ni de Tibia (ni sus marcos, ni sus orbes, ni sus
+  fuentes: las de UI-3 siguen). No se usó Gemini: con el CSS y estas piezas alcanzó, y el
+  navegador del dueño queda libre para los otros lotes. Las reglas de movimiento reducido
+  siguen (la ola de los orbes y el latido se detienen).
+- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); el inventario
+  por dentro lo cambia la rama `feat/equipment-d2` (los contenedores salen a `15rem` del
+  techo, contando con el alto de hoy del inventario); un lugar de fábrica que se acomode a
+  las ventanas ya abiertas (hoy, si se abren todas a la vez, algunas se pisan); revisar en
+  el E2E final los clicks del mapa que ahora puedan caer en una ventana flotante.
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.

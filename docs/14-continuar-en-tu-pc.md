@@ -100,7 +100,7 @@ el punto 5:
 ## Pendientes conocidos (no bloquean)
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
-  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
+  botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
   diálogo por temas y tienda sin scroll, y la ventana del gremio con botones (y lo que
@@ -290,6 +290,26 @@ el punto 5:
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
     después haga click en una casilla tiene que cerrarla o moverla.
+  - **A14, pantalla completa (hecho, rama `feat/hud-fullscreen`, docs/17 "Hecho: A14"):** el
+    mapa en toda la pantalla, la barra gótica de abajo (orbes, experiencia, hotbar y
+    botonera) y todas las ventanas flotantes con imán, como pidió el dueño el 2026-11-18.
+    Se miró con `make ui-preview` (escenas nuevas `magnet`, `migrated` y `chat`); el E2E
+    no se corrió en la rama. Queda:
+    - **Revisar en el E2E final:** ahora la batalla (arriba a la izquierda), el inventario
+      (arriba a la derecha), los contenedores (debajo del inventario) y el chat (abajo a la
+      izquierda) flotan sobre el mapa: un click en una casilla lejos del jugador hacia esas
+      esquinas puede caer en una ventana (a 1280x800 el mapa ahora tiene 20 columnas, antes
+      15). Los screenshots que eran de `.side` ahora son de su ventana (`16-chat`,
+      `18-gm-announce`, `25-party-panel`, `37-report-form`, `51-pvp-battle-list`);
+      `23-conditions-hud` es la placa sobre el orbe; `mobile-desktop-1280-side-end` pasó a
+      `mobile-desktop-1280-full-screen`. A 1280x720 la vista ajustada muestra 20x9,9 casillas
+      sobre la barra (cubrir la pantalla manda sobre las 11 filas clásicas).
+    - El chat no tiene pestañas por canal ni opacidad configurable (docs/17 UI-10).
+    - Si se abren todas las ventanas a la vez, algunas se pisan en su lugar de fábrica
+      (habilidades y chat a 1280x800): un lugar de fábrica que mire las abiertas sería otro
+      paso.
+    - El lugar de fábrica de los contenedores (`15rem` desde arriba) cuenta con el alto de
+      hoy del inventario: la rama `feat/equipment-d2` que lo rehace tiene que ajustarlo.
   - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
   - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
     piezas por material que el renderer elige por sus vecinos (también en el editor y en
@@ -344,7 +364,8 @@ el punto 5:
   se la dice al cliente; los monstruos
   siguen notando y persiguiendo solo la ventana clásica de 15x11 (+1); el cliente llena la
   caja del mapa con la vista más grande que la cubre a escala entera, sin bajar de 15x11
-  (24x16 a 2x en 1920x1080 con el dock), y deja alejar hasta la ventana entera; medido en
+  (24x16 a 2x en 1920x1080 con el dock; con la pantalla completa de A14, 30x15,5), y deja
+  alejar hasta la ventana entera; medido en
   proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
   Tras la revisión, los rangos con que apunta un jugador (armas, hechizos, condiciones)
   quedaron topados en 6 (`content.MaxRange`, esquema y carga): un monstruo golpeado desde
@@ -369,7 +390,8 @@ el punto 5:
     con filtro lineal, como opción de Gráficos apagada por defecto.
   - **La escala por defecto, para que la pruebe el dueño:** es la vista más grande que
     llena la caja a escala entera sin bajar de 15x11 (docs/17 "Hecho: A7": a 1920x1080, 2x
-    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Si prefiere ver las 31x21
+    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Con la pantalla completa
+    (A14) el escritorio siempre cubre la pantalla: 1920x1080 a 2x con 30x15,5. Si prefiere ver las 31x21
     enteras de entrada (1x a 1920x1080, con caja oscura alrededor), basta con que
     `zoomRange` (`client/src/render/zoom.ts`) devuelva su `min` como `fit`; cada jugador
     ya puede alejar hasta ahí y queda recordado.

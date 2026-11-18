@@ -418,3 +418,12 @@ secundaria.
   nota que se levanta con el viento: el `loop` de ART-7, `frame_<n>`), el cartel y el
   cajón; el bolardo no le ganó al dibujado a mano. Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **Pantalla completa, ventanas flotantes y la barra gótica (docs/17 A14; rama
+  `feat/hud-fullscreen`).** Lo que pidió el dueño el 2026-11-18: en escritorio el mapa
+  ocupa toda la pantalla (sin dock ni marco) y siempre la cubre a escala entera; abajo, la
+  barra gótica con el orbe de vida y el de maná en engastes de hierro, la experiencia, la
+  hotbar y la botonera; todas las ventanas (también el chat, translúcido, los contenedores y
+  las del servidor) flotan donde el jugador las suelte, con imán a los bordes de la
+  pantalla, de la barra y de las otras ventanas, y nunca quedan fuera ni bajo la barra;
+  `rpg.windows` v3 (lee las de antes). Ornamentos de pixel art propio
+  (`client/src/ui/ornaments.ts`). Lo que queda: docs/14, "Pendientes conocidos".

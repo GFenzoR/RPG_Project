@@ -55,7 +55,10 @@ lugar del canvas: las 33x23 casillas de la ventana del servidor con su margen, a
 la escala que tendría el canvas en la vista ajustada (la misma cuenta de
 `render/zoom.ts`). `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
 desde el build (no levanta servidores) y guarda en
-`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `server` (el
+`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `magnet` (ventanas
+borde con borde, como las deja el imán), `migrated` (un `rpg.windows` guardado con el dock de
+antes: las ventanas acopladas flotan en su lugar de fábrica), `chat` (el chat bajo el mouse,
+ya no translúcido), `server` (el
 fogón y el intercambio como ventanas, unos restos abiertos flotando y el cuadro de
 Mayús+arrastrar), `groundtip` (la ficha de un item del mapa bajo el mouse), `scale` (la
 interfaz al 125 % con el texto al 115 %; la página toma `?ui=` y `?text=`), `options`,
@@ -178,13 +181,13 @@ mouse mantenido y click previsto, un click y después una flecha, un rodeo tras 
 `make test`.
 
 `client/e2e/view.spec.ts` revisa la vista ancha (`02-game-design.md`, "La vista"): a
-1920x1080 (caja de 1536x1080 con el dock) entra a 2x, no a la 3x de las 15x11, con unas
-24x16 casillas (`__rpgClient.view()`: la ventana del `Welcome` y las casillas que muestra
+1920x1080 (caja de 1920x992: la pantalla sobre la barra de abajo) entra a 2x y la cubre con
+30x15,5 casillas (`__rpgClient.view()`: la ventana del `Welcome` y las casillas que muestra
 el canvas; `zoom()` da `{min 1, fit 2, max 6}`), casillas a 11 a los lados y 7 arriba y
 abajo en el canvas; Ctrl+rueda hacia abajo aleja a 1x con la ventana entera de 31x21
 (992x672 px, casillas a 15 y 10 en el canvas, a 17 no) y se recuerda; hacia arriba
-vuelve y lo olvida. A 1280x800 (caja de 960x800), 2x con 15 columnas y más de 11 filas,
-y 1x con 30x21 (casillas a 14 y 10 en el canvas). Screenshots `97-view-1920x1080`,
+vuelve y lo olvida. A 1280x800 (caja de 1280x712), 2x con 20 columnas y algo más de 11
+filas, y 1x con la ventana entera de 31x21 (casillas a 14 y 10 en el canvas). Screenshots `97-view-1920x1080`,
 `97b-view-1920x1080-1x`, `98-view-1280x800` y `98b-view-1280x800-1x`.
 
 ### E2E móvil (T5.6)
@@ -263,17 +266,19 @@ acepta en un evento sintético; el pad captura su dedo.
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
 - En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
   del cliente y ventana), que entra en pantalla y se cierra con un botón de 44 px.
-- A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia deja el encabezado
-  en una línea y el mapa en 2x (`__rpgClient.scale()`); sin pad ni botones de zoom. El
-  final del inventario y del panel "Apariencia" se ven sobre el chat al desplazar la
-  columna lateral. A 2x el canvas llena la caja (15 columnas y más de 11 filas). Ctrl+rueda
-  sobre el mapa sube a 3x (el canvas queda dentro de la caja y muestra menos casillas), la
-  rueda al revés vuelve a 2x y luego aleja a 1x con las 21 filas de la ventana y las 30
-  columnas que entran en la caja (se recuerda), y vuelve; la rueda sin Ctrl no hace zoom.
+- A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia queda cortado con
+  "…" en la placa sobre el orbe de vida y el mapa en 2x (`__rpgClient.scale()`); sin pad
+  ni botones de zoom. Pantalla completa (docs/17 UI-4): el canvas empieza en (0, 0), tiene
+  los 1280 px de ancho y termina justo donde empieza la barra de abajo (`hud-bar`); el chat
+  queda sobre la barra y nada tapa el final del inventario ni del panel "Apariencia". A 2x
+  el canvas llena la caja (20 columnas y algo más de 11 filas). Ctrl+rueda sobre el mapa
+  sube a 3x (el canvas sigue sobre la barra y muestra menos casillas), la rueda al revés
+  vuelve a 2x y luego aleja a 1x con la ventana entera de 31x21 (se recuerda), y vuelve; la
+  rueda sin Ctrl no hace zoom.
 
 Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` (`08-zoomed`: el
 mapa una escala más cerca), `mobile-desktop-1280-long-name.png`,
-`mobile-desktop-1280-side-end.png` (la columna lateral al final) y
+`mobile-desktop-1280-full-screen.png` (el mapa a pantalla completa con la barra) y
 `mobile-desktop-1280-zoom3.png` y `mobile-desktop-1280-zoom1.png` (la ventana entera); se
 revisan con Read como los de escritorio. Corre
 dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde: ningún

@@ -131,7 +131,7 @@ const WINDOWS: Record<string, unknown> = {
       battle: { open: true, collapsed: true },
     },
   },
-  // docs/17 UI-5: the inventory alone in the dock, an item held over it.
+  // docs/17 UI-5: the inventory open, an item held over it.
   inventory: {
     v: 3,
     z: [],
