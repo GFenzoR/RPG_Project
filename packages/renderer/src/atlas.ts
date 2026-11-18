@@ -9,6 +9,7 @@
 // images already loaded come from PixiJS Assets' cache.
 import { Assets, Spritesheet, Texture } from "pixi.js";
 import type { SpritesheetData } from "pixi.js";
+import type { AnimMeta } from "./anim.ts";
 import { fetchJSON, withRetry } from "./retry.ts";
 import type { Fetcher, RetryOptions } from "./retry.ts";
 
@@ -19,6 +20,8 @@ export interface AtlasIndex {
   /** Page JSON files, relative to atlas.json. */
   pages: string[];
   sprites: Record<string, { page: number; origin: string }>;
+  /** Animated and hinted creature sprites (docs/17 ANI); absent in atlases built before them. */
+  anims?: Record<string, AnimMeta>;
 }
 
 /** A sprite's rectangle in its page image (pixels). */
