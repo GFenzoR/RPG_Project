@@ -1,11 +1,12 @@
-// The game view: a PixiJS canvas over @rpg/renderer's MapView. It shows 15x11 tiles
-// centred on the own creature, scaled by a whole number of device pixels per sprite
-// pixel (pixel-perfect: no smoothing, no fractional scale), and draws the creatures
-// interleaved with the item stacks (ground → items → creatures, row by row), then effects
-// and floating texts on top, then names and health bars. Input goes back to the caller as
-// tile clicks (left: walk) and creature clicks (right: attack). The player may zoom in by
-// whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas is then
-// cut to the map's box and still centred on the own creature.
+// The game view: a PixiJS canvas over @rpg/renderer's MapView. It shows as much of the
+// server's window (31x21 tiles, WorldState.view) as the map's box holds, centred on the
+// own creature, scaled by a whole number of device pixels per sprite pixel (pixel-perfect:
+// no smoothing, no fractional scale; by default the largest that shows 15x11). It
+// draws the creatures interleaved with the item stacks (ground → items → creatures, row by
+// row), then effects and floating texts on top, then names and health bars. Input goes
+// back to the caller as tile clicks (left: walk) and creature clicks (right: attack). The
+// player zooms in or out by whole scales (render/zoom.ts: pinch, the +/- buttons,
+// Ctrl+wheel): the canvas stays cut to the map's box and centred on the own creature.
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
@@ -31,10 +32,11 @@ import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
 import { isBlowEffect, meleeAttacker, pushOf } from "./creature-events.ts";
 import type { Fighter } from "./creature-events.ts";
-import { VIEW_TILES, devicePixels, followCamera, mapLift } from "./viewport.ts";
+import { devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
   pinchZoom,
+  shownTiles,
   stepZoom,
   viewPixels,
   zoomPref,
@@ -68,6 +70,7 @@ import {
   isDark,
 } from "./light-layer.ts";
 import type { CreatureState, WorldState } from "../state/world.ts";
+import type { ViewTiles } from "../state/view.ts";
 
 const COLORS = {
   background: 0x000000,
@@ -111,6 +114,8 @@ export interface GameCanvas {
   readonly scale: number;
   /** The scale and the scales the player may choose now. */
   readonly zoom: ZoomView;
+  /** The tiles the canvas shows (fractional when cut to the box), at most WorldState.view. */
+  readonly shown: ViewTiles;
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /** The <canvas> element (drop target for items dragged onto the map). */
@@ -234,8 +239,8 @@ export async function createGameCanvas(
   const T = atlas.tileSize;
   const app = new Application();
   await app.init({
-    width: VIEW_TILES.width * T,
-    height: VIEW_TILES.height * T,
+    width: world.view.width * T,
+    height: world.view.height * T,
     background: COLORS.background,
     antialias: false,
     roundPixels: true,
@@ -306,24 +311,28 @@ export async function createGameCanvas(
 
   let scale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
-  // The zoom the player chose (undefined = fit the whole view) and what the map's box
+  // The zoom the player chose (undefined = the fitted view) and what the map's box
   // allows; `scale` is the one drawn.
   let pref = opts.zoom;
-  let range: ZoomRange = { min: 1, max: 1 };
+  let range: ZoomRange = { min: 1, fit: 1, max: 1 };
   let shown: ZoomView | undefined;
+  // The server's window the canvas was sized for (WorldState.view, from Welcome).
+  let sizedFor = world.view;
   /**
-   * Centres the camera on the player as drawn at `now`. Zoomed in, the canvas shows fewer
-   * (and fractional) tiles: centre those.
+   * Centres the camera on the player as drawn at `now`. Cut to the box or zoomed in, the
+   * canvas shows fewer (and fractional) tiles: centre those.
    */
   const follow = (now: number): void => {
     const self = world.self;
     if (!self) return;
     const sp = world.drawPos(self, now);
-    const tilePx = T * scale;
-    cam = followCamera(sp.x, sp.y, scale, T, {
-      width: app.screen.width / tilePx,
-      height: app.screen.height / tilePx,
-    });
+    cam = followCamera(
+      sp.x,
+      sp.y,
+      scale,
+      T,
+      shownTiles(app.screen.width, app.screen.height, scale, T),
+    );
   };
   const resize = (): void => {
     const dpr = window.devicePixelRatio || 1;
@@ -333,21 +342,25 @@ export async function createGameCanvas(
     const px = (v: string): number => parseFloat(v) || 0;
     const boxW = Math.max(0, host.clientWidth - px(style.paddingLeft) - px(style.paddingRight));
     const boxH = Math.max(0, host.clientHeight - px(style.paddingTop) - px(style.paddingBottom));
-    range = zoomRange(boxW, boxH, dpr, T);
+    sizedFor = world.view;
+    range = zoomRange(boxW, boxH, dpr, T, sizedFor);
     scale = zoomScale(pref, range);
+    // A strip at the bottom of the box that the canvas keeps clear when it can: the desktop
+    // hotbar (--map-reserve-bottom in client.css, px). A click on the last row of tiles
+    // cast F1 at 1280x800. A window cut to the box leaves it out; the whole one moves up.
+    const reserve = px(style.getPropertyValue("--map-reserve-bottom"));
     const { width: w, height: h } = viewPixels(
       Math.floor(boxW * dpr),
       Math.floor(boxH * dpr),
       scale,
       T,
+      sizedFor,
+      Math.ceil(reserve * dpr),
     );
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
-    // A strip at the bottom of the box that the canvas keeps clear when it can: the desktop
-    // hotbar (--map-reserve-bottom in client.css, px). A click on the last row of tiles
-    // cast F1 at 1280x800.
-    const lift = mapLift(boxH, h / dpr, px(style.getPropertyValue("--map-reserve-bottom")));
+    const lift = mapLift(boxH, h / dpr, reserve);
     canvas.style.marginBottom = lift > 0 ? `${lift}px` : "";
     // The camera follows at once, not from the next frame: clicks and tileToClient read it
     // meanwhile. On creation this is what sets it before the game says it is ready: Pixi's
@@ -355,7 +368,13 @@ export async function createGameCanvas(
     // draw may come a frame or more later, and until then every tile sat at camera (0, 0),
     // far off the canvas (an e2e Shift+click right after `ready` read nothing on CI).
     follow(performance.now());
-    if (!shown || shown.scale !== scale || shown.min !== range.min || shown.max !== range.max) {
+    if (
+      !shown ||
+      shown.scale !== scale ||
+      shown.min !== range.min ||
+      shown.fit !== range.fit ||
+      shown.max !== range.max
+    ) {
       shown = { scale, ...range };
       opts.zoomView?.(shown);
     }
@@ -713,6 +732,9 @@ export async function createGameCanvas(
     const self = world.self;
     if (!self) return;
     if (view.floor !== self.pos.z) view.setFloor(self.pos.z);
+    // The server's window came with the Welcome, before the canvas; should it change, the
+    // canvas fits the new one at once.
+    if (world.view !== sizedFor) resize();
     follow(now);
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
     behindWall.visible = false;
@@ -980,6 +1002,9 @@ export async function createGameCanvas(
     },
     get zoom() {
       return { scale, ...range };
+    },
+    get shown() {
+      return shownTiles(app.screen.width, app.screen.height, scale, T);
     },
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));

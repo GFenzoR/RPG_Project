@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { devicePixels, followCamera, mapLift, pixelScale } from "./viewport.ts";
+import { devicePixels, followCamera, mapLift, pixelScale, wholeScale } from "./viewport.ts";
 
 describe("viewport", () => {
   it("scales by whole device pixels per sprite pixel", () => {
@@ -8,6 +8,15 @@ describe("viewport", () => {
     expect(pixelScale(1920, 1080, 1, 32)).toBe(3);
     expect(pixelScale(1280, 720, 2, 32)).toBe(4);
     expect(pixelScale(300, 200, 1, 32)).toBe(1);
+  });
+
+  it("finds the largest scale that shows a whole window", () => {
+    const wide = { width: 31, height: 21 };
+    // 31x21 tiles of 32 px = 992x672 sprite pixels.
+    expect(wholeScale(1680, 1043, 1, 32, wide)).toBe(1);
+    expect(wholeScale(2330, 1352, 1, 32, wide)).toBe(2);
+    expect(wholeScale(1216, 780, 2, 32, wide)).toBe(2);
+    expect(wholeScale(900, 600, 1, 32, wide)).toBe(0);
   });
 
   it("centres the view on the tile and snaps to device pixels", () => {

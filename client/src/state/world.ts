@@ -58,6 +58,8 @@ import { applyMarket, tradeFrom } from "./market.ts";
 import type { MarketView, TradeView } from "./market.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
+import { CLASSIC_VIEW, serverView } from "./view.ts";
+import type { ViewTiles } from "./view.ts";
 
 export interface Walk {
   from: Pos;
@@ -343,6 +345,12 @@ export class WorldState implements TileSource {
   /** Welcome.max_queued_steps: how many own steps may wait for the server. */
   private maxQueued = 0;
   /**
+   * The window the server keeps this client up to date with (Welcome.view_width and
+   * view_height, 31x21; 15x11 before the Welcome or from an older server): the canvas
+   * draws at most this much (render/viewport.ts).
+   */
+  view: ViewTiles = CLASSIC_VIEW;
+  /**
    * The walk epoch of the last WalkRejected or FullMapView (docs/05 "Caminar"), sent with
    * every Walk: the server drops Walks sent before the client heard of a reset.
    */
@@ -527,6 +535,7 @@ export class WorldState implements TileSource {
       case "welcome":
         this.selfId = msg.value.creatureId;
         this.maxQueued = msg.value.maxQueuedSteps;
+        this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
         break;
       case "fullMapView":
         this.chunks.clear();

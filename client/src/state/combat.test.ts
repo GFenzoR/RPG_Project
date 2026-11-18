@@ -62,6 +62,8 @@ function world(): WorldState {
         serverTime: 0n,
         tickMs: 50,
         maxQueuedSteps: 4,
+        viewWidth: 31,
+        viewHeight: 21,
       },
     },
     0,

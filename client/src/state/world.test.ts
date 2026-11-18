@@ -129,6 +129,8 @@ function entered(): WorldState {
         serverTime: 0n,
         tickMs: 50,
         maxQueuedSteps: 4,
+        viewWidth: 31,
+        viewHeight: 21,
       },
     },
     0,
@@ -215,6 +217,11 @@ describe("WorldState", () => {
     expect(chunk?.items).toEqual([{ x: 101 % 32, y: 201 % 32, stack: ["4"] }]);
     // Same object until something changes, so the renderer does not rebuild the chunk.
     expect(w.chunk(7, 3, 6)).toBe(chunk);
+  });
+
+  it("takes the server's window from the Welcome (15x11 before it)", () => {
+    expect(new WorldState(content).view).toEqual({ width: 15, height: 11 });
+    expect(entered().view).toEqual({ width: 31, height: 21 });
   });
 
   it("predicts a step, keeps it on confirmation and takes the server's duration", () => {

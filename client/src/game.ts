@@ -26,6 +26,7 @@ import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotk
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
 import type { ZoomView } from "./render/zoom.ts";
+import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
@@ -163,6 +164,8 @@ export interface ClientTestHooks {
   scale(): number;
   /** The map's zoom: the scale drawn and the scales the player may choose. */
   zoom(): ZoomView;
+  /** The server's window (Welcome) and the tiles the canvas shows of it (fractional when cut). */
+  view(): { server: ViewTiles; shown: ViewTiles };
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
@@ -1478,6 +1481,7 @@ export class Game {
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
       zoom: () => canvas.zoom,
+      view: () => ({ server: world.view, shown: canvas.shown }),
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,
