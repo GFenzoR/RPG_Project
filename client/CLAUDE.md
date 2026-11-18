@@ -1091,8 +1091,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   un campo de texto y después del listener del `Game`): I inventario, K habilidades,
   B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
   la flotante de arriba o, si no hay, abre Opciones. Un resaltado del tutorial abre su
-  ventana (`windowForHighlight`). Las ventanas del servidor (diálogo, tienda, crafteo,
-  mercado, casa, intercambio) siguen donde estaban, con el mismo marco.
+  ventana (`windowForHighlight`). Desde `feat/ui-windows-2` las ventanas del servidor
+  (diálogo, tienda, crafteo, mercado, casa, intercambio) y cada contenedor son
+  `GameWindow` también, y todas se mueven y cambian de tamaño con el mouse y el teclado:
+  ver "Notas de lo que quedaba de A3, A4 y A5".
 - **Gremio** (UI-7): ventana propia con pestañas Resumen, Miembros y Guerras
   (`GuildPanel` con `tab`; sin `tab` muestra todo, como en la pestaña de los teléfonos).
   Sigue sin hooks y `ui/Guild.test.ts` recorre las pestañas.
@@ -1164,8 +1166,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
   (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
   búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
-  estado. `.npc-windows` va de lado a lado sobre el mapa, abajo al centro; con la tienda,
-  `data-shop` pone la tienda a la izquierda y el diálogo en una columna. Los temas vienen de
+  estado. En tablets y teléfonos `.npc-windows` va de lado a lado sobre el mapa; en el
+  escritorio diálogo y tienda son `GameWindow` ("Notas de lo que quedaba de A3, A4 y A5"),
+  abajo al centro, y con la tienda `.game-body[data-shop]` la pone a la izquierda del
+  diálogo, que se angosta a una columna. Los temas vienen de
   `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
   `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
   `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
@@ -1184,3 +1188,87 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **E2E:** `useAt` (Ctrl+click derecho) en `e2e/game.spec.ts` para usar algo del mapa; la
   mochila y el fogón pasan por el menú, el pico y las mochilas del intercambio por el doble
   click. Screenshots nuevos: `09a-item-menu`, `09b-item-tooltip` y `14b-shop-sell`.
+
+## Notas de lo que quedaba de A3, A4 y A5 (rama `feat/ui-windows-2`)
+- **Tres clases de ventana, un solo estado** (`ui/windows.ts`, puro y con tests): las de la
+  botonera (`WINDOW_IDS`), las del servidor (`SERVER_WINDOWS`: `dialog`, `shop`,
+  `crafting`, `market`, `house`, `trade`) y una por contenedor abierto
+  (`container-<item>`, `-2`, `-3`… si hay varios del mismo item: `containerKeys` le deja
+  su clave mientras sigue abierto, así un segundo contenedor no toma el lugar del primero).
+  Las dos últimas viven en `WindowsState.others`; `placeOf(s, id)` da el lugar de
+  cualquiera. El servidor las abre y las cierra: `GameView` calcula cuáles muestra
+  (`serverWindows`, con la precedencia de antes: la tienda solo con su diálogo, el crafteo
+  y el mercado esperan al diálogo, la casa al diálogo y al mercado) y las sigue con
+  `syncWindows` en un `useLayoutEffect` (se ven en el mismo frame). Cerrar una (×, Escape
+  si es la flotante de arriba) se lo pide al servidor (`serverClose`: `closeDialog`,
+  `closeStation`, `marketClose`, `houseClose`, `tradeCancel`, `closeContainer`); la tienda
+  no tiene × (se cierra con su diálogo). `rpg.windows` pasa a `v: 2` con `others` (sin
+  `open`: el servidor las vuelve a abrir); una `v: 1` se sigue leyendo. Se recuerdan hasta
+  `MAX_CONTAINER_PLACES` contenedores. "Restablecer ventanas" (`resetWindows`) deja abiertas
+  las del servidor que lo estaban, en su lugar de fábrica.
+- **Dónde salen la primera vez** (`windows.css`): los contenedores acoplados bajo lo que
+  haya (como en Tibia); el diálogo abajo al centro sobre la hotbar; con la tienda, los dos
+  lado a lado centrados (`.game-body[data-shop]`, `--shop-w`); crafteo, mercado y casa
+  arriba a la izquierda; el intercambio arriba a la derecha. Movidas, guardan su lugar.
+- **Componentes `framed`:** `DialogView`/`ShopView`, `CraftingWindow`, `MarketWindow`,
+  `HouseWindow`, `TradeWindow` y `ContainerView` (`ui/Inventory.tsx`) toman `framed`: sin
+  su encabezado (la barra del `GameWindow` lo nombra y lo cierra) y **sin su `data-testid`,
+  que pasa al marco**: `dialog`, `shop`, `crafting`, `market`, `house`, `trade` siguen
+  siendo los mismos test ids, y el marco tiene el título como `h2` (`dialog` →
+  `getByRole("heading")` da el nombre del NPC; `house-name` es el `titleTestid` del título)
+  y los mismos nombres del botón cerrar de antes (`closeLabel`). Un contenedor es
+  `window-container-<item>` con el `[data-testid=container][data-container-item=…]` adentro
+  (envuelto en `.inventory.container-window` para heredar los slots). En tablets y
+  teléfonos todo sigue como antes: hojas sobre el mapa y los contenedores bajo el equipo
+  (`InventoryPanel` con `containers`).
+- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView`): la barra
+  arrastra como antes; la esquina de abajo a la derecha (`.gwin-resize`; en una acoplada,
+  el borde de abajo y solo el alto) cambia el tamaño (`resizeWindow`, `clampSize` con
+  `MIN_SIZE`); el botón ✥ de la barra (`.gwin-move`, `window-move-<id>`) toma el teclado
+  (`windowNudge`): flechas mueven 16 px, Mayús+flechas cambian el tamaño, en una acoplada
+  arriba y abajo la cambian de lugar (`moveInDock`), Enter o Espacio la acoplan o la sueltan
+  junto al dock. El botón para la tecla (`preventDefault` + `stopPropagation`) para que la
+  flecha no camine; Alt no se toma (Alt+← es "atrás" del navegador). Después de acoplar o
+  soltar, el foco vuelve al ✥ de la ventana. La ayuda (H) lo explica (`client.help.windows`).
+- **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
+  `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
+  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock`, las ventanas flotantes y la
+  hotbar (`--ui-zoom` en `<html>`); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
+  tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en `rem` crece. El
+  ancho del dock (`--dock-w`) pasó a px para que el texto grande no le quite un paso de zoom
+  al mapa; la escala sí (el dock crece y el mapa toma lo que queda). Los lugares y tamaños
+  de `rpg.windows` son px de pantalla: `GameWindow` los divide por la escala (`zoom`).
+- **Sacudida de cámara y destello de la hotbar** (UI-9): `WorldState.heavyHitAt` se marca
+  cuando un `PlayerStats` baja la vida un 10 % del máximo o más (`render/shake.ts`
+  `heavyHit`); `game-canvas.ts` corre la cámara `shakeOffset` (2 px, 120 ms, un patrón fijo
+  que se apaga, en px enteros del dispositivo) si `GameOptions.cameraShake()` (Opciones,
+  `rpg.shake`, encendida por defecto) y no hay movimiento reducido. Usar un hechizo de la
+  hotbar (tecla o click) publica `GameUi.cast` y su slot pinta un `.flash` de 150 ms
+  (`flashes` en `ui/Hotbar.tsx`); con movimiento reducido no se dibuja.
+- **Texto del NPC letra por letra** (UI-8): `DialogBox` cuenta el tiempo
+  (`typedLength`, 90 caracteres/s, `state/dialog.ts`) y `DialogView` recibe `typed`: lo que
+  falta va en `.npc-rest` invisible (la caja no crece mientras aparece) y el texto entero
+  en un `.visually-hidden` para lectores de pantalla y para los E2E (`toContainText` sigue
+  andando). Un click en el texto o Espacio (si el foco no está en un botón) lo completa;
+  con movimiento reducido sale entero. El retrato respira (`npc-idle`, 3,2 s, 1 px).
+- **Items de misión:** `ItemDef.quest` (`quest: true` en `data/items`, docs/06): el nombre
+  en `--ui-item-quest` en la ficha y el menú, la marca `client.card.mark.quest` y un anillo
+  dorado en la celda (`.item[data-quest]`). Los demás nombres pasaron a `--ui-text` (UI-6).
+- **Slots vacíos:** `emptySlotStyle` (`ui/Inventory.tsx`) pone el sprite `ui/slots/<slot>`
+  del atlas (spritegen, `kind: ui`, `UI_SLOT_BOX`) como `--slot-icon` del slot; el CSS lo
+  dibuja al 30 % detrás (`.equipment .slot::before`). Sin atlas, no hay nada.
+- **Ficha sobre el mapa:** `game-canvas.ts` avisa `restTile` cuando el mouse queda 350 ms
+  quieto en una casilla (y `undefined` al salir, apretar o usar la rueda); `Game.restTile`
+  elige `menuItem` si es algo que se lleva (`groundCard` de `state/item-card.ts`: ni
+  suelos, ni muros, ni decoración, ni estaciones) y publica `GameUi.groundTip`;
+  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`).
+- **Mayús+arrastrar** (`Game.pressItem`, y en el canvas un Mayús+click es una "pulsación de
+  mirar" que mira al soltar y arrastra si se mueve): con una pila (`splittable`) suelta
+  `GameUi.split` y `ui/SplitPrompt.tsx` pregunta cuántas (la mitad para empezar,
+  `halfStack`; `splitCount` de `state/items.ts`, el mismo de "Mover parte…": de 1 a la pila
+  menos una). Enter o "Mover" manda `MoveItem` con esa cantidad; Escape o "Cancelar" no
+  mueve nada. Mayús+click sigue mirando.
+- **Vista previa:** escenas `server`, `groundtip` y `scale` (`?ui=1.25&text=1.15`) en
+  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos.
+- **E2E:** `e2e/game.spec.ts` busca la mochila fuera de la ventana del inventario
+  (`page.locator('[data-container-item="backpack"]')`, `window-container-backpack`).

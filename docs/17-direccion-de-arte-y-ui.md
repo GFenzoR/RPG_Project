@@ -836,7 +836,8 @@ recortar y pasar a woff2 con su nombre.
 - **Escala:** títulos de 15–16 px en Cinzel 600 con `letter-spacing: .04em`; interfaz de 14
   px con interlineado 1.35; diálogos de 16 px con 1.45. Números con
   `font-variant-numeric: tabular-nums` (vida, oro, pesos).
-- **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`.
+- **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`. **Hecho**, con una escala
+  de la interfaz aparte ("Hecho: lo que quedaba de A3, A4 y A5").
 
 ### UI-4 Layout de escritorio y "ver más pantalla"
 **Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
@@ -992,8 +993,9 @@ Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones 
   reglas de T5.1).
 
 ### UI-8 Diálogo de NPC y tienda sin scroll
-**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (sin texto
-letra por letra todavía; retrato a 2x; categorías deducidas por NPC).
+**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (retrato a
+2x; categorías deducidas por NPC). El texto letra por letra y el retrato que respira, en
+"Hecho: lo que quedaba de A3, A4 y A5".
 **Diálogo:**
 - **Lugar y tamaño:** abajo al centro, sobre el HUD, de `min(760px, 70vw)` de ancho y
   hasta el 65 % del alto. Retrato del NPC a la izquierda (su sprite a 3x, animado si tiene
@@ -1225,7 +1227,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 |---|---|---|---|
 | A1 ✅ | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1") y los créditos dentro de la app de escritorio ("Hecho: el resto de A1, A10, A11 y A13") | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
-| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
+| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante. Lo que quedó (cada contenedor y las ventanas del servidor como `GameWindow`, mover y cambiar el tamaño con el teclado y el mouse, escala y tamaño de texto, slots vacíos, sacudida y destello) en "Hecho: lo que quedaba de A3, A4 y A5" | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
 | A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1 a MOV-7 y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"; el toque corto que solo gira y el polvo y las ondas al pisar, "Hecho: disparar, conjurar, desvanecerse, pasos y girar") | cliente, servidor, proto, docs/02, 05 y 07 | — |
@@ -1398,10 +1400,12 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
     deshabilitado con la pista "usa un tablero" y, abierto, lo cierra;
   - "Salir del juego" es un botón más de la botonera, no de Opciones;
   - el modo de combate (postura, perseguir, modo seguro) va arriba de la ventana Batalla;
-  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias;
+  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias
+    (después: ventanas propias, "Hecho: lo que quedaba de A3, A4 y A5");
   - las ventanas del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio)
-    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda);
-  - mover ventanas con el teclado y cambiarles el tamaño no se hizo.
+    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda; después
+    son `GameWindow` acoplables);
+  - mover ventanas con el teclado y cambiarles el tamaño no se hizo (después sí).
 - **Gremio (UI-7):** ventana propia con pestañas Resumen, Miembros y Guerras. La
   administración quedó en Resumen (mensaje del día y disolver) y la invitación en Miembros.
   Una invitación al jugador sale sobre el mapa con Aceptar y Rechazar, como antes, y el
@@ -1411,7 +1415,8 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
   latido y viñeta roja con poca vida, barras con `transform`, avisos que entran y se van,
   subida de nivel con destello en la barra de experiencia y aviso en Grenze Gotisch, y la
   pantalla de muerte. Se apagan con `prefers-reduced-motion` o con "Animaciones reducidas"
-  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron.
+  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron
+  (después sí: "Hecho: lo que quedaba de A3, A4 y A5").
 - **Teléfonos:** encabezado compacto, pestañas y cajón como en T5.6, con el tema.
 - **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
   varios tamaños sin levantar nada.
@@ -1456,16 +1461,16 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
   (cura, maná, comida, elemento, munición), la descripción en itálica y las marcas "No se
   puede intercambiar" / "No se vende en el mercado". Los datos los suma el plugin de Vite
   al `ItemDef` (`cardFields`). **No se hizo:** el color de item de misión
-  (`--ui-item-quest`): `data/items` no marca los items de misión.
+  (`--ui-item-quest`): `data/items` no marca los items de misión (después: `quest: true`).
 - **Tooltip** (`ui/ItemTooltip.tsx`): la misma ficha a los 350 ms de mouse quieto sobre un
   item del DOM (equipo, contenedores, tienda, intercambio, recetas) o con el foco del
   teclado (los items del inventario toman el foco: Enter = acción por defecto, la tecla de
   menú o Mayús+F10 = menú). No toma clicks y se va con cualquier click, la rueda o Escape.
-  Sobre el canvas no hay tooltip: ahí está el menú.
+  Sobre el canvas no hay tooltip: ahí está el menú (después sí, para lo que se lleva).
 - **Diálogo (UI-8):** abajo al centro, `min(47.5rem, 100%)` de ancho; retrato del NPC a 2x
   (no 3x: los sprites de NPC son de 32 px y a 3x tapaban texto); el texto entra con un
   fundido corto (**no** letra por letra: queda pendiente, y rompería las esperas de los
-  E2E); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
+  E2E; después sí, sin romperlas: el texto entero sigue en la página); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
   borde de color por tema, hasta 2 líneas y el texto completo en el `title`. Orden:
   Misiones, Comercio, Viajes, Servicios, Conversación; dentro de cada tema, el orden del
   servidor. Fila de abajo: Volver (0) y Adiós (Escape; si el nodo no tiene "Adiós",
@@ -1502,7 +1507,76 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
 - **Pendiente de esta parte:** texto letra por letra del diálogo; retrato animado;
   color de items de misión; arrastrar con Mayús para dividir una pila (hoy es "Mover
   parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
-  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
+  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia. Todo hecho menos
+  el intercambio con cantidad: "Hecho: lo que quedaba de A3, A4 y A5".
+
+
+### Hecho: lo que quedaba de A3, A4 y A5 (2026-11-18, rama `feat/ui-windows-2`)
+Solo cliente (más `quest` en `data/items` y los íconos de spritegen): el servidor y el
+protocolo no cambian. El detalle técnico está en `client/CLAUDE.md`, "Notas de lo que
+quedaba de A3, A4 y A5".
+- **Cada contenedor es su ventana (UI-5).** Abrir una mochila (o los restos de un
+  monstruo) abre una ventana propia con su título, plegable, que se cierra con su × (o
+  Escape si es la flotante de arriba) y se acopla bajo el equipo, como en Tibia, o flota
+  donde el jugador la deje. La grilla toma las columnas que entran (de 4 a 6 en el dock).
+  El lugar se recuerda **por item** en el dispositivo (`container-backpack`; un segundo del
+  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. En
+  tablets y teléfonos siguen debajo del equipo, como antes.
+- **Las ventanas del servidor son `GameWindow`.** Diálogo, tienda, crafteo, mercado, casa e
+  intercambio tienen la barra de las demás (ícono, título, mover, plegar, cerrar), se
+  acoplan, flotan, se apilan y recuerdan su lugar. El servidor las sigue abriendo y
+  cerrando: su × hace lo que hacía el de antes (Adiós, cerrar la estación, cerrar el
+  mercado o la casa, cancelar el intercambio). La tienda no tiene ×: se cierra con su
+  diálogo. La primera vez salen donde estaban: el diálogo abajo al centro, con la tienda a
+  su izquierda; crafteo, mercado y casa arriba a la izquierda; el intercambio arriba a la
+  derecha. Los `data-testid` (`dialog`, `shop`, `crafting`, `market`, `house`, `trade`,
+  `house-name`) y los nombres de los botones de cerrar se mantienen.
+- **Mover y cambiar el tamaño, con el mouse y con el teclado (UI-1, UI-5).** La esquina de
+  abajo a la derecha cambia el tamaño (una ventana acoplada, el borde de abajo, solo el
+  alto), con un mínimo de 160x72 y nunca más grande que el área. El botón ✥ de la barra
+  arrastra como la barra y, con el foco (Tab), toma el teclado: las flechas mueven la
+  ventana 16 px, Mayús+flechas cambian su tamaño, en una acoplada arriba y abajo la cambian
+  de lugar en la columna, y Enter o Espacio la acoplan o la sueltan junto a la columna. Alt
+  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta.
+- **Escala de la interfaz y tamaño del texto (UI-3).** Opciones → Interfaz (y el menú ☰ del
+  teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock, las ventanas y la hotbar
+  crecen; el mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x) y "Tamaño del
+  texto" de 90 % a 130 % (en `rem`, como pedía UI-3). Cambio sobre el plan: son **dos**
+  opciones, porque el texto más grande no debería quitarle un paso de zoom al mapa (el
+  ancho del dock quedó en px) y la escala sí agranda los íconos y los slots. Se recuerdan
+  por dispositivo.
+- **Íconos de slot vacío (UI-5).** Diez siluetas propias de 20x20 (yelmo, amuleto, mochila,
+  túnica, espada, escudo, pantalón, bota, anillo y flechas), color hueso y grabadas en la
+  piedra, hechas con spritegen (`ui/slots/<slot>`, `kind: ui`); el equipo las muestra al
+  30 % en el slot que no tiene nada.
+- **Sacudida de cámara y destello de la hotbar (UI-9).** Un golpe que quita de una vez el
+  10 % de la vida máxima o más sacude la cámara 2 px durante 120 ms (un patrón fijo que se
+  apaga). Es opción aparte ("Sacudir la cámara con los golpes fuertes", encendida) y nunca
+  pasa con movimiento reducido. Usar un hechizo de la hotbar (tecla o click) hace destellar
+  su slot 150 ms; con movimiento reducido, no.
+- **Texto del NPC letra por letra y retrato (UI-8).** El texto aparece a 90 caracteres por
+  segundo; un click en él o Espacio lo completa y con movimiento reducido sale entero. La
+  caja tiene su tamaño final desde el principio (lo que falta espera invisible) y el texto
+  entero está en la página para los lectores de pantalla y para las esperas de los E2E. El
+  retrato "respira": sube un píxel en un bucle lento de 3,2 s. No se hizo "▼ más" (paginar
+  un texto que no entra): con los textos de hoy no hace falta.
+- **Items de misión con su color (UI-6).** Un item marcado `quest: true` en `data/items`
+  (esquema y docs/06; hoy `smuggler_tally`, `sealed_coffer`, `delver_chart`, `forge_seal`
+  y `tarnished_locket`) se nombra en `--ui-item-quest` en la ficha, el tooltip y el menú,
+  suma la marca "Objeto de misión" (el color no es la única señal) y tiene un anillo dorado
+  en su celda. Como pide UI-6, los demás nombres pasaron de oro a `--ui-text`.
+- **Tooltip sobre el canvas.** Con el mouse quieto 350 ms sobre una casilla sale la ficha
+  del item que está ahí, debajo del texto de la acción junto al cursor. Solo para lo que se
+  lleva y se puede levantar: ni suelos, ni muros, ni decoración, ni estaciones (de esos
+  dice lo que importa el texto del cursor).
+- **Mayús+arrastrar para dividir una pila.** Arrastrar con Mayús una pila (de un
+  contenedor, un slot o el mapa) pregunta, donde se suelta, cuántas unidades mover (la
+  mitad para empezar, de 1 a la pila menos una, como "Mover parte…"); Enter mueve, Escape
+  cancela. Mayús+click sigue mirando: en el mapa, ahora mira al soltar.
+- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); Pixelify Sans en
+  el canvas; el marco de hierro como PNG 9-slice; enfocar una ventana del servidor al
+  abrirse. (Si el jugador camina con el mouse quieto, la ficha de la casilla anterior se va
+  y la espera empieza de nuevo en la que queda bajo el cursor.)
 
 
 ### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)

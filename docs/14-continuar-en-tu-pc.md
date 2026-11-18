@@ -103,7 +103,8 @@ el punto 5:
   botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
-  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones; y A8 con la
+  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones (y lo que
+  quedaba de A3, A4 y A5, rama `feat/ui-windows-2`, abajo); y A8 con la
   parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
   `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
   en el orden de su §7:
@@ -182,20 +183,34 @@ el punto 5:
       Opciones que abre la misma página en una ventana sobre el juego (rama
       `feat/world-art-2`). Falta probar ese botón en la app real (`make desktop-dev`): el E2E
       corre en el navegador, donde Opciones sigue mostrando el enlace.
-  - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
-    animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
-    canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
+  - **Lo que A3, A4 y A5 dejaron (hecho, rama `feat/ui-windows-2`, docs/17 §7 "Hecho: lo que
+    quedaba de A3, A4 y A5"):** cada contenedor es su ventana; diálogo, tienda, crafteo,
+    mercado, casa e intercambio son `GameWindow` acoplables; las ventanas se mueven y
+    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥); escala de la
+    interfaz y tamaño del texto (Opciones → Interfaz); íconos de slot vacío (spritegen
+    `ui/slots/*`); sacudida de cámara con los golpes fuertes y destello de la hotbar (los
+    dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
+    letra por letra (click o Espacio lo completa) y retrato que respira; items de misión con
+    su color (`quest: true` en `data/items`); ficha sobre el canvas para lo que está en el
+    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
+    canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
+    cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+  - **Revisar en el E2E final de `feat/ui-windows-2`** (no se corrió en la rama; se miró
+    con `make ui-preview`, escenas `game`, `server`, `groundtip`, `scale`, `dialog` y
+    `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su ventana acoplada
+    (`window-container-backpack`, ya no dentro de Inventario: `09-inventory` la deja
+    afuera); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
+    lado a lado;
+    `16-crafting-window`, `52-trade-window`, `53-market-offer-posted`, `56-house-free` y
+    `57-house-rented` con la barra nueva (sus test ids y los nombres de los botones de
+    cerrar no cambiaron); que el texto del NPC aparezca letra por letra sin romper ninguna
+    espera; los slots vacíos con su silueta y que Mayús+click siga mirando en el mapa y en
+    el inventario (ahora mira al soltar). A 1280x800 la mochila acoplada queda bajo la
+    batalla y el inventario: la columna se desplaza.
   - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
     (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
     `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
     no se desplaza: el E2E de la Isla de Pruebas busca la mochila y pagina.
-  - **Lo que A3 dejó para después** (docs/17 §7, "Hecho: A2 y A3"): cada contenedor como
-    ventana propia (hoy van dentro de Inventario); las ventanas del servidor (diálogo,
-    tienda, crafteo, mercado, casa, intercambio) como `GameWindow` acoplables (hoy solo
-    tienen el marco nuevo); mover ventanas con el teclado y cambiarles el tamaño; tamaño de
-    fuente y escala de la UI (UI-3); Pixelify Sans en el canvas; íconos de slot vacío en el
-    equipo; sacudida de cámara y destello de la hotbar (UI-9). El marco de hierro es CSS:
-    el PNG 9-slice de spritegen (`ui/frame/iron`) queda como mejora.
   - **Revisar en el E2E final de la UI:** las ventanas flotantes (gremio, apariencia,
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
