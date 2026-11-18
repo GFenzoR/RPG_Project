@@ -206,6 +206,9 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
     - { x: 3154, y: 6401, z: 7 }
   exit: { x: 3153, y: 6402, z: 7 }
 ```
+- Las puertas son casillas de suelo (un hueco en el muro). El cliente, el editor y
+  `mapcli render` dibujan encima un marco de madera, el item `house_door_frame`, que no
+  está en el mapa ni lo ve el servidor (docs/17 A11).
 - `id` único en todo el mundo (es la clave de las tablas `house_owners`, `house_guests` y
   `house_items`: **no se cambia** una vez publicado). `name` es siempre
   `house.<id>.name` (los mensajes del servidor nombran la casa por su id). Una casa quitada o renombrada deja

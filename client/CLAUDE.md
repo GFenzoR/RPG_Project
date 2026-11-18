@@ -66,6 +66,21 @@ client/
   item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
   T0.5). Solo se dibuja el piso del jugador.
+- Lo que sumó la rama `feat/world-art-2` (docs/17 "Hecho: el resto de A1, A10, A11 y A13"):
+  - **Click sobre la cabeza** (ART-2): `render/creature-hits.ts` (`DrawnBoxes`, puro y con
+    tests) guarda la caja de cada criatura dibujada; el click derecho, Mayús+click, el
+    toque y el toque largo prueban primero esas cajas (la de adelante gana, el propio
+    jugador no cuenta) y después la casilla.
+  - **Criaturas tapadas:** si otra dibujada después cubre `HIDDEN_SHARE` (un cuarto) o más
+    de su caja, se dibuja otra vez encima del mapa, translúcida (`hiddenLayer`).
+  - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
+    (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
+  - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
+    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido.
+  - **Marco de puertas de casa:** `MapView` lee el mundo a través de un `DecoratedSource`
+    (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el
+    estado del juego no lo tiene.
+  - **Créditos en la app de escritorio** (A1): ver "Créditos (docs/17 A1)".
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
 ## Atlas: reintentos y "Reintentar"
@@ -303,7 +318,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   para cada pack, y un enlace en `site/credits.ts` `licenceUrl` para cada licencia).
 - Enlaces: el pie del sitio (`site.nav.credits`) y `ui/CreditsLink.tsx` en Opciones (la
   ventana de escritorio y `AudioOptions` del login y del menú ☰), otra pestaña; en la app
-  de escritorio, la dirección como texto (`client.options.credits_desktop`).
+  de escritorio, un botón que abre la misma página en una ventana sobre el juego
+  (`CreditsWindow`, renderizada en su propio elemento de `<body>`; los datos llegan de
+  `virtual:rpg-credits` al abrirla y las frases `site.credits.*` viajan en los catálogos
+  del juego; las direcciones van como texto, `CreditsPage` con `plain`), con la dirección
+  de `/credits` abajo (`client.options.credits_desktop`).
 - Fuentes: `buildFont` conserva los name ids 0–6, 13 y 14 (`KEPT_NAME_IDS`): el
   copyright y la licencia OFL viajan en cada woff2.
 - E2E: "credits" de `e2e/site.spec.ts` (screenshots `site-09` y `site-10`) y el enlace

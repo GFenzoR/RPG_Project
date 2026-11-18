@@ -129,12 +129,16 @@ el punto 5:
       OpenGameArt con licencia por archivo.
     - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
       Dungeon Crawl, una (ART-2 lo acepta).
-    - **Click sobre la cabeza** de un personaje alto (cae en la casilla de arriba): sigue
-      eligiendo la casilla, no a la criatura (ART-2, A10).
+    - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
+      ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
+      Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
+      de `07-combat`) se dibuja otra vez, translúcida, encima del mapa.
     - **Atlas:** pasó de 1 a 2 páginas (docs/07).
-    - **Pantalla de créditos (A1):** hecha en su versión mínima (lote 6): la página
-      `/credits` del sitio, enlazada desde el pie del sitio y desde Opciones. La app de
-      escritorio solo muestra la dirección para abrirla en el navegador.
+    - **Pantalla de créditos (A1):** hecha: la página `/credits` del sitio, enlazada
+      desde el pie del sitio y desde Opciones, y en la app de escritorio un botón de
+      Opciones que abre la misma página en una ventana sobre el juego (rama
+      `feat/world-art-2`). Falta probar ese botón en la app real (`make desktop-dev`): el E2E
+      corre en el navegador, donde Opciones sigue mostrando el enlace.
   - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
     animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
     canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
@@ -164,15 +168,24 @@ el punto 5:
     - **Props sin poner:** `wall_torch`, `wall_banner`, `brazier` y `fountain` existen
       (ids, i18n, arte animado) pero ningún mapa los usa todavía: es una tarea de mapa
       (`build-map-area`), por ejemplo antorchas en la mina y una fuente en cada plaza.
-    - **Marco de puerta de casa:** la puerta de una casa (`houses.yaml` `doors`) sigue
-      siendo un hueco en el muro. Un item de marco que no bloquea y `joins_walls` lo
-      resolvería, pero cambia mapas.
-    - **Muros altos (32x96), ventanas y `elevation`** (ART-3, ART-8): sin hacer.
+    - **Marco de puerta de casa:** hecho sin tocar mapas (rama `feat/world-art-2`): el
+      cliente, el editor y `mapcli render` dibujan `house_door_frame` en cada puerta de
+      `houses.yaml` (`DecoratedSource` de `packages/renderer`). Una puerta de dos casillas
+      muestra un poste en el medio.
+    - **Muralla (`rampart_wall`, 32x96) y muros con ventana** (`stone_wall_window`,
+      `wooden_wall_window`): existen (ids, i18n, arte), pero ningún mapa los usa todavía:
+      es tarea de mapa (`build-map-area`), como los props.
+    - **Elevación** (ART-8): hecha para el dibujo (`elevation` en `data/items`; el cajón de
+      carga, 8 px). No hay mesas ni barriles en `data/items` todavía, y el cajón bloquea el
+      paso: por ahora solo sube lo que se tira encima.
     - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
       (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
       recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
       islas es `mapcli autoborder`: cambia mapas.
-    - **Partículas de ambiente** (A13): polvo, brasas, hojas, ondas al pisar.
+    - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
+      polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
+      (`client/src/render/particles.ts`). Faltan el polvo y las ondas al pisar, el pasto
+      que se agita, la niebla y las gaviotas sobre el mar (ART-7).
     - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
       lava enfriada ya entran en la banda de valor de ART-6.
@@ -180,9 +193,8 @@ el punto 5:
       dos lados de un tramo norte-sur (una franja de empedrado afuera del templo). Se lee
       como un zócalo; si molesta, la solución es de mapa (pasto bajo el muro) o un muro
       más ancho.
-  - **A1** dentro de la app de escritorio: hoy Opciones solo muestra la dirección de
-    `/credits`. Antes de distribuir la app (o publicarla en tiendas, docs/15), mostrar
-    los créditos dentro de ella.
+  - **A1 en las apps móviles** (docs/15): el botón de créditos de la app de escritorio
+    sirve igual dentro de Tauri móvil (detecta Tauri), pero no se probó ahí.
   - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
     la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
     `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en

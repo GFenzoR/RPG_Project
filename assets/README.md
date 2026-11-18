@@ -151,7 +151,14 @@ tiles:
   decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
+  ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
 ```
+- `particles` (docs/17 ART-7, A13): `embers` (brasas que suben), `pollen` (polen que flota
+  alrededor de un árbol), `spray` (rocío; un suelo `spray` solo emite donde toca otro
+  suelo) o `dust` (polvo). El cliente las dibuja (`client/src/render/particles.ts`).
+- Las piezas de muro pueden medir 32x96 (la muralla, `walls/rampart_wall`: cara de 64 px).
+  El marco de las puertas de casa (`doors/house_door_frame`) también tiene 16 piezas: el
+  renderer lo pone en cada puerta de `houses.yaml` sin que esté en el mapa.
 - `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
   casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
   entrada: 250 ms y `world`.

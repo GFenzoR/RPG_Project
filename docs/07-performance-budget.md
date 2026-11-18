@@ -349,6 +349,13 @@ y 2048x896), 1,83 MB + 884 KB de PNG y 358 KB + 289 KB de JSON, más 176 KB de
 sprites nuevos del mapa: 16 piezas de 32x64 por muro (5 materiales), looks de suelo, frames de
 agua, lava, espuma, copas y fuego, y sombras.
 
+**Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
+(`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
+hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
+chunk, `MapView.forEachEmitter`). Se apagan con movimiento reducido. Las cajas de las
+criaturas (click en la cabeza, siluetas) reusan sus objetos frame a frame; las siluetas
+salen de un pool que solo crece hasta las que se vieron juntas.
+
 ### Vista ancha (31x21, 2026-11)
 La ventana de cada jugador pasó de 15x11 + 1 (17x13 = 221 casillas) a 31x21 + 1 (33x23 =
 759): 3,4 veces más área, así que cada paso y cada golpe en una zona llena llega a más

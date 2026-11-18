@@ -9,7 +9,8 @@ A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los bo
 gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
 "Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama `feat/world-art`, el
-2026-11-18).
+2026-11-18; y el resto de A1, A10, A11 y A13, rama `feat/world-art-2`, el 2026-11-18:
+"Hecho: el resto de A1, A10, A11 y A13").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -156,7 +157,8 @@ parte de arriba transparente.
   muebles sigue abajo a la derecha.
 - **Click sobre sprites altos:** un click en la cabeza de un humanoide (que cae en la
   casilla de arriba) tiene que elegir a la criatura. Primero se prueban las cajas de las
-  criaturas dibujadas (de la última a la primera) y después la casilla (pendiente, A10).
+  criaturas dibujadas (de la última a la primera) y después la casilla (hecho, 2026-11-18:
+  ver "Hecho: el resto de A1, A10, A11 y A13").
 - **Nombres y barras** van sobre la cabeza real (la parte opaca más alta del frame), no
   sobre la casilla (hecho: suben `lift` px, `client/CLAUDE.md`).
 
@@ -217,8 +219,11 @@ parte de arriba transparente.
   dibuja encima del mapa una copia de su frame, aclarada y al 45 %
   (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
   tapados.
-- **Pendiente:** muros altos de 32x96, ventanas y el marco decorativo de las puertas de
-  casa (`houses.yaml` `doors` siguen siendo un hueco en el muro: ponerlo cambia mapas).
+- **Muros altos, ventanas y marcos (hecho, 2026-11-18):** la muralla `rampart_wall` (16
+  piezas de 32x96, cara de 64 px), los muros con ventana `stone_wall_window` y
+  `wooden_wall_window` (sus 16 piezas con la textura del muro liso; la ventana solo en las
+  piezas con cara de lado a lado) y el marco de las puertas de casa, que no cambia mapas:
+  ver "Hecho: el resto de A1, A10, A11 y A13".
 
 ### ART-4 Suelos: variantes, textura y transiciones
 - **Al menos 4 variantes por suelo** (la principal en ~70 % de las casillas), elegidas en
@@ -342,14 +347,23 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
   cada item con `light` en `tiles` (radio en casillas: fragua y brasero 3,5, fogón y
   antorcha 3). Los brillos salen de un pool: un frame no asigna. En la superficie no dibuja
   nada.
-- **Pendiente:** partículas de ambiente, polvo y ondas al pisar, pasto que se agita, vetas
-  con destello (`sync: random` ya existe, falta el arte) y poner los props nuevos en los
-  pueblos.
+- **Partículas de ambiente (hecho, 2026-11-18):** brasas, polen, rocío y polvo de cueva
+  ("Hecho: el resto de A1, A10, A11 y A13").
+- **Pendiente:** polvo y ondas al pisar, pasto que se agita, niebla y gaviotas sobre el
+  mar, vetas con destello (`sync: random` ya existe, falta el arte) y poner los props
+  nuevos en los pueblos.
 
 ### ART-8 Elevación
 Una propiedad `elevation: <px>` en `data/items` (mesas, cajones, barriles: 8 px) sube lo
 que se apila encima, hasta 24 px. Es solo de dibujo. La criatura que pisa la casilla
 también sube.
+
+**Hecho (2026-11-18)** tal cual: `MapView` sube cada item por la suma de lo que tiene
+debajo (`stackElevation`, tope `MAX_ELEVATION` = 24; las sombras proyectadas no suben) y
+`elevationAt` dice cuánto sube la criatura de esa casilla; el cliente la sube también a
+mitad de paso, entre la altura de las dos casillas. El editor y `mapcli render` leen el
+mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
+`data/items` todavía.
 
 ## 3. Animación de criaturas y personajes (ANI)
 
@@ -1038,7 +1052,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 
 | Id | Tarea | Toca | Depende de |
 |---|---|---|---|
-| A1 ✅ (mínima) | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1"). Falta: los créditos dentro de la app de escritorio (hoy muestra la dirección) | cliente, sitio | — |
+| A1 ✅ | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1") y los créditos dentro de la app de escritorio ("Hecho: el resto de A1, A10, A11 y A13") | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
@@ -1047,10 +1061,10 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
-| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **casi hecho:** todo salvo `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
-| A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18); faltan muros de 32x96, ventanas y marcos de puerta de casa | renderer, spritegen o LPC, `data/items` | A10 |
+| A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
+| A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
-| A13 | Luz en cuevas y partículas de ambiente — **parcial:** la luz, hecha; faltan las partículas | cliente | A10 |
+| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; faltan los efectos al pisar y la niebla (ART-7) | cliente | A10 |
 
 ### Hecho: A1, versión mínima (2026-11-18, lote 6)
 La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte
@@ -1077,8 +1091,64 @@ que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuente
 - **Fuentes:** los woff2 servidos conservan el copyright (name id 0) y la descripción y la
   URL de la licencia (13 y 14), como pide la OFL (`KEPT_NAME_IDS` de
   `client/vite/fonts.ts`, con test).
-- **Falta:** mostrar los créditos dentro de la app de escritorio (y de las móviles, docs/15)
-  sin depender del sitio.
+- **Después** (2026-11-18): los créditos dentro de la app de escritorio, ver "Hecho: el
+  resto de A1, A10, A11 y A13". Las apps móviles (docs/15) usan el mismo botón, sin probar.
+
+### Hecho: el resto de A1, A10, A11 y A13 (2026-11-18, rama `feat/world-art-2`)
+- **Click sobre la cabeza (ART-2).** `client/src/render/creature-hits.ts` guarda cada
+  frame la caja de cada criatura dibujada: la columna de su casilla, del borde de abajo
+  hasta lo más alto del dibujo (`lift`), en su posición interpolada y elevada. El click
+  derecho, Mayús+click, el toque y el toque largo prueban primero esas cajas, de la
+  dibujada última a la primera (la de adelante gana), y después la casilla. El propio
+  jugador no entra: un click en la propia cabeza elige lo que está detrás. Caminar sigue
+  yendo a la casilla.
+- **Criaturas tapadas por otra más alta (`07-combat`).** El jugador de LPC mide ~1,4
+  casillas y tapaba al lobo de la casilla de arriba. El orden de dibujo se queda (el de
+  adelante tapa al de atrás, como pide ART-3); lo que se suma es la silueta: si una
+  criatura dibujada después cubre una cuarta parte o más de la caja de otra
+  (`HIDDEN_SHARE`), la de atrás se dibuja otra vez encima del mapa, aclarada y al 55 %
+  (`HIDDEN_ALPHA`, `HIDDEN_TINT` en `game-canvas.ts`), como el jugador detrás de un muro.
+  Vale para todas las criaturas, también para un NPC tapado por otro en el pueblo. Detrás
+  de un muro, en cambio, los demás siguen ocultos.
+- **Elevación (ART-8):** ver ART-8.
+- **Muralla y ventanas (ART-3).** `tools/spritegen/src/recipes/walls.ts`: `drawPiece` toma
+  la altura de la cara (`TALL_FACE` = 64 para la muralla) y un dibujo extra por pieza (la
+  ventana). La muralla usa la piedra del muro liso y se une con él (todo muro cuenta como
+  vecino). La ventana va solo en las piezas cuya cara cruza la casilla entera (un tramo
+  este-oeste); en un tramo norte-sur no se ve la cara, así que tampoco la ventana.
+  Bloquean el paso y la vista como cualquier muro.
+- **Marco de las puertas de casa (ART-3), sin cambiar mapas.** `houses.yaml` `doors` sigue
+  siendo un hueco en el muro que el servidor conoce por su casilla; poner un item ahí
+  cambiaría qué usa el click derecho en la puerta. En vez de eso, el cliente, el editor y
+  `mapcli render` dibujan el item `house_door_frame` en cada puerta, abajo de la pila
+  (`DecoratedSource` de `packages/renderer/src/decorated.ts`, que envuelve la fuente de
+  casillas de `MapView`). El marco tiene 16 piezas como un muro: los muros de los lados lo
+  cuentan como vecino y corren hasta la puerta; en un muro este-oeste es una viga a la
+  altura de las tapas y dos postes, en uno norte-sur la viga va a lo largo. El estado del
+  juego (clicks, mirar, caminar) nunca lo ve.
+- **Partículas (ART-7, A13).** `client/src/render/particles.ts`: hasta 100 partículas
+  (`MAX_PARTICLES`) en arreglos tipados, dibujadas por un pool fijo de sprites de 1 px en
+  el espacio del mapa (bajo las siluetas, sobre las criaturas). De dónde salen es dato: la
+  clave `particles` de la sección `tiles` de `assets/sprites.yaml` (`embers`, `pollen`,
+  `spray`, `dust`), que spritepack pasa a `atlas.json` y `MapView` junta por chunk
+  (`forEachEmitter`). Hoy: brasas en la lava, la fragua, el fogón y el brasero; polen en
+  roble, olmo, abedul y pino; rocío en el agua de mar donde toca otro suelo (un suelo
+  `spray` solo emite en sus bordes); y en las cuevas (z ≥ 8) polvo en toda la vista.
+  Cada tipo tiene su ritmo, vida, velocidad, vaivén y tres colores por edad (`STYLES`).
+  Solo emiten las casillas en vista; un frame no asigna nada (generador con semilla, el
+  callback se hace una vez, una partícula muerta deja su lugar a la última). Con
+  "Animaciones reducidas" o `prefers-reduced-motion` no hay partículas.
+- **Créditos en la app de escritorio (A1).** En la app (Tauri), Opciones muestra el botón
+  "Créditos del arte y las fuentes", que abre la página de créditos en una ventana sobre
+  el juego (`ui/CreditsLink.tsx`, `CreditsWindow` sin hooks y con test). Los datos vienen
+  de un módulo aparte, `virtual:rpg-credits`, que se importa recién al abrirla; las frases
+  `site.credits.*` viajan en los catálogos del juego. Las direcciones van como texto
+  (`CreditsPage` con `plain`): un enlace abriría el sitio dentro de la app. Abajo sigue la
+  dirección de `/credits` para el navegador. En el navegador no cambia: el enlace a
+  `/credits`.
+- **Opciones del login:** la casilla "Pad direccional en pantalla" quedaba sola en una
+  línea sobre su texto (la regla global de `label` apila en columna); ahora va al lado,
+  como los "Silenciar".
 
 ### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
 Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10
