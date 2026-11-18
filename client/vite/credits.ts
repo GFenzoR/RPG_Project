@@ -2,8 +2,8 @@
 // what their licences ask to show the player (author, title, licence and link). Read at
 // build time from the same records spritepack checks the licences against:
 //
-//   assets/CREDITS.md                    the pack table, "Fuentes (OFL 1.1)" and
-//                                        "Obras derivadas de terceros"
+//   assets/CREDITS.md                    the pack table, "Fuentes (OFL 1.1)",
+//                                        "Obras derivadas de terceros" and "Generado con IA"
 //   assets/vendor/<pack>/CREDITS.csv     per-file authors, licences and links (LPC)
 //
 // Only names, licences and links come from here; every sentence of the page is i18n
@@ -17,12 +17,19 @@ import {
   plainCell,
   usedLicense,
 } from "@rpg/spritepack";
-import type { Credits, DerivedCredit, FileCredit, PackCredit } from "../src/content-types.ts";
+import type {
+  AiCredit,
+  Credits,
+  DerivedCredit,
+  FileCredit,
+  PackCredit,
+} from "../src/content-types.ts";
 
 const CREDITS_MD = join("assets", "CREDITS.md");
 const PACK_CREDITS = "CREDITS.csv";
 const FONTS_HEADING = "## Fuentes";
 const DERIVED_HEADING = "## Obras derivadas de terceros";
+const AI_HEADING = "## Generado con IA";
 /** The pack table ends where "Obra propia" begins. */
 const OWN_HEADING = "## Obra propia";
 
@@ -32,6 +39,10 @@ const LICENCE_NAME = /\b(CC0 1\.0|OGA-BY 3\.0|CC-BY(?:-SA)? [34]\.0|OFL 1\.1)\b/
 const URL = /https:\/\/[^\s`)]+/;
 /** A sprite id in a derived-works row: `outfits/citizen`, never a frame pattern. */
 const SPRITE_ID = /^[a-z0-9_]+\/[a-z0-9_]+$/;
+/** A file (or a folder of frames) in a "Generado con IA" row, and what the page calls it. */
+const AI_FILE = /^assets\/(?:sprites\/)?([a-z0-9_]+(?:\/[a-z0-9_]+)+)(?:\/\*)?(?:\.[a-z0-9]+)?$/;
+const DATE = /\b(\d{4}-\d{2}-\d{2})\b/;
+const PROMPT_FILE = /^assets\/prompts\/[A-Za-z0-9_./-]+\.txt$/;
 
 /** The licence names of a cell, in order, each once (GPL and prose left out). */
 export function licenceNames(cell: string): string[] {
@@ -84,7 +95,27 @@ export function creditsFrom(md: string, perFile: (pack: string) => string | unde
     if (!entry) derived.push((entry = { licence, sprites: [] }));
     for (const s of sprites) if (!entry.sprites.includes(s)) entry.sprites.push(s);
   }
-  return { packs, files, derived, fonts };
+  return { packs, files, derived, fonts, ai: aiCredits(md) };
+}
+
+/**
+ * The rows of "Generado con IA": the works each one made (`assets/sprites/creatures/wolf/*.png`
+ * is `creatures/wolf`), its day and its prompt file. A row without a work, a day or a
+ * committed prompt is not shown: the page only says what the record proves.
+ */
+export function aiCredits(md: string): AiCredit[] {
+  const out: AiCredit[] = [];
+  // | Archivos | Herramienta | Fecha | Prompt | Notas |
+  for (const cells of markdownTableRows(markdownSection(md, AI_HEADING)).slice(1)) {
+    const works = [...(cells[0] ?? "").matchAll(/`([^`]+)`/g)]
+      .map((m) => AI_FILE.exec(m[1] ?? "")?.[1] ?? "")
+      .filter((w) => w !== "");
+    const date = DATE.exec(plainCell(cells[2] ?? ""))?.[1] ?? "";
+    const prompt = plainCell(cells[3] ?? "");
+    if (works.length === 0 || !date || !PROMPT_FILE.test(prompt)) continue;
+    out.push({ works: [...new Set(works)], date, prompt });
+  }
+  return out;
 }
 
 /**

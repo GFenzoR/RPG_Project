@@ -1,5 +1,6 @@
 // The /credits page (docs/17 A1): who made the third-party art and fonts the game ships,
-// under which licence and where they come from, as CC-BY, CC-BY-SA, OGA-BY and the OFL ask.
+// under which licence and where they come from, as CC-BY, CC-BY-SA, OGA-BY and the OFL ask;
+// and what was made with the owner's Gemini, which Google's policy asks not to hide.
 // The data is assets/CREDITS.md and the packs' CREDITS.csv (vite/credits.ts); every
 // sentence is i18n. No hooks: the page renders as a plain function of its props. The
 // desktop app shows the same page in a window of Options (ui/CreditsLink.tsx) with `plain`:
@@ -9,7 +10,7 @@ import type { Credits } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { licenceUrl, packKeys, safeLink } from "./credits.ts";
 
-const EMPTY: Credits = { packs: [], files: [], derived: [], fonts: [] };
+const EMPTY: Credits = { packs: [], files: [], derived: [], fonts: [], ai: [] };
 
 /** A licence's name, linked to its text when the page knows it (plain: the address). */
 function Licence(props: { name: string; plain?: boolean | undefined }): JSX.Element {
@@ -154,6 +155,31 @@ export function CreditsPage(props: {
                   </Field>
                   <Field label={t("site.credits.source")}>
                     <Source url={f.url} plain={plain} />
+                  </Field>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {c.ai.length > 0 && (
+        <>
+          <h2>{t("site.credits.ai")}</h2>
+          <p>{t("site.credits.ai_intro")}</p>
+          <ul class="credit-list compact" data-testid="credits-ai">
+            {c.ai.map((a, i) => (
+              <li key={i}>
+                <p class="works">
+                  {a.works.map((w) => (
+                    <code key={w}>{w}</code>
+                  ))}
+                </p>
+                <dl>
+                  <Field label={t("site.credits.tool")}>{t("site.credits.ai_tool")}</Field>
+                  <Field label={t("site.credits.date")}>{a.date}</Field>
+                  <Field label={t("site.credits.prompt")}>
+                    <code>{a.prompt}</code>
                   </Field>
                 </dl>
               </li>

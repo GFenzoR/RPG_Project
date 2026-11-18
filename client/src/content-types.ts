@@ -302,6 +302,18 @@ export interface Credits {
   derived: DerivedCredit[];
   /** The "Fuentes (OFL 1.1)" table. */
   fonts: FontCredit[];
+  /** Art and music made with the owner's Gemini ("Generado con IA", docs/17 SRC-5). */
+  ai: AiCredit[];
+}
+
+/** One row of "Generado con IA": what it made, when, and the committed prompt. */
+export interface AiCredit {
+  /** Sprite ids or asset paths without assets/ ("creatures/wolf", "sounds/music/puerto"). */
+  works: string[];
+  /** The day it was asked (YYYY-MM-DD). */
+  date: string;
+  /** The prompt file, assets/prompts/... */
+  prompt: string;
 }
 
 export interface PackCredit {
