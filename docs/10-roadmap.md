@@ -380,3 +380,10 @@ secundaria.
   manteniendo el mouse (MOV-3), anillo en el destino y texto de la acción junto al cursor
   (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. Falta: polvo y ondas al
   pisar (con las partículas de ART-7) y el toque corto que solo gira (MOV-2).
+- [x] **Criaturas animadas con Gemini (docs/17 SRC-4 #6 y SRC-5; rama `feat/gemini-creatures`).**
+  Lobo, rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de
+  ciénaga y espinoso con caminar, quieto, atacar y morir (sur, norte y oeste; el este
+  espejado), una hoja de Gemini cada uno cortada con `tools/gemini/import_art.py`
+  (`--cut rows|blobs`); pistas `mirror`, `anchor` y `ms` en spritepack; quieto y atacar solo
+  hacia sus lados (embestida de ANI-5 en los otros); "Hecho con IA" en `/credits`. Lo que
+  falta: docs/14, "Pendientes conocidos" (los demás animales y los ataques que no vinieron).
