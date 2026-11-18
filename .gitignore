@@ -44,3 +44,7 @@ deploy/backups/
 # Worktrees of parallel agents (Claude Code)
 .claude/worktrees/
 .wt/
+
+# Python (tools/gemini)
+__pycache__/
+*.pyc

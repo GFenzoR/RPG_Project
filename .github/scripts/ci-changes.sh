@@ -34,6 +34,8 @@ declare -A RULES=(
 	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
 	[integration]='^(server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
+	# The dev-only Python tools around the owner's Gemini: nothing else reads them.
+	[gemini]='^tools/gemini/'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
 	# The map PR worker's image runs its TypeScript and these packages as they are (T4.5).
 	[image]='^(deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)|tools/map-pr-worker/|packages/map-format/|packages/content-schema/)'
@@ -45,7 +47,7 @@ declare -A RULES=(
 	# the optional /grafana/ route (check.sh parses them with half-set credentials).
 	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$|Caddyfile$|caddy-routes\.caddy$|caddy-grafana-.*\.caddy$)'
 )
-CI_JOBS=(go-server go-bots ts validate actionlint build desktop e2e integration bench)
+CI_JOBS=(go-server go-bots ts validate actionlint build desktop e2e integration bench gemini)
 IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
 
 # decide JOB < changed-files: prints true or false.
@@ -148,6 +150,10 @@ self_test() {
 	for j in go-server go-bots integration desktop bench; do check "$j" false assets/sounds/sfx/hit.ogg; done
 	check ts true tools/soundgen/src/sfx.ts
 	for j in e2e build validate go-server stack desktop; do check "$j" false tools/soundgen/src/sfx.ts; done
+	check gemini false tools/soundgen/src/sfx.ts assets/sounds/music/puerto.ogg
+	# The Gemini tools (Python, dev-only) run their own job and nothing else.
+	check gemini true tools/gemini/import_art.py
+	for j in ts validate build e2e go-server integration stack; do check "$j" false tools/gemini/music_slots.json; done
 	if ((fails > 0)); then
 		echo "ci-changes: $fails rule check(s) failed" >&2
 		exit 1

@@ -30,6 +30,7 @@ jobs:
       e2e: ${{ steps.f.outputs.e2e }}
       integration: ${{ steps.f.outputs.integration }}
       bench: ${{ steps.f.outputs.bench }}
+      gemini: ${{ steps.f.outputs.gemini }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -146,6 +147,22 @@ jobs:
           cache: false
       - name: actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -color
+
+  # tools/gemini: the dev-only Python tools around the owner's Gemini (pure parts only:
+  # no browser, no network). The ffmpeg test is skipped when the runner has none.
+  gemini:
+    needs: changes
+    if: needs.changes.outputs.gemini == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pillow
+        run: python -m pip install "pillow==12.2.0"
+      - name: tools/gemini unit tests
+        run: make test-gemini PYTHON=python
 
   build:
     needs: changes

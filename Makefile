@@ -194,6 +194,17 @@ gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
 	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
+# tools/gemini: dev-only Python tools that drive the owner's Gemini and bring what it makes
+# into our grid, palette and audio format (tools/CLAUDE.md, "gemini"). Their tests need
+# Python 3 and Pillow only (no browser, no network; the ffmpeg step is skipped without
+# one), so `make test` leaves them out and CI runs them in their own job.
+PYTHON ?= $(shell for p in python3 python; do $$p -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1 && { echo $$p; break; }; done)
+
+.PHONY: test-gemini
+test-gemini: ## Unit tests of tools/gemini (Python 3.10+ and Pillow; ffmpeg optional)
+	@test -n "$(PYTHON)" || { echo "test-gemini: needs Python 3.10+ as python3 or python"; exit 1; }
+	$(PYTHON) -m unittest discover -s tools/gemini -p 'test_*.py' -t tools/gemini
+
 # soundgen renders our own effects and music and encodes them with ffmpeg (libopus) into
 # assets/sounds/ (committed, so builds and CI never need ffmpeg). T3.7, assets/README.md.
 .PHONY: sounds
