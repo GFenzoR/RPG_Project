@@ -301,6 +301,28 @@ class TheCredit(unittest.TestCase):
         self.assertTrue(text.endswith("\n\nHarbour town theme.\n"))
         self.assertIn("# Fecha: 2026-11-17", text)
 
+    def test_an_import_record_writes_the_sheet_and_the_command_that_cut_it(self):
+        # import_art's import.json: the frames can be cut again from the sheet the ask returned.
+        record = {"source": "wolf_c.png", "source_sha256": "ab" * 32, "cut": "rows", "size": [64, 64],
+                  "layer": "creature", "anchor": "bottom", "margin": 8, "colours": 16, "shared_colours": True,
+                  "palette": "tools/spritegen/src/palette.ts", "outlines": True, "forced_scale": None,
+                  "names": ["walk_w_0", "-", "idle_s_0+attack_s_0"], "mirrored": ["walk_w_0"],
+                  "delivery": {"prompt": "A grey wolf.", "started": "2026-11-18T08:45:00"}}
+        ask = credit.delivery_of(record)
+        text = credit.prompt_text(ask, ["assets/sprites/creatures/wolf/*.png"], record)
+        self.assertIn("# Hoja devuelta: wolf_c.png (sha256 %s)" % ("ab" * 32), text)
+        self.assertIn(
+            '# Importada con: python tools/gemini/import_art.py <hoja> --cut rows --size 64 --layer creature '
+            '--margin 8 --colors 16 --shared-colours --names "walk_w_0,-,idle_s_0+attack_s_0" --mirror "walk_w_0"',
+            text)
+        self.assertTrue(text.endswith("\n\nA grey wolf.\n"))
+        # A grid, a forced scale and no palette say so too.
+        grid = dict(record, cut="grid", grid=[4, 2], forced_scale=5.2, palette=None, shared_colours=False,
+                    names=[], mirrored=[])
+        self.assertEqual(credit.import_command(grid),
+                         "python tools/gemini/import_art.py <hoja> --grid 4x2 --size 64 --layer creature "
+                         "--margin 8 --scale 5.2 --colors 16 --no-palette")
+
 
 class TheReferences(unittest.TestCase):
     def test_a_committed_asset_may_be_sent_and_is_recorded_by_path_and_digest(self):

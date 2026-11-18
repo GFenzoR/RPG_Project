@@ -89,11 +89,48 @@ def refs_of(ask: dict, root: str = ROOT) -> list[dict]:
     return refs
 
 
-def prompt_text(ask: dict, assets: list[str]) -> str:
+def import_command(record: dict) -> str:
+    """The `import_art.py` command that turned the sheet into these frames,
+    read back from its `import.json`: with the frame names, anyone can cut the
+    same sheet again (`<hoja>` is the sheet the ask returned, `source`)."""
+    words = ["python tools/gemini/import_art.py <hoja>"]
+    if record.get("cut", "grid") == "grid":
+        grid = record.get("grid") or []
+        if len(grid) == 2:
+            words.append("--grid %dx%d" % tuple(grid))
+        if record.get("fit", "union") != "union":
+            words.append("--fit %s" % record["fit"])
+    else:
+        words.append("--cut %s" % record["cut"])
+    size = record.get("size") or []
+    if len(size) == 2:
+        words.append("--size %s" % (size[0] if size[0] == size[1] else "%dx%d" % tuple(size)))
+    words.append("--layer %s" % record.get("layer", "creature"))
+    if record.get("anchor", "bottom") != "bottom":
+        words.append("--anchor %s" % record["anchor"])
+    words.append("--margin %d" % record.get("margin", 1))
+    if record.get("forced_scale"):
+        words.append("--scale %s" % record["forced_scale"])
+    words.append("--colors %d" % (record.get("colours") or 0))
+    if record.get("shared_colours"):
+        words.append("--shared-colours")
+    if not record.get("palette"):
+        words.append("--no-palette")
+    elif not record.get("outlines") and record.get("layer") in ("creature", "character", "object", "wall"):
+        words.append("--no-outline")
+    if record.get("names"):
+        words.append('--names "%s"' % ",".join(record["names"]))
+    if record.get("mirrored"):
+        words.append('--mirror "%s"' % ",".join(record["mirrored"]))
+    return " ".join(words)
+
+
+def prompt_text(ask: dict, assets: list[str], imported: dict | None = None) -> str:
     """The prompt file: a short header (with every reference sent, by path and
-    sha256), then the prompt exactly as sent. **Never the conversation's
-    address**: it is the owner's private chat, of no use to anyone else in a
-    public repo, and it stays in the sidecar."""
+    sha256, and, from an `import_art` record, the sheet's sha256 and the
+    command that cut it), then the prompt exactly as sent. **Never the
+    conversation's address**: it is the owner's private chat, of no use to
+    anyone else in a public repo, and it stays in the sidecar."""
     lines = [
         "# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.",
         "# Assets: %s" % ", ".join(a.replace("\\", "/") for a in assets),
@@ -104,6 +141,9 @@ def prompt_text(ask: dict, assets: list[str]) -> str:
         lines.append("# Modo: %s" % ask["mode"])
     for ref in ask.get("refs") or []:
         lines.append("# Referencia: %s (sha256 %s)" % (ref.get("file", ""), ref.get("sha256", "?")))
+    if imported:
+        lines.append("# Hoja devuelta: %s (sha256 %s)" % (imported.get("source", "?"), imported.get("source_sha256", "?")))
+        lines.append("# Importada con: %s" % import_command(imported))
     return "\n".join(lines) + "\n\n" + ask["prompt"].strip() + "\n"
 
 
@@ -128,14 +168,16 @@ def main() -> int:
     parser.add_argument("--note", default="")
     args = parser.parse_args()
     with open(args.record, encoding="utf-8") as handle:
-        ask = delivery_of(json.load(handle))
+        record = json.load(handle)
+    ask = delivery_of(record)
+    imported = record if record is not ask and "source_sha256" in record else None
     prompt_guard.check(ask["prompt"])
     refs_of(ask)
     target = (args.prompt_file or prompt_path(args.asset[0])).replace("\\", "/")
     path = os.path.join(ROOT, target)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(prompt_text(ask, args.asset))
+        handle.write(prompt_text(ask, args.asset, imported))
     print("wrote %s; paste this row into assets/CREDITS.md, \"Generado con IA\":" % target)
     print(credits_row(ask, args.asset, target, args.note))
     return 0

@@ -307,6 +307,126 @@ class TheWholeImport(unittest.TestCase):
             record = art.import_sheet(other, (1, 1), (16, 16), "creature", [], os.path.join(folder, "out3"))
             self.assertNotIn("delivery", record)
 
+    def test_rows_of_any_length_keep_one_scale_and_their_registration(self):
+        # Two rows as Gemini draws them: three drawings, then two, each on an even share.
+        sheet = Image.new("RGBA", (120, 60), MAGENTA)
+        def block(x, y, w, h, colour=(120, 100, 80, 255)):
+            for yy in range(y, y + h):
+                for xx in range(x, x + w):
+                    sheet.putpixel((xx, yy), colour)
+        for i in range(3):
+            block(i * 40 + 12, 4, 16, 16)  # a 16x16 body in each 40 px share
+        block(i * 40 + 12 + 1, 4, 2, 2, (30, 25, 20, 255))  # the last one a little different
+        block(14, 34, 32, 20)  # two wider drawings in 60 px shares
+        block(74, 34, 32, 20)
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "rows.png")
+            sheet.save(path)
+            out = os.path.join(folder, "out")
+            record = art.import_sheet(path, None, (16, 16), "creature", ["a_0", "a_1", "a_2", "b_0", "-"], out,
+                                      margin=0, colours=8, palette=art.load_palette(), cut="rows",
+                                      outlines=art.load_outlines())
+            self.assertEqual(record["shape"], "rows of 3+2")
+            self.assertEqual([f["file"] for f in record["frames"]], ["a_0.png", "a_1.png", "a_2.png", "b_0.png"])
+            self.assertFalse(os.path.exists(os.path.join(out, "-.png")))
+            self.assertTrue(os.path.exists(os.path.join(out, "_drawings.png")))
+            # One scale for both rows: the wide row's 32 px fit 16, so the 16 px bodies are 8.
+            self.assertEqual(record["scale"], 2.0)
+            boxes = [art.bbox_of(Image.open(os.path.join(out, n))) for n in ("a_0.png", "a_1.png", "b_0.png")]
+            self.assertEqual(boxes[0], boxes[1])
+            self.assertEqual(boxes[0][2] - boxes[0][0], 8)
+            self.assertEqual(boxes[2][2] - boxes[2][0], 16)
+
+    def test_a_drawing_that_overhangs_its_share_is_not_cut_and_its_neighbour_stays_out(self):
+        sheet = Image.new("RGBA", (60, 20), (0, 0, 0, 0))
+        for y in range(2, 18):
+            for x in range(8, 22):  # spills past x=20, the edge of its 20 px share
+                sheet.putpixel((x, y), (120, 100, 80, 255))
+            for x in range(24, 36):
+                sheet.putpixel((x, y), (30, 25, 20, 255))
+            for x in range(44, 52):
+                sheet.putpixel((x, y), (60, 50, 40, 255))
+        rows, warnings = art.row_cells(sheet, column_gap=2)
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(rows[0]), 3)
+        first, second = art.cell_image(sheet, rows[0][0]), art.cell_image(sheet, rows[0][1])
+        self.assertEqual(first.size, second.size)  # one origin for the whole row
+        self.assertEqual(art.bbox_of(first)[2] - art.bbox_of(first)[0], 14)  # whole
+        self.assertEqual({p[:3] for p in art.pixels(second) if p[3]}, {(30, 25, 20)})  # nothing of the first
+
+    def test_blobs_are_found_in_reading_order_whatever_the_layout(self):
+        # Two panels side by side, rows not lined up, a loose speck by the second drawing.
+        sheet = Image.new("RGBA", (80, 60), MAGENTA)
+        def block(x, y, w, h):
+            for yy in range(y, y + h):
+                for xx in range(x, x + w):
+                    sheet.putpixel((xx, yy), (120, 100, 80, 255))
+        block(2, 2, 12, 12)
+        block(20, 4, 10, 12)
+        block(32, 6, 2, 2)  # a tail tip that came loose: it goes with its nearest drawing
+        block(50, 3, 14, 12)
+        block(4, 40, 16, 10)
+        keyed, _ = art.keyed_sheet(sheet, "magenta")
+        parts, boxes, _ = art.blob_cells(keyed, block=1)
+        self.assertEqual(len(parts), 4)
+        self.assertEqual([b[0] for b in boxes], [2, 20, 50, 4])
+        self.assertEqual(boxes[1][2], 34)  # the tip joined the second drawing
+
+    def test_a_body_stays_put_when_a_whip_swings_out(self):
+        part = Image.new("RGBA", (40, 10), (0, 0, 0, 0))
+        for y in range(0, 10):
+            for x in range(4, 12):
+                part.putpixel((x, y), (120, 100, 80, 255))
+        for x in range(12, 40):
+            part.putpixel((x, 5), (60, 50, 40, 255))  # the whip, thin and long
+        box = art.massed(part, art.bbox_of(part))
+        middle = (box[0] + box[2]) / 2
+        self.assertLess(abs(middle - 12), 3)  # near the body (4..12), not the box's middle (22)
+        self.assertEqual(box[2] - middle, middle - box[0])
+
+    def test_one_drawing_kept_as_several_frames_and_mirrored(self):
+        sheet = Image.new("RGBA", (32, 16), MAGENTA)
+        for y in range(4, 14):
+            for x in range(4, 10):
+                sheet.putpixel((x, y), (120, 100, 80, 255))
+            sheet.putpixel((10, y), (30, 25, 20, 255))  # the right side is darker
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "one.png")
+            sheet.save(path)
+            out = os.path.join(folder, "out")
+            art.import_sheet(path, None, (16, 16), "creature", ["idle_w_0+attack_w_0"], out, palette=None,
+                             cut="blobs", mirror={"attack_w_0"}, shared_colours=True, colours=8)
+            idle = Image.open(os.path.join(out, "idle_w_0.png"))
+            attack = Image.open(os.path.join(out, "attack_w_0.png"))
+            self.assertEqual(list(art.pixels(attack)), list(art.pixels(idle.transpose(Image.Transpose.FLIP_LEFT_RIGHT))))
+            with self.assertRaises(SystemExit):  # a name given twice
+                art.import_sheet(path, None, (16, 16), "creature", ["a_0+a_0"], out, cut="blobs")
+            with self.assertRaises(SystemExit):  # a mirror that names no frame
+                art.import_sheet(path, None, (16, 16), "creature", ["a_0"], out, cut="blobs", mirror={"b_0"})
+
+    def test_a_forced_scale_takes_the_place_of_the_boxes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.sheet_of(folder, (120, 100, 80, 255))
+            record = art.import_sheet(path, None, (32, 32), "creature", [], os.path.join(folder, "out"),
+                                      cut="blobs", forced_scale=2.0)
+            self.assertEqual(record["scale"], 2.0)
+            self.assertEqual(record["forced_scale"], 2.0)
+            frame = Image.open(os.path.join(folder, "out", "frame_0.png"))
+            box = art.bbox_of(frame)
+            self.assertEqual(box[2] - box[0], 12)  # the 24 px drawing at 2:1
+
+    def test_shared_colours_give_every_frame_the_same_shades(self):
+        a = Image.new("RGBA", (4, 1), (0, 0, 0, 0))
+        b = Image.new("RGBA", (4, 1), (0, 0, 0, 0))
+        for x, c in enumerate([(100, 80, 60), (104, 82, 61), (30, 30, 30), (200, 190, 180)]):
+            a.putpixel((x, 0), c + (255,))
+        for x, c in enumerate([(101, 80, 60), (30, 31, 30), (199, 190, 180), (60, 60, 200)]):
+            b.putpixel((x, 0), c + (255,))
+        flat = art.reduced_together([a, b], 4)
+        colours = {p[:3] for f in flat for p in art.pixels(f) if p[3]}
+        self.assertLessEqual(len(colours), 4)
+        self.assertEqual(flat[0].getpixel((0, 0)), flat[1].getpixel((0, 0)))  # one shade for both browns
+
     def test_the_wrong_number_of_names_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "s.png")
