@@ -114,9 +114,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "03-characters");
   await list.getByRole("button", { name: "Jugar" }).click();
 
-  // The world: FullMapView drawn on a pixel-perfect canvas: at the scale that shows the
-  // classic 15x11, as much of the 31x21 window as the box holds (client/CLAUDE.md "Zoom
-  // del mapa").
+  // The world: FullMapView drawn on a pixel-perfect canvas: the largest view of the 31x21
+  // window that fills the map's box at a whole scale, never less than the classic 15x11
+  // (client/CLAUDE.md "Zoom del mapa").
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   const canvas = page.getByTestId("game-canvas");
   await expect(canvas).toBeVisible();

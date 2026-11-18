@@ -323,8 +323,9 @@ const wholeSlots = (page: Page): Promise<number> =>
  */
 async function zoomByTouch(page: Page, shot: (name: string) => Promise<Buffer>): Promise<void> {
   const fit = await zoomOf(page);
-  // The fitted view: the largest scale that shows the classic 15x11 (as before the wide
-  // view); out of it, down to the scale that shows the whole window, or 1.
+  // The fitted view: the largest view with no empty part, never less than the classic
+  // 15x11 (a phone keeps its scale of before); out of it, down to the scale that shows the
+  // whole window, or 1.
   expect(fit.scale).toBe(fit.fit);
   expect(fit.max).toBeGreaterThan(fit.fit);
   expect(fit.min).toBeLessThanOrEqual(fit.fit);
@@ -358,14 +359,17 @@ async function zoomByTouch(page: Page, shot: (name: string) => Promise<Buffer>):
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.fit);
   expect(await rememberedZoom(page)).toBeNull();
 
-  // Out of the fitted view: more of the window, smaller tiles, remembered too.
+  // Out of the fitted view: more of the window, smaller tiles, remembered too. On its
+  // side a phone may already show the window's whole width: then it gains rows.
   if (fit.min < fit.fit) {
     const before = await page.evaluate(() => window.__rpgClient?.view());
     await zoomOut.tap();
     await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.fit - 1);
     expect(await rememberedZoom(page)).toBe(String(fit.fit - 1));
     const after = await page.evaluate(() => window.__rpgClient?.view());
-    expect(after?.shown.width ?? 0).toBeGreaterThan(before?.shown.width ?? 99);
+    const tiles = (v: typeof after): number => (v ? v.shown.width * v.shown.height : 0);
+    expect(tiles(after)).toBeGreaterThan(tiles(before));
+    expect(after?.shown.width ?? 0).toBeGreaterThanOrEqual(before?.shown.width ?? 99);
     expect(after?.shown.width ?? 99).toBeLessThanOrEqual(31);
     expect(after?.shown.height ?? 99).toBeLessThanOrEqual(21);
     await expect.poll(() => mapDrawn(page)).toBe(true);
@@ -1063,11 +1067,12 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   const map = await page.getByTestId("game-canvas").boundingBox();
   if (!map) throw new Error("no canvas");
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
-  // The fitted 2x fills the box with as much of the 31x21 window as fits.
+  // The fitted 2x fills the box with as much of the 31x21 window as fits: the 960 px the
+  // dock leaves are 15 columns, and the rows above the hotbar strip more than 11.
   const fitted = await page.evaluate(() => window.__rpgClient?.view());
   expect(fitted?.server).toEqual({ width: 31, height: 21 });
-  expect(fitted?.shown.width ?? 0).toBeGreaterThan(15);
-  expect(fitted?.shown.height ?? 0).toBeGreaterThanOrEqual(11);
+  expect(fitted?.shown.width ?? 0).toBeGreaterThanOrEqual(15);
+  expect(fitted?.shown.height ?? 0).toBeGreaterThan(11);
   await page.mouse.wheel(0, -100);
   expect((await zoomOf(page)).scale).toBe(2);
   await page.keyboard.down("Control");
@@ -1095,10 +1100,13 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await page.keyboard.up("Control");
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(1);
   expect(await rememberedZoom(page)).toBe("1");
-  expect(await page.evaluate(() => window.__rpgClient?.view())).toEqual({
-    server: { width: 31, height: 21 },
-    shown: { width: 31, height: 21 },
-  });
+  // All 21 rows of the window; as many of its 31 columns as the box holds (the dock
+  // leaves 960 px: 30).
+  const whole = await page.evaluate(() => window.__rpgClient?.view());
+  const viewport = await page.locator(".viewport").boundingBox();
+  if (!whole || !viewport) throw new Error("no view");
+  expect(whole.server).toEqual({ width: 31, height: 21 });
+  expect(whole.shown).toEqual({ width: Math.min(31, Math.round(viewport.width) / 32), height: 21 });
   await page.screenshot({ path: join(shots, "mobile-desktop-1280-zoom1.png") });
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, -100);

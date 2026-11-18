@@ -1,9 +1,9 @@
 // The wide view (docs/00, client/CLAUDE.md "Zoom del mapa"): the server keeps the client up
 // to date with 31x21 tiles around the player (Welcome.view_width/height). The fitted view
-// keeps the scale that shows the classic 15x11 and fills the map's box with as much of the
-// window as fits (docs/17 UI-4); Ctrl+wheel down zooms out to the whole window at 1x, a
-// tile 15 to the side and 10 up on the canvas. At 1920x1080 and 1280x800: screenshots 97,
-// 97b, 98 and 98b (phones: mobile.spec.ts).
+// is the largest one that fills the map's box at a whole scale, never less than the
+// classic 15x11 (docs/17 UI-4); Ctrl+wheel down zooms out to the whole window at 1x, a
+// tile 15 to the side and 10 up on the canvas. At 1920x1080 and 1280x800 with the dock:
+// screenshots 97, 97b, 98 and 98b (phones: mobile.spec.ts).
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -84,22 +84,29 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   errors.length = 0; // the 401 of opening the page without a session cookie
 
-  // 1920x1080, the fitted view: 2x as before the wide view (the largest scale that shows
-  // 15x11), the map's box filled with as much of the 31x21 window as fits (about 26x15).
+  // 1920x1080, the fitted view: the dock leaves a 1536x1080 box. 3x would show the
+  // classic 15x11 (16x11 of the window); 2x fills the box with 24x16 of it, above the
+  // hotbar's strip.
   const fitted = await viewOf(page);
   expect(fitted.scale).toBe(2);
+  expect(await page.evaluate(() => window.__rpgClient?.zoom())).toEqual({
+    scale: 2,
+    min: 1,
+    fit: 2,
+    max: 6,
+  });
   expect(fitted.server).toEqual({ width: 31, height: 21 });
-  expect(fitted.shown.width).toBeGreaterThan(25);
-  expect(fitted.shown.height).toBeGreaterThan(14);
+  expect(fitted.shown.width).toBeGreaterThan(23);
+  expect(fitted.shown.height).toBeGreaterThan(15);
   expect(fitted.shown.width).toBeLessThanOrEqual(31);
   expect(fitted.shown.height).toBeLessThanOrEqual(21);
   const me = await page.evaluate(() => window.__rpgClient?.self());
   if (!me) throw new Error("no own creature");
   for (const [dx, dy] of [
-    [12, 0],
-    [-12, 0],
-    [0, 6],
-    [0, -6],
+    [11, 0],
+    [-11, 0],
+    [0, 7],
+    [0, -7],
   ] as const)
     expect(await onCanvas(page, me.x + dx, me.y + dy)).toBe(true);
   await page.waitForTimeout(500); // let the atlas textures upload before the screenshot
@@ -139,13 +146,14 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
   await expect.poll(async () => (await viewOf(page)).scale).toBe(2);
   expect(await page.evaluate(() => localStorage.getItem("rpg.zoom"))).toBeNull();
 
-  // 1280x800 (the size of the other desktop tests): 2x with 15x11 or more, and 1x out.
+  // 1280x800 (the size of the other desktop tests): the dock leaves 960x800, 2x with 15
+  // columns and more than 11 rows; 1x out shows 30 columns of the window and its 21 rows.
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect.poll(async () => (await viewOf(page)).shown.width).toBeLessThan(fitted.shown.width);
   const small = await viewOf(page);
   expect(small.scale).toBe(2);
   expect(small.shown.width).toBeGreaterThanOrEqual(15);
-  expect(small.shown.height).toBeGreaterThanOrEqual(11);
+  expect(small.shown.height).toBeGreaterThan(11);
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(shots, "98-view-1280x800.png") });
   const map = await page.getByTestId("game-canvas").boundingBox();
@@ -153,8 +161,14 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
   await wheel(100);
   await expect.poll(async () => (await viewOf(page)).scale).toBe(1);
-  expect((await viewOf(page)).shown).toEqual({ width: 31, height: 21 });
-  expect(await onCanvas(page, me.x + 15, me.y - 10)).toBe(true);
+  const box = await page.locator(".viewport").boundingBox();
+  if (!box) throw new Error("no map box");
+  expect((await viewOf(page)).shown).toEqual({
+    width: Math.min(31, Math.round(box.width) / 32),
+    height: 21,
+  });
+  expect(await onCanvas(page, me.x + 14, me.y - 10)).toBe(true);
+  expect(await onCanvas(page, me.x - 14, me.y + 10)).toBe(true);
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(shots, "98b-view-1280x800-1x.png") });
   await wheel(-100);
