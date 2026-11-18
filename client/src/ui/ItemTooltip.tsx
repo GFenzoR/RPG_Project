@@ -104,6 +104,20 @@ export function tipOf(
   return { itemId, count: Number.isFinite(count) && count > 0 ? count : 1 };
 }
 
+/**
+ * What the card's place depends on: the item it describes (its size) and where that item
+ * is. The Game publishes about 20 times a second; the card is measured and placed again
+ * only when this changes, not on every publish (a layout each time).
+ */
+export function placeKey(
+  tip: { itemId: number; count: number; anchor: Rect } | undefined,
+  card: string,
+): string {
+  if (!tip) return "";
+  const a = tip.anchor;
+  return `${tip.itemId}:${tip.count}:${a.left}:${a.top}:${a.width}:${a.height}:${card}`;
+}
+
 function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
   return { left: r.left, top: r.top, width: r.width, height: r.height };
@@ -200,7 +214,12 @@ export function ItemTooltip(props: {
   const tip: Shown | undefined =
     shown ?? (g && { itemId: g.itemId, count: g.count, anchor: groundAnchor(g.tile, g.y) });
   const hidden = !tip || blocked.current;
-  // Measured before the paint, then placed: the card's real size, not a guess.
+  const magic = ui.skills.find((s) => s.id === "magic");
+  // What the card shows besides the item (a requirement met or not changes its lines).
+  const reader = `${ui.stats?.level ?? ""}:${ui.vocation ?? ""}:${magic?.level ?? ""}`;
+  const key = hidden ? "" : placeKey(tip, reader);
+  // Measured before the paint, then placed: the card's real size, not a guess. Once per
+  // card and place (placeKey): a new card element (hidden, then shown) changes the key.
   useLayoutEffect(() => {
     const el = box.current;
     if (!el || !tip || hidden) return;
@@ -214,9 +233,8 @@ export function ItemTooltip(props: {
     el.style.maxHeight = at.maxHeight === undefined ? "" : `${at.maxHeight}px`;
     el.dataset["side"] = at.side;
     el.style.visibility = "visible";
-  });
+  }, [key]);
   if (!tip || hidden) return null;
-  const magic = ui.skills.find((s) => s.id === "magic");
   const card = itemCard(props.content.items[tip.itemId], tip.itemId, tip.count, {
     level: ui.stats?.level,
     vocation: ui.vocation,

@@ -264,7 +264,12 @@ el punto 5:
     - **Para hacerlo exacto:** el servidor no dice dónde está un contenedor abierto
       (`ContainerOpen`), así que la mochila equipada es la ventana que contesta un uso del
       slot de la espalda; una mochila igual abierta del suelo en ese mismo momento podría
-      confundirlo. Un campo en `ContainerOpen` (por ejemplo, el slot) lo resolvería.
+      confundirlo. Por lo mismo, desde la revisión final del lote 9 una mochila que se
+      saca de la espalda y se vuelve a equipar sigue en su propia ventana (el cliente no
+      sabe si es la misma u otra del mismo tipo: con otra, el botín arrastrado abajo iba a
+      la del suelo); un doble click en el slot la cierra y otro la abre abajo. Un campo en
+      `ContainerOpen` (por ejemplo, el slot) resolvería las dos cosas: es cambio de proto,
+      para una tarea propia.
     - **Ideas que no se hicieron:** un arma de dos manos no ocupa las dos manos en la
       figura (el servidor tiene un slot por mano); no hay guantes, cinturón ni segundo
       anillo; mantener Alt para ver los nombres de los items del suelo (si el dueño lo

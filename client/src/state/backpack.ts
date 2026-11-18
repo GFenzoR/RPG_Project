@@ -5,7 +5,8 @@
 // ContainerOpen does not say where a container lies, so the client remembers the window that
 // answered a use of the backpack slot (`used`, then `opened`). A server that said it would
 // make this exact; until then a backpack of the same kind opened from the floor at the same
-// moment is the only thing that can fool it (it would show under the figure instead).
+// moment is the only thing that can fool it (it would show under the figure instead). For
+// the same reason a window that left the figure never comes back by itself (`equipped`).
 import type { ContainerState } from "./world.ts";
 
 /** How long a use of the backpack slot waits for its ContainerOpen, ms. */
@@ -17,16 +18,15 @@ export class EquippedBackpack {
   id: number | undefined;
   /** The item a use of the slot opens, and until when its answer counts. */
   private awaiting: { itemId: number; until: number } | undefined;
-  /** The window that was under the figure when its backpack left the slot (it may come back). */
-  private left: number | undefined;
 
   /**
-   * The player used the item in the backpack slot. With a window of that item open already
-   * the use closes it (the server toggles): nothing to wait for.
+   * The player used the item in the backpack slot. The server toggles that very backpack:
+   * the use opens it, or closes its window when it is open already (under the figure, or
+   * in a window of its own since it was worn again). Its ContainerOpen is the answer; a
+   * window of that item closing first says the use closed it (`closed`).
    */
-  used(itemId: number, open: readonly ContainerState[], now: number): void {
-    const shown = open.some((c) => c.itemId === itemId && !c.hasParent);
-    this.awaiting = shown ? undefined : { itemId, until: now + BACKPACK_ANSWER_MS };
+  used(itemId: number, now: number): void {
+    this.awaiting = { itemId, until: now + BACKPACK_ANSWER_MS };
   }
 
   /**
@@ -43,30 +43,29 @@ export class EquippedBackpack {
     }
   }
 
-  /** A ContainerClose. */
-  closed(id: number): void {
+  /**
+   * A ContainerClose of `gone` (the window as it was, when the client had it). A window of
+   * the awaited item closing means the use of the slot closed it: nothing opens after it.
+   */
+  closed(id: number, gone?: ContainerState): void {
     if (this.id === id) this.id = undefined;
-    if (this.left === id) this.left = undefined;
+    const a = this.awaiting;
+    if (a && gone && gone.itemId === a.itemId && !gone.hasParent) this.awaiting = undefined;
   }
 
   /**
-   * The backpack slot holds `itemId` now (undefined = empty). The window under the figure
-   * goes to a window of its own when its backpack leaves the slot (it can stay open on the
-   * floor beside the player), and comes back under the figure when it returns.
+   * The backpack slot holds `itemId` now (undefined = empty; the server never swaps an
+   * occupied slot, so another backpack is worn only after the slot emptied). The window
+   * under the figure goes to a window of its own when its backpack leaves the slot: it can
+   * stay open on the floor beside the player or in a chest. It does not come back when a
+   * backpack of the same kind is worn again: the client cannot tell that one from another
+   * (the loot dragged under the figure would go to the one on the floor). A use of the
+   * slot closes that window when it is the worn one, and the next use opens it below.
    */
   equipped(itemId: number | undefined, open: readonly ContainerState[]): void {
-    if (this.id !== undefined) {
-      const docked = open.find((c) => c.id === this.id);
-      if (docked && docked.itemId === itemId) return;
-      this.left = this.id;
-      this.id = undefined;
-    }
-    if (itemId === undefined || this.left === undefined) return;
-    const back = open.find((c) => c.id === this.left);
-    if (back && back.itemId === itemId) {
-      this.id = back.id;
-      this.left = undefined;
-    }
+    if (this.id === undefined) return;
+    const docked = open.find((c) => c.id === this.id);
+    if (!docked || docked.itemId !== itemId) this.id = undefined;
   }
 
   /**
@@ -90,7 +89,10 @@ export interface AutoOpenInput {
   docked: boolean;
   /** A tutorial runs (its step about opening the backpack teaches it). */
   tutorial: boolean;
-  /** A window of that same item without a parent is open (a use would close it). */
+  /**
+   * A window of that same item without a parent is open: a use of the slot may close it
+   * instead (it can be the worn backpack, in a window of its own since it was worn again).
+   */
   lookalike: boolean;
   /** The backpack this inventory already opened, or found open, since it showed. */
   done: number | undefined;

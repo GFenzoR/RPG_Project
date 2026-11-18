@@ -951,10 +951,13 @@ export class WorldState implements TileSource {
         );
         break;
       }
-      case "containerClose":
-        this.containers = this.containers.filter((c) => c.id !== msg.value.containerId);
-        this.backpack.closed(msg.value.containerId);
+      case "containerClose": {
+        const id = msg.value.containerId;
+        const gone = this.containers.find((c) => c.id === id);
+        this.containers = this.containers.filter((c) => c.id !== id);
+        this.backpack.closed(id, gone);
         break;
+      }
       default:
         break; // chat, dialogs… arrive with their roadmap tasks
     }

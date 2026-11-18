@@ -1822,7 +1822,9 @@ los nombres y los textos son nuestros.
   se muestra (una vez: si el jugador la cierra con su ×, queda cerrada hasta que el
   inventario se vuelva a abrir o se equipe otra) y su grilla va abajo de la figura, en la
   misma ventana. Si se la saca de la espalda y sigue al alcance, pasa a una ventana propia;
-  al volver a equiparla, vuelve abajo de la figura. **No se abre sola durante el tutorial**:
+  al volver a equiparla sigue en su ventana (el cliente no sabe si es la misma u otra del
+  mismo tipo, y con otra el botín arrastrado abajo iría a la del suelo: revisión final del
+  lote 9), y un doble click en el slot la cierra y otro la abre abajo. **No se abre sola durante el tutorial**:
   su paso "abre tu mochila" enseña a hacerlo. Como `ContainerOpen` no dice dónde está el
   contenedor, el cliente toma como mochila equipada la ventana que contesta un uso del
   slot de la espalda (si alguna vez molesta, un campo en `ContainerOpen` lo haría exacto).

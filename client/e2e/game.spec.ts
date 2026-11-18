@@ -396,12 +396,22 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await expect(backpackWindow.locator('[data-container-item="backpack"]')).toBeVisible();
   await expect(docked).toHaveCount(0);
   await shot(page, "10-backpack-on-map");
-  // Map → slot: equipped again, and its grid goes back under the figure.
+  // Map → slot: equipped again. The client cannot tell this backpack from another of its
+  // kind (ContainerOpen does not say where it lies), so its window stays a window of its
+  // own: never under the figure by itself (the final review of lote 9). A use of the slot
+  // closes that window (it is the worn one: the server toggles), the next one opens it
+  // under the figure.
   await backpackSlot.scrollIntoViewIfNeeded();
   const emptyBox = await backpackSlot.boundingBox();
   if (!emptyBox) throw new Error("no slot");
   await drag(ownTile, { x: emptyBox.x + emptyBox.width / 2, y: emptyBox.y + emptyBox.height / 2 });
   await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
+  await expect(backpackWindow).toBeVisible();
+  await expect(docked).toHaveCount(0);
+  await backpackSlot.locator("[data-item]").dblclick();
+  await expect(backpackWindow).toHaveCount(0);
+  await expect(docked).toHaveCount(0);
+  await backpackSlot.locator("[data-item]").dblclick();
   await expect(docked).toBeVisible();
   await expect(backpackWindow).toHaveCount(0);
 

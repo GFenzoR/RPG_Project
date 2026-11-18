@@ -831,10 +831,14 @@ export class Game {
     const useWith = this.opts.content.items[ref.itemId]?.useWith ?? false;
     this.setPending(afterUse(ref, useWith));
     this.toolAt = undefined;
-    if (useWith) return;
+    if (!useWith) this.sendUse(ref);
+  }
+
+  /** The UseItem of ref, and nothing else (what the player aimed at stays aimed). */
+  private sendUse(ref: ItemRef): void {
     // docs/17 UI-5: the window this opens is the equipped backpack's, under the figure.
     if (ref.loc.kind === "slot" && ref.loc.slot === EquipmentSlot.BACKPACK)
-      this.world.backpack.used(ref.itemId, this.world.containers, performance.now());
+      this.world.backpack.used(ref.itemId, performance.now());
     this.conn.send({
       case: "useItem",
       value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
@@ -975,12 +979,13 @@ export class Game {
 
   /**
    * Opens the backpack worn on the back (docs/17 UI-5: the inventory opens it by itself
-   * when it shows, state/backpack.ts autoOpen). A use of the slot, as a double click.
+   * when it shows, state/backpack.ts autoOpen). A use of the slot, as a double click, that
+   * leaves alone a rune or a tool the player is aiming (useItem would drop it).
    */
   openBackpack(): void {
     const it = this.world.inventory.get(EquipmentSlot.BACKPACK);
     if (!it || (this.opts.content.items[it.itemId]?.slots ?? 0) <= 0) return;
-    this.useItem({
+    this.sendUse({
       loc: { kind: "slot", slot: EquipmentSlot.BACKPACK },
       itemId: it.itemId,
       stackIndex: 0,
@@ -1014,9 +1019,11 @@ export class Game {
     const stop = (): void => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", stop);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", stop);
   }
 
   /**
@@ -1030,11 +1037,18 @@ export class Game {
     this.dragging = ref;
     this.groundTip = undefined;
     this.publish();
-    const up = (ev: PointerEvent): void => {
+    const end = (): void => {
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
       document.body.classList.remove("dragging-item");
       this.dragging = undefined;
       this.publish();
+    };
+    // The browser took the pointer (a touch turned into a scroll, the window lost it):
+    // nothing moves, and the slots stop glowing.
+    const cancel = (): void => end();
+    const up = (ev: PointerEvent): void => {
+      end();
       const to = this.dropTarget(ev.clientX, ev.clientY);
       if (!to) return;
       if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
@@ -1043,6 +1057,7 @@ export class Game {
       } else this.moveItem(ref, to);
     };
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   }
 
   /** How many units of a Shift+dragged stack go where it was dropped (the prompt's OK). */

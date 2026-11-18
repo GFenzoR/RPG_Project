@@ -418,6 +418,15 @@ secundaria.
   nota que se levanta con el viento: el `loop` de ART-7, `frame_<n>`), el cartel y el
   cajón; el bolardo no le ganó al dibujado a mano. Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **El equipo y el tooltip al estilo Diablo II (docs/17 UI-5 y UI-6, "Hecho: el equipo
+  y el tooltip al estilo Diablo II"; rama `feat/equipment-d2`).** Los dos pedidos del dueño
+  del 2026-11-18, solo cliente: el equipo es una figura sobre una grilla de 8x9 celdas con
+  slots grandes (íconos a 2x cuando la ventana tiene lugar), los slots que aceptan lo que se
+  arrastra brillan y el que no se tiñe de rojo, la mochila equipada se abre sola abajo de
+  la figura (no durante el tutorial) y la capacidad es una barra; el tooltip sale al
+  instante, compacto y centrado arriba del item o de la casilla del mapa. Lo que queda:
+  docs/14, "Pendientes conocidos" (un campo en `ContainerOpen` que diga dónde está un
+  contenedor haría exacta la mochila equipada).
 - [x] **Pantalla completa, ventanas flotantes y la barra gótica (docs/17 A14; rama
   `feat/hud-fullscreen`).** Lo que pidió el dueño el 2026-11-18: en escritorio el mapa
   ocupa toda la pantalla (sin dock ni marco) y siempre la cubre a escala entera; abajo, la

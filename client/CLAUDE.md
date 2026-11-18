@@ -1372,19 +1372,25 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   oculta mide 0: la celda mínima, hasta que se muestra. Un ícono de 32 px en un anillo o
   cuello más chico sobresale de su borde (`overflow: visible`), píxel por píxel.
 - **Brillo y rojo:** `GameUi.dragging` (el item que se arrastra: `Game.startDrag` lo
-  publica y lo borra al soltar) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
+  publica y lo borra al soltar, o con un `pointercancel`, sin mover nada) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
   `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
   `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
   `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
   captura el puntero, así que el `:hover` sigue al mouse). Nivel, vocación y manos libres
   los sigue diciendo el servidor al soltar.
 - **La mochila equipada** (`state/backpack.ts`, puro y con tests): `WorldState.backpack`
-  (`EquippedBackpack`) sabe qué contenedor abierto es el de la espalda: `Game.useItem` de
-  algo en el slot `BACKPACK` llama `used` (si ya hay abierta una ventana de ese item sin
-  padre, el uso la cierra y no espera nada), y el `ContainerOpen` de ese item, sin padre y
-  dentro de `BACKPACK_ANSWER_MS` (3 s), es la mochila (`opened`). `equipped` (cada
-  `Inventory`): si la mochila deja el slot, su ventana pasa a ser una más (`left`), y si
-  vuelve el mismo item la toma de nuevo; `closed` la olvida. `Game.publish` separa
+  (`EquippedBackpack`) sabe qué contenedor abierto es el de la espalda: un uso de algo en
+  el slot `BACKPACK` (`Game.sendUse`, de `useItem` y de `openBackpack`) llama `used`, y el
+  `ContainerOpen` de ese item, sin padre y dentro de `BACKPACK_ANSWER_MS` (3 s), es la
+  mochila (`opened`). El servidor alterna esa misma mochila: si su ventana ya estaba
+  abierta, el uso la cierra, y el `ContainerClose` de una ventana de ese item sin padre
+  (`closed`, con la ventana como era) termina la espera. `equipped` (cada `Inventory`): si
+  la mochila deja el slot, su ventana pasa a ser una más y **no vuelve sola** abajo de la
+  figura cuando se equipa una mochila del mismo tipo: el cliente no sabe si es la misma
+  (revisión final del lote 9: con otra igual, el botín arrastrado abajo iba a la del
+  suelo). Con la misma, un uso del slot cierra su ventana y el siguiente la abre abajo; con
+  otra, el primer uso ya la abre abajo. El servidor nunca cambia un slot ocupado, así que
+  otra mochila llega siempre después de un `Inventory` con el slot vacío. `Game.publish` separa
   (`split`): `GameUi.containers` son solo los que tienen ventana propia (así `GameView`
   no le da una a la mochila) y `GameUi.backpack` es la de la espalda, que `InventoryPanel`
   dibuja bajo la figura con `ContainerView docked` (`data-docked`, el mismo
@@ -1393,7 +1399,8 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   dando todos.
 - **Se abre sola** (`autoOpen`, puro y con tests; un `useEffect` de `InventoryPanel`): con
   un contenedor en el slot, sin mochila abajo, sin tutorial y sin otra ventana de ese item
-  abierta, llama `Game.openBackpack` (un `UseItem` del slot, como el doble click). Una vez
+  abierta, llama `Game.openBackpack` (un `UseItem` del slot, como el doble click, pero sin
+  pasar por `useItem`: no descarta la runa o la herramienta que el jugador apuntaba). Una vez
   por mochila mientras el inventario está montado (`done`): cerrarla con su × la deja
   cerrada hasta que el inventario se vuelva a abrir o se equipe otra. Durante el tutorial
   no (su paso `open_backpack` lo enseña; el `TutorialStep` llega en el mismo batch que el
@@ -1406,7 +1413,8 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   `TOOLTIP_GRACE_MS` (80) al salir de un item antes de irse, así el siguiente lo toma sin
   parpadeo; tras una presión vuelve con el siguiente `pointermove` sin botones; nada
   mientras `GameUi.dragging` o `body.dragging-item`. Se dibuja oculto, un
-  `useLayoutEffect` mide su tamaño real y `tipPlacement` (puro y con tests) lo pone
+  `useLayoutEffect` mide su tamaño real (solo cuando cambia `placeKey`: el item, su
+  cantidad, su caja y quién mira; no en cada publish del `Game`) y `tipPlacement` (puro y con tests) lo pone
   centrado arriba del item (`TIP_GAP` 6, `TIP_MARGIN` 6), abajo si no entra, y si no entra
   en ninguno, del lado con más lugar cortado a ese lugar (`maxHeight`): nunca sobre el
   item, así nunca bajo el cursor. `data-side` dice dónde quedó. Sin animación de entrada.
@@ -1434,8 +1442,8 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   (`[data-container-item="backpack"][data-docked]` dentro de `inventory`, 24 celdas, sin
   `window-container-backpack`), la cierra con su ×, la abre de nuevo con "Abrir" del menú
   (otra vez bajo la figura), pasa el mouse por ella (la ficha compacta, sin taparla) y,
-  tirada al suelo, la encuentra en `window-container-backpack`; vuelta al slot, otra vez
-  abajo. El del intercambio ya no le hace doble click (la cerraría): espera que esté
+  tirada al suelo, la encuentra en `window-container-backpack`; vuelta al slot, sigue en
+  su ventana; un doble click en el slot la cierra y otro la abre abajo. El del intercambio ya no le hace doble click (la cerraría): espera que esté
   abierta. Un spec nuevo que abra la mochila equipada con un doble click o "Abrir" la
   cierra si ya estaba abierta.
 

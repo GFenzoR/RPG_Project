@@ -1,6 +1,6 @@
 // The tooltip's placement (docs/17 UI-6, the Diablo II idea): pure, no DOM.
 import { describe, expect, it } from "vitest";
-import { TIP_GAP, TIP_MARGIN, groundAnchor, tipPlacement } from "./ItemTooltip.tsx";
+import { TIP_GAP, TIP_MARGIN, groundAnchor, placeKey, tipPlacement } from "./ItemTooltip.tsx";
 import type { Rect } from "./ItemTooltip.tsx";
 
 const view = { width: 1280, height: 800 };
@@ -75,5 +75,22 @@ describe("groundAnchor", () => {
       side: "below",
       top: 60 + 40 + TIP_GAP,
     });
+  });
+});
+
+describe("placeKey (the card is measured again only when it or its place changes)", () => {
+  const tip = { itemId: 7, count: 1, anchor: cell };
+  it("stays the same across publishes that change nothing", () => {
+    // groundAnchor builds a new box on every render: equal boxes give the same key.
+    expect(placeKey({ ...tip, anchor: { ...cell } }, "8:knight:")).toBe(placeKey(tip, "8:knight:"));
+  });
+
+  it("changes with the item, its count, its place and what the card says", () => {
+    const base = placeKey(tip, "8:knight:");
+    expect(placeKey({ ...tip, itemId: 8 }, "8:knight:")).not.toBe(base);
+    expect(placeKey({ ...tip, count: 2 }, "8:knight:")).not.toBe(base);
+    expect(placeKey({ ...tip, anchor: { ...cell, top: 401 } }, "8:knight:")).not.toBe(base);
+    expect(placeKey(tip, "9:knight:")).not.toBe(base);
+    expect(placeKey(undefined, "8:knight:")).toBe("");
   });
 });

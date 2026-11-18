@@ -81,18 +81,26 @@ describe("the equipped backpack (docs/17 UI-5: under the figure)", () => {
         },
         now,
       );
+    const close = (containerId: number): void =>
+      apply({ case: "containerClose", value: create(ContainerCloseSchema, { containerId }) });
     wear(48);
-    w.backpack.used(48, w.containers, 0);
+    w.backpack.used(48, 0);
     open(3, 100);
     expect(w.backpack.id).toBe(3);
     wear(undefined); // dropped on the floor beside the player: a window of its own
     expect(w.backpack.id).toBeUndefined();
     expect(w.containers.map((c) => c.id)).toEqual([3]);
-    wear(48); // worn again: back under the figure
-    expect(w.backpack.id).toBe(3);
-    apply({ case: "containerClose", value: create(ContainerCloseSchema, { containerId: 3 }) });
+    wear(48); // a backpack worn again, perhaps another one: its window stays its own
     expect(w.backpack.id).toBeUndefined();
-    open(4); // opened from the floor, no use of the slot: a window of its own
+    // The use of the slot closed that window (it was the worn one): nothing goes below.
+    w.backpack.used(48, 200);
+    close(3);
+    open(4, 300); // opened from the floor, no use of the slot: a window of its own
+    expect(w.backpack.id).toBeUndefined();
+    w.backpack.used(48, 400); // the next use opens it below the figure
+    open(5, 450);
+    expect(w.backpack.id).toBe(5);
+    close(5);
     expect(w.backpack.id).toBeUndefined();
   });
 });
