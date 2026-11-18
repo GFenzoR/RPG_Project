@@ -11,11 +11,12 @@
   --dock-w: clamp(272px, 100vw - 960px, 384px);
 }
 /* The interface scale (docs/17 UI-3, Options → Interface; state/ui-prefs.ts sets --ui-zoom
-   on <html>): the dock, the windows and the hotbar grow or shrink, the map keeps its
-   pixels and takes what is left. The dock is in px, not rem: the text size option makes
-   the text larger without taking a zoom step from the map. GameView divides the windows'
-   remembered places and sizes (screen px) by it. */
-.game[data-ui="windows"] :is(.dock, .game-body > .gwin, .hotbar) {
+   on <html>): the dock and the windows grow or shrink, the map keeps its pixels and takes
+   what is left. The dock is in px, not rem: the text size option makes the text larger
+   without taking a zoom step from the map. GameView divides the windows' remembered
+   places and sizes (screen px) by it. The hotbar is left out: it measures its slots to
+   page them (Hotbar.tsx), and its text follows the text size anyway. */
+.game[data-ui="windows"] :is(.dock, .game-body > .gwin) {
   zoom: var(--ui-zoom, 1);
 }
 .game[data-ui="windows"] .game-body {

@@ -91,7 +91,7 @@ export interface GameSettings {
    * Interface; main.tsx keeps them).
    */
   interfaceOptions?: JSX.Element | undefined;
-  /** The interface scale (1 = 100 %): the CSS zoom of the dock, the windows and the hotbar. */
+  /** The interface scale (1 = 100 %): the CSS zoom of the dock and the windows. */
   uiScale?: number | undefined;
   /** The camera shakes on a heavy hit (off with reduced motion whatever this says). */
   cameraShake?: boolean | undefined;

@@ -1,5 +1,5 @@
-// Options → Interface (docs/17 UI-3, UI-9): the interface scale (the dock, the windows and
-// the hotbar), the text size and the camera shake on heavy hits. Without hooks: the choices
+// Options → Interface (docs/17 UI-3, UI-9): the interface scale (the dock and the windows),
+// the text size and the camera shake on heavy hits. Without hooks: the choices
 // live in main.tsx, kept per device in localStorage (state/ui-prefs.ts).
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";

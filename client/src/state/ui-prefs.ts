@@ -48,7 +48,7 @@ const SCALE_KEY = "rpg.ui-scale";
 const TEXT_KEY = "rpg.text-scale";
 const SHAKE_KEY = "rpg.shake";
 
-/** The interface scales Options offers (the CSS zoom of the dock, windows and hotbar). */
+/** The interface scales Options offers (the CSS zoom of the dock and the windows). */
 export const UI_SCALES: readonly number[] = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
 /** The text sizes Options offers (docs/17 UI-3: 90 % to 130 %, the root font size). */
 export const TEXT_SCALES: readonly number[] = [0.9, 1, 1.15, 1.3];

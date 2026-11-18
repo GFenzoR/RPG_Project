@@ -1232,8 +1232,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   soltar, el foco vuelve al ✥ de la ventana. La ayuda (H) lo explica (`client.help.windows`).
 - **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
   `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
-  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock`, las ventanas flotantes y la
-  hotbar (`--ui-zoom` en `<html>`); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
+  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock` y las ventanas flotantes (`--ui-zoom`
+  en `<html>`; la hotbar no: mide sus slots para paginarlos, y su texto sigue al tamaño
+  del texto); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
   tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en `rem` crece. El
   ancho del dock (`--dock-w`) pasó a px para que el texto grande no le quite un paso de zoom
   al mapa; la escala sí (el dock crece y el mapa toma lo que queda). Los lugares y tamaños

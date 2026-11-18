@@ -1539,9 +1539,10 @@ quedaba de A3, A4 y A5".
   de lugar en la columna, y Enter o Espacio la acoplan o la sueltan junto a la columna. Alt
   queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta.
 - **Escala de la interfaz y tamaño del texto (UI-3).** Opciones → Interfaz (y el menú ☰ del
-  teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock, las ventanas y la hotbar
-  crecen; el mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x) y "Tamaño del
-  texto" de 90 % a 130 % (en `rem`, como pedía UI-3). Cambio sobre el plan: son **dos**
+  teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock y las ventanas crecen; el
+  mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x; la hotbar no se escala:
+  mide sus slots para paginarlos) y "Tamaño del texto" de 90 % a 130 % (en `rem`, como
+  pedía UI-3). Cambio sobre el plan: son **dos**
   opciones, porque el texto más grande no debería quitarle un paso de zoom al mapa (el
   ancho del dock quedó en px) y la escala sí agranda los íconos y los slots. Se recuerdan
   por dispositivo.
