@@ -497,7 +497,8 @@ func (w *World) combatSkill(p *Player, id string) int {
 	return lvl
 }
 
-// hide makes p invisible: the clients that knew it get CreatureDisappear and from now
+// hide makes p invisible: the clients that knew it get CreatureDisappear (as a teleport:
+// nothing tells them it still stands there, attack.go) and from now
 // on nobody else is sent it (AOI filters it, docs/01-architecture.md "Trampas y
 // anti-bot"). Monsters without sees_invisible drop it as a target on their next think.
 func (w *World) hide(_ *game.TickContext, p *Player) {
@@ -507,7 +508,7 @@ func (w *World) hide(_ *game.TickContext, p *Player) {
 	p.invisible = true
 	w.eachObserver(p, p.pos, func(o *Player) {
 		if o.forget(p.id) {
-			o.emit(disappearMsg(p.id))
+			o.emit(disappearMsg(p.id, goneTeleport))
 		}
 	})
 }

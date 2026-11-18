@@ -973,13 +973,14 @@ func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction
 	w.observeMove(nil, m, from, to, posMsg(from), posMsg(to), uint32(ticks.Duration().Milliseconds()))
 }
 
-// removeMonster takes m out of the world (it died).
-func (w *World) removeMonster(m *Monster) {
+// removeMonster takes m out of the world: it died (goneDeath), or the server takes it
+// away (goneDespawn).
+func (w *World) removeMonster(m *Monster, why pb.DisappearReason) {
 	var gone *pb.ServerMessage // built once, for every observer that knew m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.forget(m.id) {
 			if gone == nil {
-				gone = disappearMsg(m.id)
+				gone = disappearMsg(m.id, why)
 			}
 			o.emit(gone)
 		}

@@ -162,7 +162,7 @@ func (w *World) creaturePos(id uint32) (world.Pos, bool) {
 
 // observeMove tells every client around either end of a step of a creature (the player
 // pl or the monster mo) what it needs: CreatureMove if it keeps seeing it,
-// CreatureDisappear if it stops, CreatureAppear if it starts. The mover's own client is
+// CreatureDisappear (out of view) if it stops, CreatureAppear if it starts. The mover's own client is
 // the caller's job. Every client gets the same CreatureMove, CreatureDisappear or
 // CreatureAppear (built once, on first need): with the wide view a step in a crowd goes
 // to a few hundred clients, and the batches are only read after the tick (the gateway's
@@ -193,7 +193,7 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 		case knows:
 			o.forget(id)
 			if gone == nil {
-				gone = disappearMsg(id)
+				gone = disappearMsg(id, goneOutOfView)
 			}
 			o.emit(gone)
 		case sees:
@@ -230,20 +230,22 @@ func (w *World) appearToObservers(c *Player) {
 	})
 }
 
-func (w *World) disappearFromObservers(c *Player) {
+// disappearFromObservers tells every client that knows c that it left their view, and why.
+func (w *World) disappearFromObservers(c *Player, why pb.DisappearReason) {
 	var gone *pb.ServerMessage // built once, for every observer that knew c
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if o.forget(c.id) {
 			if gone == nil {
-				gone = disappearMsg(c.id)
+				gone = disappearMsg(c.id, why)
 			}
 			o.emit(gone)
 		}
 	})
 }
 
-func disappearMsg(id uint32) *pb.ServerMessage {
-	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureDisappear{CreatureDisappear: &pb.CreatureDisappear{Id: id}}}
+// disappearMsg is the CreatureDisappear of creature id, with why it left the view (attack.go).
+func disappearMsg(id uint32, why pb.DisappearReason) *pb.ServerMessage {
+	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureDisappear{CreatureDisappear: &pb.CreatureDisappear{Id: id, Reason: why}}}
 }
 
 // ---- map areas --------------------------------------------------------------------
@@ -253,7 +255,7 @@ func disappearMsg(id uint32) *pb.ServerMessage {
 func (w *World) sendFullView(p *Player) {
 	for _, id := range p.known {
 		if id != p.id {
-			p.emit(disappearMsg(id))
+			p.emit(disappearMsg(id, goneOutOfView)) // p moved away from them
 		}
 	}
 	p.known = p.known[:0]
