@@ -13,9 +13,11 @@ client/
   src/state/             estado local del juego reconstruido desde eventos del servidor
   src/render/            capa de juego sobre packages/renderer (tiles, criaturas, efectos)
   src/input/             teclado (flechas/WASD, hotkeys), mouse y táctil (T5.6)
-  src/ui/                Preact: inventario, chat, diálogos de NPC, skills, login
+  src/ui/                Preact: pantalla de juego (GameView), ventanas, inventario, chat...
+  src/preview/           vista previa de la UI sin servidor (make ui-preview)
   src/i18n/              carga de textos desde i18n/
-  e2e/                   Playwright: tests y screenshots
+  vite/fonts.ts          plugin: fuentes OFL recortadas a woff2 en /fonts/
+  e2e/                   Playwright: tests y screenshots (y e2e/ui-preview.ts, un script)
 ```
 
 ## Reglas del cliente
@@ -28,13 +30,16 @@ client/
   (pixel-perfect, `roundPixels`, sin suavizado). El jugador puede acercar el mapa por
   escalas enteras (ver "Zoom del mapa"), nunca alejarlo por debajo de las 15x11.
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
-  Así es accesible, traducible y testeable con Playwright.
+  Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
+  ni columna fija: el mapa, el dock a su derecha y ventanas separadas (ver "Notas de la UI
+  oscura").
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
 - Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
   2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba (vista de 15x11,
-  click derecho = usar, layout) cambian cuando se haga cada tarea de su plan (§7).
+  click derecho = usar) cambian cuando se haga cada tarea de su plan (§7). A2 y A3 (tema,
+  fuentes, dock y ventanas) ya están.
 
 ## Notas de T1.5
 - Sin servidor propio de assets: el plugin de Vite empaqueta el contenido de `data/` e
@@ -133,7 +138,8 @@ client/
   selector de canal y la línea para escribir. Todo es texto DOM: nunca `innerHTML`.
 - Idioma: `pickLanguage` = `?lang=` → `localStorage` `rpg.lang` → navegador → es. `main.tsx`
   guarda el idioma en estado y `ui/LanguagePicker.tsx` lo cambia en vivo (esquina fuera del
-  juego, header dentro); el `Game` recibe `t` por un ref y el canvas renombra etiquetas.
+  juego; dentro, la ventana Opciones en escritorio y el menú ☰ en teléfonos); el `Game`
+  recibe `t` por un ref y el canvas renombra etiquetas.
 - `translator(texts, lang)` soporta plurales ICU; `make validate` revisa las claves literales
   del código (cliente, editor y servidor).
 
@@ -164,7 +170,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.2
 - `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones del header (`ConditionBar` en `ui/App.tsx`, nombres `condition.<id>.name`).
+  condiciones (`ConditionBar` en `ui/GameView.tsx`, bajo los orbes en escritorio y en el
+  encabezado de los teléfonos; nombres `condition.<id>.name`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -292,7 +299,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `WorldState.guild` (`state/guild.ts`, puro y con tests) guarda el gremio y las
   invitaciones de `GuildUpdate`; `guildPowers`/`memberActions` deciden qué botones mostrar
   con las mismas reglas que el servidor (que igual valida todo). `ui/Guild.tsx`: panel del
-  gremio en la columna lateral y las invitaciones sobre el mapa (`.guild-invitations`, más
+  gremio (su propia ventana con pestañas en escritorio, docs/17 UI-7; una pestaña del panel
+  en teléfonos) y las invitaciones sobre el mapa (`.guild-invitations`, más
   arriba que las del grupo). El panel no usa hooks (formularios no controlados que leen sus
   campos al enviar): `ui/Guild.test.ts` recorre su árbol sin DOM. Si le agregas estado,
   mantén ese test posible o muévelo a otro componente.
@@ -544,11 +552,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`layout.ts` `hotbarRoom`). La franja bajo el mapa (154 px, el alto del pad) es el
   `padding-bottom` de `.viewport`; el canvas se mide con la caja de contenido. El tutorial
   se pliega con "×" sin saltarse.
-- Escritorio: en la columna lateral todo menos el chat va en `.side-scroll`, que se
-  desplaza; el chat queda fijo debajo. Antes era `sticky` y tapaba el final del inventario
-  y de "Apariencia" a 1280x800. Con pestañas o cajón, `.side-scroll` es
-  `display: contents`. El log del sistema va al final de esa columna en escritorio y
-  arriba de la pestaña del chat en el resto.
+- Con pestañas o cajón, `.side-scroll` es `display: contents` y el log del sistema va
+  arriba de la pestaña del chat. El escritorio ya no tiene columna lateral (ver "Notas de
+  la UI oscura").
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
@@ -606,8 +612,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`nameStyleFor`, se mezcla en el `TextStyle`). `outfitReady` se calcula y guarda por
   atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambia el `lookKey`
   de un jugador, se tiran sus sprites y se arman de nuevo.
-- Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Va en la
-  columna lateral y es una pestaña más (`appearance` en `PANEL_TABS`). Muestra por tipo lo
+- Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Es la
+  ventana Apariencia de la botonera en escritorio y una pestaña más en teléfonos
+  (`appearance` en `PANEL_TABS`). Muestra por tipo lo
   que la cuenta tiene, con la opción por defecto primero (manda `UnequipCosmetic`) y
   botones de 44 px con `aria-pressed`; tocar lo que ya se lleva no manda nada.
   El enlace a `/shop` se abre en otra pestaña; en la app de escritorio se muestra la
@@ -707,3 +714,68 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `id`...). "Dejar la casa" pide confirmación con un `<details>` (sin hooks). La cantidad
   de la tienda se limita y se muestra con `shopCount` (`ui/Dialog.tsx`).
 - E2E: el segundo test de `e2e/sandbox.spec.ts` (screenshots 94 y 95).
+
+## Notas de la UI oscura (docs/17, A2 y A3)
+- **Fuentes OFL** (UI-3): Cinzel (títulos), Grenze Gotisch (logo, subida de nivel, muerte),
+  Alegreya Sans (interfaz) y Alegreya (lo que dicen los NPCs, ayuda). Los `.ttf` de
+  google/fonts están tal cual en `assets/vendor/font-*/` (`CREDITS.md`); `vite/fonts.ts`
+  (tabla `FONTS`) los recorta al latín del juego, los sirve como woff2 en `/fonts/` y los
+  emite en el build; `ui/fonts.css` tiene un `@font-face` por fila (`vite/fonts.test.ts`
+  compara los dos). Nada se baja de la red: la CSP de escritorio es `font-src 'self'`.
+- **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
+  `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
+  (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten
+  todas las ventanas: la lista de selectores de "Frames" en `client.css`. Una ventana nueva
+  se suma ahí. No uses colores sueltos: usa un token.
+- **Escritorio** (`layout.panel === "sidebar"`, `.game[data-ui="windows"]`, `windows.css`):
+  sin encabezado. `ui/GameView.tsx` dibuja el mapa y a su derecha el dock (`aside.side`,
+  `#side-panel`, ancho `--dock-w`: el más angosto que deja al mapa su próxima escala
+  entera; a 1280 px el mapa va a 2x, a 1920x1080 a 3x) con:
+  - `ui/Vitals.tsx`: orbes de vida y maná (se llenan con `transform`, el "fantasma" marca
+    lo perdido, laten bajo el 25 %; `orbFill`/`lowHealth` puros), nombre, nivel, barra de
+    experiencia y condiciones. Los test ids `health`, `mana`, `level`, `experience` y
+    `conditions` siguen ahí con los mismos textos;
+  - `ui/Toolbar.tsx`: botones con íconos propios (`ui/icons.tsx`, pixel art de 16x16 como
+    texto, 1x en el dock angosto y 2x desde 1344 px) que abren y cierran las ventanas, el
+    mercado (solo lo cierra: se abre desde un tablero) y "Salir del juego";
+  - las ventanas acopladas (`.dock-stack`, se desplaza si no entran) y el chat con el log
+    como segunda pestaña (`ChatBox`; mientras el log no se ve, todos los avisos flotan sobre
+    el mapa, no solo los importantes).
+- **Ventanas** (UI-5): `ui/windows.ts` (puro, con tests) guarda cuáles están abiertas,
+  acopladas o flotando, dónde, plegadas y en qué orden; se recuerda por dispositivo en
+  `localStorage` `rpg.windows` (si no se puede leer, vuelven las de fábrica: batalla e
+  inventario acopladas). `ui/GameWindow.tsx` es el marco (barra con ícono, título, plegar
+  y cerrar; `role="dialog"` flotando, `region` acoplada). Se arrastran por la barra: una
+  flotante sigue al puntero, una acoplada deja un fantasma; soltada sobre el dock se acopla
+  antes de la ventana bajo el puntero. Doble click en la barra la pliega. Cierran con un
+  fundido de 100 ms (`CLOSE_MS`, `[data-closing]`). Teclas (`WINDOW_KEYS`, solo fuera de
+  un campo de texto y después del listener del `Game`): I inventario, K habilidades,
+  B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
+  la flotante de arriba o, si no hay, abre Opciones. Un resaltado del tutorial abre su
+  ventana (`windowForHighlight`). Las ventanas del servidor (diálogo, tienda, crafteo,
+  mercado, casa, intercambio) siguen donde estaban, con el mismo marco.
+- **Gremio** (UI-7): ventana propia con pestañas Resumen, Miembros y Guerras
+  (`GuildPanel` con `tab`; sin `tab` muestra todo, como en la pestaña de los teléfonos).
+  Sigue sin hooks y `ui/Guild.test.ts` recorre las pestañas.
+- **Opciones**: Sonido (`SoundOptions` de `ui/AudioOptions.tsx`; la esquina del login y el
+  menú ☰ siguen con `AudioOptions`), Controles (pad), Interfaz (idioma, "Animaciones
+  reducidas" y "Restablecer ventanas"). `main.tsx` arma esas piezas (`GameSettings`).
+- **Animaciones** (UI-9): solo `transform` y `opacity`, ≤ 240 ms salvo los bucles (ola de
+  los orbes, latido). `prefers-reduced-motion` o la opción (`state/ui-prefs.ts`,
+  `localStorage` `rpg.motion`, `data-motion="reduced"` en `<html>`) las cortan con una
+  regla global al final de `windows.css`; el viaje en barco conserva su fundido.
+- **Teléfonos y tablets**: el encabezado compacto, las pestañas y el cajón de T5.6 con el
+  tema nuevo. La hotbar solo lleva su correa en escritorio: en el teléfono con pad cada
+  píxel cuenta para sus 4 slots (`Hotbar` resta el padding y el borde de la barra).
+- **Vista previa sin servidor**: `make ui-preview [ONLY=<escena>]` (`e2e/ui-preview.ts`)
+  construye `preview/index.html` (`src/preview/`, solo con `RPG_UI_PREVIEW=1`: nunca va
+  al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas y
+  saca screenshots de cada escena (game, windows, options, dialog, danger, death, login,
+  characters) a 1920x1080, 1280x800, 1280x720, 960x700, teléfono vertical y horizontal y
+  tablet, en `e2e/screenshots/actual/ui-preview/`. Playwright contesta cada pedido desde el
+  build: no levanta servidores. Los estados están en `src/preview/fixtures.ts`.
+- **E2E**: `e2e/windows.ts` (`openWindow`, `closeWindow`) abre las ventanas desde la
+  botonera. Test ids nuevos: `toolbar`, `toolbar-<id>` (`options-button` para Opciones,
+  `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones),
+  `window-close-<id>`, `window-fold-<id>`, `[data-window-button]`, `[data-chat-tab]`,
+  `[data-guild-tab]`, `reduced-motion`, `windows-reset`; la ayuda es `controls-help`.

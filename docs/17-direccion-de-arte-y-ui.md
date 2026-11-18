@@ -3,7 +3,8 @@
 Este doc nace de la primera prueba del dueño (2026-11-17). Fija cómo se tiene que ver,
 moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MOV-n`,
 `UI-n`, `SRC-n`) para citarla en tareas y PRs. Lo que todavía es código está en el plan
-del final (§7): nada de este doc está implementado salvo lo que dice "hoy".
+del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
+que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -552,6 +553,9 @@ recortar y pasar a woff2 con su nombre.
 - **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`.
 
 ### UI-4 Layout de escritorio y "ver más pantalla"
+**Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
+de abajo: los orbes, la botonera y el chat van en la columna derecha (el dock) y no hay
+HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080.
 ```
 ┌──────────────────────────────────────────────────────────┬──────────────┐
 │ [avisos: arriba al centro, sin tomar clicks]              │ Columna      │
@@ -770,6 +774,9 @@ recortar y pasar a woff2 con su nombre.
 | Golpe fuerte al jugador | sacudida de cámara de 2 px | 120 ms | **apagada**, y es opción aparte como en D2R |
 
 ### UI-10 Chat
+**Hoy (A3):** el chat quedó abajo del dock, con el log como segunda pestaña ("Registro"),
+y no flota sobre el mapa. Mientras el log no se ve, todos los mensajes del servidor flotan
+sobre el mapa (no solo los importantes).
 - Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
   Comercio, Sistema).
 - Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
@@ -871,8 +878,8 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | Id | Tarea | Toca | Depende de |
 |---|---|---|---|
 | A1 | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones | cliente, sitio | — |
-| A2 | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
-| A3 | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
+| A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
+| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
 | A6 | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E | cliente | — |
@@ -883,6 +890,46 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
 | A13 | Luz en cuevas y partículas de ambiente | cliente | A10 |
+
+### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
+Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10
+(el detalle técnico está en `client/CLAUDE.md`, "Notas de la UI oscura"):
+- **Fuentes (UI-3):** Cinzel, Grenze Gotisch, Alegreya Sans y Alegreya, de google/fonts con
+  commit fijo, en `assets/vendor/font-*/` con su `OFL.txt` y fila en `CREDITS.md`. El
+  plugin `client/vite/fonts.ts` las recorta a latín y las sirve como woff2 en `/fonts/`.
+  Pixelify Sans (canvas) no se agregó todavía: el canvas sigue con su fuente.
+- **Tokens y marco (UI-2):** los de la tabla, con los nombres viejos como alias. El marco
+  de hierro es CSS (sin el PNG 9-slice de spritegen), la piedra es una veta SVG en línea.
+  Los íconos de la botonera son pixel art propio de 16x16 escrito como texto en
+  `client/src/ui/icons.tsx` (no en el atlas: así se ven antes de que cargue).
+- **Layout (UI-4), cambio:** sin encabezado ni columna fija. A la derecha del mapa, el
+  **dock**: orbes de vida y maná con nombre, nivel y experiencia en el medio, la botonera,
+  las ventanas acopladas y el chat. No hay HUD abajo: el mapa usa todo el alto y toma la
+  escala entera más grande (2x a 1280x720, 3x a 1920x1080). La hotbar sigue sobre el borde
+  de abajo del mapa, como una correa. Ocultar el dock no se hizo: con 15x11 casillas solo
+  ganaría donde el ancho limita, y A7 (31x21) lo va a cambiar todo.
+- **Botonera y ventanas (UI-5):** como se pidió, salvo:
+  - el mercado no se abre desde la botonera (se abre con un tablero): su botón está
+    deshabilitado con la pista "usa un tablero" y, abierto, lo cierra;
+  - "Salir del juego" es un botón más de la botonera, no de Opciones;
+  - el modo de combate (postura, perseguir, modo seguro) va arriba de la ventana Batalla;
+  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias;
+  - las ventanas del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio)
+    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda);
+  - mover ventanas con el teclado y cambiarles el tamaño no se hizo.
+- **Gremio (UI-7):** ventana propia con pestañas Resumen, Miembros y Guerras. La
+  administración quedó en Resumen (mensaje del día y disolver) y la invitación en Miembros.
+  Una invitación al jugador sale sobre el mapa con Aceptar y Rechazar, como antes, y el
+  botón Gremio muestra un punto mientras espera.
+- **Chat (UI-10), cambio:** abajo del dock, no flotante (ver UI-10).
+- **Animaciones (UI-9):** abrir y cerrar ventanas, botones, orbes con ola y "fantasma",
+  latido y viñeta roja con poca vida, barras con `transform`, avisos que entran y se van,
+  subida de nivel con destello en la barra de experiencia y aviso en Grenze Gotisch, y la
+  pantalla de muerte. Se apagan con `prefers-reduced-motion` o con "Animaciones reducidas"
+  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron.
+- **Teléfonos:** encabezado compacto, pestañas y cajón como en T5.6, con el tema.
+- **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
+  varios tamaños sin levantar nada.
 
 Orden sugerido. A6 y A8 son lo que más se nota con menos riesgo y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.

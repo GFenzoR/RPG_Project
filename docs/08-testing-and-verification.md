@@ -45,6 +45,20 @@ el archivo y la imagen.
 **Claude debe abrir los screenshots con la herramienta Read** cuando cambia algo visual,
 y describir en el PR qué vio.
 
+### Vista previa de la UI sin servidor (`make ui-preview`)
+Para iterar sobre la interfaz sin Docker, Postgres ni el servidor del juego:
+`make ui-preview` (o `ONLY=<escena>`) construye una página de vista previa
+(`client/preview/`, `client/src/preview/`: solo con `RPG_UI_PREVIEW=1`, nunca va al build
+normal) que monta la pantalla de juego con estados inventados
+(`client/src/preview/fixtures.ts`) y un pedazo de Puerto dibujado por `mapcli render` en
+lugar del canvas. `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
+desde el build (no levanta servidores) y guarda en
+`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `options`,
+`dialog`, `danger` (vida baja y subida de nivel), `death`, `login` y `characters` a
+1920x1080, 1280x800, 1280x720, 960x700, un teléfono (390x844 y 844x390) y una tablet
+(768x1024). No reemplaza a `make e2e`: no hay mapa real, ni red, ni criaturas en el canvas.
+Sirve para revisar con Read el tema, el layout y las ventanas en todos los tamaños.
+
 ## Golden files
 - `packages/map-format/testdata/golden/`: chunks de entrada y salida esperada.
 - `proto`: un mensaje de ejemplo serializado en Go se decodifica en TS y viceversa.

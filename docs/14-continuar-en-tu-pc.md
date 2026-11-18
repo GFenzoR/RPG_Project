@@ -97,8 +97,9 @@ el punto 5:
 
 ## Pendientes conocidos (no bloquean)
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
-  deja escrito qué cambiar y cómo. Por ahora es solo documentación: no se cambió código,
-  arte ni herramientas. Lo que falta, en el orden de su §7:
+  deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
+  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"). Lo que
+  falta, en el orden de su §7:
   - **A6, movimiento fluido** (cliente). Hoy el cliente espera el `CreatureMove` de un paso
     antes de prever el siguiente (`Game.frame` sale si existe `world.pending`).
     `predictStep` empieza el paso en `now` y no donde terminó el anterior, y los pasos de
@@ -107,11 +108,19 @@ el punto 5:
   - **A8, animación procedural** de los monstruos y NPCs de un solo frame (ANI-5). **A9**
     necesita protocolo: quién ataca a quién y si una criatura murió o salió de la vista
     (ANI-7).
-  - **A2 a A5, la UI** (cliente):
-    - fuentes OFL, tokens y marcos;
-    - HUD con orbes, botonera y ventanas separadas (el gremio sale de la columna lateral);
-    - click derecho con menú y ficha del item;
-    - diálogo y tienda sin scroll.
+  - **A4 y A5, la UI** (cliente): click derecho con menú y ficha del item; diálogo y tienda
+    sin scroll.
+  - **Lo que A3 dejó para después** (docs/17 §7, "Hecho: A2 y A3"): cada contenedor como
+    ventana propia (hoy van dentro de Inventario); las ventanas del servidor (diálogo,
+    tienda, crafteo, mercado, casa, intercambio) como `GameWindow` acoplables (hoy solo
+    tienen el marco nuevo); mover ventanas con el teclado y cambiarles el tamaño; tamaño de
+    fuente y escala de la UI (UI-3); Pixelify Sans en el canvas; íconos de slot vacío en el
+    equipo; sacudida de cámara y destello de la hotbar (UI-9). El marco de hierro es CSS:
+    el PNG 9-slice de spritegen (`ui/frame/iron`) queda como mejora.
+  - **Revisar en el E2E final de la UI:** las ventanas flotantes (gremio, apariencia,
+    opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
+    cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
+    después haga click en una casilla tiene que cerrarla o moverla.
   - **A7, vista de hasta 31x21** (servidor, protocolo y cliente). Hoy el AOI fija 15x11 + 1
     (`server/internal/session/aoi.go`, docs/01 y docs/05). Hay que volver a medir el
     ancho de banda por jugador (docs/07).
