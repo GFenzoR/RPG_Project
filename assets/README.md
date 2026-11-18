@@ -25,7 +25,7 @@
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
-   agrega su fila en la tabla de `CREDITS.md` (CC0, CC-BY o OGA-BY). Son las mismas reglas
+   agrega su fila en la tabla de `CREDITS.md` (CC0, CC-BY, OGA-BY o CC-BY-SA). Son las mismas reglas
    que para los sprites, y `make validate` comprueba las dos cosas. Se mantienen los
    nombres del pack (mayúsculas, espacios, subcarpetas como `Audio/impactMetal_000.ogg`);
    solo la carpeta `<pack>` va en minúsculas y sin espacios.
@@ -65,7 +65,10 @@ y después `make sprites` rearma el atlas. Al pasar una ruta a spritegen hay que
 entrada de `sprites.yaml` (la regla de arriba). El test de spritegen falla si un PNG
 commiteado no coincide con su receta.
 
-Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concreto):
+Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concreto). La
+dirección de arte acordada el 2026-11-17 está en `docs/17-direccion-de-arte-y-ui.md`:
+proyección, muros con altura, variantes de suelo, valores, animación y el orden en que se
+reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tareas.
 - 32x32, vista cenital oblicua 3/4: se ve la cara de arriba y la frontal (sur).
 - Contorno de 1 px en un tono oscuro del color local (no negro puro), luz desde arriba a la
   izquierda, 3-4 tonos por material, poco o nada de tramado, alfa solo 0 o 255.
@@ -140,9 +143,10 @@ La salida es determinista: mismo input, mismos bytes. Para revisar el atlas con 
 ## Integrar un pack de terceros (checklist)
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` (nombre en minúsculas, sin
    espacios) junto con su texto de licencia como `LICENSE` o `LICENSE.txt`.
-2. Agrega una fila a `CREDITS.md` con autor, licencia (CC0, CC-BY 3.0/4.0, OGA-BY), URL de
-   origen y la carpeta `` `assets/vendor/<pack>/` ``. Sin esa fila spritepack rechaza el
-   pack.
+2. Agrega una fila a `CREDITS.md` con autor, licencia (CC0, CC-BY 3.0/4.0, OGA-BY 3.0 o,
+   desde el 2026-11-17, CC-BY-SA 3.0/4.0), URL de origen y la carpeta
+   `` `assets/vendor/<pack>/` ``. Sin esa fila spritepack rechaza el pack. Si el pack trae
+   licencia por archivo, mira "Packs con licencia por archivo" abajo.
 3. En `sprites.yaml`, cambia `placeholder` por `source` en cada sprite que el pack cubra:
    ```yaml
    weapons/iron_sword: { source: vendor/<pack>/items.png, tile: [4, 2] }   # columna, fila (32 px)
@@ -154,3 +158,33 @@ La salida es determinista: mismo input, mismos bytes. Para revisar el atlas con 
    consultar con el usuario.
 4. `make sprites` y revisa la imagen con Read; `make test` comprueba que todo sprite de
    `data/` sigue resolviéndose.
+
+### Packs con licencia por archivo (Liberated Pixel Cup)
+Los packs de LPC no tienen una licencia para todo el pack: cada archivo trae la suya en el
+`CREDITS.csv` del Universal LPC Spritesheet Character Generator o en los `Credits.txt` de
+LPC Revised. Repositorios y detalle en `docs/17-direccion-de-arte-y-ui.md` (SRC-2 y SRC-3).
+1. Anota el commit de origen.
+2. Copia solo los archivos con una licencia aceptada (CC0, CC-BY, OGA-BY, CC-BY-SA). Si un
+   archivo tiene varias, elige una aceptada. Si solo tiene GPL o no tiene fila, no entra.
+   Del repo del generador se copia arte, nunca código (es GPL-3.0).
+3. Respeta las rutas del origen dentro de `assets/vendor/<pack>/`. Deja al lado un
+   `LICENSE.txt` con el texto de cada licencia que aparece y el subconjunto de créditos de
+   lo copiado (`CREDITS.csv` solo con esas filas, o los `Credits.txt`).
+4. La fila de `CREDITS.md` dice "por archivo" en la licencia, remite a ese archivo de
+   créditos y pone la URL con el commit.
+5. Lo que una herramienta propia derive de esos archivos (capas compuestas, recoloreados)
+   va en `assets/sprites/derived/<pack>/`, con una fila en "Obras derivadas de terceros"
+   de `CREDITS.md`. Lleva la licencia del origen: un derivado de CC-BY-SA sigue siendo
+   CC-BY-SA.
+
+## Fuentes (OFL)
+Las fuentes de la interfaz son OFL 1.1 y van auto-alojadas: la CSP de escritorio solo
+deja `font-src 'self'`. Las elegidas y sus rutas en `https://github.com/google/fonts` están
+en `docs/17-direccion-de-arte-y-ui.md` (UI-3).
+- `assets/vendor/font-<familia>/`: los `.ttf` tal como están en google/fonts, su `OFL.txt` y
+  una copia como `LICENSE.txt` (el validador busca un archivo que empiece por `LICENSE`).
+- Una fila en la tabla "Fuentes" de `CREDITS.md`: el copyright de la primera línea del
+  `OFL.txt`, OFL 1.1 y la URL de la carpeta con el commit.
+- Los woff2 recortados que usa el cliente se generan en el build y no se commitean. Recortar
+  o convertir es crear una versión modificada: no se hace con las familias que declaran un
+  "Reserved Font Name" en su `OFL.txt`.

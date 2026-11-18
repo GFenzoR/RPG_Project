@@ -32,7 +32,7 @@ Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nomb
 | Protocolo | WebSocket binario + Protobuf |
 | Escala inicial | Hasta 100 jugadores simultáneos en un solo servidor |
 | Hosting | Una instancia AWS con Docker Compose (~USD 10–20/mes) |
-| Arte | Packs libres CC0/CC-BY + placeholders; se reemplaza después |
+| Arte | Arte propio más packs libres: CC0, CC-BY, OGA-BY y, desde el 2026-11-17 (decisión del dueño), CC-BY-SA (p. ej. Liberated Pixel Cup); fuentes OFL. Licencias y obligaciones en `assets/CREDITS.md`; dirección de arte en `17-direccion-de-arte-y-ui.md` |
 | Combate | Como Tibia: movimiento por casillas, auto-ataque al objetivo, hechizos y runas con hotkeys |
 | Vocaciones | 4 fijas, con nombres propios (equivalentes a knight, paladin, sorcerer, druid) |
 | Skills | Como Tibia (puños, espada, hacha, maza, distancia, escudo, nivel mágico, pesca) **más oficios** (minería, herrería, cocina, etc.) |
@@ -64,6 +64,7 @@ llegue su tarea, siguen como estaban:
 - Sigue fuera de alcance, sin tarea: mazmorras instanciadas.
 
 ## Lo que NO vamos a hacer
-- Usar sprites, mapas, nombres o textos de Tibia.
+- Usar sprites, mapas, nombres o textos de Tibia (ni sprites, fuentes o interfaces de Diablo
+  u otros juegos de referencia: de ellos se aprende el estilo, no se calca).
 - Vender poder (experiencia, items, stats, bendiciones con dinero real).
 - Arquitectura distribuida antes de necesitarla.

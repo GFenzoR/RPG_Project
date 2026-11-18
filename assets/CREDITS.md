@@ -1,11 +1,34 @@
 # Créditos de assets
 
 Todo asset de terceros debe tener una entrada aquí antes de usarse en el juego.
-Licencias aceptadas: CC0, CC-BY 3.0/4.0, OGA-BY. **No** se aceptan assets sin licencia
-clara, con licencia "no comercial" ni sacados de otros juegos.
+
+**Licencias aceptadas:**
+- Arte y sonido: CC0, CC-BY 3.0/4.0 y OGA-BY 3.0. Desde el 2026-11-17, por decisión del
+  dueño, también **CC-BY-SA 3.0/4.0** (por ejemplo, Liberated Pixel Cup).
+- Fuentes: **SIL OFL 1.1** (desde el 2026-11-17).
+
+**No** se aceptan: assets sin licencia clara, GPL como única licencia del archivo, "no
+comercial" (NC), "sin derivados" (ND), "solo uso personal", licencias de tienda que no dejan
+redistribuir (el repo es público), ni nada sacado de otros juegos.
+
+Reglas que vienen con eso (detalle en `docs/17-direccion-de-arte-y-ui.md`, "SRC"):
+- **Licencia por archivo.** En packs como los de LPC cada archivo trae la suya (`CREDITS.csv`
+  o `Credits.txt` del origen): solo entran los archivos con una licencia aceptada. Si un
+  archivo tiene varias, se elige una aceptada y la fila lo dice.
+- **Atribución.** CC-BY, CC-BY-SA y OGA-BY piden autor, título, licencia y enlace, visibles
+  para el jugador. Hoy están en este archivo; la pantalla de créditos del juego y del sitio
+  está pendiente (tarea A1 de docs/17).
+- **CC-BY-SA.** Lo que se derive de un archivo BY-SA (recoloreado, recortado, combinado)
+  sigue siendo BY-SA y va en "Obras derivadas", nunca como obra propia CC0. Una página del
+  atlas solo junta sprites: cada uno conserva su licencia, y el código y el arte propio no
+  cambian de licencia.
+- **DRM.** CC-BY y CC-BY-SA no permiten poner medidas técnicas que restrinjan el material.
+  Antes de publicar en tiendas móviles (docs/15), hay que revisar esto. OGA-BY sí lo permite.
 
 `tools/spritepack` solo acepta un pack de `assets/vendor/<pack>/` si tiene una fila aquí
-con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/README.md`.
+con esa carpeta y un archivo `LICENSE` dentro. `make validate` exige lo mismo para los
+sonidos. Las fuentes siguen la misma regla (`assets/vendor/font-<familia>/`, con su
+`OFL.txt` copiado como `LICENSE.txt`). Procedimiento completo: `assets/README.md`.
 
 | Pack / archivo | Autor | Licencia | Fuente (URL) | Carpeta | Atribución requerida |
 |---|---|---|---|---|---|
@@ -24,3 +47,24 @@ con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/R
 | Isla Volcánica (T5.5): música, ambiente, suelos, bordes y cartel | Neque's Realm | CC0 1.0 | Música y ambiente propios: `sounds/music/volcan.ogg` y `sounds/ambient/volcan.ogg` (`tools/soundgen`, recetas `music/volcan` y `ambient/volcan`). Suelos (`ground/ash`, `basalt`, `cinder_path`, `cooled_lava`, `lava`) y `decor/signpost` de `tools/spritegen`; sus bordes (`sprites/borders/{ash_sand,cooled_lava_*,cinder_path_ash}_*`) los recorta `gen-borders` de ese arte. El resto de sus sprites sale del pack Dungeon Crawl |
 | Isla de Pruebas (sandbox, `docs/16-probar-el-juego.md`): llave de latón `tools/brass_key` | Neque's Realm (pixel art propio) | CC0 1.0 | `tools/spritegen/src/recipes/items.ts` (`make spritegen ONLY=tools/brass_key`). La puerta de práctica (`dngn/doors/closed_door.png`, `open_door.png`) y los tres NPCs (`mon/human.png`, `mon/unique/terence.png`, `mon/unique/harold.png`) salen del pack Dungeon Crawl |
 | Auditoría de contenido (2026-11): grebas de acero de ascua `armor/embersteel_greaves` | Neque's Realm (pixel art propio) | CC0 1.0 | `tools/spritegen/src/recipes/items.ts` (`make spritegen ONLY=armor/embersteel_greaves`). Las demás armas, piezas, virotes y brebajes nuevos usan tiles del pack Dungeon Crawl (CC0, fila de arriba; mapeo en `assets/sprites.yaml`) |
+
+## Fuentes (OFL 1.1)
+
+Todavía ninguna. Las elegidas para la UI están en `docs/17-direccion-de-arte-y-ui.md`
+(UI-3). Cada familia va con una fila: los `.ttf` de `https://github.com/google/fonts` tal
+cual, en `assets/vendor/font-<familia>/`, junto con su `OFL.txt` y una copia como
+`LICENSE.txt`. Una familia con "Reserved Font Name" en su `OFL.txt` no se recorta ni se
+convierte con su nombre.
+
+| Familia | Autor (copyright del `OFL.txt`) | Licencia | Fuente (URL con commit) | Carpeta |
+|---|---|---|---|---|
+
+## Obras derivadas de terceros
+
+Todavía ninguna. Son sprites que una herramienta propia arma a partir de archivos de
+`assets/vendor/` (capas de LPC compuestas en un atuendo, recoloreados). Van en
+`assets/sprites/derived/<pack>/` con la licencia de su origen: lo que sale de un archivo
+CC-BY-SA sigue siendo CC-BY-SA.
+
+| Archivos | Sale de (pack y archivos de origen) | Licencia | Herramienta que los genera |
+|---|---|---|---|
