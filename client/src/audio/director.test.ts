@@ -9,7 +9,7 @@ import {
   positionAt,
   seededRandom,
 } from "./director.ts";
-import type { DirectorConfig, MusicTrack, Scene, Voice } from "./director.ts";
+import type { DirectorConfig, MusicTrack, Readiness, Scene, Voice } from "./director.ts";
 
 const track = (seconds: number, entries: number[], end = seconds - 5): MusicTrack => ({
   seconds,
@@ -54,13 +54,13 @@ const world = (zone?: string, extra: { quest?: string; boss?: string } = {}): Sc
   boss: extra.boss,
 });
 
-const always = (): boolean => true;
+const always = (): Readiness => "ready";
 
 /** A director and a clock that steps it every `step` ms, like the engine's pump. */
 function run(seed = 7, config = CONFIG) {
   const d = new MusicDirector(config, seededRandom(seed));
   let now = 0;
-  let ready: (s: string) => boolean = always;
+  let ready: (s: string) => Readiness = always;
   const at = (scene: Scene, ms: number, step = 250): void => {
     const end = now + ms;
     for (; now < end; now += step) d.update(now, scene, ready);
@@ -71,7 +71,7 @@ function run(seed = 7, config = CONFIG) {
     at,
     now: () => now,
     lead: (): Voice | undefined => d.voices().find((v) => v.env.to > 0),
-    setReady: (fn: (s: string) => boolean) => (ready = fn),
+    setReady: (fn: (s: string) => Readiness) => (ready = fn),
   };
 }
 
@@ -319,7 +319,7 @@ describe("MusicDirector", () => {
     const { d, at, setReady } = run();
     at(world("town"), 5000);
     const town = d.voices()[0] as Voice;
-    setReady((s) => s.startsWith("t"));
+    setReady((s) => (s.startsWith("t") ? "ready" : "loading"));
     at(world("cave"), CONFIG.dwellMs + 2000);
     expect(d.voices()).toEqual([town]);
     expect(town.env.to).toBe(1);
@@ -354,6 +354,89 @@ describe("MusicDirector", () => {
     expect(d.voices()).toEqual([]);
     expect(d.playing()?.pool).toBe("town"); // resting, then the next one
     at(world("town"), CONFIG.gapMs[1] + 1000);
+    expect(d.voices()).toHaveLength(1);
+  });
+
+  it("back while the track still fades out, that voice comes back up: never the same track twice", () => {
+    const { d, at, now } = run(9);
+    at(world("town"), 20_000);
+    const town = d.voices()[0] as Voice;
+    const twice = (): boolean => {
+      const sounds = d.voices().map((v) => v.sound);
+      return new Set(sounds).size !== sounds.length;
+    };
+    // The cave takes over after the dwell, and the player turns round at once: back in
+    // town after another dwell, with the town's fade-out not over yet.
+    for (let t = 0; t < CONFIG.dwellMs + 250; t += 250) {
+      at(world("cave"), 250);
+      expect(twice()).toBe(false);
+    }
+    expect(d.playing()?.pool).toBe("cave");
+    expect(town.env.to).toBe(0);
+    for (let t = 0; t < CONFIG.dwellMs + 250; t += 250) {
+      at(world("town"), 250);
+      expect(twice()).toBe(false);
+    }
+    expect(d.playing()?.pool).toBe("town");
+    // The same voice, rising from where its gain was, with the cave's on the mirror curve.
+    const [back, cave] = d.voices() as [Voice, Voice];
+    expect(back).toBe(town);
+    expect(back.env).toMatchObject({ ms: CONFIG.fades.zone, to: 1 });
+    expect(back.env.from).toBeGreaterThan(0.3);
+    expect(cave).toMatchObject({ pool: "cave", env: { to: 0, at: back.env.at } });
+    for (let t = now(); t <= back.env.at + CONFIG.fades.zone; t += 100) {
+      const a = gainAt(back.env, t);
+      const b = gainAt(cave.env, t);
+      expect(a * a + b * b).toBeCloseTo(1, 9);
+    }
+    at(world("town"), CONFIG.fades.zone + 250);
+    expect(d.voices()).toEqual([town]);
+  });
+
+  it("a track whose file failed gives way to another of its pool", () => {
+    const { d, at, setReady } = run(5);
+    at(world("town"), 0);
+    const first = d.voices()[0] as Voice;
+    const queued = d.wanted()[0] ?? ""; // the next one, asked for early
+    expect(queued).not.toBe(first.sound);
+    setReady((s) => (s === queued ? "failed" : "ready"));
+    const track = CONFIG.tracks[first.sound] as MusicTrack & { seconds: number };
+    at(world("town"), (track.seconds - first.from) * 1000 + CONFIG.gapMs[1] + 1000);
+    const next = d.voices()[0] as Voice;
+    expect(next.sound).not.toBe(queued);
+    expect(next.sound).not.toBe(first.sound);
+    expect(CONFIG.tracks[next.sound]?.entries).toContain(next.from);
+  });
+
+  it("a pool whose only track failed keeps the old music until the file is back", () => {
+    const { d, at, setReady } = run();
+    at(world("town"), 5000);
+    const town = d.voices()[0] as Voice;
+    setReady((s) => (s === "f1" ? "failed" : "ready"));
+    at(world("forest"), CONFIG.dwellMs + 5000);
+    expect(d.voices()).toEqual([town]);
+    expect(town.env.to).toBe(1);
+    expect(d.playing()?.pool).toBe("town");
+    expect(d.wanted()).toContain("f1"); // the engine fetches it again
+    setReady((s) => (s === "f1" ? "loading" : "ready"));
+    at(world("forest"), 1000);
+    expect(d.playing()?.pool).toBe("town");
+    setReady(always);
+    at(world("forest"), 0);
+    expect(d.playing()?.pool).toBe("forest");
+    expect(d.voices().at(-1)?.sound).toBe("f1");
+  });
+
+  it("a voice the engine lost goes at once, a loop file too, and its pool goes on", () => {
+    const { d, at } = run();
+    at(world("old"), 1000);
+    const loop = d.voices()[0] as Voice;
+    d.ended(loop.id, 1250);
+    expect(d.voices()).toEqual([loop]); // a looping element never ends by itself
+    d.lost(loop.id, 1250);
+    expect(d.voices()).toEqual([]);
+    expect(d.playing()?.pool).toBe("old"); // resting, then again
+    at(world("old"), CONFIG.gapMs[1] + 1000);
     expect(d.voices()).toHaveLength(1);
   });
 });

@@ -11,6 +11,8 @@
 //   begins), never at its first second, unless it has none (a loop file).
 // - Back in a zone (or the title screen) within `resumeMs`, its track goes on where it was;
 //   after that, a fresh one. After a boss, the zone's track comes back at a fresh entry.
+//   Back while its track is still fading out, that same voice fades back in: a track never
+//   plays twice over itself.
 // - Crossfades are equal-power (sin/cos), with a length by what changed (`Fades`).
 // - A new zone or quest area takes over only after `dwellMs` in it: walking along a border
 //   never flaps. A boss takes over at once and lets go `bossHoldMs` after the last one left
@@ -19,6 +21,9 @@
 //   (`gapMs`) before the next; the title's and a boss's crossfade into the next before the
 //   ending, so they never stop.
 // - Ordinary fights are not an input at all: the owner wants the zone's music to go on.
+// - A track whose file failed (`Readiness` "failed") gives way to another of its pool; a
+//   pool with nothing else waits, with the old music going on, until the engine has
+//   fetched the file again.
 
 /** A track of a pool, from assets/sounds.yaml (music-gemini measured it). */
 export interface MusicTrack {
@@ -72,6 +77,13 @@ export type Scene =
       /** The pool of a boss in view. */
       boss: string | undefined;
     };
+
+/**
+ * Whether the engine can play a sound: right away, once its file arrives ("loading"), or
+ * not for now ("failed": its file did not arrive or did not decode; the engine tries again
+ * later).
+ */
+export type Readiness = "ready" | "loading" | "failed";
 
 /** What a pool is playing for: how it ends a track and whether it resumes. */
 export type Role = "title" | "zone" | "quest" | "boss";
@@ -168,6 +180,8 @@ interface Pending {
   fadeMs: number;
   /** A natural next (after a gap or into a crossfade): the outgoing track is not remembered. */
   next: boolean;
+  /** It goes on where the track was (`memory`): a voice of it still fading comes back up. */
+  resume: boolean;
 }
 
 interface Memory {
@@ -201,6 +215,8 @@ export class MusicDirector {
   private readonly memory = new Map<string, Memory>();
   /** The next track of each pool, decided when its current one starts (to prefetch it). */
   private readonly queued = new Map<string, string>();
+  /** The engine's answer for each sound, as given to the last update. */
+  private readiness: (sound: string) => Readiness = () => "ready";
   /** Bumped on every change of the voices (the engine skips work when it did not move). */
   version = 0;
 
@@ -237,9 +253,11 @@ export class MusicDirector {
 
   /**
    * Moves the music to `now` for `scene`. `ready(sound)` says whether the engine can play a
-   * sound right away: a start waits (the old music goes on) until it can.
+   * sound right away: a start waits (the old music goes on) until it can, and a start whose
+   * file failed takes another track of its pool.
    */
-  update(now: number, scene: Scene, ready: (sound: string) => boolean): void {
+  update(now: number, scene: Scene, ready: (sound: string) => Readiness): void {
+    this.readiness = ready;
     this.dropFinished(now);
     const want = this.desired(now, scene);
     const planned = this.pending !== undefined && sameTarget(want, this.pending.target);
@@ -250,7 +268,8 @@ export class MusicDirector {
     }
     if (!this.pending) this.planNext(now);
     const p = this.pending;
-    if (p && (p.sound === undefined || ready(p.sound))) {
+    if (p?.sound !== undefined && ready(p.sound) === "failed") this.swapFailed(p);
+    if (p && (p.sound === undefined || ready(p.sound) === "ready")) {
       this.pending = undefined;
       this.apply(now, p);
     }
@@ -259,7 +278,19 @@ export class MusicDirector {
   /** The engine heard a voice's element end before the director expected it. */
   ended(voiceId: number, now: number): void {
     const v = this.voiceList.find((x) => x.id === voiceId);
-    if (!v || v.loop) return;
+    if (v && !v.loop) this.drop(v, now);
+  }
+
+  /**
+   * The engine cannot play a voice (its file failed to arrive or to decode): it goes now,
+   * a loop file too, and the music goes on as after a track's end (the next of its pool).
+   */
+  lost(voiceId: number, now: number): void {
+    const v = this.voiceList.find((x) => x.id === voiceId);
+    if (v) this.drop(v, now);
+  }
+
+  private drop(v: Voice, now: number): void {
     this.voiceList = this.voiceList.filter((x) => x !== v);
     this.version++;
     if (v === this.lead) this.leadEnded(now);
@@ -329,7 +360,8 @@ export class MusicDirector {
             : from === undefined && want === undefined
               ? 0
               : fades.zone;
-    if (!want) return { target: undefined, sound: undefined, from: 0, fadeMs, next: false };
+    if (!want)
+      return { target: undefined, sound: undefined, from: 0, fadeMs, next: false, resume: false };
     const afterBoss = from?.role === "boss" && want.role !== "boss";
     const mem = this.memory.get(want.pool);
     const fresh = mem === undefined || now - mem.at > this.config.resumeMs;
@@ -343,10 +375,18 @@ export class MusicDirector {
           from: this.entryOf(mem.sound),
           fadeMs,
           next: false,
+          resume: false,
         };
       }
       if (mem.position < track.end - RESUME_MARGIN_S)
-        return { target: want, sound: mem.sound, from: mem.position, fadeMs, next: false };
+        return {
+          target: want,
+          sound: mem.sound,
+          from: mem.position,
+          fadeMs,
+          next: false,
+          resume: true,
+        };
     }
     const sound = this.takeQueued(want.pool) ?? this.pick(want.pool);
     return {
@@ -355,6 +395,7 @@ export class MusicDirector {
       from: sound === undefined ? 0 : this.entryOf(sound),
       fadeMs,
       next: false,
+      resume: false,
     };
   }
 
@@ -386,37 +427,66 @@ export class MusicDirector {
       from: sound === undefined ? 0 : this.entryOf(sound),
       fadeMs,
       next: true,
+      resume: false,
     };
+  }
+
+  /**
+   * A start whose file failed takes another track of its pool, at a fresh entry. With no
+   * other (a pool of one, or all of them failed) it stays: the old music goes on while the
+   * engine fetches the file again.
+   */
+  private swapFailed(p: Pending): void {
+    if (!p.target || p.sound === undefined) return;
+    const other = this.pick(p.target.pool);
+    if (other === undefined || other === p.sound || this.readiness(other) === "failed") return;
+    p.sound = other;
+    p.from = this.entryOf(other);
+    p.resume = false;
   }
 
   private apply(now: number, p: Pending): void {
     const old = this.lead;
     if (old && !p.next) this.remember(old, now);
+    // Back while the track still fades out (the player turned round at a border): that
+    // voice comes back up from where its gain is, with the outgoing one on the mirror
+    // curve, rather than a second copy of the track a few seconds behind it.
+    const target = p.target;
+    const back =
+      p.resume && target
+        ? this.voiceList.find((v) => v.env.to <= 0 && v.pool === target.pool && v.sound === p.sound)
+        : undefined;
     // The old music fades out over the same span the new one fades in.
     for (const v of this.voiceList) if (v.env.to > 0) this.fadeOut(v, now, p.fadeMs);
     this.gapUntil = undefined;
-    this.current = p.target;
+    this.current = target;
     this.lead = undefined;
-    if (!p.target || p.sound === undefined) return;
-    const track = this.config.tracks[p.sound];
-    const voice: Voice = {
-      id: this.nextId++,
-      sound: p.sound,
-      pool: p.target.pool,
-      role: p.target.role,
-      from: p.from,
-      startedAt: now,
-      loop: track?.seconds === undefined,
-      env: { at: now, ms: p.fadeMs, from: 0, to: 1 },
-    };
-    this.cutOldest(now);
-    this.voiceList.push(voice);
+    if (!target || p.sound === undefined) return;
+    let voice: Voice;
+    if (back) {
+      back.env = { at: now, ms: p.fadeMs, from: gainAt(back.env, now), to: 1 };
+      voice = back;
+    } else {
+      const track = this.config.tracks[p.sound];
+      voice = {
+        id: this.nextId++,
+        sound: p.sound,
+        pool: target.pool,
+        role: target.role,
+        from: p.from,
+        startedAt: now,
+        loop: track?.seconds === undefined,
+        env: { at: now, ms: p.fadeMs, from: 0, to: 1 },
+      };
+      this.cutOldest(now);
+      this.voiceList.push(voice);
+    }
     this.lead = voice;
-    this.last.set(p.target.pool, p.sound);
-    this.memory.delete(p.target.pool);
-    if (!this.queued.has(p.target.pool)) {
-      const next = this.pick(p.target.pool);
-      if (next !== undefined) this.queued.set(p.target.pool, next);
+    this.last.set(target.pool, p.sound);
+    this.memory.delete(target.pool);
+    if (!this.queued.has(target.pool)) {
+      const next = this.pick(target.pool);
+      if (next !== undefined) this.queued.set(target.pool, next);
     }
     this.version++;
   }
@@ -485,19 +555,24 @@ export class MusicDirector {
 
   /**
    * The next track of a pool: a shuffled round of all of them, never the one that played
-   * last (`last` is set when a track starts, in apply).
+   * last (`last` is set when a track starts, in apply), and none whose file failed. When
+   * only the last one can play, it plays again (at another entry); when none can, one that
+   * waits for its file (the old music goes on meanwhile).
    */
   private pick(pool: string): string | undefined {
     const tracks = this.config.pools[pool] ?? [];
     if (tracks.length <= 1) return tracks[0];
     const last = this.last.get(pool);
+    const usable = (s: string): boolean => this.readiness(s) !== "failed";
     let bag = this.bags.get(pool) ?? [];
-    let i = bag.findIndex((s) => s !== last);
+    let i = bag.findIndex((s) => s !== last && usable(s));
     if (i < 0) {
       bag = this.shuffled(tracks);
-      i = bag.findIndex((s) => s !== last);
+      i = bag.findIndex((s) => s !== last && usable(s));
+      if (i < 0) i = bag.findIndex(usable);
+      if (i < 0) i = bag.findIndex((s) => s !== last);
     }
-    const [sound] = bag.splice(i, 1);
+    const [sound] = bag.splice(Math.max(0, i), 1);
     this.bags.set(pool, bag);
     return sound;
   }

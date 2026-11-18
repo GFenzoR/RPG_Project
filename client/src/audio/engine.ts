@@ -11,16 +11,38 @@
 // ~66 MB): its file is fetched once into an object URL (the compressed bytes, ~1 MB) that
 // the element decodes as it plays and can seek in, whatever the server says about byte
 // ranges. The last KEEP_STREAMS files stay; nothing is fetched while the music is muted.
+// A file that fails (the network, a deploy, a file the element cannot decode) is fetched
+// again after STREAM_RETRY_MS, doubling up to STREAM_RETRY_MAX_MS; meanwhile the director
+// plays another track of its pool, or keeps the old music. A loop file (soundgen's themes,
+// with no `seconds`) is decoded and loops on a buffer source instead: a media element's
+// `loop` leaves a gap at every turn.
 //
 // The AudioContext is only created on unlock(), after the first user gesture, because
 // browsers (and the desktop webviews) refuse to start audio before one. Until then play()
-// is silent and the wanted ambient loop and music are only remembered.
+// is silent and the wanted ambient loop and music are only remembered. The music's
+// elements are made in that gesture too, and each one plays-and-pauses nothing in it
+// (StreamLike.bless): WebKit lets an element start later only if play() was called on it
+// within a gesture. A play() refused anyway is tried again on the next gesture.
 //
 // Everything the browser provides comes through AudioPorts, so tests run on a fake context.
 import type { SoundChannel, SoundManifest } from "../content-types.ts";
 import type { Pos } from "../state/geometry.ts";
-import { MusicDirector, envelopePoints, gainAt, positionAt } from "./director.ts";
-import type { DirectorConfig, Envelope, MusicTrack, Role, Scene, Voice } from "./director.ts";
+import {
+  MAX_VOICES as MAX_MUSIC_VOICES,
+  MusicDirector,
+  envelopePoints,
+  gainAt,
+  positionAt,
+} from "./director.ts";
+import type {
+  DirectorConfig,
+  Envelope,
+  MusicTrack,
+  Readiness,
+  Role,
+  Scene,
+  Voice,
+} from "./director.ts";
 import { ALL_CHANNELS } from "./prefs.ts";
 import type { AudioPrefs, VolumeChannel } from "./prefs.ts";
 
@@ -79,6 +101,17 @@ export interface StreamLike {
   stop(): void;
   /** `fn` runs when the file plays to its end (never after stop). */
   onEnded(fn: () => void): void;
+  /** `fn` runs when the element cannot play its file: broken, or a codec it lacks. */
+  onError(fn: () => void): void;
+  /**
+   * Called within a user gesture on an element with no file: it plays and pauses nothing,
+   * which in WebKit (Safari, iOS, the macOS webview) lets it start playing later.
+   */
+  bless(): void;
+  /** Whether the browser refused the last play() for want of a gesture (it is silent). */
+  blocked(): boolean;
+  /** Where the element is in its file, s (E2E). */
+  time(): number;
 }
 
 export interface AudioPorts {
@@ -117,13 +150,20 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
     return undefined;
   }
   let ended: () => void = () => undefined;
-  // A play() that a later play() or stop() replaced must not seek or start anything.
+  let failed: () => void = () => undefined;
+  // A play() that a later play() or stop() replaced must not seek, start or report anything.
   let turn = 0;
+  let refused = false;
   el.addEventListener("ended", () => ended());
+  // A file it cannot play: loadedmetadata never comes. stop() leaves no src to fail at.
+  el.addEventListener("error", () => {
+    if (el.getAttribute("src") !== null) failed();
+  });
   return {
     output,
     play(url, at, loop) {
       const mine = ++turn;
+      refused = false;
       el.loop = loop;
       const start = (): void => {
         if (mine !== turn) return;
@@ -133,8 +173,12 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
           // not seekable yet: it plays from where the element is
         }
         el.play().catch((err: unknown) => {
-          if (mine === turn && !(err instanceof DOMException && err.name === "AbortError"))
-            console.warn("audio: cannot play the music", err);
+          const name = err instanceof DOMException ? err.name : "";
+          if (mine !== turn || name === "AbortError") return;
+          // No gesture behind it (WebKit): the next one plays it again (AudioEngine.unlock).
+          if (name === "NotAllowedError") refused = true;
+          else failed();
+          console.warn("audio: cannot play the music", err);
         });
       };
       if (el.src === url && el.readyState >= 1) start();
@@ -145,6 +189,7 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
     },
     stop() {
       turn++;
+      refused = false;
       el.pause();
       el.removeAttribute("src");
       el.load();
@@ -152,6 +197,16 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
     onEnded(fn) {
       ended = fn;
     },
+    onError(fn) {
+      failed = fn;
+    },
+    bless() {
+      if (el.getAttribute("src") !== null) return; // in use: its own play() counts
+      el.play().catch(() => undefined); // no file: it waits, and pause() turns it down
+      el.pause();
+    },
+    blocked: () => refused,
+    time: () => el.currentTime,
   };
 }
 
@@ -204,8 +259,21 @@ export const LATE_MS = 300;
  * forth between two zones does not decode again; older ones are forgotten.
  */
 export const KEEP_LOOPS = 2;
-/** Music files kept fetched (their compressed bytes, ~1 MB each; docs/07 "Audio"). */
+/**
+ * Music files kept fetched while unused (their compressed bytes, ~1 MB each; docs/07
+ * "Audio"); the ones playing or wanted are kept on top of these. A decoded loop file is
+ * kept only while it plays or is wanted.
+ */
 export const KEEP_STREAMS = 4;
+/** A music file that failed is fetched again after this, ms, doubled at each failure… */
+export const STREAM_RETRY_MS = 5000;
+/** …up to this. */
+export const STREAM_RETRY_MAX_MS = 60_000;
+/**
+ * Music elements made (and blessed) within the first gesture: as many as the director
+ * plays at once, and one more for the moment it cuts the oldest fade short.
+ */
+export const MUSIC_DECKS = MAX_MUSIC_VOICES + 1;
 /** How often the music director is pumped, ms (a track ends without any message). */
 export const PUMP_MS = 250;
 /** Spacing of the points of a gain ramp that follows an envelope, ms. */
@@ -267,7 +335,7 @@ interface LoopSlot {
   playing: { sound: string; source: SourceLike; gain: GainLike } | undefined;
 }
 
-/** A media element (and its gain) playing one of the director's voices. */
+/** A media element (or a loop file's buffer source) and its gain, playing a voice. */
 interface Deck {
   stream: StreamLike;
   gain: GainLike;
@@ -275,14 +343,32 @@ interface Deck {
   sound: string;
   /** The envelope its gain follows (the voice's, by identity). */
   env: Envelope;
+  /** While it comes in late (ATTACH_MS): a linear ramp from `from` at `at` to `to`. */
+  attach: { at: number; until: number; from: number; to: number } | undefined;
+  /** A loop file's buffer source: made for its voice, never reused. */
+  loop: boolean;
+  /** Its element had its play-and-pause within a gesture (StreamLike.bless). */
+  blessed: boolean;
 }
 
 /** What the music does now (tests, E2E). */
 export interface MusicState {
   pool: string | undefined;
   role: Role | undefined;
-  /** Each voice: its gain on the envelope now, where its track is, and whether it has an element. */
-  voices: { sound: string; pool: string; gain: number; position: number; playing: boolean }[];
+  /**
+   * Each voice: its gain on the envelope now, where its track is, and whether it has an
+   * element; with one, the gain its node has now over the sound's volume (`heard`, what
+   * the ramps really did) and where the element is in its file (`time`, s).
+   */
+  voices: {
+    sound: string;
+    pool: string;
+    gain: number;
+    position: number;
+    playing: boolean;
+    heard: number | undefined;
+    time: number | undefined;
+  }[];
   /** Files the director wants ready. */
   wanted: string[];
 }
@@ -302,10 +388,14 @@ export class AudioEngine {
   private recentLoops: string[] = [];
   private readonly director: MusicDirector;
   private scene: Scene = { kind: "silent" };
-  /** Music files: the object URL of each one fetched (undefined: it failed). */
-  private readonly streams = new Map<string, Promise<string | undefined>>();
+  /** Music files being fetched or fetched: a track into an object URL, a loop file decoded. */
+  private readonly streams = new Map<string, Promise<void>>();
   private readonly streamUrls = new Map<string, string>();
-  private readonly failed = new Set<string>();
+  private readonly loopBuffers = new Map<string, BufferLike>();
+  /** Music files that failed → when to fetch them again (audio clock, ms). */
+  private readonly failed = new Map<string, number>();
+  /** How many times each music file failed (the wait before the next try doubles). */
+  private readonly failures = new Map<string, number>();
   /** Fetched music files, oldest first (at most KEEP_STREAMS while unused). */
   private streamOrder: string[] = [];
   /** Voice id → the element playing it. */
@@ -348,7 +438,37 @@ export class AudioEngine {
         .resume()
         .then(() => this.pump())
         .catch(() => undefined);
+    this.blessDecks();
     this.pump();
+  }
+
+  /**
+   * Within a gesture: makes the music's elements up to MUSIC_DECKS and blesses each new one
+   * (StreamLike.bless), and plays again, from where its voice is now, an element whose
+   * play() the browser refused for want of a gesture.
+   */
+  private blessDecks(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    let elements = this.spareDecks.length;
+    for (const d of this.decks.values()) if (!d.loop) elements++;
+    for (; elements < MUSIC_DECKS; elements++) {
+      const deck = this.newDeck(ctx);
+      if (!deck) break;
+      this.spareDecks.push(deck);
+    }
+    for (const d of this.spareDecks)
+      if (!d.blessed) {
+        d.stream.bless();
+        d.blessed = true;
+      }
+    const now = ctx.currentTime * 1000;
+    for (const [id, d] of this.decks) {
+      if (!d.stream.blocked()) continue;
+      const v = this.director.voices().find((x) => x.id === id);
+      const url = this.streamUrls.get(d.sound);
+      if (v && url !== undefined) d.stream.play(url, v.loop ? 0 : positionAt(v, now), v.loop);
+    }
   }
 
   /** The volumes in use: the options panel starts from these each time it mounts. */
@@ -578,13 +698,19 @@ export class AudioEngine {
     return {
       pool: playing?.pool,
       role: playing?.role,
-      voices: this.director.voices().map((v) => ({
-        sound: v.sound,
-        pool: v.pool,
-        gain: gainAt(v.env, now),
-        position: positionAt(v, now),
-        playing: this.decks.has(v.id),
-      })),
+      voices: this.director.voices().map((v) => {
+        const deck = this.decks.get(v.id);
+        const vol = this.manifest.sounds[v.sound]?.volume ?? 1;
+        return {
+          sound: v.sound,
+          pool: v.pool,
+          gain: gainAt(v.env, now),
+          position: positionAt(v, now),
+          playing: deck !== undefined,
+          heard: deck && vol > 0 ? deck.gain.gain.value / vol : undefined,
+          time: deck?.stream.time(),
+        };
+      }),
       wanted: this.director.wanted(),
     };
   }
@@ -599,11 +725,30 @@ export class AudioEngine {
     if (!ctx || ctx.state !== "running") return;
     const now = ctx.currentTime * 1000;
     const audible = this.level("music") > 0;
+    if (audible) this.settleFailures(now);
     // Muted, nothing is fetched: every track counts as ready and plays on no element.
-    const ready = (s: string): boolean => !audible || this.streamUrls.has(s) || this.failed.has(s);
+    const ready = (s: string): Readiness =>
+      !audible ? "ready" : this.failed.has(s) ? "failed" : this.has(s) ? "ready" : "loading";
     this.director.update(now, this.scene, ready);
-    if (audible) for (const s of this.director.wanted()) void this.loadStream(s);
+    if (audible) for (const s of this.director.wanted()) this.fetchMusic(s);
     this.syncDecks(ctx, now, audible);
+  }
+
+  /** Whether a music file is fetched (a loop file: decoded) and can play right away. */
+  private has(sound: string): boolean {
+    return this.streamUrls.has(sound) || this.loopBuffers.has(sound);
+  }
+
+  /**
+   * Files due for another try are forgotten, so the next want fetches them again; a voice
+   * with no element whose file failed goes (the director moves on to the next of its pool)
+   * instead of "playing" in silence until the model thinks its track ended.
+   */
+  private settleFailures(now: number): void {
+    for (const [s, at] of this.failed) if (now >= at) this.failed.delete(s);
+    for (const v of this.director.voices())
+      if (v.env.to > 0 && !this.decks.has(v.id) && this.failed.has(v.sound))
+        this.director.lost(v.id, now);
   }
 
   private syncDecks(ctx: ContextLike, now: number, audible: boolean): void {
@@ -618,43 +763,64 @@ export class AudioEngine {
         continue;
       }
       if (v.env.to <= 0) continue; // fading out: not worth an element now
-      const url = this.streamUrls.get(v.sound);
-      if (url === undefined) {
-        void this.loadStream(v.sound);
+      const buffer = v.loop ? this.loopBuffers.get(v.sound) : undefined;
+      const url = v.loop ? undefined : this.streamUrls.get(v.sound);
+      if (buffer === undefined && url === undefined) {
+        this.fetchMusic(v.sound);
         continue;
       }
-      const fresh = this.takeDeck(ctx);
+      const fresh = buffer ? this.loopDeck(ctx, buffer) : this.takeDeck(ctx);
       if (!fresh) continue;
       fresh.voice = v.id;
       fresh.sound = v.sound;
       this.decks.set(v.id, fresh);
       const id = v.id;
+      const sound = v.sound;
       fresh.stream.onEnded(() => {
         if (this.decks.get(id) !== fresh) return;
         this.director.ended(id, ctx.currentTime * 1000);
         this.pump();
       });
+      fresh.stream.onError(() => {
+        if (this.decks.get(id) !== fresh) return;
+        this.markFailed(sound);
+        this.director.lost(id, ctx.currentTime * 1000);
+        this.pump();
+      });
       // A voice that started a while ago (its file was late, or the music was muted) comes
       // in where it is now, with a short fade instead of a jump.
       const late = now - v.startedAt > PUMP_MS;
-      fresh.stream.play(url, v.loop ? 0 : positionAt(v, now), v.loop);
+      fresh.stream.play(url ?? "", v.loop ? 0 : positionAt(v, now), v.loop);
       this.follow(fresh, v, now, late);
       this.pushHistory(v.sound);
     }
   }
 
-  /** Ramps a deck's gain along its voice's envelope from `now` (from 0 when `late`). */
+  /**
+   * Ramps a deck's gain along its voice's envelope from `now`. One that comes in late
+   * (`late`, or still within its ATTACH_MS ramp when the envelope changes) ramps from where
+   * its gain is to the envelope by the end of that ramp, never jumping to the envelope.
+   */
   private follow(deck: Deck, v: Voice, now: number, late: boolean): void {
     const vol = this.manifest.sounds[v.sound]?.volume ?? 1;
     const p = deck.gain.gain;
     const t = now / 1000;
     p.cancelScheduledValues(t);
+    const a = deck.attach;
+    const coming = late
+      ? { from: 0, until: now + ATTACH_MS }
+      : a && now < a.until
+        ? { from: a.from + ((a.to - a.from) * (now - a.at)) / (a.until - a.at), until: a.until }
+        : undefined;
     let from = now;
-    if (late) {
-      p.setValueAtTime(0, t);
-      from = now + ATTACH_MS;
-      p.linearRampToValueAtTime(gainAt(v.env, from) * vol, from / 1000);
+    if (coming) {
+      const to = gainAt(v.env, coming.until) * vol;
+      p.setValueAtTime(coming.from, t);
+      p.linearRampToValueAtTime(to, coming.until / 1000);
+      deck.attach = { at: now, until: coming.until, from: coming.from, to };
+      from = coming.until;
     } else {
+      deck.attach = undefined;
       p.setValueAtTime(gainAt(v.env, now) * vol, t);
     }
     for (const [ms, g] of envelopePoints(v.env, from, RAMP_STEP_MS))
@@ -662,17 +828,75 @@ export class AudioEngine {
     deck.env = v.env;
   }
 
+  /** An element for a voice: a spare one (the first made, the last freed), or a new one. */
   private takeDeck(ctx: ContextLike): Deck | undefined {
-    const spare = this.spareDecks.pop();
-    if (spare) return spare;
+    return this.spareDecks.shift() ?? this.newDeck(ctx);
+  }
+
+  private newDeck(ctx: ContextLike): Deck | undefined {
     const out = this.channels.get("music");
-    const stream = this.ports.createStream(ctx);
+    const stream = out && this.ports.createStream(ctx);
     if (!out || !stream) return undefined;
     const gain = ctx.createGain();
     gain.gain.value = 0;
     stream.output.connect(gain);
     gain.connect(out);
-    return { stream, gain, voice: 0, sound: "", env: { at: 0, ms: 0, from: 0, to: 0 } };
+    return {
+      stream,
+      gain,
+      voice: 0,
+      sound: "",
+      env: { at: 0, ms: 0, from: 0, to: 0 },
+      attach: undefined,
+      loop: false,
+      blessed: false,
+    };
+  }
+
+  /**
+   * A loop file (soundgen's themes) on a buffer source of its own, which loops without a
+   * gap: a media element's `loop` leaves one at every turn (Chromium).
+   */
+  private loopDeck(ctx: ContextLike, buffer: BufferLike): Deck | undefined {
+    const out = this.channels.get("music");
+    if (!out) return undefined;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(out);
+    let src: SourceLike | undefined;
+    let since = 0;
+    const stream: StreamLike = {
+      output: gain,
+      play() {
+        src?.stop();
+        src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.loop = true;
+        src.connect(gain);
+        src.start();
+        since = ctx.currentTime;
+      },
+      stop() {
+        src?.stop();
+        src?.disconnect();
+        src = undefined;
+      },
+      onEnded: () => undefined,
+      onError: () => undefined,
+      bless: () => undefined,
+      blocked: () => false,
+      time: () => (src ? (ctx.currentTime - since) % Math.max(buffer.duration, 0.001) : 0),
+    };
+    return {
+      stream,
+      gain,
+      voice: 0,
+      sound: "",
+      env: { at: 0, ms: 0, from: 0, to: 0 },
+      attach: undefined,
+      loop: true,
+      blessed: true,
+    };
   }
 
   private freeDeck(id: number, deck: Deck): void {
@@ -680,64 +904,90 @@ export class AudioEngine {
     deck.gain.gain.cancelScheduledValues(t);
     deck.gain.gain.setValueAtTime(0, t);
     deck.stream.stop();
+    deck.attach = undefined;
     this.decks.delete(id);
-    this.spareDecks.push(deck);
+    if (deck.loop) deck.gain.disconnect();
+    else this.spareDecks.unshift(deck);
   }
 
-  /** Fetches a music file once into an object URL; a failure is remembered (and logged). */
-  private loadStream(sound: string): Promise<string | undefined> {
-    let p = this.streams.get(sound);
-    if (!p) {
-      const def = this.manifest.sounds[sound];
-      const loading: Promise<string | undefined> = def
+  /**
+   * Fetches a music file once: a track into an object URL, a loop file decoded. A failure
+   * is logged and remembered (`failed`) until it is due for another try.
+   */
+  private fetchMusic(sound: string): void {
+    const def = this.manifest.sounds[sound];
+    const ctx = this.ctx;
+    if (!def || !ctx || this.streams.has(sound) || this.failed.has(sound)) return;
+    const current = (): boolean => this.streams.get(sound) === loading;
+    const fetching: Promise<unknown> =
+      def.seconds === undefined
         ? this.ports
-            .loadStream(def.url)
-            .then((url) => {
-              if (this.streams.get(sound) !== loading) {
-                this.ports.releaseStream(url); // let go of while it loaded
-                return undefined;
-              }
-              this.streamUrls.set(sound, url);
-              this.keepStream(sound);
-              this.pump();
-              return url;
+            .fetch(def.url)
+            .then((data) => ctx.decodeAudioData(data))
+            .then((b) => {
+              if (current()) this.loopBuffers.set(sound, b);
             })
-            .catch((err: unknown) => {
-              console.warn(`audio: cannot load ${sound}`, err);
-              this.failed.add(sound);
-              return undefined;
-            })
-        : Promise.resolve(undefined);
-      if (!def) this.failed.add(sound);
-      p = loading;
-      this.streams.set(sound, p);
-    }
-    return p;
+        : this.ports.loadStream(def.url).then((url) => {
+            if (current()) this.streamUrls.set(sound, url);
+            else this.ports.releaseStream(url); // let go of while it loaded
+          });
+    const loading: Promise<void> = fetching.then(
+      () => {
+        if (!current()) return;
+        this.keepStream(sound);
+        this.pump();
+      },
+      (err: unknown) => {
+        if (!current()) return;
+        console.warn(`audio: cannot load ${sound}`, err);
+        this.markFailed(sound);
+        this.pump();
+      },
+    );
+    this.streams.set(sound, loading);
   }
 
-  /** Keeps `sound` among the last KEEP_STREAMS files and lets go of older unused ones. */
+  /** A music file failed (to arrive or to play): forgotten, and fetched again later. */
+  private markFailed(sound: string): void {
+    const n = (this.failures.get(sound) ?? 0) + 1;
+    this.failures.set(sound, n);
+    const wait = Math.min(STREAM_RETRY_MAX_MS, STREAM_RETRY_MS * 2 ** (n - 1));
+    this.failed.set(sound, (this.ctx?.currentTime ?? 0) * 1000 + wait);
+    this.forgetStream(sound);
+    this.streamOrder = this.streamOrder.filter((s) => s !== sound);
+  }
+
+  private forgetStream(sound: string): void {
+    const url = this.streamUrls.get(sound);
+    if (url !== undefined) this.ports.releaseStream(url);
+    this.streamUrls.delete(sound);
+    this.loopBuffers.delete(sound);
+    this.streams.delete(sound);
+  }
+
+  /**
+   * Keeps `sound` among the last KEEP_STREAMS files and lets go of older unused ones; a
+   * decoded loop file goes as soon as it is unused (~10 MB of PCM each).
+   */
   private keepStream(sound: string): void {
     const order = this.streamOrder.filter((s) => s !== sound);
     order.push(sound);
     const inUse = new Set([...this.decks.values()].map((d) => d.sound));
     for (const s of this.director.wanted()) inUse.add(s);
     inUse.add(sound);
-    while (order.length > KEEP_STREAMS) {
-      const i = order.findIndex((s) => !inUse.has(s));
+    for (;;) {
+      let i = order.findIndex((s) => !inUse.has(s) && this.loopBuffers.has(s));
+      if (i < 0 && order.length > KEEP_STREAMS) i = order.findIndex((s) => !inUse.has(s));
       if (i < 0) break;
       const [old] = order.splice(i, 1);
-      if (old === undefined) break;
-      const url = this.streamUrls.get(old);
-      if (url !== undefined) this.ports.releaseStream(url);
-      this.streamUrls.delete(old);
-      this.streams.delete(old);
+      if (old !== undefined) this.forgetStream(old);
     }
     this.streamOrder = order;
   }
 
   /** Whether a music file is fetched and kept (tests: what the engine lets go of). */
   isStreamed(sound: string): boolean {
-    return this.streamUrls.has(sound);
+    return this.has(sound);
   }
 
   /** Stops the director's pump (tests; a page keeps one engine for its whole life). */

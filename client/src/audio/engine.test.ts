@@ -7,6 +7,8 @@ import {
   KEEP_STREAMS,
   MAX_PAN,
   MAX_VOICES,
+  MUSIC_DECKS,
+  STREAM_RETRY_MS,
   directorConfig,
   spatial,
 } from "./engine.ts";
@@ -120,12 +122,17 @@ class FakeStream implements StreamLike {
   loop = false;
   plays = 0;
   stops = 0;
+  blessings = 0;
+  /** The browser refused its last play() for want of a gesture (a test sets it). */
+  refused = false;
   private ended: () => void = () => undefined;
+  private failed: () => void = () => undefined;
   play(url: string, at: number, loop: boolean): void {
     this.url = url;
     this.at = at;
     this.loop = loop;
     this.plays++;
+    this.refused = false;
   }
   stop(): void {
     this.url = undefined;
@@ -134,10 +141,29 @@ class FakeStream implements StreamLike {
   onEnded(fn: () => void): void {
     this.ended = fn;
   }
+  onError(fn: () => void): void {
+    this.failed = fn;
+  }
+  bless(): void {
+    this.blessings++;
+  }
+  blocked(): boolean {
+    return this.refused;
+  }
+  time(): number {
+    return this.at;
+  }
   end(): void {
     this.ended();
   }
+  /** The element cannot play its file (an `error` event). */
+  fail(): void {
+    this.failed();
+  }
 }
+
+/** The elements a test's music played on (the engine makes MUSIC_DECKS spare ones). */
+const used = (streams: FakeStream[]): FakeStream[] => streams.filter((s) => s.plays > 0);
 
 const sound = (url: string, channel: "sfx" | "ui" | "music" | "ambient", maxVoices = 3) => ({
   url,
@@ -204,8 +230,10 @@ function setup(prefs = defaultPrefs()) {
   const released: string[] = [];
   const streams: FakeStream[] = [];
   const pumps: (() => void)[] = [];
-  /** Files that only arrive when the test says so. */
-  const held = new Map<string, () => void>();
+  /** Files that only arrive when the test says so: `held.get(url)?.(false)` fails one. */
+  const held = new Map<string, (ok?: boolean) => void>();
+  /** Files that fail to arrive (the network, a deploy). */
+  const failing = new Set<string>();
   let hold = false;
   let now = 0;
   let rand = 0;
@@ -213,6 +241,7 @@ function setup(prefs = defaultPrefs()) {
     createContext: () => ctx,
     fetch: async (url) => {
       fetched.push(url);
+      if (failing.has(url)) throw new Error(`${url}: offline`);
       return new ArrayBuffer(url.includes("waves") || url.includes("wind") ? 60 : 1);
     },
     now: () => now,
@@ -224,8 +253,13 @@ function setup(prefs = defaultPrefs()) {
     },
     loadStream: (url) => {
       streamed.push(url);
+      if (failing.has(url)) return Promise.reject(new Error(`${url}: offline`));
       if (!hold) return Promise.resolve(`blob:${url}`);
-      return new Promise((resolve) => held.set(url, () => resolve(`blob:${url}`)));
+      return new Promise((resolve, reject) =>
+        held.set(url, (ok = true) =>
+          ok ? resolve(`blob:${url}`) : reject(new Error(`${url}: offline`)),
+        ),
+      );
     },
     releaseStream: (url) => released.push(url),
     every: (_ms, fn) => {
@@ -242,6 +276,7 @@ function setup(prefs = defaultPrefs()) {
     released,
     streams,
     held,
+    failing,
     holdFiles: (on: boolean) => (hold = on),
     setNow: (ms: number) => (now = ms),
     setRandom: (r: number) => (rand = r),
@@ -538,12 +573,28 @@ describe("the music", () => {
     expect(engine.history).toContain("menu");
   });
 
-  it("plays a loop file looping, from its start", async () => {
-    const { engine, streams, at } = setup();
+  it("plays a loop file decoded on a buffer source that loops (no gap at each turn), and lets go of it once unused", async () => {
+    const { ctx, engine, streams, streamed, fetched, at } = setup();
     await unlockNow(engine);
     engine.setMusic(world("odd"));
     await at(0);
-    expect(streams[0]).toMatchObject({ url: "blob:audio/tune.ogg", at: 0, loop: true });
+    expect(fetched).toEqual(["audio/tune.ogg"]); // decoded, not streamed
+    expect(streamed).toEqual([]);
+    expect(used(streams)).toEqual([]); // no media element: its `loop` leaves a gap
+    const src = ctx.sources.find((s) => s.loop);
+    expect(src?.started).toBe(0);
+    const gain = src?.outputs[0] as FakeGain;
+    expect(gain.outputs).toEqual([ctx.gains[3]]); // into the music channel
+    expect(gain.gain.events.at(-1)).toEqual(["ramp", 0.5, 2]); // the zone's fade
+    expect(engine.musicState().voices[0]).toMatchObject({ sound: "tune", playing: true });
+    expect(engine.isStreamed("tune")).toBe(true);
+    // Another zone: once the loop has faded out and other files arrive, it is let go of.
+    engine.setMusic(world("town"));
+    for (let t = 0.25; t <= 6; t += 0.25) await at(t);
+    expect(src?.stopped).toBeDefined();
+    engine.setMusic(world("cave"));
+    for (let t = 6.25; t <= 9; t += 0.25) await at(t);
+    expect(engine.isStreamed("tune")).toBe(false);
   });
 
   it("crossfades a zone change on two elements with equal power", async () => {
@@ -576,6 +627,12 @@ describe("the music", () => {
     const state = engine.musicState();
     expect(state.voices.map((v) => v.pool)).toEqual(["town", "cave"]);
     expect(state.voices.every((v) => v.playing)).toBe(true);
+    // What the nodes and the elements really have, next to the model's.
+    expect(state.voices.map((v) => v.time)).toEqual([town?.at, cave?.at]);
+    expect(state.voices.map((v) => v.heard)).toEqual([
+      deckGain(town).value / 0.5,
+      deckGain(cave).value / 0.5,
+    ]);
     await at(14);
     expect(town?.stops).toBe(1); // faded out: its element is let go of
     expect(engine.musicState().voices).toHaveLength(1);
@@ -591,7 +648,7 @@ describe("the music", () => {
     await at(1.5);
     await at(4);
     expect(engine.musicState().pool).toBe("town");
-    expect(streams).toHaveLength(1);
+    expect(used(streams)).toHaveLength(1);
     const wanted = engine.musicState().wanted[0] ?? "";
     expect(wanted).toMatch(/^cave/);
     held.get(`audio/${wanted}.ogg`)?.();
@@ -609,9 +666,9 @@ describe("the music", () => {
     await at(0);
     await at(20);
     expect(streamed).toEqual([]);
-    expect(streams).toHaveLength(0);
+    expect(used(streams)).toHaveLength(0);
     const [voice] = engine.musicState().voices;
-    expect(voice).toMatchObject({ sound: "menu", playing: false });
+    expect(voice).toMatchObject({ sound: "menu", playing: false, heard: undefined });
     engine.setPrefs(defaultPrefs()); // the file is fetched now, and starts when it arrives
     await flush();
     const s = streams[0];
@@ -638,7 +695,7 @@ describe("the music", () => {
     expect(engine.musicState().voices).toHaveLength(0);
     await at(2.5); // gap_ms is 1–2 s
     expect(engine.musicState().voices).toHaveLength(1);
-    expect(streams).toHaveLength(1); // the same element, reused
+    expect(used(streams)).toHaveLength(1); // the same element, reused
     expect(first?.plays).toBe(2);
     expect(first?.url).not.toBe(firstUrl); // the other track of the pool
   });
@@ -654,5 +711,143 @@ describe("the music", () => {
     expect(released.length).toBeGreaterThan(0);
     const kept = Object.keys(MANIFEST.sounds).filter((id) => engine.isStreamed(id));
     expect(kept.length).toBeLessThanOrEqual(KEEP_STREAMS + 2);
+  });
+
+  it("makes and blesses its elements within the first gesture, once", async () => {
+    const { engine, streams } = setup();
+    engine.unlock();
+    expect(streams).toHaveLength(MUSIC_DECKS);
+    expect(streams.map((s) => s.blessings)).toEqual(streams.map(() => 1));
+    engine.unlock(); // every gesture calls it
+    await flush();
+    expect(streams).toHaveLength(MUSIC_DECKS);
+    expect(streams.map((s) => s.blessings)).toEqual(streams.map(() => 1));
+  });
+
+  it("plays again, on the next gesture, an element the browser refused to start", async () => {
+    const { engine, streams, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    const s = used(streams)[0] as FakeStream;
+    const from = s.at;
+    s.refused = true; // WebKit: play() outside a gesture, NotAllowedError
+    await at(5);
+    expect(s.plays).toBe(1); // the pump cannot help: no gesture behind it
+    engine.unlock();
+    expect(s.plays).toBe(2);
+    expect(s.at).toBeCloseTo(from + 5, 6); // where its voice is now
+    expect(s.url).toMatch(/^blob:audio\/town\d\.ogg$/);
+    engine.unlock(); // playing now: nothing to do
+    expect(s.plays).toBe(2);
+  });
+
+  it("an element that cannot play its file: the next track of the pool takes over", async () => {
+    const { engine, streams, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    const s = used(streams)[0] as FakeStream;
+    const broken = engine.musicState().voices[0]?.sound;
+    s.fail(); // a codec it lacks: loadedmetadata never comes
+    await flush();
+    expect(engine.musicState().voices).toEqual([]);
+    expect(s.stops).toBe(1);
+    expect(engine.isStreamed(broken ?? "")).toBe(false);
+    await at(2.5); // gap_ms is 1–2 s
+    const [next] = engine.musicState().voices;
+    expect(next?.sound).not.toBe(broken);
+    expect(next?.playing).toBe(true);
+  });
+
+  it("a track whose file does not arrive gives way to another of its pool", async () => {
+    const { engine, held, holdFiles, at } = setup();
+    await unlockNow(engine);
+    holdFiles(true);
+    engine.setMusic(world("town"));
+    await at(0);
+    const first = engine.musicState().wanted[0] ?? "";
+    held.get(`audio/${first}.ogg`)?.(false);
+    await flush();
+    await at(0.25);
+    expect(engine.musicState().voices).toEqual([]); // no voice playing in silence
+    const other = engine.musicState().wanted[0] ?? "";
+    expect(other).toMatch(/^town/);
+    expect(other).not.toBe(first);
+    held.get(`audio/${other}.ogg`)?.();
+    await flush();
+    await at(0.5);
+    expect(engine.musicState().voices).toMatchObject([{ sound: other, playing: true }]);
+  });
+
+  it("a pool of one whose file fails keeps the old music, and fetches the file again later", async () => {
+    const { engine, streamed, failing, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    const town = engine.musicState().voices[0]?.sound;
+    failing.add("audio/menu.ogg");
+    engine.setMusic({ kind: "title" });
+    for (let t = 0.25; t <= 3; t += 0.25) await at(t);
+    expect(engine.musicState()).toMatchObject({
+      pool: "town",
+      voices: [{ sound: town, gain: 1, playing: true }],
+    });
+    expect(streamed.filter((u) => u === "audio/menu.ogg")).toHaveLength(1);
+    failing.clear(); // the network is back: fetched again at its retry, not before
+    let t = 3;
+    while (engine.musicState().pool === "town" && t < 30) await at((t += 0.25));
+    expect(t).toBeGreaterThanOrEqual(STREAM_RETRY_MS / 1000);
+    expect(t).toBeLessThanOrEqual(STREAM_RETRY_MS / 1000 + 0.5);
+    expect(streamed.filter((u) => u === "audio/menu.ogg")).toHaveLength(2);
+    expect(engine.musicState().pool).toBe("title");
+    expect(engine.musicState().voices.at(-1)).toMatchObject({ sound: "menu", playing: true });
+  });
+
+  it("a voice whose file fails while it has no element goes, instead of playing in silence", async () => {
+    const muted = withMuted(defaultPrefs(), "music", true);
+    const { engine, failing, at } = setup(muted);
+    await unlockNow(engine);
+    engine.setMusic({ kind: "title" });
+    await at(0);
+    await at(20);
+    expect(engine.musicState().voices).toMatchObject([{ sound: "menu", playing: false }]);
+    failing.add("audio/menu.ogg");
+    engine.setPrefs(defaultPrefs()); // unmuted: its file is fetched, and fails
+    await flush();
+    await at(20.25);
+    expect(engine.musicState().voices).toEqual([]);
+    expect(engine.musicState().wanted).toEqual(["menu"]); // waiting for it to come back
+  });
+
+  it("an envelope that changes while a late element comes in goes on from where its ramp is", async () => {
+    const muted = withMuted(defaultPrefs(), "music", true);
+    const { ctx, engine, streams, at } = setup(muted);
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    await at(20);
+    engine.setPrefs(defaultPrefs()); // the town's element comes in over ATTACH_MS from 0
+    await flush();
+    const g = deckGain(used(streams)[0]);
+    expect(g.events.at(-1)?.[2]).toBeCloseTo(20 + ATTACH_MS / 1000, 9);
+    // A third of the way into that ramp, the title takes over (no dwell): the town fades.
+    ctx.currentTime = 20 + ATTACH_MS / 3000;
+    engine.setMusic({ kind: "title" });
+    await flush();
+    expect(engine.musicState().pool).toBe("title");
+    const cancel = g.events.map((e) => e[0]).lastIndexOf("cancel");
+    const [set, ramp, ...fade] = g.events.slice(cancel + 1);
+    expect(set?.[0]).toBe("set");
+    expect(set?.[1]).toBeCloseTo(0.5 / 3, 9); // where the ramp was, not a jump to 0.5
+    // The rest of the ramp leads to the envelope (already fading), then follows it down.
+    expect(ramp?.[2]).toBeCloseTo(20 + ATTACH_MS / 1000, 9);
+    expect(ramp?.[1]).toBeLessThan(0.5);
+    let last = ramp?.[1] ?? 0;
+    for (const [, v] of fade) {
+      expect(v).toBeLessThanOrEqual(last + 1e-9);
+      last = v;
+    }
+    expect(last).toBe(0);
   });
 });

@@ -207,9 +207,10 @@ transmite (ver abajo).
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
 | Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~29 KiB |
 | Descarga al cambiar de zona | el tema que suena y el siguiente de su pool (≤ 3 MiB) | ~1,7–2,2 MiB |
-| Música en memoria | ≤ `KEEP_STREAMS` (4) archivos comprimidos + los decodificadores de 2–3 elementos | ~4–5 MB |
+| Música en memoria | `KEEP_STREAMS` (4) archivos comprimidos sin usar, más los que suenan o se esperan si son más (como mucho 6: 4 voces y 2 pedidos), + los decodificadores de 2–4 elementos | ~4–5 MB; ~7 MB en el peor caso |
+| Música en la caché de la PWA | nada (`client/src/sw/policy.ts`: `/audio/sounds/music/` va a la red) | 0 |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes) |
+| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
 
 - **Por qué cambió (pedido del dueño, 2026-11-18):** al escuchar la música de Gemini pidió
   transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
@@ -228,8 +229,20 @@ transmite (ver abajo).
   vez a un object URL (los bytes comprimidos) y lo toca con un `<audio>` conectado a Web Audio
   (`MediaElementAudioSourceNode`), que decodifica de a poco y puede saltar a cualquier
   segundo sin depender de que el servidor acepte rangos (`Range`). Guarda los últimos
-  `KEEP_STREAMS` archivos (4) que no estén sonando ni esperándose; con la música silenciada
-  no baja nada.
+  `KEEP_STREAMS` archivos (4) que no estén sonando ni esperándose; los que suenan o se
+  esperan se guardan además de esos, así que en el peor caso (cuatro voces durante un
+  corte y dos temas pedidos) son seis. Con la música silenciada no baja nada. Un archivo
+  que no llega (o que el elemento no puede decodificar) se vuelve a pedir a los
+  `STREAM_RETRY_MS` (5 s), con la espera doblada en cada falla hasta 60 s.
+- **La PWA no guarda la música:** el service worker deja `/audio/sounds/music/` a la red
+  (como `/api`). Con stale-while-revalidate una PWA instalada terminaba guardando los
+  ~13 MiB de música y escribía un tema entero (~1 MB) en su caché en cada cambio de zona;
+  el motor ya baja cada tema una sola vez por sesión y el navegador lo cachea por HTTP.
+  Efectos y ambiente (chicos) siguen en la caché.
+- **Los temas de soundgen** (sin `seconds`: lo que suena en un lugar que el dueño marca
+  `none`) son loops cortos: se decodifican (~10 MB de PCM mono cada uno) y suenan en un
+  `AudioBufferSourceNode` con `loop`, sin hueco en la vuelta (el `loop` de un `<audio>`
+  deja uno en Chromium). Se sueltan apenas dejan de sonar y de esperarse.
 - **Formatos:** efectos y ambiente **Ogg Opus mono** 48 kHz (32 kbps los efectos, 16 el
   ambiente); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
   música de Gemini estéreo a 48 kbps (40 las cuevas). `make music-gemini` escribe ese

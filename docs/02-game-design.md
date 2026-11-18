@@ -1628,7 +1628,12 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
     empieza una frase, medidos al importarlo), al azar. Bajar a una cueva no suena igual dos
     veces.
   - **Volver a una zona** antes de 3 minutos (`resume_ms`) sigue el tema donde iba; después,
-    un tema y un punto nuevos.
+    un tema y un punto nuevos. Si vuelve mientras ese tema todavía se apaga (dio la vuelta
+    en un borde), el mismo tema vuelve a subir desde donde está: nunca suena dos veces
+    encima de sí mismo.
+  - **Un tema que no baja** (un corte de red, un deploy, un archivo roto) no deja silencio:
+    suena otro de la pool, o sigue la música de antes si la pool no tiene otro, y el
+    archivo se vuelve a pedir más tarde (a los 5 s, después 10, 20… hasta cada minuto).
   - **Transiciones de potencia constante** (seno/coseno, sin pozo de volumen ni clics), con
     su largo según qué cambió (`fades`): otra zona o el área de una quest ~5 s, aparece un
     jefe ~1,5 s, se va el jefe ~6 s de vuelta al tema de la zona en un punto nuevo, título y
@@ -1646,13 +1651,15 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   tomas de Gemini (título, Puerto, Bosque, Volcán, Cuevas y el guardián de la forja;
   `assets/sounds/music/gemini.yaml`). Las seis versiones nuevas de cueva suenan como
   provisionales hasta que el dueño elija (`cave_pool` en `picks.json`). Los temas de
-  soundgen siguen en el repo y vuelven a sonar, como loops, en el lugar que el dueño marque
-  `none`.
+  soundgen siguen en el repo y vuelven a sonar, como loops sin hueco en la vuelta, en el
+  lugar que el dueño marque `none`.
 - **Volumen y silencio** de la música siguen en Opciones; con la música silenciada no se
   baja ningún tema (el director sigue el tiempo y, al volver a subirla, entra con un fundido
   corto donde va el tema).
 - **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
-  navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
+  navegadores y los webviews de la app de escritorio. Si el navegador igual rechaza la
+  música (Safari y los webviews de Apple piden un gesto por elemento), vuelve a intentarlo
+  en el gesto siguiente, desde donde va el tema. Mientras el audio esté suspendido,
   los efectos se descartan, para que no suenen todos juntos al reanudarse, y la música no
   avanza (sigue al reanudarse). Con la pestaña en segundo plano todo sigue sonando.
 - **Recolección**: el sonido de la herramienta (minería, tala, pesca) solo se oye en la

@@ -103,11 +103,17 @@ test("music: the island's track, then the caves' through an equal-power crossfad
   expect(island?.position).toBeGreaterThan(0); // from an entry point, not its first second
 
   // Down to the cave of the sandbox (floor 8): after the dwell, the caves' pool crossfades
-  // in. Every sample in between keeps the power: out² + in² = 1.
+  // in. Every sample in between keeps the power: out² + in² = 1, on the director's
+  // envelopes and on the gains the nodes really have (`heard`: what the ramps did).
   const say = page.getByTestId("say").getByRole("textbox");
   await say.fill("/tp 2118 2092 8");
   await say.press("Enter");
-  const both: { out: number; into: number }[] = [];
+  const both: {
+    out: number;
+    into: number;
+    heardOut: number | undefined;
+    heardIn: number | undefined;
+  }[] = [];
   const deadline = Date.now() + 30_000;
   for (;;) {
     const m = await music();
@@ -115,19 +121,25 @@ test("music: the island's track, then the caves' through an equal-power crossfad
     const out = v.find((x) => x.pool === "town_puerto");
     const into = v.find((x) => x.pool === "cave");
     if (out && into && out.gain < 0.999 && into.gain > 0.001)
-      both.push({ out: out.gain, into: into.gain });
+      both.push({ out: out.gain, into: into.gain, heardOut: out.heard, heardIn: into.heard });
     if (m?.pool === "cave" && v.length === 1 && v[0]?.playing && v[0].gain > 0.99) break;
     if (Date.now() > deadline) throw new Error(`no crossfade into the caves: ${JSON.stringify(m)}`);
     await page.waitForTimeout(150);
   }
   expect(both.length).toBeGreaterThan(3); // a 5 s fade sampled every ~150 ms
   for (const s of both) expect(s.out ** 2 + s.into ** 2).toBeCloseTo(1, 2);
+  // The nodes are read a render quantum apart at most: a looser bound.
+  for (const s of both) expect((s.heardOut ?? 0) ** 2 + (s.heardIn ?? 0) ** 2).toBeCloseTo(1, 1);
   // The old track faded out while the new one faded in.
   expect(both.at(-1)?.out ?? 1).toBeLessThan(both[0]?.out ?? 0);
   expect(both.at(-1)?.into ?? 0).toBeGreaterThan(both[0]?.into ?? 1);
+  expect(both.at(-1)?.heardOut ?? 1).toBeLessThan(both[0]?.heardOut ?? 0);
   const cave = (await music())?.voices[0];
   expect(cave?.sound).toMatch(/^music_cueva/);
   expect(cave?.position).toBeGreaterThan(0);
+  expect(cave?.heard ?? 0).toBeGreaterThan(0.95);
+  // Its element plays, and where the director thinks the track is (it seeked to the entry).
+  expect(Math.abs((cave?.time ?? 0) - (cave?.position ?? 0))).toBeLessThan(1.5);
   await page.waitForTimeout(300);
   await shot(page, "93b-music-cave");
   expect(errors).toEqual([]);

@@ -259,26 +259,45 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `audio.currentPrefs()`.
 - Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`: el
   tema que lleva la música y el ambiente; `music`: el estado del director, `MusicState`,
-  con la pool, y cada voz con su ganancia, su posición y si tiene elemento).
+  con la pool, y cada voz con su ganancia, su posición y si tiene elemento; con uno,
+  también `heard`, la ganancia que tiene el nodo ahora sobre el volumen del sonido, y
+  `time`, dónde va el elemento en su archivo: lo que de verdad suena).
 - **El director de música** (`audio/director.ts`, puro y con tests; pedido del dueño del
   2026-11-18, reglas en docs/02 "Sonido"): recibe una `Scene` (`title`, `silent` o `world`
   con las pools de la zona, del área de una quest importante y de un jefe a la vista), un
   reloj y un azar inyectados, y lleva una lista de `Voice` (un tema desde un segundo, con
   su envolvente de potencia constante: `gainAt`, `envelopePoints`). Baraja cada pool sin
   repetir, arranca en un punto de entrada (`entries` de `sounds.yaml`), recuerda por pool
-  dónde iba (`resumeMs`), espera `dwellMs` antes de cambiar de zona, sostiene al jefe
-  `bossHoldMs`, deja respirar `gapMs` entre temas de una zona y no arranca un tema hasta
-  que su archivo está (`ready`, `wanted`). No sabe de combates: una pelea común no cambia
-  nada.
+  dónde iba (`resumeMs`; si vuelve mientras esa voz todavía se apaga, la misma voz vuelve
+  a subir en espejo de la otra, no una copia del tema), espera `dwellMs` antes de cambiar
+  de zona, sostiene al jefe `bossHoldMs`, deja respirar `gapMs` entre temas de una zona y
+  no arranca un tema hasta que su archivo está (`ready` da un `Readiness`: `ready`,
+  `loading` o `failed`; `wanted`). Un tema `failed` cede su lugar a otro de la pool; sin
+  otro, sigue la música de antes hasta que el archivo vuelve. `lost(voz)`: el motor no
+  puede tocarla (se va ya, también un loop). No sabe de combates: una pelea común no
+  cambia nada.
 - **El motor y la música** (`audio/engine.ts`): `setMusic(scene)` y una bomba cada
   `PUMP_MS` (250 ms) sobre el reloj de audio (`ctx.currentTime`); nada se mueve mientras el
   contexto no está `running`. Cada voz suena en un `<audio>` conectado al canal de música
   por su propia ganancia (`StreamLike`, `AudioPorts.createStream`), que sigue la envolvente
   con rampas lineales cada `RAMP_STEP_MS`; una voz que recibe su elemento tarde (archivo
-  lento o música recién activada) entra con `ATTACH_MS` de fundido. Cada tema se baja una
+  lento o música recién activada) entra con `ATTACH_MS` de fundido (si la envolvente cambia
+  mientras tanto, sigue desde donde va esa rampa, sin salto). Cada tema se baja una
   vez a un object URL (`loadStream`): se puede saltar a cualquier segundo sin `Range` del
   servidor. Guarda `KEEP_STREAMS` (4) archivos; con la música silenciada no baja nada y
-  suelta los elementos. La CSP de escritorio permite `media-src blob:` por eso.
+  suelta los elementos. La CSP de escritorio permite `media-src blob:` por eso. Un
+  archivo que no llega o que el elemento no decodifica (`error` del `<audio>`,
+  `StreamLike.onError`) queda `failed` y se pide de nuevo a los `STREAM_RETRY_MS` (5 s),
+  doblando hasta `STREAM_RETRY_MAX_MS` (60 s); una voz sin elemento con su archivo
+  fallado se suelta (`lost`). Un tema sin `seconds` (soundgen, el `none` de un lugar) se
+  decodifica y suena en un buffer source con `loop` (sin el hueco del `loop` de un
+  `<audio>`), y se suelta apenas deja de sonar.
+- **WebKit y los gestos** (Safari, iOS y el WKWebView de macOS): `unlock()` (cada gesto)
+  crea los `MUSIC_DECKS` (4) elementos y "bendice" cada uno nuevo con un `play()`/`pause()`
+  sin archivo dentro del gesto (`StreamLike.bless`): WebKit deja arrancar más tarde solo a
+  un elemento que tuvo un `play()` en un gesto. Si igual rechaza un `play()`
+  (`NotAllowedError`, `StreamLike.blocked`), el gesto siguiente lo vuelve a llamar desde
+  donde va la voz. Falta probarlo en un iPhone y en la app de macOS (docs/14).
 - `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente); al
   salir, `Game.destroy` calla el ambiente y el título entra con su fundido. Dentro,
   `Game.keepLoops` arma la escena con `sceneFor` (`audio/cues.ts`, puro: `loopFor` para la
@@ -719,7 +738,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
-  `/healthz` ni otros orígenes; páginas network-first, `/assets/*` cache-first.
+  `/healthz`, la música (`/audio/sounds/music/`, docs/07 "Audio") ni otros orígenes;
+  páginas network-first, `/assets/*` cache-first.
   `pwa.ts` lo registra solo en un build de producción, en contexto seguro y fuera de
   Tauri (lo importan `main.tsx` y `site/main.tsx`). Instalación y Tauri mobile:
   `docs/15-movil.md`.
@@ -1054,8 +1074,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `make play` se prueba a mano: elige el mismo templo para un personaje sin ciudad.
 - El test de música del mismo archivo (otro guardián gm de la isla) espera el tema de la
   pool de Puerto solo, baja con `/tp` a la cueva y muestrea `__rpgAudio.music()` durante el
-  fundido: la voz de la isla baja, la de las cuevas sube y out² + in² = 1 en cada muestra;
-  después queda solo el tema de cueva, sin errores de consola (screenshot `93b-music-cave`).
+  fundido: la voz de la isla baja, la de las cuevas sube y out² + in² = 1 en cada muestra,
+  sobre las envolventes del director y sobre las ganancias reales de los nodos (`heard`,
+  con un margen de 0,05: los dos nodos se leen hasta un render quantum aparte); después
+  queda solo el tema de cueva, con su elemento a menos de 1,5 s de donde el director cree
+  que va (`time` contra `position`), sin errores de consola (screenshot `93b-music-cave`).
 
 ## Notas de la prueba exploratoria (rama `fix/playtest`)
 - `ItemDef.blocks` aplica la regla de `packages/map-format`: un `kind: wall` bloquea salvo
