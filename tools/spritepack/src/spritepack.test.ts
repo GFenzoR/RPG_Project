@@ -7,7 +7,11 @@ import { collectSpriteRefs } from "./content.ts";
 import {
   derivedLicense,
   fileLicenses,
+  markdownSection,
+  markdownTableRows,
   parseCreditsCsv,
+  parseCreditsRows,
+  plainCell,
   registeredPacks,
   usedLicense,
 } from "./credits.ts";
@@ -172,6 +176,44 @@ describe("credits", () => {
       "GPL 3.0",
     ]);
     expect(fileLicenses(rows, "spritesheets/body/female/walk.png")).toBeUndefined();
+  });
+
+  it("reads each CREDITS.csv row's authors, licences and links for the credits page", () => {
+    const csv =
+      "filename,notes,authors,licenses,urls\r\n" +
+      '"hair/long/walk.png","a ""quoted"" note, with a comma" ,"A,B (b)" ,"CC-BY-SA 3.0,GPL 3.0" ,"https://x/1,https://x/2"\r\n' +
+      '"","" ,"nobody" ,"CC0" ,""\r\n';
+    expect(parseCreditsRows(csv)).toEqual([
+      {
+        file: "hair/long/walk.png",
+        authors: ["A", "B (b)"],
+        licenses: ["CC-BY-SA 3.0", "GPL 3.0"],
+        urls: ["https://x/1", "https://x/2"],
+      },
+    ]);
+    // Without a licences column there is nothing to check a file against.
+    expect(parseCreditsCsv("filename,authors\na.png,A\n").size).toBe(0);
+    expect(parseCreditsRows("filename,authors\na.png,A\n")).toEqual([
+      { file: "a.png", authors: ["A"], licenses: [], urls: [] },
+    ]);
+  });
+
+  it("reads the rows of a CREDITS.md section's tables", () => {
+    const md =
+      "# Credits\n\n| a | b |\n|---|:-:|\n| `x` | **y** |\n\n## Fonts\n\n| f | l |\n|---|---|\n| F | OFL 1.1 |\n\n## Next\n| n |\n";
+    expect(markdownTableRows(md)).toEqual([
+      ["a", "b"],
+      ["`x`", "**y**"],
+      ["f", "l"],
+      ["F", "OFL 1.1"],
+      ["n"],
+    ]);
+    expect(markdownTableRows(markdownSection(md, "## Fonts"))).toEqual([
+      ["f", "l"],
+      ["F", "OFL 1.1"],
+    ]);
+    expect(markdownSection(md, "## Missing")).toBe("");
+    expect(plainCell(" `x`  **y** ")).toBe("x y");
   });
 
   it("uses each file under its most permissive accepted licence, never GPL", () => {

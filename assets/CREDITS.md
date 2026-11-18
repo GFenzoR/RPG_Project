@@ -16,8 +16,12 @@ Reglas que vienen con eso (detalle en `docs/17-direccion-de-arte-y-ui.md`, "SRC"
   o `Credits.txt` del origen): solo entran los archivos con una licencia aceptada. Si un
   archivo tiene varias, se elige una aceptada y la fila lo dice.
 - **Atribución.** CC-BY, CC-BY-SA y OGA-BY piden autor, título, licencia y enlace, visibles
-  para el jugador. Hoy están en este archivo; la pantalla de créditos del juego y del sitio
-  está pendiente (tarea A1 de docs/17).
+  para el jugador. La página `/credits` del sitio (enlazada desde el pie de cada página y
+  desde Opciones en el juego; tarea A1 de docs/17) se arma con este archivo al construir el
+  cliente (`client/vite/credits.ts`): la tabla de packs, "Fuentes" y "Obras derivadas de
+  terceros", más el `CREDITS.csv` de cada pack con licencia por archivo. Un pack nuevo
+  necesita además su nombre y autor en `i18n/{es,en}/site.yaml`
+  (`site.credits.pack.<carpeta>.title` y `.author`, con los guiones de la carpeta como `_`): `make test` lo exige.
 - **CC-BY-SA.** Lo que se derive de un archivo BY-SA (recoloreado, recortado, combinado)
   sigue siendo BY-SA y va en "Obras derivadas", nunca como obra propia CC0. Una página del
   atlas solo junta sprites: cada uno conserva su licencia, y el código y el arte propio no

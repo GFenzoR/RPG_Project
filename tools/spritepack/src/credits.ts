@@ -52,28 +52,85 @@ export function derivedLicense(licences: readonly string[]): string | undefined 
   return worst;
 }
 
+/** One row of a per-file credits CSV, its lists split on commas and trimmed. */
+export interface FileCreditRow {
+  /** The file's path as the CSV names it ("hair/long/adult/walk.png"). */
+  file: string;
+  authors: string[];
+  licenses: string[];
+  urls: string[];
+}
+
 /**
  * The rows of a per-file credits CSV (the Universal LPC Spritesheet Character Generator's
- * CREDITS.csv: filename,notes,authors,licenses,urls): file -> the licences it lists.
+ * CREDITS.csv: filename,notes,authors,licenses,urls), in file order. Rows without a file
+ * name are skipped; a missing column reads as an empty list.
  */
-export function parseCreditsCsv(text: string): Map<string, string[]> {
+export function parseCreditsRows(text: string): FileCreditRow[] {
   const rows = parseCsv(text);
   const head = rows[0]?.map((c) => c.trim()) ?? [];
-  const file = head.indexOf("filename");
-  const lic = head.indexOf("licenses");
-  const out = new Map<string, string[]>();
-  if (file < 0 || lic < 0) return out;
+  const col = (name: string): number => head.indexOf(name);
+  const file = col("filename");
+  if (file < 0) return [];
+  const list = (row: string[], i: number): string[] =>
+    i < 0
+      ? []
+      : (row[i] ?? "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter((x) => x !== "");
+  const out: FileCreditRow[] = [];
   for (const row of rows.slice(1)) {
     const name = row[file]?.trim();
     if (!name) continue;
-    const licences = (row[lic] ?? "")
-      .split(",")
-      .map((l) => l.trim())
-      .filter((l) => l !== "");
-    out.set(name, licences);
+    out.push({
+      file: name,
+      authors: list(row, col("authors")),
+      licenses: list(row, col("licenses")),
+      urls: list(row, col("urls")),
+    });
   }
   return out;
 }
+
+/**
+ * The rows of a per-file credits CSV: file -> the licences it lists. Empty when the CSV has
+ * no `licenses` column.
+ */
+export function parseCreditsCsv(text: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!(parseCsv(text)[0] ?? []).some((c) => c.trim() === "licenses")) return out;
+  for (const row of parseCreditsRows(text)) out.set(row.file, row.licenses);
+  return out;
+}
+
+/** Rows of the markdown tables of `md` (cells trimmed), skipping header separators. */
+export function markdownTableRows(md: string): string[][] {
+  const rows: string[][] = [];
+  for (const line of md.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t.startsWith("|")) continue;
+    const cells = t
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
+    rows.push(cells);
+  }
+  return rows;
+}
+
+/** The text of `md` from the heading to the next "## " heading ("" without the heading). */
+export function markdownSection(md: string, heading: string): string {
+  const start = md.indexOf(heading);
+  if (start < 0) return "";
+  const next = md.indexOf("\n## ", start + heading.length);
+  return md.slice(start, next < 0 ? undefined : next);
+}
+
+/** A table cell as plain text: no emphasis or code marks, single spaces. */
+export const plainCell = (cell: string): string =>
+  cell.replace(/[*`]/g, "").replace(/\s+/g, " ").trim();
 
 /**
  * The licences a per-file credits table lists for a file of its pack, given by its path

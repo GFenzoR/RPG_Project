@@ -7,7 +7,8 @@
 //   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
 //                        `vite build` emits them under audio/
 //   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
-//                        (highscore categories) and the posts of data/news
+//                        (highscore categories), the posts of data/news and the credits
+//                        of /credits (vite/credits.ts)
 //   /atlas/<file>        sprite atlas built from assets/ with tools/spritepack (dev server);
 //                        `vite build` emits the same files under atlas/
 //
@@ -17,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
@@ -328,6 +330,7 @@ export function loadSiteContent(root: string): SiteContent {
     news,
     cosmetics: loadCosmetics(root),
     outfits: loadOutfits(root),
+    credits: loadCredits(root),
   };
 }
 

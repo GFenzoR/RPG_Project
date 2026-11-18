@@ -264,7 +264,9 @@ La salida es determinista: mismo input, mismos bytes. Para revisar el atlas con 
 2. Agrega una fila a `CREDITS.md` con autor, licencia (CC0, CC-BY 3.0/4.0, OGA-BY 3.0 o,
    desde el 2026-11-17, CC-BY-SA 3.0/4.0), URL de origen y la carpeta
    `` `assets/vendor/<pack>/` ``. Sin esa fila spritepack rechaza el pack. Si el pack trae
-   licencia por archivo, mira "Packs con licencia por archivo" abajo.
+   licencia por archivo, mira "Packs con licencia por archivo" abajo. La fila sale también
+   en la página `/credits` del sitio: agrega `site.credits.pack.<pack>.title` y `.author` (guiones como `_`)
+   en `i18n/es/site.yaml` y `i18n/en/site.yaml` (`client/vite/credits.test.ts` lo exige).
 3. En `sprites.yaml`, cambia `placeholder` por `source` en cada sprite que el pack cubra:
    ```yaml
    weapons/iron_sword: { source: vendor/<pack>/items.png, tile: [4, 2] }   # columna, fila (32 px)

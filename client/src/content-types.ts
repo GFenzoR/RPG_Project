@@ -264,4 +264,56 @@ export interface SiteContent {
   cosmetics?: CosmeticDef[];
   /** data/outfits.yaml (T5.7): the shop previews an outfit with its south-facing frame. */
   outfits?: OutfitDef[];
+  /** The /credits page (docs/17 A1), read from assets/CREDITS.md and the packs' CSVs. */
+  credits?: Credits;
+}
+
+/**
+ * Third-party art and fonts the game ships and their attribution (docs/17 A1), built by
+ * client/vite/credits.ts from assets/CREDITS.md and each pack's per-file CREDITS.csv.
+ */
+export interface Credits {
+  /** The pack rows of the first table of CREDITS.md. */
+  packs: PackCredit[];
+  /** Per-file credits of the packs that have them, files with the same credit grouped. */
+  files: FileCredit[];
+  /** Sprites composed from vendor files ("Obras derivadas de terceros"), by licence. */
+  derived: DerivedCredit[];
+  /** The "Fuentes (OFL 1.1)" table. */
+  fonts: FontCredit[];
+}
+
+export interface PackCredit {
+  /** Its folder, assets/vendor/<pack>/; its name and author are site.credits.pack.<pack>.* */
+  pack: string;
+  /** The licences its row names, GPL left out ("CC0 1.0", "OGA-BY 3.0"...). */
+  licences: string[];
+  /** Where it comes from. */
+  url: string;
+  /** Its files carry their own credits (entries of `files`). */
+  perFile: boolean;
+}
+
+export interface FileCredit {
+  pack: string;
+  /** The works: the folders of the files inside the pack ("hair/long/adult"). */
+  works: string[];
+  authors: string[];
+  /** The one licence the files are used under (CREDITS.md "Licencia por archivo"). */
+  licence: string;
+  urls: string[];
+}
+
+export interface DerivedCredit {
+  licence: string;
+  /** Sprite ids ("outfits/citizen", "npcs/merchant"). */
+  sprites: string[];
+}
+
+export interface FontCredit {
+  family: string;
+  /** The copyright line of its OFL.txt. */
+  copyright: string;
+  licence: string;
+  url: string;
 }

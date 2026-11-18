@@ -8,6 +8,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { ALL_CHANNELS, savePrefs, withMuted, withVolume } from "../audio/prefs.ts";
 import type { AudioPrefs } from "../audio/prefs.ts";
+import { CreditsLink } from "./CreditsLink.tsx";
 
 export function SoundOptions(props: {
   t: Translate;
@@ -89,6 +90,7 @@ export function AudioOptions(props: {
               {props.children}
             </>
           )}
+          <CreditsLink t={t} />
           <button type="button" onClick={() => setOpen(false)}>
             {t("client.options.close")}
           </button>

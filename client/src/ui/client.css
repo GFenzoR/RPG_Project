@@ -2826,6 +2826,16 @@ body.using-item canvas {
   font-weight: 600;
 }
 
+/* The link to the website's credits (docs/17 A1), in Options. */
+.credits-link {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+p.credits-link {
+  margin: 0;
+  color: var(--muted);
+}
+
 /* ---- The item card (docs/17 UI-6): menu, tooltip and shop ---------------------------- */
 .item-card {
   font-size: 13px;

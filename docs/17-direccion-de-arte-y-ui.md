@@ -949,8 +949,8 @@ sobre el mapa (no solo los importantes).
 - **Archivo con varias licencias:** se elige una aceptada y se anota cuál.
 - **Obligaciones:**
   - **Atribución** (CC-BY, CC-BY-SA, OGA-BY): autor, título, licencia y enlace. Van en
-    `assets/CREDITS.md` y, cuando exista, en una pantalla de créditos que se encuentre
-    (sitio `/credits` y Opciones → Créditos: pendiente A1).
+    `assets/CREDITS.md` y en la página `/credits` del sitio, que se arma con ese archivo
+    y con el `CREDITS.csv` de cada pack (A1, versión mínima: ver "Hecho: A1").
   - **CC-BY-SA:** lo que se derive de un archivo BY-SA (recoloreado, recortado o
     combinado) queda BY-SA y se dice en su fila de créditos. No contagia al código ni al
     arte propio CC0: una página del atlas que junta sprites es una colección, y cada
@@ -1038,7 +1038,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 
 | Id | Tarea | Toca | Depende de |
 |---|---|---|---|
-| A1 | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones | cliente, sitio | — |
+| A1 ✅ (mínima) | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1"). Falta: los créditos dentro de la app de escritorio (hoy muestra la dirección) | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
@@ -1051,6 +1051,34 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18); faltan muros de 32x96, ventanas y marcos de puerta de casa | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
 | A13 | Luz en cuevas y partículas de ambiente — **parcial:** la luz, hecha; faltan las partículas | cliente | A10 |
+
+### Hecho: A1, versión mínima (2026-11-18, lote 6)
+La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte
+que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuentes OFL.
+- **Página `/credits` del sitio** (`client/src/site/Credits.tsx`, sin hooks). Los datos los
+  arma `client/vite/credits.ts` al construir, como parte de `virtual:rpg-site`. Salen de
+  `assets/CREDITS.md` (tabla de packs, "Fuentes" y "Obras derivadas de terceros") y del
+  `CREDITS.csv` de cada pack con licencia por archivo. Usa los mismos lectores que
+  spritepack (`parseCreditsRows`, `markdownTableRows`, `usedLicense`).
+- **Qué muestra:**
+  - cada pack, con su licencia enlazada a su texto y su fuente;
+  - los archivos de LPC agrupados por autores, con la licencia bajo la que se usan y sus
+    enlaces;
+  - los sprites compuestos, por licencia;
+  - las fuentes, con su copyright;
+  - una línea sobre la obra propia CC0.
+- **Textos:** todo es i18n (`site.credits.*`). El nombre y el autor de cada pack van por
+  su carpeta (`site.credits.pack.<pack>.*`, guiones como `_`); un test exige esas claves para cada pack de
+  la tabla y un enlace para cada licencia nombrada. Solo se enlazan direcciones http(s)
+  (`site/credits.ts` `safeLink`).
+- **Enlaces:** desde el pie de cada página del sitio y desde Opciones en el juego, en la
+  ventana de escritorio y en el panel del login y del menú ☰ (`ui/CreditsLink.tsx`). En la
+  app de escritorio se muestra la dirección como texto, como la tienda.
+- **Fuentes:** los woff2 servidos conservan el copyright (name id 0) y la descripción y la
+  URL de la licencia (13 y 14), como pide la OFL (`KEPT_NAME_IDS` de
+  `client/vite/fonts.ts`, con test).
+- **Falta:** mostrar los créditos dentro de la app de escritorio (y de las móviles, docs/15)
+  sin depender del sitio.
 
 ### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
 Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10

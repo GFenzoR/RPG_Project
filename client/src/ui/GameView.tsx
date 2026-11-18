@@ -28,6 +28,7 @@ import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import type { GuildTab } from "./Guild.tsx";
 import { AppearancePanel } from "./Appearance.tsx";
+import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
@@ -1060,6 +1061,7 @@ function OptionsBody(props: {
             <button type="button" data-testid="windows-reset" onClick={() => props.onReset()}>
               {t("client.options.reset_windows")}
             </button>
+            <CreditsLink t={t} />
           </div>
         </>
       )}

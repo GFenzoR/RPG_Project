@@ -132,8 +132,9 @@ el punto 5:
     - **Click sobre la cabeza** de un personaje alto (cae en la casilla de arriba): sigue
       eligiendo la casilla, no a la criatura (ART-2, A10).
     - **Atlas:** pasó de 1 a 2 páginas (docs/07).
-    - **Pantalla de créditos (A1):** las capas de LPC son CC-BY-SA y OGA-BY, piden
-      atribución visible; hoy está solo en `assets/CREDITS.md`.
+    - **Pantalla de créditos (A1):** hecha en su versión mínima (lote 6): la página
+      `/credits` del sitio, enlazada desde el pie del sitio y desde Opciones. La app de
+      escritorio solo muestra la dirección para abrirla en el navegador.
   - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
     animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
     canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
@@ -179,7 +180,9 @@ el punto 5:
       dos lados de un tramo norte-sur (una franja de empedrado afuera del templo). Se lee
       como un zócalo; si molesta, la solución es de mapa (pasto bajo el muro) o un muro
       más ancho.
-  - **A1**, la pantalla de créditos que piden CC-BY y CC-BY-SA.
+  - **A1** dentro de la app de escritorio: hoy Opciones solo muestra la dirección de
+    `/credits`. Antes de distribuir la app (o publicarla en tiendas, docs/15), mostrar
+    los créditos dentro de ella.
   - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
     la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
     `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en

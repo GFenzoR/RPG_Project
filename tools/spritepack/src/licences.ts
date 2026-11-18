@@ -7,7 +7,15 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { AnimEntry } from "./anims.ts";
 import { listFiles } from "./content.ts";
-import { derivedLicense, fileLicenses, parseCreditsCsv, usedLicense } from "./credits.ts";
+import {
+  derivedLicense,
+  fileLicenses,
+  markdownSection as section,
+  markdownTableRows as tableRows,
+  parseCreditsCsv,
+  plainCell as plain,
+  usedLicense,
+} from "./credits.ts";
 import { parseManifest } from "./manifest.ts";
 
 const CREDITS_MD = "assets/CREDITS.md";
@@ -16,32 +24,6 @@ const VENDOR = "assets/vendor";
 /** A pack's per-file credits, next to its LICENSE (the generator's own name for it). */
 const PACK_CREDITS = "CREDITS.csv";
 const DERIVED_HEADING = "## Obras derivadas de terceros";
-
-/** Rows of the markdown tables of `md` (cells trimmed), skipping header separators. */
-function tableRows(md: string): string[][] {
-  const rows: string[][] = [];
-  for (const line of md.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t.startsWith("|")) continue;
-    const cells = t
-      .split("|")
-      .slice(1, -1)
-      .map((c) => c.trim());
-    if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
-    rows.push(cells);
-  }
-  return rows;
-}
-
-/** The text of `md` from the heading to the next "## " heading. */
-function section(md: string, heading: string): string {
-  const start = md.indexOf(heading);
-  if (start < 0) return "";
-  const next = md.indexOf("\n## ", start + heading.length);
-  return md.slice(start, next < 0 ? undefined : next);
-}
-
-const plain = (cell: string): string => cell.replace(/[*`]/g, "").replace(/\s+/g, " ").trim();
 
 /** Every problem found, as "<where>: <what>" lines; empty when the credits are right. */
 export function licenceProblems(root: string): string[] {

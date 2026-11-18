@@ -213,6 +213,55 @@ test.describe.serial("public website", () => {
     expect(errors).toEqual([]);
   });
 
+  // docs/17 A1: the LPC characters (OGA-BY, CC-BY-SA) and the OFL fonts ask to show the
+  // player each author, work, licence and link. The page reads assets/CREDITS.md and LPC's
+  // CREDITS.csv at build time.
+  test("credits: every third-party pack, file, character and font", async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.goto("/?lang=es");
+    await page.locator(".site-footer").getByRole("link", { name: "Créditos" }).click();
+    await expect(page).toHaveURL(/\/credits$/);
+    await expect(page).toHaveTitle("Créditos · Neque's Realm");
+    const credits = page.getByTestId("credits");
+    await expect(credits.getByRole("heading", { level: 1 })).toHaveText("Créditos");
+    await expect(credits.locator("[data-pack=dungeon-crawl] h3")).toContainText("Dungeon Crawl");
+    await expect(credits.locator("[data-pack=ulpc] h3")).toContainText("Universal LPC");
+    // Each LPC file group names its authors and links its licence and its source.
+    const files = page.getByTestId("credits-files");
+    await expect(files.locator("li").first()).toBeVisible();
+    expect(await files.locator("li").count()).toBeGreaterThan(10);
+    await expect(files).toContainText("Johannes Sjölund (wulax)");
+    await expect(files.locator('a[data-licence="OGA-BY 3.0"]').first()).toHaveAttribute(
+      "href",
+      "https://static.opengameart.org/OGA-BY-3.0.txt",
+    );
+    await expect(files.locator('a[data-licence="CC-BY-SA 3.0"]').first()).toHaveAttribute(
+      "href",
+      "https://creativecommons.org/licenses/by-sa/3.0/",
+    );
+    await expect(files.locator('a[href^="https://opengameart.org/"]').first()).toBeVisible();
+    const derived = page.getByTestId("credits-derived");
+    await expect(derived).toContainText("outfits/citizen");
+    await expect(derived).toContainText("npcs/sailor_old");
+    const fonts = page.getByTestId("credits-fonts");
+    await expect(fonts.locator("[data-font]")).toHaveCount(4);
+    await expect(fonts.locator('[data-font="Cinzel"]')).toContainText("The Cinzel Project Authors");
+    await expect(fonts.locator('a[data-licence="OFL 1.1"]').first()).toBeVisible();
+    await fitsWidth(page);
+    await shot(page, "site-09-credits-es", false);
+
+    await page.getByTestId("language").selectOption("en");
+    await expect(credits.getByRole("heading", { level: 1 })).toHaveText("Credits");
+    await expect(credits.getByRole("heading", { name: "Derived works" })).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/credits");
+    await expect(page.getByTestId("credits-files").locator("li").first()).toBeVisible();
+    // Long links and author lists wrap: the page never scrolls sideways on a phone.
+    await fitsWidth(page);
+    await shot(page, "site-10-credits-en-375", false);
+    expect(errors).toEqual([]);
+  });
+
   test("Play leads to the login and into the game", async ({ page }) => {
     // Run last in a full E2E: the game page is a cold load of every module of /play/ from
     // Vite's dev server (pixi.js and the whole client) in a new browser context, and the

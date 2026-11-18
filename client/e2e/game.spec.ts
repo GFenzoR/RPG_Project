@@ -1887,6 +1887,9 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(options.locator(".channel").nth(1).locator(".value")).toHaveText("20");
   await options.screenshot({ path: join(shots, "34-sound-options.png") });
   await shot(page, "35-sound-options-game");
+  // docs/17 A1: the credits of the art and fonts, on the website in another tab.
+  await expect(options.getByTestId("credits-link")).toHaveAttribute("href", "/credits");
+  await expect(options.getByTestId("credits-link")).toHaveAttribute("target", "_blank");
   // Muted effects spend no voice: a step is silent now. The window closes with its ×
   // ("Cerrar Opciones").
   await options.getByRole("button", { name: "Cerrar" }).click();
@@ -1909,6 +1912,10 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(page.getByTestId("volume-music")).toHaveValue("20");
   await expect(page.getByTestId("mute-sfx")).toBeChecked();
   await expect(page.getByTestId("volume-master")).toHaveValue("80");
+  await expect(page.locator(".corner").getByTestId("credits-link")).toHaveAttribute(
+    "href",
+    "/credits",
+  );
   await shot(page, "36-sound-options-login");
 
   // The panel moves from the corner to the game's Options window: it must show what is in

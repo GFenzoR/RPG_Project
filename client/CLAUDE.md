@@ -17,6 +17,7 @@ client/
   src/preview/           vista previa de la UI sin servidor (make ui-preview)
   src/i18n/              carga de textos desde i18n/
   vite/fonts.ts          plugin: fuentes OFL recortadas a woff2 en /fonts/
+  vite/credits.ts        créditos de /credits desde assets/CREDITS.md y los CREDITS.csv
   e2e/                   Playwright: tests y screenshots (y e2e/ui-preview.ts, un script)
 ```
 
@@ -292,6 +293,21 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   noticia, ruta desconocida, foco, paginación con 21 montaraces sembrados con `psql`, y
   "Jugar" → login → juego conservando el idioma elegido en el juego tras recargar). Los E2E
   del juego van a `/play/?lang=es`.
+
+## Créditos (docs/17 A1)
+- `/credits` del sitio (`site/Credits.tsx`, sin hooks): `SiteContent.credits` lo arma
+  `vite/credits.ts` (`loadCredits`, puro en `creditsFrom`, con tests) desde
+  `assets/CREDITS.md` y el `CREDITS.csv` de cada pack, con los lectores de spritepack.
+  Cada frase es i18n (`site.credits.*`); el nombre y autor de un pack,
+  `site.credits.pack.<carpeta>.*` (guiones como `_`; `vite/credits.test.ts` exige las dos claves en es y en
+  para cada pack, y un enlace en `site/credits.ts` `licenceUrl` para cada licencia).
+- Enlaces: el pie del sitio (`site.nav.credits`) y `ui/CreditsLink.tsx` en Opciones (la
+  ventana de escritorio y `AudioOptions` del login y del menú ☰), otra pestaña; en la app
+  de escritorio, la dirección como texto (`client.options.credits_desktop`).
+- Fuentes: `buildFont` conserva los name ids 0–6, 13 y 14 (`KEPT_NAME_IDS`): el
+  copyright y la licencia OFL viajan en cada woff2.
+- E2E: "credits" de `e2e/site.spec.ts` (screenshots `site-09` y `site-10`) y el enlace
+  en el test de sonido de `e2e/game.spec.ts`.
 
 ## Notas de T4.5
 - Portal de mapas en el sitio (`src/site/Maps.tsx`): `/maps/submit`, `/maps/mine` y
