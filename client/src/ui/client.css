@@ -2972,6 +2972,10 @@ body.using-item canvas {
   width: 20px;
   height: 20px;
 }
+/* The whole columns a phone takes leave a strip: the grid sits centred, like its pages. */
+.game:not([data-layout="desktop"]) .shop-grid {
+  margin-inline: auto;
+}
 /* The dialog's options on a small screen: two columns, up to three lines each (no title
    to hover there). */
 .game:not([data-layout="desktop"]) .dialog-options {
