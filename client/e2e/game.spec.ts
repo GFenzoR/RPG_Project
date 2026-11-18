@@ -50,6 +50,18 @@ async function useAt(page: Page, x: number, y: number): Promise<void> {
   await page.keyboard.up("Control");
 }
 
+/**
+ * Keys go to the game: the focus leaves whatever took it (a text field takes the arrow keys,
+ * input/keyboard.ts takesText). Not a click: since docs/17 UI-4 the map starts at the
+ * page's top left corner, and a click there walks towards that tile.
+ */
+async function keysToGame(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && el !== document.body) el.blur();
+  });
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -491,7 +503,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
         { timeout: 90_000, intervals: [250] },
       )
       .toBe(true);
-    await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+    await keysToGame(page);
   };
 
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
@@ -628,7 +640,7 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="frost_lance"]')).toBeVisible();
   await expect(hotbar.locator('[data-hotkey="F2"] [data-spell="verdant_mend"]')).toBeVisible();
   await expect(hotbar.locator('[data-hotkey="F3"] [data-spell="mend_other"]')).toBeVisible();
-  await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+  await keysToGame(page);
 
   // F2 heals the druid itself: the server spends 20 mana and starts the cooldown.
   const mana = (): Promise<number | undefined> =>
@@ -820,7 +832,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await shot(page, "14b-shop-sell");
 
   // Walking away (keyboard: the windows cover part of the map) closes both windows.
-  await page.locator("body").click({ position: { x: 1, y: 1 } });
+  await keysToGame(page);
   for (let i = 0; i < 3; i++) {
     const before = await self(page);
     await page.keyboard.press("ArrowLeft");
@@ -1965,7 +1977,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
 
     // Walking advances it: find a free direction, then step back and forth. The server
     // counts each confirmed step.
-    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await keysToGame(page);
     const still = async (): Promise<Self> => {
       let s: Self | undefined;
       await expect
@@ -2545,7 +2557,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await arrived(b, 3152, 6403);
   await arrived(c, 3154, 6403);
   const step = async (page: Page, key: string, x: number, y: number): Promise<void> => {
-    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await keysToGame(page);
     await page.keyboard.press(key);
     await arrived(page, x, y);
   };
@@ -2632,7 +2644,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await step(b, "ArrowUp", 3153, 6400);
   await step(c, "ArrowLeft", 3153, 6403);
   await step(c, "ArrowUp", 3153, 6402);
-  await c.locator("body").click({ position: { x: 1, y: 1 } });
+  await keysToGame(c);
   await c.keyboard.press("ArrowUp");
   await expect(c.getByTestId("game-log")).toContainText(
     "La puerta de esta casa no se abre para ti.",

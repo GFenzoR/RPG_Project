@@ -948,6 +948,13 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones),
   `window-close-<id>`, `window-fold-<id>`, `[data-window-button]`, `[data-chat-tab]`,
   `[data-guild-tab]`, `reduced-motion`, `windows-reset`; la ayuda es `controls-help`.
+  El mapa empieza en la esquina de arriba a la izquierda de la página: un click en (1, 1)
+  camina hacia esa casilla. Para que las teclas vayan al juego, `keysToGame`
+  (`e2e/game.spec.ts`) le quita el foco al campo de texto, sin clicks. El dock angosto
+  dice "Perseguir"; la casilla conserva su nombre entero (`aria-label`, "Perseguir al
+  objetivo"). `.viewport` lleva `min-width: 0`: con `overflow: clip` (que no es un
+  contenedor de scroll) el canvas fijaba su ancho mínimo y, al achicar la ventana, el mapa
+  empujaba el dock fuera de la pantalla.
 
 ## Notas de A4 y A5 (docs/17 UI-6, UI-7 y UI-8)
 - **Controles** (`state/controls.ts`, `localStorage` `rpg.controls`, `menu` por defecto o
@@ -987,7 +994,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   estado. `.npc-windows` va de lado a lado sobre el mapa, abajo al centro; con la tienda,
   `data-shop` pone la tienda a la izquierda y el diálogo en una columna. Los temas vienen de
   `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
-  `state/dialog.ts` arma la grilla. Test ids: `dialog-filter`, `dialog-bye`,
+  `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
+  `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
+  128 px y el diálogo no entraba en un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
   `[data-topic]`, `shop-search`, `[data-filter]`, `[data-shop-tab]`, `shop-grid`,
   `shop-prev`/`shop-next`, `shop-bar`, `shop-count`, `shop-minus`/`shop-plus`/`shop-max`,
   `shop-total`, `shop-act`. Las reglas de la tienda son puras en `state/shop.ts`

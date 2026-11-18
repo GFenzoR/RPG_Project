@@ -26,16 +26,37 @@ export function iconStyle(icon: IconRect | undefined): JSX.CSSProperties {
   };
 }
 
-/** An atlas icon at 2x (a box twice its size; the icon scaled pixelated: client.css). */
-export function BigIcon(props: { icon: IconRect | undefined; class?: string }): JSX.Element {
+/**
+ * The whole scale of a big icon: 2x, or with `fit` the largest whole scale (at least 1) at
+ * which it fits a `fit` px square. An NPC's portrait fits 64 px: a 32 px sprite of Dungeon
+ * Crawl at 2x and a 64 px LPC character at 1x take the same box (at 2x the LPC frame was
+ * 128 px, and an NPC's dialog no longer fit a phone on its side).
+ */
+export function bigIconScale(icon: IconRect, fit?: number): number {
+  if (fit === undefined) return 2;
+  return Math.max(1, Math.floor(fit / Math.max(icon.width, icon.height, 1)));
+}
+
+/** An atlas icon at a whole scale (a box that size; the icon scaled pixelated: client.css). */
+export function BigIcon(props: {
+  icon: IconRect | undefined;
+  class?: string;
+  /** Fit the icon in a square of this many px instead of drawing it at 2x. */
+  fit?: number;
+}): JSX.Element {
   const icon = props.icon;
+  const scale = icon ? bigIconScale(icon, props.fit) : 2;
   return (
     <span
       class={`big-icon ${props.class ?? ""}`}
-      style={icon ? { width: `${icon.width * 2}px`, height: `${icon.height * 2}px` } : {}}
+      style={icon ? { width: `${icon.width * scale}px`, height: `${icon.height * scale}px` } : {}}
       aria-hidden="true"
     >
-      {icon && <span style={iconStyle(icon)} />}
+      {icon && (
+        <span
+          style={{ ...iconStyle(icon), ...(scale === 2 ? {} : { transform: `scale(${scale})` }) }}
+        />
+      )}
     </span>
   );
 }

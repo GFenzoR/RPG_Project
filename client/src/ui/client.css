@@ -602,6 +602,10 @@ kbd {
 .viewport {
   flex: 1;
   min-height: 0;
+  /* overflow: clip (below) is not a scroll container, so without this the flex item would
+     keep the canvas's width as its minimum: made narrower, the window kept the map as wide
+     as before and pushed the dock off the screen. */
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1042,7 +1046,7 @@ body.using-item canvas {
   gap: 0.6rem;
   align-items: flex-start;
 }
-/* The NPC's sprite at 2x in a sunken frame. */
+/* The NPC's sprite in a sunken frame, at the whole scale that fits 64 px (PORTRAIT_PX). */
 .npc-portrait {
   flex: none;
   display: grid;

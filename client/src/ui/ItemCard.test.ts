@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import type { ItemCardView } from "../state/item-card.ts";
-import { ItemCard, cardTitle, typeText } from "./ItemCard.tsx";
+import { BigIcon, ItemCard, bigIconScale, cardTitle, typeText } from "./ItemCard.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;
@@ -85,5 +85,32 @@ describe("ItemCard (docs/17 UI-6)", () => {
       "client.card.kind.material",
     );
     expect(typeText(t, { ...card, type: [] })).toBe("");
+  });
+});
+
+describe("BigIcon", () => {
+  const icon = (width: number, height: number) => ({ url: "a.png", x: 0, y: 0, width, height });
+
+  it("draws at 2x, or at the whole scale that fits a square", () => {
+    expect(bigIconScale(icon(32, 32))).toBe(2);
+    expect(bigIconScale(icon(64, 64))).toBe(2);
+    // An NPC portrait fits 64 px: Dungeon Crawl's 32 px at 2x, an LPC character at 1x.
+    expect(bigIconScale(icon(32, 32), 64)).toBe(2);
+    expect(bigIconScale(icon(64, 64), 64)).toBe(1);
+    expect(bigIconScale(icon(16, 16), 64)).toBe(4);
+    expect(bigIconScale(icon(32, 64), 64)).toBe(1);
+    // Never under 1x, even when the sprite is larger than the box.
+    expect(bigIconScale(icon(96, 96), 64)).toBe(1);
+  });
+
+  it("sizes its box and scales the sprite to match", () => {
+    const fitted = BigIcon({ icon: icon(64, 64), fit: 64 }) as unknown as Node;
+    expect(fitted.props["style"]).toEqual({ width: "64px", height: "64px" });
+    const inner = nodes(fitted.props.children)[0];
+    expect(inner?.props["style"]).toMatchObject({ width: "64px", transform: "scale(1)" });
+    const double = BigIcon({ icon: icon(32, 32) }) as unknown as Node;
+    expect(double.props["style"]).toEqual({ width: "64px", height: "64px" });
+    // 2x is client.css's .big-icon > span, with no inline transform.
+    expect(nodes(double.props.children)[0]?.props["style"]).not.toHaveProperty("transform");
   });
 });

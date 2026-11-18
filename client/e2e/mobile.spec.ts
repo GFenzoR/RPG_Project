@@ -10,7 +10,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { psql } from "./psql.ts";
 import { openWindow } from "./windows.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
@@ -676,6 +676,21 @@ async function overThePad(page: Page, selector: string): Promise<void> {
 }
 
 /** In Puerto: a tap on the priestess talks to her; the window fits and closes with ×. */
+/**
+ * Waits until the open animation of a window and of what is in it ends (gwin-in scales it
+ * up from 96 %, client.css): its box measured before is up to 4 % short.
+ */
+async function opened(window: Locator): Promise<void> {
+  await window.evaluate((el) =>
+    Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ).then(() => undefined),
+  );
+}
+
 async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   let priest: { id: number; x: number; y: number } | undefined;
   await expect
@@ -700,6 +715,7 @@ async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   // The server's DialogOpen reached the client state, not only the window.
   expect(await page.evaluate(() => window.__rpgClient?.dialog() !== undefined)).toBe(true);
   // The window fits the screen and its close button is a 44 px target.
+  await opened(dialog);
   const box = await dialog.boundingBox();
   const vp = page.viewportSize();
   if (!box || !vp) throw new Error("no dialog box");

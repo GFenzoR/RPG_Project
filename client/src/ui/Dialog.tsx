@@ -36,6 +36,9 @@ import type { IconName } from "./icons.tsx";
 import { BigIcon, typeText } from "./ItemCard.tsx";
 import type { IconRect } from "./ItemCard.tsx";
 
+/** The NPC's portrait fits this square (ItemCard.tsx bigIconScale). */
+export const PORTRAIT_PX = 64;
+
 interface Props {
   t: Translate;
   content: ClientContent;
@@ -132,7 +135,7 @@ export function DialogView(props: {
       <div class="dialog-body">
         {props.portrait && (
           <span class="npc-portrait">
-            <BigIcon icon={props.portrait} />
+            <BigIcon icon={props.portrait} fit={PORTRAIT_PX} />
           </span>
         )}
         {/* Greetings say the player's name ({name} in the npcs.yaml catalogs). */}

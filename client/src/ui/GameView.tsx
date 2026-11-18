@@ -378,8 +378,10 @@ export function GameView(props: GameViewProps): JSX.Element {
         </select>
       </label>
       <label class="check" title={t("client.fight.chase")}>
+        {/* The narrow dock shows "Chase": the box keeps its whole name. */}
         <input
           type="checkbox"
+          aria-label={t("client.fight.chase")}
           checked={chase}
           onChange={(e) => {
             const c = e.currentTarget.checked;
