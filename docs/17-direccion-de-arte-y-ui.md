@@ -925,9 +925,10 @@ Consultadas el 2026-11-17. No se bajó ni se incrustó ninguna imagen de estas p
   https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator
 - LPC Revised: https://github.com/ElizaWy/LPC
 - Organización oficial: https://github.com/LiberatedPixelCup
-- Ultima Online, guía del cliente clásico y menús contextuales:
+- Ultima Online, guía del cliente clásico (menú, paperdoll) y menús contextuales de NPCs
+  y jugadores:
   https://uo.com/wiki/ultima-online-wiki/technical/classic-client-user-guide/ ,
-  https://uoguide.com/Skill_Menu
+  https://uo.com/wiki/ultima-online-wiki/technical/previous-publishes/2001-2/2001-publish-14-14th-november/
 - Old School RuneScape, menú "Choose Option" y Examinar:
   https://oldschool.runescape.wiki/w/Choose_Option
 - Interpolación y buffer de entrada en juegos en red:
