@@ -262,10 +262,13 @@ func TestGatherOutOfViewSaysNothing(t *testing.T) {
 }
 
 // The reach caps of the content (content.MaxReach: inventory.reach, resource.reach) are
-// the view half-height: gathering and crafting answer nothing out of view, so a longer
-// reach could only ever fail.
-func TestMaxReachIsTheView(t *testing.T) {
-	if content.MaxReach != min(session.ViewHalfW, session.ViewHalfH) {
-		t.Fatalf("content.MaxReach = %d, the view is ±%d x ±%d", content.MaxReach, session.ViewHalfW, session.ViewHalfH)
+// the half-height of the classic window (a monster's sight), and within the view:
+// gathering and crafting answer nothing out of view, so a longer reach could only fail.
+func TestMaxReachIsTheClassicWindow(t *testing.T) {
+	if content.MaxReach != min(session.SightHalfW, session.SightHalfH) {
+		t.Fatalf("content.MaxReach = %d, the classic window is ±%d x ±%d", content.MaxReach, session.SightHalfW, session.SightHalfH)
+	}
+	if content.MaxReach > min(session.ViewHalfW, session.ViewHalfH) {
+		t.Fatalf("content.MaxReach = %d, beyond the view of ±%d x ±%d", content.MaxReach, session.ViewHalfW, session.ViewHalfH)
 	}
 }

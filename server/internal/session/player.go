@@ -514,6 +514,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ServerTime:     uint64(max(ctx.Now.UnixMilli(), 0)),
 		TickMs:         uint32(game.TickDuration.Milliseconds()),
 		MaxQueuedSteps: uint32(w.mv.MaxQueuedSteps),
+		ViewWidth:      ViewTilesW,
+		ViewHeight:     ViewTilesH,
 	}}})
 	// Saved conditions first (T3.2): the first stats, and what observers get, already
 	// carry their speed (and an invisible player is never shown).

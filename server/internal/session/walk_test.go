@@ -28,19 +28,19 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] {
 		t.Fatalf("join events %v, want %v", got, want)
 	}
-	if evs[0].GetWelcome().GetCreatureId() != p.ID() || evs[0].GetWelcome().GetTickMs() != 50 {
+	if wl := evs[0].GetWelcome(); wl.GetCreatureId() != p.ID() || wl.GetTickMs() != 50 || wl.GetViewWidth() != 31 || wl.GetViewHeight() != 21 {
 		t.Fatalf("welcome %v", evs[0])
 	}
 	area := evs[1].GetFullMapView().GetArea()
-	if area.GetX() != 102-8 || area.GetY() != 101-6 || area.GetWidth() != 17 || area.GetHeight() != 13 {
+	if area.GetX() != 102-16 || area.GetY() != 101-11 || area.GetWidth() != 33 || area.GetHeight() != 23 {
 		t.Fatalf("area %d,%d %dx%d", area.GetX(), area.GetY(), area.GetWidth(), area.GetHeight())
 	}
-	if len(area.GetFloors()) != 1 || area.GetFloors()[0].GetZ() != 7 || len(area.GetFloors()[0].GetTiles()) != 17*13 {
+	if len(area.GetFloors()) != 1 || area.GetFloors()[0].GetZ() != 7 || len(area.GetFloors()[0].GetTiles()) != 33*23 {
 		t.Fatalf("floors %v", area.GetFloors())
 	}
 	// The wall east of the temple: grass with the wall item on top.
 	tiles := area.GetFloors()[0].GetTiles()
-	wall := area.GetPalette()[tiles[6*17+9]]
+	wall := area.GetPalette()[tiles[11*33+17]]
 	if len(wall.GetItems()) != 2 || wall.GetItems()[0].GetItemId() != worldtest.Grass || wall.GetItems()[1].GetItemId() != worldtest.Wall {
 		t.Fatalf("wall tile %v", wall)
 	}

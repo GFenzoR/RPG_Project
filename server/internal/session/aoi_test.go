@@ -12,14 +12,15 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
+// The window is 31x21 plus a margin of one tile: 16 tiles to each side, 11 up and down.
 func TestSeesIsTheViewPlusMargin(t *testing.T) {
 	c := world.Pos{X: 100, Y: 100, Z: 7}
-	for _, q := range []world.Pos{{X: 92, Y: 94, Z: 7}, {X: 108, Y: 106, Z: 7}, {X: 100, Y: 100, Z: 3}} {
+	for _, q := range []world.Pos{{X: 84, Y: 89, Z: 7}, {X: 116, Y: 111, Z: 7}, {X: 115, Y: 100, Z: 7}, {X: 100, Y: 100, Z: 3}} {
 		if !session.Sees(c, q) {
 			t.Errorf("does not see %v", q)
 		}
 	}
-	for _, q := range []world.Pos{{X: 91, Y: 100, Z: 7}, {X: 109, Y: 100, Z: 7}, {X: 100, Y: 93, Z: 7}, {X: 100, Y: 107, Z: 7}, {X: 100, Y: 100, Z: 8}} {
+	for _, q := range []world.Pos{{X: 83, Y: 100, Z: 7}, {X: 117, Y: 100, Z: 7}, {X: 100, Y: 88, Z: 7}, {X: 100, Y: 112, Z: 7}, {X: 100, Y: 100, Z: 8}} {
 		if session.Sees(c, q) {
 			t.Errorf("sees %v", q)
 		}
@@ -30,14 +31,30 @@ func TestSeesIsTheViewPlusMargin(t *testing.T) {
 	}
 }
 
+// A monster's sight is the classic 15x11 window plus its margin, on its own floor only.
+func TestInSightIsTheClassicWindow(t *testing.T) {
+	c := world.Pos{X: 100, Y: 100, Z: 7}
+	for _, q := range []world.Pos{{X: 92, Y: 94, Z: 7}, {X: 108, Y: 106, Z: 7}} {
+		if !session.InSight(c, q) || !session.InSight(q, c) {
+			t.Errorf("not in sight: %v", q)
+		}
+	}
+	for _, q := range []world.Pos{{X: 91, Y: 100, Z: 7}, {X: 109, Y: 100, Z: 7}, {X: 100, Y: 93, Z: 7}, {X: 100, Y: 107, Z: 7},
+		{X: 100, Y: 100, Z: 6}, {X: 115, Y: 100, Z: 7}} {
+		if session.InSight(c, q) {
+			t.Errorf("in sight: %v", q)
+		}
+	}
+}
+
 func TestAOIEnterAndLeave(t *testing.T) {
-	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 32))
-	a, pa := h.join("Ana", at(10, 10))
-	b, pb2 := h.join("Bob", at(16, 10)) // 6 tiles east: in view
+	h := newHarness(t, worldtest.Open(t, 0, 0, 96, 48))
+	a, pa := h.join("Ana", at(10, 20))
+	b, pb2 := h.join("Bob", at(24, 20)) // 14 tiles east: in view
 	a.take()
 	b.take()
 
-	// Bob walks east: at x=18 he is still in Ana's area (dx 8, the margin), at 19 he leaves.
+	// Bob walks east: at x=26 he is still in Ana's area (dx 16, the margin), at 27 he leaves.
 	h.input(b, walkPath(E, E, E))
 	h.sim.RunTicks(30)
 	ae := a.take()
@@ -51,14 +68,14 @@ func TestAOIEnterAndLeave(t *testing.T) {
 	if d := find(be, (*pb.ServerMessage).GetCreatureDisappear); len(d) != 1 || d[0].GetId() != pa.ID() {
 		t.Fatalf("Bob got %v", kinds(be))
 	}
-	// Every step east brings a new column of 13 tiles at x+8.
+	// Every step east brings a new column of 23 tiles at x+16.
 	slices := find(be, (*pb.ServerMessage).GetMapSlice)
 	if len(slices) != 3 {
 		t.Fatalf("%d slices", len(slices))
 	}
 	for i, s := range slices {
 		a := s.GetArea()
-		if a.GetX() != uint32(17+i+8) || a.GetY() != 4 || a.GetWidth() != 1 || a.GetHeight() != 13 {
+		if a.GetX() != uint32(25+i+16) || a.GetY() != 9 || a.GetWidth() != 1 || a.GetHeight() != 23 {
 			t.Fatalf("slice %d: %d,%d %dx%d", i, a.GetX(), a.GetY(), a.GetWidth(), a.GetHeight())
 		}
 	}
@@ -90,11 +107,11 @@ func TestDiagonalSlices(t *testing.T) {
 		t.Fatalf("%d slices", len(sl))
 	}
 	col, row := sl[0].GetArea(), sl[1].GetArea()
-	// At 21,21: new column x=29 (y 15..27) and new row y=27 (x 13..28, corner excluded).
-	if col.GetX() != 29 || col.GetY() != 15 || col.GetWidth() != 1 || col.GetHeight() != 13 {
+	// At 21,21: new column x=37 (y 10..32) and new row y=32 (x 5..36, corner excluded).
+	if col.GetX() != 37 || col.GetY() != 10 || col.GetWidth() != 1 || col.GetHeight() != 23 {
 		t.Fatalf("column %v", col)
 	}
-	if row.GetX() != 13 || row.GetY() != 27 || row.GetWidth() != 16 || row.GetHeight() != 1 {
+	if row.GetX() != 5 || row.GetY() != 32 || row.GetWidth() != 32 || row.GetHeight() != 1 {
 		t.Fatalf("row %v", row)
 	}
 }
@@ -103,10 +120,10 @@ func TestAreaClippedAtWorldEdge(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32))
 	a, _ := h.join("Ana", at(2, 1))
 	area := a.take()[1].GetFullMapView().GetArea()
-	if area.GetX() != 0 || area.GetY() != 0 || area.GetWidth() != 11 || area.GetHeight() != 8 {
+	if area.GetX() != 0 || area.GetY() != 0 || area.GetWidth() != 19 || area.GetHeight() != 13 {
 		t.Fatalf("area %d,%d %dx%d", area.GetX(), area.GetY(), area.GetWidth(), area.GetHeight())
 	}
-	if len(area.GetFloors()[0].GetTiles()) != 11*8 {
+	if len(area.GetFloors()[0].GetTiles()) != 19*13 {
 		t.Fatal("tiles do not match the clipped size")
 	}
 }

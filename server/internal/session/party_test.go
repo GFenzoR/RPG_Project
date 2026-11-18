@@ -391,12 +391,12 @@ func TestPartyInfoAudit(t *testing.T) {
 		t.Fatalf("in view: %v", bm)
 	}
 
-	// Bruno walks east out of Ana's view (more than 8 tiles).
-	for range 10 {
+	// Bruno walks east out of Ana's view (more than 16 tiles).
+	for range 18 {
 		h.input(cb, walk(pb.Direction_DIRECTION_EAST))
 		h.sim.RunTicks(25)
 	}
-	if b.Pos().X < 20 {
+	if b.Pos().X < 28 {
 		t.Fatalf("Bruno did not walk away: %v", b.Pos())
 	}
 	h.sim.RunTicks(20)
@@ -464,8 +464,9 @@ func TestPartyChat(t *testing.T) {
 // its "sharing" flag nor in the indicator (both use only the members the viewer sees).
 func TestPartyInfoAuditShared(t *testing.T) {
 	h := partyHarness(t)
-	ca, a := h.join("Ana", at(10, 10))
-	cb, b := h.join("Bruno", at(12, 10))
+	// Far from the temple (0,0), where a dead Bruno comes back, and from 10,50.
+	ca, a := h.join("Ana", at(40, 10))
+	cb, b := h.join("Bruno", at(42, 10))
 	h.form(ca, a, member{cb, b})
 	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_ON, 0))
 	h.do(func(ctx *game.TickContext) {
@@ -476,7 +477,7 @@ func TestPartyInfoAuditShared(t *testing.T) {
 	if up := lastParty(ca.take()); up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE {
 		t.Fatalf("in view: %v", up.GetShared())
 	}
-	h.do(func(*game.TickContext) { h.w.Teleport(b, pos(50, 50)) })
+	h.do(func(*game.TickContext) { h.w.Teleport(b, pos(10, 50)) })
 	h.sim.RunTicks(20)
 	up := lastParty(ca.take())
 	for _, m := range up.GetMembers() {

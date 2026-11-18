@@ -514,10 +514,11 @@ type Inventory struct {
 	Reach int `yaml:"reach"`
 }
 
-// MaxReach bounds inventory.reach and resource.reach: the view half-height
-// (session.ViewHalfH, the smaller half of the view). The server answers nothing about a
-// tile out of the player's view (gathering, crafting stations: not_possible), so a longer
-// reach would only ever answer that.
+// MaxReach bounds inventory.reach and resource.reach: the half-height of the classic 15x11
+// window with its margin (session.SightHalfH), what a monster notices. The wide view
+// (31x21, docs/00) did not stretch it: hands reach as far as before. It must stay within
+// the view (session.ViewHalfH): the server answers nothing about a tile out of the
+// player's view (gathering, crafting stations: not_possible).
 const MaxReach = 6
 
 // check verifies the inventory numbers: max_open_containers, door_cooldown_ms and reach

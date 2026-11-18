@@ -454,15 +454,18 @@ func dist2(a, b world.Pos) int {
 
 func (w *World) inProtection(p world.Pos) bool { return w.m.Flags(p)&world.FlagProtection != 0 }
 
-// validTarget reports whether monster m may keep fighting player t.
+// validTarget reports whether monster m may keep fighting player t: still in the world, on
+// its floor and in its sight (InSight: a player the wide view shows farther away is lost),
+// out of protection zones and not invisible to it.
 func (w *World) validTarget(m *Monster, t *Player) bool {
-	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && Sees(m.pos, t.pos) && !w.inProtection(t.pos) &&
+	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && InSight(m.pos, t.pos) && !w.inProtection(t.pos) &&
 		seesPlayer(m, t)
 }
 
-// findTarget returns the closest player m can see and reach, or nil. With a leash, only
-// players within m's leash area count, and not one it gave up as out of its way while it
-// stands on that tile out of m's reach (beyondLeash).
+// findTarget returns the closest player m can see (in its sight, InSight, and in line of
+// sight) and reach, or nil. With a leash, only players within m's leash area count, and
+// not one it gave up as out of its way while it stands on that tile out of m's reach
+// (beyondLeash).
 func (w *World) findTarget(tick game.Tick, m *Monster) *Player {
 	return w.pickTarget(tick, m, nil, false)
 }
@@ -473,7 +476,8 @@ func (w *World) pickTarget(tick game.Tick, m *Monster, skip *Player, inReach boo
 	var best *Player
 	bestD := 0
 	leash := w.leash(m)
-	w.eachObserver(nil, m.pos, func(o *Player) {
+	x, y := int(m.pos.X), int(m.pos.Y)
+	w.eachInRect(x-SightHalfW, y-SightHalfH, x+SightHalfW, y+SightHalfH, m.pos.Z, func(o *Player) {
 		if o == skip || o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) ||
 			leash >= 0 && (chebyshev(o.pos, m.slot.spawn.Center) > leash || w.beyondLeash(tick, m, o)) ||
 			inReach && !w.hits(m, o) {
