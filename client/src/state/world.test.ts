@@ -17,6 +17,7 @@ import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { PRESENCE_GRACE_MS, WorldState } from "./world.ts";
+import { PLAYOUT_MARGIN_MS, SLIDE_MS, STEP_LEAD_MS } from "./motion.ts";
 import type { CreatureState } from "./world.ts";
 
 const content: ClientContent = {
@@ -70,7 +71,7 @@ const content: ClientContent = {
   vocations: ["guardian"],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100, maxQueuedSteps: 4 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -114,7 +115,7 @@ function fullView(): Msg {
     floors: [create(MapFloorSchema, { z: 7, tiles })],
     creatures: [self, other],
   });
-  return { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area } };
+  return { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area, walkEpoch: 1 } };
 }
 
 function entered(): WorldState {
@@ -129,6 +130,16 @@ function entered(): WorldState {
   w.apply(fullView(), 0);
   return w;
 }
+
+const rejected = (dir: Direction, x = 100, y = 200, walkEpoch = 2): Msg => ({
+  case: "walkRejected",
+  value: {
+    $typeName: "game.v1.WalkRejected",
+    pos: { $typeName: "game.v1.Position", x, y, z: 7 },
+    dir,
+    walkEpoch,
+  },
+});
 
 const move = (
   id: number,
@@ -163,65 +174,64 @@ describe("WorldState", () => {
     expect(w.chunk(7, 3, 6)).toBe(chunk);
   });
 
-  it("predicts one step, keeps it on confirmation and takes the server's duration", () => {
+  it("predicts a step, keeps it on confirmation and takes the server's duration", () => {
     const w = entered();
     expect(w.predictStep(Direction.EAST, 1000)).toBe(true);
     expect(w.self?.pos).toEqual({ x: 101, y: 200, z: 7 });
     expect(w.self?.walk?.duration).toBe(500); // 1000 * 100% / 200
+    expect(w.unconfirmed).toBe(1);
     expect(w.canStep(1100)).toBe(false);
     w.apply(move(7, [100, 200], [101, 200], 550), 1040);
-    expect(w.pending).toBeUndefined();
+    expect(w.unconfirmed).toBe(0);
     expect(w.self?.walk).toMatchObject({ start: 1000, duration: 550 });
     expect(w.drawPos(w.self as CreatureState, 1275)).toEqual({ x: 100.5, y: 200 });
-    expect(w.canStep(1549)).toBe(false);
-    expect(w.canStep(1550)).toBe(true);
+    // The next step may be decided STEP_LEAD_MS before this one ends.
+    expect(w.canStep(1500 - 1)).toBe(false);
+    expect(w.canStep(1550 - STEP_LEAD_MS)).toBe(true);
   });
 
-  it("does not predict into blocked tiles or creatures", () => {
+  it("does not predict into blocked tiles or creatures; a blocked diagonal slides", () => {
     const w = entered();
     expect(w.predictStep(Direction.SOUTH_EAST, 0)).toBe(false); // crate
-    expect(w.self?.dir).toBe(Direction.SOUTH_EAST);
     expect(w.predictStep(Direction.NORTH, 0)).toBe(false); // unknown tile
-    expect(w.pending).toBeUndefined();
+    expect(w.self?.dir).toBe(Direction.SOUTH);
+    expect(w.unconfirmed).toBe(0);
+    // Nothing open: the player turns, once.
+    expect(w.chooseStep(Direction.NORTH, 0)).toEqual({ kind: "turn", dir: Direction.NORTH });
+    expect(w.self?.dir).toBe(Direction.NORTH);
+    expect(w.chooseStep(Direction.NORTH, 0)).toBeUndefined();
+    // South-east is the crate: its east half is open.
+    expect(w.chooseStep(Direction.SOUTH_EAST, 0)).toEqual({ kind: "walk", dir: Direction.EAST });
+    expect(w.self?.pos).toEqual({ x: 101, y: 200, z: 7 });
   });
 
-  it("goes back to the server's position on WalkRejected", () => {
+  it("goes back to the server's position on WalkRejected, gliding, in a new walk epoch", () => {
     const w = entered();
+    expect(w.walkEpoch).toBe(1); // from the FullMapView
     w.predictStep(Direction.EAST, 0);
-    w.apply(
-      {
-        case: "walkRejected",
-        value: {
-          $typeName: "game.v1.WalkRejected",
-          pos: { $typeName: "game.v1.Position", x: 100, y: 200, z: 7 },
-          dir: Direction.EAST,
-        },
-      },
-      30,
-    );
-    expect(w.pending).toBeUndefined();
-    expect(w.self?.pos).toEqual({ x: 100, y: 200, z: 7 });
-    expect(w.self?.walk).toBeUndefined();
-    expect(w.canStep(30)).toBe(true);
+    w.apply(rejected(Direction.EAST, 100, 200, 2), 50);
+    const s = w.self as CreatureState;
+    expect(w.unconfirmed).toBe(0);
+    expect(w.walkEpoch).toBe(2);
+    expect(s.pos).toEqual({ x: 100, y: 200, z: 7 });
+    expect(s.walk).toBeUndefined();
+    expect(w.canStep(50)).toBe(true);
+    // It was drawn a tenth of the way east: it glides back instead of jumping.
+    expect(w.drawPos(s, 50).x).toBeCloseTo(100.1);
+    expect(w.drawPos(s, 50 + SLIDE_MS / 2).x).toBeCloseTo(100.025);
+    expect(w.drawPos(s, 50 + SLIDE_MS)).toEqual({ x: 100, y: 200 });
   });
 
   it("keeps off a refused step until retryWalk, an own move or a new view (B10)", () => {
-    const rejected = (dir: Direction, x = 100, y = 200): Msg => ({
-      case: "walkRejected",
-      value: {
-        $typeName: "game.v1.WalkRejected",
-        pos: { $typeName: "game.v1.Position", x, y, z: 7 },
-        dir,
-      },
-    });
     const w = entered();
     // East onto (101,200), say stairs with no room at their other end (portal.blocked).
     expect(w.predictStep(Direction.EAST, 0)).toBe(true);
     w.apply(rejected(Direction.EAST), 30);
     // A held key asks on every frame: no Walk, and no Turn (it already faces east).
     expect(w.predictStep(Direction.EAST, 40)).toBe(false);
+    expect(w.chooseStep(Direction.EAST, 40)).toBeUndefined();
     expect(w.predictStep(Direction.EAST, 5000)).toBe(false);
-    expect(w.pending).toBeUndefined();
+    expect(w.unconfirmed).toBe(0);
     expect(w.self?.pos).toEqual({ x: 100, y: 200, z: 7 });
     expect(w.self?.dir).toBe(Direction.EAST);
     // A fresh press (or a release, a new pad direction) tries it once more.
@@ -252,7 +262,7 @@ describe("WorldState", () => {
     const w = entered();
     w.predictStep(Direction.EAST, 0);
     w.apply(move(7, [100, 200], [100, 201], 500), 20);
-    expect(w.pending).toBeUndefined();
+    expect(w.unconfirmed).toBe(0);
     expect(w.self?.pos).toEqual({ x: 100, y: 201, z: 7 });
     expect(w.self?.dir).toBe(Direction.SOUTH);
   });
@@ -264,6 +274,26 @@ describe("WorldState", () => {
     expect(tom.pos).toEqual({ x: 101, y: 202, z: 7 });
     expect(w.drawPos(tom, 2100)).toEqual({ x: 100.25, y: 202 });
     expect(w.drawPos(tom, 2400)).toEqual({ x: 101, y: 202 });
+  });
+
+  it("draws the server's steps on its tick timeline, the next after the one drawn", () => {
+    const w = entered();
+    // Tick 100 arrives at 5000; tick 108 (the next step, 400 ms later on the server)
+    // arrives early, at 5390: it still starts when the first one ends.
+    const at1 = w.batchTime(100, 5000);
+    expect(at1).toBe(5000 + PLAYOUT_MARGIN_MS); // the jitter buffer
+    w.apply(move(9, [100, 202], [101, 202], 400), 5000, at1);
+    const tom = w.creatures.get(9) as CreatureState;
+    expect(w.drawPos(tom, 5000)).toEqual({ x: 100, y: 202 }); // waits for its start
+    const at2 = w.batchTime(108, 5390);
+    expect(Math.abs(at2 - (at1 + 400))).toBeLessThan(5); // back to back
+    w.apply(move(9, [101, 202], [102, 202], 400), 5390, at2);
+    expect(tom.pos).toEqual({ x: 102, y: 202, z: 7 });
+    expect(w.drawPos(tom, at2 - 10).x).toBeGreaterThan(100.95); // still the first step
+    expect(w.drawPos(tom, at2 - 10).x).toBeLessThan(101);
+    expect(w.facing(tom, at2 - 10)).toBe(Direction.EAST);
+    expect(w.drawPos(tom, at2)).toEqual({ x: 101, y: 202 });
+    expect(w.drawPos(tom, at2 + 200)).toEqual({ x: 101.5, y: 202 });
   });
 
   it("computes step durations like the server", () => {

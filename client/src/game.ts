@@ -1,19 +1,12 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
-// the server says; the one thing it predicts is the next own step.
+// the server says; the one thing it predicts is the own keyboard steps (a few ahead).
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
-import {
-  ChatChannel,
-  CreatureKind,
-  Direction,
-  GuildAction,
-  MarketSide,
-  PartyAction,
-} from "@rpg/protocol";
-import type { DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
+import { ChatChannel, CreatureKind, GuildAction, MarketSide, PartyAction } from "@rpg/protocol";
+import type { Direction, DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
 import { ItemPicker, itemActions, tileActions } from "./input/actions.ts";
 import type { ActionKind } from "./input/actions.ts";
 import { HeldDirection } from "./input/dpad.ts";
@@ -38,6 +31,7 @@ import { findPath } from "./state/path.ts";
 import { climbable, pathPassable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import { MotionTrail } from "./state/motion.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
@@ -138,6 +132,11 @@ export interface ClientTestHooks {
    */
   ready: boolean;
   self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
+  /**
+   * Where the own creature was drawn on each frame of the last `ms` (fractional tiles,
+   * oldest first): continuous motion means it moves on every frame while walking.
+   */
+  trail(ms: number): { t: number; x: number; y: number }[];
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
@@ -219,8 +218,10 @@ export class Game {
   /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
   private canvasFailed = false;
   private destroyed = false;
-  /** A click that arrived while a predicted step was unconfirmed. */
+  /** A click that arrived while predicted steps were unconfirmed. */
   private clickTarget: Pos | undefined;
+  /** Where the own creature was drawn on the last frames (the E2E `trail` hook). */
+  private readonly trail = new MotionTrail();
   /**
    * What waits for the next click on the map (the crosshair): a "use with" tool (T1.12) or
    * a heal for another player (T3.1). Any other cast or use drops it (`state/aim.ts`).
@@ -266,10 +267,12 @@ export class Game {
     this.conn = new Connection(opts.sessionToken, opts.locale, {
       batch: (batch) => {
         const now = performance.now();
+        // The steps of this batch start on the server's tick timeline (state/motion.ts).
+        const at = this.world.batchTime(Number(batch.tick), now);
         const cues: Cue[] = [];
         for (const e of batch.events) {
           if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
-          this.world.apply(e.message, now);
+          this.world.apply(e.message, now, at);
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
@@ -1290,8 +1293,9 @@ export class Game {
         const s = world.self;
         if (!s) return undefined;
         const now = performance.now();
-        return { ...s.pos, pending: world.pending !== undefined, walking: world.walking(s, now) };
+        return { ...s.pos, pending: world.unconfirmed > 0, walking: world.walking(s, now) };
       },
+      trail: (ms) => this.trail.since(performance.now() - ms),
       walkable: (x, y, z) => world.free(x, y, z),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
@@ -1340,9 +1344,13 @@ export class Game {
 
   private frame(now: number): void {
     const self = this.world.self;
-    if (!self || this.world.pending) return;
+    if (!self) return;
+    const drawn = this.world.drawPos(self, now);
+    this.trail.record(now, drawn.x, drawn.y);
     const target = this.clickTarget;
     if (target) {
+      // The path starts where the server has the player: after the predicted steps.
+      if (this.world.unconfirmed > 0) return;
       this.clickTarget = undefined;
       // Round stairs, holes and teleports on the way: only the goal may be one.
       const passable = pathPassable(this.opts.content.portals, target, (x, y) =>
@@ -1355,13 +1363,18 @@ export class Game {
       if (steps && steps.length > 0) this.conn.send({ case: "walkPath", value: { steps } });
       return;
     }
+    // The next step is decided just before the drawn one ends (STEP_LEAD_MS): its Walk
+    // waits in the server's queue and the drawing goes on without a stop.
     if (!this.world.canStep(now)) return;
     const dir = this.keys.take() ?? this.pad.take();
     if (dir === undefined) return;
-    const before = self.dir;
-    if (this.world.predictStep(dir, now)) this.conn.send({ case: "walk", value: { dir } });
-    else if (before !== dir && dir !== Direction.UNSPECIFIED)
-      this.conn.send({ case: "turn", value: { dir } });
+    const step = this.world.chooseStep(dir, now);
+    if (step?.kind === "walk")
+      this.conn.send({
+        case: "walk",
+        value: { dir: step.dir, walkEpoch: this.world.walkEpoch },
+      });
+    else if (step?.kind === "turn") this.conn.send({ case: "turn", value: { dir: step.dir } });
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

@@ -46,7 +46,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100, maxQueuedSteps: 4 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],

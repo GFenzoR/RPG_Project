@@ -252,6 +252,7 @@ export function loadClientContent(root: string): ClientContent {
       baseStepMs: num(mv["base_step_ms"], 1000),
       diagonalCost: num(mv["diagonal_cost"], 1.5),
       maxPathTiles: num(mv["max_path_tiles"], 100),
+      maxQueuedSteps: num(mv["max_queued_steps"], 4),
     },
     chat: { maxLength: num(chat["max_length"], 255) },
     guild: {

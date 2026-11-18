@@ -37,7 +37,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100, maxQueuedSteps: 4 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -67,6 +67,7 @@ function world(): WorldState {
       case: "fullMapView",
       value: {
         $typeName: "game.v1.FullMapView",
+        walkEpoch: 1,
         area: {
           $typeName: "game.v1.MapArea",
           x: 0,
