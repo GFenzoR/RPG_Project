@@ -15,7 +15,19 @@ import { TouchPadToggle } from "./ui/TouchPad.tsx";
 import { ControlsOptions } from "./ui/ControlsOptions.tsx";
 import { loadControls, saveControls } from "./state/controls.ts";
 import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
-import { applyReducedMotion, loadReducedMotion, saveReducedMotion } from "./state/ui-prefs.ts";
+import {
+  applyReducedMotion,
+  applyScales,
+  loadCameraShake,
+  loadReducedMotion,
+  loadTextScale,
+  loadUiScale,
+  saveCameraShake,
+  saveReducedMotion,
+  saveTextScale,
+  saveUiScale,
+} from "./state/ui-prefs.ts";
+import { InterfaceOptions } from "./ui/InterfaceOptions.tsx";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
 import "./ui/client.css";
@@ -100,6 +112,13 @@ function Root(): JSX.Element {
   useEffect(() => {
     applyReducedMotion(document.documentElement, reducedMotion);
   }, [reducedMotion]);
+  // docs/17 UI-3, UI-9: the interface scale, the text size and the camera shake (Options).
+  const [uiScale, setUiScale] = useState(() => loadUiScale(storage));
+  const [textScale, setTextScale] = useState(() => loadTextScale(storage));
+  const [shake, setShake] = useState(() => loadCameraShake(storage));
+  useEffect(() => {
+    applyScales(document.documentElement, uiScale, textScale);
+  }, [uiScale, textScale]);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("client.title");
@@ -125,12 +144,33 @@ function Root(): JSX.Element {
       }}
     />
   );
+  const interfaceOptions = (): JSX.Element => (
+    <InterfaceOptions
+      t={t}
+      uiScale={uiScale}
+      textScale={textScale}
+      shake={shake}
+      onUiScale={(v) => {
+        saveUiScale(v, storage);
+        setUiScale(v);
+      }}
+      onTextScale={(v) => {
+        saveTextScale(v, storage);
+        setTextScale(v);
+      }}
+      onShake={(on) => {
+        saveCameraShake(on, storage);
+        setShake(on);
+      }}
+    />
+  );
   // The login screen's corner and the phone menu: the language and the Options button.
   const picker = (
     <>
       {language()}
       <AudioOptions t={t} audio={audio} storage={storage}>
         {padToggle()}
+        {interfaceOptions()}
       </AudioOptions>
     </>
   );
@@ -160,6 +200,9 @@ function Root(): JSX.Element {
           saveReducedMotion(on, storage);
           setReducedMotion(on);
         },
+        uiScale,
+        cameraShake: shake,
+        interfaceOptions: interfaceOptions(),
       }}
       audio={audio}
       touchPad={touchPad}

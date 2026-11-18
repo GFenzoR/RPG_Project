@@ -54,6 +54,7 @@ import { movesOnStep } from "./portals.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
+import { heavyHit } from "../render/shake.ts";
 import { houseFrom } from "./house.ts";
 import type { HouseView } from "./house.ts";
 import { applyMarket, tradeFrom } from "./market.ts";
@@ -425,6 +426,11 @@ export class WorldState implements TileSource {
   /** The creature the player attacks (SetTarget), if any. */
   target: number | undefined;
   stats: PlayerStatsState | undefined;
+  /**
+   * performance.now() of the last heavy hit to the player (render/shake.ts heavyHit: a
+   * tenth of the maximum health or more at once): the canvas shakes its camera (UI-9).
+   */
+  heavyHitAt: number | undefined;
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
@@ -870,6 +876,7 @@ export class WorldState implements TileSource {
       case "playerStats": {
         const v = msg.value;
         const s = this.self;
+        if (heavyHit(this.stats?.health, v.health, v.maxHealth)) this.heavyHitAt = now;
         if (s && v.speed > 0) s.speed = v.speed;
         if (s && v.maxHealth > 0) s.health = Math.round((v.health * 100) / v.maxHealth);
         this.stats = {

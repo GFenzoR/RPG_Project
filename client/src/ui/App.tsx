@@ -15,6 +15,7 @@ import { ServerPicker } from "./ServerPicker.tsx";
 import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
+import { loadCameraShake } from "../state/ui-prefs.ts";
 import type { GameSettings } from "./GameView.tsx";
 
 type Screen =
@@ -397,9 +398,12 @@ function GameScreen(props: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>(emptyGameUi);
   const [storage] = useState(safeStorage);
-  // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click.
+  // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click; the
+  // camera shake (docs/17 UI-9), at each heavy hit.
   const controls = useRef(props.settings?.controlsMode);
   controls.current = props.settings?.controlsMode;
+  const shake = useRef(props.settings?.cameraShake);
+  shake.current = props.settings?.cameraShake;
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -412,6 +416,7 @@ function GameScreen(props: {
       vocation: props.character.vocation,
       storage,
       controls: () => controls.current ?? loadControls(storage),
+      cameraShake: () => shake.current ?? loadCameraShake(storage),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),

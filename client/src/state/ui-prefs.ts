@@ -41,3 +41,80 @@ export function motionReduced(root: HTMLElement | undefined): boolean {
     return false;
   }
 }
+
+// ---- Interface scale, text size and camera shake (docs/17 UI-3, UI-9) ------------------
+
+const SCALE_KEY = "rpg.ui-scale";
+const TEXT_KEY = "rpg.text-scale";
+const SHAKE_KEY = "rpg.shake";
+
+/** The interface scales Options offers (the CSS zoom of the dock, windows and hotbar). */
+export const UI_SCALES: readonly number[] = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
+/** The text sizes Options offers (docs/17 UI-3: 90 % to 130 %, the root font size). */
+export const TEXT_SCALES: readonly number[] = [0.9, 1, 1.15, 1.3];
+
+/** The offered value closest to `v` (a remembered or typed one), or 1 when it is not a number. */
+export function nearestScale(v: number, offered: readonly number[]): number {
+  if (!Number.isFinite(v)) return 1;
+  let best = 1;
+  for (const o of offered) if (Math.abs(o - v) < Math.abs(best - v)) best = o;
+  return best;
+}
+
+function readNumber(storage: Pick<Storage, "getItem"> | undefined, key: string): number {
+  try {
+    const raw = storage?.getItem(key);
+    return raw == null ? 1 : Number(raw);
+  } catch {
+    return 1;
+  }
+}
+
+function write(storage: Pick<Storage, "setItem"> | undefined, key: string, value: string): void {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // Private mode or full storage: the choice lasts until the page reloads.
+  }
+}
+
+/** The remembered interface scale (1 when unset or unreadable). */
+export const loadUiScale = (storage: Pick<Storage, "getItem"> | undefined): number =>
+  nearestScale(readNumber(storage, SCALE_KEY), UI_SCALES);
+
+export const saveUiScale = (v: number, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, SCALE_KEY, String(nearestScale(v, UI_SCALES)));
+
+/** The remembered text size (1 when unset or unreadable). */
+export const loadTextScale = (storage: Pick<Storage, "getItem"> | undefined): number =>
+  nearestScale(readNumber(storage, TEXT_KEY), TEXT_SCALES);
+
+export const saveTextScale = (v: number, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, TEXT_KEY, String(nearestScale(v, TEXT_SCALES)));
+
+/**
+ * The camera shake on a heavy hit (docs/17 UI-9: an option of its own, as in other games
+ * of the kind): on unless turned off. Reduced motion turns it off whatever this says.
+ */
+export function loadCameraShake(storage: Pick<Storage, "getItem"> | undefined): boolean {
+  try {
+    return storage?.getItem(SHAKE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export const saveCameraShake = (on: boolean, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, SHAKE_KEY, on ? "on" : "off");
+
+/** Sets the interface scale and the text size on the page (client.css, windows.css). */
+export function applyScales(
+  root: { style: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty"> },
+  uiScale: number,
+  textScale: number,
+): void {
+  if (uiScale === 1) root.style.removeProperty("--ui-zoom");
+  else root.style.setProperty("--ui-zoom", String(uiScale));
+  if (textScale === 1) root.style.removeProperty("--ui-text-scale");
+  else root.style.setProperty("--ui-text-scale", String(textScale));
+}

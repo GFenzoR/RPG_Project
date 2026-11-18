@@ -16,6 +16,20 @@ import type { HotbarFit } from "./layout.ts";
 
 /** Repaint interval of the cooldown shades, ms. */
 const COOLDOWN_REFRESH_MS = 100;
+/** How long after a use the slot keeps its flash in the DOM (it plays 150 ms), ms. */
+export const FLASH_MS = 400;
+
+/**
+ * docs/17 UI-9: whether the slot of `spellId` flashes at `now` (its spell was just used:
+ * its key or a click). The flash element plays once; it stays a little in the DOM.
+ */
+export function flashes(
+  cast: { spellId: string; at: number } | undefined,
+  spellId: string,
+  now: number,
+): boolean {
+  return cast !== undefined && cast.spellId === spellId && Math.abs(now - cast.at) < FLASH_MS;
+}
 /** Width of each slider arrow (CSS px; .hotbar .page in client.css): a touch target. */
 const ARROW_PX = 44;
 /** Room left free on each side of the bar (max-width: calc(100% - 1rem) in client.css). */
@@ -47,6 +61,7 @@ export function Hotbar(props: {
   const [measure, setMeasure] = useState<Measure | undefined>(undefined);
   const [ends, setEnds] = useState({ prev: false, next: false });
   const total = props.ui.hotkeys.length;
+  const cast = props.ui.cast;
   useEffect(() => {
     const timer = setInterval(() => setNow(performance.now()), COOLDOWN_REFRESH_MS);
     return () => clearInterval(timer);
@@ -193,6 +208,9 @@ export function Hotbar(props: {
                 <span class="key">{key}</span>
                 <span class="spell">{id ? name(id) : t("client.hotbar.empty")}</span>
                 {left > 0 && <span class="cd" style={{ height: `${Math.round(left * 100)}%` }} />}
+                {id && flashes(cast, id, now) && (
+                  <span class="flash" key={cast?.at} data-flash="" aria-hidden="true" />
+                )}
               </button>
             )}
           </li>

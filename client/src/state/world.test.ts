@@ -572,6 +572,23 @@ describe("conditions (T3.2)", () => {
     );
     expect(w.self?.speed).toBe(before * 2);
   });
+
+  it("notes when a heavy hit lands, for the camera shake (docs/17 UI-9)", () => {
+    const w = entered();
+    const stats = (health: number, at: number): void =>
+      w.apply(
+        { case: "playerStats", value: create(PlayerStatsSchema, { health, maxHealth: 200 }) },
+        at,
+      );
+    stats(200, 10); // the first stats: no hit
+    expect(w.heavyHitAt).toBeUndefined();
+    stats(190, 20); // 5 %: light
+    expect(w.heavyHitAt).toBeUndefined();
+    stats(160, 30); // 15 %: heavy
+    expect(w.heavyHitAt).toBe(30);
+    stats(200, 40); // a heal changes nothing
+    expect(w.heavyHitAt).toBe(30);
+  });
 });
 
 describe("presence check (T4.1)", () => {
