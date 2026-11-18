@@ -443,3 +443,6 @@ func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }
 func (w *World) DamageMonsterForTest(ctx *game.TickContext, m *Monster, p *Player, dmg int) {
 	w.damageMonster(ctx, m, p, dmg, ElementPhysical)
 }
+
+// QueueCapForTest is the capacity of p's step queue (it must not grow while a key is held).
+func (p *Player) QueueCapForTest() int { return cap(p.queue) }

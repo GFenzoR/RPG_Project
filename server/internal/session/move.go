@@ -155,6 +155,12 @@ func (w *World) walk(p *Player, d world.Direction, epoch uint32) {
 		w.reject(p, dirMsg(d))
 		return
 	}
+	if p.qhead > 0 {
+		// A held key may never let the queue empty: drop the steps taken (at most
+		// MaxQueuedSteps left to move) so it does not grow for as long as the key is held.
+		n := copy(p.queue, p.queue[p.qhead:])
+		p.queue, p.qhead = p.queue[:n], 0
+	}
 	p.queue = append(p.queue, d)
 	p.keyWalk = true
 }

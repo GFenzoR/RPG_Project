@@ -182,3 +182,23 @@ func TestTeleportStartsANewWalkEpoch(t *testing.T) {
 		t.Fatalf("the new epoch does not walk: at %v", p.Pos())
 	}
 }
+
+// A key held for a long walk never lets the queue empty (a step always waits): the queue
+// drops the steps taken instead of growing for as long as the key is held.
+func TestHeldKeyQueueDoesNotGrow(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 256, 8))
+	cl, p := h.join("Mira", at(1, 4))
+	cl.take()
+	h.input(cl, walkIn(E, 1))
+	h.input(cl, walkIn(E, 1))
+	for i := range 2000 {
+		if i%10 == 5 {
+			h.input(cl, walkIn(E, 1)) // one more per step: one always waits
+		}
+		h.sim.Step()
+		cl.batches = nil
+	}
+	if p.Pos().X < 150 || !p.Walking() || p.QueueCapForTest() > 8 {
+		t.Fatalf("at %v, walking %v, queue capacity %d", p.Pos(), p.Walking(), p.QueueCapForTest())
+	}
+}
