@@ -114,7 +114,15 @@ Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitido
   da su sha256.
 - **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no
   reclama la propiedad de lo generado. Estos archivos no son "Obra propia" (spritegen,
-  soundgen) ni de terceros: la página `/credits` todavía no los lista (pendiente, docs/14).
+  soundgen) ni de terceros: la página `/credits` los lista en "Hecho con IA" (cada fila
+  con sus sprites, su fecha y su archivo de prompt; `client/vite/credits.ts`).
+- **Los sprites de criaturas** (2026-11-18): una hoja por criatura, pedida con
+  `tools/gemini/gemini_web.py image` y cortada con `tools/gemini/import_art.py`. El archivo
+  de prompt da también la hoja que volvió (sha256) y el comando exacto que la cortó (frames,
+  espejados, escala), así se puede rehacer. El este de cada acción es el oeste espejado
+  (`mirror: true` en `assets/sprites.yaml`). Reemplazan a los sprites de Dungeon Crawl que
+  esas criaturas usaban (`wolf`, `zombie_rat`, `fire_crab`, `bat`, `jumping_spider`,
+  `giant_frog`, `thorn_hunter`), que siguen en `assets/vendor/dungeon-crawl/`.
 
 | Archivos | Herramienta | Fecha | Prompt | Notas |
 |---|---|---|---|---|
@@ -126,3 +134,10 @@ Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitido
 | `assets/sounds/music/gemini/volcan_2.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sounds/music/gemini/volcan_2.txt` | «Beneath the Obsidian Ridge» (título de Gemini): toma 2 del tema `volcan`, para la Isla Volcánica. Loop de 60 s de los 2:59 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
 | `assets/sounds/music/gemini/cave_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/cave_1.txt` | «Iron in the Deep» (título de Gemini): toma 1 del tema `cave`, para las minas y cuevas (pisos bajo el mar). Loop de 64 s de los 2:48 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
 | `assets/sounds/music/gemini/boss_forge_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/boss_forge_1.txt` | «Anvil of the Cursed Forge» (título de Gemini): toma 1 del tema `boss_forge`, para el guardián de la forja. Loop de 70 s de los 2:59 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sprites/creatures/wolf/*.png` (frames de `creatures/wolf`, el lobo) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/wolf.txt` | 64x64; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/bilge_rat/*.png` (frames de `creatures/bilge_rat`, la rata de sentina) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/bilge_rat.txt` | 32x32; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/tide_crab/*.png` (frames de `creatures/tide_crab`, el cangrejo de marea) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/tide_crab.txt` | 32x32; caminar, quieto, pinzar (al norte y a los lados) y morir |
+| `assets/sprites/creatures/gloom_bat/*.png` (frames de `creatures/gloom_bat`, el murciélago lóbrego) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/gloom_bat.txt` | 64x64; volar, quieto, morder (al sur y a los lados) y morir |
+| `assets/sprites/creatures/moss_spider/*.png` (frames de `creatures/moss_spider`, la araña de musgo) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/moss_spider.txt` | 64x64; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/mire_toad/*.png` (frames de `creatures/mire_toad`, el sapo de ciénaga) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/mire_toad.txt` | 64x64; saltar, quieto (al sur y a los lados), atacar a los lados y morir |
+| `assets/sprites/creatures/thornling/*.png` (frames de `creatures/thornling`, el espinoso) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/thornling.txt` | 64x64; caminar, quieto, azotar (al sur y a los lados) y morir |

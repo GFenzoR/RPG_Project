@@ -105,9 +105,11 @@ es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
    (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
    de LPC (`vendor/ulpc`).
 2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, de spritegen:
-   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`). spritepack arma los
-   clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como tengan
-   todas sin huecos.
+   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`, o las hojas de
+   Gemini de "Arte y música hechos con Gemini": `sprites/creatures/wolf/`). spritepack arma
+   los clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como
+   tengan todas sin huecos. Si no hay `sprites/<sprite>.png` ni entrada en `sprites`, el
+   nombre del sprite es un alias de su primer frame (quieto o caminar, hacia el sur).
 3. **Ninguno:** el sprite único se anima por código (ANI-5). Una entrada de `animations`
    sin `layers` le da pistas.
 
@@ -122,8 +124,8 @@ animations:
     layers:                                # "<sheet>" = la hoja de cada acción
       - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
-  creatures/gloom_bat: { flying: true }    # pistas para un sprite de un solo frame
-  creatures/wolf: { facing: left }
+  creatures/hollow_crawler: { facing: left }   # pistas para un sprite de un solo frame
+  creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { attack: 110, death: 200 } }   # frames de archivos
 ```
 - **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
   norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
@@ -140,13 +142,30 @@ animations:
   `shadow: baked | ellipse | none`. Con capas, la sombra por defecto es `ellipse` (la sombra
   de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
   `baked` (Dungeon Crawl y spritegen la pintan).
+- **Pistas de frames de archivos** (solo sin capas, y solo si el sprite tiene frames en
+  `sprites/<sprite>/`; si no, error):
+  - `mirror: true` (ANI-1): en cada acción con frames al oeste y ninguno al este (o al
+    revés), spritepack agrega los del otro lado espejados (`<sprite>/walk_e_<n>`, origen
+    `file`). Un lado que ya tiene frames nunca se pisa. Para criaturas sin nada en un solo
+    brazo; con `mirror` no se usa `facing` (los dos lados tienen frames);
+  - `anchor: br | bc` (por defecto `br`): `bc` para frames de 64x64 o que no llenan la
+    casilla: los pies van a `FEET_LINE`, medidos en los frames de caminar;
+  - `ms: { idle: 500, attack: 110, death: 200 }`: ms por frame de cada acción que se juega
+    por tiempo (sin esto, 500, 60 y 100; caminar va por distancia). Un `ms` de una acción
+    sin frames es error.
+- **Quieto y atacar solo hacia sus lados** (`OWN_FACINGS`, `packages/renderer/src/anim.ts`):
+  una criatura que mira hacia un lado sin frames de `idle` o de `attack` no toma los de
+  otro lado: usa el frame parado de esa dirección (el 0 de caminar) y, al atacar, la
+  embestida de ANI-5. Así un mordisco dibujado solo de perfil no hace girar al lobo cuando
+  muerde hacia el sur. Caminar y morir siguen tomando el sur (o la primera dirección).
 - **Alias:** el nombre del sprite (`outfits/sailor`) apunta a su primer frame quieto (para
   las referencias de `data/`, los íconos y la tienda del sitio), y los frames viejos de un
   atuendo (`outfits/sailor/s_0`, `e_2`, T0.5) a la pose quieta y al ciclo de caminar.
   Comparten el rectángulo del atlas: no ocupan lugar.
 - **Errores** (`make sprites`): una animación con capas no puede pisar un sprite que ya
   existe (archivo o entrada de `sprites`); una entrada con pistas tiene que nombrar uno que
-  exista; falta una hoja o es más chica que lo que piden la acción y sus filas.
+  exista; falta una hoja o es más chica que lo que piden la acción y sus filas; `mirror`,
+  `anchor` o `ms` con capas o sin frames de archivos.
 - **atlas.json** suma `anims`: por sprite, `w`, `h`, `anchor` (`bc` con capas: los pies
   sobre la casilla; `br`, el de siempre), `foot` (filas vacías bajo los pies), `top` (alto
   del dibujo), `shadow`, `facing`, `flying` y por acción `frames`, `ms`, `perTile` y `dirs`.
@@ -330,6 +349,44 @@ Arte, de la hoja al sprite:
    `import.json`.
 3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
+
+**Criaturas animadas de una sola hoja** (así se hicieron las siete del 2026-11-18: lobo,
+rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
+espinoso; prompts en `assets/prompts/sprites/creatures/`):
+- **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
+  `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña
+  cubierta de musgo que escupe savia) y pide **ocho filas, cada una una tira**: caminar
+  hacia la cámara, de espaldas y de perfil (4 frames cada una), quieto (2 de frente, 2 de
+  espaldas, 2 de perfil), atacar hacia la cámara, de espaldas y de perfil (3 cada una) y
+  morir de frente (3). "Vista desde arriba y adelante, la cámara a 45 grados" en las de
+  frente y espaldas. El perfil se pide **hacia la derecha** (Gemini lo dibuja así aunque se
+  pida a la izquierda) y se espeja al importar.
+- **Lo que Gemini hace bien y mal** (siete hojas): las filas de caminar y de quieto salen
+  casi siempre; los ataques de frente y de espaldas casi nunca (dibuja otro perfil o una
+  pose parada) y la cantidad de frames por fila varía. No se pide de nuevo por eso: un
+  ataque que falta en una dirección lo hace la embestida de ANI-5 ("Quieto y atacar solo
+  hacia sus lados", arriba), o se arma con el frame parado, el de golpe que sí haya y el
+  parado otra vez. Una hoja con frames que no son la misma criatura se pide otra vez (dos
+  veces como mucho) o la criatura se deja.
+- **El corte** no es una grilla pareja: `--cut rows` toma las filas tal como vinieron
+  (cada una en partes iguales si sus dibujos caen una en cada parte, así conserva el
+  registro con que se dibujaron; el que se sale de su parte no se corta y el vecino no se
+  cuela) y `--cut blobs` cada dibujo suelto, para una hoja en dos paneles o filas torcidas,
+  centrado en su masa (una cola o un látigo no corren el cuerpo). Las dos escriben
+  `_drawings.png`: la hoja con cada dibujo numerado, contra la que se escribe `--names`
+  (`-` descarta uno, `idle_s_0+attack_s_0` lo guarda dos veces). `--mirror` espeja los
+  frames de perfil, `--shared-colours` reduce los colores de todos juntos (de a uno, el
+  pelaje titilaba entre frames) y `--scale` fija la escala (fuente por píxel) cuando el
+  dibujo más ancho, una muerte tendida o unas alas abiertas, achicaría al resto.
+- **Tamaño** (ART-2, al lado de un personaje de LPC de ~46 px): rata y cangrejo en 32x32;
+  lobo, araña, sapo, murciélago y espinoso en 64x64 con `anchor: bc` (el lobo mide ~36 px
+  de largo, el espinoso ~40 de alto). Todos con `shadow: ellipse` y `mirror: true`.
+- **Revisar** con Read: `_drawings.png`, `_preview.png`, `anim_sheet.py
+  assets/sprites/creatures/<c>` y una fila de criaturas sobre pasto armada del atlas; en el
+  juego, los screenshots del E2E. Después, `credit.py build/gemini/import/<c>/import.json
+  --asset "assets/sprites/creatures/<c>/*.png" --prompt-file
+  assets/prompts/sprites/creatures/<c>.txt`: con el `import.json` (y no el sidecar) el
+  archivo de prompt suma la hoja que volvió (sha256) y el comando exacto que la cortó.
 
 Música, del MP4 al loop:
 1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
