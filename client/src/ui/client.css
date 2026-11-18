@@ -317,6 +317,7 @@ kbd {
 .presence,
 .load-failed,
 .options-panel,
+.credits-window,
 .hud-menu-body,
 .invitation,
 .death,
@@ -2839,6 +2840,99 @@ body.using-item canvas {
 p.credits-link {
   margin: 0;
   color: var(--muted);
+}
+button.credits-link {
+  align-self: flex-start;
+}
+/* The credits inside the desktop app (A1): over the whole window, scrolling inside. Fixed to
+   the screen: it takes the safe area's insets itself (T5.6). */
+.credits-overlay {
+  position: fixed;
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(9 8 7 / 0.7);
+}
+.credits-window {
+  width: min(48rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: normal;
+}
+.credits-window > .credits-close {
+  position: sticky;
+  top: 0;
+  float: right;
+}
+.credits-window .credits h1 {
+  margin-top: 0;
+  font-size: 1.3rem;
+}
+
+/* Credits (docs/17 A1): authors, licences and links of the third-party art and fonts. The
+   site's /credits page and, in the desktop app, the credits window of Options. */
+.credits h2 {
+  margin-top: 1.5rem;
+}
+.credits a,
+.credits code,
+.credits dd {
+  overflow-wrap: anywhere;
+}
+.credit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.credit-list > li {
+  border-top: 1px solid #2c323d;
+  padding-top: 0.6rem;
+}
+.credit-list h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+.credit-list dl {
+  margin: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+.credit-field {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.credit-field dt {
+  color: var(--muted);
+}
+.credit-field dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+}
+.credit-list .works {
+  margin: 0 0 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.credit-list.compact {
+  font-size: 0.9rem;
+}
+@media (max-width: 480px) {
+  .credit-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
 }
 
 /* ---- The item card (docs/17 UI-6): menu, tooltip and shop ---------------------------- */

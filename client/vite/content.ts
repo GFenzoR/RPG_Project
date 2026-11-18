@@ -9,6 +9,8 @@
 //   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
 //                        (highscore categories), the posts of data/news and the credits
 //                        of /credits (vite/credits.ts)
+//   virtual:rpg-credits  the same credits for the game page (docs/17 A1: the desktop app
+//                        shows them inside the app), imported only when they are opened
 //   /atlas/<file>        sprite atlas built from assets/ with tools/spritepack (dev server);
 //                        `vite build` emits the same files under atlas/
 //
@@ -41,6 +43,10 @@ import type {
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const SITE_ID = "virtual:rpg-site";
+const CREDITS_ID = "virtual:rpg-credits";
+const RESOLVED_CREDITS_ID = "\0" + CREDITS_ID;
+/** The site catalog keys the game page carries, for the credits it can show (A1). */
+export const GAME_SITE_KEYS = /^site\.credits\./;
 const RESOLVED_SITE_ID = "\0" + SITE_ID;
 /** i18n catalogs of the website (all keys). */
 const SITE_CATALOGS = [
@@ -125,6 +131,9 @@ export function loadClientContent(root: string): ClientContent {
         ...(desc !== "" ? { desc } : {}),
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
         ...(isObj(raw["door"]) ? { door: true as const } : {}),
+        ...(typeof raw["elevation"] === "number" && raw["elevation"] > 0
+          ? { elevation: raw["elevation"] }
+          : {}),
         ...cardFields(raw),
       };
     }
@@ -154,6 +163,11 @@ export function loadClientContent(root: string): ClientContent {
       const text = texts[shared];
       if (text !== undefined) texts[key] ??= text;
     }
+    // The credits' sentences (docs/17 A1): the desktop app shows them without the site.
+    const site = readYaml(join(root, "i18n", lang, "site.yaml"));
+    if (isObj(site))
+      for (const [k, v] of Object.entries(site))
+        if (typeof v === "string" && GAME_SITE_KEYS.test(k)) texts[k] = v;
     i18n[lang] = texts;
   }
   const monsters: Record<string, string> = {};
@@ -671,12 +685,14 @@ export function rpgContent(): Plugin {
     name: "rpg-client-content",
     resolveId(id) {
       if (id === VIRTUAL_ID) return RESOLVED_ID;
+      if (id === CREDITS_ID) return RESOLVED_CREDITS_ID;
       return id === SITE_ID ? RESOLVED_SITE_ID : undefined;
     },
     load(id) {
       // Read once per dev server start, like the game's content: restart to see a new post.
       if (id === RESOLVED_SITE_ID)
         return `export default ${JSON.stringify(loadSiteContent(root))};`;
+      if (id === RESOLVED_CREDITS_ID) return `export default ${JSON.stringify(loadCredits(root))};`;
       if (id !== RESOLVED_ID) return undefined;
       return `export default ${JSON.stringify(loadClientContent(root))};`;
     },
