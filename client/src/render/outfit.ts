@@ -25,10 +25,23 @@ export function outfitDir(d: Direction): OutfitDir {
   return dy < 0 ? "n" : "s";
 }
 
-/** How far through its step a creature is, 0..1, or undefined when it is not walking. */
+/**
+ * How far through its step a creature is, 0..1, or undefined when it is not walking: also
+ * before the step starts (a step drawn after the one before, or waiting on the playout).
+ */
 export function stepProgress(walk: Walk | undefined, now: number): number | undefined {
-  if (!walk || walk.duration <= 0 || now >= walk.start + walk.duration) return undefined;
-  return Math.max(0, (now - walk.start) / walk.duration);
+  if (!walk || walk.duration <= 0 || now < walk.start || now >= walk.start + walk.duration)
+    return undefined;
+  return (now - walk.start) / walk.duration;
+}
+
+/**
+ * How many sprite pixels a creature drawn with a single picture (a monster, an NPC) is
+ * lifted while walking: one in the middle half of each step, a small hop per tile, so it
+ * does not glide like a chess piece. 0 when standing.
+ */
+export function walkBob(progress: number | undefined): number {
+  return progress !== undefined && progress >= 0.25 && progress < 0.75 ? 1 : 0;
 }
 
 /**

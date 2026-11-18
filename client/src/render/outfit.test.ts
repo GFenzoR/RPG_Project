@@ -1,6 +1,6 @@
 import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
-import { outfitDir, outfitFrame, outfitKey, outfitKeys, stepProgress } from "./outfit.ts";
+import { outfitDir, outfitFrame, outfitKey, outfitKeys, stepProgress, walkBob } from "./outfit.ts";
 
 describe("outfit frames", () => {
   it("maps 8 directions to n/e/s/w, diagonals to their horizontal half", () => {
@@ -27,8 +27,18 @@ describe("outfit frames", () => {
     expect(stepProgress(walk, 1100)).toBe(0.25);
     expect(stepProgress(walk, 1399)).toBeCloseTo(0.9975);
     expect(stepProgress(walk, 1400)).toBeUndefined(); // the step is over
-    expect(stepProgress(walk, 900)).toBe(0); // clock skew: not before the start
+    // A step that has not started (drawn after the one before): standing until it does.
+    expect(stepProgress(walk, 900)).toBeUndefined();
     expect(stepProgress({ ...walk, duration: 0 }, 1000)).toBeUndefined();
+  });
+
+  it("lifts a single-picture creature a pixel in the middle of each step", () => {
+    expect(walkBob(undefined)).toBe(0);
+    expect(walkBob(0)).toBe(0);
+    expect(walkBob(0.24)).toBe(0);
+    expect(walkBob(0.25)).toBe(1);
+    expect(walkBob(0.74)).toBe(1);
+    expect(walkBob(0.75)).toBe(0);
   });
 
   it("stands on frame 0 and alternates the walking frames through a step", () => {

@@ -19,7 +19,12 @@ export function pixelScale(
 
 /**
  * Camera that centres a view of `view` tiles (the whole 15x11, or fewer and fractional when
- * zoomed in: render/zoom.ts) on a (fractional) tile, snapped to whole sprite pixels.
+ * zoomed in: render/zoom.ts) on a (fractional) tile, snapped to whole device pixels (a
+ * sprite pixel is `zoom` of them): the map scrolls one device pixel at a time, not one
+ * sprite pixel (a jolt of `zoom` pixels every few frames). Sprites stay whole: they are
+ * scaled by whole numbers and only moved by whole device pixels. The tile is snapped
+ * first (devicePixels) and the half view after, so whoever the camera follows, drawn with
+ * devicePixels, keeps the very same place on screen.
  */
 export function followCamera(
   x: number,
@@ -28,13 +33,18 @@ export function followCamera(
   tileSize: number,
   view: { width: number; height: number } = VIEW_TILES,
 ): Camera {
-  const snap = (v: number): number => Math.round(v * tileSize) / tileSize;
+  const unit = tileSize * zoom; // device pixels per tile
+  const half = (n: number): number => Math.round((0.5 - n / 2) * unit);
   return {
-    x: snap(x + 0.5 - view.width / 2),
-    y: snap(y + 0.5 - view.height / 2),
+    x: (Math.round(x * unit) + half(view.width)) / unit,
+    y: (Math.round(y * unit) + half(view.height)) / unit,
     zoom,
   };
 }
+
+/** A position in tiles as sprite pixels (what Pixi takes), snapped to whole device pixels. */
+export const devicePixels = (v: number, tileSize: number, zoom: number): number =>
+  Math.round(v * tileSize * zoom) / zoom;
 
 /**
  * Bottom margin of the canvas in a box `boxHeight` CSS px tall for a view `viewHeight`

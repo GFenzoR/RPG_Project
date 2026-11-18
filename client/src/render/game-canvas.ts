@@ -9,9 +9,10 @@
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, Skull } from "@rpg/protocol";
+import type { Direction } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
-import { VIEW_TILES, followCamera, mapLift } from "./viewport.ts";
+import { VIEW_TILES, devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
   pinchZoom,
@@ -40,6 +41,7 @@ import {
   DEFAULT_OUTFIT,
   outfitDir,
   outfitFrame,
+  walkBob,
   outfitKey,
   outfitKeys,
   stepProgress,
@@ -354,11 +356,8 @@ export async function createGameCanvas(
       ? atlas.texture(
           outfitKey(
             outfit.sprite,
-            outfitDir(c.dir),
-            outfitFrame(
-              world.walking(c, now) ? stepProgress(c.walk, now) : undefined,
-              outfit.frames,
-            ),
+            outfitDir(world.facing(c, now)),
+            outfitFrame(stepProgress(world.activeWalk(c, now), now), outfit.frames),
           ),
         )
       : undefined;
@@ -371,9 +370,9 @@ export async function createGameCanvas(
   };
 
   // Fallback body without a sprite: a coloured block with a mark on the side it faces.
-  const drawShape = (s: CreatureSprite, c: CreatureState): void => {
-    const [dx, dy] = delta(c.dir);
-    s.drawnDir = c.dir;
+  const drawShape = (s: CreatureSprite, c: CreatureState, dir: Direction): void => {
+    const [dx, dy] = delta(dir);
+    s.drawnDir = dir;
     if (s.body.children.some((ch) => ch instanceof Sprite)) return;
     s.shape
       .clear()
@@ -480,7 +479,8 @@ export async function createGameCanvas(
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
     s.drawnSkull = c.skull;
-    if (s.drawnDir !== c.dir) drawShape(s, c);
+    const facing = world.facing(c, now);
+    if (s.drawnDir !== facing) drawShape(s, c, facing);
     if (s.outfit) {
       const tex = outfitTexture(s.outfitDef, c, now);
       if (tex && s.outfit.texture !== tex) s.outfit.texture = tex;
@@ -521,14 +521,21 @@ export async function createGameCanvas(
       seen.add(c.id);
       const s = spriteOf(c, now);
       const p = world.drawPos(c, now);
-      s.body.position.set(Math.round(p.x * T), Math.round(p.y * T));
+      const w = world.activeWalk(c, now);
+      // Whole device pixels, like the camera (render/viewport.ts): smooth at any zoom.
+      // A single picture (no walking frames) hops a pixel through each step.
+      const bob = s.outfit ? 0 : walkBob(stepProgress(w, now));
+      s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y, T, scale) - bob);
       // Only the invisible player itself is sent its creature: see-through (T3.2).
       s.body.alpha = c.id === world.selfId && world.invisible ? 0.4 : 1;
       // While walking, draw on whichever end of the step comes later in row order, so the
       // creature is never hidden under the items of the tile it is entering or leaving.
-      const w = world.walking(c, now) ? c.walk : undefined;
-      const later =
-        w && (w.from.y > w.to.y || (w.from.y === w.to.y && w.from.x > w.to.x)) ? w.from : c.pos;
+      const step = w && now < w.start + w.duration ? w : undefined;
+      const later = !step
+        ? c.pos
+        : step.from.y > step.to.y || (step.from.y === step.to.y && step.from.x > step.to.x)
+          ? step.from
+          : step.to;
       view.placeEntity(s.body, later.x, later.y);
       const head = tileToScreen(cam, p.x + 0.5, p.y, T);
       const barTop = Math.round(head.y) - BAR_H * scale;
