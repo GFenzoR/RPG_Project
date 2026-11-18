@@ -13,6 +13,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -153,6 +154,35 @@ func TestTradeSwapsItemsAtomically(t *testing.T) {
 		t.Fatalf("trade economy entries = %d, want 4", trade)
 	}
 	h.sim.Step() // the ledgers reconcile every tick: a duplication fails the test
+}
+
+// Proposing a trade to an invisible player answers "not possible", near or far, as to a
+// player out of view: "too far" would tell where it stands (docs/02 "La vista"). The
+// invisible player gets no invitation.
+func TestTradeRequestHidesInvisiblePlayers(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(1, 2))
+	cb, b := h.trader("Beto", pos(4, 2)) // 3 tiles east: seen, not beside
+	if !hasKey(h.send(ca, tradeReq(b.ID(), nil, 0)), "trade.too_far") {
+		t.Fatal("a visible player 3 tiles away is not too far")
+	}
+	h.do(func(*game.TickContext) { h.w.SetInvisibleForTest(b, true) })
+	ca.take()
+	cb.take()
+	if a.Knows(b.ID()) {
+		t.Fatal("Ana still knows the invisible Beto")
+	}
+	if keys := systemKeys(h.send(ca, tradeReq(b.ID(), nil, 0))); keys["inventory.not_possible"] == 0 || keys["trade.too_far"] > 0 {
+		t.Fatalf("invisible 3 tiles away: %v", keys)
+	}
+	h.do(func(*game.TickContext) { h.w.Teleport(b, pos(2, 2)) }) // beside Ana
+	ca.take()
+	if keys := systemKeys(h.send(ca, tradeReq(b.ID(), nil, 0))); keys["inventory.not_possible"] == 0 {
+		t.Fatalf("invisible beside Ana: %v", keys)
+	}
+	if u := lastTrade(cb.take()); u != nil {
+		t.Fatalf("the invisible Beto got an invitation: %v", u)
+	}
 }
 
 func TestTradeCancellations(t *testing.T) {
