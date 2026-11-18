@@ -18,6 +18,7 @@ import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol"
 import {
   Atlas,
   DEATH_FADE_MS,
+  FEET_LINE,
   DEATH_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
@@ -44,13 +45,13 @@ import {
   tileToScreen,
   VANISH_MS,
 } from "@rpg/renderer";
-import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
+import type { AnimState, AtlasIcon, Camera, StepKind, TileArt } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
-import { ParticleLayer } from "./particles.ts";
+import { ParticleLayer, stepKindOf } from "./particles.ts";
 import type { ParticleView } from "./particles.ts";
 import {
   attackAction,
@@ -637,6 +638,20 @@ export async function createGameCanvas(
     }
     return st;
   };
+  // Steps (docs/17 MOV-7): what a step kicks up on each ground, by ground item, from the
+  // `steps` of its sprite in atlas.json `tiles` (assets/sprites.yaml): a puff of dust, a
+  // ripple. Particles of render/particles.ts, at the feet of the tile the step leaves.
+  const stepKinds = new Map<number, StepKind | null>();
+  const kickUp = (at: Pos): void => {
+    const ground = world.tile(at.x, at.y, at.z)?.[0];
+    if (ground === undefined) return;
+    let kind = stepKinds.get(ground);
+    if (kind === undefined) {
+      kind = stepKindOf(ground, content.items, atlas.index.tiles) ?? null;
+      stepKinds.set(ground, kind);
+    }
+    if (kind) particles.kick(kind, (at.x + 0.5) * T, (at.y + 1) * T - FEET_LINE);
+  };
   /** Draws a creature's body for `now` (its step, facing and what happened to it). */
   const animateBody = (
     figure: CreatureBody,
@@ -651,8 +666,11 @@ export async function createGameCanvas(
     animInput.walkStart = moving?.start;
     animInput.walkMs = moving?.duration ?? 0;
     animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
+    const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
+    // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
+    if (moving && st.walkStart !== stepBefore && !figure.clips.meta?.flying) kickUp(moving.from);
     return pose.done;
   };
 

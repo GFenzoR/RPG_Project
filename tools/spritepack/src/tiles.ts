@@ -8,13 +8,17 @@
 // spritepack finds them by name (own art or `sprites` entries) and writes what each sprite
 // has into atlas.json `tiles`; the `tiles` section of sprites.yaml adds what names cannot
 // say: the timing of an animation, a centred anchor, that a door joins the walls, the
-// share of the main look, the light it gives and the ambient particles it gives off. packages/renderer tile-art.ts reads it (same TileMeta shape).
+// share of the main look, the light it gives, the ambient particles it gives off and what a
+// step on it kicks up. packages/renderer tile-art.ts reads it (same TileMeta shape).
 
 export type TileSync = "world" | "tile" | "random";
 
 /** Ambient particles (docs/17 ART-7, A13): same list as PARTICLE_KINDS in tile-art.ts. */
 export const PARTICLE_KINDS = ["embers", "pollen", "spray", "dust"] as const;
 export type ParticleKind = (typeof PARTICLE_KINDS)[number];
+/** What a step on a ground kicks up (docs/17 MOV-7): same list as STEP_KINDS in tile-art.ts. */
+export const STEP_KINDS = ["dust", "ripple"] as const;
+export type StepKind = (typeof STEP_KINDS)[number];
 
 /** atlas.json `tiles[sprite]`: see TileMeta in packages/renderer tile-art.ts. */
 export interface TileMeta {
@@ -29,6 +33,7 @@ export interface TileMeta {
   shadow?: true;
   light?: number;
   particles?: ParticleKind;
+  steps?: StepKind;
 }
 
 /** One entry of the `tiles` section of assets/sprites.yaml. */
@@ -42,6 +47,8 @@ export interface TileEntry {
   light?: number;
   /** Ambient particles the client spawns around it. */
   particles?: ParticleKind;
+  /** A ground: what each step on it kicks up (a puff of dust, a ripple). */
+  steps?: StepKind;
 }
 
 /** A part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow (same as tile-art.ts). */
@@ -59,6 +66,7 @@ const ENTRY_KEYS = new Set([
   "weight",
   "light",
   "particles",
+  "steps",
   "notes",
 ]);
 /** Largest light radius, tiles. */
@@ -109,6 +117,11 @@ export function parseTileEntry(
     const k = PARTICLE_KINDS.find((p) => p === r["particles"]);
     if (k) entry.particles = k;
     else fail(`particles must be one of ${PARTICLE_KINDS.join(", ")}`);
+  }
+  if (r["steps"] !== undefined) {
+    const k = STEP_KINDS.find((p) => p === r["steps"]);
+    if (k) entry.steps = k;
+    else fail(`steps must be one of ${STEP_KINDS.join(", ")}`);
   }
   if (r["notes"] !== undefined && typeof r["notes"] !== "string") fail("notes must be a string");
   return entry;
@@ -187,6 +200,7 @@ export function tileMetas(
       if (entry.anchor) meta.anchor = entry.anchor;
       if (entry.light !== undefined) meta.light = entry.light;
       if (entry.particles) meta.particles = entry.particles;
+      if (entry.steps) meta.steps = entry.steps;
       if (entry.joins) {
         if (meta.wall) fail("a wall already joins its neighbours: drop joins_walls");
         else meta.joins = true;

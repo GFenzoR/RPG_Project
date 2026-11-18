@@ -9,6 +9,7 @@
 // - anchor: centred on the tile (trees) instead of the bottom-right corner;
 // - shadow: <sprite>/shadow, drawn on the shadow layer under the items;
 // - particles: ambient motes the client spawns around it (docs/17 ART-7, A13);
+// - steps: what a step on a ground kicks up, a puff of dust or a ripple (MOV-7);
 // - elevation (data/items, not the atlas): what stands on a table or a crate is drawn
 //   higher (ART-8), stackElevation below.
 // tools/spritepack writes what each sprite has into atlas.json `tiles` (TileMeta).
@@ -37,6 +38,8 @@ export interface TileMeta {
   light?: number;
   /** Ambient particles the client spawns around it (ART-7, A13). */
   particles?: ParticleKind;
+  /** A ground: what each step on it kicks up (MOV-7). */
+  steps?: StepKind;
 }
 
 export type TileSync = "world" | "tile" | "random";
@@ -48,6 +51,13 @@ export type TileSync = "world" | "tile" | "random";
  */
 export const PARTICLE_KINDS = ["embers", "pollen", "spray", "dust"] as const;
 export type ParticleKind = (typeof PARTICLE_KINDS)[number];
+
+/**
+ * What a step on a ground kicks up (docs/17 MOV-7, client only): a puff of dust on sand,
+ * dirt or ash, a ripple where the ground is wet.
+ */
+export const STEP_KINDS = ["dust", "ripple"] as const;
+export type StepKind = (typeof STEP_KINDS)[number];
 
 /** The textures (or images) of a sprite's tile art, resolved from its TileMeta. */
 export interface TileArt<T> {

@@ -6,8 +6,12 @@ import {
   MAX_STEP_MS,
   ParticleLayer,
   ParticleSim,
+  SIM_KINDS,
+  STEP_PARTICLES,
+  STEP_RESERVE,
   STYLES,
   seededRandom,
+  stepKindOf,
 } from "./particles.ts";
 
 const T = 32;
@@ -24,10 +28,10 @@ describe("seededRandom", () => {
 });
 
 describe("ParticleSim", () => {
-  it("spawns in the birth box of its tile and never more than MAX_PARTICLES", () => {
+  it("spawns in the birth box of its tile, leaving room for the steps' particles", () => {
     const sim = new ParticleSim(seededRandom(1), T);
     for (let i = 0; i < MAX_PARTICLES + 20; i++) sim.spawn("embers", 10, 20);
-    expect(sim.count).toBe(MAX_PARTICLES);
+    expect(sim.count).toBe(MAX_PARTICLES - STEP_RESERVE);
     const s = STYLES.embers;
     for (let i = 0; i < sim.count; i++) {
       expect(sim.x[i]).toBeGreaterThanOrEqual((10 + s.x0) * T);
@@ -80,6 +84,65 @@ describe("ParticleSim", () => {
     sim.step(life - 300 - 100);
     expect(sim.alpha(0)).toBeLessThan(0.5);
     expect(sim.color(0)).toBe(STYLES.embers.colors[2]);
+  });
+
+  it("kicks up a puff of dust at the feet that rises a little and is gone in ~300 ms", () => {
+    const sim = new ParticleSim(seededRandom(8), T);
+    expect(sim.kick("dust", 100, 200)).toBe(STEP_PARTICLES.dust);
+    expect(sim.count).toBe(STEP_PARTICLES.dust);
+    for (let i = 0; i < sim.count; i++) {
+      expect(SIM_KINDS[sim.kind[i] ?? 0]).toBe("puff");
+      expect(Math.abs((sim.x[i] ?? 0) - 100)).toBeLessThanOrEqual(4);
+      expect(sim.y[i]).toBeLessThanOrEqual(200);
+      expect(sim.y[i]).toBeGreaterThanOrEqual(198);
+      expect(sim.vy[i]).toBeLessThan(0); // it rises
+    }
+    sim.step(40);
+    // Seen at once: a step's puff is short, it fades in within a frame or two.
+    expect(sim.alpha(0)).toBeGreaterThan(0.8);
+    expect(sim.color(0)).toBe(STYLES.puff.colors[0]);
+    sim.step(STYLES.puff.lifeMs + STYLES.puff.lifeSpreadMs);
+    expect(sim.count).toBe(0);
+  });
+
+  it("spreads a ring of ripples flat round the feet on wet ground", () => {
+    const sim = new ParticleSim(seededRandom(9), T);
+    sim.kick("ripple", 50, 60);
+    expect(sim.count).toBe(STEP_PARTICLES.ripple);
+    const dist = (i: number): number => Math.hypot((sim.x[i] ?? 0) - 50, (sim.y[i] ?? 0) - 60);
+    const before = Array.from({ length: sim.count }, (_, i) => dist(i));
+    sim.step(200);
+    let left = 0;
+    let right = 0;
+    for (let i = 0; i < sim.count; i++) {
+      expect(SIM_KINDS[sim.kind[i] ?? 0]).toBe("ripple");
+      expect(dist(i)).toBeGreaterThan(before[i] ?? 0); // spreading out
+      expect(Math.abs((sim.y[i] ?? 0) - 60)).toBeLessThanOrEqual(3.5); // flat: an ellipse
+      if ((sim.x[i] ?? 0) < 50) left++;
+      else right++;
+    }
+    expect(left).toBeGreaterThan(1); // all round, not one way
+    expect(right).toBeGreaterThan(1);
+    sim.step(STYLES.ripple.lifeMs + STYLES.ripple.lifeSpreadMs);
+    expect(sim.count).toBe(0);
+  });
+
+  it("knows what a step kicks up from the ground's sprite in atlas.json tiles", () => {
+    const items = { 1: { sprite: "ground/sand" }, 2: { sprite: "ground/stone" } };
+    const tiles = { "ground/sand": { variants: 3, steps: "dust" as const }, "ground/stone": {} };
+    expect(stepKindOf(1, items, tiles)).toBe("dust");
+    expect(stepKindOf(2, items, tiles)).toBeUndefined();
+    expect(stepKindOf(3, items, tiles)).toBeUndefined();
+    expect(stepKindOf(1, items, undefined)).toBeUndefined();
+  });
+
+  it("kicks up steps in the room ambient particles leave, up to the pool", () => {
+    const sim = new ParticleSim(seededRandom(10), T);
+    for (let i = 0; i < MAX_PARTICLES; i++) sim.spawn("dust", 1, 1);
+    expect(sim.kick("dust", 0, 0)).toBe(STEP_PARTICLES.dust);
+    while (sim.count < MAX_PARTICLES - 3) sim.kick("ripple", 0, 0);
+    expect(sim.kick("ripple", 0, 0)).toBeLessThanOrEqual(3);
+    expect(sim.count).toBe(MAX_PARTICLES);
   });
 
   it("emits about rate × time from one tile", () => {
@@ -144,6 +207,19 @@ describe("ParticleLayer", () => {
     for (let t = 10_016; t < 14_000; t += 16) l.update(t, view, none, true, false);
     expect(l.sim.count).toBeGreaterThan(5);
     expect(Array.from(l.sim.kind.slice(0, l.sim.count)).every((k) => k === 3)).toBe(true);
+  });
+
+  it("kicks up steps unless motion is reduced", () => {
+    const l = new ParticleLayer(T, seededRandom(11));
+    const none = (): void => {};
+    l.update(0, view, none, false, false);
+    l.kick("dust", 64, 90);
+    expect(l.sim.count).toBe(STEP_PARTICLES.dust);
+    l.update(16, view, none, false, false);
+    expect(visible(l)).toBe(STEP_PARTICLES.dust);
+    l.update(32, view, none, false, true);
+    l.kick("ripple", 64, 90);
+    expect(l.sim.count).toBe(0);
   });
 
   it("shows nothing with reduced motion", () => {

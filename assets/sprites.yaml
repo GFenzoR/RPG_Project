@@ -457,7 +457,14 @@ animations:
 # tiles of the light it gives in caves), the share of the main look (weight, default 0.7)
 # and particles: the ambient motes the client spawns there (docs/17 ART-7, A13: embers,
 # pollen, spray, which a ground gives off only where it meets another ground, or dust).
+# steps: what each step on a ground kicks up (docs/17 MOV-7): dust, a small puff at the
+# feet, or ripple, a ring of drops spreading on wet ground.
 tiles:
+  ground/sand: { steps: dust }
+  ground/dirt: { steps: dust }
+  ground/ash: { steps: dust }
+  ground/cinder_path: { steps: dust }
+  ground/wet_sand: { steps: ripple }
   ground/water_shallow: { ms: 240, sync: world, particles: spray }
   ground/water_shoal: { ms: 240, sync: world }
   ground/lava: { ms: 280, sync: world, particles: embers }
