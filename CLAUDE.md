@@ -57,6 +57,8 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
 - Móvil: PWA instalable, Tauri Android/iOS, firmas y tiendas → `docs/15-movil.md`
 - Probar el juego a mano en la Isla de Pruebas (`make play`, hacerse staff, PvP) → `docs/16-probar-el-juego.md`
+- Dirección de arte, animación, sensación de movimiento, UI y de dónde sacar assets →
+  `docs/17-direccion-de-arte-y-ui.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md` (lotes)
 
 ## Principios de arquitectura

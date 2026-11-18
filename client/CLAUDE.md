@@ -32,6 +32,9 @@ client/
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
+- Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
+  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba (vista de 15x11,
+  click derecho = usar, layout) cambian cuando se haga cada tarea de su plan (§7).
 
 ## Notas de T1.5
 - Sin servidor propio de assets: el plugin de Vite empaqueta el contenido de `data/` e
