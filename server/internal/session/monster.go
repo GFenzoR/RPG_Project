@@ -336,10 +336,15 @@ func healthPercent(cur, maxHealth int) uint32 {
 
 // ---- spawns ----------------------------------------------------------------------
 
-// watched reports whether any player sees tile p.
+// watched reports whether a player stands within the classic window of tile p (the
+// rectangle of InSight, on the floors seen together with p's): no monster appears there.
+// Not the wide view (Sees): a player hunting one spawn would hold back the respawns of
+// its neighbours 12-20 tiles away and cut the world's capacity (docs/07). A monster may
+// appear in a player's view instead, beyond the classic window (docs/02 "Respawns").
 func (w *World) watched(p world.Pos) bool {
 	seen := false
-	w.eachObserver(nil, p, func(*Player) { seen = true })
+	x, y := int(p.X), int(p.Y)
+	w.eachInRect(x-SightHalfW, y-SightHalfH, x+SightHalfW, y+SightHalfH, p.Z, func(*Player) { seen = true })
 	return seen
 }
 

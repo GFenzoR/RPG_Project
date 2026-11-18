@@ -113,6 +113,41 @@ func TestMonsterSightStaysClassic(t *testing.T) {
 	}
 }
 
+// A respawn waits only while a player stands within the classic window of the spawn tile
+// (InSight's rectangle, on the floors seen together), not the wide view: a player hunting
+// one spawn does not hold back its neighbours 12-20 tiles away, so the world's capacity
+// (docs/07) stays as measured with 15x11 (docs/02 "Respawns").
+func TestRespawnWaitsOnlyForTheClassicWindow(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		dx, dy int
+		waits  bool
+	}{
+		{"east edge of the classic window", session.SightHalfW, 0, true},
+		{"south edge of the classic window", 0, session.SightHalfH, true},
+		{"one beyond, east", session.SightHalfW + 1, 0, false},
+		{"one beyond, south", 0, session.SightHalfH + 1, false},
+		{"12 tiles east, in the wide view", 12, 0, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			wolf := wolfDef()
+			wolf.Behavior.Aggressive = false
+			h := wideHarness(t, wolf, spawnAt("wolf", 40, 30, 0, 5))
+			_, ana := h.join("Ana", at(40+c.dx, 30+c.dy))
+			h.sim.Step()
+			w := onlyMonster(t, h)
+			if !ana.Knows(w.ID()) {
+				t.Fatalf("Ana at %v does not see the spawn tile", ana.Pos())
+			}
+			h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, w, ana, 1000) })
+			h.sim.RunFor(20 * time.Second) // well past respawn_seconds
+			if n := len(h.w.Monsters()); (n == 0) != c.waits {
+				t.Fatalf("Ana at %v: %d monsters 20 s after the kill, want the respawn to wait %v", ana.Pos(), n, c.waits)
+			}
+		})
+	}
+}
+
 // Every aimed range of the content stops at content.MaxRange (weapon.range, a spell's or
 // a condition's range), the classic window's half-height: a monster hit from as far as a
 // player may aim, straight up the window's short axis or across its corner, notices who
