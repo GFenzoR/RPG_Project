@@ -71,7 +71,9 @@ client/
   - **Click sobre la cabeza** (ART-2): `render/creature-hits.ts` (`DrawnBoxes`, puro y con
     tests) guarda la caja de cada criatura dibujada; el click derecho, Mayús+click, el
     toque y el toque largo prueban primero esas cajas (la de adelante gana, el propio
-    jugador no cuenta) y después la casilla.
+    jugador no cuenta) y después la casilla. Una cabeza que sube a una casilla con algo
+    propio que usar (puerta, item, escalera de mano: `GameCanvasOptions.ownUse` →
+    `Game.ownUse`) no cuenta: el click es de esa casilla, como dice el texto del cursor.
   - **Criaturas tapadas:** si otra dibujada después cubre `HIDDEN_SHARE` (un cuarto) o más
     de su caja, se dibuja otra vez encima del mapa, translúcida (`hiddenLayer`).
   - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`

@@ -22,7 +22,7 @@ import {
   itemPrimary,
   tileActions,
 } from "./input/actions.ts";
-import type { ActionKind, ItemFacts } from "./input/actions.ts";
+import type { ActionKind, ItemFacts, TileFacts } from "./input/actions.ts";
 import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
@@ -797,6 +797,28 @@ export class Game {
     return (c.houseDoors?.includes(doorKey(x, y, z)) ?? false) || usedBare(c.portals, x, y, z);
   }
 
+  /**
+   * What input/actions.ts knows of a map tile but its creature: `item` (its menuItem), a
+   * bare house door or rope spot, a ladder, whether anything is known there.
+   */
+  private groundFacts(x: number, y: number, z: number, item: ItemRef | undefined): TileFacts {
+    return {
+      item: item && this.itemFacts(item),
+      door: this.usesGround(x, y, z),
+      climb: climbable(this.opts.content.portals, x, y, z),
+      known: (this.world.tile(x, y, z)?.length ?? 0) > 0,
+    };
+  }
+
+  /**
+   * ART-2: whether a map tile has something of its own to use (a door, an item, a ladder),
+   * leaving its creature out: then a head rising into it from the tile below does not take
+   * its click (the canvas's creatureUnder), and the click does what the cursor's hint says.
+   */
+  private ownUse(x: number, y: number, z: number): boolean {
+    return defaultAction(this.groundFacts(x, y, z, menuItem(this.world, x, y, z))) !== undefined;
+  }
+
   /** Looks at the creature on a tile, or else at its top item (the ground counts). */
   private lookTileAt(x: number, y: number, z: number): void {
     const c = [...this.world.creatures.values()].find(
@@ -1078,11 +1100,8 @@ export class Game {
     const top = topItem(this.world, tx, ty, z, false);
     const item = menuItem(this.world, tx, ty, z);
     const actions = tileActions({
+      ...this.groundFacts(tx, ty, z, item),
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: item && this.itemFacts(item),
-      door: this.usesGround(tx, ty, z),
-      climb: climbable(this.opts.content.portals, tx, ty, z),
-      known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
     // The player itself on the tile: the menu is about what lies there.
@@ -1529,6 +1548,7 @@ export class Game {
       doorAt: (x, y, z) =>
         (this.opts.content.houseDoors?.includes(doorKey(x, y, z)) ?? false) ||
         (this.world.tile(x, y, z)?.some((id) => this.world.item(id)?.door === true) ?? false),
+      ownUse: (x, y, z) => this.ownUse(x, y, z),
       dragTile: (x, y, z) => {
         const ref = topItem(this.world, x, y, z, false);
         if (ref) this.startDrag(ref);
@@ -1704,11 +1724,8 @@ export class Game {
     const other = c && c.id !== this.world.selfId ? c : undefined;
     const item = menuItem(this.world, x, y, z);
     const kind = defaultAction({
+      ...this.groundFacts(x, y, z, item),
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: item && this.itemFacts(item),
-      door: this.usesGround(x, y, z),
-      climb: climbable(this.opts.content.portals, x, y, z),
-      known: (this.world.tile(x, y, z)?.length ?? 0) > 0,
     });
     if (kind === undefined) return "";
     const name = other ? creatureName(other, this.opts.t) : item ? this.itemTitle(item.itemId) : "";

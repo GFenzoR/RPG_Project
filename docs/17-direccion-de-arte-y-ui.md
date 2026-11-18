@@ -1246,7 +1246,10 @@ que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuente
   derecho, Mayús+click, el toque y el toque largo prueban primero esas cajas, de la
   dibujada última a la primera (la de adelante gana), y después la casilla. El propio
   jugador no entra: un click en la propia cabeza elige lo que está detrás. Caminar sigue
-  yendo a la casilla.
+  yendo a la casilla. Una casilla con algo propio que usar (una puerta, un item, una
+  escalera de mano: `Game.ownUse`) se queda con su click: ninguna cabeza que suba desde
+  la casilla de abajo lo toma, y el click hace lo que dice el texto junto al cursor (antes,
+  con otro jugador parado al sur de una puerta, el click derecho en la puerta lo atacaba).
 - **Criaturas tapadas por otra más alta (`07-combat`).** El jugador de LPC mide ~1,4
   casillas y tapaba al lobo de la casilla de arriba. El orden de dibujo se queda (el de
   adelante tapa al de atrás, como pide ART-3); lo que se suma es la silueta: si una

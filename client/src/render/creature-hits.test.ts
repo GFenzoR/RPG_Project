@@ -29,6 +29,26 @@ describe("DrawnBoxes.pick (ART-2)", () => {
     expect(b.pick(10.5, 9.2)?.id).toBe(1);
   });
 
+  it("leaves a head out of a tile with something of its own to use", () => {
+    // A tall player at (10, 10) south of a door at (10, 9): the door keeps its click.
+    const b = new DrawnBoxes();
+    b.add(2, 10, 10, 0.6, entityZIndex(10, 10));
+    const asked: string[] = [];
+    const door = (x: number, y: number): boolean => {
+      asked.push(`${x},${y}`);
+      return x === 10 && y === 9;
+    };
+    expect(b.pick(10.5, 9.7, undefined, door)).toBeUndefined(); // the head, over the door
+    expect(asked).toEqual(["10,9"]);
+    expect(b.pick(10.5, 10.5, undefined, door)?.id).toBe(2); // its own tile: never asked
+    expect(asked).toEqual(["10,9"]);
+    // Bare ground above: the head picks it, as without the question.
+    expect(b.pick(10.5, 9.7, undefined, () => false)?.id).toBe(2);
+    // The wolf on the door tile, behind the player's head: the wolf, not the head.
+    const s = scene();
+    expect(s.pick(10.5, 9.8, undefined, (x, y) => x === 10 && y === 9)?.id).toBe(1);
+  });
+
   it("follows the drawn position of a creature between two tiles", () => {
     const b = new DrawnBoxes();
     b.add(3, 6.5, 2, 0, entityZIndex(7, 2));

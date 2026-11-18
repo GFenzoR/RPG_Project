@@ -201,6 +201,11 @@ export interface GameCanvasOptions {
   controls?(): ControlsMode;
   /** The tile is a door (a map door item or a house door): right-clicked, it is used. */
   doorAt?(x: number, y: number, z: number): boolean;
+  /**
+   * ART-2: the tile has something of its own to use (a door, an item, a ladder): the head
+   * of a tall creature on the tile below, rising into it, does not take its click or tap.
+   */
+  ownUse?(x: number, y: number, z: number): boolean;
   /** The left button was pressed on a tile and dragged (move its top item). */
   dragTile(x: number, y: number, z: number, e: PointerEvent): void;
   /**
@@ -1095,11 +1100,14 @@ export async function createGameCanvas(
   };
   /**
    * ART-2: the creature drawn on top at canvas point p (its head may rise over the tile
-   * above its own), other than the own player.
+   * above its own, unless that tile has something of its own to use), other than the own
+   * player.
    */
   const creatureUnder = (p: { x: number; y: number }): CreatureState | undefined => {
     const w = screenToWorld(cam, p.x, p.y, T);
-    const box = drawnBoxes.pick(w.x, w.y, world.selfId);
+    const own = opts.ownUse;
+    const z = world.self?.pos.z ?? 0;
+    const box = drawnBoxes.pick(w.x, w.y, world.selfId, own && ((x, y) => own(x, y, z)));
     return box ? world.creatures.get(box.id) : undefined;
   };
   /** The tile a finger meant: the tile of the creature under it (its head counts), else its own. */

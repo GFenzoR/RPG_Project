@@ -1,7 +1,9 @@
 // Where each creature is drawn this frame (docs/17 ART-2), for two things a tile cannot tell:
 // - clicks: a humanoid of 64x64 rises over the tile above its own, and a click on its head
 //   must pick it. The boxes of the drawn creatures are tried first, from the last drawn (the
-//   one in front) to the first, and only then the tile under the pointer;
+//   one in front) to the first, and only then the tile under the pointer. A tile with
+//   something of its own to use (a door, an item, a ladder) keeps its click: no head
+//   rising into it from the tile below takes it (what the cursor's hint says, MOV-7);
 // - hidden creatures: a tall figure in front can cover most of a creature on the tile behind
 //   it (a wolf right north of a player). That one is drawn again over the map, see-through
 //   (a silhouette, like the own player behind a wall, ART-3), so it can still be seen.
@@ -56,13 +58,26 @@ export class DrawnBoxes {
 
   /**
    * The creature drawn on top at world point (px, py) (tiles, fractional), leaving out
-   * `skip` (the own player: clicking one's own head picks what is behind it).
+   * `skip` (the own player: clicking one's own head picks what is behind it) and, when
+   * `keeps` says the tile under the point has something of its own to use (a door, an
+   * item, a ladder), every head rising into it from the tile below: a player standing
+   * south of a door never takes the click meant for the door.
    */
-  pick(px: number, py: number, skip?: number): DrawnBox | undefined {
+  pick(
+    px: number,
+    py: number,
+    skip?: number,
+    keeps?: (tx: number, ty: number) => boolean,
+  ): DrawnBox | undefined {
     let best: DrawnBox | undefined;
+    let kept: boolean | undefined; // keeps of the tile under the point, asked once
     for (let i = 0; i < this.count; i++) {
       const b = this.list[i] as DrawnBox;
       if (b.id === skip || px < b.x || px >= b.x + 1 || py < b.top || py >= b.bottom) continue;
+      if (keeps && py < b.bottom - 1) {
+        kept ??= keeps(Math.floor(px), Math.floor(py));
+        if (kept) continue;
+      }
       if (!best || b.order > best.order) best = b;
     }
     return best;
