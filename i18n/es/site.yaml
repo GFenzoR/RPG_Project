@@ -310,7 +310,7 @@ site.credits.derived_intro: "Los personajes que Neque's Realm arma combinando y 
 site.credits.fonts: "Fuentes"
 site.credits.fonts_intro: "Se sirven recortadas a las letras que usa el juego, en woff2. Cada archivo conserva su aviso de copyright y su licencia."
 site.credits.ai: "Hecho con IA"
-site.credits.ai_intro: "Este arte lo dibujó Gemini, de Google, con la cuenta del dueño del juego, a partir de una descripción propia que no nombra otros juegos, artistas ni obras. Después se llevó a la grilla, la paleta y los valores del juego. El texto exacto de cada pedido está en el repositorio."
+site.credits.ai_intro: "Este arte y esta música los hizo Gemini, de Google, con la cuenta del dueño del juego, a partir de una descripción propia que no nombra otros juegos, artistas ni obras. Después el arte se llevó a la grilla, la paleta y los valores del juego, y la música a loops cortos. El texto exacto de cada pedido está en el repositorio."
 site.credits.tool: "Herramienta"
 site.credits.ai_tool: "Google Gemini (app web)"
 site.credits.date: "Fecha"
