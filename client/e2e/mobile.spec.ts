@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { psql } from "./psql.ts";
+import { openWindow } from "./windows.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -993,19 +994,22 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await expect(page.getByTestId("experience")).toBeVisible();
   await expect(page.getByTestId("game")).toHaveAttribute("data-layout", "desktop");
   await page.screenshot({ path: join(shots, "mobile-desktop-1280-long-name.png") });
-  // The header stays one line (the controls help is cut, not wrapped): before T5.6 it grew
-  // to 6 lines with a name like this and pushed the map down to 1x.
-  const header = await page.locator("header.hud").boundingBox();
-  expect(header?.height ?? 999).toBeLessThan(80);
+  // No header on desktop (docs/17 UI-4): the name and its experience sit between the
+  // orbs of the dock, cut with an ellipsis, and the map keeps its 2x (before T5.6 the
+  // header grew to 6 lines with a name like this and pushed the map down to 1x).
+  await expect(page.locator("header.hud")).toHaveCount(0);
+  const vitals = await page.locator(".vitals").boundingBox();
+  expect(vitals?.height ?? 999).toBeLessThan(160);
+  expect(await page.locator(".vname").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => window.__rpgClient?.scale())).toBe(2);
   // No touch pad on a PC with a mouse (the Options switch can still turn it on), and no
   // zoom buttons: a PC zooms with Ctrl+wheel.
   await expect(page.getByTestId("touch-pad")).toHaveCount(0);
   await expect(page.getByTestId("zoom-buttons")).toHaveCount(0);
 
-  // The side column: the chat keeps its place at the bottom and the rest scrolls above it,
-  // so the end of the inventory and of the appearance panel can be brought into view
-  // (the chat used to stay over them at 1280x800).
+  // The dock: the chat keeps its place at the bottom and the windows scroll above it, so
+  // the end of the inventory can be brought into view (the chat used to stay over it at
+  // 1280x800); the appearance window (toolbar, O) floats over the map.
   const uncovered = (testid: string): Promise<boolean> =>
     page.getByTestId(testid).evaluate((el) => {
       el.scrollIntoView({ block: "end" });
@@ -1014,6 +1018,7 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
       return hit !== null && el.contains(hit);
     });
   expect(await uncovered("capacity")).toBe(true);
+  await openWindow(page, "appearance");
   expect(await uncovered("appearance-panel")).toBe(true);
   const chat = await page.getByTestId("say").boundingBox();
   const side = await page.locator("#side-panel").boundingBox();

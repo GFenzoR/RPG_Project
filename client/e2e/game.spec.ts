@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { psql } from "./psql.ts";
+import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -303,7 +304,9 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
 
-  // Every swing trains fists (no weapon yet): the skills panel shows the progress.
+  // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
+  // progress.
+  await openWindow(page, "skills");
   const skills = page.getByTestId("skills-panel");
   await expect(skills.getByText("Puños")).toBeVisible();
   await expect
@@ -721,13 +724,11 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(log).toContainText(
     "Ves: cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
   );
-  // The log sits at the end of the scrolling side column on desktop: bring it into view
-  // so the screenshot shows the line read, then put the column back for the next shots.
-  await log.scrollIntoViewIfNeeded();
+  // The log is a tab of the chat box on desktop (docs/17 UI-10): show it for the
+  // screenshot, then go back to the chat for the next shots.
+  await page.locator('[data-chat-tab="log"]').click();
   await shot(page, "12b-puerto-temple-sign");
-  await page.locator(".side-scroll").evaluate((el) => {
-    el.scrollTop = 0;
-  });
+  await page.locator('[data-chat-tab="chat"]').click();
 
   // The priestess stands next to the temple: right click opens her dialog.
   const priest = await npc("puerto_priest");
@@ -1084,8 +1085,10 @@ test("chat on the local and global channels, then switch the language", async ({
   );
   await page.locator(".side").screenshot({ path: join(shots, "16-chat.png") });
 
-  // Switching the language translates every screen at once, the running game included.
-  await page.getByTestId("language").selectOption("en");
+  // Switching the language (the Options window of the toolbar) translates every screen at
+  // once, the running game included.
+  await openWindow(page, "options");
+  await page.getByTestId("options").getByTestId("language").selectOption("en");
   await expect(chat).toContainText(`${name} says: <b>hola</b> {name}`);
   await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
   await expect(page.getByRole("button", { name: "Leave game" })).toBeVisible();
@@ -1294,7 +1297,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   }
   expect(Date.now() - t0).toBeLessThan(10_000);
   await shot(page, "22-haste");
-  await page.locator(".hud").screenshot({ path: join(shots, "23-conditions-hud.png") });
+  await page.locator(".vitals").screenshot({ path: join(shots, "23-conditions-hud.png") });
   expect(errors).toEqual([]);
 });
 
@@ -1339,7 +1342,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const leadPage = await enter(lead.email);
   const matePage = await enter(mate.email);
 
-  // Both wake up at the temple: the mate is in the leader's battle list, with "+".
+  // Both wake up at the temple: the mate is in the leader's battle list, with "+". The
+  // party window (toolbar, P) docks under the battle list.
+  for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
   const invite = leadPage
@@ -1514,6 +1519,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
     await page.waitForTimeout(1800); // the recipe's time_ms
   }
   await expect(log).toContainText(/Has hecho [^{}]+\./);
+  await openWindow(page, "skills");
   await expect(page.getByTestId("skills-panel")).toContainText("Cocina");
   await shot(page, "17-crafting-done");
   await page.keyboard.press("Escape");
@@ -1793,12 +1799,12 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   expect(await history()).toContain("step");
   expect(await starts()).toBeGreaterThanOrEqual(3); // two loops and a step
 
-  // Options: lower the music, mute the effects.
-  await page.locator(".hud").getByTestId("options-button").click();
+  // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
+  await page.getByTestId("options-button").click();
   const options = page.getByTestId("options");
-  await expect(options.getByRole("heading").first()).toHaveText("Sonido");
+  await expect(options.locator("h3").first()).toHaveText("Sonido");
   // T5.6: the controls section follows with the on-screen pad switch (off with a mouse).
-  await expect(options.getByRole("heading").nth(1)).toHaveText("Controles");
+  await expect(options.locator("h3").nth(1)).toHaveText("Controles");
   await expect(options.getByTestId("touch-pad-toggle")).not.toBeChecked();
   await options.getByTestId("volume-music").fill("20");
   await options.getByTestId("mute-sfx").check();
@@ -1806,7 +1812,8 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(options.locator(".channel").nth(1).locator(".value")).toHaveText("20");
   await options.screenshot({ path: join(shots, "34-sound-options.png") });
   await shot(page, "35-sound-options-game");
-  // Muted effects spend no voice: a step is silent now.
+  // Muted effects spend no voice: a step is silent now. The window closes with its ×
+  // ("Cerrar Opciones").
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect(options).toHaveCount(0);
   const before = (await history()).length;
@@ -1816,7 +1823,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
   // have been dropped while the file loaded (see above); after the options clicks it is
   // cached, so one more button click plays.
-  await page.locator(".hud").getByTestId("options-button").click();
+  await page.getByTestId("options-button").click();
   await expect(options).toHaveCount(1);
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect.poll(history).toContain("click");
@@ -1829,13 +1836,13 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(page.getByTestId("volume-master")).toHaveValue("80");
   await shot(page, "36-sound-options-login");
 
-  // The panel moves from the corner to the game's header: it must show what is in use
-  // now, not what the page loaded with (no reload this time).
+  // The panel moves from the corner to the game's Options window: it must show what is in
+  // use now, not what the page loaded with (no reload this time).
   await page.getByTestId("mute-ambient").check();
   await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
-  await page.locator(".hud").getByTestId("options-button").click();
-  const hud = page.locator(".hud").getByTestId("options");
+  await page.getByTestId("options-button").click();
+  const hud = page.getByTestId("options");
   await expect(hud.getByTestId("mute-ambient")).toBeChecked();
   await expect(hud.getByTestId("volume-music")).toHaveValue("20");
   await expect(hud.getByTestId("mute-sfx")).toBeChecked();
@@ -1951,28 +1958,23 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     // At the desktop app's minimum width the shop reaches the top right corner: the panel
     // hides while it is open and comes back after.
     await page.setViewportSize({ width: 960, height: 700 });
-    // The header stays one line: the controls help folds into a button, which opens it
-    // over the map without pushing the map down.
-    const hud = page.locator("header.hud");
-    const help = page.getByTestId("controls-help");
-    await expect(hud.locator(".hint")).toBeHidden();
-    await expect(help.locator("summary")).toHaveText("Controles");
-    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
+    // No header on desktop (docs/17 UI-4): the controls help is the toolbar's "?" window,
+    // which floats over the map without moving it.
+    await expect(page.locator("header.hud")).toHaveCount(0);
     const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
-    await help.locator("summary").click();
+    await openWindow(page, "help");
+    const help = page.getByTestId("controls-help");
     await expect(help.locator("p")).toContainText("Camina con las flechas");
     await shot(page, "44-controls-help-960");
-    // The opened help wraps inside its box and the window (the header itself is nowrap).
+    // The help wraps inside its window, and the window stays inside the screen.
     const fits = await help
       .locator("p")
       .evaluate(
         (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
       );
     expect(fits).toBe(true);
-    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
     expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
-    await help.locator("summary").click();
-    await expect(help.locator("p")).toBeHidden();
+    await closeWindow(page, "help");
     let prov: { id: number; x: number; y: number } | undefined;
     await expect
       .poll(async () => {
@@ -2007,7 +2009,6 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await expect(page.getByTestId("shop")).toBeHidden();
     await expect(panel).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(hud.locator(".hint")).toBeVisible();
     await expect(help).toBeHidden();
 
     // Skipping ends it for good: the server confirms and the panel and highlight go away.
@@ -2061,7 +2062,8 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   const lead = await enter(founder.email);
   const mateP = await enter(mate.email);
 
-  // Found it from the panel.
+  // Found it from the guild window (the toolbar's G, docs/17 UI-7).
+  for (const page of [lead, mateP]) await openWindow(page, "guild");
   const panel = lead.getByTestId("guild-panel");
   await expect(panel).toContainText("No estás en un gremio.");
   await expect(panel).toContainText("Cuesta 2000 monedas de cobre y pide nivel 18.");
@@ -2071,7 +2073,8 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await expect(panel.locator("h2")).toContainText(guildName);
   await expect(panel.locator("h2")).toContainText("Líder");
 
-  // Invite the mate by name; the invitation shows over the mate's map.
+  // Invite the mate by name (the members tab); the invitation shows over the mate's map.
+  await panel.locator('[data-guild-tab="members"]').click();
   await panel.getByLabel("Nombre del personaje").fill(mate.name);
   await panel.getByRole("button", { name: "Invitar" }).click();
   await expect(lead.getByTestId("game-log")).toContainText(`Invitaste a ${mate.name} a tu gremio.`);
@@ -2084,10 +2087,14 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
 
   for (const page of [lead, mateP]) {
     const p = page.getByTestId("guild-panel");
+    await p.locator('[data-guild-tab="members"]').click();
     await expect(p.locator("li[data-member]")).toHaveCount(2);
     await expect(p).toContainText("Miembros (2 en línea de 2)");
   }
+  // Leaving and the message of the day are on the summary tab.
+  await mateP.getByTestId("guild-panel").locator('[data-guild-tab="summary"]').click();
   await expect(mateP.getByTestId("guild-leave")).toBeVisible();
+  await panel.locator('[data-guild-tab="summary"]').click();
   await panel.getByPlaceholder("Mensaje del día").fill("Cacería al amanecer");
   await panel.getByRole("button", { name: "Cambiar" }).click();
   await expect(mateP.getByTestId("guild-motd")).toHaveText("Cacería al amanecer");
@@ -2098,7 +2105,11 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await input.fill("hola gremio");
   await input.press("Enter");
   await expect(lead.getByTestId("chat-log")).toContainText(`[Gremio] ${mate.name}: hola gremio`);
-  await lead.locator(".side").screenshot({ path: join(shots, "46-guild-panel.png") });
+  await lead
+    .locator('.gwin[data-window="guild"]')
+    .screenshot({ path: join(shots, "46-guild-panel.png") });
+  // The guild window floats over the map: out of the way of the Shift+click below.
+  for (const page of [lead, mateP]) await closeWindow(page, "guild");
 
   // The founder looks at the mate (Shift+click on its tile) and sees the guild.
   const at = await self(mateP);
