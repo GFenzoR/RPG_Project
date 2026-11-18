@@ -205,6 +205,17 @@ test-gemini: ## Unit tests of tools/gemini (Python 3.10+ and Pillow; ffmpeg opti
 	@test -n "$(PYTHON)" || { echo "test-gemini: needs Python 3.10+ as python3 or python"; exit 1; }
 	$(PYTHON) -m unittest discover -s tools/gemini -p 'test_*.py' -t tools/gemini
 
+# The owner's picks of Gemini music (build/music-gemini/picks.json) into the game: converts
+# each pick into assets/sounds/music/gemini/, rewrites its lines of assets/sounds.yaml, the
+# prompt files, the CREDITS.md rows and assets/sounds/music/gemini.yaml, then checks the
+# size budget. A slot not picked yet plays its take 1 (provisional); "none" plays what it
+# played before Gemini. Swap a pick: edit picks.json and run this again (assets/README.md).
+.PHONY: music-gemini
+music-gemini: ## Put the owner's Gemini music picks in the game: make music-gemini [FROM=build/music-gemini] (Python 3.10+, ffmpeg)
+	@test -n "$(PYTHON)" || { echo "music-gemini: needs Python 3.10+ as python3 or python"; exit 1; }
+	$(PYTHON) tools/gemini/music_import.py $(if $(FROM),--from "$(FROM)")
+	node --experimental-strip-types tools/soundgen/src/cli.ts check
+
 # soundgen renders our own effects and music and encodes them with ffmpeg (libopus) into
 # assets/sounds/ (committed, so builds and CI never need ffmpeg). T3.7, assets/README.md.
 .PHONY: sounds
