@@ -19,7 +19,7 @@ import {
   tint,
 } from "../draw.ts";
 import type { Rng } from "../draw.ts";
-import { darken, lighten, mix, PALETTE } from "../palette.ts";
+import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
@@ -27,8 +27,15 @@ const { wood, darkWood, weatheredWood, iron, darkIron, rope, paper, redCloth, mo
 
 // ---- ground ------------------------------------------------------------------------------
 
+/**
+ * Floorboards: darker and duller than the furniture wood, so a room reads as a floor under
+ * what stands on it (docs/17 ART-6: grounds L* 20-50, low chroma).
+ */
+const floorWood = material("#6f5238", "#5b432e", "#483424", "#35261b");
+
 /** Horizontal planks, 8 px wide, one staggered butt joint per row. */
 function woodenFloor(img: Image, _rand: Rng, seed: number): void {
+  const wood = floorWood;
   const joints = [5, 21, 13, 29];
   eachInRect(0, 0, 32, 32, (x, y) => {
     const row = Math.floor(y / 8);
@@ -48,8 +55,8 @@ function woodenFloor(img: Image, _rand: Rng, seed: number): void {
     px(img, x, y, c);
   });
   // A couple of knots.
-  knot(img, 24, 3, wood);
-  knot(img, 9, 19, wood);
+  knot(img, 24, 3, floorWood);
+  knot(img, 9, 19, floorWood);
 }
 
 function knot(img: Image, x: number, y: number, m: Material): void {
