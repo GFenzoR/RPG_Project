@@ -446,3 +446,13 @@ func (w *World) DamageMonsterForTest(ctx *game.TickContext, m *Monster, p *Playe
 
 // QueueCapForTest is the capacity of p's step queue (it must not grow while a key is held).
 func (p *Player) QueueCapForTest() int { return cap(p.queue) }
+
+// FullViewForTest builds the MapArea of p's whole view as sendFullView does, without
+// sending it or changing what p's client knows (benchmarks, loop goroutine).
+func (w *World) FullViewForTest(p *Player) *pb.MapArea {
+	kept := p.known
+	p.known = nil
+	area := w.mapArea(p, int(p.pos.X)-ViewHalfW, int(p.pos.Y)-ViewHalfH, ViewW, ViewH)
+	p.known = kept
+	return area
+}
