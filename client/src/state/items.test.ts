@@ -62,6 +62,41 @@ const content: ClientContent = {
   i18n: {},
 };
 
+describe("the equipped backpack (docs/17 UI-5: under the figure)", () => {
+  it("is the window that answers a use of the backpack slot, while the backpack is worn", () => {
+    const w = new WorldState(content);
+    const apply = (m: Msg, now = 0): void => w.apply(m, now);
+    const wear = (itemId?: number): void =>
+      apply({
+        case: "inventory",
+        value: create(InventorySchema, {
+          slots: itemId ? [{ slot: EquipmentSlot.BACKPACK, item: { itemId } }] : [],
+        }),
+      });
+    const open = (containerId: number, now = 0): void =>
+      apply(
+        {
+          case: "containerOpen",
+          value: create(ContainerOpenSchema, { containerId, itemId: 48, capacity: 20 }),
+        },
+        now,
+      );
+    wear(48);
+    w.backpack.used(48, w.containers, 0);
+    open(3, 100);
+    expect(w.backpack.id).toBe(3);
+    wear(undefined); // dropped on the floor beside the player: a window of its own
+    expect(w.backpack.id).toBeUndefined();
+    expect(w.containers.map((c) => c.id)).toEqual([3]);
+    wear(48); // worn again: back under the figure
+    expect(w.backpack.id).toBe(3);
+    apply({ case: "containerClose", value: create(ContainerCloseSchema, { containerId: 3 }) });
+    expect(w.backpack.id).toBeUndefined();
+    open(4); // opened from the floor, no use of the slot: a window of its own
+    expect(w.backpack.id).toBeUndefined();
+  });
+});
+
 describe("inventory state", () => {
   it("keeps equipment, open containers and tile stack sizes", () => {
     const w = new WorldState(content);

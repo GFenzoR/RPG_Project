@@ -86,10 +86,13 @@ function OfferList(
   );
 }
 
-/** The tradeable items of the open containers, with their location for TradeOffer. */
+/**
+ * The tradeable items of the open containers (the equipped backpack under the figure
+ * first, docs/17 UI-5), with their location for TradeOffer.
+ */
 function offerable(ui: GameUi, content: ClientContent) {
   const out: { container: number; index: number; itemId: number; count: number }[] = [];
-  for (const c of ui.containers) {
+  for (const c of ui.backpack ? [ui.backpack, ...ui.containers] : ui.containers) {
     c.items.forEach((it, index) => {
       if (content.items[it.itemId]?.tradeable) {
         out.push({ container: c.id, index, itemId: it.itemId, count: it.count });
