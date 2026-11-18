@@ -28,7 +28,10 @@ Reglas que vienen con eso (detalle en `docs/17-direccion-de-arte-y-ui.md`, "SRC"
 `tools/spritepack` solo acepta un pack de `assets/vendor/<pack>/` si tiene una fila aquí
 con esa carpeta y un archivo `LICENSE` dentro. `make validate` exige lo mismo para los
 sonidos. Las fuentes siguen la misma regla (`assets/vendor/font-<familia>/`, con su
-`OFL.txt` copiado como `LICENSE.txt`). Procedimiento completo: `assets/README.md`.
+`OFL.txt` copiado como `LICENSE.txt`). En un pack con licencia por archivo (un
+`CREDITS.csv` en su carpeta), `make test` (spritepack, `src/licences.ts`) exige además una
+fila con una licencia aceptada para cada PNG: sin fila o solo con GPL, falla.
+Procedimiento completo: `assets/README.md`.
 
 | Pack / archivo | Autor | Licencia | Fuente (URL) | Carpeta | Atribución requerida |
 |---|---|---|---|---|---|
@@ -69,11 +72,19 @@ tiene. El cliente no usa los `.ttf` tal cual:
 ## Obras derivadas de terceros
 
 Son sprites que una herramienta propia arma a partir de archivos de `assets/vendor/` (capas
-de LPC compuestas en un personaje, recoloreadas). Llevan la licencia de su origen: lo que
-sale de un archivo CC-BY-SA sigue siendo CC-BY-SA. Los que arma `tools/spritepack` desde
-`assets/sprites.yaml` (`animations`) no se commitean como PNG: salen en el atlas generado,
-y su receta (capas y paletas) es la entrada de `sprites.yaml`.
+de LPC compuestas en un personaje, recoloreadas). Llevan la licencia de su origen, la de
+la capa más restrictiva: si todas las capas listan OGA-BY 3.0 en `CREDITS.csv`, se usan
+bajo esa y el sprite sale OGA-BY 3.0; con una sola capa que solo es CC-BY-SA (además de
+GPL, que no se usa), el sprite entero sigue siendo CC-BY-SA. Los que arma
+`tools/spritepack` desde `assets/sprites.yaml` (`animations`) no se commitean como PNG:
+salen en el atlas generado, y su receta (capas y paletas) es la entrada de `sprites.yaml`.
+
+Cada fila nombra sus sprites uno por uno, entre comillas invertidas: `make test`
+(spritepack, `src/licences.ts`) calcula la licencia de cada sprite desde las filas de
+`CREDITS.csv` de sus capas y falla si un sprite compuesto falta aquí o está con otra
+licencia. Un personaje nuevo de LPC va en la fila de su licencia.
 
 | Archivos | Sale de (pack y archivos de origen) | Licencia | Herramienta que los genera |
 |---|---|---|---|
-| Frames `<sprite>/<acción>_<dir>_<n>` del atlas de los atuendos `outfits/{citizen,sailor,ranger,noble}`, los monstruos `creatures/{wreck_looter,coffer_smuggler,obsidian_delver,drowned_miner}` y los NPCs `npcs/*` salvo `npcs/forge_echo` (caminar, quieto y, los que pelean, ataque y caída) | Capas de `assets/vendor/ulpc/spritesheets/` que nombra cada entrada de `animations` de `assets/sprites.yaml` (autores en `assets/vendor/ulpc/CREDITS.csv`). Recoloreadas con las paletas propias de `palettes` | CC-BY-SA 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
+| Frames `<sprite>/<acción>_<dir>_<n>` del atlas (caminar, quieto y, los que pelean, ataque y caída) de los atuendos `outfits/citizen`, `outfits/sailor`, `outfits/ranger` y `outfits/noble`, los monstruos `creatures/wreck_looter` y `creatures/coffer_smuggler` y los NPCs `npcs/merchant`, `npcs/priest_forest`, `npcs/sandbox_merchant` y `npcs/ferryman_volcanic` | Capas de `assets/vendor/ulpc/spritesheets/` que nombra cada entrada de `animations` de `assets/sprites.yaml` (autores en `assets/vendor/ulpc/CREDITS.csv`); todas listan OGA-BY 3.0 y se usan bajo esa. Recoloreadas con las paletas propias de `palettes` | OGA-BY 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
+| Frames `<sprite>/<acción>_<dir>_<n>` del atlas (los mismos) de los monstruos `creatures/obsidian_delver` y `creatures/drowned_miner` y los NPCs `npcs/sailor_old`, `npcs/armorer`, `npcs/priestess`, `npcs/miner_old`, `npcs/diver_old`, `npcs/druid_elder`, `npcs/tanner`, `npcs/ferryman`, `npcs/sandbox_trainer`, `npcs/sandbox_ferryman`, `npcs/forge_keeper`, `npcs/priest_volcanic` y `npcs/smith_volcanic` | Las mismas capas, más al menos una que solo es CC-BY-SA 3.0 (y GPL): la barba (`beards/beard/basic/`), el pelo largo (`hair/long/adult/`) o el despeinado (`hair/bedhead/adult/`). Recoloreadas con las paletas propias de `palettes` | CC-BY-SA 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |

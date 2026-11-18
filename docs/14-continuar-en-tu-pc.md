@@ -159,9 +159,13 @@ el punto 5:
     sombra de contacto de criaturas ya están.
   - **A12, assets de LPC** (SRC-4; lo primero, muros, pasto y agua; los humanoides ya
     están) y **A1**, la pantalla de créditos que piden CC-BY y CC-BY-SA.
-  - **Las herramientas no leen la licencia.** spritepack y `make validate` solo piden la
-    fila de `CREDITS.md` y el `LICENSE`. La política nueva (CC-BY-SA, OFL, licencia por
-    archivo) la hace cumplir la revisión, igual que antes. El texto de las reglas que
+  - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
+    la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
+    `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en
+    `CREDITS.csv` para cada PNG del pack y que "Obras derivadas de terceros" de
+    `CREDITS.md` dé a cada sprite compuesto la licencia de sus capas (OGA-BY 3.0, o
+    CC-BY-SA 3.0 si una capa solo es BY-SA: hoy 2 monstruos y 13 NPCs). El resto de la
+    política nueva (CC-BY-SA, OFL) la hace cumplir la revisión, igual que antes. El texto de las reglas que
     reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
     "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
   - Lo 👤 está en "Lo que es tuyo".

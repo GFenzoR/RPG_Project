@@ -256,7 +256,9 @@ LPC Revised. Repositorios y detalle en `docs/17-direccion-de-arte-y-ui.md` (SRC-
 5. Lo que una herramienta propia derive de esos archivos (capas compuestas, recoloreados)
    va en `assets/sprites/derived/<pack>/`, con una fila en "Obras derivadas de terceros"
    de `CREDITS.md`. Lleva la licencia del origen: un derivado de CC-BY-SA sigue siendo
-   CC-BY-SA.
+   CC-BY-SA. Los sprites que spritepack compone desde capas (`animations`) van nombrados uno
+   por uno en la fila de su licencia; `make test` la calcula desde `CREDITS.csv` (la capa más
+   restrictiva) y falla si no coincide (`tools/spritepack/src/licences.ts`).
 
 ## Fuentes (OFL)
 Las fuentes de la interfaz son OFL 1.1 y van auto-alojadas: la CSP de escritorio solo

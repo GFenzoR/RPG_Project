@@ -4,8 +4,15 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MAX_PNG_SIDE, MAX_TOTAL_PIXELS, buildAtlas, pngSize, writeAtlas } from "./build.ts";
 import { collectSpriteRefs } from "./content.ts";
-import { registeredPacks } from "./credits.ts";
+import {
+  derivedLicense,
+  fileLicenses,
+  parseCreditsCsv,
+  registeredPacks,
+  usedLicense,
+} from "./credits.ts";
 import { createImage, decodePng, encodePng, fillRect } from "./image.ts";
+import { licenceProblems } from "./licences.ts";
 import type { Image } from "./image.ts";
 import { MAX_PLACEHOLDER_SIDE, parseManifest } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
@@ -148,6 +155,107 @@ describe("credits", () => {
     const md =
       "| | | | | `assets/vendor/...` | |\n" + CREDITS_ROW("kenney_tiny") + "assets/vendor/prose\n";
     expect([...registeredPacks(md)]).toEqual(["kenney_tiny"]);
+  });
+
+  it("reads per-file licences from an LPC CREDITS.csv", () => {
+    const csv =
+      "filename,notes,authors,licenses,urls\r\n" +
+      '"hair/long/walk.png","a ""quoted"" note, with a comma" ,"A,B" ,"CC-BY-SA 3.0,GPL 3.0" ,"u"\r\n' +
+      '"body/male/walk.png","" ,"C" ,"OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0" ,"u"\r\n';
+    const rows = parseCreditsCsv(csv);
+    expect([...rows.keys()]).toEqual(["hair/long/walk.png", "body/male/walk.png"]);
+    expect(rows.get("hair/long/walk.png")).toEqual(["CC-BY-SA 3.0", "GPL 3.0"]);
+    // A path inside the pack matches the row named from its spritesheets/ folder.
+    expect(fileLicenses(rows, "spritesheets/body/male/walk.png")).toEqual([
+      "OGA-BY 3.0",
+      "CC-BY-SA 3.0",
+      "GPL 3.0",
+    ]);
+    expect(fileLicenses(rows, "spritesheets/body/female/walk.png")).toBeUndefined();
+  });
+
+  it("uses each file under its most permissive accepted licence, never GPL", () => {
+    expect(usedLicense(["CC-BY-SA 3.0", "GPL 3.0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(usedLicense(["CC-BY 3.0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(usedLicense(["CC-BY-SA 3.0", "GPL 3.0"])).toBe("CC-BY-SA 3.0");
+    expect(usedLicense(["CC0"])).toBe("CC0");
+    expect(usedLicense(["GPL 3.0", "GPL 2.0"])).toBeUndefined();
+    expect(usedLicense(["CC-BY-NC 3.0"])).toBeUndefined();
+    // One CC-BY-SA layer makes the composed frame CC-BY-SA.
+    expect(derivedLicense(["OGA-BY 3.0", "CC0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(derivedLicense(["OGA-BY 3.0", "CC-BY-SA 3.0"])).toBe("CC-BY-SA 3.0");
+    expect(derivedLicense([])).toBeUndefined();
+  });
+});
+
+describe("licence audit", () => {
+  const CSV = [
+    "filename,notes,authors,licenses,urls",
+    '"body/walk.png","" ,"A" ,"OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0" ,"u"',
+    '"beard/walk.png","" ,"B" ,"CC-BY-SA 3.0,GPL 3.0" ,"u"',
+    "",
+  ].join("\n");
+  const WALK =
+    "    actions: { walk: { sheet: walk, frame: [32, 32], rows: { s: 0 }, col: 0, count: 1 } }";
+  const ANIMS = [
+    "animations:",
+    "  npcs/plain:",
+    WALK,
+    "    layers: [{ file: vendor/lpc/spritesheets/body/<sheet>.png }]",
+    "  npcs/bearded:",
+    WALK,
+    "    layers:",
+    "      - { file: vendor/lpc/spritesheets/body/<sheet>.png }",
+    "      - { file: vendor/lpc/spritesheets/beard/<sheet>.png }",
+    "",
+  ].join("\n");
+  const credits = (...rows: string[]): string =>
+    [
+      "| Pack | ... |",
+      "|---|---|",
+      "| LPC | x | por archivo | u | `assets/vendor/lpc/` | Sí |",
+      "",
+      "## Obras derivadas de terceros",
+      "",
+      "| Archivos | Sale de | Licencia | Herramienta |",
+      "|---|---|---|---|",
+      ...rows,
+      "",
+      "## Otra",
+      "",
+    ].join("\n");
+  function lpcPack(): void {
+    put("assets/vendor/lpc/CREDITS.csv", CSV);
+    put("assets/vendor/lpc/LICENSE.txt", "per file");
+    put("assets/vendor/lpc/spritesheets/body/walk.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/spritesheets/beard/walk.png", encodePng(createImage(32, 32)));
+    put("assets/sprites.yaml", ANIMS);
+  }
+
+  it("accepts each sprite under the licence its layers give it", () => {
+    lpcPack();
+    put(
+      "assets/CREDITS.md",
+      credits(
+        "| `npcs/plain` | capas | OGA-BY 3.0 | spritepack |",
+        "| `npcs/bearded` | capas | **CC-BY-SA 3.0** | spritepack |",
+      ),
+    );
+    expect(licenceProblems(root)).toEqual([]);
+  });
+
+  it("refuses a blanket licence, a missing sprite and a GPL-only or unlisted file", () => {
+    lpcPack();
+    put("assets/CREDITS.md", credits("| `npcs/plain` | capas | CC-BY-SA 3.0 | spritepack |"));
+    put("assets/vendor/lpc/spritesheets/gpl/walk.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/spritesheets/stray.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/CREDITS.csv", CSV + '"gpl/walk.png","" ,"C" ,"GPL 3.0" ,"u"\n');
+    expect(licenceProblems(root)).toEqual([
+      "assets/vendor/lpc/spritesheets/gpl/walk.png: lists no accepted licence (GPL 3.0)",
+      "assets/vendor/lpc/spritesheets/stray.png: no row in its CREDITS.csv",
+      "npcs/plain: assets/CREDITS.md says CC-BY-SA 3.0, its layers make it OGA-BY 3.0",
+      'npcs/bearded: its frames come from vendor layers (CC-BY-SA 3.0); name it in "Obras derivadas de terceros" of assets/CREDITS.md',
+    ]);
   });
 });
 
@@ -327,6 +435,10 @@ describe("repository content", () => {
     const used = new Set(collectSpriteRefs(REPO).map((ref) => ref.sprite));
     expect(used.size).toBeGreaterThan(0);
     for (const sprite of used) expect(r.atlas?.index.sprites[sprite]).toBeDefined();
+  });
+
+  it("credits every vendor file and every derived sprite under the right licence", () => {
+    expect(licenceProblems(REPO)).toEqual([]);
   });
 });
 

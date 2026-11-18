@@ -2,7 +2,10 @@
 # dir in n|e|s|w, frame 0 = standing, 1..frames-1 = the walking steps. Since docs/17 (A12)
 # the four outfits are animated Liberated Pixel Cup characters (`animations` in
 # assets/sprites.yaml): those names are aliases of their idle and walk frames, and the client
-# plays the animation. Every player wears "citizen" until Outfit.look_id picks one
+# plays the animation. `frames` (at most 3) still counts those T0.5 names, not the animation:
+# 0 is the idle pose and 1 and 2 are two walk frames half a cycle apart (tools/spritepack,
+# legacyFrame). The full walk cycle (8 frames: the LPC sheet's 9 columns minus the standing
+# one) lives in the animation. Every player wears "citizen" until Outfit.look_id picks one
 # (docs/06-content-data.md).
 - id: citizen
   sprite: outfits/citizen
