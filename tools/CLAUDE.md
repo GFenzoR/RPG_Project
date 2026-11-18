@@ -69,6 +69,97 @@ con código 1 si algún bot no entra o se desconecta. `-profile human|mechanical
 el ritmo de los perfiles de `server/pkg/bot` (los mismos del test de la detección de bots):
 el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico no.
 
+## gemini (Python, solo desarrollo)
+`tools/gemini` maneja la app web de Gemini **en el Chrome del dueño** para pedir arte y
+música, y trae lo que devuelve a nuestra grilla, paleta y formato de audio. Es un port de
+las herramientas de Ants of Neque (el otro juego del dueño, misma cuenta), que ya están
+probadas: se queda en Python. Nunca es dependencia del juego, del servidor ni del cliente.
+Desde el 2026-11-17 el dueño permite usar lo generado con su Gemini (docs/17 SRC-5): el
+prompt describe contenido propio y **nunca nombra otro juego, artista ni obra**
+(`prompt_guard.py` lo frena), y lo que se usa va en `assets/CREDITS.md` ("Generado con IA")
+con un prompt commiteado (`credit.py`). Flujo completo en `assets/README.md`, "Arte y música
+hechos con Gemini".
+
+**El navegador es del dueño.** Las herramientas se conectan por CDP a un Chrome que el
+dueño abre él mismo:
+`chrome.exe --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%/chrome-gemini`
+(un perfil propio: Chrome 136 no abre el puerto en el perfil por defecto). **Nunca inician
+sesión, nunca leen ni copian cookies, nunca abren ni cierran ese Chrome**: abren una
+pestaña propia, cierran solo esa y se desconectan. Si no está abierto, se dice y se sigue
+con otra cosa.
+
+```
+pip install -r tools/gemini/requirements.txt       Pillow, Playwright (sin bajar navegador), imageio-ffmpeg
+python tools/gemini/gemini_web.py check [--list-modes]       solo lectura: ¿conectado, con sesión, en qué modo?
+python tools/gemini/gemini_web.py image "<prompt>" --name N [--ref a.png] [--out-dir DIR]
+python tools/gemini/music_web.py ask "<prompt>" --name N [--out-dir DIR]   |   fetch <url> --name N
+python tools/gemini/music_queue.py run|status [--slots a,b] [--takes 2] [--into DIR]
+python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide cada tema
+python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
+python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -18]
+python tools/gemini/anim_sheet.py <carpeta> --out hoja.png   hoja de contacto para revisar con Read
+python tools/gemini/credit.py <sidecar.json> --asset assets/...   prompt commiteado + fila de CREDITS
+make test-gemini                                     tests (Python 3.10+ y Pillow; ffmpeg opcional)
+```
+Las salidas van por defecto a `build/gemini/{art,music,import,convert}/` (no se
+commitean); todas aceptan otra carpeta. Ninguna escribe en `assets/`.
+
+**Lo que cambió en la web de Gemini (verificado el 2026-11-17):**
+- **Modos:** el menú ofrece "Ayuda todos los días 4 Hydrogen", "Código y análisis 4 Argon"
+  y "3.5 Flash-Lite" (más "Nivel de pensamiento": bajo, medio, alto). La música sale en
+  Hydrogen, con Argon de reserva. Los modos **no están fijos en el código**: `--modes` o
+  `GEMINI_MODES` dan la lista por preferencia (expresiones contra las etiquetas del menú;
+  por defecto `Hydrogen,Argon`, `page_rules.DEFAULT_MODES`). Un Lite nunca sirve: apaga las
+  herramientas de imagen, música y video.
+- **Herramientas:** "Crear música", "Crear imagen", "Crear video", "Canvas" y "Deep
+  Research", en "Cargas y herramientas", son `<gem-menu-item role=menuitemcheckbox>`, no
+  botones (`gemini_web.CLICK_TOOL_JS`).
+
+**Lo que se mantiene de Ants of Neque (cada regla costó pedidos reales):**
+- **Se detecta el medio, nunca se cree el texto:** la respuesta puede decir "solo genero
+  texto" con el tema justo debajo. El texto solo se lee para decir *por qué* no llegó nada
+  (`page_rules.classify`: `quota`, `masked`, `policy`, `error`, `nothing`).
+- **Un solo driver en el navegador** (`browser_lock.py`): un archivo en la carpeta temporal,
+  **el mismo que usa Ants of Neque**, porque el Chrome es uno solo para los dos proyectos.
+- **El compositor se vacía y se relee antes de cada pedido:** Gemini devuelve una pregunta
+  no enviada como borrador en el chat nuevo; si el compositor no queda con el prompt exacto,
+  el pedido termina `not_sent` sin apretar Enter.
+- **La cuota no se martilla:** una hora de reinicio dicha por la página o por el menú
+  ("El límite se restablece el 18 nov, 11:53 p.m.") va al sidecar (`reset`) y la cola duerme
+  hasta ahí (`--max-sleep` la limita); se pacea por la ventana medida (~7 temas por hora); un
+  `masked` (la respuesta de "soy un modelo de lenguaje") en un modo pasa al siguiente de la
+  lista; atascos y pedidos sin enviar tienen tope y enfriamiento. Una cola dormida sigue
+  entregando: si se rechaza lo que trae, hay que matar su proceso además de borrar los
+  archivos.
+- **Un sidecar JSON por salida** (`<nombre>.json`): prompt, referencias, modo, resultado,
+  segundos, conversación, respuesta, y para un tema su título, duración y sha256. Se escribe
+  también al fallar, y apenas el pedido sale, para poder hacer `fetch` si el driver muere.
+
+**Arte (`import_art.py`):** fondo magenta (por tono, con el borde rosado reparado) o el alfa
+de la hoja; grilla cortada en frames (avisa si otra grilla con los mismos frames corta
+menos dibujo; `--auto-grid` la toma); una caja común para todos los frames de una animación;
+escala por vecino más cercano a `--size` (32, o 64 para personas, ART-2) apoyado abajo y
+centrado; colores reducidos (`--colors`) y llevados a la paleta de spritegen (se lee de
+`tools/spritegen/src/palette.ts`) dentro de la banda de L* de ART-6 de `--layer` (`ground`
+20–50 con C* ≤ 35, `wall`/`object` 25–65, `creature`/`character` 10–85, `effect` 60–100),
+con los píxeles más oscuros que la banda como contorno (los contornos de spritegen, ART-5);
+alfa 0 o 255. Escribe los frames, `_preview.png` (revisar con Read) e `import.json`.
+
+**Música (`music_convert.py`):** MP4/AAC (o lo que lea ffmpeg) a Ogg Opus 48 kHz con el
+ffmpeg del PATH (el de `make sounds`) o el de `imageio-ffmpeg`: corta los fades, cierra el
+bucle con un crossfade de potencia constante de la cola sobre la cabeza, normaliza con **una
+sola ganancia** a -18 LUFS sin pasar -1,5 dBTP (medida con `loudnorm`; una ganancia que
+varía rompería la costura) y, como el códec puede escalonar una costura limpia, rota el
+bucle de a 97 ms hasta que la costura codificada sea ordinaria (`seam_turns` en el JSON).
+Primeros temas reales (2026-11-18): costura de 3,3 a 0,9 tras rotar, ~650 KB a 32 kbps
+estéreo (más que los 256 KB de docs/07 por archivo de música: decisión del dueño).
+
+**Tests:** `make test-gemini` (unittest; claves, cortes, escala, paleta y bandas, costura,
+crossfade, ganancia, lectura de respuestas y del menú, la regla del prompt, el candado, la
+cola contra un Gemini falso, y una conversión real si hay ffmpeg con libopus). No están en
+`make test` (para no exigir Python al resto); la CI los corre en el job `gemini` cuando
+cambia `tools/gemini/`.
+
 ## soundgen
 `tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de
 `assets/sounds/`. Es un sintetizador determinista en TS (`synth.ts`) con las recetas en

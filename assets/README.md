@@ -5,7 +5,8 @@
 | `sprites.yaml` | Manifiesto: de dónde salen los píxeles de cada sprite de `data/` | Sí |
 | `sprites/<ruta>.png` | Arte propio del proyecto (32x32 o múltiplos de 32) | Sí |
 | `vendor/<pack>/` | Packs de terceros tal como se bajaron, con su archivo `LICENSE` | Sí |
-| `CREDITS.md` | Registro de licencias de todo lo que hay en `vendor/` | Sí |
+| `CREDITS.md` | Registro de licencias de todo lo que hay en `vendor/`, y de lo generado con Gemini | Sí |
+| `prompts/<ruta>.txt` | El prompt exacto de cada asset hecho con el Gemini del dueño (ver abajo) | Sí |
 | `atlas/` | Salida de `make sprites` (`atlas.json`, `atlas-N.png/json`) | No (generado) |
 
 ## Sonido (T3.7)
@@ -251,6 +252,53 @@ Son mapas de píxeles hechos a mano, con un contorno casi negro por fuera. Cada 
 su propia silueta, para que se distinga también sin color. El canvas las dibuja junto al
 nombre a 1 píxel de pantalla por píxel del sprite (como el texto de 12 px), y la lista de
 batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de antes.
+
+## Arte y música hechos con Gemini (desde el 2026-11-17)
+Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta de Gemini
+(la app web, la misma que usa en Ants of Neque). Las herramientas están en `tools/gemini`
+(`tools/CLAUDE.md`, "gemini") y las reglas son estas:
+- **El prompt describe nuestro contenido**: qué es (un puerto al atardecer, un lobo que
+  trota hacia el sur) y cómo suena o se ve, nunca a qué se parece. **Nunca nombra otro
+  juego, artista, compositor ni obra**, ni pide "al estilo de" o "inspirado en". Las
+  herramientas se niegan a enviar un prompt así (`tools/gemini/prompt_guard.py`).
+- **Cada archivo que se usa queda registrado** en `CREDITS.md`, sección "Generado con
+  IA": los archivos, la herramienta (Gemini, app web de la cuenta del dueño, y el modo),
+  la fecha y un **archivo de prompt commiteado** en `assets/prompts/<ruta del asset sin
+  "assets/" ni extensión>.txt` con el prompt exacto (para los frames de una hoja, uno solo
+  con el nombre del sprite). `python tools/gemini/credit.py <sidecar.json> --asset <ruta>`
+  escribe ese archivo e imprime la fila.
+- **Se acredita a Gemini como herramienta** y no se presenta como hecho a mano (Google no
+  reclama la propiedad de lo generado, y su política pide no ocultar el origen). Un
+  archivo de Gemini no entra en las filas de "Obra propia" (que son de spritegen y
+  soundgen): si reemplaza uno de ellos, esa fila lo excluye.
+- **Nada llega a `assets/` sin que alguien lo mire o lo escuche.** Todo sale primero a
+  `build/gemini/` (no se commitea).
+
+Arte, de la hoja al sprite:
+1. `python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk_s [--ref hoja.png]`
+   deja `build/gemini/art/wolf_walk_s.png` y su `.json`. Al prompt se le suman las reglas
+   de la casa (`HOUSE_RULES`): fondo magenta plano, grilla pareja sin textos, 3/4 frontal,
+   luz desde arriba a la izquierda, contorno oscuro del color local, colores apagados.
+2. `python tools/gemini/import_art.py build/gemini/art/wolf_walk_s.png --grid 4x1 --size 32
+   --layer creature --prefix walk_s` deja en `build/gemini/import/wolf_walk_s/` los frames
+   en nuestra grilla (vecino más cercano), con la paleta de spritegen dentro de la banda
+   de ART-6 de su capa, el contorno oscuro y alfa 0 o 255, más `_preview.png` (mirarlo con
+   Read) e `import.json`.
+3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
+   (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
+
+Música, del MP4 al loop:
+1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
+   uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
+   con su `.json`.
+2. Se escuchan, y el elegido pasa por `python tools/gemini/music_convert.py
+   build/gemini/music/<tema>_<n>.mp4`: sin fades, cerrado en bucle con un crossfade de la
+   cola sobre la cabeza, a -18 LUFS y en Ogg Opus, con la costura medida después de
+   codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
+3. Se copia a `assets/sounds/music/`, se apunta en `sounds.yaml` y se corre `credit.py`.
+   **Ojo con el presupuesto:** un tema de Gemini de ~2:40 en Opus estéreo a 32 kbps pesa
+   ~650 KB, y `docs/07` (Audio) da 256 KB por archivo de música. Subirlo es decisión del
+   dueño, antes de mergear el primer tema.
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

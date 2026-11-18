@@ -6,6 +6,10 @@ Todo asset de terceros debe tener una entrada aquí antes de usarse en el juego.
 - Arte y sonido: CC0, CC-BY 3.0/4.0 y OGA-BY 3.0. Desde el 2026-11-17, por decisión del
   dueño, también **CC-BY-SA 3.0/4.0** (por ejemplo, Liberated Pixel Cup).
 - Fuentes: **SIL OFL 1.1** (desde el 2026-11-17).
+- Arte y música **generados con la cuenta de Gemini del dueño** (desde el 2026-11-17, por
+  decisión del dueño): van en "Generado con IA", al final, con su herramienta, su fecha y su
+  prompt commiteado. El prompt describe contenido propio y nunca nombra otro juego,
+  artista ni obra.
 
 **No** se aceptan: assets sin licencia clara, GPL como única licencia del archivo, "no
 comercial" (NC), "sin derivados" (ND), "solo uso personal", licencias de tienda que no dejan
@@ -94,3 +98,20 @@ licencia. Un personaje nuevo de LPC va en la fila de su licencia.
 |---|---|---|---|
 | Frames `<sprite>/<acción>_<dir>_<n>` del atlas (caminar, quieto y, los que pelean, ataque y caída) de los atuendos `outfits/citizen`, `outfits/sailor`, `outfits/ranger` y `outfits/noble`, los monstruos `creatures/wreck_looter` y `creatures/coffer_smuggler` y los NPCs `npcs/merchant`, `npcs/priest_forest`, `npcs/sandbox_merchant` y `npcs/ferryman_volcanic` | Capas de `assets/vendor/ulpc/spritesheets/` que nombra cada entrada de `animations` de `assets/sprites.yaml` (autores en `assets/vendor/ulpc/CREDITS.csv`); todas listan OGA-BY 3.0 y se usan bajo esa. Recoloreadas con las paletas propias de `palettes` | OGA-BY 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
 | Frames `<sprite>/<acción>_<dir>_<n>` del atlas (los mismos) de los monstruos `creatures/obsidian_delver` y `creatures/drowned_miner` y los NPCs `npcs/sailor_old`, `npcs/armorer`, `npcs/priestess`, `npcs/miner_old`, `npcs/diver_old`, `npcs/druid_elder`, `npcs/tanner`, `npcs/ferryman`, `npcs/sandbox_trainer`, `npcs/sandbox_ferryman`, `npcs/forge_keeper`, `npcs/priest_volcanic` y `npcs/smith_volcanic` | Las mismas capas, más al menos una que solo es CC-BY-SA 3.0 (y GPL): la barba (`beards/beard/basic/`), el pelo largo (`hair/long/adult/`) o el despeinado (`hair/bedhead/adult/`). Recoloreadas con las paletas propias de `palettes` | CC-BY-SA 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
+
+## Generado con IA
+
+Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitidos desde el
+2026-11-17 por decisión del dueño (`docs/17-direccion-de-arte-y-ui.md`, SRC-5). Reglas:
+- **El prompt describe nuestro contenido** y nunca nombra otro juego, artista, compositor
+  ni obra, ni pide imitarlos. `tools/gemini` se niega a enviar uno que lo haga.
+- **Cada fila lleva su prompt commiteado**: `assets/prompts/<ruta del asset sin "assets/"
+  ni extensión>.txt`, con el prompt exacto y su encabezado (herramienta, modo, fecha).
+  `python tools/gemini/credit.py <sidecar.json> --asset <ruta>` lo escribe e imprime la
+  fila de abajo.
+- **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no
+  reclama la propiedad de lo generado. Estos archivos no son "Obra propia" (spritegen,
+  soundgen) ni de terceros: la página `/credits` todavía no los lista (pendiente, docs/14).
+
+| Archivos | Herramienta | Fecha | Prompt | Notas |
+|---|---|---|---|---|

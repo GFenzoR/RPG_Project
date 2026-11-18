@@ -422,6 +422,32 @@ el punto 5:
   banner, el diálogo de un NPC y el menú; crafteo, mercado, casa e intercambio comparten
   la regla CSS del diálogo pero no tienen su propia medición. Falta verlo en un iPhone y
   un Android con muesca de verdad (el override de CDP solo existe en Chromium).
+- **Herramientas de Gemini (`tools/gemini`, rama `feat/gemini-tools`).** El arte y la
+  música hechos con la cuenta de Gemini del dueño están permitidos desde el 2026-11-17
+  (docs/17 SRC-5) y ya hay con qué pedirlos, importarlos y registrarlos (`tools/CLAUDE.md`,
+  "gemini"; `make test-gemini`, job `gemini` de la CI). El smoke de solo lectura
+  (`gemini_web.py check --list-modes`) vio el 2026-11-18 el Chrome del dueño con sesión, en
+  Hydrogen. Lo que falta:
+  - **Ningún asset de Gemini entró todavía al juego.** Los 14 temas que pidió la sesión
+    principal el 2026-11-17 (`build/music-gemini/` del repo principal, dos por lugar)
+    esperan que el dueño elija; los elegidos pasan por `music_convert.py`, `sounds.yaml` y
+    `credit.py`. La sección "Generado con IA" de `assets/CREDITS.md` está vacía.
+  - **Presupuesto de música:** un tema de Gemini (~2:40) pesa ~650 KB en Opus estéreo a
+    32 kbps y docs/07 da 256 KB por archivo de música (1,5 MB todo el audio). Hay que
+    decidir con el dueño: subir el tope (el audio no cuenta en la descarga inicial),
+    mono o menos kbps, o temas más cortos.
+  - **La página `/credits` no lista lo generado con IA** (`client/vite/credits.ts` solo lee
+    packs, fuentes y obras derivadas). Con el primer asset de Gemini, sumar una sección
+    que diga "Hecho con Gemini" y sus textos en `i18n/{es,en}/site.yaml`.
+  - **El pedido de imagen** (`gemini_web.py image`, eligiendo "Crear imagen" en el menú
+    nuevo) no se probó contra la página todavía: es un port del de Ants of Neque, que sí
+    funcionaba, y el primer pedido real es su prueba. Si "Crear imagen" pide controles
+    propios (como la música: duración, voces), hay que sumarlos como en `music_web.py`.
+  - **`import_art.py` sobre una hoja real** se probó con una de Ants of Neque (una palanca
+    en 5x2): con 8 a 10 colores antes de la paleta queda limpia; con 16 salía con ruido. Las
+    hojas que no son pixel art limpio (ilustración) quedan con algo de ruido: bajar
+    `--colors` o pedir "pixel art, flat shading" con más fuerza.
+
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace

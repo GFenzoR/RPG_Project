@@ -30,6 +30,8 @@ Decisiones del dueño del mismo día (ya están en `00-vision.md`, `CLAUDE.md` y
 - Los assets de terceros pueden ser también **CC-BY-SA** (por ejemplo, Liberated Pixel
   Cup), y las fuentes, **OFL**.
 - La vista llega **hasta 31x21 casillas**.
+- Se puede usar arte y música **generados con su cuenta de Gemini**, registrados en
+  `assets/CREDITS.md` con su prompt y sin nombrar otros juegos, artistas ni obras (SRC-5).
 - **La regla legal no cambia.** De Tibia copiamos mecánicas, y de Tibia y Diablo
   aprendemos estilo. Nunca copiamos sus sprites, nombres, mapas, textos ni fuentes. Nada de
   este doc se dibujó mirando un sprite concreto de esos juegos, y ninguna tarea que salga
@@ -956,7 +958,9 @@ sobre el mapa (no solo los importantes).
 ### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)
 - **Se aceptan:**
   - arte y sonido: CC0, CC-BY 3.0/4.0, OGA-BY 3.0 y **CC-BY-SA 3.0/4.0**;
-  - fuentes: **SIL OFL 1.1**.
+  - fuentes: **SIL OFL 1.1**;
+  - arte y música **generados con la cuenta de Gemini del dueño** (desde el 2026-11-17,
+    por decisión del dueño), con las reglas de SRC-5.
 - **Se rechazan:** solo GPL (o GPL como única licencia del archivo), "no comercial" (NC),
   "sin derivados" (ND), "uso personal", licencias de tienda que no dejan redistribuir (el
   repo es público), lo que no tiene licencia clara y todo lo que sale de otros juegos.
@@ -1045,6 +1049,33 @@ Se quedan:
 - los íconos de items de Dungeon Crawl, que se leen bien a 32x32;
 - los efectos propios (`effects/*`);
 - las marcas PvP.
+
+### SRC-5 Arte y música generados con IA (desde el 2026-11-17)
+El dueño permite, desde el 2026-11-17, arte y música hechos con **su** cuenta de Gemini (la
+app web; las herramientas, en `tools/gemini`, se manejan como en Ants of Neque, su otro
+juego). Las reglas:
+- **El prompt describe nuestro contenido** (qué es, qué ánimo tiene, qué instrumentos o
+  materiales) y **nunca nombra otro juego, artista, compositor ni obra**, ni pide "al estilo
+  de", "inspirado en" o "que suene como". La regla legal de arriba vale igual: de Tibia y
+  de los demás se aprende el estilo con palabras propias, nunca se pide copiarlos.
+  `tools/gemini/prompt_guard.py` frena los prompts que nombran o piden imitar.
+- **Registro:** cada archivo que se usa va en la sección "Generado con IA" de
+  `assets/CREDITS.md` con la herramienta (Gemini, app web, y el modo), la fecha y un
+  **archivo de prompt commiteado** (`assets/prompts/<ruta>.txt`, el prompt exacto). Lo arma
+  `tools/gemini/credit.py`.
+- **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no reclama
+  la propiedad de lo generado; su política pide no ocultar el origen.
+- **Pasa por nuestras reglas antes de entrar:** el arte, por `tools/gemini/import_art.py`
+  (fondo fuera, grilla en frames, escala por vecino más cercano a 32 o 64, paleta de
+  spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 y alfa 0 o
+  255); la música, por `tools/gemini/music_convert.py` (sin fades, bucle cerrado con
+  crossfade, -18 LUFS, Ogg Opus). Nada se commitea sin mirarlo o escucharlo.
+- **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
+  a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
+  (criaturas con anatomía, retratos, música con instrumentos).
+
+Cómo se usa, paso a paso: `assets/README.md`, "Arte y música hechos con Gemini", y
+`tools/CLAUDE.md`, "gemini".
 
 ## 7. Plan de implementación propuesto
 Cada tarea es un PR con sus tests y screenshots (CLAUDE.md, "Definición de terminado").
