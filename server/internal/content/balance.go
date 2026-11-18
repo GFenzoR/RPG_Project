@@ -578,6 +578,10 @@ type CombatMode struct {
 // Stances are the fight stances of balance.yaml, in protocol order (FightStance 1..3).
 var Stances = [...]string{"offensive", "balanced", "defensive"}
 
+// MaxQueuedSteps caps movement.max_queued_steps: a deeper queue would only let a client
+// run further ahead of what the server confirmed.
+const MaxQueuedSteps = 8
+
 // Movement holds the walking constants (docs/02-game-design.md, "Movimiento").
 type Movement struct {
 	// BaseStepMs is the step duration on 100 % terrain at speed 100:
@@ -585,6 +589,10 @@ type Movement struct {
 	BaseStepMs   int     `yaml:"base_step_ms"`
 	DiagonalCost float64 `yaml:"diagonal_cost"`
 	MaxPathTiles int     `yaml:"max_path_tiles"`
+	// MaxQueuedSteps is how many keyboard steps (Walk) may wait in a player's queue: the
+	// client predicts that many ahead so a held key walks without a stop between tiles,
+	// and one more resets the walk (docs/05 "Caminar").
+	MaxQueuedSteps int `yaml:"max_queued_steps"`
 }
 
 // Experience is the level curve: total XP for level n is a*n^3 + b*n^2 + c*n + d.
@@ -715,6 +723,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
+	}
+	if m.MaxQueuedSteps <= 0 || m.MaxQueuedSteps > MaxQueuedSteps {
+		return Balance{}, fmt.Errorf("movement.max_queued_steps must be in 1..%d", MaxQueuedSteps)
 	}
 	if err := b.Experience.check(); err != nil {
 		return Balance{}, err

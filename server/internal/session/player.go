@@ -49,6 +49,13 @@ type Player struct {
 	// dest is where a WalkPath ends; reroutes around creatures aim at it.
 	dest    world.Pos
 	hasDest bool
+	// keyWalk: the queue holds only keyboard steps (Walk), which a Walk queues after;
+	// a path or a chase step is dropped by the next Walk instead.
+	keyWalk bool
+	// walkEpoch numbers the resets of the walk (WalkRejected, FullMapView): a Walk of
+	// another epoch was sent before the client heard of the last one. Never 0 (a Walk
+	// with 0 skips the check).
+	walkEpoch uint32
 
 	// known is the sorted list of creature ids the client knows (has been sent).
 	known []uint32
@@ -298,7 +305,24 @@ func (p *Player) stopWalk() {
 	p.queue = p.queue[:0]
 	p.qhead = 0
 	p.hasDest = false
+	p.keyWalk = false
 }
+
+// queued is how many steps are left in the queue.
+func (p *Player) queued() int { return len(p.queue) - p.qhead }
+
+// resetWalk empties the queue and starts a new walk epoch: Walks still on their way
+// (sent before the client hears of the reset) are dropped when they arrive.
+func (p *Player) resetWalk() {
+	p.stopWalk()
+	p.walkEpoch++
+	if p.walkEpoch == 0 {
+		p.walkEpoch = 1
+	}
+}
+
+// WalkEpoch returns the current walk epoch (tests).
+func (p *Player) WalkEpoch() uint32 { return p.walkEpoch }
 
 func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// T5.4: no snapshot is taken while a house has unwritten item changes (an autosave
@@ -454,6 +478,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		dir:        world.South,
 		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
 		safe:       true, // T5.2: until the client says otherwise
+		walkEpoch:  1,
 	}
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {

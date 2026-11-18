@@ -219,7 +219,7 @@ func (w *World) sendFullView(p *Player) {
 	p.known = p.known[:0]
 	x0, y0 := int(p.pos.X)-ViewHalfW, int(p.pos.Y)-ViewHalfH
 	area := w.mapArea(p, x0, y0, ViewW, ViewH)
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FullMapView{FullMapView: &pb.FullMapView{Area: area}}})
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FullMapView{FullMapView: &pb.FullMapView{Area: area, WalkEpoch: p.walkEpoch}}})
 }
 
 // sendSlice sends p the rectangle (x0, y0, wd, ht) that just came into view.

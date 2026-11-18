@@ -143,9 +143,11 @@ message MapArea {
   repeated Creature creatures = 7;
 }
 
-// FullMapView is the whole visible area, sent on login and after a teleport.
+// FullMapView is the whole visible area, sent on login and after a teleport. walk_epoch
+// is the walk epoch from now on (see Walk): a teleport drops the step queue too.
 message FullMapView {
   MapArea area = 1;
+  uint32 walk_epoch = 2;
 }
 
 // MapSlice is the new row or column (on every visible floor) after a step.
@@ -620,10 +622,13 @@ message HouseUpdate {
 
 // ---- movement and connection ------------------------------------------------
 
-// WalkRejected tells the client its predicted step failed; it snaps back to pos.
+// WalkRejected tells the client its predicted steps failed; it snaps back to pos. The
+// server dropped its step queue and starts walk_epoch: Walks of an older epoch (sent
+// before the client heard of this) are dropped.
 message WalkRejected {
   Position pos = 1;
   Direction dir = 2;
+  uint32 walk_epoch = 3;
 }
 
 message Pong {

@@ -5,6 +5,7 @@ movement:
   base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
   diagonal_cost: 1.5
   max_path_tiles: 100
+  max_queued_steps: 4       # keyboard steps the client predicts and the server queues ahead
 
 experience:
   # Total XP for level n = a*n^3 + b*n^2 + c*n (+ d). Own curve, zero at level 1.

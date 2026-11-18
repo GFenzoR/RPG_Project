@@ -44,10 +44,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		if !ok {
 			return
 		}
-		// Keyboard walking: the new step replaces whatever was queued, and starts as soon
-		// as the current step ends (the server, not the client, decides the pace).
-		p.stopWalk()
-		p.queue = append(p.queue, d)
+		w.walk(p, d, m.Walk.GetWalkEpoch())
 	case *pb.ClientMessage_WalkPath:
 		w.walkPath(p, m.WalkPath.GetSteps())
 	case *pb.ClientMessage_StopWalk:
@@ -140,6 +137,28 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 	}
 }
 
+// walk queues one keyboard step (docs/05 "Caminar"). The client predicts a few steps
+// ahead and sends each one before the step it draws ends, so a held key walks with no
+// stop between tiles: the step waits here until the one before ends (the server, not the
+// client, decides the pace). It goes after the keyboard steps already queued; a path or a
+// chase step is dropped. A Walk of another epoch was sent before the client heard of the
+// last reset and was already forgotten there: it is dropped without an answer. A step
+// over max_queued_steps (more than an honest client predicts) resets the walk.
+func (w *World) walk(p *Player, d world.Direction, epoch uint32) {
+	if epoch != 0 && epoch != p.walkEpoch {
+		return
+	}
+	if !p.keyWalk {
+		p.stopWalk()
+	}
+	if p.queued() >= w.mv.MaxQueuedSteps {
+		w.reject(p, dirMsg(d))
+		return
+	}
+	p.queue = append(p.queue, d)
+	p.keyWalk = true
+}
+
 func (w *World) walkPath(p *Player, steps []pb.Direction) {
 	p.stopWalk()
 	if len(steps) == 0 {
@@ -153,13 +172,11 @@ func (w *World) walkPath(p *Player, steps []pb.Direction) {
 	for _, s := range steps {
 		d, ok := dirFromMsg(s)
 		if !ok {
-			p.stopWalk()
 			w.reject(p, pb.Direction_DIRECTION_UNSPECIFIED)
 			return
 		}
 		next, ok := dest.Step(d)
 		if !ok {
-			p.stopWalk()
 			w.reject(p, dirMsg(d))
 			return
 		}
@@ -169,12 +186,15 @@ func (w *World) walkPath(p *Player, steps []pb.Direction) {
 	p.dest, p.hasDest = dest, true
 }
 
-// reject tells the client its predicted walk failed and where the player really is. d
-// is the refused step, or UNSPECIFIED when the whole request was invalid.
+// reject empties the step queue, starts a new walk epoch and tells the client its
+// predicted walk failed and where the player really is. d is the refused step, or
+// UNSPECIFIED when the whole request was invalid.
 func (w *World) reject(p *Player, d pb.Direction) {
+	p.resetWalk()
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_WalkRejected{WalkRejected: &pb.WalkRejected{
-		Pos: posMsg(p.pos),
-		Dir: d,
+		Pos:       posMsg(p.pos),
+		Dir:       d,
+		WalkEpoch: p.walkEpoch,
 	}}})
 }
 
@@ -227,7 +247,6 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	d := p.queue[p.qhead]
 	to, ok := p.pos.Step(d)
 	if !ok || !w.m.Walkable(to) {
-		p.stopWalk()
 		w.reject(p, dirMsg(d))
 		return
 	}
@@ -236,7 +255,6 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 			return // out of pathfinding quota this tick: try again on the next one
 		}
 		if !p.hasDest || !w.reroute(p) {
-			p.stopWalk()
 			w.reject(p, dirMsg(d))
 			return
 		}
@@ -245,14 +263,12 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	}
 	if !w.mayEnter(p, to) {
 		// T5.4: a house door only lets its owner, guests and (if allowed) guild in.
-		p.stopWalk()
 		w.reject(p, dirMsg(d))
 		p.emit(systemMsg(msgHouseNoAccess))
 		return
 	}
 	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
 		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
-		p.stopWalk()
 		w.reject(p, dirMsg(d))
 		p.emit(systemMsg(msgPvPProtLocked))
 		return
@@ -264,7 +280,6 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	if pt != nil {
 		var refuse string
 		if dest, refuse = w.portalArrival(ctx, p, pt, to); refuse != "" {
-			p.stopWalk()
 			w.reject(p, dirMsg(d))
 			p.emit(systemMsg(refuse))
 			return
@@ -381,9 +396,10 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	w.relocate(p, to)
 }
 
-// relocate is Teleport for a player known to be in the world.
+// relocate is Teleport for a player known to be in the world. The walk starts a new
+// epoch (sent with the FullMapView): a Walk on its way was meant for the old place.
 func (w *World) relocate(p *Player, to world.Pos) {
-	p.stopWalk()
+	p.resetWalk()
 	w.disappearFromObservers(p)
 	w.unindex(p)
 	p.pos = to

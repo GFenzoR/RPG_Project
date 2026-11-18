@@ -1842,10 +1842,12 @@ func (x *MapArea) GetCreatures() []*Creature {
 	return nil
 }
 
-// FullMapView is the whole visible area, sent on login and after a teleport.
+// FullMapView is the whole visible area, sent on login and after a teleport. walk_epoch
+// is the walk epoch from now on (see Walk): a teleport drops the step queue too.
 type FullMapView struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Area          *MapArea               `protobuf:"bytes,1,opt,name=area,proto3" json:"area,omitempty"`
+	WalkEpoch     uint32                 `protobuf:"varint,2,opt,name=walk_epoch,json=walkEpoch,proto3" json:"walk_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1885,6 +1887,13 @@ func (x *FullMapView) GetArea() *MapArea {
 		return x.Area
 	}
 	return nil
+}
+
+func (x *FullMapView) GetWalkEpoch() uint32 {
+	if x != nil {
+		return x.WalkEpoch
+	}
+	return 0
 }
 
 // MapSlice is the new row or column (on every visible floor) after a step.
@@ -4920,11 +4929,14 @@ func (x *HouseUpdate) GetInside() bool {
 	return false
 }
 
-// WalkRejected tells the client its predicted step failed; it snaps back to pos.
+// WalkRejected tells the client its predicted steps failed; it snaps back to pos. The
+// server dropped its step queue and starts walk_epoch: Walks of an older epoch (sent
+// before the client heard of this) are dropped.
 type WalkRejected struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
 	Dir           Direction              `protobuf:"varint,2,opt,name=dir,proto3,enum=game.v1.Direction" json:"dir,omitempty"`
+	WalkEpoch     uint32                 `protobuf:"varint,3,opt,name=walk_epoch,json=walkEpoch,proto3" json:"walk_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4971,6 +4983,13 @@ func (x *WalkRejected) GetDir() Direction {
 		return x.Dir
 	}
 	return Direction_DIRECTION_UNSPECIFIED
+}
+
+func (x *WalkRejected) GetWalkEpoch() uint32 {
+	if x != nil {
+		return x.WalkEpoch
+	}
+	return 0
 }
 
 type Pong struct {
@@ -5928,9 +5947,11 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x06height\x18\x04 \x01(\rR\x06height\x12'\n" +
 	"\apalette\x18\x05 \x03(\v2\r.game.v1.TileR\apalette\x12)\n" +
 	"\x06floors\x18\x06 \x03(\v2\x11.game.v1.MapFloorR\x06floors\x12/\n" +
-	"\tcreatures\x18\a \x03(\v2\x11.game.v1.CreatureR\tcreatures\"3\n" +
+	"\tcreatures\x18\a \x03(\v2\x11.game.v1.CreatureR\tcreatures\"R\n" +
 	"\vFullMapView\x12$\n" +
-	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\"0\n" +
+	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\x12\x1d\n" +
+	"\n" +
+	"walk_epoch\x18\x02 \x01(\rR\twalkEpoch\"0\n" +
 	"\bMapSlice\x12$\n" +
 	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\"T\n" +
 	"\n" +
@@ -6183,10 +6204,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x05money\x18\x15 \x01(\x04R\x05money\x12\x1b\n" +
 	"\tread_only\x18\x16 \x01(\bR\breadOnly\x12\x16\n" +
 	"\x06access\x18\x17 \x01(\bR\x06access\x12\x16\n" +
-	"\x06inside\x18\x18 \x01(\bR\x06inside\"Y\n" +
+	"\x06inside\x18\x18 \x01(\bR\x06inside\"x\n" +
 	"\fWalkRejected\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12$\n" +
-	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"H\n" +
+	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\x12\x1d\n" +
+	"\n" +
+	"walk_epoch\x18\x03 \x01(\rR\twalkEpoch\"H\n" +
 	"\x04Pong\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x04R\n" +
 	"clientTime\x12\x1f\n" +

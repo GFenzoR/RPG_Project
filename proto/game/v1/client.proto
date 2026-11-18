@@ -59,8 +59,14 @@ message Hello {
   string locale = 3;
 }
 
+// Walk asks for one step in dir (docs/05 "Caminar"). It goes after the keyboard steps
+// already queued, at most movement.max_queued_steps of them (one more resets the walk
+// with WalkRejected), and drops a queued WalkPath. walk_epoch is the one of the last
+// WalkRejected or FullMapView the client got: a Walk of another epoch was sent before that
+// reset, and the server drops it without an answer. 0 skips the check.
 message Walk {
   Direction dir = 1;
+  uint32 walk_epoch = 2;
 }
 
 // WalkPath queues up to 100 steps (auto-walk after a click).

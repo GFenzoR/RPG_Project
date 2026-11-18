@@ -517,7 +517,8 @@ func New(cfg Config) (*World, error) {
 		return nil, errors.New("session: Config.Save is required")
 	}
 	mv := cfg.Balance.Movement
-	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength {
+	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength ||
+		mv.MaxQueuedSteps <= 0 || mv.MaxQueuedSteps > content.MaxQueuedSteps {
 		return nil, fmt.Errorf("session: invalid movement balance %+v", mv)
 	}
 	if len(cfg.Vocations) == 0 {

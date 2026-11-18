@@ -29,7 +29,7 @@
     "movement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["base_step_ms", "diagonal_cost", "max_path_tiles"],
+      "required": ["base_step_ms", "diagonal_cost", "max_path_tiles", "max_queued_steps"],
       "properties": {
         "base_step_ms": {
           "$ref": "common.schema.json#/$defs/positiveInt"
@@ -40,6 +40,12 @@
         },
         "max_path_tiles": {
           "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "max_queued_steps": {
+          "description": "Keyboard steps (Walk) the client predicts and the server queues ahead (docs/05 \"Caminar\").",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
         }
       }
     },
