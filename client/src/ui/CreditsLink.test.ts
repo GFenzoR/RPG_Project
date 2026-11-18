@@ -54,6 +54,7 @@ const credits: Credits = {
     },
   ],
   derived: [],
+  ai: [],
   fonts: [
     {
       family: "Cinzel",
