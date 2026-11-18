@@ -46,4 +46,17 @@ func TestAimedRangesStopAtMaxRange(t *testing.T) {
 			t.Errorf("condition range %d: accepted %v, want %v (%v)", rng, err == nil, ok, err)
 		}
 	}
+
+	// An area spell's radius too: it hits every monster within it, and one hit at
+	// radius 7 straight north would not notice the caster (session.InSight).
+	for radius, ok := range map[int]bool{1: true, MaxRange: true, MaxRange + 1: false} {
+		wave := Spell{ID: "wave", Group: SpellGroupAttack, Effect: SpellEffect{Damage: &SpellDamage{Element: "fire", Radius: radius}}}
+		if err := wave.check(); (err == nil) != ok {
+			t.Errorf("damage radius %d: accepted %v, want %v (%v)", radius, err == nil, ok, err)
+		}
+	}
+	bad := Spell{ID: "bad", Group: SpellGroupAttack, Effect: SpellEffect{Damage: &SpellDamage{Element: "fire", Range: 3, Radius: -1}}}
+	if bad.check() == nil {
+		t.Error("a negative radius with a range was accepted")
+	}
 }

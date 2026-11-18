@@ -714,6 +714,14 @@ describe("validator diagnostics", () => {
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
   });
 
+  // An area spell's radius too: a monster hit 7 tiles straight north would not notice.
+  it("caps an area spell's radius at the classic window's half-height", () => {
+    edit("data/spells.yaml", "{ element: earth, radius: 1,", "{ element: earth, radius: 7,");
+    expect(
+      messages(root).some((m) => m.startsWith("error data/spells.yaml:160:") && m.includes("<= 6")),
+    ).toBe(true);
+  });
+
   it("limits the number of different blessings to balance.yaml max_blessings", () => {
     edit("data/balance.yaml", "max_blessings: 5", "max_blessings: 4");
     expect(

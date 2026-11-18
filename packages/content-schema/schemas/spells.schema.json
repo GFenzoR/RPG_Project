@@ -59,7 +59,12 @@
             "required": ["element"],
             "properties": {
               "element": { "$ref": "common.schema.json#/$defs/element" },
-              "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+              "radius": {
+                "description": "Area spell (no range): hits every monster within radius tiles of the caster, at most 6 like an aimed range (server content.MaxRange): a monster it hits always notices the caster and fights back.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
               "range": { "$ref": "common.schema.json#/$defs/aimRange" },
               "condition": { "$ref": "common.schema.json#/$defs/conditionApply" }
             },
