@@ -8,10 +8,28 @@
 // cut to the map's box and still centred on the own creature.
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, Skull } from "@rpg/protocol";
+import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import type { Direction } from "@rpg/protocol";
-import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
-import type { AtlasIcon, Camera } from "@rpg/renderer";
+import {
+  Atlas,
+  MISSING_TEXTURE,
+  MapView,
+  animate,
+  newAnimInput,
+  newAnimState,
+  newPose,
+  screenToTile,
+  startAttack,
+  startDeath,
+  startHit,
+  tileToScreen,
+} from "@rpg/renderer";
+import type { AnimState, AtlasIcon, Camera } from "@rpg/renderer";
+import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
+import type { ClipSet } from "./clips.ts";
+import { CreatureBody } from "./creature-body.ts";
+import { isBlowEffect, meleeAttacker, pushOf } from "./creature-events.ts";
+import type { Fighter } from "./creature-events.ts";
 import { VIEW_TILES, devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
@@ -31,22 +49,14 @@ import { mapPress } from "../input/mouse.ts";
 import type { ControlsMode } from "../state/controls.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
-import { delta } from "../state/geometry.ts";
+import { delta, samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
 import { lookKey, playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
-import {
-  DEFAULT_OUTFIT,
-  outfitDir,
-  outfitFrame,
-  walkBob,
-  outfitKey,
-  outfitKeys,
-  stepProgress,
-} from "./outfit.ts";
+import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
 import type { CreatureState, WorldState } from "../state/world.ts";
 
@@ -187,10 +197,11 @@ interface CreatureSprite {
   /** The PvP mark left of the name (T5.2): its sprite, or shapes without one (drawSkull). */
   skull: Container;
   drawnSkull: Skull;
-  /** A player's outfit sprite (T0.5); its texture follows the facing and the step. */
-  outfit: Sprite | undefined;
-  /** The outfit drawn (T5.7: the equipped outfit cosmetic, else citizen). */
-  outfitDef: OutfitDef | undefined;
+  /**
+   * The animated body (docs/17 ANI): a monster's or NPC's sprite, or a player's outfit
+   * (T0.5; T5.7: the equipped outfit cosmetic, else citizen). Undefined = the coloured block.
+   */
+  figure: CreatureBody | undefined;
   /** lookKey of the cosmetics the sprites were built with (T5.7): a change rebuilds them. */
   drawnLook: string;
   bar: Graphics;
@@ -322,16 +333,43 @@ export async function createGameCanvas(
           ? COLORS.npc
           : COLORS.player;
   const nameOf = (c: CreatureState): string => creatureName(c, t);
+  // Clip sets (render/clips.ts), built once per sprite: its frames by action and facing
+  // when atlas.json animates it, else its single texture (moved procedurally).
+  const clipCache = new Map<string, ClipSet<Texture> | null>();
+  const lookup = (key: string): Texture | undefined => atlas.texture(key);
+  const cachedClips = (
+    key: string,
+    build: () => ClipSet<Texture> | undefined,
+  ): ClipSet<Texture> | undefined => {
+    let clips = clipCache.get(key);
+    if (clips === undefined) {
+      clips = build() ?? null;
+      clipCache.set(key, clips);
+    }
+    return clips ?? undefined;
+  };
   // Monsters and NPCs: their atlas sprite (data/monsters, data/npcs), when there is one.
-  const creatureTexture = (c: CreatureState): Texture | undefined => {
+  const creatureClips = (c: CreatureState): ClipSet<Texture> | undefined => {
     const path =
       c.kind === CreatureKind.MONSTER
         ? content.monsterSprites[c.contentId]
         : c.kind === CreatureKind.NPC
           ? content.npcSprites?.[c.contentId]
           : undefined;
-    return path ? atlas.texture(path) : undefined;
+    return path ? cachedClips(path, () => spriteClips(path, atlas.index.anims, lookup)) : undefined;
   };
+  /** An outfit animated in atlas.json (docs/17 ANI-6), not T0.5 frames. */
+  const animatedOutfit = (o: OutfitDef): boolean =>
+    Object.keys(atlas.index.anims?.[o.sprite]?.actions ?? {}).length > 0;
+  const outfitClips = (o: OutfitDef): ClipSet<Texture> | undefined =>
+    cachedClips(`outfit:${o.id}`, () => {
+      if (animatedOutfit(o)) return spriteClips(o.sprite, atlas.index.anims, lookup);
+      const first = atlas.texture(`${o.sprite}/s_0`);
+      return legacyOutfitClips(o.sprite, o.frames, lookup, {
+        w: first?.width ?? T,
+        h: first?.height ?? T,
+      });
+    });
   // PvP marks (T5.2): their sprite when the atlas has real art for it (render/marks.ts).
   const markPath = (mark: Skull): string | undefined => {
     const path = markSprite(mark);
@@ -348,10 +386,12 @@ export async function createGameCanvas(
   const outfitReady = (o: OutfitDef): boolean => {
     let ready = readyOutfits.get(o.id);
     if (ready === undefined) {
-      ready = outfitKeys(o).every((k) => {
-        const origin = atlas.index.sprites[k]?.origin;
-        return atlas.has(k) && origin !== "auto" && origin !== "placeholder";
-      });
+      ready =
+        animatedOutfit(o) ||
+        outfitKeys(o).every((k) => {
+          const origin = atlas.index.sprites[k]?.origin;
+          return atlas.has(k) && origin !== "auto" && origin !== "placeholder";
+        });
       readyOutfits.set(o.id, ready);
     }
     return ready;
@@ -359,33 +399,84 @@ export async function createGameCanvas(
   const citizen = content.outfits?.find((o) => o.id === DEFAULT_OUTFIT);
   const drawableOutfit = (o: OutfitDef | undefined): OutfitDef | undefined =>
     o && outfitReady(o) ? o : citizen && outfitReady(citizen) ? citizen : undefined;
-  const outfitTexture = (
-    outfit: OutfitDef | undefined,
+
+  // Animation (packages/renderer anim.ts): one state per creature, kept while it is in
+  // view (a cosmetic change rebuilds the sprites, not the state), and one input and pose
+  // reused for every creature, so a frame allocates nothing for it (docs/07).
+  const animStates = new Map<number, AnimState>();
+  const animInput = newAnimInput();
+  const pose = newPose();
+  const stateOf = (id: number, now: number): AnimState => {
+    let st = animStates.get(id);
+    if (!st) {
+      st = newAnimState(id, now);
+      animStates.set(id, st);
+    }
+    return st;
+  };
+  /** Draws a creature's body for `now` (its step, facing and what happened to it). */
+  const animateBody = (
+    figure: CreatureBody,
+    st: AnimState,
     c: CreatureState,
     now: number,
-  ): Texture | undefined =>
-    outfit
-      ? atlas.texture(
-          outfitKey(
-            outfit.sprite,
-            outfitDir(world.facing(c, now)),
-            outfitFrame(stepProgress(world.activeWalk(c, now), now), outfit.frames),
-          ),
-        )
-      : undefined;
-  // Sprites bigger than a tile extend up and left from its bottom-right corner, as in
-  // MapView.
-  const bodySprite = (tex: Texture): Sprite => {
-    const sp = new Sprite({ texture: tex, anchor: 1 });
-    sp.position.set(T, T);
-    return sp;
+  ): boolean => {
+    const w = world.activeWalk(c, now);
+    const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
+    animInput.now = now;
+    animInput.dir = outfitDir(world.facing(c, now));
+    animInput.walkStart = moving?.start;
+    animInput.walkMs = moving?.duration ?? 0;
+    animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
+    animate(st, figure.clips.meta, animInput, pose);
+    figure.draw(pose, dirIndex(animInput.dir));
+    return pose.done;
+  };
+
+  // Who attacks and who gets hit (render/creature-events.ts): the effects, projectiles and
+  // damage numbers that arrived since the last frame start lunges, flashes and pushes.
+  let seenEvents = Number.NEGATIVE_INFINITY;
+  const fighters = (): Iterable<Fighter> => world.creatures.values();
+  const react = (now: number): void => {
+    let newest = seenEvents;
+    const z = world.self?.pos.z;
+    for (const p of world.projectiles) {
+      if (p.start <= seenEvents) continue;
+      newest = Math.max(newest, p.start);
+      const shooter = p.from.z === z ? world.creatureAt(p.from.x, p.from.y, p.from.z) : undefined;
+      if (shooter) startAttack(stateOf(shooter.id, now), now, p.to.x - p.from.x, p.to.y - p.from.y);
+    }
+    for (const e of world.effects) {
+      if (e.start <= seenEvents || !isBlowEffect(e.effectId)) continue;
+      newest = Math.max(newest, e.start);
+      // A projectile that landed there in the same batch already animated its shooter.
+      if (world.projectiles.some((p) => p.start === e.start && samePos(p.to, e.pos))) continue;
+      const victim = e.pos.z === z ? world.creatureAt(e.pos.x, e.pos.y, e.pos.z) : undefined;
+      const by = victim && meleeAttacker(victim, fighters(), world.selfId, world.target);
+      if (victim && by)
+        startAttack(stateOf(by.id, now), now, victim.pos.x - by.pos.x, victim.pos.y - by.pos.y);
+    }
+    for (const f of world.floatingTexts) {
+      if (f.start <= seenEvents) continue;
+      newest = Math.max(newest, f.start);
+      if (f.kind !== FloatingTextKind.DAMAGE || f.pos.z !== z) continue;
+      const victim = world.creatureAt(f.pos.x, f.pos.y, f.pos.z);
+      if (!victim) continue;
+      const shot = world.projectiles.find((p) => p.start === f.start && samePos(p.to, f.pos));
+      const by = shot
+        ? world.creatureAt(shot.from.x, shot.from.y, shot.from.z)
+        : meleeAttacker(victim, fighters(), world.selfId, world.target);
+      const [dx, dy] = pushOf(victim, by);
+      startHit(stateOf(victim.id, now), now, dx, dy);
+    }
+    seenEvents = newest;
   };
 
   // Fallback body without a sprite: a coloured block with a mark on the side it faces.
   const drawShape = (s: CreatureSprite, c: CreatureState, dir: Direction): void => {
     const [dx, dy] = delta(dir);
     s.drawnDir = dir;
-    if (s.body.children.some((ch) => ch instanceof Sprite)) return;
+    if (s.figure) return;
     s.shape
       .clear()
       .rect(8, 5, 16, 24)
@@ -414,6 +505,8 @@ export async function createGameCanvas(
   };
 
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
+    // A creature that died in view and is back (a player's respawn) ends its fall at once.
+    if (ghosts.has(c.id)) dropGhost(c.id);
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
     const lk = isPlayer ? lookKey(c.cosmetics) : "";
@@ -428,13 +521,10 @@ export async function createGameCanvas(
       const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
-      const tex = creatureTexture(c);
-      if (tex) body.addChild(bodySprite(tex));
       const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
-      const outfitTex = outfitTexture(outfitDef, c, now);
-      const outfitSprite = outfitTex ? bodySprite(outfitTex) : undefined;
-      if (outfitSprite && look) outfitSprite.tint = look.tint;
-      if (outfitSprite) body.addChild(outfitSprite);
+      const clips = outfitDef ? outfitClips(outfitDef) : creatureClips(c);
+      const figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
+      if (figure) body.addChild(figure.root);
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
       labels.addChild(bar);
@@ -474,8 +564,7 @@ export async function createGameCanvas(
         guild,
         skull,
         drawnSkull: Skull.UNSPECIFIED,
-        outfit: outfitSprite,
-        outfitDef,
+        figure,
         drawnLook: lk,
         bar,
         drawnDir: -1,
@@ -493,26 +582,74 @@ export async function createGameCanvas(
     s.drawnSkull = c.skull;
     const facing = world.facing(c, now);
     if (s.drawnDir !== facing) drawShape(s, c, facing);
-    if (s.outfit) {
-      const tex = outfitTexture(s.outfitDef, c, now);
-      if (tex && s.outfit.texture !== tex) s.outfit.texture = tex;
-    }
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;
     if (s.drawnTarget !== targeted) drawFrame(s, targeted);
     return s;
   };
 
+  const dropLabels = (s: CreatureSprite): void => {
+    s.label.destroy();
+    s.guild.destroy();
+    s.skull.destroy();
+    s.bar.destroy();
+  };
   const dropSprite = (id: number): void => {
     const s = sprites.get(id);
     if (!s) return;
     view.removeEntity(s.body);
     s.body.destroy({ children: true });
-    s.label.destroy();
-    s.guild.destroy();
-    s.skull.destroy();
-    s.bar.destroy();
+    dropLabels(s);
     sprites.delete(id);
+  };
+
+  // Deaths (ANI-2, ANI-5): a creature that leaves the view with an empty health bar died
+  // there (the server sends CreatureHealth 0 before CreatureDisappear; ANI-7 would say so
+  // outright). Its body stays where it fell, without name or bar, while its death plays,
+  // over the corpse the server already put on the tile.
+  interface Ghost {
+    body: Container;
+    figure: CreatureBody;
+    state: AnimState;
+    dir: CreatureState["dir"];
+  }
+  const ghosts = new Map<number, Ghost>();
+  const lastSeen = new Map<number, CreatureState["dir"]>();
+  const dropGhost = (id: number): void => {
+    const g = ghosts.get(id);
+    if (!g) return;
+    view.removeEntity(g.body);
+    g.body.destroy({ children: true });
+    ghosts.delete(id);
+  };
+  /** A creature left the view: it falls if it died with a body to animate, else it goes. */
+  const leave = (id: number, now: number): void => {
+    const s = sprites.get(id);
+    const state = animStates.get(id);
+    animStates.delete(id);
+    const dir = lastSeen.get(id);
+    lastSeen.delete(id);
+    if (!s || !s.figure || !state || s.drawnHealth > 0 || dir === undefined) {
+      dropSprite(id);
+      return;
+    }
+    dropLabels(s);
+    sprites.delete(id);
+    s.frame.clear();
+    startDeath(state, now);
+    ghosts.set(id, { body: s.body, figure: s.figure, state, dir });
+  };
+  const drawGhosts = (now: number): void => {
+    for (const [id, g] of ghosts) {
+      animInput.now = now;
+      animInput.dir = outfitDir(g.dir);
+      animInput.walkStart = undefined;
+      animInput.walkMs = 0;
+      animInput.moveDx = 0;
+      animate(g.state, g.figure.clips.meta, animInput, pose);
+      g.figure.draw(pose, dirIndex(animInput.dir));
+      if (pose.done) dropGhost(id);
+    }
   };
 
   // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
@@ -528,6 +665,7 @@ export async function createGameCanvas(
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
+    react(now);
     for (const c of world.creatures.values()) {
       if (c.pos.z !== self.pos.z) continue;
       seen.add(c.id);
@@ -535,9 +673,9 @@ export async function createGameCanvas(
       const p = world.drawPos(c, now);
       const w = world.activeWalk(c, now);
       // Whole device pixels, like the camera (render/viewport.ts): smooth at any zoom.
-      // A single picture (no walking frames) hops a pixel through each step.
-      const bob = s.outfit ? 0 : walkBob(stepProgress(w, now));
-      s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y, T, scale) - bob);
+      s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y, T, scale));
+      if (s.figure) animateBody(s.figure, stateOf(c.id, now), c, now);
+      if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
       // Only the invisible player itself is sent its creature: see-through (T3.2).
       s.body.alpha = c.id === world.selfId && world.invisible ? 0.4 : 1;
       // While walking, draw on whichever end of the step comes later in row order, so the
@@ -549,7 +687,8 @@ export async function createGameCanvas(
           ? step.from
           : step.to;
       view.placeEntity(s.body, later.x, later.y);
-      const head = tileToScreen(cam, p.x + 0.5, p.y, T);
+      // Over the head of a figure taller than its tile (ART-2).
+      const head = tileToScreen(cam, p.x + 0.5, p.y - (s.figure?.lift ?? 0) / T, T);
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
@@ -593,7 +732,9 @@ export async function createGameCanvas(
         );
       }
     }
-    for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);
+    for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now);
+    for (const id of [...animStates.keys()]) if (!seen.has(id)) animStates.delete(id);
+    drawGhosts(now);
     world.expire(now);
     effects.draw(now, self.pos.z, cam, scale);
   };
@@ -803,6 +944,7 @@ export async function createGameCanvas(
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
+      for (const id of [...ghosts.keys()]) dropGhost(id);
       effects.destroy();
       view.destroy();
       app.destroy(true, { children: true });
