@@ -9,6 +9,7 @@ import {
   SLIDE_MAX_TILES,
   SLIDE_MS,
   combine,
+  ownSlideMaxTiles,
   slideBetween,
   slideLeft,
   stalls,
@@ -99,6 +100,18 @@ describe("slides", () => {
     expect(slideLeft(s, 100 + SLIDE_MS / 2)?.x).toBeCloseTo(0.125);
     expect(slideLeft(s, 100 + SLIDE_MS)).toBeUndefined();
     expect(slideLeft(undefined, 0)).toBeUndefined();
+  });
+
+  it("let the own creature glide back over all the steps it predicts, and one more", () => {
+    expect(ownSlideMaxTiles(4)).toBe(5);
+    expect(ownSlideMaxTiles(8)).toBe(9);
+    expect(ownSlideMaxTiles(1)).toBe(SLIDE_MAX_TILES);
+    // 3.8 tiles ahead with 4 predicted: it glides; anyone else that far jumps.
+    expect(slideBetween({ x: 13.8, y: 5 }, { x: 10, y: 5 }, 0, ownSlideMaxTiles(4))?.x).toBeCloseTo(
+      3.8,
+    );
+    expect(slideBetween({ x: 13.8, y: 5 }, { x: 10, y: 5 }, 0)).toBeUndefined();
+    expect(slideBetween({ x: 16, y: 5 }, { x: 10, y: 5 }, 0, ownSlideMaxTiles(4))).toBeUndefined();
   });
 });
 

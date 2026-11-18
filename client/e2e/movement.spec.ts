@@ -27,6 +27,13 @@ const KEYS = [
   { key: "ArrowUp", dx: 0, dy: -1 },
 ] as const;
 
+/** How far the free run ahead is measured (tiles). */
+const RUN_MAX = 10;
+/** The shortest step at level 1: speed 205 on the fastest ground (100), in whole ticks. */
+const MIN_STEP_MS = 500;
+/** client/src/state/motion.ts STEP_LEAD_MS: the next step is decided this long before. */
+const STEP_LEAD_MS = 50;
+
 /** Waits until the own creature stands still with every step confirmed; returns where. */
 async function standing(page: Page): Promise<{ x: number; y: number; z: number }> {
   let at: { x: number; y: number; z: number } | undefined;
@@ -82,38 +89,52 @@ test("a held arrow key walks tile after tile without stopping between them", asy
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   errors.length = 0; // the 401 of opening the page without a session cookie
 
-  // A straight run of 6 free tiles from where the character wakes up.
+  // The longest straight run of free tiles (up to RUN_MAX) from where the character wakes
+  // up; at least 6.
   const start = await standing(page);
   let way: (typeof KEYS)[number] | undefined;
+  let run = 0;
   for (const k of KEYS) {
-    const free = await page.evaluate(
-      ({ s, dx, dy }) =>
-        [1, 2, 3, 4, 5, 6].every(
-          (i) => window.__rpgClient?.walkable(s.x + dx * i, s.y + dy * i, s.z) ?? false,
-        ),
-      { s: start, dx: k.dx, dy: k.dy },
+    const n = await page.evaluate(
+      ({ s, dx, dy, max }) => {
+        let i = 0;
+        while (
+          i < max &&
+          (window.__rpgClient?.walkable(s.x + dx * (i + 1), s.y + dy * (i + 1), s.z) ?? false)
+        )
+          i++;
+        return i;
+      },
+      { s: start, dx: k.dx, dy: k.dy, max: RUN_MAX },
     );
-    if (free) {
+    if (n > run) {
       way = k;
-      break;
+      run = n;
     }
   }
-  if (!way) throw new Error(`no straight run of 6 free tiles from ${JSON.stringify(start)}`);
+  if (!way || run < 6)
+    throw new Error(`no straight run of 6 free tiles from ${JSON.stringify(start)}`);
   const dir = way;
   await page.waitForTimeout(300); // let the atlas textures upload
 
-  // Hold the key ~4 steps long (500 ms each at level 1), then let go.
+  // Hold the key 2 s (4 or 5 steps of 500 ms at level 1), then let go. The screenshot is
+  // taken after letting go, on the last step: taken while the key is held, a slow capture
+  // (software WebGL in the CI) would hold it longer and walk more.
   const t0 = await page.evaluate(() => performance.now());
   await page.keyboard.down(dir.key);
-  await page.waitForTimeout(1300);
-  await page.screenshot({ path: join(shots, "96-movement-held-key.png") });
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(2000);
   await page.keyboard.up(dir.key);
+  const held = (await page.evaluate(() => performance.now())) - t0;
+  await page.screenshot({ path: join(shots, "96-movement-held-key.png") });
   const end = await standing(page);
   const t1 = await page.evaluate(() => performance.now());
   const tiles = Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
+  // The first step starts after t0, and each next one is decided STEP_LEAD_MS before the
+  // one drawn ends: no more than this many while the key was down (fewer on slower ground),
+  // and never past the free run (the client does not predict into a blocked tile).
+  const most = Math.min(run, Math.floor((held + STEP_LEAD_MS) / MIN_STEP_MS) + 1);
   expect(tiles).toBeGreaterThanOrEqual(4);
-  expect(tiles).toBeLessThanOrEqual(6);
+  expect(tiles).toBeLessThanOrEqual(most);
   expect(end.z).toBe(start.z);
 
   // Every frame from leaving the first tile to reaching the last one moved along the way.

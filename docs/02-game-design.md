@@ -53,7 +53,8 @@ Todos los números de este documento son **valores iniciales** que viven en
     con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
     horizontal o vertical libre (se "desliza" junto a un muro).
   - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
-    sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos.
+    sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos,
+    aunque el cliente ya dibujara los `max_queued_steps` pasos predichos.
   - Las demás criaturas y el camino del click se dibujan sobre la línea de ticks del
     servidor con un colchón contra el jitter de la red (~40 ms): los pasos seguidos del
     servidor se ven seguidos, sin pausas ni tirones.

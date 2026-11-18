@@ -142,10 +142,13 @@ consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
 junto con los del editor.
 
-`client/e2e/movement.spec.ts` mide la fluidez: mantiene una flecha ~4 pasos por una recta
-libre y lee las posiciones que el cliente dibujó en cada frame (`__rpgClient.trail`).
-Falla si algún frame entre la primera y la última casilla se quedó quieto o volvió atrás
-(screenshot `96-movement-held-key`, a mitad de camino). Mide las posiciones del modelo
+`client/e2e/movement.spec.ts` mide la fluidez: mantiene una flecha 2 s (4 o 5 pasos) por
+una recta libre y lee las posiciones que el cliente dibujó en cada frame
+(`__rpgClient.trail`). Falla si algún frame entre la primera y la última casilla se quedó
+quieto o volvió atrás, o si dio más pasos de los que entran en el tiempo que la tecla
+estuvo apretada, medido con `performance.now()` (screenshot `96-movement-held-key`, al
+soltar la tecla, en el último paso: sacarlo con la tecla apretada alargaba el tiempo en
+una CI lenta). Mide las posiciones del modelo
 (`WorldState.drawPos` en cada `frame`), no el sprite ni la cámara en pantalla: su
 redondeo a píxeles de pantalla lo cubre `client/src/render/viewport.test.ts`. La misma
 regla, con red simulada (latencia, jitter, 40 a 144 fps, un click y después una flecha,

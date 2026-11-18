@@ -15,8 +15,22 @@ export const STEP_LEAD_MS = 50;
 /** How long a correction (a refused step, a step the server took otherwise) glides. */
 export const SLIDE_MS = 160;
 
-/** A correction longer than this (tiles) jumps: it is a teleport, not a slip. */
+/**
+ * A correction longer than this (tiles) jumps: it is a teleport, not a slip. The own
+ * creature's corrections allow more (ownSlideMaxTiles): its predictions run ahead.
+ */
 export const SLIDE_MAX_TILES = 3;
+
+/**
+ * The longest correction of the own creature that still glides with `maxQueued` steps
+ * predicted (Welcome.max_queued_steps): drawn on the last of them, up to that many tiles
+ * ahead of where a WalkRejected (or a prediction given up) puts it back, plus one of
+ * margin (a slide not over yet, a step the server took otherwise). Never less than
+ * SLIDE_MAX_TILES.
+ */
+export function ownSlideMaxTiles(maxQueued: number): number {
+  return Math.max(SLIDE_MAX_TILES, maxQueued + 1);
+}
 
 /**
  * How long an own step may go unanswered after it was drawn before the client gives it up:
@@ -129,17 +143,19 @@ export interface Slide {
 
 /**
  * A slide that takes the drawing from `before` to `after` smoothly, or undefined when
- * there is nothing to smooth (the same place) or the jump is a teleport.
+ * there is nothing to smooth (the same place) or the jump is a teleport (longer than
+ * `maxTiles`).
  */
 export function slideBetween(
   before: { x: number; y: number },
   after: { x: number; y: number },
   now: number,
+  maxTiles = SLIDE_MAX_TILES,
 ): Slide | undefined {
   const x = before.x - after.x;
   const y = before.y - after.y;
   const d = Math.max(Math.abs(x), Math.abs(y));
-  if (d < 1e-3 || d > SLIDE_MAX_TILES) return undefined;
+  if (d < 1e-3 || d > maxTiles) return undefined;
   return { x, y, start: now };
 }
 

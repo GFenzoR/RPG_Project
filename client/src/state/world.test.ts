@@ -137,6 +137,40 @@ function entered(): WorldState {
   return w;
 }
 
+/** entered(), then a FullMapView of an 8x1 grass row at (100, 200) with only Mira on it. */
+function inRow(): WorldState {
+  const w = entered();
+  const area = create(MapAreaSchema, {
+    x: 100,
+    y: 200,
+    width: 8,
+    height: 1,
+    palette: [tile(1)],
+    floors: [create(MapFloorSchema, { z: 7, tiles: new Array<number>(8).fill(0) })],
+    creatures: [
+      create(CreatureSchema, {
+        id: 7,
+        kind: CreatureKind.PLAYER,
+        name: "Mira",
+        pos: { x: 100, y: 200, z: 7 },
+        dir: Direction.EAST,
+        speed: 200,
+      }),
+    ],
+  });
+  w.apply(
+    { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area, walkEpoch: 1 } },
+    0,
+  );
+  return w;
+}
+
+/** Predicts `n` steps east from (100, 200), each STEP_LEAD_MS before the one drawn ends. */
+function predictEast(w: WorldState, n: number): void {
+  for (let i = 0; i < n; i++)
+    expect(w.predictStep(Direction.EAST, i * 500 - (i > 0 ? STEP_LEAD_MS : 0))).toBe(i + 1);
+}
+
 const rejected = (dir: Direction, x = 100, y = 200, walkEpoch = 2): Msg => ({
   case: "walkRejected",
   value: {
@@ -218,6 +252,21 @@ describe("WorldState", () => {
     expect(w.self?.pos).toEqual({ x: 101, y: 200, z: 7 });
   });
 
+  it("turns only with every step confirmed: the server's queued steps would face elsewhere", () => {
+    const w = entered();
+    const s = w.self as CreatureState;
+    // East onto (101,200); from there north is the unknown tile: nothing open.
+    expect(w.predictStep(Direction.EAST, 0)).toBe(1);
+    expect(w.canStep(500 - STEP_LEAD_MS)).toBe(true);
+    expect(w.chooseStep(Direction.NORTH, 500 - STEP_LEAD_MS)).toBeUndefined();
+    expect(s.dir).toBe(Direction.EAST); // as the server will have it after the step
+    expect(w.unconfirmed).toBe(1);
+    // Confirmed: the held key turns now.
+    w.apply(move(7, [100, 200], [101, 200], 500, 1), 60);
+    expect(w.chooseStep(Direction.NORTH, 500)).toEqual({ kind: "turn", dir: Direction.NORTH });
+    expect(s.dir).toBe(Direction.NORTH);
+  });
+
   it("goes back to the server's position on WalkRejected, gliding, in a new walk epoch", () => {
     const w = entered();
     expect(w.walkEpoch).toBe(1); // from the FullMapView
@@ -233,6 +282,32 @@ describe("WorldState", () => {
     expect(w.drawPos(s, 50).x).toBeCloseTo(100.1);
     expect(w.drawPos(s, 50 + SLIDE_MS / 2).x).toBeCloseTo(100.025);
     expect(w.drawPos(s, 50 + SLIDE_MS)).toEqual({ x: 100, y: 200 });
+  });
+
+  it("glides back from as many tiles ahead as max_queued_steps predicts, never jumps", () => {
+    const w = inRow();
+    const s = w.self as CreatureState;
+    predictEast(w, 4); // Welcome.max_queued_steps
+    expect(w.unconfirmed).toBe(4);
+    // Drawn on the fourth step, 3.8 tiles ahead, when the first one is refused.
+    expect(w.drawPos(s, 1900).x).toBeCloseTo(103.8);
+    w.apply(rejected(Direction.EAST), 1900);
+    expect(s.pos).toEqual({ x: 100, y: 200, z: 7 });
+    expect(w.drawPos(s, 1900).x).toBeCloseTo(103.8); // no jump
+    expect(w.drawPos(s, 1900 + SLIDE_MS / 2).x).toBeCloseTo(100.95);
+    expect(w.drawPos(s, 1900 + SLIDE_MS)).toEqual({ x: 100, y: 200 });
+  });
+
+  it("glides back when it gives up max_queued_steps steps never answered", () => {
+    const w = inRow();
+    const s = w.self as CreatureState;
+    predictEast(w, 4);
+    const now = 500 + PREDICT_TIMEOUT_MS; // the first one's end, plus the timeout
+    w.expirePredicted(now);
+    expect(w.unconfirmed).toBe(0);
+    expect(s.pos).toEqual({ x: 100, y: 200, z: 7 });
+    expect(w.drawPos(s, now).x).toBeCloseTo(104); // all four drawn: no jump back
+    expect(w.drawPos(s, now + SLIDE_MS)).toEqual({ x: 100, y: 200 });
   });
 
   it("keeps off a refused step until retryWalk, an own move or a new view (B10)", () => {

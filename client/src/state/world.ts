@@ -42,6 +42,7 @@ import {
   PREDICT_TIMEOUT_MS,
   Playout,
   STEP_LEAD_MS,
+  ownSlideMaxTiles,
   slideBetween,
   slideLeft,
   stepChoices,
@@ -807,8 +808,9 @@ export class WorldState implements TileSource {
           const before = this.drawPos(s, now);
           s.pos = back;
           s.walk = undefined;
-          // Back to where the server says, gliding (no snap under normal latency).
-          s.slide = slideBetween(before, back, now);
+          // Back to where the server says, gliding (no snap under normal latency), from
+          // as far ahead as the predictions go.
+          s.slide = slideBetween(before, back, now, this.ownSlideMax);
         }
         break;
       }
@@ -948,7 +950,12 @@ export class WorldState implements TileSource {
     }
     c.pos = to;
     c.walk = { from, to, start, duration: drawn, prev };
-    c.slide = slideBetween(before, this.drawPos(c, now), now);
+    c.slide = slideBetween(
+      before,
+      this.drawPos(c, now),
+      now,
+      id === this.selfId ? this.ownSlideMax : undefined,
+    );
   }
 
   /**
@@ -1018,7 +1025,7 @@ export class WorldState implements TileSource {
     c.pos = cur;
     c.walk = last;
     c.slide = undefined;
-    c.slide = slideBetween(before, this.drawPos(c, now), now);
+    c.slide = slideBetween(before, this.drawPos(c, now), now, this.ownSlideMax);
     return true;
   }
 
@@ -1037,7 +1044,7 @@ export class WorldState implements TileSource {
     const before = this.drawPos(s, now);
     s.pos = first.from;
     s.walk = undefined;
-    s.slide = slideBetween(before, first.from, now);
+    s.slide = slideBetween(before, first.from, now, this.ownSlideMax);
   }
 
   /**
@@ -1119,6 +1126,11 @@ export class WorldState implements TileSource {
     return Math.max(1, this.maxQueued);
   }
 
+  /** The longest correction of the own creature that glides (motion.ts ownSlideMaxTiles). */
+  private get ownSlideMax(): number {
+    return ownSlideMaxTiles(this.maxPredicted);
+  }
+
   /** Whether an own step in `dir` looks possible: a free tile, not the step just refused. */
   stepOpen(dir: Direction): boolean {
     const s = this.self;
@@ -1161,7 +1173,10 @@ export class WorldState implements TileSource {
   /**
    * The own step for a wanted direction (a key, the pad): the direction, or for a diagonal
    * one of its halves when the diagonal is blocked (sliding along a wall). Nothing open:
-   * the player turns that way (`turn`, sent only when the facing changes).
+   * the player turns that way (`turn`, sent only when the facing changes), but only with
+   * every step confirmed. The server turns at once and each step still queued there sets
+   * the facing again: the player would face the turn here and the last step for everyone
+   * else. A held key turns once the steps are confirmed.
    */
   chooseStep(
     dir: Direction,
@@ -1173,6 +1188,7 @@ export class WorldState implements TileSource {
       const seq = this.predictStep(d, now);
       if (seq !== undefined) return { kind: "walk", dir: d, seq };
     }
+    if (this.predicted.length > 0) return undefined;
     if (s.dir === dir || dir === Direction.UNSPECIFIED) return undefined;
     s.dir = dir;
     return { kind: "turn", dir };

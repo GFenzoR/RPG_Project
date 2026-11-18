@@ -619,7 +619,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   en el contenido empaquetado) pasos mandados sin confirmar. `canStep` deja decidir el siguiente cuando al paso
   dibujado le faltan `STEP_LEAD_MS` (50 ms, `state/motion.ts`) o menos; `chooseStep`
   prueba la dirección y, si es una diagonal bloqueada, su mitad horizontal y luego la
-  vertical (`stepChoices`); si nada está libre, gira (manda `Turn` solo si cambia). El
+  vertical (`stepChoices`); si nada está libre, gira (manda `Turn` solo si cambia y sin
+  pasos sin confirmar: el servidor gira en el acto y cada paso de su cola vuelve a fijar
+  la dirección, así que uno se vería girado y los demás no; una tecla mantenida gira
+  cuando se confirman). El
   paso nuevo empieza cuando termina el dibujado (`Walk.prev` mantiene el anterior hasta
   entonces) y se manda con `walkEpoch` y su número (`seq`, `PredictedStep.seq`, uno más
   por paso). El `CreatureMove` propio con el `walk_seq` del más viejo y sus mismas
@@ -656,7 +659,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   dibujado ~1 s tarde durante minutos (con `c.pos`, los clicks y los efectos a tiempo).
 - **Correcciones**: `CreatureState.slide` (`slideBetween`/`slideLeft`) desliza en
   `SLIDE_MS` (160 ms, ease-out) cualquier salto del dibujo de hasta `SLIDE_MAX_TILES` (3);
-  más es un teletransporte y salta.
+  más es un teletransporte y salta. Las del propio jugador (`WalkRejected`,
+  `expirePredicted`, `ownStep`) llegan hasta `ownSlideMaxTiles` (`max_queued_steps` + 1,
+  5 con 4): con 4 pasos predichos el dibujo puede ir casi 4 casillas adelante del
+  servidor, y eso también se desliza.
 - **Dibujo**: `drawPos` usa `activeWalk` (el paso que se dibuja ahora: el último o los de
   antes mientras duren) más lo que queda del deslizamiento; `facing` es la dirección de
   ese paso mientras camina; `stepProgress` es `undefined` antes de empezar (parado). La
@@ -677,10 +683,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   saltos; además un click y después una flecha (cada `Walk` respondido por su paso),
   `Walk` perdidos y un corte de 1 s de la red del observador (sin atraso que dure). Si
   cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene una
-  flecha ~4 pasos sobre una recta libre y lee `__rpgClient.trail(ms)` (el `drawPos` del
-  modelo en cada `frame`, `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia
-  atrás (screenshot `96-movement-held-key`). Mide el modelo, no el sprite ni la cámara
-  en pantalla: su redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
+  flecha 2 s (4 o 5 pasos; como mucho los que entran en el tiempo medido) sobre una recta
+  libre y lee `__rpgClient.trail(ms)` (el `drawPos` del modelo en cada `frame`,
+  `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia atrás (screenshot
+  `96-movement-held-key`, sacado al soltar la tecla). Mide el modelo, no el sprite ni la
+  cámara en pantalla: su redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el
