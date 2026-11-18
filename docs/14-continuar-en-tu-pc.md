@@ -526,15 +526,19 @@ el punto 5:
       (`resume_ms`, 3 min) son datos de `sounds.yaml`: se ajustan sin código después de
       jugar un rato. Los puntos de entrada salen de la envolvente de nivel; si alguno cae
       feo en un tema, se puede bajar `ENTRY_MOST` o subir `ENTRY_GAP` en
-      `tools/gemini/music_convert.py` y volver a importar.
+      `tools/gemini/music_convert.py` y volver a correr `make music-gemini`: el importador
+      guarda con qué `ENTRY_*` midió cada tema y, si cambiaron, los vuelve a convertir y
+      medir (no hace falta `--fresh` ni subir `ANALYSIS`).
     - **Música de quest por paso:** una quest importante ya puede tener música en un lugar
       (`music` en su YAML, docs/06), pero ninguna la usa (falta un tema propio para
       pedirle a Gemini) y el cliente no sabe en qué paso va el jugador: una música que
       dependa del paso necesita que el servidor lo mande (un campo en el protocolo).
     - **Safari/iOS y el WKWebView de macOS:** la música suena por un `<audio>` conectado a
       Web Audio, que arranca después del primer gesto. Chromium (y el E2E) lo hacen sin
-      problema; falta probarlo en un iPhone y en la app de escritorio de macOS, donde un
-      `play()` fuera de un gesto podría rechazarse (se loguea un aviso y la música calla).
+      problema. WebKit pide un gesto por elemento: el motor crea sus cuatro elementos en el
+      primer gesto y les hace un `play()`/`pause()` vacío ahí mismo, y si igual rechaza un
+      `play()` lo vuelve a llamar en el gesto siguiente (desde donde va el tema; mientras
+      tanto esa voz calla). Falta probarlo en un iPhone y en la app de escritorio de macOS.
   - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
     estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
     cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
