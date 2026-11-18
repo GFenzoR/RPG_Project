@@ -107,11 +107,12 @@ el punto 5:
   parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
   `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
   en el orden de su §7:
-  - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
-    docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
-    servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
-    (caminar manteniendo el mouse), MOV-4 (click previsto), MOV-7 (respuesta visual) y el
-    E2E de MOV-9 con 150 ms de latencia simulada.
+  - **A6, movimiento fluido (hecho):** ramas `feat/movement-feel` y `feat/movement-more`
+    (ver abajo y docs/17 §4 "Hecho: A6, primera parte" y "segunda parte"). No fue solo del
+    cliente como decía el plan: el servidor encola los pasos de teclado (protocolo en
+    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. Quedan
+    el polvo y las ondas al pisar (MOV-7, con las partículas de ART-7) y el toque corto
+    que solo gira (MOV-2).
   - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
@@ -257,19 +258,26 @@ el punto 5:
   - **Etiquetas a 1x:** alejado a la ventana entera los nombres se acomodan con la regla de
     zoom 1x (`render/labels.ts`); en una multitud se ocultan muchos. Revisarlo en el
     playtest.
-- **Movimiento fluido (rama `feat/movement-feel`, apilada sobre `feat/ui-theme`: se mergea
-  después de ella o con ella).** Hecho: pasos de teclado predichos
-  hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo
-  en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de pantalla, los pasos del
-  servidor sobre su línea de ticks con colchón de jitter, correcciones que se deslizan,
-  diagonal con dos flechas y deslizarse junto a un muro (docs/02 "Movimiento",
+- **Movimiento fluido (ramas `feat/movement-feel` y `feat/movement-more`).** Hecho: pasos
+  de teclado predichos hasta 4 adelante y encolados en el servidor detrás de una época de
+  caminata (protocolo en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de
+  pantalla, los pasos del servidor sobre su línea de ticks con colchón de jitter,
+  correcciones que se deslizan, diagonal con dos flechas y deslizarse junto a un muro; y
+  después el click previsto (camino del cliente, cada paso un `Walk`, rodeo en el
+  cliente), caminar manteniendo el botón izquierdo hacia el cursor, el anillo del destino
+  y el texto de la acción junto al cursor (docs/02 "Movimiento" y "Controles del mouse",
   client/CLAUDE.md "Movimiento fluido"). Quedó:
-  - **Caminar manteniendo el click (como Diablo 2), propuesta.** Hoy el click izquierdo
-    camina al soltar y, si se arrastra, mueve el item de arriba. Propuesta: un click
-    mantenido sobre una casilla sin item movible (o con Ctrl) sigue al cursor: cada vez que
-    la casilla bajo el cursor cambia, `WalkPath` nuevo (el servidor ya reemplaza el camino
-    y termina el paso en curso), como mucho uno por paso. Cliente solo; choca con el
-    arrastre de items, por eso queda para decidir.
+  - **Mantener el botón sobre un item:** arrastrar antes de 200 ms mueve el item y
+    mantenerlo quieto camina hacia el cursor (docs/17 MOV-3). Si en el playtest se arrastra
+    un item sin querer al empezar a caminar, la opción es exigir Ctrl para arrastrar desde
+    el mapa, o que el mantener empiece solo fuera de las casillas con items.
+  - **Polvo y ondas al pisar (MOV-7):** son arte por terreno; van con las partículas de
+    ART-7 y A13.
+  - **El texto junto al cursor** muestra la acción por defecto (atacar, hablar, trepar,
+    abrir, usar una estación, el tablero o una puerta) apenas el mouse se apoya en la
+    casilla, sin espera. Mirar en el playtest si molesta al caminar con el mouse por
+    zonas con muchos monstruos; se podría pedir ~300 ms quieto, como el tooltip.
+  - **Mantener el mouse con el dedo:** no hay (el toque largo es el menú y está el pad).
   - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
     tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
     mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.
@@ -277,9 +285,9 @@ el punto 5:
     lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
     tocó.
   - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
-    corte de 1 s y `Walk` perdidos; falta jugarlo por el hosting de pruebas (docs/13) con
-    el E2E `e2e/movement.spec.ts` como referencia y mirar si los 40 ms de colchón alcanzan
-    con Wi-Fi.
+    corte de 1 s y `Walk` perdidos, y el E2E `e2e/movement.spec.ts` corre con ~150 ms de
+    latencia simulada en el WebSocket; falta jugarlo por el hosting de pruebas (docs/13) y
+    mirar si los 40 ms de colchón alcanzan con Wi-Fi.
   - **Diagonal con dos flechas, para decidir:** hoy dos flechas perpendiculares
     mantenidas dan la diagonal, y también un toque perpendicular con otra mantenida
     (derecha mantenida + toque de arriba = un paso noreste, no uno al norte). Al cambiar
@@ -288,14 +296,6 @@ el punto 5:
     buscó (×1,5 de duración, otra casilla). Opciones: dejarlo; que un toque ya soltado
     dé el paso lateral; o que la diagonal pida las dos teclas juntas un instante (~60 ms,
     a costa de que el primer paso de una diagonal buscada salga recto).
-  - **Una flecha durante un camino por click casi nunca entra** (viene de antes, no lo
-    trajo A6). El frame solo lee las teclas cuando `canStep`, y durante un camino por
-    click el paso dibujado casi siempre está lejos de terminar: en una simulación con un
-    camino de 16 pasos (~450 frames), `canStep` estuvo abierto de 2 a 12 frames (antes de
-    A6, de 2 a 10). La tecla suele esperar a que termine el camino. Para la sensación de
-    Diablo 2, una pulsación nueva (no la autorrepetición) debería predecir desde el próximo
-    paso del camino: mandar el `Walk` (que descarta el camino en el servidor) y dibujarlo
-    detrás del paso en curso.
   - **Eventos y pasos de los demás:** los pasos se dibujan sobre la línea de ticks
     (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
     desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe

@@ -47,6 +47,11 @@ defecto (abrir, usar con, comer, equipar o usar). Para usar al instante: **doble
   para pelear); Mayús+click derecho abre su menú;
 - Mayús+click izquierdo mira (el texto del servidor); pasar el mouse sobre un objeto del
   inventario, la tienda o el intercambio muestra su ficha;
+- con el mouse quieto sobre el mapa, junto al cursor se lee la acción por defecto de esa
+  casilla ("Atacar a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila"); nada sobre el
+  suelo pelado ni sobre un adorno que no hace nada al usarlo (docs/17 MOV-7, UI-5);
+- el click izquierdo camina hasta la casilla y el botón izquierdo mantenido camina hacia
+  el cursor ("Movimiento");
 - con el dedo, el toque largo abre el mismo menú (T5.6).
 
 Donde este doc dice "click derecho" para usar algo del mapa (una escalera de mano, una
@@ -57,7 +62,25 @@ el doble click o Ctrl+click derecho.
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
-- Click-to-walk con pathfinding A* en el servidor (máx. 100 casillas).
+- **Click para caminar** (máx. 100 casillas): el cliente arma el camino con A* sobre las
+  casillas que conoce (rodea criaturas, muros, escaleras, agujeros y teletransportes salvo
+  el destino) y lo camina paso a paso como una tecla mantenida: cada paso sale como `Walk`
+  y el servidor lo valida y marca su ritmo (`05-network-protocol.md` "Caminar"). El
+  primer paso sale en el acto, al apretar el botón (al soltarlo si en la casilla hay un
+  item para arrastrar), aunque haya pasos sin confirmar. Si el servidor rechaza un paso
+  (una criatura que el cliente no veía) o una criatura se mete en el camino, el cliente
+  vuelve deslizándose y lo rodea (como mucho 10 veces por click). Un anillo dorado marca
+  la casilla 300 ms; rojo si no hay camino, y el personaje se detiene. Una tecla durante
+  el camino lo termina en el próximo borde de casilla. Con el doble click (controles de
+  menú) el camino del primer click termina: los pasos ya mandados se dan.
+- **Mantener el botón izquierdo sobre el mapa** (más de 200 ms quieto, o arrastrando
+  donde no hay un item para mover) camina hacia el cursor, casilla por casilla, como en
+  Diablo 2: en cada borde elige la dirección (de 8) por el ángulo del cursor respecto del
+  personaje. La cámara lo sigue, así que el cursor quieto en la pantalla sigue apuntando
+  igual. Contra un muro se desliza como la tecla; si la dirección está bloqueada, rodea
+  hacia la casilla bajo el cursor mientras siga apuntando al mismo lado; sin camino,
+  gira. Al soltar se dan los pasos ya mandados. Sobre una casilla con un item, arrastrar
+  antes de los 200 ms sigue moviendo el item. Con el dedo no hay mantener: está el pad.
 - **Movimiento fluido** (al estilo de Diablo 2, pero por casillas y con el servidor como
   juez). Mantener una tecla camina casilla tras casilla sin detenerse entre ellas: el
   cliente predice hasta `max_queued_steps` pasos (`balance.yaml`, 4) y decide el siguiente
@@ -71,9 +94,10 @@ el doble click o Ctrl+click derecho.
   - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
     sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos,
     aunque el cliente ya dibujara los `max_queued_steps` pasos predichos.
-  - Las demás criaturas y el camino del click se dibujan sobre la línea de ticks del
-    servidor con un colchón contra el jitter de la red (~40 ms): los pasos seguidos del
-    servidor se ven seguidos, sin pausas ni tirones.
+  - Las demás criaturas (y los pasos propios que da el servidor, como los de perseguir)
+    se dibujan sobre la línea de ticks del servidor con un colchón contra el jitter de la
+    red (~40 ms): los pasos seguidos del servidor se ven seguidos, sin pausas ni tirones.
+    El click y el mouse mantenido son pasos predichos, como la tecla.
   - La cámara y las criaturas se mueven de a un píxel de pantalla (no de a un píxel del
     sprite, que a escala 3 eran saltos de 3 píxeles cada pocos frames); los sprites siguen
     enteros y a escala entera. Las criaturas sin frames de caminar (monstruos, NPCs) dan
@@ -526,8 +550,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     se ve, porque es estado del mapa: mover o soltar items (`TileUpdate`), recolectar (el
     efecto en la casilla del recurso) o abrir una puerta. Es una pista aceptada, como en
     el género; su criatura, su vida y sus números no viajan. Un invisible sigue ocupando
-    su casilla: quien intente pisarla recibe `WalkRejected` (un camino por click lo rodea)
-    y los monstruos lo esquivan. Es una pista aceptada.
+    su casilla: quien intente pisarla recibe `WalkRejected` (un camino por click vuelve y
+    lo rodea) y los monstruos lo esquivan. Es una pista aceptada.
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
     puntería son ventajas y terminan. **Morir** termina todas. La de otro jugador guarda

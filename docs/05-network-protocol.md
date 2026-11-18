@@ -525,10 +525,18 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   cola). Garantía: todo `Walk` aceptado termina en un `CreatureMove` (con su `seq`), un
   `WalkRejected` o un `FullMapView` (teletransporte, muerte); el servidor no vacía la cola
   en silencio por su cuenta. Solo lo hacen, sin contestar, lo que pide el propio cliente
-  (`StopWalk`, y un `WalkPath`, que la reemplaza: el cliente lo manda sin pasos de teclado
-  sin confirmar) y la desconexión. Un `Walk` que el gateway descarta no llega nunca: lo
-  responde el `walk_seq` de uno posterior, y si no hay otro, el cliente lo da por perdido
-  a los 3 s (`PREDICT_TIMEOUT_MS`).
+  (`StopWalk` y `WalkPath`, que la reemplaza) y la desconexión. El cliente del juego no
+  manda ninguno de los dos (docs/17 A6): sus `Walk` siempre esperan respuesta. Un `Walk`
+  que el gateway descarta no llega nunca: lo responde el `walk_seq` de uno posterior, y
+  si no hay otro, el cliente lo da por perdido a los 3 s (`PREDICT_TIMEOUT_MS`).
+- **Click para caminar y mouse mantenido (docs/17 MOV-3 y MOV-4): `Walk`, no `WalkPath`.**
+  El cliente arma el camino con A* y manda cada paso como un `Walk` de teclado, con su
+  época y su `seq`, el mismo margen antes de que termine el paso dibujado y el mismo tope
+  `max_queued_steps`; el mouse mantenido elige cada paso hacia el cursor. Para el
+  servidor no hay diferencia con una tecla: valida y da cada paso a su ritmo. Si rechaza
+  uno (un `Walk` bloqueado por una criatura no se recalcula), el cliente rearma el camino
+  esquivando esa casilla y sigue con la época nueva. `WalkPath` (con el rodeo del
+  servidor) queda para los bots (`tools/bots`) y clientes que no predicen.
 - `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
   (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
   `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
@@ -1186,7 +1194,7 @@ Reglas en `02-game-design.md` ("Condiciones").
   llega con su nombre pero sin `pos`. Al terminar le llega `CreatureAppear` a quien ve su
   casilla. Solo su propio cliente lo sigue recibiendo (y lo dibuja semitransparente).
   Un invisible sigue ocupando su casilla: quien intente pisarla recibe `WalkRejected` (un
-  camino por click lo rodea) y los monstruos lo esquivan. Es una pista aceptada.
+  camino por click vuelve y lo rodea) y los monstruos lo esquivan. Es una pista aceptada.
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |

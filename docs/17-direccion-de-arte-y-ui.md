@@ -6,11 +6,11 @@ moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MO
 del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
 que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; A4 y
 A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
-gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
-"Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
-2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama `feat/world-art`, el
-2026-11-18; y el resto de A1, A10, A11 y A13, rama `feat/world-art-2`, el 2026-11-18:
-"Hecho: el resto de A1, A10, A11 y A13").
+gremio; "Hecho: A4, A5 y los botones del gremio"; A6: movimiento fluido, click previsto y
+caminar manteniendo el mouse, "Hecho: A6" en §4; y A8 con la parte de criaturas de A10 y
+A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
+`feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
+`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -463,7 +463,7 @@ siguen igual.
 
 ## 4. Sensación de movimiento (MOV)
 
-### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+### Hecho: A6, primera parte (2026-11-18, rama `feat/movement-feel`)
 Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico está en
 `client/CLAUDE.md` ("Movimiento fluido"), `server/CLAUDE.md` ("Caminar") y docs/05
 ("Caminar"). **Donde el plan y esto no coinciden, vale esto.**
@@ -507,17 +507,76 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
   - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
     paso de su cola vuelve a fijar la dirección;
   - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
-- **Pendiente:**
-  - MOV-3 (caminar manteniendo el mouse);
-  - MOV-4 (click previsto). Hoy el click espera a que no queden pasos sin confirmar, manda
-    `WalkPath` y sus pasos se dibujan con MOV-5, sin predicción;
-  - MOV-7 (respuesta visual);
-  - el E2E de MOV-9 con 150 ms de latencia simulada en el WebSocket. Hoy lo cubre la
-    simulación de `client/src/state/walking.test.ts` (RTT de 2 a 300 ms con jitter);
-    `e2e/movement.spec.ts` corre sin latencia;
-  - lo que quedó anotado en docs/14 ("Movimiento fluido"), por ejemplo que una flecha
-    apretada durante un camino por click casi nunca entra.
+- **Quedaba** (hecho en la segunda parte, abajo): MOV-3, MOV-4, MOV-7, el E2E de MOV-9 con
+  latencia y una flecha durante un camino por click, que casi nunca entraba.
 - MOV-8 es una decisión del dueño: no se tocó.
+
+### Hecho: A6, segunda parte (2026-11-18, rama `feat/movement-more`)
+Solo cliente: el servidor y el protocolo no cambian. El detalle técnico está en
+`client/CLAUDE.md` ("Movimiento fluido"). **Donde el plan de abajo y esto no coinciden,
+vale esto.**
+- **MOV-4, cambio: el click ya no manda `WalkPath`.** El cliente arma el camino con A*
+  (`state/steering.ts`, `Steering.walkTo`) desde donde lo tiene: después de los pasos que
+  ya mandó, que se siguen dando. Lo camina como una tecla mantenida: cada paso se predice
+  y sale como `Walk` (época y `seq`) 50 ms antes de que termine el dibujado, por la misma
+  cola. El servidor valida cada paso y marca el ritmo (`readyAt`, `max_queued_steps`),
+  igual que con el teclado. El primer paso sale en el acto: al apretar el botón sobre
+  una casilla sin un item para arrastrar, o al soltarlo si lo hay.
+  - **Por qué `Walk` y no predecir los pasos de un `WalkPath`:** un `WalkPath` reemplaza
+    la cola del servidor (vacía en silencio los `Walk` sin confirmar) y sus pasos vuelven
+    sin `walk_seq`. Con `Walk`, cada respuesta se empareja con su predicción y el click no
+    espera a que no queden pasos sin confirmar.
+  - **El rodeo lo hace el cliente.** El servidor no recalcula un `Walk` bloqueado por una
+    criatura: lo rechaza. El cliente vuelve deslizándose, anota esa casilla y arma el
+    camino de nuevo sin ella (como mucho `ROUTE_REPLANS`, 10 veces por click). También lo
+    rearma si una criatura que ve se mete en el próximo paso, o si el servidor le dio otro
+    paso (persecución). Sin camino, se detiene.
+  - Una flecha durante un camino por click entra en el próximo borde de casilla y termina
+    el camino (antes casi nunca entraba: el frame solo leía las teclas sin camino).
+  - El doble click en el mapa (controles de menú) ya no manda `StopWalk`: termina el
+    camino que empezó su primer click y los pasos ya mandados (normalmente uno) se dan.
+    Un `StopWalk` dejaría al cliente esperando respuestas de pasos que el servidor borró.
+  - `WalkPath` sigue en el protocolo: lo usan los bots (`tools/bots`).
+- **MOV-3, como el plan, con un rodeo que se mantiene.** El botón izquierdo mantenido sobre
+  el mapa camina hacia el cursor: después de `HOLD_WALK_MS` (200 ms) quieto, o apenas se
+  arrastra si la casilla no tiene un item para arrastrar.
+  - En cada borde de casilla elige la dirección (de 8) por el ángulo del cursor respecto
+    del personaje dibujado: cada dirección toma sus 45°. Con el cursor sobre la casilla
+    propia no camina. Una diagonal bloqueada se desliza por su mitad libre, como la tecla.
+  - Si la dirección está bloqueada, da el primer paso de un A* hacia la casilla bajo el
+    cursor y **sigue ese rodeo mientras el cursor apunte al mismo lado**. Con solo el
+    primer paso, en una U de muros el personaje salía y volvía a entrar. Sin camino, gira.
+  - La cámara sigue al personaje: el cursor quieto en la pantalla sigue apuntando igual y
+    se camina en línea, como en Diablo 2.
+  - El puntero queda capturado (`setPointerCapture`): soltar fuera del canvas también
+    termina. Al soltar se dan los pasos ya mandados, sin `StopWalk`. Un click corto (menos
+    de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
+  - Sobre una casilla con un item para arrastrar, arrastrar antes de los 200 ms sigue
+    moviendo el item: es lo que docs/14 dejaba para decidir.
+  - Con el dedo no hay mantener: el toque largo es el menú (T5.6) y está el pad.
+- **MOV-7, en parte.**
+  - Un anillo de 300 ms en la casilla del click, que se cierra y se desvanece
+    (`render/walk-mark.ts`): dorado si hay camino; rojo si no (y el camino de antes
+    termina).
+  - El texto de la acción por defecto junto al mouse quieto sobre el mapa (UI-5): "Atacar
+    a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila" (`client.action.*`). Sale de
+    `defaultAction` (`input/actions.ts`): la primera opción del menú de esa casilla. No
+    aparece sobre el suelo pelado ni sobre un adorno que no hace nada al usarlo (un árbol,
+    un muro); sí sobre una estación, el tablero del mercado o una puerta. Es un `attr()`
+    de CSS: no es texto de la página para los lectores de pantalla ni para los tests.
+  - El primer paso sale en el acto (MOV-4).
+  - **No se hizo: polvo y ondas al pisar.** Son arte (partículas por terreno): quedan con
+    las partículas de ART-7 y A13.
+- **MOV-9, hecho.** E2E en `client/e2e/movement.spec.ts` con ~150 ms de RTT y jitter. Es
+  un proxy en Playwright (`page.routeWebSocket`): 75 ms más 0–40 ms por sentido, en orden.
+  El cliente no tiene un parámetro de latencia.
+  - Una flecha mantenida 10 casillas tarda la suma de sus 10 pasos ± un frame, sin frames
+    quietos.
+  - El mouse mantenido y un click de 5 a 7 casillas caminan sin frames quietos ni hacia
+    atrás, y arrancan menos de 150 ms después del botón. Antes, el click esperaba un RTT y
+    un tick.
+  - `state/walking.test.ts` simula además el mouse mantenido y el click previsto, en
+    enlaces de 2 a 300 ms con jitter.
 
 ### Por qué se sentía "paso, pausa, paso" (antes de A6)
 - **El cliente espera la confirmación.**
@@ -545,7 +604,7 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
 ### Propuestas
 El plan, con lo que A6 hizo marcado. Antes de A6, `Walk` reemplazaba la cola por **un**
 paso y por eso el plan era solo del cliente. Ya no: el servidor encola los pasos de
-teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
+teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
 
 - **MOV-1 Pasos encadenados (✅ A6, distinto del plan original).**
   - El paso N+1 previsto empieza exactamente en `fin(N)`, no en `now`. Si el frame llega
@@ -568,19 +627,20 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
   - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
   - Un toque de otra dirección de menos de 80 ms estando quieto solo gira (o Ctrl+flecha,
     como en Tibia).
-- **MOV-3 Mantener el mouse (Diablo 2).**
+- **MOV-3 Mantener el mouse (Diablo 2) (✅ A6, con un rodeo que se mantiene).**
   - Con el botón izquierdo mantenido sobre el mapa, en cada borde de casilla el cliente
     elige la dirección (de 8) hacia la casilla bajo el cursor. Si está bloqueada, usa el
     primer paso de su A* hacia ella. Lo predice y lo manda como un paso de teclado
     (`chooseStep` y `Walk` con época y `seq`, MOV-1).
   - Al soltar, se dan los pasos ya mandados, como con la tecla: nada de `StopWalk`.
   - Un click corto (menos de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
-- **MOV-4 Click para caminar, previsto.** El camino lo arma el cliente, que manda los
-  pasos. Puede ir prediciendo esos pasos con MOV-1 (como mucho `max_queued_steps`
-  adelante, cada uno como `Walk`) mientras los `CreatureMove` coincidan. Hoy un `WalkPath`
-  reemplaza la cola: el click lo manda solo sin pasos de teclado sin confirmar. Si el servidor rodea a una criatura (recalcula con A*), el
-  cliente acepta sus pasos con la corrección de siempre. Como mínimo, predecir el primer
-  paso para que el click responda en el acto.
+- **MOV-4 Click para caminar, previsto (✅ A6: cada paso es un `Walk` y el rodeo lo hace
+  el cliente).** El camino lo arma el cliente, que manda los pasos. Puede ir prediciendo
+  esos pasos con MOV-1 (como mucho `max_queued_steps` adelante, cada uno como `Walk`)
+  mientras los `CreatureMove` coincidan. Antes, un `WalkPath` reemplazaba la cola: el
+  click lo mandaba solo sin pasos de teclado sin confirmar. Si el servidor rodea a una
+  criatura (recalcula con A*), el cliente acepta sus pasos con la corrección de siempre.
+  Como mínimo, predecir el primer paso para que el click responda en el acto.
 - **MOV-5 Línea de tiempo para los demás (✅ A6, como colchón de jitter: `Playout`).**
   El plan era una función pura `scheduleStep(prev, move, now)`, con tests:
   - un `CreatureMove` empieza en `max(llegada, fin del paso anterior de esa criatura)`;
@@ -595,7 +655,7 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
     igual). Sin "mirar adelante", para que la vista sea igual para todos.
   - Probar a redondear cámara y criaturas a **píxel de pantalla** en vez de píxel de
     sprite, y comparar en 60 y 144 Hz. Si se ve mejor, queda.
-- **MOV-7 Respuesta visual.**
+- **MOV-7 Respuesta visual (✅ A6 en parte: falta polvo y ondas, que van con ART-7).**
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
@@ -607,8 +667,8 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
   - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
 
   Por eso queda propuesto y no aplicado.
-- **MOV-9 Criterio de aceptación** (falta el E2E con latencia; hoy lo cubre la simulación
-  de `client/src/state/walking.test.ts`):
+- **MOV-9 Criterio de aceptación (✅ A6: E2E con un proxy de latencia en Playwright, no un
+  parámetro de desarrollo del cliente).**
   - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
     flecha 10 casillas tarda 10 × la duración del paso ± 1 frame, y no hay frames con el
     sprite propio quieto.
@@ -1099,7 +1159,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
-| A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
+| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
@@ -1232,11 +1292,12 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
 - **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
   varios tamaños sin levantar nada.
 
-### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
-Está en §4, al principio, porque cambia el plan de MOV-1: el servidor encola los pasos de
-teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y soltar la
-tecla no manda `StopWalk`. Quedan MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia
-simulada.
+### Hecho: A6 (2026-11-18, ramas `feat/movement-feel` y `feat/movement-more`)
+Está en §4, al principio, porque cambia el plan de MOV-1 y MOV-4: el servidor encola los
+pasos de teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y
+soltar la tecla no manda `StopWalk`; el click y el mouse mantenido caminan por esa misma
+cola, con el camino armado y rearmado en el cliente (sin `WalkPath`). El E2E de MOV-9 corre
+con ~150 ms de latencia simulada.
 
 
 ### Hecho: A4, A5 y los botones del gremio (2026-11-18, rama `feat/ui-interactions`)
@@ -1251,8 +1312,8 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
     está sobre una escalera de mano, como antes);
   - **doble click** hace la acción por defecto: en el equipo, los contenedores, la tienda
     (compra o vende una unidad) y, en modo `menu`, en el mapa. En el mapa el primer click
-    del doble ya mandó caminar: el doble click manda `StopWalk` si ese camino salió hace
-    menos de 700 ms, y después usa;
+    del doble ya empezó a caminar: el doble click termina ese camino (desde A6, segunda
+    parte, sin `StopWalk`: los pasos ya mandados se dan) y después usa;
   - Mayús+click izquierdo sigue mirando (`LookAt`: el texto del servidor, con datos vivos).
 - **El menú del item** (`ui/ActionMenu.tsx`, el del toque largo de T5.6): título con el
   ícono a 2x, **las acciones arriba** (la primera es la acción por defecto, en negrita y
@@ -1371,7 +1432,9 @@ Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A
     `29-bosque-dock`, `46-guild-panel` y `65-volcan-temple`;
   - más los nuevos de cada tarea: ficha de item, menú del click derecho, HUD, cada
     ventana, la tienda con 24 items y el diálogo con 18 opciones.
-- **Movimiento:** tests con reloj falso (MOV-1, MOV-2, MOV-5) y el criterio de MOV-9.
+- **Movimiento:** tests con reloj falso (MOV-1, MOV-2, MOV-5), la simulación de
+  `client/src/state/walking.test.ts` y el criterio de MOV-9 (`client/e2e/movement.spec.ts`,
+  con ~150 ms de latencia en el WebSocket).
 - **UI:**
   - tests sin DOM de los componentes nuevos, con el mismo estilo de `ui/Guild.test.ts`;
   - los E2E de escritorio a 1280x800 y 1280x720 sin scroll en diálogo y tienda: el alto

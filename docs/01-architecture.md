@@ -735,8 +735,8 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
      `05-network-protocol.md`, "Condiciones"); `TestInvisibilityIsFilteredByServer`
      (`internal/session/condition_test.go`) es la auditoría de información de T4.1 para ese
      caso. Un invisible sigue ocupando su casilla: quien intente pisarla recibe
-     `WalkRejected` (un camino por click lo rodea) y los monstruos lo esquivan. Es una pista
-     aceptada.
+     `WalkRejected` (un camino por click vuelve y lo rodea) y los monstruos lo esquivan.
+     Es una pista aceptada.
    - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos. Tampoco su
      posición por otro camino: un grito llega más lejos que la ventana, y quien no ve a
      quien grita lo oye por nombre, sin posición; de un proyectil con una punta fuera de la

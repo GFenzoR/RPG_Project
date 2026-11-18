@@ -143,7 +143,8 @@ Postgres arriba; aplica las migraciones solo) y el Vite del cliente en `:5176`, 
 proxy de `/api` y `/ws`. El test crea cuenta y personaje por la API, entra por la UI
 (login con error y luego correcto, lista de personajes, Jugar), comprueba que el canvas usa
 una escala entera y muestra al menos 15x11 casillas de la ventana de 31x21, camina 3 pasos con teclado (flechas y WASD, cada uno
-predicho y confirmado) y 2 con click (`WalkPath`), y sale del juego. Cualquier error de
+predicho y confirmado) y 2 con click (el camino del cliente, cada paso un `Walk`
+predicho), y sale del juego. Cualquier error de
 consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
 junto con los del editor.
@@ -156,8 +157,16 @@ estuvo apretada, medido con `performance.now()` (screenshot `96-movement-held-ke
 soltar la tecla, en el último paso: sacarlo con la tecla apretada alargaba el tiempo en
 una CI lenta). Mide las posiciones del modelo
 (`WorldState.drawPos` en cada `frame`), no el sprite ni la cámara en pantalla: su
-redondeo a píxeles de pantalla lo cubre `client/src/render/viewport.test.ts`. La misma
-regla, con red simulada (latencia, jitter, 40 a 144 fps, un click y después una flecha,
+redondeo a píxeles de pantalla lo cubre `client/src/render/viewport.test.ts`. El segundo
+test del archivo hace lo mismo con ~150 ms de RTT y jitter en el WebSocket del juego
+(docs/17 MOV-9): un proxy en Playwright (`page.routeWebSocket`, 75 ms más 0–40 ms por
+sentido, en orden) entre la página y el servidor. Una flecha mantenida 10 casillas tiene
+que tardar la suma de sus pasos (`__rpgClient.stepMs`) ± un frame; el botón izquierdo
+mantenido unas casillas adelante y un click a 5–7 casillas tienen que caminar sin frames
+quietos ni hacia atrás y salir menos de 150 ms después del botón (screenshots
+`96b-movement-lag-mouse-held` y `96c-movement-lag-click`, con el anillo si la captura
+llega a tiempo). La misma regla, con red simulada (latencia, jitter, 40 a 144 fps, tecla,
+mouse mantenido y click previsto, un click y después una flecha, un rodeo tras un rechazo,
 `Walk` perdidos, un corte de la red), la cubre `client/src/state/walking.test.ts` en
 `make test`.
 
