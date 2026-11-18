@@ -183,8 +183,9 @@ palettes:
 # single-frame sprite (facing, flying, shadow), which the client animates procedurally.
 #
 # People: Universal LPC Spritesheet Character Generator layers (vendor/ulpc, licence per file
-# in its CREDITS.csv; the composed sprites are CC-BY-SA 3.0, assets/CREDITS.md). Layer order:
-# body, legs, feet, torso, head, beard, hair, hat.
+# in its CREDITS.csv). A composed sprite is OGA-BY 3.0 when every layer lists it, else
+# CC-BY-SA 3.0, and assets/CREDITS.md must name it in that row (make test checks it). Layer
+# order: body, legs, feet, torso, head, beard, hair, hat.
 animations:
   # ---- player outfits (data/outfits.yaml): every action ------------------------------------
   outfits/citizen:

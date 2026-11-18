@@ -12,8 +12,9 @@ the following" and that following every term of CC-BY-SA lets you use all of its
 Neque's Realm uses these files under the licence picked per file in assets/CREDITS.md:
 OGA-BY 3.0 when the file lists it, else CC-BY-SA 3.0. Never under GPL only (no file here
 lists GPL alone). Sprites composed from them (layers drawn together and recoloured by
-tools/spritepack from assets/sprites.yaml `animations`) are CC-BY-SA 3.0 works derived
-from these files.
+tools/spritepack from assets/sprites.yaml `animations`) are works derived from these files
+under the most restrictive licence of their layers: OGA-BY 3.0 when every layer lists it,
+else CC-BY-SA 3.0 (assets/CREDITS.md, "Obras derivadas de terceros", names each one).
 
 Licences (their full text is at these addresses):
 - Creative Commons Attribution-ShareAlike 3.0 Unported (CC-BY-SA 3.0)
