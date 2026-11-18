@@ -88,6 +88,17 @@ describe("DrawnBoxes.forEachHidden (07-combat: the wolf behind the tall player)"
     expect(hidden(b)).toEqual([]);
   });
 
+  it("says whether a box not in the list (a body falling dead) is covered", () => {
+    const b = new DrawnBoxes();
+    b.add(2, 10, 10, 0.6, entityZIndex(10, 10)); // the mage, in front
+    // A wolf that died on the tile north of it: no longer a creature to click.
+    const wolf = { id: 0, x: 10, bottom: 10, top: 9, order: entityZIndex(10, 9) };
+    expect(b.covered(wolf)).toBe(true);
+    // South of the mage it is in front, and one tile east nothing covers it.
+    expect(b.covered({ ...wolf, bottom: 12, top: 11, order: entityZIndex(10, 11) })).toBe(false);
+    expect(b.covered({ ...wolf, x: 11, order: entityZIndex(11, 9) })).toBe(false);
+  });
+
   it("measures the covered share of the box behind", () => {
     const [wolf, player] = [scene().at(0), scene().at(1)];
     if (!wolf || !player) throw new Error("no boxes");

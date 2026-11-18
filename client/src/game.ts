@@ -224,12 +224,12 @@ export interface ClientTestHooks {
   /**
    * A9 (docs/17 ANI-7): creatures in an attack pose now, the ones falling dead and the
    * ones shimmering away after a teleport or a logout (`ms` into it, `of` its length,
-   * `action` the clip: attack, shoot, cast or lunge; death; vanish).
+   * `action` the clip: attack, shoot, cast or lunge; death; vanish; `x`, `y` its tile).
    */
   poses(): {
-    attacking: { id: number; ms: number; of: number; action: string }[];
-    dying: { id: number; ms: number; of: number; action: string }[];
-    vanishing: { id: number; ms: number; of: number; action: string }[];
+    attacking: PoseView[];
+    dying: PoseView[];
+    vanishing: PoseView[];
   };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
@@ -241,6 +241,16 @@ export interface ClientTestHooks {
   cosmetics(): CosmeticsStateView | undefined;
   /** T5.7: players the client sees with their equipped cosmetics. */
   players(): { id: number; name: string; cosmetics: CosmeticsView }[];
+}
+
+/** One creature in a pose (ClientTestHooks.poses): its id, how far in, the clip and its tile. */
+interface PoseView {
+  id: number;
+  ms: number;
+  of: number;
+  action: string;
+  x: number;
+  y: number;
 }
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */

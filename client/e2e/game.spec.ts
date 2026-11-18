@@ -33,7 +33,15 @@ interface Caught {
   ids: number[];
   attacks: { id: number; kind: number; targetId: number }[];
   departures: { id: number; reason: string }[];
+  /** The tile of the first creature in the pose (a falling body: where it stays). */
+  at: { x: number; y: number };
 }
+
+/** A fall is shot in its last FALL_SHOT_MS (before its last 60): the hit's effect is ending. */
+const FALL_SHOT_MS = 300;
+/** Tiles round a fall that its close-up shows (it rises a tile over its own). */
+const CLOSE_W = 9;
+const CLOSE_H = 7;
 
 /**
  * A9 (docs/17 ANI-7): waits for a creature well into an attack pose (with clipOnly, an
@@ -42,7 +50,10 @@ interface Caught {
  * animation frame (after a third of it, before its last 60 ms), so the frame drawn last
  * is in it; holding requestAnimationFrame keeps the game from drawing the next one until
  * the shot is taken (an attack lasts 250-360 ms, a screenshot can take longer). Attack:
- * clips for the first 20 s, then any. Returns what it saw on that frame (Caught).
+ * clips for the first 20 s, then any; the whole page. A fall: late in it (its last
+ * FALL_SHOT_MS, when the effect of the blow that killed it is ending), and a close-up of
+ * CLOSE_W x CLOSE_H tiles round it, so the body is big in the shot (a body behind a taller
+ * creature also shows as a see-through copy). Returns what it saw on that frame (Caught).
  */
 async function shotPose(
   page: Page,
@@ -55,13 +66,17 @@ async function shotPose(
     const left = deadline - Date.now();
     const handle = await page
       .waitForFunction(
-        ({ k, clips }): Caught | false => {
+        ({ k, clips, late }): Caught | false => {
           const c = window.__rpgClient;
           const p = c?.poses();
           if (!c || !p) return false;
           const list = k === "death" ? p.dying : p.attacking.filter((a) => !clips || a.of > 300);
-          const ids = list.filter((x) => x.ms > x.of / 3 && x.ms < x.of - 60).map((x) => x.id);
-          if (ids.length === 0) return false;
+          const from = (x: { of: number }): number =>
+            k === "death" ? Math.max(x.of / 3, x.of - late) : x.of / 3;
+          const posed = list.filter((x) => x.ms > from(x) && x.ms < x.of - 60);
+          const first = posed[0];
+          if (!first) return false;
+          const ids = posed.map((x) => x.id);
           const w = window as unknown as PoseHold;
           const held: FrameRequestCallback[] = [];
           w.e2eHeld = held;
@@ -70,16 +85,22 @@ async function shotPose(
             held.push(cb);
             return 0;
           };
-          return { ids, attacks: c.attacks(5_000), departures: c.departures(5_000) };
+          return {
+            ids,
+            attacks: c.attacks(5_000),
+            departures: c.departures(5_000),
+            at: { x: first.x, y: first.y },
+          };
         },
-        { k: kind, clips: clipOnly },
+        { k: kind, clips: clipOnly, late: FALL_SHOT_MS },
         { timeout: clipOnly ? Math.min(20_000, left) : left, polling: "raf" },
       )
       .catch(() => undefined);
     if (!handle) continue;
     try {
       const caught = await handle.jsonValue();
-      await shot(page, name);
+      if (caught && kind === "death") await closeShot(page, name, caught.at);
+      else await shot(page, name);
       if (caught) return caught;
     } finally {
       await page.evaluate(() => {
@@ -94,6 +115,24 @@ async function shotPose(
     }
   }
   throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
+}
+
+/** Screenshot `name` of the CLOSE_W x CLOSE_H tiles round tile `at` (inside the page). */
+async function closeShot(page: Page, name: string, at: { x: number; y: number }): Promise<void> {
+  const { a, b } = await page.evaluate(({ x, y }) => {
+    const c = window.__rpgClient;
+    return { a: c?.tileToClient(x, y), b: c?.tileToClient(x + 1, y + 1) };
+  }, at);
+  const size = page.viewportSize();
+  if (!a || !b || !size) throw new Error("no canvas for the close-up");
+  const tw = b.x - a.x;
+  const th = b.y - a.y;
+  // The body rises about a tile over its own: one row more above than below.
+  const x = Math.max(0, Math.round(a.x - (CLOSE_W / 2) * tw));
+  const y = Math.max(0, Math.round(a.y - (CLOSE_H / 2 + 0.5) * th));
+  const width = Math.min(size.width - x, Math.round(CLOSE_W * tw));
+  const height = Math.min(size.height - y, Math.round(CLOSE_H * th));
+  await page.screenshot({ path: join(shots, `${name}.png`), clip: { x, y, width, height } });
 }
 
 /** Random letters with no vowels, so a name never contains a reserved word. */

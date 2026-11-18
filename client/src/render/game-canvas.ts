@@ -180,6 +180,9 @@ export interface PoseTime {
   of: number;
   /** The clip it plays: attack, shoot or cast (lunge: a single image's), death, vanish. */
   action: string;
+  /** Its tile (a body falling or shimmering away: where it stays). */
+  x: number;
+  y: number;
 }
 
 export interface GameCanvasOptions {
@@ -422,6 +425,10 @@ export async function createGameCanvas(
   const showHidden = (box: DrawnBox): void => {
     const s = sprites.get(box.id);
     if (!s?.figure || s.body.alpha < 1) return;
+    showCopy(s.body, s.figure.sprite);
+  };
+  /** The see-through copy of a body's sprite `fig` (in `body`), from the pool. */
+  const showCopy = (body: Container, fig: Sprite): void => {
     let copy = hiddenPool[hiddenShown];
     if (!copy) {
       copy = new Sprite({
@@ -434,12 +441,26 @@ export async function createGameCanvas(
       hiddenLayer.addChild(copy);
     }
     hiddenShown++;
-    const fig = s.figure.sprite;
     copy.texture = fig.texture;
-    copy.position.set(s.body.x + fig.x, s.body.y + fig.y);
+    copy.position.set(body.x + fig.x, body.y + fig.y);
     copy.scale.copyFrom(fig.scale);
     copy.skew.copyFrom(fig.skew);
+    copy.alpha = HIDDEN_ALPHA * fig.alpha; // a body fading in, falling or shimmering away
     copy.visible = true;
+  };
+  /**
+   * A body falling dead or shimmering away (a ghost) mostly hidden by a creature in front
+   * (a wolf killed right north of the mage that killed it): its see-through copy too.
+   */
+  const ghostBox: DrawnBox = { id: 0, x: 0, bottom: 0, top: 0, order: 0 };
+  const showHiddenGhost = (g: { body: Container; figure: CreatureBody }): void => {
+    const x = g.body.x / T;
+    const y = g.body.y / T;
+    ghostBox.x = x;
+    ghostBox.bottom = y + 1;
+    ghostBox.top = y - g.figure.lift / T;
+    ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
+    if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure.sprite);
   };
   view.overlay.addChild(particles.view, hiddenLayer, behindWall);
   const effectLayer = new Container({ label: "effects" });
@@ -1073,14 +1094,16 @@ export async function createGameCanvas(
         );
       }
     }
-    // A creature mostly hidden by a taller one in front (a wolf right north of a player).
-    hiddenShown = 0;
-    drawnBoxes.forEachHidden(showHidden);
-    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     // Gone without a departure of its own (another floor, a new map view): it just goes.
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
+    // A creature mostly hidden by a taller one in front (a wolf right north of a player),
+    // and a body falling or shimmering away behind one.
+    hiddenShown = 0;
+    drawnBoxes.forEachHidden(showHidden);
+    for (const g of ghosts) showHiddenGhost(g);
+    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     world.expire(now);
     drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale);
@@ -1414,13 +1437,18 @@ export async function createGameCanvas(
         const action = clip ? attackClipAction(meta, st.attackAction, dir) : "lunge";
         const of = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
         const ms = now - st.attackAt;
-        if (ms >= 0 && ms < of) attacking.push({ id, ms, of, action });
+        if (ms >= 0 && ms < of)
+          attacking.push({ id, ms, of, action, x: c?.pos.x ?? 0, y: c?.pos.y ?? 0 });
       }
       const dying: PoseTime[] = [];
       const vanishing: PoseTime[] = [];
       for (const g of ghosts) {
+        // Where its body stays: the tile it was drawn on last.
+        const x = Math.round(g.body.x / T);
+        const y = Math.round(g.body.y / T);
         if (Number.isNaN(g.state.diedAt)) {
-          vanishing.push({ id: g.id, ms: now - g.state.vanishAt, of: VANISH_MS, action: "vanish" });
+          const ms = now - g.state.vanishAt;
+          vanishing.push({ id: g.id, ms, of: VANISH_MS, action: "vanish", x, y });
           continue;
         }
         const clip = clipMs(g.figure.clips.meta, "death");
@@ -1429,6 +1457,8 @@ export async function createGameCanvas(
           ms: now - g.state.diedAt,
           of: clip ? clip + DEATH_FADE_MS : DEATH_MS,
           action: "death",
+          x,
+          y,
         });
       }
       return { attacking, dying, vanishing };
