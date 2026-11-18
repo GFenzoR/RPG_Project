@@ -33,6 +33,7 @@ sonidos. Las fuentes siguen la misma regla (`assets/vendor/font-<familia>/`, con
 | Pack / archivo | Autor | Licencia | Fuente (URL) | Carpeta | Atribución requerida |
 |---|---|---|---|---|---|
 | Dungeon Crawl Stone Soup tiles (release Nov-2015) | Artistas de Dungeon Crawl Stone Soup (lista en `ARTISTS.md` del pack) | CC0 1.0 | https://github.com/crawl/tiles (también https://opengameart.org/content/dungeon-crawl-32x32-tiles) | `assets/vendor/dungeon-crawl/` | No (se acredita igual) |
+| Universal LPC Spritesheet Character Generator: capas de personaje (cuerpos, cabezas, ropa, pelo, barbas, sombreros; 92 archivos) | Varios, por archivo: ver `assets/vendor/ulpc/CREDITS.csv` (columnas `authors` y `urls`) | Por archivo (`CREDITS.csv`): se usan bajo OGA-BY 3.0 cuando el archivo la lista y si no bajo CC-BY-SA 3.0 (pelo largo, despeinado y la barba). Nunca bajo GPL | https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator (commit `04140673ec02906f8233523639733c83690df750`) | `assets/vendor/ulpc/` | Sí |
 
 ## Obra propia
 
@@ -67,10 +68,12 @@ tiene. El cliente no usa los `.ttf` tal cual:
 
 ## Obras derivadas de terceros
 
-Todavía ninguna. Son sprites que una herramienta propia arma a partir de archivos de
-`assets/vendor/` (capas de LPC compuestas en un atuendo, recoloreados). Van en
-`assets/sprites/derived/<pack>/` con la licencia de su origen: lo que sale de un archivo
-CC-BY-SA sigue siendo CC-BY-SA.
+Son sprites que una herramienta propia arma a partir de archivos de `assets/vendor/` (capas
+de LPC compuestas en un personaje, recoloreadas). Llevan la licencia de su origen: lo que
+sale de un archivo CC-BY-SA sigue siendo CC-BY-SA. Los que arma `tools/spritepack` desde
+`assets/sprites.yaml` (`animations`) no se commitean como PNG: salen en el atlas generado,
+y su receta (capas y paletas) es la entrada de `sprites.yaml`.
 
 | Archivos | Sale de (pack y archivos de origen) | Licencia | Herramienta que los genera |
 |---|---|---|---|
+| Frames `<sprite>/<acción>_<dir>_<n>` del atlas de los atuendos `outfits/{citizen,sailor,ranger,noble}`, los monstruos `creatures/{wreck_looter,coffer_smuggler,obsidian_delver,drowned_miner}` y los NPCs `npcs/*` salvo `npcs/forge_echo` (caminar, quieto y, los que pelean, ataque y caída) | Capas de `assets/vendor/ulpc/spritesheets/` que nombra cada entrada de `animations` de `assets/sprites.yaml` (autores en `assets/vendor/ulpc/CREDITS.csv`). Recoloreadas con las paletas propias de `palettes` | CC-BY-SA 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |

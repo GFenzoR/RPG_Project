@@ -121,7 +121,7 @@ const GRASS = "assets/vendor/dungeon-crawl/dngn/floor/grass/grass0.png";
 const LABEL = [230, 230, 220, 255] as const;
 const BACKDROP = [24, 24, 28, 255] as const;
 /** What effect frames are previewed over. */
-const PREVIEW_CREATURE = "outfits/citizen/s_0";
+const PREVIEW_CREATURE = "creatures/bristleback_boar";
 
 /** A frame path (…/<name>/<n>) belongs to the strip …/<name>; other paths stand alone. */
 const stripOf = (path: string): string | undefined => /^(.*)\/[0-9]+$/.exec(path)?.[1];

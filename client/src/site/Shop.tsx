@@ -44,8 +44,11 @@ const previewSprite = (site: SiteContent, c: CosmeticDef): string | undefined =>
   return o ? `${o.sprite}/s_0` : undefined;
 };
 
-/** Previews scale the 32 px sprites by this (pixel-perfect). */
-const PREVIEW_SCALE = 2;
+/**
+ * Previews fill a box of this many px with the largest whole scale (pixel-perfect): a 32 px
+ * sprite at 2x, a 64 px LPC frame (docs/17 ANI-6) at 1x.
+ */
+const PREVIEW_BOX = 64;
 
 function Preview(props: {
   def: CosmeticDef | undefined;
@@ -55,7 +58,7 @@ function Preview(props: {
   const { def, icon } = props;
   if (!def) return null;
   if (def.kind === "outfit" && icon) {
-    const k = PREVIEW_SCALE;
+    const k = Math.max(1, Math.floor(PREVIEW_BOX / Math.max(icon.width, icon.height)));
     return (
       <span
         class="shop-preview sprite"

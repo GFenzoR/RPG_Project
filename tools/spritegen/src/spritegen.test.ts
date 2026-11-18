@@ -30,7 +30,6 @@ import {
   UI_ICON,
   UI_ICON_BOX,
 } from "./index.ts";
-import { FRONT_SWING } from "./recipes/creatures.ts";
 import { EFFECT_FRAMES } from "./recipes/effects.ts";
 import { PALETTE } from "./palette.ts";
 
@@ -221,7 +220,7 @@ describe("cast shadow", () => {
       for (let x = 8; x <= 10; x++) expect(opaque(img, x, y), `${x},${y}`).toBe(true);
   });
 
-  it("is on every creature and outfit frame and on nothing else", () => {
+  it("is on every creature and on nothing else", () => {
     for (const p of recipePaths()) {
       const img = render(p);
       let shadow = 0;
@@ -229,36 +228,6 @@ describe("cast shadow", () => {
         for (let x = 0; x < img.width; x++) if (same(get(img, x, y), SHADOW)) shadow++;
       if (RECIPES[p]?.kind === "creature") expect(shadow, p).toBeGreaterThan(10);
       else expect(shadow, p).toBeLessThan(10);
-    }
-  });
-});
-
-describe("outfit walk cycle", () => {
-  /** The lowest row of column x that is part of the figure (not its shadow). */
-  const lowest = (img: Image, x: number): number => {
-    for (let y = img.height - 1; y >= 0; y--)
-      if (opaque(img, x, y) && !same(get(img, x, y), SHADOW)) return y;
-    return -1;
-  };
-
-  it("swings the arms FRONT_SWING px up and down facing north and south", () => {
-    expect(FRONT_SWING).toBeGreaterThanOrEqual(2);
-    const outfits = new Set(recipePaths("outfits/").map((p) => p.split("/")[1]));
-    expect(outfits.size).toBeGreaterThanOrEqual(4);
-    for (const o of outfits) {
-      for (const dir of ["n", "s"]) {
-        const [stand, step1, step2] = [0, 1, 2].map((f) => render(`outfits/${o}/${dir}_${f}`));
-        if (!stand || !step1 || !step2) throw new Error(`outfits/${o}/${dir}: missing frames`);
-        // Column 10 is the screen-left arm, 21 the screen-right one (outside the torso).
-        for (const [x, sign] of [
-          [10, 1],
-          [21, -1],
-        ] as const) {
-          const at = `outfits/${o}/${dir} column ${x}`;
-          expect(lowest(step2, x) - lowest(stand, x), at).toBe(sign * FRONT_SWING);
-          expect(lowest(step1, x) - lowest(stand, x), at).toBe(-sign * FRONT_SWING);
-        }
-      }
     }
   });
 });
