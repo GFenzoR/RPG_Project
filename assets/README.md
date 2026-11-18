@@ -12,10 +12,10 @@
 ## Sonido (T3.7)
 | Ruta | Qué es | ¿Se commitea? |
 |---|---|---|
-| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla, música del título, de combate y de jefes | Sí |
+| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, ambiente por isla, y la música: las pools de temas de cada lugar (islas, cuevas, título, jefes), las medidas de cada tema y los tiempos del director | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
-| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), escrita por `make music-gemini` | Sí |
-| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, con fuente, título y medidas | Sí (lo escribe `make music-gemini`) |
+| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), temas enteros en estéreo escritos por `make music-gemini` | Sí |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de las cuevas, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -29,36 +29,56 @@
 ### La música de Gemini (`make music-gemini`)
 Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las tomas que
 Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
-Volcán, Cuevas, combate y el guardián de la forja). Las tomas están fuera de git, en
-`build/music-gemini/<lugar>_<n>.mp4` con su sidecar (la tercera de Puerto es `probe_1.mp4`),
-y las elecciones en `build/music-gemini/picks.json`:
+Volcán, Cuevas, combate y el guardián de la forja), más seis versiones de cueva pedidas
+el mismo día (`cave_mine`, `cave_crystal`, `cave_flooded`, `cave_abyss`, `cave_ossuary`,
+`cave_ember`). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
+sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
+`build/music-gemini/picks.json`:
 ```json
-{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off"}}
+{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off",
+           "cave": "1", "cave_pool": ["mine", "crystal", "ember"]}}
 ```
 - **Una toma** (`"1"`, `"2"`, `"3"`) suena en su lugar. **Varias** (una lista) entran
-  todas: la primera es el sonido del lugar (`music_puerto`) y las demás, sonidos propios
-  (`music_puerto_2`, `music_puerto_3`) para el director de música que las va a alternar
-  (pendiente, `docs/14`).
-- **Un lugar sin elegir** suena con su toma 1, marcada `provisional` en el manifiesto y en
-  su fila de `CREDITS.md`.
+  todas: la primera es el sonido del lugar (`music_puerto`), las demás sonidos propios
+  (`music_puerto_2`, `music_puerto_3`), y todas forman la pool del lugar en `sounds.yaml`
+  (`music.pools.town_puerto`), que el director de música baraja.
+- **Las versiones de cueva** (`cave_pool`: `"mine"`, `"cave_mine"` o `"cave_mine_1"`) se
+  suman a la pool de las cuevas después de su toma (`music_cueva_mine`...). Mientras el dueño
+  no escriba `cave_pool`, entran las seis que pasan las medidas
+  (`music_convert.piece_problems`: tema entero de 2 minutos o más, volumen medible, ningún
+  hueco de silencio de más de 6 s, al menos dos puntos de entrada), marcadas
+  **provisionales** (en el manifiesto y en su fila de `CREDITS.md`); las que no pasan quedan
+  en `skipped` con el motivo.
+- **Un lugar sin elegir** suena con su toma 1, marcada `provisional`.
 - **`none` u `off`** deja lo que sonaba antes de Gemini: el tema de soundgen de ese lugar
   (`puerto`, `bosque`, `volcan`, `cueva`: por eso siguen en el repo con sus recetas), o
-  nada propio donde no había (título, combate, jefe: sigue la música de la zona).
+  nada propio donde no había (título, jefe: sigue la música de la zona). **El combate solo
+  acepta `none`/`off`**: el dueño no quiere música para peleas comunes (2026-11-18).
 
 Para cambiar una elección: editar `picks.json` y correr **`make music-gemini`** (con
 `FROM=<carpeta>` si las tomas están en otro lado). Hace todo de nuevo desde las elecciones:
-convierte cada toma con `music_convert.py` (sin fades, un loop de 54 a 72 s elegido donde
-lo que sigue al corte se parece al comienzo, cerrado con un crossfade, una sola ganancia
-hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **mono a 20 kbps**; una toma ya convertida
-con los mismos ajustes no se vuelve a convertir), la copia a `sounds/music/gemini/`,
-reescribe sus líneas de `sounds.yaml` (entre las marcas `# gemini-music:…`), el archivo de
-prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md` y
-`sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
-(`tools/soundgen check`). Los masters de Gemini vienen calientes (picos de +1,5 a +5 dBTP):
-el techo de pico deja los loops entre -16 y -19,5 LUFS, y el volumen de `sounds.yaml`
-devuelve esa diferencia hasta 1 (`volume_for`), así que suenan ~2 dB por debajo de los
-temas de soundgen. Después: `make test` (el test de soundgen compara el manifiesto con
-`sounds.yaml`, las filas y la carpeta), `make validate` y escucharlo con `make play`.
+convierte cada toma **entera** con `music_convert.py` (`loop=False`: nada se corta, una
+sola ganancia hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **estéreo a 48 kbps**, 40 las
+cuevas; una toma ya convertida con los mismos ajustes no se vuelve a convertir) y mide
+dónde puede empezar (`entries`: donde empieza una frase según la envolvente de nivel, a
+15 s o más uno de otro, nunca en el segundo 0 ni en los últimos 30 s del cuerpo), dónde
+termina su cuerpo (`end`: empieza el final compuesto) y su hueco más largo. Después la copia
+a `sounds/music/gemini/`, reescribe sus líneas de `sounds.yaml` (sonidos con `seconds`,
+`end` y `entries`, pools, título y jefes, entre las marcas `# gemini-music:…`), el archivo
+de prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md`
+y `sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
+(`tools/soundgen check`, que ahora suma también cada pool). Los masters de Gemini vienen
+calientes (picos de +1,5 a +5 dBTP): donde el techo de pico deja una toma bajo -14 LUFS, el
+volumen de `sounds.yaml` devuelve la diferencia hasta 1 (`volume_for`; el medidor lee un
+archivo mono como dos parlantes, así que un tema estéreo y uno mono de soundgen al mismo
+LUFS suenan igual). Después: `make test` (el test de soundgen compara el manifiesto con
+`sounds.yaml`, las pools, las filas y la carpeta), `make validate` y escucharlo con
+`make play`.
+
+**Cómo suena en el juego** (el director de música, `client/src/audio/director.ts`; reglas
+en `docs/02`, "Sonido"): cada tema se transmite (no se decodifica entero, docs/07 "Audio"),
+empieza en un punto de entrada al azar, nunca se repite dos veces seguidas, y los cambios
+de lugar son fundidos de potencia constante con su largo según qué cambió.
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
@@ -438,19 +458,18 @@ prompts en `assets/prompts/sprites/creatures/`):
   assets/prompts/sprites/creatures/<c>.txt`: con el `import.json` (y no el sidecar) el
   archivo de prompt suma la hoja que volvió (sha256) y el comando exacto que la cortó.
 
-Música, del MP4 al loop:
+Música, del MP4 al juego:
 1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
    uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
    con su `.json`.
-2. Se escuchan, y el elegido pasa por `python tools/gemini/music_convert.py
-   build/gemini/music/<tema>_<n>.mp4`: sin fades, cerrado en bucle con un crossfade de la
-   cola sobre la cabeza, a -14 LUFS (el nivel de la música que ya tiene el juego) y en
-   Ogg Opus, con la costura medida después de
-   codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
+2. Se escuchan (para probar una conversión suelta: `python tools/gemini/music_convert.py
+   build/gemini/music/<tema>_<n>.mp4 --no-loop`, el tema entero a -14 LUFS en Ogg Opus con
+   sus puntos de entrada en el `.json`; sin `--no-loop` hace un loop cerrado con crossfade,
+   como antes del 2026-11-18).
 3. El dueño elige en `build/music-gemini/picks.json` y `make music-gemini` lo pone en el
-   juego con sus créditos ("La música de Gemini", arriba). El presupuesto se respeta sin
-   subirlo: mono, 20 kbps y loops de ~1 minuto (un tema entero de ~3 min pesaría ~650 KB
-   en estéreo a 32 kbps y ocuparía ~33 MB decodificado).
+   juego con sus créditos ("La música de Gemini", arriba): temas enteros en estéreo
+   (~1 MiB cada uno), que el cliente transmite. El presupuesto (docs/07 "Audio") se
+   revisó para eso el 2026-11-18.
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:
