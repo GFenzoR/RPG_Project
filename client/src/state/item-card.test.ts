@@ -151,6 +151,15 @@ describe("itemCard", () => {
     expect(itemCard(forge, 1, 1).stats).toEqual([]);
   });
 
+  it("a quest item takes the quest colour and says so with a mark (docs/17 UI-6)", () => {
+    const tally: ItemDef = { ...base, kind: "material", tradeable: false, quest: true };
+    const card = itemCard(tally, 3, 4);
+    expect(card.quest).toBe(true);
+    expect(card.marks).toEqual(["client.card.mark.quest", "client.card.mark.no_trade"]);
+    expect(itemCard(sword, 1, 1).quest).toBeUndefined();
+    expect(itemCard(sword, 1, 1).marks).not.toContain("client.card.mark.quest");
+  });
+
   it("an unknown item gets an empty card", () => {
     const card = itemCard(undefined, 999, 0);
     expect(card).toMatchObject({ itemId: 999, id: "", count: 1, type: [], stats: [] });

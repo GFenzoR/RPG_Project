@@ -2981,11 +2981,17 @@ button.credits-link {
   gap: 8px;
   margin-bottom: 2px;
 }
+/* docs/17 UI-6: the name in parchment, a quest item's in the quest colour (and its card says
+   it with a mark, for whoever does not see the colour). */
 .card-name {
   font-family: var(--ui-font-title);
   font-weight: 700;
   font-size: 14px;
-  color: var(--ui-gold-300);
+  color: var(--ui-text);
+}
+.card-name.quest,
+.touch-menu-name.quest {
+  color: var(--ui-item-quest);
 }
 .card-name::first-letter {
   text-transform: uppercase;

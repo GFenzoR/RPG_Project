@@ -36,6 +36,10 @@
         "max_stack": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "tradeable": { "type": "boolean" },
         "pickupable": { "type": "boolean" },
+        "quest": {
+          "type": "boolean",
+          "description": "docs/17 UI-6, display only: an item that exists for a quest (what a step's has_item asks for). The client shows its name in the quest colour (--ui-item-quest) with a mark on its card; the server ignores it."
+        },
         "elevation": {
           "type": "integer",
           "minimum": 1,

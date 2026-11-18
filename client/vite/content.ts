@@ -393,6 +393,7 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
     };
   if (raw["pickupable"] === false) out.fixed = true;
   if (raw["market_board"] === true) out.board = true;
+  if (raw["quest"] === true) out.quest = true;
   return out;
 }
 

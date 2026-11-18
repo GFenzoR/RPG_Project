@@ -65,6 +65,8 @@ export interface ItemDef {
   fixed?: true;
   /** `market_board: true` (T5.3): using it opens the global market. */
   board?: true;
+  /** `quest: true` (docs/17 UI-6): a quest item, named in the quest colour. */
+  quest?: true;
 }
 
 /** The `weapon` block of an item (data/items). */

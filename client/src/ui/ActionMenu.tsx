@@ -239,7 +239,9 @@ export function ActionMenu(props: {
         {menu.title && (
           <div class="touch-menu-title">
             {icon && <BigIcon icon={icon} class="touch-menu-icon" />}
-            <span class="touch-menu-name">{menu.title}</span>
+            <span class={card?.quest ? "touch-menu-name quest" : "touch-menu-name"}>
+              {menu.title}
+            </span>
           </div>
         )}
         {menu.actions.map((kind, i) =>
