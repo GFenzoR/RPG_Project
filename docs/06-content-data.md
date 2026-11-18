@@ -550,10 +550,11 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
 - **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal` y
-  de una `condition` va de 1 a 6 (el esquema y `content.MaxRange`): el medio alto de la
-  ventana clásica de 15x11 + 1, lo que nota un monstruo. Así un monstruo golpeado desde
-  tan lejos como apunta un jugador siempre lo nota y devuelve el golpe; la vista ancha de
-  31x21 no lo estiró (`02-game-design.md` "La vista").
+  de una `condition` va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
+  esquema y `content.MaxRange`): el medio alto de la ventana clásica de 15x11 + 1, lo que
+  nota un monstruo. Así un monstruo golpeado desde tan lejos como apunta un jugador, o
+  por un área, siempre lo nota y devuelve el golpe; la vista ancha de 31x21 no lo estiró
+  (`02-game-design.md` "La vista").
 - `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
   `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.
 - Las palabras deben ser únicas (el validador lo revisa) y propias. Los nombres van en

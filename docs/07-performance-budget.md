@@ -125,9 +125,9 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
   con la curva y el ritmo de `balance.yaml → experience` (ley de potencia entre los anclajes
   8 → 1 h, 20 → 8 h, 50 → 80 h; fuera de ellos, el tramo más cercano).
 - **Eficiencia 2/3:** nadie mata a un monstruo en el instante en que reaparece (caminar,
-  saquear, curarse, y un monstruo no reaparece en una casilla que un jugador ve, docs/02
-  "Monstruos"; con la vista de 31x21 ese "ve" es más grande: "La vista", pendiente de
-  medir en docs/14). Jugadores de la franja = XP/h de sus monstruos × 2/3 / XP/h por jugador.
+  saquear, curarse, y un monstruo no reaparece cerca de un jugador: dentro de la ventana
+  clásica de 15x11 + 1, también con la vista de 31x21, docs/02 "Monstruos" y "La vista").
+  Jugadores de la franja = XP/h de sus monstruos × 2/3 / XP/h por jugador.
 - Cada monstruo de producción pertenece a una sola franja (el test lo exige: uno nuevo
   obliga a ubicarlo). El jefe de la forja suma a la de 50–60.
 
@@ -394,8 +394,17 @@ tiempos de `go test -bench` (mediana de 3):
 - **Monstruos:** lo que nota un monstruo sigue siendo la ventana clásica (`InSight`) y
   `pickTarget` recorre solo ese rectángulo: la IA no cuesta más. Los sectores activos (2
   sectores alrededor de cada jugador, 64 casillas o más) ya cubrían la ventana ancha.
+- **Respawns:** el bloqueo de un respawn (`watched`) mira la ventana clásica, no la
+  ancha: con la ancha, quien caza en un spawn frenaba los vecinos (a 12–20 casillas) y la
+  "Eficiencia 2/3" de "Capacidad del mundo" quedaba optimista. Así la capacidad sigue
+  como se midió con 15x11 (`TestRespawnWaitsOnlyForTheClassicWindow`).
 - **Pendiente:** repetir `make bots` (base y stress) contra un servidor real con la vista
   de 31x21 y el monitoreo, para confirmar la medición en proceso (docs/14).
+- **Pendiente, el cliente:** a 1x en 1920x1080 se dibuja la ventana entera, unas 650
+  casillas por capa en vez de las 165 de 15x11, más las etiquetas de una multitud. No se
+  midieron FPS ni draw calls (no hay instrumentación y piden un navegador real con GPU,
+  como en "Cliente" arriba): anotar FPS y draw calls a 1x y a la escala por defecto en
+  1920x1080, en el pueblo con bots, contra el presupuesto (60 fps, < 50 draw calls).
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

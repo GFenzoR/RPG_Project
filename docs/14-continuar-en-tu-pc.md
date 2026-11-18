@@ -199,7 +199,10 @@ el punto 5:
   proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
   Tras la revisión, los rangos con que apunta un jugador (armas, hechizos, condiciones)
   quedaron topados en 6 (`content.MaxRange`, esquema y carga): un monstruo golpeado desde
-  tan lejos siempre lo nota y contesta. Quedó:
+  tan lejos siempre lo nota y contesta. La segunda revisión topó también el `radius` de
+  los hechizos de área, dejó que proponer un intercambio a un invisible conteste "no es
+  posible" (antes "muy lejos" decía dónde estaba) y devolvió el bloqueo de los respawns a
+  la ventana clásica (abajo). Quedó:
   - **Repetir `make e2e`:** la rama se rebasó sobre la punta de `feat/movement-feel`
     (`d9d80ca`, con f29dcc9 y f88d92a de `feat/ui-theme`); los screenshots de A7 (97b, 98b
     y los de teléfonos) se sacaron sin el CSS de hotbar y condiciones de f88d92a.
@@ -224,10 +227,17 @@ el punto 5:
     y el resto en `--ui-void`; quedó el canvas lleno hasta los bordes con casillas
     fraccionarias, centrado en el jugador (como el zoom de antes). Revisarlo en el playtest
     con la UI oscura.
-  - **Respawns y la vista ancha:** un monstruo no reaparece donde un jugador lo ve, y ahora
-    se ve hasta 16 casillas a los lados: quien caza en un spawn frena los respawns de los
-    vecinos (están a 12–20). La capacidad del mundo (docs/07) no lo modela; mirarlo con
-    la telemetría del primer público o con un test de capacidad espacial.
+  - **Respawns y la vista ancha, para que lo confirme el dueño:** un monstruo no reaparece
+    con un jugador dentro de la ventana clásica de 15x11 + 1 (`session.watched`), como
+    antes de la vista ancha. Con la ventana entera, quien caza en un spawn frenaba los
+    respawns de los vecinos (están a 12–20) y la capacidad del mundo (docs/07) quedaba
+    optimista sin medirlo. El costo: un monstruo puede aparecer dentro de lo que se ve, a
+    9–16 casillas a los lados o 7–11 arriba y abajo. Si el dueño prefiere que nada aparezca a la vista, es una línea
+    (`watched` con `eachObserver`) más medir la capacidad (telemetría o un test
+    espacial) y ajustar respawns y distancias.
+  - **El cliente a 31x21 sin medir:** a 1x se dibujan unas 650 casillas por capa (165 con
+    15x11) más las etiquetas. Anotar FPS y draw calls a 1x y a la escala por defecto en
+    1920x1080 (docs/07 "Vista ancha"); pide un navegador real con GPU.
   - **Etiquetas a 1x:** alejado a la ventana entera los nombres se acomodan con la regla de
     zoom 1x (`render/labels.ts`); en una multitud se ocultan muchos. Revisarlo en el
     playtest.

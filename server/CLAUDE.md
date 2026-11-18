@@ -313,8 +313,11 @@ server/
   persigue un monstruo** es la ventana clásica de 15x11 + 1 (`InSight`, `SightHalfW`/`H`):
   una regla nueva de "ver" de un monstruo usa `InSight`, nunca `Sees`. Los rangos de armas,
   hechizos y ataques salen de `data/`; `content.MaxReach` y `content.MaxRange` (6, el
-  alcance de las manos y el rango con que apunta un jugador) siguen a la ventana clásica:
-  un monstruo golpeado desde tan lejos como se apunta siempre devuelve el golpe.
+  alcance de las manos y el rango o radio con que apunta un jugador) siguen a la ventana
+  clásica: un monstruo golpeado desde tan lejos como se apunta siempre devuelve el golpe.
+  El bloqueo de un respawn (`watched`) también mira la ventana clásica, no la ancha (la
+  capacidad del mundo de docs/07). Una respuesta que dependa de dónde está otro jugador
+  pide `Sees` **y** `Knows` (un invisible no se ve aunque esté en la ventana).
   Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
   comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
 

@@ -193,18 +193,18 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   La elección se recuerda por dispositivo.
 - **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
   (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, reportar
-  a un jugador, la vida y el maná de los miembros del grupo y que un monstruo no
-  reaparezca donde un jugador lo vería. Un objetivo a 15 casillas se conserva; para
-  pegarle hay que llegar a su rango (con "perseguir", el personaje camina). Proponer un
-  intercambio sigue pidiendo estar al lado: la ventana solo cambia la respuesta ("no es
-  posible" a quien no se ve, "muy lejos" a quien se ve y no está al lado).
+  a un jugador y la vida y el maná de los miembros del grupo. Un objetivo a 15 casillas
+  se conserva; para pegarle hay que llegar a su rango (con "perseguir", el personaje
+  camina). Proponer un intercambio sigue pidiendo estar al lado: la ventana solo cambia
+  la respuesta ("no es posible" a quien no se ve, también a un invisible aunque esté al
+  lado; "muy lejos" a quien se ve y no está al lado).
 - **No cambia con la vista:**
   - **Los rangos:** cada arma a distancia, hechizo y ataque de monstruo tiene su `range`
     en `data/`. Ver más lejos no los alarga. El de un arma, un hechizo de daño o de
     curación y una condición a distancia es como mucho 6 (el esquema y
-    `content.MaxRange`), el medio alto de la ventana clásica: un monstruo golpeado desde
-    tan lejos como apunta un jugador siempre lo nota y devuelve el golpe (si no, se lo
-    mataría gratis desde fuera de lo que nota). El de un ataque de monstruo no tiene ese
+    `content.MaxRange`), el medio alto de la ventana clásica, y el `radius` de un hechizo
+    de área también: un monstruo golpeado desde tan lejos como apunta un jugador siempre
+    lo nota y devuelve el golpe (si no, se lo mataría gratis desde fuera de lo que nota). El de un ataque de monstruo no tiene ese
     tope: un monstruo solo ataca a un objetivo que nota.
   - **Lo que nota un monstruo:** un agresivo elige objetivo, y lo sigue persiguiendo, solo
     dentro de la ventana clásica: 15x11 + 1 de margen, 8 casillas a los lados y 6 arriba y
@@ -217,11 +217,15 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
 - **PvP:** la visión es la ventana entera, igual para todos. Quien juega con el mapa
   acercado (o en un teléfono, que por defecto muestra menos) tiene en la lista de batalla
   todo lo que su cliente conoce. La cámara va centrada en el jugador, sin "mirar adelante".
-- **Respawns:** un monstruo no reaparece en una casilla que algún jugador ve, y ahora se
-  ve más: quien caza en un spawn también frena los respawns de los spawns a menos de 16
-  casillas a los lados y 11 arriba y abajo (están a unas 12–20). Cada uno reintenta cada
-  5 s en otra casilla de su radio. Si la capacidad del mundo lo nota (`07`, "Capacidad del
-  mundo"), se ajusta con respawns y distancias, no con la regla.
+- **Respawns:** un monstruo no reaparece en una casilla con algún jugador dentro de su
+  ventana clásica (8 casillas a los lados y 6 arriba y abajo, en los pisos que se ven
+  juntos; `session.watched`), no de la ventana entera. Si fuera la entera, quien caza en
+  un spawn frenaría los respawns de los spawns vecinos (están a unas 12–20 casillas) y la
+  capacidad del mundo (`07`, "Capacidad del mundo", medida con 15x11) quedaría corta. A
+  cambio, un monstruo puede aparecer dentro de lo que ve un jugador, a 9–16 casillas a
+  los lados o 7–11 arriba y abajo. Cada spawn bloqueado reintenta cada 5 s en otra casilla
+  de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
+  prefiere que nada aparezca a la vista.
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
@@ -614,8 +618,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
   `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está mirando el punto, con la vista ancha de 31x21 (evita aparecer en la cara):
-  se reintenta cada 5 s.
+  jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
+  aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
