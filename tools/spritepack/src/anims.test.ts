@@ -257,6 +257,40 @@ describe("buildAtlas with animations", () => {
     });
   });
 
+  it("animates a sprite from files named <sprite>/<action>_<dir>_<n> (own art)", () => {
+    const frame = (rows: number): Buffer => {
+      const img = createImage(32, 32);
+      fillRect(img, 8, 30 - rows, 16, rows, GREY);
+      return encodePng(img);
+    };
+    put("assets/sprites/creatures/boar.png", frame(10));
+    for (const n of [0, 1, 2, 3])
+      put(`assets/sprites/creatures/boar/walk_w_${n}.png`, frame(10 + n));
+    put("assets/sprites/creatures/boar/walk_e_0.png", frame(10)); // e has a gap: 1 frame
+    for (const n of [0, 1]) put(`assets/sprites/creatures/ghost/idle_s_${n}.png`, frame(8));
+    put("assets/sprites.yaml", "sprites: {}\nanimations:\n  creatures/boar: { facing: left }\n");
+    put("data/monsters/boar.yaml", "id: boar\nsprite: creatures/boar\n");
+    put("data/monsters/ghost.yaml", "id: ghost\nsprite: creatures/ghost\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.anims["creatures/boar"]).toEqual({
+      w: 32,
+      h: 32,
+      anchor: "br",
+      foot: 2,
+      top: 13,
+      shadow: "baked",
+      facing: "left",
+      actions: { walk: { frames: 1, ms: 0, perTile: 1, dirs: ["e", "w"] } },
+    });
+    expect(r.atlas?.index.anims["creatures/ghost"]?.actions).toEqual({
+      idle: { frames: 2, ms: 500, dirs: ["s"] },
+    });
+    // No base file: the base name is the first idle frame, not a placeholder.
+    const page = r.atlas?.pages[0]?.json.frames;
+    expect(page?.["creatures/ghost"]).toEqual(page?.["creatures/ghost/idle_s_0"]);
+  });
+
   it("maps legacy outfit frames onto the idle pose and the walk cycle", () => {
     const meta = {
       w: 64,

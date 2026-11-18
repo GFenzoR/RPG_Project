@@ -14,7 +14,7 @@ import {
   measureFrames,
   recolorImage,
 } from "./anims.ts";
-import type { AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
+import type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
 import { collectSpriteRefs, listFiles } from "./content.ts";
 import type { SpriteRef } from "./content.ts";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
@@ -250,6 +250,50 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     anims[name] = built.meta;
   }
 
+  // 2c. Frames by name (docs/17 ANI-4): files <sprite>/<action>_<dir>_<n> (own art, such as
+  // a spritegen walk cycle) animate <sprite>; and hints-only entries for a sprite that exists.
+  const fileFrames = new Map<string, Map<string, Image>>();
+  for (const [name, r] of resolved) {
+    const m = FRAME_NAME.exec(name);
+    if (!m?.[1] || r.origin !== "file" || anims[m[1]]) continue;
+    const list = fileFrames.get(m[1]) ?? new Map<string, Image>();
+    list.set(name, r.image);
+    fileFrames.set(m[1], list);
+  }
+  const hinted = new Map<string, AnimEntry>();
+  for (const [name, entry] of sortedAnims) if (entry.layers.length === 0) hinted.set(name, entry);
+  const bases = [...new Set([...fileFrames.keys(), ...hinted.keys()])].sort();
+  for (const name of bases) {
+    const entry = hinted.get(name);
+    const where = at(MANIFEST_FILE, animLines.get(name));
+    const frames = fileFrames.get(name);
+    const r = resolved.get(name);
+    if (entry && (!r || r.origin === "auto") && !frames) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `${name}: hints need a sprite of that name (a file in ${SPRITES_DIR} or a sprites entry)`,
+      });
+      continue;
+    }
+    const found = frames ? framesByName(name, frames) : undefined;
+    const image = r?.image ?? found?.first;
+    if (!image) continue;
+    const m = measureFrames(found?.walk.length ? found.walk : [image]);
+    anims[name] = {
+      w: image.width,
+      h: image.height,
+      anchor: "br",
+      foot: m.foot,
+      top: m.top,
+      shadow: entry?.shadow ?? "baked",
+      ...(entry?.facing ? { facing: entry.facing } : {}),
+      ...(entry?.flying ? { flying: true } : {}),
+      actions: found?.actions ?? {},
+    };
+    if (!r && found) aliases.set(name, found.base);
+  }
+
   // 3. Sprites used by data/ that nothing provides.
   const refs = collectSpriteRefs(root);
   const refsBySprite = new Map<string, SpriteRef[]>();
@@ -282,33 +326,6 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
         height: TILE,
       }),
     });
-  }
-
-  // 3b. Hints-only animations: drawing hints for a sprite that exists.
-  for (const [name, entry] of sortedAnims) {
-    if (entry.layers.length > 0) continue;
-    const where = at(MANIFEST_FILE, animLines.get(name));
-    const r = resolved.get(name);
-    if (!r || r.origin === "auto") {
-      diags.push({
-        severity: "error",
-        where,
-        message: `${name}: hints need a sprite of that name (a file in ${SPRITES_DIR} or a sprites entry)`,
-      });
-      continue;
-    }
-    const m = measureFrames([r.image]);
-    anims[name] = {
-      w: r.image.width,
-      h: r.image.height,
-      anchor: "br",
-      foot: m.foot,
-      top: m.top,
-      shadow: entry.shadow,
-      ...(entry.facing ? { facing: entry.facing } : {}),
-      ...(entry.flying ? { flying: true } : {}),
-      actions: {},
-    };
   }
 
   const sprites = new Map<string, { origin: Origin; refs: SpriteRef[] }>();
@@ -405,6 +422,51 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
   }
   write("atlas.json", JSON.stringify(atlas.index, null, 2) + "\n");
   return written;
+}
+
+/** An animation frame's name: <sprite>/<action>_<dir>_<n> (docs/17 ANI-4). */
+const FRAME_NAME = /^(.+)\/(idle|walk|attack|death)_([nesw])_([0-9]+)$/;
+
+/** Default ms per frame of an action whose frames are files (walk plays by distance). */
+const FILE_FRAME_MS: Record<AnimAction, number> = { idle: 500, walk: 0, attack: 60, death: 100 };
+
+/**
+ * The clips that files named <sprite>/<action>_<dir>_<n> make: per action, the facings
+ * that have frame 0, and as many frames as every one of them has from 0 without a gap.
+ */
+function framesByName(
+  sprite: string,
+  frames: Map<string, Image>,
+): { actions: AnimMeta["actions"]; base: string; first: Image | undefined; walk: Image[] } {
+  const actions: AnimMeta["actions"] = {};
+  for (const action of ANIM_ACTIONS) {
+    const dirs = ANIM_DIRS.filter((d) => frames.has(frameName(sprite, action, d, 0)));
+    if (dirs.length === 0) continue;
+    let count = Infinity;
+    for (const d of dirs) {
+      let n = 0;
+      while (frames.has(frameName(sprite, action, d, n))) n++;
+      count = Math.min(count, n);
+    }
+    actions[action] = {
+      frames: count,
+      ms: FILE_FRAME_MS[action],
+      ...(action === "walk" ? { perTile: Math.max(1, Math.floor(count / 2)) } : {}),
+      dirs,
+    };
+  }
+  const order = ["idle", "walk", "attack", "death"] as const;
+  let base = "";
+  for (const action of order) {
+    const a = actions[action];
+    if (!a) continue;
+    base = frameName(sprite, action, a.dirs.includes("s") ? "s" : (a.dirs[0] ?? "s"), 0);
+    break;
+  }
+  const walk = actions.walk
+    ? [...frames].filter(([k]) => k.startsWith(`${sprite}/walk_`)).map(([, v]) => v)
+    : [];
+  return { actions, base, first: frames.get(base), walk };
 }
 
 const sortedRecord = <T>(r: Record<string, T>): Record<string, T> =>

@@ -37,6 +37,21 @@ const thornWood = material("#6e5440", "#4f3a2b", "#38291e", "#251b13");
 
 // ---- helpers -----------------------------------------------------------------------------
 
+/**
+ * A four-legged trot (docs/17 ANI-2): frame f of 4, the legs in diagonal pairs (near front
+ * with far back, near back with far front). Each pair reaches forward (towards the head,
+ * to the left), passes under the body lifted 1 px, swings back and passes again on the
+ * ground. f < 0 is the standing pose: no offset.
+ */
+const TROT = [
+  { dx: -1, lift: 0 },
+  { dx: 0, lift: 1 },
+  { dx: 1, lift: 0 },
+  { dx: 0, lift: 0 },
+] as const;
+const trot = (f: number, pair: 0 | 1): { dx: number; lift: number } =>
+  f < 0 ? { dx: 0, lift: 0 } : (TROT[(f + pair * 2) % TROT.length] ?? { dx: 0, lift: 0 });
+
 /** A shaded ellipse (a body, a head): domeLight plus a bias. */
 function ball(img: Image, cx: number, cy: number, rx: number, ry: number, m: Material, bias = 0) {
   eachInEllipse(cx, cy, rx, ry, (x, y, nx, ny) =>
@@ -180,12 +195,15 @@ function thievingGull(img: Image): void {
 }
 
 /** A squat, dark boar with a pale bristle crest along its back and curved tusks. */
-function bristlebackBoar(img: Image): void {
+function bristlebackBoar(img: Image, f = -1): void {
+  // Diagonal pairs: a = near front + far back, b = near back + far front.
+  const a = trot(f, 0);
+  const b = trot(f, 1);
   // Far legs.
-  limb(img, 22, 24, 3, 5, boarFur, -0.3);
-  limb(img, 26, 23, 3, 5, boarFur, -0.3);
-  rect(img, 22, 28, 3, 1, hoof.base);
-  rect(img, 26, 27, 3, 1, hoof.base);
+  limb(img, 22 + b.dx, 24, 3, 5 - b.lift, boarFur, -0.3);
+  limb(img, 26 + a.dx, 23, 3, 5 - a.lift, boarFur, -0.3);
+  rect(img, 22 + b.dx, 28 - b.lift, 3, 1, hoof.base);
+  rect(img, 26 + a.dx, 27 - a.lift, 3, 1, hoof.base);
   // Tail.
   line(img, 29, 16, 30, 18, boarFur.shadow);
   // Body.
@@ -239,20 +257,23 @@ function bristlebackBoar(img: Image): void {
   px(img, 8, 19, [40, 18, 14, 255]);
   px(img, 9, 19, boarFur.deep);
   // Near legs.
-  limb(img, 9, 25, 3, 5, boarFur, -0.05);
-  limb(img, 15, 25, 3, 5, boarFur, -0.05);
-  rect(img, 9, 29, 3, 1, hoof.base);
-  rect(img, 15, 29, 3, 1, hoof.base);
+  limb(img, 9 + a.dx, 25, 3, 5 - a.lift, boarFur, -0.05);
+  limb(img, 15 + b.dx, 25, 3, 5 - b.lift, boarFur, -0.05);
+  rect(img, 9 + a.dx, 29 - a.lift, 3, 1, hoof.base);
+  rect(img, 15 + b.dx, 29 - b.lift, 3, 1, hoof.base);
   outline(img, { amount: 0.55 });
 }
 
 /** A red deer whose antlers are thorny bramble wood, with leaves and berries, and a vine on its back. */
-function brambleStag(img: Image): void {
-  // Far legs.
-  slantLimb(img, 15, 20, 14, 28, 2, stagCoat, -0.35);
-  slantLimb(img, 25, 20, 26, 28, 2, stagCoat, -0.35);
-  rect(img, 13, 29, 2, 1, hoof.base);
-  rect(img, 26, 29, 2, 1, hoof.base);
+function brambleStag(img: Image, f = -1): void {
+  // Diagonal pairs: a = near front + far back, b = near back + far front.
+  const a = trot(f, 0);
+  const b = trot(f, 1);
+  // Far legs: the hip stays, the hoof moves.
+  slantLimb(img, 15, 20, 14 + b.dx, 28 - b.lift, 2, stagCoat, -0.35);
+  slantLimb(img, 25, 20, 26 + a.dx, 28 - a.lift, 2, stagCoat, -0.35);
+  rect(img, 13 + b.dx, 29 - b.lift, 2, 1, hoof.base);
+  rect(img, 26 + a.dx, 29 - a.lift, 2, 1, hoof.base);
   // Body with a pale belly.
   eachInEllipse(20, 16.5, 8.5, 5, (x, y, nx, ny) => {
     const m = ny > 0.55 ? stagBelly : stagCoat;
@@ -274,10 +295,10 @@ function brambleStag(img: Image): void {
     (x, y) => 0.8 - (x - 9) * 0.05 + (y > 14 ? -0.1 : 0),
   );
   // Near legs.
-  slantLimb(img, 12, 19, 11, 28, 2, stagCoat, -0.05);
-  slantLimb(img, 22, 20, 23, 28, 2, stagCoat, -0.05);
-  rect(img, 10, 29, 2, 1, hoof.base);
-  rect(img, 23, 29, 2, 1, hoof.base);
+  slantLimb(img, 12, 19, 11 + a.dx, 28 - a.lift, 2, stagCoat, -0.05);
+  slantLimb(img, 22, 20, 23 + b.dx, 28 - b.lift, 2, stagCoat, -0.05);
+  rect(img, 10 + a.dx, 29 - a.lift, 2, 1, hoof.base);
+  rect(img, 23 + b.dx, 29 - b.lift, 2, 1, hoof.base);
   // Head and muzzle.
   ball(img, 9.5, 9.5, 3.5, 3, stagCoat, 0.1);
   ball(img, 6, 12, 2.2, 1.7, stagCoat, -0.05);
@@ -373,8 +394,22 @@ function brambleStag(img: Image): void {
   }
 }
 
+/**
+ * Walk cycles (docs/17 ANI-4): <sprite>/walk_w_<n>, looking left like the standing pose;
+ * the client mirrors them to walk east (`facing: left` in assets/sprites.yaml).
+ */
+const walkCycle = (sprite: string, draw: (img: Image, f: number) => void): RecipeBook =>
+  Object.fromEntries(
+    TROT.map((_, f) => [
+      `${sprite}/walk_w_${f}`,
+      { kind: "creature" as const, draw: (img: Image) => draw(img, f) },
+    ]),
+  );
+
 export const CREATURES: RecipeBook = {
   "creatures/thieving_gull": { kind: "creature", draw: thievingGull },
-  "creatures/bristleback_boar": { kind: "creature", draw: bristlebackBoar },
-  "creatures/bramble_stag": { kind: "creature", draw: brambleStag },
+  "creatures/bristleback_boar": { kind: "creature", draw: (img) => bristlebackBoar(img) },
+  "creatures/bramble_stag": { kind: "creature", draw: (img) => brambleStag(img) },
+  ...walkCycle("creatures/bristleback_boar", bristlebackBoar),
+  ...walkCycle("creatures/bramble_stag", brambleStag),
 };

@@ -76,6 +76,13 @@ export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 
 /**
+ * Animation frames of a creature sprite (docs/17 ANI-4): <sprite>/<action>_<dir>_<n>, such as
+ * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
+ * turns them into that sprite's clips.
+ */
+export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|death)_(n|e|s|w)_[0-9]+$/;
+
+/**
  * Client interface icons, which the client finds by path (no data/ file names them):
  * ui/<group>/<id>, such as the PvP marks ui/marks/aggressor (client/src/render/marks.ts).
  */
@@ -94,9 +101,15 @@ export function checkPaths(root: string): string[] {
     const ui = RECIPES[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))
       problems.push(`${p}: ui icons are exactly the ui/<group>/<id> paths of kind "ui"`);
-    else if (!ui && !used.has(p) && !OUTFIT_FRAME.test(p) && !EFFECT_FRAME.test(p))
+    else if (
+      !ui &&
+      !used.has(p) &&
+      !OUTFIT_FRAME.test(p) &&
+      !EFFECT_FRAME.test(p) &&
+      !used.has(ANIM_FRAME.exec(p)?.[1] ?? "")
+    )
       problems.push(
-        `${p}: no sprite field in data/ uses this path (and it is not an outfit or effect frame)`,
+        `${p}: no sprite field in data/ uses this path (and it is not an outfit, animation or effect frame)`,
       );
   }
   const strips = new Map<string, number[]>();
