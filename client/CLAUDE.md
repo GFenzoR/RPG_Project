@@ -531,8 +531,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
   LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
   Cualquier otro motivo la saca en el momento.
-- E2E: `__rpgClient.attacks(ms)` y `poses()` (quién está en pose de ataque y quién cae);
-  `shotPose` de `e2e/game.spec.ts` saca la captura mientras la pose dura.
+- E2E: `__rpgClient.attacks(ms)` y `poses()` (quién está en pose de ataque y quién cae, y
+  cuánto lleva); `shotPose` de `e2e/game.spec.ts` espera un frame en medio de la pose,
+  retiene `requestAnimationFrame` (el juego no dibuja otro) y saca la captura.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
