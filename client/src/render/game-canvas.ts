@@ -1346,6 +1346,9 @@ export async function createGameCanvas(
       hideHint();
       return;
     }
+    // The map moved under a still mouse (the player walks): the card of the old tile goes
+    // and the rest starts again on the new one.
+    if (restAt && !samePos(tile, restAt)) watchRest(hover.x, hover.y);
     if (hintTile && samePos(tile, hintTile) && now - hintAt < HINT_REFRESH_MS) return;
     hintTile = tile;
     hintAt = now;

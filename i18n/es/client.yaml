@@ -824,6 +824,7 @@ client.credits.failed: "No se pudieron leer los créditos. Ciérralos y vuelve a
 client.help.title: "Ayuda"
 client.help.keys: "Teclas"
 client.help.escape: "Cierra la ventana de arriba; si no hay ninguna, abre las opciones"
+client.help.windows: "Ventanas: arrástralas por la barra o por ✥ y cambia su tamaño desde la esquina. Con el teclado, Tab hasta ✥: las flechas la mueven, Mayús+flechas cambian su tamaño y Enter la acopla o la suelta. Mayús+arrastrar una pila mueve solo una parte."
 client.guild.tab.summary: "Resumen"
 client.guild.tab.members: "Miembros"
 client.guild.tab.wars: "Guerras"

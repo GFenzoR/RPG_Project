@@ -824,6 +824,7 @@ client.credits.failed: "The credits could not be read. Close them and try again.
 client.help.title: "Help"
 client.help.keys: "Keys"
 client.help.escape: "Closes the top window; with none open, opens the options"
+client.help.windows: "Windows: drag them by their bar or by ✥ and resize them from the corner. With the keyboard, Tab to ✥: the arrows move it, Shift+arrows resize it and Enter docks or floats it. Shift+drag a stack to move only part of it."
 client.guild.tab.summary: "Summary"
 client.guild.tab.members: "Members"
 client.guild.tab.wars: "Wars"

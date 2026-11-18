@@ -1413,6 +1413,8 @@ function HelpBody(props: { t: Translate }): JSX.Element {
           <dd>{t("client.hotbar.title")}</dd>
         </div>
       </dl>
+      {/* docs/17 UI-1: the windows from the keyboard (their ✥ handle). */}
+      <p class="help-windows">{t("client.help.windows")}</p>
     </div>
   );
 }
