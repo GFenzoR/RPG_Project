@@ -17,8 +17,30 @@ export interface AnimActionMeta {
   ms: number;
   /** Walk: frames per tile walked. */
   perTile?: number;
-  /** Facings with frames; the others use "s" (or the first). */
+  /**
+   * Facings with frames. Facing another way, walk and death use "s" (or the first);
+   * idle and attack (OWN_FACINGS) get the procedural motion instead: the standing frame of
+   * that facing, and the lunge.
+   */
   dirs: AnimDir[];
+}
+
+/**
+ * Actions drawn only facing a way they have frames for. A sheet can come with a bite to the
+ * side and none to the front (the Gemini monsters, assets/README.md): turning the creature
+ * sideways to bite south would be wrong, so it lunges with its own facing's frame (ANI-5).
+ */
+export const OWN_FACINGS: ReadonlySet<AnimAction> = new Set<AnimAction>(["idle", "attack"]);
+
+/** The action's clip when it may be drawn facing `dir` (see OWN_FACINGS). */
+export function clipFacing(
+  meta: AnimMeta | undefined,
+  action: AnimAction,
+  dir: AnimDir,
+): AnimActionMeta | undefined {
+  const a = meta?.actions[action];
+  if (!a || (OWN_FACINGS.has(action) && !a.dirs.includes(dir))) return undefined;
+  return a;
 }
 
 /** atlas.json `anims[sprite]`: frames and drawing hints of a creature sprite. */
@@ -212,7 +234,6 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   out.shadow = 1;
   out.done = false;
   const top = Math.max(8, meta?.top ?? 24);
-  const actions = meta?.actions;
 
   // Steps: count each one when the next starts, so the cycle continues across tiles.
   let t: number | undefined;
@@ -234,14 +255,14 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
     dying(meta, now - s.diedAt, out);
   } else {
     const sinceAttack = now - s.attackAt;
-    const attack = actions?.attack;
+    const attack = clipFacing(meta, "attack", in_.dir);
     if (attack && sinceAttack >= 0 && sinceAttack < attack.frames * attack.ms) {
       out.action = "attack";
       out.frame = Math.min(attack.frames - 1, Math.floor(sinceAttack / attack.ms));
     } else if (t !== undefined || now - s.stepEnd < IDLE_AFTER_MS) {
       walking(s, meta, in_, t, top, out);
     } else {
-      idle(s, meta, now, top, out);
+      idle(s, meta, in_.dir, now, top, out);
     }
     if (!attack && sinceAttack >= 0 && sinceAttack < LUNGE_OUT_MS + LUNGE_BACK_MS) {
       const d =
@@ -307,8 +328,15 @@ function walking(
   }
 }
 
-function idle(s: AnimState, meta: AnimMeta | undefined, now: number, top: number, out: Pose): void {
-  const clip = meta?.actions.idle;
+function idle(
+  s: AnimState,
+  meta: AnimMeta | undefined,
+  dir: AnimDir,
+  now: number,
+  top: number,
+  out: Pose,
+): void {
+  const clip = clipFacing(meta, "idle", dir);
   if (clip && clip.frames > 0 && clip.ms > 0) {
     const cycle = clip.frames * clip.ms;
     out.action = "idle";

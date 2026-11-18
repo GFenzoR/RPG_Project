@@ -4,7 +4,7 @@
 // one texture, which packages/renderer anim.ts moves procedurally. Built once per sprite
 // and cached by the canvas: drawing a frame only indexes arrays. Pure apart from the
 // texture lookup (tests pass strings).
-import { ANIM_DIRS } from "@rpg/renderer";
+import { ANIM_DIRS, OWN_FACINGS } from "@rpg/renderer";
 import type { AnimAction, AnimDir, AnimMeta } from "@rpg/renderer";
 
 export interface ClipSet<T> {
@@ -41,6 +41,12 @@ export function spriteClips<T>(
     if (!a || a.frames < 1 || a.dirs.length === 0) continue;
     const byDir: T[][] = [];
     for (const dir of ANIM_DIRS) {
+      // Idle and attack only face their own ways: another facing gets no frames here, and
+      // clipTexture draws its standing frame (OWN_FACINGS, packages/renderer anim.ts).
+      if (OWN_FACINGS.has(action) && !a.dirs.includes(dir)) {
+        byDir.push([]);
+        continue;
+      }
       const d = a.dirs.includes(dir) ? dir : a.dirs.includes("s") ? "s" : (a.dirs[0] ?? "s");
       const list: T[] = [];
       for (let n = 0; n < a.frames; n++) {

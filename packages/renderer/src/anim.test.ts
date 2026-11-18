@@ -124,6 +124,39 @@ describe("clips", () => {
     expect(animate(s, LPC, in_, out).action).toBe("idle");
   });
 
+  it("bites and idles only facing its own ways: else the lunge and the standing frame", () => {
+    // A Gemini monster: walk all round, a bite only to the sides, an idle only facing south.
+    const SIDE: AnimMeta = {
+      ...LPC,
+      actions: {
+        idle: { frames: 2, ms: 500, dirs: ["s"] },
+        walk: { frames: 4, ms: 0, perTile: 2, dirs: DIRS },
+        attack: { frames: 3, ms: 110, dirs: ["e", "w"] },
+        death: { frames: 3, ms: 200, dirs: ["s"] },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.dir = "w";
+    startAttack(s, 1000, -1, 0);
+    in_.now = 1000 + 120;
+    expect(animate(s, SIDE, in_, out)).toMatchObject({ action: "attack", frame: 1, x: 0 });
+    // Facing south it has no bite: it lunges with its standing frame (ANI-5).
+    in_.dir = "s";
+    startAttack(s, 2000, 0, 1);
+    in_.now = 2000 + LUNGE_OUT_MS;
+    expect(animate(s, SIDE, in_, out)).toMatchObject({ action: "idle", x: 0, y: LUNGE_PX });
+    // Standing facing west, where it has no idle: the walk's standing frame, still.
+    in_.dir = "w";
+    for (const now of [5000, 5300, 5600, 5900]) {
+      in_.now = now;
+      expect(animate(s, SIDE, in_, out)).toMatchObject({ action: "idle", frame: 0, scaleY: 1 });
+    }
+    // Death keeps falling back to south, as LPC's fall does.
+    startDeath(s, 7000);
+    in_.now = 7000 + 250;
+    expect(animate(s, SIDE, in_, out)).toMatchObject({ action: "death", frame: 1 });
+  });
+
   it("plays the death clip, fades its last frame and says when it is done", () => {
     const { s, in_, out } = setup();
     startDeath(s, 0);
