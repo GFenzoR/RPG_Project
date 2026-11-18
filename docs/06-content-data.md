@@ -122,10 +122,11 @@ items:
   piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
-- **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
-  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type, attack }`
-  (`arrow` para los arcos, `bolt` para las ballestas de una mano de la auditoría de
-  contenido M4), apilable, y va en el slot de munición. Cada disparo gasta una y suma su
+- **Distancia y munición** (T3.1): un arma `type: distance` exige `range` (de 1 a 6, ver
+  "Tope de los rangos" en Hechizos) y `ammo` (el `ammo.type` que dispara). La munición
+  es `kind: ammo` con `ammo: { type, attack }` (`arrow` para los arcos, `bolt` para las
+  ballestas de una mano de la auditoría de contenido M4), apilable, y va en el slot de
+  munición. Cada disparo gasta una y suma su
   `attack` al del arma:
   ```yaml
   - id: short_bow
@@ -548,6 +549,11 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
+- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal` y
+  de una `condition` va de 1 a 6 (el esquema y `content.MaxRange`): el medio alto de la
+  ventana clásica de 15x11 + 1, lo que nota un monstruo. Así un monstruo golpeado desde
+  tan lejos como apunta un jugador siempre lo nota y devuelve el golpe; la vista ancha de
+  31x21 no lo estiró (`02-game-design.md` "La vista").
 - `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
   `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.
 - Las palabras deben ser únicas (el validador lo revisa) y propias. Los nombres van en

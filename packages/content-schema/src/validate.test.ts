@@ -699,6 +699,21 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  // Aimed ranges stop at the same 6 tiles (server content.MaxRange), what a monster
+  // notices: a monster hit from that far always fights back, never a free kill.
+  it("caps weapon, spell and condition ranges at the classic window's half-height", () => {
+    edit("data/items/weapons.yaml", "attack: 7, range: 6,", "attack: 7, range: 7,");
+    edit("data/spells.yaml", "{ element: energy, range: 4,", "{ element: energy, range: 7,");
+    edit("data/spells.yaml", "heal: { range: 5,", "heal: { range: 7,");
+    edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
+    const out = messages(root);
+    expect(
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:118:") && m.includes("<= 6")),
+    ).toBe(true);
+    const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
+    expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
+  });
+
   it("limits the number of different blessings to balance.yaml max_blessings", () => {
     edit("data/balance.yaml", "max_blessings: 5", "max_blessings: 4");
     expect(

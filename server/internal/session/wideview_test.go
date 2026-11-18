@@ -113,6 +113,50 @@ func TestMonsterSightStaysClassic(t *testing.T) {
 	}
 }
 
+// Every aimed range of the content stops at content.MaxRange (weapon.range, a spell's or
+// a condition's range), the classic window's half-height: a monster hit from as far as a
+// player may aim, straight up the window's short axis or across its corner, notices who
+// hit it and fights back. One tile farther north it would not (InSight): the wide view
+// lets a player target a monster 15 tiles away, the cap keeps it from free kills.
+func TestMaxRangeIsTheClassicWindow(t *testing.T) {
+	if content.MaxRange != min(session.SightHalfW, session.SightHalfH) {
+		t.Fatalf("content.MaxRange = %d, the classic window is ±%d x ±%d", content.MaxRange, session.SightHalfW, session.SightHalfH)
+	}
+	r := content.MaxRange
+	for _, c := range []struct {
+		name      string
+		dx, dy    int
+		fightBack bool
+	}{
+		{"north", 0, -r, true},
+		{"corner", r, r, true},
+		{"one beyond, north", 0, -r - 1, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := worldtest.Open(t, 0, 0, 32, 32)
+			m.Islands()[0].Spawns = []world.Spawn{spawnAt("dummy", 15+c.dx, 15+c.dy, 0, 60)}
+			h := newHarness(t, m, func(cfg *session.Config) {
+				cfg.Monsters = content.Monsters{"dummy": targetDummyDef()}
+				cfg.Items = testItems()
+				cfg.Spells = rangerSpells()
+				// Built here, past the content check: the last case aims one tile beyond it.
+				cfg.Spells["test_shot"].Effect.Damage.Range = max(abs(c.dx), abs(c.dy))
+				cfg.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
+			})
+			cl, p := ranger(t, h, pos(15, 15), 0)
+			d := h.dummy()
+			h.castNow(cl, castAt("test_shot", d.ID()))
+			if h.w.MonsterHealth(d) >= 1000 {
+				t.Fatalf("the shot at %v missed the dummy at %v", p.Pos(), d.Pos())
+			}
+			h.sim.RunTicks(2)
+			if got := d.TargetID() == p.ID(); got != c.fightBack {
+				t.Fatalf("shot from %v at %v: the dummy fights back %v, want %v", p.Pos(), d.Pos(), got, c.fightBack)
+			}
+		})
+	}
+}
+
 // PvP vision is the view: a player targets another 15 tiles away, and loses it beyond.
 func TestPvPTargetFifteenTilesAway(t *testing.T) {
 	g := newPvP(t, nil)

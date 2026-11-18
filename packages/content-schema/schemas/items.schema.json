@@ -99,7 +99,7 @@
             "attack": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
             "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
             "hands": { "enum": [1, 2] },
-            "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "range": { "$ref": "common.schema.json#/$defs/aimRange" },
             "element": { "$ref": "common.schema.json#/$defs/element" },
             "ammo": {
               "description": "Distance weapons (T3.1): the ammo.type it shoots from the ammo slot, one per shot.",

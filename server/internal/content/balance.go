@@ -521,6 +521,13 @@ type Inventory struct {
 // player's view (gathering, crafting stations: not_possible).
 const MaxReach = 6
 
+// MaxRange bounds every aimed range of the content: weapon.range, the range of a damage or
+// heal spell and a condition's range. It is what a monster notices (session.InSight, the
+// half-height of the classic 15x11 window): a monster hit from as far as a player can aim
+// always notices who hit it and fights back. The wide view (31x21) shows targets farther
+// away; it must not let a player hit one that never answers.
+const MaxRange = 6
+
 // check verifies the inventory numbers: max_open_containers, door_cooldown_ms and reach
 // above 0 (reach at most MaxReach), use_cooldown_ms not negative.
 func (i Inventory) check() error {

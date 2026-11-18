@@ -312,7 +312,9 @@ server/
   manda y lo que puede elegir como objetivo, mirar o usar (con su `reach`). Lo que **nota y
   persigue un monstruo** es la ventana clásica de 15x11 + 1 (`InSight`, `SightHalfW`/`H`):
   una regla nueva de "ver" de un monstruo usa `InSight`, nunca `Sees`. Los rangos de armas,
-  hechizos y ataques salen de `data/`; `content.MaxReach` (6) sigue a la ventana clásica.
+  hechizos y ataques salen de `data/`; `content.MaxReach` y `content.MaxRange` (6, el
+  alcance de las manos y el rango con que apunta un jugador) siguen a la ventana clásica:
+  un monstruo golpeado desde tan lejos como se apunta siempre devuelve el golpe.
   Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
   comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
 

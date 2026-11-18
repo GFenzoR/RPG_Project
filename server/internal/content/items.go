@@ -156,8 +156,17 @@ func (is Items) ByNumeric() map[uint16]*Item {
 	return out
 }
 
+// check verifies what the server needs of an item beyond its schema: a weapon's range
+// within MaxRange (0 = melee).
+func (it *Item) check() error {
+	if wp := it.Weapon; wp != nil && (wp.Range < 0 || wp.Range > MaxRange) {
+		return fmt.Errorf("weapon range must be 0 to %d", MaxRange)
+	}
+	return nil
+}
+
 // LoadItems reads <dataDir>/items/*.yaml and the numeric ids of <dataDir>/ids.lock.yaml.
-// Every item must have a numeric id (make gen-ids).
+// Every item must have a numeric id (make gen-ids) and pass check.
 func LoadItems(dataDir string) (Items, error) {
 	files, err := filepath.Glob(filepath.Join(dataDir, "items", "*.yaml"))
 	if err != nil {
@@ -190,6 +199,9 @@ func LoadItems(dataDir string) (Items, error) {
 			n, ok := lock.Items[it.ID]
 			if !ok || n <= 0 || n > 0xFFFF {
 				return nil, fmt.Errorf("%s: item %q has no numeric id in ids.lock.yaml (make gen-ids)", f, it.ID)
+			}
+			if err := it.check(); err != nil {
+				return nil, fmt.Errorf("%s: item %q: %w", f, it.ID, err)
 			}
 			it.Numeric = uint16(n)
 			items[it.ID] = it

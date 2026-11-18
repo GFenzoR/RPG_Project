@@ -48,7 +48,7 @@
             "properties": {
               "range": {
                 "description": "T3.1: heals another player (the target) at up to range tiles in line of sight instead of the caster.",
-                "$ref": "common.schema.json#/$defs/positiveInt"
+                "$ref": "common.schema.json#/$defs/aimRange"
               }
             },
             "unevaluatedProperties": false
@@ -60,7 +60,7 @@
             "properties": {
               "element": { "$ref": "common.schema.json#/$defs/element" },
               "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-              "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+              "range": { "$ref": "common.schema.json#/$defs/aimRange" },
               "condition": { "$ref": "common.schema.json#/$defs/conditionApply" }
             },
             "unevaluatedProperties": false
