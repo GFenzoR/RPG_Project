@@ -131,7 +131,9 @@ client/
   `ItemLocation` del protocolo y el item de arriba de un tile.
 - Panel `ui/Inventory.tsx`: slots de equipo, capacidad (oz = gramos / 100) y una ventana
   por contenedor abierto. Los iconos son el sprite del atlas como fondo CSS
-  (`Atlas.icon`).
+  (`Atlas.icon`). Desde `feat/equipment-d2` el equipo es una figura al estilo Diablo II,
+  con la mochila equipada abajo y la capacidad como barra: ver "Notas del equipo y el
+  tooltip al estilo Diablo II".
 - Arrastrar y soltar con eventos de puntero propios (no HTML5 DnD, para cruzar canvas y
   DOM): `Game.pressItem` / `startDrag` y `dropTarget` (un `[data-drop]` o un tile del
   canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
@@ -1217,7 +1219,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **Tooltip** (`ui/ItemTooltip.tsx`, montado en `GameView` junto al menú): delegación en
   `document` sobre `[data-tip-item]` (+ `data-tip-count`), 350 ms de mouse, o foco del
   teclado con `:focus-visible`. Los items del inventario tienen `tabIndex=0`: Enter =
-  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`.
+  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`. Desde
+  `feat/equipment-d2` sale sin espera, arriba del item y con la ficha compacta
+  (`TipCard`): ver "Notas del equipo y el tooltip al estilo Diablo II".
 - **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
   (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
   búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
@@ -1314,12 +1318,14 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   dorado en la celda (`.item[data-quest]`). Los demás nombres pasaron a `--ui-text` (UI-6).
 - **Slots vacíos:** `emptySlotStyle` (`ui/Inventory.tsx`) pone el sprite `ui/slots/<slot>`
   del atlas (spritegen, `kind: ui`, `UI_SLOT_BOX`) como `--slot-icon` del slot; el CSS lo
-  dibuja al 30 % detrás (`.equipment .slot::before`). Sin atlas, no hay nada.
+  dibuja al 30 % detrás (`.doll .slot::before`; desde `feat/equipment-d2`, a la escala de
+  su slot, `--slot-scale`). Sin atlas, no hay nada.
 - **Ficha sobre el mapa:** `game-canvas.ts` avisa `restTile` cuando el mouse queda 350 ms
   quieto en una casilla (y `undefined` al salir, apretar o usar la rueda); `Game.restTile`
   elige `menuItem` si es algo que se lleva (`groundCard` de `state/item-card.ts`: ni
   suelos, ni muros, ni decoración, ni estaciones) y publica `GameUi.groundTip`;
-  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`).
+  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`). Desde
+  `feat/equipment-d2`, sin espera y arriba de la casilla (ver abajo).
 - **Mayús+arrastrar** (`Game.pressItem`, y en el canvas un Mayús+click es una "pulsación de
   mirar" que mira al soltar y arrastra si se mueve): con una pila (`splittable`) suelta
   `GameUi.split` y `ui/SplitPrompt.tsx` pregunta cuántas (la mitad para empezar,
@@ -1327,6 +1333,92 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   menos una). Enter o "Mover" manda `MoveItem` con esa cantidad; Escape o "Cancelar" no
   mueve nada. Mayús+click sigue mirando.
 - **Vista previa:** escenas `server`, `groundtip` y `scale` (`?ui=1.25&text=1.15`) en
-  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos.
+  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos (desde
+  `feat/equipment-d2` la mochila es `ui.backpack`, abajo de la figura).
 - **E2E:** `e2e/game.spec.ts` busca la mochila fuera de la ventana del inventario
   (`page.locator('[data-container-item="backpack"]')`, `window-container-backpack`).
+  Desde `feat/equipment-d2` la mochila equipada va dentro del inventario (abajo).
+
+## Notas del equipo y el tooltip al estilo Diablo II (rama `feat/equipment-d2`)
+Los dos pedidos del dueño del 2026-11-18 (docs/17 UI-5 y UI-6, "Hecho: el equipo y el
+tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y textos propios.
+- **La figura** (`state/equipment.ts`, puro y con tests; `ui/Inventory.tsx`): `DOLL` da el
+  lugar (columna y fila desde 1) y el tamaño en celdas de cada slot en una grilla de
+  `DOLL_COLS` x `DOLL_ROWS` (8x9). `InventoryPanel` mide el ancho que tiene (`.doll-box`,
+  `ResizeObserver`, en un `useLayoutEffect`: el primer cuadro ya sale a su tamaño) y
+  `dollCell` elige la celda: el mayor número par de px enteros que entra, entre
+  `DOLL_MIN_CELL` (24) y `DOLL_MAX_CELL` (44), con `DOLL_GAP` (2) entre celdas; la grilla
+  se centra con un margen entero. Con celda y separación pares, todo ícono cae en píxeles
+  enteros. `slotBox` da la caja de un slot e `iconScale` la escala entera de su ícono (la
+  mayor que entra dejando `SLOT_PAD`, nunca menos de 1x): `ItemCell` dibuja el item como
+  una caja de ese tamaño con el sprite adentro (`.item > .sprite`, `transform: scale(n)`
+  desde la esquina, `data-scale`). Las celdas de contenedor no pasan caja: 1x. Una pestaña
+  oculta mide 0: la celda mínima, hasta que se muestra. Un ícono de 32 px en un anillo o
+  cuello más chico sobresale de su borde (`overflow: visible`), píxel por píxel.
+- **Brillo y rojo:** `GameUi.dragging` (el item que se arrastra: `Game.startDrag` lo
+  publica y lo borra al soltar) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
+  `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
+  `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
+  `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
+  captura el puntero, así que el `:hover` sigue al mouse). Nivel, vocación y manos libres
+  los sigue diciendo el servidor al soltar.
+- **La mochila equipada** (`state/backpack.ts`, puro y con tests): `WorldState.backpack`
+  (`EquippedBackpack`) sabe qué contenedor abierto es el de la espalda: `Game.useItem` de
+  algo en el slot `BACKPACK` llama `used` (si ya hay abierta una ventana de ese item sin
+  padre, el uso la cierra y no espera nada), y el `ContainerOpen` de ese item, sin padre y
+  dentro de `BACKPACK_ANSWER_MS` (3 s), es la mochila (`opened`). `equipped` (cada
+  `Inventory`): si la mochila deja el slot, su ventana pasa a ser una más (`left`), y si
+  vuelve el mismo item la toma de nuevo; `closed` la olvida. `Game.publish` separa
+  (`split`): `GameUi.containers` son solo los que tienen ventana propia (así `GameView`
+  no le da una a la mochila) y `GameUi.backpack` es la de la espalda, que `InventoryPanel`
+  dibuja bajo la figura con `ContainerView docked` (`data-docked`, el mismo
+  `data-testid="container"` y `data-container-item`, con su encabezado y su ×). El
+  intercambio ofrece también lo de `ui.backpack`. `__rpgClient.containers()` (E2E) sigue
+  dando todos.
+- **Se abre sola** (`autoOpen`, puro y con tests; un `useEffect` de `InventoryPanel`): con
+  un contenedor en el slot, sin mochila abajo, sin tutorial y sin otra ventana de ese item
+  abierta, llama `Game.openBackpack` (un `UseItem` del slot, como el doble click). Una vez
+  por mochila mientras el inventario está montado (`done`): cerrarla con su × la deja
+  cerrada hasta que el inventario se vuelva a abrir o se equipe otra. Durante el tutorial
+  no (su paso `open_backpack` lo enseña; el `TutorialStep` llega en el mismo batch que el
+  `Inventory` al entrar). En teléfonos el panel está montado aunque su pestaña no se vea:
+  se abre al entrar.
+- **Capacidad:** `Capacity` (`data-testid="capacity"` en el bloque) con `.cap-bar`
+  (`capacityLoad`: la fracción cargada; `heavy` desde `HEAVY_LOAD`, 85 %, `full` sin lugar)
+  y el texto de siempre.
+- **El tooltip** (`ui/ItemTooltip.tsx`): sin espera (`pointerover` muestra en el acto),
+  `TOOLTIP_GRACE_MS` (80) al salir de un item antes de irse, así el siguiente lo toma sin
+  parpadeo; tras una presión vuelve con el siguiente `pointermove` sin botones; nada
+  mientras `GameUi.dragging` o `body.dragging-item`. Se dibuja oculto, un
+  `useLayoutEffect` mide su tamaño real y `tipPlacement` (puro y con tests) lo pone
+  centrado arriba del item (`TIP_GAP` 6, `TIP_MARGIN` 6), abajo si no entra, y si no entra
+  en ninguno, del lado con más lugar cortado a ese lugar (`maxHeight`): nunca sobre el
+  item, así nunca bajo el cursor. `data-side` dice dónde quedó. Sin animación de entrada.
+- **La ficha compacta** (`TipCard` de `ui/ItemCard.tsx`, sin hooks; `ItemCard` con `tip`):
+  `.item-card.tip`, cada línea centrada y sin ícono; `nameClass` (`card-name`, `quest` o
+  `coin`: `ItemCardView.currency` para `kind: currency`); stats con
+  `client.card.stat_line` ("{stat}: {value}"); requisitos, efectos, marcas y la
+  descripción al final. Colores: tokens `--ui-item-plain`, `--ui-item-coin`,
+  `--ui-item-stat` y `--ui-item-effect`; los requisitos sin cumplir en `--ui-danger`. El
+  menú y la tienda siguen con la ficha entera.
+- **Sobre el mapa:** `game-canvas.ts` llama `restTile` en el acto cada vez que cambia la
+  casilla bajo el mouse (ya no espera 350 ms quieto); `Game.restTile` suma `tile`, la
+  casilla en coordenadas de página (`tileToClient` de ella y de la siguiente), y no publica
+  nada mientras se arrastra. `ItemTooltip` usa `groundAnchor`: la casilla, estirada hacia
+  abajo hasta pasar el texto del cursor (`GROUND_HINT_PX`), así colocada abajo no lo tapa.
+- **Para las ventanas flotantes** (rama `feat/hud-fullscreen`): nada del interior depende
+  del dock. La figura toma el ancho de la ventana: 2x en los slots grandes desde unos 286
+  px de cuerpo (una ventana de unos 19 rem); a 16 rem los íconos van a 1x.
+- **Vista previa:** escenas `inventory` (una espada arrastrada sobre el equipo: la mano
+  derecha brilla y la izquierda, bajo el puntero, se tiñe de rojo), `inventoryfloat` (el
+  inventario flotando, de 420 px), `tooltip` (la espada de la mano derecha) y
+  `tooltipcoin` (las monedas de la mochila); en teléfono y tablet abren la pestaña del
+  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`.
+- **E2E:** el primer test de `e2e/game.spec.ts` encuentra la mochila abierta bajo la figura
+  (`[data-container-item="backpack"][data-docked]` dentro de `inventory`, 24 celdas, sin
+  `window-container-backpack`), la cierra con su ×, la abre de nuevo con "Abrir" del menú
+  (otra vez bajo la figura), pasa el mouse por ella (la ficha compacta, sin taparla) y,
+  tirada al suelo, la encuentra en `window-container-backpack`; vuelta al slot, otra vez
+  abajo. El del intercambio ya no le hace doble click (la cerraría): espera que esté
+  abierta. Un spec nuevo que abra la mochila equipada con un doble click o "Abrir" la
+  cierra si ya estaba abierta.

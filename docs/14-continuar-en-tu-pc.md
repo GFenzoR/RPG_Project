@@ -241,11 +241,40 @@ el punto 5:
     suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
     canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
     cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+  - **El equipo y el tooltip al estilo Diablo II (hecho, rama `feat/equipment-d2`,
+    docs/17 §7 "Hecho: el equipo y el tooltip al estilo Diablo II"):** los dos pedidos del
+    dueño del 2026-11-18. El equipo es una figura sobre una grilla de 8x9 celdas con slots
+    grandes (íconos a 2x desde ~286 px de ancho), brillo y rojo al arrastrar, la mochila
+    equipada abierta sola abajo de la figura (no durante el tutorial) y la capacidad como
+    barra; el tooltip sale al instante, arriba del item (o de la casilla del mapa), compacto
+    y centrado. Solo cliente. Queda:
+    - **Revisar en el E2E del lote** (no se corrió en la rama; se miró con `make ui-preview`,
+      escenas `inventory`, `inventoryfloat`, `tooltip`, `tooltipcoin`, `groundtip`, `game`,
+      `server`, `scale` y `windows`): `09-inventory` (la figura y la mochila abajo),
+      `09a-item-menu`, `09b-item-tooltip` (la ficha compacta arriba de la mochila),
+      `10-backpack-on-map` (la mochila tirada, en su propia ventana), `22-ranger-inventory`
+      (el arco a 2x y el carcaj con 30), `52-trade-window` (las monedas de la mochila
+      abierta sola). Que ningún spec abra la mochila equipada con doble click o "Abrir"
+      cuando ya está abierta (la cerraría).
+    - **Mirar en el playtest:** si la mochila que se abre sola molesta a alguien que la
+      tenía cerrada (queda cerrada mientras el inventario siga abierto); si la ventana
+      acoplada, ahora más alta, empuja demasiado la columna a 1280x800 (se puede plegar,
+      cambiar de alto o, con `feat/hud-fullscreen`, flotar); si el rojo bajo el puntero se
+      lee bien; si el tooltip instantáneo molesta al pasar el mouse por el mapa.
+    - **Para hacerlo exacto:** el servidor no dice dónde está un contenedor abierto
+      (`ContainerOpen`), así que la mochila equipada es la ventana que contesta un uso del
+      slot de la espalda; una mochila igual abierta del suelo en ese mismo momento podría
+      confundirlo. Un campo en `ContainerOpen` (por ejemplo, el slot) lo resolvería.
+    - **Ideas que no se hicieron:** un arma de dos manos no ocupa las dos manos en la
+      figura (el servidor tiene un slot por mano); no hay guantes, cinturón ni segundo
+      anillo; mantener Alt para ver los nombres de los items del suelo (si el dueño lo
+      pide).
   - **Revisar en el E2E final de `feat/ui-windows-2`** (no se corrió en la rama; se miró
     con `make ui-preview`, escenas `game`, `server`, `groundtip`, `scale`, `dialog` y
     `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su ventana acoplada
     (`window-container-backpack`, ya no dentro de Inventario: `09-inventory` la deja
-    afuera); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
+    afuera; desde `feat/equipment-d2` la mochila equipada vuelve a estar dentro, abajo de
+    la figura, y solo una que no se lleva puesta tiene ventana propia); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
     lado a lado;
     `16-crafting-window`, `52-trade-window`, `53-market-offer-posted`, `56-house-free` y
     `57-house-rented` con la barra nueva (sus test ids y los nombres de los botones de

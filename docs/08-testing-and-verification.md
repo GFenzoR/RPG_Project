@@ -60,8 +60,12 @@ fogón y el intercambio como ventanas, unos restos abiertos flotando y el cuadro
 Mayús+arrastrar), `groundtip` (la ficha de un item del mapa bajo el mouse), `scale` (la
 interfaz al 125 % con el texto al 115 %; la página toma `?ui=` y `?text=`), `options`,
 `dialog`, `shop` (la tienda con dos páginas), `dialog18` (18 opciones sin scroll),
-`itemmenu` (el menú del click derecho con la ficha), `tooltip` (la ficha con el mouse sobre
-un item), `guild` (la ventana del gremio), `danger` (vida baja y subida de nivel), `death`,
+`itemmenu` (el menú del click derecho con la ficha), `inventory` (el equipo al estilo
+Diablo II con una espada arrastrada encima: los slots que la aceptan brillan, el que no, rojo
+bajo el puntero), `inventoryfloat` (el inventario flotando y más ancho), `tooltip` y
+`tooltipcoin` (la ficha compacta con el mouse sobre la espada de la mano derecha y sobre
+las monedas de la mochila; en teléfono y tablet esas escenas abren la pestaña del
+inventario), `guild` (la ventana del gremio), `danger` (vida baja y subida de nivel), `death`,
 `login` y `characters` a
 1920x1080, 1280x800, 1280x720, 960x700, un teléfono (390x844 y 844x390) y una tablet
 (768x1024). No reemplaza a `make e2e`: no hay mapa real, ni red, ni criaturas en el canvas.

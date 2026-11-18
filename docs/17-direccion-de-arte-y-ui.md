@@ -1087,6 +1087,26 @@ va a 2x con 24x16 casillas.
   - barra de capacidad;
   - cada contenedor abierto es **su propia ventana** (como hoy, una por contenedor), con
     una grilla de 4 o 5 columnas de `--ui-slot`.
+  - **Cambio del dueño (2026-11-18): al estilo Diablo II.** "Por ahora el menú de items
+    equipados lo hiciste como en tibia, pero creo que sería más cómodo estilo Diablo II".
+    De Diablo II se toma solo la idea del panel (nunca su arte, sus nombres ni sus textos):
+    - una grilla de 8x9 celdas cuadradas con cada slot en su lugar y de su tamaño: cabeza
+      2x2 arriba al centro con el cuello 1x1 al lado; las manos 2x4 a los costados (la
+      izquierda a la izquierda, como antes); el torso 2x3; el anillo 1x1 a la altura de la
+      cadera; las piernas 2x2; la mochila y la munición (un carcaj con su cantidad) 2x2 a
+      los lados de las piernas; los pies 2x2 abajo. La silueta propia de siempre detrás;
+    - slots grandes: el ícono al mayor múltiplo entero que entra (2x en los de 2x2 o más
+      desde que la ventana mide unos 286 px), y los slots vacíos con su silueta a esa
+      escala;
+    - mientras se arrastra o se elige (toque) un item, los slots que lo aceptan brillan y
+      el que no lo acepta se tiñe de rojo bajo el puntero;
+    - la grilla de la **mochila equipada abajo de la figura**, en la misma ventana (como la
+      grilla del inventario de Diablo II), abierta sola al abrir el inventario; los
+      contenedores de adentro y los del suelo siguen siendo ventanas propias;
+    - la capacidad como una barra fina con su texto, abajo.
+
+    Hecho en la rama `feat/equipment-d2` (§7, "Hecho: el equipo y el tooltip al estilo
+    Diablo II").
 - **Las ventanas que ya existen** pasan a `GameWindow` con el mismo marco: diálogo,
   tienda, crafteo, casa, intercambio, presencia, tutorial, reporte y muerte. Los
   `data-testid` y los `data-tutorial` se mantienen.
@@ -1115,6 +1135,17 @@ Mayús+click derecho), y en el menú las acciones van arriba y la ficha debajo.
   derecho abre el menú.
 - **Tooltip** en los dos modos: después de 350 ms de mouse sobre un item del DOM sale la
   ficha. También con el foco del teclado. Se va al salir o con Escape.
+  - **Cambio del dueño (2026-11-18): como en Diablo II.** "Al poner el mouse sobre un item
+    muestra su descripción como en diablo, también sería bueno agregarlo". Desde la rama
+    `feat/equipment-d2` sale **al instante**, centrado **arriba** del item (abajo si no hay
+    lugar, nunca bajo el cursor), en una caja compacta casi negra con borde fino, cada línea
+    centrada y sin ícono (el item está ahí abajo): el nombre claro, el de un item de misión
+    en su color y el del dinero dorado; los stats en blanco ("Ataque: 13"); los efectos en
+    azul; los requisitos que no se cumplen en rojo; la descripción apagada y al final. Igual
+    en el equipo, la mochila, los contenedores, la tienda, el intercambio y lo que está en
+    el suelo (arriba de su casilla). El menú del click derecho sigue con la ficha entera.
+    Idea para después, solo si el dueño la pide: mantener Alt para ver los nombres de los
+    items del suelo.
 - **La ficha** (estilo Diablo 2, de 260–320 px de ancho, ubicada con `menuPlacement` para
   no salirse):
   1. Nombre en Cinzel: `--ui-text`, o `--ui-item-quest` si es de misión. Cantidad si es
@@ -1738,6 +1769,44 @@ quedaba de A3, A4 y A5".
   abrirse. (Si el jugador camina con el mouse quieto, la ficha de la casilla anterior se va
   y la espera empieza de nuevo en la que queda bajo el cursor.)
 
+
+### Hecho: el equipo y el tooltip al estilo Diablo II (2026-11-18, rama `feat/equipment-d2`)
+Los dos pedidos del dueño del 2026-11-18 (UI-5 y UI-6, arriba). Solo cliente: el servidor y
+el protocolo no cambian. El detalle técnico está en `client/CLAUDE.md`, "Notas del equipo y
+el tooltip al estilo Diablo II". Solo la idea del panel y del tooltip: el arte, las fuentes,
+los nombres y los textos son nuestros.
+- **La figura.** Diez slots sobre una grilla de 8x9 celdas cuadradas (tabla de UI-5) que
+  toma el ancho que tiene la ventana: acoplada en el dock (a 1280 y 1920 px de ancho los
+  íconos de los slots grandes van a 2x; a 960 px, a 1x), flotando (crece al agrandarla) o
+  en la pestaña del teléfono (de lado a lado, hasta 44 px por celda). Las celdas miden un
+  número par de píxeles enteros, así cada ícono cae en píxeles enteros. Un ícono de 32 px
+  en el anillo o el cuello, que a veces miden menos, sobresale un poco de su borde, píxel
+  por píxel, en vez de achicarse.
+- **Brillo y rojo.** Mientras se arrastra un item (desde el inventario, un contenedor o el
+  mapa) o hay uno elegido con un toque o con "Mover", los slots que lo aceptan brillan en
+  dorado; el que no lo acepta se tiñe de rojo bajo el puntero. La regla es la del servidor
+  (un arma en la mano derecha, un escudo en la izquierda, cada armadura en su slot, la
+  munición en el carcaj, un contenedor en la espalda); nivel, vocación y manos libres los
+  sigue diciendo el servidor al soltar.
+- **La mochila abajo de la figura.** La mochila equipada se abre sola cuando el inventario
+  se muestra (una vez: si el jugador la cierra con su ×, queda cerrada hasta que el
+  inventario se vuelva a abrir o se equipe otra) y su grilla va abajo de la figura, en la
+  misma ventana. Si se la saca de la espalda y sigue al alcance, pasa a una ventana propia;
+  al volver a equiparla, vuelve abajo de la figura. **No se abre sola durante el tutorial**:
+  su paso "abre tu mochila" enseña a hacerlo. Como `ContainerOpen` no dice dónde está el
+  contenedor, el cliente toma como mochila equipada la ventana que contesta un uso del
+  slot de la espalda (si alguna vez molesta, un campo en `ContainerOpen` lo haría exacto).
+- **Capacidad.** Una barra fina de lo que se carga (dorada; ámbar desde el 85 %, roja sin
+  lugar) y el texto de siempre abajo.
+- **El tooltip.** Sin espera (antes 350 ms) y arriba del item, como dice UI-6. Al barrer una
+  grilla con el mouse pasa de celda en celda sin parpadear (espera 80 ms al salir de un
+  item por si entra en otro). Sobre el mapa, la ficha del item de la casilla bajo el mouse
+  sale al instante arriba de esa casilla (abajo, si no hay lugar, pasando el texto del
+  cursor). No sale mientras se arrastra algo.
+- **Lo que no se hizo:** los items de dos manos no ocupan las dos manos a la vez en la
+  figura (el servidor tiene un solo slot por mano); no hay guantes, cinturón ni segundo
+  anillo (no existen esos slots); mantener Alt para ver los nombres de los items del suelo
+  queda como idea.
 
 ### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
 Siete monstruos que eran un sprite de Dungeon Crawl con la animación de ANI-5 ahora tienen
