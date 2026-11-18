@@ -302,6 +302,13 @@ export async function createGameCanvas(
         })
       : [],
   );
+  const doorTiles = new Set(content.houseDoors ?? []);
+  /**
+   * ART-3: the tile right south of the own player holds a wall that hides it. A house door's
+   * frame joins the walls but is open: standing just inside the doorway is not "behind".
+   */
+  const behindWallAt = (x: number, y: number): boolean =>
+    view.wallAt(x, y) && !(doorTiles.size > 0 && doorTiles.has(`${x},${y},${view.floor}`));
   const view = new MapView({
     source: new DecoratedSource(world, (z, cx, cy) => frames.get(`${z}/${cx}/${cy}`)),
     texture,
@@ -853,7 +860,7 @@ export async function createGameCanvas(
       view.placeEntity(s.body, later.x, later.y);
       const lift = s.figure?.lift ?? 0;
       drawnBoxes.add(c.id, p.x, p.y - raised, lift / T, entityZIndex(later.x, later.y));
-      if (c.id === world.selfId && s.figure && view.wallAt(Math.round(p.x), Math.round(p.y) + 1)) {
+      if (c.id === world.selfId && s.figure && behindWallAt(Math.round(p.x), Math.round(p.y) + 1)) {
         const fig = s.figure.sprite;
         behindWall.texture = fig.texture;
         behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
