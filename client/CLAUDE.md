@@ -79,7 +79,12 @@ client/
   - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
     (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
   - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
-    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido.
+    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido. Los pasos
+    (MOV-7): cuando una criatura empieza un paso (`animateBody` ve cambiar
+    `AnimState.walkStart`), la casilla que deja patea lo de su suelo (`steps` de
+    `atlas.json` `tiles`, `stepKindOf`) a la altura de los pies: `ParticleLayer.kick`
+    (`dust`: 4 motas; `ripple`: un anillo de 8 gotas achatado). Las de ambiente dejan
+    `STEP_RESERVE` (16) de las 100 libres para los pasos; los voladores no patean nada.
   - **Marco de puertas de casa:** `MapView` lee el mundo a través de un `DecoratedSource`
     (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el
     estado del juego no lo tiene.
@@ -508,8 +513,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   sus texturas se descarta. Quieto y atacar (`OWN_FACINGS` de `packages/renderer`) quedan
   vacíos hacia una dirección que no tiene frames (las criaturas de Gemini muerden de
   perfil y no siempre de frente): ahí `clipTexture` da el frame parado de esa dirección y
-  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Caminar y morir
-  toman el sur (o la primera) como antes.
+  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Disparar
+  (`shoot`) y conjurar (`cast`) son ataques también: `OWN_FACINGS` los incluye. Caminar y
+  morir toman el sur (o la primera) como antes.
 - Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
   en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
   `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene
@@ -521,26 +527,41 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
-  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira); un
+  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira), con el
+  clip de su tipo (`attackAction`: `RANGED` → `shoot`, el arco de LPC; `SPELL` → `cast`;
+  `MELEE` → `attack`; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
+  `attack` si el sprite no tiene ese clip, y en la embestida si no tiene ninguno); un
   número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
   la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
   viejo (sin `attack_events`) se deduce como antes: un `Projectile` anima a la criatura de
   su casilla de salida; un efecto de golpe, bloqueo o elemento sin proyectil en el mismo
   batch, al atacante cuerpo a cuerpo (el propio jugador si su objetivo está ahí y al lado;
   si no, una criatura del otro bando al lado, primero la que mira esa casilla).
-- Muerte: una criatura cuyo `CreatureDisappear` dice `DEATH` (`WorldState.departures`,
-  `leavesDying`; con un servidor viejo, la que sale con la barra en 0) murió ahí. Su
-  cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
-  LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
-  Cualquier otro motivo la saca en el momento.
-- Un motivo de salida vale hasta que la criatura vuelve: `addCreature` lo borra
-  (`forgetDeparture`) cuando reaparece, así un jugador que murió y despertó a la vista no
-  cae al salir después del piso dibujado.
+- Salidas (ANI-7): el canvas juega cada `CreatureDisappear` que llegó desde el frame
+  anterior una sola vez (`DepartureFeed` de `render/creature-events.ts`, por la hora del
+  batch, sobre `WorldState.departures`), antes de dibujar las criaturas, sobre el cuerpo
+  dibujado en el frame anterior. `leaveStyle` decide: `DEATH` (o, con un servidor viejo,
+  salir con la barra en 0: `leavesDying`) cae; `TELEPORT` y `LOGOUT` se desvanecen
+  (`startVanish`, `VANISH_MS` 350 ms: se angosta, se estira, tinte `SHIMMER_TINT`,
+  parpadea); `OUT_OF_VIEW` y `DESPAWN` salen en el acto. El cuerpo que cae o se desvanece
+  queda como "fantasma" (`ghosts`, una lista: puede convivir con la criatura de vuelta)
+  sin nombre ni barra hasta que termina. Así un jugador que muere a la vista y despierta
+  en un templo también a la vista (sale y vuelve en el mismo batch) deja su cuerpo cayendo
+  donde murió, y la criatura de vuelta es un sprite nuevo, con estado nuevo y su fundido
+  de 300 ms. Una criatura que deja de dibujarse sin salida propia (otro piso, un mapa
+  nuevo) se borra. Un fantasma tapado por una criatura más alta tiene su copia translúcida
+  (`DrawnBoxes.covered`).
+- `WorldState` no borra una salida cuando la criatura vuelve: la marca `back`, y
+  `departureOf` la ignora (así un jugador que murió y despertó a la vista no "muere" al
+  salir después del piso dibujado); el canvas igual la juega una vez.
 - E2E: `__rpgClient.attacks(ms)`, `departures(ms)` (el motivo por su nombre, `DEATH`...)
-  y `poses()` (quién está en pose de ataque y quién cae, y cuánto lleva); `shotPose` de
+  y `poses()` (quién está en pose de ataque, quién cae y quién se desvanece, cuánto lleva,
+  el clip, `attack`, `shoot`, `cast` o `lunge`, y su casilla); `shotPose` de
   `e2e/game.spec.ts` espera un frame en medio de la pose, retiene `requestAnimationFrame`
   (el juego no dibuja otro), saca la captura y devuelve lo que vio en ese frame
-  (`Caught`: quiénes estaban en la pose, y los ataques y salidas que el cliente guardaba).
+  (`Caught`: quiénes estaban en la pose, dónde, y los ataques y salidas que el cliente
+  guardaba). Una caída se saca en sus últimos 300 ms (`FALL_SHOT_MS`: el efecto del golpe
+  ya termina) y en primer plano, 9x7 casillas alrededor del cuerpo (`closeShot`).
   Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
   exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
@@ -613,8 +634,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     o cualquier `[data-drop]` (slot vacío o celda de contenedor), con un listener de
     captura en `window`. Arrastrar con el dedo sigue funcionando como con el mouse.
   - Pad direccional (`ui/TouchPad.tsx`, `HeldDirection`): se lee en `frame` como las
-    teclas (`keys.take() ?? pad.take()`); un toque es un paso y mantenerlo repite al ritmo
-    de caminar. Interruptor en Opciones (`AudioOptions` tiene un hueco `children`; el
+    teclas (`keys.take() ?? pad.take()`); un toque es un paso (o, quieto y hacia otro
+    lado, solo un giro: MOV-2, ver "Movimiento fluido") y mantenerlo repite al ritmo de
+    caminar. Interruptor en Opciones (`AudioOptions` tiene un hueco `children`; el
     estado vive en `main.tsx`), guardado en `localStorage` `rpg.touchPad`; sin elegir, se
     muestra con puntero grueso (pantalla táctil). Con pad, `.game[data-pad]`: la hotbar
     empieza después (`PAD_RESERVE_PX`) y en vertical el mapa sube y el pad va debajo.
@@ -873,7 +895,16 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
   (`walkBob`).
 - **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
-  con `combine`), también un toque perpendicular con otra tecla mantenida. Falta que el
+  con `combine`), también un toque perpendicular con otra tecla mantenida.
+- **Girar sin caminar** (docs/17 MOV-2, `input/keyboard.ts` `TurnTap`, puro y con tests):
+  `decideStep` pasa la dirección de las teclas o del pad por `TurnTap.decide` con
+  `WorldState.standingStill` (sin paso dibujado ni predicho) y la dirección propia. Quieto
+  y hacia otro lado: `turn` (manda `Turn` en el acto) y después `wait` hasta que la tecla
+  lleve `TURN_TAP_MS` (80 ms) apretada; soltada antes, solo giró. Mirando ya hacia ahí, o
+  caminando, `walk` como antes. Ctrl+flecha (`turnKeyDirection`, WASD no) solo gira. Un
+  botón del pad activado con el teclado (`padStep`) es un paso siempre. En el E2E, un paso
+  es `stepKey` / `stepToward` (`e2e/keys.ts`): un toque para girar si hace falta (y
+  comprueba que no se movió) y otro para caminar; `__rpgClient.self()` trae `dir`. Falta que el
   dueño decida si un cambio de dirección con las teclas solapadas debe dar ese paso
   diagonal (docs/14).
 - **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y

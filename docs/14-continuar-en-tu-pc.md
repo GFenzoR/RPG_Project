@@ -110,9 +110,10 @@ el punto 5:
   - **A6, movimiento fluido (hecho):** ramas `feat/movement-feel` y `feat/movement-more`
     (ver abajo y docs/17 §4 "Hecho: A6, primera parte" y "segunda parte"). No fue solo del
     cliente como decía el plan: el servidor encola los pasos de teclado (protocolo en
-    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. Quedan
-    el polvo y las ondas al pisar (MOV-7, con las partículas de ART-7) y el toque corto
-    que solo gira (MOV-2).
+    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. El
+    polvo y las ondas al pisar (MOV-7) y el toque corto que solo gira (MOV-2) se hicieron
+    después (rama `feat/lpc-actions`, docs/17 "Hecho: disparar, conjurar, desvanecerse,
+    pasos y girar"; ver "Movimiento fluido" abajo).
   - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
@@ -124,14 +125,22 @@ el punto 5:
       (`CreatureDisappear.reason`), y el cliente anima con eso en vez de deducirlo (docs/05
       "Quién ataca y por qué sale una criatura", docs/17 ANI-7). La deducción queda para un
       servidor viejo. Las capturas `07b-attack-pose` y `11b-death` ya se sacaron y
-      revisaron (en `11b-death` el lobo que cae queda casi todo detrás del mago y del
-      efecto del hechizo: se ve, pero poco). Pendiente de A9: `make bots`
-      contra un servidor real con los eventos (docs/07 "Eventos de ataque"); un jugador que
-      muere a la vista y reaparece en un templo también a la vista no deja su cuerpo
-      cayendo; un desvanecerse para `TELEPORT` y `LOGOUT`; `DESPAWN` no lo usa ningún camino
-      todavía (solo el hook de test `DespawnForTest`).
-    - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
-      un hechizo o un arco juega el ataque (`slash`).
+      revisaron. Después (rama `feat/lpc-actions`, docs/17 "Hecho: disparar, conjurar,
+      desvanecerse, pasos y girar"): `11b-death` es un primer plano de 9x7 casillas al
+      final de la caída (antes el lobo quedaba casi todo detrás del mago y del efecto del
+      hechizo), y un cuerpo que cae detrás de una criatura más alta tiene su copia
+      translúcida; un jugador que muere a la vista y despierta en un templo a la vista deja
+      su cuerpo cayendo donde murió; `TELEPORT` y `LOGOUT` se desvanecen (350 ms). Queda
+      de A9: `make bots` contra un servidor real con los eventos (docs/07 "Eventos de
+      ataque"); `DESPAWN` no lo usa ningún camino todavía (solo el hook de test
+      `DespawnForTest`) y sale en el acto, sin desvanecerse.
+    - **Conjurar y disparar (hecho, rama `feat/lpc-actions`):** los humanoides de LPC juegan
+      `shoot` (el arco) para un `CreatureAttack{RANGED}` y `cast` (`spellcast`) para un
+      `SPELL`. Queda: las hojas no traen el arma (el arco, la varita): es el gesto solo,
+      porque no hay capas de armas de LPC en el repo (sumarlas es una tarea de arte, con
+      sus filas de `CREDITS.csv` como estas). Con un servidor sin `attack_events` todo
+      sigue jugando `attack`. Mirar en el E2E y en el playtest si el gesto de tensar sin
+      arco se lee como un tiro (los monstruos tiran botellas, cuchillos y esquirlas).
     - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
       `feat/gemini-creatures`, docs/17 "Hecho: criaturas de Gemini"): lobo, rata de
       sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
@@ -209,8 +218,9 @@ el punto 5:
       islas es `mapcli autoborder`: cambia mapas.
     - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
       polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
-      (`client/src/render/particles.ts`). Faltan el polvo y las ondas al pisar, el pasto
-      que se agita, la niebla y las gaviotas sobre el mar (ART-7).
+      (`client/src/render/particles.ts`); el polvo y las ondas al pisar, después
+      (`steps`, rama `feat/lpc-actions`). Faltan el pasto que se agita, la niebla y las
+      gaviotas sobre el mar (ART-7).
     - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
       lava enfriada ya entran en la banda de valor de ART-6.
@@ -295,8 +305,17 @@ el punto 5:
     mantenerlo quieto camina hacia el cursor (docs/17 MOV-3). Si en el playtest se arrastra
     un item sin querer al empezar a caminar, la opción es exigir Ctrl para arrastrar desde
     el mapa, o que el mantener empiece solo fuera de las casillas con items.
-  - **Polvo y ondas al pisar (MOV-7):** son arte por terreno; van con las partículas de
-    ART-7 y A13.
+  - **Polvo y ondas al pisar (MOV-7, hecho en `feat/lpc-actions`):** datos por suelo
+    (`steps` en `tiles` de `assets/sprites.yaml`): polvo en arena, tierra, ceniza y senda
+    de escoria; ondas en la arena mojada (no hay agua baja caminable). No pasaron por un
+    E2E propio: mirarlos en el playtest (que no ensucien con muchos monstruos caminando
+    sobre arena; el pool les reserva 16 de las 100 partículas). Pasto que se agita al
+    pasar y niebla (ART-7) siguen sin hacer.
+  - **El toque corto que solo gira (MOV-2, hecho en `feat/lpc-actions`):** quieto, una
+    tecla o el pad hacia otro lado gira y camina solo si sigue apretado 80 ms; Ctrl+flecha
+    solo gira. Mirar en el playtest si un toque rápido para dar un paso hacia un costado
+    (sobre todo con el dedo en el pad, donde un toque dura 50–120 ms) gira más veces de
+    las que se quiere; la salida sería bajar el umbral o dejarlo solo para el teclado.
   - **El texto junto al cursor** muestra la acción por defecto (atacar, hablar, trepar,
     abrir, usar una estación, el tablero o una puerta) apenas el mouse se apoya en la
     casilla, sin espera. Mirar en el playtest si molesta al caminar con el mouse por

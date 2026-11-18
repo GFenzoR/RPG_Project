@@ -10,7 +10,9 @@ gremio; "Hecho: A4, A5 y los botones del gremio"; A6: movimiento fluido, click p
 caminar manteniendo el mouse, "Hecho: A6" en §4; y A8 con la parte de criaturas de A10 y
 A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
 `feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
-`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13").
+`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13"; y los restos
+de ANI y MOV, rama `feat/lpc-actions`, el 2026-11-18: "Hecho: disparar, conjurar,
+desvanecerse, pasos y girar").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -325,7 +327,9 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
 - **Ambiente solo del cliente** (sin servidor, pool de ≤ 100 partículas en pantalla):
   - motas de polvo en cuevas, brasas en el Volcán, hojas en el Bosque, niebla y gaviotas
     sobre el mar;
-  - polvo al pisar tierra o arena (3 frames, 200 ms) y ondas al pisar agua baja;
+  - polvo al pisar tierra o arena (3 frames, 200 ms) y ondas al pisar agua baja (hecho:
+    "Hecho: disparar, conjurar, desvanecerse, pasos y girar"; no hay agua baja caminable,
+    así que las ondas van en la arena mojada);
   - el pasto alto se agita al pasar.
 - **Luz:**
   - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
@@ -398,8 +402,8 @@ animados"); lo usan las criaturas de Gemini.
   | walk | 9 por dirección (1 quieto + 8) | caminar | 4 frames por casilla |
   | slash | 6 | cuerpo a cuerpo | |
   | thrust | 8 | lanza | |
-  | spellcast | 7 | conjurar | 7 x 60 ms |
-  | shoot | 13 | arco | se recorta a 300–400 ms |
+  | spellcast | 7 | conjurar | 7 x 60 ms (`cast`) |
+  | shoot | 13 | arco | una columna sí y una no: 7 x 50 ms (`shoot`) |
   | hurt | 6, solo hacia el sur | morir | |
 
 - **Quieto y atacar, solo hacia sus lados** (2026-11-18): una criatura con frames de
@@ -464,22 +468,27 @@ session/attack.go`), y el cliente anima con eso (`client/src/render/creature-eve
 - **`CreatureAttack{id, kind, target_id, to, radius}`** antes del `Projectile`, el
   `Effect` y el `FloatingText` del ataque: `MELEE`, `RANGED` o `SPELL`, con el objetivo (si
   el cliente lo conoce), su casilla (o el borde de la ventana de su lado) o el centro y el
-  radio de un área. El atacante juega su clip `attack` hacia el objetivo (los humanoides
-  LPC, el `slash`; todavía no hay clips propios de disparo ni de conjuro, así que los tres
-  usan ese) y un sprite de un solo frame, la embestida de ANI-5. Un área se juega hacia
-  donde mira. La víctima retrocede alejándose del atacante o del centro del área.
+  radio de un área. El atacante juega el clip de ese tipo hacia el objetivo: `MELEE` el
+  `attack` (el `slash` de LPC), `RANGED` el `shoot` (el arco) y `SPELL` el `cast`
+  (`spellcast`); un sprite sin ese clip juega `attack`, y uno sin ninguno la embestida de
+  ANI-5. Un área se juega hacia donde mira. La víctima retrocede alejándose del atacante o
+  del centro del área.
 - **`CreatureDisappear.reason`**: `OUT_OF_VIEW`, `DEATH`, `DESPAWN`, `TELEPORT`,
-  `LOGOUT`. Solo `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la
-  hoja; un solo frame: la caída de ANI-5); el resto lo saca en el momento.
+  `LOGOUT`. `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la hoja;
+  un solo frame: la caída de ANI-5); `TELEPORT` y `LOGOUT` lo desvanecen donde estaba
+  (`VANISH_MS`, 350 ms: se angosta, sube un poco, pálido y parpadeando; nunca la caída);
+  `OUT_OF_VIEW` y `DESPAWN` lo sacan en el momento. Cada salida se juega una vez, también
+  si la criatura ya volvió en el mismo batch: un jugador que muere a la vista y despierta
+  en un templo también a la vista deja su cuerpo cayendo donde murió y aparece (con su
+  fundido) en el templo.
 - **Sin filtrar nada:** el ataque llega solo a quien conoce al atacante (el de un
   invisible lo hace visible antes), nunca habla de un objetivo invisible y de uno fuera de
   la ventana da solo el lado. Volverse invisible sale como `TELEPORT`.
 - **Servidor viejo:** `Welcome.attack_events` en `false` y el cliente sigue deduciéndolo
   como antes (abajo).
-- **Pendiente:** clips propios de disparo (`shoot`) y de conjuro (`spellcast`) para LPC;
-  un jugador que muere a la vista y reaparece en un templo también a la vista no deja
-  su cuerpo cayendo (el mismo id vuelve en el mismo batch); un efecto de desvanecerse para
-  `TELEPORT` y `LOGOUT`.
+- **Lo que quedaba pendiente** (clips de disparo y de conjuro, la muerte con reaparición a
+  la vista y el desvanecerse) está hecho: "Hecho: disparar, conjurar, desvanecerse, pasos
+  y girar" (§7). `DESPAWN` sigue saliendo en el momento.
 
 Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
@@ -524,8 +533,9 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
   dibujado, sin esperar la confirmación del anterior ni medir el RTT. Cada paso empieza en
   el `fin` del anterior.
 - **MOV-2, en parte.** Un toque durante un paso camina apenas termina
-  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. No se hizo
-  el toque corto que solo gira.
+  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. El toque
+  corto que solo gira se hizo después ("Hecho: disparar, conjurar, desvanecerse, pasos y
+  girar", §7).
 - **MOV-5, cambio.** No es `scheduleStep`: es un colchón de jitter (`Playout`) sobre la
   línea de ticks del servidor. Cada paso se encadena tras el que se dibuja y, si va
   atrasado, se dibuja hasta 25 % más rápido. Vale para las demás criaturas y para el
@@ -605,8 +615,8 @@ vale esto.**
     de CSS: no es texto de la página para los lectores de pantalla ni para los tests. Se
     oculta mientras hay un menú abierto (lo tapaba).
   - El primer paso sale en el acto (MOV-4).
-  - **No se hizo: polvo y ondas al pisar.** Son arte (partículas por terreno): quedan con
-    las partículas de ART-7 y A13.
+  - **Polvo y ondas al pisar:** no se hicieron acá; después, con las partículas de A13
+    ("Hecho: disparar, conjurar, desvanecerse, pasos y girar", §7).
 - **MOV-9, hecho.** E2E en `client/e2e/movement.spec.ts` con ~150 ms de RTT y jitter. Es
   un proxy en Playwright (`page.routeWebSocket`): 75 ms más 0–40 ms por sentido, en orden.
   El cliente no tiene un parámetro de latencia.
@@ -661,7 +671,8 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
     confirmaciones.
   - `WalkRejected` descarta todo lo previsto y vuelve a la posición del servidor,
     deslizándose.
-- **MOV-2 Buffer de entrada (A6, en parte: el toque durante un paso).**
+- **MOV-2 Buffer de entrada (✅ A6 y `feat/lpc-actions`: el toque durante un paso, y el
+  toque corto que solo gira con el teclado y con el pad).**
   - Una tecla apretada en el último 40 % del paso (o en sus últimos 150 ms) se guarda y se
     ejecuta en el borde de la casilla.
   - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
@@ -695,7 +706,7 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
     igual). Sin "mirar adelante", para que la vista sea igual para todos.
   - Probar a redondear cámara y criaturas a **píxel de pantalla** en vez de píxel de
     sprite, y comparar en 60 y 144 Hz. Si se ve mejor, queda.
-- **MOV-7 Respuesta visual (✅ A6 en parte: falta polvo y ondas, que van con ART-7).**
+- **MOV-7 Respuesta visual (✅ A6, y el polvo y las ondas en `feat/lpc-actions`).**
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
@@ -1202,14 +1213,66 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
-| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
+| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1 a MOV-7 y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"; el toque corto que solo gira y el polvo y las ondas al pisar, "Hecho: disparar, conjurar, desvanecerse, pasos y girar") | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
-| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas) | servidor, proto, cliente | A8 |
+| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas). Después: disparo y conjuro de LPC, desvanecerse y la muerte con reaparición a la vista ("Hecho: disparar, conjurar, desvanecerse, pasos y girar") | servidor, proto, cliente | A8 |
 | A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
-| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; faltan los efectos al pisar y la niebla (ART-7) | cliente | A10 |
+| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; los efectos al pisar después ("Hecho: disparar, conjurar, desvanecerse, pasos y girar"); falta la niebla (ART-7) | cliente | A10 |
+
+### Hecho: disparar, conjurar, desvanecerse, pasos y girar (2026-11-18, rama `feat/lpc-actions`)
+Lo que quedaba de ANI (A9) y de MOV (A6). Solo cliente y herramientas: el servidor y el
+protocolo no cambian.
+- **Disparar y conjurar (ANI-2, ANI-7).** Las 23 capas de LPC suman sus hojas `shoot` y
+  `spellcast` (46 archivos del mismo commit fijado del Universal LPC, con sus filas de
+  `CREDITS.csv` copiadas tal cual: todas listan OGA-BY 3.0 o CC-BY-SA 3.0; se bajaron del
+  repo oficial y se compararon byte a byte). El preset `lpc` de spritepack suma `shoot`
+  (las 13 columnas de la hoja, una sí y una no con la clave nueva `step: 2`: 7 x 50 ms,
+  350 ms) y `cast` (7 x 60 ms, 420 ms). Los atuendos tienen todas las acciones; los
+  monstruos humanoides solo las de sus ataques en `data/monsters`: `wreck_looter`,
+  `coffer_smuggler` y `obsidian_delver` (tiran botellas, cuchillos o esquirlas de
+  obsidiana: `distance`) disparan, `drowned_miner` (un hechizo de muerte) conjura. El
+  cliente elige el clip por `CreatureAttack.kind` (`render/creature-events.ts`
+  `attackAction`; `packages/renderer/src/anim.ts` `attackClip`): sin ese clip juega
+  `attack`, y sin ninguno la embestida. Con un servidor viejo (sin `attack_events`) todo sigue siendo `attack`: no
+  hay cómo distinguir un arco de un hechizo por el `Projectile`. Hojas sin arco: el
+  `shoot` de LPC es el gesto de tensar y soltar, sin el arma (no hay capas de armas). Se ve
+  como un tiro o un lanzamiento, que es lo que hacen esos monstruos.
+- **Desvanecerse (ANI-7).** `TELEPORT` y `LOGOUT` dejan el cuerpo donde estaba 350 ms
+  (`VANISH_MS`): se angosta (pierde el 70 % del ancho), se estira un 20 % hacia arriba, toma un tinte celeste
+  (`SHIMMER_TINT`, multiplicado), parpadea cada 50 ms y se desvanece. Nunca la caída. Vale
+  para la invisibilidad y las escaleras, que el servidor manda como `TELEPORT`.
+- **Una muerte con reaparición a la vista.** El servidor manda `CreatureDisappear{DEATH}` y
+  `CreatureAppear` del mismo id en el mismo batch. El canvas ya no pregunta "¿por qué se
+  fue?" a las criaturas que dejó de ver: juega cada salida que llegó desde el frame
+  anterior una vez (`DepartureFeed`), sobre el cuerpo dibujado entonces, aunque la
+  criatura ya esté de vuelta. `WorldState` ya no borra la salida cuando vuelve: la marca
+  (`back`), y `departureOf` la ignora. El cuerpo cae donde murió y el jugador aparece con
+  su fundido de 300 ms en el templo.
+- **Cuerpos tapados.** Un cuerpo que cae o se desvanece detrás de una criatura más alta (el
+  lobo muerto justo al norte del mago) también tiene la copia translúcida de ART-2
+  (`DrawnBoxes.covered`).
+- **Polvo y ondas al pisar (MOV-7, ART-7).** Dato: la clave `steps` de un suelo en la
+  sección `tiles` de `assets/sprites.yaml` (`dust` o `ripple`), que spritepack lleva a
+  `atlas.json`. Hoy: polvo en arena, tierra, ceniza y senda de escoria; ondas en la arena
+  mojada (el agua baja no se camina). Cuando una criatura empieza un paso, la casilla que
+  deja patea lo suyo a la altura de los pies (`ParticleLayer.kick`): 4 motas de polvo que
+  suben un poco y se asientan (200–320 ms) o un anillo de 8 gotas que se abre achatado
+  (380–460 ms). Usa el pool de A13: las partículas de ambiente dejan 16 de las 100 libres
+  para los pasos (`STEP_RESERVE`). Los voladores no patean nada; con movimiento reducido,
+  nada.
+- **El toque corto que solo gira (MOV-2).** Quieto, una tecla o el pad hacia un lado al que
+  no se mira gira al personaje en el acto (`Turn`) y camina solo si sigue apretado 80 ms
+  (`TURN_TAP_MS`, `input/keyboard.ts` `TurnTap`). Mirando ya hacia ese lado, o caminando,
+  camina enseguida, como antes. Ctrl+flecha siempre solo gira (con WASD no: Ctrl+W cierra
+  la pestaña). Un botón del pad activado con el teclado sigue siendo un paso. El E2E da un
+  paso como lo daría un jugador: un toque para girar si hace falta y otro para caminar
+  (`client/e2e/keys.ts`), y comprueba que el toque que gira no mueve.
+- **`11b-death` reencuadrada.** La captura espera los últimos 300 ms de la caída (el efecto
+  del golpe que mató termina) y recorta 9x7 casillas alrededor del cuerpo, que
+  `__rpgClient.poses()` ahora ubica.
 
 ### Hecho: A1, versión mínima (2026-11-18, lote 6)
 La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte

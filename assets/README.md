@@ -216,10 +216,15 @@ tiles:
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
   ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
+  ground/sand: { steps: dust }   # lo que patea cada paso sobre este suelo
 ```
 - `particles` (docs/17 ART-7, A13): `embers` (brasas que suben), `pollen` (polen que flota
   alrededor de un árbol), `spray` (rocío; un suelo `spray` solo emite donde toca otro
   suelo) o `dust` (polvo). El cliente las dibuja (`client/src/render/particles.ts`).
+- `steps` (docs/17 MOV-7), solo para suelos: lo que patea cada paso que sale de una casilla
+  de ese suelo, a la altura de los pies: `dust` (unas motas de polvo que suben y se
+  asientan: arena, tierra, ceniza, senda de escoria) o `ripple` (un anillo de gotas que se
+  abre: la arena mojada). Partículas del mismo pool que `particles`.
 - Las piezas de muro pueden medir 32x96 (la muralla, `walls/rampart_wall`: cara de 64 px).
   El marco de las puertas de casa (`doors/house_door_frame`) también tiene 16 piezas: el
   renderer lo pone en cada puerta de `houses.yaml` sin que esté en el mapa.

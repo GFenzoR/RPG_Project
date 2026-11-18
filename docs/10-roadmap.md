@@ -378,8 +378,8 @@ secundaria.
   correcciones que se deslizan. Segunda parte (docs/17 §4, "Hecho: A6, segunda parte"):
   click previsto (el camino lo arma el cliente y lo camina como `Walk`, MOV-4), caminar
   manteniendo el mouse (MOV-3), anillo en el destino y texto de la acción junto al cursor
-  (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. Falta: polvo y ondas al
-  pisar (con las partículas de ART-7) y el toque corto que solo gira (MOV-2).
+  (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. El polvo y las ondas al
+  pisar y el toque corto que solo gira (MOV-2), después: entrada de abajo.
 - [x] **Criaturas animadas con Gemini (docs/17 SRC-4 #6 y SRC-5; rama `feat/gemini-creatures`).**
   Lobo, rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de
   ciénaga y espinoso con caminar, quieto, atacar y morir (sur, norte y oeste; el este
@@ -387,3 +387,10 @@ secundaria.
   (`--cut rows|blobs`); pistas `mirror`, `anchor` y `ms` en spritepack; quieto y atacar solo
   hacia sus lados (embestida de ANI-5 en los otros); "Hecho con IA" en `/credits`. Lo que
   falta: docs/14, "Pendientes conocidos" (los demás animales y los ataques que no vinieron).
+- [x] **Disparar, conjurar, desvanecerse, pasos y girar (docs/17 ANI y MOV; rama
+  `feat/lpc-actions`).** Hojas `shoot` y `spellcast` de las 23 capas de LPC (46 archivos
+  del mismo commit, con sus créditos por archivo) y el clip por `CreatureAttack.kind`;
+  `TELEPORT` y `LOGOUT` se desvanecen; una muerte con reaparición a la vista deja el cuerpo
+  cayendo; polvo y ondas al pisar por suelo (`steps`, partículas de A13); el toque corto
+  que solo gira (MOV-2) y Ctrl+flecha; `11b-death` en primer plano. Lo que queda: docs/14,
+  "Pendientes conocidos".
