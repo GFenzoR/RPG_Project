@@ -1,17 +1,73 @@
 /* Fonts (docs/17 UI-3), self-hosted at /fonts/ (vite/fonts.ts). */
 @import "./fonts.css";
+/* The desktop game screen: dock, orbs, toolbar and windows (docs/17 UI-4, UI-5). */
+@import "./windows.css";
 
 :root {
   color-scheme: dark;
-  --bg: #12151b;
-  --panel: #1d222b;
-  --text: #e6e2d8;
-  --muted: #9aa0a8;
-  --accent: #d9b44a;
-  --error: #ff7a6b;
-  font-family: system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  /* ---- Design tokens (docs/17 UI-2): dark stone, iron and old gold ---------------- */
+  --ui-void: #090807;
+  --ui-stone-950: #0f0d0b;
+  --ui-stone-900: #171410;
+  --ui-stone-800: #211c17;
+  --ui-stone-700: #2e2720;
+  --ui-stone-600: #40362c;
+  --ui-iron-900: #1a1816;
+  --ui-iron-600: #4a4540;
+  --ui-iron-400: #7a7268;
+  --ui-iron-200: #a9a094;
+  --ui-gold-700: #6e5422;
+  --ui-gold-500: #b8923f;
+  --ui-gold-300: #e2c47a;
+  --ui-text: #ddd2b8;
+  --ui-text-muted: #9c917c;
+  --ui-text-dim: #6f6656;
+  --ui-life-700: #5a0f0f;
+  --ui-life-500: #a3201b;
+  --ui-life-300: #e0523f;
+  --ui-mana-700: #0e1e4d;
+  --ui-mana-500: #2347a8;
+  --ui-mana-300: #5d86e6;
+  --ui-xp: #c9a646;
+  --ui-ok: #5f9e4f;
+  --ui-warn: #d29a2e;
+  --ui-danger: #e5574a;
+  --ui-item-quest: #e2c47a;
+  --ui-chat-party: #7fb2ff;
+  --ui-chat-guild: #7fd07a;
+  --ui-chat-private: #d48cff;
+  --ui-chat-system: #d9b44a;
+  --ui-chat-broadcast: #ff8a5c;
+  --ui-radius: 2px;
+  --ui-slot: 36px;
+  --ui-shadow: 0 6px 18px rgb(0 0 0 / 0.6);
+  --ui-dur-fast: 80ms;
+  --ui-dur: 140ms;
+  --ui-dur-slow: 240ms;
+  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ui-font: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --ui-font-title: "Cinzel", Georgia, serif;
+  --ui-font-gothic: "Grenze Gotisch", "Cinzel", Georgia, serif;
+  --ui-font-book: "Alegreya", Georgia, serif;
+  /* Stone grain: fractal noise at a few percent over the stone colour (own SVG, no image
+     file; the desktop CSP allows data: images). */
+  --ui-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.78 0 0 0 0 0.66 0 0 0 0.16 -0.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* The iron frame of every window: outer dark line, iron border, lit bevel top left,
+     dark bevel bottom right, drop shadow. */
+  --ui-frame-shadow:
+    0 0 0 1px var(--ui-iron-900), inset 1px 1px 0 var(--ui-iron-400),
+    inset -1px -1px 0 var(--ui-iron-900), var(--ui-shadow);
+  /* Older names, kept as aliases while the site and the older rules move to the tokens. */
+  --bg: var(--ui-void);
+  --panel: var(--ui-stone-900);
+  --text: var(--ui-text);
+  --muted: var(--ui-text-muted);
+  --accent: var(--ui-gold-500);
+  --error: var(--ui-danger);
+  font-family: var(--ui-font);
+  background: var(--ui-void);
+  color: var(--ui-text);
 }
 html,
 body,
@@ -19,12 +75,58 @@ body,
   margin: 0;
   height: 100%;
 }
+/* The panels' top margin stays inside the page (it used to push the body's background
+   down and leave a black band over it). */
+#app {
+  display: flow-root;
+}
+body {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgb(64 44 24 / 0.22), transparent 70%), var(--ui-grain),
+    var(--ui-void);
+}
+h1,
+h2,
+h3 {
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-gold-300);
+}
+/* Thin dark scrollbars everywhere (Firefox and Chromium read these). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-iron-600) var(--ui-stone-950);
+}
+/* The game's name over the login and character screens (Grenze Gotisch, own lettering). */
+.brand {
+  margin: 8vh auto 0;
+  text-align: center;
+  font-family: var(--ui-font-gothic);
+  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ui-gold-300);
+  text-shadow:
+    0 2px 0 #000,
+    0 0 18px rgb(184 146 63 / 0.35);
+}
+.brand + .panel {
+  margin-top: 1.25rem;
+}
+@media (max-height: 500px) {
+  .brand {
+    display: none;
+  }
+}
+/* Phones: the name in the header in the interface's type, so more of it fits. */
+.hud.compact .name {
+  font-family: var(--ui-font);
+}
 .panel {
   max-width: 22rem;
   margin: 10vh auto 0;
   padding: 1.5rem;
-  background: var(--panel);
-  border-radius: 6px;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -52,41 +154,127 @@ label {
   font-size: 0.9rem;
 }
 small {
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 input,
 select,
+textarea,
 button {
   font: inherit;
   padding: 0.45rem 0.6rem;
-  border-radius: 4px;
-  border: 1px solid #3a414d;
-  background: #11141a;
-  color: var(--text);
+  border-radius: var(--ui-radius);
+  color: var(--ui-text);
 }
+/* Fields: dark wells in the stone, gold edge on focus. */
+input,
+select,
+textarea {
+  border: 1px solid var(--ui-iron-600);
+  background: var(--ui-stone-950);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.7);
+  transition: border-color var(--ui-dur-fast) ease;
+}
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--ui-iron-400);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ui-gold-500);
+}
+input::placeholder {
+  color: var(--ui-text-dim);
+}
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--ui-gold-500);
+  box-shadow: none;
+}
+/* Buttons: carved stone with an iron edge; hover lights the edge gold, a press sinks
+   them one pixel (docs/17 UI-9). */
 button {
-  background: var(--accent);
-  color: #1a1a1a;
-  border: none;
-  cursor: pointer;
   font-weight: 600;
+  color: var(--ui-gold-300);
+  background:
+    linear-gradient(rgb(255 240 210 / 0.07), transparent 45%, rgb(0 0 0 / 0.25)),
+    var(--ui-stone-700);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 1px 0 1px rgb(255 240 210 / 0.08);
+  cursor: pointer;
+  transition:
+    color var(--ui-dur-fast) ease,
+    box-shadow var(--ui-dur-fast) ease,
+    background-color var(--ui-dur-fast) ease,
+    transform var(--ui-dur-fast) ease;
 }
-button:disabled {
-  opacity: 0.6;
+button:hover:not(:disabled):not([aria-disabled="true"]) {
+  color: #f6e7bd;
+  background-color: var(--ui-stone-600);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-500),
+    inset 0 1px 0 1px rgb(255 240 210 / 0.1);
+}
+button:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-700),
+    inset 0 2px 5px rgb(0 0 0 / 0.65);
+}
+button:disabled,
+button[aria-disabled="true"] {
+  color: var(--ui-text-dim);
   cursor: default;
+}
+/* The main action of a form: a brighter, gold-edged button. */
+button[type="submit"] {
+  color: #fbeec4;
+  background: linear-gradient(rgb(255 230 170 / 0.12), transparent 50%, rgb(0 0 0 / 0.3)), #5a2a16;
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-700),
+    inset 0 1px 0 1px rgb(255 220 160 / 0.15);
+}
+button[type="submit"]:hover:not(:disabled) {
+  background-color: #6e3519;
 }
 button.link {
   background: none;
-  color: var(--muted);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ui-text-muted);
   font-weight: normal;
   text-decoration: underline;
 }
+button.link:hover:not(:disabled) {
+  background: none;
+  box-shadow: none;
+  color: var(--ui-gold-300);
+}
+a {
+  color: var(--ui-gold-300);
+}
+kbd {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  font-family: inherit;
+  font-size: 0.85em;
+  text-align: center;
+  color: var(--ui-gold-300);
+  background: var(--ui-stone-950);
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+}
 .error {
-  color: var(--error);
+  color: var(--ui-danger);
   margin: 0;
 }
 .notice {
-  color: var(--accent);
+  color: var(--ui-gold-300);
   margin: 0;
 }
 .characters {
@@ -101,13 +289,93 @@ button.link {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  background: rgb(9 8 7 / 0.55);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(74 69 64 / 0.6);
 }
 .characters .name {
-  font-weight: 600;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--ui-gold-300);
 }
 .characters .meta {
-  color: var(--muted);
+  color: var(--ui-text-muted);
   flex: 1;
+}
+
+/* ---- Frames (docs/17 UI-2): every window, panel and box over the map ---------------- */
+.panel,
+.gwin,
+.dialog,
+.shop,
+.crafting,
+.market,
+.house,
+.trade,
+.tutorial,
+.presence,
+.load-failed,
+.options-panel,
+.hud-menu-body,
+.invitation,
+.death,
+.tutorial-show {
+  color: var(--ui-text);
+  background-color: var(--ui-stone-900);
+  background-image: var(--ui-grain);
+  border: 2px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-frame-shadow);
+}
+/* The title bar of the server's windows (dialog, shop, crafting, market, house, trade):
+   a darker strip with a gold line under it, edge to edge over the window's padding. */
+.dialog > header,
+.shop > header,
+.crafting > header,
+.market > header,
+.house > header,
+.trade > header,
+.tutorial > header {
+  margin: -0.5rem -0.6rem 0.45rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+  background: linear-gradient(#2b241c, #1a1612);
+  border-bottom: 1px solid var(--ui-gold-700);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+}
+.dialog h2,
+.shop h2,
+.crafting h2,
+.market h2,
+.house h2,
+.trade h2,
+.tutorial h2,
+.presence h2,
+.death h2 {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+}
+/* Every server window appears like the toolbar's windows. */
+.dialog,
+.shop,
+.crafting,
+.market,
+.house,
+.trade,
+.presence,
+.invitation {
+  animation: gwin-in var(--ui-dur) var(--ui-ease-out);
+}
+@keyframes gwin-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes gwin-out {
+  to {
+    opacity: 0;
+  }
 }
 .game {
   display: flex;
@@ -120,13 +388,18 @@ button.link {
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
-/* The header is always one line (T5.6): a wrapped header pushed the map down a zoom step. */
+/* The header of tablets and phones is always one line (T5.6): a wrapped header pushed the
+   map down a zoom step. The desktop has no header (docs/17 UI-4: the dock has it all). */
 .hud {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.4rem 0.75rem;
-  background: var(--panel);
+  background:
+    linear-gradient(rgb(255 240 210 / 0.04), rgb(0 0 0 / 0.25)), var(--ui-grain),
+    var(--ui-stone-800);
+  border-bottom: 2px solid var(--ui-iron-600);
+  box-shadow: 0 1px 0 var(--ui-iron-900);
   flex-wrap: nowrap;
   white-space: nowrap;
   min-width: 0;
@@ -135,50 +408,19 @@ button.link {
   flex-shrink: 0;
 }
 .hud .name {
-  font-weight: 600;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--ui-gold-300);
   flex-shrink: 1;
   min-width: 3rem;
   max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Controls help on wide windows: one line cut with an ellipsis; it opens the whole text. */
-.hud .hint {
-  flex: 1 1 0;
-  min-width: 4rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-.hud .hint summary {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-  list-style: none;
-}
-.hud .hint summary::-webkit-details-marker {
-  display: none;
-}
-.hud .hint p {
-  position: absolute;
-  top: 100%;
-  left: 0.75rem;
-  z-index: 30;
-  max-width: 32rem;
-  margin: 0.25rem 0 0;
-  padding: 0.6rem 0.75rem;
-  white-space: normal;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--muted);
-  border-radius: 0.4rem;
-  line-height: 1.4;
-}
-/* Controls help as a button under 1200 px (wide windows show .hint inline). */
 .hud {
   position: relative;
 }
+/* Controls help as a button (tablets on their side). */
 .hud .controls-help {
   display: none;
   flex: 1;
@@ -186,18 +428,18 @@ button.link {
 .hud .controls-help summary {
   display: inline-block;
   cursor: pointer;
-  color: var(--muted);
+  color: var(--ui-text-muted);
   font-size: 0.85rem;
   padding: 0.15rem 0.5rem;
-  border: 1px solid var(--muted);
-  border-radius: 0.3rem;
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
   list-style: none;
 }
 .hud .controls-help summary::-webkit-details-marker {
   display: none;
 }
 .hud .controls-help[open] summary {
-  color: inherit;
+  color: var(--ui-gold-300);
 }
 .hud .controls-help p {
   position: absolute;
@@ -209,16 +451,13 @@ button.link {
   padding: 0.6rem 0.75rem;
   /* The header is nowrap (one line): the opened help wraps inside its box. */
   white-space: normal;
-  background: var(--panel);
-  border: 1px solid var(--muted);
-  border-radius: 0.4rem;
+  background: var(--ui-stone-900);
+  border: 2px solid var(--ui-iron-600);
+  box-shadow: var(--ui-frame-shadow);
   font-size: 0.85rem;
   line-height: 1.4;
 }
 @media (max-width: 1199px) {
-  .hud .hint {
-    display: none;
-  }
   .hud .controls-help {
     display: block;
   }
@@ -227,8 +466,14 @@ button.link {
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
 }
+.hud .stat[data-testid="health"] {
+  color: #f08a78;
+}
+.hud .stat[data-testid="mana"] {
+  color: #8fb0f0;
+}
 /* Own conditions (T3.2): one named badge each, coloured by kind. */
-.hud .conditions {
+.conditions {
   display: flex;
   gap: 0.3rem;
   flex-shrink: 1;
@@ -236,22 +481,25 @@ button.link {
   overflow: hidden;
 }
 /* None: no empty item, so no gap for it in the header. */
-.hud .conditions:empty {
+.conditions:empty {
   display: none;
 }
-.hud .condition {
-  padding: 0.05rem 0.4rem;
+.condition {
+  padding: 0.05rem 0.45rem;
   border-radius: 0.6rem;
   font-size: 0.75rem;
   border: 1px solid currentColor;
+  background: rgb(0 0 0 / 0.35);
+  white-space: nowrap;
+  animation: notice-in var(--ui-dur) var(--ui-ease-out);
 }
-.hud .condition-damage {
+.condition-damage {
   color: #e8a050;
 }
-.hud .condition-debuff {
+.condition-debuff {
   color: #c890ff;
 }
-.hud .condition-buff {
+.condition-buff {
   color: #8fe0a8;
 }
 .game-body {
@@ -265,12 +513,14 @@ button.link {
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.5rem;
-  background: var(--panel);
+  background:
+    linear-gradient(90deg, rgb(0 0 0 / 0.35), transparent 6px), var(--ui-grain), var(--ui-stone-900);
+  border-left: 2px solid var(--ui-iron-600);
   overflow-y: auto;
   font-size: 0.85rem;
 }
 .side h2 {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   margin: 0 0 0.4rem;
 }
 .battle ul,
@@ -282,31 +532,50 @@ button.link {
   flex-direction: column;
   gap: 0.25rem;
 }
+/* The battle list: one carved row per creature, its health under the name. */
 .battle button {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.15rem;
+  gap: 0.2rem;
   text-align: left;
   padding: 0.25rem 0.4rem;
-  border: 2px solid transparent;
+  font-weight: 500;
+  color: var(--ui-text);
+  background: rgb(9 8 7 / 0.55);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(74 69 64 / 0.55);
 }
 .battle button.target {
-  border-color: #ff2020;
+  color: #ffd9cf;
+  box-shadow:
+    inset 0 0 0 1px #d8362b,
+    0 0 6px rgb(216 54 43 / 0.55);
 }
 .battle .hp {
   display: block;
   height: 4px;
-  background: #101010;
+  overflow: hidden;
+  background: #0b0605;
+  box-shadow: 0 0 0 1px #000;
 }
-.battle .hp span {
+/* The bars fill with transform (docs/17 UI-9): scaleX of the share left. */
+.battle .hp span,
+.skills .sbar span,
+.party .hp span,
+.party .mp span {
   display: block;
   height: 100%;
-  background: #30c030;
+  transform-origin: left center;
+  transition: transform var(--ui-dur-slow) var(--ui-ease-out);
+}
+.battle .hp span {
+  background: linear-gradient(#ff7a62, var(--ui-life-500));
 }
 .battle .empty {
-  color: var(--muted);
+  color: var(--ui-text-muted);
+  font-style: italic;
   margin: 0;
 }
 .fight {
@@ -321,7 +590,7 @@ button.link {
 }
 .log {
   margin-top: auto;
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 .viewport {
   flex: 1;
@@ -333,14 +602,14 @@ button.link {
   /* clip, where supported: a focused control in a window over the map (Tab through the
      shop) must not scroll the whole map up and leave a black band. */
   overflow: clip;
-  background: #000;
+  background: radial-gradient(ellipse at center, transparent 40%, rgb(0 0 0 / 0.6)), var(--ui-void);
 }
 .viewport canvas {
   display: block;
   image-rendering: pixelated;
 }
 .connecting {
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 /* The atlas did not load after its retries (ui/LoadStatus.tsx): the error over the empty
    map, with a large "Retry" button. */
@@ -353,9 +622,6 @@ button.link {
   box-sizing: border-box;
   padding: 1rem 1.25rem;
   text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--muted);
-  border-radius: 0.4rem;
 }
 .load-failed p {
   margin: 0;
@@ -376,38 +642,71 @@ button.link {
 .skills li {
   display: contents;
 }
+.skills .sname {
+  color: var(--ui-text);
+}
 .skills .slevel {
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--ui-gold-300);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .skills .sbar {
   grid-column: 1 / -1;
   display: block;
-  height: 3px;
-  margin-bottom: 0.2rem;
-  background: #101010;
+  height: 4px;
+  margin-bottom: 0.3rem;
+  overflow: hidden;
+  background: var(--ui-stone-950);
+  box-shadow: 0 0 0 1px #000;
 }
 .skills .sbar span {
-  display: block;
-  height: 100%;
-  background: #d0a030;
+  background: linear-gradient(#ead38a, var(--ui-xp) 60%, #7a5f1f);
 }
 .viewport {
   position: relative;
 }
+/* Level up (docs/17 UI-9): a large gothic notice that rises in with a golden glow. */
 .level-up {
   position: absolute;
-  top: 1.5rem;
+  top: 12%;
   left: 50%;
+  z-index: 6;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.5rem 1.25rem;
-  background: rgba(0, 0, 0, 0.75);
-  border: 2px solid #d0a030;
-  color: #f0d070;
+  gap: 0.15rem;
+  padding: 0.6rem 2.5rem 0.75rem;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.78) 40%, transparent 72%);
+  color: var(--ui-gold-300);
   pointer-events: none;
+  text-align: center;
+  animation: level-in 600ms var(--ui-ease-out);
+}
+.level-up strong {
+  font-family: var(--ui-font-gothic);
+  font-size: clamp(1.8rem, 4.5vw, 2.8rem);
+  font-weight: 600;
+  line-height: 1.05;
+  text-shadow:
+    0 2px 0 #000,
+    0 0 14px rgb(226 196 122 / 0.75),
+    0 0 32px rgb(184 146 63 / 0.5);
+}
+.level-up span {
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ui-text);
+  text-shadow: 0 1px 0 #000;
+}
+@keyframes level-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.75rem) scale(0.9);
+  }
 }
 
 /* Voyage (T3.5): the map fades to dark and back while the destination shows. */
@@ -448,15 +747,27 @@ button.link {
   grid-template-columns: repeat(5, 36px);
   justify-content: start;
 }
+/* A slot is a well cut in the stone: dark, sunk, an iron rim (docs/17 UI-2). */
 .inventory .slot {
-  width: 36px;
-  height: 36px;
+  width: var(--ui-slot);
+  height: var(--ui-slot);
   box-sizing: border-box;
-  border: 1px solid #3a4250;
-  background: #141820;
+  border: 1px solid var(--ui-iron-900);
+  background:
+    radial-gradient(circle at 50% 40%, rgb(255 240 210 / 0.04), transparent 70%),
+    var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px rgb(74 69 64 / 0.7),
+    inset 1px 2px 4px rgb(0 0 0 / 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: box-shadow var(--ui-dur-fast) ease;
+}
+.inventory .slot:hover {
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-700),
+    inset 1px 2px 4px rgb(0 0 0 / 0.8);
 }
 .inventory .slot.gap {
   border: none;
@@ -492,18 +803,43 @@ button.link {
     0 0 2px #000;
 }
 .inventory .capacity {
-  margin: 0.35rem 0 0;
-  color: var(--muted);
+  margin: 0.4rem 0 0;
+  color: var(--ui-text-muted);
+  font-size: 0.8rem;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+}
+/* The equipment over a figure of the character (a paperdoll, docs/17 UI-5): an own
+   silhouette drawn as an SVG behind the slots. */
+.inventory .equipment {
+  padding: 0.35rem 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 100'%3E%3Cpath fill='%23e2c47a' fill-opacity='0.07' d='M30 4c7 0 11 5 11 11s-4 11-11 11-11-5-11-11 4-11 11-11zM14 30h32l8 6 4 26-6 2-4-20v18l4 34h-10l-3-30h-2l-3 30H24l4-34V44l-4 20-6-2 4-26z'/%3E%3C/svg%3E")
+    center / auto 100% no-repeat;
 }
 .inventory .container {
   margin-top: 0.5rem;
+  padding: 0.3rem;
+  background: rgb(9 8 7 / 0.45);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(74 69 64 / 0.55);
+  animation: gwin-in var(--ui-dur) var(--ui-ease-out);
 }
 .inventory .container header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.25rem;
+  margin: -0.3rem -0.3rem 0.3rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.45rem;
+  font-family: var(--ui-font-title);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ui-gold-300);
+  background: linear-gradient(#2b241c, #1a1612);
+  border-bottom: 1px solid var(--ui-gold-700);
+}
+.inventory .container header span::first-letter {
+  text-transform: uppercase;
 }
 .inventory .container header button {
   padding: 0 0.4rem;
@@ -518,17 +854,25 @@ body.using-item canvas {
   cursor: crosshair !important;
 }
 
-/* Spell hotkeys F1–F12 (T1.9): a bar along the bottom of the viewport. With the slider
+/* Spell hotkeys F1–F12 (T1.9): a belt along the bottom of the viewport. With the slider
    (T5.6) the list shows only whole slots and scrolls, snapping to a slot. */
 .hotbar {
   position: absolute;
   bottom: 0.5rem;
   left: 50%;
+  z-index: 2;
   transform: translateX(-50%);
   display: flex;
   gap: 0.25rem;
   align-items: stretch;
   max-width: calc(100% - 1rem);
+  padding: 3px;
+  background: rgb(15 13 11 / 0.82);
+  border: 1px solid var(--ui-iron-900);
+  border-radius: var(--ui-radius);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    0 3px 10px rgb(0 0 0 / 0.6);
 }
 .hotbar ol {
   list-style: none;
@@ -554,10 +898,6 @@ body.using-item canvas {
   flex: none;
   padding: 0;
   font-size: 1.3rem;
-  color: #eee;
-  background: rgba(20, 20, 30, 0.82);
-  border: 1px solid #555;
-  border-radius: 3px;
 }
 .hotbar .page:disabled {
   opacity: 0.35;
@@ -567,13 +907,11 @@ body.using-item canvas {
   position: relative;
   width: 4.6rem;
   height: 3.1rem;
-  padding: 0.1rem 0.2rem;
-  font-size: 0.65rem;
+  padding: 0.1rem 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 500;
   line-height: 1.1;
-  color: #eee;
-  background: rgba(20, 20, 30, 0.92);
-  border: 1px solid #555;
-  border-radius: 3px;
+  color: var(--ui-text);
   overflow: hidden;
 }
 .hotbar li button {
@@ -581,14 +919,25 @@ body.using-item canvas {
   flex-direction: column;
   align-items: flex-start;
   cursor: pointer;
+  background: var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px rgb(74 69 64 / 0.8),
+    inset 1px 2px 4px rgb(0 0 0 / 0.75);
+}
+.hotbar li button:not(:disabled) {
+  background:
+    radial-gradient(circle at 50% 120%, rgb(184 146 63 / 0.22), transparent 70%),
+    var(--ui-stone-800);
 }
 .hotbar li button:disabled {
-  color: var(--muted);
+  color: var(--ui-text-dim);
   cursor: default;
 }
 .hotbar .key {
-  font-weight: bold;
-  color: #d0a030;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  font-size: 0.68rem;
+  color: var(--ui-gold-500);
 }
 .hotbar .spell {
   text-align: left;
@@ -598,15 +947,13 @@ body.using-item canvas {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 0.68);
+  box-shadow: 0 -1px 0 rgb(226 196 122 / 0.35);
   pointer-events: none;
 }
 .hotbar .edit {
   width: 1.8rem;
-  background: rgba(20, 20, 30, 0.82);
-  color: #eee;
-  border: 1px solid #555;
-  border-radius: 3px;
+  padding: 0;
 }
 /* Desktop: a slimmer bar closer to the edge, and the canvas keeps the strip it takes clear
    when the window has room, or moves up as far as it can (--map-reserve-bottom, read by
@@ -651,10 +998,6 @@ body.using-item canvas {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.5rem 0.6rem;
-  color: #eee;
-  background: rgba(20, 20, 30, 0.94);
-  border: 1px solid #666;
-  border-radius: 4px;
   font-size: 0.85rem;
 }
 .dialog header,
@@ -667,14 +1010,17 @@ body.using-item canvas {
 .dialog h2,
 .shop h2 {
   margin: 0;
-  font-size: 0.95rem;
 }
 .dialog .close {
   padding: 0 0.4rem;
 }
+/* What the NPC says: book type (Alegreya), like a page of a chronicle (docs/17 UI-8). */
 .npc-text {
   margin: 0.4rem 0 0.6rem;
-  line-height: 1.35;
+  font-family: var(--ui-font-book);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #e8dcc0;
 }
 .dialog .options {
   list-style: none;
@@ -687,21 +1033,29 @@ body.using-item canvas {
 .dialog .options button {
   width: 100%;
   text-align: left;
+  font-weight: 500;
+  color: var(--ui-text);
 }
 .dialog kbd {
-  display: inline-block;
-  min-width: 1.1rem;
-  text-align: center;
-  color: #ffd27a;
-  font-family: inherit;
+  margin-right: 0.3rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-weight: 700;
 }
 .shop .tabs {
   display: flex;
   gap: 0.25rem;
   margin: 0.4rem 0;
 }
-.shop .tabs [aria-selected="true"] {
-  border-color: #ffd27a;
+.shop .tabs [aria-selected="true"],
+.guild-tabs [aria-selected="true"],
+.chat-tabs [aria-selected="true"] {
+  color: #f6e7bd;
+  background: var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-500),
+    inset 0 2px 5px rgb(0 0 0 / 0.6);
 }
 .shop ul {
   list-style: none;
@@ -718,14 +1072,19 @@ body.using-item canvas {
 .shop li .owned {
   grid-column: 2;
   grid-row: 2;
-  color: var(--muted);
+  color: var(--ui-text-muted);
   font-size: 0.75rem;
 }
 .shop li input {
   width: 3.2rem;
 }
+.shop li + li {
+  border-top: 1px solid rgb(74 69 64 / 0.35);
+}
+.shop .price,
 .shop .money {
-  color: #ffd27a;
+  color: var(--ui-gold-300);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Crafting station (T3.4): top left, like the NPC windows ---------------------- */
@@ -739,10 +1098,6 @@ body.using-item canvas {
   max-height: calc(100% - 5rem);
   overflow-y: auto;
   padding: 0.5rem 0.6rem;
-  color: #eee;
-  background: rgba(20, 20, 30, 0.94);
-  border: 1px solid #666;
-  border-radius: 4px;
   font-size: 0.85rem;
 }
 .crafting header {
@@ -752,7 +1107,6 @@ body.using-item canvas {
 }
 .crafting h2 {
   margin: 0;
-  font-size: 0.95rem;
 }
 /* The title is the station's item name, lower case in Spanish ("fragua"): a title starts
    with a capital. */
@@ -773,11 +1127,12 @@ body.using-item canvas {
   align-items: center;
   gap: 0.4rem;
   padding: 0.25rem;
-  border: 1px solid #444;
-  border-radius: 3px;
+  background: rgb(9 8 7 / 0.5);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(74 69 64 / 0.55);
 }
 .crafting .recipe.ready {
-  border-color: #6a8a4a;
+  box-shadow: inset 0 0 0 1px var(--ui-ok);
 }
 .crafting .inputs {
   list-style: none;
@@ -787,34 +1142,49 @@ body.using-item canvas {
 }
 .crafting .needs {
   margin: 0;
-  color: var(--muted);
+  color: var(--ui-text-muted);
   font-size: 0.75rem;
 }
 .crafting .lacking {
-  color: #e08a7a;
+  color: var(--ui-danger);
 }
 .crafting .recipe button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Death screen (T1.11): over the map until the player closes it. */
+/* Death screen (T1.11): over the map until the player closes it; the map turns to blood. */
 .death {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 5;
+  z-index: 7;
   min-width: 16rem;
-  padding: 1rem 1.5rem;
+  padding: 1.1rem 1.75rem 1.25rem;
   text-align: center;
-  background: rgba(20, 0, 0, 0.88);
-  border: 2px solid #a03030;
-  color: #f0d0d0;
+  color: #f0d6cc;
+  border-color: #5a1a14;
+  box-shadow:
+    var(--ui-frame-shadow),
+    0 0 0 100vmax rgb(40 0 0 / 0.55);
+  animation: death-in 700ms var(--ui-ease-out);
 }
 .death h2 {
-  margin: 0 0 0.5rem;
-  color: #ff6060;
+  margin: 0 0 0.6rem;
+  font-family: var(--ui-font-gothic);
+  font-size: 2.2rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #e0523f;
+  text-shadow:
+    0 2px 0 #000,
+    0 0 16px rgb(224 82 63 / 0.6);
+}
+@keyframes death-in {
+  from {
+    opacity: 0;
+  }
 }
 .death p {
   margin: 0.25rem 0;
@@ -822,8 +1192,6 @@ body.using-item canvas {
 
 /* ---- chat and language (T1.13) ---------------------------------------------------- */
 .chat {
-  /* On desktop it sits under the scrolling column of the side panel (.side-scroll). */
-  background: var(--panel);
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -831,13 +1199,24 @@ body.using-item canvas {
 .chat-lines {
   list-style: none;
   margin: 0;
-  padding: 0.3rem;
+  padding: 0.3rem 0.4rem;
   height: 8.5rem;
   overflow-y: auto;
-  font-size: 0.8rem;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 3px;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  background: rgb(9 8 7 / 0.7);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.7);
   overflow-wrap: anywhere;
+}
+.chat-lines li {
+  animation: line-in var(--ui-dur) var(--ui-ease-out);
+}
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-0.3rem);
+  }
 }
 .chat-lines .say {
   color: #f2d94e;
@@ -847,7 +1226,7 @@ body.using-item canvas {
   font-weight: bold;
 }
 .chat-lines .whisper {
-  color: #c9b98a;
+  color: var(--ui-chat-private);
   font-style: italic;
 }
 .chat-lines .global {
@@ -857,7 +1236,7 @@ body.using-item canvas {
   color: #9fe3a0;
 }
 .chat-lines .broadcast {
-  color: #ff8a80;
+  color: var(--ui-chat-broadcast);
   font-weight: bold;
 }
 .say {
@@ -883,7 +1262,7 @@ body.using-item canvas {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 
 /* Parties (T3.3). */
@@ -899,10 +1278,10 @@ body.using-item canvas {
   justify-content: center;
   padding: 0 0.5rem;
   font-weight: bold;
-  border-color: #404850;
+  color: var(--ui-gold-300);
 }
 .chat-lines .party {
-  color: #8fd0ff;
+  color: var(--ui-chat-party);
 }
 .party ul {
   list-style: none;
@@ -922,14 +1301,17 @@ body.using-item canvas {
 }
 .party .tag {
   margin-left: 0.35rem;
-  padding: 0 0.25rem;
+  padding: 0 0.3rem;
   font-size: 0.7rem;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  border: 1px solid var(--ui-gold-700);
+  color: var(--ui-gold-300);
 }
 .party .tag.sharing {
-  border-color: #30c030;
-  color: #60e060;
+  border-color: var(--ui-ok);
+  color: #8fd07a;
+}
+.party .mname {
+  font-weight: 500;
 }
 .party .mlevel,
 .party .where {
@@ -945,16 +1327,15 @@ body.using-item canvas {
 .party .mp {
   display: block;
   height: 4px;
-  background: #101010;
+  overflow: hidden;
+  background: #0b0605;
+  box-shadow: 0 0 0 1px #000;
 }
-.party .hp span,
-.party .mp span {
-  display: block;
-  height: 100%;
-  background: #30c030;
+.party .hp span {
+  background: linear-gradient(#ff7a62, var(--ui-life-500));
 }
 .party .mp span {
-  background: #3070e0;
+  background: linear-gradient(#8fb0f0, var(--ui-mana-500));
 }
 .party .actions,
 .party-actions {
@@ -968,7 +1349,7 @@ body.using-item canvas {
   font-size: 0.8rem;
 }
 .party .shared-2 {
-  color: #60e060;
+  color: #8fd07a;
 }
 .party .shared-3 {
   color: var(--error);
@@ -991,8 +1372,7 @@ body.using-item canvas {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.75rem;
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid var(--accent);
+  border-color: var(--ui-gold-700);
 }
 .invitation p {
   margin: 0;
@@ -1018,15 +1398,11 @@ body.using-item canvas {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text);
-  background: rgba(20, 20, 30, 0.96);
-  border: 1px solid #666;
   border-radius: 4px;
 }
 .options-panel h3 {
   margin: 0 0 0.2rem;
-  font-size: 0.85rem;
-  color: var(--accent);
+  font-size: 0.8rem;
 }
 .options-panel .channel {
   display: grid;
@@ -1058,8 +1434,10 @@ body.using-item canvas {
   gap: 0.35rem;
   margin-top: 0.5rem;
   padding: 0.5rem;
-  border: 1px solid #404850;
-  border-radius: 4px;
+  background: rgb(9 8 7 / 0.55);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px var(--ui-gold-700);
+  animation: gwin-in var(--ui-dur) var(--ui-ease-out);
 }
 .report-form label {
   display: flex;
@@ -1085,9 +1463,6 @@ body.using-item canvas {
   z-index: 6;
   max-width: 22rem;
   padding: 0.6rem 0.8rem;
-  background: var(--panel, #1c2128);
-  border: 1px solid #e0a060;
-  border-radius: 4px;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1117,9 +1492,6 @@ body.using-item canvas {
   z-index: 5;
   max-width: 17rem;
   padding: 0.55rem 0.75rem;
-  background: var(--panel, #1c2128);
-  border: 1px solid #6fb3e0;
-  border-radius: 4px;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1147,14 +1519,13 @@ body.using-item canvas {
   align-self: flex-end;
 }
 [data-tutorial-active] {
-  outline: 2px solid #6fb3e0;
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 2px;
-  box-shadow: 0 0 0 0 rgba(111, 179, 224, 0.6);
   animation: tutorial-pulse 1.4s ease-in-out infinite;
 }
 @keyframes tutorial-pulse {
   50% {
-    box-shadow: 0 0 10px 4px rgba(111, 179, 224, 0.6);
+    outline-color: rgb(226 196 122 / 0.35);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1211,21 +1582,40 @@ body.using-item canvas {
 
 /* Guilds (T5.1). */
 .chat-lines .guild {
-  color: #b8e986;
+  color: var(--ui-chat-guild);
 }
 .guild h2 .tag,
 .guild .tag {
   margin-left: 0.35rem;
-  padding: 0 0.25rem;
+  padding: 0 0.3rem;
+  font-family: var(--ui-font);
   font-size: 0.7rem;
   font-weight: normal;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  letter-spacing: 0;
+  border: 1px solid var(--ui-gold-700);
+  color: var(--ui-gold-300);
+}
+.guild h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.2rem;
 }
 .guild h3 {
-  margin: 0.4rem 0 0.2rem;
-  font-size: 0.8rem;
-  color: var(--muted);
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.75rem;
+  color: var(--ui-gold-500);
+}
+/* The guild window's own buttons (docs/17 UI-7): one tab per part. */
+.guild-tabs {
+  display: flex;
+  gap: 3px;
+  margin: 0.35rem 0 0.25rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgb(74 69 64 / 0.6);
+}
+.guild-tabs button {
+  flex: 1;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.78rem;
 }
 .guild .motd {
   margin: 0 0 0.3rem;
@@ -1267,7 +1657,8 @@ body.using-item canvas {
   background: #505860;
 }
 .guild li.online .dot {
-  background: #30c030;
+  background: #5fcf4f;
+  box-shadow: 0 0 4px #5fcf4f;
 }
 .guild .actions,
 .guild-actions {
@@ -1319,9 +1710,9 @@ body.using-item canvas {
   font-size: 0.8rem;
 }
 .guild button.danger {
-  background: transparent;
-  border: 1px solid var(--error);
-  color: var(--error);
+  color: #ffb3a8;
+  background: #4a1510;
+  box-shadow: inset 0 0 0 1px #8a2a20;
 }
 .guild-invitations {
   bottom: 8rem;
@@ -1363,7 +1754,7 @@ body.using-item canvas {
   align-items: center;
 }
 .guild-wars li.active {
-  color: #ffb0a0;
+  color: #ffb3a8;
 }
 
 /* ---- Trade window and market (T5.3): top left (market) and top right (trade) ------ */
@@ -1378,10 +1769,6 @@ body.using-item canvas {
   max-height: calc(100% - 5rem);
   overflow-y: auto;
   padding: 0.5rem 0.6rem;
-  color: #eee;
-  background: rgba(20, 20, 30, 0.95);
-  border: 1px solid #666;
-  border-radius: 4px;
   font-size: 0.82rem;
 }
 .market {
@@ -1404,8 +1791,7 @@ body.using-item canvas {
 }
 .house h3 {
   margin: 0.6rem 0 0.25rem;
-  font-size: 0.85rem;
-  color: #ffd27a;
+  font-size: 0.78rem;
 }
 .house p {
   margin: 0.25rem 0;
@@ -1447,8 +1833,9 @@ body.using-item canvas {
   margin: 0;
 }
 .house .danger {
-  color: #fff;
-  background: #8a2a20;
+  color: #ffb3a8;
+  background: #4a1510;
+  box-shadow: inset 0 0 0 1px #8a2a20;
 }
 .trade {
   right: 0.5rem;
@@ -1463,22 +1850,21 @@ body.using-item canvas {
 .market header h2,
 .trade header h2 {
   margin: 0;
-  font-size: 0.95rem;
   flex: 1;
 }
 .market h3,
 .trade h3 {
   margin: 0.6rem 0 0.25rem;
-  font-size: 0.85rem;
-  color: #ffd27a;
+  font-size: 0.78rem;
 }
 .market h4 {
   margin: 0.4rem 0 0.2rem;
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 .market .money {
-  color: #ffd27a;
+  color: var(--ui-gold-300);
+  font-variant-numeric: tabular-nums;
 }
 .market ul,
 .trade ul {
@@ -1518,7 +1904,7 @@ body.using-item canvas {
 }
 .market output {
   flex-basis: 100%;
-  color: #ff8a7a;
+  color: var(--ui-danger);
 }
 .market .mside {
   color: var(--muted);
@@ -1546,7 +1932,7 @@ body.using-item canvas {
   font-size: 0.7rem;
   line-height: 32px;
   text-align: center;
-  background: #333;
+  background: var(--ui-stone-700);
 }
 .trade .columns {
   display: grid;
@@ -1567,26 +1953,28 @@ body.using-item canvas {
 }
 .market .reference {
   margin: 0 0 0.3rem;
-  color: #ffd27a;
+  color: var(--ui-gold-300);
   font-size: 0.8rem;
 }
 .market .read-only {
   margin: 0.3rem 0;
   padding: 0.3rem 0.4rem;
   color: #ffd0c8;
-  background: rgba(160, 40, 30, 0.35);
-  border-radius: 3px;
+  background: rgb(160 40 30 / 0.35);
+  border-left: 3px solid var(--ui-danger);
 }
 
 /* ---- Small screens and touch (T5.6) ---------------------------------------------------
-   App.tsx sets data-layout / data-panel / data-flow on .game from ui/layout.ts (the
-   breakpoints live there as data, not here). Desktop (data-panel="sidebar") keeps the
-   look it had: the panes are display: contents, so the side column is unchanged. */
+   GameView.tsx sets data-layout / data-panel / data-flow on .game from ui/layout.ts (the
+   breakpoints live there as data, not here). Desktop (data-panel="sidebar") is the
+   windowed screen of windows.css (data-ui="windows"); these rules are the tabs and the
+   drawer of tablets and phones. */
 
-/* Visible focus everywhere, for keyboard and switch users (the site has its own). */
+/* Visible focus everywhere, for keyboard and switch users (the site has its own): a gold
+   ring that reads on stone and on the map. */
 .game :focus-visible,
 .panel :focus-visible {
-  outline: 3px solid #8fc7ff;
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 2px;
 }
 
@@ -1600,36 +1988,10 @@ body.using-item canvas {
   display: none;
 }
 
-/* Desktop side column: every section but the chat scrolls in .side-scroll, and the chat
-   keeps its own place under it (it used to be sticky over the column and covered the end
-   of the inventory and the appearance panel at 1280x800). With tabs or the drawer the
-   wrapper is transparent and the panes behave as before. */
+/* With tabs or the drawer the wrapper of the sections is transparent: the panes behave as
+   if they were the panel's children. */
 .side-scroll {
   display: contents;
-}
-.game[data-panel="sidebar"] .side {
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-}
-.game[data-panel="sidebar"] .side-scroll {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-/* The sections keep their height and the column scrolls (the panes are display: contents). */
-.game[data-panel="sidebar"] .side-scroll > .pane > * {
-  flex-shrink: 0;
-}
-.game[data-panel="sidebar"] .chat {
-  flex: none;
-  padding: 0.5rem;
-  border-top: 1px solid #2c323c;
 }
 
 /* Server notices over the map: above the hotbar, under the bottom edge of the windows. */
@@ -1660,17 +2022,30 @@ body.using-item canvas {
 .notices:empty {
   display: none;
 }
+/* A notice: dark smoke behind gold-lit text, in and out like a whisper (docs/17 UI-9). */
 .notice-line {
   margin: 0;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.85rem;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.3;
   text-align: center;
-  color: #f4ecd8;
-  background: rgba(10, 10, 16, 0.82);
-  border-left: 3px solid var(--accent);
-  border-radius: 3px;
-  animation: notice-in 160ms ease-out;
+  color: #f4ead2;
+  text-shadow: 0 1px 0 #000;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(9 8 7 / 0.85) 12%,
+    rgb(9 8 7 / 0.85) 88%,
+    transparent
+  );
+  animation:
+    notice-in 160ms var(--ui-ease-out),
+    notice-out 300ms var(--ui-ease-in) 5700ms forwards;
+}
+@keyframes notice-out {
+  to {
+    opacity: 0;
+  }
 }
 @keyframes notice-in {
   from {
@@ -1690,9 +2065,6 @@ body.using-item canvas {
   top: 0.75rem;
   right: 0.75rem;
   z-index: 5;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid #6fb3e0;
   font-weight: normal;
   font-size: 0.85rem;
 }
@@ -1714,16 +2086,17 @@ body.using-item canvas {
   flex: 1 0 auto;
   min-height: 44px;
   padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-  background: #11141a;
-  border: 1px solid #3a414d;
-  border-bottom-width: 3px;
+  font-family: var(--ui-font-title);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ui-text-muted);
 }
 .panel-tabs [role="tab"][aria-selected="true"] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  color: var(--ui-gold-300);
+  background: var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 -3px 0 var(--ui-gold-500);
 }
 .game:not([data-panel="sidebar"]) .side {
   gap: 0.5rem;
@@ -1876,8 +2249,6 @@ body.using-item canvas {
   margin-top: 0.25rem;
   padding: 0.75rem;
   white-space: normal;
-  background: var(--panel);
-  border: 1px solid var(--muted);
   border-radius: 0.4rem;
 }
 .hud-menu-body .controls-text {
