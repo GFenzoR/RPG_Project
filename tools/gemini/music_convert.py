@@ -6,25 +6,37 @@ client plays music with a Web Audio `AudioBufferSourceNode` and `loop = true`
 sample, and Ogg Opus is the format `assets/sounds/` ships (`tools/soundgen`).
 
 Every delivery is a finished *piece*: it opens, it closes, and it ends in
-silence, so it cannot loop as it is. Four steps get from one to the other:
+silence, so it cannot loop as it is. These steps get from one to the other:
 
 1. **The fades come off** (`fade_bounds`): walked in from each end, a tenth of
    a second at a time, while the level is under half the body's. Blunt on
    purpose: what matters is that the crossfade meets music at both ends.
-2. **The loop is closed** (`close_loop`): the last `--crossfade` seconds are
+2. **A shorter loop, when asked** (`--max-seconds`, `loop_length`): the game
+   keeps the loops it plays decoded in memory (docs/07 "Audio": ~11 MB a
+   minute in mono at 48 kHz) and every file inside the size budget, so a
+   three-minute piece can ship as a loop of about a minute. The length is
+   picked between `LOOP_RANGE` of the maximum and the maximum, where what
+   follows the cut looks most like the head over the crossfade (the onsets of
+   both in step, so a beat falls on a beat; the energy contour alike; the same
+   level), because that is exactly what the crossfade lays over the head.
+3. **The loop is closed** (`close_loop`): the last `--crossfade` seconds are
    folded back over the head with an equal-power crossfade (a linear one dips
    about 3 dB in the middle, a hole at the exact moment the seam hides). The
    loop's last sample is followed by the sample that came after it in the
    piece, so the wrap is continuous by construction, not by luck.
-3. **Loudness normalised with one constant gain** (`loudness_gain`): ffmpeg's
+4. **Loudness normalised with one constant gain** (`loudness_gain`): ffmpeg's
    EBU R128 meter (`loudnorm`, measuring only) reads the loop's integrated
    loudness and true peak, and a single gain brings it to `--lufs`, never past
    `--true-peak`. A time-varying normaliser would end the loop at a different
-   gain from the one it starts at, and the seam would jump.
-4. **Encoded to Ogg Opus** at 48 kHz, and decoded back to measure what ships:
+   gain from the one it starts at, and the seam would jump. A mono loop is
+   measured as mono, like soundgen's themes (the browser plays both alike on
+   two speakers). Gemini masters run hot (+1.5 to +5 dBTP on 2026-11-17's
+   takes), so the peak ceiling, not the target, usually sets the gain:
+   `music_import` makes up the difference with the volume in `sounds.yaml`.
+5. **Encoded to Ogg Opus** at 48 kHz, and decoded back to measure what ships:
    the seam (`seam_score`: the step across the wrap against the ordinary steps
    around it; under 1 is quieter than the music) and the length.
-5. **The seam survives the encoder** (`turn`): the last frame's coding error
+6. **The seam survives the encoder** (`turn`): the last frame's coding error
    and the first's come from two unrelated frames, so a seam that is clean in
    the samples can step after encoding (3.3 on the first real track,
    2026-11-18, from 0.81 before it). The loop is a circle, so it is turned by
@@ -38,10 +50,11 @@ inside `imageio-ffmpeg`. Build-time only; nothing of it reaches the game.
 
     python tools/gemini/music_convert.py <track.mp4> [--out build/gemini/convert/<stem>.ogg]
         [--kbps 32] [--channels 2] [--lufs -14] [--true-peak -1.5] [--crossfade 4] [--no-loop]
+        [--max-seconds 72]
 
-It never writes into `assets/`: the owner listens to the `.ogg` first, and then
-it is copied by hand with its prompt file and its `CREDITS.md` row
-(`credit.py`). `<out stem>.json` beside it holds the measures and, when the
+It never writes into `assets/` by itself: the owner listens first.
+`music_import.py` (`make music-gemini`) runs it on the owner's picks and puts
+the results in the game, with their prompt files and `CREDITS.md` rows. `<out stem>.json` beside it holds the measures and, when the
 delivery has a `music_web` sidecar beside it, the prompt it was asked with.
 """
 
@@ -80,6 +93,11 @@ BODY_SKIP = 5.0
 TURNS = 8
 TURN_MS = 97  # odd against Opus's 20 ms frames, so every turn lands elsewhere in one
 SEAM_GOOD = 1.0
+## `--max-seconds`: the loop's length is picked between this share of the
+## maximum and the maximum (`loop_length`).
+LOOP_RANGE = 0.75
+## The hop of the envelopes `loop_length` compares (10 ms: a beat lands within 5 ms).
+ENVELOPE_HOP = 0.01
 ## docs/07 "Audio": one music file of assets/sounds.yaml (soundgen's budget).
 MUSIC_FILE_BUDGET = 256 * 1024
 
@@ -155,6 +173,74 @@ def turn(x, channels: int, frames: int):
         return array.array("f", x)
     at = (frames % n) * channels
     return array.array("f", x[at:]) + array.array("f", x[:at])
+
+
+def envelope(mono, rate: int, hop: float = ENVELOPE_HOP) -> list[float]:
+    """The level of a mono signal in dB, one value per `hop` seconds (RMS)."""
+    size = max(int(rate * hop), 1)
+    out = []
+    for start in range(0, len(mono) - size + 1, size):
+        total = 0.0
+        for index in range(start, start + size):
+            value = mono[index]
+            total += value * value
+        out.append(10.0 * math.log10(total / size + 1e-10))
+    return out
+
+
+def onset_curve(levels: list[float]) -> list[float]:
+    """Where something starts: the rises of a level envelope (a beat, a note),
+    nothing where it falls or holds."""
+    return [0.0] + [max(0.0, b - a) for a, b in zip(levels, levels[1:])]
+
+
+def correlation(a, b) -> float:
+    """Pearson's correlation of two sequences (their common length); 0 when
+    either is flat."""
+    n = min(len(a), len(b))
+    if n < 2:
+        return 0.0
+    mean_a = sum(a[:n]) / n
+    mean_b = sum(b[:n]) / n
+    cov = var_a = var_b = 0.0
+    for i in range(n):
+        da, db = a[i] - mean_a, b[i] - mean_b
+        cov += da * db
+        var_a += da * da
+        var_b += db * db
+    if var_a <= 0.0 or var_b <= 0.0:
+        return 0.0
+    return cov / math.sqrt(var_a * var_b)
+
+
+def loop_length(mono, rate: int, shortest: float, longest: float, window: float,
+                hop: float = ENVELOPE_HOP) -> tuple[float, float]:
+    """The loop length, in seconds between `shortest` and `longest`, whose next
+    `window` seconds look most like the first `window` (what `close_loop` lays
+    over the head), and its score. The score adds the correlation of the
+    onsets (beats in step), half the correlation of the energy contours, and
+    takes off a sixth per dB of difference in level; a longer loop wins a tie
+    (up to 0.05). `mono` starts where the loop does; a length whose window
+    runs past its end is not tried."""
+    levels = envelope(mono, rate, hop)
+    onsets = onset_curve(levels)
+    span = max(int(round(window / hop)), 2)
+    low = max(int(round(shortest / hop)), 1)
+    high = min(int(round(longest / hop)), len(levels) - span)
+    if high < low:
+        return max(min(longest, (len(levels) - span) * hop), 0.0), 0.0
+    head_onsets, head_levels = onsets[:span], levels[:span]
+    head_mean = sum(head_levels) / span
+    best = (float("-inf"), high)
+    for lag in range(low, high + 1):
+        tail_levels = levels[lag : lag + span]
+        score = correlation(head_onsets, onsets[lag : lag + span])
+        score += 0.5 * correlation(head_levels, tail_levels)
+        score -= abs(sum(tail_levels) / span - head_mean) / 6.0
+        score += 0.05 * (lag - low) / max(high - low, 1)
+        if score > best[0]:
+            best = (score, lag)
+    return round(best[1] * hop, 6), round(best[0], 3)
 
 
 def percentile(values: list[float], share: float) -> float:
@@ -300,20 +386,29 @@ def _delivery_record(source: str) -> dict:
 
 
 def convert(source: str, out: str, kbps: int = KBPS, channels: int = CHANNELS, lufs: float = LUFS,
-            true_peak: float = TRUE_PEAK, crossfade: float = CROSSFADE, loop: bool = True) -> dict:
-    """Converts one delivery and returns the record written beside it."""
+            true_peak: float = TRUE_PEAK, crossfade: float = CROSSFADE, loop: bool = True,
+            max_seconds: float = 0.0) -> dict:
+    """Converts one delivery and returns the record written beside it. With
+    `max_seconds`, a longer piece loops over its first `loop_length` seconds."""
     record: dict = {"source": os.path.basename(source)}
     with open(source, "rb") as handle:
         record["source_sha256"] = hashlib.sha256(handle.read()).hexdigest()
     x = decode(source, RATE, channels)
     record["source_seconds"] = round(frames_of(x, channels) / RATE, 2)
     if loop:
-        head, tail = fade_bounds(decode(source, ANALYSIS_RATE, 1), ANALYSIS_RATE)
+        light = decode(source, ANALYSIS_RATE, 1)
+        head, tail = fade_bounds(light, ANALYSIS_RATE)
         x = trim(x, channels, int(head * RATE), int(tail * RATE))
         record["fade_in_cut"] = round(head, 2)
         record["fade_out_cut"] = round(tail, 2)
+        span = int(crossfade * RATE)
+        if max_seconds > 0 and frames_of(x, channels) > int(max_seconds * RATE) + span:
+            body = light[int(head * ANALYSIS_RATE) : len(light) - int(tail * ANALYSIS_RATE)]
+            length, score = loop_length(body, ANALYSIS_RATE, max_seconds * LOOP_RANGE, max_seconds, crossfade)
+            x = x[: (int(round(length * RATE)) + span) * channels]
+            record.update({"max_seconds": max_seconds, "excerpt_seconds": length, "excerpt_score": score})
         record["seam_uncut"] = round(seam_score(x, channels, RATE), 3)
-        x = close_loop(x, channels, int(crossfade * RATE))
+        x = close_loop(x, channels, span)
         record["crossfade"] = crossfade
         record["seam_loop"] = round(seam_score(x, channels, RATE), 3)
     record["loop_seconds" if loop else "seconds"] = round(frames_of(x, channels) / RATE, 3)
@@ -377,12 +472,15 @@ def main() -> int:
     parser.add_argument("--true-peak", type=float, default=TRUE_PEAK)
     parser.add_argument("--crossfade", type=float, default=CROSSFADE)
     parser.add_argument("--no-loop", action="store_true", help="a cue that plays once: no fades cut, no fold")
+    parser.add_argument("--max-seconds", type=float, default=0.0,
+                        help="loop a longer piece over its first ~N seconds (loop_length picks them); 0 = all of it")
     args = parser.parse_args()
     if args.out and len(args.tracks) > 1:
         raise SystemExit("--out names one file: pass one track, or use --out-dir")
     for track in args.tracks:
         out = args.out or os.path.join(args.out_dir, os.path.splitext(os.path.basename(track))[0] + ".ogg")
-        record = convert(track, out, args.kbps, args.channels, args.lufs, args.true_peak, args.crossfade, not args.no_loop)
+        record = convert(track, out, args.kbps, args.channels, args.lufs, args.true_peak, args.crossfade, not args.no_loop,
+                         args.max_seconds)
         print(
             "%s: %s s loop, fades cut %s/%s s, %s -> %s LUFS (gain %s dB), seam %s, %d KB%s"
             % (out, record.get("loop_seconds", record.get("seconds")), record.get("fade_in_cut", 0), record.get("fade_out_cut", 0),

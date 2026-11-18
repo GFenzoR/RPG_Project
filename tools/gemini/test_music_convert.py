@@ -125,6 +125,61 @@ class TheLoopSeam(unittest.TestCase):
         self.assertEqual(mc.percentile([], 0.5), 0.0)
 
 
+def clicks(seconds: float, rate: int, every: float, amp: float = 0.8, seed: int = 7):
+    """Short decaying noise bursts every `every` seconds over a faint hiss: a beat."""
+    import random
+
+    noise = random.Random(seed)
+    out = array.array("f", (0.01 * (noise.random() - 0.5) for _ in range(int(seconds * rate))))
+    burst = int(0.03 * rate)
+    beat = 0.0
+    while beat < seconds:
+        start = int(beat * rate)
+        for i in range(min(burst, len(out) - start)):
+            out[start + i] += amp * (1.0 - i / burst) * (noise.random() - 0.5)
+        beat += every
+    return out
+
+
+class TheLoopLength(unittest.TestCase):
+    def test_the_envelope_is_the_level_in_db_hop_by_hop(self):
+        levels = mc.envelope(array.array("f", [0.5] * 400), 1000, hop=0.1)
+        self.assertEqual(len(levels), 4)
+        for level in levels:
+            self.assertAlmostEqual(level, 20 * math.log10(0.5), places=3)
+
+    def test_onsets_are_the_rises_only(self):
+        self.assertEqual(mc.onset_curve([-20.0, -10.0, -10.0, -30.0, -25.0]), [0.0, 10.0, 0.0, 0.0, 5.0])
+
+    def test_correlation(self):
+        self.assertAlmostEqual(mc.correlation([1, 2, 3, 4], [2, 4, 6, 8]), 1.0)
+        self.assertAlmostEqual(mc.correlation([1, 2, 3, 4], [4, 3, 2, 1]), -1.0)
+        self.assertEqual(mc.correlation([1, 1, 1], [1, 2, 3]), 0.0)
+
+    def test_a_beat_falls_on_a_beat(self):
+        # Beats every 0.5 s: of the lengths between 10.13 and 12.37 s, the cut lays
+        # a beat over a beat only at a whole number of beats, and the longest wins.
+        rate = 8000
+        length, score = mc.loop_length(clicks(16.0, rate, 0.5), rate, 10.13, 12.37, 2.0)
+        self.assertAlmostEqual(length, 12.0, delta=0.011)
+        self.assertGreater(score, 1.0)
+
+    def test_the_level_after_the_cut_matches_the_head(self):
+        # Loud for 15 s, then 20 dB down: a cut whose next 2 s are quiet would fold a
+        # quiet tail over a loud head; the length stays where the music is as loud.
+        rate = 4000
+        loud = clicks(15.0, rate, 0.37, amp=0.6, seed=1)
+        quiet = clicks(15.0, rate, 0.37, amp=0.06, seed=2)
+        length, _score = mc.loop_length(loud + quiet, rate, 8.0, 20.0, 2.0)
+        self.assertLessEqual(length, 13.0)
+
+    def test_a_piece_too_short_for_the_range_loops_as_far_as_it_can(self):
+        rate = 2000
+        length, score = mc.loop_length(tone(6.0, rate), rate, 8.0, 10.0, 2.0)
+        self.assertAlmostEqual(length, 4.0, delta=0.011)
+        self.assertEqual(score, 0.0)
+
+
 class TheLoudness(unittest.TestCase):
     def test_a_loud_track_comes_down_to_the_target(self):
         self.assertEqual(mc.loudness_gain(-12.0, -0.5, -18.0, -1.5), -6.0)
@@ -177,6 +232,25 @@ class TheWholeStep(unittest.TestCase):
             self.assertEqual(record["delivery"]["prompt"], "a calm test tone")
             with open(os.path.join(folder, "out", "piece.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["sha256"], record["sha256"])
+
+    def test_a_long_piece_loops_over_its_first_seconds_in_mono(self):
+        rate = 48000
+        x = clicks(20.0, rate, 0.5, amp=0.5)
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, "beat.wav")
+            with wave.open(source, "wb") as out:
+                out.setnchannels(1)
+                out.setsampwidth(2)
+                out.setframerate(rate)
+                out.writeframes(array.array("h", (int(max(-1.0, min(1.0, v)) * 32767) for v in x)).tobytes())
+            record = mc.convert(source, os.path.join(folder, "beat.ogg"), kbps=24, channels=1, crossfade=1.0,
+                                max_seconds=8.0)
+            # A whole number of beats between 6 and 8 s, the longest.
+            self.assertAlmostEqual(record["excerpt_seconds"], 8.0, delta=0.011)
+            self.assertAlmostEqual(record["loop_seconds"], record["excerpt_seconds"], delta=0.001)
+            self.assertEqual(record["channels"], 1)
+            self.assertLess(record["seam_encoded"], 3.0)
+            self.assertLess(abs(record["length_error_frames"]), 48000 * 0.05)
 
 
 MUSIC = os.path.join(mc.ROOT, "assets", "sounds", "music")
