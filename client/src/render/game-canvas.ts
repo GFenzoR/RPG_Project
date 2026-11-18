@@ -18,6 +18,8 @@ import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import type { Direction } from "@rpg/protocol";
 import {
   Atlas,
+  DEATH_FADE_MS,
+  DEATH_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
   LUNGE_BACK_MS,
@@ -155,13 +157,20 @@ export interface GameCanvas {
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
-   * E2E: the creatures in an attack pose now (its clip or lunge; `ms` since it started,
-   * `of` its length) and the ones falling dead (docs/17 ANI-2, ANI-7).
+   * E2E: the creatures in an attack pose now (its clip or lunge) and the ones falling dead
+   * (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its length.
    */
-  poses(): { attacking: { id: number; ms: number; of: number }[]; dying: number[] };
+  poses(): { attacking: PoseTime[]; dying: PoseTime[] };
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
+}
+
+/** How far into an animation a creature is (GameCanvas.poses, for the E2E). */
+export interface PoseTime {
+  id: number;
+  ms: number;
+  of: number;
 }
 
 export interface GameCanvasOptions {
@@ -1347,14 +1356,19 @@ export async function createGameCanvas(
     },
     poses() {
       const now = performance.now();
-      const attacking: { id: number; ms: number; of: number }[] = [];
+      const attacking: PoseTime[] = [];
       for (const [id, st] of animStates) {
         const of =
           clipMs(sprites.get(id)?.figure?.clips.meta, "attack") || LUNGE_OUT_MS + LUNGE_BACK_MS;
         const ms = now - st.attackAt;
         if (ms >= 0 && ms < of) attacking.push({ id, ms, of });
       }
-      return { attacking, dying: [...ghosts.keys()] };
+      const dying: PoseTime[] = [];
+      for (const [id, g] of ghosts) {
+        const clip = clipMs(g.figure.clips.meta, "death");
+        dying.push({ id, ms: now - g.state.diedAt, of: clip ? clip + DEATH_FADE_MS : DEATH_MS });
+      }
+      return { attacking, dying };
     },
     element: canvas,
     clientToTile(clientX, clientY) {

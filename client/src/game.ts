@@ -197,10 +197,13 @@ export interface ClientTestHooks {
   /** A9: the CreatureAttack events of the last `ms` (attacker, kind, target). */
   attacks(ms: number): { id: number; kind: number; targetId: number }[];
   /**
-   * A9 (docs/17 ANI-7): creatures in an attack pose now (`ms` into it, `of` its length)
-   * and the ones falling dead.
+   * A9 (docs/17 ANI-7): creatures in an attack pose now and the ones falling dead (`ms`
+   * into it, `of` its length).
    */
-  poses(): { attacking: { id: number; ms: number; of: number }[]; dying: number[] };
+  poses(): {
+    attacking: { id: number; ms: number; of: number }[];
+    dying: { id: number; ms: number; of: number }[];
+  };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */

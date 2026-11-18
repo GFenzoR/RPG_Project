@@ -16,11 +16,20 @@ mkdirSync(shots, { recursive: true });
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(shots, `${name}.png`) });
 
+/** What shotPose keeps on window while it holds the game's frames. */
+interface PoseHold {
+  e2eRaf?: typeof window.requestAnimationFrame | undefined;
+  e2eHeld?: FrameRequestCallback[];
+}
+
 /**
- * A9 (docs/17 ANI-7): waits for a creature to start an attack pose (its clip or lunge) or
- * to fall dead, and takes screenshot `name` while it lasts. The page notices the pose on
- * the frame it starts; the shot counts only if the same pose is still on after it (an
- * attack lasts 250-360 ms, a fall 400-750), else it waits for the next one.
+ * A9 (docs/17 ANI-7): waits for a creature well into an attack pose (with clipOnly, an
+ * attack clip like an LPC swing, not the 250 ms lunge of a single image) or a fall, holds
+ * the canvas on that frame and takes screenshot `name`. The page sees the pose on an
+ * animation frame (after a third of it, before its last 60 ms), so the frame drawn last
+ * is in it; holding requestAnimationFrame keeps the game from drawing the next one until
+ * the shot is taken (an attack lasts 250-360 ms, a screenshot can take longer). Attack:
+ * clips for the first 20 s, then any.
  */
 async function shotPose(
   page: Page,
@@ -29,38 +38,49 @@ async function shotPose(
   timeout: number,
 ): Promise<void> {
   const deadline = Date.now() + timeout;
-  for (;;) {
+  for (const clipOnly of kind === "attack" ? [true, false] : [false]) {
     const left = deadline - Date.now();
-    if (left <= 0) throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
-    const seen = await page
+    const caught = await page
       .waitForFunction(
-        (k) => {
+        ({ k, clips }) => {
           const p = window.__rpgClient?.poses();
-          if (!p) return undefined;
-          if (k === "death")
-            return p.dying[0] !== undefined ? { id: p.dying[0], t0: 0 } : undefined;
-          const a = p.attacking.find((x) => x.ms < 60);
-          return a ? { id: a.id, t0: performance.now() - a.ms } : undefined;
+          if (!p) return false;
+          const list = k === "death" ? p.dying : p.attacking.filter((a) => !clips || a.of > 300);
+          if (!list.some((x) => x.ms > x.of / 3 && x.ms < x.of - 60)) return false;
+          const w = window as unknown as PoseHold;
+          const held: FrameRequestCallback[] = [];
+          w.e2eHeld = held;
+          w.e2eRaf = window.requestAnimationFrame;
+          window.requestAnimationFrame = (cb) => {
+            held.push(cb);
+            return 0;
+          };
+          return true;
         },
-        kind,
-        { timeout: left, polling: "raf" },
+        { k: kind, clips: clipOnly },
+        { timeout: clipOnly ? Math.min(20_000, left) : left, polling: "raf" },
       )
-      .then((h) => h.jsonValue())
-      .catch(() => undefined);
-    if (!seen) continue;
-    await shot(page, name);
-    const still = await page.evaluate(
-      ({ k, id, t0 }) => {
-        const p = window.__rpgClient?.poses();
-        if (k === "death") return p?.dying.includes(id) ?? false;
-        return (p?.attacking ?? []).some(
-          (a) => a.id === id && Math.abs(performance.now() - a.ms - t0) < 5,
-        );
-      },
-      { k: kind, id: seen.id, t0: seen.t0 },
-    );
-    if (still) return;
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!caught) continue;
+    try {
+      await shot(page, name);
+    } finally {
+      await page.evaluate(() => {
+        const w = window as unknown as PoseHold;
+        const raf = w.e2eRaf;
+        if (!raf) return;
+        window.requestAnimationFrame = raf;
+        w.e2eRaf = undefined;
+        for (const cb of w.e2eHeld ?? []) window.requestAnimationFrame(cb);
+        w.e2eHeld = [];
+      });
+    }
+    return;
   }
+  throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
 }
 
 /** Random letters with no vowels, so a name never contains a reserved word. */
@@ -620,6 +640,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   const fall = shotPose(page, "11b-death", "death", 150_000).then(() => {
     fell = true;
   });
+  fall.catch(() => undefined); // its failure surfaces in the race below
   while (!fell) {
     if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) await targetWolf();
     await page.keyboard.press("F1");
