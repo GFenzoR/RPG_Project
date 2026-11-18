@@ -143,10 +143,26 @@ const WINDOWS: Record<string, unknown> = {
       help: { open: true, dock: false, collapsed: false, x: 24, y: 24 },
     },
   },
+  // docs/17 UI-5: the corpse's container floats where the player left it, resized.
+  server: {
+    v: 2,
+    order: ["battle", "inventory", "skills", "party"],
+    z: [],
+    win: {
+      battle: { open: true, dock: true, collapsed: true },
+      inventory: { open: true, dock: true, collapsed: false },
+    },
+    others: {
+      "container-creature_remains": { dock: false, collapsed: false, x: 24, y: 300, w: 240 },
+    },
+  },
 };
 const SCENES = [
   "game",
   "windows",
+  "server",
+  "groundtip",
+  "scale",
   "options",
   "dialog",
   "shop",
@@ -196,10 +212,14 @@ try {
         localStorage.clear();
         if (w) localStorage.setItem("rpg.windows", JSON.stringify(w));
       }, windows ?? null);
-      const sceneParam = ["windows", "options", "tooltip", "guild"].includes(scene)
+      const sceneParam = ["windows", "options", "tooltip", "guild", "scale"].includes(scene)
         ? "game"
         : scene;
-      await page.goto(`http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}`);
+      // docs/17 UI-3: the interface at 125 % with the text at 115 %.
+      const scales = scene === "scale" ? "&ui=1.25&text=1.15" : "";
+      await page.goto(
+        `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}`,
+      );
       await page.waitForSelector(".game, .panel");
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).

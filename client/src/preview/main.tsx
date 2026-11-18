@@ -3,7 +3,8 @@
 // server, Postgres or a character (docs/08). Only built with RPG_UI_PREVIEW=1
 // (vite.config.ts): it never ships.
 //
-//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|danger|death|login|characters&lang=es|en
+//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|server|groundtip|danger|death|
+//     login|characters&lang=es|en[&ui=1.25&text=1.15]
 //
 // The windows' state comes from localStorage (rpg.windows), as in the game: the screenshot
 // script (e2e/ui-preview.ts) writes it for each scene.
@@ -34,14 +35,23 @@ import {
   withDanger,
   withDeath,
   withDialog,
+  withGroundTip,
   withItemMenu,
   withManyOptions,
+  withServerWindows,
   withShop,
 } from "./fixtures.ts";
+import { InterfaceOptions } from "../ui/InterfaceOptions.tsx";
+import { applyScales } from "../state/ui-prefs.ts";
+import { SLOT_KEYS } from "../ui/Inventory.tsx";
 import "../ui/client.css";
 
 const params = new URLSearchParams(location.search);
 const scene = params.get("scene") ?? "game";
+// docs/17 UI-3: ?ui=1.25&text=1.15 show the interface scale and the text size.
+const uiScale = Number(params.get("ui") ?? 1) || 1;
+const textScale = Number(params.get("text") ?? 1) || 1;
+applyScales(document.documentElement, uiScale, textScale);
 const lang = params.get("lang") ?? "es";
 const t = translator(content.i18n[lang] ?? {}, lang);
 document.documentElement.lang = lang;
@@ -157,6 +167,16 @@ function Preview(props: { game: Game }): JSX.Element {
     });
   if (scene === "danger") s = withDanger(s, now);
   if (scene === "death") s = withDeath(s, now);
+  if (scene === "server")
+    s = withServerWindows(content, s, {
+      x: Math.round(window.innerWidth * 0.35),
+      y: Math.round(window.innerHeight * 0.55),
+    });
+  if (scene === "groundtip")
+    s = withGroundTip(content, s, {
+      x: Math.round(window.innerWidth * 0.3),
+      y: Math.round(window.innerHeight * 0.35),
+    });
   const settings: GameSettings = {
     language: (
       <LanguagePicker t={t} lang={lang} languages={Object.keys(content.i18n)} onChange={() => {}} />
@@ -167,6 +187,19 @@ function Preview(props: { game: Game }): JSX.Element {
     controls: <ControlsOptions t={t} mode="menu" onChange={() => {}} />,
     reducedMotion: false,
     setReducedMotion: () => {},
+    uiScale,
+    cameraShake: true,
+    interfaceOptions: (
+      <InterfaceOptions
+        t={t}
+        uiScale={uiScale}
+        textScale={textScale}
+        shake={true}
+        onUiScale={() => {}}
+        onTextScale={() => {}}
+        onShake={() => {}}
+      />
+    ),
   };
   return (
     <>
@@ -199,6 +232,8 @@ if (root) {
     const names: string[] = [
       ...defs.flatMap((d) => (d.sprite ? [d.sprite] : [])),
       ...Object.values<string>(content.npcSprites ?? {}),
+      // The empty equipment slots (docs/17 UI-5).
+      ...Object.values(SLOT_KEYS).map((k) => `ui/slots/${k}`),
     ];
     loadIcons(names, { base: new URL("/atlas/", location.href).href }).then(
       (icons) => render(<Preview game={stubGame(icons)} />, root),
