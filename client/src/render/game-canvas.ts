@@ -22,6 +22,7 @@ import {
   startAttack,
   startDeath,
   startHit,
+  tilePixels,
   tileToScreen,
 } from "@rpg/renderer";
 import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
@@ -58,6 +59,14 @@ import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
+import {
+  FIRE_TINT,
+  LightLayer,
+  PLAYER_LIGHT,
+  PLAYER_TINT,
+  glowTexture,
+  isDark,
+} from "./light-layer.ts";
 import type { CreatureState, WorldState } from "../state/world.ts";
 
 const COLORS = {
@@ -282,7 +291,18 @@ export async function createGameCanvas(
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
-  app.stage.addChild(view.root, effectLayer, labels, textLayer);
+  // Caves are dark (ART-7): a light map over the map, under effects and names.
+  const lights = new LightLayer(glowTexture());
+  app.stage.addChild(view.root, lights.view, effectLayer, labels, textLayer);
+  /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
+  let lightTile = 0;
+  const addFireLight = (x: number, y: number, radius: number): void =>
+    lights.add(
+      (x + 0.5 - cam.x) * lightTile,
+      (y + 0.5 - cam.y) * lightTile,
+      radius * lightTile,
+      FIRE_TINT,
+    );
 
   let scale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
@@ -779,6 +799,19 @@ export async function createGameCanvas(
     drawGhosts(now);
     world.expire(now);
     effects.draw(now, self.pos.z, cam, scale);
+    if (isDark(self.pos.z)) {
+      lightTile = tilePixels(cam, T);
+      const sp = world.drawPos(self, now);
+      lights.begin(app.screen.width, app.screen.height);
+      lights.add(
+        (sp.x + 0.5 - cam.x) * lightTile,
+        (sp.y + 0.5 - cam.y) * lightTile,
+        PLAYER_LIGHT * lightTile,
+        PLAYER_TINT,
+      );
+      view.forEachLight(addFireLight);
+      lights.end(app.renderer);
+    } else lights.hide();
   };
 
   app.ticker.add(() => {
@@ -988,6 +1021,7 @@ export async function createGameCanvas(
       for (const id of [...sprites.keys()]) dropSprite(id);
       for (const id of [...ghosts.keys()]) dropGhost(id);
       effects.destroy();
+      lights.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },
