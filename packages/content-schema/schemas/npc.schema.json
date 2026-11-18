@@ -70,7 +70,11 @@
           "$ref": "common.schema.json#/$defs/id"
         },
         "if": { "$ref": "common.schema.json#/$defs/conditions" },
-        "action": { "$ref": "common.schema.json#/$defs/actions" }
+        "action": { "$ref": "common.schema.json#/$defs/actions" },
+        "tag": {
+          "description": "The topic the client groups this option under (docs/17 UI-8, docs/06): it wins over the one the client deduces from the action, the conditions and the next node. Display only: the server ignores it.",
+          "enum": ["quests", "trade", "travel", "services", "talk"]
+        }
       }
     },
     "offer": {

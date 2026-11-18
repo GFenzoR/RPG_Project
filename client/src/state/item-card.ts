@@ -1,0 +1,230 @@
+// The item card (docs/17 UI-6): what the right-click menu, the hover tooltip and the shop
+// show of an item, from its ItemDef (vite/content.ts cardFields). Pure: the caller passes
+// who looks (level, vocation, magic level) so a requirement can show whether it is met.
+// The server's "look" text is still the one that knows live data (a house's owner,
+// charges): "Look" in the menu keeps sending LookAt.
+import { EquipmentSlot } from "@rpg/protocol";
+import type { ItemDef } from "../content-types.ts";
+import { formatOz } from "./items.ts";
+
+/** What the card needs to know of the player looking. Unknown fields skip the check. */
+export interface Viewer {
+  level?: number | undefined;
+  vocation?: string | undefined;
+  magicLevel?: number | undefined;
+}
+
+/** One stat line: its label's i18n key and the value (a number, or "1.20" oz). */
+export interface CardStat {
+  /** client.card.stat.<id> */
+  id: "attack" | "defense" | "armor" | "range" | "slots" | "charges" | "weight";
+  value: number | string;
+  /** For a stack: the whole stack's weight ("10.32"). */
+  total?: string | undefined;
+}
+
+/** A requirement and whether the viewer meets it (undefined = unknown). */
+export type CardRequirement =
+  | { id: "level"; level: number; met: boolean | undefined }
+  | { id: "magic"; level: number; met: boolean | undefined }
+  | { id: "vocations"; vocations: string[]; met: boolean | undefined };
+
+/** An effect line: i18n key client.card.effect.<id> with its value. */
+export type CardEffect =
+  | { id: "heal_hp" | "heal_mp"; value: number }
+  | { id: "food"; seconds: number }
+  | { id: "rune"; spell: string }
+  | { id: "element"; element: string }
+  | { id: "ammo"; ammo: string }
+  | { id: "shoots"; ammo: string };
+
+export interface ItemCardView {
+  itemId: number;
+  /** data/items id ("" when the client does not know the item). */
+  id: string;
+  count: number;
+  /**
+   * The type line as i18n keys: the first is the kind ("Weapon"), the rest qualify it
+   * ("sword", "one hand"). The card joins them "Weapon — sword, one hand".
+   */
+  type: string[];
+  stats: CardStat[];
+  requires: CardRequirement[];
+  effects: CardEffect[];
+  /** i18n key of the description, if any. */
+  desc?: string | undefined;
+  /** i18n keys of the marks under it (client.card.mark.*). */
+  marks: string[];
+}
+
+/** Kinds of items people carry (the rest are the map: ground, walls, decoration). */
+const CARRIED = new Set([
+  "container",
+  "weapon",
+  "armor",
+  "shield",
+  "tool",
+  "consumable",
+  "currency",
+  "material",
+  "rune",
+  "ammo",
+]);
+
+/** The card of an item (an unknown item gets an empty card with its number). */
+export function itemCard(
+  def: ItemDef | undefined,
+  itemId: number,
+  count: number,
+  who: Viewer = {},
+): ItemCardView {
+  const card: ItemCardView = {
+    itemId,
+    id: def?.id ?? "",
+    count: Math.max(count, 1),
+    type: [],
+    stats: [],
+    requires: [],
+    effects: [],
+    marks: [],
+  };
+  if (!def) return card;
+  const kind = def.kind ?? "";
+  card.type = typeLine(def, kind);
+  const w = def.weapon;
+  if (w) {
+    card.stats.push({ id: "attack", value: w.attack });
+    if (w.defense > 0) card.stats.push({ id: "defense", value: w.defense });
+    if (w.range > 0) card.stats.push({ id: "range", value: w.range });
+    if (w.element) card.effects.push({ id: "element", element: w.element });
+    if (w.ammo) card.effects.push({ id: "shoots", ammo: w.ammo });
+  }
+  if (def.ammo) {
+    card.stats.push({ id: "attack", value: def.ammo.attack });
+    card.effects.push({ id: "ammo", ammo: def.ammo.type });
+  }
+  if (def.armor) card.stats.push({ id: "armor", value: def.armor.armor });
+  if (def.shield) card.stats.push({ id: "defense", value: def.shield.defense });
+  if (def.slots > 0) card.stats.push({ id: "slots", value: def.slots });
+  if (def.rune) {
+    card.stats.push({ id: "charges", value: def.rune.charges });
+    card.effects.push({ id: "rune", spell: def.rune.spell });
+  }
+  const c = def.consumable;
+  if (c) {
+    if (c.healHp > 0) card.effects.push({ id: "heal_hp", value: c.healHp });
+    if (c.healMp > 0) card.effects.push({ id: "heal_mp", value: c.healMp });
+    if (c.foodMs > 0) card.effects.push({ id: "food", seconds: Math.round(c.foodMs / 1000) });
+  }
+  const carried = CARRIED.has(kind) && !def.fixed;
+  if (carried && (def.weight ?? 0) > 0) {
+    const grams = def.weight ?? 0;
+    card.stats.push({
+      id: "weight",
+      value: formatOz(grams),
+      total: card.count > 1 ? formatOz(grams * card.count) : undefined,
+    });
+  }
+  const req = def.requires;
+  if (req && req.level > 0)
+    card.requires.push({
+      id: "level",
+      level: req.level,
+      met: who.level === undefined ? undefined : who.level >= req.level,
+    });
+  if (req && req.vocations.length > 0)
+    card.requires.push({
+      id: "vocations",
+      vocations: req.vocations,
+      met: who.vocation === undefined ? undefined : req.vocations.includes(who.vocation),
+    });
+  if (def.rune && def.rune.magicLevel > 0)
+    card.requires.push({
+      id: "magic",
+      level: def.rune.magicLevel,
+      met: who.magicLevel === undefined ? undefined : who.magicLevel >= def.rune.magicLevel,
+    });
+  card.desc = def.desc;
+  if (carried && kind !== "currency") {
+    if (def.tradeable !== true) card.marks.push("client.card.mark.no_trade");
+    else if (def.marketable !== true) card.marks.push("client.card.mark.no_market");
+  }
+  return card;
+}
+
+function typeLine(def: ItemDef, kind: string): string[] {
+  const out = [`client.card.kind.${kind || "unknown"}`];
+  if (def.weapon) {
+    out.push(`client.card.weapon.${def.weapon.type}`);
+    out.push(def.weapon.hands === 2 ? "client.card.hands.two" : "client.card.hands.one");
+  } else if (def.armor) out.push(`client.card.slot.${def.armor.slot}`);
+  else if (def.ammo) out.push(`client.card.ammo.${def.ammo.type}`);
+  else if (def.toolUse) out.push(`client.card.tool.${def.toolUse}`);
+  else if (def.consumable && def.consumable.foodMs > 0) out.push("client.card.food");
+  return out;
+}
+
+/** The categories of the shop's filters (docs/17 UI-8), from an item's kind. */
+export const SHOP_CATEGORIES = ["weapons", "armor", "tools", "consumables", "materials"] as const;
+export type ShopCategory = (typeof SHOP_CATEGORIES)[number];
+
+export function shopCategory(def: ItemDef | undefined): ShopCategory {
+  switch (def?.kind) {
+    case "weapon":
+    case "ammo":
+      return "weapons";
+    case "armor":
+    case "shield":
+      return "armor";
+    case "tool":
+    case "container":
+      return "tools";
+    case "consumable":
+    case "rune":
+      return "consumables";
+    default:
+      return "materials";
+  }
+}
+
+/**
+ * The equipment slot an item goes to when the menu's "Equip" moves it (docs/02 "Items":
+ * a weapon in the right hand, a shield in the left, armor in its slot, ammo in the ammo
+ * slot). Undefined for anything else; the server checks hands, level and vocation.
+ */
+export function equipSlot(def: ItemDef | undefined): EquipmentSlot | undefined {
+  if (!def) return undefined;
+  if (def.weapon) return EquipmentSlot.RIGHT_HAND;
+  if (def.shield) return EquipmentSlot.LEFT_HAND;
+  if (def.ammo) return EquipmentSlot.AMMO;
+  switch (def.armor?.slot) {
+    case "head":
+      return EquipmentSlot.HEAD;
+    case "body":
+      return EquipmentSlot.ARMOR;
+    case "legs":
+      return EquipmentSlot.LEGS;
+    case "feet":
+      return EquipmentSlot.FEET;
+    case "neck":
+      return EquipmentSlot.NECK;
+    case "ring":
+      return EquipmentSlot.RING;
+    default:
+      return undefined;
+  }
+}
+
+/** The lines a card takes when drawn (for placing a menu or a tooltip before it is drawn). */
+export function cardLines(card: ItemCardView, withName: boolean): number {
+  const desc = card.desc ? 3 : 0;
+  return (
+    (withName ? 1 : 0) +
+    (card.type.length > 0 ? 1 : 0) +
+    Math.ceil(card.stats.length / 2) +
+    card.requires.length +
+    card.effects.length +
+    desc +
+    card.marks.length
+  );
+}
