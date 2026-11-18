@@ -14,6 +14,7 @@ import {
   slideLeft,
   stalls,
   stepChoices,
+  towardDirection,
 } from "./motion.ts";
 
 describe("Playout", () => {
@@ -130,12 +131,34 @@ describe("directions", () => {
     ]);
   });
 
+  it("make no list per call: held against a wall, they are asked every frame (docs/07)", () => {
+    for (const d of [Direction.NORTH, Direction.NORTH_EAST, Direction.SOUTH_WEST])
+      expect(stepChoices(d)).toBe(stepChoices(d));
+    expect(Object.isFrozen(stepChoices(Direction.EAST))).toBe(true);
+  });
+
   it("combine two perpendicular directions into their diagonal", () => {
     expect(combine(Direction.NORTH, Direction.EAST)).toBe(Direction.NORTH_EAST);
     expect(combine(Direction.WEST, Direction.SOUTH)).toBe(Direction.SOUTH_WEST);
     expect(combine(Direction.NORTH, Direction.SOUTH)).toBeUndefined();
     expect(combine(Direction.EAST, Direction.EAST)).toBeUndefined();
     expect(combine(Direction.NORTH_EAST, Direction.EAST)).toBeUndefined();
+  });
+
+  it("point toward the cursor by its angle, 45° each, and not while it is on the own tile", () => {
+    expect(towardDirection(0, 0)).toBe(Direction.UNSPECIFIED);
+    expect(towardDirection(0.49, -0.49)).toBe(Direction.UNSPECIFIED);
+    expect(towardDirection(0.6, 0)).toBe(Direction.EAST);
+    expect(towardDirection(-3, 0.5)).toBe(Direction.WEST);
+    expect(towardDirection(0, -0.7)).toBe(Direction.NORTH);
+    expect(towardDirection(1, 4)).toBe(Direction.SOUTH);
+    // 22.5° is the edge between east and north-east.
+    expect(towardDirection(5, -2)).toBe(Direction.EAST);
+    expect(towardDirection(5, -2.2)).toBe(Direction.NORTH_EAST);
+    expect(towardDirection(2, 2)).toBe(Direction.SOUTH_EAST);
+    expect(towardDirection(-1, -1.1)).toBe(Direction.NORTH_WEST);
+    expect(towardDirection(-2.2, 5)).toBe(Direction.SOUTH_WEST);
+    expect(towardDirection(-2, 5)).toBe(Direction.SOUTH);
   });
 });
 

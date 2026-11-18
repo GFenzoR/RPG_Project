@@ -1481,6 +1481,22 @@ class Validator {
         ref([loop, "islands", island], id, loop);
       }
     }
+    // The music over the zone's: the title screen's, a fight's and each boss's.
+    const music = src.data["music"];
+    if (isObj(music)) {
+      ref(["music", "title"], music["title"], "music");
+      ref(["music", "combat"], music["combat"], "music");
+      const bosses = isObj(music["bosses"]) ? music["bosses"] : {};
+      for (const [monster, id] of Object.entries(bosses)) {
+        if (!this.index.ids.monster.has(monster))
+          this.error(
+            src,
+            ["music", "bosses", monster],
+            `unknown monster "${monster}" (data/monsters)`,
+          );
+        ref(["music", "bosses", monster], id, "music");
+      }
+    }
   }
 
   /**

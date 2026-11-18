@@ -12,6 +12,7 @@ import {
   frameName,
   layerOver,
   measureFrames,
+  mirrorImage,
   recolorImage,
 } from "./anims.ts";
 import type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
@@ -284,14 +285,41 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       });
       continue;
     }
+    const fileHints = entry && (entry.mirror || entry.anchor || entry.ms);
+    if (fileHints && !frames) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `${name}: mirror, anchor and ms need frames from files (${SPRITES_DIR}/${name}/<action>_<dir>_<n>.png)`,
+      });
+      continue;
+    }
+    if (frames && entry?.mirror) {
+      for (const [frame, image] of mirroredFrames(name, frames)) {
+        frames.set(frame, image);
+        resolved.set(frame, { origin: "file", image });
+      }
+    }
     const found = frames ? framesByName(name, frames) : undefined;
-    const image = r?.image ?? found?.first;
+    const image = found?.first ?? r?.image;
     if (!image) continue;
+    if (found && entry?.ms) {
+      for (const [action, ms] of Object.entries(entry.ms) as [AnimAction, number][]) {
+        const clip = found.actions[action];
+        if (clip) clip.ms = ms;
+        else
+          diags.push({
+            severity: "error",
+            where,
+            message: `${name}: ms.${action} but no ${action} frames`,
+          });
+      }
+    }
     const m = measureFrames(found?.walk.length ? found.walk : [image]);
     anims[name] = {
       w: image.width,
       h: image.height,
-      anchor: "br",
+      anchor: entry?.anchor ?? "br",
       foot: m.foot,
       top: m.top,
       shadow: entry?.shadow ?? "baked",
@@ -488,6 +516,31 @@ function framesByName(
     ? [...frames].filter(([k]) => k.startsWith(`${sprite}/walk_`)).map(([, v]) => v)
     : [];
   return { actions, base, first: frames.get(base), walk };
+}
+
+/**
+ * The frames `mirror: true` adds (docs/17 ANI-1): for every action with west frames and
+ * no east ones, each west frame flipped left to right as the east one of its number, and
+ * the other way round. A facing the files already have is never replaced.
+ */
+export function mirroredFrames(sprite: string, frames: Map<string, Image>): Map<string, Image> {
+  const out = new Map<string, Image>();
+  const pairs: [AnimDir, AnimDir][] = [
+    ["w", "e"],
+    ["e", "w"],
+  ];
+  for (const action of ANIM_ACTIONS) {
+    for (const [from, to] of pairs) {
+      if (!frames.has(frameName(sprite, action, from, 0))) continue;
+      if (frames.has(frameName(sprite, action, to, 0))) continue;
+      for (let n = 0; ; n++) {
+        const src = frames.get(frameName(sprite, action, from, n));
+        if (!src) break;
+        out.set(frameName(sprite, action, to, n), mirrorImage(src));
+      }
+    }
+  }
+  return out;
 }
 
 const sortedRecord = <T>(r: Record<string, T>): Record<string, T> =>

@@ -318,7 +318,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	if pt != nil {
 		// relocate, not Teleport: p walks, so it is in the world, and the step skipped the
 		// view of this floor (through): p must land, whatever Teleport would check.
-		w.relocate(p, dest)
+		w.relocate(p, dest, goneTeleport)
 	}
 }
 
@@ -383,7 +383,7 @@ func (w *World) stepView(p *Player, to world.Pos, d world.Direction) {
 			}
 			continue
 		}
-		p.emit(disappearMsg(id))
+		p.emit(disappearMsg(id, goneOutOfView))
 	}
 	p.known = kept
 
@@ -411,14 +411,15 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	if w.byClient[p.client] != p {
 		return
 	}
-	w.relocate(p, to)
+	w.relocate(p, to, goneTeleport)
 }
 
-// relocate is Teleport for a player known to be in the world. The walk starts a new
-// epoch (sent with the FullMapView): a Walk on its way was meant for the old place.
-func (w *World) relocate(p *Player, to world.Pos) {
+// relocate is Teleport for a player known to be in the world; the ones who saw it get
+// why it left (a teleport, or a death that wakes it up at its temple). The walk starts a
+// new epoch (sent with the FullMapView): a Walk on its way was meant for the old place.
+func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	p.resetWalk()
-	w.disappearFromObservers(p)
+	w.disappearFromObservers(p, why)
 	w.unindex(p)
 	p.pos = to
 	w.index(p)

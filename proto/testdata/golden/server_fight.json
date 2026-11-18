@@ -1,0 +1,63 @@
+{
+  "tick": "4242",
+  "events": [
+    {
+      "creatureAttack": {
+        "id": 40001,
+        "kind": "ATTACK_KIND_MELEE",
+        "targetId": 7,
+        "to": {
+          "x": 993,
+          "y": 995,
+          "z": 7
+        }
+      }
+    },
+    {
+      "creatureAttack": {
+        "id": 7,
+        "kind": "ATTACK_KIND_SPELL",
+        "to": {
+          "x": 993,
+          "y": 995,
+          "z": 7
+        },
+        "radius": 3
+      }
+    },
+    {
+      "creatureAttack": {
+        "id": 40002,
+        "kind": "ATTACK_KIND_RANGED",
+        "to": {
+          "x": 1009,
+          "y": 990,
+          "z": 7
+        }
+      }
+    },
+    {
+      "creatureHealth": {
+        "id": 40001
+      }
+    },
+    {
+      "creatureDisappear": {
+        "id": 40001,
+        "reason": "DISAPPEAR_REASON_DEATH"
+      }
+    },
+    {
+      "creatureDisappear": {
+        "id": 40003,
+        "reason": "DISAPPEAR_REASON_OUT_OF_VIEW"
+      }
+    },
+    {
+      "creatureDisappear": {
+        "id": 8,
+        "reason": "DISAPPEAR_REASON_LOGOUT"
+      }
+    }
+  ]
+}

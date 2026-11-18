@@ -255,4 +255,95 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     expect(sh?.x).toBe(4.5 * T);
     expect(shadows.alpha).toBeLessThan(0.5);
   });
+
+  it("lists the tiles that give off particles; spray only where its ground meets another", () => {
+    const g = ground();
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) g[y * 32 + x] = "sea";
+    const withParticles = (id: string): TileArt<Texture> | undefined => {
+      const base = {
+        base: named(id),
+        weight: 0.7,
+        ms: 250,
+        sync: "world" as const,
+        anchorX: 1 as const,
+        joinsWalls: false,
+        light: 0,
+      };
+      if (id === "sea") return { ...base, particles: "spray" };
+      if (id === "forge") return { ...base, particles: "embers" };
+      return undefined;
+    };
+    const chunks = new Map<string, ChunkData>([
+      ["7/0/0", { ground: g, items: [{ x: 9, y: 9, stack: ["forge", "forge"] }] }],
+    ]);
+    const source: TileSource = { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) };
+    const v = new MapView({
+      source,
+      texture: () => Texture.WHITE,
+      art: withParticles,
+      tileSize: T,
+      floor: 7,
+    });
+    v.render(cam, size);
+    const seen: string[] = [];
+    v.forEachEmitter((x, y, kind) => seen.push(`${x},${y} ${kind}`));
+    // The 4x4 sea in the chunk's corner: its edge tiles toward the grass (x = 3 or y = 3),
+    // not the inner ones nor the chunk's own border; one emitter per stack.
+    expect(seen.filter((e) => e.endsWith("spray")).sort()).toEqual(
+      ["0,3", "1,3", "2,3", "3,0", "3,1", "3,2", "3,3"].map((t) => `${t} spray`).sort(),
+    );
+    expect(seen.filter((e) => e.endsWith("embers"))).toEqual(["9,9 embers"]);
+  });
+});
+
+describe("MapView elevation (docs/17 ART-8)", () => {
+  const elevation = (id: string): number => (id === "table" ? 8 : id === "crate" ? 10 : 0);
+  function elevView(chunks: Map<string, ChunkData>, withElevation = true): MapView {
+    const source: TileSource = { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) };
+    return new MapView({
+      source,
+      texture: () => Texture.WHITE,
+      elevation: withElevation ? elevation : undefined,
+      tileSize: T,
+      floor: 7,
+    });
+  }
+
+  it("raises what is stacked on a table, up to the cap, and the creature standing there", () => {
+    const chunks = new Map<string, ChunkData>([
+      [
+        "7/0/0",
+        {
+          ground: ground(),
+          items: [
+            { x: 2, y: 3, stack: ["table", "coin", "coin"] },
+            { x: 5, y: 3, stack: ["crate", "crate", "crate", "coin"] },
+            { x: 7, y: 3, stack: ["coin", "table"] },
+          ],
+        },
+      ],
+    ]);
+    const v = elevView(chunks);
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 40 * T, height: 40 * T });
+    const ys = itemLayer(v).children.map((s) => 4 * T - s.y);
+    // Table, coin on it, coin on that (a coin raises nothing more); three crates (10 + 10,
+    // then capped at 24) and a coin on top; a table on a coin raises nothing under it.
+    expect(ys).toEqual([0, 8, 8, 0, 10, 20, 24, 0, 0]);
+    expect(v.elevationAt(2, 3)).toBe(8);
+    expect(v.elevationAt(5, 3)).toBe(24);
+    expect(v.elevationAt(7, 3)).toBe(8);
+    expect(v.elevationAt(1, 1)).toBe(0);
+    expect(v.elevationAt(-1, 3)).toBe(0);
+    expect(v.elevationAt(100, 100)).toBe(0);
+  });
+
+  it("raises nothing without an elevation lookup", () => {
+    const chunks = new Map<string, ChunkData>([
+      ["7/0/0", { ground: ground(), items: [{ x: 2, y: 3, stack: ["table", "coin"] }] }],
+    ]);
+    const v = elevView(chunks, false);
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 40 * T, height: 40 * T });
+    expect(itemLayer(v).children.map((s) => s.y)).toEqual([4 * T, 4 * T]);
+    expect(v.elevationAt(2, 3)).toBe(0);
+  });
 });

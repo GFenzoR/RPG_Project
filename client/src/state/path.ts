@@ -1,6 +1,7 @@
-// Click-to-walk: A* over the tiles the client knows, producing the WalkPath steps. The
-// server re-validates every step (and re-plans around creatures), so this only has to be
-// a good guess; it never leaves the known area.
+// Click-to-walk and the mouse held's detours (state/steering.ts): A* over the tiles the
+// client knows. Each step goes out as a Walk the server validates (it refuses one a
+// creature blocks, and the client plans round it), so this only has to be a good guess; it
+// never leaves the known area.
 import { Direction } from "@rpg/protocol";
 import { delta } from "./geometry.ts";
 import type { Pos } from "./geometry.ts";

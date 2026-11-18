@@ -1,0 +1,178 @@
+# The Gemini music of the game, slot by slot (assets/README.md "Sonido"). Written by
+# `make music-gemini` (tools/gemini/music_import.py) from the owner's picks in
+# build/music-gemini/picks.json: change a pick there and run it again; never by hand.
+# pick: a take (1, 2, 3), a pool of takes, or none; provisional: not picked yet (take 1);
+# file/volume: what the slot's sound plays (a pool's first track); fallback: the soundgen
+# theme that plays with none (kept, with its recipe, for that); tracks: every take shipped.
+format: 1
+settings: { channels: 1, kbps: 20, max_seconds: 72, lufs: -14, true_peak: -1.5 }
+slots:
+  title:
+    sound: "music_title"
+    pick: "1"
+    provisional: false
+    file: "sounds/music/gemini/title_1.ogg"
+    volume: 1
+    tracks:
+      - take: "1"
+        sound: "music_title"
+        file: "sounds/music/gemini/title_1.ogg"
+        volume: 1
+        source: "title_1.mp4"
+        source_sha256: "e1a3580011493058d8d1f82d77c2c36e9b83cfd5462fb384db4eb276ef162469"
+        title: "Salt on the Ancient Altar"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/title_1.txt"
+        track_seconds: 176.54
+        loop_seconds: 64
+        lufs: -17.65
+        seam: 0.07
+        bytes: 173321
+  town_puerto:
+    sound: "music_puerto"
+    pick: ["1", "2", "3"]
+    provisional: false
+    file: "sounds/music/gemini/town_puerto_1.ogg"
+    volume: 1
+    fallback: "sounds/music/puerto.ogg"
+    tracks:
+      - take: "1"
+        sound: "music_puerto"
+        file: "sounds/music/gemini/town_puerto_1.ogg"
+        volume: 1
+        source: "town_puerto_1.mp4"
+        source_sha256: "f5bb696a6a733b6dd332d0e64e67a19badf3ce3313cf355f42aba683e5302ab6"
+        title: "Salt-Stained Shore"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/town_puerto_1.txt"
+        track_seconds: 176.43
+        loop_seconds: 62.81
+        lufs: -18.77
+        seam: 1.13
+        bytes: 168377
+      - take: "2"
+        sound: "music_puerto_2"
+        file: "sounds/music/gemini/town_puerto_2.ogg"
+        volume: 0.97
+        source: "town_puerto_2.mp4"
+        source_sha256: "a66ce5ae9f175fd7767900d5fc7b5cf3c5cb8bcb034facd9a5bb6cf9ee725060"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/town_puerto_2.txt"
+        track_seconds: 181.23
+        loop_seconds: 70.25
+        lufs: -16.87
+        seam: 0.58
+        bytes: 190105
+      - take: "3"
+        sound: "music_puerto_3"
+        file: "sounds/music/gemini/town_puerto_3.ogg"
+        volume: 0.92
+        source: "probe_1.mp4"
+        source_sha256: "a34c2989ea5869b39974c9bd38730d4122f262309391f6c0138b7f0a3b1959f4"
+        title: "Beneath the Citadel Wall"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/town_puerto_3.txt"
+        track_seconds: 176.56
+        loop_seconds: 69.57
+        lufs: -16.41
+        seam: 0.6
+        bytes: 192137
+  bosque:
+    sound: "music_bosque"
+    pick: "1"
+    provisional: false
+    file: "sounds/music/gemini/bosque_1.ogg"
+    volume: 1
+    fallback: "sounds/music/bosque.ogg"
+    tracks:
+      - take: "1"
+        sound: "music_bosque"
+        file: "sounds/music/gemini/bosque_1.ogg"
+        volume: 1
+        source: "bosque_1.mp4"
+        source_sha256: "a4b28ee3eab888a8b24812b078a47967650b07ea3ee85ff43d8a08b4f01a1109"
+        title: "Beneath The Blackened Boughs"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/bosque_1.txt"
+        track_seconds: 179.58
+        loop_seconds: 54.07
+        lufs: -18.35
+        seam: 0.67
+        bytes: 134505
+  volcan:
+    sound: "music_volcan"
+    pick: "2"
+    provisional: false
+    file: "sounds/music/gemini/volcan_2.ogg"
+    volume: 1
+    fallback: "sounds/music/volcan.ogg"
+    tracks:
+      - take: "2"
+        sound: "music_volcan"
+        file: "sounds/music/gemini/volcan_2.ogg"
+        volume: 1
+        source: "volcan_2.mp4"
+        source_sha256: "92e8f8d8399fef841f9bbd2ffe7ab03a1b9fcd0b6caef238d0e2aacd3caeec2e"
+        title: "Beneath the Obsidian Ridge"
+        made: "2026-11-18"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/volcan_2.txt"
+        track_seconds: 179.98
+        loop_seconds: 60
+        lufs: -18.97
+        seam: 0.04
+        bytes: 150075
+  cave:
+    sound: "music_cueva"
+    pick: "1"
+    provisional: false
+    file: "sounds/music/gemini/cave_1.ogg"
+    volume: 1
+    fallback: "sounds/music/cueva.ogg"
+    tracks:
+      - take: "1"
+        sound: "music_cueva"
+        file: "sounds/music/gemini/cave_1.ogg"
+        volume: 1
+        source: "cave_1.mp4"
+        source_sha256: "8cd68b4c1dfb3ea746318080e02d7f08f8f0d3a4cb114c5dac3916586bccccf5"
+        title: "Iron in the Deep"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/cave_1.txt"
+        track_seconds: 168.53
+        loop_seconds: 64
+        lufs: -19.54
+        seam: 0.66
+        bytes: 148550
+  combat:
+    sound: "music_combat"
+    pick: "none"
+    provisional: false
+  boss_forge:
+    sound: "music_boss_forge"
+    pick: "1"
+    provisional: false
+    file: "sounds/music/gemini/boss_forge_1.ogg"
+    volume: 1
+    tracks:
+      - take: "1"
+        sound: "music_boss_forge"
+        file: "sounds/music/gemini/boss_forge_1.ogg"
+        volume: 1
+        source: "boss_forge_1.mp4"
+        source_sha256: "2e2e0f18e79c6e1ba88268c18f1b4b6ef36ffab755d059d0d4f6185d2b3b976d"
+        title: "Anvil of the Cursed Forge"
+        made: "2026-11-17"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/boss_forge_1.txt"
+        track_seconds: 179.49
+        loop_seconds: 69.82
+        lufs: -17.59
+        seam: 0.02
+        bytes: 167098

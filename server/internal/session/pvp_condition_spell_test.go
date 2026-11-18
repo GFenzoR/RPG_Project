@@ -21,6 +21,7 @@ import (
 // zones, levels, staff, safe mode (a marked victim or an arena is fine), range and line
 // of sight; aimed at a party member it is allowed, as a bolt is. The client's hotkey sends
 // no target: the spell then goes to the player Ana attacks (SetTarget), by the same rules.
+// Only a cast that lands is an attack event (A9).
 func TestPvPConditionSpellRules(t *testing.T) {
 	type side struct{ x, y, level int }
 	open := func(x int) side { return side{x, 10, 30} }
@@ -88,6 +89,7 @@ func TestPvPConditionSpellRules(t *testing.T) {
 			}
 			speed, mana := b.Speed(), a.Mana()
 			ca.take()
+			cb.take()
 			if tc.hotkey {
 				g.input(ca, cast("root"))
 			} else {
@@ -96,6 +98,13 @@ func TestPvPConditionSpellRules(t *testing.T) {
 			g.sim.Step()
 			keys := sysKeys(ca.take())
 			slowed := g.w.ConditionsForTest(b)["slowed"] > 0
+			// A9: Bea's client gets the cast as a SPELL attack on her, and only if it lands.
+			evs := cb.take()
+			if tc.reason == "" {
+				wantAttack(t, "Bea", evs, a.ID(), spell, b.ID(), b.Pos(), 0)
+			} else if got := attacksBy(evs, a.ID()); len(got) != 0 {
+				t.Errorf("a refused cast sent attacks: %v", got)
+			}
 			if tc.reason != "" {
 				if !slices.Contains(keys, tc.reason) || slowed || b.Speed() != speed || a.Mana() != mana {
 					t.Fatalf("messages %v, slowed %v, speed %d → %d, mana %d → %d", keys, slowed, speed, b.Speed(), mana, a.Mana())

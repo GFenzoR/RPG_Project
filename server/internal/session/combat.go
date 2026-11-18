@@ -157,6 +157,7 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_MELEE, f)
 	// Every swing at a monster trains the weapon's skill, hit or miss (fists without a
 	// weapon). Hitting players trains nothing (T5.2): two friends cannot train on each other.
 	skill, attack := w.meleeSkill(p)
@@ -196,6 +197,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, f foe) {
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
 	w.useUp(p, ammo)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_RANGED, f)
 	w.projectile(p.pos, f.pos(), ElementPhysical)
 	w.physicalHit(ctx, p, f, maxHit, SkillDistance)
 }
@@ -277,7 +279,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z {
 			continue
 		}
-		ranged := a.Type != "melee"
+		ranged := a.Type != attackMelee
 		if !ranged && d > 1 || ranged && (d > max(a.Range, 1) || !w.m.LineOfSight(m.pos, t.pos)) {
 			continue
 		}
@@ -290,6 +292,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
 		}
+		w.attackEvent(m.id, m.pos, monsterAttackKind(a.Type), t.id, t.pos, t.invisible, 0)
 		if ranged {
 			w.projectileAt(m.pos, t, a.Element)
 		}
@@ -393,7 +396,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 	pos := m.pos
 	w.clearConditions(ctx, holder{m: m}, true)
-	w.removeMonster(m)
+	w.removeMonster(m, goneDeath)
 	w.addCorpse(ctx, pos, corpse, w.corpseFor)
 	if owner != nil {
 		owner.emit(lootMsg(corpse))

@@ -336,7 +336,7 @@ func TestBan(t *testing.T) {
 	}
 	// A login that read the database before the ban is refused too.
 	again := &fakeClient{}
-	a.sim.Command(a.w.Join(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Cheater",
+	a.sim.Command(a.joinCmd(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Cheater",
 		Vocation: "guardian", Level: 1, Health: 145}, again))
 	a.sim.Step()
 	if !again.closed || again.reason != pb.DisconnectReason_DISCONNECT_REASON_BANNED || a.w.PlayerByCharacter(p.CharacterID()) != nil {
@@ -355,7 +355,7 @@ func TestBan(t *testing.T) {
 		t.Fatalf("admin got %v", got)
 	}
 	back := &fakeClient{}
-	a.sim.Command(a.w.Join(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Cheater",
+	a.sim.Command(a.joinCmd(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Cheater",
 		Vocation: "guardian", Level: 1, Health: 145}, back))
 	a.sim.Step()
 	if back.closed {
@@ -394,14 +394,14 @@ func TestBanExpires(t *testing.T) {
 	a.sim.Step()
 	c := session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Brief", Vocation: "guardian", Level: 1, Health: 145}
 	early := &fakeClient{}
-	a.sim.Command(a.w.Join(c, early))
+	a.sim.Command(a.joinCmd(c, early))
 	a.sim.Step()
 	if !early.closed {
 		t.Fatal("joined during the ban")
 	}
 	a.sim.RunFor(time.Minute)
 	late := &fakeClient{}
-	a.sim.Command(a.w.Join(c, late))
+	a.sim.Command(a.joinCmd(c, late))
 	a.sim.Step()
 	if late.closed || a.w.PlayerByCharacter(p.CharacterID()) == nil {
 		t.Fatal("refused after the ban")

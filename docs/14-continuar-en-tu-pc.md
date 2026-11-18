@@ -107,34 +107,63 @@ el punto 5:
   parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
   `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
   en el orden de su §7:
-  - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
-    docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
-    servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
-    (caminar manteniendo el mouse), MOV-4 (click previsto), MOV-7 (respuesta visual) y el
-    E2E de MOV-9 con 150 ms de latencia simulada.
+  - **A6, movimiento fluido (hecho):** ramas `feat/movement-feel` y `feat/movement-more`
+    (ver abajo y docs/17 §4 "Hecho: A6, primera parte" y "segunda parte"). No fue solo del
+    cliente como decía el plan: el servidor encola los pasos de teclado (protocolo en
+    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. Quedan
+    el polvo y las ondas al pisar (MOV-7, con las partículas de ART-7) y el toque corto
+    que solo gira (MOV-2).
   - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
     cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
     `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
     Lo que quedó pendiente de eso:
-    - **A9 (protocolo):** quién ataca a quién y si una criatura murió o salió de la vista
-      (ANI-7). Hasta entonces el cliente lo deduce (`render/creature-events.ts`) y puede
-      animar al monstruo equivocado cuando varios rodean a un jugador.
+    - **A9 (hecho, rama `feat/attack-events`, E2E del lote 7):** el servidor manda quién
+      ataca a quién (`CreatureAttack`) y por qué sale una criatura
+      (`CreatureDisappear.reason`), y el cliente anima con eso en vez de deducirlo (docs/05
+      "Quién ataca y por qué sale una criatura", docs/17 ANI-7). La deducción queda para un
+      servidor viejo. Las capturas `07b-attack-pose` y `11b-death` ya se sacaron y
+      revisaron (en `11b-death` el lobo que cae queda casi todo detrás del mago y del
+      efecto del hechizo: se ve, pero poco). Pendiente de A9: `make bots`
+      contra un servidor real con los eventos (docs/07 "Eventos de ataque"); un jugador que
+      muere a la vista y reaparece en un templo también a la vista no deja su cuerpo
+      cayendo; un desvanecerse para `TELEPORT` y `LOGOUT`; `DESPAWN` no lo usa ningún camino
+      todavía (solo el hook de test `DespawnForTest`).
     - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
       un hechizo o un arco juega el ataque (`slash`).
-    - **Animales:** los monstruos de Dungeon Crawl siguen con un frame y la animación
-      procedural. Ningún repo oficial de LPC en GitHub trae animales con licencia al lado
-      (el lobo del Starter Kit no la tiene); faltan ciclos propios de spritegen o hojas de
-      OpenGameArt con licencia por archivo.
+    - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
+      `feat/gemini-creatures`, docs/17 "Hecho: criaturas de Gemini"): lobo, rata de
+      sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
+      espinoso. Siguen con un frame y ANI-5 `hollow_crawler`, `ore_beetle`, los cinco del
+      Volcán (`ash_hound`, `cinder_salamander`, `slag_golem`, `ember_wyrmling`,
+      `slagbound_warden`) y la gaviota (arte propio de spritegen: hay una hoja de Gemini
+      buena en `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin
+      commitear ni usar; cambiarla es decisión del dueño). Mismo camino: `assets/README.md`, "Criaturas animadas de una sola
+      hoja".
+    - **Lo que las hojas de Gemini no trajeron:** ataques de frente o de espaldas en
+      cuatro de las siete (cangrejo al sur; murciélago y espinoso al norte; sapo al norte y
+      al sur, y sin quieto al norte): esas direcciones usan la embestida procedural con el
+      frame parado. El espinoso a 64x64 queda con algo de ruido de corteza (la ilustración
+      tiene mucha textura y el muestreo es por vecino más cercano). Un pedido nuevo de esas
+      filas sueltas no saldría con el mismo dibujo: si se quiere, una hoja entera nueva.
+    - **Revisar en el E2E** (no se corrió en la rama): las siete criaturas en el juego, su
+      tamaño al lado de los personajes y los monstruos de Dungeon Crawl que quedan, y el
+      murciélago (oscuro) sobre los suelos de la mina.
     - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
-      Dungeon Crawl, una (ART-2 lo acepta).
-    - **Click sobre la cabeza** de un personaje alto (cae en la casilla de arriba): sigue
-      eligiendo la casilla, no a la criatura (ART-2, A10).
+      Dungeon Crawl, una (ART-2 lo acepta). Las criaturas de Gemini siguen la escala de LPC
+      (lobo, araña, sapo y espinoso de 64x64), así que ahora un lobo es más grande que el
+      jabalí de spritegen.
+    - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
+      ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
+      Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
+      de `07-combat`) se dibuja otra vez, translúcida, encima del mapa.
     - **Atlas:** pasó de 1 a 2 páginas (docs/07).
-    - **Pantalla de créditos (A1):** hecha en su versión mínima (lote 6): la página
-      `/credits` del sitio, enlazada desde el pie del sitio y desde Opciones. La app de
-      escritorio solo muestra la dirección para abrirla en el navegador.
+    - **Pantalla de créditos (A1):** hecha: la página `/credits` del sitio, enlazada
+      desde el pie del sitio y desde Opciones, y en la app de escritorio un botón de
+      Opciones que abre la misma página en una ventana sobre el juego (rama
+      `feat/world-art-2`). Falta probar ese botón en la app real (`make desktop-dev`): el E2E
+      corre en el navegador, donde Opciones sigue mostrando el enlace.
   - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
     animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
     canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
@@ -164,15 +193,24 @@ el punto 5:
     - **Props sin poner:** `wall_torch`, `wall_banner`, `brazier` y `fountain` existen
       (ids, i18n, arte animado) pero ningún mapa los usa todavía: es una tarea de mapa
       (`build-map-area`), por ejemplo antorchas en la mina y una fuente en cada plaza.
-    - **Marco de puerta de casa:** la puerta de una casa (`houses.yaml` `doors`) sigue
-      siendo un hueco en el muro. Un item de marco que no bloquea y `joins_walls` lo
-      resolvería, pero cambia mapas.
-    - **Muros altos (32x96), ventanas y `elevation`** (ART-3, ART-8): sin hacer.
+    - **Marco de puerta de casa:** hecho sin tocar mapas (rama `feat/world-art-2`): el
+      cliente, el editor y `mapcli render` dibujan `house_door_frame` en cada puerta de
+      `houses.yaml` (`DecoratedSource` de `packages/renderer`). Una puerta de dos casillas
+      muestra un poste en el medio.
+    - **Muralla (`rampart_wall`, 32x96) y muros con ventana** (`stone_wall_window`,
+      `wooden_wall_window`): existen (ids, i18n, arte), pero ningún mapa los usa todavía:
+      es tarea de mapa (`build-map-area`), como los props.
+    - **Elevación** (ART-8): hecha para el dibujo (`elevation` en `data/items`; el cajón de
+      carga, 8 px). No hay mesas ni barriles en `data/items` todavía, y el cajón bloquea el
+      paso: por ahora solo sube lo que se tira encima.
     - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
       (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
       recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
       islas es `mapcli autoborder`: cambia mapas.
-    - **Partículas de ambiente** (A13): polvo, brasas, hojas, ondas al pisar.
+    - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
+      polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
+      (`client/src/render/particles.ts`). Faltan el polvo y las ondas al pisar, el pasto
+      que se agita, la niebla y las gaviotas sobre el mar (ART-7).
     - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
       lava enfriada ya entran en la banda de valor de ART-6.
@@ -180,9 +218,8 @@ el punto 5:
       dos lados de un tramo norte-sur (una franja de empedrado afuera del templo). Se lee
       como un zócalo; si molesta, la solución es de mapa (pasto bajo el muro) o un muro
       más ancho.
-  - **A1** dentro de la app de escritorio: hoy Opciones solo muestra la dirección de
-    `/credits`. Antes de distribuir la app (o publicarla en tiendas, docs/15), mostrar
-    los créditos dentro de ella.
+  - **A1 en las apps móviles** (docs/15): el botón de créditos de la app de escritorio
+    sirve igual dentro de Tauri móvil (detecta Tauri), pero no se probó ahí.
   - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
     la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
     `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en
@@ -245,19 +282,37 @@ el punto 5:
   - **Etiquetas a 1x:** alejado a la ventana entera los nombres se acomodan con la regla de
     zoom 1x (`render/labels.ts`); en una multitud se ocultan muchos. Revisarlo en el
     playtest.
-- **Movimiento fluido (rama `feat/movement-feel`, apilada sobre `feat/ui-theme`: se mergea
-  después de ella o con ella).** Hecho: pasos de teclado predichos
-  hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo
-  en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de pantalla, los pasos del
-  servidor sobre su línea de ticks con colchón de jitter, correcciones que se deslizan,
-  diagonal con dos flechas y deslizarse junto a un muro (docs/02 "Movimiento",
+- **Movimiento fluido (ramas `feat/movement-feel` y `feat/movement-more`).** Hecho: pasos
+  de teclado predichos hasta 4 adelante y encolados en el servidor detrás de una época de
+  caminata (protocolo en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de
+  pantalla, los pasos del servidor sobre su línea de ticks con colchón de jitter,
+  correcciones que se deslizan, diagonal con dos flechas y deslizarse junto a un muro; y
+  después el click previsto (camino del cliente, cada paso un `Walk`, rodeo en el
+  cliente), caminar manteniendo el botón izquierdo hacia el cursor, el anillo del destino
+  y el texto de la acción junto al cursor (docs/02 "Movimiento" y "Controles del mouse",
   client/CLAUDE.md "Movimiento fluido"). Quedó:
-  - **Caminar manteniendo el click (como Diablo 2), propuesta.** Hoy el click izquierdo
-    camina al soltar y, si se arrastra, mueve el item de arriba. Propuesta: un click
-    mantenido sobre una casilla sin item movible (o con Ctrl) sigue al cursor: cada vez que
-    la casilla bajo el cursor cambia, `WalkPath` nuevo (el servidor ya reemplaza el camino
-    y termina el paso en curso), como mucho uno por paso. Cliente solo; choca con el
-    arrastre de items, por eso queda para decidir.
+  - **Mantener el botón sobre un item:** arrastrar antes de 200 ms mueve el item y
+    mantenerlo quieto camina hacia el cursor (docs/17 MOV-3). Si en el playtest se arrastra
+    un item sin querer al empezar a caminar, la opción es exigir Ctrl para arrastrar desde
+    el mapa, o que el mantener empiece solo fuera de las casillas con items.
+  - **Polvo y ondas al pisar (MOV-7):** son arte por terreno; van con las partículas de
+    ART-7 y A13.
+  - **El texto junto al cursor** muestra la acción por defecto (atacar, hablar, trepar,
+    abrir, usar una estación, el tablero o una puerta) apenas el mouse se apoya en la
+    casilla, sin espera. Mirar en el playtest si molesta al caminar con el mouse por
+    zonas con muchos monstruos; se podría pedir ~300 ms quieto, como el tooltip.
+  - **Mantener el mouse con el dedo:** no hay (el toque largo es el menú y está el pad).
+  - **Un click lento corta el camino del click:** una presión de 200 ms o más se vuelve
+    mantener (docs/17 MOV-3). Si un borde de paso cae en ese tiempo, el mantener toma el
+    mando y descarta el camino del click, y al soltar el personaje se detiene tras 1 o 2
+    pasos. Con 500 ms por paso pasa con clicks de más de ~450 ms; con un personaje rápido,
+    desde ~350 ms. Es lo que dice MOV-3; mirar en el playtest si molesta (la salida sería
+    que el mantener siga el camino del click mientras el cursor quede sobre su destino).
+  - **Anillo rojo antes del doble click (controles de menú):** el primer click sobre una
+    estación, una puerta, el tablero o un monstruo ya intenta caminar hasta esa casilla,
+    que no se pisa: el anillo rojo de "sin camino" sale justo antes de que el doble click
+    use o ataque. Decidir en el playtest si un click sobre algo que se usa o se ataca
+    debería no marcar nada, o caminar hasta la casilla de al lado.
   - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
     tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
     mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.
@@ -265,9 +320,9 @@ el punto 5:
     lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
     tocó.
   - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
-    corte de 1 s y `Walk` perdidos; falta jugarlo por el hosting de pruebas (docs/13) con
-    el E2E `e2e/movement.spec.ts` como referencia y mirar si los 40 ms de colchón alcanzan
-    con Wi-Fi.
+    corte de 1 s y `Walk` perdidos, y el E2E `e2e/movement.spec.ts` corre con ~150 ms de
+    latencia simulada en el WebSocket; falta jugarlo por el hosting de pruebas (docs/13) y
+    mirar si los 40 ms de colchón alcanzan con Wi-Fi.
   - **Diagonal con dos flechas, para decidir:** hoy dos flechas perpendiculares
     mantenidas dan la diagonal, y también un toque perpendicular con otra mantenida
     (derecha mantenida + toque de arriba = un paso noreste, no uno al norte). Al cambiar
@@ -276,14 +331,6 @@ el punto 5:
     buscó (×1,5 de duración, otra casilla). Opciones: dejarlo; que un toque ya soltado
     dé el paso lateral; o que la diagonal pida las dos teclas juntas un instante (~60 ms,
     a costa de que el primer paso de una diagonal buscada salga recto).
-  - **Una flecha durante un camino por click casi nunca entra** (viene de antes, no lo
-    trajo A6). El frame solo lee las teclas cuando `canStep`, y durante un camino por
-    click el paso dibujado casi siempre está lejos de terminar: en una simulación con un
-    camino de 16 pasos (~450 frames), `canStep` estuvo abierto de 2 a 12 frames (antes de
-    A6, de 2 a 10). La tecla suele esperar a que termine el camino. Para la sensación de
-    Diablo 2, una pulsación nueva (no la autorrepetición) debería predecir desde el próximo
-    paso del camino: mandar el `Walk` (que descarta el camino en el servidor) y dibujarlo
-    detrás del paso en curso.
   - **Eventos y pasos de los demás:** los pasos se dibujan sobre la línea de ticks
     (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
     desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe
@@ -410,6 +457,54 @@ el punto 5:
   banner, el diálogo de un NPC y el menú; crafteo, mercado, casa e intercambio comparten
   la regla CSS del diálogo pero no tienen su propia medición. Falta verlo en un iPhone y
   un Android con muesca de verdad (el override de CDP solo existe en Chromium).
+- **Herramientas de Gemini (`tools/gemini`, rama `feat/gemini-tools`).** El arte y la
+  música hechos con la cuenta de Gemini del dueño están permitidos desde el 2026-11-17
+  (docs/17 SRC-5) y ya hay con qué pedirlos, importarlos y registrarlos (`tools/CLAUDE.md`,
+  "gemini"; `make test-gemini`, job `gemini` de la CI). El smoke de solo lectura
+  (`gemini_web.py check --list-modes`) vio el 2026-11-18 el Chrome del dueño con sesión, en
+  Hydrogen. Lo que falta:
+  - **La música de Gemini ya suena** (2026-11-18, `make music-gemini`, `assets/README.md`
+    "Sonido"): las elecciones del dueño de `build/music-gemini/picks.json` del repo
+    principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
+    forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
+    `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
+  - **Director de música (pedido del dueño, 2026-11-18):** las transiciones importan mucho
+    y un tema no debería empezar siempre desde el principio. Falta un director que alterne
+    las tomas de un lugar (Puerto ya tiene tres: `music_puerto`, `_2`, `_3`, hoy suena la
+    primera), empiece cada loop en un punto distinto y cuide los fundidos. El manifiesto
+    (`assets/sounds/music/gemini.yaml`, `tracks`) ya lista varias tomas por lugar, pero
+    `sounds.yaml` todavía espera un loop por isla: el director necesita una forma de
+    nombrar un grupo de tomas (y su validación).
+  - **Más versiones de cueva:** el mundo tiene muchas cuevas y el dueño quiere que la música
+    varíe al bajar a una. Hay que pedirlas (`music_queue.py`; la sesión principal ya
+    probó un `cave_mine_1` que terminó en `policy`).
+  - **Combate:** el dueño no quiere música de combate para peleas comunes, solo para un jefe
+    o una quest importante. El cliente ya sabe tocar la de un jefe (`music.bosses`) y la
+    de combate (`music.combat`, hoy sin usar); falta la regla de "quest importante".
+  - **Presupuesto de audio:** con mono a 20 kbps y loops de ~1 minuto, las 8 tomas de hoy
+    dejan el total en ~1454 de 1536 KiB (docs/07). Más tomas (las cuevas, otro lugar)
+    necesitan decidir con el dueño: subir el tope (el audio no cuenta en la descarga
+    inicial), bajar los kbps o acortar los loops.
+  - **Volumen:** los masters de Gemini vienen con picos de +1,5 a +5 dBTP; con una sola
+    ganancia y el techo de -1,5 dBTP los loops quedan entre -16 y -19,5 LUFS y, aun con
+    volumen 1 en `sounds.yaml`, suenan ~2 dB por debajo de los temas de soundgen. Nadie
+    los escuchó en el juego todavía: si se oyen bajos, un limitador suave antes de la
+    ganancia (con cuidado de la costura) o subir el canal de música.
+  - **Los primeros assets de Gemini son las siete criaturas** (rama
+    `feat/gemini-creatures`, filas en "Generado con IA" de `assets/CREDITS.md` y prompts en
+    `assets/prompts/sprites/creatures/`).
+  - **La página `/credits` lista lo generado con IA** en "Hecho con IA" (rama
+    `feat/gemini-creatures`): falta mirarla en el E2E (`site-09`/`site-10`, la sección nueva
+    va antes de "Obra propia").
+  - **El pedido de imagen** funcionó en los diez pedidos del 2026-11-18 (Hydrogen, "Crear
+    imagen", ~30 s cada uno, sin cuota). Gemini elige el formato de la imagen y no respeta
+    la grilla pedida: por eso `import_art.py --cut rows|blobs`.
+  - **`import_art.py` sobre hojas reales:** las siete criaturas salieron limpias con 16
+    colores reducidos juntos (`--shared-colours`) y 24 el espinoso (el musgo se perdía);
+    la textura de una ilustración muy detallada queda como ruido al bajar por vecino más
+    cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
+    la herramienta).
+
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace

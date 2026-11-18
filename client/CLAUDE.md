@@ -23,8 +23,9 @@ client/
 
 ## Reglas del cliente
 - El cliente es "tonto": envía intenciones y dibuja lo que el servidor dice.
-  Solo predice los pasos propios de teclado (hasta `max_queued_steps`, ver "Movimiento
-  fluido") y los corrige si el servidor los rechaza.
+  Solo predice los pasos propios (teclado, pad, click para caminar y mouse mantenido;
+  hasta `max_queued_steps`, ver "Movimiento fluido") y los corrige si el servidor los
+  rechaza.
 - Interpolación de movimiento entre casillas según la velocidad que manda el servidor;
   los pasos que da el servidor se dibujan sobre su línea de ticks, uno detrás del otro.
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
@@ -44,7 +45,7 @@ client/
 - Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
   2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba cambian cuando se
   haga cada tarea de su plan (§7). A2 y A3 (tema, fuentes, dock y ventanas) ya están, A6
-  en parte (movimiento), A7 (vista de 31x21), y A4 y A5 (menú del click derecho con la
+  (movimiento), A7 (vista de 31x21), y A4 y A5 (menú del click derecho con la
   ficha, diálogo y tienda sin scroll; ver "Notas de A4 y A5"): el click derecho sobre un
   item ya no lo usa por defecto.
 
@@ -66,6 +67,23 @@ client/
   item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
   T0.5). Solo se dibuja el piso del jugador.
+- Lo que sumó la rama `feat/world-art-2` (docs/17 "Hecho: el resto de A1, A10, A11 y A13"):
+  - **Click sobre la cabeza** (ART-2): `render/creature-hits.ts` (`DrawnBoxes`, puro y con
+    tests) guarda la caja de cada criatura dibujada; el click derecho, Mayús+click, el
+    toque y el toque largo prueban primero esas cajas (la de adelante gana, el propio
+    jugador no cuenta) y después la casilla. Una cabeza que sube a una casilla con algo
+    propio que usar (puerta, item, escalera de mano: `GameCanvasOptions.ownUse` →
+    `Game.ownUse`) no cuenta: el click es de esa casilla, como dice el texto del cursor.
+  - **Criaturas tapadas:** si otra dibujada después cubre `HIDDEN_SHARE` (un cuarto) o más
+    de su caja, se dibuja otra vez encima del mapa, translúcida (`hiddenLayer`).
+  - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
+    (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
+  - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
+    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido.
+  - **Marco de puertas de casa:** `MapView` lee el mundo a través de un `DecoratedSource`
+    (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el
+    estado del juego no lo tiene.
+  - **Créditos en la app de escritorio** (A1): ver "Créditos (docs/17 A1)".
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
 ## Atlas: reintentos y "Reintentar"
@@ -235,6 +253,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   vuelve a montar al entrar o salir del juego, y cada vez parte de
   `audio.currentPrefs()`.
 - Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
+- Música sobre la de la zona (`content.sounds.music`, opcionales): `Screens` (`ui/App.tsx`)
+  pone `music.title` fuera del juego (sin ambiente); al salir, `Game.destroy` calla los
+  loops y el efecto vuelve al título. Dentro, `Game.keepLoops` elige con `musicFor`
+  (`audio/cues.ts`, puro): un jefe de `music.bosses` en la lista de batalla, después un
+  combate (`music.combat`, si existe: objetivo propio o un golpe sobre la casilla propia,
+  `blowAt`, hace menos de `combatHoldMs`), después la zona. Corre tras cada batch y cada
+  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un combate termina sin mensaje.
+- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de cada
+  canal (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que
@@ -298,12 +325,19 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `/credits` del sitio (`site/Credits.tsx`, sin hooks): `SiteContent.credits` lo arma
   `vite/credits.ts` (`loadCredits`, puro en `creditsFrom`, con tests) desde
   `assets/CREDITS.md` y el `CREDITS.csv` de cada pack, con los lectores de spritepack.
+  "Hecho con IA" (`credits-ai`, `aiCredits`) lista las filas de "Generado con IA": sus
+  sprites, la fecha y el archivo de prompt (una fila sin fecha o sin prompt commiteado no
+  se muestra; el test exige que cada prompt exista).
   Cada frase es i18n (`site.credits.*`); el nombre y autor de un pack,
   `site.credits.pack.<carpeta>.*` (guiones como `_`; `vite/credits.test.ts` exige las dos claves en es y en
   para cada pack, y un enlace en `site/credits.ts` `licenceUrl` para cada licencia).
 - Enlaces: el pie del sitio (`site.nav.credits`) y `ui/CreditsLink.tsx` en Opciones (la
   ventana de escritorio y `AudioOptions` del login y del menú ☰), otra pestaña; en la app
-  de escritorio, la dirección como texto (`client.options.credits_desktop`).
+  de escritorio, un botón que abre la misma página en una ventana sobre el juego
+  (`CreditsWindow`, renderizada en su propio elemento de `<body>`; los datos llegan de
+  `virtual:rpg-credits` al abrirla y las frases `site.credits.*` viajan en los catálogos
+  del juego; las direcciones van como texto, `CreditsPage` con `plain`), con la dirección
+  de `/credits` abajo (`client.options.credits_desktop`).
 - Fuentes: `buildFont` conserva los name ids 0–6, 13 y 14 (`KEPT_NAME_IDS`): el
   copyright y la licencia OFL viajan en cada woff2.
 - E2E: "credits" de `e2e/site.spec.ts` (screenshots `site-09` y `site-10`) y el enlace
@@ -471,7 +505,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
   dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
   `<dir>_<n>` como quieto (0) y caminar (1..); si no, la textura única. Una acción sin todas
-  sus texturas se descarta.
+  sus texturas se descarta. Quieto y atacar (`OWN_FACINGS` de `packages/renderer`) quedan
+  vacíos hacia una dirección que no tiene frames (las criaturas de Gemini muerden de
+  perfil y no siempre de frente): ahí `clipTexture` da el frame parado de esa dirección y
+  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Caminar y morir
+  toman el sur (o la primera) como antes.
 - Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
   en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
   `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene
@@ -480,16 +518,32 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
   con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
   y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
-- Quién ataca a quién (`render/creature-events.ts`, puro, con tests) se deduce de lo que
-  llegó desde el frame anterior, hasta que el protocolo lo diga (ANI-7, tarea A9): un
-  `Projectile` anima a la criatura de su casilla de salida; un efecto de golpe, bloqueo o
-  elemento sin proyectil en el mismo batch, al atacante cuerpo a cuerpo (el propio jugador
-  si su objetivo está ahí y al lado; si no, una criatura del otro bando al lado, primero la
-  que mira esa casilla); un número de daño hace destellar a la víctima.
-- Muerte: una criatura que sale de la vista con la barra en 0 murió ahí (el servidor manda
-  `CreatureHealth` 0 antes de `CreatureDisappear`). Su cuerpo queda como "fantasma" sin
-  nombre ni barra mientras juega su caída (`death` de LPC, o la procedural) sobre el
-  cadáver, y se borra al terminar o si la criatura vuelve.
+- Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
+  `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
+  frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
+  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira); un
+  número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
+  la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
+  viejo (sin `attack_events`) se deduce como antes: un `Projectile` anima a la criatura de
+  su casilla de salida; un efecto de golpe, bloqueo o elemento sin proyectil en el mismo
+  batch, al atacante cuerpo a cuerpo (el propio jugador si su objetivo está ahí y al lado;
+  si no, una criatura del otro bando al lado, primero la que mira esa casilla).
+- Muerte: una criatura cuyo `CreatureDisappear` dice `DEATH` (`WorldState.departures`,
+  `leavesDying`; con un servidor viejo, la que sale con la barra en 0) murió ahí. Su
+  cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
+  LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
+  Cualquier otro motivo la saca en el momento.
+- Un motivo de salida vale hasta que la criatura vuelve: `addCreature` lo borra
+  (`forgetDeparture`) cuando reaparece, así un jugador que murió y despertó a la vista no
+  cae al salir después del piso dibujado.
+- E2E: `__rpgClient.attacks(ms)`, `departures(ms)` (el motivo por su nombre, `DEATH`...)
+  y `poses()` (quién está en pose de ataque y quién cae, y cuánto lleva); `shotPose` de
+  `e2e/game.spec.ts` espera un frame en medio de la pose, retiene `requestAnimationFrame`
+  (el juego no dibuja otro), saca la captura y devuelve lo que vio en ese frame
+  (`Caught`: quiénes estaban en la pose, y los ataques y salidas que el cliente guardaba).
+  Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
+  exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
+  la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
@@ -511,7 +565,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   comparten un `GraphicsContext` por id; un frame no asigna nada (los sprites y formas se
   toman por orden y los sobrantes se ocultan; un número conserva su `Text` mientras el
   mundo lo guarde y vuelve a una reserva al terminar). `WorldState.expire` filtra las
-  listas en el lugar (`dropFinished`), sin un array nuevo por frame.
+  listas en el lugar (`dropFinished`), sin un array nuevo por frame. Con la pestaña en
+  segundo plano no hay frames: `apply` las filtra también al agregar (`pushLive`, una
+  pasada por batch como mucho), así no crecen sin tope hasta que vuelve.
 - Para cambiar un efecto: su receta en `tools/spritegen/src/recipes/effects.ts`,
   `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
   servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.
@@ -705,7 +761,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   por paso). El `CreatureMove` propio con el `walk_seq` del más viejo y sus mismas
   casillas lo confirma: conserva su inicio local y toma la duración del servidor (corre
   los de atrás). Cualquier otro paso propio con predicciones pendientes es `ownStep`: un
-  paso sin `walk_seq` (el siguiente de un camino por click, uno de persecución, que el
+  paso sin `walk_seq` (uno de persecución, o de un `WalkPath` de otro cliente, que el
   servidor dio antes de recibir el `Walk`) o con el de una predicción ya abandonada va
   antes de los `Walk` pendientes; uno con `walk_seq` k responde también a los anteriores
   a k, que se perdieron. El paso del servidor se dibuja en el lugar de la predicción más
@@ -715,12 +771,80 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `Walk` anterior). `expirePredicted` (cada `frame`) abandona las predicciones si la más
   vieja no tuvo respuesta `PREDICT_TIMEOUT_MS` (3 s) después de dibujada: su `Walk` se
   perdió y ninguno lo sigue; el personaje vuelve deslizándose. Un `WalkRejected` vacía
-  `predicted`. `game.ts` `frame` solo pide `keys.take() ?? pad.take()` cuando `canStep`;
-  un click espera `unconfirmed === 0` para mandar el camino desde donde está el
-  servidor.
+  `predicted`. `game.ts` `decideStep` (cada `frame`, y en el acto tras un click) solo pide
+  `keys.take() ?? pad.take()` cuando `canStep` y se lo pasa a `Steering.next` con el
+  punto bajo el mouse mantenido (abajo).
 - **Época** (docs/05 "Caminar"): `walkEpoch` sale del último `WalkRejected` o
   `FullMapView` y va en cada `Walk`; el servidor descarta los de otra época sin contestar.
-- **Pasos del servidor** (las demás criaturas y el camino propio por click): `Game` pide
+- **Click y mouse mantenido** (docs/17 MOV-3 y MOV-4, `state/steering.ts`, puro y con
+  tests): `Steering.next(world, now, { key, toward })` decide el paso cuando `canStep`:
+  la tecla o el pad primero (termina el camino), después el mouse mantenido, después el
+  camino del click. Todo sale como `Walk` predicho (`predictStep`), igual que una tecla:
+  el cliente ya no manda `WalkPath` ni `StopWalk`.
+  - **Click** (`walkTo`): A* (`state/path.ts`, `pathPassable`) desde `self.pos`, es decir
+    después de los pasos ya predichos, que se siguen dando; no espera `unconfirmed` 0.
+    `Game.walkTo` llama a `decideStep` en el acto: sin paso dibujado, el primero sale en el
+    mismo evento. El camino se rearma (`replan`, hasta `ROUTE_REPLANS`, 10) si el
+    personaje no está donde el camino esperaba (un paso de persecución, una predicción
+    abandonada), si el próximo paso ya no está libre (una criatura) o tras un
+    `WalkRejected` (`Steering.heard`, que `game.ts` llama tras `world.apply` de cada
+    mensaje): esa casilla va a `avoid`, y el segundo rechazo lo termina
+    (`ROUTE_REFUSALS`: un aviso por rechazo, como `house.no_access` o
+    `pvp.protection_locked`, no se repite casilla por casilla). Sin camino, o un
+    `FullMapView`, lo termina. Un click es una intención nueva, como una tecla pulsada de
+    nuevo: `walkTo` llama a `retryWalk`, así que un paso rechazado antes (`refused`) se
+    vuelve a intentar una vez (un rechazo y un aviso por click). Mientras sigue rechazado,
+    `plan` no pasa por esa casilla si planea desde donde empezó ese paso
+    (`WorldState.refusedStep`): `predictStep` no lo daría y el camino no llevaría a nada.
+    `mark` (`WalkMark`: casilla, hora, si hay camino) es el anillo de MOV-7.
+  - **Mouse mantenido** (`toward`, el punto bajo el cursor en casillas fraccionarias,
+    `GameCanvas.worldAt`): dirección por el ángulo desde el centro del personaje dibujado
+    (`towardDirection` de `motion.ts`, 45° cada una; nada sobre la casilla propia); si no
+    está libre, `stepChoices` (la mitad libre de una diagonal) y después el primer paso de
+    un A* hacia la casilla bajo el cursor, guardado como camino con `heading`: se sigue
+    mientras el cursor apunte igual (si no, en una U de muros entraba y salía). Sin nada,
+    gira (`WorldState.turn`). Nunca pisa en línea recta una escalera, un agujero o un
+    teletransporte que no sea la casilla bajo el cursor (`movesOnStep`; el A* ya los
+    rodea, `pathPassable`): arrastrar el cursor por encima de un agujero no cambia de piso.
+    Una búsqueda sin camino (o cuyo primer paso no se puede dar) no se repite desde la
+    misma casilla hacia la misma durante `NO_WAY_MS` (250 ms): parado contra un muro,
+    `canStep` está abierto en cada frame. Ese frame no crea objetos (docs/07): `drawPos` y
+    `GameCanvas.worldAt` escriben en uno reutilizado y `stepChoices` es una tabla fija.
+  - **Botón izquierdo en el canvas** (`input/mouse.ts` `LeftPress`, puro y con tests):
+    `GameCanvasOptions.pressTile` le pregunta al `Game` (`Game.pressTile`, la regla pura
+    es `pressAnswer`) qué puede hacer la presión: con una mira o un item elegido, solo
+    click al soltar (y arrastre);
+    sobre una casilla con un item movible (`topItem` sin `fixed`), arrastrar antes de
+    `HOLD_WALK_MS` (200 ms) lo mueve y el click camina al soltar; sin item, camina en el
+    acto (`walked`: el soltar ya no es click) y arrastrar es mantener. Quieto 200 ms (lo
+    revisa el ticker del canvas antes de `frame`) o arrastrado: `holdAt` con la posición
+    del cursor en la página, en cada `pointermove`; `setPointerCapture` sigue fuera del
+    canvas; `pointerup`, `lostpointercapture` o un `pointermove` sin el botón llaman
+    `holdEnd` (y el `blur` de la ventana lo suelta en el `Game`). Soltar no manda nada:
+    se dan los pasos ya mandados. Cada presión (sin mira ni item elegido) llama a
+    `retryWalk`, como una tecla pulsada de nuevo; el mantener en que se convierte no lo
+    vuelve a llamar (un rechazo y un aviso por presión).
+    El dedo no mantiene (gestos de T5.6).
+  - **Doble click** (controles de menú): `Steering.cancel()` termina el camino del primer
+    click, sin `StopWalk` (dejaría `Walk` sin respuesta).
+- **Respuesta visual** (MOV-7): el anillo (`render/walk-mark.ts` `markRing`, puro: 300 ms,
+  de 0,5 a 0,25 casillas, se desvanece; dorado o rojo sin camino) es un `Graphics` del
+  stage entre la luz y los efectos (`drawWalkMark`). El texto junto al mouse sobre el
+  mapa (sale apenas el mouse pasa por la casilla, sin esperar a que se quede quieto; al
+  caminar con el cursor quieto cambia a medida que el mapa pasa por debajo): un
+  `div.map-hint` en `body` que el canvas mueve en `pointermove` y llena en el
+  ticker cuando cambia la casilla bajo el cursor (o cada `HINT_REFRESH_MS`, 250) con
+  `GameCanvasOptions.hoverText` → `Game.hoverText`: `defaultAction` (`input/actions.ts`,
+  la primera opción del menú de esa casilla, nunca solo "Mirar", ni el "Usar" de un
+  adorno fijo sin `ItemFacts.usable`: puerta, estación de `recipes` o tablero
+  `ItemDef.board`) con `client.action.<tipo>` y el nombre, o el verbo solo
+  (`client.touch.action.<tipo>`) sin nombre o para trepar. El texto va en `data-text` y
+  lo muestra un `::after { content: attr(data-text) }`: no es texto de la página (ni los
+  locators de Playwright ni un lector de pantalla lo encuentran, `aria-hidden`). Se
+  oculta al apretar un botón, con una mira, un item elegido, un arrastre o un menú
+  abierto (`Game.hoverText` da `""`; el texto, con z-index 70, quedaría sobre el menú).
+- **Pasos del servidor** (las demás criaturas y los pasos propios que el servidor da por
+  su cuenta, como los de persecución): `Game` pide
   `world.batchTime(batch.tick, now)` por batch y pasa ese `at` a `apply`; el paso empieza
   en `at` y se encadena tras el que se sigue dibujando (`prev`, sin saltos): si ese
   termina después de `at`, el nuevo lo espera y se dibuja hasta `PLAYOUT_CATCH_UP` (25 %)
@@ -757,14 +881,27 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   de `game.ts`), un observador y las reglas de la cola del servidor sobre enlaces de 2 a
   300 ms con jitter, a 60, 144 y 40 fps, y exige cero frames quietos con tecla mantenida,
   camino por click y para el observador, cero huecos en el servidor y un rechazo sin
-  saltos; además un click y después una flecha (cada `Walk` respondido por su paso),
-  `Walk` perdidos y un corte de 1 s de la red del observador (sin atraso que dure). Si
-  cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene una
+  saltos; con el `Steering` real, también el mouse mantenido y el click previsto (sale en
+  el frame del click, sin frames quietos, rodeo tras un rechazo); además un click y
+  después una flecha (cada `Walk` respondido por su paso), `Walk` perdidos y un corte de
+  1 s de la red del observador (sin atraso que dure). Si cambias tiempos de `motion.ts`,
+  córrelo. `state/steering.test.ts` prueba el camino (primer paso en el acto, después de
+  los predichos, rodeos, `ROUTE_REFUSALS`, `ROUTE_REPLANS`, teletransporte) y el mouse
+  (ángulo, deslizarse, el rodeo de una U sin volver atrás, girar, `NO_WAY_MS`, rodear un
+  paso rechazado, no pisar un agujero que no está bajo el cursor) y que un click vuelve a
+  intentar un paso rechazado. E2E `e2e/movement.spec.ts`: mantiene una
   flecha 2 s (4 o 5 pasos; como mucho los que entran en el tiempo medido) sobre una recta
   libre y lee `__rpgClient.trail(ms)` (el `drawPos` del modelo en cada `frame`,
   `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia atrás (screenshot
-  `96-movement-held-key`, sacado al soltar la tecla). Mide el modelo, no el sprite ni la
-  cámara en pantalla: su redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
+  `96-movement-held-key`, sacado al soltar la tecla). El segundo test pasa el WebSocket
+  por un proxy de Playwright (`page.routeWebSocket`, 75 ms + 0–40 ms por sentido, en
+  orden; docs/17 MOV-9): una flecha 10 casillas tarda la suma de sus pasos
+  (`__rpgClient.stepMs`) ± un frame; el mouse mantenido y un click a 5–7 casillas, sin
+  frames quietos y saliendo < 150 ms después del botón (screenshots
+  `96b-movement-lag-mouse-held`, `96c-movement-lag-click`). Las rectas evitan escaleras,
+  agujeros y teletransportes, y el mouse aprieta una casilla sin items sobre el canvas
+  (`elementFromPoint`). Mide el modelo, no el sprite ni la cámara en pantalla: su
+  redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el
@@ -807,7 +944,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
   todo (también los pasos predichos, y trae la época de caminata nueva). No hay estado
   propio de portales; solo `canStep` no predice más allá de un paso sobre una escalera,
-  un agujero o un teletransporte (`movesOnStep`).
+  un agujero o un teletransporte (`movesOnStep`), y el mouse mantenido no pisa uno que no
+  esté bajo el cursor (`Steering`, "Movimiento fluido").
 - `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
   `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
@@ -843,8 +981,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   lo vuelve a predecir ni mandar, así que una tecla mantenida no repite el aviso en cada
   paso. Se olvida con `retryWalk` (`game.ts`: tecla de movimiento pulsada de nuevo, sin
   contar la autorrepetición, o soltada; pad con otra dirección, soltado o tocado; pérdida
-  del foco), con cualquier movimiento propio y con un `FullMapView`. El click para caminar
-  no lo mira.
+  del foco; un click, `Steering.walkTo`; una presión nueva del botón izquierdo sobre el
+  mapa, `Game.pressTile`), con cualquier movimiento propio y con un `FullMapView`.
+  Mientras dura, el camino por click y el mouse mantenido lo rodean: `Steering.plan` no
+  pasa por esa casilla al planear desde donde empezó el paso (`refusedStep`).
 - E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
   sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la
@@ -976,9 +1116,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   con el mouse: el siguiente click en una casilla (`clickTile` mira `picker.picked`), un
   slot o una celda deja el item.
 - **Doble click**: en un item del DOM, `Game.itemDefault` (la primera acción); en el mapa
-  (solo modo `menu`), el `dblclick` del canvas va a `Game.doubleClickTile`: manda
-  `StopWalk` si el primer click mandó un `WalkPath` hace menos de `DOUBLE_CLICK_STOP_MS`
-  y hace lo del click derecho clásico. Un toque de dedo reciente lo ignora.
+  (solo modo `menu`), el `dblclick` del canvas va a `Game.doubleClickTile`: termina el
+  camino que empezó el primer click (`Steering.cancel`, sin `StopWalk`: desde A6 los
+  pasos del click son `Walk` que esperan respuesta) y hace lo del click derecho clásico.
+  Un toque de dedo reciente lo ignora.
 - **Ficha** (`state/item-card.ts` `itemCard`, puro, y `ui/ItemCard.tsx`, sin hooks): los
   datos salen de `ItemDef` (`vite/content.ts` `cardFields`: `kind`, `weight`, `weapon`,
   `ammo`, `armor`, `shield`, `consumable`, `rune`, `requires`, `fixed`; opcionales).

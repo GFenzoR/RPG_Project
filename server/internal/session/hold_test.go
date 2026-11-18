@@ -80,7 +80,7 @@ func TestTransferHoldsDropsUntilSaved(t *testing.T) {
 	again := &fakeClient{}
 	c := withPack(b.CharacterID(), pos(0, 1))
 	c.Name = "Bruno"
-	h.sim.Command(h.w.Join(c, again))
+	h.sim.Command(h.joinCmd(c, again))
 	h.sim.Step()
 	if !h.w.InFlightForTest(b.CharacterID()) {
 		t.Fatal("the relogin dropped the hold")

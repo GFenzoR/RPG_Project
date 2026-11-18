@@ -149,7 +149,9 @@ func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player, arena bool) {
 	if !ok {
 		to = temple
 	}
-	w.Teleport(p, to)
+	if w.byClient[p.client] == p { // as Teleport: the ones who saw p see it die there
+		w.relocate(p, to, goneDeath)
+	}
 }
 
 // arenaDefeat is a death in a pvp zone at the hands of a player in it too (T5.2): no

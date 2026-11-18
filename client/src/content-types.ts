@@ -34,6 +34,11 @@ export interface ItemDef {
   /** A map door (a `door` block in data/items: open or shut). Absent on any other item. */
   door?: true;
   /**
+   * docs/17 ART-8: sprite pixels it raises what is stacked on it and the creature standing
+   * there (a table, a crate). Display only. Absent when it raises nothing.
+   */
+  elevation?: number;
+  /**
    * i18n key of its `description` in data/items ("item.iron_sword.desc", or a sign's
    * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.
    */
@@ -58,6 +63,8 @@ export interface ItemDef {
   requires?: { level: number; vocations: string[] };
   /** `pickupable: false`: a map fixture nobody carries (a station, a board). */
   fixed?: true;
+  /** `market_board: true` (T5.3): using it opens the global market. */
+  board?: true;
 }
 
 /** The `weapon` block of an item (data/items). */
@@ -163,12 +170,26 @@ export interface LoopRules {
   underground: string | undefined;
 }
 
+/**
+ * The music's rules on top of the zone's loop: the title screen's, a fight's and a boss's
+ * (audio/cues.ts musicFor). Each one is optional: without it, the zone's loop plays on.
+ */
+export interface MusicRules extends LoopRules {
+  /** Outside the game: the login, sign-up and character screens. */
+  title: string | undefined;
+  /** While the player fights, and combatHoldMs after the last blow or target. */
+  combat: string | undefined;
+  combatHoldMs: number;
+  /** Monster content id → the loop that plays while one is in view, over everything. */
+  bosses: Record<string, string>;
+}
+
 /** assets/sounds.yaml as the client uses it (vite/content.ts). */
 export interface SoundManifest {
   sounds: Record<string, SoundDef>;
   /** Event name → sound ids (one is picked at random). */
   events: Record<string, string[]>;
-  music: LoopRules;
+  music: MusicRules;
   ambient: LoopRules;
 }
 
@@ -281,6 +302,18 @@ export interface Credits {
   derived: DerivedCredit[];
   /** The "Fuentes (OFL 1.1)" table. */
   fonts: FontCredit[];
+  /** Art and music made with the owner's Gemini ("Generado con IA", docs/17 SRC-5). */
+  ai: AiCredit[];
+}
+
+/** One row of "Generado con IA": what it made, when, and the committed prompt. */
+export interface AiCredit {
+  /** Sprite ids or asset paths without assets/ ("creatures/wolf", "sounds/music/puerto"). */
+  works: string[];
+  /** The day it was asked (YYYY-MM-DD). */
+  date: string;
+  /** The prompt file, assets/prompts/... */
+  prompt: string;
 }
 
 export interface PackCredit {

@@ -140,8 +140,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `client/src/audio/` con canales, voces y sonido posicional; eventos → sonidos en
   `assets/sounds.yaml`. Hay 27 efectos y 3 loops de música (Puerto, Bosque y Cueva) más 2
   de ambiente, todos generados por `make sounds` (`tools/soundgen`, CC0), y el panel
-  Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`),
-  música de combate y probar Opus en el WKWebView de macOS.
+  Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`) y
+  probar Opus en el WKWebView de macOS. Desde el 2026-11-18 la música es la que el dueño
+  eligió entre las tomas de Gemini (`make music-gemini`), con música del título y del
+  guardián de la forja; el cliente también sabe tocar música de combate, pero el dueño la
+  apagó (solo jefes o quests importantes). Falta el director de música (docs/14).
 
 ## Hito 4 — Alpha pública
 - [x] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el
@@ -367,9 +370,20 @@ secundaria.
   de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
   tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
   con tope de 50 000 y precio de referencia por mediana.
-- [x] **Movimiento fluido (docs/17 A6, en parte; rama `feat/movement-feel`).** Pasos de
-  teclado predichos hasta `max_queued_steps` (4) y encolados en el servidor detrás de una
-  época de caminata, con su número (`seq`/`walk_seq`, docs/05 "Caminar"); los pasos del
-  servidor sobre su línea de ticks con colchón de jitter; cámara y criaturas a píxel de
-  pantalla; diagonal con dos flechas; correcciones que se deslizan. Falta (docs/17 §4,
-  "Hecho: A6 (parcial)"): MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia simulada.
+- [x] **Movimiento fluido (docs/17 A6; ramas `feat/movement-feel` y
+  `feat/movement-more`).** Pasos de teclado predichos hasta `max_queued_steps` (4) y
+  encolados en el servidor detrás de una época de caminata, con su número
+  (`seq`/`walk_seq`, docs/05 "Caminar"); los pasos del servidor sobre su línea de ticks con
+  colchón de jitter; cámara y criaturas a píxel de pantalla; diagonal con dos flechas;
+  correcciones que se deslizan. Segunda parte (docs/17 §4, "Hecho: A6, segunda parte"):
+  click previsto (el camino lo arma el cliente y lo camina como `Walk`, MOV-4), caminar
+  manteniendo el mouse (MOV-3), anillo en el destino y texto de la acción junto al cursor
+  (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. Falta: polvo y ondas al
+  pisar (con las partículas de ART-7) y el toque corto que solo gira (MOV-2).
+- [x] **Criaturas animadas con Gemini (docs/17 SRC-4 #6 y SRC-5; rama `feat/gemini-creatures`).**
+  Lobo, rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de
+  ciénaga y espinoso con caminar, quieto, atacar y morir (sur, norte y oeste; el este
+  espejado), una hoja de Gemini cada uno cortada con `tools/gemini/import_art.py`
+  (`--cut rows|blobs`); pistas `mirror`, `anchor` y `ms` en spritepack; quieto y atacar solo
+  hacia sus lados (embestida de ANI-5 en los otros); "Hecho con IA" en `/credits`. Lo que
+  falta: docs/14, "Pendientes conocidos" (los demás animales y los ataques que no vinieron).

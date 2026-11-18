@@ -6,6 +6,10 @@ Todo asset de terceros debe tener una entrada aquí antes de usarse en el juego.
 - Arte y sonido: CC0, CC-BY 3.0/4.0 y OGA-BY 3.0. Desde el 2026-11-17, por decisión del
   dueño, también **CC-BY-SA 3.0/4.0** (por ejemplo, Liberated Pixel Cup).
 - Fuentes: **SIL OFL 1.1** (desde el 2026-11-17).
+- Arte y música **generados con la cuenta de Gemini del dueño** (desde el 2026-11-17, por
+  decisión del dueño): van en "Generado con IA", al final, con su herramienta, su fecha y su
+  prompt commiteado. El prompt describe contenido propio y nunca nombra otro juego,
+  artista ni obra.
 
 **No** se aceptan: assets sin licencia clara, GPL como única licencia del archivo, "no
 comercial" (NC), "sin derivados" (ND), "solo uso personal", licencias de tienda que no dejan
@@ -46,7 +50,7 @@ Procedimiento completo: `assets/README.md`.
 
 | Archivos | Autor | Licencia | Fuente reproducible |
 |---|---|---|---|
-| `assets/sounds/**/*.ogg` (efectos, interfaz, música y ambiente) | Neque's Realm (generado proceduralmente) | CC0 1.0 | `tools/soundgen` (`make sounds`). Recetas y melodías propias, sin muestras externas |
+| `assets/sounds/**/*.ogg` (efectos, interfaz, música y ambiente), salvo `assets/sounds/music/gemini/` (música de Gemini, en "Generado con IA") | Neque's Realm (generado proceduralmente) | CC0 1.0 | `tools/soundgen` (`make sounds`). Recetas y melodías propias, sin muestras externas. Los temas de `sounds/music/{puerto,bosque,volcan,cueva}.ogg` siguen en el repo con sus recetas aunque un tema de Gemini los reemplace: son los que vuelven a sonar si el dueño elige `none` (`assets/sounds/music/gemini.yaml`) |
 | `assets/sprites/**/*.png` dibujados por recetas (suelos, muros, decoración, items y criaturas listados en `tools/spritegen/src/recipes/`) | Neque's Realm (pixel art generado por código) | CC0 1.0 | `tools/spritegen` (`make spritegen`). Recetas propias, sin calcar ni copiar sprites de terceros |
 | `assets/sprites/effects/<nombre>/<n>.png` (tiras animadas de efectos de combate y magia: golpe, bloqueo, curación, conjuro, cosecha, refuerzo y los 7 elementos) | Neque's Realm (pixel art generado por código) | CC0 1.0 | `tools/spritegen/src/recipes/effects.ts` (`make spritegen ONLY=effects/`). Partículas, destellos y estallidos propios, sin tomar formas ni tiempos de efectos de otros juegos |
 | `assets/sprites/ui/marks/*.png`: marcas PvP (T5.2) del canvas y de la lista de batalla (espadas cruzadas del agresor, gota del asesino, escudo partido del proscrito) | Neque's Realm (pixel art propio) | CC0 1.0 | `tools/spritegen/src/recipes/ui.ts` (`make spritegen ONLY=ui/`). Diseño propio, sin calcar las marcas de otros juegos. Sin el sprite en el atlas, el cliente dibuja el placeholder de formas de antes (`drawSkull` en `client/src/render/game-canvas.ts`, `.skull` en `client/src/ui/client.css`) |
@@ -94,3 +98,46 @@ licencia. Un personaje nuevo de LPC va en la fila de su licencia.
 |---|---|---|---|
 | Frames `<sprite>/<acción>_<dir>_<n>` del atlas (caminar, quieto y, los que pelean, ataque y caída) de los atuendos `outfits/citizen`, `outfits/sailor`, `outfits/ranger` y `outfits/noble`, los monstruos `creatures/wreck_looter` y `creatures/coffer_smuggler` y los NPCs `npcs/merchant`, `npcs/priest_forest`, `npcs/sandbox_merchant` y `npcs/ferryman_volcanic` | Capas de `assets/vendor/ulpc/spritesheets/` que nombra cada entrada de `animations` de `assets/sprites.yaml` (autores en `assets/vendor/ulpc/CREDITS.csv`); todas listan OGA-BY 3.0 y se usan bajo esa. Recoloreadas con las paletas propias de `palettes` | OGA-BY 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
 | Frames `<sprite>/<acción>_<dir>_<n>` del atlas (los mismos) de los monstruos `creatures/obsidian_delver` y `creatures/drowned_miner` y los NPCs `npcs/sailor_old`, `npcs/armorer`, `npcs/priestess`, `npcs/miner_old`, `npcs/diver_old`, `npcs/druid_elder`, `npcs/tanner`, `npcs/ferryman`, `npcs/sandbox_trainer`, `npcs/sandbox_ferryman`, `npcs/forge_keeper`, `npcs/priest_volcanic` y `npcs/smith_volcanic` | Las mismas capas, más al menos una que solo es CC-BY-SA 3.0 (y GPL): la barba (`beards/beard/basic/`), el pelo largo (`hair/long/adult/`) o el despeinado (`hair/bedhead/adult/`). Recoloreadas con las paletas propias de `palettes` | CC-BY-SA 3.0 | `tools/spritepack` (`make sprites`): compone las capas, recolorea y corta los frames (`src/anims.ts`) |
+
+## Generado con IA
+
+Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitidos desde el
+2026-11-17 por decisión del dueño (`docs/17-direccion-de-arte-y-ui.md`, SRC-5). Reglas:
+- **El prompt describe nuestro contenido** y nunca nombra otro juego, artista, compositor
+  ni obra, ni pide imitarlos. `tools/gemini` se niega a enviar uno que lo haga.
+- **Cada fila lleva su prompt commiteado**: `assets/prompts/<ruta del asset sin "assets/"
+  ni extensión>.txt`, con el prompt exacto y su encabezado (herramienta, modo, fecha y
+  referencias). `python tools/gemini/credit.py <sidecar.json> --asset <ruta>` lo escribe e
+  imprime la fila de abajo.
+- **Las referencias subidas con el pedido** (`--ref`) son solo archivos de `assets/` ya
+  acreditados aquí (u obra propia); la fila las nombra en "Notas" y el archivo de prompt
+  da su sha256.
+- **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no
+  reclama la propiedad de lo generado. Estos archivos no son "Obra propia" (spritegen,
+  soundgen) ni de terceros: la página `/credits` los lista en "Hecho con IA" (cada fila
+  con sus sprites, su fecha y su archivo de prompt; `client/vite/credits.ts`).
+- **Los sprites de criaturas** (2026-11-18): una hoja por criatura, pedida con
+  `tools/gemini/gemini_web.py image` y cortada con `tools/gemini/import_art.py`. El archivo
+  de prompt da también la hoja que volvió (sha256) y el comando exacto que la cortó (frames,
+  espejados, escala), así se puede rehacer. El este de cada acción es el oeste espejado
+  (`mirror: true` en `assets/sprites.yaml`). Reemplazan a los sprites de Dungeon Crawl que
+  esas criaturas usaban (`wolf`, `zombie_rat`, `fire_crab`, `bat`, `jumping_spider`,
+  `giant_frog`, `thorn_hunter`), que siguen en `assets/vendor/dungeon-crawl/`.
+
+| Archivos | Herramienta | Fecha | Prompt | Notas |
+|---|---|---|---|---|
+| `assets/sounds/music/gemini/title_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/title_1.txt` | «Salt on the Ancient Altar» (título de Gemini): toma 1 del tema `title`, para la pantalla de título (login y personajes). Loop de 64 s de los 2:56 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/town_puerto_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/town_puerto_1.txt` | «Salt-Stained Shore» (título de Gemini): toma 1 del tema `town_puerto`, para Puerto (también la isla de inicio y la de pruebas) (una de las 3 tomas elegidas; `music_puerto` es la que suena hoy). Loop de 63 s de los 2:56 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/town_puerto_2.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/town_puerto_2.txt` | Sin título (Gemini no le dio uno): toma 2 del tema `town_puerto`, para Puerto (también la isla de inicio y la de pruebas) (una de las 3 tomas elegidas; `music_puerto` es la que suena hoy). Loop de 70 s de los 3:01 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/town_puerto_3.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/town_puerto_3.txt` | «Beneath the Citadel Wall» (título de Gemini): toma 3 del tema `town_puerto`, para Puerto (también la isla de inicio y la de pruebas) (una de las 3 tomas elegidas; `music_puerto` es la que suena hoy). Loop de 70 s de los 2:56 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/bosque_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/bosque_1.txt` | «Beneath The Blackened Boughs» (título de Gemini): toma 1 del tema `bosque`, para la Isla del Bosque. Loop de 54 s de los 2:59 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/volcan_2.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sounds/music/gemini/volcan_2.txt` | «Beneath the Obsidian Ridge» (título de Gemini): toma 2 del tema `volcan`, para la Isla Volcánica. Loop de 60 s de los 2:59 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/cave_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/cave_1.txt` | «Iron in the Deep» (título de Gemini): toma 1 del tema `cave`, para las minas y cuevas (pisos bajo el mar). Loop de 64 s de los 2:48 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sounds/music/gemini/boss_forge_1.ogg` | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-17 | `assets/prompts/sounds/music/gemini/boss_forge_1.txt` | «Anvil of the Cursed Forge» (título de Gemini): toma 1 del tema `boss_forge`, para el guardián de la forja. Loop de 70 s de los 2:59 del tema, Ogg Opus mono a 20 kbps (`make music-gemini`) |
+| `assets/sprites/creatures/wolf/*.png` (frames de `creatures/wolf`, el lobo) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/wolf.txt` | 64x64; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/bilge_rat/*.png` (frames de `creatures/bilge_rat`, la rata de sentina) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/bilge_rat.txt` | 32x32; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/tide_crab/*.png` (frames de `creatures/tide_crab`, el cangrejo de marea) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/tide_crab.txt` | 32x32; caminar, quieto, pinzar (al norte y a los lados) y morir |
+| `assets/sprites/creatures/gloom_bat/*.png` (frames de `creatures/gloom_bat`, el murciélago lóbrego) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/gloom_bat.txt` | 64x64; volar, quieto, morder (al sur y a los lados) y morir |
+| `assets/sprites/creatures/moss_spider/*.png` (frames de `creatures/moss_spider`, la araña de musgo) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/moss_spider.txt` | 64x64; caminar, quieto, morder y morir |
+| `assets/sprites/creatures/mire_toad/*.png` (frames de `creatures/mire_toad`, el sapo de ciénaga) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/mire_toad.txt` | 64x64; saltar, quieto (al sur y a los lados), atacar a los lados y morir |
+| `assets/sprites/creatures/thornling/*.png` (frames de `creatures/thornling`, el espinoso) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/thornling.txt` | 64x64; caminar, quieto, azotar (al sur y a los lados) y morir |

@@ -201,14 +201,23 @@ El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez q
 
 | Métrica | Presupuesto | Hoy |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~645 KiB (34 archivos) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~1454 KiB (38 archivos; 1293 KiB de música) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~154 KiB / ~29 KiB |
+| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~188 KiB / ~29 KiB |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~27 MB con todo cargado |
+| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~36 MB en el peor caso |
 
-- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en música y 16 en
-  ambiente.
+- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en la música de
+  soundgen, 20 en la de Gemini y 16 en ambiente.
+- **Música de Gemini** (2026-11-18, `make music-gemini`, `assets/README.md` "Sonido"): un
+  tema de ~3 min decodificado ocupa ~33 MB, así que cada toma entra como un loop de 54 a
+  72 s (`music_import.py` `MAX_SECONDS`) a 20 kbps mono: 130–190 KiB por loop. Con las 8
+  tomas de hoy quedan ~80 KiB libres del total: más versiones (las cuevas que pidió el
+  dueño) necesitan subir el tope, bajar los kbps o acortar los loops.
+- **Memoria:** el motor (`client/src/audio/engine.ts`, `KEEP_LOOPS`) deja decodificados
+  solo los dos últimos loops que pidió cada canal (el que suena y el anterior, para ir y
+  volver sin decodificar de nuevo); los demás se olvidan. Peor caso: efectos e interfaz
+  (~3 MB), dos ambientes (~6 MB) y los dos loops de música más largos (~27 MB).
 - El test de `tools/soundgen` (`checkBudget`) falla si algún archivo o el total se pasan.
   También lo comprueba `make sounds`. Los límites están en `BUDGET`
   (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
@@ -349,6 +358,13 @@ y 2048x896), 1,83 MB + 884 KB de PNG y 358 KB + 289 KB de JSON, más 176 KB de
 sprites nuevos del mapa: 16 piezas de 32x64 por muro (5 materiales), looks de suelo, frames de
 agua, lava, espuma, copas y fuego, y sombras.
 
+**Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
+(`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
+hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
+chunk, `MapView.forEachEmitter`). Se apagan con movimiento reducido. Las cajas de las
+criaturas (click en la cabeza, siluetas) reusan sus objetos frame a frame; las siluetas
+salen de un pool que solo crece hasta las que se vieron juntas.
+
 ### Vista ancha (31x21, 2026-11)
 La ventana de cada jugador pasó de 15x11 + 1 (17x13 = 221 casillas) a 31x21 + 1 (33x23 =
 759): 3,4 veces más área, así que cada paso y cada golpe en una zona llena llega a más
@@ -426,6 +442,37 @@ tiempos de `go test -bench` (mediana de 3):
   midieron FPS ni draw calls (no hay instrumentación y piden un navegador real con GPU,
   como en "Cliente" arriba): anotar FPS y draw calls a 1x y a la escala por defecto en
   1920x1080, en el pueblo con bots, contra el presupuesto (60 fps, < 50 draw calls).
+
+### Eventos de ataque (A9, 2026-11-18)
+`CreatureAttack` por cada ataque que ocurre (a quien conoce al atacante) y el motivo de
+cada `CreatureDisappear` (docs/05, "Quién ataca y por qué sale una criatura"). Medido como
+la vista ancha: `TestCrowdBandwidth` y `go test -bench` en proceso (sin Docker en esa
+tarea), mismo notebook, Windows nativo, antes y después en la misma sesión (mediana de 3;
+otra tarea del lote corría en paralelo, así que los µs tienen ruido; los bytes y las
+asignaciones no):
+
+| Métrica | Antes | Con A9 | Presupuesto |
+|---|---|---|---|
+| Salida por jugador, base 100 (B/s) | 490 | 532 (+8,6 %) | < 4096 |
+| Salida por jugador, stress 300 (B/s) | 1676 | 1684 (+0,5 %) | < 4096 |
+| Tick medio en `TestCrowdBandwidth`, base / stress (µs) | 105 / 954 | 108 / 970 | p99 < 10 ms |
+| `BenchmarkCrowdTick` base (µs / asignaciones) | 98,6 / 308 | 96,7 / 310 | |
+| `BenchmarkCrowdTick` stress (µs / asignaciones) | 1036 / 1005 | 1033 / 1005 | |
+| `BenchmarkTickMonsters` 100 + 256 (µs / asignaciones) | 278 / 486 | 234 / 489 | |
+| `BenchmarkTickMonsters` 100 + 1024 (µs / asignaciones) | 613 / 563 | 505 / 576 | |
+| `BenchmarkTickPlayersWalking` 300 (µs / asignaciones) | 180 / 1152 | 160 / 1151 | |
+
+- **Bytes:** un `CreatureAttack` pesa unos 23 B (con el campo del `oneof`) por cliente
+  que lo recibe; el motivo de un `CreatureDisappear`, 2 B. Base sube más que stress porque
+  ahí los bots pelean con monstruos y cada ronda (de ellos y de los monstruos) es un
+  ataque más para todos los que miran; en el pueblo de stress casi no hay monstruos. Queda
+  muy lejos de los 4 KB/s.
+- **Tick:** el ataque se arma una vez y se comparte entre todos los que lo ven (como
+  `hitEvents`); solo un cliente que ve al atacante pero no al objetivo recibe uno propio
+  (el borde de su ventana). Las asignaciones suben de 2 a 13 por tick en los benchmarks con
+  monstruos peleando; los tiempos quedan dentro del ruido.
+- **Pendiente:** `make bots` contra un servidor real con A9 (base y stress), para
+  confirmar los números de arriba como en "`make bots` contra un servidor real".
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

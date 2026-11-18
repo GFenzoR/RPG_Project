@@ -6,10 +6,11 @@ moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MO
 del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
 que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; A4 y
 A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
-gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
-"Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
-2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama `feat/world-art`, el
-2026-11-18).
+gremio; "Hecho: A4, A5 y los botones del gremio"; A6: movimiento fluido, click previsto y
+caminar manteniendo el mouse, "Hecho: A6" en §4; y A8 con la parte de criaturas de A10 y
+A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
+`feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
+`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -29,6 +30,8 @@ Decisiones del dueño del mismo día (ya están en `00-vision.md`, `CLAUDE.md` y
 - Los assets de terceros pueden ser también **CC-BY-SA** (por ejemplo, Liberated Pixel
   Cup), y las fuentes, **OFL**.
 - La vista llega **hasta 31x21 casillas**.
+- Se puede usar arte y música **generados con su cuenta de Gemini**, registrados en
+  `assets/CREDITS.md` con su prompt y sin nombrar otros juegos, artistas ni obras (SRC-5).
 - **La regla legal no cambia.** De Tibia copiamos mecánicas, y de Tibia y Diablo
   aprendemos estilo. Nunca copiamos sus sprites, nombres, mapas, textos ni fuentes. Nada de
   este doc se dibujó mirando un sprite concreto de esos juegos, y ninguna tarea que salga
@@ -156,7 +159,8 @@ parte de arriba transparente.
   muebles sigue abajo a la derecha.
 - **Click sobre sprites altos:** un click en la cabeza de un humanoide (que cae en la
   casilla de arriba) tiene que elegir a la criatura. Primero se prueban las cajas de las
-  criaturas dibujadas (de la última a la primera) y después la casilla (pendiente, A10).
+  criaturas dibujadas (de la última a la primera) y después la casilla (hecho, 2026-11-18:
+  ver "Hecho: el resto de A1, A10, A11 y A13").
 - **Nombres y barras** van sobre la cabeza real (la parte opaca más alta del frame), no
   sobre la casilla (hecho: suben `lift` px, `client/CLAUDE.md`).
 
@@ -217,8 +221,11 @@ parte de arriba transparente.
   dibuja encima del mapa una copia de su frame, aclarada y al 45 %
   (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
   tapados.
-- **Pendiente:** muros altos de 32x96, ventanas y el marco decorativo de las puertas de
-  casa (`houses.yaml` `doors` siguen siendo un hueco en el muro: ponerlo cambia mapas).
+- **Muros altos, ventanas y marcos (hecho, 2026-11-18):** la muralla `rampart_wall` (16
+  piezas de 32x96, cara de 64 px), los muros con ventana `stone_wall_window` y
+  `wooden_wall_window` (sus 16 piezas con la textura del muro liso; la ventana solo en las
+  piezas con cara de lado a lado) y el marco de las puertas de casa, que no cambia mapas:
+  ver "Hecho: el resto de A1, A10, A11 y A13".
 
 ### ART-4 Suelos: variantes, textura y transiciones
 - **Al menos 4 variantes por suelo** (la principal en ~70 % de las casillas), elegidas en
@@ -342,21 +349,32 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
   cada item con `light` en `tiles` (radio en casillas: fragua y brasero 3,5, fogón y
   antorcha 3). Los brillos salen de un pool: un frame no asigna. En la superficie no dibuja
   nada.
-- **Pendiente:** partículas de ambiente, polvo y ondas al pisar, pasto que se agita, vetas
-  con destello (`sync: random` ya existe, falta el arte) y poner los props nuevos en los
-  pueblos.
+- **Partículas de ambiente (hecho, 2026-11-18):** brasas, polen, rocío y polvo de cueva
+  ("Hecho: el resto de A1, A10, A11 y A13").
+- **Pendiente:** polvo y ondas al pisar, pasto que se agita, niebla y gaviotas sobre el
+  mar, vetas con destello (`sync: random` ya existe, falta el arte) y poner los props
+  nuevos en los pueblos.
 
 ### ART-8 Elevación
 Una propiedad `elevation: <px>` en `data/items` (mesas, cajones, barriles: 8 px) sube lo
 que se apila encima, hasta 24 px. Es solo de dibujo. La criatura que pisa la casilla
 también sube.
 
+**Hecho (2026-11-18)** tal cual: `MapView` sube cada item por la suma de lo que tiene
+debajo (`stackElevation`, tope `MAX_ELEVATION` = 24; las sombras proyectadas no suben) y
+`elevationAt` dice cuánto sube la criatura de esa casilla; el cliente la sube también a
+mitad de paso, entre la altura de las dos casillas. El editor y `mapcli render` leen el
+mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
+`data/items` todavía.
+
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones
 4 (N, E, S, O), como hoy (`render/outfit.ts` lleva las diagonales a la horizontal). No hace
 falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
-un escudo en un brazo, no.
+un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
+spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
+animados"); lo usan las criaturas de Gemini.
 
 ### ANI-2 Acciones, frames y tiempos
 
@@ -364,11 +382,11 @@ un escudo en un brazo, no.
 |---|---|---|---|---|
 | Quieto | 2–4 | 400–600 ms por frame (ciclo de 1,6–2,4 s) | 150 ms sin paso | sí, con fase por id de criatura |
 | Caminar | 4 (mínimo 2) más la pose quieta | 2 frames por casilla: un ciclo cada 2 pasos | `CreatureMove` | por distancia, no por tiempo |
-| Atacar cuerpo a cuerpo | 3–4 (anticipación, golpe, recuperación) | 300–400 ms | evento de ataque (proto pendiente, ANI-7) | no |
-| Atacar a distancia | 3 | 300 ms | `Projectile` que sale de su casilla | no |
-| Conjurar | 3–4 | 400 ms | efecto de conjuro o de elemento sobre ella | no |
+| Atacar cuerpo a cuerpo | 3–4 (anticipación, golpe, recuperación) | 300–400 ms | `CreatureAttack{MELEE}` (ANI-7) | no |
+| Atacar a distancia | 3 | 300 ms | `CreatureAttack{RANGED}` (ANI-7) | no |
+| Conjurar | 3–4 | 400 ms | `CreatureAttack{SPELL}` (ANI-7); curar y conjurar, el efecto sobre ella | no |
 | Recibir golpe | 1 (o el procedural) | 150 ms | `Effect` 1 o `FloatingText` de daño en su casilla | no |
-| Morir | 4–6 | 500–700 ms, después el cadáver | desaparición por muerte (ANI-7) | no |
+| Morir | 4–6 | 500–700 ms, después el cadáver | `CreatureDisappear{reason: DEATH}` (ANI-7) | no |
 | Aparecer | procedural | 300 ms | `CreatureAppear` que no viene del borde de la vista | no |
 
 - **Equivalencias con LPC** (convención de las hojas LPC clásicas; LPC Revised cambió en
@@ -384,6 +402,10 @@ un escudo en un brazo, no.
   | shoot | 13 | arco | se recorta a 300–400 ms |
   | hurt | 6, solo hacia el sur | morir | |
 
+- **Quieto y atacar, solo hacia sus lados** (2026-11-18): una criatura con frames de
+  `idle` o `attack` en algunas direcciones y no en otras usa, en esas otras, el frame
+  parado de esa dirección y la embestida de ANI-5 (`OWN_FACINGS`), en vez de girar hacia
+  un lado que sí tiene frames. Caminar y morir siguen tomando el sur.
 - **Caminar por distancia** (como hace `outfitFrame` hoy): el frame sale del avance del
   paso, así los pies no patinan si cambia la velocidad. En pasos encadenados no vuelve al
   frame quieto (ANI-3).
@@ -434,6 +456,32 @@ frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`ti
 siguen igual.
 
 ### ANI-7 Lo que falta del servidor
+**Hecho (A9, 2026-11-18;** E2E del lote 7 con las capturas `07b-attack-pose` y
+`11b-death` revisadas). El servidor dice quién ataca a quién y por qué sale
+una criatura (docs/05, "Quién ataca y por qué sale una criatura"; `server/internal/
+session/attack.go`), y el cliente anima con eso (`client/src/render/creature-events.ts` y
+`game-canvas.ts`):
+- **`CreatureAttack{id, kind, target_id, to, radius}`** antes del `Projectile`, el
+  `Effect` y el `FloatingText` del ataque: `MELEE`, `RANGED` o `SPELL`, con el objetivo (si
+  el cliente lo conoce), su casilla (o el borde de la ventana de su lado) o el centro y el
+  radio de un área. El atacante juega su clip `attack` hacia el objetivo (los humanoides
+  LPC, el `slash`; todavía no hay clips propios de disparo ni de conjuro, así que los tres
+  usan ese) y un sprite de un solo frame, la embestida de ANI-5. Un área se juega hacia
+  donde mira. La víctima retrocede alejándose del atacante o del centro del área.
+- **`CreatureDisappear.reason`**: `OUT_OF_VIEW`, `DEATH`, `DESPAWN`, `TELEPORT`,
+  `LOGOUT`. Solo `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la
+  hoja; un solo frame: la caída de ANI-5); el resto lo saca en el momento.
+- **Sin filtrar nada:** el ataque llega solo a quien conoce al atacante (el de un
+  invisible lo hace visible antes), nunca habla de un objetivo invisible y de uno fuera de
+  la ventana da solo el lado. Volverse invisible sale como `TELEPORT`.
+- **Servidor viejo:** `Welcome.attack_events` en `false` y el cliente sigue deduciéndolo
+  como antes (abajo).
+- **Pendiente:** clips propios de disparo (`shoot`) y de conjuro (`spellcast`) para LPC;
+  un jugador que muere a la vista y reaparece en un templo también a la vista no deja
+  su cuerpo cayendo (el mismo id vuelve en el mismo batch); un efecto de desvanecerse para
+  `TELEPORT` y `LOGOUT`.
+
+Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
   hace falta `attacker_id` (y la víctima) en un mensaje nuevo o en `Effect`. Es protocolo:
   docs/05 y revisión con `code-reviewer`. Mientras tanto el cliente lo deduce
@@ -447,7 +495,7 @@ siguen igual.
 
 ## 4. Sensación de movimiento (MOV)
 
-### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+### Hecho: A6, primera parte (2026-11-18, rama `feat/movement-feel`)
 Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico está en
 `client/CLAUDE.md` ("Movimiento fluido"), `server/CLAUDE.md` ("Caminar") y docs/05
 ("Caminar"). **Donde el plan y esto no coinciden, vale esto.**
@@ -491,17 +539,84 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
   - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
     paso de su cola vuelve a fijar la dirección;
   - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
-- **Pendiente:**
-  - MOV-3 (caminar manteniendo el mouse);
-  - MOV-4 (click previsto). Hoy el click espera a que no queden pasos sin confirmar, manda
-    `WalkPath` y sus pasos se dibujan con MOV-5, sin predicción;
-  - MOV-7 (respuesta visual);
-  - el E2E de MOV-9 con 150 ms de latencia simulada en el WebSocket. Hoy lo cubre la
-    simulación de `client/src/state/walking.test.ts` (RTT de 2 a 300 ms con jitter);
-    `e2e/movement.spec.ts` corre sin latencia;
-  - lo que quedó anotado en docs/14 ("Movimiento fluido"), por ejemplo que una flecha
-    apretada durante un camino por click casi nunca entra.
+- **Quedaba** (hecho en la segunda parte, abajo): MOV-3, MOV-4, MOV-7, el E2E de MOV-9 con
+  latencia y una flecha durante un camino por click, que casi nunca entraba.
 - MOV-8 es una decisión del dueño: no se tocó.
+
+### Hecho: A6, segunda parte (2026-11-18, rama `feat/movement-more`)
+Solo cliente: el servidor y el protocolo no cambian. El detalle técnico está en
+`client/CLAUDE.md` ("Movimiento fluido"). **Donde el plan de abajo y esto no coinciden,
+vale esto.**
+- **MOV-4, cambio: el click ya no manda `WalkPath`.** El cliente arma el camino con A*
+  (`state/steering.ts`, `Steering.walkTo`) desde donde lo tiene: después de los pasos que
+  ya mandó, que se siguen dando. Lo camina como una tecla mantenida: cada paso se predice
+  y sale como `Walk` (época y `seq`) 50 ms antes de que termine el dibujado, por la misma
+  cola. El servidor valida cada paso y marca el ritmo (`readyAt`, `max_queued_steps`),
+  igual que con el teclado. El primer paso sale en el acto: al apretar el botón sobre
+  una casilla sin un item para arrastrar, o al soltarlo si lo hay.
+  - **Por qué `Walk` y no predecir los pasos de un `WalkPath`:** un `WalkPath` reemplaza
+    la cola del servidor (vacía en silencio los `Walk` sin confirmar) y sus pasos vuelven
+    sin `walk_seq`. Con `Walk`, cada respuesta se empareja con su predicción y el click no
+    espera a que no queden pasos sin confirmar.
+  - **El rodeo lo hace el cliente.** El servidor no recalcula un `Walk` bloqueado por una
+    criatura: lo rechaza. El cliente vuelve deslizándose, anota esa casilla y arma el
+    camino de nuevo sin ella. Un segundo rechazo lo termina (`ROUTE_REFUSALS`): la puerta
+    de una casa o una zona de protección con el bloqueo de PvP mandan un aviso por
+    rechazo, y el camino no lo repite casilla por casilla. También lo rearma si una
+    criatura que ve se mete en el próximo paso, o si el servidor le dio otro paso
+    (persecución); como mucho `ROUTE_REPLANS` (10) veces por click. Sin camino, se
+    detiene.
+  - Una flecha durante un camino por click entra en el próximo borde de casilla y termina
+    el camino (antes casi nunca entraba: el frame solo leía las teclas sin camino).
+  - El doble click en el mapa (controles de menú) ya no manda `StopWalk`: termina el
+    camino que empezó su primer click y los pasos ya mandados (normalmente uno) se dan.
+    Un `StopWalk` dejaría al cliente esperando respuestas de pasos que el servidor borró.
+  - `WalkPath` sigue en el protocolo: lo usan los bots (`tools/bots`).
+- **MOV-3, como el plan, con un rodeo que se mantiene.** El botón izquierdo mantenido sobre
+  el mapa camina hacia el cursor: después de `HOLD_WALK_MS` (200 ms) quieto, o apenas se
+  arrastra si la casilla no tiene un item para arrastrar.
+  - En cada borde de casilla elige la dirección (de 8) por el ángulo del cursor respecto
+    del personaje dibujado: cada dirección toma sus 45°. Con el cursor sobre la casilla
+    propia no camina. Una diagonal bloqueada se desliza por su mitad libre, como la tecla.
+  - Si la dirección está bloqueada, da el primer paso de un A* hacia la casilla bajo el
+    cursor y **sigue ese rodeo mientras el cursor apunte al mismo lado**. Con solo el
+    primer paso, en una U de muros el personaje salía y volvía a entrar. Sin camino, gira.
+  - No pisa en línea recta una escalera, un agujero o un teletransporte salvo que sea la
+    casilla bajo el cursor, igual que el camino del click: arrastrar el cursor por encima
+    de un agujero no cambia de piso sin querer (un agujero puede pedir soga para volver).
+  - La cámara sigue al personaje: el cursor quieto en la pantalla sigue apuntando igual y
+    se camina en línea, como en Diablo 2.
+  - El puntero queda capturado (`setPointerCapture`): soltar fuera del canvas también
+    termina. Al soltar se dan los pasos ya mandados, sin `StopWalk`. Un click corto (menos
+    de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
+  - Sobre una casilla con un item para arrastrar, arrastrar antes de los 200 ms sigue
+    moviendo el item: es lo que docs/14 dejaba para decidir.
+  - Con el dedo no hay mantener: el toque largo es el menú (T5.6) y está el pad.
+- **MOV-7, en parte.**
+  - Un anillo de 300 ms en la casilla del click, que se cierra y se desvanece
+    (`render/walk-mark.ts`): dorado si hay camino; rojo si no (y el camino de antes
+    termina).
+  - El texto de la acción por defecto junto al mouse sobre el mapa (UI-5), apenas pasa por
+    la casilla y sin esperar a que se quede quieto: "Atacar
+    a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila" (`client.action.*`). Sale de
+    `defaultAction` (`input/actions.ts`): la primera opción del menú de esa casilla. No
+    aparece sobre el suelo pelado ni sobre un adorno que no hace nada al usarlo (un árbol,
+    un muro); sí sobre una estación, el tablero del mercado o una puerta. Es un `attr()`
+    de CSS: no es texto de la página para los lectores de pantalla ni para los tests. Se
+    oculta mientras hay un menú abierto (lo tapaba).
+  - El primer paso sale en el acto (MOV-4).
+  - **No se hizo: polvo y ondas al pisar.** Son arte (partículas por terreno): quedan con
+    las partículas de ART-7 y A13.
+- **MOV-9, hecho.** E2E en `client/e2e/movement.spec.ts` con ~150 ms de RTT y jitter. Es
+  un proxy en Playwright (`page.routeWebSocket`): 75 ms más 0–40 ms por sentido, en orden.
+  El cliente no tiene un parámetro de latencia.
+  - Una flecha mantenida 10 casillas tarda la suma de sus 10 pasos ± un frame, sin frames
+    quietos.
+  - El mouse mantenido y un click de 5 a 7 casillas caminan sin frames quietos ni hacia
+    atrás, y arrancan menos de 150 ms después del botón. Antes, el click esperaba un RTT y
+    un tick.
+  - `state/walking.test.ts` simula además el mouse mantenido y el click previsto, en
+    enlaces de 2 a 300 ms con jitter.
 
 ### Por qué se sentía "paso, pausa, paso" (antes de A6)
 - **El cliente espera la confirmación.**
@@ -529,7 +644,7 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
 ### Propuestas
 El plan, con lo que A6 hizo marcado. Antes de A6, `Walk` reemplazaba la cola por **un**
 paso y por eso el plan era solo del cliente. Ya no: el servidor encola los pasos de
-teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
+teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
 
 - **MOV-1 Pasos encadenados (✅ A6, distinto del plan original).**
   - El paso N+1 previsto empieza exactamente en `fin(N)`, no en `now`. Si el frame llega
@@ -552,19 +667,20 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
   - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
   - Un toque de otra dirección de menos de 80 ms estando quieto solo gira (o Ctrl+flecha,
     como en Tibia).
-- **MOV-3 Mantener el mouse (Diablo 2).**
+- **MOV-3 Mantener el mouse (Diablo 2) (✅ A6, con un rodeo que se mantiene).**
   - Con el botón izquierdo mantenido sobre el mapa, en cada borde de casilla el cliente
     elige la dirección (de 8) hacia la casilla bajo el cursor. Si está bloqueada, usa el
     primer paso de su A* hacia ella. Lo predice y lo manda como un paso de teclado
     (`chooseStep` y `Walk` con época y `seq`, MOV-1).
   - Al soltar, se dan los pasos ya mandados, como con la tecla: nada de `StopWalk`.
   - Un click corto (menos de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
-- **MOV-4 Click para caminar, previsto.** El camino lo arma el cliente, que manda los
-  pasos. Puede ir prediciendo esos pasos con MOV-1 (como mucho `max_queued_steps`
-  adelante, cada uno como `Walk`) mientras los `CreatureMove` coincidan. Hoy un `WalkPath`
-  reemplaza la cola: el click lo manda solo sin pasos de teclado sin confirmar. Si el servidor rodea a una criatura (recalcula con A*), el
-  cliente acepta sus pasos con la corrección de siempre. Como mínimo, predecir el primer
-  paso para que el click responda en el acto.
+- **MOV-4 Click para caminar, previsto (✅ A6: cada paso es un `Walk` y el rodeo lo hace
+  el cliente).** El camino lo arma el cliente, que manda los pasos. Puede ir prediciendo
+  esos pasos con MOV-1 (como mucho `max_queued_steps` adelante, cada uno como `Walk`)
+  mientras los `CreatureMove` coincidan. Antes, un `WalkPath` reemplazaba la cola: el
+  click lo mandaba solo sin pasos de teclado sin confirmar. Si el servidor rodea a una
+  criatura (recalcula con A*), el cliente acepta sus pasos con la corrección de siempre.
+  Como mínimo, predecir el primer paso para que el click responda en el acto.
 - **MOV-5 Línea de tiempo para los demás (✅ A6, como colchón de jitter: `Playout`).**
   El plan era una función pura `scheduleStep(prev, move, now)`, con tests:
   - un `CreatureMove` empieza en `max(llegada, fin del paso anterior de esa criatura)`;
@@ -579,7 +695,7 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
     igual). Sin "mirar adelante", para que la vista sea igual para todos.
   - Probar a redondear cámara y criaturas a **píxel de pantalla** en vez de píxel de
     sprite, y comparar en 60 y 144 Hz. Si se ve mejor, queda.
-- **MOV-7 Respuesta visual.**
+- **MOV-7 Respuesta visual (✅ A6 en parte: falta polvo y ondas, que van con ART-7).**
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
@@ -591,8 +707,8 @@ teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
   - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
 
   Por eso queda propuesto y no aplicado.
-- **MOV-9 Criterio de aceptación** (falta el E2E con latencia; hoy lo cubre la simulación
-  de `client/src/state/walking.test.ts`):
+- **MOV-9 Criterio de aceptación (✅ A6: E2E con un proxy de latencia en Playwright, no un
+  parámetro de desarrollo del cliente).**
   - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
     flecha 10 casillas tarda 10 × la duración del paso ± 1 frame, y no hay frames con el
     sprite propio quieto.
@@ -942,7 +1058,9 @@ sobre el mapa (no solo los importantes).
 ### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)
 - **Se aceptan:**
   - arte y sonido: CC0, CC-BY 3.0/4.0, OGA-BY 3.0 y **CC-BY-SA 3.0/4.0**;
-  - fuentes: **SIL OFL 1.1**.
+  - fuentes: **SIL OFL 1.1**;
+  - arte y música **generados con la cuenta de Gemini del dueño** (desde el 2026-11-17,
+    por decisión del dueño), con las reglas de SRC-5.
 - **Se rechazan:** solo GPL (o GPL como única licencia del archivo), "no comercial" (NC),
   "sin derivados" (ND), "uso personal", licencias de tienda que no dejan redistribuir (el
   repo es público), lo que no tiene licencia clara y todo lo que sale de otros juegos.
@@ -1015,7 +1133,7 @@ Por impacto en pantalla y por costo:
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini") |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -1032,25 +1150,66 @@ Se quedan:
 - los efectos propios (`effects/*`);
 - las marcas PvP.
 
+### SRC-5 Arte y música generados con IA (desde el 2026-11-17)
+El dueño permite, desde el 2026-11-17, arte y música hechos con **su** cuenta de Gemini (la
+app web; las herramientas, en `tools/gemini`, se manejan como en Ants of Neque, su otro
+juego). Las reglas:
+- **El prompt describe nuestro contenido** (qué es, qué ánimo tiene, qué instrumentos o
+  materiales) y **nunca nombra otro juego, artista, compositor ni obra**, ni pide "al estilo
+  de", "inspirado en" o "que suene como". La regla legal de arriba vale igual: de Tibia y
+  de los demás se aprende el estilo con palabras propias, nunca se pide copiarlos.
+  `tools/gemini/prompt_guard.py` frena los prompts que nombran o piden imitar.
+- **Las referencias también son nuestras:** lo que se sube con el pedido (`--ref`, y con
+  `--edit` se pide algo parecido a eso) es solo un archivo commiteado en `assets/`, ya
+  acreditado. Nunca un sprite, una captura ni un audio de terceros u otro juego, aunque el
+  prompt sea limpio. Los drivers rechazan otra ruta, y el registro nombra cada referencia
+  con su sha256.
+- **Registro:** cada archivo que se usa va en la sección "Generado con IA" de
+  `assets/CREDITS.md` con la herramienta (Gemini, app web, y el modo), la fecha, las
+  referencias y un **archivo de prompt commiteado** (`assets/prompts/<ruta>.txt`, el prompt
+  exacto). Lo arma `tools/gemini/credit.py`. La dirección de la conversación de Gemini no se
+  commitea: es el chat privado del dueño y queda en el sidecar de `build/`.
+- **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no reclama
+  la propiedad de lo generado; su política pide no ocultar el origen.
+- **Pasa por nuestras reglas antes de entrar:** el arte, por `tools/gemini/import_art.py`
+  (fondo fuera, grilla en frames, escala por vecino más cercano a 32 o 64, paleta de
+  spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 donde ART-5 lo
+  pide, es decir no en suelos ni efectos, y alfa 0 o 255); la música, por
+  `tools/gemini/music_convert.py` (sin fades, bucle cerrado con crossfade, -14 LUFS, Ogg
+  Opus). Nada se commitea sin mirarlo o escucharlo.
+- **Un solo volumen para toda la música: -14 LUFS** (integrado, pico real ≤ -1,5 dBTP). Es
+  el nivel de los temas que ya tiene el juego (soundgen: de -11,3 a -15,8, unos -14 en
+  promedio), así un tema de Gemini no suena más bajo que los otros. Un tema nuevo, venga de
+  donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`. Los
+  masters de Gemini traen picos de +1,5 a +5 dBTP, así que el techo de pico los deja entre
+  -16 y -19,5 LUFS (2026-11-18); `make music-gemini` compensa con el volumen de
+  `sounds.yaml`, hasta 1.
+- **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
+  a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
+  (criaturas con anatomía, retratos, música con instrumentos).
+
+Cómo se usa, paso a paso: `assets/README.md`, "Arte y música hechos con Gemini", y
+`tools/CLAUDE.md`, "gemini".
+
 ## 7. Plan de implementación propuesto
 Cada tarea es un PR con sus tests y screenshots (CLAUDE.md, "Definición de terminado").
 Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 
 | Id | Tarea | Toca | Depende de |
 |---|---|---|---|
-| A1 ✅ (mínima) | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1"). Falta: los créditos dentro de la app de escritorio (hoy muestra la dirección) | cliente, sitio | — |
+| A1 ✅ | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1") y los créditos dentro de la app de escritorio ("Hecho: el resto de A1, A10, A11 y A13") | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
-| A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
+| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
-| A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
-| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **casi hecho:** todo salvo `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
-| A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18); faltan muros de 32x96, ventanas y marcos de puerta de casa | renderer, spritegen o LPC, `data/items` | A10 |
+| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas) | servidor, proto, cliente | A8 |
+| A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
+| A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
-| A13 | Luz en cuevas y partículas de ambiente — **parcial:** la luz, hecha; faltan las partículas | cliente | A10 |
+| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; faltan los efectos al pisar y la niebla (ART-7) | cliente | A10 |
 
 ### Hecho: A1, versión mínima (2026-11-18, lote 6)
 La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte
@@ -1077,8 +1236,67 @@ que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuente
 - **Fuentes:** los woff2 servidos conservan el copyright (name id 0) y la descripción y la
   URL de la licencia (13 y 14), como pide la OFL (`KEPT_NAME_IDS` de
   `client/vite/fonts.ts`, con test).
-- **Falta:** mostrar los créditos dentro de la app de escritorio (y de las móviles, docs/15)
-  sin depender del sitio.
+- **Después** (2026-11-18): los créditos dentro de la app de escritorio, ver "Hecho: el
+  resto de A1, A10, A11 y A13". Las apps móviles (docs/15) usan el mismo botón, sin probar.
+
+### Hecho: el resto de A1, A10, A11 y A13 (2026-11-18, rama `feat/world-art-2`)
+- **Click sobre la cabeza (ART-2).** `client/src/render/creature-hits.ts` guarda cada
+  frame la caja de cada criatura dibujada: la columna de su casilla, del borde de abajo
+  hasta lo más alto del dibujo (`lift`), en su posición interpolada y elevada. El click
+  derecho, Mayús+click, el toque y el toque largo prueban primero esas cajas, de la
+  dibujada última a la primera (la de adelante gana), y después la casilla. El propio
+  jugador no entra: un click en la propia cabeza elige lo que está detrás. Caminar sigue
+  yendo a la casilla. Una casilla con algo propio que usar (una puerta, un item, una
+  escalera de mano: `Game.ownUse`) se queda con su click: ninguna cabeza que suba desde
+  la casilla de abajo lo toma, y el click hace lo que dice el texto junto al cursor (antes,
+  con otro jugador parado al sur de una puerta, el click derecho en la puerta lo atacaba).
+- **Criaturas tapadas por otra más alta (`07-combat`).** El jugador de LPC mide ~1,4
+  casillas y tapaba al lobo de la casilla de arriba. El orden de dibujo se queda (el de
+  adelante tapa al de atrás, como pide ART-3); lo que se suma es la silueta: si una
+  criatura dibujada después cubre una cuarta parte o más de la caja de otra
+  (`HIDDEN_SHARE`), la de atrás se dibuja otra vez encima del mapa, aclarada y al 55 %
+  (`HIDDEN_ALPHA`, `HIDDEN_TINT` en `game-canvas.ts`), como el jugador detrás de un muro.
+  Vale para todas las criaturas, también para un NPC tapado por otro en el pueblo. Detrás
+  de un muro, en cambio, los demás siguen ocultos.
+- **Elevación (ART-8):** ver ART-8.
+- **Muralla y ventanas (ART-3).** `tools/spritegen/src/recipes/walls.ts`: `drawPiece` toma
+  la altura de la cara (`TALL_FACE` = 64 para la muralla) y un dibujo extra por pieza (la
+  ventana). La muralla usa la piedra del muro liso y se une con él (todo muro cuenta como
+  vecino). La ventana va solo en las piezas cuya cara cruza la casilla entera (un tramo
+  este-oeste); en un tramo norte-sur no se ve la cara, así que tampoco la ventana.
+  Bloquean el paso y la vista como cualquier muro.
+- **Marco de las puertas de casa (ART-3), sin cambiar mapas.** `houses.yaml` `doors` sigue
+  siendo un hueco en el muro que el servidor conoce por su casilla; poner un item ahí
+  cambiaría qué usa el click derecho en la puerta. En vez de eso, el cliente, el editor y
+  `mapcli render` dibujan el item `house_door_frame` en cada puerta, abajo de la pila
+  (`DecoratedSource` de `packages/renderer/src/decorated.ts`, que envuelve la fuente de
+  casillas de `MapView`). El marco tiene 16 piezas como un muro: los muros de los lados lo
+  cuentan como vecino y corren hasta la puerta; en un muro este-oeste es una viga a la
+  altura de las tapas y dos postes, en uno norte-sur la viga va a lo largo. El estado del
+  juego (clicks, mirar, caminar) nunca lo ve.
+- **Partículas (ART-7, A13).** `client/src/render/particles.ts`: hasta 100 partículas
+  (`MAX_PARTICLES`) en arreglos tipados, dibujadas por un pool fijo de sprites de 1 px en
+  el espacio del mapa (bajo las siluetas, sobre las criaturas). De dónde salen es dato: la
+  clave `particles` de la sección `tiles` de `assets/sprites.yaml` (`embers`, `pollen`,
+  `spray`, `dust`), que spritepack pasa a `atlas.json` y `MapView` junta por chunk
+  (`forEachEmitter`). Hoy: brasas en la lava, la fragua, el fogón y el brasero; polen en
+  roble, olmo, abedul y pino; rocío en el agua de mar donde toca otro suelo (un suelo
+  `spray` solo emite en sus bordes); y en las cuevas (z ≥ 8) polvo en toda la vista.
+  Cada tipo tiene su ritmo, vida, velocidad, vaivén y tres colores por edad (`STYLES`).
+  Solo emiten las casillas en vista; un frame no asigna nada (generador con semilla, el
+  callback se hace una vez, una partícula muerta deja su lugar a la última). Con
+  "Animaciones reducidas" o `prefers-reduced-motion` no hay partículas.
+- **Créditos en la app de escritorio (A1).** En la app (Tauri), Opciones muestra el botón
+  "Créditos del arte y las fuentes", que abre la página de créditos en una ventana sobre
+  el juego (`ui/CreditsLink.tsx`, `CreditsWindow` sin hooks y con test). Los datos vienen
+  de un módulo aparte, `virtual:rpg-credits`, que se importa recién al abrirla; las frases
+  `site.credits.*` viajan en los catálogos del juego. Las direcciones van como texto
+  (`CreditsPage` con `plain`): un enlace abriría el sitio dentro de la app. Abajo sigue la
+  dirección de `/credits` para el navegador. En el navegador no cambia: el enlace a
+  `/credits`.
+- **Opciones del login:** la casilla "Pad direccional en pantalla" quedaba sola en una
+  línea sobre su texto (la regla global de `label` apila en columna); ahora va al lado,
+  como los "Silenciar".
 
 ### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
 Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10
@@ -1120,11 +1338,12 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
 - **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
   varios tamaños sin levantar nada.
 
-### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
-Está en §4, al principio, porque cambia el plan de MOV-1: el servidor encola los pasos de
-teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y soltar la
-tecla no manda `StopWalk`. Quedan MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia
-simulada.
+### Hecho: A6 (2026-11-18, ramas `feat/movement-feel` y `feat/movement-more`)
+Está en §4, al principio, porque cambia el plan de MOV-1 y MOV-4: el servidor encola los
+pasos de teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y
+soltar la tecla no manda `StopWalk`; el click y el mouse mantenido caminan por esa misma
+cola, con el camino armado y rearmado en el cliente (sin `WalkPath`). El E2E de MOV-9 corre
+con ~150 ms de latencia simulada.
 
 
 ### Hecho: A4, A5 y los botones del gremio (2026-11-18, rama `feat/ui-interactions`)
@@ -1139,8 +1358,8 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
     está sobre una escalera de mano, como antes);
   - **doble click** hace la acción por defecto: en el equipo, los contenedores, la tienda
     (compra o vende una unidad) y, en modo `menu`, en el mapa. En el mapa el primer click
-    del doble ya mandó caminar: el doble click manda `StopWalk` si ese camino salió hace
-    menos de 700 ms, y después usa;
+    del doble ya empezó a caminar: el doble click termina ese camino (desde A6, segunda
+    parte, sin `StopWalk`: los pasos ya mandados se dan) y después usa;
   - Mayús+click izquierdo sigue mirando (`LookAt`: el texto del servidor, con datos vivos).
 - **El menú del item** (`ui/ActionMenu.tsx`, el del toque largo de T5.6): título con el
   ícono a 2x, **las acciones arriba** (la primera es la acción por defecto, en negrita y
@@ -1208,6 +1427,30 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
   docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
 
 
+### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
+Siete monstruos que eran un sprite de Dungeon Crawl con la animación de ANI-5 ahora tienen
+frames hechos con el Gemini del dueño (SRC-5): de la Isla del Puerto `wolf`, `bilge_rat`,
+`tide_crab`, `gloom_bat` y `moss_spider` (también en el Bosque), y del Bosque `mire_toad`
+y `thornling`. Una hoja por criatura (diez pedidos en total: tres para probar el formato
+con el lobo), cortada con `tools/gemini/import_art.py` y declarada como datos en
+`assets/sprites.yaml` (`mirror`, `anchor: bc`, `shadow: ellipse`, `ms`). Cómo se pide, se
+corta y se revisa: `assets/README.md`, "Criaturas animadas de una sola hoja".
+- **Direcciones (ANI-1):** sur, norte y oeste dibujados; el este, el oeste espejado.
+  Morir, solo hacia el sur, como LPC.
+- **Lo que no vino:** Gemini casi nunca dibuja un ataque de frente o de espaldas. Con un
+  frame de golpe usable se armó el clip (parado, golpe, parado); si no, esa dirección usa
+  la embestida de ANI-5 con su frame parado (ANI-2, "Quieto y atacar, solo hacia sus
+  lados"): el cangrejo no tiene mordisco al sur; el murciélago, el sapo y el espinoso, al
+  norte (el sapo tampoco al sur ni quieto al norte).
+- **Tamaño (ART-2):** rata y cangrejo en 32x32; lobo, araña, sapo, murciélago y espinoso en
+  64x64 con los pies en la casilla, a la escala de los personajes de LPC (el lobo ~36 px
+  de largo, el espinoso ~40 de alto). La escala mezclada con los monstruos de Dungeon Crawl
+  que quedan sigue (docs/14).
+- **Quedaron fuera:** la gaviota (`thieving_gull`) ya es arte propio de spritegen; su hoja
+  de Gemini salió bien pero cambiarla es decisión del dueño. Los del Volcán y
+  `hollow_crawler`, `ore_beetle` siguen con ANI-5.
+- **/credits** lista lo hecho con Gemini ("Hecho con IA", desde `CREDITS.md`).
+
 ### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
 Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en
 `05-network-protocol.md` (`Welcome.view_width`/`view_height`, áreas de 33x23); el costo en
@@ -1259,7 +1502,9 @@ Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A
     `29-bosque-dock`, `46-guild-panel` y `65-volcan-temple`;
   - más los nuevos de cada tarea: ficha de item, menú del click derecho, HUD, cada
     ventana, la tienda con 24 items y el diálogo con 18 opciones.
-- **Movimiento:** tests con reloj falso (MOV-1, MOV-2, MOV-5) y el criterio de MOV-9.
+- **Movimiento:** tests con reloj falso (MOV-1, MOV-2, MOV-5), la simulación de
+  `client/src/state/walking.test.ts` y el criterio de MOV-9 (`client/e2e/movement.spec.ts`,
+  con ~150 ms de latencia en el WebSocket).
 - **UI:**
   - tests sin DOM de los componentes nuevos, con el mismo estilo de `ui/Guild.test.ts`;
   - los E2E de escritorio a 1280x800 y 1280x720 sin scroll en diálogo y tienda: el alto

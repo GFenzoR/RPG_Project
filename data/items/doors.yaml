@@ -42,3 +42,12 @@
   description: item.pruebas_gate_open.desc
   pickupable: false
   door: { closed: pruebas_gate }
+
+# The timber frame of a house door (docs/17 A11): never in the maps. A house door
+# (houses.yaml doors) is a gap in the wall that the server knows by its tile; the client, the
+# editor and mapcli render draw this frame on it, so the gap reads as a doorway.
+- id: house_door_frame
+  kind: decoration
+  sprite: doors/house_door_frame
+  name: item.house_door_frame.name
+  pickupable: false

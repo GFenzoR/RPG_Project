@@ -1,17 +1,26 @@
 // The /credits page (docs/17 A1): who made the third-party art and fonts the game ships,
-// under which licence and where they come from, as CC-BY, CC-BY-SA, OGA-BY and the OFL ask.
+// under which licence and where they come from, as CC-BY, CC-BY-SA, OGA-BY and the OFL ask;
+// and what was made with the owner's Gemini, which Google's policy asks not to hide.
 // The data is assets/CREDITS.md and the packs' CREDITS.csv (vite/credits.ts); every
-// sentence is i18n. No hooks: the page renders as a plain function of its props.
+// sentence is i18n. No hooks: the page renders as a plain function of its props. The
+// desktop app shows the same page in a window of Options (ui/CreditsLink.tsx) with `plain`:
+// its addresses as text, since a link would open inside the app.
 import type { ComponentChildren, JSX } from "preact";
 import type { Credits } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { licenceUrl, packKeys, safeLink } from "./credits.ts";
 
-const EMPTY: Credits = { packs: [], files: [], derived: [], fonts: [] };
+const EMPTY: Credits = { packs: [], files: [], derived: [], fonts: [], ai: [] };
 
-/** A licence's name, linked to its text when the page knows it. */
-function Licence(props: { name: string }): JSX.Element {
+/** A licence's name, linked to its text when the page knows it (plain: the address). */
+function Licence(props: { name: string; plain?: boolean | undefined }): JSX.Element {
   const url = licenceUrl(props.name);
+  if (url && props.plain)
+    return (
+      <span data-licence={props.name}>
+        {props.name} <code>{url}</code>
+      </span>
+    );
   return url ? (
     <a href={url} rel="noopener license" target="_blank" data-licence={props.name}>
       {props.name}
@@ -21,9 +30,9 @@ function Licence(props: { name: string }): JSX.Element {
   );
 }
 
-/** An external link, or its text when it is not http(s). */
-function Source(props: { url: string }): JSX.Element {
-  const href = safeLink(props.url);
+/** An external link, or its text when it is not http(s) (or the page is plain). */
+function Source(props: { url: string; plain?: boolean | undefined }): JSX.Element {
+  const href = props.plain ? undefined : safeLink(props.url);
   return href ? (
     <a href={href} rel="noopener" target="_blank">
       {props.url}
@@ -42,8 +51,13 @@ function Field(props: { label: string; children: ComponentChildren }): JSX.Eleme
   );
 }
 
-export function CreditsPage(props: { t: Translate; credits: Credits | undefined }): JSX.Element {
-  const { t } = props;
+export function CreditsPage(props: {
+  t: Translate;
+  credits: Credits | undefined;
+  /** No links: every address as text (the desktop app). */
+  plain?: boolean;
+}): JSX.Element {
+  const { t, plain } = props;
   const c = props.credits ?? EMPTY;
   return (
     <section class="card credits" data-testid="credits">
@@ -61,11 +75,11 @@ export function CreditsPage(props: { t: Translate; credits: Credits | undefined 
                 <Field label={t("site.credits.author")}>{t(keys.author)}</Field>
                 <Field label={t("site.credits.licence")}>
                   {p.licences.map((l) => (
-                    <Licence key={l} name={l} />
+                    <Licence key={l} name={l} plain={plain} />
                   ))}
                 </Field>
                 <Field label={t("site.credits.source")}>
-                  <Source url={p.url} />
+                  <Source url={p.url} plain={plain} />
                 </Field>
               </dl>
               {p.perFile && <p class="muted">{t("site.credits.per_file")}</p>}
@@ -89,11 +103,11 @@ export function CreditsPage(props: { t: Translate; credits: Credits | undefined 
                 <dl>
                   <Field label={t("site.credits.authors")}>{f.authors.join(", ")}</Field>
                   <Field label={t("site.credits.licence")}>
-                    <Licence name={f.licence} />
+                    <Licence name={f.licence} plain={plain} />
                   </Field>
                   <Field label={t("site.credits.source")}>
                     {f.urls.map((u) => (
-                      <Source key={u} url={u} />
+                      <Source key={u} url={u} plain={plain} />
                     ))}
                   </Field>
                 </dl>
@@ -112,7 +126,7 @@ export function CreditsPage(props: { t: Translate; credits: Credits | undefined 
               <li key={d.licence}>
                 <dl>
                   <Field label={t("site.credits.licence")}>
-                    <Licence name={d.licence} />
+                    <Licence name={d.licence} plain={plain} />
                   </Field>
                   <Field label={t("site.credits.sprites")}>
                     {d.sprites.map((s) => (
@@ -137,10 +151,35 @@ export function CreditsPage(props: { t: Translate; credits: Credits | undefined 
                 <dl>
                   <Field label={t("site.credits.author")}>{f.copyright}</Field>
                   <Field label={t("site.credits.licence")}>
-                    <Licence name={f.licence} />
+                    <Licence name={f.licence} plain={plain} />
                   </Field>
                   <Field label={t("site.credits.source")}>
-                    <Source url={f.url} />
+                    <Source url={f.url} plain={plain} />
+                  </Field>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {c.ai.length > 0 && (
+        <>
+          <h2>{t("site.credits.ai")}</h2>
+          <p>{t("site.credits.ai_intro")}</p>
+          <ul class="credit-list compact" data-testid="credits-ai">
+            {c.ai.map((a, i) => (
+              <li key={i}>
+                <p class="works">
+                  {a.works.map((w) => (
+                    <code key={w}>{w}</code>
+                  ))}
+                </p>
+                <dl>
+                  <Field label={t("site.credits.tool")}>{t("site.credits.ai_tool")}</Field>
+                  <Field label={t("site.credits.date")}>{a.date}</Field>
+                  <Field label={t("site.credits.prompt")}>
+                    <code>{a.prompt}</code>
                   </Field>
                 </dl>
               </li>

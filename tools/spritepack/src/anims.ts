@@ -46,6 +46,15 @@ export interface AnimEntry {
   facing?: "left" | "right";
   flying?: boolean;
   shadow: Shadow;
+  /**
+   * Frames from files only (no layers): the west frames of an action stand in for its
+   * missing east ones mirrored, and the other way round (docs/17 ANI-1, `mirror: true`).
+   */
+  mirror?: boolean;
+  /** Frames from files only: where the frame sits on its tile (default br). */
+  anchor?: "br" | "bc";
+  /** Frames from files only: ms per frame of idle, attack or death (walk plays by distance). */
+  ms?: Partial<Record<AnimAction, number>>;
 }
 
 /** What atlas.json says about an animated (or hinted) sprite: see AnimMeta in packages/renderer. */
@@ -114,7 +123,20 @@ export const PRESETS: Record<string, Partial<Record<AnimAction, ActionSpec>>> = 
 /** vendor/<pack>/<path with <sheet>>.png, relative to assets/. */
 const LAYER_FILE = /^vendor\/([A-Za-z0-9._-]+)\/(?:[A-Za-z0-9._ <>-]+\/)*[A-Za-z0-9._ <>-]+\.png$/;
 const PALETTE_NAME = /^[a-z0-9_]+$/;
-const ENTRY_KEYS = new Set(["preset", "layers", "actions", "facing", "flying", "shadow", "notes"]);
+const ENTRY_KEYS = new Set([
+  "preset",
+  "layers",
+  "actions",
+  "facing",
+  "flying",
+  "shadow",
+  "mirror",
+  "anchor",
+  "ms",
+  "notes",
+]);
+/** The actions whose frames play by time (walk plays by the distance walked). */
+const TIMED_ACTIONS: readonly AnimAction[] = ["idle", "attack", "death"];
 const SPEC_KEYS = new Set(["sheet", "frame", "rows", "col", "count", "ms", "per_tile"]);
 
 /** Parses the `palettes` section: name -> list of "#rrggbb" (light to dark). */
@@ -185,7 +207,61 @@ export function parseAnimEntry(
     if (shadow === "baked" || shadow === "ellipse" || shadow === "none") entry.shadow = shadow;
     else fail("shadow must be baked, ellipse or none");
   }
+  parseFileHints(raw, entry, fail);
   return entry;
+}
+
+/** `mirror`, `anchor` and `ms`: hints for frames that come from files (no layers). */
+function parseFileHints(
+  raw: Record<string, unknown>,
+  entry: AnimEntry,
+  fail: (message: string) => void,
+): void {
+  const given = ["mirror", "anchor", "ms"].filter((k) => raw[k] !== undefined);
+  if (given.length === 0) return;
+  if (entry.layers.length > 0 || raw["layers"] !== undefined) {
+    fail(`${given.join(", ")}: only for frames from files (an entry without layers)`);
+    return;
+  }
+  const mirror = raw["mirror"];
+  if (mirror !== undefined) {
+    if (typeof mirror === "boolean") entry.mirror = mirror;
+    else fail("mirror must be true or false");
+  }
+  const anchor = raw["anchor"];
+  if (anchor !== undefined) {
+    if (anchor === "br" || anchor === "bc") entry.anchor = anchor;
+    else fail("anchor must be br or bc");
+  }
+  const ms = raw["ms"];
+  if (ms !== undefined) {
+    if (!isRecord(ms)) {
+      fail("ms must map idle, attack or death to ms per frame");
+      return;
+    }
+    const out: Partial<Record<AnimAction, number>> = {};
+    for (const [action, value] of Object.entries(ms)) {
+      if (!(TIMED_ACTIONS as readonly string[]).includes(action))
+        fail(`ms.${action}: only ${TIMED_ACTIONS.join(", ")} play by time`);
+      else if (!Number.isInteger(value) || (value as number) < 1)
+        fail(`ms.${action} must be an integer >= 1`);
+      else out[action as AnimAction] = value as number;
+    }
+    entry.ms = out;
+  }
+}
+
+/** A copy of `src` flipped left to right. */
+export function mirrorImage(src: Image): Image {
+  const out = createImage(src.width, src.height);
+  for (let y = 0; y < src.height; y++) {
+    for (let x = 0; x < src.width; x++) {
+      const s = (y * src.width + x) * 4;
+      const d = (y * src.width + (src.width - 1 - x)) * 4;
+      for (let c = 0; c < 4; c++) out.data[d + c] = src.data[s + c] ?? 0;
+    }
+  }
+  return out;
 }
 
 function parseLayer(

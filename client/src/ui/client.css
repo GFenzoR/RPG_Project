@@ -317,6 +317,7 @@ kbd {
 .presence,
 .load-failed,
 .options-panel,
+.credits-window,
 .hud-menu-body,
 .invitation,
 .death,
@@ -863,6 +864,33 @@ body.dragging-item * {
 /* A tool waiting for its tile (T1.12): the next click on the map uses it there. */
 body.using-item canvas {
   cursor: crosshair !important;
+}
+
+/* docs/17 MOV-7, UI-5: the default action on the tile under the mouse, beside the cursor
+   (render/game-canvas.ts). The text is a CSS attr(), never taking the pointer. */
+.map-hint {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 70;
+  padding: 1px 6px 2px;
+  pointer-events: none;
+  white-space: nowrap;
+  font: 600 0.8rem/1.2 var(--ui-font);
+  color: var(--ui-gold-300);
+  background: rgb(15 13 11 / 0.82);
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  text-shadow: 0 1px 0 var(--ui-void);
+}
+.map-hint::after {
+  content: attr(data-text);
+}
+.map-hint[hidden],
+body.using-item .map-hint,
+body.dragging-item .map-hint,
+body.picking-item .map-hint {
+  display: none;
 }
 
 /* Spell hotkeys F1–F12 (T1.9): a belt along the bottom of the viewport. With the slider
@@ -1672,7 +1700,8 @@ body.using-item canvas {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.options-panel .mute {
+.options-panel .mute,
+.options-panel .check {
   display: flex;
   flex-direction: row;
   white-space: nowrap;
@@ -2838,6 +2867,99 @@ body.using-item canvas {
 p.credits-link {
   margin: 0;
   color: var(--muted);
+}
+button.credits-link {
+  align-self: flex-start;
+}
+/* The credits inside the desktop app (A1): over the whole window, scrolling inside. Fixed to
+   the screen: it takes the safe area's insets itself (T5.6). */
+.credits-overlay {
+  position: fixed;
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(9 8 7 / 0.7);
+}
+.credits-window {
+  width: min(48rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: normal;
+}
+.credits-window > .credits-close {
+  position: sticky;
+  top: 0;
+  float: right;
+}
+.credits-window .credits h1 {
+  margin-top: 0;
+  font-size: 1.3rem;
+}
+
+/* Credits (docs/17 A1): authors, licences and links of the third-party art and fonts. The
+   site's /credits page and, in the desktop app, the credits window of Options. */
+.credits h2 {
+  margin-top: 1.5rem;
+}
+.credits a,
+.credits code,
+.credits dd {
+  overflow-wrap: anywhere;
+}
+.credit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.credit-list > li {
+  border-top: 1px solid #2c323d;
+  padding-top: 0.6rem;
+}
+.credit-list h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+.credit-list dl {
+  margin: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+.credit-field {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.credit-field dt {
+  color: var(--muted);
+}
+.credit-field dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+}
+.credit-list .works {
+  margin: 0 0 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.credit-list.compact {
+  font-size: 0.9rem;
+}
+@media (max-width: 480px) {
+  .credit-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
 }
 
 /* ---- The item card (docs/17 UI-6): menu, tooltip and shop ---------------------------- */

@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadContent } from "@rpg/map-format";
-import { dialogTopics, loadClientContent, loadPortals, loadSiteContent } from "./content.ts";
+import {
+  GAME_SITE_KEYS,
+  dialogTopics,
+  loadClientContent,
+  loadPortals,
+  loadSiteContent,
+} from "./content.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -140,6 +146,23 @@ describe("client content (T0.5)", () => {
     expect(byId.get("backpack")?.door).toBeUndefined();
   });
 
+  it("carries the elevation of the items that raise what is on them (docs/17 ART-8)", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("cargo_crate")?.elevation).toBe(8);
+    expect(byId.get("anvil")?.elevation).toBeUndefined();
+  });
+
+  it("carries the credits' sentences of site.yaml for the desktop app (docs/17 A1)", () => {
+    for (const lang of ["es", "en"]) {
+      const texts = content.i18n[lang] ?? {};
+      expect(texts["site.credits.title"]).toBeTruthy();
+      expect(texts["site.credits.licence"]).toBeTruthy();
+      expect(
+        Object.keys(texts).filter((k) => k.startsWith("site.") && !GAME_SITE_KEYS.test(k)),
+      ).toEqual([]);
+    }
+  });
+
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
     expect(content.outfits).toContainEqual({ id: "citizen", sprite: "outfits/citizen", frames: 3 });
   });
@@ -204,6 +227,9 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
     const fixed = Object.values(content.items).filter((d) => d.fixed);
     expect(fixed.length).toBeGreaterThan(0);
     expect(byId.get("backpack")?.fixed).toBeUndefined();
+    // The market board says so: the cursor offers its use (docs/17 MOV-7).
+    expect(byId.get("market_board")?.board).toBe(true);
+    expect(byId.get("oak_tree")?.board).toBeUndefined();
   });
 
   it("files every dialog option under one topic per NPC, with no conflicts", () => {

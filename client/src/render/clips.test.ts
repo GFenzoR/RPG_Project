@@ -55,6 +55,33 @@ describe("clip sets", () => {
     expect(spriteClips("m/none", undefined, atlasOf([]))).toBeUndefined();
   });
 
+  it("draws idle and attack only facing their own ways, the stance elsewhere", () => {
+    // A Gemini monster: a bite drawn only to the sides, an idle only facing south.
+    const wolf: AnimMeta = {
+      ...HERO,
+      actions: {
+        walk: { frames: 2, ms: 0, perTile: 1, dirs: DIRS },
+        idle: { frames: 2, ms: 500, dirs: ["s"] },
+        attack: { frames: 2, ms: 110, dirs: ["e", "w"] },
+      },
+    };
+    const keys = [
+      ...DIRS.flatMap((d) => [`m/wolf/walk_${d}_0`, `m/wolf/walk_${d}_1`]),
+      "m/wolf/idle_s_0",
+      "m/wolf/idle_s_1",
+      ...["e", "w"].flatMap((d) => [`m/wolf/attack_${d}_0`, `m/wolf/attack_${d}_1`]),
+    ];
+    const c = spriteClips("m/wolf", { "m/wolf": wolf }, atlasOf(keys));
+    if (!c) throw new Error("no clips");
+    expect(Object.keys(c.meta?.actions ?? {})).toEqual(["idle", "walk", "attack"]);
+    expect(c.frames.attack?.[dirIndex("n")]).toEqual([]);
+    expect(clipTexture(c, "attack", dirIndex("e"), 1)).toBe("m/wolf/attack_e_1");
+    expect(clipTexture(c, "attack", dirIndex("n"), 1)).toBe("m/wolf/walk_n_0"); // not a side bite
+    expect(clipTexture(c, "idle", dirIndex("w"), 1)).toBe("m/wolf/walk_w_0"); // not the south idle
+    expect(clipTexture(c, "idle", dirIndex("s"), 1)).toBe("m/wolf/idle_s_1");
+    expect(c.still).toBe("m/wolf/idle_s_0");
+  });
+
   it("keeps the hints of a single-frame sprite", () => {
     const bat: AnimMeta = { ...HERO, anchor: "br", shadow: "baked", flying: true, actions: {} };
     const c = spriteClips("m/bat", { "m/bat": bat }, atlasOf(["m/bat"]));

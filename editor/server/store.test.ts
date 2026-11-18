@@ -632,6 +632,8 @@ describe("bootstrap", () => {
     expect(pick("forge_gate_open")).toEqual({ door: "open", lock: undefined, key: undefined });
     expect(pick("ember_key")).toEqual({ door: undefined, lock: undefined, key: "forge_gate" });
     expect(pick("grass")).toEqual({ door: undefined, lock: undefined, key: undefined });
+    // ART-8: the canvas raises what is stacked on a crate.
+    expect(b.items.find((i) => i.id === "cargo_crate")?.elevation).toBe(8);
     for (const lang of ["es", "en"]) {
       expect(b.i18n[lang]?.["editor.door_locked"]).toContain("{key}");
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();

@@ -1,0 +1,7 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sounds/music/gemini/town_puerto_3.ogg
+# Herramienta: Gemini web app
+# Fecha: 2026-11-17
+# Modo: Hydrogen
+
+Dark medieval fantasy town theme: a slow, melancholic fingerpicked nylon-string acoustic guitar in a minor key over a low cello drone, soft reverb, about 70 bpm. Instrumental only, no vocals, original composition, loopable, about three minutes.

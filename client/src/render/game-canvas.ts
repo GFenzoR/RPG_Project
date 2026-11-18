@@ -4,22 +4,37 @@
 // no smoothing, no fractional scale; by default the largest that shows 15x11). It
 // draws the creatures interleaved with the item stacks (ground → items → creatures, row by
 // row), then effects and floating texts on top, then names and health bars. Input goes
-// back to the caller as tile clicks (left: walk) and creature clicks (right: attack). The
-// player zooms in or out by whole scales (render/zoom.ts: pinch, the +/- buttons,
-// Ctrl+wheel): the canvas stays cut to the map's box and centred on the own creature.
+// back to the caller as tile clicks (left: walk) and creature clicks (right: attack); the
+// left button held walks toward the cursor (docs/17 MOV-3). The player zooms in or out by
+// whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas stays cut
+// to the map's box and centred on the own creature.
+// docs/17: a click on a tall creature's head picks it (ART-2, render/creature-hits.ts); a
+// creature mostly hidden by a taller one in front is drawn again see-through; what stands on
+// a table or a crate is raised (ART-8); ambient particles drift over the map (ART-7, A13,
+// render/particles.ts).
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import type { Direction } from "@rpg/protocol";
 import {
   Atlas,
+  DEATH_FADE_MS,
+  DEATH_MS,
+  DecoratedSource,
+  HOUSE_DOOR_FRAME,
+  LUNGE_BACK_MS,
+  LUNGE_OUT_MS,
   MISSING_TEXTURE,
   MapView,
+  extrasByChunk,
   animate,
+  clipMs,
+  entityZIndex,
   newAnimInput,
   newAnimState,
   newPose,
   screenToTile,
+  screenToWorld,
   startAttack,
   startDeath,
   startHit,
@@ -30,7 +45,18 @@ import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
-import { isBlowEffect, meleeAttacker, pushOf } from "./creature-events.ts";
+import { DrawnBoxes } from "./creature-hits.ts";
+import type { DrawnBox } from "./creature-hits.ts";
+import { ParticleLayer } from "./particles.ts";
+import type { ParticleView } from "./particles.ts";
+import {
+  attackDir,
+  attackerOf,
+  isBlowEffect,
+  leavesDying,
+  meleeAttacker,
+  pushFrom,
+} from "./creature-events.ts";
 import type { Fighter } from "./creature-events.ts";
 import { devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
@@ -48,7 +74,10 @@ import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
-import { mapPress } from "../input/mouse.ts";
+import { LeftPress, mapPress } from "../input/mouse.ts";
+import type { PressAnswer } from "../input/mouse.ts";
+import type { WalkMark } from "../state/steering.ts";
+import { MARK_COLORS, MARK_SQUASH, markRing } from "./walk-mark.ts";
 import type { ControlsMode } from "../state/controls.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -69,7 +98,7 @@ import {
   glowTexture,
   isDark,
 } from "./light-layer.ts";
-import type { CreatureState, WorldState } from "../state/world.ts";
+import type { CreatureState, Walk, WorldState } from "../state/world.ts";
 import type { ViewTiles } from "../state/view.ts";
 
 const COLORS = {
@@ -95,6 +124,9 @@ const BAR_H = 4;
 /** The own player seen through a wall (ART-3): its sprite, light and translucent. */
 const BEHIND_WALL_ALPHA = 0.45;
 const BEHIND_WALL_TINT = 0xd6e2ff;
+/** A creature hidden by a taller one in front of it (07-combat): drawn again like that. */
+const HIDDEN_ALPHA = 0.55;
+const HIDDEN_TINT = 0xffe2c8;
 
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
@@ -104,6 +136,12 @@ export interface GameCanvas {
   tileToClient(x: number, y: number): { x: number; y: number };
   /** The tile of the own floor under page coordinates, or undefined outside the canvas. */
   clientToTile(clientX: number, clientY: number): Pos | undefined;
+  /**
+   * The point of the own floor under page coordinates, in fractional tiles (tile x spans
+   * [x, x + 1)), also outside the canvas (the mouse held on the map, docs/17 MOV-3). The
+   * same object every call (asked every frame of a hold): read it before the next.
+   */
+  worldAt(clientX: number, clientY: number): { x: number; y: number } | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
   /** Where any sprite of the atlas is (an NPC's portrait in its dialog), real art or not. */
@@ -118,9 +156,21 @@ export interface GameCanvas {
   readonly shown: ViewTiles;
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
+  /**
+   * E2E: the creatures in an attack pose now (its clip or lunge) and the ones falling dead
+   * (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its length.
+   */
+  poses(): { attacking: PoseTime[]; dying: PoseTime[] };
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
+}
+
+/** How far into an animation a creature is (GameCanvas.poses, for the E2E). */
+export interface PoseTime {
+  id: number;
+  ms: number;
+  of: number;
 }
 
 export interface GameCanvasOptions {
@@ -151,8 +201,34 @@ export interface GameCanvasOptions {
   controls?(): ControlsMode;
   /** The tile is a door (a map door item or a house door): right-clicked, it is used. */
   doorAt?(x: number, y: number, z: number): boolean;
+  /**
+   * ART-2: the tile has something of its own to use (a door, an item, a ladder): the head
+   * of a tall creature on the tile below, rising into it, does not take its click or tap.
+   */
+  ownUse?(x: number, y: number, z: number): boolean;
   /** The left button was pressed on a tile and dragged (move its top item). */
   dragTile(x: number, y: number, z: number, e: PointerEvent): void;
+  /**
+   * docs/17 MOV-3, MOV-7: the left button went down on a tile (no Shift): whether a drag
+   * moves its item, whether holding it walks toward the cursor, and whether the walk there
+   * already started (then its release is no click). Without it: a click on release, a drag
+   * moves the item, no hold.
+   */
+  pressTile?(x: number, y: number, z: number): PressAnswer;
+  /**
+   * docs/17 MOV-3: the left button is held on the map: walk toward the cursor, at page
+   * coordinates (cx, cy); called again each time it moves.
+   */
+  holdAt?(cx: number, cy: number): void;
+  /** The held left button was let go (or the hold was lost): stop walking toward it. */
+  holdEnd?(): void;
+  /** docs/17 MOV-7: the last click-to-walk's mark (a ring on its tile for MARK_MS). */
+  walkMark?(): WalkMark | undefined;
+  /**
+   * docs/17 MOV-7, UI-5: the default action on a tile, shown beside the mouse over it
+   * ("" = nothing to show).
+   */
+  hoverText?(x: number, y: number, z: number): string;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -172,6 +248,12 @@ const TOUCH_MENU_MS = 1500;
 
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
+
+/** How often the text beside the cursor is asked again while the tile under it stays. */
+const HINT_REFRESH_MS = 250;
+
+/** Where the text beside the cursor goes, from the cursor (CSS px). */
+const HINT_OFFSET = { x: 14, y: 18 } as const;
 
 /** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
 const MARK_HALF = MARK_BOX.w / 2;
@@ -275,10 +357,30 @@ export async function createGameCanvas(
     }
     return a ?? undefined;
   };
+  // docs/17 A11: the timber frame of every house door (a gap in the wall the server knows by
+  // its tile), drawn by the renderer only: the world state never holds it.
+  const frameId = Object.entries(content.items).find(([, d]) => d.id === HOUSE_DOOR_FRAME)?.[0];
+  const frames = extrasByChunk(
+    frameId
+      ? (content.houseDoors ?? []).map((key) => {
+          const [x = -1, y = -1, z = -1] = key.split(",").map(Number);
+          return { x, y, z, id: frameId };
+        })
+      : [],
+  );
+  const doorTiles = new Set(content.houseDoors ?? []);
+  /**
+   * ART-3: the tile right south of the own player holds a wall that hides it. A house door's
+   * frame joins the walls but is open: standing just inside the doorway is not "behind".
+   */
+  const behindWallAt = (x: number, y: number): boolean =>
+    view.wallAt(x, y) && !(doorTiles.size > 0 && doorTiles.has(`${x},${y},${view.floor}`));
   const view = new MapView({
-    source: world,
+    source: new DecoratedSource(world, (z, cx, cy) => frames.get(`${z}/${cx}/${cy}`)),
     texture,
     art,
+    // ART-8: tables and crates raise what is stacked on them (data/items elevation).
+    elevation: (id) => content.items[Number(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
   });
@@ -292,13 +394,54 @@ export async function createGameCanvas(
     visible: false,
     roundPixels: true,
   });
-  view.overlay.addChild(behindWall);
+  // Ambient particles (A13), in world space under the silhouettes.
+  const particles = new ParticleLayer(T);
+  const particleView: ParticleView = { x: 0, y: 0, width: 0, height: 0 };
+  const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
+  const motionQuery =
+    typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
+  /** Reduced motion (Options or the system, state/ui-prefs.ts): no particles. */
+  const reducedMotion = (): boolean =>
+    document.documentElement.dataset["motion"] === "reduced" || (motionQuery?.matches ?? false);
+  // Where each creature was drawn this frame (ART-2): clicks on heads, hidden creatures.
+  const drawnBoxes = new DrawnBoxes();
+  // Creatures mostly hidden by a taller one in front: a see-through copy over the map, from
+  // a pool that only grows.
+  const hiddenLayer = new Container({ label: "hidden creatures" });
+  const hiddenPool: Sprite[] = [];
+  let hiddenShown = 0;
+  const showHidden = (box: DrawnBox): void => {
+    const s = sprites.get(box.id);
+    if (!s?.figure || s.body.alpha < 1) return;
+    let copy = hiddenPool[hiddenShown];
+    if (!copy) {
+      copy = new Sprite({
+        anchor: { x: 0.5, y: 1 },
+        alpha: HIDDEN_ALPHA,
+        tint: HIDDEN_TINT,
+        roundPixels: true,
+      });
+      hiddenPool.push(copy);
+      hiddenLayer.addChild(copy);
+    }
+    hiddenShown++;
+    const fig = s.figure.sprite;
+    copy.texture = fig.texture;
+    copy.position.set(s.body.x + fig.x, s.body.y + fig.y);
+    copy.scale.copyFrom(fig.scale);
+    copy.skew.copyFrom(fig.skew);
+    copy.visible = true;
+  };
+  view.overlay.addChild(particles.view, hiddenLayer, behindWall);
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
   // Caves are dark (ART-7): a light map over the map, under effects and names.
   const lights = new LightLayer(glowTexture());
-  app.stage.addChild(view.root, lights.view, effectLayer, labels, textLayer);
+  // docs/17 MOV-7: the ring of a click-to-walk, over the light (seen in a cave too).
+  const walkMark = new Graphics({ label: "walk mark" });
+  let walkMarkDrawn = false;
+  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, textLayer);
   /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
   let lightTile = 0;
   const addFireLight = (x: number, y: number, radius: number): void =>
@@ -505,13 +648,53 @@ export async function createGameCanvas(
     return pose.done;
   };
 
-  // Who attacks and who gets hit (render/creature-events.ts): the effects, projectiles and
-  // damage numbers that arrived since the last frame start lunges, flashes and pushes.
+  // Who attacks and who gets hit (render/creature-events.ts): what arrived since the last
+  // frame starts attack clips or lunges, flashes and pushes. A server with attack events
+  // (A9) names the attacker and its target; for an older one the client works it out from
+  // the effects, projectiles and damage numbers.
   let seenEvents = Number.NEGATIVE_INFINITY;
   const fighters = (): Iterable<Fighter> => world.creatures.values();
   const react = (now: number): void => {
     let newest = seenEvents;
     const z = world.self?.pos.z;
+    if (world.attackEvents) {
+      for (const a of world.attacks) {
+        if (a.start <= seenEvents) continue;
+        newest = Math.max(newest, a.start);
+        const by = world.creatures.get(a.id);
+        if (!by || by.pos.z !== z) continue;
+        const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
+        const [dx, dy] = attackDir(by, target, a.to);
+        startAttack(stateOf(by.id, now), now, dx, dy);
+      }
+    } else newest = Math.max(newest, inferAttacks(now, z));
+    for (const f of world.floatingTexts) {
+      if (f.start <= seenEvents) continue;
+      newest = Math.max(newest, f.start);
+      if (f.kind !== FloatingTextKind.DAMAGE || f.pos.z !== z) continue;
+      const victim = world.creatureAt(f.pos.x, f.pos.y, f.pos.z);
+      if (!victim) continue;
+      let from: Pos | undefined;
+      if (world.attackEvents) {
+        const a = attackerOf(victim, world.attacks, f.start);
+        from = a && (a.radius > 0 ? a.to : world.creatures.get(a.id)?.pos);
+      } else {
+        const shot = world.projectiles.find((p) => p.start === f.start && samePos(p.to, f.pos));
+        from = shot
+          ? shot.from
+          : meleeAttacker(victim, fighters(), world.selfId, world.target)?.pos;
+      }
+      const [dx, dy] = pushFrom(victim, from);
+      startHit(stateOf(victim.id, now), now, dx, dy);
+    }
+    seenEvents = newest;
+  };
+  /**
+   * An older server's fights: the attackers of its projectiles and blows, guessed. Returns
+   * the newest time it looked at.
+   */
+  const inferAttacks = (now: number, z: number | undefined): number => {
+    let newest = seenEvents;
     for (const p of world.projectiles) {
       if (p.start <= seenEvents) continue;
       newest = Math.max(newest, p.start);
@@ -528,20 +711,7 @@ export async function createGameCanvas(
       if (victim && by)
         startAttack(stateOf(by.id, now), now, victim.pos.x - by.pos.x, victim.pos.y - by.pos.y);
     }
-    for (const f of world.floatingTexts) {
-      if (f.start <= seenEvents) continue;
-      newest = Math.max(newest, f.start);
-      if (f.kind !== FloatingTextKind.DAMAGE || f.pos.z !== z) continue;
-      const victim = world.creatureAt(f.pos.x, f.pos.y, f.pos.z);
-      if (!victim) continue;
-      const shot = world.projectiles.find((p) => p.start === f.start && samePos(p.to, f.pos));
-      const by = shot
-        ? world.creatureAt(shot.from.x, shot.from.y, shot.from.z)
-        : meleeAttacker(victim, fighters(), world.selfId, world.target);
-      const [dx, dy] = pushOf(victim, by);
-      startHit(stateOf(victim.id, now), now, dx, dy);
-    }
-    seenEvents = newest;
+    return newest;
   };
 
   // Fallback body without a sprite: a coloured block with a mark on the side it faces.
@@ -675,10 +845,11 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Deaths (ANI-2, ANI-5): a creature that leaves the view with an empty health bar died
-  // there (the server sends CreatureHealth 0 before CreatureDisappear; ANI-7 would say so
-  // outright). Its body stays where it fell, without name or bar, while its death plays,
-  // over the corpse the server already put on the tile.
+  // Deaths (ANI-2, ANI-5, ANI-7): a creature that leaves the view because it died
+  // (CreatureDisappear.reason DEATH; from an older server, with an empty health bar:
+  // render/creature-events.ts leavesDying) stays where it fell, without name or bar, while
+  // its death plays (an LPC body its clip, a single image the procedural fall), over the
+  // corpse the server already put on the tile. Any other way out of the view drops it.
   interface Ghost {
     body: Container;
     figure: CreatureBody;
@@ -701,7 +872,8 @@ export async function createGameCanvas(
     animStates.delete(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
-    if (!s || !s.figure || !state || s.drawnHealth > 0 || dir === undefined) {
+    const dying = s !== undefined && leavesDying(world.departureOf(id), s.drawnHealth);
+    if (!s || !s.figure || !state || !dying || dir === undefined) {
       dropSprite(id);
       return;
     }
@@ -724,9 +896,43 @@ export async function createGameCanvas(
     }
   };
 
+  /** The ring of the last click-to-walk while it lasts (docs/17 MOV-7). */
+  const drawWalkMark = (now: number, z: number): void => {
+    const mark = opts.walkMark?.();
+    const ring = mark && mark.pos.z === z ? markRing(now - mark.at) : undefined;
+    if (!mark || !ring) {
+      if (walkMarkDrawn) walkMark.clear();
+      walkMarkDrawn = false;
+      return;
+    }
+    const c = tileToScreen(cam, mark.pos.x + 0.5, mark.pos.y + 0.5, T);
+    const r = ring.radius * tilePixels(cam, T);
+    walkMark
+      .clear()
+      .ellipse(Math.round(c.x), Math.round(c.y), r, r * MARK_SQUASH)
+      .stroke({
+        width: Math.max(1, scale),
+        color: mark.reachable ? MARK_COLORS.reachable : MARK_COLORS.blocked,
+        alpha: ring.alpha,
+      });
+    walkMarkDrawn = true;
+  };
+
   // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
   // effects play their atlas frames; drawn while the world state keeps them (it expires them).
   const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer });
+
+  /**
+   * ART-8: how many sprite pixels a creature drawn at `p` is raised: the elevation of its
+   * tile, or between the two tiles of the step it is taking.
+   */
+  const raisedBy = (p: { x: number; y: number }, w: Walk | undefined, now: number): number => {
+    if (!w || now < w.start || now >= w.start + w.duration)
+      return view.elevationAt(Math.round(p.x), Math.round(p.y));
+    const from = view.elevationAt(w.from.x, w.from.y);
+    const to = view.elevationAt(w.to.x, w.to.y);
+    return from === to ? from : Math.round(from + ((to - from) * (now - w.start)) / w.duration);
+  };
 
   const draw = (now: number): void => {
     const self = world.self;
@@ -738,6 +944,13 @@ export async function createGameCanvas(
     follow(now);
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
     behindWall.visible = false;
+    const tilePx = tilePixels(cam, T);
+    particleView.x = cam.x;
+    particleView.y = cam.y;
+    particleView.width = app.screen.width / tilePx;
+    particleView.height = app.screen.height / tilePx;
+    particles.update(now, particleView, emitters, isDark(self.pos.z), reducedMotion());
+    drawnBoxes.reset();
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
@@ -748,8 +961,10 @@ export async function createGameCanvas(
       const s = spriteOf(c, now);
       const p = world.drawPos(c, now);
       const w = world.activeWalk(c, now);
+      // ART-8: on a table or a crate (between two tiles, between their heights), in tiles.
+      const raised = raisedBy(p, w, now) / T;
       // Whole device pixels, like the camera (render/viewport.ts): smooth at any zoom.
-      s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y, T, scale));
+      s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y - raised, T, scale));
       if (s.figure) animateBody(s.figure, stateOf(c.id, now), c, now);
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
       // Only the invisible player itself is sent its creature: see-through (T3.2).
@@ -763,7 +978,9 @@ export async function createGameCanvas(
           ? step.from
           : step.to;
       view.placeEntity(s.body, later.x, later.y);
-      if (c.id === world.selfId && s.figure && view.wallAt(Math.round(p.x), Math.round(p.y) + 1)) {
+      const lift = s.figure?.lift ?? 0;
+      drawnBoxes.add(c.id, p.x, p.y - raised, lift / T, entityZIndex(later.x, later.y));
+      if (c.id === world.selfId && s.figure && behindWallAt(Math.round(p.x), Math.round(p.y) + 1)) {
         const fig = s.figure.sprite;
         behindWall.texture = fig.texture;
         behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
@@ -772,7 +989,7 @@ export async function createGameCanvas(
         behindWall.visible = s.body.alpha === 1;
       }
       // Over the head of a figure taller than its tile (ART-2).
-      const head = tileToScreen(cam, p.x + 0.5, p.y - (s.figure?.lift ?? 0) / T, T);
+      const head = tileToScreen(cam, p.x + 0.5, p.y - raised - lift / T, T);
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
@@ -816,10 +1033,15 @@ export async function createGameCanvas(
         );
       }
     }
+    // A creature mostly hidden by a taller one in front (a wolf right north of a player).
+    hiddenShown = 0;
+    drawnBoxes.forEachHidden(showHidden);
+    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now);
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
     world.expire(now);
+    drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale);
     if (isDark(self.pos.z)) {
       lightTile = tilePixels(cam, T);
@@ -838,10 +1060,16 @@ export async function createGameCanvas(
 
   app.ticker.add(() => {
     const now = performance.now();
+    // A left press held still long enough walks toward the cursor (docs/17 MOV-3), in
+    // time for this frame's step.
+    if (press?.lp.tick(now) === "hold") startHold(press);
     opts.frame(now);
     draw(now);
+    showHint(now);
   });
 
+  /** worldAt's answer, reused. */
+  const heldPoint = { x: 0, y: 0 };
   const toCanvas = (clientX: number, clientY: number): { x: number; y: number } => {
     const r = canvas.getBoundingClientRect();
     return {
@@ -859,6 +1087,8 @@ export async function createGameCanvas(
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   /** The tile under the finger that went down (a drag moves its item). */
   let touchTile: Pos | undefined;
+  /** What that finger aimed at (the tile of a creature when it went down on its head; ART-2). */
+  let touchAim: Pos | undefined;
   /** The last finger press on the canvas: when, and whether it already opened the menu. */
   let touchPress = { at: Number.NEGATIVE_INFINITY, menu: false };
   const tileUnder = (clientX: number, clientY: number): Pos | undefined => {
@@ -867,6 +1097,23 @@ export async function createGameCanvas(
     const p = toCanvas(clientX, clientY);
     const tile = screenToTile(cam, p.x, p.y, T);
     return { x: tile.x, y: tile.y, z: self.pos.z };
+  };
+  /**
+   * ART-2: the creature drawn on top at canvas point p (its head may rise over the tile
+   * above its own, unless that tile has something of its own to use), other than the own
+   * player.
+   */
+  const creatureUnder = (p: { x: number; y: number }): CreatureState | undefined => {
+    const w = screenToWorld(cam, p.x, p.y, T);
+    const own = opts.ownUse;
+    const z = world.self?.pos.z ?? 0;
+    const box = drawnBoxes.pick(w.x, w.y, world.selfId, own && ((x, y) => own(x, y, z)));
+    return box ? world.creatures.get(box.id) : undefined;
+  };
+  /** The tile a finger meant: the tile of the creature under it (its head counts), else its own. */
+  const aimUnder = (clientX: number, clientY: number): Pos | undefined => {
+    const at = tileUnder(clientX, clientY);
+    return (at && creatureUnder(toCanvas(clientX, clientY))?.pos) ?? at;
   };
   /** The scale when the current pinch started (two fingers zoom by whole scales). */
   let pinchFrom: number | undefined;
@@ -879,10 +1126,10 @@ export async function createGameCanvas(
       } else if (g.kind === "pinchEnd") {
         pinchFrom = undefined;
       } else if (g.kind === "tap") {
-        const at = tileUnder(g.x, g.y);
+        const at = aimUnder(g.x, g.y);
         if (at) opts.tapTile(at.x, at.y, at.z);
       } else if (g.kind === "longPress") {
-        const at = touchTile;
+        const at = touchAim;
         touchPress.menu = true;
         if (at) opts.longPressTile(at.x, at.y, at.z, g.x, g.y);
       } else if (g.kind === "dragStart" && e) {
@@ -904,6 +1151,7 @@ export async function createGameCanvas(
     opts.touched();
     if (!gestures.active) {
       touchTile = tileUnder(e.clientX, e.clientY);
+      touchAim = aimUnder(e.clientX, e.clientY);
       touchPress = { at: performance.now(), menu: false };
     }
     // Pointer event times share performance.now()'s clock.
@@ -916,51 +1164,146 @@ export async function createGameCanvas(
   // the pointer for it before our timer fires: take it as the long press of that finger.
   canvas.addEventListener("contextmenu", (e) => {
     const recent = performance.now() - touchPress.at < TOUCH_MENU_MS;
-    if (!recent || touchPress.menu || !touchTile) return;
+    if (!recent || touchPress.menu || !touchAim) return;
     touchPress.menu = true;
     gestures.reset();
     clearTimeout(longPressTimer);
     longPressTimer = undefined;
-    opts.longPressTile(touchTile.x, touchTile.y, touchTile.z, e.clientX, e.clientY);
+    opts.longPressTile(touchAim.x, touchAim.y, touchAim.z, e.clientX, e.clientY);
   });
 
-  // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
-  // creature on the tile, or use the tile (a ladder climbs); Ctrl+right uses its top item
-  // even on a ladder. The rule is input/mouse.ts mapPress.
-  let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
+  // Left: a click walks (on a tile without an item to drag, from the press on), shift+click
+  // looks, a drag moves the top item, a press held walks toward the cursor (docs/17 MOV-3,
+  // input/mouse.ts LeftPress). Right: attack the creature on the tile, or use the tile (a
+  // ladder climbs); Ctrl+right uses its top item even on a ladder. The rule is
+  // input/mouse.ts mapPress.
+  interface Press {
+    x: number;
+    y: number;
+    z: number;
+    lp: LeftPress;
+    /** The walk there started on the press: the release is no click. */
+    walked: boolean;
+    pointerId: number;
+    /** Where the cursor is now (page coordinates). */
+    cx: number;
+    cy: number;
+  }
+  let press: Press | undefined;
+  /** Captures the pointer so the hold goes on outside the canvas, and walks toward it. */
+  const startHold = (p: Press): void => {
+    try {
+      canvas.setPointerCapture(p.pointerId);
+    } catch {
+      // The pointer is gone already (lostpointercapture or the next move ends the hold).
+    }
+    hideHint();
+    opts.holdAt?.(p.cx, p.cy);
+  };
+  const endHold = (): void => {
+    const p = press;
+    press = undefined;
+    if (p?.lp.holding) opts.holdEnd?.();
+  };
+
+  // docs/17 MOV-7, UI-5: the default action on the tile under the mouse, beside it, as soon
+  // as the mouse moves over it (no wait for it to rest).
+  // Its text is a CSS attr(): not text of the page (no locator or screen reader finds it).
+  const hint = document.createElement("div");
+  hint.className = "map-hint";
+  hint.setAttribute("aria-hidden", "true");
+  hint.hidden = true;
+  document.body.appendChild(hint);
+  let hover: { x: number; y: number } | undefined;
+  let hintTile: Pos | undefined;
+  let hintAt = Number.NEGATIVE_INFINITY;
+  const hideHint = (): void => {
+    hintTile = undefined;
+    if (!hint.hidden) hint.hidden = true;
+  };
+  const showHint = (now: number): void => {
+    if (!hover || press || !opts.hoverText) {
+      hideHint();
+      return;
+    }
+    const tile = tileUnder(hover.x, hover.y);
+    if (!tile) {
+      hideHint();
+      return;
+    }
+    if (hintTile && samePos(tile, hintTile) && now - hintAt < HINT_REFRESH_MS) return;
+    hintTile = tile;
+    hintAt = now;
+    const text = opts.hoverText(tile.x, tile.y, tile.z);
+    if (hint.dataset["text"] !== text) hint.dataset["text"] = text;
+    const hidden = text === "";
+    if (hint.hidden !== hidden) hint.hidden = hidden;
+  };
+
   canvas.addEventListener("pointerdown", (e) => {
     if (isTouchPointer(e.pointerType)) {
       touchDown(e);
       return;
     }
+    hideHint();
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
     const p = toCanvas(e.clientX, e.clientY);
     const tile = screenToTile(cam, p.x, p.y, T);
     const z = self.pos.z;
-    const c = e.button === 2 ? world.creatureAt(tile.x, tile.y, z) : undefined;
+    // ART-2: the drawn creatures first (a click on the head of a tall one), then the tile.
+    const hit = e.button === 2 || e.shiftKey ? creatureUnder(p) : undefined;
+    const at = hit?.pos ?? tile;
+    const c = e.button === 2 ? (hit ?? world.creatureAt(tile.x, tile.y, z)) : undefined;
     const other = c && c.id !== world.selfId ? c : undefined;
-    const inDoor =
-      other?.kind === CreatureKind.PLAYER && (opts.doorAt?.(tile.x, tile.y, z) ?? false);
+    const inDoor = other?.kind === CreatureKind.PLAYER && (opts.doorAt?.(at.x, at.y, z) ?? false);
     const act = mapPress(e.button, e, other?.id, inDoor, opts.controls?.() ?? "classic");
     if (act.kind === "attack") opts.clickCreature(act.creature);
-    else if (act.kind === "use") opts.useTile(tile.x, tile.y, z, act.top);
-    else if (act.kind === "menu") opts.menuTile?.(tile.x, tile.y, z, e.clientX, e.clientY);
-    else if (act.kind === "look") opts.lookTile(tile.x, tile.y, z);
-    else if (act.kind === "press") press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
+    else if (act.kind === "use")
+      opts.useTile(inDoor ? at.x : tile.x, inDoor ? at.y : tile.y, z, act.top);
+    else if (act.kind === "menu") opts.menuTile?.(at.x, at.y, z, e.clientX, e.clientY);
+    else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
+    else if (act.kind === "press") {
+      endHold(); // a press left over (its release went elsewhere)
+      const can = opts.pressTile?.(tile.x, tile.y, z) ?? { walked: false, drag: true, hold: false };
+      press = {
+        x: tile.x,
+        y: tile.y,
+        z,
+        lp: new LeftPress(performance.now(), p.x, p.y, can, DRAG_START_PX),
+        walked: can.walked,
+        pointerId: e.pointerId,
+        cx: e.clientX,
+        cy: e.clientY,
+      };
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
     if (isTouchPointer(e.pointerType)) {
       onGestures(gestures.move(e.pointerId, e.clientX, e.clientY, e.timeStamp), e);
       return;
     }
+    hover = { x: e.clientX, y: e.clientY };
+    hint.style.transform = `translate(${e.clientX + HINT_OFFSET.x}px, ${e.clientY + HINT_OFFSET.y}px)`;
     if (!press) return;
+    if ((e.buttons & 1) === 0) {
+      endHold(); // the button went up where no pointerup reached the canvas
+      return;
+    }
+    press.cx = e.clientX;
+    press.cy = e.clientY;
+    if (press.lp.holding) {
+      opts.holdAt?.(e.clientX, e.clientY);
+      return;
+    }
     const p = toCanvas(e.clientX, e.clientY);
-    if (Math.hypot(p.x - press.px, p.y - press.py) < DRAG_START_PX) return;
-    const from = press;
-    press = undefined;
-    opts.dragTile(from.x, from.y, from.z, e);
+    const change = press.lp.move(p.x, p.y);
+    if (change === "drag") {
+      const from = press;
+      press = undefined;
+      opts.dragTile(from.x, from.y, from.z, e);
+    } else if (change === "hold") startHold(press);
   });
   canvas.addEventListener("pointerup", (e) => {
     if (isTouchPointer(e.pointerType)) {
@@ -969,11 +1312,21 @@ export async function createGameCanvas(
     }
     if (!press || e.button !== 0) return;
     const from = press;
+    const end = from.lp.up();
     press = undefined;
-    opts.clickTile(from.x, from.y, from.z);
+    if (end === "hold") opts.holdEnd?.();
+    else if (end === "click" && !from.walked) opts.clickTile(from.x, from.y, from.z);
+  });
+  // A hold captures the pointer: it ends with its pointerup, or here if the capture is lost
+  // (the window lost the focus, the canvas went away).
+  canvas.addEventListener("lostpointercapture", () => {
+    if (press?.lp.holding) endHold();
   });
   canvas.addEventListener("pointerleave", () => {
-    press = undefined;
+    hover = undefined;
+    hideHint();
+    // A hold has the pointer captured: it goes on outside the canvas.
+    if (press && !press.lp.holding) press = undefined;
   });
   // docs/17 UI-6: a double click does the tile's default action (the Game decides whether
   // it counts: only in the menu controls, and never right after a finger).
@@ -1009,6 +1362,22 @@ export async function createGameCanvas(
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));
     },
+    poses() {
+      const now = performance.now();
+      const attacking: PoseTime[] = [];
+      for (const [id, st] of animStates) {
+        const of =
+          clipMs(sprites.get(id)?.figure?.clips.meta, "attack") || LUNGE_OUT_MS + LUNGE_BACK_MS;
+        const ms = now - st.attackAt;
+        if (ms >= 0 && ms < of) attacking.push({ id, ms, of });
+      }
+      const dying: PoseTime[] = [];
+      for (const [id, g] of ghosts) {
+        const clip = clipMs(g.figure.clips.meta, "death");
+        dying.push({ id, ms: now - g.state.diedAt, of: clip ? clip + DEATH_FADE_MS : DEATH_MS });
+      }
+      return { attacking, dying };
+    },
     element: canvas,
     clientToTile(clientX, clientY) {
       const self = world.self;
@@ -1018,6 +1387,14 @@ export async function createGameCanvas(
       const p = toCanvas(clientX, clientY);
       const tile = screenToTile(cam, p.x, p.y, T);
       return { x: tile.x, y: tile.y, z: self.pos.z };
+    },
+    worldAt(clientX, clientY) {
+      if (!world.self) return undefined;
+      // No object of its own (toCanvas makes one): a hold asks every frame (docs/07).
+      const r = canvas.getBoundingClientRect();
+      const sx = ((clientX - r.left) * canvas.width) / r.width;
+      const sy = ((clientY - r.top) * canvas.height) / r.height;
+      return screenToWorld(cam, sx, sy, T, heldPoint);
     },
     markIcon(mark) {
       const path = markPath(mark);
@@ -1040,6 +1417,7 @@ export async function createGameCanvas(
     },
     destroy() {
       clearTimeout(longPressTimer);
+      hint.remove();
       gestures.reset();
       observer.disconnect();
       window.removeEventListener("resize", resize);

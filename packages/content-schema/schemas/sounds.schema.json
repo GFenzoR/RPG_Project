@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/sounds.schema.json",
   "title": "Sound manifest (assets/sounds.yaml)",
-  "description": "T3.7: sound files and their channel, the game events that play them and the music and ambient loop of each island. make validate also checks that files exist, that a vendor/ file has its CREDITS.md row, that every reference is a declared sound of the right channel and that islands exist in world/world.yaml.",
+  "description": "T3.7: sound files and their channel, the game events that play them and the music and ambient loop of each island, plus the music of the title screen, of a fight and of each boss. make validate also checks that files exist, that a vendor/ file has its CREDITS.md row, that every reference is a declared sound of the right channel, that islands exist in world/world.yaml and that bosses are monsters of data/monsters.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "sounds"],
@@ -38,20 +38,46 @@
         ]
       }
     },
-    "music": { "$ref": "#/$defs/loops" },
+    "music": { "$ref": "#/$defs/music" },
     "ambient": { "$ref": "#/$defs/loops" }
   },
   "$defs": {
+    "music": {
+      "description": "The keys of loops, plus what plays over them (client/src/audio/cues.ts musicFor): a boss in view, then a fight, then the zone. title plays outside the game.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fade_ms": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "islands": { "$ref": "#/$defs/islandLoops" },
+        "underground": { "$ref": "common.schema.json#/$defs/id" },
+        "title": {
+          "description": "The login, sign-up and character screens.",
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "combat": {
+          "description": "While the player has a target or took a blow less than combat_hold_ms ago.",
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "combat_hold_ms": { "type": "integer", "minimum": 0, "maximum": 60000 },
+        "bosses": {
+          "description": "Monster id (data/monsters) → the loop that plays while one is in view, over a fight and the zone.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/id" }
+        }
+      }
+    },
+    "islandLoops": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/id" }
+    },
     "loops": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "fade_ms": { "type": "integer", "minimum": 0, "maximum": 10000 },
-        "islands": {
-          "type": "object",
-          "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
-          "additionalProperties": { "$ref": "common.schema.json#/$defs/id" }
-        },
+        "islands": { "$ref": "#/$defs/islandLoops" },
         "underground": { "$ref": "common.schema.json#/$defs/id" }
       }
     }

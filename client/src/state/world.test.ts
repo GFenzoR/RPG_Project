@@ -131,6 +131,7 @@ function entered(): WorldState {
         maxQueuedSteps: 4,
         viewWidth: 31,
         viewHeight: 21,
+        attackEvents: false,
       },
     },
     0,
@@ -287,7 +288,12 @@ describe("WorldState", () => {
     expect(w.canStep(50)).toBe(true);
     // It was drawn a tenth of the way east: it glides back instead of jumping.
     expect(w.drawPos(s, 50).x).toBeCloseTo(100.1);
+    // Into a reused object when given (the mouse held asks every frame, docs/07).
+    const out = { x: 0, y: 0 };
+    expect(w.drawPos(s, 50, out)).toBe(out);
+    expect(out.x).toBeCloseTo(100.1);
     expect(w.drawPos(s, 50 + SLIDE_MS / 2).x).toBeCloseTo(100.025);
+    expect(w.drawPos(s, 50 + SLIDE_MS, out)).toEqual({ x: 100, y: 200 });
     expect(w.drawPos(s, 50 + SLIDE_MS)).toEqual({ x: 100, y: 200 });
   });
 
@@ -322,6 +328,8 @@ describe("WorldState", () => {
     // East onto (101,200), say stairs with no room at their other end (portal.blocked).
     expect(w.predictStep(Direction.EAST, 0)).toBe(1);
     w.apply(rejected(Direction.EAST), 30);
+    // What the click's route and the mouse held plan round (state/steering.ts).
+    expect(w.refusedStep).toEqual({ from: { x: 100, y: 200, z: 7 }, to: { x: 101, y: 200, z: 7 } });
     // A held key asks on every frame: no Walk, and no Turn (it already faces east).
     expect(w.predictStep(Direction.EAST, 40)).toBeUndefined();
     expect(w.chooseStep(Direction.EAST, 40)).toBeUndefined();
@@ -331,6 +339,7 @@ describe("WorldState", () => {
     expect(w.self?.dir).toBe(Direction.EAST);
     // A fresh press (or a release, a new pad direction) tries it once more.
     w.retryWalk();
+    expect(w.refusedStep).toBeUndefined();
     expect(w.predictStep(Direction.EAST, 5000)).toBe(2);
     w.apply(rejected(Direction.EAST), 5030);
     expect(w.predictStep(Direction.EAST, 5040)).toBeUndefined();
@@ -344,7 +353,7 @@ describe("WorldState", () => {
     // A full map view (a teleport) forgets it too.
     w.apply(fullView(), 7300);
     expect(w.predictStep(Direction.EAST, 7300)).toBe(5);
-    // A refusal that is not of the predicted step (a WalkPath's, elsewhere or another
+    // A refusal that is not of the predicted step (of another step, elsewhere or another
     // way) leaves the next step alone.
     w.apply(rejected(Direction.NORTH), 7330);
     expect(w.predictStep(Direction.EAST, 7340)).toBe(6);

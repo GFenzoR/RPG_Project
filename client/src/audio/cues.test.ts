@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cuesOf, effectEvents, islandAt, loopFor } from "./cues.ts";
+import { blowAt, cuesOf, effectEvents, islandAt, loopFor, musicFor } from "./cues.ts";
 import type { CueContext } from "./cues.ts";
 import { loadSounds, repoRoot, soundFiles } from "../../vite/content.ts";
 
@@ -114,6 +114,41 @@ describe("zones", () => {
     expect(loopFor({ x: 210, y: 110, z: 8 }, islands, rules)).toBe("cave");
     expect(loopFor({ x: 0, y: 0, z: 7 }, islands, rules)).toBeUndefined();
   });
+
+  const music = {
+    ...rules,
+    title: "menu",
+    combat: "fight",
+    combatHoldMs: 8000,
+    bosses: { slagbound_warden: "forge" },
+  };
+  const forest = { x: 210, y: 110, z: 7 };
+
+  it("plays a boss's loop while one is in view, over a fight and the zone", () => {
+    expect(musicFor(forest, islands, music, ["wolf", "slagbound_warden"], true)).toBe("forge");
+    expect(musicFor(forest, islands, music, ["slagbound_warden"], false)).toBe("forge");
+    expect(musicFor(forest, islands, music, ["wolf"], true)).toBe("fight");
+    expect(musicFor(forest, islands, music, ["wolf"], false)).toBe("b");
+    expect(musicFor({ ...forest, z: 8 }, islands, music, [], false)).toBe("cave");
+  });
+
+  it("keeps the zone's loop in a fight when there is no fight music", () => {
+    const quiet = { ...music, combat: undefined, bosses: {} };
+    expect(musicFor(forest, islands, quiet, ["slagbound_warden"], true)).toBe("b");
+  });
+
+  it("a blow on the player's own tile is a fight; a heal there or a blow elsewhere is not", () => {
+    const effect = (effectId: number, pos = at): Msg =>
+      msg({ case: "effect", value: { pos, effectId } });
+    expect(blowAt(effect(1), at)).toBe(true); // hit
+    expect(blowAt(effect(2), at)).toBe(true); // block or miss
+    expect(blowAt(effect(11), at)).toBe(true); // fire
+    expect(blowAt(effect(3), at)).toBe(false); // heal
+    expect(blowAt(effect(5), at)).toBe(false); // gather
+    expect(blowAt(effect(1, { ...at, x: at.x + 1 }), at)).toBe(false);
+    expect(blowAt(effect(1, { ...at, z: 8 }), at)).toBe(false);
+    expect(blowAt(system("combat.cannot_attack"), at)).toBe(false);
+  });
 });
 
 describe("assets/sounds.yaml", () => {
@@ -153,6 +188,14 @@ describe("assets/sounds.yaml", () => {
       expect(m.sounds[m.ambient.islands[island] ?? ""]?.channel).toBe("ambient");
     }
     expect(m.music.underground).toBe("music_cueva");
+  });
+
+  it("the title screen's, a fight's and the bosses' music are music loops", () => {
+    // Which of them play is the owner's pick (assets/sounds/music/gemini.yaml); the ones
+    // there must be music, and a boss is a monster's content id.
+    for (const id of [m.music.title, m.music.combat, ...Object.values(m.music.bosses)])
+      if (id !== undefined) expect(m.sounds[id]?.channel, id).toBe("music");
+    expect(m.music.combatHoldMs).toBeGreaterThan(0);
   });
 
   it("serves files under audio/", () => {

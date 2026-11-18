@@ -117,6 +117,7 @@ const MANIFEST: SoundManifest = {
     b: sound("audio/b.ogg", "sfx", 8),
     tune: sound("audio/tune.ogg", "music"),
     other: sound("audio/other.ogg", "music"),
+    third: sound("audio/third.ogg", "music"),
     waves: sound("audio/waves.ogg", "ambient"),
   },
   events: {
@@ -126,7 +127,15 @@ const MANIFEST: SoundManifest = {
     many: ["a", "b"],
     loopy: ["tune"],
   },
-  music: { fadeMs: 2000, islands: {}, underground: undefined },
+  music: {
+    fadeMs: 2000,
+    islands: {},
+    underground: undefined,
+    title: undefined,
+    combat: undefined,
+    combatHoldMs: 8000,
+    bosses: {},
+  },
   ambient: { fadeMs: 1000, islands: {}, underground: undefined },
 };
 
@@ -372,6 +381,41 @@ describe("loops", () => {
     engine.setLoops(undefined, undefined);
     expect(ctx.sources[1]?.stopped).toBe(12);
     expect(engine.playingLoops()).toEqual({ music: undefined, ambient: undefined });
+  });
+
+  it("keeps the last two loops of a slot decoded and forgets older ones", async () => {
+    const { ctx, engine, fetched } = setup();
+    await unlockNow(engine);
+    engine.setLoops("tune", "waves");
+    await flush();
+    engine.setLoops("other", "waves");
+    await flush();
+    // Back and forth (the zone, a fight, the zone): nothing is fetched or decoded again.
+    engine.setLoops("tune", "waves");
+    await flush();
+    expect(fetched.filter((u) => u.includes("tune"))).toHaveLength(1);
+    expect(ctx.decoded).toBe(3);
+    // A third loop pushes out the oldest of the slot; the ambient bed is its own slot.
+    engine.setLoops("third", "waves");
+    await flush();
+    expect(engine.isCached("other")).toBe(false);
+    expect(engine.isCached("tune")).toBe(true);
+    expect(engine.isCached("waves")).toBe(true);
+    engine.setLoops("other", "waves");
+    await flush();
+    expect(fetched.filter((u) => u.includes("other"))).toHaveLength(2);
+    expect(engine.playingLoops().music).toBe("other");
+  });
+
+  it("does not cache again a loop forgotten while it loaded", async () => {
+    const { engine } = setup();
+    await unlockNow(engine);
+    engine.setLoops("tune", undefined);
+    engine.setLoops("other", undefined);
+    engine.setLoops("third", undefined);
+    await flush();
+    expect(engine.isCached("tune")).toBe(false);
+    expect(engine.playingLoops().music).toBe("third");
   });
 
   it("does not start a loop that stopped being wanted while it loaded", async () => {

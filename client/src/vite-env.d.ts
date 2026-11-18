@@ -11,3 +11,9 @@ declare module "virtual:rpg-site" {
   const site: SiteContent;
   export default site;
 }
+
+declare module "virtual:rpg-credits" {
+  import type { Credits } from "./content-types.ts";
+  const credits: Credits;
+  export default credits;
+}

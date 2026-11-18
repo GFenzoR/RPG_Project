@@ -323,6 +323,7 @@ func (w *World) boltSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_SPELL, f)
 	w.projectile(p.pos, m.pos, d.Element)
 	dmg := combat.Resist(w.scaled(ctx, d.Scaling, p), m.kind.def.Resistances[d.Element])
 	w.damageMonster(ctx, m, p, dmg, d.Element)
@@ -345,6 +346,7 @@ func (w *World) boltPlayer(ctx *game.TickContext, p, v *Player, d *content.Spell
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_SPELL, foe{p: v})
 	w.projectile(p.pos, v.pos, d.Element)
 	dmg := w.scaled(ctx, d.Scaling, p)
 	w.hurtPlayer(ctx, p, v, dmg, d.Element, true)
@@ -377,6 +379,7 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		return false
 	}
 	r := d.Radius
+	w.areaAttack(ctx, p, r)
 	effect := elementEffect(d.Element)
 	for dy := -r; dy <= r; dy++ {
 		for dx := -r; dx <= r; dx++ {
@@ -490,6 +493,9 @@ func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	// An invisible caster appears before its heal flies from its tile (cast would end the
+	// invisibility after it, the old order of the attacks, A9).
+	w.reveal(ctx, p)
 	w.projectile(p.pos, o.pos, ElementHoly)
 	if o.health < o.maxHealth && p.party != nil && o.party == p.party {
 		w.contribute(ctx, p) // T3.3: healing a wounded member counts for shared experience
@@ -652,10 +658,10 @@ func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.Cond
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_SPELL, f) // reveals p, as before
 	w.projectile(p.pos, m.pos, w.conditionElement(a))
 	w.buffEffect(m.pos)
 	w.applyCondition(ctx, holder{m: m}, a, p.id)
-	w.reveal(ctx, p)
 	if m.target == nil && w.validTarget(m, p) {
 		m.setTarget(p) // like a hit: it fights back
 		m.state = StateAlert
@@ -681,10 +687,10 @@ func (w *World) conditionPlayer(ctx *game.TickContext, p, v *Player, a *content.
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_SPELL, foe{p: v}) // reveals p, as before
 	w.projectile(p.pos, v.pos, w.conditionElement(a))
 	w.buffEffect(v.pos)
 	w.aggress(ctx, p, v)
-	w.reveal(ctx, p)
 	w.markFight(ctx, p)
 	w.markFight(ctx, v)
 	w.applyCondition(ctx, holder{p: v}, a, p.id)
@@ -736,6 +742,7 @@ func (w *World) wandFight(ctx *game.TickContext, p *Player, f foe) {
 	if element == "" {
 		element = ElementPhysical
 	}
+	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_RANGED, f)
 	w.projectile(p.pos, f.pos(), element)
 	dmg := combat.WandHit(ctx.Rand, wp.Attack, w.cfg.Balance.Combat.WandMinFactor)
 	if f.p != nil {

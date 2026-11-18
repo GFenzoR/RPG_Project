@@ -168,17 +168,56 @@ export function slideLeft(s: Slide | undefined, now: number): { x: number; y: nu
   return { x: s.x * k, y: s.y * k };
 }
 
+function choicesOf(d: Direction): readonly Direction[] {
+  const [dx, dy] = delta(d);
+  if (dx === 0 || dy === 0) return Object.freeze([d]);
+  const h = dx > 0 ? Direction.EAST : Direction.WEST;
+  const v = dy > 0 ? Direction.SOUTH : Direction.NORTH;
+  return Object.freeze([d, h, v]);
+}
+
+/** stepChoices of every direction, made once. */
+const STEP_CHOICES: ReadonlyMap<Direction, readonly Direction[]> = new Map(
+  [
+    Direction.UNSPECIFIED,
+    Direction.NORTH,
+    Direction.NORTH_EAST,
+    Direction.EAST,
+    Direction.SOUTH_EAST,
+    Direction.SOUTH,
+    Direction.SOUTH_WEST,
+    Direction.WEST,
+    Direction.NORTH_WEST,
+  ].map((d) => [d, choicesOf(d)]),
+);
+
 /**
  * The steps to try for a wanted direction, in order: the direction, and for a diagonal its
  * horizontal then its vertical half. Walking north-east along a wall to the north slides
- * east instead of stopping.
+ * east instead of stopping. The same frozen list every call: a key or the mouse held
+ * against a wall asks every frame (docs/07: nothing made per frame).
  */
-export function stepChoices(d: Direction): Direction[] {
-  const [dx, dy] = delta(d);
-  if (dx === 0 || dy === 0) return [d];
+export function stepChoices(d: Direction): readonly Direction[] {
+  return STEP_CHOICES.get(d) ?? choicesOf(d);
+}
+
+/** tan(22.5°): the edge between a straight sector and a diagonal one of the eight directions. */
+const OCTANT_EDGE = Math.SQRT2 - 1;
+
+/**
+ * The direction (of 8) toward a point `(dx, dy)` tiles away from the centre of the own tile,
+ * by its angle: each direction takes the 45° around it (docs/17 MOV-3, the mouse held on the
+ * map). UNSPECIFIED while the point is on the own tile (less than half a tile on both axes).
+ */
+export function towardDirection(dx: number, dy: number): Direction {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax < 0.5 && ay < 0.5) return Direction.UNSPECIFIED;
   const h = dx > 0 ? Direction.EAST : Direction.WEST;
   const v = dy > 0 ? Direction.SOUTH : Direction.NORTH;
-  return [d, h, v];
+  if (ay <= ax * OCTANT_EDGE) return h;
+  if (ax <= ay * OCTANT_EDGE) return v;
+  return combine(h, v) ?? h;
 }
 
 /** The diagonal between two perpendicular directions (north + east = north-east), if any. */

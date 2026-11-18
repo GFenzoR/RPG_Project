@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./camera": "./src/camera.ts",
+    "./decorated": "./src/decorated.ts",
     "./retry": "./src/retry.ts",
     "./tile-art": "./src/tile-art.ts"
   },

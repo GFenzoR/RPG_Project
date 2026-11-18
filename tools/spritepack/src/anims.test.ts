@@ -291,6 +291,84 @@ describe("buildAtlas with animations", () => {
     expect(page?.["creatures/ghost"]).toEqual(page?.["creatures/ghost/idle_s_0"]);
   });
 
+  it("mirrors west frames to the east, anchors on the feet and times the clips (mirror, anchor, ms)", () => {
+    // A 64x64 creature drawn facing south, north and west, as the Gemini monsters: a grey
+    // body with a red snout on its left, so a mirrored frame has the snout on its right.
+    const frame = (rows: number): Buffer => {
+      const img = createImage(64, 64);
+      fillRect(img, 20, 60 - rows, 24, rows, GREY);
+      fillRect(img, 20, 58 - rows, 2, 2, RED);
+      return encodePng(img);
+    };
+    for (const n of [0, 1, 2, 3])
+      for (const d of ["s", "n", "w"])
+        put(`assets/sprites/creatures/wolf/walk_${d}_${n}.png`, frame(20 + n));
+    for (const n of [0, 1, 2]) {
+      put(`assets/sprites/creatures/wolf/attack_w_${n}.png`, frame(20));
+      put(`assets/sprites/creatures/wolf/death_s_${n}.png`, frame(10));
+    }
+    put("assets/sprites/creatures/wolf/walk_e_9.png", frame(20)); // not frame 0: e is still missing
+    put(
+      "assets/sprites.yaml",
+      "sprites: {}\nanimations:\n  creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { attack: 110, death: 200 } }\n",
+    );
+    put("data/monsters/wolf.yaml", "id: wolf\nsprite: creatures/wolf\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.anims["creatures/wolf"]).toEqual({
+      w: 64,
+      h: 64,
+      anchor: "bc",
+      foot: 4,
+      top: 25,
+      shadow: "ellipse",
+      actions: {
+        walk: { frames: 4, ms: 0, perTile: 2, dirs: ["n", "e", "s", "w"] },
+        attack: { frames: 3, ms: 110, dirs: ["e", "w"] },
+        death: { frames: 3, ms: 200, dirs: ["s"] },
+      },
+    });
+    const page = r.atlas?.pages[0]?.json.frames;
+    const img = r.atlas?.pages[0]?.image;
+    const west = page?.["creatures/wolf/walk_w_2"]?.frame;
+    const east = page?.["creatures/wolf/walk_e_2"]?.frame;
+    if (!img || !west || !east) throw new Error("no frame");
+    expect(r.atlas?.index.sprites["creatures/wolf/walk_e_2"]).toMatchObject({ origin: "file" });
+    expect(pixel(img, west.x + 20, west.y + 36)).toEqual(RED);
+    expect(pixel(img, east.x + 43, east.y + 36)).toEqual(RED); // the snout on the other side
+    expect(pixel(img, east.x + 20, east.y + 36)).toEqual([0, 0, 0, 0]);
+    // A sprite with no frames of its own is the first one (walk, facing south).
+    expect(page?.["creatures/wolf"]).toEqual(page?.["creatures/wolf/walk_s_0"]);
+  });
+
+  it("refuses frame hints with layers, without frames or for a clip that is not there", () => {
+    const { errors: errs } = parseManifest(`sprites: {}
+animations:
+  x/one: { layers: [vendor/p/<sheet>.png], preset: lpc, mirror: true }
+  x/two: { mirror: yes, anchor: top, ms: { walk: 100, attack: 0 } }
+`);
+    expect(errs.map((e) => `${e.line ?? "-"} ${e.sprite ?? ""}: ${e.message}`)).toEqual([
+      "3 x/one: mirror: only for frames from files (an entry without layers)",
+      "4 x/two: mirror must be true or false",
+      "4 x/two: anchor must be br or bc",
+      "4 x/two: ms.walk: only idle, attack, death play by time",
+      "4 x/two: ms.attack must be an integer >= 1",
+    ]);
+    put("assets/sprites/creatures/still.png", encodePng(createImage(32, 32)));
+    put("assets/sprites/creatures/toad/walk_s_0.png", encodePng(createImage(32, 32)));
+    put(
+      "assets/sprites.yaml",
+      "sprites: {}\nanimations:\n  creatures/still: { mirror: true }\n  creatures/toad: { ms: { idle: 500 } }\n",
+    );
+    put("data/monsters/a.yaml", "id: a\nsprite: creatures/still\n");
+    put("data/monsters/b.yaml", "id: b\nsprite: creatures/toad\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([
+      "assets/sprites.yaml:3 creatures/still: mirror, anchor and ms need frames from files (assets/sprites/creatures/still/<action>_<dir>_<n>.png)",
+      "assets/sprites.yaml:4 creatures/toad: ms.idle but no idle frames",
+    ]);
+  });
+
   it("maps legacy outfit frames onto the idle pose and the walk cycle", () => {
     const meta = {
       w: 64,

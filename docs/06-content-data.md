@@ -142,6 +142,10 @@ items:
 - **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
   `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
+- **Elevación** (`elevation`, docs/17 ART-8, solo de dibujo): cuántos píxeles de sprite
+  sube lo que se apila encima de este item del mapa, y la criatura que pisa su casilla
+  (mesas y cajones: 8). Las de una pila se suman hasta 24. El servidor la ignora; la leen
+  el cliente, el editor y `mapcli render`.
 - **Equipo:** `weapon`, `shield` y `armor` (con `armor.slot`) definen el slot; `requires`
   (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
@@ -878,7 +882,11 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
 - **Con frames:** una entrada con `layers` compone hojas de un pack (personajes de LPC) en
   frames `<sprite>/<acción>_<dir>_<n>` (`idle`, `walk`, `attack`, `death`). Arte propio:
   archivos con esos nombres en `assets/sprites/` (un ciclo de spritegen, como
-  `creatures/bristleback_boar/walk_w_0..3`).
+  `creatures/bristleback_boar/walk_w_0..3`, o las hojas de Gemini de
+  `creatures/wolf/`). Una entrada sin `layers` les da `mirror: true` (el este es el oeste
+  espejado), `anchor: bc` (los pies sobre la casilla) y `ms` por acción
+  (`{ attack: 110, death: 200 }`). Quieto y atacar se dibujan solo hacia las direcciones
+  que tienen frames; hacia las otras, el frame parado y la embestida de ANI-5.
 - **Sin frames:** el cliente mueve el sprite único (salto por casilla, inclinación,
   respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
   `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
@@ -960,6 +968,43 @@ párrafos separados por una línea en blanco, líneas que empiezan con `- ` como
 más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `innerHTML`, así
 que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
 `i18n/<lang>/site.yaml` (claves `site.*`).
+
+## Sonido (`assets/sounds.yaml`, T3.7)
+El manifiesto de sonido vive en `assets/` (no en `data/`) pero se valida igual
+(`sounds.schema.json` y `make validate`); el cliente lo empaqueta como `content.sounds`.
+Qué suena con cada evento y cómo se juega está en `02-game-design.md`, "Sonido"; los
+archivos, su origen y su presupuesto, en `assets/README.md` "Sonido" y `07`, "Audio".
+```yaml
+format: 1
+sounds:          # id: archivo bajo assets/, canal, volumen 0..1, copias a la vez
+  hit: { file: sounds/sfx/hit.ogg, channel: sfx, volume: 0.8, max_voices: 4 }
+  music_puerto: { file: sounds/music/gemini/town_puerto_1.ogg, channel: music, volume: 1 }
+events:          # evento del cliente → sonido, o lista para elegir uno al azar
+  effect.hit: hit
+music:
+  fade_ms: 2500                       # fundido cruzado al cambiar de loop
+  islands: { puerto: music_puerto }   # isla de world.yaml → loop
+  underground: music_cueva            # pisos z > 7
+  title: music_title                  # fuera del juego (login y personajes)
+  combat: music_combat                # mientras pelea (hoy no hay: el dueño lo apagó)
+  combat_hold_ms: 8000                # cuánto sigue la de combate tras el último golpe u objetivo
+  bosses: { slagbound_warden: music_boss_forge }   # monstruo de data/monsters → loop
+ambient:
+  fade_ms: 2000
+  islands: { puerto: amb_olas }
+```
+- `make validate` exige que cada archivo exista (y uno de `vendor/` tenga su fila en
+  `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada loop de `music`
+  (islas, `underground`, `title`, `combat` y los de `bosses`) sea del canal `music` y los
+  de `ambient` del suyo, que las islas existan en `world/world.yaml` y que las claves de
+  `bosses` sean monstruos de `data/monsters`.
+- **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos) y
+  `# gemini-music:rules:begin`/`end` (`title`, `combat`, `bosses`) las escribe
+  `make music-gemini` desde las elecciones del dueño; no se editan a mano. Lo que tiene
+  cada lugar (la toma, varias tomas, o `none`) está en `assets/sounds/music/gemini.yaml`:
+  `pick`, `provisional`, `file`/`volume` del sonido del lugar, `fallback` (el tema de
+  soundgen que vuelve con `none`) y `tracks` (cada toma con su fuente, el título que le dio
+  Gemini, su prompt y las medidas del loop). El resto del archivo es a mano.
 
 ## i18n
 ```yaml

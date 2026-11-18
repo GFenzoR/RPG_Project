@@ -464,6 +464,9 @@ export function loadPaletteItems(root: string): PaletteItem[] {
         if (typeof door["key"] === "string") item.lock = door["key"];
       }
       if (typeof raw["key"] === "string") item.key = raw["key"];
+      // ART-8: the canvas raises what is stacked on it, as the game does.
+      if (typeof raw["elevation"] === "number" && raw["elevation"] > 0)
+        item.elevation = raw["elevation"];
       items.push(item);
     }
   }

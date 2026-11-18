@@ -35,15 +35,21 @@ export const clampZoom = (z: number): number => Math.min(MAX_ZOOM, Math.max(MIN_
 /** Screen pixels per tile. */
 export const tilePixels = (cam: Camera, tileSize: number): number => tileSize * cam.zoom;
 
-/** World position (fractional tiles) under a screen point. */
+/**
+ * World position (fractional tiles) under a screen point, written into `out` when given (a
+ * caller asking every frame makes no object).
+ */
 export function screenToWorld(
   cam: Camera,
   sx: number,
   sy: number,
   tileSize: number,
+  out: { x: number; y: number } = { x: 0, y: 0 },
 ): { x: number; y: number } {
   const p = tilePixels(cam, tileSize);
-  return { x: cam.x + sx / p, y: cam.y + sy / p };
+  out.x = cam.x + sx / p;
+  out.y = cam.y + sy / p;
+  return out;
 }
 
 /** Integer tile under a screen point. */

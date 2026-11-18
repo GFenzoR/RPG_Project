@@ -1,15 +1,30 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
-// together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
-// the server says; the one thing it predicts is the own keyboard steps (a few ahead).
+// together. The client only sends intents (Walk, Turn, Logout...) and draws what the server
+// says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
+// route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
-import { ChatChannel, CreatureKind, GuildAction, MarketSide, PartyAction } from "@rpg/protocol";
+import {
+  ChatChannel,
+  CreatureKind,
+  DisappearReason,
+  GuildAction,
+  MarketSide,
+  PartyAction,
+} from "@rpg/protocol";
 import type { Direction, DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
-import { ItemPicker, itemActions, itemPrimary, tileActions } from "./input/actions.ts";
-import type { ActionKind, ItemFacts } from "./input/actions.ts";
-import { itemContext } from "./input/mouse.ts";
+import {
+  ItemPicker,
+  defaultAction,
+  itemActions,
+  itemPrimary,
+  tileActions,
+} from "./input/actions.ts";
+import type { ActionKind, ItemFacts, TileFacts } from "./input/actions.ts";
+import { itemContext, pressAnswer } from "./input/mouse.ts";
+import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
 import type { ControlsMode } from "./state/controls.ts";
 import { equipSlot, itemCard } from "./state/item-card.ts";
@@ -34,12 +49,13 @@ import { locationInit, menuItem, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
-import { findPath } from "./state/path.ts";
-import { climbable, pathPassable, usedBare, useMode } from "./state/portals.ts";
+import { Steering } from "./state/steering.ts";
+import type { SteerInput, StepChoice } from "./state/steering.ts";
+import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { MotionTrail } from "./state/motion.ts";
-import { cuesOf, loopFor } from "./audio/cues.ts";
+import { blowAt, cuesOf, loopFor, musicFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
@@ -159,6 +175,8 @@ export interface ClientTestHooks {
    * to screen pixels): continuous motion means it moves on every frame while walking.
    */
   trail(ms: number): { t: number; x: number; y: number }[];
+  /** How long a straight own step onto (x, y, z) lasts at the player's speed now, ms. */
+  stepMs(x: number, y: number, z: number): number;
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
@@ -183,6 +201,24 @@ export interface ClientTestHooks {
   itemNumber(id: string): number | undefined;
   /** Projectiles and effects (IDs) drawn less than `ms` ago. */
   magic(ms: number): { projectiles: number; effects: number[] };
+  /**
+   * A9: the CreatureAttack events of the last `ms` (attacker, kind, target), while the
+   * world keeps them (`ATTACK_MS`).
+   */
+  attacks(ms: number): { id: number; kind: number; targetId: number }[];
+  /**
+   * A9: why creatures left the view in the last `ms` (`reason`: the DisappearReason's
+   * name, `DEATH`, `OUT_OF_VIEW`...), while the world keeps them (`DEPARTURE_MS`).
+   */
+  departures(ms: number): { id: number; reason: string }[];
+  /**
+   * A9 (docs/17 ANI-7): creatures in an attack pose now and the ones falling dead (`ms`
+   * into it, `of` its length).
+   */
+  poses(): {
+    attacking: { id: number; ms: number; of: number }[];
+    dying: { id: number; ms: number; of: number }[];
+  };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -201,8 +237,8 @@ const DRAG_START_PX = 4;
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
 
-/** A walk a click sent this recently is the first click of a double click: it stops. */
-const DOUBLE_CLICK_STOP_MS = 700;
+/** How often the frame looks again at which loops should play (a fight ends silently). */
+const LOOPS_EVERY_MS = 500;
 
 declare global {
   interface Window {
@@ -250,8 +286,15 @@ export class Game {
   /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
   private canvasFailed = false;
   private destroyed = false;
-  /** A click that arrived while predicted steps were unconfirmed. */
-  private clickTarget: Pos | undefined;
+  /**
+   * Where the own creature walks besides the keys (docs/17 MOV-3, MOV-4): a click's route
+   * and the mouse held on the map, predicted step by step like a held key.
+   */
+  private readonly steer: Steering;
+  /** The left button held on the map (MOV-3): the cursor's page coordinates. */
+  private hold: { x: number; y: number } | undefined;
+  /** decideStep's input to Steering.next, reused (asked every frame while standing). */
+  private readonly steerInput: SteerInput = {};
   /** Where the own creature was drawn on the last frames (the E2E `trail` hook). */
   private readonly trail = new MotionTrail();
   /**
@@ -263,6 +306,10 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
+  /** performance.now() when the player last fought (a target, a blow on their tile). */
+  private foughtAt = Number.NEGATIVE_INFINITY;
+  /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
+  private loopsAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
   private safe = true;
   /** T5.6: the direction held on the on-screen pad (read like the movement keys). */
@@ -282,8 +329,6 @@ export class Game {
   private touchAt = Number.NEGATIVE_INFINITY;
   /** The last finger press on a DOM item already opened its menu. */
   private itemMenuOpened = false;
-  /** performance.now() of the last WalkPath a click sent (a double click stops it). */
-  private clickWalkAt = Number.NEGATIVE_INFINITY;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
   private zoomView: ZoomView | undefined;
@@ -294,6 +339,11 @@ export class Game {
     this.safe = loadSafeMode(opts.storage);
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
+    this.steer = new Steering({
+      portals: opts.content.portals,
+      diagonalCost: opts.content.movement.diagonalCost,
+      maxPathTiles: opts.content.movement.maxPathTiles,
+    });
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
@@ -305,8 +355,13 @@ export class Game {
         const at = this.world.batchTime(Number(batch.tick), now);
         const cues: Cue[] = [];
         for (const e of batch.events) {
-          if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
+          if (opts.audio) {
+            cues.push(...cuesOf(e.message, this.cueContext()));
+            const self = this.world.self;
+            if (self && blowAt(e.message, self.pos)) this.foughtAt = now;
+          }
           this.world.apply(e.message, now, at);
+          this.steer.heard(e.message);
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
@@ -742,6 +797,28 @@ export class Game {
     return (c.houseDoors?.includes(doorKey(x, y, z)) ?? false) || usedBare(c.portals, x, y, z);
   }
 
+  /**
+   * What input/actions.ts knows of a map tile but its creature: `item` (its menuItem), a
+   * bare house door or rope spot, a ladder, whether anything is known there.
+   */
+  private groundFacts(x: number, y: number, z: number, item: ItemRef | undefined): TileFacts {
+    return {
+      item: item && this.itemFacts(item),
+      door: this.usesGround(x, y, z),
+      climb: climbable(this.opts.content.portals, x, y, z),
+      known: (this.world.tile(x, y, z)?.length ?? 0) > 0,
+    };
+  }
+
+  /**
+   * ART-2: whether a map tile has something of its own to use (a door, an item, a ladder),
+   * leaving its creature out: then a head rising into it from the tile below does not take
+   * its click (the canvas's creatureUnder), and the click does what the cursor's hint says.
+   */
+  private ownUse(x: number, y: number, z: number): boolean {
+    return defaultAction(this.groundFacts(x, y, z, menuItem(this.world, x, y, z))) !== undefined;
+  }
+
   /** Looks at the creature on a tile, or else at its top item (the ground counts). */
   private lookTileAt(x: number, y: number, z: number): void {
     const c = [...this.world.creatures.values()].find(
@@ -777,7 +854,7 @@ export class Game {
         this.attack(action.creature);
         break;
       case "walk":
-        this.clickTarget = action.pos;
+        this.walkTo(action.pos);
         break;
       case "castOnCreature":
         this.castAimed(action.spellId, { creature: action.creature });
@@ -1023,11 +1100,8 @@ export class Game {
     const top = topItem(this.world, tx, ty, z, false);
     const item = menuItem(this.world, tx, ty, z);
     const actions = tileActions({
+      ...this.groundFacts(tx, ty, z, item),
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: item && this.itemFacts(item),
-      door: this.usesGround(tx, ty, z),
-      climb: climbable(this.opts.content.portals, tx, ty, z),
-      known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
     // The player itself on the tile: the menu is about what lies there.
@@ -1066,6 +1140,10 @@ export class Game {
       equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
       split: def?.stackable === true && ref.count > 1,
       fixed: def?.fixed === true,
+      usable:
+        def?.door === true ||
+        def?.board === true ||
+        this.opts.content.recipes.some((r) => r.station === ref.itemId),
     };
   }
 
@@ -1216,11 +1294,9 @@ export class Game {
   private doubleClickTile(pos: Pos): void {
     if (this.controls() !== "menu") return;
     if (performance.now() - this.touchAt < TOUCH_CONTEXTMENU_MS) return; // a finger's taps
-    this.clickTarget = undefined;
-    if (performance.now() - this.clickWalkAt < DOUBLE_CLICK_STOP_MS) {
-      this.clickWalkAt = Number.NEGATIVE_INFINITY;
-      this.conn.send({ case: "stopWalk", value: {} });
-    }
+    // The route its first click started ends; the steps already sent are taken (no
+    // StopWalk: the client waits for every Walk's answer, docs/05 "Caminar").
+    this.steer.cancel();
     this.closeMenuQuietly();
     const c = this.world.creatureAt(pos.x, pos.y, pos.z);
     if (c && c.id !== this.world.selfId) this.attack(c.id);
@@ -1355,9 +1431,27 @@ export class Game {
     const self = this.world.self;
     if (!audio || !self) return;
     for (const c of cues) audio.play(c.events, c.pos, self.pos);
+    this.keepLoops(performance.now());
+  }
+
+  /**
+   * The music and ambient loops for now: the zone's, a fight's while the player has a
+   * target or took a blow less than `combatHoldMs` ago, a boss's while one is in view
+   * (assets/sounds.yaml `music`, audio/cues.ts musicFor). After each batch and, because a
+   * fight ends without a message, every LOOPS_EVERY_MS from the frame.
+   */
+  private keepLoops(now: number): void {
+    const audio = this.opts.audio;
+    const self = this.world.self;
+    if (!audio || !self) return;
+    this.loopsAt = now;
     const { islands, sounds } = this.opts.content;
+    if (this.world.target !== undefined) this.foughtAt = now;
+    const fighting = now - this.foughtAt < sounds.music.combatHoldMs;
+    const bosses = Object.keys(sounds.music.bosses).length > 0;
+    const inView = bosses ? this.world.battleList().map((c) => c.contentId) : [];
     audio.setLoops(
-      loopFor(self.pos, islands, sounds.music),
+      musicFor(self.pos, islands, sounds.music, inView, fighting),
       loopFor(self.pos, islands, sounds.ambient),
     );
   }
@@ -1433,6 +1527,17 @@ export class Game {
         this.longPressTile({ x, y, z }, cx, cy, true);
       },
       doubleClickTile: (x, y, z) => this.doubleClickTile({ x, y, z }),
+      pressTile: (x, y, z) => this.pressTile({ x, y, z }),
+      holdAt: (x, y) => {
+        // The route of the press ends: the cursor leads now (state/steering.ts).
+        this.hold = { x, y };
+      },
+      holdEnd: () => {
+        // The steps already sent are taken, as when a key is let go: no StopWalk.
+        this.hold = undefined;
+      },
+      walkMark: () => this.steer.mark,
+      hoverText: (x, y, z) => this.hoverText({ x, y, z }),
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -1443,6 +1548,7 @@ export class Game {
       doorAt: (x, y, z) =>
         (this.opts.content.houseDoors?.includes(doorKey(x, y, z)) ?? false) ||
         (this.world.tile(x, y, z)?.some((id) => this.world.item(id)?.door === true) ?? false),
+      ownUse: (x, y, z) => this.ownUse(x, y, z),
       dragTile: (x, y, z) => {
         const ref = topItem(this.world, x, y, z, false);
         if (ref) this.startDrag(ref);
@@ -1477,6 +1583,10 @@ export class Game {
         return { ...s.pos, pending: world.unconfirmed > 0, walking: world.walking(s, now) };
       },
       trail: (ms) => this.trail.since(performance.now() - ms),
+      stepMs: (x, y, z) => {
+        const s = world.self;
+        return s ? world.stepDuration({ x, y, z }, s.speed, false) : 0;
+      },
       walkable: (x, y, z) => world.free(x, y, z),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
@@ -1502,6 +1612,19 @@ export class Game {
           effects: world.effects.filter((e) => now - e.start < ms).map((e) => e.effectId),
         };
       },
+      attacks: (ms) => {
+        const now = performance.now();
+        return world.attacks
+          .filter((a) => now - a.start < ms)
+          .map((a) => ({ id: a.id, kind: a.kind, targetId: a.targetId }));
+      },
+      departures: (ms) => {
+        const now = performance.now();
+        return world.departures
+          .filter((d) => now - d.start < ms)
+          .map((d) => ({ id: d.id, reason: DisappearReason[d.reason] }));
+      },
+      poses: () => canvas.poses(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)
@@ -1527,40 +1650,89 @@ export class Game {
   private frame(now: number): void {
     const self = this.world.self;
     if (!self) return;
+    if (now - this.loopsAt >= LOOPS_EVERY_MS) this.keepLoops(now);
     this.world.expirePredicted(now);
     const drawn = this.world.drawPos(self, now);
     this.trail.record(now, drawn.x, drawn.y);
-    const target = this.clickTarget;
-    if (target) {
-      // The path starts where the server has the player: after the predicted steps.
-      if (this.world.unconfirmed > 0) return;
-      this.clickTarget = undefined;
-      // Round stairs, holes and teleports on the way: only the goal may be one.
-      const passable = pathPassable(this.opts.content.portals, target, (x, y) =>
-        this.world.free(x, y, target.z),
-      );
-      const steps = findPath(self.pos, target, passable, {
-        diagonalCost: this.opts.content.movement.diagonalCost,
-        maxSteps: this.opts.content.movement.maxPathTiles,
-      });
-      if (steps && steps.length > 0) {
-        this.conn.send({ case: "walkPath", value: { steps } });
-        this.clickWalkAt = now;
-      }
-      return;
-    }
-    // The next step is decided just before the drawn one ends (STEP_LEAD_MS): its Walk
-    // waits in the server's queue and the drawing goes on without a stop.
+    this.decideStep(now);
+  }
+
+  /**
+   * The next own step, decided just before the drawn one ends (STEP_LEAD_MS): its Walk
+   * waits in the server's queue and the drawing goes on without a stop. A key or the pad
+   * first, then the mouse held on the map, then a click's route (state/steering.ts).
+   */
+  private decideStep(now: number): void {
     if (!this.world.canStep(now)) return;
-    const dir = this.keys.take() ?? this.pad.take();
-    if (dir === undefined) return;
-    const step = this.world.chooseStep(dir, now);
+    const key = this.keys.take() ?? this.pad.take();
+    const hold = this.hold;
+    const input = this.steerInput;
+    input.key = key;
+    input.toward = key === undefined && hold ? this.canvas?.worldAt(hold.x, hold.y) : undefined;
+    this.sendStep(this.steer.next(this.world, now, input));
+  }
+
+  private sendStep(step: StepChoice | undefined): void {
     if (step?.kind === "walk")
       this.conn.send({
         case: "walk",
         value: { dir: step.dir, walkEpoch: this.world.walkEpoch, seq: step.seq },
       });
     else if (step?.kind === "turn") this.conn.send({ case: "turn", value: { dir: step.dir } });
+  }
+
+  /**
+   * Click-to-walk (docs/17 MOV-4, MOV-7): the route is planned from where the client has
+   * the player and its first step leaves at once (if none is drawn), predicted like a key.
+   */
+  private walkTo(pos: Pos): void {
+    const now = performance.now();
+    this.steer.walkTo(this.world, pos, now);
+    this.decideStep(now);
+  }
+
+  /**
+   * A plain left press on a map tile (docs/17 MOV-3, MOV-7): with nothing aimed or picked,
+   * a tile without an item to drag is walked to at once (the first step leaves on the
+   * press, not on the release); one with an item waits, so a drag moves the item and a
+   * release walks. Held, it walks toward the cursor either way. A press is a fresh intent,
+   * like a fresh key press: a step the server refused is tried again (one refusal and one
+   * message a press, WorldState.retryWalk); the hold it may become does not retry again.
+   */
+  private pressTile(pos: Pos): PressAnswer {
+    const aiming = this.picker.picked !== undefined || this.pending !== undefined;
+    const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
+    const answer = pressAnswer(
+      aiming,
+      top !== undefined && this.opts.content.items[top.itemId]?.fixed !== true,
+    );
+    if (!aiming) this.world.retryWalk();
+    if (answer.walked) this.click({ pos });
+    return answer;
+  }
+
+  /**
+   * The default action on a map tile as text for beside the cursor (docs/17 MOV-7, UI-5):
+   * what the right click (or, with the menu controls, its menu's first button and the double
+   * click) does there. "" for none: bare ground, the own tile with nothing on it.
+   */
+  private hoverText(pos: Pos): string {
+    // Nothing over an open menu (the right click's, z-index under the text's).
+    if (this.pending || this.picker.picked || this.menu) return "";
+    const { x, y, z } = pos;
+    const c = this.world.creatureAt(x, y, z);
+    const other = c && c.id !== this.world.selfId ? c : undefined;
+    const item = menuItem(this.world, x, y, z);
+    const kind = defaultAction({
+      ...this.groundFacts(x, y, z, item),
+      creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
+    });
+    if (kind === undefined) return "";
+    const name = other ? creatureName(other, this.opts.t) : item ? this.itemTitle(item.itemId) : "";
+    const t = this.opts.t;
+    return name && kind !== "climb"
+      ? t(`client.action.${kind}`, { name })
+      : t(`client.touch.action.${kind}`);
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -1623,6 +1795,7 @@ export class Game {
   private readonly onBlur = (): void => {
     this.keys.clear();
     this.pad.clear();
+    this.hold = undefined;
     this.world.retryWalk();
   };
 

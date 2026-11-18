@@ -1,7 +1,9 @@
 // Audio engine (T3.7) over the Web Audio API: one gain per channel (sfx, ui, music,
 // ambient) under a master gain, lazily loaded and cached buffers, a cap on simultaneous
 // voices, simple positional sound (distance attenuation and stereo pan around the player)
-// and two crossfading loop slots (music and ambient bed).
+// and two crossfading loop slots (music and ambient bed). A loop's decoded buffer is kept
+// only while it is one of the last KEEP_LOOPS its slot wanted (docs/07 "Audio": a minute
+// of music is ~11 MB decoded).
 //
 // The AudioContext is only created on unlock(), after the first user gesture, because
 // browsers (and the desktop webviews) refuse to start audio before one. Until then play()
@@ -106,6 +108,11 @@ export const PAN_RANGE = 7;
 export const MAX_PAN = 0.8;
 /** A sound whose file arrives later than this after it was asked for is dropped. */
 export const LATE_MS = 300;
+/**
+ * Loops kept decoded per slot: the one playing and the one before it, so going back and
+ * forth (a fight and the zone's music) does not decode again; older ones are forgotten.
+ */
+export const KEEP_LOOPS = 2;
 
 /** Gain and pan of a sound at `at` heard from `listener`; undefined = out of earshot. */
 export function spatial(at: Pos, listener: Pos): { gain: number; pan: number } | undefined {
@@ -148,6 +155,8 @@ export class AudioEngine {
     music: { want: undefined, playing: undefined },
     ambient: { want: undefined, playing: undefined },
   };
+  /** The loops each slot wanted last, oldest first (at most KEEP_LOOPS). */
+  private readonly recentLoops: Record<LoopKind, string[]> = { music: [], ambient: [] };
   /** Sound ids started, newest last (E2E hook and tests). */
   readonly history: string[] = [];
 
@@ -295,13 +304,14 @@ export class AudioEngine {
     if (!p) {
       const def = this.manifest.sounds[id];
       const ctx = this.ctx;
-      p =
+      const loading: Promise<BufferLike | undefined> =
         def && ctx
           ? this.ports
               .fetch(def.url)
               .then((data) => ctx.decodeAudioData(data))
               .then((b) => {
-                this.decoded.set(id, b);
+                // A loop forgotten while it loaded is not cached again.
+                if (this.buffers.get(id) === loading) this.decoded.set(id, b);
                 return b;
               })
               .catch((err: unknown) => {
@@ -309,9 +319,29 @@ export class AudioEngine {
                 return undefined;
               })
           : Promise.resolve(undefined);
+      p = loading;
       this.buffers.set(id, p);
     }
     return p;
+  }
+
+  /** Whether a sound's decoded buffer is cached (tests: what a loop change forgets). */
+  isCached(id: string): boolean {
+    return this.buffers.has(id);
+  }
+
+  /** Keeps `id` among the last KEEP_LOOPS loops of a slot and forgets the older ones. */
+  private rememberLoop(kind: LoopKind, id: string): void {
+    const recent = this.recentLoops[kind].filter((r) => r !== id);
+    recent.push(id);
+    while (recent.length > KEEP_LOOPS) {
+      const old = recent.shift();
+      if (old === undefined) break;
+      // A source still fading out keeps its own reference to the buffer.
+      this.buffers.delete(old);
+      this.decoded.delete(old);
+    }
+    this.recentLoops[kind] = recent;
   }
 
   // ---- loops ---------------------------------------------------------------------------
@@ -325,6 +355,7 @@ export class AudioEngine {
       const slot = this.loops[kind];
       if (slot.want === id) continue;
       slot.want = id;
+      if (id !== undefined) this.rememberLoop(kind, id);
       this.startLoop(kind);
     }
   }

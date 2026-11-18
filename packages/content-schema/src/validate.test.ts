@@ -263,6 +263,48 @@ describe("validator diagnostics", () => {
     expect(has("volume")).toBe(true);
   });
 
+  it("checks the title, fight and boss music: music loops, and bosses that are monsters", () => {
+    mkdirSync(file("assets/sounds"), { recursive: true });
+    for (const f of ["hit", "song", "fight", "boss"])
+      writeFileSync(file(`assets/sounds/${f}.ogg`), "x");
+    const write = (music: string[]): string[] => {
+      writeFileSync(
+        file("assets/sounds.yaml"),
+        [
+          "format: 1",
+          "sounds:",
+          "  hit: { file: sounds/hit.ogg, channel: sfx }",
+          "  song: { file: sounds/song.ogg, channel: music }",
+          "  fight: { file: sounds/fight.ogg, channel: music }",
+          "  boss: { file: sounds/boss.ogg, channel: music }",
+          "music:",
+          ...music,
+        ].join("\n") + "\n",
+      );
+      return messages(root).filter((m) => m.includes("sounds.yaml"));
+    };
+    expect(
+      write([
+        "  title: song",
+        "  combat: fight",
+        "  combat_hold_ms: 8000",
+        "  bosses: { slagbound_warden: boss }",
+      ]),
+    ).toEqual([]);
+    const out = write([
+      "  title: hit",
+      "  combat: nope",
+      "  combat_hold_ms: 120000",
+      "  bosses: { no_such_beast: boss, slagbound_warden: hit }",
+    ]);
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('sound "hit" is on channel sfx, not music')).toBe(true);
+    expect(has('unknown sound "nope"')).toBe(true);
+    expect(has('unknown monster "no_such_beast"')).toBe(true);
+    expect(has("combat_hold_ms")).toBe(true);
+    expect(out.filter((m) => m.includes('sound "hit" is on channel sfx'))).toHaveLength(2);
+  });
+
   it("accepts a third-party sound pack with its CREDITS row and LICENSE, as spritepack does", () => {
     const pack = file("assets/vendor/kenney-impact");
     mkdirSync(join(pack, "Audio"), { recursive: true });

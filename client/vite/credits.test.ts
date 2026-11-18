@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { markdownSection, markdownTableRows } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import { licenceUrl, packKeys } from "../src/site/credits.ts";
 import { loadSiteContent, repoRoot } from "./content.ts";
@@ -33,6 +34,14 @@ const MD = [
   "| Frames `<sprite>/<acción>_<dir>_<n>` de `outfits/citizen` y `npcs/merchant` | capas | OGA-BY 3.0 | spritepack |",
   "| Frames de `npcs/sailor_old` | capas | CC-BY-SA 3.0 | spritepack |",
   "| Más de `npcs/priest` | capas | **OGA-BY 3.0** | spritepack |",
+  "",
+  "## Generado con IA",
+  "| Archivos | Herramienta | Fecha | Prompt | Notas |",
+  "|---|---|---|---|---|",
+  "| `assets/sprites/creatures/wolf/*.png` (frames de `creatures/wolf`) | Gemini | 2026-11-18 | `assets/prompts/sprites/creatures/wolf.txt` | 64x64 |",
+  "| `assets/sounds/music/puerto.ogg` | Gemini | 2026-11-19 | `assets/prompts/sounds/music/puerto.txt` | — |",
+  "| `assets/sprites/creatures/rat/*.png` | Gemini | sin fecha | `assets/prompts/sprites/creatures/rat.txt` | no day: not shown |",
+  "| `assets/sprites/creatures/bat/*.png` | Gemini | 2026-11-18 | en el chat | no prompt file: not shown |",
 ].join("\n");
 
 const CSV = [
@@ -76,6 +85,18 @@ describe("credits page data (docs/17 A1)", () => {
       { licence: "OGA-BY 3.0", sprites: ["outfits/citizen", "npcs/merchant", "npcs/priest"] },
       { licence: "CC-BY-SA 3.0", sprites: ["npcs/sailor_old"] },
     ]);
+    expect(c.ai).toEqual([
+      {
+        works: ["creatures/wolf"],
+        date: "2026-11-18",
+        prompt: "assets/prompts/sprites/creatures/wolf.txt",
+      },
+      {
+        works: ["sounds/music/puerto"],
+        date: "2026-11-19",
+        prompt: "assets/prompts/sounds/music/puerto.txt",
+      },
+    ]);
     expect(c.fonts).toEqual([
       {
         family: "Serif",
@@ -98,6 +119,7 @@ describe("credits page data (docs/17 A1)", () => {
       files: [],
       derived: [],
       fonts: [],
+      ai: [],
     });
   });
 
@@ -125,6 +147,11 @@ describe("credits page data (docs/17 A1)", () => {
     const derived = c.derived.flatMap((d) => d.sprites);
     expect(derived).toEqual(expect.arrayContaining(["outfits/citizen", "npcs/sailor_old"]));
     expect(new Set(c.fonts.map((f) => f.family))).toEqual(new Set(FONTS.map((f) => f.family)));
+    // Every row of "Generado con IA" is on the page, and its prompt file is committed.
+    const aiRows = markdownTableRows(markdownSection(md, "## Generado con IA")).slice(1);
+    expect(c.ai.length).toBe(aiRows.length);
+    for (const a of c.ai) expect(existsSync(join(root, a.prompt)), a.prompt).toBe(true);
+    expect(c.ai.flatMap((a) => a.works)).toEqual(expect.arrayContaining(["creatures/wolf"]));
   });
 
   it("links every licence it names and has a name and author for every pack in es and en", () => {

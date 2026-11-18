@@ -1,7 +1,17 @@
-import { CreatureKind, Direction } from "@rpg/protocol";
+import { AttackKind, CreatureKind, Direction, DisappearReason } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
-import { faces, isBlowEffect, meleeAttacker, pushOf } from "./creature-events.ts";
-import type { Fighter } from "./creature-events.ts";
+import {
+  attackDir,
+  attackerOf,
+  faces,
+  inArea,
+  isBlowEffect,
+  leavesDying,
+  meleeAttacker,
+  pushFrom,
+  pushOf,
+} from "./creature-events.ts";
+import type { AttackSeen, Fighter } from "./creature-events.ts";
 
 const at = (x: number, y: number): { x: number; y: number; z: number } => ({ x, y, z: 7 });
 const fighter = (
@@ -56,5 +66,72 @@ describe("who strikes whom", () => {
     expect(pushOf(fighter(5, CreatureKind.MONSTER, 0, 0, Direction.EAST), undefined)).toEqual([
       -1, 0,
     ]);
+  });
+});
+
+// A9: the server says who attacked whom (CreatureAttack) and why a creature left.
+const attack = (
+  id: number,
+  targetId: number,
+  to: { x: number; y: number; z: number },
+  start: number,
+  radius = 0,
+): AttackSeen => ({
+  id,
+  kind: radius > 0 ? AttackKind.SPELL : AttackKind.MELEE,
+  targetId,
+  to,
+  radius,
+  start,
+});
+
+describe("what the server says", () => {
+  it("aims an attack at its target where the client draws it, else at its tile", () => {
+    const self = fighter(SELF, CreatureKind.PLAYER, 4, 5);
+    // The target moved since: the client's position wins over the tile of the event.
+    expect(attackDir(self, fighter(10, CreatureKind.MONSTER, 4, 4), at(5, 5))).toEqual([0, -1]);
+    // A target out of the window: the edge point on its side.
+    expect(attackDir(self, undefined, at(20, 5))).toEqual([1, 0]);
+    // An area around the caster: where it faces.
+    expect(
+      attackDir(fighter(2, CreatureKind.PLAYER, 3, 3, Direction.WEST), undefined, at(3, 3)),
+    ).toEqual([-1, 0]);
+  });
+
+  it("finds the attack behind a hit: aimed at the victim, else an area over it, same batch", () => {
+    const victim = fighter(10, CreatureKind.MONSTER, 5, 5);
+    const ring = attack(SELF, 0, at(4, 4), 100, 2);
+    const blow = attack(7, 10, at(5, 5), 100);
+    const late = attack(8, 10, at(5, 5), 200);
+    expect(attackerOf(victim, [ring, blow, late], 100)).toBe(blow);
+    expect(attackerOf(victim, [ring, late], 100)).toBe(ring);
+    expect(attackerOf(victim, [late], 100)).toBeUndefined();
+    // The caster is not hit by its own area; a tile beyond the radius is not covered.
+    expect(attackerOf(fighter(SELF, CreatureKind.PLAYER, 4, 4), [ring], 100)).toBeUndefined();
+    expect(inArea(at(4, 4), 2, at(6, 6))).toBe(false);
+    expect(inArea(at(4, 4), 2, at(6, 5))).toBe(true);
+    expect(inArea(at(4, 4), 2, { x: 5, y: 4, z: 6 })).toBe(false);
+  });
+
+  it("pushes the victim away from the attacker or the area's centre", () => {
+    const victim = fighter(10, CreatureKind.MONSTER, 5, 5, Direction.EAST);
+    expect(pushFrom(victim, at(4, 4))).toEqual([1, 1]);
+    expect(pushFrom(victim, at(5, 5))).toEqual([-1, 0]); // same tile: back from its facing
+    expect(pushFrom(victim, undefined)).toEqual([-1, 0]);
+  });
+
+  it("lets a creature fall only when it died; an older server's empty bar still counts", () => {
+    expect(leavesDying(DisappearReason.DEATH, 0)).toBe(true);
+    expect(leavesDying(DisappearReason.DEATH, 30)).toBe(true);
+    for (const r of [
+      DisappearReason.OUT_OF_VIEW,
+      DisappearReason.TELEPORT,
+      DisappearReason.LOGOUT,
+      DisappearReason.DESPAWN,
+    ])
+      expect(leavesDying(r, 0)).toBe(false);
+    expect(leavesDying(DisappearReason.UNSPECIFIED, 0)).toBe(true);
+    expect(leavesDying(undefined, 0)).toBe(true);
+    expect(leavesDying(undefined, 12)).toBe(false);
   });
 });

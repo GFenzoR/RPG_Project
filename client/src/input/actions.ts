@@ -36,6 +36,11 @@ export interface ItemFacts {
   split?: boolean | undefined;
   /** A map fixture nobody carries (a station, a board): nothing to move. */
   fixed?: boolean | undefined;
+  /**
+   * A fixture that does something when used (a door, a crafting station, the market
+   * board), unlike a tree or a wall: its use is a default action worth showing.
+   */
+  usable?: boolean | undefined;
 }
 
 /** The default action of an item: the first button of its menu. */
@@ -78,6 +83,19 @@ export function tileActions(f: TileFacts): ActionKind[] {
     if (f.item.split) out.push("split");
   }
   return out;
+}
+
+/**
+ * The default action on a map tile (docs/17 UI-5, MOV-7: the text beside the cursor): the
+ * first button of its menu, what the classic right click and the menu's double click do.
+ * Undefined when that is only looking (bare ground, the own tile with nothing on it).
+ */
+export function defaultAction(f: TileFacts): ActionKind | undefined {
+  const first = tileActions(f)[0];
+  if (first === "look") return undefined;
+  // A tree, a wall or a fountain: using it does nothing, so the cursor says nothing.
+  if (first === "use" && f.item?.fixed === true && f.item.usable !== true) return undefined;
+  return first;
 }
 
 /** The menu of a DOM item (inventory slot, container cell): its default action first. */

@@ -2,10 +2,11 @@
 // test island, walks 5 steps (keyboard and click) and saves screenshots for review.
 // Any console error or uncaught exception fails the test.
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { parse } from "yaml";
 import { psql } from "./psql.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
@@ -14,6 +15,85 @@ const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(shots, `${name}.png`) });
+
+/** What shotPose keeps on window while it holds the game's frames. */
+interface PoseHold {
+  e2eRaf?: typeof window.requestAnimationFrame | undefined;
+  e2eHeld?: FrameRequestCallback[];
+}
+
+/**
+ * What shotPose saw on the frame it shot: the creatures in the pose there, and the
+ * server's attack events and departures the client still kept (`__rpgClient.attacks`,
+ * `departures`), read on that same frame. With them a test checks that the pose came
+ * from the server's word (A9) and not from the client's guess for an older server.
+ */
+interface Caught {
+  ids: number[];
+  attacks: { id: number; kind: number; targetId: number }[];
+  departures: { id: number; reason: string }[];
+}
+
+/**
+ * A9 (docs/17 ANI-7): waits for a creature well into an attack pose (with clipOnly, an
+ * attack clip like an LPC swing, not the 250 ms lunge of a single image) or a fall, holds
+ * the canvas on that frame and takes screenshot `name`. The page sees the pose on an
+ * animation frame (after a third of it, before its last 60 ms), so the frame drawn last
+ * is in it; holding requestAnimationFrame keeps the game from drawing the next one until
+ * the shot is taken (an attack lasts 250-360 ms, a screenshot can take longer). Attack:
+ * clips for the first 20 s, then any. Returns what it saw on that frame (Caught).
+ */
+async function shotPose(
+  page: Page,
+  name: string,
+  kind: "attack" | "death",
+  timeout: number,
+): Promise<Caught> {
+  const deadline = Date.now() + timeout;
+  for (const clipOnly of kind === "attack" ? [true, false] : [false]) {
+    const left = deadline - Date.now();
+    const handle = await page
+      .waitForFunction(
+        ({ k, clips }): Caught | false => {
+          const c = window.__rpgClient;
+          const p = c?.poses();
+          if (!c || !p) return false;
+          const list = k === "death" ? p.dying : p.attacking.filter((a) => !clips || a.of > 300);
+          const ids = list.filter((x) => x.ms > x.of / 3 && x.ms < x.of - 60).map((x) => x.id);
+          if (ids.length === 0) return false;
+          const w = window as unknown as PoseHold;
+          const held: FrameRequestCallback[] = [];
+          w.e2eHeld = held;
+          w.e2eRaf = window.requestAnimationFrame;
+          window.requestAnimationFrame = (cb) => {
+            held.push(cb);
+            return 0;
+          };
+          return { ids, attacks: c.attacks(5_000), departures: c.departures(5_000) };
+        },
+        { k: kind, clips: clipOnly },
+        { timeout: clipOnly ? Math.min(20_000, left) : left, polling: "raf" },
+      )
+      .catch(() => undefined);
+    if (!handle) continue;
+    try {
+      const caught = await handle.jsonValue();
+      await shot(page, name);
+      if (caught) return caught;
+    } finally {
+      await page.evaluate(() => {
+        const w = window as unknown as PoseHold;
+        const raf = w.e2eRaf;
+        if (!raf) return;
+        window.requestAnimationFrame = raf;
+        w.e2eRaf = undefined;
+        for (const cb of w.e2eHeld ?? []) window.requestAnimationFrame(cb);
+        w.e2eHeld = [];
+      });
+    }
+  }
+  throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
+}
 
 /** Random letters with no vowels, so a name never contains a reserved word. */
 function randomLetters(n: number): string {
@@ -177,7 +257,8 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   }
   await shot(page, "05-walked-keyboard");
 
-  // 2 more by clicking a tile two columns to the right (WalkPath).
+  // 2 more by clicking a tile two columns to the right (the client's route, each step a
+  // Walk).
   expect(await walkable(x + 1, y)).toBe(true);
   expect(await walkable(x + 2, y)).toBe(true);
   const target = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
@@ -360,6 +441,26 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     })
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
+  // A9: the server says who attacks whom (docs/17 ANI-7): a CreatureAttack of the player
+  // at its wolf or of the wolf. Without those events the client still plays poses, guessed
+  // from the effects and projectiles (an older server), so the poses alone prove nothing.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (wolf) =>
+            (window.__rpgClient?.attacks(1_000) ?? []).some(
+              (a) => a.id === wolf || a.targetId === wolf,
+            ),
+          target,
+        ),
+      { timeout: 15_000, intervals: [100] },
+    )
+    .toBe(true);
+  // An attack pose, the own player's swing or the wolf's lunge, and on that same frame the
+  // CreatureAttack of a creature in it, which started it.
+  const swing = await shotPose(page, "07b-attack-pose", "attack", 30_000);
+  expect(swing.attacks.filter((a) => swing.ids.includes(a.id))).not.toEqual([]);
 
   // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
   // progress.
@@ -399,8 +500,8 @@ const WOLF_WAIT = { x: 1056, y: 1052 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
   // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
-  // --repeat-each) killed them all.
-  test.setTimeout(180_000);
+  // --repeat-each) killed them all; killing one at the end (A9) can take another.
+  test.setTimeout(330_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -561,6 +662,26 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // The cast spent mana and started the cooldown shade on F1.
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
   await hotbar.screenshot({ path: join(shots, "12-hotbar.png") });
+
+  // A9: bolts (and fists) until a wolf dies, and its fall on screen: the server's
+  // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
+  let fell = false;
+  const fall = shotPose(page, "11b-death", "death", 150_000);
+  fall.then(
+    () => {
+      fell = true;
+    },
+    () => undefined, // its failure surfaces in the race below
+  );
+  while (!fell) {
+    if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) await targetWolf();
+    await page.keyboard.press("F1");
+    await Promise.race([fall, page.waitForTimeout(500)]);
+  }
+  // It falls because its CreatureDisappear said DEATH, not because its health bar was
+  // empty (the client's guess with an older server, which would fall the same).
+  const dead = await fall;
+  for (const id of dead.ids) expect(dead.departures).toContainEqual({ id, reason: "DEATH" });
 
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
@@ -1856,6 +1977,16 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Nothing may start before a gesture (browser autoplay rules).
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
   expect(await starts()).toBe(0);
+  // The first gesture starts the title screen's loop (the owner's Gemini pick in
+  // assets/sounds.yaml music.title; none if he picked none), and no ambient bed. Polling
+  // what plays proves its file loaded and decoded.
+  const sounds = parse(
+    readFileSync(join(import.meta.dirname, "..", "..", "assets", "sounds.yaml"), "utf8"),
+  ) as { music?: { title?: string } };
+  await page.keyboard.press("Shift");
+  await expect
+    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
+    .toEqual({ music: sounds.music?.title, ambient: undefined });
 
   await enterGame(page, email, password);
   errors.length = 0;

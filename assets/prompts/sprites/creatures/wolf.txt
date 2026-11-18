@@ -1,0 +1,39 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/creatures/wolf/*.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-18
+# Modo: Hydrogen
+# Hoja devuelta: wolf_c.png (sha256 ff8c812aab7ffcb4f96554689ca4492fce6ffcbfa14ef9d9ef0a64bd582c2f1c)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut rows --size 64 --layer creature --margin 8 --colors 16 --shared-colours --names "walk_s_0,walk_s_1,walk_s_2,walk_s_3,walk_n_0,walk_n_1,walk_n_2,walk_n_3,walk_w_0,walk_w_1,walk_w_2,walk_w_3,idle_s_0+attack_s_0,idle_s_1+attack_s_2,idle_n_0+attack_n_0,idle_n_1+attack_n_2,idle_w_0,idle_w_1,attack_s_1,-,-,attack_n_1,-,-,attack_w_0+attack_w_2,attack_w_1,-,death_s_0,death_s_1,death_s_2" --mirror "attack_w_0,attack_w_1,attack_w_2,idle_w_0,idle_w_1,walk_w_0,walk_w_1,walk_w_2,walk_w_3"
+
+A pixel-art animation sprite sheet of one creature for a dark fantasy top-down role-playing game: a lean, shaggy wolf of the windy harbour island, ash-grey fur with a darker grey back and a pale grey belly, amber eyes, a long bushy tail. A hunter that stalks travellers on the coast road.
+
+Eight rows of frames, each row a separate strip, every frame the same wolf at the same scale on the same ground line:
+- Row 1, four frames: the wolf trotting straight toward the camera, head-on front view (we see its face, chest and front legs; the legs alternate).
+- Row 2, four frames: the wolf trotting straight away from the camera, rear view (we see its back, hindquarters and tail; the legs alternate).
+- Row 3, four frames: the wolf trotting to the right, in profile facing right.
+- Row 4, six frames: the wolf standing still and breathing: two frames facing the camera, two frames seen from behind, two frames in profile facing right.
+- Row 5, three frames: the wolf biting toward the camera, head-on (crouch, lunge with open jaws, recover).
+- Row 6, three frames: the wolf biting away from the camera, seen from behind (crouch, lunge with open jaws, recover).
+- Row 7, three frames: the wolf biting to the right, in profile facing right (crouch, lunge with open jaws, recover).
+- Row 8, three frames: the wolf dying, seen from the front (staggers, collapses, lies still on its side).
+
+The same silhouette, proportions, colours and size in every frame: only the pose and the facing change.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

@@ -965,7 +965,7 @@ func TestWorldTaintedFailsSafe(t *testing.T) {
 		t.Fatal("a trade opened while read-only")
 	}
 	again := &fakeClient{}
-	h.sim.Command(h.w.Join(withPack(s.CharacterID(), pos(2, 2)), again))
+	h.sim.Command(h.joinCmd(withPack(s.CharacterID(), pos(2, 2)), again))
 	h.sim.Step()
 	if !again.closed || again.reason != pb.DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED {
 		t.Fatalf("relogin closed %v reason %v", again.closed, again.reason)

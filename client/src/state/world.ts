@@ -21,7 +21,9 @@ export interface PresenceState {
 }
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
+  AttackKind,
   Cosmetics,
+  DisappearReason,
   Creature,
   Skull,
   EquipmentSlot,
@@ -35,7 +37,7 @@ import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
-import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -150,6 +152,27 @@ export interface ProjectileState {
   start: number;
 }
 
+/**
+ * A CreatureAttack (A9, docs/05 "Quién ataca y por qué sale una criatura"): creature `id`
+ * attacked `targetId` (0: an area, or a target out of the window) towards `to`.
+ */
+export interface AttackState {
+  id: number;
+  kind: AttackKind;
+  targetId: number;
+  to: Pos;
+  /** An area spell's radius around `to`; 0 for one target. */
+  radius: number;
+  start: number;
+}
+
+/** Why a creature left the view (CreatureDisappear.reason), kept a moment for the canvas. */
+export interface DepartureState {
+  id: number;
+  reason: DisappearReason;
+  start: number;
+}
+
 /** A number rising from a tile: damage, healing, experience. */
 export interface FloatingTextState {
   pos: Pos;
@@ -256,6 +279,9 @@ export const PROJECTILE_MS = 250;
 /** How long effects and floating texts live, ms. */
 export const EFFECT_MS = 600;
 export const FLOATING_TEXT_MS = 1000;
+/** How long attacks (for the hits of their batch) and departures are kept, ms. */
+export const ATTACK_MS = FLOATING_TEXT_MS;
+export const DEPARTURE_MS = 1000;
 
 /** Removes, in place and keeping the order, the entries that started `ms` or more before now. */
 export function dropFinished(list: { start: number }[], now: number, ms: number): void {
@@ -266,6 +292,21 @@ export function dropFinished(list: { start: number }[], now: number, ms: number)
   }
   list.length = kept;
 }
+
+/**
+ * Adds x (started now) to a list kept in start order, first dropping what finished if its
+ * oldest entry did. The canvas drops them every frame (WorldState.expire), but a tab in the
+ * background draws no frames: without this the lists would grow with every batch until it
+ * comes back, and so would what walks them on the way in (a departure forgotten on every
+ * CreatureAppear) and on the first frame back. One pass per batch at most: the entries of
+ * one batch start together.
+ */
+function pushLive<T extends { start: number }>(list: T[], x: T, ms: number): void {
+  const first = list[0];
+  if (first && x.start - first.start >= ms) dropFinished(list, x.start, ms);
+  list.push(x);
+}
+
 /** Status log length. */
 const LOG_SIZE = 5;
 /** Chat lines kept on screen. */
@@ -362,10 +403,15 @@ export class WorldState implements TileSource {
    * way): a held movement key would predict it again as soon as a step can start, and every
    * refusal brings its message back (portal.blocked: no room on the other side;
    * house.no_access). predictStep keeps off that very step (same tile, same target) until
-   * retryWalk (a fresh press or a release of a movement key or the pad, a new direction),
-   * an own move or a full map view. Click-to-walk (WalkPath) never looks at it.
+   * retryWalk (a fresh press or a release of a movement key or the pad, a new direction,
+   * a click or a fresh press of the left button on the map), an own move or a full map
+   * view. The click's route and the mouse held (state/steering.ts) plan round it.
    */
   private refused: { from: Pos; to: Pos } | undefined;
+  /** The own step the server refused last (`refused`), while the client keeps off it. */
+  get refusedStep(): Readonly<{ from: Pos; to: Pos }> | undefined {
+    return this.refused;
+  }
   /** Whether the player is invisible (its own condition): it is drawn see-through. */
   get invisible(): boolean {
     return this.conditions.some((c) => c.id === "invisible");
@@ -396,6 +442,14 @@ export class WorldState implements TileSource {
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
   projectiles: ProjectileState[] = [];
+  /**
+   * Welcome.attack_events: the server says who attacks whom (`attacks`) and why a
+   * creature leaves (`departures`), A9. False for an older server: the canvas works the
+   * fights out from effects and projectiles (render/creature-events.ts).
+   */
+  attackEvents = false;
+  attacks: AttackState[] = [];
+  departures: DepartureState[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
@@ -536,6 +590,7 @@ export class WorldState implements TileSource {
         this.selfId = msg.value.creatureId;
         this.maxQueued = msg.value.maxQueuedSteps;
         this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
+        this.attackEvents = msg.value.attackEvents;
         break;
       case "fullMapView":
         this.chunks.clear();
@@ -560,6 +615,11 @@ export class WorldState implements TileSource {
         break;
       case "creatureDisappear":
         this.creatures.delete(msg.value.id);
+        pushLive(
+          this.departures,
+          { id: msg.value.id, reason: msg.value.reason, start: now },
+          DEPARTURE_MS,
+        );
         if (this.target === msg.value.id) this.target = undefined;
         break;
       case "creatureHealth": {
@@ -568,15 +628,37 @@ export class WorldState implements TileSource {
         break;
       }
       case "effect":
-        this.effects.push({ pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now });
+        pushLive(
+          this.effects,
+          { pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now },
+          EFFECT_MS,
+        );
+        break;
+      case "creatureAttack":
+        pushLive(
+          this.attacks,
+          {
+            id: msg.value.id,
+            kind: msg.value.kind,
+            targetId: msg.value.targetId,
+            to: posOf(msg.value.to),
+            radius: msg.value.radius,
+            start: now,
+          },
+          ATTACK_MS,
+        );
         break;
       case "projectile":
-        this.projectiles.push({
-          from: posOf(msg.value.from),
-          to: posOf(msg.value.to),
-          projectileId: msg.value.projectileId,
-          start: now,
-        });
+        pushLive(
+          this.projectiles,
+          {
+            from: posOf(msg.value.from),
+            to: posOf(msg.value.to),
+            projectileId: msg.value.projectileId,
+            start: now,
+          },
+          PROJECTILE_MS,
+        );
         break;
       case "partyUpdate":
         this.party.update(msg.value);
@@ -644,12 +726,16 @@ export class WorldState implements TileSource {
         break;
       }
       case "floatingText":
-        this.floatingTexts.push({
-          pos: posOf(msg.value.pos),
-          kind: msg.value.kind,
-          amount: Number(msg.value.amount),
-          start: now,
-        });
+        pushLive(
+          this.floatingTexts,
+          {
+            pos: posOf(msg.value.pos),
+            kind: msg.value.kind,
+            amount: Number(msg.value.amount),
+            start: now,
+          },
+          FLOATING_TEXT_MS,
+        );
         break;
       case "dialogOpen": {
         const v = msg.value;
@@ -808,7 +894,8 @@ export class WorldState implements TileSource {
         const s = this.self;
         const back = msg.value.pos ? posOf(msg.value.pos) : undefined;
         // The refusal of a predicted step itself (the server says the refused step's
-        // direction and where the player stands), not of a step of a WalkPath.
+        // direction and where the player stands), not of a step the server took on its own
+        // (a chase).
         const p = steps.find(
           (q) => back && samePos(back, q.from) && msg.value.dir === directionTo(q.from, q.to),
         );
@@ -903,6 +990,9 @@ export class WorldState implements TileSource {
 
   private addCreature(c: Creature): void {
     const prev = this.creatures.get(c.id);
+    // It is back: why it left last no longer holds (a player that died and woke up in
+    // view must not fall when it later leaves the drawn floor).
+    if (!prev) this.forgetDeparture(c.id);
     this.creatures.set(c.id, {
       id: c.id,
       kind: c.kind,
@@ -1057,13 +1147,38 @@ export class WorldState implements TileSource {
   }
 
   /**
-   * Forgets effects, floating texts and projectiles that finished. In place: the canvas
-   * calls this every frame, and a new array per frame would be garbage (docs/07).
+   * Forgets effects, floating texts, projectiles, attacks and departures that finished. In
+   * place: the canvas calls this every frame, and a new array per frame would be garbage
+   * (docs/07).
    */
   expire(now: number): void {
     dropFinished(this.effects, now, EFFECT_MS);
     dropFinished(this.floatingTexts, now, FLOATING_TEXT_MS);
     dropFinished(this.projectiles, now, PROJECTILE_MS);
+    dropFinished(this.attacks, now, ATTACK_MS);
+    dropFinished(this.departures, now, DEPARTURE_MS);
+  }
+
+  /**
+   * Why creature id last left the view, while it is kept (DEPARTURE_MS) and the creature
+   * has not come back since.
+   */
+  departureOf(id: number): DisappearReason | undefined {
+    for (let i = this.departures.length - 1; i >= 0; i--) {
+      const d = this.departures[i];
+      if (d?.id === id) return d.reason;
+    }
+    return undefined;
+  }
+
+  /** Drops the departures of creature id, in place (it came back into view). */
+  private forgetDeparture(id: number): void {
+    let kept = 0;
+    for (let i = 0; i < this.departures.length; i++) {
+      const d = this.departures[i];
+      if (d && d.id !== id) this.departures[kept++] = d;
+    }
+    this.departures.length = kept;
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
@@ -1144,10 +1259,13 @@ export class WorldState implements TileSource {
   stepOpen(dir: Direction): boolean {
     const s = this.self;
     if (!s) return false;
-    const to = step(s.pos, dir);
-    if (!this.free(to.x, to.y, to.z)) return false;
+    // No Pos made: the mouse held against a wall asks this every frame (docs/07).
+    const [dx, dy] = delta(dir);
+    const x = s.pos.x + dx;
+    const y = s.pos.y + dy;
+    if (!this.free(x, y, s.pos.z)) return false;
     const r = this.refused;
-    return !(r && samePos(r.from, s.pos) && samePos(r.to, to));
+    return !(r && samePos(r.from, s.pos) && r.to.x === x && r.to.y === y && r.to.z === s.pos.z);
   }
 
   /**
@@ -1197,7 +1315,16 @@ export class WorldState implements TileSource {
       const seq = this.predictStep(d, now);
       if (seq !== undefined) return { kind: "walk", dir: d, seq };
     }
-    if (this.predicted.length > 0) return undefined;
+    return this.turn(dir);
+  }
+
+  /**
+   * Turns the own creature toward `dir` without a step (chooseStep's "nothing open"): only
+   * with every step confirmed and when the facing changes; the Turn to send, if any.
+   */
+  turn(dir: Direction): { kind: "turn"; dir: Direction } | undefined {
+    const s = this.self;
+    if (!s || this.predicted.length > 0) return undefined;
     if (s.dir === dir || dir === Direction.UNSPECIFIED) return undefined;
     s.dir = dir;
     return { kind: "turn", dir };
@@ -1225,9 +1352,14 @@ export class WorldState implements TileSource {
 
   /**
    * Where to draw a creature (fractional tiles): along the step drawn now (waiting at its
-   * start before it begins), plus what is left of a correction gliding out.
+   * start before it begins), plus what is left of a correction gliding out. Written into
+   * `out` when given (a caller asking every frame makes no object, docs/07).
    */
-  drawPos(c: CreatureState, now: number): { x: number; y: number } {
+  drawPos(
+    c: CreatureState,
+    now: number,
+    out: { x: number; y: number } = { x: 0, y: 0 },
+  ): { x: number; y: number } {
     const w = this.activeWalk(c, now);
     let x = c.pos.x;
     let y = c.pos.y;
@@ -1243,9 +1375,13 @@ export class WorldState implements TileSource {
       y = w.to.y;
     }
     const left = slideLeft(c.slide, now);
-    if (left) return { x: x + left.x, y: y + left.y };
-    if (c.slide) c.slide = undefined;
-    return { x, y };
+    if (left) {
+      x += left.x;
+      y += left.y;
+    } else if (c.slide) c.slide = undefined;
+    out.x = x;
+    out.y = y;
+    return out;
   }
 }
 

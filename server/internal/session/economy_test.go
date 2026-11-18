@@ -126,7 +126,7 @@ func TestEconomyOutlier(t *testing.T) {
 	cl := &fakeClient{}
 	c := withPack(960, pos(10, 10))
 	c.Name, c.Vocation = "Lucky", "guardian"
-	h.sim.Command(h.w.Join(c, cl))
+	h.sim.Command(h.joinCmd(c, cl))
 	h.sim.Step()
 	p := h.w.PlayerByCharacter(960)
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 100) })) // 110 allowed at level 1
@@ -231,7 +231,7 @@ func TestEconomyOutlierSurvivesRelogin(t *testing.T) {
 	c.Name, c.Vocation = "Hopper", "guardian"
 	for range 3 {
 		cl := &fakeClient{}
-		h.sim.Command(h.w.Join(c, cl))
+		h.sim.Command(h.joinCmd(c, cl))
 		h.sim.Step()
 		p := h.w.PlayerByCharacter(970)
 		h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 40) }))
@@ -255,7 +255,7 @@ func TestEconomyEarningsPrunedWithChecksOff(t *testing.T) {
 		c := withPack(int64(990+i), pos(10+i, 10))
 		c.Name, c.Vocation = "Passer", "guardian"
 		cl := &fakeClient{}
-		h.sim.Command(h.w.Join(c, cl))
+		h.sim.Command(h.joinCmd(c, cl))
 		h.sim.Step()
 		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
 		h.sim.Step()

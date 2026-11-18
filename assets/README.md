@@ -5,14 +5,17 @@
 | `sprites.yaml` | Manifiesto: de dónde salen los píxeles de cada sprite de `data/` | Sí |
 | `sprites/<ruta>.png` | Arte propio del proyecto (32x32 o múltiplos de 32) | Sí |
 | `vendor/<pack>/` | Packs de terceros tal como se bajaron, con su archivo `LICENSE` | Sí |
-| `CREDITS.md` | Registro de licencias de todo lo que hay en `vendor/` | Sí |
+| `CREDITS.md` | Registro de licencias de todo lo que hay en `vendor/`, y de lo generado con Gemini | Sí |
+| `prompts/<ruta>.txt` | El prompt exacto de cada asset hecho con el Gemini del dueño (ver abajo) | Sí |
 | `atlas/` | Salida de `make sprites` (`atlas.json`, `atlas-N.png/json`) | No (generado) |
 
 ## Sonido (T3.7)
 | Ruta | Qué es | ¿Se commitea? |
 |---|---|---|
-| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla | Sí |
+| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla, música del título, de combate y de jefes | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
+| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), escrita por `make music-gemini` | Sí |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, con fuente, título y medidas | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -22,6 +25,40 @@
 - El render es determinista (mismos samples con la misma receta). Los bytes del `.ogg`
   pueden variar entre versiones de libopus: es normal ver diffs binarios al regenerar.
 - Presupuesto de tamaño en `docs/07-performance-budget.md`, "Audio".
+
+### La música de Gemini (`make music-gemini`)
+Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las tomas que
+Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
+Volcán, Cuevas, combate y el guardián de la forja). Las tomas están fuera de git, en
+`build/music-gemini/<lugar>_<n>.mp4` con su sidecar (la tercera de Puerto es `probe_1.mp4`),
+y las elecciones en `build/music-gemini/picks.json`:
+```json
+{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off"}}
+```
+- **Una toma** (`"1"`, `"2"`, `"3"`) suena en su lugar. **Varias** (una lista) entran
+  todas: la primera es el sonido del lugar (`music_puerto`) y las demás, sonidos propios
+  (`music_puerto_2`, `music_puerto_3`) para el director de música que las va a alternar
+  (pendiente, `docs/14`).
+- **Un lugar sin elegir** suena con su toma 1, marcada `provisional` en el manifiesto y en
+  su fila de `CREDITS.md`.
+- **`none` u `off`** deja lo que sonaba antes de Gemini: el tema de soundgen de ese lugar
+  (`puerto`, `bosque`, `volcan`, `cueva`: por eso siguen en el repo con sus recetas), o
+  nada propio donde no había (título, combate, jefe: sigue la música de la zona).
+
+Para cambiar una elección: editar `picks.json` y correr **`make music-gemini`** (con
+`FROM=<carpeta>` si las tomas están en otro lado). Hace todo de nuevo desde las elecciones:
+convierte cada toma con `music_convert.py` (sin fades, un loop de 54 a 72 s elegido donde
+lo que sigue al corte se parece al comienzo, cerrado con un crossfade, una sola ganancia
+hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **mono a 20 kbps**; una toma ya convertida
+con los mismos ajustes no se vuelve a convertir), la copia a `sounds/music/gemini/`,
+reescribe sus líneas de `sounds.yaml` (entre las marcas `# gemini-music:…`), el archivo de
+prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md` y
+`sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
+(`tools/soundgen check`). Los masters de Gemini vienen calientes (picos de +1,5 a +5 dBTP):
+el techo de pico deja los loops entre -16 y -19,5 LUFS, y el volumen de `sounds.yaml`
+devuelve esa diferencia hasta 1 (`volume_for`), así que suenan ~2 dB por debajo de los
+temas de soundgen. Después: `make test` (el test de soundgen compara el manifiesto con
+`sounds.yaml`, las filas y la carpeta), `make validate` y escucharlo con `make play`.
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
@@ -68,9 +105,11 @@ es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
    (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
    de LPC (`vendor/ulpc`).
 2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, de spritegen:
-   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`). spritepack arma los
-   clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como tengan
-   todas sin huecos.
+   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`, o las hojas de
+   Gemini de "Arte y música hechos con Gemini": `sprites/creatures/wolf/`). spritepack arma
+   los clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como
+   tengan todas sin huecos. Si no hay `sprites/<sprite>.png` ni entrada en `sprites`, el
+   nombre del sprite es un alias de su primer frame (quieto o caminar, hacia el sur).
 3. **Ninguno:** el sprite único se anima por código (ANI-5). Una entrada de `animations`
    sin `layers` le da pistas.
 
@@ -85,8 +124,8 @@ animations:
     layers:                                # "<sheet>" = la hoja de cada acción
       - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
-  creatures/gloom_bat: { flying: true }    # pistas para un sprite de un solo frame
-  creatures/wolf: { facing: left }
+  creatures/hollow_crawler: { facing: left }   # pistas para un sprite de un solo frame
+  creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { attack: 110, death: 200 } }   # frames de archivos
 ```
 - **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
   norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
@@ -103,13 +142,30 @@ animations:
   `shadow: baked | ellipse | none`. Con capas, la sombra por defecto es `ellipse` (la sombra
   de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
   `baked` (Dungeon Crawl y spritegen la pintan).
+- **Pistas de frames de archivos** (solo sin capas, y solo si el sprite tiene frames en
+  `sprites/<sprite>/`; si no, error):
+  - `mirror: true` (ANI-1): en cada acción con frames al oeste y ninguno al este (o al
+    revés), spritepack agrega los del otro lado espejados (`<sprite>/walk_e_<n>`, origen
+    `file`). Un lado que ya tiene frames nunca se pisa. Para criaturas sin nada en un solo
+    brazo; con `mirror` no se usa `facing` (los dos lados tienen frames);
+  - `anchor: br | bc` (por defecto `br`): `bc` para frames de 64x64 o que no llenan la
+    casilla: los pies van a `FEET_LINE`, medidos en los frames de caminar;
+  - `ms: { idle: 500, attack: 110, death: 200 }`: ms por frame de cada acción que se juega
+    por tiempo (sin esto, 500, 60 y 100; caminar va por distancia). Un `ms` de una acción
+    sin frames es error.
+- **Quieto y atacar solo hacia sus lados** (`OWN_FACINGS`, `packages/renderer/src/anim.ts`):
+  una criatura que mira hacia un lado sin frames de `idle` o de `attack` no toma los de
+  otro lado: usa el frame parado de esa dirección (el 0 de caminar) y, al atacar, la
+  embestida de ANI-5. Así un mordisco dibujado solo de perfil no hace girar al lobo cuando
+  muerde hacia el sur. Caminar y morir siguen tomando el sur (o la primera dirección).
 - **Alias:** el nombre del sprite (`outfits/sailor`) apunta a su primer frame quieto (para
   las referencias de `data/`, los íconos y la tienda del sitio), y los frames viejos de un
   atuendo (`outfits/sailor/s_0`, `e_2`, T0.5) a la pose quieta y al ciclo de caminar.
   Comparten el rectángulo del atlas: no ocupan lugar.
 - **Errores** (`make sprites`): una animación con capas no puede pisar un sprite que ya
   existe (archivo o entrada de `sprites`); una entrada con pistas tiene que nombrar uno que
-  exista; falta una hoja o es más chica que lo que piden la acción y sus filas.
+  exista; falta una hoja o es más chica que lo que piden la acción y sus filas; `mirror`,
+  `anchor` o `ms` con capas o sin frames de archivos.
 - **atlas.json** suma `anims`: por sprite, `w`, `h`, `anchor` (`bc` con capas: los pies
   sobre la casilla; `br`, el de siempre), `foot` (filas vacías bajo los pies), `top` (alto
   del dibujo), `shadow`, `facing`, `flying` y por acción `frames`, `ms`, `perTile` y `dirs`.
@@ -151,7 +207,14 @@ tiles:
   decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
+  ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
 ```
+- `particles` (docs/17 ART-7, A13): `embers` (brasas que suben), `pollen` (polen que flota
+  alrededor de un árbol), `spray` (rocío; un suelo `spray` solo emite donde toca otro
+  suelo) o `dust` (polvo). El cliente las dibuja (`client/src/render/particles.ts`).
+- Las piezas de muro pueden medir 32x96 (la muralla, `walls/rampart_wall`: cara de 64 px).
+  El marco de las puertas de casa (`doors/house_door_frame`) también tiene 16 piezas: el
+  renderer lo pone en cada puerta de `houses.yaml` sin que esté en el mapa.
 - `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
   casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
   entrada: 250 ms y `world`.
@@ -244,6 +307,100 @@ Son mapas de píxeles hechos a mano, con un contorno casi negro por fuera. Cada 
 su propia silueta, para que se distinga también sin color. El canvas las dibuja junto al
 nombre a 1 píxel de pantalla por píxel del sprite (como el texto de 12 px), y la lista de
 batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de antes.
+
+## Arte y música hechos con Gemini (desde el 2026-11-17)
+Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta de Gemini
+(la app web, la misma que usa en Ants of Neque). Las herramientas están en `tools/gemini`
+(`tools/CLAUDE.md`, "gemini") y las reglas son estas:
+- **El prompt describe nuestro contenido**: qué es (un puerto al atardecer, un lobo que
+  trota hacia el sur) y cómo suena o se ve, nunca a qué se parece. **Nunca nombra otro
+  juego, artista, compositor ni obra**, ni pide "al estilo de" o "inspirado en". Las
+  herramientas se niegan a enviar un prompt así (`tools/gemini/prompt_guard.py`).
+- **Una referencia (`--ref`) es solo un archivo commiteado en `assets/`, ya acreditado**
+  (arte propio o de un pack de `CREDITS.md`). Lo que se sube es parte del pedido tanto
+  como el texto, y con `--edit` se pide algo parecido: un sprite o un audio de terceros
+  (y menos de Tibia u otro juego) nunca se manda. Los drivers rechazan otra ruta; el
+  sidecar guarda la ruta y el sha256, y `credit.py` los escribe en el archivo de prompt y
+  en la fila (y no acredita si la referencia ya no está en el repo tal como se mandó).
+- **Cada archivo que se usa queda registrado** en `CREDITS.md`, sección "Generado con
+  IA": los archivos, la herramienta (Gemini, app web de la cuenta del dueño, y el modo),
+  la fecha y un **archivo de prompt commiteado** en `assets/prompts/<ruta del asset sin
+  "assets/" ni extensión>.txt` con el prompt exacto (para los frames de una hoja, uno solo
+  con el nombre del sprite). `python tools/gemini/credit.py <sidecar.json> --asset <ruta>`
+  escribe ese archivo e imprime la fila.
+- **Se acredita a Gemini como herramienta** y no se presenta como hecho a mano (Google no
+  reclama la propiedad de lo generado, y su política pide no ocultar el origen). Un
+  archivo de Gemini no entra en las filas de "Obra propia" (que son de spritegen y
+  soundgen): si reemplaza uno de ellos, esa fila lo excluye.
+- **Nada llega a `assets/` sin que alguien lo mire o lo escuche.** Todo sale primero a
+  `build/gemini/` (no se commitea).
+
+Arte, de la hoja al sprite:
+1. `python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk_s [--ref assets/sprites/....png]`
+   deja `build/gemini/art/wolf_walk_s.png` y su `.json`. Al prompt se le suman las reglas
+   de la casa (`HOUSE_RULES`): fondo magenta plano, grilla pareja sin textos, 3/4 frontal,
+   luz desde arriba a la izquierda, contorno oscuro del color local, colores apagados, y
+   nada magenta, rosa, púrpura ni violeta en el sujeto (la clave por tono se los lleva).
+2. `python tools/gemini/import_art.py build/gemini/art/wolf_walk_s.png --grid 4x1 --size 32
+   --layer creature --prefix walk_s` deja en `build/gemini/import/wolf_walk_s/` los frames
+   en nuestra grilla (vecino más cercano), con la paleta de spritegen dentro de la banda
+   de ART-6 de su capa, el contorno oscuro (en criaturas, personajes, objetos y muros; los
+   suelos y los efectos no llevan) y alfa 0 o 255, más `_preview.png` (mirarlo con Read) e
+   `import.json`.
+3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
+   (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
+
+**Criaturas animadas de una sola hoja** (así se hicieron las siete del 2026-11-18: lobo,
+rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
+espinoso; prompts en `assets/prompts/sprites/creatures/`):
+- **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
+  `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña
+  cubierta de musgo que escupe savia) y pide **ocho filas, cada una una tira**: caminar
+  hacia la cámara, de espaldas y de perfil (4 frames cada una), quieto (2 de frente, 2 de
+  espaldas, 2 de perfil), atacar hacia la cámara, de espaldas y de perfil (3 cada una) y
+  morir de frente (3). "Vista desde arriba y adelante, la cámara a 45 grados" en las de
+  frente y espaldas. El perfil se pide **hacia la derecha** (Gemini lo dibuja así aunque se
+  pida a la izquierda) y se espeja al importar.
+- **Lo que Gemini hace bien y mal** (siete hojas): las filas de caminar y de quieto salen
+  casi siempre; los ataques de frente y de espaldas casi nunca (dibuja otro perfil o una
+  pose parada) y la cantidad de frames por fila varía. No se pide de nuevo por eso: un
+  ataque que falta en una dirección lo hace la embestida de ANI-5 ("Quieto y atacar solo
+  hacia sus lados", arriba), o se arma con el frame parado, el de golpe que sí haya y el
+  parado otra vez. Una hoja con frames que no son la misma criatura se pide otra vez (dos
+  veces como mucho) o la criatura se deja.
+- **El corte** no es una grilla pareja: `--cut rows` toma las filas tal como vinieron
+  (cada una en partes iguales si sus dibujos caen una en cada parte, así conserva el
+  registro con que se dibujaron; el que se sale de su parte no se corta y el vecino no se
+  cuela) y `--cut blobs` cada dibujo suelto, para una hoja en dos paneles o filas torcidas,
+  centrado en su masa (una cola o un látigo no corren el cuerpo). Las dos escriben
+  `_drawings.png`: la hoja con cada dibujo numerado, contra la que se escribe `--names`
+  (`-` descarta uno, `idle_s_0+attack_s_0` lo guarda dos veces). `--mirror` espeja los
+  frames de perfil, `--shared-colours` reduce los colores de todos juntos (de a uno, el
+  pelaje titilaba entre frames) y `--scale` fija la escala (fuente por píxel) cuando el
+  dibujo más ancho, una muerte tendida o unas alas abiertas, achicaría al resto.
+- **Tamaño** (ART-2, al lado de un personaje de LPC de ~46 px): rata y cangrejo en 32x32;
+  lobo, araña, sapo, murciélago y espinoso en 64x64 con `anchor: bc` (el lobo mide ~36 px
+  de largo, el espinoso ~40 de alto). Todos con `shadow: ellipse` y `mirror: true`.
+- **Revisar** con Read: `_drawings.png`, `_preview.png`, `anim_sheet.py
+  assets/sprites/creatures/<c>` y una fila de criaturas sobre pasto armada del atlas; en el
+  juego, los screenshots del E2E. Después, `credit.py build/gemini/import/<c>/import.json
+  --asset "assets/sprites/creatures/<c>/*.png" --prompt-file
+  assets/prompts/sprites/creatures/<c>.txt`: con el `import.json` (y no el sidecar) el
+  archivo de prompt suma la hoja que volvió (sha256) y el comando exacto que la cortó.
+
+Música, del MP4 al loop:
+1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
+   uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
+   con su `.json`.
+2. Se escuchan, y el elegido pasa por `python tools/gemini/music_convert.py
+   build/gemini/music/<tema>_<n>.mp4`: sin fades, cerrado en bucle con un crossfade de la
+   cola sobre la cabeza, a -14 LUFS (el nivel de la música que ya tiene el juego) y en
+   Ogg Opus, con la costura medida después de
+   codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
+3. El dueño elige en `build/music-gemini/picks.json` y `make music-gemini` lo pone en el
+   juego con sus créditos ("La música de Gemini", arriba). El presupuesto se respeta sin
+   subirlo: mono, 20 kbps y loops de ~1 minuto (un tema entero de ~3 min pesaría ~650 KB
+   en estéreo a 32 kbps y ocuparía ~33 MB decodificado).
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

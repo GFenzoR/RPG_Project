@@ -511,7 +511,7 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   }
   await shot("01-world");
 
-  // Walk: a tap on a tile two steps away (WalkPath, the server walks it).
+  // Walk: a tap on a tile two steps away (the client's route, each step a Walk).
   let me = await settled(page);
   let d = await openDirection(page, me, 2);
   await tapTile(page, me.x + 2 * d.dx, me.y + 2 * d.dy);

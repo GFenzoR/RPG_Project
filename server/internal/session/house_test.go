@@ -300,6 +300,10 @@ func TestHouseDoorsGuestsAndExpel(t *testing.T) {
 	if !hasKey(cb.take(), "house.expelled") || h.w.Map().HouseAt(b.Pos()) != nil {
 		t.Fatalf("Beto still inside at %v", b.Pos())
 	}
+	// A9: the owner saw him go as a teleport (he did not walk out).
+	if got := disappearsOf(evs, b.ID()); !slices.Equal(got, []pb.DisappearReason{pb.DisappearReason_DISAPPEAR_REASON_TELEPORT}) {
+		t.Errorf("the owner saw Beto leave for %v, want a teleport", got)
+	}
 	// Only the owner manages the house.
 	h.openDoor(cb, cottageDoor)
 	if evs := h.send(cb, houseCmd(&pb.HouseGuestAdd{Name: "Cid"})); !hasKey(evs, "house.not_owner") {

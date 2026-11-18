@@ -1,6 +1,9 @@
-// Who attacks and who gets hit, for the creature animations (docs/17 ANI-2, ANI-5). The
-// protocol does not say who struck whom yet (ANI-7, task A9: Effect only carries the
-// tile), so the client deduces it from what it sees. Pure, with tests.
+// Who attacks and who gets hit, and how a creature leaves, for the creature animations
+// (docs/17 ANI-2, ANI-5, ANI-7). Pure, with tests.
+//
+// A server with Welcome.attack_events (A9) says it: CreatureAttack names the attacker and
+// its target or area (attackDir, attackerOf), and CreatureDisappear says why a creature
+// left (leavesDying). For an older server the client deduces it from what it sees:
 //   - A ranged attack or a spell with a Projectile: the creature on its `from` tile.
 //   - A melee hit (a hit, block or element effect on a tile that no projectile reached in
 //     the same batch): the own player if its target is there and it stands next to it;
@@ -8,8 +11,8 @@
 //     strike monsters), the one facing the tile first, then the lowest id.
 //   - A damage number on a tile: the creature there flashes and is pushed away from its
 //     attacker (or back from where it faces).
-import { CreatureKind } from "@rpg/protocol";
-import type { Direction } from "@rpg/protocol";
+import { CreatureKind, DisappearReason } from "@rpg/protocol";
+import type { AttackKind, Direction } from "@rpg/protocol";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 
@@ -61,8 +64,85 @@ export function meleeAttacker(
 
 /** Unit push for a hit on `victim`: away from its attacker, else back from its facing. */
 export function pushOf(victim: Fighter, attacker: Fighter | undefined): readonly [number, number] {
-  if (attacker)
-    return [Math.sign(victim.pos.x - attacker.pos.x), Math.sign(victim.pos.y - attacker.pos.y)];
+  return pushFrom(victim, attacker?.pos);
+}
+
+/**
+ * Unit push for a hit on `victim` from tile `from` (its attacker, or an area's centre):
+ * away from it, else (none, or the same tile) back from its facing.
+ */
+export function pushFrom(victim: Fighter, from: Pos | undefined): readonly [number, number] {
+  const px = from ? Math.sign(victim.pos.x - from.x) : 0;
+  const py = from ? Math.sign(victim.pos.y - from.y) : 0;
+  if (px !== 0 || py !== 0) return [px, py];
   const [dx, dy] = delta(victim.dir);
   return [-dx || 0, -dy || 0];
+}
+
+/** A CreatureAttack the client got (state/world.ts `attacks`). */
+export interface AttackSeen {
+  /** The attacker. */
+  id: number;
+  kind: AttackKind;
+  /** The creature attacked, 0 for an area spell or a target out of the window. */
+  targetId: number;
+  /** The target's tile, the edge of the window on its side, or the area's centre. */
+  to: Pos;
+  /** An area spell's radius around `to` (0: one target). */
+  radius: number;
+  /** When it arrived (the batch's time). */
+  start: number;
+}
+
+/**
+ * Unit direction of an attack from its attacker: towards its target where the client
+ * draws it, else towards `to`; an attack on its own tile (an area spell around the
+ * caster) goes where the attacker faces.
+ */
+export function attackDir(
+  attacker: Fighter,
+  target: Fighter | undefined,
+  to: Pos,
+): readonly [number, number] {
+  const at = target?.pos ?? to;
+  const dx = Math.sign(at.x - attacker.pos.x);
+  const dy = Math.sign(at.y - attacker.pos.y);
+  if (dx !== 0 || dy !== 0) return [dx, dy];
+  const [fx, fy] = delta(attacker.dir);
+  return [fx, fy];
+}
+
+/** Whether an area of `radius` around `centre` covers `p` (the server's round area). */
+export function inArea(centre: Pos, radius: number, p: Pos): boolean {
+  const dx = p.x - centre.x;
+  const dy = p.y - centre.y;
+  return p.z === centre.z && dx * dx + dy * dy <= radius * radius + radius;
+}
+
+/**
+ * The attack behind a hit on `victim` that arrived at `start`: an attack of that batch
+ * aimed at it, else an area of that batch that covers its tile.
+ */
+export function attackerOf(
+  victim: Fighter,
+  attacks: Iterable<AttackSeen>,
+  start: number,
+): AttackSeen | undefined {
+  let area: AttackSeen | undefined;
+  for (const a of attacks) {
+    if (a.start !== start) continue;
+    if (a.targetId === victim.id) return a;
+    if (!area && a.radius > 0 && a.id !== victim.id && inArea(a.to, a.radius, victim.pos)) area = a;
+  }
+  return area;
+}
+
+/**
+ * Whether a creature that left the view fell there: the server's reason says so (a
+ * DEATH); without one (an older server, or a reason no longer at hand) an empty health
+ * bar does, as the server sends CreatureHealth 0 before a death.
+ */
+export function leavesDying(reason: DisappearReason | undefined, health: number): boolean {
+  if (reason === undefined || reason === DisappearReason.UNSPECIFIED) return health <= 0;
+  return reason === DisappearReason.DEATH;
 }
