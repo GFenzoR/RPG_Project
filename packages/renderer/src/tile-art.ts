@@ -30,6 +30,8 @@ export interface TileMeta {
   joins?: true;
   /** Has <sprite>/shadow, drawn on the shadow layer. */
   shadow?: true;
+  /** Gives light in dark places (caves, ART-7): its radius in tiles. */
+  light?: number;
 }
 
 export type TileSync = "world" | "tile" | "random";
@@ -52,6 +54,8 @@ export interface TileArt<T> {
   /** Neighbours treat it as a wall (walls and joins). */
   joinsWalls: boolean;
   shadow?: T;
+  /** Light radius in tiles, 0 for none. */
+  light: number;
 }
 
 /** Share of the tiles that keep a ground's main look (ART-4: about 70 %). */
@@ -169,6 +173,7 @@ export function resolveTileArt<T>(
     sync: meta.sync ?? "world",
     anchorX: meta.anchor === "bc" ? 0.5 : 1,
     joinsWalls: meta.wall === true || meta.joins === true,
+    light: meta.light ?? 0,
   };
   if (meta.variants) {
     const v = list(meta.variants + 1, (n) => variantName(sprite, n));

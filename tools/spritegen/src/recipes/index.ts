@@ -5,6 +5,7 @@ import { EFFECTS } from "./effects.ts";
 import { GROUND } from "./ground.ts";
 import { ITEMS } from "./items.ts";
 import { PORTALS } from "./portals.ts";
+import { PROPS } from "./props.ts";
 import { TERRAIN } from "./terrain.ts";
 import { TREES } from "./trees.ts";
 import { UI } from "./ui.ts";
@@ -26,6 +27,7 @@ export const RECIPES: RecipeBook = merge(
   GROUND,
   WALLS,
   TREES,
+  PROPS,
   PORTALS,
   ITEMS,
   CREATURES,

@@ -253,3 +253,7 @@ items:
   embersteel_crossbow: 250
   obsidian_wand: 251
   blackfrost_staff: 252
+  wall_torch: 253
+  wall_banner: 254
+  brazier: 255
+  fountain: 256

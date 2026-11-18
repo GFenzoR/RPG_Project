@@ -72,6 +72,8 @@ interface CachedChunk {
   shadows: Container | undefined;
   items: Sprite[];
   animated: Animated[];
+  /** Light sources (tile art light): x, y (global tile) and radius in tiles, flat. */
+  lights: number[];
   /** Neighbour chunks the wall pieces on this chunk's border were picked from. */
   deps: { cx: number; cy: number; data: ChunkData | undefined }[];
 }
@@ -249,6 +251,18 @@ export class MapView {
     return this.cache.size;
   }
 
+  /**
+   * Calls fn for every item that gives light (tile art light, ART-7) in the built chunks: its
+   * tile and its radius in tiles. Allocates nothing.
+   */
+  forEachLight(fn: (x: number, y: number, radius: number) => void): void {
+    for (const c of this.cache.values()) {
+      const l = c.lights;
+      for (let i = 0; i + 2 < l.length; i += 3)
+        fn(l[i] as number, l[i + 1] as number, l[i + 2] as number);
+    }
+  }
+
   /** Number of animated sprites in the built chunks (for tests and the debug overlay). */
   get animatedCount(): number {
     if (this.animatedStale) this.collectAnimated();
@@ -352,6 +366,7 @@ export class MapView {
         : false;
     };
     const items: Sprite[] = [];
+    const lights: number[] = [];
     let shadows: Container | undefined;
     for (const s of data.items) {
       const x = gx + s.x;
@@ -374,6 +389,7 @@ export class MapView {
         sprite.zIndex = itemZIndex(x, y, i);
         items.push(sprite);
         if (art?.frames) animated.push(animatedOf(sprite, art, tileHash(x, y, z + i)));
+        if (art && art.light > 0) lights.push(x, y, art.light);
         if (art?.shadow) {
           shadows ??= new Container({ label: `shadows ${key}` });
           const sh = new Sprite({
@@ -395,6 +411,7 @@ export class MapView {
       shadows,
       items,
       animated,
+      lights,
       deps: deps.size > 0 ? [...deps.values()] : NO_DEPS,
     });
     if (animated.length > 0) this.animatedStale = true;

@@ -115,6 +115,35 @@
   pickupable: false
   blocks_movement: true
 
+# Town props (docs/17 ART-7): animated, for map builders. A wall torch or banner hangs on the
+# face of an east-west wall: place it on the wall's tile, after the wall in the stack.
+- id: wall_torch
+  kind: decoration
+  sprite: decor/wall_torch
+  name: item.wall_torch.name
+  pickupable: false
+
+- id: wall_banner
+  kind: decoration
+  sprite: decor/wall_banner
+  name: item.wall_banner.name
+  pickupable: false
+
+- id: brazier
+  kind: decoration
+  sprite: decor/brazier
+  name: item.brazier.name
+  pickupable: false
+  blocks_movement: true
+
+- id: fountain
+  kind: decoration
+  sprite: decor/fountain
+  name: item.fountain.name
+  description: item.fountain.desc
+  pickupable: false
+  blocks_movement: true
+
 # Portals (T1.16, docs/02 "Cambiar de piso"): only the look of a portal of portals.yaml,
 # which does the moving. `portal` says which one each item shows: make validate wants it
 # on the entrance of every portal of that kind and way (docs/03 "Validación").

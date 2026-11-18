@@ -23,6 +23,7 @@ export interface TileMeta {
   wall?: true;
   joins?: true;
   shadow?: true;
+  light?: number;
 }
 
 /** One entry of the `tiles` section of assets/sprites.yaml. */
@@ -32,6 +33,8 @@ export interface TileEntry {
   anchor?: "bc";
   joins?: true;
   weight?: number;
+  /** Radius of the light it gives in dark places (caves), tiles. */
+  light?: number;
 }
 
 /** A part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow (same as tile-art.ts). */
@@ -41,7 +44,9 @@ export const WALL_PIECES = 16;
 export const MIN_FRAME_MS = 50;
 export const MAX_FRAME_MS = 5000;
 
-const ENTRY_KEYS = new Set(["ms", "sync", "anchor", "joins_walls", "weight", "notes"]);
+const ENTRY_KEYS = new Set(["ms", "sync", "anchor", "joins_walls", "weight", "light", "notes"]);
+/** Largest light radius, tiles. */
+export const MAX_LIGHT = 8;
 
 export function parseTileEntry(
   raw: unknown,
@@ -77,6 +82,12 @@ export function parseTileEntry(
     const w = r["weight"];
     if (typeof w !== "number" || !(w > 0) || !(w < 1)) fail("weight must be between 0 and 1");
     else entry.weight = w;
+  }
+  if (r["light"] !== undefined) {
+    const l = r["light"];
+    if (typeof l !== "number" || !(l > 0) || l > MAX_LIGHT)
+      fail(`light must be a radius in tiles, above 0 and up to ${MAX_LIGHT}`);
+    else entry.light = l;
   }
   if (r["notes"] !== undefined && typeof r["notes"] !== "string") fail("notes must be a string");
   return entry;
@@ -153,6 +164,7 @@ export function tileMetas(
       if (entry.sync !== undefined) meta.sync = entry.sync;
       if (entry.weight !== undefined) meta.weight = entry.weight;
       if (entry.anchor) meta.anchor = entry.anchor;
+      if (entry.light !== undefined) meta.light = entry.light;
       if (entry.joins) {
         if (meta.wall) fail("a wall already joins its neighbours: drop joins_walls");
         else meta.joins = true;

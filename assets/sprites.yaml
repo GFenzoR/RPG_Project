@@ -57,8 +57,6 @@ sprites:
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
   food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
   weapons/forged_shortsword: { source: vendor/dungeon-crawl/item/weapon/short_sword1.png }
-  decor/smelting_forge: { source: vendor/dungeon-crawl/dngn/altars/makhleb_flame1.png }
-  decor/cooking_hearth: { source: vendor/dungeon-crawl/dngn/gateways/return_vestibule.png }
 
   # Items: Isla del Bosque (T3.6)
   quest/sealed_coffer: { source: vendor/dungeon-crawl/item/misc/misc_box.png }
@@ -451,8 +449,8 @@ animations:
 # (<sprite>/var_<n>), animation frames (<sprite>/frame_<n>), wall pieces (<sprite>/wall_<mask>)
 # and cast shadows (<sprite>/shadow) are found by name; this section adds what names cannot
 # say: ms and sync of an animation (world: in step; tile: a phase per tile; random: a rare
-# glint), a centred anchor (bc), joins_walls for a door set in a wall, and the share of
-# the main look (weight, default 0.7).
+# glint), a centred anchor (bc), joins_walls for a door set in a wall, light (the radius in
+# tiles of the light it gives in caves) and the share of the main look (weight, default 0.7).
 tiles:
   ground/water_shallow: { ms: 240, sync: world }
   ground/water_shoal: { ms: 240, sync: world }
@@ -462,6 +460,12 @@ tiles:
   decor/birch_tree: { anchor: bc, ms: 700, sync: tile }
   decor/pine_tree: { anchor: bc, ms: 900, sync: tile }
   decor/bush: { ms: 750, sync: tile }
+  decor/smelting_forge: { ms: 120, sync: tile, light: 3.5 }
+  decor/cooking_hearth: { ms: 110, sync: tile, light: 3 }
+  decor/wall_torch: { ms: 110, sync: tile, light: 3 }
+  decor/brazier: { ms: 120, sync: tile, light: 3.5 }
+  decor/fountain: { ms: 150, sync: world }
+  decor/wall_banner: { ms: 170, sync: tile }
   doors/pruebas_gate: { joins_walls: true }
   doors/pruebas_gate_open: { joins_walls: true }
   doors/forge_gate: { joins_walls: true }

@@ -122,6 +122,7 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
       sync: "world" as const,
       anchorX: 1 as const,
       joinsWalls: false,
+      light: 0,
     };
     if (id === "wall") return { ...base, base: named("wall"), wall: pieces, joinsWalls: true };
     if (id === "door") return { ...base, base: named("door"), joinsWalls: true };
