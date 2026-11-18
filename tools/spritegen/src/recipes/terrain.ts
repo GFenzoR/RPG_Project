@@ -11,7 +11,6 @@ import {
   line,
   opaque,
   outline,
-  polygon,
   px,
   rect,
   shadeOf,
@@ -266,50 +265,6 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
 
 // ---- objects -----------------------------------------------------------------------------
 
-/** Iron anvil with a horn to the left, on its foot. */
-function anvil(img: Image): void {
-  const top = iron;
-  const side = darkIron;
-  // Horn: top face and its shadowed underside.
-  polygon(
-    img,
-    [
-      [10, 10],
-      [2, 12],
-      [10, 14],
-    ],
-    top.base,
-  );
-  line(img, 3, 12, 9, 11, top.light);
-  polygon(
-    img,
-    [
-      [10, 14],
-      [2, 12],
-      [4, 14],
-      [10, 17],
-    ],
-    side.shadow,
-  );
-  // Face (top) and its front.
-  rect(img, 9, 10, 19, 4, top.base);
-  rect(img, 9, 10, 19, 1, top.light);
-  rect(img, 9, 10, 1, 4, top.light);
-  rect(img, 26, 11, 1, 2, top.shadow); // hardy hole
-  rect(img, 9, 14, 19, 4, side.base);
-  rect(img, 9, 14, 19, 1, side.light);
-  rect(img, 27, 14, 1, 4, side.deep);
-  // Waist.
-  eachInRect(13, 18, 11, 5, (x, y) => {
-    const u = (x + 0.5 - 18.5) / 5.5;
-    px(img, x, y, shadeOf(side, cylinderLight(u) - 0.1));
-  });
-  // Foot: a low box.
-  box(img, 9, 22, 19, 2, 5, side);
-  rect(img, 9, 22, 19, 1, top.shadow);
-  outline(img, { amount: 0.5 });
-}
-
 /** Wooden cargo crate with a darker frame, a diagonal brace and nails. */
 function cargoCrate(img: Image): void {
   const m = weatheredWood;
@@ -531,7 +486,6 @@ export const TERRAIN: RecipeBook = {
   "ground/cinder_path": { kind: "ground", draw: cinderPath },
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
   "decor/signpost": { kind: "object", draw: signpost },
-  "decor/anvil": { kind: "object", draw: anvil },
   "decor/cargo_crate": { kind: "object", draw: cargoCrate },
   "decor/market_board": { kind: "object", height: 64, draw: marketBoard },
   "decor/mooring_post": { kind: "object", draw: mooringPost },

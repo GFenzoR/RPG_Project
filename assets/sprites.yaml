@@ -89,8 +89,6 @@ sprites:
   # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine and the practice
   # gate of the sandbox island, shut and open.
 
-  npcs/forge_echo: { source: vendor/dungeon-crawl/mon/nonliving/fire_elemental.png }
-
   # Content audit (2026-11): weapon tiers to the Isla Volcánica, crossbows and bolts, head,
   # feet and leg pieces, the arcanist's starting wand and the mana draughts. The embersteel
   # greaves are spritegen art (assets/sprites/armor), like the other leg pieces.
@@ -374,7 +372,7 @@ animations:
       - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
       - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
       - { file: vendor/ulpc/spritesheets/hair/bedhead/adult/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-  # Isla Volcánica (T5.5). The forge echo is a spirit of fire: Dungeon Crawl, hinted below.
+  # Isla Volcánica (T5.5). The forge echo is a spirit of fire drawn by the sprite engine, below.
   npcs/forge_keeper:
     preset: lpc
     actions: [idle, walk]
@@ -422,7 +420,6 @@ animations:
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.
   creatures/thieving_gull: { facing: left, flying: true }
-  npcs/forge_echo: { flying: true }
 
   # ---- sprite engine (tools/spritegen/src/engine, docs/17 "Motor de sprites") ---------------
   # Frames rendered from a model in all four facings (no mirror, no facing), 64x64 with the
@@ -430,6 +427,8 @@ animations:
   # (spritegen check fails if they differ from its spec).
   creatures/bristleback_boar: { anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 90, death: 120 } }
   creatures/bramble_stag: { anchor: bc, shadow: ellipse, ms: { idle: 550, attack: 90, death: 130 } }
+  # The forge echo, an ember spirit in a smith's shape (it was a Dungeon Crawl fire elemental).
+  npcs/forge_echo: { anchor: bc, shadow: ellipse, flying: true, ms: { idle: 420 } }
 
   # ---- monsters drawn with the owner's Gemini (assets/CREDITS.md "Generado con IA") ---------
   # Frames from files, assets/sprites/<sprite>/<action>_<dir>_<n>.png: south, north and west
