@@ -1867,8 +1867,83 @@ body.using-item canvas {
 }
 .guild-tabs button {
   flex: 1;
-  padding: 0.25rem 0.4rem;
-  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.3rem 0.2rem 0.2rem;
+  font-size: 0.72rem;
+}
+.guild-tabs .icon {
+  width: 24px;
+  height: 24px;
+}
+/* Each part fades in when its button is pressed. */
+.guild-part {
+  animation: npc-text-in var(--ui-dur) var(--ui-ease-out);
+}
+.guild li {
+  position: relative;
+}
+.guild-members li {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+/* What a rank allows on a member: "⋯" opens it beside the name. */
+.member-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0 0.45rem;
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  color: var(--ui-gold-300);
+  line-height: 1.3;
+}
+.member-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.guild-members li {
+  flex-wrap: wrap;
+}
+/* Open, the actions take their own line under the name (the list scrolls: nothing floats
+   out of it). */
+.member-menu[open] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  flex-basis: 100%;
+}
+.member-menu[open] > summary {
+  margin-left: auto;
+}
+.member-menu[open] > .actions {
+  flex-basis: 100%;
+  justify-content: flex-end;
+  animation: npc-text-in var(--ui-dur) var(--ui-ease-out);
+}
+.guild-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.8rem;
+  margin: 0.3rem 0;
+}
+.guild-facts > div {
+  display: contents;
+}
+.guild-facts dt {
+  color: var(--ui-text-muted);
+}
+.guild-facts dd {
+  margin: 0;
+}
+.guild-ranks h3 {
+  margin: 0.3rem 0 0.1rem;
+}
+.guild-ranks .holders {
+  margin: 0;
+  font-size: 0.8rem;
 }
 .guild .motd {
   margin: 0 0 0.3rem;
