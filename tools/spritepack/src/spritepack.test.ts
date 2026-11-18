@@ -352,6 +352,76 @@ describe("buildAtlas", () => {
     expect(r.diagnostics.filter((d) => d.severity === "warning")).toHaveLength(4);
   });
 
+  it("describes map tile art in atlas.json tiles (docs/17 ART-3, ART-4, ART-7)", () => {
+    const tile = encodePng(solid(32, 32, [9, 9, 9]));
+    const tall = encodePng(solid(32, 64, [9, 9, 9]));
+    put("assets/sprites/ground/grass.png", tile);
+    for (const n of [1, 2, 3]) put(`assets/sprites/ground/grass/var_${n}.png`, tile);
+    put("assets/sprites/ground/water.png", tile);
+    for (const n of [1, 2, 3]) put(`assets/sprites/ground/water/frame_${n}.png`, tile);
+    put("assets/sprites/walls/stone.png", tall);
+    for (let m = 0; m < 16; m++) put(`assets/sprites/walls/stone/wall_${m}.png`, tall);
+    put("assets/sprites/decor/tree.png", tall);
+    put("assets/sprites/decor/tree/shadow.png", tall);
+    put("assets/sprites/doors/gate.png", tall);
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/water: { ms: 220, sync: world }
+  ground/grass: { weight: 0.6 }
+  decor/tree: { anchor: bc }
+  doors/gate: { joins_walls: true }
+`,
+    );
+    const r = buildAtlas(root);
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.tiles).toEqual({
+      "decor/tree": { anchor: "bc", shadow: true },
+      "doors/gate": { joins: true },
+      "ground/grass": { variants: 3, weight: 0.6 },
+      "ground/water": { frames: 4, ms: 220, sync: "world" },
+      "walls/stone": { wall: true },
+    });
+  });
+
+  it("refuses tile art with gaps, missing pieces or no sprite to belong to", () => {
+    const tile = encodePng(solid(32, 32, [9, 9, 9]));
+    put("assets/sprites/ground/grass.png", tile);
+    put("assets/sprites/ground/grass/var_2.png", tile);
+    put("assets/sprites/walls/stone.png", tile);
+    put("assets/sprites/walls/stone/wall_0.png", tile);
+    put("assets/sprites/decor/lost/shadow.png", tile);
+    put("assets/sprites/ground/sand.png", tile);
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/sand: { ms: 200 }
+  ground/nothing: { anchor: bc }
+  ground/grass: { sync: sometimes }
+`,
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/ground\/grass: sync must be world, tile or random/),
+    );
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/sand: { ms: 200 }
+  ground/nothing: { anchor: bc }
+`,
+    );
+    expect(errors(buildAtlas(root))).toEqual([
+      expect.stringMatching(/decor\/lost: decor\/lost\/shadow needs the sprite decor\/lost itself/),
+      expect.stringMatching(/ground\/grass: var_<n> must be var_1..var_1 without gaps/),
+      expect.stringMatching(/ground\/nothing: a tiles entry needs a sprite of that name/),
+      expect.stringMatching(/ground\/sand: ms and sync need frames/),
+      expect.stringMatching(/walls\/stone: a wall needs all 16 pieces/),
+    ]);
+  });
+
   it("strict mode turns automatic placeholders into errors", () => {
     put("data/monsters/wolf.yaml", "id: wolf\nsprite: creatures/wolf\n");
     const r = buildAtlas(root, { strict: true });

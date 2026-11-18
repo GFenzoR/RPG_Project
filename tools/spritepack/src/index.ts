@@ -17,6 +17,8 @@ export type {
   Diagnostic,
   Origin,
 } from "./build.ts";
+export { TILE_PART, WALL_PIECES, parseTileEntry, tileMetas } from "./tiles.ts";
+export type { TileEntry, TileMeta, TileSync } from "./tiles.ts";
 export { collectSpriteRefs, outfitFrames } from "./content.ts";
 export type { SpriteRef } from "./content.ts";
 export { registeredPacks } from "./credits.ts";

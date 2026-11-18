@@ -3,6 +3,8 @@ import { isMap, isScalar, LineCounter, parseDocument } from "yaml";
 import { parseAnimEntry, parsePalettes } from "./anims.ts";
 import type { AnimEntry } from "./anims.ts";
 import { parseHexColor } from "./image.ts";
+import { parseTileEntry } from "./tiles.ts";
+import type { TileEntry } from "./tiles.ts";
 import type { Rgba } from "./image.ts";
 import { TILE } from "./placeholder.ts";
 
@@ -44,6 +46,10 @@ export interface Manifest {
   animations: Map<string, AnimEntry>;
   /** 1-based line of each animation key. */
   animationLines: Map<string, number>;
+  /** Timing, anchor and joins of map sprites with tile art, docs/17 ART-7 (tiles.ts). */
+  tiles: Map<string, TileEntry>;
+  /** 1-based line of each tiles key. */
+  tileLines: Map<string, number>;
 }
 
 export interface ManifestError {
@@ -63,6 +69,8 @@ export function parseManifest(text: string): { manifest: Manifest; errors: Manif
     palettes: new Map(),
     animations: new Map(),
     animationLines: new Map(),
+    tiles: new Map(),
+    tileLines: new Map(),
   };
   const lc = new LineCounter();
   const doc = parseDocument(text, { lineCounter: lc, uniqueKeys: true, prettyErrors: false });
@@ -92,6 +100,7 @@ export function parseManifest(text: string): { manifest: Manifest; errors: Manif
   };
   keyLines("sprites", manifest.lines);
   keyLines("animations", manifest.animationLines);
+  keyLines("tiles", manifest.tileLines);
 
   for (const [sprite, raw] of Object.entries(sprites)) {
     const line = manifest.lines.get(sprite);
@@ -124,10 +133,27 @@ export function parseManifest(text: string): { manifest: Manifest; errors: Manif
     const entry = parseAnimEntry(raw, manifest.palettes, fail);
     if (entry) manifest.animations.set(sprite, entry);
   }
+  const tiles = root["tiles"] ?? {};
+  if (!isRecord(tiles)) {
+    errors.push({ message: '"tiles" must be a mapping' });
+    return { manifest, errors };
+  }
+  for (const [sprite, raw] of Object.entries(tiles)) {
+    const line = manifest.tileLines.get(sprite);
+    const fail = (message: string): void => {
+      errors.push({ sprite, message, ...(line === undefined ? {} : { line }) });
+    };
+    if (!SPRITE_PATH.test(sprite)) {
+      fail("sprite path must be lowercase snake_case segments separated by /");
+      continue;
+    }
+    const entry = parseTileEntry(raw, fail);
+    if (entry) manifest.tiles.set(sprite, entry);
+  }
   return { manifest, errors };
 }
 
-const TOP_KEYS = new Set(["sprites", "palettes", "animations"]);
+const TOP_KEYS = new Set(["sprites", "palettes", "animations", "tiles"]);
 
 function parseEntry(raw: unknown, fail: (msg: string) => void): SpriteEntry | undefined {
   if (!isRecord(raw)) {

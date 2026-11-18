@@ -23,6 +23,8 @@ import type { Image } from "./image.ts";
 import { parseManifest, SPRITE_PATH } from "./manifest.ts";
 import type { SpriteEntry } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
+import { tileMetas } from "./tiles.ts";
+import type { TileEntry, TileMeta } from "./tiles.ts";
 import { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placeholder.ts";
 
 export const MANIFEST_FILE = "assets/sprites.yaml";
@@ -85,6 +87,8 @@ export interface AtlasIndex {
   sprites: Record<string, { page: number; origin: Origin }>;
   /** Animated and hinted creature sprites (assets/sprites.yaml `animations`, docs/17 ANI). */
   anims: Record<string, AnimMeta>;
+  /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tiles.ts). */
+  tiles: Record<string, TileMeta>;
 }
 
 export interface BuildResult {
@@ -129,6 +133,8 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   let animations = new Map<string, AnimEntry>();
   let animLines = new Map<string, number>();
   let palettes = new Map<string, number[]>();
+  let tileEntries = new Map<string, TileEntry>();
+  let tileLines = new Map<string, number>();
   if (existsSync(manifestPath)) {
     const { manifest, errors } = parseManifest(readFileSync(manifestPath, "utf8"));
     for (const e of errors) {
@@ -144,6 +150,8 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     animations = manifest.animations;
     animLines = manifest.animationLines;
     palettes = manifest.palettes;
+    tileEntries = manifest.tiles;
+    tileLines = manifest.tileLines;
   }
   const creditsPath = join(root, CREDITS_FILE);
   const packs = registeredPacks(existsSync(creditsPath) ? readFileSync(creditsPath, "utf8") : "");
@@ -328,6 +336,17 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     });
   }
 
+  // 3b. Map tile art (tiles.ts): variants, frames, wall pieces and shadows by name, plus the
+  // tiles entries of the manifest. Automatic placeholders do not count as art.
+  const tileNames = [...resolved].filter(([, r]) => r.origin !== "auto").map(([k]) => k);
+  const { tiles, problems } = tileMetas([...tileNames, ...aliases.keys()], tileEntries);
+  for (const p of problems)
+    diags.push({
+      severity: "error",
+      where: at(MANIFEST_FILE, tileLines.get(p.sprite)),
+      message: `${p.sprite}: ${p.message}`,
+    });
+
   const sprites = new Map<string, { origin: Origin; refs: SpriteRef[] }>();
   for (const [name, r] of resolved)
     sprites.set(name, { origin: r.origin, refs: refsBySprite.get(name) ?? [] });
@@ -374,6 +393,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     pages: jsonFiles,
     sprites: {},
     anims: {},
+    tiles: {},
   };
   const byName = [...packed.placements].sort((a, b) => (a.name < b.name ? -1 : 1));
   for (const p of byName) {
@@ -402,6 +422,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   index.sprites = sortedRecord(index.sprites);
   for (const page of pages) page.json.frames = sortedRecord(page.json.frames);
   index.anims = anims;
+  index.tiles = tiles;
   return { diagnostics: diags, atlas: { index, pages }, sprites };
 }
 
