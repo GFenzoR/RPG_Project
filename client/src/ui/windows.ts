@@ -66,7 +66,10 @@ export interface WindowsState {
 /** localStorage key of the remembered windows. */
 export const WINDOWS_STORAGE_KEY = "rpg.windows";
 
-/** Containers remembered at most (the oldest places beyond it are forgotten on load). */
+/**
+ * Containers remembered at most: the ones whose window changed last (`others` keeps them in
+ * that order); the ones beyond it are not saved, nor loaded.
+ */
 export const MAX_CONTAINER_PLACES = 24;
 
 export const isToolWindow = (v: unknown): v is WindowId =>
@@ -169,13 +172,13 @@ export function loadWindows(raw: string | null | undefined): WindowsState {
     }
   const others: Record<string, WindowPlace> = {};
   if (d.v === 2 && typeof d.others === "object" && d.others !== null) {
-    let containers = 0;
+    const places: [string, WindowPlace][] = [];
     for (const [id, p] of Object.entries(d.others as Record<string, unknown>)) {
       if (!isServerWindow(id) && !isContainerKey(id)) continue;
-      if (isContainerKey(id) && ++containers > MAX_CONTAINER_PLACES) continue;
       const place = read(p, defaultPlace(id));
-      if (place) others[id] = { ...place, open: false };
+      if (place) places.push([id, { ...place, open: false }]);
     }
+    for (const [id, place] of lastContainers(places)) others[id] = place;
   }
   const s: WindowsState = { order: [], z: [], win, others };
   const ids = (v: unknown): WinKey[] =>
@@ -190,10 +193,19 @@ export function loadWindows(raw: string | null | undefined): WindowsState {
   return { order, z, win, others };
 }
 
+/**
+ * The server's windows and the last MAX_CONTAINER_PLACES containers of `entries` (the ones
+ * that changed last), in their order.
+ */
+function lastContainers<T>(entries: readonly [string, T][]): [string, T][] {
+  let drop = entries.filter(([id]) => isContainerKey(id)).length - MAX_CONTAINER_PLACES;
+  return entries.filter(([id]) => !(isContainerKey(id) && drop-- > 0));
+}
+
 /** The JSON stored under WINDOWS_STORAGE_KEY (the server's windows without `open`). */
 export function saveWindows(s: WindowsState): string {
   const others = Object.fromEntries(
-    Object.entries(s.others).map(([id, p]) => [
+    lastContainers(Object.entries(s.others)).map(([id, p]) => [
       id,
       { dock: p.dock, collapsed: p.collapsed, x: p.x, y: p.y, w: p.w, h: p.h },
     ]),
@@ -201,10 +213,16 @@ export function saveWindows(s: WindowsState): string {
   return JSON.stringify({ v: 2, order: s.order, z: s.z, win: s.win, others });
 }
 
-const withPlace = (s: WindowsState, id: WinKey, p: Partial<WindowPlace>): WindowsState =>
-  isToolWindow(id)
-    ? { ...s, win: { ...s.win, [id]: { ...s.win[id], ...p } } }
-    : { ...s, others: { ...s.others, [id]: { ...placeOf(s, id), ...p } } };
+const withPlace = (s: WindowsState, id: WinKey, p: Partial<WindowPlace>): WindowsState => {
+  if (isToolWindow(id)) return { ...s, win: { ...s.win, [id]: { ...s.win[id], ...p } } };
+  const place = { ...placeOf(s, id), ...p };
+  if (!isContainerKey(id)) return { ...s, others: { ...s.others, [id]: place } };
+  // A container that changes goes last: the ones that changed longest ago are forgotten
+  // first (MAX_CONTAINER_PLACES).
+  const others = Object.fromEntries(Object.entries(s.others).filter(([k]) => k !== id));
+  others[id] = place;
+  return { ...s, others };
+};
 
 /** Brings a floating window to the top (a docked one has no stacking). */
 export function focusWindow(s: WindowsState, id: WinKey): WindowsState {

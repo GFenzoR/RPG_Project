@@ -1564,8 +1564,8 @@ quedaba de A3, A4 y A5".
   retrato "respira": sube un píxel en un bucle lento de 3,2 s. No se hizo "▼ más" (paginar
   un texto que no entra): con los textos de hoy no hace falta.
 - **Items de misión con su color (UI-6).** Un item marcado `quest: true` en `data/items`
-  (esquema y docs/06; hoy `smuggler_tally`, `sealed_coffer`, `delver_chart`, `forge_seal`
-  y `tarnished_locket`) se nombra en `--ui-item-quest` en la ficha, el tooltip y el menú,
+  (esquema y docs/06; hoy `bosun_logbook`, `smuggler_tally`, `sealed_coffer`,
+  `delver_chart`, `forge_seal` y `tarnished_locket`) se nombra en `--ui-item-quest` en la ficha, el tooltip y el menú,
   suma la marca "Objeto de misión" (el color no es la única señal) y tiene un anillo dorado
   en su celda. Como pide UI-6, los demás nombres pasaron de oro a `--ui-text`.
 - **Tooltip sobre el canvas.** Con el mouse quieto 350 ms sobre una casilla sale la ficha

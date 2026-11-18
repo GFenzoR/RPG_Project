@@ -13,7 +13,10 @@
 // ranges. The last KEEP_STREAMS files stay; nothing is fetched while the music is muted.
 // A file that fails (the network, a deploy, a file the element cannot decode) is fetched
 // again after STREAM_RETRY_MS, doubling up to STREAM_RETRY_MAX_MS; meanwhile the director
-// plays another track of its pool, or keeps the old music. A loop file (soundgen's themes,
+// plays another track of its pool, or keeps the old music. A file the element cannot play
+// at all (MEDIA_ERR_SRC_NOT_SUPPORTED: a codec it lacks) is not fetched again this session,
+// and where the browser says it lacks Ogg Opus (old WebKit) no track is ever fetched: the
+// retries would download ~1 MB a minute for nothing. A loop file (soundgen's themes,
 // with no `seconds`) is decoded and loops on a buffer source instead: a media element's
 // `loop` leaves a gap at every turn.
 //
@@ -101,8 +104,12 @@ export interface StreamLike {
   stop(): void;
   /** `fn` runs when the file plays to its end (never after stop). */
   onEnded(fn: () => void): void;
-  /** `fn` runs when the element cannot play its file: broken, or a codec it lacks. */
-  onError(fn: () => void): void;
+  /**
+   * `fn` runs when the element cannot play its file: broken, or a codec it lacks. It says
+   * `unsupported` when the element cannot play that kind of file at all
+   * (MEDIA_ERR_SRC_NOT_SUPPORTED), which fetching it again never mends.
+   */
+  onError(fn: (unsupported: boolean) => void): void;
   /**
    * Called within a user gesture on an element with no file: it plays and pauses nothing,
    * which in WebKit (Safari, iOS, the macOS webview) lets it start playing later.
@@ -125,6 +132,8 @@ export interface AudioPorts {
   random(): number;
   /** A media element whose output goes into `ctx`; undefined where there is none. */
   createStream(ctx: ContextLike): StreamLike | undefined;
+  /** Whether a media element can play the music's tracks (Ogg Opus); asked once. */
+  canStream(): boolean;
   /** Fetches a whole file and gives an object URL of it (its compressed bytes). */
   loadStream(url: string): Promise<string>;
   /** Lets go of an object URL of loadStream. */
@@ -150,14 +159,15 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
     return undefined;
   }
   let ended: () => void = () => undefined;
-  let failed: () => void = () => undefined;
+  let failed: (unsupported: boolean) => void = () => undefined;
   // A play() that a later play() or stop() replaced must not seek, start or report anything.
   let turn = 0;
   let refused = false;
   el.addEventListener("ended", () => ended());
   // A file it cannot play: loadedmetadata never comes. stop() leaves no src to fail at.
+  // Code 4 (MEDIA_ERR_SRC_NOT_SUPPORTED) is a kind of file it cannot play at all.
   el.addEventListener("error", () => {
-    if (el.getAttribute("src") !== null) failed();
+    if (el.getAttribute("src") !== null) failed(el.error?.code === 4);
   });
   return {
     output,
@@ -177,7 +187,7 @@ function browserStream(ctx: ContextLike): StreamLike | undefined {
           if (mine !== turn || name === "AbortError") return;
           // No gesture behind it (WebKit): the next one plays it again (AudioEngine.unlock).
           if (name === "NotAllowedError") refused = true;
-          else failed();
+          else failed(name === "NotSupportedError");
           console.warn("audio: cannot play the music", err);
         });
       };
@@ -229,6 +239,15 @@ export function browserPorts(): AudioPorts {
     now: () => performance.now(),
     random: Math.random,
     createStream: browserStream,
+    canStream() {
+      // Old WebKit (Safari, iOS, the macOS and iOS webviews) has no Ogg Opus in <audio>.
+      if (typeof Audio === "undefined") return false;
+      try {
+        return new Audio().canPlayType('audio/ogg; codecs="opus"') !== "";
+      } catch {
+        return false;
+      }
+    },
     async loadStream(url) {
       const res = await fetch(new URL(encodeURI(url), siteRoot()).href);
       if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
@@ -392,7 +411,10 @@ export class AudioEngine {
   private readonly streams = new Map<string, Promise<void>>();
   private readonly streamUrls = new Map<string, string>();
   private readonly loopBuffers = new Map<string, BufferLike>();
-  /** Music files that failed → when to fetch them again (audio clock, ms). */
+  /**
+   * Music files that failed → when to fetch them again (audio clock, ms); Infinity for one
+   * the browser cannot play at all, never fetched again this session.
+   */
   private readonly failed = new Map<string, number>();
   /** How many times each music file failed (the wait before the next try doubles). */
   private readonly failures = new Map<string, number>();
@@ -409,7 +431,16 @@ export class AudioEngine {
     this.manifest = manifest;
     this.prefs = prefs;
     this.ports = ports;
-    this.director = new MusicDirector(directorConfig(manifest), () => ports.random());
+    const config = directorConfig(manifest);
+    this.director = new MusicDirector(config, () => ports.random());
+    // No Ogg Opus in a media element: the streamed tracks never count as ready, so none is
+    // fetched (each would come down whole to fail, again at every retry). The director
+    // stays silent, or plays a loop file of its pool (those are decoded, not streamed).
+    if (!ports.canStream()) {
+      for (const [id, t] of Object.entries(config.tracks))
+        if (t.seconds !== undefined) this.failed.set(id, Infinity);
+      console.warn("audio: this browser cannot play the music (Ogg Opus)");
+    }
   }
 
   get unlocked(): boolean {
@@ -781,9 +812,9 @@ export class AudioEngine {
         this.director.ended(id, ctx.currentTime * 1000);
         this.pump();
       });
-      fresh.stream.onError(() => {
+      fresh.stream.onError((unsupported) => {
         if (this.decks.get(id) !== fresh) return;
-        this.markFailed(sound);
+        this.markFailed(sound, unsupported);
         this.director.lost(id, ctx.currentTime * 1000);
         this.pump();
       });
@@ -947,12 +978,15 @@ export class AudioEngine {
     this.streams.set(sound, loading);
   }
 
-  /** A music file failed (to arrive or to play): forgotten, and fetched again later. */
-  private markFailed(sound: string): void {
+  /**
+   * A music file failed (to arrive or to play): forgotten, and fetched again later; one the
+   * element cannot play at all (`forever`: a codec it lacks) is not fetched again.
+   */
+  private markFailed(sound: string, forever = false): void {
     const n = (this.failures.get(sound) ?? 0) + 1;
     this.failures.set(sound, n);
     const wait = Math.min(STREAM_RETRY_MAX_MS, STREAM_RETRY_MS * 2 ** (n - 1));
-    this.failed.set(sound, (this.ctx?.currentTime ?? 0) * 1000 + wait);
+    this.failed.set(sound, forever ? Infinity : (this.ctx?.currentTime ?? 0) * 1000 + wait);
     this.forgetStream(sound);
     this.streamOrder = this.streamOrder.filter((s) => s !== sound);
   }

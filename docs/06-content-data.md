@@ -143,8 +143,8 @@ items:
   `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
 - **Item de misión** (`quest: true`, docs/17 UI-6, solo de dibujo): un item que existe
-  para una quest (lo que pide el `has_item` de un paso: `smuggler_tally`,
-  `sealed_coffer`, `delver_chart`, `forge_seal`, `tarnished_locket`). El cliente pone su
+  para una quest (lo que pide el `has_item` de un paso o de un diálogo: `bosun_logbook`,
+  `smuggler_tally`, `sealed_coffer`, `delver_chart`, `forge_seal`, `tarnished_locket`). El cliente pone su
   nombre en el color de misión (`--ui-item-quest`) en la ficha, el tooltip y el menú, le
   suma la marca "Objeto de misión" y lo enmarca en oro en el equipo y los contenedores. No
   cambia ninguna regla: que se pueda comerciar lo sigue diciendo `tradeable`. El servidor

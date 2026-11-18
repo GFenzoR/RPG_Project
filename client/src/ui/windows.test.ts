@@ -31,7 +31,7 @@ import {
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { NudgeContext } from "./windows.ts";
+import type { NudgeContext, WinKey } from "./windows.ts";
 
 describe("default windows", () => {
   it("opens the battle list and the equipment in the dock, as in Tibia", () => {
@@ -218,10 +218,29 @@ describe("the server's windows and the containers (docs/17 UI-5)", () => {
 
   it("forget unknown keys and old containers past the limit", () => {
     const others: Record<string, unknown> = { chat: { dock: true }, "container-x y": {} };
+    others["market"] = { dock: true };
     for (let i = 0; i < MAX_CONTAINER_PLACES + 5; i++) others[`container-bag${i}`] = { dock: true };
     const s = loadWindows(JSON.stringify({ v: 2, win: {}, others }));
-    expect(Object.keys(s.others)).toHaveLength(MAX_CONTAINER_PLACES);
+    // The last ones saved are the ones that changed last: the first five go.
+    const kept = Array.from({ length: MAX_CONTAINER_PLACES }, (_, i) => `container-bag${i + 5}`);
+    expect(Object.keys(s.others)).toEqual(["market", ...kept]);
     expect("chat" in s.others).toBe(false);
+  });
+
+  it("saves the containers whose windows changed last, up to the limit", () => {
+    let s = defaultWindows();
+    const bag = (i: number): WinKey => `container-bag${i}` as WinKey;
+    for (let i = 0; i < MAX_CONTAINER_PLACES + 6; i++) s = syncWindows(s, ["market", bag(i)]);
+    s = floatWindow(s, bag(0), 40, 50); // the first one seen, moved now
+    const saved = JSON.parse(saveWindows(s)) as { others: Record<string, unknown> };
+    const containers = Object.keys(saved.others).filter((id) => id.startsWith("container-"));
+    expect(containers).toHaveLength(MAX_CONTAINER_PLACES);
+    expect(containers.at(-1)).toBe(bag(0));
+    for (let i = 1; i <= 6; i++) expect(containers).not.toContain(bag(i));
+    expect(containers).toContain(bag(7));
+    expect("market" in saved.others).toBe(true);
+    const loaded = loadWindows(JSON.stringify(saved));
+    expect(placeOf(loaded, bag(0))).toMatchObject({ dock: false, x: 40, y: 50 });
   });
 
   it("reset keeps the open ones open, at their default places", () => {

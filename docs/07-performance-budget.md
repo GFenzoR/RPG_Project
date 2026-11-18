@@ -233,7 +233,11 @@ transmite (ver abajo).
   esperan se guardan además de esos, así que en el peor caso (cuatro voces durante un
   corte y dos temas pedidos) son seis. Con la música silenciada no baja nada. Un archivo
   que no llega (o que el elemento no puede decodificar) se vuelve a pedir a los
-  `STREAM_RETRY_MS` (5 s), con la espera doblada en cada falla hasta 60 s.
+  `STREAM_RETRY_MS` (5 s), con la espera doblada en cada falla hasta 60 s. Uno que el
+  elemento no sabe tocar (`MEDIA_ERR_SRC_NOT_SUPPORTED`, un códec que le falta) no se vuelve
+  a pedir en la sesión, y si el navegador dice que no toca Ogg Opus en `<audio>`
+  (`canPlayType`, WebKit viejo) no se baja ningún tema: la música queda en silencio en vez
+  de bajar ~1 MB por minuto para nada.
 - **La PWA no guarda la música:** el service worker deja `/audio/sounds/music/` a la red
   (como `/api`). Con stale-while-revalidate una PWA instalada terminaba guardando los
   ~13 MiB de música y escribía un tema entero (~1 MB) en su caché en cada cambio de zona;

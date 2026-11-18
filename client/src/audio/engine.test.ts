@@ -126,7 +126,7 @@ class FakeStream implements StreamLike {
   /** The browser refused its last play() for want of a gesture (a test sets it). */
   refused = false;
   private ended: () => void = () => undefined;
-  private failed: () => void = () => undefined;
+  private failed: (unsupported: boolean) => void = () => undefined;
   play(url: string, at: number, loop: boolean): void {
     this.url = url;
     this.at = at;
@@ -141,7 +141,7 @@ class FakeStream implements StreamLike {
   onEnded(fn: () => void): void {
     this.ended = fn;
   }
-  onError(fn: () => void): void {
+  onError(fn: (unsupported: boolean) => void): void {
     this.failed = fn;
   }
   bless(): void {
@@ -156,9 +156,9 @@ class FakeStream implements StreamLike {
   end(): void {
     this.ended();
   }
-  /** The element cannot play its file (an `error` event). */
-  fail(): void {
-    this.failed();
+  /** The element cannot play its file (an `error` event); `unsupported`: a codec it lacks. */
+  fail(unsupported = false): void {
+    this.failed(unsupported);
   }
 }
 
@@ -223,7 +223,7 @@ const MANIFEST: SoundManifest = {
   ambient: { fadeMs: 1000, islands: {}, underground: undefined },
 };
 
-function setup(prefs = defaultPrefs()) {
+function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
   const ctx = new FakeContext();
   const fetched: string[] = [];
   const streamed: string[] = [];
@@ -251,6 +251,7 @@ function setup(prefs = defaultPrefs()) {
       streams.push(s);
       return s;
     },
+    canStream: () => opts.canStream ?? true,
     loadStream: (url) => {
       streamed.push(url);
       if (failing.has(url)) return Promise.reject(new Error(`${url}: offline`));
@@ -758,6 +759,41 @@ describe("the music", () => {
     const [next] = engine.musicState().voices;
     expect(next?.sound).not.toBe(broken);
     expect(next?.playing).toBe(true);
+  });
+
+  it("an element that cannot play that kind of file: its track is never fetched again", async () => {
+    const { engine, streams, streamed, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic({ kind: "title" }); // a pool of one
+    await at(0);
+    const s = used(streams)[0] as FakeStream;
+    s.fail(true); // MEDIA_ERR_SRC_NOT_SUPPORTED: a codec it lacks
+    await flush();
+    expect(engine.musicState().voices).toEqual([]);
+    // Ordinary failures are fetched again within STREAM_RETRY_MAX_MS; this one, never.
+    for (let t = 0.5; t <= 200; t += 0.5) await at(t);
+    expect(streamed.filter((u) => u === "audio/menu.ogg")).toHaveLength(1);
+    expect(engine.musicState().voices).toEqual([]);
+    // The other pools' tracks are not held against it.
+    engine.setMusic(world("town"));
+    await at(200.5);
+    expect(engine.musicState().voices).toMatchObject([{ playing: true }]);
+  });
+
+  it("where the browser lacks Ogg Opus no track is fetched, and a loop file still plays", async () => {
+    const { engine, streams, streamed, fetched, at } = setup(defaultPrefs(), { canStream: false });
+    await unlockNow(engine);
+    engine.setMusic({ kind: "title" });
+    for (let t = 0; t <= 130; t += 0.5) await at(t);
+    engine.setMusic(world("cave"));
+    for (let t = 130.5; t <= 260; t += 0.5) await at(t);
+    expect(streamed).toEqual([]);
+    expect(used(streams)).toEqual([]);
+    expect(engine.musicState().voices).toEqual([]);
+    engine.setMusic(world("odd")); // soundgen's loop files are decoded, not streamed
+    for (let t = 260.5; t <= 264; t += 0.5) await at(t);
+    expect(fetched).toContain("audio/tune.ogg");
+    expect(engine.musicState().voices).toMatchObject([{ sound: "tune", playing: true }]);
   });
 
   it("a track whose file does not arrive gives way to another of its pool", async () => {
