@@ -97,3 +97,20 @@ export function topItem(
   const count = world.tileCounts(x, y, z)?.[i] ?? 0;
   return { loc: { kind: "pos", pos: { x, y, z } }, itemId: t[i] ?? 0, stackIndex: i, count };
 }
+
+/** Whether a stack of `count` units can be split (a Shift+drag, docs/17 UI-6). */
+export function splittable(def: { stackable: boolean } | undefined, count: number): boolean {
+  return def?.stackable === true && count > 1;
+}
+
+/** What a split prompt starts at: half the stack, rounded down (1 at least). */
+export const halfStack = (count: number): number => Math.max(1, Math.floor(count / 2));
+
+/**
+ * The units a split moves (the menu's "Move part…" and a Shift+drag): a whole number from
+ * 1 to the stack less one (the whole stack is a plain move); not a number moves 1.
+ */
+export function splitCount(n: number, stack: number): number {
+  const max = Math.max(1, stack - 1);
+  return Number.isFinite(n) ? Math.min(max, Math.max(1, Math.floor(n))) : 1;
+}

@@ -26,8 +26,9 @@ import type { ActionKind, ItemFacts, TileFacts } from "./input/actions.ts";
 import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
+import { motionReduced } from "./state/ui-prefs.ts";
 import type { ControlsMode } from "./state/controls.ts";
-import { equipSlot, itemCard } from "./state/item-card.ts";
+import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
 import { dialogLayout, optionForKey } from "./state/dialog.ts";
 import { HeldDirection } from "./input/dpad.ts";
@@ -52,7 +53,7 @@ import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, menuItem, tileUse, topItem } from "./state/items.ts";
+import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
@@ -141,6 +142,27 @@ export interface GameUi {
   cosmetics?: CosmeticsStateView | undefined;
   /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
   zoom?: ZoomView | undefined;
+  /**
+   * Shift+drag of a stack (docs/17 UI-6): it was dropped at (x, y) and asks how many of
+   * its `count` units go there (ui/SplitPrompt.tsx).
+   */
+  split?: SplitView | undefined;
+  /** The last spell used from the hotbar and when (docs/17 UI-9: its slot flashes). */
+  cast?: { spellId: string; at: number } | undefined;
+  /**
+   * The item lying on the map tile the mouse rests on, at page (x, y): its card shows
+   * there (docs/17 UI-6, ui/ItemTooltip.tsx).
+   */
+  groundTip?: { itemId: number; count: number; x: number; y: number } | undefined;
+}
+
+/** A Shift+drag of a stack waiting for how many units move. */
+export interface SplitView {
+  /** Page coordinates of the drop. */
+  x: number;
+  y: number;
+  itemId: number;
+  count: number;
 }
 
 /**
@@ -285,6 +307,11 @@ export interface GameOptions {
    * click; without it, what this device remembers (state/controls.ts).
    */
   controls?(): ControlsMode;
+  /**
+   * Whether a heavy hit shakes the camera (Options → Interface, docs/17 UI-9), read at each
+   * hit; reduced motion turns it off anyway. Without it, it shakes.
+   */
+  cameraShake?(): boolean;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -355,6 +382,12 @@ export class Game {
   private touchAt = Number.NEGATIVE_INFINITY;
   /** The last finger press on a DOM item already opened its menu. */
   private itemMenuOpened = false;
+  /** The last spell used from the hotbar (its slot flashes, docs/17 UI-9). */
+  private cast: { spellId: string; at: number } | undefined;
+  /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
+  private groundTip: GameUi["groundTip"];
+  /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
+  private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
   private zoomView: ZoomView | undefined;
@@ -622,6 +655,7 @@ export class Game {
     if (!this.world.house) return;
     this.world.house = undefined;
     this.conn.send({ case: "houseCommand", value: { action: { case: "close", value: {} } } });
+    this.publish();
   }
 
   /** Closes the market window (the server forgets it too). */
@@ -723,6 +757,9 @@ export class Game {
 
   /** Casts a spell by ID (hotkey) on the current target, if any. */
   castSpell(spellId: string): void {
+    // Its slot flashes (docs/17 UI-9), whatever the server answers.
+    this.cast = { spellId, at: performance.now() };
+    this.publish();
     const aims = this.opts.content.spells.find((s) => s.id === spellId)?.aimsAtPlayer ?? false;
     this.setPending(afterCast(spellId, aims));
     if (aims) return;
@@ -922,7 +959,9 @@ export class Game {
 
   /**
    * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
-   * pointer travels a few pixels, and the item moves where it is released.
+   * pointer travels a few pixels, and the item moves where it is released. With Shift a
+   * click looks at the item and a drag moves part of a stack (docs/17 UI-6: it asks how
+   * many where it is dropped).
    */
   pressItem(ref: ItemRef, e: PointerEvent): void {
     if (isTouchPointer(e.pointerType)) {
@@ -931,29 +970,61 @@ export class Game {
     }
     const x0 = e.clientX;
     const y0 = e.clientY;
+    const shift = e.shiftKey;
     const move = (ev: PointerEvent): void => {
       if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < DRAG_START_PX) return;
       stop();
-      this.startDrag(ref);
+      this.startDrag(ref, shift);
+    };
+    const up = (): void => {
+      stop();
+      if (shift) this.lookAt(ref);
     };
     const stop = (): void => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointerup", up);
     };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointerup", up);
   }
 
-  /** Drags ref until the pointer is released over a drop target (canvas, slot, container). */
-  private startDrag(ref: ItemRef): void {
+  /**
+   * Drags ref until the pointer is released over a drop target (canvas, slot, container).
+   * `split` (a Shift+drag) of a stack asks first how many units go (splitDrop).
+   */
+  private startDrag(ref: ItemRef, split = false): void {
+    this.closeSplit();
     document.body.classList.add("dragging-item");
     const up = (ev: PointerEvent): void => {
       window.removeEventListener("pointerup", up);
       document.body.classList.remove("dragging-item");
       const to = this.dropTarget(ev.clientX, ev.clientY);
-      if (to) this.moveItem(ref, to);
+      if (!to) return;
+      if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
+        this.split = { ref, to, x: ev.clientX, y: ev.clientY };
+        this.publish();
+      } else this.moveItem(ref, to);
     };
     window.addEventListener("pointerup", up);
+  }
+
+  /** How many units of a Shift+dragged stack go where it was dropped (the prompt's OK). */
+  splitConfirm(count: number): void {
+    const s = this.split;
+    this.split = undefined;
+    if (s) this.moveItem({ ...s.ref, count: splitCount(count, s.ref.count) }, s.to);
+    this.publish();
+  }
+
+  /** Drops a Shift+drag without moving anything (the prompt's Cancel or Escape). */
+  splitCancel(): void {
+    if (this.closeSplit()) this.publish();
+  }
+
+  private closeSplit(): boolean {
+    if (!this.split) return false;
+    this.split = undefined;
+    return true;
   }
 
   /** Where a drop at page coordinates lands: a [data-drop] element or a map tile. */
@@ -1438,6 +1509,14 @@ export class Game {
       vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
       zoom: this.zoomView,
+      cast: this.cast,
+      groundTip: this.groundTip,
+      split: this.split && {
+        x: this.split.x,
+        y: this.split.y,
+        itemId: this.split.ref.itemId,
+        count: this.split.ref.count,
+      },
     });
     this.armPresenceTimer();
   }
@@ -1565,6 +1644,8 @@ export class Game {
       },
       walkMark: () => this.steer.mark,
       hoverText: (x, y, z) => this.hoverText({ x, y, z }),
+      restTile: (at) => this.restTile(at),
+      shake: () => (this.opts.cameraShake?.() ?? true) && !motionReduced(document.documentElement),
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -1576,9 +1657,10 @@ export class Game {
         (this.opts.content.houseDoors?.includes(doorKey(x, y, z)) ?? false) ||
         (this.world.tile(x, y, z)?.some((id) => this.world.item(id)?.door === true) ?? false),
       ownUse: (x, y, z) => this.ownUse(x, y, z),
-      dragTile: (x, y, z) => {
+      dragTile: (x, y, z, e) => {
         const ref = topItem(this.world, x, y, z, false);
-        if (ref) this.startDrag(ref);
+        // Shift+drag from the map moves part of its stack too (docs/17 UI-6).
+        if (ref) this.startDrag(ref, e.shiftKey);
       },
       tapTile: (x, y, z) => this.tapTile({ x, y, z }),
       longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
@@ -1775,6 +1857,25 @@ export class Game {
     return name && kind !== "climb"
       ? t(`client.action.${kind}`, { name })
       : t(`client.touch.action.${kind}`);
+  }
+
+  /**
+   * The mouse rested on a map tile (or left it): the card of the item lying there, if it is
+   * one people carry (state/item-card.ts groundCard); nothing while a menu, a pick or an
+   * aim is up.
+   */
+  private restTile(
+    at: { x: number; y: number; z: number; cx: number; cy: number } | undefined,
+  ): void {
+    let tip: GameUi["groundTip"];
+    if (at && !this.menu && !this.pending && !this.picker.picked) {
+      const ref = menuItem(this.world, at.x, at.y, at.z);
+      if (ref && groundCard(this.opts.content.items[ref.itemId]))
+        tip = { itemId: ref.itemId, count: Math.max(1, ref.count), x: at.cx, y: at.cy };
+    }
+    if (tip === undefined && this.groundTip === undefined) return;
+    this.groundTip = tip;
+    this.publish();
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

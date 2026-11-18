@@ -1,6 +1,7 @@
 // The item card as a tooltip (docs/17 UI-6): 350 ms after the mouse rests on any DOM item
 // with data-tip-item (inventory, containers, the shop, trade), or when the keyboard focuses
-// one, its card shows beside it. It never takes the pointer (pointer-events: none) and goes
+// one, its card shows beside it. Over the map, the card of the item lying on the tile the
+// mouse rests on (GameUi.groundTip: the canvas times the rest, the Game picks the item). It never takes the pointer (pointer-events: none) and goes
 // away when the mouse leaves, on any press, a scroll or Escape. Fingers never get it: a
 // long press opens the menu with the same card.
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -14,6 +15,8 @@ import { ItemCard } from "./ItemCard.tsx";
 
 /** How long the mouse rests on an item before its card shows, ms (docs/17 UI-9). */
 export const TOOLTIP_DELAY_MS = 350;
+/** Below the cursor's hint text on the map (render/game-canvas.ts HINT_OFFSET), CSS px. */
+const GROUND_DY = 40;
 /** Height of a line of the card and its padding (client.css .item-tooltip), CSS px. */
 const LINE = 19;
 const PAD = 20;
@@ -111,18 +114,22 @@ export function ItemTooltip(props: {
       document.removeEventListener("keydown", onKey);
     };
   }, []);
-  if (!shown || props.blocked) return null;
   const { ui } = props;
+  // A DOM item's card first; else the one of the item on the map tile the mouse rests on
+  // (Game.restTile), under the cursor's hint text.
+  const ground = shown ? undefined : ui.groundTip;
+  const tip = shown ?? ground;
+  if (!tip || props.blocked) return null;
   const magic = ui.skills.find((s) => s.id === "magic");
-  const card = itemCard(props.content.items[shown.itemId], shown.itemId, shown.count, {
+  const card = itemCard(props.content.items[tip.itemId], tip.itemId, tip.count, {
     level: ui.stats?.level,
     vocation: ui.vocation,
     magicLevel: magic?.level,
   });
   const height = PAD + cardLines(card, true) * LINE + 40;
   const at = mousePlacement(
-    shown.x + 12,
-    shown.y + 12,
+    tip.x + 12,
+    tip.y + (ground ? GROUND_DY : 12),
     window.innerWidth,
     window.innerHeight,
     CARD_MENU_WIDTH,
@@ -131,8 +138,14 @@ export function ItemTooltip(props: {
   const style: JSX.CSSProperties = { left: `${at.left}px`, top: `${at.top}px` };
   if (at.maxHeight !== undefined) style.maxHeight = `${at.maxHeight}px`;
   return (
-    <div class="item-tooltip" role="tooltip" data-testid="item-tooltip" style={style}>
-      <ItemCard t={props.t} card={card} icon={props.game?.itemIcon(shown.itemId)} />
+    <div
+      class="item-tooltip"
+      role="tooltip"
+      data-testid="item-tooltip"
+      data-ground={ground ? "" : undefined}
+      style={style}
+    >
+      <ItemCard t={props.t} card={card} icon={props.game?.itemIcon(tip.itemId)} />
     </div>
   );
 }

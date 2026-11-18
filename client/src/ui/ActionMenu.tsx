@@ -9,6 +9,7 @@ import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { ActionMenuView, Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { halfStack, splitCount } from "../state/items.ts";
 import type { ItemRef } from "../state/items.ts";
 import { cardLines } from "../state/item-card.ts";
 import { BigIcon, ItemCard } from "./ItemCard.tsx";
@@ -270,7 +271,7 @@ export function ActionMenu(props: {
                   name="count"
                   min={1}
                   max={Math.max(1, stack - 1)}
-                  defaultValue={String(Math.max(1, Math.floor(stack / 2)))}
+                  defaultValue={String(halfStack(stack))}
                   aria-label={t("client.touch.split_count")}
                   data-testid="split-count"
                 />
@@ -309,12 +310,6 @@ export function ActionMenu(props: {
       </div>
     </div>
   );
-}
-
-/** The units "Move part…" takes: a whole number from 1 to the stack less one. */
-export function splitCount(n: number, stack: number): number {
-  const max = Math.max(1, stack - 1);
-  return Number.isFinite(n) ? Math.min(max, Math.max(1, Math.floor(n))) : 1;
 }
 
 /** The item picked by a tap: "tap where it goes", with a big button to drop the pick. */

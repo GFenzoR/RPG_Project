@@ -235,3 +235,12 @@ export function cardLines(card: ItemCardView, withName: boolean): number {
     card.marks.length
   );
 }
+
+/**
+ * Whether an item lying on the map gets its card under a resting mouse (docs/17 UI-6): what
+ * people carry and can pick up (a sword, a stack of coins, a corpse's loot), never the map
+ * itself (grounds, walls, decoration, a station or a board: their use is the cursor's hint).
+ */
+export function groundCard(def: ItemDef | undefined): boolean {
+  return def !== undefined && CARRIED.has(def.kind ?? "") && def.fixed !== true;
+}

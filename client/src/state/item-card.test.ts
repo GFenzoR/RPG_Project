@@ -1,7 +1,7 @@
 import { EquipmentSlot } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ItemDef } from "../content-types.ts";
-import { cardLines, equipSlot, itemCard, shopCategory } from "./item-card.ts";
+import { cardLines, equipSlot, groundCard, itemCard, shopCategory } from "./item-card.ts";
 
 const base: ItemDef = {
   id: "x",
@@ -158,6 +158,15 @@ describe("itemCard", () => {
     expect(card.marks).toEqual(["client.card.mark.quest", "client.card.mark.no_trade"]);
     expect(itemCard(sword, 1, 1).quest).toBeUndefined();
     expect(itemCard(sword, 1, 1).marks).not.toContain("client.card.mark.quest");
+  });
+
+  it("a card over the map only for what people carry, never the map itself", () => {
+    expect(groundCard(sword)).toBe(true);
+    expect(groundCard({ ...base, kind: "currency" })).toBe(true);
+    expect(groundCard({ ...base, kind: "wall" })).toBe(false);
+    expect(groundCard({ ...base, kind: "decoration" })).toBe(false);
+    expect(groundCard({ ...base, kind: "container", fixed: true })).toBe(false); // a station
+    expect(groundCard(undefined)).toBe(false);
   });
 
   it("an unknown item gets an empty card", () => {

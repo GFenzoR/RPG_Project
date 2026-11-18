@@ -96,6 +96,7 @@ import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
+import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
   FIRE_TINT,
   LightLayer,
@@ -241,6 +242,16 @@ export interface GameCanvasOptions {
    * ("" = nothing to show).
    */
   hoverText?(x: number, y: number, z: number): string;
+  /**
+   * docs/17 UI-6: the mouse rested REST_MS on tile (x, y, z) at page (cx, cy) (the card of
+   * what lies there shows), or left it, pressed or scrolled (`undefined`: it goes).
+   */
+  restTile?(at: { x: number; y: number; z: number; cx: number; cy: number } | undefined): void;
+  /**
+   * docs/17 UI-9: whether a heavy hit shakes the camera now (the option, and never with
+   * reduced motion). Asked at each frame of a shake; without it, never.
+   */
+  shake?(): boolean;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -266,6 +277,9 @@ const HINT_REFRESH_MS = 250;
 
 /** Where the text beside the cursor goes, from the cursor (CSS px). */
 const HINT_OFFSET = { x: 14, y: 18 } as const;
+
+/** How long the mouse rests on a tile before the card of its item shows, ms (UI-9: 350). */
+const REST_MS = 350;
 
 /** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
 const MARK_HALF = MARK_BOX.w / 2;
@@ -1002,6 +1016,13 @@ export async function createGameCanvas(
     // canvas fits the new one at once.
     if (world.view !== sizedFor) resize();
     follow(now);
+    // A heavy hit to the player shakes the camera a little (render/shake.ts).
+    const hitAt = world.heavyHitAt;
+    if (hitAt !== undefined && now - hitAt < SHAKE_MS && opts.shake?.() === true) {
+      const unit = tilePixels(cam, T);
+      const o = shakeOffset(now - hitAt, window.devicePixelRatio || 1);
+      cam = { ...cam, x: cam.x + o.x / unit, y: cam.y + o.y / unit };
+    }
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
     behindWall.visible = false;
     const tilePx = tilePixels(cam, T);
@@ -1248,6 +1269,11 @@ export async function createGameCanvas(
     lp: LeftPress;
     /** The walk there started on the press: the release is no click. */
     walked: boolean;
+    /**
+     * A Shift press (docs/17 UI-6): released where it was it looks at this tile (a creature's
+     * head too, ART-2); dragged, it moves part of the top item's stack.
+     */
+    look?: Pos | undefined;
     pointerId: number;
     /** Where the cursor is now (page coordinates). */
     cx: number;
@@ -1285,6 +1311,31 @@ export async function createGameCanvas(
     hintTile = undefined;
     if (!hint.hidden) hint.hidden = true;
   };
+  // docs/17 UI-6: the card of the item on the tile the mouse rests on (ui/ItemTooltip.tsx).
+  let restTimer: ReturnType<typeof setTimeout> | undefined;
+  let restAt: Pos | undefined;
+  let resting = false;
+  const stopRest = (): void => {
+    clearTimeout(restTimer);
+    restTimer = undefined;
+    restAt = undefined;
+    if (resting) opts.restTile?.(undefined);
+    resting = false;
+  };
+  const watchRest = (cx: number, cy: number): void => {
+    if (!opts.restTile || press) return;
+    const tile = tileUnder(cx, cy);
+    if (tile && restAt && samePos(tile, restAt)) return; // still on it: the card stays
+    stopRest();
+    if (!tile) return;
+    restAt = tile;
+    restTimer = setTimeout(() => {
+      restTimer = undefined;
+      if (press || !hover) return;
+      resting = true;
+      opts.restTile?.({ ...tile, cx: hover.x, cy: hover.y });
+    }, REST_MS);
+  };
   const showHint = (now: number): void => {
     if (!hover || press || !opts.hoverText) {
       hideHint();
@@ -1310,6 +1361,7 @@ export async function createGameCanvas(
       return;
     }
     hideHint();
+    stopRest();
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
@@ -1327,7 +1379,20 @@ export async function createGameCanvas(
     else if (act.kind === "use")
       opts.useTile(inDoor ? at.x : tile.x, inDoor ? at.y : tile.y, z, act.top);
     else if (act.kind === "menu") opts.menuTile?.(at.x, at.y, z, e.clientX, e.clientY);
-    else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
+    else if (act.kind === "look" && e.button === 0) {
+      endHold();
+      press = {
+        x: tile.x,
+        y: tile.y,
+        z,
+        lp: new LeftPress(performance.now(), p.x, p.y, { drag: true, hold: false }, DRAG_START_PX),
+        walked: false,
+        look: { x: at.x, y: at.y, z },
+        pointerId: e.pointerId,
+        cx: e.clientX,
+        cy: e.clientY,
+      };
+    } else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
     else if (act.kind === "press") {
       endHold(); // a press left over (its release went elsewhere)
       const can = opts.pressTile?.(tile.x, tile.y, z) ?? { walked: false, drag: true, hold: false };
@@ -1350,6 +1415,7 @@ export async function createGameCanvas(
     }
     hover = { x: e.clientX, y: e.clientY };
     hint.style.transform = `translate(${e.clientX + HINT_OFFSET.x}px, ${e.clientY + HINT_OFFSET.y}px)`;
+    watchRest(e.clientX, e.clientY);
     if (!press) return;
     if ((e.buttons & 1) === 0) {
       endHold(); // the button went up where no pointerup reached the canvas
@@ -1379,6 +1445,7 @@ export async function createGameCanvas(
     const end = from.lp.up();
     press = undefined;
     if (end === "hold") opts.holdEnd?.();
+    else if (end === "click" && from.look) opts.lookTile(from.look.x, from.look.y, from.look.z);
     else if (end === "click" && !from.walked) opts.clickTile(from.x, from.y, from.z);
   });
   // A hold captures the pointer: it ends with its pointerup, or here if the capture is lost
@@ -1389,6 +1456,7 @@ export async function createGameCanvas(
   canvas.addEventListener("pointerleave", () => {
     hover = undefined;
     hideHint();
+    stopRest();
     // A hold has the pointer captured: it goes on outside the canvas.
     if (press && !press.lp.holding) press = undefined;
   });
@@ -1406,6 +1474,7 @@ export async function createGameCanvas(
   // instead of the page; a plain wheel does nothing, as before.
   const wheel = new WheelZoom();
   const onWheel = (e: WheelEvent): void => {
+    stopRest();
     if (!e.ctrlKey) return;
     e.preventDefault();
     const steps = wheel.add(e.deltaY, e.deltaMode, e.timeStamp);
@@ -1502,6 +1571,7 @@ export async function createGameCanvas(
     },
     destroy() {
       clearTimeout(longPressTimer);
+      clearTimeout(restTimer);
       hint.remove();
       gestures.reset();
       observer.disconnect();
