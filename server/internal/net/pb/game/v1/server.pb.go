@@ -264,9 +264,10 @@ const (
 	AttackKind_ATTACK_KIND_UNSPECIFIED AttackKind = 0
 	// A blow at an adjacent creature: a weapon, fists, a monster's melee attack.
 	AttackKind_ATTACK_KIND_MELEE AttackKind = 1
-	// A shot: a distance weapon, a wand, a monster's distance attack or spell.
+	// A shot: a distance weapon, a wand, a monster's distance attack.
 	AttackKind_ATTACK_KIND_RANGED AttackKind = 2
-	// A spell or a rune at a creature, or an area spell around the caster (radius > 0).
+	// A spell or a rune at a creature (a monster's spell too), or an area spell around the
+	// caster (radius > 0).
 	AttackKind_ATTACK_KIND_SPELL AttackKind = 3
 )
 

@@ -2908,14 +2908,15 @@ export enum AttackKind {
   MELEE = 1,
 
   /**
-   * A shot: a distance weapon, a wand, a monster's distance attack or spell.
+   * A shot: a distance weapon, a wand, a monster's distance attack.
    *
    * @generated from enum value: ATTACK_KIND_RANGED = 2;
    */
   RANGED = 2,
 
   /**
-   * A spell or a rune at a creature, or an area spell around the caster (radius > 0).
+   * A spell or a rune at a creature (a monster's spell too), or an area spell around the
+   * caster (radius > 0).
    *
    * @generated from enum value: ATTACK_KIND_SPELL = 3;
    */

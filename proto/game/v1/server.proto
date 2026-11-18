@@ -345,9 +345,10 @@ enum AttackKind {
   ATTACK_KIND_UNSPECIFIED = 0;
   // A blow at an adjacent creature: a weapon, fists, a monster's melee attack.
   ATTACK_KIND_MELEE = 1;
-  // A shot: a distance weapon, a wand, a monster's distance attack or spell.
+  // A shot: a distance weapon, a wand, a monster's distance attack.
   ATTACK_KIND_RANGED = 2;
-  // A spell or a rune at a creature, or an area spell around the caster (radius > 0).
+  // A spell or a rune at a creature (a monster's spell too), or an area spell around the
+  // caster (radius > 0).
   ATTACK_KIND_SPELL = 3;
 }
 
