@@ -28,6 +28,8 @@ export default defineConfig({
         site: dir("./index.html"),
         play: dir("./play/index.html"),
         sw: dir("./src/sw.ts"),
+        // make ui-preview only (docs/08): the game's DOM with made-up states, never shipped.
+        ...(process.env["RPG_UI_PREVIEW"] ? { preview: dir("./preview/index.html") } : {}),
       },
       output: {
         entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),

@@ -306,6 +306,13 @@ e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in *
 	pnpm --filter @rpg/editor e2e $(E2E_ARGS)
 	DATABASE_URL="$(DATABASE_URL)" pnpm --filter @rpg/client e2e $(E2E_ARGS)
 
+.PHONY: ui-preview
+# The game's interface with made-up states and a picture of Puerto for the map: no server,
+# no Postgres (docs/08). ONLY=<scene> for one scene; screenshots in
+# client/e2e/screenshots/actual/ui-preview/.
+ui-preview: ## Screenshots of the game UI at desktop, tablet and phone sizes, without a server
+	node --experimental-strip-types client/e2e/ui-preview.ts $(if $(ONLY),--only $(ONLY))
+
 .PHONY: bots
 # Load test (tools/bots, docs/07-performance-budget.md). Without URL it builds the map and
 # starts its own server on loopback (tools/bots/loadtest.sh; LOAD_DATABASE_URL, default the

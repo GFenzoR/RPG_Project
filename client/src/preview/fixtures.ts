@@ -1,0 +1,284 @@
+// Made-up game states for the UI preview (src/preview/main.tsx): a character with items,
+// creatures in view, a party, a guild, chat and log lines. Only for looking at the UI
+// without a server (make ui-preview); nothing here reaches the game.
+import {
+  CreatureKind,
+  Direction,
+  EquipmentSlot,
+  GuildRank,
+  MessageKind,
+  SharedExperience,
+} from "@rpg/protocol";
+import type { Skull, TextParam } from "@rpg/protocol";
+import type { ClientContent } from "../content-types.ts";
+import type { GameUi } from "../game.ts";
+import type { CreatureState, ItemView } from "../state/world.ts";
+import { emptyGameUi } from "../ui/GameView.tsx";
+
+/** Numeric id of an item by its content id (0 when the item is gone from data/). */
+export function itemNumber(content: ClientContent, id: string): number {
+  for (const [n, def] of Object.entries(content.items)) if (def.id === id) return Number(n);
+  return 0;
+}
+
+const param = (name: string, value: TextParam["value"]): TextParam =>
+  ({ name, value }) as unknown as TextParam;
+
+function creature(
+  id: number,
+  kind: CreatureKind,
+  name: string,
+  contentId: string,
+  health: number,
+): CreatureState {
+  return {
+    id,
+    kind,
+    name,
+    contentId,
+    pos: { x: 0, y: 0, z: 7 },
+    dir: Direction.SOUTH,
+    speed: 200,
+    health,
+    walk: undefined,
+    guild: "",
+    skull: 0 as Skull,
+    cosmetics: { outfit: "", color: "", nameEffect: "" },
+  } as unknown as CreatureState;
+}
+
+export interface Scene {
+  ui: GameUi;
+  name: string;
+}
+
+/** The base: a level 15 guardian in Puerto with a full backpack and a wolf hunt nearby. */
+export function baseScene(content: ClientContent, now: number): Scene {
+  const ui = emptyGameUi();
+  const item = (id: string, count = 1): ItemView => ({ itemId: itemNumber(content, id), count });
+  ui.stats = {
+    health: 312,
+    maxHealth: 420,
+    mana: 96,
+    maxMana: 180,
+    level: 15,
+    experience: 35280,
+    levelPercent: 62,
+    capacity: 41250,
+    maxCapacity: 66000,
+    speed: 230,
+  };
+  ui.selfName = "Aldric Varn";
+  ui.selfId = 1;
+  ui.skills = [
+    ["fist", 12, 40],
+    ["sword", 24, 71],
+    ["shield", 21, 18],
+    ["distance", 10, 5],
+    ["magic", 3, 55],
+    ["fishing", 14, 90],
+    ["mining", 8, 22],
+    ["cooking", 6, 0],
+  ].map(([id, level, percent]) => ({
+    id: String(id),
+    level: Number(level),
+    percent: Number(percent),
+  })) as GameUi["skills"];
+  ui.inventory = new Map([
+    [EquipmentSlot.HEAD, item("embersteel_helm")],
+    [EquipmentSlot.BACKPACK, item("backpack")],
+    [EquipmentSlot.LEFT_HAND, item("plank_shield")],
+    [EquipmentSlot.RIGHT_HAND, item("iron_sword")],
+    [EquipmentSlot.FEET, item("tarred_boots")],
+    [EquipmentSlot.AMMO, item("arrow", 37)],
+  ]);
+  ui.containers = [
+    {
+      id: 1,
+      itemId: itemNumber(content, "backpack"),
+      capacity: 20,
+      hasParent: false,
+      items: [
+        item("rope"),
+        item("pickaxe"),
+        item("ship_biscuit", 7),
+        item("raw_fish", 12),
+        item("copper_coin", 86),
+        item("felling_axe"),
+      ],
+    },
+  ];
+  ui.battle = [
+    creature(11, CreatureKind.MONSTER, "", "wolf", 64),
+    creature(12, CreatureKind.MONSTER, "", "wolf", 100),
+    creature(13, CreatureKind.PLAYER, "Brisa Molina", "", 88),
+    creature(14, CreatureKind.MONSTER, "", "bilge_rat", 30),
+  ];
+  ui.target = 11;
+  ui.hotkeys = Array.from({ length: 12 }, (_, i) => content.spells[i]?.id);
+  ui.hotkeys[5] = undefined;
+  ui.chat = [
+    {
+      kind: MessageKind.SAY,
+      speakerName: "Brisa Molina",
+      speakerContentId: "",
+      text: "¿Vamos a los lobos del norte?",
+      localized: undefined,
+      at: now - 9000,
+    },
+    {
+      kind: MessageKind.SAY,
+      speakerName: "Aldric Varn",
+      speakerContentId: "",
+      text: "Voy, llevo galletas y vendas.",
+      localized: undefined,
+      at: now - 7000,
+    },
+    {
+      kind: MessageKind.PARTY,
+      speakerName: "Brisa Molina",
+      speakerContentId: "",
+      text: "Te espero en la puerta norte.",
+      localized: undefined,
+      at: now - 5000,
+    },
+    {
+      kind: MessageKind.GUILD,
+      speakerName: "Corvo",
+      speakerContentId: "",
+      text: "Cacería al amanecer, no falten.",
+      localized: undefined,
+      at: now - 3000,
+    },
+  ] as GameUi["chat"];
+  ui.log = [
+    {
+      key: "progress.skill_up",
+      params: [
+        param("skill", { case: "contentId", value: "sword" }),
+        param("level", { case: "number", value: 24n }),
+      ],
+      at: now - 1200,
+    },
+  ];
+  ui.party = {
+    leaderId: 1,
+    shared: SharedExperience.ACTIVE,
+    members: [
+      {
+        id: 1,
+        name: "Aldric Varn",
+        vocation: "guardian",
+        level: 15,
+        inView: true,
+        health: 74,
+        mana: 53,
+        island: "puerto",
+        sharing: true,
+      },
+      {
+        id: 13,
+        name: "Brisa Molina",
+        vocation: "ranger",
+        level: 14,
+        inView: true,
+        health: 88,
+        mana: 61,
+        island: "puerto",
+        sharing: true,
+      },
+      {
+        id: 21,
+        name: "Tomás Rial",
+        vocation: "mage",
+        level: 16,
+        inView: false,
+        health: 0,
+        mana: 0,
+        island: "bosque",
+        sharing: false,
+      },
+    ],
+  };
+  ui.guild = {
+    id: 4n,
+    name: "Faro Austral",
+    motd: "Cacería al amanecer en el bosque. Traigan cuerda.",
+    rank: GuildRank.LEADER,
+    members: [
+      { name: "Aldric Varn", rank: GuildRank.LEADER, online: true },
+      { name: "Corvo", rank: GuildRank.VICE, online: true },
+      { name: "Brisa Molina", rank: GuildRank.MEMBER, online: true },
+      { name: "Tomás Rial", rank: GuildRank.MEMBER, online: false },
+    ],
+    pending: [{ name: "Lía Puerto", until: now + 30 * 3600 * 1000 }],
+    wars: [],
+  };
+  ui.cosmetics = {
+    owned: ["outfit_sailor", "name_frost"],
+    balance: 120,
+    equipped: { outfit: "", color: "", nameEffect: "" },
+  };
+  ui.conditions = [{ id: "well_fed", until: now + 60_000, ticks: 0 }];
+  return { ui, name: "base" };
+}
+
+/** An NPC dialog with its shop open. */
+export function withDialog(content: ClientContent, s: Scene): Scene {
+  const ui = { ...s.ui };
+  ui.dialog = {
+    id: 7,
+    npcId: 50,
+    npcContentId: "puerto_provisioner",
+    text: "npc.puerto_provisioner.greet",
+    options: [
+      { id: 1, text: "dialog.trade", params: [] },
+      { id: 2, text: "npc.puerto_provisioner.opt_tools", params: [] },
+      { id: 3, text: "npc.puerto_provisioner.opt_gossip", params: [] },
+      { id: 4, text: "dialog.bye", params: [] },
+    ],
+  };
+  ui.shop = {
+    dialogId: 7,
+    npcId: 50,
+    money: 86,
+    lines: ["rope", "pickaxe", "ship_biscuit", "felling_axe", "raw_fish"].map((id, i) => ({
+      itemId: itemNumber(content, id),
+      buyPrice: [10, 50, 3, 40, 0][i] ?? 0,
+      sellPrice: [0, 0, 0, 0, 2][i] ?? 0,
+      owned: [1, 1, 7, 1, 12][i] ?? 0,
+    })),
+  };
+  return { ui, name: "dialog" };
+}
+
+/** Low health, poisoned, just levelled up. */
+export function withDanger(s: Scene, now: number): Scene {
+  const ui = { ...s.ui };
+  if (ui.stats) ui.stats = { ...ui.stats, health: 74, mana: 20, level: 16, levelPercent: 3 };
+  ui.conditions = [
+    { id: "poison", until: now + 9000, ticks: 3 },
+    { id: "hasted", until: now + 20_000, ticks: 0 },
+  ];
+  ui.levelUp = { level: 16, at: now };
+  ui.log = [
+    ...ui.log,
+    {
+      key: "progress.level_up",
+      params: [
+        param("from", { case: "number", value: 15n }),
+        param("level", { case: "number", value: 16n }),
+      ],
+      at: now - 100,
+    },
+  ];
+  return { ui, name: "danger" };
+}
+
+/** Dead: the death screen over the map. */
+export function withDeath(s: Scene, now: number): Scene {
+  const ui = { ...s.ui };
+  if (ui.stats) ui.stats = { ...ui.stats, health: 0 };
+  ui.death = { experience: 4120, blessings: 0, at: now };
+  return { ui, name: "death" };
+}
