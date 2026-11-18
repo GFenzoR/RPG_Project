@@ -58,7 +58,7 @@ async function slot(fn) {
 }
 const run = (prompt, opts) => slot(() => agent(prompt, opts))
 
-const RULES = `Game: Neque's Realm (repo ${REPO}). Follow CLAUDE.md: server authoritative, single owner of world state (game loop goroutine, no DB I/O in the loop, no mutexes on entities), no time.Now() in game logic, player-visible text only through i18n es+en, content as data, ids with make gen-ids, legal rule (nothing from Tibia; third-party assets only CC0/CC-BY/OGA-BY in assets/CREDITS.md). Docs in Spanish; code, comments and commits in English.
+const RULES = `Game: Neque's Realm (repo ${REPO}). Follow CLAUDE.md: server authoritative, single owner of world state (game loop goroutine, no DB I/O in the loop, no mutexes on entities), no time.Now() in game logic, player-visible text only through i18n es+en, content as data, ids with make gen-ids, legal rule (nothing from Tibia; third-party assets only CC0/CC-BY/OGA-BY/CC-BY-SA, fonts OFL, each file recorded in assets/CREDITS.md; art and music generated with the Gemini account of the owner are recorded there too, and their prompts never name another game, artist or work). Docs in Spanish; code, comments and commits in English.
 Native Windows + Git Bash: start EVERY Bash call with: ${PATHX}
 Never push, never open PRs, never call gh, never use git stash. Do NOT launch sub-agents (the owner caps agents at 2 at a time, sub-agents included).`
 
@@ -168,7 +168,7 @@ Answer in Spanish: BLOCKING / IMPORTANT / MINOR (file:line, scenario, fix), or s
   verify = await run(`${RULES}
 You close the batch "${NAME}". From ${REPO} create the worktree: git worktree add .wt/vf -b ${NAME}/verify ${tip} (if .wt/vf exists, an earlier run was cut: reuse it). Work only there; pnpm install --frozen-lockfile.
 1. Apply the BLOCKING and IMPORTANT findings of the final review below (verify each; explain rejects) and cheap MINOR ones, with tests. Commit. ${ATTR}
-2. You are the only agent with Docker and ports. If docker info fails: powershell -NoProfile -Command "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'", poll, make db-up. Fresh database rpg_e2e_${NAME} (DROP IF EXISTS + CREATE via docker exec ... psql -U postgres); DATABASE_URL and TEST_DATABASE_URL = postgres://postgres:postgres@localhost:5432/rpg_e2e_${NAME}.
+2. Before Docker: the owner may be playing with 'make play' (a gameserver.exe and Vite on :8080/:5173 started from C:\ProyectosVSCode\RPG_Project). Never stop it: if 'netstat -ano | grep LISTENING | grep -E ":(8080|5173) "' shows them, wait in a loop (check every 2 min, up to 8 h) until they are gone. Then you are the only agent with Docker and ports. If docker info fails: powershell -NoProfile -Command "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'", poll, make db-up. Fresh database rpg_e2e_${NAME} (DROP IF EXISTS + CREATE via docker exec ... psql -U postgres); DATABASE_URL and TEST_DATABASE_URL = postgres://postgres:postgres@localhost:5432/rpg_e2e_${NAME}.
 3. make lint, make test, make validate, make test-integration, make e2e — all full, the only e2e of the batch. Fix until green (never weaken tests; a flaky test gets its cause found and fixed). Review with Read the screenshots the items point at:
 ${notes}
 4. taskkill //IM gameserver.exe //F, DROP the database, stop the Vite servers you started, then docker desktop stop and wsl --shutdown.

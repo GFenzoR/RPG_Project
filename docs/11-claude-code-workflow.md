@@ -65,7 +65,16 @@ Etapas (el script nunca corre más de **2 agentes a la vez**, contando los subag
 5. **Verificar, una sola vez.** Un agente aplica la revisión final y corre el **único**
    `make test-integration` + `make e2e` del lote, revisa los screenshots que señalaron las
    tareas, y al final apaga Docker y WSL. Un test inestable se investiga y se arregla, no
-   se esconde con reintentos.
+   se esconde con reintentos. **Si el dueño está jugando** con `make play` (un
+   `gameserver.exe` y Vite escuchando en `:8080` y `:5173`), el agente no lo para: espera,
+   mirando cada 2 minutos y hasta 8 horas, a que esos puertos se liberen, y recién ahí
+   arranca Docker.
+
+Las reglas que el script le pasa a cada agente (`RULES` en `lote.js`) repiten las de
+`CLAUDE.md`, la regla legal incluida: assets de terceros solo CC0, CC-BY, OGA-BY o
+CC-BY-SA, fuentes OFL, cada archivo en `assets/CREDITS.md`; y el arte y la música hechos
+con el Gemini del dueño también van ahí, con prompts que nunca nombran otro juego,
+artista ni obra (`tools/CLAUDE.md`, "gemini").
 
 Después, la sesión principal (no un agente) hace **un** push de la punta como `fix/<lote>`,
 abre **un** PR con base en el lote anterior (una sección por rama), espera la CI de GitHub y
