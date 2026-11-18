@@ -2002,18 +2002,27 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(e.message));
-  // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled.
+  // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled, and
+  // on the media elements the music streams on (the second each one starts from).
   await page.addInitScript(() => {
-    const w = window as unknown as { __audioStarts: number };
+    const w = window as unknown as { __audioStarts: number; __musicFrom: number[] };
     w.__audioStarts = 0;
+    w.__musicFrom = [];
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
       w.__audioStarts++;
       return start.apply(this, args);
     };
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      w.__musicFrom.push(this.currentTime);
+      return play.call(this);
+    };
   });
   const starts = (): Promise<number> =>
     page.evaluate(() => (window as unknown as { __audioStarts: number }).__audioStarts);
+  const musicFrom = (): Promise<number[]> =>
+    page.evaluate(() => (window as unknown as { __musicFrom: number[] }).__musicFrom);
   const history = (): Promise<string[]> => page.evaluate(() => window.__rpgAudio?.history() ?? []);
 
   const { email, password } = await newGuardian(playwright, "Hark");
@@ -2021,24 +2030,42 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Nothing may start before a gesture (browser autoplay rules).
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
   expect(await starts()).toBe(0);
-  // The first gesture starts the title screen's loop (the owner's Gemini pick in
-  // assets/sounds.yaml music.title; none if he picked none), and no ambient bed. Polling
-  // what plays proves its file loaded and decoded.
+  expect(await musicFrom()).toEqual([]);
+  // The first gesture starts the title screen's music (a track of the pool the owner picked
+  // in assets/sounds.yaml music.title, through the music director), and no ambient bed.
+  // Polling what plays proves its file arrived. The gesture is a click on the empty page: a
+  // modifier key alone is no user activation for Chromium, and the context stays suspended.
   const sounds = parse(
     readFileSync(join(import.meta.dirname, "..", "..", "assets", "sounds.yaml"), "utf8"),
-  ) as { music?: { title?: string } };
-  await page.keyboard.press("Shift");
+  ) as {
+    music: { title?: string; islands: Record<string, string>; pools: Record<string, string[]> };
+  };
+  const pool = (id: string | undefined): string[] => sounds.music.pools[id ?? ""] ?? [];
+  await page.mouse.click(4, 796);
   await expect
-    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
-    .toEqual({ music: sounds.music?.title, ambient: undefined });
+    .poll(async () => {
+      const l = await page.evaluate(() => window.__rpgAudio?.loops());
+      return l && l.ambient === undefined && pool(sounds.music.title).includes(l.music ?? "");
+    })
+    .toBe(true);
 
   await enterGame(page, email, password);
   errors.length = 0;
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(true);
-  // The test island plays the harbour loop and the waves (assets/sounds.yaml).
+  // The test island plays a track of the harbour's pool and the waves (assets/sounds.yaml).
   await expect
-    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
-    .toEqual({ music: "music_puerto", ambient: "amb_olas" });
+    .poll(async () => {
+      const l = await page.evaluate(() => window.__rpgAudio?.loops());
+      return (
+        l &&
+        l.ambient === "amb_olas" &&
+        pool(sounds.music.islands["testisle"]).includes(l.music ?? "")
+      );
+    })
+    .toBe(true);
+  // Each track started at one of its entry points, never at its first second.
+  await expect.poll(async () => (await musicFrom()).length).toBeGreaterThanOrEqual(1);
+  for (const from of await musicFrom()) expect(from).toBeGreaterThan(0);
   // An own step makes a sound too. The engine drops a sound whose file is still loading
   // after LATE_MS (a late sound is worse than none), so on a slow runner the first step can
   // be silent: walk back and forth until one plays (its file is cached by then).
@@ -2059,7 +2086,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     await arrived(page, start.x, start.y);
   }
   expect(await history()).toContain("step");
-  expect(await starts()).toBeGreaterThanOrEqual(3); // two loops and a step
+  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambient bed and a step
 
   // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
   await page.getByTestId("options-button").click();

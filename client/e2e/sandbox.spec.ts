@@ -67,6 +67,72 @@ async function enterGame(
   await page.waitForFunction(() => window.__rpgClient?.ready === true, undefined, SLOW);
 }
 
+test("music: the island's track, then the caves' through an equal-power crossfade, with no errors", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const who = await newGuardian(playwright, "Musico");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who); // its clicks are the gesture that unlocks the audio
+  errors.length = 0; // the login page's own requests (a 401 before signing in) are not ours
+  const music = () => page.evaluate(() => window.__rpgAudio?.music());
+  // The sandbox island plays the harbour's pool (assets/sounds.yaml): after the title's fade,
+  // one track alone, on its own element, at full gain.
+  await expect
+    .poll(
+      async () => {
+        const m = await music();
+        const v = m?.voices ?? [];
+        return m?.pool === "town_puerto" && v.length === 1 && v[0]?.playing && v[0].gain > 0.99;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  const island = (await music())?.voices[0];
+  expect(island?.position).toBeGreaterThan(0); // from an entry point, not its first second
+
+  // Down to the cave of the sandbox (floor 8): after the dwell, the caves' pool crossfades
+  // in. Every sample in between keeps the power: out² + in² = 1.
+  const say = page.getByTestId("say").getByRole("textbox");
+  await say.fill("/tp 2118 2092 8");
+  await say.press("Enter");
+  const both: { out: number; into: number }[] = [];
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const m = await music();
+    const v = m?.voices ?? [];
+    const out = v.find((x) => x.pool === "town_puerto");
+    const into = v.find((x) => x.pool === "cave");
+    if (out && into && out.gain < 0.999 && into.gain > 0.001)
+      both.push({ out: out.gain, into: into.gain });
+    if (m?.pool === "cave" && v.length === 1 && v[0]?.playing && v[0].gain > 0.99) break;
+    if (Date.now() > deadline) throw new Error(`no crossfade into the caves: ${JSON.stringify(m)}`);
+    await page.waitForTimeout(150);
+  }
+  expect(both.length).toBeGreaterThan(3); // a 5 s fade sampled every ~150 ms
+  for (const s of both) expect(s.out ** 2 + s.into ** 2).toBeCloseTo(1, 2);
+  // The old track faded out while the new one faded in.
+  expect(both.at(-1)?.out ?? 1).toBeLessThan(both[0]?.out ?? 0);
+  expect(both.at(-1)?.into ?? 0).toBeGreaterThan(both[0]?.into ?? 1);
+  const cave = (await music())?.voices[0];
+  expect(cave?.sound).toMatch(/^music_cueva/);
+  expect(cave?.position).toBeGreaterThan(0);
+  await page.waitForTimeout(300);
+  await shot(page, "93b-music-cave");
+  expect(errors).toEqual([]);
+});
+
 test("sandbox island: wake up in its temple, then /tp to the pens, the yard of portals and the cave", async ({
   page,
   playwright,
