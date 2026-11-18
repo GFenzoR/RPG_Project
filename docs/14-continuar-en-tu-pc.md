@@ -154,10 +154,16 @@ el punto 5:
       versión se leía peor que el elemental (una mancha naranja sobre dos palitos oscuros, de
       costado un tronco ardiendo); la nueva es un espíritu de fuego con forma de herrero,
       núcleo al rojo blanco, llamas que suben y el martillo en alto. Cómo escribir uno:
-      `tools/CLAUDE.md`, "spritegen: el motor". Queda: pasar otros sprites propios de un
-      frame (cajón, bolardo, tablero, cartel; la gaviota si el dueño quiere), la acción de
-      recibir golpe (no existe en el cliente: sigue el destello procedural) y frames de
-      props animados (ART-7). **Revisar en el E2E** (no se corrió en la rama; se revisó con
+      `tools/CLAUDE.md`, "spritegen: el motor". Después (2026-11-18, *"todo debiese tener
+      animaciones"*) pasaron al motor el tablero del mercado, el cartel y el cajón, cada
+      uno tras compararlo con el viejo sobre sus suelos a 1x junto a una persona de LPC; el
+      bolardo se probó tres veces, no le ganó al dibujado a mano y sigue como estaba. El
+      motor ahora hace props animados (`loop` de un spec: el sprite y `frame_<n>`, ART-7,
+      con su `tiles` en `sprites.yaml`, sin cambios en spritepack ni en el cliente): una
+      nota del tablero del mercado se levanta con el viento (4 frames de 180 ms). Queda: la
+      gaviota si el dueño quiere, la acción de recibir golpe (no existe en el cliente: sigue
+      el destello procedural) y más props animados con `loop` (una bandera, un farol
+      colgado) si llegan al mapa. **Revisar en el E2E** (no se corrió en la rama; se revisó con
       las hojas y lineups de `spritegen sheet` y `mapcli render`): el jabalí y el ciervo en
       el Bosque y el Puerto, en las cuatro direcciones, atacando y muriendo (la caída de
       costado; de frente y de espaldas, ancho y no una raya), su tamaño al lado del lobo y
@@ -166,7 +172,14 @@ el punto 5:
       forma de herrero y el martillo en alto, también de costado; el yunque en las
       herrerías (Isla de Pruebas 2073,2102). La barra y el nombre del ciervo van más arriba
       que antes: `top` sale de su caminar al norte (las astas lejos, ~54 px); los del eco,
-      sobre el martillo alzado.
+      sobre el martillo alzado. Los props: el tablero del mercado (Isla de Pruebas
+      2091,2103; Puerto 3168,6382; Volcán 3660,5790; Bosque 4164,6106), que la nota de abajo
+      a la derecha se levante y caiga sin que el tablero salte, y que el mercado se siga
+      abriendo al usarlo; el cartel en Brasal (3641,5793 sobre basalto, 3635,5793 y
+      3691,5794 sobre ceniza) y en la puerta de la forja (z 8, 3693,5830); los cajones en
+      los muelles (Puerto 3201,6430, Volcán 3630,5796, Pruebas 2095,2134) y en los
+      depósitos de piso de madera (Puerto 3182,6420; Pruebas 2084,2100), y lo que se apoya
+      encima de un cajón (`elevation: 8`) sobre la tapa.
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
       cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
@@ -894,7 +907,9 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   de las criaturas"), salvo el jabalí y el ciervo, de 64x64 sobre la sombra de contacto.
 - **Motor de sprites** (arte propio, `tools/spritegen/src/engine/`, CC0): el jabalí, el
   ciervo, el eco de la forja y el yunque salen de modelos con volumen y un rig de acciones
-  (`engine/specs/`), en cuatro direcciones (`tools/CLAUDE.md`, "spritegen: el motor").
+  (`engine/specs/`), en cuatro direcciones (`tools/CLAUDE.md`, "spritegen: el motor");
+  también el cajón, el cartel y el tablero del mercado, este animado (una nota que se
+  levanta con el viento, `frame_<n>` de ART-7).
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

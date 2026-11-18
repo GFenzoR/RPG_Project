@@ -311,8 +311,10 @@ volumen y, si es una criatura, de un rig con acciones. Sus reglas de estilo (cá
 luz, tonos de `palette.ts`, contorno selectivo, tamaños y anclas de ART-2, frames y
 tiempos de ANI-2) están en un solo lugar, `engine/style.ts`.
 - **Hoy:** `creatures/bristleback_boar` y `creatures/bramble_stag` (quieto, caminar,
-  atacar y morir: 68 frames cada uno), `npcs/forge_echo` (quieto y caminar: 32 frames) y
-  `decor/anvil` (una imagen).
+  atacar y morir: 68 frames cada uno), `npcs/forge_echo` (quieto y caminar: 32 frames),
+  `decor/anvil`, `decor/cargo_crate` y `decor/signpost` (una imagen) y
+  `decor/market_board` (animado: 4 frames). El bolardo (`decor/mooring_post`) sigue de
+  `recipes/terrain.ts`: el del motor no se leyó mejor.
 - **Frames:** una criatura tiene `sprites/<sprite>/<acción>_<dir>_<n>.png` en las cuatro
   direcciones, dibujadas desde el modelo (el este no es el oeste espejado: la luz sigue a
   la izquierda), de 64x64 sin sombra pintada. No hay `sprites/<sprite>.png`: el nombre del
@@ -320,6 +322,11 @@ tiempos de ANI-2) están en un solo lugar, `engine/style.ts`.
 - **Pistas:** su entrada de `animations` dice `anchor: bc`, `shadow: ellipse`, `flying`
   si flota y los `ms` del rig; nada de `facing` ni `mirror`, y ninguna entrada en
   `sprites`. `spritegen check` y `make test` fallan si no coinciden con el spec.
+- **Props animados:** un objeto con `loop` en su spec sale como `sprites/<sprite>.png` (el
+  frame 0) y `sprites/<sprite>/frame_<n>.png`, como los props animados de
+  `recipes/props.ts`, y su entrada de `tiles` en `assets/sprites.yaml` lleva los `ms` y el
+  `sync` del loop (`decor/market_board: { ms: 180, sync: tile }`); `spritegen check` lo
+  exige.
 - **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet --only
   <sprite>` deja en `build/spritegen/` la hoja de contacto (todos los frames a 4x) y el
   lineup (a 1x, sobre su suelo, al lado del lobo y de una persona de LPC). Mirarlas con

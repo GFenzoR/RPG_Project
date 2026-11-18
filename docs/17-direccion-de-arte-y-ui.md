@@ -556,6 +556,7 @@ leen el renderer, las puertas y las hojas de revisión):
 | ANI-2 acciones y tiempos | Diablo II: muchos modos por monstruo; RotMG: ciclos cortos que se leen | `ACTIONS`: quieto 2-4 frames de 400-600 ms, caminar 2-4 (2 por casilla, por distancia), atacar 3-4 en 300-400 ms, disparar 3, conjurar 3-4, morir 4-6 en 500-700 ms; el validador los exige |
 | ANI-3 continuidad | — | el ciclo de caminar empieza en un frame de contacto y el quieto respira desde la pose parada |
 | ANI-4 nombres | — | `frameName`: `<sprite>/<acción>_<dir>_<n>`; spritepack arma los clips de esos archivos y el `CreatureBody` del cliente los juega sin cambios |
+| ART-7 tiles e items animados | Stardew: el mundo se mueve en lo chico | `LOOP`: un objeto con `loop` sale como el sprite y `<sprite>/frame_<n>` (2 a 8 frames de 80 a 900 ms, `sync` world, tile o random), los nombres que spritepack ya arma como tile animado; el renderer lo juega con el `ms` y el `sync` de su entrada de `tiles` |
 | "Un mundo que respira" | Stardew | quieto con respiración, orejas, colas y llamas que se mueven; chispas que suben |
 
 De ningún juego se tomó un sprite, una forma ni una paleta: solo estas reglas de estilo.
@@ -573,8 +574,10 @@ espaldas, de frente y de espaldas al menos el 45 % de ancho de lo que mide de pe
 revisión del jabalí), pies en la fila del suelo, un caminar que cambia de silueta, un
 ataque y una muerte que se distinguen del parado, sur y oeste distinguibles, y las pistas de
 `assets/sprites.yaml` iguales al rig (`anchor`, `shadow: ellipse`, `flying`, los `ms`; sin
-`facing` ni `mirror`; sin entrada en `sprites`). Más el determinismo (mismo spec, mismos
-píxeles).
+`facing` ni `mirror`; sin entrada en `sprites`; un objeto con `loop`, su entrada de `tiles`
+con el mismo `ms` y `sync`). Un `loop` se mueve (algún frame cambia al menos 4 px respecto
+del 0) sin irse de su lugar (la caja de cada frame a 3 px o menos de la del 0). Más el
+determinismo (mismo spec, mismos píxeles).
 
 **Revisión:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
 <prefijo>]` escribe en `build/spritegen/` la hoja de contacto de cada sprite del motor
@@ -616,6 +619,32 @@ persona de LPC). Se miran con Read.
   versiones lado a lado sobre su suelo y quedó la nueva.
 - **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
   cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
+- **Props de una casilla** (2026-11-18, pedido del dueño: *"si bien las gráficas no están
+  mal siento que necesitamos mejorarlas ... todo debiese tener animaciones"*). Cada uno se
+  comparó con el dibujado a mano sobre cada suelo donde está en el mapa, a 1x, al lado de
+  una persona de LPC, y quedó el del motor solo donde se leía claramente mejor:
+  - **Tablero del mercado** (`decor/market_board`, 32x64): postes cuadrados con volumen,
+    tablero de tablas en su marco, techito a dos aguas con hileras de tejas y cinco notas
+    con sus renglones y su chinche (rojo o de hierro). Sobre la tierra del Bosque las patas
+    finas del viejo desaparecían. Es el primer prop animado del motor: con el viento se
+    levanta el pie de la nota de abajo a la derecha (`loop`: 4 frames de 180 ms, `sync:
+    tile`), así el tablero donde se abre el mercado llama la vista.
+  - **Cartel** (`decor/signpost`, los carteles de Brasal y de la puerta de la mina): dos
+    tablas con renglones tallados y clavos, en un poste que sube por encima de ellas, en
+    madera clara. El viejo, de madera oscura, se perdía sobre la tierra de la mina y el
+    basalto.
+  - **Cajón** (`decor/cargo_crate`, 29 en muelles, playas y depósitos de las cuatro
+    islas): madera cálida, la tapa iluminada con dos juntas, listones más oscuros en el
+    borde del frente, la riostra en diagonal y un clavo en cada esquina. El primer intento
+    del motor (marco gris alrededor de la tapa, juntas en el frente) se leía peor que el
+    viejo: la tapa perdía el borde y el marco se fundía con las tablas del muelle; el que
+    quedó usa un solo material cálido y la tapa lisa. Gana sobre el muelle, la arena, la
+    tierra y la piedra; sobre el piso de madera de los depósitos contrasta menos que el
+    viejo de marco gris, pero se lee por la tapa clara y el contorno.
+  - **Bolardo** (`decor/mooring_post`): se probó tres veces (tapa en hongo con faja de
+    hierro y cabo suelto; poste claro; poste oscuro con dos vueltas de cabo) y ninguna le
+    ganó al dibujado a mano, que tiene la tapa más nítida y el cabo suelto: sigue en
+    `recipes/terrain.ts`.
 
 **Decisiones:**
 - **Un modelo con volumen y no recetas 2D:** las cuatro direcciones, la luz, el contorno y
@@ -629,11 +658,19 @@ persona de LPC). Se miran con Read.
   de spritepack.
 - **El eco no tiene ataque ni muerte:** es un NPC (los NPCs solo están quietos y caminan).
 - **La gaviota sigue a mano** hasta que el dueño elija su arte.
+- **Un prop del motor reemplaza al dibujado solo si se lee claramente mejor** en su suelo,
+  a 1x, junto a una persona de LPC; si empata, queda el de antes (el bolardo). Para
+  objetos chicos rinden pocas piezas, un material cálido que contraste con el suelo y
+  textura baja; el detalle (juntas, marcos de otro color) a 1x se vuelve ruido.
+- **Props animados con `loop` y no con `actions`:** un objeto no tiene direcciones ni
+  acciones; sus frames llevan los nombres de ART-7 (`frame_<n>`) y la temporización vive
+  en `tiles` de `sprites.yaml`, como la de los props de `recipes/props.ts`: ni spritepack
+  ni el cliente cambian.
 
-**Pendiente:** pasar al motor otros sprites propios de un frame (cajón, bolardo, tablero,
-cartel; la gaviota si el dueño quiere), sumar primitivas si hacen falta (un toro para
-anillos, cajas redondeadas), frames `frame_<n>` para props animados (ART-7) y la revisión
-en el juego del E2E final (no se corrió en la rama).
+**Pendiente:** otros props animados con `loop` (una bandera o un farol colgado si llegan
+al mapa; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
+dueño quiere, sumar primitivas si hacen falta (un toro para anillos, cajas redondeadas) y
+la revisión en el juego del E2E final (no se corrió en la rama).
 
 ## 4. Sensación de movimiento (MOV)
 

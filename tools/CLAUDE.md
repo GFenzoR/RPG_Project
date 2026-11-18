@@ -287,7 +287,7 @@ ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)". Desde el 2026-11-18 una parte de las
 recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el jabalí, el
-ciervo, el eco de la forja y el yunque.
+ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel.
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su
@@ -309,8 +309,9 @@ Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`),
 | `sheet.ts` | Hoja de contacto y lineup para revisar |
 | `specs/` | Los specs del juego; `specs/index.ts` (`ENGINE_SPECS`) los registra |
 
-**Escribir un spec** (ejemplos: `specs/boar.ts`, `specs/stag.ts`, `specs/forge-echo.ts`,
-`specs/anvil.ts`). Unidades: píxeles de sprite; x al este, y al norte (lejos de la
+**Escribir un spec** (ejemplos: `specs/boar.ts`, `specs/stag.ts`, `specs/forge-echo.ts`;
+objetos: `specs/anvil.ts`, `specs/crate.ts`, `specs/signpost.ts` y `specs/market-board.ts`,
+este con un `loop`). Unidades: píxeles de sprite; x al este, y al norte (lejos de la
 cámara), z arriba; el suelo es z = 0.
 - `sprite`: la ruta de `data/` (`creatures/<id>`, `npcs/<id>`, `decor/<id>`).
 - `size`: la clase de ART-2 (`smallCreature`, `mediumAnimal`, `humanoid`, `bigCreature`,
@@ -342,6 +343,15 @@ cámara), z arriba; el suelo es z = 0.
   lineup de revisión (el de donde está en el mapa); `views: { w: 20, e: -20 }` gira un poco
   una dirección hacia la cámara (+ en el oeste, - en el este): una figura de costado muestra
   la cara y lo que lleva en la mano del lado lejano (el eco de la forja).
+- `loop` (solo objetos, ART-7): `{ frames, ms, sync, keys }` hace de un objeto un prop
+  animado. El sprite es el frame 0 y `<sprite>/frame_<n>` los demás: los nombres que
+  spritepack ya arma como tile animado (como la fragua o el estandarte de
+  `recipes/props.ts`), así que el cliente lo juega sin cambios. Las keys son las de una
+  acción en bucle (el frame f en f/frames, de la última key vuelve a la primera);
+  `frames` de 2 a 8 y `ms` de 80 a 900 (`LOOP` de `style.ts`, la tabla de ART-7); `sync`:
+  `world` (todos en fase), `tile` (cada casilla con su fase) o `random`. Ejemplo: la nota
+  del tablero del mercado que se levanta con el viento (una parte colgada de su chinche:
+  `at` en el chinche, y un giro en x le levanta el pie hacia la cámara).
 
 **Escribir un rig:** `actions` con `idle` y `walk` como mínimo, y `attack`, `shoot`,
 `cast` o `death` si los usa (un NPC: solo quieto y caminar). Cada acción tiene `frames`
@@ -364,9 +374,11 @@ primera key (frame 0) a la última (frame n-1). Lo que no está en una key queda
 **Registrar y generar:** el spec va en `specs/index.ts`. Una criatura necesita su entrada
 en `animations` de `assets/sprites.yaml`: `{ anchor: bc, shadow: ellipse, ms: { idle: N,
 attack: N, death: N } }` con los `ms` del rig (y `flying: true` si flota), sin `facing` ni
-`mirror`, y ninguna entrada en `sprites` (los píxeles son archivos). Si reemplaza arte
-viejo, se borran sus PNG. Después `make spritegen ONLY=<sprite>/` (o el prefijo) y `make
-sprites STRICT=1`.
+`mirror`, y ninguna entrada en `sprites` (los píxeles son archivos). Un objeto con `loop`
+necesita su entrada en `tiles` con los mismos `ms` y `sync` (`decor/market_board: { ms:
+180, sync: tile }`); uno sin `loop`, ninguna con `ms` ni `sync`. Si reemplaza arte viejo,
+se borran sus PNG (y su receta, con los imports que dejen de usarse). Después `make
+spritegen ONLY=<sprite>/` (o el prefijo) y `make sprites STRICT=1`.
 
 **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
 <prefijo>] [--out DIR] [--scale N]` escribe `build/spritegen/<sprite>.sheet.png` (todos los
@@ -374,7 +386,14 @@ frames a Nx, por defecto 4, en una grilla: una fila por acción y dirección) y
 `<sprite>.lineup.png` (a 1x, escalado 3x, como lo pone el cliente sobre su suelo, al lado
 del lobo de Gemini y de una persona de LPC si el atlas está armado). Mirar los dos con
 Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
-lea mejor.
+lea mejor. Un prop de una casilla se compara sobre cada suelo donde está, al lado de una
+persona de LPC, a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
+el detalle. Lo que aprendió la revisión del 2026-11-18: pocas piezas y un material cálido
+(el primer cajón del motor, con un marco gris y vetas en el frente, se perdía sobre las
+tablas del muelle; el que quedó es de madera clara con la tapa lisa); textura baja
+(`amount` 0,06-0,16: más hierve a 1x); y un objeto alto puede pararse adelante en su casilla
+(`at: [0, -3, 0]`, el poste del cartel) para no tocar el borde del lienzo de 32x32. El bolardo se
+probó tres veces y ninguna le ganó al dibujado a mano: sigue en `recipes/terrain.ts`.
 
 **Puertas de calidad** (`gates.ts`, umbrales en `GATES`; las corren `make test` y
 `spritegen check`, que también va al final de `make spritegen`): colores solo de sus
@@ -386,7 +405,10 @@ en la banda de su tipo (ART-6); alto y largo de perfil dentro del rango de ART-2
 de perfil (`frontWidth`: si no, de frente se lee como una raya a 1x, como el primer
 jabalí); los pies en la fila del suelo (más holgura si flota); caminar que cambia de
 silueta, un ataque y una muerte que se distinguen del parado y sur distinto de oeste; las
-pistas de `sprites.yaml` iguales al rig; y el determinismo (mismo spec, mismos píxeles).
+pistas de `sprites.yaml` iguales al rig (y el `tiles` de un `loop`); un `loop` que se mueve
+(algún frame cambia al menos 4 px respecto del 0, `loopMoves`) sin irse de su lugar (la caja
+de cada frame a 3 px o menos de la del 0, `loopDrift`); y el determinismo (mismo spec,
+mismos píxeles).
 El test del motor es `src/engine/engine.test.ts`.
 
 ## spritepack

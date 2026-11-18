@@ -414,4 +414,7 @@ secundaria.
   atacar y morir en cuatro direcciones; el eco de la forja (era Dungeon Crawl) y el yunque
   también salen del motor. Tras revisar las hojas, el jabalí ganó ancho de frente y de
   espaldas (puerta `frontWidth`) y el eco se rehízo como espíritu de fuego con forma de
-  herrero y el martillo en alto. Lo que queda: docs/14, "Pendientes conocidos".
+  herrero y el martillo en alto. Después pasaron al motor el tablero del mercado (con una
+  nota que se levanta con el viento: el `loop` de ART-7, `frame_<n>`), el cartel y el
+  cajón; el bolardo no le ganó al dibujado a mano. Lo que queda: docs/14, "Pendientes
+  conocidos".
