@@ -290,6 +290,18 @@ server/
   `mapcompile` (`compile.checkPortalLooks`); `initPortals` solo avisa (log), para un
   `world.bin` compilado antes de cambiar `data/items`.
 
+- **Caminar (cola de teclado y época, `session/move.go`, docs/05 "Caminar"):** `Walk`
+  encola detrás de los pasos de teclado (`Player.keyWalk`; un camino o un paso de
+  persecución se descarta), con tope `movement.max_queued_steps` (uno más reinicia), y
+  compacta la cola para que una tecla mantenida no la haga crecer. `Player.walkEpoch`
+  (desde 1, nunca 0) numera los reinicios: `reject` y `relocate` llaman a `resetWalk` y
+  el `WalkRejected`/`FullMapView` lleva la época nueva; un `Walk` de otra época se
+  descarta sin contestar (0 no se revisa: bots y clientes viejos). El cliente tiene pasos
+  predichos esperando respuesta: **ningún camino nuevo puede vaciar la cola de un jugador
+  conectado en silencio** (`stopWalk` solo); usa `reject` (o `relocate`, que manda el
+  `FullMapView`), o su cliente se queda esperando confirmaciones que no llegan. El ritmo
+  sigue siendo del servidor (`readyAt`).
+
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
   `store/shop.go` + `httpapi/shop.go` + `app/shop.go` + `session/cosmetics.go`. Todo cambio

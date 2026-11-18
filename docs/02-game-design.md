@@ -42,6 +42,25 @@ Todos los números de este documento son **valores iniciales** que viven en
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - Click-to-walk con pathfinding A* en el servidor (máx. 100 casillas).
+- **Movimiento fluido** (al estilo de Diablo 2, pero por casillas y con el servidor como
+  juez). Mantener una tecla camina casilla tras casilla sin detenerse entre ellas: el
+  cliente predice hasta `max_queued_steps` pasos (`balance.yaml`, 4) y decide el siguiente
+  50 ms antes de que termine el que dibuja; el servidor los encola y empieza cada uno el
+  tick en que termina el anterior (`05-network-protocol.md` "Caminar"). La velocidad no
+  cambia: cada paso dura lo que dice la fórmula de arriba y el servidor valida cada paso
+  y su ritmo. Soltar la tecla en los últimos 50 ms de un paso todavía da el siguiente.
+  - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
+    con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
+    horizontal o vertical libre (se "desliza" junto a un muro).
+  - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
+    sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos.
+  - Las demás criaturas y el camino del click se dibujan sobre la línea de ticks del
+    servidor con un colchón contra el jitter de la red (~40 ms): los pasos seguidos del
+    servidor se ven seguidos, sin pausas ni tirones.
+  - La cámara y las criaturas se mueven de a un píxel de pantalla (no de a un píxel del
+    sprite, que a escala 3 eran saltos de 3 píxeles cada pocos frames); los sprites siguen
+    enteros y a escala entera. Las criaturas sin frames de caminar (monstruos, NPCs) dan
+    un saltito de 1 px en medio de cada paso.
 - Cambiar de piso: escaleras, escaleras de mano, agujeros, sogas y teletransportes (ver
   "Cambiar de piso"). Rampas no hay por ahora.
 

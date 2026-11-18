@@ -22,8 +22,10 @@ client/
 
 ## Reglas del cliente
 - El cliente es "tonto": envía intenciones y dibuja lo que el servidor dice.
-  Solo predice el movimiento propio (un paso) y lo corrige si el servidor lo rechaza.
-- Interpolación de movimiento entre casillas según la velocidad que manda el servidor.
+  Solo predice los pasos propios de teclado (hasta `max_queued_steps`, ver "Movimiento
+  fluido") y los corrige si el servidor los rechaza.
+- Interpolación de movimiento entre casillas según la velocidad que manda el servidor;
+  los pasos que da el servidor se dibujan sobre su línea de ticks, uno detrás del otro.
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
 - Ventana visible por defecto 15x11 casillas; el canvas escala en múltiplos enteros
@@ -579,7 +581,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   15x11 casillas enteras (la de siempre, `pixelScale`). El máximo es la mayor que todavía
   muestra 7x5 (`MIN_VIEW`). Siempre escalas enteras. Acercado, el canvas se corta a la
   caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
-  jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
+  jugador una vista de casillas fraccionarias, con la cámara en píxeles de pantalla
+  enteros (ver "Movimiento fluido"). El servidor sigue mandando las 15x11 (+1):
   el zoom es solo de dibujo.
 - La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
   `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
@@ -601,6 +604,59 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Ubicación de los botones (`touch.css`): abajo a la derecha del mapa, sobre una hotbar
   de una línea y bajo el cajón. En vertical con pad van en la franja, sobre las flechas de
   la hotbar. Mientras hay un item elegido, el banner toma su lugar y se ocultan.
+
+## Movimiento fluido
+Pedido del dueño: "fluidez de movimiento como en Diablo 2", por casillas y con el servidor
+como juez. Medido antes del cambio (simulación de `state/walking.test.ts` con la lógica
+vieja): a escala 3 la cámara saltaba de a 3 px de pantalla y 6 cada ~15 frames (7 % de
+los frames) porque se fijaba a píxeles de sprite; un camino por click y las demás
+criaturas arrancaban cada paso al llegar su batch (con 20–60 ms de jitter: 4–10 frames
+disparejos cada 10 pasos y tirones hacia adelante); con RTT alto el teclado esperaba la
+confirmación de cada paso (6 frames quietos y 3 ticks de hueco en el servidor cada 12
+pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
+- **Pasos de teclado** (`state/world.ts`): `predicted` guarda hasta
+  `movement.max_queued_steps` (`balance.yaml`, 4; `ClientContent.movement.maxQueuedSteps`)
+  pasos mandados sin confirmar. `canStep` deja decidir el siguiente cuando al paso
+  dibujado le faltan `STEP_LEAD_MS` (50 ms, `state/motion.ts`) o menos; `chooseStep`
+  prueba la dirección y, si es una diagonal bloqueada, su mitad horizontal y luego la
+  vertical (`stepChoices`); si nada está libre, gira (manda `Turn` solo si cambia). El
+  paso nuevo empieza cuando termina el dibujado (`Walk.prev` mantiene el anterior hasta
+  entonces) y se manda con `walkEpoch`. El `CreatureMove` que confirma el más viejo
+  conserva su inicio local y toma la duración del servidor (corre los de atrás). Un
+  `WalkRejected` o un movimiento propio distinto vacía `predicted`. `game.ts` `frame`
+  solo pide `keys.take() ?? pad.take()` cuando `canStep`; un click espera
+  `unconfirmed === 0` para mandar el camino desde donde está el servidor.
+- **Época** (docs/05 "Caminar"): `walkEpoch` sale del último `WalkRejected` o
+  `FullMapView` y va en cada `Walk`; el servidor descarta los de otra época sin contestar.
+- **Pasos del servidor** (las demás criaturas y el camino propio por click): `Game` pide
+  `world.batchTime(batch.tick, now)` por batch y pasa ese `at` a `apply`; el paso empieza
+  en `at` y se encadena tras el que se sigue dibujando (`prev`, sin saltos). `Playout`
+  es un colchón de jitter: retraso = envolvente de las llegadas (olvida una tardía a
+  5 ms/s) + `PLAYOUT_MARGIN_MS` (40), que se mueve a 5 ms/s (sube) y 10 ms/s (baja), menos
+  de un frame por paso; un batch más tarde que el retraso lo sube de golpe (ese paso
+  arranca tarde: la única pausa que queda).
+- **Correcciones**: `CreatureState.slide` (`slideBetween`/`slideLeft`) desliza en
+  `SLIDE_MS` (160 ms, ease-out) cualquier salto del dibujo de hasta `SLIDE_MAX_TILES` (3);
+  más es un teletransporte y salta.
+- **Dibujo**: `drawPos` usa `activeWalk` (el paso que se dibuja ahora: el último o los de
+  antes mientras duren) más lo que queda del deslizamiento; `facing` es la dirección de
+  ese paso mientras camina; `stepProgress` es `undefined` antes de empezar (parado). La
+  cámara (`followCamera`) y las criaturas (`devicePixels`) se fijan a píxeles de
+  pantalla, no de sprite: el mapa se mueve de a 1 px y la criatura seguida queda quieta
+  en pantalla; los sprites siguen enteros (escala entera, desplazamientos enteros). Una
+  criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
+  (`walkBob`).
+- **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
+  con `combine`).
+- **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y
+  `state/walking.test.ts`: este último simula cliente (el `WorldState` real y el `frame`
+  de `game.ts`), un observador y las reglas de la cola del servidor sobre enlaces de 2 a
+  300 ms con jitter, a 60, 144 y 40 fps, y exige cero frames quietos con tecla mantenida,
+  camino por click y para el observador, cero huecos en el servidor y un rechazo sin
+  saltos. Si cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene
+  una flecha ~4 pasos sobre una recta libre y lee `__rpgClient.trail(ms)` (las
+  posiciones dibujadas por frame, `MotionTrail`, un anillo fijo): ningún frame quieto ni
+  hacia atrás (screenshot `96-movement-held-key`).
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el
@@ -641,7 +697,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 ## Notas de portales (escaleras, agujeros, sogas, teletransportes)
 - El servidor mueve al jugador (`02-game-design.md` "Cambiar de piso"); el cliente solo ve
   un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
-  todo (también el paso predicho). No hay estado propio de portales.
+  todo (también los pasos predichos, y trae la época de caminata nueva). No hay estado
+  propio de portales; solo `canStep` no predice más allá de un paso sobre una escalera,
+  un agujero o un teletransporte (`movesOnStep`).
 - `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
   `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):

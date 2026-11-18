@@ -100,7 +100,7 @@ el punto 5:
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"). Lo que
   falta, en el orden de su §7:
-  - **A6, movimiento fluido** (cliente). Hoy el cliente espera el `CreatureMove` de un paso
+  - **A6, movimiento fluido** (cliente): hecho en la rama `feat/movement-feel` (ver abajo). Antes el cliente espera el `CreatureMove` de un paso
     antes de prever el siguiente (`Game.frame` sale si existe `world.pending`).
     `predictStep` empieza el paso en `now` y no donde terminó el anterior, y los pasos de
     los demás empiezan cuando llega el paquete: por eso se siente "paso, pausa, paso". La
@@ -134,6 +134,27 @@ el punto 5:
     reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
     "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
   - Lo 👤 está en "Lo que es tuyo".
+- **Movimiento fluido (rama `feat/movement-feel`).** Hecho: pasos de teclado predichos
+  hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo
+  en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de pantalla, los pasos del
+  servidor sobre su línea de ticks con colchón de jitter, correcciones que se deslizan,
+  diagonal con dos flechas y deslizarse junto a un muro (docs/02 "Movimiento",
+  client/CLAUDE.md "Movimiento fluido"). Quedó:
+  - **Caminar manteniendo el click (como Diablo 2), propuesta.** Hoy el click izquierdo
+    camina al soltar y, si se arrastra, mueve el item de arriba. Propuesta: un click
+    mantenido sobre una casilla sin item movible (o con Ctrl) sigue al cursor: cada vez que
+    la casilla bajo el cursor cambia, `WalkPath` nuevo (el servidor ya reemplaza el camino
+    y termina el paso en curso), como mucho uno por paso. Cliente solo; choca con el
+    arrastre de items, por eso queda para decidir.
+  - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
+    tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
+    mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.
+  - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
+    lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
+    tocó.
+  - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter; falta
+    jugarlo por el hosting de pruebas (docs/13) con el E2E `e2e/movement.spec.ts` como
+    referencia y mirar si los 40 ms de colchón alcanzan con Wi-Fi.
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
   correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la

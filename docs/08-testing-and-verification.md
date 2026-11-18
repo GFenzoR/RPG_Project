@@ -142,6 +142,13 @@ consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
 junto con los del editor.
 
+`client/e2e/movement.spec.ts` mide la fluidez: mantiene una flecha ~4 pasos por una recta
+libre y lee las posiciones que el cliente dibujó en cada frame (`__rpgClient.trail`).
+Falla si algún frame entre la primera y la última casilla se quedó quieto o volvió atrás
+(screenshot `96-movement-held-key`, a mitad de camino). La misma regla, con red simulada
+(latencia, jitter, 40 a 144 fps), la cubre `client/src/state/walking.test.ts` en
+`make test`.
+
 ### E2E móvil (T5.6)
 `client/e2e/mobile.spec.ts` corre el juego en dispositivos emulados de Playwright, con el
 mismo servidor y Vite del E2E de escritorio (de `devices[...]` se toman tamaño, densidad,

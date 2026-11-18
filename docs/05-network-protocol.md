@@ -454,7 +454,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|
-| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW) |
+| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW), `walk_epoch` |
 | `WalkPath` | `steps[]` (máx. 100) |
 | `StopWalk` | — |
 | `Turn` | `dir` |
@@ -491,14 +491,32 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
   a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
   posición cambia al **empezar** el paso.
-- `Walk` reemplaza lo que hubiera en cola (también un `WalkPath`) por un paso; si el
-  personaje está a mitad de un paso, sale al terminarlo. Mandar `Walk` cada tick no
-  acelera nada.
+- **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
+  mucho `movement.max_queued_steps` (`balance.yaml`, 4); si en la cola hay un `WalkPath`
+  o un paso de persecución (`chase`), lo descarta. Si el personaje está a mitad de un paso,
+  el siguiente sale el tick en que termina. Así el cliente predice unos pasos adelante y
+  manda cada uno un poco antes de que termine el que dibuja (`client/CLAUDE.md`
+  "Movimiento fluido"): el servidor camina sin huecos entre casillas aunque la red los
+  junte o los atrase. Uno más que el tope no es un cliente honesto (el cliente nunca tiene
+  más de `max_queued_steps` sin confirmar): **reinicia la caminata** (`WalkRejected`, ver
+  abajo). Mandar `Walk` cada tick no acelera nada: el ritmo es del servidor, la cola se
+  llena y el siguiente la vacía.
+- **Época de la caminata (`walk_epoch`, desde 1).** Toda vez que el servidor vacía la cola
+  y se lo dice al cliente, empieza una época nueva: cada `WalkRejected` (lleva
+  `walk_epoch`) y cada teletransporte (el `FullMapView` lleva `walk_epoch`; el del login
+  trae la 1). El cliente manda en cada `Walk` la época del último de esos mensajes. Un
+  `Walk` de otra época salió antes de que el cliente supiera del reinicio, y el cliente ya
+  lo olvidó: el servidor lo descarta **sin contestar** (no lo ejecuta desde una casilla que
+  el cliente no esperaba). `walk_epoch` 0 no se revisa (clientes y bots anteriores a la
+  cola). Garantía: todo `Walk` aceptado termina en un `CreatureMove`, un `WalkRejected` o
+  un `FullMapView` (teletransporte, muerte); nada vacía la cola en silencio (salvo
+  `StopWalk`, que pide el cliente, y un jugador sin conexión).
 - `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
   (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
   `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
 - Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
-  `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
+  `WalkRejected{pos, dir, walk_epoch}`, se vacía la cola (los pasos de teclado de atrás
+  también) y empieza otra época. Si la bloquea **una criatura** durante un
   `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
   criaturas (y escaleras, agujeros y teletransportes salvo el final); si no hay camino (o
   el destino está ocupado) → `WalkRejected`. Un `Walk` de teclado bloqueado por una
@@ -1059,7 +1077,9 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   cliente conocía y `FullMapView` del destino (con el piso nuevo); los observadores del
   origen reciben `CreatureDisappear` y los del destino `CreatureAppear`. Sin `MapSlice`
   del piso de origen: el `FullMapView` reemplaza la vista. El paso pendiente del cliente
-  queda resuelto por el `FullMapView`, y la cola de pasos se vacía. Subir y bajar sin
+  queda resuelto por el `FullMapView`, la cola de pasos se vacía y empieza otra época de
+  caminata (`walk_epoch`). El cliente no predice pasos más allá de una escalera, un agujero
+  o un teletransporte. Subir y bajar sin
   parar cuesta un `FullMapView` por paso: en la mina volcánica, 471 bytes arriba y 308
   abajo, unos 950 B/s al ritmo de un nivel 30 (docs/07; lo mide
   `TestVolcanicMineStairsOnTheMap`).
@@ -1153,7 +1173,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
-| `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) |
+| `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) y la época de la caminata (`walk_epoch`) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista |
@@ -1178,7 +1198,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `HouseUpdate` | La ventana de una casa, o su cierre (T5.4) |
 | `CreatureCosmetics` | Cambiaron los cosméticos equipados de un jugador visible (T5.7) |
 | `CosmeticsState` | Cosméticos de la cuenta, saldo premium y lo equipado (T5.7) |
-| `WalkRejected` | El cliente corrige su predicción |
+| `WalkRejected` | El cliente corrige su predicción: posición, paso rechazado y época nueva de la caminata (`walk_epoch`) |
 | `Pong`, `Disconnect` | |
 
 Los textos del servidor viajan como **clave i18n + parámetros** (`LocalizedText`), no
