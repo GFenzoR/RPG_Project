@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { parse } from "yaml";
 import { psql } from "./psql.ts";
+import { stepKey } from "./keys.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
 
@@ -250,7 +251,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   ];
   for (const [key, dx, dy] of keySteps) {
     expect(await walkable(x + dx, y + dy)).toBe(true);
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     x += dx;
     y += dy;
     await arrived(page, x, y);
@@ -956,7 +957,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await keysToGame(page);
   for (let i = 0; i < 3; i++) {
     const before = await self(page);
-    await page.keyboard.press("ArrowLeft");
+    await stepKey(page, "ArrowLeft");
     if (before) await arrived(page, before.x - 1, before.y);
   }
   await expect(dialog).toBeHidden();
@@ -1494,7 +1495,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   if (!start) throw new Error("no own creature");
   const t0 = Date.now();
   for (let i = 0; i < 3; i++) {
-    await page.keyboard.press("ArrowRight");
+    await stepKey(page, "ArrowRight");
     await arrived(page, start.x + i + 1, start.y);
   }
   expect(Date.now() - t0).toBeLessThan(10_000);
@@ -2001,7 +2002,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   const start = await self(page);
   if (!start) throw new Error("no own creature");
   for (let i = 0; ; i++) {
-    await page.keyboard.press("ArrowRight");
+    await stepKey(page, "ArrowRight");
     await arrived(page, start.x + 1, start.y);
     const played = await expect
       .poll(history, { timeout: 2000 })
@@ -2011,7 +2012,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
         () => false,
       );
     if (played || i === 4) break;
-    await page.keyboard.press("ArrowLeft");
+    await stepKey(page, "ArrowLeft");
     await arrived(page, start.x, start.y);
   }
   expect(await history()).toContain("step");
@@ -2038,7 +2039,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect(options).toHaveCount(0);
   const before = (await history()).length;
-  await page.keyboard.press("ArrowLeft");
+  await stepKey(page, "ArrowLeft");
   await arrived(page, start.x, start.y);
   expect((await history()).slice(before)).not.toContain("step");
   // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
@@ -2129,7 +2130,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     let key = "";
     for (const k of Object.keys(back)) {
       const before = await still();
-      await page.keyboard.press(k);
+      await stepKey(page, k);
       await page.waitForTimeout(700);
       const after = await still();
       if (after.x !== before.x || after.y !== before.y) {
@@ -2139,7 +2140,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     }
     expect(key).not.toBe("");
     await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 1 de 5.");
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     await page.waitForTimeout(700);
     await still();
     await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 2 de 5.");
@@ -2147,7 +2148,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await panel.screenshot({ path: join(shots, "40-tutorial-panel.png") });
     for (let i = 0; i < 3; i++) {
       key = back[key] ?? "";
-      await page.keyboard.press(key);
+      await stepKey(page, key);
       await page.waitForTimeout(700);
       await still();
     }
@@ -2438,7 +2439,7 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
     const me = await self(page);
     if (!me) throw new Error("no position");
     for (let i = 0; i < 3; i++) {
-      await page.keyboard.press("ArrowDown");
+      await stepKey(page, "ArrowDown");
       await arrived(page, me.x, me.y + i + 1);
     }
   }
@@ -2689,7 +2690,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await arrived(c, 3154, 6403);
   const step = async (page: Page, key: string, x: number, y: number): Promise<void> => {
     await keysToGame(page);
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     await arrived(page, x, y);
   };
   const openDoor = async (page: Page): Promise<void> => {
@@ -2776,7 +2777,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await step(c, "ArrowLeft", 3153, 6403);
   await step(c, "ArrowUp", 3153, 6402);
   await keysToGame(c);
-  await c.keyboard.press("ArrowUp");
+  await stepKey(c, "ArrowUp");
   await expect(c.getByTestId("game-log")).toContainText(
     "La puerta de esta casa no se abre para ti.",
   );
@@ -3096,14 +3097,14 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   await standsOn(3693, 5796, 7);
 
   // One step west, onto the stairs: down to the mine, whose floor the client now draws.
-  await page.keyboard.press("ArrowLeft");
+  await stepKey(page, "ArrowLeft");
   await standsOn(3692, 5797, 8);
   await expect.poll(() => topOf(3692, 5796, 8)).toBe(ids.up);
   await page.waitForTimeout(300);
   await shot(page, "74-volcan-mine-floor-8");
 
   // One step north, onto the stairs up: back on the surface, south of the stairs down.
-  await page.keyboard.press("ArrowUp");
+  await stepKey(page, "ArrowUp");
   await standsOn(3692, 5797, 7);
   await expect.poll(() => topOf(3692, 5796, 7)).toBe(ids.down);
   await page.waitForTimeout(300);

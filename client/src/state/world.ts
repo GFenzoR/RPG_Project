@@ -1247,6 +1247,17 @@ export class WorldState implements TileSource {
     return !w || now >= w.start + w.duration - STEP_LEAD_MS;
   }
 
+  /**
+   * The own creature stands still: no step drawn now and none predicted (MOV-2: a short
+   * tap toward another way only turns it then).
+   */
+  standingStill(now: number): boolean {
+    const s = this.self;
+    if (!s || this.predicted.length > 0) return false;
+    const w = s.walk;
+    return !w || now >= w.start + w.duration;
+  }
+
   private get maxPredicted(): number {
     return Math.max(1, this.maxQueued);
   }

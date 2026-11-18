@@ -7,6 +7,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { stepKey } from "./keys.ts";
 import { psql } from "./psql.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
@@ -196,12 +197,12 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   const chase = page.getByRole("checkbox", { name: "Perseguir al objetivo" });
   await chase.click();
   await expect(chase).toBeFocused();
-  await page.keyboard.press("ArrowDown");
+  await stepKey(page, "ArrowDown");
   await standsOn(2091, 2094, 7);
   const stance = page.getByRole("combobox", { name: "Modo de combate" });
   const before = await stance.inputValue();
   await stance.focus();
-  await page.keyboard.press("ArrowRight");
+  await stepKey(page, "ArrowRight");
   await standsOn(2092, 2094, 7);
   expect(await stance.inputValue()).toBe(before);
 

@@ -36,7 +36,14 @@ import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
-import { MovementKeys, isTextField, keyDirection, typingInField } from "./input/keyboard.ts";
+import {
+  MovementKeys,
+  TurnTap,
+  isTextField,
+  keyDirection,
+  turnKeyDirection,
+  typingInField,
+} from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
@@ -168,7 +175,10 @@ export interface ClientTestHooks {
    * the player, so `tileToClient` points at the map (before the first frame too).
    */
   ready: boolean;
-  self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
+  /** The own creature: where, whether steps wait for the server or are drawn, and its facing (a Direction). */
+  self():
+    | { x: number; y: number; z: number; pending: boolean; walking: boolean; dir: Direction }
+    | undefined;
   /**
    * Where the own creature was on each frame of the last `ms` (`WorldState.drawPos` in
    * `frame`, what the canvas draws from: fractional tiles, oldest first, before rounding
@@ -283,6 +293,10 @@ export class Game {
   private readonly world: WorldState;
   private readonly conn: Connection;
   private readonly keys = new MovementKeys();
+  /** MOV-2: a short tap toward another way, standing still, only turns. */
+  private readonly turnTap = new TurnTap();
+  /** A pad button activated from the keyboard (padStep): one step, never only a turn. */
+  private padStepped: Direction | undefined;
   private canvas: GameCanvas | undefined;
   private starting = false;
   /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
@@ -1324,6 +1338,7 @@ export class Game {
   /** One step (a pad button activated from the keyboard). */
   padStep(dir: Direction): void {
     this.pad.tap(dir);
+    this.padStepped = dir;
     this.world.retryWalk();
   }
 
@@ -1582,7 +1597,12 @@ export class Game {
         const s = world.self;
         if (!s) return undefined;
         const now = performance.now();
-        return { ...s.pos, pending: world.unconfirmed > 0, walking: world.walking(s, now) };
+        return {
+          ...s.pos,
+          pending: world.unconfirmed > 0,
+          walking: world.walking(s, now),
+          dir: s.dir,
+        };
       },
       trail: (ms) => this.trail.since(performance.now() - ms),
       stepMs: (x, y, z) => {
@@ -1667,6 +1687,16 @@ export class Game {
   private decideStep(now: number): void {
     if (!this.world.canStep(now)) return;
     const key = this.keys.take() ?? this.pad.take();
+    const stepped = this.padStepped;
+    this.padStepped = undefined;
+    const self = this.world.self;
+    // MOV-2: standing still, a short tap (key or pad) toward another way only turns.
+    if (key === undefined || key === stepped || !self) this.turnTap.clear();
+    else {
+      const tap = this.turnTap.decide(key, this.world.standingStill(now), self.dir, now);
+      if (tap === "turn") this.sendStep(this.world.turn(key));
+      if (tap === "turn" || tap === "wait") return;
+    }
     const hold = this.hold;
     const input = this.steerInput;
     input.key = key;
@@ -1782,6 +1812,13 @@ export class Game {
         return;
       }
     }
+    // MOV-2: Ctrl+arrow only turns, as in Tibia (with every step confirmed: WorldState.turn).
+    const turnTo = e.ctrlKey ? turnKeyDirection(e.code) : undefined;
+    if (turnTo !== undefined) {
+      e.preventDefault();
+      if (!e.repeat) this.sendStep(this.world.turn(turnTo));
+      return;
+    }
     if (this.keys.down(e.code)) {
       e.preventDefault();
       // A fresh press tries a refused step again; the OS auto-repeat of a held key does not.
@@ -1797,6 +1834,7 @@ export class Game {
   private readonly onBlur = (): void => {
     this.keys.clear();
     this.pad.clear();
+    this.turnTap.clear();
     this.hold = undefined;
     this.world.retryWalk();
   };

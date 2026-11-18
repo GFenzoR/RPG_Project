@@ -95,6 +95,10 @@ el doble click o Ctrl+click derecho.
   - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
     con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
     horizontal o vertical libre (se "desliza" junto a un muro).
+  - **Girar sin caminar** (docs/17 MOV-2): quieto, una tecla (o el pad) hacia otro lado
+    gira al personaje en el acto y camina solo si sigue apretada 80 ms: un toque corto
+    solo gira. Mirando ya hacia ese lado, o caminando, camina enseguida. Ctrl+flecha gira
+    siempre sin caminar, como en Tibia (Ctrl con WASD no: Ctrl+W cierra la pestaña).
   - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
     sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos,
     aunque el cliente ya dibujara los `max_queued_steps` pasos predichos.

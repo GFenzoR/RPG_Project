@@ -13,6 +13,7 @@ import { devices, expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { psql } from "./psql.ts";
 import { openWindow } from "./windows.ts";
+import { stepToward } from "./keys.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -517,10 +518,12 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   await tapTile(page, me.x + 2 * d.dx, me.y + 2 * d.dy);
   await arrived(page, me.x + 2 * d.dx, me.y + 2 * d.dy);
 
-  // The pad: a tap is one step.
+  // The pad: a tap is one step; toward a way the player does not face, a first tap only
+  // turns it (docs/17 MOV-2, checked by stepToward).
   me = await self(page);
   d = await openDirection(page, me, 1);
-  await pad.locator(`[data-dir="${d.dir}"]`).tap();
+  const button = pad.locator(`[data-dir="${d.dir}"]`);
+  await stepToward(page, d.dir, () => button.tap());
   await arrived(page, me.x + d.dx, me.y + d.dy);
   // Holding keeps walking at the walking speed (two steps or more).
   me = await self(page);

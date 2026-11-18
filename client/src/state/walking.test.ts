@@ -511,6 +511,17 @@ describe("own steps predicted ahead", () => {
       now,
     );
 
+  it("stands still only with no step drawn and none predicted (MOV-2)", () => {
+    const w = client(WALKER, 200);
+    expect(w.standingStill(0)).toBe(true);
+    w.chooseStep(Direction.EAST, 0);
+    expect(w.standingStill(100)).toBe(false); // walking, predicted
+    expect(w.standingStill(5000)).toBe(false); // drawn, but the server has not answered
+    confirm(w, X0, X0 + 1, 500, 300, 1);
+    expect(w.standingStill(400)).toBe(false); // confirmed, still drawn
+    expect(w.standingStill(600)).toBe(true);
+  });
+
   it("decides the next step just before the drawn one ends and draws it right after", () => {
     const w = client(WALKER, 200);
     const s = w.self as CreatureState;
