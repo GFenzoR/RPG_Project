@@ -52,6 +52,14 @@ client/
   origin, como detrás de Caddy, así la cookie `rpg_session` funciona sin pedir el token.
 - Las criaturas se dibujan dentro de la capa de items de `MapView` (`placeEntity`), por
   casilla: sobre los items de su casilla y bajo los de las casillas siguientes.
+- Arte del mapa (docs/17 ART-3 a ART-7; `assets/README.md`, "Arte del mapa"): el canvas
+  le pasa a `MapView` el `TileArt` de cada item (`atlas.tileArt`, resuelto una vez por id)
+  y la hora del frame, y `MapView` pone los looks de suelo, las piezas de muro, las anclas
+  centradas, las sombras proyectadas (capa entre el suelo y los items) y avanza los tiles
+  animados sin asignar. Encima del mapa: la silueta del jugador propio cuando lo tapa el
+  muro de la casilla de al sur (`behindWall`, `view.wallAt`), y en los pisos z ≥ 8 la luz
+  de `render/light-layer.ts` (multiply, bajo efectos y nombres; da luz el jugador y cada
+  item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
   T0.5). Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).

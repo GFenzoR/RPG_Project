@@ -185,6 +185,13 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
   `GraphicsContext`. Dibujar un frame no crea objetos para animar. Con los personajes de LPC
   el atlas pasó a **2 páginas** (2048x2048 y 2048x640): Pixi agrupa hasta 16 texturas por
   batch, así que no suma draw calls por página.
+- Arte del mapa (docs/17 ART-3 a ART-7): los looks de suelo y las piezas de muro se eligen
+  al armar el chunk, no por frame. Los tiles animados (agua, lava, espuma, copas, fuego) van
+  en una lista plana que `MapView.render` recorre una vez por frame: por cada uno, una
+  cuenta (`frameAt`) y, solo si cambió el frame, un cambio de textura. Sin asignar. La
+  capa de sombras proyectadas es un render group más (un batch). La luz de las cuevas
+  (z ≥ 8) suma un pase a un render texture de un cuarto de la pantalla, con un sprite de
+  brillo por luz sacado de un pool; en la superficie no dibuja.
 
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
@@ -333,6 +340,12 @@ monstruos con quieto, caminar, atacar y caer, y 17 NPCs con quieto y caminar. Se
 aparte del bundle (el presupuesto de 5 MB no cuenta sprites), pero es lo primero que espera
 el juego. Pendiente si molesta: PNG indexado (las capas usan pocas decenas de colores) o
 una página por demanda para los NPCs.
+
+**Atlas con el arte del mapa** (2026-11-18, `feat/world-art`): sigue en 2 páginas (2048x2016
+y 2048x896), 1,83 MB + 884 KB de PNG y 358 KB + 289 KB de JSON, más 176 KB de
+`atlas.json`: unos 220 KB más de PNG y 80 KB más de JSON que con las criaturas. Son ~200
+sprites nuevos del mapa: 16 piezas de 32x64 por muro (5 materiales), looks de suelo, frames de
+agua, lava, espuma, copas y fuego, y sombras.
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

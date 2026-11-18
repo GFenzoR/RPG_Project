@@ -8,7 +8,8 @@ que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y
 A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
 gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
 "Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
-2026-11-17).
+2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama `feat/world-art`, el
+2026-11-18).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -150,7 +151,9 @@ parte de arriba transparente.
   del borde de abajo de la casilla, donde va la sombra de contacto). `foot` (filas vacías
   bajo los pies) y `top` (alto del dibujo) no se escriben: spritepack los mide en los
   frames de caminar y los pone en `atlas.json` `anims`. Toda animación con capas es `bc`.
-  Para items y muebles sigue pendiente (A10).
+  En el mapa (hecho, 2026-11-18): un sprite con `anchor: bc` en la sección `tiles` de
+  `assets/sprites.yaml` se centra en su casilla (los árboles); el resto de los items y
+  muebles sigue abajo a la derecha.
 - **Click sobre sprites altos:** un click en la cabeza de un humanoide (que cae en la
   casilla de arriba) tiene que elegir a la criatura. Primero se prueban las cajas de las
   criaturas dibujadas (de la última a la primera) y después la casilla (pendiente, A10).
@@ -186,6 +189,37 @@ parte de arriba transparente.
 - Techos y pisos de arriba (en Tibia se ocultan al entrar) **quedan fuera** de este plan.
   Hoy solo se dibuja el piso del jugador.
 
+**Hecho (A11, 2026-11-18), con estas diferencias con lo de arriba:**
+- **Una pieza entera por máscara, no tapa y cara por separado.** Cada material tiene 16
+  sprites de 32x64, `walls/<material>/wall_<máscara>` (N=1, E=2, S=4, O=8), con la tapa y la
+  cara ya juntas: menos sprites por casilla, y las esquinas y uniones se dibujan a mano en
+  la receta. El sprite del material (`walls/stone_wall`) es la pieza este-oeste, la que ven
+  el inventario y la paleta del editor.
+- **Sin campo `autotile` en `data/items`.** Que un sprite es un muro lo dicen los nombres de
+  sus piezas: spritepack las encuentra y escribe `wall: true` en `atlas.json` `tiles`. Una
+  puerta en un muro (`doors/forge_gate`, `doors/pruebas_gate` y sus abiertas) lleva
+  `joins_walls: true` en la sección `tiles` de `sprites.yaml`: no tiene piezas, pero sus
+  vecinos la cuentan como muro y la tapa sigue de corrido. Las dos puertas son arcos
+  propios metidos en su muro, con la misma altura.
+- **Dos formas** (`tools/spritegen/src/recipes/walls.ts`):
+  - **muros construidos** (piedra, troncos): delgados, de 10 px. Un muro este-oeste se para
+    en el borde sur de su casilla: su cara la llena y su tapa ocupa solo las últimas 10
+    filas de la casilla de atrás, así que lo que está ahí se sigue viendo casi entero. Un
+    tramo norte-sur es una franja de tapas por el medio, con suelo a los lados;
+  - **roca** (paredes de cueva, vetas de hierro y de brasa): un bloque de todo el ancho y
+    20 filas de fondo, con tapa rugosa y cara de acantilado solo donde no sigue roca al sur.
+- **Orden de dibujo:** el de siempre (fila por fila; `MapView` ordena items y criaturas por
+  `itemZIndex` y `entityZIndex` a través de los bordes de chunk), así que la tapa de un muro
+  tapa a la criatura de la casilla de atrás y la criatura de adelante tapa la cara. Las
+  piezas se eligen mirando los vecinos también en el chunk de al lado, y un chunk se
+  rearma si cambia un vecino del que dependen sus bordes.
+- **Silueta:** cuando el muro de la casilla de al sur tapa al jugador propio, el cliente
+  dibuja encima del mapa una copia de su frame, aclarada y al 45 %
+  (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
+  tapados.
+- **Pendiente:** muros altos de 32x96, ventanas y el marco decorativo de las puertas de
+  casa (`houses.yaml` `doors` siguen siendo un hueco en el muro: ponerlo cambia mapas).
+
 ### ART-4 Suelos: variantes, textura y transiciones
 - **Al menos 4 variantes por suelo** (la principal en ~70 % de las casillas), elegidas en
   el render con un hash de (x, y, z): `ground/grass/0..3`. El mapa no cambia y el resultado
@@ -199,6 +233,15 @@ parte de arriba transparente.
   - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
 - **Bordes** (`gen-borders`): entre todos los pares de suelos que se tocan, con orilla
   irregular (nunca recta), y en el agua con espuma animada.
+
+**Hecho (A10, 2026-11-18):** pasto, tierra, arena y piedra de piso tienen 4 looks y la arena
+mojada 2 (`ground/<suelo>/var_<n>`, recetas en `tools/spritegen/src/recipes/ground.ts`). El
+renderer elige con `tileHash(x, y, z)` y deja el principal en el 70 % (`weight` en
+`tiles`). Los detalles sueltos (flores, matas, piedritas, una raíz, una concha, musgo) van
+en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tiene una
+orilla de tres ondas que se repiten por casilla (nunca recta y sin dientes) y las orillas
+del agua, espuma que rompe en 4 frames (`borders/sand_water_<pieza>/frame_<n>`). Un test de
+spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
 
 ### ART-5 Contorno, sombra y luz
 - **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
@@ -221,6 +264,10 @@ parte de arriba transparente.
   - árboles y edificios: una **capa de sombras** del renderer, después del suelo y antes
     de los items, con blend multiply, a partir de un sprite de sombra propio
     (`<sprite>.shadow`). La sombra cae sobre cualquier suelo sin pintarla en el árbol.
+    **Hecho (2026-11-18)** como `<sprite>/shadow`, sin multiply: la capa entera va al 32 %
+    (`CAST_SHADOW_ALPHA`) y cada sombra va teñida hacia el azul violeta
+    (`CAST_SHADOW_TINT`), así dos sombras que se pisan no se oscurecen el doble. La tienen
+    los árboles, el arbusto, la roca, la fragua, la fuente y el brasero.
 
 ### ART-6 Paleta y valores
 - **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.
@@ -277,6 +324,27 @@ parte de arriba transparente.
   - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
     y de cada antorcha (capa de oscuridad en multiply y luces aditivas);
   - día y noche no entran en este plan.
+
+**Hecho (A10 y la luz de A13, 2026-11-18):**
+- **Formato:** frames `<sprite>/frame_<n>` (el sprite es el frame 0) y, en la sección
+  `tiles` de `assets/sprites.yaml`, `ms` y `sync` (por defecto 250 ms y `world`).
+  spritepack los pasa a `atlas.json` `tiles` y `MapView` los avanza en
+  `render(cam, view, now)` desde una lista plana: no asigna nada por frame y solo toca un
+  sprite cuando cambia su frame. El editor anima igual; `mapcli render` muestra el frame 0.
+- **Animados hoy:** agua y bajío (240 ms, `world`), lava (280 ms, `world`), espuma de
+  orilla (250 ms, `world`), copas de roble, olmo, abedul y pino y el arbusto (700–900 ms,
+  `tile`), fragua y fogón (110–120 ms, `tile`), y cuatro props nuevos para los pueblos:
+  antorcha y estandarte de pared (cuelgan en la cara de un muro este-oeste: van en su
+  casilla, después del muro), brasero y fuente. Los props todavía no están en ningún mapa.
+- **Luz en cuevas:** `client/src/render/light-layer.ts`. Un mapa de luz a un cuarto de la
+  pantalla, borrado a un gris frío (`AMBIENT`), con un brillo suave por luz, encima del
+  mapa con blend multiply y debajo de efectos y nombres. Da luz el jugador (4,5 casillas) y
+  cada item con `light` en `tiles` (radio en casillas: fragua y brasero 3,5, fogón y
+  antorcha 3). Los brillos salen de un pool: un frame no asigna. En la superficie no dibuja
+  nada.
+- **Pendiente:** partículas de ambiente, polvo y ondas al pisar, pasto que se agita, vetas
+  con destello (`sync: random` ya existe, falta el arte) y poner los props nuevos en los
+  pueblos.
 
 ### ART-8 Elevación
 Una propiedad `elevation: <px>` en `data/items` (mesas, cajones, barriles: 8 px) sube lo
@@ -940,15 +1008,22 @@ Por impacto en pantalla y por costo:
 
 | # | Hoy | Qué va | De dónde | Necesita |
 |---|---|---|---|---|
-| 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | A10, A11 |
-| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | A10 (variantes) |
-| 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | A10 (animación) |
+| 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
+| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
+| 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
 | 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado) |
-| 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | A10 |
-| 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | ART-7 |
+| 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
+| 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
+
+**Por qué spritegen y no LPC para el mundo (2026-11-18):** las recetas propias dan las 16
+piezas de muro, los looks de suelo y los frames que pide el renderer con la paleta de
+`palette.ts`, sin recortar ni recomponer hojas de terceros y sin sumar filas a
+`CREDITS.md` ni atribución visible. Si más adelante se quiere LPC para algún suelo, entra por
+la misma convención de nombres (`var_`, `frame_`, `wall_`, `shadow`) como entradas de
+`sprites.yaml`.
 
 Se quedan:
 - los íconos de items de Dungeon Crawl, que se leen bien a 32x32;
@@ -970,10 +1045,10 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A7 | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
-| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **parcial:** frames por acción, anclas y sombra de contacto de criaturas, hechos; falta el resto | renderer, spritepack, cliente, editor | — |
-| A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) | renderer, spritegen o LPC, `data/items` | A10 |
-| A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **parcial:** humanoides hechos; faltan suelos, agua y árboles | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
-| A13 | Luz en cuevas y partículas de ambiente | cliente | A10 |
+| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **casi hecho:** todo salvo `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
+| A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18); faltan muros de 32x96, ventanas y marcos de puerta de casa | renderer, spritegen o LPC, `data/items` | A10 |
+| A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
+| A13 | Luz en cuevas y partículas de ambiente — **parcial:** la luz, hecha; faltan las partículas | cliente | A10 |
 
 ### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
 Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10

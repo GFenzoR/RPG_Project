@@ -133,6 +133,37 @@ fila de `CREDITS.csv` copiada al subconjunto de la carpeta), escribir su entrada
 revisar el preview. El lobo del "RPG Maker MZ LPC Starter Kit" quedó afuera: no trae
 licencia al lado del archivo (docs/17, SRC-2).
 
+## Arte del mapa: looks, frames, muros, sombras y luz (docs/17 ART-3 a ART-7)
+Un sprite que `data/` pone en el mapa (suelo o item) puede tener partes al lado, que
+spritepack encuentra por nombre (arte propio o entradas de `sprites.yaml`):
+
+| Parte | Qué es | Quién la usa |
+|---|---|---|
+| `<sprite>/var_<n>` (n = 1..) | Otro look del suelo; el sprite es el look 0 | El renderer elige uno por casilla con `tileHash(x, y, z)`, el 0 en el 70 % |
+| `<sprite>/frame_<n>` (n = 1..) | Otro frame de un suelo o item animado; el sprite es el frame 0 | `MapView` los avanza con el reloj; `mapcli render` muestra el 0 |
+| `<sprite>/wall_<m>` (m = 0..15, las 16) | La pieza de muro para cada máscara de vecinos muro (N=1, E=2, S=4, O=8), de 32x64 | El renderer pone en cada casilla la de sus vecinos |
+| `<sprite>/shadow` | Su sombra proyectada, en negro, del tamaño del sprite | La capa de sombras, teñida y translúcida, entre el suelo y los items |
+
+Lo que los nombres no dicen va en la sección `tiles` de `sprites.yaml`:
+```yaml
+tiles:
+  ground/water_shallow: { ms: 240, sync: world }   # ms por frame y sincronía
+  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
+  decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
+  doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
+```
+- `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
+  casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
+  entrada: 250 ms y `world`.
+- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7).
+- `ms` y `sync` sin frames, `weight` sin looks, piezas de muro incompletas o partes sin su
+  sprite son errores de `make sprites`.
+
+spritepack escribe lo que tiene cada sprite en `atlas.json` `tiles` (`TileMeta` de
+`packages/renderer/src/tile-art.ts`, puro y compartido con `mapcli render`). Los bordes de
+orilla (`borders/sand_water_*`) traen 3 frames de espuma que hace `gen-borders`, no
+spritegen.
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
@@ -149,9 +180,15 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Contorno de 1 px en un tono oscuro del color local (no negro puro), luz desde arriba a la
   izquierda, 3-4 tonos por material, poco o nada de tramado, alfa solo 0 o 255.
 - Paleta apagada y algo oscura que combine con Dungeon Crawl (`tools/spritegen/src/palette.ts`).
-- Objetos más altos que una casilla (árboles, carteles) pueden medir 64x64 o 32x64: el
+- Objetos más altos que una casilla (carteles, la fragua) pueden medir 64x64 o 32x64: el
   renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
-  la izquierda. Items de inventario: 32x32 centrados con fondo transparente.
+  la izquierda. Los árboles (`recipes/trees.ts`, 64x96) van centrados en su
+  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y 4 frames de viento.
+  Items de inventario: 32x32 centrados con fondo transparente.
+- Muros (`recipes/walls.ts`): 16 piezas de 32x64 por material, la tapa levantada 32 px
+  sobre la cara (ver "Arte del mapa" arriba y docs/17 ART-3).
+- Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
+  bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
 - Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
 - Todo determinista: ruido con semilla, nunca `Math.random`.
@@ -213,7 +250,7 @@ batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de
 - `atlas.json`: índice para cliente y editor: `tileSize`, lista de páginas y, por sprite,
   `{page, origin}` con `origin` = `file | vendor | placeholder | auto` (un frame compuesto
   de capas de un pack es `vendor`). `anims`: las animaciones y pistas (ver "Sprites
-  animados").
+  animados"). `tiles`: el arte del mapa de cada sprite (ver "Arte del mapa").
 - `atlas-N.png` + `atlas-N.json`: páginas de hasta 2048x2048 en formato Spritesheet de
   PixiJS (hash). Las claves de `frames` son las rutas lógicas. Cada página lista a las
   demás en `meta.related_multi_packs`.

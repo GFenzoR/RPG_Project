@@ -104,7 +104,8 @@ el punto 5:
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
   diálogo por temas y tienda sin scroll, y la ventana del gremio con botones; y A8 con la
-  parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo). Lo que falta,
+  parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
+  `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
   en el orden de su §7:
   - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
     docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
@@ -154,11 +155,29 @@ el punto 5:
   - **A7, vista de hasta 31x21** (servidor, protocolo y cliente). Hoy el AOI fija 15x11 + 1
     (`server/internal/session/aoi.go`, docs/01 y docs/05). Hay que volver a medir el
     ancho de banda por jugador (docs/07).
-  - **A10 y A11, renderer:** tiles animados, variantes de suelo, capa de sombras, anclas
-    de items y muros por piezas con autotile (ART-2 a ART-8). Anclas, frames por acción y
-    sombra de contacto de criaturas ya están.
-  - **A12, assets de LPC** (SRC-4; lo primero, muros, pasto y agua; los humanoides ya
-    están) y **A1**, la pantalla de créditos que piden CC-BY y CC-BY-SA.
+  - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
+    piezas por material que el renderer elige por sus vecinos (también en el editor y en
+    `mapcli render`), con la silueta del jugador propio detrás de un muro; suelos con
+    looks; agua, bajío, lava, espuma de orilla, copas, fragua, fogón y cuatro props nuevos
+    animados; árboles centrados con sombra proyectada; cuevas oscuras con luz del jugador
+    y de los fuegos. Todo es spritegen propio (CC0): no hizo falta LPC para el mundo
+    (docs/17 SRC-4). Lo que quedó:
+    - **Props sin poner:** `wall_torch`, `wall_banner`, `brazier` y `fountain` existen
+      (ids, i18n, arte animado) pero ningún mapa los usa todavía: es una tarea de mapa
+      (`build-map-area`), por ejemplo antorchas en la mina y una fuente en cada plaza.
+    - **Marco de puerta de casa:** la puerta de una casa (`houses.yaml` `doors`) sigue
+      siendo un hueco en el muro. Un item de marco que no bloquea y `joins_walls` lo
+      resolvería, pero cambia mapas.
+    - **Muros altos (32x96), ventanas y `elevation`** (ART-3, ART-8): sin hacer.
+    - **Partículas de ambiente** (A13): polvo, brasas, hojas, ondas al pisar.
+    - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
+      contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
+      lava enfriada ya entran en la banda de valor de ART-6.
+    - **Cara exterior de los muros delgados:** el suelo de la casilla del muro se ve a los
+      dos lados de un tramo norte-sur (una franja de empedrado afuera del templo). Se lee
+      como un zócalo; si molesta, la solución es de mapa (pasto bajo el muro) o un muro
+      más ancho.
+  - **A1**, la pantalla de créditos que piden CC-BY y CC-BY-SA.
   - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
     la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
     `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en
@@ -227,13 +246,8 @@ el punto 5:
     parte ofrecida al cerrar el trato (y revisa que siga habiendo esa cantidad) y la
     ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:
     la regla pura, un test de sesión del trato parcial y el E2E de T5.3 con 10 de 100.
-  - **Sprites de las estaciones:** la fragua parece una fogata y el fogón un horno o un
-    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`). Está en la lista de
-    reemplazos de docs/17 (SRC-4, fila 8), animados (ART-7).
-  - **Casa de Prueba:** el `wooden_wall` y el `wooden_floor` se confunden (tablones los
-    dos) y la puerta de una casa es solo suelo (`houses.yaml` `doors`), sin nada que la
-    marque en el mapa. Lo resuelven los muros con altura y cara frontal, y el marco de
-    puerta decorativo que no bloquea (docs/17, ART-3, tarea A11).
+  - **Casa de Prueba:** los muros de troncos ya tienen altura y cara, y el piso es más
+    oscuro: no se confunden. La puerta sigue siendo un hueco (falta el marco, arriba).
   - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
     (`render/labels.ts` solo los acomoda a zoom 1).
   - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
