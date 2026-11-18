@@ -29,8 +29,11 @@ import {
   spriteFile,
   UI_ICON,
   UI_ICON_BOX,
+  UI_SLOT_BOX,
+  uiIconBox,
 } from "./index.ts";
 import { EFFECT_FRAMES } from "./recipes/effects.ts";
+import { SLOT_MASKS } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -313,18 +316,17 @@ describe("the boar and the stag (docs/17 ART-2, Animales medianos)", () => {
 describe("ui icons", () => {
   const icons = recipePaths("ui/");
 
-  it("draw only inside UI_ICON_BOX, which is all the client shows", () => {
+  it("draw only inside their box, which is all the client shows", () => {
     expect(icons.length).toBeGreaterThan(0);
+    expect(uiIconBox("ui/marks/murderer")).toEqual(UI_ICON_BOX);
+    expect(uiIconBox("ui/slots/head")).toEqual(UI_SLOT_BOX);
     for (const p of icons) {
       const img = render(p);
+      const box = uiIconBox(p);
       expect([img.width, img.height], p).toEqual([32, 32]);
       for (let y = 0; y < img.height; y++)
         for (let x = 0; x < img.width; x++) {
-          const inBox =
-            x >= UI_ICON_BOX.x &&
-            x < UI_ICON_BOX.x + UI_ICON_BOX.w &&
-            y >= UI_ICON_BOX.y &&
-            y < UI_ICON_BOX.y + UI_ICON_BOX.h;
+          const inBox = x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h;
           if (!inBox) expect(opaque(img, x, y), `${p} ${x},${y}`).toBe(false);
         }
     }
@@ -340,5 +342,38 @@ describe("ui icons", () => {
       return bits;
     });
     expect(new Set(masks).size).toBe(marks.length);
+  });
+
+  it("draw every equipment slot (docs/17 UI-5), each its own 20x20 silhouette", () => {
+    const slots = [
+      "head",
+      "neck",
+      "backpack",
+      "armor",
+      "right_hand",
+      "left_hand",
+      "legs",
+      "feet",
+      "ring",
+      "ammo",
+    ];
+    expect(Object.keys(SLOT_MASKS).sort()).toEqual([...slots].sort());
+    for (const [slot, rows] of Object.entries(SLOT_MASKS)) {
+      expect(rows.length, slot).toBe(UI_SLOT_BOX.h);
+      for (const r of rows) expect(r.length, slot).toBe(UI_SLOT_BOX.w);
+    }
+    const masks = slots.map((s) => {
+      const img = render(`ui/slots/${s}`);
+      let bits = "";
+      let on = 0;
+      for (let i = 3; i < img.data.length; i += 4) {
+        bits += img.data[i] ? "1" : "0";
+        if (img.data[i]) on++;
+      }
+      // Big enough to read faded under an empty slot.
+      expect(on, s).toBeGreaterThan(40);
+      return bits;
+    });
+    expect(new Set(masks).size).toBe(slots.length);
   });
 });

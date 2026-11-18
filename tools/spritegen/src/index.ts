@@ -22,7 +22,7 @@ import { RECIPES } from "./recipes/index.ts";
 
 export { RECIPES } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
-export { UI_ICON_BOX } from "./recipe.ts";
+export { UI_ICON_BOX, UI_SLOT_BOX, uiIconBox } from "./recipe.ts";
 
 export const TILE = 32;
 

@@ -327,6 +327,15 @@ su propia silueta, para que se distinga también sin color. El canvas las dibuja
 nombre a 1 píxel de pantalla por píxel del sprite (como el texto de 12 px), y la lista de
 batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de antes.
 
+Y los slots vacíos del equipo (docs/17 UI-5) `ui/slots/<slot>` (`head`, `neck`,
+`backpack`, `armor`, `right_hand`, `left_hand`, `legs`, `feet`, `ring`, `ammo`): un
+yelmo, un amuleto, una mochila, una túnica, una espada, un escudo con cruz, un pantalón,
+una bota, un anillo y tres flechas. Van dentro de `UI_SLOT_BOX` (20x20 en el centro;
+`uiIconBox` dice la caja de cada grupo) y el cliente los muestra enteros, como el ícono de
+un item, desvaídos bajo el slot que no tiene nada (`client/src/ui/Inventory.tsx`). Son
+máscaras de 20x20 en color hueso, sin contorno: el borde de arriba a la izquierda se
+aclara y el de abajo a la derecha se oscurece, como grabados en la piedra.
+
 ## Arte y música hechos con Gemini (desde el 2026-11-17)
 Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta de Gemini
 (la app web, la misma que usa en Ants of Neque). Las herramientas están en `tools/gemini`

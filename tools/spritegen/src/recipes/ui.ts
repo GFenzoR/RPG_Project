@@ -1,6 +1,8 @@
-// Client interface icons (kind "ui"): drawn inside UI_ICON_BOX at the centre of a 32x32
-// sprite, which is all the client shows of them. The client finds them by path, not by a
-// data/ field: ui/marks/<id> are the PvP marks of client/src/render/marks.ts.
+// Client interface icons (kind "ui"): drawn inside their group's box at the centre of a
+// 32x32 sprite (uiIconBox: UI_ICON_BOX for the marks, UI_SLOT_BOX for the slots), which is
+// all the client shows of them. The client finds them by path, not by a data/ field:
+// ui/marks/<id> are the PvP marks of client/src/render/marks.ts, ui/slots/<slot> the empty
+// equipment slots of client/src/ui/Inventory.tsx.
 //
 // PvP marks (T5.2): original sigils, one silhouette per mark so they read without colour
 // too, in the colours of docs/02 "Marcas": amber crossed blades for the aggressor (drew
@@ -12,7 +14,7 @@ import { opaque, px } from "../draw.ts";
 import { hex, material } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
-import { UI_ICON_BOX } from "../recipe.ts";
+import { UI_ICON_BOX, UI_SLOT_BOX } from "../recipe.ts";
 
 /** The outline of every mark: near black, warm, like the cast shadows. */
 const INK: Rgba = hex("#140e0c");
@@ -110,8 +112,296 @@ const OUTLAW = [
   "....DD....",
 ];
 
+// ---- Empty equipment slots (docs/17 UI-5) ----------------------------------------------
+// What each slot of the equipment window takes, as a silhouette cut in the stone: the
+// client draws it faded under a slot that holds nothing (client/src/ui/Inventory.tsx), so
+// a new player sees where the helmet or the shield goes. One shape per slot, no colour of
+// its own: bone white lit from the top-left (an edge with nothing above or left of it),
+// shaded on the bottom-right edges, flat in between. 20x20 masks ("#"), placed at
+// UI_SLOT_BOX.
+
+/** Light, flat and shaded bone of the slot silhouettes. */
+const BONE = { light: hex("#e3d8bf"), base: hex("#b3a68a"), shadow: hex("#76694f") } as const;
+
+/** Draws a 20x20 mask at UI_SLOT_BOX, lit from the top-left like an engraving. */
+function slotMask(img: Image, rows: readonly string[]): void {
+  const on = (x: number, y: number): boolean => rows[y]?.[x] === "#";
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch !== "#") return;
+      const c =
+        !on(x, y - 1) || !on(x - 1, y)
+          ? BONE.light
+          : !on(x, y + 1) || !on(x + 1, y)
+            ? BONE.shadow
+            : BONE.base;
+      px(img, UI_SLOT_BOX.x + x, UI_SLOT_BOX.y + y, c);
+    });
+  });
+}
+
+/** Head: a closed helm, its eye slits split by the nose guard. */
+const SLOT_HEAD = [
+  "....................",
+  "......########......",
+  "....############....",
+  "...##############...",
+  "..################..",
+  "..################..",
+  ".##################.",
+  ".##################.",
+  ".##################.",
+  ".####....##....####.",
+  ".####....##....####.",
+  ".######..##..######.",
+  ".######..##..######.",
+  "..#####..##..#####..",
+  "..#####......#####..",
+  "...####......####...",
+  "....###......###....",
+  "....................",
+  "....................",
+  "....................",
+];
+
+/** Neck: an amulet on its chain. */
+const SLOT_NECK = [
+  "....................",
+  "..#..............#..",
+  "..#..............#..",
+  "...#............#...",
+  "...#............#...",
+  "....#..........#....",
+  "....#..........#....",
+  ".....#........#.....",
+  "......#......#......",
+  ".......#....#.......",
+  "........####........",
+  ".......######.......",
+  "......########......",
+  "......###..###......",
+  "......###..###......",
+  "......########......",
+  ".......######.......",
+  "........####........",
+  "....................",
+  "....................",
+];
+
+/** Backpack: a sack with its handle, its flap and a pocket. */
+const SLOT_BACKPACK = [
+  "....................",
+  ".......######.......",
+  "......##....##......",
+  "......#......#......",
+  "...##############...",
+  "..################..",
+  "..################..",
+  "..#######..#######..",
+  "..################..",
+  "..################..",
+  "..################..",
+  "..####........####..",
+  "..####.######.####..",
+  "..####.######.####..",
+  "..####.######.####..",
+  "..####........####..",
+  "..################..",
+  "...##############...",
+  "....................",
+  "....................",
+];
+
+/** Armor: a tunic with its sleeves and the neck cut. */
+const SLOT_ARMOR = [
+  "....................",
+  "....####....####....",
+  "...######..######...",
+  "..#######..#######..",
+  ".##################.",
+  "####################",
+  "####################",
+  "###.############.###",
+  "##..############..##",
+  "#...############...#",
+  "....############....",
+  "....############....",
+  "....############....",
+  "....############....",
+  "....############....",
+  "....############....",
+  "....############....",
+  ".....##########.....",
+  "....................",
+  "....................",
+];
+
+/** Right hand (the weapon's): a sword, point up and to the right. */
+const SLOT_RIGHT_HAND = [
+  "....................",
+  ".................##.",
+  "................###.",
+  "...............###..",
+  "..............###...",
+  ".............###....",
+  "............###.....",
+  "...........###......",
+  "..........###.......",
+  ".........###........",
+  "....#...###.........",
+  ".....#.###..........",
+  "......###...........",
+  ".....####...........",
+  "....##..##..........",
+  "...##....#..........",
+  "..##................",
+  ".###................",
+  ".##.................",
+  "....................",
+];
+
+/** Left hand (the shield's): a heater shield with a cross. */
+const SLOT_LEFT_HAND = [
+  "....................",
+  "...##############...",
+  "..################..",
+  "..#######..#######..",
+  "..#######..#######..",
+  "..#######..#######..",
+  "..##............##..",
+  "..################..",
+  "..#######..#######..",
+  "..#######..#######..",
+  "..#######..#######..",
+  "...######..######...",
+  "...######..######...",
+  "....#####..#####....",
+  ".....####..####.....",
+  "......###..###......",
+  ".......##..##.......",
+  "........#..#........",
+  "....................",
+  "....................",
+];
+
+/** Legs: a pair of trousers. */
+const SLOT_LEGS = [
+  "....................",
+  "....############....",
+  "....############....",
+  "....############....",
+  "...##############...",
+  "...######..######...",
+  "...######..######...",
+  "...#####....#####...",
+  "...#####....#####...",
+  "..######....######..",
+  "..#####......#####..",
+  "..#####......#####..",
+  "..#####......#####..",
+  "..#####......#####..",
+  "..#####......#####..",
+  ".######......######.",
+  ".######......######.",
+  "....................",
+  "....................",
+  "....................",
+];
+
+/** Feet: a boot, toe to the right. */
+const SLOT_FEET = [
+  "....................",
+  "....................",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......#######.......",
+  "......########......",
+  ".....##########.....",
+  ".....############...",
+  ".....#############..",
+  ".....##############.",
+  ".....##############.",
+  ".....##############.",
+  "....................",
+  "....................",
+  "....................",
+];
+
+/** Ring: a band with its stone on top. */
+const SLOT_RING = [
+  "....................",
+  "....................",
+  "........####........",
+  ".......######.......",
+  "........####........",
+  "......########......",
+  ".....###....###.....",
+  "....##........##....",
+  "....##........##....",
+  "...##..........##...",
+  "...##..........##...",
+  "...##..........##...",
+  "....##........##....",
+  "....##........##....",
+  ".....###....###.....",
+  "......########......",
+  "....................",
+  "....................",
+  "....................",
+  "....................",
+];
+
+/** Ammo: three arrows, points up. */
+const SLOT_AMMO = [
+  "....................",
+  "....#.....#.....#...",
+  "...###...###...###..",
+  "..#####.#####.#####.",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "....#.....#.....#...",
+  "...#.#...#.#...#.#..",
+  "...#.#...#.#...#.#..",
+  "...#.#...#.#...#.#..",
+  "....#.....#.....#...",
+  "....................",
+  "....................",
+  "....................",
+];
+
+/** The silhouette of each equipment slot (client/src/ui/Inventory.tsx SLOT_KEYS). */
+export const SLOT_MASKS: Readonly<Record<string, readonly string[]>> = {
+  head: SLOT_HEAD,
+  neck: SLOT_NECK,
+  backpack: SLOT_BACKPACK,
+  armor: SLOT_ARMOR,
+  right_hand: SLOT_RIGHT_HAND,
+  left_hand: SLOT_LEFT_HAND,
+  legs: SLOT_LEGS,
+  feet: SLOT_FEET,
+  ring: SLOT_RING,
+  ammo: SLOT_AMMO,
+};
+
 export const UI: RecipeBook = {
   "ui/marks/aggressor": { kind: "ui", draw: (img) => pixelMap(img, AGGRESSOR, AMBER, STEEL_GRIP) },
   "ui/marks/murderer": { kind: "ui", draw: (img) => pixelMap(img, MURDERER, CRIMSON) },
   "ui/marks/outlaw": { kind: "ui", draw: (img) => pixelMap(img, OUTLAW, VIOLET) },
+  ...Object.fromEntries(
+    Object.entries(SLOT_MASKS).map(([slot, rows]) => [
+      `ui/slots/${slot}`,
+      { kind: "ui" as const, draw: (img: Image) => slotMask(img, rows) },
+    ]),
+  ),
 };

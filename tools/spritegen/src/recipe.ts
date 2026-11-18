@@ -14,7 +14,8 @@ import type { Rng } from "./draw.ts";
  * - effect: one frame of a tile effect (effects/<name>/<frame>), transparent, drawn over
  *   the creatures of its tile; the client plays the frames in order (recipes/effects.ts).
  * - ui: a client interface icon (ui/<group>/<id>, such as the PvP marks): 32x32 with the
- *   drawing inside UI_ICON_BOX, which is all the client shows of it.
+ *   drawing inside its group's box (uiIconBox: UI_ICON_BOX for the marks, UI_SLOT_BOX for
+ *   the empty equipment slots), which is all the client shows of it.
  */
 export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature" | "effect" | "ui";
 
@@ -53,3 +54,15 @@ export type RecipeBook = Record<string, Recipe>;
  * the same numbers (client/src/render/marks.ts MARK_BOX); a test checks both.
  */
 export const UI_ICON_BOX = { x: 10, y: 10, w: 12, h: 12 } as const;
+
+/**
+ * The part of a 32x32 `ui/slots/<slot>` sprite with the drawing: the empty equipment slot
+ * icons (docs/17 UI-5), which the client shows whole, like an item icon, under a slot that
+ * holds nothing (client/src/ui/Inventory.tsx).
+ */
+export const UI_SLOT_BOX = { x: 6, y: 6, w: 20, h: 20 } as const;
+
+/** The box a `ui` sprite draws in: UI_SLOT_BOX for ui/slots/*, UI_ICON_BOX for the rest. */
+export function uiIconBox(path: string): { x: number; y: number; w: number; h: number } {
+  return path.startsWith("ui/slots/") ? UI_SLOT_BOX : UI_ICON_BOX;
+}
