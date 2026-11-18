@@ -18,6 +18,10 @@ import { GameView } from "../ui/GameView.tsx";
 import type { GameSettings } from "../ui/GameView.tsx";
 import { LanguagePicker } from "../ui/LanguagePicker.tsx";
 import { TouchPadToggle } from "../ui/TouchPad.tsx";
+import { SoundOptions } from "../ui/AudioOptions.tsx";
+import { defaultPrefs } from "../audio/prefs.ts";
+import type { AudioPrefs } from "../audio/prefs.ts";
+import type { AudioEngine } from "../audio/engine.ts";
 import { pixelScale } from "../render/viewport.ts";
 import { loadIcons } from "../site/shop.ts";
 import type { SpriteIcon } from "../site/shop.ts";
@@ -46,6 +50,21 @@ function stubGame(icons: Map<string, SpriteIcon>): Game {
     get: (_, key) => answers[String(key)] ?? (() => undefined),
   });
 }
+
+/** An AudioEngine that only keeps its preferences: the Options window's sliders read it. */
+function stubAudio(): AudioEngine {
+  let prefs: AudioPrefs = defaultPrefs();
+  const answers: Record<string, unknown> = {
+    currentPrefs: () => prefs,
+    setPrefs: (next: AudioPrefs) => {
+      prefs = next;
+    },
+  };
+  return new Proxy({} as AudioEngine, {
+    get: (_, key) => answers[String(key)] ?? (() => undefined),
+  });
+}
+const audio = stubAudio();
 
 /**
  * The map picture where the canvas goes, as large as the canvas would be. mapcli render
@@ -93,7 +112,7 @@ function Preview(props: { game: Game }): JSX.Element {
     language: (
       <LanguagePicker t={t} lang={lang} languages={Object.keys(content.i18n)} onChange={() => {}} />
     ),
-    sound: <p class="muted">—</p>,
+    sound: <SoundOptions t={t} audio={audio} storage={undefined} />,
     touchPad: <TouchPadToggle t={t} on={false} onChange={() => {}} />,
     reducedMotion: false,
     setReducedMotion: () => {},
