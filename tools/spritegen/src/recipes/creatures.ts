@@ -17,7 +17,7 @@ import {
 import type { Point } from "../draw.ts";
 import { hex, material, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
-import type { RecipeBook } from "../recipe.ts";
+import type { Recipe, RecipeBook } from "../recipe.ts";
 
 const { feather, bone, foliage, redCloth } = PALETTE;
 
@@ -194,124 +194,193 @@ function thievingGull(img: Image): void {
   outline(img, { amount: 0.55 });
 }
 
+// ---- the big animals: boar and stag ---------------------------------------------------------
+
+/**
+ * Where a 32x32 design lands on a bigger canvas: its coordinates scaled by k and moved by
+ * (ox, oy). The boar and the stag were drawn on 32x32 and, beside the Gemini animals and the
+ * LPC people, read like young ones (a stag shorter than the wolf, docs/17 ART-2 "Animales
+ * medianos"): they keep their design and are drawn k times bigger on 64x64, centred on its
+ * bottom edge, for `anchor: bc` in assets/sprites.yaml. Lengths scale too; a single pixel
+ * (an eye, a nostril, a berry) stays one pixel.
+ */
+export interface Scale {
+  k: number;
+  ox: number;
+  oy: number;
+}
+
+/** The design's 32x32 box, k times bigger, centred on the bottom edge of a size x size canvas. */
+export const scaleOnto = (size: number, k: number): Scale => ({
+  k,
+  ox: (size - 32 * k) / 2,
+  oy: size - 32 * k,
+});
+
+export const BIG_ANIMAL = 64;
+/** About the wolf's length (~39 px), stockier. */
+export const BOAR_SCALE = scaleOnto(BIG_ANIMAL, 1.2);
+/** Antlers up at a person's height (~45 px), the body about the wolf's length. */
+export const STAG_SCALE = scaleOnto(BIG_ANIMAL, 1.4);
+
+/** Canvas coordinates of a design: x, y and lengths, and rounded points. */
+function pen(s: Scale) {
+  const X = (v: number): number => s.ox + v * s.k;
+  const Y = (v: number): number => s.oy + v * s.k;
+  return {
+    X,
+    Y,
+    /** A length, at least one pixel. */
+    N: (v: number): number => Math.max(1, Math.round(v * s.k)),
+    /** A design point as a canvas pixel. */
+    P: (x: number, y: number): [number, number] => [Math.round(X(x)), Math.round(Y(y))],
+    /** A polygon of design points. */
+    pts: (list: readonly Point[]): Point[] => list.map(([x, y]) => [X(x), Y(y)]),
+  };
+}
+
 /** A squat, dark boar with a pale bristle crest along its back and curved tusks. */
-function bristlebackBoar(img: Image, f = -1): void {
+function bristlebackBoar(img: Image, f = -1, s: Scale = BOAR_SCALE): void {
+  const { X, Y, N, P, pts } = pen(s);
   // Diagonal pairs: a = near front + far back, b = near back + far front.
   const a = trot(f, 0);
   const b = trot(f, 1);
+  // A leg from its hip (design row `top`) down to its hoof (row `hoof`, lifted by the trot).
+  const leg = (
+    x: number,
+    top: number,
+    hoofRow: number,
+    step: { dx: number; lift: number },
+    bias: number,
+  ): void => {
+    const lx = Math.round(X(x + step.dx));
+    const y0 = Math.round(Y(top));
+    const hy = Math.round(Y(hoofRow) - step.lift * s.k);
+    limb(img, lx, y0, N(3), hy - y0 + 1, boarFur, bias);
+    rect(img, lx, hy, N(3), 1, hoof.base);
+  };
   // Far legs.
-  limb(img, 22 + b.dx, 24, 3, 5 - b.lift, boarFur, -0.3);
-  limb(img, 26 + a.dx, 23, 3, 5 - a.lift, boarFur, -0.3);
-  rect(img, 22 + b.dx, 28 - b.lift, 3, 1, hoof.base);
-  rect(img, 26 + a.dx, 27 - a.lift, 3, 1, hoof.base);
+  leg(22, 24, 28, b, -0.3);
+  leg(26, 23, 27, a, -0.3);
   // Tail.
-  line(img, 29, 16, 30, 18, boarFur.shadow);
+  line(img, ...P(29, 16), ...P(30, 18), boarFur.shadow);
   // Body.
-  ball(img, 19, 19, 10, 6.5, boarFur);
-  // Bristle crest: spikes along the top of the back, pale tips.
-  for (let x = 10; x <= 28; x++) {
-    const u = (x + 0.5 - 19) / 10;
-    const top = Math.round(19 - 6.5 * Math.sqrt(Math.max(0, 1 - u * u)));
-    const h = 2 + (x % 2 === 0 ? 1 : 0) + (x > 13 && x < 24 ? 1 : 0);
+  ball(img, X(19), Y(19), 10 * s.k, 6.5 * s.k, boarFur);
+  // Bristle crest: spikes along the top of the back, pale tips, every other pixel taller.
+  for (let cx = Math.round(X(10)); cx <= Math.round(X(28)); cx++) {
+    const x = (cx + 0.5 - s.ox) / s.k; // the design's x at this pixel's centre
+    const u = (x - 19) / 10;
+    const top = Math.round(Y(19) - 6.5 * s.k * Math.sqrt(Math.max(0, 1 - u * u)));
+    const h = Math.round((2 + (cx % 2 === 0 ? 1 : 0) + (x > 13.5 && x < 24.5 ? 1 : 0)) * s.k);
     for (let k = 0; k < h; k++) {
       const c = k === h - 1 ? bristle.light : k === 0 ? bristle.shadow : bristle.base;
-      px(img, x, top - k + 1, c);
+      px(img, cx, top - k + 1, c);
     }
   }
   // Head, lower left, in front of the body.
-  ball(img, 9.5, 20.5, 6, 5.5, boarFur, 0.05);
+  ball(img, X(9.5), Y(20.5), 6 * s.k, 5.5 * s.k, boarFur, 0.05);
   // Ears.
   shape(
     img,
-    [
+    pts([
       [8, 13],
       [12, 15.5],
       [8.5, 17],
-    ],
+    ]),
     boarFur,
     () => 0.3,
   );
   shape(
     img,
-    [
+    pts([
       [13, 14],
       [15.5, 17],
       [12, 17],
-    ],
+    ]),
     boarFur,
     () => 0.55,
   );
   // Snout.
-  ball(img, 4.5, 24, 3, 2.5, snout);
-  px(img, 3, 24, snout.deep);
-  px(img, 5, 24, snout.deep);
-  // Tusks curling up beside the snout.
-  px(img, 7, 26, bone.shadow);
-  px(img, 8, 25, bone.base);
-  px(img, 8, 24, bone.light);
-  px(img, 8, 23, bone.light);
-  px(img, 2, 26, bone.shadow);
-  px(img, 1, 25, bone.base);
-  px(img, 1, 24, bone.light);
+  ball(img, X(4.5), Y(24), 3 * s.k, 2.5 * s.k, snout);
+  px(img, ...P(3, 24), snout.deep);
+  px(img, ...P(5, 24), snout.deep);
+  // Tusks curling up beside the snout: a pale hook each, lit at the tip.
+  line(img, ...P(8, 25), ...P(8, 23), bone.light);
+  px(img, ...P(8, 25), bone.base);
+  px(img, ...P(7, 26), bone.shadow);
+  line(img, ...P(1, 25), ...P(1, 24), bone.light);
+  px(img, ...P(1, 25), bone.base);
+  px(img, ...P(2, 26), bone.shadow);
   // Eye.
-  px(img, 8, 19, [40, 18, 14, 255]);
-  px(img, 9, 19, boarFur.deep);
+  px(img, ...P(8, 19), [40, 18, 14, 255]);
+  px(img, ...P(9, 19), boarFur.deep);
   // Near legs.
-  limb(img, 9 + a.dx, 25, 3, 5 - a.lift, boarFur, -0.05);
-  limb(img, 15 + b.dx, 25, 3, 5 - b.lift, boarFur, -0.05);
-  rect(img, 9 + a.dx, 29 - a.lift, 3, 1, hoof.base);
-  rect(img, 15 + b.dx, 29 - b.lift, 3, 1, hoof.base);
+  leg(9, 25, 29, a, -0.05);
+  leg(15, 25, 29, b, -0.05);
   outline(img, { amount: 0.55 });
 }
 
 /** A red deer whose antlers are thorny bramble wood, with leaves and berries, and a vine on its back. */
-function brambleStag(img: Image, f = -1): void {
+function brambleStag(img: Image, f = -1, s: Scale = STAG_SCALE): void {
+  const { X, Y, N, P, pts } = pen(s);
   // Diagonal pairs: a = near front + far back, b = near back + far front.
   const a = trot(f, 0);
   const b = trot(f, 1);
-  // Far legs: the hip stays, the hoof moves.
-  slantLimb(img, 15, 20, 14 + b.dx, 28 - b.lift, 2, stagCoat, -0.35);
-  slantLimb(img, 25, 20, 26 + a.dx, 28 - a.lift, 2, stagCoat, -0.35);
-  rect(img, 13 + b.dx, 29 - b.lift, 2, 1, hoof.base);
-  rect(img, 26 + a.dx, 29 - a.lift, 2, 1, hoof.base);
+  // A slanted leg from its hip to the ground (the hip stays, the hoof moves) and its hoof,
+  // which sits hoofDx design pixels from the foot (the front hooves point forward).
+  const leg = (
+    hip: Point,
+    foot: number,
+    hoofDx: number,
+    step: { dx: number; lift: number },
+    bias: number,
+  ): void => {
+    const [hx, hy] = P(hip[0], hip[1]);
+    const fx = Math.round(X(foot + step.dx));
+    const fy = Math.round(Y(28) - step.lift * s.k);
+    slantLimb(img, hx, hy, fx, fy, N(2), stagCoat, bias);
+    rect(img, Math.round(X(foot + step.dx + hoofDx)), fy + 1, N(2), 1, hoof.base);
+  };
+  // Far legs.
+  leg([15, 20], 14, -1, b, -0.35);
+  leg([25, 20], 26, 0, a, -0.35);
   // Body with a pale belly.
-  eachInEllipse(20, 16.5, 8.5, 5, (x, y, nx, ny) => {
+  eachInEllipse(X(20), Y(16.5), 8.5 * s.k, 5 * s.k, (x, y, nx, ny) => {
     const m = ny > 0.55 ? stagBelly : stagCoat;
     px(img, x, y, shadeOf(m, domeLight(nx, ny) + 0.05));
   });
   // White rump and short tail.
-  ball(img, 28, 14.5, 1.5, 2, stagBelly, 0.1);
+  ball(img, X(28), Y(14.5), 1.5 * s.k, 2 * s.k, stagBelly, 0.1);
   // Neck rising to the head (top left).
+  const neckLeft = X(9);
   shape(
     img,
-    [
+    pts([
       [9, 9],
       [13.5, 8.5],
       [17, 14],
       [15, 19],
       [11, 17],
-    ],
+    ]),
     stagCoat,
-    (x, y) => 0.8 - (x - 9) * 0.05 + (y > 14 ? -0.1 : 0),
+    (x, y) => 0.8 - ((x - neckLeft) / s.k) * 0.05 + (y > Y(14) ? -0.1 : 0),
   );
   // Near legs.
-  slantLimb(img, 12, 19, 11 + a.dx, 28 - a.lift, 2, stagCoat, -0.05);
-  slantLimb(img, 22, 20, 23 + b.dx, 28 - b.lift, 2, stagCoat, -0.05);
-  rect(img, 10 + a.dx, 29 - a.lift, 2, 1, hoof.base);
-  rect(img, 23 + b.dx, 29 - b.lift, 2, 1, hoof.base);
+  leg([12, 19], 11, -1, a, -0.05);
+  leg([22, 20], 23, 0, b, -0.05);
   // Head and muzzle.
-  ball(img, 9.5, 9.5, 3.5, 3, stagCoat, 0.1);
-  ball(img, 6, 12, 2.2, 1.7, stagCoat, -0.05);
-  px(img, 4, 12, [30, 22, 18, 255]); // nose
-  px(img, 8, 9, [24, 16, 12, 255]); // eye
+  ball(img, X(9.5), Y(9.5), 3.5 * s.k, 3 * s.k, stagCoat, 0.1);
+  ball(img, X(6), Y(12), 2.2 * s.k, 1.7 * s.k, stagCoat, -0.05);
+  px(img, ...P(4, 12), [30, 22, 18, 255]); // nose
+  px(img, ...P(8, 9), [24, 16, 12, 255]); // eye
   // Ears.
   shape(
     img,
-    [
+    pts([
       [11, 6],
       [15, 5],
       [13, 8],
-    ],
+    ]),
     stagCoat,
     () => 0.5,
   );
@@ -326,7 +395,9 @@ function brambleStag(img: Image, f = -1): void {
     [16, 3, 15, 0], // and the one up
   ];
   const beam = (fn: (x: number, y: number) => void): void => {
-    for (const [x0, y0, x1, y1] of branches) {
+    for (const [dx0, dy0, dx1, dy1] of branches) {
+      const [x0, y0] = P(dx0, dy0);
+      const [x1, y1] = P(dx1, dy1);
       const dx = Math.abs(x1 - x0);
       const dy = Math.abs(y1 - y0);
       const sx = x0 < x1 ? 1 : -1;
@@ -347,6 +418,7 @@ function brambleStag(img: Image, f = -1): void {
       }
     }
   };
+  const aboveHead = Math.round(Y(7));
   beam((x, y) => {
     for (const [ox, oy] of [
       [-1, 0],
@@ -354,29 +426,32 @@ function brambleStag(img: Image, f = -1): void {
       [0, -1],
       [0, 1],
     ] as const)
-      if (y + oy <= 7) px(img, x + ox, y + oy, thornWood.shadow);
+      if (y + oy <= aboveHead) px(img, x + ox, y + oy, thornWood.shadow);
   });
-  beam((x, y) => px(img, x, y, x < 11 ? thornWood.light : thornWood.base));
+  beam((x, y) => px(img, x, y, x < X(11) ? thornWood.light : thornWood.base));
   // Leaf clusters on the branches (a lit pixel survives the outline in the middle).
   for (const [x, y] of [
     [3, 3],
     [18, 3],
     [10, 2],
   ] as const) {
-    rect(img, x - 1, y - 1, 3, 3, foliage.base);
-    px(img, x, y, foliage.light);
-    px(img, x + 1, y + 1, foliage.shadow);
+    const [cx, cy] = P(x, y);
+    rect(img, cx - 1, cy - 1, N(3), N(3), foliage.base);
+    px(img, cx, cy, foliage.light);
+    px(img, cx + 1, cy + 1, foliage.shadow);
   }
   // A bramble vine across its back: a thick green stem with leaves and pale thorns.
-  for (let x = 14; x <= 26; x++) {
-    const y = 12 + Math.round(Math.sin(x * 0.9) * 1.2);
-    px(img, x, y, foliage.shadow);
-    px(img, x, y + 1, foliage.deep);
-    if (x % 4 === 1) {
-      px(img, x, y - 1, foliage.light);
-      px(img, x + 1, y - 1, foliage.base);
+  for (let cx = Math.round(X(14)); cx <= Math.round(X(26)); cx++) {
+    const x = (cx + 0.5 - s.ox) / s.k;
+    const col = Math.floor(x);
+    const y = Math.round(Y(12) + Math.sin(x * 0.9) * 1.2 * s.k);
+    px(img, cx, y, foliage.shadow);
+    px(img, cx, y + 1, foliage.deep);
+    if (col % 4 === 1) {
+      px(img, cx, y - 1, foliage.light);
+      px(img, cx + 1, y - 1, foliage.base);
     }
-    if (x % 4 === 3) px(img, x, y + 2, thornWood.light);
+    if (col % 4 === 3) px(img, cx, y + 2, thornWood.light);
   }
   outline(img, { amount: 0.55 });
   // Berries after the outline, so they stay bright: on the branch tips and the vine.
@@ -389,8 +464,9 @@ function brambleStag(img: Image, f = -1): void {
     [17, 11],
     [24, 11],
   ] as const) {
-    px(img, x, y, hex("#d8343a"));
-    if (y > 0) px(img, x, y - 1, hex("#f07a72"));
+    const [cx, cy] = P(x, y);
+    px(img, cx, cy, hex("#d8343a"));
+    px(img, cx, cy - 1, hex("#f07a72"));
   }
 }
 
@@ -398,18 +474,29 @@ function brambleStag(img: Image, f = -1): void {
  * Walk cycles (docs/17 ANI-4): <sprite>/walk_w_<n>, looking left like the standing pose;
  * the client mirrors them to walk east (`facing: left` in assets/sprites.yaml).
  */
-const walkCycle = (sprite: string, draw: (img: Image, f: number) => void): RecipeBook =>
+const walkCycle = (
+  sprite: string,
+  draw: (img: Image, f: number) => void,
+  size: Partial<Recipe> = {},
+): RecipeBook =>
   Object.fromEntries(
     TROT.map((_, f) => [
       `${sprite}/walk_w_${f}`,
-      { kind: "creature" as const, draw: (img: Image) => draw(img, f) },
+      { kind: "creature" as const, ...size, draw: (img: Image) => draw(img, f) },
     ]),
   );
 
+/**
+ * The boar and the stag on 64x64 with no painted cast shadow: they stand on the renderer's
+ * contact ellipse with their feet on the tile, like the Gemini animals (`anchor: bc`,
+ * `shadow: ellipse` in assets/sprites.yaml).
+ */
+const BIG: Partial<Recipe> = { width: BIG_ANIMAL, height: BIG_ANIMAL, shadow: false };
+
 export const CREATURES: RecipeBook = {
   "creatures/thieving_gull": { kind: "creature", draw: thievingGull },
-  "creatures/bristleback_boar": { kind: "creature", draw: (img) => bristlebackBoar(img) },
-  "creatures/bramble_stag": { kind: "creature", draw: (img) => brambleStag(img) },
-  ...walkCycle("creatures/bristleback_boar", bristlebackBoar),
-  ...walkCycle("creatures/bramble_stag", brambleStag),
+  "creatures/bristleback_boar": { kind: "creature", ...BIG, draw: (img) => bristlebackBoar(img) },
+  "creatures/bramble_stag": { kind: "creature", ...BIG, draw: (img) => brambleStag(img) },
+  ...walkCycle("creatures/bristleback_boar", bristlebackBoar, BIG),
+  ...walkCycle("creatures/bramble_stag", brambleStag, BIG),
 };

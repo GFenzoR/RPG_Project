@@ -247,14 +247,65 @@ describe("cast shadow", () => {
       for (let x = 8; x <= 10; x++) expect(opaque(img, x, y), `${x},${y}`).toBe(true);
   });
 
-  it("is on every creature and on nothing else", () => {
+  it("is on every creature that does not stand on the contact ellipse, and on nothing else", () => {
     for (const p of recipePaths()) {
       const img = render(p);
       let shadow = 0;
       for (let y = 0; y < img.height; y++)
         for (let x = 0; x < img.width; x++) if (same(get(img, x, y), SHADOW)) shadow++;
-      if (RECIPES[p]?.kind === "creature") expect(shadow, p).toBeGreaterThan(10);
+      const recipe = RECIPES[p];
+      if (recipe?.kind === "creature" && recipe.shadow !== false)
+        expect(shadow, p).toBeGreaterThan(10);
       else expect(shadow, p).toBeLessThan(10);
+    }
+  });
+});
+
+/** Opaque box of a sprite: left, top, right and bottom (inclusive). */
+function opaqueBox(img: Image): { x0: number; y0: number; x1: number; y1: number } {
+  const box = { x0: img.width, y0: img.height, x1: -1, y1: -1 };
+  for (let y = 0; y < img.height; y++)
+    for (let x = 0; x < img.width; x++)
+      if (opaque(img, x, y)) {
+        box.x0 = Math.min(box.x0, x);
+        box.y0 = Math.min(box.y0, y);
+        box.x1 = Math.max(box.x1, x);
+        box.y1 = Math.max(box.y1, y);
+      }
+  return box;
+}
+
+describe("the boar and the stag (docs/17 ART-2, Animales medianos)", () => {
+  // Beside the Gemini wolf (~39 px long) and the LPC people (~46 px tall) a 32x32 boar and
+  // stag read like young ones: they are drawn bigger on 64x64, for anchor bc.
+  const animals = [
+    ...recipePaths("creatures/bristleback_boar"),
+    ...recipePaths("creatures/bramble_stag"),
+  ];
+
+  it("are 64x64 frames on the contact ellipse, centred, with the feet near the bottom", () => {
+    expect(animals).toHaveLength(10);
+    for (const p of animals) {
+      expect(RECIPES[p]?.shadow, p).toBe(false);
+      const img = render(p);
+      expect([img.width, img.height], p).toEqual([64, 64]);
+      const b = opaqueBox(img);
+      expect(Math.abs((b.x0 + b.x1 + 1) / 2 - 32), `${p} centred`).toBeLessThanOrEqual(3);
+      expect(63 - b.y1, `${p} feet`).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("stand at the size of a grown animal: the boar about the wolf's length, the stag a person's height", () => {
+    for (const p of animals) {
+      const b = opaqueBox(render(p));
+      const [w, h] = [b.x1 - b.x0 + 1, b.y1 - b.y0 + 1];
+      if (p.startsWith("creatures/bristleback_boar")) {
+        expect(w, p).toBeGreaterThanOrEqual(34);
+        expect(h, p).toBeGreaterThanOrEqual(21);
+      } else {
+        expect(w, p).toBeGreaterThanOrEqual(38);
+        expect(h, p).toBeGreaterThanOrEqual(40);
+      }
     }
   });
 });

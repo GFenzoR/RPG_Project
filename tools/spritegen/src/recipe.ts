@@ -9,7 +9,8 @@ import type { Rng } from "./draw.ts";
  *   (the renderer anchors it at the bottom-right corner of its tile, extending up-left).
  * - item: 32x32 inventory/ground icon, centred, transparent background.
  * - creature: monster, NPC or outfit frame, 32x32 (or larger), standing on its tile. It
- *   gets the cast shadow of the Dungeon Crawl monsters (castShadow, see `shadow`).
+ *   gets the cast shadow of the Dungeon Crawl monsters (castShadow, see `shadow`), unless
+ *   it stands on the renderer's contact ellipse like the animated monsters (`shadow: false`).
  * - effect: one frame of a tile effect (effects/<name>/<frame>), transparent, drawn over
  *   the creatures of its tile; the client plays the frames in order (recipes/effects.ts).
  * - ui: a client interface icon (ui/<group>/<id>, such as the PvP marks): 32x32 with the
@@ -32,8 +33,12 @@ export interface Recipe {
   width?: number;
   /** Pixels, a multiple of 32 (default 32). */
   height?: number;
-  /** Creatures only: the cast shadow's options (default ones when absent). */
-  shadow?: ShadowOptions;
+  /**
+   * Creatures only: the cast shadow's options (default ones when absent), or false for none:
+   * a sprite whose assets/sprites.yaml entry says `shadow: ellipse` gets the renderer's
+   * contact shadow instead, and a painted one would make two.
+   */
+  shadow?: ShadowOptions | false;
   /**
    * Draws into img (already sized, transparent). rand and seed come from the sprite path,
    * so a recipe is reproducible and independent of the others.

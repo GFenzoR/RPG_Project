@@ -433,8 +433,10 @@ animations:
   creatures/cinder_salamander: { facing: left }
   creatures/ember_wyrmling: { facing: left }
   creatures/thieving_gull: { facing: left, flying: true }
-  creatures/bristleback_boar: { facing: left }
-  creatures/bramble_stag: { facing: left }
+  # The spritegen boar and stag trot with frames looking left, 64x64 since docs/17 ART-2
+  # "Animales medianos": their feet on the tile and the contact shadow, like the Gemini animals.
+  creatures/bristleback_boar: { facing: left, anchor: bc, shadow: ellipse }
+  creatures/bramble_stag: { facing: left, anchor: bc, shadow: ellipse }
   npcs/forge_echo: { flying: true }
 
   # ---- monsters drawn with the owner's Gemini (assets/CREDITS.md "Generado con IA") ---------
