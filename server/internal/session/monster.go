@@ -392,10 +392,14 @@ func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial boo
 	w.monsters = append(w.monsters, m) // ids grow: the slice stays ordered
 	w.monByID[m.id] = m
 	w.mindex(m)
+	var msg *pb.ServerMessage // built once, for every observer
 	w.eachObserver(nil, pos, func(o *Player) {
 		if !o.Knows(m.id) {
 			o.remember(m.id)
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.monsterMsg(m)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.monsterMsg(m)}}}
+			}
+			o.emit(msg)
 		}
 	})
 	return true
@@ -612,9 +616,13 @@ func (w *World) face(m *Monster, p world.Pos) {
 		return
 	}
 	m.dir = d
+	var msg *pb.ServerMessage // built once, for every observer that knows m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.Knows(m.id) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: m.id, Dir: dirMsg(d)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: m.id, Dir: dirMsg(d)}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
@@ -732,9 +740,13 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 	}
 	m.health = m.maxHealth
 	pct := healthPercent(m.health, m.maxHealth)
+	var msg *pb.ServerMessage // built once, for every observer that knows m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.Knows(m.id) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: m.id, HealthPercent: pct}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: m.id, HealthPercent: pct}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
@@ -958,9 +970,13 @@ func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction
 
 // removeMonster takes m out of the world (it died).
 func (w *World) removeMonster(m *Monster) {
+	var gone *pb.ServerMessage // built once, for every observer that knew m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.forget(m.id) {
-			o.emit(disappearMsg(m.id))
+			if gone == nil {
+				gone = disappearMsg(m.id)
+			}
+			o.emit(gone)
 		}
 	})
 	w.munindex(m)

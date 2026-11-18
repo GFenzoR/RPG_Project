@@ -456,3 +456,10 @@ func (w *World) FullViewForTest(p *Player) *pb.MapArea {
 	p.known = kept
 	return area
 }
+
+// FaceForTest turns m towards p as a fight does (tests only, loop goroutine).
+func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
+
+// GiveUpForTest makes m give up its fight: full health, told to who sees it (tests only,
+// loop goroutine).
+func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }

@@ -218,18 +218,26 @@ func (w *World) appearToObservers(c *Player) {
 	if c.invisible {
 		return // T3.2: an invisible player is sent to nobody
 	}
+	var msg *pb.ServerMessage // built once, for every observer (creatureMsg is the same for all)
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if !o.Knows(c.id) {
 			o.remember(c.id)
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.creatureMsg(c)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.creatureMsg(c)}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
 
 func (w *World) disappearFromObservers(c *Player) {
+	var gone *pb.ServerMessage // built once, for every observer that knew c
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if o.forget(c.id) {
-			o.emit(disappearMsg(c.id))
+			if gone == nil {
+				gone = disappearMsg(c.id)
+			}
+			o.emit(gone)
 		}
 	})
 }

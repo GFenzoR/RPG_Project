@@ -175,3 +175,80 @@ func TestPvPTargetFifteenTilesAway(t *testing.T) {
 		t.Fatalf("Vale at %v (17 tiles): Ash's target %d", v.Pos(), a.Target())
 	}
 }
+
+// sharedMsg checks that every client got exactly one message about creature id that about
+// picks out (it returns the creature's id, or 0 for another kind), and the same one: built
+// once for every observer, as the wide view sends each to many more clients.
+func sharedMsg(t *testing.T, what string, id uint32, about func(*pb.ServerMessage) uint32, cls ...*fakeClient) {
+	t.Helper()
+	var first *pb.ServerMessage
+	for i, cl := range cls {
+		var got []*pb.ServerMessage
+		for _, e := range cl.take() {
+			if about(e) == id {
+				got = append(got, e)
+			}
+		}
+		switch {
+		case len(got) != 1:
+			t.Fatalf("%s: client %d got %d messages, want 1", what, i, len(got))
+		case i == 0:
+			first = got[0]
+		case got[0] != first:
+			t.Errorf("%s: client %d got its own copy, not the shared message", what, i)
+		}
+	}
+}
+
+// Every observer of a creature appearing, turning, healed by giving up or leaving gets the
+// same message, built once, like a step or a hit (observeMove, hitEvents).
+func TestObserversShareOneMessage(t *testing.T) {
+	appearOf := func(m *pb.ServerMessage) uint32 { return m.GetCreatureAppear().GetCreature().GetId() }
+	turnOf := func(m *pb.ServerMessage) uint32 { return m.GetCreatureTurn().GetId() }
+	healthOf := func(m *pb.ServerMessage) uint32 { return m.GetCreatureHealth().GetId() }
+	goneOf := func(m *pb.ServerMessage) uint32 { return m.GetCreatureDisappear().GetId() }
+
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	h := monsterHarness(t, []*content.Monster{wolf}, spawnAt("wolf", 30, 30, 0, 600))
+	// Ana and Bob join in the first tick, the one the spawns fill in: both see the wolf
+	// appear.
+	acl, bcl := &fakeClient{}, &fakeClient{}
+	for _, j := range []struct {
+		name string
+		cl   *fakeClient
+		at   world.Pos
+	}{{"Ana", acl, pos(36, 30)}, {"Bob", bcl, pos(30, 36)}} {
+		nextChar++
+		h.sim.Command(h.w.Join(session.Character{ID: nextChar, AccountID: nextChar, Name: j.name, Vocation: "guardian",
+			Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: j.at}, j.cl))
+	}
+	h.sim.Step()
+	w := onlyMonster(t, h)
+	ana := h.w.PlayerByCharacter(nextChar - 1)
+	sharedMsg(t, "the wolf spawns", w.ID(), appearOf, acl, bcl)
+
+	ccl, carl := h.join("Carl", at(33, 33))
+	sharedMsg(t, "Carl joins", carl.ID(), appearOf, acl, bcl)
+	ccl.take()
+
+	h.input(ccl, &pb.ClientMessage{Message: &pb.ClientMessage_Turn{Turn: &pb.Turn{Dir: W}}})
+	h.sim.Step()
+	sharedMsg(t, "Carl turns", carl.ID(), turnOf, ccl, acl, bcl)
+
+	h.do(func(*game.TickContext) { h.w.FaceForTest(w, pos(30, 20)) })
+	sharedMsg(t, "the wolf faces north", w.ID(), turnOf, ccl, acl, bcl)
+
+	h.do(func(ctx *game.TickContext) {
+		w.SetHealth(10)
+		h.w.GiveUpForTest(ctx, w)
+	})
+	sharedMsg(t, "the wolf gives up, healed", w.ID(), healthOf, ccl, acl, bcl)
+
+	h.sim.Command(h.w.Leave(ccl))
+	h.sim.Step()
+	sharedMsg(t, "Carl leaves", carl.ID(), goneOf, acl, bcl)
+
+	h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, w, ana, 1000) })
+	sharedMsg(t, "the wolf dies", w.ID(), goneOf, acl, bcl)
+}

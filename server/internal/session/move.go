@@ -215,11 +215,12 @@ func (w *World) turn(p *Player, d world.Direction) {
 		return
 	}
 	p.dir = d
-	msg := &pb.CreatureTurn{Id: p.id, Dir: dirMsg(d)}
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: msg}})
+	// One message for p and every observer that knows it, never changed after emit.
+	msg := &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: dirMsg(d)}}}
+	p.emit(msg)
 	w.eachObserver(p, p.pos, func(o *Player) {
 		if o.Knows(p.id) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: msg.Dir}}})
+			o.emit(msg)
 		}
 	})
 }
