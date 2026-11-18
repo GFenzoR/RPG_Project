@@ -243,8 +243,9 @@ export interface GameCanvasOptions {
    */
   hoverText?(x: number, y: number, z: number): string;
   /**
-   * docs/17 UI-6: the mouse rested REST_MS on tile (x, y, z) at page (cx, cy) (the card of
-   * what lies there shows), or left it, pressed or scrolled (`undefined`: it goes).
+   * docs/17 UI-6: the mouse came over tile (x, y, z) at page (cx, cy) (the card of what lies
+   * there shows at once, as in Diablo II), or left the map, pressed or scrolled
+   * (`undefined`: it goes). Called again only when the tile under the mouse changes.
    */
   restTile?(at: { x: number; y: number; z: number; cx: number; cy: number } | undefined): void;
   /**
@@ -277,9 +278,6 @@ const HINT_REFRESH_MS = 250;
 
 /** Where the text beside the cursor goes, from the cursor (CSS px). */
 const HINT_OFFSET = { x: 14, y: 18 } as const;
-
-/** How long the mouse rests on a tile before the card of its item shows, ms (UI-9: 350). */
-const REST_MS = 350;
 
 /** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
 const MARK_HALF = MARK_BOX.w / 2;
@@ -1311,13 +1309,12 @@ export async function createGameCanvas(
     hintTile = undefined;
     if (!hint.hidden) hint.hidden = true;
   };
-  // docs/17 UI-6: the card of the item on the tile the mouse rests on (ui/ItemTooltip.tsx).
-  let restTimer: ReturnType<typeof setTimeout> | undefined;
+  // docs/17 UI-6: the card of the item on the tile under the mouse (ui/ItemTooltip.tsx), at
+  // once (the owner on 2026-11-18: "como en diablo"). From one tile to the next the Game
+  // swaps the card in a single update: no gap, no flicker while sweeping the map.
   let restAt: Pos | undefined;
   let resting = false;
   const stopRest = (): void => {
-    clearTimeout(restTimer);
-    restTimer = undefined;
     restAt = undefined;
     if (resting) opts.restTile?.(undefined);
     resting = false;
@@ -1326,15 +1323,13 @@ export async function createGameCanvas(
     if (!opts.restTile || press) return;
     const tile = tileUnder(cx, cy);
     if (tile && restAt && samePos(tile, restAt)) return; // still on it: the card stays
-    stopRest();
-    if (!tile) return;
+    if (!tile) {
+      stopRest();
+      return;
+    }
     restAt = tile;
-    restTimer = setTimeout(() => {
-      restTimer = undefined;
-      if (press || !hover) return;
-      resting = true;
-      opts.restTile?.({ ...tile, cx: hover.x, cy: hover.y });
-    }, REST_MS);
+    resting = true;
+    opts.restTile({ ...tile, cx, cy });
   };
   const showHint = (now: number): void => {
     if (!hover || press || !opts.hoverText) {
@@ -1574,7 +1569,6 @@ export async function createGameCanvas(
     },
     destroy() {
       clearTimeout(longPressTimer);
-      clearTimeout(restTimer);
       hint.remove();
       gestures.reset();
       observer.disconnect();

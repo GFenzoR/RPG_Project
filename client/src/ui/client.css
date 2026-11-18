@@ -35,6 +35,12 @@
   --ui-warn: #d29a2e;
   --ui-danger: #e5574a;
   --ui-item-quest: #e2c47a;
+  /* The tooltip's lines (docs/17 UI-6, the Diablo II idea): a plain item's name, money,
+     the stats and the effects. */
+  --ui-item-plain: #ece5d6;
+  --ui-item-coin: #f0bf3c;
+  --ui-item-stat: #f4f0e8;
+  --ui-item-effect: #8ea6ff;
   --ui-chat-party: #7fb2ff;
   --ui-chat-guild: #7fd07a;
   --ui-chat-private: #d48cff;
@@ -3153,6 +3159,9 @@ button.credits-link {
 .touch-menu-name.quest {
   color: var(--ui-item-quest);
 }
+.card-name.coin {
+  color: var(--ui-item-coin);
+}
 .card-name::first-letter {
   text-transform: uppercase;
 }
@@ -3220,7 +3229,6 @@ button.credits-link {
   transform-origin: 0 0;
   image-rendering: pixelated;
 }
-/* The card as a tooltip: never takes the pointer. */
 /* Shift+drag of a stack (docs/17 UI-6): how many go where it was dropped. */
 .split-prompt {
   position: fixed;
@@ -3260,26 +3268,65 @@ button.credits-link {
   justify-content: flex-end;
   gap: 0.35rem;
 }
+/* The hover tooltip in the Diablo II style (docs/17 UI-6; the owner on 2026-11-18): a
+   compact near-black box with a thin rim, every line centred, no icon, at once and with no
+   animation. ItemTooltip.tsx places it above the item (below without room) after measuring
+   it: hidden until then. It never takes the pointer. */
 .item-tooltip {
   position: fixed;
   z-index: 60;
-  width: 288px;
+  left: 0;
+  top: 0;
+  visibility: hidden;
   box-sizing: border-box;
-  padding: 8px 10px;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 12px));
+  padding: 5px 10px 6px;
   overflow: hidden;
   pointer-events: none;
-  background-color: rgb(15 13 11 / 0.96);
-  background-image: var(--ui-grain);
-  border: 2px solid var(--ui-iron-600);
-  border-radius: var(--ui-radius);
-  box-shadow: var(--ui-frame-shadow);
-  animation: tip-in var(--ui-dur-fast) var(--ui-ease-out);
+  background: rgb(6 5 4 / 0.9);
+  border: 1px solid var(--ui-iron-600);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.85),
+    0 4px 14px rgb(0 0 0 / 0.55);
 }
-@keyframes tip-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
+.item-card.tip {
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ui-item-stat);
+}
+.item-card.tip .card-name {
+  display: block;
+  font-size: 14px;
+  color: var(--ui-item-plain);
+}
+.item-card.tip .card-name.quest {
+  color: var(--ui-item-quest);
+}
+.item-card.tip .card-name.coin {
+  color: var(--ui-item-coin);
+}
+.item-card.tip .card-type {
+  color: var(--ui-text-muted);
+}
+.item-card.tip .tip-stats li {
+  color: var(--ui-item-stat);
+  font-variant-numeric: tabular-nums;
+}
+.item-card.tip .card-requires li,
+.item-card.tip .card-requires li.met {
+  color: var(--ui-item-stat);
+}
+.item-card.tip .card-requires li.unmet {
+  color: var(--ui-danger);
+}
+.item-card.tip .card-effects li {
+  color: var(--ui-item-effect);
+}
+.item-card.tip .card-desc {
+  margin-top: 2px;
+  color: var(--ui-text-muted);
 }
 /* Items in the DOM take the keyboard focus (their card shows, Enter uses them). */
 .item[tabindex]:focus-visible {

@@ -159,10 +159,18 @@ export interface GameUi {
   /** The last spell used from the hotbar and when (docs/17 UI-9: its slot flashes). */
   cast?: { spellId: string; at: number } | undefined;
   /**
-   * The item lying on the map tile the mouse rests on, at page (x, y): its card shows
-   * there (docs/17 UI-6, ui/ItemTooltip.tsx).
+   * The item lying on the map tile under the mouse, at page (x, y): its card shows above the
+   * tile, `tile` in page coordinates (docs/17 UI-6, ui/ItemTooltip.tsx).
    */
-  groundTip?: { itemId: number; count: number; x: number; y: number } | undefined;
+  groundTip?:
+    | {
+        itemId: number;
+        count: number;
+        x: number;
+        y: number;
+        tile: { left: number; top: number; width: number; height: number };
+      }
+    | undefined;
 }
 
 /** A Shift+drag of a stack waiting for how many units move. */
@@ -1906,10 +1914,22 @@ export class Game {
     at: { x: number; y: number; z: number; cx: number; cy: number } | undefined,
   ): void {
     let tip: GameUi["groundTip"];
-    if (at && !this.menu && !this.pending && !this.picker.picked) {
+    if (at && this.canvas && !this.menu && !this.pending && !this.picker.picked && !this.dragging) {
       const ref = menuItem(this.world, at.x, at.y, at.z);
-      if (ref && groundCard(this.opts.content.items[ref.itemId]))
-        tip = { itemId: ref.itemId, count: Math.max(1, ref.count), x: at.cx, y: at.cy };
+      if (ref && groundCard(this.opts.content.items[ref.itemId])) {
+        // The tile in page coordinates (docs/17 UI-6: the card goes above it).
+        const c = this.canvas.tileToClient(at.x, at.y);
+        const n = this.canvas.tileToClient(at.x + 1, at.y + 1);
+        const width = n.x - c.x;
+        const height = n.y - c.y;
+        tip = {
+          itemId: ref.itemId,
+          count: Math.max(1, ref.count),
+          x: at.cx,
+          y: at.cy,
+          tile: { left: c.x - width / 2, top: c.y - height / 2, width, height },
+        };
+      }
     }
     if (tip === undefined && this.groundTip === undefined) return;
     this.groundTip = tip;

@@ -1,10 +1,11 @@
 // The item card (docs/17 UI-6): name, type, stats, requirements, effects, description and
-// marks of an item, as the right-click menu, the hover tooltip and the shop show it. The
-// data is state/item-card.ts (pure); this only draws it. No hooks: ItemCard.test.ts walks
-// its tree without a DOM.
+// marks of an item, as the right-click menu and the shop show it, and its compact form for
+// the hover tooltip (`tip`, the Diablo II style the owner asked for on 2026-11-18: every line
+// centred, no icon, the description last). The data is state/item-card.ts (pure); this only
+// draws it. No hooks: ItemCard.test.ts walks its tree without a DOM.
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
-import type { CardEffect, CardRequirement, ItemCardView } from "../state/item-card.ts";
+import type { CardEffect, CardRequirement, CardStat, ItemCardView } from "../state/item-card.ts";
 
 /** A sprite's place in the atlas, as Game.itemIcon gives it. */
 export interface IconRect {
@@ -106,6 +107,21 @@ function effectText(t: Translate, e: CardEffect): string {
   }
 }
 
+/**
+ * The name's class: a quest item in the quest colour, money in gold (docs/17 UI-6), the rest
+ * plain.
+ */
+export function nameClass(card: ItemCardView): string {
+  return card.quest ? "card-name quest" : card.currency ? "card-name coin" : "card-name";
+}
+
+/** A stat's value as the card writes it ("13", "33.00 oz", "33.00 oz (330.00 oz in total)"). */
+function statValue(t: Translate, s: CardStat): string {
+  if (s.id !== "weight") return String(s.value);
+  const oz = t("client.card.oz", { oz: s.value });
+  return s.total === undefined ? oz : `${oz} ${t("client.card.weight_total", { oz: s.total })}`;
+}
+
 export function ItemCard(props: {
   t: Translate;
   card: ItemCardView;
@@ -113,15 +129,18 @@ export function ItemCard(props: {
   name?: boolean | undefined;
   /** The item's icon, drawn at 2x beside the name. */
   icon?: IconRect | undefined;
+  /** The hover tooltip's compact card (TipCard). */
+  tip?: boolean | undefined;
 }): JSX.Element {
   const { t, card } = props;
+  if (props.tip) return TipCard({ t, card });
   const type = typeText(t, card);
   return (
     <div class="item-card" data-testid="item-card" data-card-item={card.id}>
       {props.name !== false && (
         <div class="card-head">
           {props.icon && <BigIcon icon={props.icon} class="card-icon" />}
-          <span class={card.quest ? "card-name quest" : "card-name"}>{cardTitle(t, card)}</span>
+          <span class={nameClass(card)}>{cardTitle(t, card)}</span>
         </div>
       )}
       {type && <p class="card-type">{type}</p>}
@@ -168,6 +187,63 @@ export function ItemCard(props: {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * The card of the hover tooltip (docs/17 UI-6, the Diablo II idea): one centred line each,
+ * the name coloured (plain, quest or money), the type, the stats ("Attack: 13"), the
+ * requirements (red when unmet), the effects (blue), the marks and the description last,
+ * muted. No icon: the item is right under it.
+ */
+export function TipCard(props: { t: Translate; card: ItemCardView }): JSX.Element {
+  const { t, card } = props;
+  const type = typeText(t, card);
+  return (
+    <div class="item-card tip" data-testid="item-card" data-card-item={card.id}>
+      <p class={nameClass(card)}>{cardTitle(t, card)}</p>
+      {type && <p class="card-type">{type}</p>}
+      {card.stats.length > 0 && (
+        <ul class="tip-stats">
+          {card.stats.map((s) => (
+            <li key={s.id} data-stat={s.id}>
+              {t("client.card.stat_line", {
+                stat: t(`client.card.stat.${s.id}`),
+                value: statValue(t, s),
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {card.requires.length > 0 && (
+        <ul class="card-requires">
+          {card.requires.map((r) => (
+            <li
+              key={r.id}
+              data-requirement={r.id}
+              class={r.met === false ? "unmet" : r.met === true ? "met" : undefined}
+            >
+              {requirementText(t, r)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {card.effects.length > 0 && (
+        <ul class="card-effects">
+          {card.effects.map((e, i) => (
+            <li key={`${e.id}-${i}`}>{effectText(t, e)}</li>
+          ))}
+        </ul>
+      )}
+      {card.marks.length > 0 && (
+        <ul class="card-marks">
+          {card.marks.map((m) => (
+            <li key={m}>{t(m)}</li>
+          ))}
+        </ul>
+      )}
+      {card.desc && <p class="card-desc">{t(card.desc)}</p>}
     </div>
   );
 }

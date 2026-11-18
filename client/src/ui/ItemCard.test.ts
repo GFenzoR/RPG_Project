@@ -2,7 +2,15 @@
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import type { ItemCardView } from "../state/item-card.ts";
-import { BigIcon, ItemCard, bigIconScale, cardTitle, typeText } from "./ItemCard.tsx";
+import {
+  BigIcon,
+  ItemCard,
+  TipCard,
+  bigIconScale,
+  cardTitle,
+  nameClass,
+  typeText,
+} from "./ItemCard.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;
@@ -85,6 +93,58 @@ describe("ItemCard (docs/17 UI-6)", () => {
       "client.card.kind.material",
     );
     expect(typeText(t, { ...card, type: [] })).toBe("");
+  });
+});
+
+describe("TipCard (docs/17 UI-6: the tooltip in the Diablo II style)", () => {
+  it("writes one line each, the description last, without an icon", () => {
+    const icon = { url: "a.png", x: 0, y: 0, width: 32, height: 32 };
+    const tree = ItemCard({ t, card, icon, tip: true });
+    const all = texts(tree);
+    expect(all[0]).toBe("item.iron_sword.name");
+    expect(all.at(-1)).toBe("item.iron_sword.desc");
+    expect(all.indexOf("client.card.mark.no_market")).toBeLessThan(
+      all.indexOf("item.iron_sword.desc"),
+    );
+    expect(all).toContain('client.card.stat_line{"stat":"client.card.stat.attack","value":"13"}');
+    expect(all).toContain(
+      `client.card.stat_line${JSON.stringify({
+        stat: "client.card.stat.weight",
+        value: 'client.card.oz{"oz":"33.00"}',
+      })}`,
+    );
+    const all2 = nodes(tree);
+    expect(all2.some((n) => String(n.props["class"] ?? "").includes("big-icon"))).toBe(false);
+    expect(all2[0]?.props["class"]).toBe("item-card tip");
+    expect(all2[0]?.props["data-testid"]).toBe("item-card");
+    // The unmet requirement is red (client.css), the effect blue.
+    const level = all2.find((n) => n.props["data-requirement"] === "level");
+    expect(level?.props["class"]).toBe("unmet");
+    expect(TipCard({ t, card })).toBeTruthy();
+  });
+
+  it("writes the weight of a whole stack after the unit's", () => {
+    const stack: ItemCardView = {
+      ...card,
+      count: 10,
+      stats: [{ id: "weight", value: "0.50", total: "5.00" }],
+    };
+    expect(texts(TipCard({ t, card: stack }))).toContain(
+      `client.card.stat_line${JSON.stringify({
+        stat: "client.card.stat.weight",
+        value: 'client.card.oz{"oz":"0.50"} client.card.weight_total{"oz":"5.00"}',
+      })}`,
+    );
+  });
+
+  it("colours the name: plain, a quest item's, money's", () => {
+    expect(nameClass(card)).toBe("card-name");
+    expect(nameClass({ ...card, quest: true })).toBe("card-name quest");
+    expect(nameClass({ ...card, currency: true })).toBe("card-name coin");
+    const coin = nodes(TipCard({ t, card: { ...card, currency: true } })).find(
+      (n) => n.props["class"] === "card-name coin",
+    );
+    expect(coin).toBeDefined();
   });
 });
 

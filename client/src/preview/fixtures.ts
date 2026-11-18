@@ -419,7 +419,33 @@ export function withGroundTip(
 ): Scene {
   const ui: GameUi = {
     ...s.ui,
-    groundTip: { itemId: itemNumber(content, "iron_sword"), count: 1, x: at.x, y: at.y },
+    groundTip: {
+      itemId: itemNumber(content, "iron_sword"),
+      count: 1,
+      x: at.x,
+      y: at.y,
+      // The tile under the cursor at the fitted zoom (2x: 64 CSS px).
+      tile: { left: at.x - 32, top: at.y - 32, width: 64, height: 64 },
+    },
   };
   return { ui, name: "groundtip" };
+}
+
+/**
+ * docs/17 UI-5: a sword of the backpack dragged over the equipment: the right hand glows (it
+ * takes it), the other slots do not (the screenshot script hovers one: it tints red).
+ */
+export function withHeld(content: ClientContent, s: Scene): Scene {
+  const id = itemNumber(content, "boarding_saber");
+  const index = s.ui.backpack?.items.findIndex((it) => it.itemId === id) ?? -1;
+  const ui: GameUi = {
+    ...s.ui,
+    dragging: {
+      loc: { kind: "container", id: s.ui.backpack?.id ?? 1, index },
+      itemId: id,
+      stackIndex: index,
+      count: 1,
+    },
+  };
+  return { ui, name: "inventory" };
 }

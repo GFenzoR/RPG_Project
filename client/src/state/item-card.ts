@@ -57,6 +57,8 @@ export interface ItemCardView {
   marks: string[];
   /** A quest item (data/items `quest: true`): its name takes the quest colour. */
   quest?: boolean | undefined;
+  /** Money (`kind: currency`): its name is gold in the tooltip (docs/17 UI-6). */
+  currency?: boolean | undefined;
 }
 
 /** Kinds of items people carry (the rest are the map: ground, walls, decoration). */
@@ -147,6 +149,7 @@ export function itemCard(
       met: who.magicLevel === undefined ? undefined : who.magicLevel >= def.rune.magicLevel,
     });
   card.desc = def.desc;
+  if (kind === "currency") card.currency = true;
   // docs/17 UI-6: the colour says it is a quest item; the mark says it without colour.
   if (def.quest === true) {
     card.quest = true;
