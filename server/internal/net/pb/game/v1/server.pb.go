@@ -1597,8 +1597,14 @@ type Welcome struct {
 	// How many keyboard steps (Walk) may wait in the player's queue (balance.yaml
 	// movement.max_queued_steps): the client predicts no more ahead (docs/05 "Caminar").
 	MaxQueuedSteps uint32 `protobuf:"varint,4,opt,name=max_queued_steps,json=maxQueuedSteps,proto3" json:"max_queued_steps,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// The window of tiles the server keeps the client up to date with, centred on the
+	// player, without the margin of one tile on every side that FullMapView and MapSlice
+	// also carry (docs/05 "Formato de mapa"): 31x21. The client draws at most this much.
+	// 0 = a server from before the wide view: 15x11.
+	ViewWidth     uint32 `protobuf:"varint,5,opt,name=view_width,json=viewWidth,proto3" json:"view_width,omitempty"`
+	ViewHeight    uint32 `protobuf:"varint,6,opt,name=view_height,json=viewHeight,proto3" json:"view_height,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Welcome) Reset() {
@@ -1655,6 +1661,20 @@ func (x *Welcome) GetTickMs() uint32 {
 func (x *Welcome) GetMaxQueuedSteps() uint32 {
 	if x != nil {
 		return x.MaxQueuedSteps
+	}
+	return 0
+}
+
+func (x *Welcome) GetViewWidth() uint32 {
+	if x != nil {
+		return x.ViewWidth
+	}
+	return 0
+}
+
+func (x *Welcome) GetViewHeight() uint32 {
+	if x != nil {
+		return x.ViewHeight
 	}
 	return 0
 }
@@ -5949,14 +5969,18 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\bquestion\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\bquestion\x12/\n" +
 	"\aoptions\x18\x03 \x03(\v2\x15.game.v1.DialogOptionR\aoptions\x12\x1d\n" +
 	"\n" +
-	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"\x8e\x01\n" +
+	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"\xce\x01\n" +
 	"\aWelcome\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x1f\n" +
 	"\vserver_time\x18\x02 \x01(\x04R\n" +
 	"serverTime\x12\x17\n" +
 	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\x12(\n" +
-	"\x10max_queued_steps\x18\x04 \x01(\rR\x0emaxQueuedSteps\"0\n" +
+	"\x10max_queued_steps\x18\x04 \x01(\rR\x0emaxQueuedSteps\x12\x1d\n" +
+	"\n" +
+	"view_width\x18\x05 \x01(\rR\tviewWidth\x12\x1f\n" +
+	"\vview_height\x18\x06 \x01(\rR\n" +
+	"viewHeight\"0\n" +
 	"\x04Tile\x12(\n" +
 	"\x05items\x18\x01 \x03(\v2\x12.game.v1.ItemStackR\x05items\".\n" +
 	"\bMapFloor\x12\f\n" +

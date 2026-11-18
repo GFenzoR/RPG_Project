@@ -5,7 +5,9 @@
       "welcome": {
         "creatureId": 7,
         "serverTime": "1793400000500",
-        "tickMs": 50
+        "tickMs": 50,
+        "viewWidth": 31,
+        "viewHeight": 21
       }
     },
     {

@@ -118,6 +118,12 @@ message Welcome {
   // How many keyboard steps (Walk) may wait in the player's queue (balance.yaml
   // movement.max_queued_steps): the client predicts no more ahead (docs/05 "Caminar").
   uint32 max_queued_steps = 4;
+  // The window of tiles the server keeps the client up to date with, centred on the
+  // player, without the margin of one tile on every side that FullMapView and MapSlice
+  // also carry (docs/05 "Formato de mapa"): 31x21. The client draws at most this much.
+  // 0 = a server from before the wide view: 15x11.
+  uint32 view_width = 5;
+  uint32 view_height = 6;
 }
 
 // ---- map --------------------------------------------------------------------
