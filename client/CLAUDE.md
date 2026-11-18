@@ -755,7 +755,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     mensaje): esa casilla va a `avoid`, y el segundo rechazo lo termina
     (`ROUTE_REFUSALS`: un aviso por rechazo, como `house.no_access` o
     `pvp.protection_locked`, no se repite casilla por casilla). Sin camino, o un
-    `FullMapView`, lo termina.
+    `FullMapView`, lo termina. Un click es una intención nueva, como una tecla pulsada de
+    nuevo: `walkTo` llama a `retryWalk`, así que un paso rechazado antes (`refused`) se
+    vuelve a intentar una vez (un rechazo y un aviso por click). Mientras sigue rechazado,
+    `plan` no pasa por esa casilla si planea desde donde empezó ese paso
+    (`WorldState.refusedStep`): `predictStep` no lo daría y el camino no llevaría a nada.
     `mark` (`WalkMark`: casilla, hora, si hay camino) es el anillo de MOV-7.
   - **Mouse mantenido** (`toward`, el punto bajo el cursor en casillas fraccionarias,
     `GameCanvas.worldAt`): dirección por el ángulo desde el centro del personaje dibujado
@@ -763,12 +767,17 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     está libre, `stepChoices` (la mitad libre de una diagonal) y después el primer paso de
     un A* hacia la casilla bajo el cursor, guardado como camino con `heading`: se sigue
     mientras el cursor apunte igual (si no, en una U de muros entraba y salía). Sin nada,
-    `chooseStep` gira. Una búsqueda sin camino no se repite desde la misma casilla hacia
-    la misma durante `NO_WAY_MS` (250 ms): parado contra un muro, `canStep` está abierto
-    en cada frame.
+    gira (`WorldState.turn`). Nunca pisa en línea recta una escalera, un agujero o un
+    teletransporte que no sea la casilla bajo el cursor (`movesOnStep`; el A* ya los
+    rodea, `pathPassable`): arrastrar el cursor por encima de un agujero no cambia de piso.
+    Una búsqueda sin camino (o cuyo primer paso no se puede dar) no se repite desde la
+    misma casilla hacia la misma durante `NO_WAY_MS` (250 ms): parado contra un muro,
+    `canStep` está abierto en cada frame. Ese frame no crea objetos (docs/07): `drawPos` y
+    `GameCanvas.worldAt` escriben en uno reutilizado y `stepChoices` es una tabla fija.
   - **Botón izquierdo en el canvas** (`input/mouse.ts` `LeftPress`, puro y con tests):
-    `GameCanvasOptions.pressTile` le pregunta al `Game` (`Game.pressTile`) qué puede
-    hacer la presión: con una mira o un item elegido, solo click al soltar (y arrastre);
+    `GameCanvasOptions.pressTile` le pregunta al `Game` (`Game.pressTile`, la regla pura
+    es `pressAnswer`) qué puede hacer la presión: con una mira o un item elegido, solo
+    click al soltar (y arrastre);
     sobre una casilla con un item movible (`topItem` sin `fixed`), arrastrar antes de
     `HOLD_WALK_MS` (200 ms) lo mueve y el click camina al soltar; sin item, camina en el
     acto (`walked`: el soltar ya no es click) y arrastrar es mantener. Quieto 200 ms (lo
@@ -776,14 +785,18 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     del cursor en la página, en cada `pointermove`; `setPointerCapture` sigue fuera del
     canvas; `pointerup`, `lostpointercapture` o un `pointermove` sin el botón llaman
     `holdEnd` (y el `blur` de la ventana lo suelta en el `Game`). Soltar no manda nada:
-    se dan los pasos ya mandados.
+    se dan los pasos ya mandados. Cada presión (sin mira ni item elegido) llama a
+    `retryWalk`, como una tecla pulsada de nuevo; el mantener en que se convierte no lo
+    vuelve a llamar (un rechazo y un aviso por presión).
     El dedo no mantiene (gestos de T5.6).
   - **Doble click** (controles de menú): `Steering.cancel()` termina el camino del primer
     click, sin `StopWalk` (dejaría `Walk` sin respuesta).
 - **Respuesta visual** (MOV-7): el anillo (`render/walk-mark.ts` `markRing`, puro: 300 ms,
   de 0,5 a 0,25 casillas, se desvanece; dorado o rojo sin camino) es un `Graphics` del
-  stage entre la luz y los efectos (`drawWalkMark`). El texto junto al mouse quieto sobre
-  el mapa: un `div.map-hint` en `body` que el canvas mueve en `pointermove` y llena en el
+  stage entre la luz y los efectos (`drawWalkMark`). El texto junto al mouse sobre el
+  mapa (sale apenas el mouse pasa por la casilla, sin esperar a que se quede quieto; al
+  caminar con el cursor quieto cambia a medida que el mapa pasa por debajo): un
+  `div.map-hint` en `body` que el canvas mueve en `pointermove` y llena en el
   ticker cuando cambia la casilla bajo el cursor (o cada `HINT_REFRESH_MS`, 250) con
   `GameCanvasOptions.hoverText` → `Game.hoverText`: `defaultAction` (`input/actions.ts`,
   la primera opción del menú de esa casilla, nunca solo "Mirar", ni el "Usar" de un
@@ -792,7 +805,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (`client.touch.action.<tipo>`) sin nombre o para trepar. El texto va en `data-text` y
   lo muestra un `::after { content: attr(data-text) }`: no es texto de la página (ni los
   locators de Playwright ni un lector de pantalla lo encuentran, `aria-hidden`). Se
-  oculta al apretar un botón, con una mira, un item elegido o un arrastre.
+  oculta al apretar un botón, con una mira, un item elegido, un arrastre o un menú
+  abierto (`Game.hoverText` da `""`; el texto, con z-index 70, quedaría sobre el menú).
 - **Pasos del servidor** (las demás criaturas y los pasos propios que el servidor da por
   su cuenta, como los de persecución): `Game` pide
   `world.batchTime(batch.tick, now)` por batch y pasa ese `at` a `apply`; el paso empieza
@@ -837,7 +851,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   1 s de la red del observador (sin atraso que dure). Si cambias tiempos de `motion.ts`,
   córrelo. `state/steering.test.ts` prueba el camino (primer paso en el acto, después de
   los predichos, rodeos, `ROUTE_REFUSALS`, `ROUTE_REPLANS`, teletransporte) y el mouse
-  (ángulo, deslizarse, el rodeo de una U sin volver atrás, girar, `NO_WAY_MS`). E2E `e2e/movement.spec.ts`: mantiene una
+  (ángulo, deslizarse, el rodeo de una U sin volver atrás, girar, `NO_WAY_MS`, rodear un
+  paso rechazado, no pisar un agujero que no está bajo el cursor) y que un click vuelve a
+  intentar un paso rechazado. E2E `e2e/movement.spec.ts`: mantiene una
   flecha 2 s (4 o 5 pasos; como mucho los que entran en el tiempo medido) sobre una recta
   libre y lee `__rpgClient.trail(ms)` (el `drawPos` del modelo en cada `frame`,
   `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia atrás (screenshot
@@ -892,7 +908,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
   todo (también los pasos predichos, y trae la época de caminata nueva). No hay estado
   propio de portales; solo `canStep` no predice más allá de un paso sobre una escalera,
-  un agujero o un teletransporte (`movesOnStep`).
+  un agujero o un teletransporte (`movesOnStep`), y el mouse mantenido no pisa uno que no
+  esté bajo el cursor (`Steering`, "Movimiento fluido").
 - `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
   `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
@@ -928,8 +945,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   lo vuelve a predecir ni mandar, así que una tecla mantenida no repite el aviso en cada
   paso. Se olvida con `retryWalk` (`game.ts`: tecla de movimiento pulsada de nuevo, sin
   contar la autorrepetición, o soltada; pad con otra dirección, soltado o tocado; pérdida
-  del foco), con cualquier movimiento propio y con un `FullMapView`. Un camino por click
-  tampoco lo pisa: `Steering` lo rearma sin esa casilla.
+  del foco; un click, `Steering.walkTo`; una presión nueva del botón izquierdo sobre el
+  mapa, `Game.pressTile`), con cualquier movimiento propio y con un `FullMapView`.
+  Mientras dura, el camino por click y el mouse mantenido lo rodean: `Steering.plan` no
+  pasa por esa casilla al planear desde donde empezó el paso (`refusedStep`).
 - E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
   sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la

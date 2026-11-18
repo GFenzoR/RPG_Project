@@ -7,11 +7,11 @@
 // closes. Pure: no DOM, no clock (callers pass `now`).
 import { Direction } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
-import { samePos, step } from "./geometry.ts";
+import { delta, samePos, step } from "./geometry.ts";
 import type { Pos } from "./geometry.ts";
 import { stepChoices, towardDirection } from "./motion.ts";
 import { findPath } from "./path.ts";
-import { pathPassable } from "./portals.ts";
+import { movesOnStep, pathPassable } from "./portals.ts";
 import type { Portals } from "./portals.ts";
 import type { WorldState } from "./world.ts";
 
@@ -33,9 +33,10 @@ export const ROUTE_REPLANS = 10;
 export const ROUTE_REFUSALS = 2;
 
 /**
- * How long a search toward the held cursor that found no way is not tried again from the
- * same tile to the same one: the mouse held against a wall decides every frame (canStep
- * stays open while the player stands), and an A* over the known area each frame is waste.
+ * How long a search toward the held cursor that found no way (or a way whose first step
+ * cannot be taken) is not tried again from the same tile to the same one: the mouse held
+ * against a wall decides every frame (canStep stays open while the player stands), and an
+ * A* over the known area each frame is waste.
  */
 export const NO_WAY_MS = 250;
 
@@ -98,6 +99,8 @@ export class Steering {
   mark: WalkMark | undefined;
   /** The last search toward the held cursor that found no way (NO_WAY_MS). */
   private noWay: { from: Pos; goal: Pos; at: number } | undefined;
+  /** Where the own creature is drawn, written each frame of a hold (no object per frame). */
+  private readonly drawn = { x: 0, y: 0 };
 
   constructor(private readonly cfg: SteerConfig) {}
 
@@ -110,10 +113,13 @@ export class Steering {
    * A click to walk to `goal` (docs/17 MOV-4): plans the route from where the client has
    * the player (after the steps it already predicted, which still run) and replaces the
    * route before. No way there (or the own tile): the route ends there. Returns whether
-   * there is one; the mark says it either way (not for the own tile).
+   * there is one; the mark says it either way (not for the own tile). A click is a fresh
+   * intent, like a fresh key press: a step the server refused is tried again
+   * (WorldState.retryWalk), one refusal and one message a click.
    */
   walkTo(world: WorldState, goal: Pos, now: number): boolean {
     this.route = undefined;
+    world.retryWalk();
     const s = world.self;
     if (!s) return false;
     if (samePos(s.pos, goal)) return false;
@@ -177,10 +183,13 @@ export class Steering {
 
   /**
    * MOV-3: one step toward the cursor, by its angle from the drawn player (8 directions);
-   * a blocked diagonal slides along its free half, like a key. Blocked: the first step of
-   * an A* toward the tile under the cursor, kept as a detour while the cursor points the
-   * same way (else, round a U of walls, the next step would walk straight back in). No way:
-   * the player turns that way.
+   * a blocked diagonal slides along its free half, like a key. Never straight onto stairs,
+   * a hole or a teleport on the way (the player would land on another floor): only onto
+   * the tile under the cursor, like a click's route. Blocked: the first step of an A*
+   * toward the tile under the cursor, kept as a detour while the cursor points the same way
+   * (else, round a U of walls, the next step would walk straight back in). No way: the
+   * player turns that way. Held against a wall it runs every frame: it makes no object then
+   * (docs/07).
    */
   private toward(
     world: WorldState,
@@ -189,7 +198,7 @@ export class Steering {
   ): StepChoice | undefined {
     const s = world.self;
     if (!s) return undefined;
-    const drawn = world.drawPos(s, now);
+    const drawn = world.drawPos(s, now, this.drawn);
     const dir = towardDirection(at.x - drawn.x - 0.5, at.y - drawn.y - 0.5);
     if (dir === Direction.UNSPECIFIED) {
       this.route = undefined;
@@ -200,20 +209,34 @@ export class Steering {
       if (next) return next;
     }
     this.route = undefined;
+    const from = s.pos;
+    const gx = Math.floor(at.x);
+    const gy = Math.floor(at.y);
     for (const d of stepChoices(dir)) {
+      const [dx, dy] = delta(d);
+      const x = from.x + dx;
+      const y = from.y + dy;
+      if ((x !== gx || y !== gy) && movesOnStep(this.cfg.portals, x, y, from.z)) continue;
       const seq = world.predictStep(d, now);
       if (seq !== undefined) return { kind: "walk", dir: d, seq };
     }
-    const goal = { x: Math.floor(at.x), y: Math.floor(at.y), z: s.pos.z };
     const n = this.noWay;
-    const known = n && now - n.at < NO_WAY_MS && samePos(n.from, s.pos) && samePos(n.goal, goal);
-    const steps = known ? undefined : this.plan(world, s.pos, goal, []);
-    if (!known && !steps?.length) this.noWay = { from: s.pos, goal, at: now };
+    if (
+      n &&
+      now - n.at < NO_WAY_MS &&
+      samePos(n.from, from) &&
+      n.goal.x === gx &&
+      n.goal.y === gy &&
+      n.goal.z === from.z
+    )
+      return world.turn(dir);
+    const goal = { x: gx, y: gy, z: from.z };
+    const steps = this.plan(world, from, goal, []);
     if (steps && steps.length > 0) {
       this.route = {
         goal,
         steps,
-        from: s.pos,
+        from,
         replans: 0,
         refusals: 0,
         avoid: [],
@@ -223,7 +246,9 @@ export class Steering {
       const next = this.follow(world, now);
       if (next) return next;
     }
-    return world.chooseStep(dir, now); // nothing open: turn that way
+    // No way, or its first step cannot be taken: not searched again for a while.
+    this.noWay = { from, goal, at: now };
+    return world.turn(dir); // the steps ahead were tried already: turn that way
   }
 
   /** The route's next step, planned again first if the player is off it or it closed. */
@@ -261,18 +286,27 @@ export class Steering {
     return true;
   }
 
-  /** A* over the free tiles the client knows, round portals but the goal (state/path.ts). */
+  /**
+   * A* over the free tiles the client knows, round portals but the goal (state/path.ts),
+   * and off the tile of the step the server refused (WorldState.refusedStep) when planning
+   * from where that step started: predictStep would not take it, so a way through it would
+   * lead nowhere.
+   */
   private plan(
     world: WorldState,
     from: Pos,
     goal: Pos,
     avoid: readonly Pos[],
   ): Direction[] | undefined {
+    const r = world.refusedStep;
+    const refused = r && samePos(r.from, from) ? r.to : undefined;
     const passable = pathPassable(
       this.cfg.portals,
       goal,
       (x, y) =>
-        world.free(x, y, goal.z) && !avoid.some((a) => a.x === x && a.y === y && a.z === goal.z),
+        world.free(x, y, goal.z) &&
+        !(refused && refused.x === x && refused.y === y && refused.z === goal.z) &&
+        !avoid.some((a) => a.x === x && a.y === y && a.z === goal.z),
     );
     return findPath(from, goal, passable, {
       diagonalCost: this.cfg.diagonalCost,

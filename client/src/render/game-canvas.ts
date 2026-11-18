@@ -126,7 +126,8 @@ export interface GameCanvas {
   clientToTile(clientX: number, clientY: number): Pos | undefined;
   /**
    * The point of the own floor under page coordinates, in fractional tiles (tile x spans
-   * [x, x + 1)), also outside the canvas (the mouse held on the map, docs/17 MOV-3).
+   * [x, x + 1)), also outside the canvas (the mouse held on the map, docs/17 MOV-3). The
+   * same object every call (asked every frame of a hold): read it before the next.
    */
   worldAt(clientX: number, clientY: number): { x: number; y: number } | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
@@ -195,7 +196,7 @@ export interface GameCanvasOptions {
   /** docs/17 MOV-7: the last click-to-walk's mark (a ring on its tile for MARK_MS). */
   walkMark?(): WalkMark | undefined;
   /**
-   * docs/17 MOV-7, UI-5: the default action on a tile, shown beside a resting mouse
+   * docs/17 MOV-7, UI-5: the default action on a tile, shown beside the mouse over it
    * ("" = nothing to show).
    */
   hoverText?(x: number, y: number, z: number): string;
@@ -1009,6 +1010,8 @@ export async function createGameCanvas(
     showHint(now);
   });
 
+  /** worldAt's answer, reused. */
+  const heldPoint = { x: 0, y: 0 };
   const toCanvas = (clientX: number, clientY: number): { x: number; y: number } => {
     const r = canvas.getBoundingClientRect();
     return {
@@ -1142,7 +1145,8 @@ export async function createGameCanvas(
     if (p?.lp.holding) opts.holdEnd?.();
   };
 
-  // docs/17 MOV-7, UI-5: the default action on the tile under a resting mouse, beside it.
+  // docs/17 MOV-7, UI-5: the default action on the tile under the mouse, beside it, as soon
+  // as the mouse moves over it (no wait for it to rest).
   // Its text is a CSS attr(): not text of the page (no locator or screen reader finds it).
   const hint = document.createElement("div");
   hint.className = "map-hint";
@@ -1309,8 +1313,11 @@ export async function createGameCanvas(
     },
     worldAt(clientX, clientY) {
       if (!world.self) return undefined;
-      const p = toCanvas(clientX, clientY);
-      return screenToWorld(cam, p.x, p.y, T);
+      // No object of its own (toCanvas makes one): a hold asks every frame (docs/07).
+      const r = canvas.getBoundingClientRect();
+      const sx = ((clientX - r.left) * canvas.width) / r.width;
+      const sy = ((clientY - r.top) * canvas.height) / r.height;
+      return screenToWorld(cam, sx, sy, T, heldPoint);
     },
     markIcon(mark) {
       const path = markPath(mark);

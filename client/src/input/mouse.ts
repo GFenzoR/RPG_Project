@@ -85,6 +85,19 @@ export interface PressAnswer extends PressOptions {
   walked: boolean;
 }
 
+/**
+ * What a plain left press on a map tile can do (Game.pressTile), by docs/17 MOV-3 and
+ * MOV-4: while a tool or a spell aims or an item waits to be placed (`aiming`), only a click
+ * on release (or a drag); on a tile with an item to move (`movable`), a drag moves it and
+ * the click walks on release; else the walk there starts on the press. Held, it walks
+ * toward the cursor, but never while aiming.
+ */
+export function pressAnswer(aiming: boolean, movable: boolean): PressAnswer {
+  if (aiming) return { walked: false, drag: true, hold: false };
+  if (movable) return { walked: false, drag: true, hold: true };
+  return { walked: true, drag: false, hold: true };
+}
+
 /** What a pointer event did to a left press: it became a drag or a hold. */
 export type PressChange = "drag" | "hold" | undefined;
 

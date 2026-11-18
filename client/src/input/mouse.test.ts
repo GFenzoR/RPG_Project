@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HOLD_WALK_MS, LeftPress, itemContext, mapPress } from "./mouse.ts";
+import { HOLD_WALK_MS, LeftPress, itemContext, mapPress, pressAnswer } from "./mouse.ts";
 
 const plain = { shiftKey: false, ctrlKey: false };
 const ctrl = { shiftKey: false, ctrlKey: true };
@@ -99,5 +99,20 @@ describe("LeftPress (docs/17 MOV-3)", () => {
     const p = new LeftPress(1000, 50, 50, { drag: true, hold: false }, 6);
     expect(p.tick(5000)).toBeUndefined();
     expect(p.up()).toBe("click");
+  });
+});
+
+describe("pressAnswer (Game.pressTile, docs/17 MOV-3 and MOV-4)", () => {
+  it("walks on the press on a tile with nothing to drag; held, toward the cursor", () => {
+    expect(pressAnswer(false, false)).toEqual({ walked: true, drag: false, hold: true });
+  });
+
+  it("waits for the release on a tile with an item to move: a drag moves it", () => {
+    expect(pressAnswer(false, true)).toEqual({ walked: false, drag: true, hold: true });
+  });
+
+  it("only clicks (or drags) while something aims or waits to be placed", () => {
+    expect(pressAnswer(true, false)).toEqual({ walked: false, drag: true, hold: false });
+    expect(pressAnswer(true, true)).toEqual({ walked: false, drag: true, hold: false });
   });
 });

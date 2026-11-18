@@ -131,6 +131,12 @@ describe("directions", () => {
     ]);
   });
 
+  it("make no list per call: held against a wall, they are asked every frame (docs/07)", () => {
+    for (const d of [Direction.NORTH, Direction.NORTH_EAST, Direction.SOUTH_WEST])
+      expect(stepChoices(d)).toBe(stepChoices(d));
+    expect(Object.isFrozen(stepChoices(Direction.EAST))).toBe(true);
+  });
+
   it("combine two perpendicular directions into their diagonal", () => {
     expect(combine(Direction.NORTH, Direction.EAST)).toBe(Direction.NORTH_EAST);
     expect(combine(Direction.WEST, Direction.SOUTH)).toBe(Direction.SOUTH_WEST);

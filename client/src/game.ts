@@ -1,6 +1,7 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
-// together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
-// the server says; the one thing it predicts is the own keyboard steps (a few ahead).
+// together. The client only sends intents (Walk, Turn, Logout...) and draws what the server
+// says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
+// route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
@@ -15,7 +16,7 @@ import {
   tileActions,
 } from "./input/actions.ts";
 import type { ActionKind, ItemFacts } from "./input/actions.ts";
-import { itemContext } from "./input/mouse.ts";
+import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
 import type { ControlsMode } from "./state/controls.ts";
@@ -42,7 +43,7 @@ import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { Steering } from "./state/steering.ts";
-import type { StepChoice } from "./state/steering.ts";
+import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
@@ -264,6 +265,8 @@ export class Game {
   private readonly steer: Steering;
   /** The left button held on the map (MOV-3): the cursor's page coordinates. */
   private hold: { x: number; y: number } | undefined;
+  /** decideStep's input to Steering.next, reused (asked every frame while standing). */
+  private readonly steerInput: SteerInput = {};
   /** Where the own creature was drawn on the last frames (the E2E `trail` hook). */
   private readonly trail = new MotionTrail();
   /**
@@ -1575,8 +1578,10 @@ export class Game {
     if (!this.world.canStep(now)) return;
     const key = this.keys.take() ?? this.pad.take();
     const hold = this.hold;
-    const toward = key === undefined && hold ? this.canvas?.worldAt(hold.x, hold.y) : undefined;
-    this.sendStep(this.steer.next(this.world, now, { key, toward }));
+    const input = this.steerInput;
+    input.key = key;
+    input.toward = key === undefined && hold ? this.canvas?.worldAt(hold.x, hold.y) : undefined;
+    this.sendStep(this.steer.next(this.world, now, input));
   }
 
   private sendStep(step: StepChoice | undefined): void {
@@ -1602,15 +1607,20 @@ export class Game {
    * A plain left press on a map tile (docs/17 MOV-3, MOV-7): with nothing aimed or picked,
    * a tile without an item to drag is walked to at once (the first step leaves on the
    * press, not on the release); one with an item waits, so a drag moves the item and a
-   * release walks. Held, it walks toward the cursor either way.
+   * release walks. Held, it walks toward the cursor either way. A press is a fresh intent,
+   * like a fresh key press: a step the server refused is tried again (one refusal and one
+   * message a press, WorldState.retryWalk); the hold it may become does not retry again.
    */
   private pressTile(pos: Pos): PressAnswer {
-    if (this.picker.picked || this.pending) return { walked: false, drag: true, hold: false };
-    const top = topItem(this.world, pos.x, pos.y, pos.z, false);
-    if (top && this.opts.content.items[top.itemId]?.fixed !== true)
-      return { walked: false, drag: true, hold: true };
-    this.click({ pos });
-    return { walked: true, drag: false, hold: true };
+    const aiming = this.picker.picked !== undefined || this.pending !== undefined;
+    const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
+    const answer = pressAnswer(
+      aiming,
+      top !== undefined && this.opts.content.items[top.itemId]?.fixed !== true,
+    );
+    if (!aiming) this.world.retryWalk();
+    if (answer.walked) this.click({ pos });
+    return answer;
   }
 
   /**
@@ -1619,7 +1629,8 @@ export class Game {
    * click) does there. "" for none: bare ground, the own tile with nothing on it.
    */
   private hoverText(pos: Pos): string {
-    if (this.pending || this.picker.picked) return "";
+    // Nothing over an open menu (the right click's, z-index under the text's).
+    if (this.pending || this.picker.picked || this.menu) return "";
     const { x, y, z } = pos;
     const c = this.world.creatureAt(x, y, z);
     const other = c && c.id !== this.world.selfId ? c : undefined;

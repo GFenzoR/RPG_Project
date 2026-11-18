@@ -168,17 +168,37 @@ export function slideLeft(s: Slide | undefined, now: number): { x: number; y: nu
   return { x: s.x * k, y: s.y * k };
 }
 
+function choicesOf(d: Direction): readonly Direction[] {
+  const [dx, dy] = delta(d);
+  if (dx === 0 || dy === 0) return Object.freeze([d]);
+  const h = dx > 0 ? Direction.EAST : Direction.WEST;
+  const v = dy > 0 ? Direction.SOUTH : Direction.NORTH;
+  return Object.freeze([d, h, v]);
+}
+
+/** stepChoices of every direction, made once. */
+const STEP_CHOICES: ReadonlyMap<Direction, readonly Direction[]> = new Map(
+  [
+    Direction.UNSPECIFIED,
+    Direction.NORTH,
+    Direction.NORTH_EAST,
+    Direction.EAST,
+    Direction.SOUTH_EAST,
+    Direction.SOUTH,
+    Direction.SOUTH_WEST,
+    Direction.WEST,
+    Direction.NORTH_WEST,
+  ].map((d) => [d, choicesOf(d)]),
+);
+
 /**
  * The steps to try for a wanted direction, in order: the direction, and for a diagonal its
  * horizontal then its vertical half. Walking north-east along a wall to the north slides
- * east instead of stopping.
+ * east instead of stopping. The same frozen list every call: a key or the mouse held
+ * against a wall asks every frame (docs/07: nothing made per frame).
  */
-export function stepChoices(d: Direction): Direction[] {
-  const [dx, dy] = delta(d);
-  if (dx === 0 || dy === 0) return [d];
-  const h = dx > 0 ? Direction.EAST : Direction.WEST;
-  const v = dy > 0 ? Direction.SOUTH : Direction.NORTH;
-  return [d, h, v];
+export function stepChoices(d: Direction): readonly Direction[] {
+  return STEP_CHOICES.get(d) ?? choicesOf(d);
 }
 
 /** tan(22.5°): the edge between a straight sector and a diagonal one of the eight directions. */

@@ -177,7 +177,8 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   }
   await shot(page, "05-walked-keyboard");
 
-  // 2 more by clicking a tile two columns to the right (WalkPath).
+  // 2 more by clicking a tile two columns to the right (the client's route, each step a
+  // Walk).
   expect(await walkable(x + 1, y)).toBe(true);
   expect(await walkable(x + 2, y)).toBe(true);
   const target = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {

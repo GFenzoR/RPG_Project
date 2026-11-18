@@ -11,6 +11,7 @@ import {
 } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
+import { delta } from "./geometry.ts";
 import { PREDICT_TIMEOUT_MS, STEP_LEAD_MS } from "./motion.ts";
 import { NO_WAY_MS, ROUTE_REFUSALS, ROUTE_REPLANS, Steering } from "./steering.ts";
 import type { StepChoice } from "./steering.ts";
@@ -61,10 +62,10 @@ const STEP = 500;
 
 /**
  * A world from rows of text ('.' grass, '#' a crate, '@' the player on grass, 'm' a monster
- * on grass), its top-left tile at (X0, Y0).
+ * on grass), its top-left tile at (X0, Y0), with the portals given (ClientContent.portals).
  */
-function world(rows: string[]): WorldState {
-  const w = new WorldState(content);
+function world(rows: string[], portals?: Record<string, string>): WorldState {
+  const w = new WorldState(portals ? { ...content, portals } : content);
   w.apply(
     {
       case: "welcome",
@@ -134,6 +135,16 @@ const steer = () => new Steering({ diagonalCost: 1.5, maxPathTiles: 100 });
 const self = (w: WorldState) => w.self as CreatureState;
 const at = (x: number, y: number) => ({ x: X0 + x, y: Y0 + y, z: 7 });
 const pos = (x: number, y: number) => ({ $typeName: "game.v1.Position" as const, x, y, z: 7 });
+
+/** The server refuses the step `dir` from (x, y) (an invisible creature, a house door...). */
+function refuse(w: WorldState, s: Steering, x: number, y: number, dir: Direction, now: number) {
+  const msg = {
+    case: "walkRejected" as const,
+    value: { $typeName: "game.v1.WalkRejected" as const, pos: pos(x, y), dir, walkEpoch: 2 },
+  };
+  w.apply(msg, now);
+  s.heard(msg);
+}
 
 /** The server takes the oldest predicted step (its CreatureMove with the Walk's seq). */
 function confirm(w: WorldState, now: number): void {
@@ -317,6 +328,20 @@ describe("Steering: click-to-walk, predicted (docs/17 MOV-4)", () => {
     expect(sent).toBe(ROUTE_REPLANS + 1); // the first plan and its replans
   });
 
+  it("a click tries a step the server refused once more, like a fresh key press", () => {
+    // An arrow east is refused: someone stood at the far end of the stairs, or the PvP
+    // lock lasted, and it is over now.
+    const w = world(["@.....", "......"]);
+    const s = steer();
+    expect(w.chooseStep(Direction.EAST, 0)).toMatchObject({ kind: "walk", dir: Direction.EAST });
+    refuse(w, s, X0, Y0, Direction.EAST, 300);
+    expect(w.chooseStep(Direction.EAST, 400)).toBeUndefined(); // a held key: not again
+    // A click on the tile east: the Walk goes out (one refusal, one message a click).
+    expect(s.walkTo(w, at(1, 0), 1000)).toBe(true);
+    expect(s.mark).toMatchObject({ reachable: true });
+    expect(s.next(w, 1000, {})).toMatchObject({ kind: "walk", dir: Direction.EAST });
+  });
+
   it("is dropped by a teleport", () => {
     const w = world(["@....."]);
     const s = steer();
@@ -397,6 +422,61 @@ describe("Steering: the mouse held on the map (docs/17 MOV-3)", () => {
     const before = looks;
     s.next(w, NO_WAY_MS + 10, held(NO_WAY_MS + 10));
     expect(looks - before).toBe(search); // after NO_WAY_MS it searches again
+  });
+
+  it("goes round a step the server refused, without an A* every frame", () => {
+    // An arrow east was refused (an invisible creature on the tile east, say).
+    const w = world(["@.....", "......"]);
+    const s = steer();
+    w.chooseStep(Direction.EAST, 0);
+    refuse(w, s, X0, Y0, Direction.EAST, 300);
+    // The mouse held past it: round it, not into it (predictStep would not take it).
+    expect(s.next(w, 1000, cursor(w, 3, 0)(1000))).toMatchObject({
+      kind: "walk",
+      dir: Direction.SOUTH,
+    });
+    // In a corridor there is no way round: it turns and does not search again each frame.
+    const c = world(["@....."]);
+    const t = steer();
+    c.chooseStep(Direction.EAST, 0);
+    refuse(c, t, X0, Y0, Direction.EAST, 300);
+    let looks = 0;
+    const free = c.free.bind(c);
+    c.free = (x, y, z) => {
+      looks++;
+      return free(x, y, z);
+    };
+    const held = cursor(c, 3, 0);
+    expect(t.next(c, 1000, held(1000))).toBeUndefined(); // it faces east already
+    const first = looks;
+    let frames = 0;
+    for (let now = 1010; now < 1000 + NO_WAY_MS; now += 10, frames++) t.next(c, now, held(now));
+    expect(looks - first).toBeLessThanOrEqual(frames); // the step ahead only
+    expect(self(c).pos).toEqual(at(0, 0));
+  });
+
+  it("never steps onto stairs, a hole or a teleport on the way, only onto the one held", () => {
+    const portals = { [`${X0 + 1},${Y0},7`]: "hole" };
+    const cfg = { portals, diagonalCost: 1.5, maxPathTiles: 100 };
+    // The cursor past a hole: round it, the camera following (the cursor points east).
+    const w = world(["@.....", "......"], portals);
+    const sent = run(w, new Steering(cfg), 0, 2500, cursor(w, 3, 0));
+    expect(sent[0]).toBe(Direction.SOUTH);
+    let x = X0;
+    let y = Y0;
+    for (const d of sent) {
+      const [dx, dy] = delta(d);
+      x += dx;
+      y += dy;
+      expect({ x, y }).not.toEqual({ x: X0 + 1, y: Y0 });
+    }
+    expect(x).toBeGreaterThan(X0 + 1); // went on past it
+    // The cursor on the hole itself: down it goes, like a click on it.
+    const v = world(["@.....", "......"], portals);
+    expect(new Steering(cfg).next(v, 0, cursor(v, 1, 0)(0))).toMatchObject({
+      kind: "walk",
+      dir: Direction.EAST,
+    });
   });
 
   it("turns toward the cursor when no way leads there", () => {

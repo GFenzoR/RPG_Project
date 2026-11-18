@@ -549,6 +549,9 @@ vale esto.**
   - Si la dirección está bloqueada, da el primer paso de un A* hacia la casilla bajo el
     cursor y **sigue ese rodeo mientras el cursor apunte al mismo lado**. Con solo el
     primer paso, en una U de muros el personaje salía y volvía a entrar. Sin camino, gira.
+  - No pisa en línea recta una escalera, un agujero o un teletransporte salvo que sea la
+    casilla bajo el cursor, igual que el camino del click: arrastrar el cursor por encima
+    de un agujero no cambia de piso sin querer (un agujero puede pedir soga para volver).
   - La cámara sigue al personaje: el cursor quieto en la pantalla sigue apuntando igual y
     se camina en línea, como en Diablo 2.
   - El puntero queda capturado (`setPointerCapture`): soltar fuera del canvas también
@@ -561,12 +564,14 @@ vale esto.**
   - Un anillo de 300 ms en la casilla del click, que se cierra y se desvanece
     (`render/walk-mark.ts`): dorado si hay camino; rojo si no (y el camino de antes
     termina).
-  - El texto de la acción por defecto junto al mouse quieto sobre el mapa (UI-5): "Atacar
+  - El texto de la acción por defecto junto al mouse sobre el mapa (UI-5), apenas pasa por
+    la casilla y sin esperar a que se quede quieto: "Atacar
     a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila" (`client.action.*`). Sale de
     `defaultAction` (`input/actions.ts`): la primera opción del menú de esa casilla. No
     aparece sobre el suelo pelado ni sobre un adorno que no hace nada al usarlo (un árbol,
     un muro); sí sobre una estación, el tablero del mercado o una puerta. Es un `attr()`
-    de CSS: no es texto de la página para los lectores de pantalla ni para los tests.
+    de CSS: no es texto de la página para los lectores de pantalla ni para los tests. Se
+    oculta mientras hay un menú abierto (lo tapaba).
   - El primer paso sale en el acto (MOV-4).
   - **No se hizo: polvo y ondas al pisar.** Son arte (partículas por terreno): quedan con
     las partículas de ART-7 y A13.

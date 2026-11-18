@@ -4,6 +4,7 @@ import {
   centerOn,
   pan,
   screenToTile,
+  screenToWorld,
   tileToScreen,
   visibleChunks,
   zoomAt,
@@ -17,6 +18,14 @@ describe("camera", () => {
     expect(screenToTile(cam, 0, 0, T)).toEqual({ x: 100, y: 200 });
     expect(screenToTile(cam, 63, 64, T)).toEqual({ x: 100, y: 201 });
     expect(tileToScreen(cam, 101, 202, T)).toEqual({ x: 64, y: 128 });
+  });
+
+  it("gives the fractional world point under the screen, into a reused object if given", () => {
+    const cam = { x: 100, y: 200, zoom: 2 };
+    expect(screenToWorld(cam, 96, 32, T)).toEqual({ x: 101.5, y: 200.5 });
+    const out = { x: 0, y: 0 };
+    expect(screenToWorld(cam, 32, 96, T, out)).toBe(out);
+    expect(out).toEqual({ x: 100.5, y: 201.5 });
   });
 
   it("zooms around the cursor", () => {

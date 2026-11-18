@@ -35,7 +35,7 @@ import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
-import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -362,10 +362,15 @@ export class WorldState implements TileSource {
    * way): a held movement key would predict it again as soon as a step can start, and every
    * refusal brings its message back (portal.blocked: no room on the other side;
    * house.no_access). predictStep keeps off that very step (same tile, same target) until
-   * retryWalk (a fresh press or a release of a movement key or the pad, a new direction),
-   * an own move or a full map view. Click-to-walk (WalkPath) never looks at it.
+   * retryWalk (a fresh press or a release of a movement key or the pad, a new direction,
+   * a click or a fresh press of the left button on the map), an own move or a full map
+   * view. The click's route and the mouse held (state/steering.ts) plan round it.
    */
   private refused: { from: Pos; to: Pos } | undefined;
+  /** The own step the server refused last (`refused`), while the client keeps off it. */
+  get refusedStep(): Readonly<{ from: Pos; to: Pos }> | undefined {
+    return this.refused;
+  }
   /** Whether the player is invisible (its own condition): it is drawn see-through. */
   get invisible(): boolean {
     return this.conditions.some((c) => c.id === "invisible");
@@ -808,7 +813,8 @@ export class WorldState implements TileSource {
         const s = this.self;
         const back = msg.value.pos ? posOf(msg.value.pos) : undefined;
         // The refusal of a predicted step itself (the server says the refused step's
-        // direction and where the player stands), not of a step of a WalkPath.
+        // direction and where the player stands), not of a step the server took on its own
+        // (a chase).
         const p = steps.find(
           (q) => back && samePos(back, q.from) && msg.value.dir === directionTo(q.from, q.to),
         );
@@ -1144,10 +1150,13 @@ export class WorldState implements TileSource {
   stepOpen(dir: Direction): boolean {
     const s = this.self;
     if (!s) return false;
-    const to = step(s.pos, dir);
-    if (!this.free(to.x, to.y, to.z)) return false;
+    // No Pos made: the mouse held against a wall asks this every frame (docs/07).
+    const [dx, dy] = delta(dir);
+    const x = s.pos.x + dx;
+    const y = s.pos.y + dy;
+    if (!this.free(x, y, s.pos.z)) return false;
     const r = this.refused;
-    return !(r && samePos(r.from, s.pos) && samePos(r.to, to));
+    return !(r && samePos(r.from, s.pos) && r.to.x === x && r.to.y === y && r.to.z === s.pos.z);
   }
 
   /**
@@ -1197,7 +1206,16 @@ export class WorldState implements TileSource {
       const seq = this.predictStep(d, now);
       if (seq !== undefined) return { kind: "walk", dir: d, seq };
     }
-    if (this.predicted.length > 0) return undefined;
+    return this.turn(dir);
+  }
+
+  /**
+   * Turns the own creature toward `dir` without a step (chooseStep's "nothing open"): only
+   * with every step confirmed and when the facing changes; the Turn to send, if any.
+   */
+  turn(dir: Direction): { kind: "turn"; dir: Direction } | undefined {
+    const s = this.self;
+    if (!s || this.predicted.length > 0) return undefined;
     if (s.dir === dir || dir === Direction.UNSPECIFIED) return undefined;
     s.dir = dir;
     return { kind: "turn", dir };
@@ -1225,9 +1243,14 @@ export class WorldState implements TileSource {
 
   /**
    * Where to draw a creature (fractional tiles): along the step drawn now (waiting at its
-   * start before it begins), plus what is left of a correction gliding out.
+   * start before it begins), plus what is left of a correction gliding out. Written into
+   * `out` when given (a caller asking every frame makes no object, docs/07).
    */
-  drawPos(c: CreatureState, now: number): { x: number; y: number } {
+  drawPos(
+    c: CreatureState,
+    now: number,
+    out: { x: number; y: number } = { x: 0, y: 0 },
+  ): { x: number; y: number } {
     const w = this.activeWalk(c, now);
     let x = c.pos.x;
     let y = c.pos.y;
@@ -1243,9 +1266,13 @@ export class WorldState implements TileSource {
       y = w.to.y;
     }
     const left = slideLeft(c.slide, now);
-    if (left) return { x: x + left.x, y: y + left.y };
-    if (c.slide) c.slide = undefined;
-    return { x, y };
+    if (left) {
+      x += left.x;
+      y += left.y;
+    } else if (c.slide) c.slide = undefined;
+    out.x = x;
+    out.y = y;
+    return out;
   }
 }
 

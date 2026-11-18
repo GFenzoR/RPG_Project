@@ -866,8 +866,8 @@ body.using-item canvas {
   cursor: crosshair !important;
 }
 
-/* docs/17 MOV-7, UI-5: the default action on the tile under a resting mouse, beside the
-   cursor (render/game-canvas.ts). The text is a CSS attr(), never taking the pointer. */
+/* docs/17 MOV-7, UI-5: the default action on the tile under the mouse, beside the cursor
+   (render/game-canvas.ts). The text is a CSS attr(), never taking the pointer. */
 .map-hint {
   position: fixed;
   left: 0;

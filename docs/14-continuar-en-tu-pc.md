@@ -278,6 +278,17 @@ el punto 5:
     casilla, sin espera. Mirar en el playtest si molesta al caminar con el mouse por
     zonas con muchos monstruos; se podría pedir ~300 ms quieto, como el tooltip.
   - **Mantener el mouse con el dedo:** no hay (el toque largo es el menú y está el pad).
+  - **Un click lento corta el camino del click:** una presión de 200 ms o más se vuelve
+    mantener (docs/17 MOV-3). Si un borde de paso cae en ese tiempo, el mantener toma el
+    mando y descarta el camino del click, y al soltar el personaje se detiene tras 1 o 2
+    pasos. Con 500 ms por paso pasa con clicks de más de ~450 ms; con un personaje rápido,
+    desde ~350 ms. Es lo que dice MOV-3; mirar en el playtest si molesta (la salida sería
+    que el mantener siga el camino del click mientras el cursor quede sobre su destino).
+  - **Anillo rojo antes del doble click (controles de menú):** el primer click sobre una
+    estación, una puerta, el tablero o un monstruo ya intenta caminar hasta esa casilla,
+    que no se pisa: el anillo rojo de "sin camino" sale justo antes de que el doble click
+    use o ataque. Decidir en el playtest si un click sobre algo que se usa o se ataca
+    debería no marcar nada, o caminar hasta la casilla de al lado.
   - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
     tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
     mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.

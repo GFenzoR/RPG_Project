@@ -47,8 +47,8 @@ defecto (abrir, usar con, comer, equipar o usar). Para usar al instante: **doble
   para pelear); Mayús+click derecho abre su menú;
 - Mayús+click izquierdo mira (el texto del servidor); pasar el mouse sobre un objeto del
   inventario, la tienda o el intercambio muestra su ficha;
-- con el mouse quieto sobre el mapa, junto al cursor se lee la acción por defecto de esa
-  casilla ("Atacar a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila"); nada sobre el
+- con el mouse sobre el mapa, junto al cursor se lee la acción por defecto de esa
+  casilla (apenas pasa por ella, sin esperar a que se quede quieto) ("Atacar a lobo", "Hablar con Tilde", "Trepar", "Abrir mochila"); nada sobre el
   suelo pelado ni sobre un adorno que no hace nada al usarlo (docs/17 MOV-7, UI-5);
 - el click izquierdo camina hasta la casilla y el botón izquierdo mantenido camina hacia
   el cursor ("Movimiento");
@@ -71,7 +71,9 @@ el doble click o Ctrl+click derecho.
   (una criatura que el cliente no veía) o una criatura se mete en el camino, el cliente
   vuelve deslizándose y lo rodea; un segundo paso rechazado lo detiene (así una zona en
   la que no puede entrar no repite su aviso casilla por casilla). Un anillo dorado marca
-  la casilla 300 ms; rojo si no hay camino, y el personaje se detiene. Una tecla durante
+  la casilla 300 ms; rojo si no hay camino, y el personaje se detiene. Un click nuevo,
+  como una tecla pulsada de nuevo, vuelve a intentar un paso que el servidor rechazó (una
+  vez por click); mientras siga rechazado, el camino lo rodea. Una tecla durante
   el camino lo termina en el próximo borde de casilla. Con el doble click (controles de
   menú) el camino del primer click termina: los pasos ya mandados se dan.
 - **Mantener el botón izquierdo sobre el mapa** (más de 200 ms quieto, o arrastrando
@@ -80,7 +82,8 @@ el doble click o Ctrl+click derecho.
   personaje. La cámara lo sigue, así que el cursor quieto en la pantalla sigue apuntando
   igual. Contra un muro se desliza como la tecla; si la dirección está bloqueada, rodea
   hacia la casilla bajo el cursor mientras siga apuntando al mismo lado; sin camino,
-  gira. Al soltar se dan los pasos ya mandados. Sobre una casilla con un item, arrastrar
+  gira. Como el click, no pisa escaleras, agujeros ni teletransportes salvo la casilla
+  bajo el cursor. Al soltar se dan los pasos ya mandados. Sobre una casilla con un item, arrastrar
   antes de los 200 ms sigue moviendo el item. Con el dedo no hay mantener: está el pad.
 - **Movimiento fluido** (al estilo de Diablo 2, pero por casillas y con el servidor como
   juez). Mantener una tecla camina casilla tras casilla sin detenerse entre ellas: el
