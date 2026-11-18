@@ -398,6 +398,7 @@ class TheReuse(unittest.TestCase):
         self.assertFalse(mi._settings_match(dict(now, analysis=mc.ANALYSIS - 1), 48))
 
 
+@unittest.skipUnless(_has_opus(), "no ffmpeg with libopus (PATH or imageio-ffmpeg)")
 class TheImport(unittest.TestCase):
     def test_a_pick_comes_in_credited_and_none_takes_it_out(self):
         with tempfile.TemporaryDirectory() as root:
