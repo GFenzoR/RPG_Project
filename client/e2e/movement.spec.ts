@@ -236,8 +236,12 @@ async function motion(
     t: s.t,
     d: (s.x - start.x) * way.dx + (s.y - start.y) * way.dy,
   }));
-  const first = along.findIndex((s) => s.d > 0);
-  const last = along.findIndex((s) => s.d >= tiles);
+  // The window can begin on the end of the walk before, which ended on `start` and may have
+  // come back along `way` (ArrowRight, the first of WAYS, after ten tiles to the left): the
+  // walk measured begins after the drawing first stands at or behind the start.
+  const home = along.findIndex((s) => s.d <= 0);
+  const first = along.findIndex((s, i) => i > home && s.d > 0);
+  const last = along.findIndex((s, i) => i > first && s.d >= tiles);
   expect(first).toBeGreaterThan(0);
   expect(last).toBeGreaterThan(first);
   const walking = along.slice(first - 1, last + 1);
