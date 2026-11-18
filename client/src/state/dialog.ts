@@ -97,3 +97,30 @@ export function filterButtons(
 export function fold(s: string): string {
   return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
+
+/** How fast an NPC's words appear (docs/17 UI-8: 90 characters a second). */
+export const TYPE_CPS = 90;
+
+/**
+ * How many characters of a text of `length` show `ms` after it started appearing, letter
+ * by letter at `cps` a second: all of them once done (or when ms is not a number).
+ */
+export function typedLength(length: number, ms: number, cps = TYPE_CPS): number {
+  if (!(ms >= 0) || !(cps > 0)) return length;
+  return Math.min(length, Math.floor((ms * cps) / 1000));
+}
+
+/** How long a text of `length` characters takes to appear whole, ms. */
+export const typingMs = (length: number, cps = TYPE_CPS): number =>
+  Math.ceil((length * 1000) / cps);
+
+/**
+ * A text cut where the typewriter is: what shows and what is still to come (kept in the
+ * page invisible, so the box has its final size from the start and nothing jumps). By
+ * characters as people see them (code points: an emoji or a "ñ" is never split).
+ */
+export function typedParts(text: string, shown: number): { shown: string; rest: string } {
+  const chars = [...text];
+  const n = Math.max(0, Math.min(shown, chars.length));
+  return { shown: chars.slice(0, n).join(""), rest: chars.slice(n).join("") };
+}

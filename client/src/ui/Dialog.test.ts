@@ -126,6 +126,55 @@ describe("DialogView (docs/17 UI-8)", () => {
     expect(byAttr(tree, "data-testid", "dialog-filter")).toHaveLength(0);
   });
 
+  it("the NPC's words appear letter by letter; a click shows them whole", () => {
+    let skipped = 0;
+    const tree = DialogView({
+      t,
+      content,
+      dialog: dialog([]),
+      selfName: "Aldric",
+      portrait: undefined,
+      query: "",
+      onQuery: () => undefined,
+      choose: () => undefined,
+      close: () => undefined,
+      typed: 5,
+      onSkip: () => void skipped++,
+    });
+    const said = 'npc.priest.greet{"name":"Aldric"}';
+    const p = byAttr(tree, "class", "npc-text")[0];
+    expect(p?.props["data-typing"]).toBe("");
+    // Screen readers (and the tests) get the whole text; the rest waits invisible.
+    expect(texts(byAttr(tree, "class", "visually-hidden")[0])).toEqual([said]);
+    expect(texts(byAttr(tree, "class", "npc-rest")[0])).toEqual([said.slice(5)]);
+    (p?.props["onClick"] as () => void)();
+    expect(skipped).toBe(1);
+    // Whole: one plain paragraph.
+    const done = view(dialog([])).tree;
+    const q = byAttr(done, "class", "npc-text")[0];
+    expect(q?.props["data-typing"]).toBeUndefined();
+    expect(texts(q)).toEqual([said]);
+  });
+
+  it("framed in a GameWindow, it leaves the header and the test id to the frame", () => {
+    const tree = DialogView({
+      t,
+      content,
+      dialog: dialog([]),
+      selfName: "Aldric",
+      portrait: undefined,
+      query: "",
+      onQuery: () => undefined,
+      choose: () => undefined,
+      close: () => undefined,
+      framed: true,
+    }) as Node;
+    expect(tree.props["data-testid"]).toBeUndefined();
+    expect(tree.props["role"]).toBeUndefined();
+    expect(nodes(tree).some((n) => n.type === "h2")).toBe(false);
+    expect((view(dialog([])).tree as Node).props["data-testid"]).toBe("dialog");
+  });
+
   it("Goodbye closes the dialog when the node has no goodbye option", () => {
     const { tree, closed, chosen } = view(dialog([opt(1, "npc.priest.opt_heal")]));
     const bye = byAttr(tree, "data-testid", "dialog-bye")[0];

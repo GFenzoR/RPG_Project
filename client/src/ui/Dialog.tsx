@@ -18,7 +18,15 @@ import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { formatMessage } from "../state/messages.ts";
 import type { DialogState, ShopLine, ShopState } from "../state/world.ts";
-import { FILTER_FROM, dialogLayout, filterButtons } from "../state/dialog.ts";
+import {
+  FILTER_FROM,
+  dialogLayout,
+  filterButtons,
+  typedLength,
+  typedParts,
+} from "../state/dialog.ts";
+import { typingInField } from "../input/keyboard.ts";
+import { motionReduced } from "../state/ui-prefs.ts";
 import type { DialogLayout, DialogOption } from "../state/dialog.ts";
 import {
   filterShop,
@@ -46,6 +54,11 @@ interface Props {
   ui: GameUi;
   /** A phone or tablet (layout.ts): the shop's grid takes the screen's width. */
   compact?: boolean | undefined;
+  /**
+   * Inside a GameWindow (the desktop, docs/17 UI-5): its title bar names the NPC or the
+   * shop and closes it, so the window's own header goes.
+   */
+  framed?: boolean | undefined;
 }
 
 /** The icon of each topic (ui/icons.tsx). */
@@ -80,10 +93,37 @@ export function DialogWindow(props: Props): JSX.Element | null {
   );
 }
 
-function DialogBox(props: Props & { dialog: DialogState }): JSX.Element {
+/**
+ * The dialog with its filter and the NPC's words appearing letter by letter (docs/17 UI-8:
+ * 90 a second; a click on them or Space shows them whole, and with reduced motion they are
+ * whole from the start). A new node starts both again: key it by the node.
+ */
+export function DialogBox(props: Props & { dialog: DialogState }): JSX.Element {
   const [query, setQuery] = useState("");
   const d = props.dialog;
   const sprite = d.npcContentId ? props.content.npcSprites?.[d.npcContentId] : undefined;
+  const length = [...props.t(d.text, { name: props.ui.selfName })].length;
+  const [start] = useState(() => performance.now());
+  const [now, setNow] = useState(start);
+  const [whole, setWhole] = useState(() => motionReduced(document.documentElement));
+  const typed = whole ? length : typedLength(length, now - start);
+  const typing = typed < length;
+  useEffect(() => {
+    if (!typing) return undefined;
+    const timer = setInterval(() => setNow(performance.now()), TYPE_TICK_MS);
+    // Space shows the words whole (a focused button keeps Space for itself).
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.code !== "Space" || e.repeat || typingInField(e)) return;
+      if (document.activeElement instanceof HTMLButtonElement) return;
+      e.preventDefault();
+      setWhole(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [typing]);
   return (
     <DialogView
       t={props.t}
@@ -95,9 +135,15 @@ function DialogBox(props: Props & { dialog: DialogState }): JSX.Element {
       onQuery={setQuery}
       choose={(id) => props.game?.chooseOption(id)}
       close={() => props.game?.closeDialog()}
+      framed={props.framed}
+      typed={typed}
+      onSkip={() => setWhole(true)}
     />
   );
 }
+
+/** How often the words that appear are drawn again, ms (90 a second: ~3 a tick). */
+const TYPE_TICK_MS = 33;
 
 /** The dialog window as a plain function (no hooks: Dialog.test.ts walks it). */
 export function DialogView(props: {
@@ -110,8 +156,17 @@ export function DialogView(props: {
   onQuery(q: string): void;
   choose(optionId: number): void;
   close(): void;
+  /** Inside a GameWindow: no header of its own (the frame's title bar). */
+  framed?: boolean | undefined;
+  /** How many characters of the NPC's words show yet (undefined: all of them). */
+  typed?: number | undefined;
+  /** A click on the words while they appear: show them whole. */
+  onSkip?: (() => void) | undefined;
 }): JSX.Element {
   const { t, content, dialog: d } = props;
+  // Greetings say the player's name ({name} in the npcs.yaml catalogs).
+  const said = t(d.text, { name: props.selfName });
+  const parts = typedParts(said, props.typed ?? Number.POSITIVE_INFINITY);
   const npcName = d.npcContentId ? t(`npc.${d.npcContentId}.name`) : "";
   const layout: DialogLayout = dialogLayout(content, d);
   // An option may carry parameters: a blessing's {price} (content audit M6).
@@ -119,27 +174,51 @@ export function DialogView(props: {
     formatMessage({ key: o.text, params: o.params, at: 0 }, content, t);
   const shown = filterButtons(layout.grid, props.query, text);
   return (
-    <section class="dialog" data-testid="dialog" role="dialog" aria-label={npcName}>
-      <header>
-        <h2>{npcName}</h2>
-        <button
-          type="button"
-          class="close"
-          aria-label={t("client.dialog.close")}
-          title={t("client.dialog.close")}
-          onClick={() => props.close()}
-        >
-          ×
-        </button>
-      </header>
+    <section
+      class="dialog"
+      // Framed, the GameWindow carries the test id (and the NPC's name as its heading).
+      data-testid={props.framed ? undefined : "dialog"}
+      role={props.framed ? undefined : "dialog"}
+      aria-label={props.framed ? undefined : npcName}
+    >
+      {!props.framed && (
+        <header>
+          <h2>{npcName}</h2>
+          <button
+            type="button"
+            class="close"
+            aria-label={t("client.dialog.close")}
+            title={t("client.dialog.close")}
+            onClick={() => props.close()}
+          >
+            ×
+          </button>
+        </header>
+      )}
       <div class="dialog-body">
         {props.portrait && (
           <span class="npc-portrait">
             <BigIcon icon={props.portrait} fit={PORTRAIT_PX} />
           </span>
         )}
-        {/* Greetings say the player's name ({name} in the npcs.yaml catalogs). */}
-        <p class="npc-text">{t(d.text, { name: props.selfName })}</p>
+        {parts.rest ? (
+          // Appearing: the rest waits invisible (the box keeps its final size) and screen
+          // readers get the whole text at once.
+          <p
+            class="npc-text"
+            data-typing=""
+            title={t("client.dialog.skip")}
+            onClick={() => props.onSkip?.()}
+          >
+            <span class="visually-hidden">{said}</span>
+            <span aria-hidden="true">
+              {parts.shown}
+              <span class="npc-rest">{parts.rest}</span>
+            </span>
+          </p>
+        ) : (
+          <p class="npc-text">{said}</p>
+        )}
       </div>
       {layout.grid.length >= FILTER_FROM && (
         <input
@@ -219,7 +298,8 @@ export const SHOP_START: ShopUiState = {
   count: 1,
 };
 
-function ShopWindow(props: Props & { shop: ShopState }): JSX.Element {
+/** The shop with its tab, filter, search, page, chosen item and count. */
+export function ShopWindow(props: Props & { shop: ShopState }): JSX.Element {
   const [s, setS] = useState<ShopUiState>(SHOP_START);
   const grid = shopGrid(window.innerWidth, window.innerHeight, props.compact === true);
   // The grid fills its row with as many cells as the window's width takes (a narrow map
@@ -254,6 +334,7 @@ function ShopWindow(props: Props & { shop: ShopState }): JSX.Element {
       buy={(id, n) => props.game?.shopBuy(id, n)}
       sell={(id, n) => props.game?.shopSell(id, n)}
       card={(id, x, y) => props.game?.openCardMenu(id, x, y)}
+      framed={props.framed}
     />
   );
 }
@@ -277,6 +358,8 @@ export function ShopView(props: {
   sell(itemId: number, count: number): void;
   /** Right click on a cell: the item's card. */
   card(itemId: number, x: number, y: number): void;
+  /** Inside a GameWindow: the money goes beside the tabs, no header of its own. */
+  framed?: boolean | undefined;
 }): JSX.Element {
   const { t, content, shop, state: s } = props;
   const nameOf = (id: number): string => {
@@ -311,6 +394,11 @@ export function ShopView(props: {
       {t(key)}
     </button>
   );
+  const money = (
+    <span class="money" data-testid="shop-money">
+      {t("client.shop.money", { money: shop.money })}
+    </span>
+  );
   const card = line
     ? itemCard(content.items[line.itemId], line.itemId, 1, {
         level: props.level,
@@ -318,13 +406,17 @@ export function ShopView(props: {
       })
     : undefined;
   return (
-    <section class="shop" data-testid="shop" aria-label={t("client.shop.title")}>
-      <header>
-        <h2>{t("client.shop.title")}</h2>
-        <span class="money" data-testid="shop-money">
-          {t("client.shop.money", { money: shop.money })}
-        </span>
-      </header>
+    <section
+      class="shop"
+      data-testid={props.framed ? undefined : "shop"}
+      aria-label={t("client.shop.title")}
+    >
+      {!props.framed && (
+        <header>
+          <h2>{t("client.shop.title")}</h2>
+          {money}
+        </header>
+      )}
       <div class="shop-top">
         <div class="tabs" role="tablist">
           {tabButton("buy", "client.shop.buy")}
@@ -339,6 +431,7 @@ export function ShopView(props: {
           value={s.query}
           onInput={(e) => props.set({ query: e.currentTarget.value, page: 0 })}
         />
+        {props.framed && money}
       </div>
       {filters.length > 2 && (
         <div class="shop-filters" role="group" aria-label={t("client.shop.categories")}>
