@@ -392,49 +392,6 @@ function boulder(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.5 });
 }
 
-/** A wooden signpost: a plank board with carved lines, nailed to a charred post. */
-function signpost(img: Image, _rand: Rng, seed: number): void {
-  // Post, lit on the left.
-  eachInRect(14, 13, 5, 16, (x, y) => {
-    const u = (x + 0.5 - 16.5) / 2.5;
-    px(img, x, y, shadeOf(darkWood, cylinderLight(u) + (hash2(x, y >> 2, seed) - 0.5) * 0.15));
-  });
-  rect(img, 13, 28, 7, 1, darkWood.deep); // where it goes into the ground
-  // Board: the lit top edge, two planks on the front, a darker frame.
-  eachInRect(4, 7, 25, 12, (x, y) => {
-    const yy = y - 7;
-    const grain = tileNoise(x, y * 3, 8, 1, seed) - 0.5;
-    let level = 0.5 + grain * 0.35;
-    if (yy === 0) level = 0.85;
-    else if (yy === 6)
-      level = 0.1; // the seam between the planks
-    else if (yy === 11) level = 0.15;
-    px(img, x, y, shadeOf(wood, level));
-  });
-  rect(img, 4, 7, 1, 12, wood.light);
-  rect(img, 28, 7, 1, 12, wood.deep);
-  // Carved letters: short gouges in two lines.
-  for (const [row, from, to] of [
-    [10, 7, 25],
-    [15, 8, 22],
-  ] as const) {
-    for (let x = from; x <= to; x++) {
-      if (hash2(x, row, seed + 1) < 0.22) continue; // gaps between the words
-      px(img, x, row, wood.deep);
-      if (hash2(x, row, seed + 2) < 0.4) px(img, x, row + 1, wood.shadow);
-    }
-  }
-  // Nails.
-  for (const [x, y] of [
-    [6, 9],
-    [26, 9],
-    [6, 16],
-    [26, 16],
-  ] as const)
-    px(img, x, y, darkIron.base);
-  outline(img, { amount: 0.5 });
-}
-
 export const TERRAIN: RecipeBook = {
   "ground/wooden_floor": { kind: "ground", draw: woodenFloor },
   "ground/dock_planks": { kind: "ground", draw: dockPlanks },
@@ -442,7 +399,6 @@ export const TERRAIN: RecipeBook = {
   "ground/basalt": { kind: "ground", draw: basaltPaving },
   "ground/cinder_path": { kind: "ground", draw: cinderPath },
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
-  "decor/signpost": { kind: "object", draw: signpost },
   "decor/cargo_crate": { kind: "object", draw: cargoCrate },
   "decor/mooring_post": { kind: "object", draw: mooringPost },
   "decor/boulder": { kind: "object", draw: boulder },
