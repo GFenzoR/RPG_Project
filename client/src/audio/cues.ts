@@ -4,7 +4,7 @@
 // the engine plays the first one sounds.yaml maps.
 import { MessageKind } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
-import type { IslandRect, LoopRules, SoundManifest } from "../content-types.ts";
+import type { IslandRect, LoopRules, MusicRules, SoundManifest } from "../content-types.ts";
 import { samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import {
@@ -111,10 +111,56 @@ export function loopFor(
   return island === undefined ? undefined : rules.islands[island];
 }
 
+/** Effects that are a blow: a hit, a block or a miss, a magic hit or an area tile. */
+const isBlow = (effectId: number): boolean =>
+  effectId === EFFECT_HIT ||
+  effectId === EFFECT_BLOCK ||
+  (effectId >= EFFECT_ELEMENT && ELEMENTS[effectId - EFFECT_ELEMENT] !== undefined);
+
+/**
+ * Whether a server message is a fight reaching the player: a blow on their own tile (a
+ * monster's hit, block or spell; or their own area spell around them). Attacking is the
+ * other half, the player's target (game.ts).
+ */
+export function blowAt(msg: ServerMessage["message"], self: Pos): boolean {
+  if (msg.case !== "effect") return false;
+  const at = pos(msg.value.pos);
+  return at !== undefined && samePos(at, self) && isBlow(msg.value.effectId);
+}
+
+/**
+ * The music for where the player is and what goes on around them: a boss in view (its
+ * content id in `bosses`, the first one listed in `inView`, closest first), then a fight
+ * (`fighting`, with a `combat` loop), then the zone's loop (loopFor). The title screen's
+ * loop is the menus' (App.tsx), never this.
+ */
+export function musicFor(
+  p: Pos,
+  islands: readonly IslandRect[],
+  rules: MusicRules,
+  inView: readonly string[],
+  fighting: boolean,
+): string | undefined {
+  for (const id of inView) {
+    const boss = rules.bosses[id];
+    if (boss !== undefined) return boss;
+  }
+  if (fighting && rules.combat !== undefined) return rules.combat;
+  return loopFor(p, islands, rules);
+}
+
 /** A manifest with no sounds (tests, a build without assets/sounds.yaml). */
 export const NO_SOUNDS: SoundManifest = {
   sounds: {},
   events: {},
-  music: { fadeMs: 0, islands: {}, underground: undefined },
+  music: {
+    fadeMs: 0,
+    islands: {},
+    underground: undefined,
+    title: undefined,
+    combat: undefined,
+    combatHoldMs: 0,
+    bosses: {},
+  },
   ambient: { fadeMs: 0, islands: {}, underground: undefined },
 };

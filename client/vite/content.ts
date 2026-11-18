@@ -34,6 +34,7 @@ import type {
   OutfitDef,
   SiteContent,
   LoopRules,
+  MusicRules,
   RecipeDef,
   SoundDef,
   SoundManifest,
@@ -536,15 +537,34 @@ export function loadCosmetics(root: string): CosmeticDef[] {
 /** Where the sound files are served: /audio/<path under assets/>. */
 export const AUDIO_PREFIX = "audio/";
 
+const stringMap = (v: unknown): Record<string, string> => {
+  const out: Record<string, string> = {};
+  if (isObj(v)) for (const [k, id] of Object.entries(v)) if (typeof id === "string") out[k] = id;
+  return out;
+};
+
 const loopRules = (v: unknown): LoopRules => {
   const l = isObj(v) ? v : {};
-  const islands: Record<string, string> = {};
-  if (isObj(l["islands"]))
-    for (const [k, id] of Object.entries(l["islands"])) if (typeof id === "string") islands[k] = id;
   return {
     fadeMs: typeof l["fade_ms"] === "number" ? l["fade_ms"] : 2000,
-    islands,
+    islands: stringMap(l["islands"]),
     underground: typeof l["underground"] === "string" ? l["underground"] : undefined,
+  };
+};
+
+/** How long the fight music outlasts the last blow or target when sounds.yaml says nothing. */
+export const COMBAT_HOLD_MS = 8000;
+
+/** The music's rules: the zone's loops plus the title screen's, a fight's and a boss's. */
+const musicRules = (v: unknown): MusicRules => {
+  const l = isObj(v) ? v : {};
+  const str = (k: string): string | undefined => (typeof l[k] === "string" ? l[k] : undefined);
+  return {
+    ...loopRules(l),
+    title: str("title"),
+    combat: str("combat"),
+    combatHoldMs: typeof l["combat_hold_ms"] === "number" ? l["combat_hold_ms"] : COMBAT_HOLD_MS,
+    bosses: stringMap(l["bosses"]),
   };
 };
 
@@ -578,7 +598,7 @@ export function loadSounds(root: string): SoundManifest {
       );
       if (ids.length > 0) events[ev] = ids;
     }
-  return { sounds, events, music: loopRules(m["music"]), ambient: loopRules(m["ambient"]) };
+  return { sounds, events, music: musicRules(m["music"]), ambient: loopRules(m["ambient"]) };
 }
 
 function loadIslands(root: string): IslandRect[] {

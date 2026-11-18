@@ -170,12 +170,26 @@ export interface LoopRules {
   underground: string | undefined;
 }
 
+/**
+ * The music's rules on top of the zone's loop: the title screen's, a fight's and a boss's
+ * (audio/cues.ts musicFor). Each one is optional: without it, the zone's loop plays on.
+ */
+export interface MusicRules extends LoopRules {
+  /** Outside the game: the login, sign-up and character screens. */
+  title: string | undefined;
+  /** While the player fights, and combatHoldMs after the last blow or target. */
+  combat: string | undefined;
+  combatHoldMs: number;
+  /** Monster content id → the loop that plays while one is in view, over everything. */
+  bosses: Record<string, string>;
+}
+
 /** assets/sounds.yaml as the client uses it (vite/content.ts). */
 export interface SoundManifest {
   sounds: Record<string, SoundDef>;
   /** Event name → sound ids (one is picked at random). */
   events: Record<string, string[]>;
-  music: LoopRules;
+  music: MusicRules;
   ambient: LoopRules;
 }
 

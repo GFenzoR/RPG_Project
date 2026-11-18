@@ -48,7 +48,7 @@ import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { MotionTrail } from "./state/motion.ts";
-import { cuesOf, loopFor } from "./audio/cues.ts";
+import { blowAt, cuesOf, loopFor, musicFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
@@ -212,6 +212,9 @@ const DRAG_START_PX = 4;
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
 
+/** How often the frame looks again at which loops should play (a fight ends silently). */
+const LOOPS_EVERY_MS = 500;
+
 declare global {
   interface Window {
     __rpgClient?: ClientTestHooks;
@@ -278,6 +281,10 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
+  /** performance.now() when the player last fought (a target, a blow on their tile). */
+  private foughtAt = Number.NEGATIVE_INFINITY;
+  /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
+  private loopsAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
   private safe = true;
   /** T5.6: the direction held on the on-screen pad (read like the movement keys). */
@@ -323,7 +330,11 @@ export class Game {
         const at = this.world.batchTime(Number(batch.tick), now);
         const cues: Cue[] = [];
         for (const e of batch.events) {
-          if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
+          if (opts.audio) {
+            cues.push(...cuesOf(e.message, this.cueContext()));
+            const self = this.world.self;
+            if (self && blowAt(e.message, self.pos)) this.foughtAt = now;
+          }
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
           if (e.message.case === "welcome" && !this.safe) {
@@ -1376,9 +1387,27 @@ export class Game {
     const self = this.world.self;
     if (!audio || !self) return;
     for (const c of cues) audio.play(c.events, c.pos, self.pos);
+    this.keepLoops(performance.now());
+  }
+
+  /**
+   * The music and ambient loops for now: the zone's, a fight's while the player has a
+   * target or took a blow less than `combatHoldMs` ago, a boss's while one is in view
+   * (assets/sounds.yaml `music`, audio/cues.ts musicFor). After each batch and, because a
+   * fight ends without a message, every LOOPS_EVERY_MS from the frame.
+   */
+  private keepLoops(now: number): void {
+    const audio = this.opts.audio;
+    const self = this.world.self;
+    if (!audio || !self) return;
+    this.loopsAt = now;
     const { islands, sounds } = this.opts.content;
+    if (this.world.target !== undefined) this.foughtAt = now;
+    const fighting = now - this.foughtAt < sounds.music.combatHoldMs;
+    const bosses = Object.keys(sounds.music.bosses).length > 0;
+    const inView = bosses ? this.world.battleList().map((c) => c.contentId) : [];
     audio.setLoops(
-      loopFor(self.pos, islands, sounds.music),
+      musicFor(self.pos, islands, sounds.music, inView, fighting),
       loopFor(self.pos, islands, sounds.ambient),
     );
   }
@@ -1563,6 +1592,7 @@ export class Game {
   private frame(now: number): void {
     const self = this.world.self;
     if (!self) return;
+    if (now - this.loopsAt >= LOOPS_EVERY_MS) this.keepLoops(now);
     this.world.expirePredicted(now);
     const drawn = this.world.drawPos(self, now);
     this.trail.record(now, drawn.x, drawn.y);

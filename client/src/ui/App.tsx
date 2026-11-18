@@ -76,6 +76,14 @@ function Screens({
     );
   }, []);
 
+  // Outside the game the menus play the title screen's loop (assets/sounds.yaml
+  // music.title), and no ambient bed; the game sets its own loops from its first batch.
+  // Leaving the game silences it first (Game.destroy) and this starts the title again.
+  const inGame = screen.name === "game";
+  useEffect(() => {
+    if (!inGame) audio?.setLoops(content.sounds.music.title, undefined);
+  }, [inGame, audio, content]);
+
   const toCharacters = (): void => setScreen({ name: "characters" });
   const toLogin = (): void => setScreen({ name: "login" });
 
