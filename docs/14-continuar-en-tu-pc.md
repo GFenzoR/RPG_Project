@@ -119,17 +119,17 @@ el punto 5:
     cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
     `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
     Lo que quedó pendiente de eso:
-    - **A9 (hecho, rama `feat/attack-events`):** el servidor manda quién ataca a quién
-      (`CreatureAttack`) y por qué sale una criatura (`CreatureDisappear.reason`), y el
-      cliente anima con eso en vez de deducirlo (docs/05 "Quién ataca y por qué sale una
-      criatura", docs/17 ANI-7). La deducción queda para un servidor viejo. Pendiente de
-      A9: correr el E2E del lote y revisar con Read las capturas `07b-attack-pose` y
-      `11b-death` (todavía no se sacaron nunca; los tests ya exigen el `CreatureAttack` y
-      el `DEATH` del servidor, no solo la pose); `make bots` contra un servidor real con
-      los eventos (docs/07 "Eventos de ataque"); un jugador que muere a la vista y
-      reaparece en un templo también a la vista no deja su cuerpo cayendo; un
-      desvanecerse para `TELEPORT` y `LOGOUT`; `DESPAWN` no lo usa ningún camino todavía
-      (solo el hook de test `DespawnForTest`).
+    - **A9 (código hecho, rama `feat/attack-events`; sin ✅ hasta el E2E):** el servidor
+      manda quién ataca a quién (`CreatureAttack`) y por qué sale una criatura
+      (`CreatureDisappear.reason`), y el cliente anima con eso en vez de deducirlo (docs/05
+      "Quién ataca y por qué sale una criatura", docs/17 ANI-7). La deducción queda para un
+      servidor viejo. Pendiente de A9: correr el E2E del lote y revisar con Read las
+      capturas `07b-attack-pose` y `11b-death` (todavía no se sacaron nunca; los tests ya
+      exigen el `CreatureAttack` y el `DEATH` del servidor, no solo la pose); `make bots`
+      contra un servidor real con los eventos (docs/07 "Eventos de ataque"); un jugador que
+      muere a la vista y reaparece en un templo también a la vista no deja su cuerpo
+      cayendo; un desvanecerse para `TELEPORT` y `LOGOUT`; `DESPAWN` no lo usa ningún camino
+      todavía (solo el hook de test `DespawnForTest`).
     - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
       un hechizo o un arco juega el ataque (`slash`).
     - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
