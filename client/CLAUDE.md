@@ -760,7 +760,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     está libre, `stepChoices` (la mitad libre de una diagonal) y después el primer paso de
     un A* hacia la casilla bajo el cursor, guardado como camino con `heading`: se sigue
     mientras el cursor apunte igual (si no, en una U de muros entraba y salía). Sin nada,
-    `chooseStep` gira.
+    `chooseStep` gira. Una búsqueda sin camino no se repite desde la misma casilla hacia
+    la misma durante `NO_WAY_MS` (250 ms): parado contra un muro, `canStep` está abierto
+    en cada frame.
   - **Botón izquierdo en el canvas** (`input/mouse.ts` `LeftPress`, puro y con tests):
     `GameCanvasOptions.pressTile` le pregunta al `Game` (`Game.pressTile`) qué puede
     hacer la presión: con una mira o un item elegido, solo click al soltar (y arrastre);
