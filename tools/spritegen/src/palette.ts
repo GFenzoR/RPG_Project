@@ -103,6 +103,18 @@ export const PALETTE = {
   fur: material("#9a8670", "#76654f", "#554838", "#382f25"),
   bone: material("#ece4cf", "#cfc4a6", "#a69a7c", "#776d55"),
   feather: material("#f0f0ea", "#cfd0ca", "#a3a6a2", "#727673"),
+  /** The bristleback boar (engine/specs/boar.ts): dark brown hide, pale crest, pink snout. */
+  boarFur: material("#7c6350", "#5c4738", "#423328", "#2b211a"),
+  bristle: material("#b3a289", "#8f7e67", "#6b5c4a", "#493e32"),
+  snout: material("#c49484", "#a07364", "#7a5446", "#52372d"),
+  hoof: material("#5a5048", "#3f3832", "#2c2723", "#1d1a17"),
+  /** The bramble stag (engine/specs/stag.ts): red coat, pale belly, thorn-wood antlers. */
+  stagCoat: material("#b8814f", "#935f36", "#6b4325", "#462b17"),
+  stagBelly: material("#e4d2b0", "#c8b48e", "#a08b69", "#76654b"),
+  thornWood: material("#6e5440", "#4f3a2b", "#38291e", "#251b13"),
+  berry: material("#f07a72", "#d8343a", "#a32228", "#6e171b"),
+  /** Eyes and nostrils: near black, a little warm; shiny parts get a glint. */
+  eye: material("#4a3c38", "#2e2422", "#211918", "#161010"),
   // Liquids and glows
   water: material("#5d93b5", "#3e7398", "#2c5677", "#1d3b55"),
   ember: material("#ffd36b", "#f39a35", "#c4581f", "#7e2e12"),

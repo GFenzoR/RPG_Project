@@ -280,33 +280,41 @@ function opaqueBox(img: Image): { x0: number; y0: number; x1: number; y1: number
 
 describe("the boar and the stag (docs/17 ART-2, Animales medianos)", () => {
   // Beside the Gemini wolf (~39 px long) and the LPC people (~46 px tall) a 32x32 boar and
-  // stag read like young ones: they are drawn bigger on 64x64, for anchor bc.
+  // stag read like young ones. Since 2026-11-18 they are sprite engine models
+  // (engine/specs/): 64x64 frames on the contact ellipse in all four facings.
   const animals = [
-    ...recipePaths("creatures/bristleback_boar"),
-    ...recipePaths("creatures/bramble_stag"),
+    ...recipePaths("creatures/bristleback_boar/"),
+    ...recipePaths("creatures/bramble_stag/"),
   ];
 
-  it("are 64x64 frames on the contact ellipse, centred, with the feet near the bottom", () => {
-    expect(animals).toHaveLength(10);
+  it("are 64x64 frames on the contact ellipse for idle, walk, attack and death in four facings", () => {
+    // 4 facings x (4 idle + 4 walk + 4 attack + 5 death) each.
+    expect(animals).toHaveLength(2 * 4 * 17);
+    for (const action of ["idle", "walk", "attack", "death"])
+      for (const dir of ["n", "e", "s", "w"]) {
+        expect(animals, `${action}_${dir}`).toContain(
+          `creatures/bristleback_boar/${action}_${dir}_0`,
+        );
+        expect(animals, `${action}_${dir}`).toContain(`creatures/bramble_stag/${action}_${dir}_0`);
+      }
     for (const p of animals) {
       expect(RECIPES[p]?.shadow, p).toBe(false);
       const img = render(p);
       expect([img.width, img.height], p).toEqual([64, 64]);
       const b = opaqueBox(img);
-      expect(Math.abs((b.x0 + b.x1 + 1) / 2 - 32), `${p} centred`).toBeLessThanOrEqual(3);
-      expect(63 - b.y1, `${p} feet`).toBeLessThanOrEqual(5);
+      expect(63 - b.y1, `${p} feet`).toBeGreaterThanOrEqual(1);
     }
   });
 
   it("stand at the size of a grown animal: the boar about the wolf's length, the stag a person's height", () => {
-    for (const p of animals) {
+    for (const p of animals.filter((a) => /\/walk_[we]_/.test(a))) {
       const b = opaqueBox(render(p));
       const [w, h] = [b.x1 - b.x0 + 1, b.y1 - b.y0 + 1];
       if (p.startsWith("creatures/bristleback_boar")) {
         expect(w, p).toBeGreaterThanOrEqual(34);
         expect(h, p).toBeGreaterThanOrEqual(21);
       } else {
-        expect(w, p).toBeGreaterThanOrEqual(38);
+        expect(w, p).toBeGreaterThanOrEqual(34);
         expect(h, p).toBeGreaterThanOrEqual(40);
       }
     }

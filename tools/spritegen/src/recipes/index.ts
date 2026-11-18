@@ -1,4 +1,7 @@
-// Every recipe, by sprite path. A path may live in only one book.
+// Every recipe, by sprite path. A path may live in only one book. The sprite engine's specs
+// (engine/specs/) come in as one recipe per frame.
+import { engineRecipes } from "../engine/book.ts";
+import { ENGINE_SPECS } from "../engine/specs/index.ts";
 import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
 import { EFFECTS } from "./effects.ts";
@@ -33,4 +36,5 @@ export const RECIPES: RecipeBook = merge(
   CREATURES,
   EFFECTS,
   UI,
+  engineRecipes(ENGINE_SPECS),
 );
