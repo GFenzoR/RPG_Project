@@ -1672,7 +1672,8 @@ body.using-item canvas {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.options-panel .mute {
+.options-panel .mute,
+.options-panel .check {
   display: flex;
   flex-direction: row;
   white-space: nowrap;
