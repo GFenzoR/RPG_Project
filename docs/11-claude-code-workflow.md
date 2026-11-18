@@ -66,9 +66,14 @@ Etapas (el script nunca corre más de **2 agentes a la vez**, contando los subag
    `make test-integration` + `make e2e` del lote, revisa los screenshots que señalaron las
    tareas, y al final apaga Docker y WSL. Un test inestable se investiga y se arregla, no
    se esconde con reintentos. **Si el dueño está jugando** con `make play` (un
-   `gameserver.exe` y Vite escuchando en `:8080` y `:5173`), el agente no lo para: espera,
-   mirando cada 2 minutos y hasta 8 horas, a que esos puertos se liberen, y recién ahí
-   arranca Docker.
+   `gameserver.exe` y Vite escuchando en `:8080` y `:5173`), el agente no lo para: mira de
+   dónde corre cada proceso de esos puertos (ruta y línea de comando); uno de
+   `.wtf` es un resto de una corrida cortada de este mismo paso y lo cierra; por los
+   demás espera, mirando cada 2 minutos y hasta 8 horas, a que se liberen, y recién ahí
+   arranca Docker. Si a las 8 horas siguen, no corre el e2e: deja commiteados los arreglos
+   de la revisión final y termina con `ok=false`, diciendo que la verificación espera a que
+   el dueño cierre `make play`. `tools/mapcli/src/lote.test.ts` corre el script con un
+   agente falso y revisa estos prompts.
 
 Las reglas que el script le pasa a cada agente (`RULES` en `lote.js`) repiten las de
 `CLAUDE.md`, la regla legal incluida: assets de terceros solo CC0, CC-BY, OGA-BY o

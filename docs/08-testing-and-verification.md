@@ -115,7 +115,7 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor; un reintento por test fallado y 40 min de tope (ver "E2E en la CI") | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
-| `gemini` | `make test-gemini`: los tests de `tools/gemini` (Python 3.12 y Pillow; las herramientas de solo desarrollo que manejan el Gemini del dueño, ver `tools/CLAUDE.md`). Solo corre si cambia `tools/gemini/` (o la CI, el `Makefile`...); el test con ffmpeg se salta si el runner no lo tiene | — |
+| `gemini` | `make test-gemini`: los tests de `tools/gemini` (Python 3.12 y Pillow; las herramientas de solo desarrollo que manejan el Gemini del dueño, ver `tools/CLAUDE.md`). Solo corre si cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` o `assets/sounds/music/` (o la CI, el `Makefile`...); los tests con ffmpeg se saltan si el runner no lo tiene | — |
 
 Además, dos workflows para los PR de mapas (T2.4, detalle en `04`, "PR de mapas en
 CI"): `map-pr.yml` (`pull_request`, solo lectura; su YAML sale del PR, pero tal como está en la base corre el código de la rama base) corre `mapcli pr-check` y sube los

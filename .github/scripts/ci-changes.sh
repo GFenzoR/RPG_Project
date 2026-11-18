@@ -22,8 +22,9 @@ declare -A RULES=(
 	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
 	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	[go-bots]='^(tools/bots|server|proto)/'
-	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules.
-	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows)/'
+	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules, and
+	# tools/mapcli/src/lote.test.ts runs the batch workflow of .claude/workflows.
+	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows|\.claude/workflows)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
 	[actionlint]='^\.github/'
 	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
@@ -34,8 +35,10 @@ declare -A RULES=(
 	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
 	[integration]='^(server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
-	# The dev-only Python tools around the owner's Gemini: nothing else reads them.
-	[gemini]='^tools/gemini/'
+	# The dev-only Python tools around the owner's Gemini: nothing else reads them. Their
+	# tests read spritegen's palette (import_art snaps to it) and measure the game's music
+	# (music_convert's loudness target is the one the shipped themes have).
+	[gemini]='^(tools/gemini/|tools/spritegen/src/palette\.ts$|assets/sounds/music/)'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
 	# The map PR worker's image runs its TypeScript and these packages as they are (T4.5).
 	[image]='^(deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)|tools/map-pr-worker/|packages/map-format/|packages/content-schema/)'
@@ -149,10 +152,15 @@ self_test() {
 	for j in ts validate build e2e stack; do check "$j" true assets/sounds.yaml assets/sounds/music/puerto.ogg; done
 	for j in go-server go-bots integration desktop bench; do check "$j" false assets/sounds/sfx/hit.ogg; done
 	check ts true tools/soundgen/src/sfx.ts
+	# The batch workflow's test (tools/mapcli/src/lote.test.ts) runs in the TS job.
+	check ts true .claude/workflows/lote.js
 	for j in e2e build validate go-server stack desktop; do check "$j" false tools/soundgen/src/sfx.ts; done
-	check gemini false tools/soundgen/src/sfx.ts assets/sounds/music/puerto.ogg
-	# The Gemini tools (Python, dev-only) run their own job and nothing else.
+	check gemini false tools/soundgen/src/sfx.ts assets/sounds/sfx/hit.ogg tools/spritegen/src/draw.ts
+	# The Gemini tools (Python, dev-only) run their own job and nothing else; their tests
+	# also read spritegen's palette and the shipped music.
 	check gemini true tools/gemini/import_art.py
+	check gemini true tools/spritegen/src/palette.ts
+	check gemini true assets/sounds/music/puerto.ogg
 	for j in ts validate build e2e go-server integration stack; do check "$j" false tools/gemini/music_slots.json; done
 	if ((fails > 0)); then
 		echo "ci-changes: $fails rule check(s) failed" >&2
