@@ -248,8 +248,9 @@ describe("validator diagnostics", () => {
         "  effect.hit: [hit, nope]",
         "  ui.click: song",
         "music:",
-        "  islands: { puerto: song, atlantis: song }",
-        "  underground: hit",
+        "  pools: { town: [song, hit] }",
+        "  islands: { puerto: town, atlantis: town }",
+        "  underground: nowhere",
       ].join("\n") + "\n",
     );
     const out = messages(root).filter((m) => m.includes("sounds.yaml"));
@@ -259,50 +260,89 @@ describe("validator diagnostics", () => {
     expect(has('unknown sound "nope"')).toBe(true);
     expect(has('sound "song" is a music loop, not an event sound')).toBe(true);
     expect(has('sound "hit" is on channel sfx, not music')).toBe(true);
+    expect(has('unknown pool "nowhere"')).toBe(true);
     expect(has('unknown island "atlantis"')).toBe(true);
     expect(has("volume")).toBe(true);
   });
 
-  it("checks the title, fight and boss music: music loops, and bosses that are monsters", () => {
+  it("checks the music: pools of music, the title's and the bosses' pools, a track's measures and a quest's pool", () => {
     mkdirSync(file("assets/sounds"), { recursive: true });
-    for (const f of ["hit", "song", "fight", "boss"])
+    for (const f of ["hit", "song", "other", "boss"])
       writeFileSync(file(`assets/sounds/${f}.ogg`), "x");
-    const write = (music: string[]): string[] => {
+    const write = (sounds: string[], music: string[]): string[] => {
       writeFileSync(
         file("assets/sounds.yaml"),
         [
           "format: 1",
           "sounds:",
           "  hit: { file: sounds/hit.ogg, channel: sfx }",
-          "  song: { file: sounds/song.ogg, channel: music }",
-          "  fight: { file: sounds/fight.ogg, channel: music }",
           "  boss: { file: sounds/boss.ogg, channel: music }",
+          ...sounds,
           "music:",
           ...music,
         ].join("\n") + "\n",
       );
-      return messages(root).filter((m) => m.includes("sounds.yaml"));
+      return messages(root).filter((m) => m.includes("sounds.yaml") || m.includes("quests"));
     };
+    const good = [
+      "  song: { file: sounds/song.ogg, channel: music, seconds: 180, end: 170, entries: [12, 40.5] }",
+      "  other: { file: sounds/other.ogg, channel: music }",
+    ];
     expect(
-      write([
-        "  title: song",
-        "  combat: fight",
-        "  combat_hold_ms: 8000",
-        "  bosses: { slagbound_warden: boss }",
+      write(good, [
+        "  fades: { zone: 5000, boss_in: 1500, boss_out: 6000, title: 3000, next: 4000 }",
+        "  dwell_ms: 3000",
+        "  boss_hold_ms: 5000",
+        "  resume_ms: 180000",
+        "  gap_ms: [6000, 15000]",
+        "  pools: { menu: [song, other], forge: [boss] }",
+        "  title: menu",
+        "  bosses: { slagbound_warden: forge }",
       ]),
     ).toEqual([]);
-    const out = write([
-      "  title: hit",
-      "  combat: nope",
-      "  combat_hold_ms: 120000",
-      "  bosses: { no_such_beast: boss, slagbound_warden: hit }",
-    ]);
-    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    const out = write(
+      [
+        "  song: { file: sounds/song.ogg, channel: music, seconds: 180, end: 190, entries: [0, 40, 30, 200] }",
+        "  other: { file: sounds/other.ogg, channel: music, entries: [10] }",
+        "  hit2: { file: sounds/hit.ogg, channel: sfx, seconds: 3 }",
+      ],
+      [
+        "  gap_ms: [9000, 1000]",
+        "  pools: { menu: [song, hit, nope], forge: [boss] }",
+        "  title: song",
+        "  combat: forge",
+        "  bosses: { no_such_beast: forge, slagbound_warden: lair }",
+      ],
+    );
+    const has = (m: string): boolean => out.some((o) => o.includes(m));
     expect(has('sound "hit" is on channel sfx, not music')).toBe(true);
     expect(has('unknown sound "nope"')).toBe(true);
+    expect(has('unknown pool "song"')).toBe(true); // the title names a pool, not a sound
+    expect(has('unknown pool "lair"')).toBe(true);
     expect(has('unknown monster "no_such_beast"')).toBe(true);
-    expect(has("combat_hold_ms")).toBe(true);
-    expect(out.filter((m) => m.includes('sound "hit" is on channel sfx'))).toHaveLength(2);
+    expect(has("combat")).toBe(true); // fights have no music any more (the owner, 2026-11-18)
+    expect(has("gap_ms is [min, max]")).toBe(true);
+    expect(has("end 190 is past the track's 180 s")).toBe(true);
+    expect(has("entries")).toBe(true); // 0, then 40 → 30 going down
+    expect(out.filter((m) => m.includes("entries go up, after 0"))).toHaveLength(2);
+    expect(has("entry 200 is past the body's end")).toBe(true);
+    expect(has("a track with end or entries needs its seconds")).toBe(true);
+    expect(has("seconds, end and entries are a music track's")).toBe(true);
+
+    // An important quest's music names a pool of sounds.yaml.
+    write(good, ["  pools: { forge: [boss] }"]);
+    const quest = file("data/quests/ch3_warden.yaml");
+    const text = readFileSync(quest, "utf8");
+    const withMusic = (pool: string): string[] => {
+      writeFileSync(
+        quest,
+        text +
+          `music: { pool: ${pool}, floors: [9], rects: [{ x: 3690, y: 5790, w: 12, h: 10 }] }\n`,
+      );
+      return messages(root).filter((m) => m.includes("ch3_warden"));
+    };
+    expect(withMusic("forge")).toEqual([]);
+    expect(withMusic("shrine").some((m) => m.includes('unknown pool "shrine"'))).toBe(true);
   });
 
   it("accepts a third-party sound pack with its CREDITS row and LICENSE, as spritepack does", () => {

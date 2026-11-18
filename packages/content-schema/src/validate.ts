@@ -1408,7 +1408,9 @@ class Validator {
 
   /**
    * assets/sounds.yaml (T3.7, optional): files exist, vendor packs have their CREDITS.md
-   * row, events and loops name declared sounds of the right channel, islands exist.
+   * row, events and loops name declared sounds of the right channel, the music's places
+   * name declared pools (and an important quest's music too), islands exist, and a
+   * track's measures fit in it.
    */
   private checkSounds(): void {
     const abs = join(this.root, "assets", "sounds.yaml");
@@ -1466,10 +1468,22 @@ class Validator {
       else ref(["events", ev], v);
     }
     const islands = this.worldIslands();
+    // The music: pools of music sounds, and places that name a pool (the director's,
+    // client/src/audio/director.ts). The ambient bed names its loops directly.
+    const music = isObj(src.data["music"]) ? src.data["music"] : {};
+    const pools = isObj(music["pools"]) ? music["pools"] : {};
+    for (const [pool, ids] of Object.entries(pools))
+      if (Array.isArray(ids)) ids.forEach((id, i) => ref(["music", "pools", pool, i], id, "music"));
+    const pool = (path: PathSegment[], id: unknown): void => {
+      if (typeof id === "string" && !(id in pools))
+        this.error(src, path, `unknown pool "${id}" (music.pools)`);
+    };
     for (const loop of ["music", "ambient"] as const) {
       const l = src.data[loop];
       if (!isObj(l)) continue;
-      ref([loop, "underground"], l["underground"], loop);
+      const name = (path: PathSegment[], id: unknown): void =>
+        loop === "music" ? pool(path, id) : ref(path, id, "ambient");
+      name([loop, "underground"], l["underground"]);
       const by = isObj(l["islands"]) ? l["islands"] : {};
       for (const [island, id] of Object.entries(by)) {
         if (islands && !islands.has(island))
@@ -1478,24 +1492,65 @@ class Validator {
             [loop, "islands", island],
             `unknown island "${island}" (world/world.yaml)`,
           );
-        ref([loop, "islands", island], id, loop);
+        name([loop, "islands", island], id);
       }
     }
-    // The music over the zone's: the title screen's, a fight's and each boss's.
-    const music = src.data["music"];
-    if (isObj(music)) {
-      ref(["music", "title"], music["title"], "music");
-      ref(["music", "combat"], music["combat"], "music");
-      const bosses = isObj(music["bosses"]) ? music["bosses"] : {};
-      for (const [monster, id] of Object.entries(bosses)) {
-        if (!this.index.ids.monster.has(monster))
+    // Over the zone's: the title screen's pool and each boss's.
+    pool(["music", "title"], music["title"]);
+    const bosses = isObj(music["bosses"]) ? music["bosses"] : {};
+    for (const [monster, id] of Object.entries(bosses)) {
+      if (!this.index.ids.monster.has(monster))
+        this.error(
+          src,
+          ["music", "bosses", monster],
+          `unknown monster "${monster}" (data/monsters)`,
+        );
+      pool(["music", "bosses", monster], id);
+    }
+    const gap = music["gap_ms"];
+    if (Array.isArray(gap) && typeof gap[0] === "number" && typeof gap[1] === "number")
+      if (gap[0] > gap[1])
+        this.error(src, ["music", "gap_ms"], `gap_ms is [min, max]: ${gap[0]} > ${gap[1]}`);
+    // A track's measures (make music-gemini): only on music, end within it, entries going
+    // up from after 0 to the body's end.
+    for (const [id, s] of Object.entries(sounds)) {
+      if (!isObj(s) || !["seconds", "end", "entries"].some((k) => k in s)) continue;
+      if (s["channel"] !== "music") {
+        this.error(src, ["sounds", id], "seconds, end and entries are a music track's");
+        continue;
+      }
+      const seconds = typeof s["seconds"] === "number" ? s["seconds"] : undefined;
+      if (seconds === undefined) {
+        this.error(src, ["sounds", id], "a track with end or entries needs its seconds");
+        continue;
+      }
+      const end = typeof s["end"] === "number" ? s["end"] : seconds;
+      if (end > seconds)
+        this.error(src, ["sounds", id, "end"], `end ${end} is past the track's ${seconds} s`);
+      const entries = Array.isArray(s["entries"]) ? s["entries"] : [];
+      let before = 0;
+      entries.forEach((e, i) => {
+        if (typeof e !== "number") return;
+        if (e > end)
           this.error(
             src,
-            ["music", "bosses", monster],
-            `unknown monster "${monster}" (data/monsters)`,
+            ["sounds", id, "entries", i],
+            `entry ${e} is past the body's end (${end} s)`,
           );
-        ref(["music", "bosses", monster], id, "music");
-      }
+        else if (e <= before)
+          this.error(src, ["sounds", id, "entries", i], "entries go up, after 0");
+        before = e;
+      });
+    }
+    // An important quest's music names a pool of this file.
+    for (const q of this.quests) {
+      const m = isObj(q.data) ? q.data["music"] : undefined;
+      if (isObj(m) && typeof m["pool"] === "string" && !(m["pool"] in pools))
+        this.error(
+          q,
+          ["music", "pool"],
+          `unknown pool "${m["pool"]}" (assets/sounds.yaml music.pools)`,
+        );
     }
   }
 

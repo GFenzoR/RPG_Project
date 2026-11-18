@@ -39,6 +39,36 @@
         }
       }
     },
+    "music": {
+      "description": "An important quest's music: its pool (assets/sounds.yaml music.pools) plays while the player stands in one of the rects on one of the floors, over the zone's; a boss in view still beats it. Only the client reads it (client/src/audio/cues.ts questPoolAt).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pool", "floors", "rects"],
+      "properties": {
+        "pool": { "$ref": "common.schema.json#/$defs/id" },
+        "floors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 15 }
+        },
+        "rects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["x", "y", "w", "h"],
+            "properties": {
+              "x": { "type": "integer", "minimum": 0 },
+              "y": { "type": "integer", "minimum": 0 },
+              "w": { "type": "integer", "minimum": 1 },
+              "h": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
     "notes": { "$ref": "common.schema.json#/$defs/notes" }
   },
   "$defs": {
