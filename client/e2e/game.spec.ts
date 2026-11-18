@@ -114,7 +114,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "03-characters");
   await list.getByRole("button", { name: "Jugar" }).click();
 
-  // The world: FullMapView drawn on a pixel-perfect canvas.
+  // The world: FullMapView drawn on a pixel-perfect canvas: at the scale that shows the
+  // classic 15x11, as much of the 31x21 window as the box holds (client/CLAUDE.md "Zoom
+  // del mapa").
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   const canvas = page.getByTestId("game-canvas");
   await expect(canvas).toBeVisible();
@@ -126,8 +128,14 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   }));
   const scale = await page.evaluate(() => window.__rpgClient?.scale() ?? 0);
   expect(Number.isInteger(scale) && scale >= 1).toBe(true);
-  expect(size.width).toBe(15 * 32 * scale);
-  expect(size.height).toBe(11 * 32 * scale);
+  expect(size.width % scale).toBe(0);
+  expect(size.height % scale).toBe(0);
+  const view = await page.evaluate(() => window.__rpgClient?.view());
+  expect(view?.server).toEqual({ width: 31, height: 21 });
+  expect(view?.shown.width ?? 0).toBeGreaterThanOrEqual(15);
+  expect(view?.shown.height ?? 0).toBeGreaterThanOrEqual(11);
+  expect(view?.shown.width ?? 99).toBeLessThanOrEqual(31);
+  expect(view?.shown.height ?? 99).toBeLessThanOrEqual(21);
   expect(size.css * size.dpr).toBe(size.width);
   const start = await self(page);
   if (!start) throw new Error("no own creature");
