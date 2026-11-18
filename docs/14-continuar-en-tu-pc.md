@@ -197,7 +197,12 @@ el punto 5:
   caja del mapa con la vista más grande que la cubre a escala entera, sin bajar de 15x11
   (24x16 a 2x en 1920x1080 con el dock), y deja alejar hasta la ventana entera; medido en
   proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
-  Quedó:
+  Tras la revisión, los rangos con que apunta un jugador (armas, hechizos, condiciones)
+  quedaron topados en 6 (`content.MaxRange`, esquema y carga): un monstruo golpeado desde
+  tan lejos siempre lo nota y contesta. Quedó:
+  - **Repetir `make e2e`:** la rama se rebasó sobre la punta de `feat/movement-feel`
+    (`d9d80ca`, con f29dcc9 y f88d92a de `feat/ui-theme`); los screenshots de A7 (97b, 98b
+    y los de teléfonos) se sacaron sin el CSS de hotbar y condiciones de f88d92a.
   - **`make bots` a 31x21:** la medición es en proceso (`TestCrowdBandwidth`, que con 15x11
     dio lo mismo que `make bots`); falta repetir base y stress contra un servidor real con
     el monitoreo y anotar los números en docs/07.

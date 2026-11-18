@@ -1212,7 +1212,9 @@ Cambios respecto de UI-4:
   centrado en el jugador, como el zoom de antes; no se recorta a lados impares con
   `--ui-void` alrededor. Solo alejado más allá de la ventana entera queda caja oscura.
 - **Lo que no cambia** (como decía UI-4): ni los rangos de armas y hechizos ni lo que nota
-  un monstruo, que sigue siendo la ventana clásica de 15x11 + 1 (`session.InSight`).
+  un monstruo, que sigue siendo la ventana clásica de 15x11 + 1 (`session.InSight`). Los
+  rangos con que apunta un jugador quedaron topados en 6 (`content.MaxRange`): con la vista
+  ancha se elige un objetivo a 15 casillas, pero no se le pega desde donde no lo nota.
 - **Sin hacer:** la escala 1,5x "sharp-bilinear" y repetir `make bots` contra un servidor
   real (la medición fue en proceso, `TestCrowdBandwidth`). Están en docs/14.
 
