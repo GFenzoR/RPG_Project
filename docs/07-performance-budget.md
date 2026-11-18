@@ -197,32 +197,49 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
-(carga perezosa) y queda decodificado en memoria.
+(carga perezosa). Los efectos y el ambiente quedan decodificados en memoria; la música se
+transmite (ver abajo).
 
-| Métrica | Presupuesto | Hoy |
+| Métrica | Presupuesto | Hoy (2026-11-18) |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~1454 KiB (38 archivos; 1293 KiB de música) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
+| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~188 KiB / ~29 KiB |
+| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~29 KiB |
+| Descarga al cambiar de zona | el tema que suena y el siguiente de su pool (≤ 3 MiB) | ~1,7–2,2 MiB |
+| Música en memoria | ≤ `KEEP_STREAMS` (4) archivos comprimidos + los decodificadores de 2–3 elementos | ~4–5 MB |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~36 MB en el peor caso |
+| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes) |
 
-- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en la música de
-  soundgen, 20 en la de Gemini y 16 en ambiente.
-- **Música de Gemini** (2026-11-18, `make music-gemini`, `assets/README.md` "Sonido"): un
-  tema de ~3 min decodificado ocupa ~33 MB, así que cada toma entra como un loop de 54 a
-  72 s (`music_import.py` `MAX_SECONDS`) a 20 kbps mono: 130–190 KiB por loop. Con las 8
-  tomas de hoy quedan ~80 KiB libres del total: más versiones (las cuevas que pidió el
-  dueño) necesitan subir el tope, bajar los kbps o acortar los loops.
-- **Memoria:** el motor (`client/src/audio/engine.ts`, `KEEP_LOOPS`) deja decodificados
-  solo los dos últimos loops que pidió cada canal (el que suena y el anterior, para ir y
-  volver sin decodificar de nuevo); los demás se olvidan. Peor caso: efectos e interfaz
-  (~3 MB), dos ambientes (~6 MB) y los dos loops de música más largos (~27 MB).
-- El test de `tools/soundgen` (`checkBudget`) falla si algún archivo o el total se pasan.
-  También lo comprueba `make sounds`. Los límites están en `BUDGET`
-  (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
-- Un sonido silenciado no ocupa voz. Si el archivo llega más de 300 ms tarde, ese sonido
-  se descarta.
+- **Por qué cambió (pedido del dueño, 2026-11-18):** al escuchar la música de Gemini pidió
+  transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
+  Puerto y más versiones de cueva. Los loops de ~1 minuto mono a 20 kbps del lote 7 eran
+  justo la monotonía que no quiere y sonaban finos. Ahora cada toma entra **entera** (~3 min)
+  en **Ogg Opus estéreo**, y el tope pasó de 1,5 MiB a 16 MiB en total, con 8 MiB por pool.
+- **Bitrate medido** (2026-11-18, la toma 1 de Puerto y la 1 de Cuevas contra el AAC de
+  Gemini, error por tercio de octava y ancho estéreo): a 24 kbps el códec junta los canales
+  (se pierde un cuarto a un tercio del ancho); desde 32 kbps el estéreo queda entero y el
+  error baja despacio (Puerto 2,25 / 2,10 / 2,01 / 1,86 dB a 32 / 40 / 48 / 56 kbps; Cuevas
+  2,01 / 1,72 / 1,61 / 1,20). Los temas van a **48 kbps** (~1,1 MiB por toma); las cuevas,
+  drones y goteos ralos cuya fuente corta en 14 kHz, a **40 kbps** (~0,85 MiB), para que su
+  pool de 7 entre en el presupuesto con lugar para dos versiones más.
+- **Streaming:** un tema de 3 minutos en estéreo decodificado entero ocuparía ~66 MB, más que
+  todo el presupuesto de memoria. El motor (`client/src/audio/engine.ts`) baja el archivo una
+  vez a un object URL (los bytes comprimidos) y lo toca con un `<audio>` conectado a Web Audio
+  (`MediaElementAudioSourceNode`), que decodifica de a poco y puede saltar a cualquier
+  segundo sin depender de que el servidor acepte rangos (`Range`). Guarda los últimos
+  `KEEP_STREAMS` archivos (4) que no estén sonando ni esperándose; con la música silenciada
+  no baja nada.
+- **Formatos:** efectos y ambiente **Ogg Opus mono** 48 kHz (32 kbps los efectos, 16 el
+  ambiente); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
+  música de Gemini estéreo a 48 kbps (40 las cuevas). `make music-gemini` escribe ese
+  formato (`tools/gemini/music_import.py`, `KBPS` y `AMBIENT_KBPS`).
+- El test de `tools/soundgen` (`checkBudget`) falla si algún archivo, una pool o el total se
+  pasan. También lo comprueban `make sounds` y `make music-gemini`. Los límites están en
+  `BUDGET` (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
+- Un sonido silenciado no ocupa voz. Si el archivo de un efecto llega más de 300 ms tarde,
+  ese sonido se descarta. Un tema que tarda en llegar no corta nada: la música anterior
+  sigue hasta que el nuevo puede sonar.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

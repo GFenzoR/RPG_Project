@@ -497,6 +497,9 @@ Las recompensas de `rewards` son iguales para todos. Lo que depende de la vocaci
 con `give_item`/`give_gold` en opciones de diálogo condicionadas con `vocation_in` (ver
 `harbor_master`: espada para el guardián, monedas para el arcanista).
 
+Una quest importante puede declarar `music` (una pool de `assets/sounds.yaml` que suena en
+unos rectángulos de unos pisos): ver "Música de una quest importante", en "Sonido".
+
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
   cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`.
@@ -985,33 +988,76 @@ archivos, su origen y su presupuesto, en `assets/README.md` "Sonido" y `07`, "Au
 format: 1
 sounds:          # id: archivo bajo assets/, canal, volumen 0..1, copias a la vez
   hit: { file: sounds/sfx/hit.ogg, channel: sfx, volume: 0.8, max_voices: 4 }
-  music_puerto: { file: sounds/music/gemini/town_puerto_1.ogg, channel: music, volume: 1 }
+  # Un tema entero (make music-gemini): su largo, dónde termina su cuerpo (empieza el final
+  # compuesto) y los segundos desde los que el director puede arrancarlo. Sin `seconds`, el
+  # archivo es un loop (los de soundgen) y se repite.
+  music_puerto: { file: sounds/music/gemini/town_puerto_1.ogg, channel: music, volume: 0.7,
+                  seconds: 176.43, end: 171.83, entries: [10, 26.7, 53.4, 73.4, 100, 126.7, 141.7] }
 events:          # evento del cliente → sonido, o lista para elegir uno al azar
   effect.hit: hit
-music:
-  fade_ms: 2500                       # fundido cruzado al cambiar de loop
-  islands: { puerto: music_puerto }   # isla de world.yaml → loop
-  underground: music_cueva            # pisos z > 7
-  title: music_title                  # fuera del juego (login y personajes)
-  combat: music_combat                # mientras pelea (hoy no hay: el dueño lo apagó)
-  combat_hold_ms: 8000                # cuánto sigue la de combate tras el último golpe u objetivo
-  bosses: { slagbound_warden: music_boss_forge }   # monstruo de data/monsters → loop
+music:           # el director de música (client/src/audio/director.ts)
+  fades: { zone: 5000, boss_in: 1500, boss_out: 6000, title: 3000, next: 4000 }   # ms
+  dwell_ms: 3000            # una zona nueva manda recién tras este tiempo en ella
+  boss_hold_ms: 5000        # la música del jefe sigue esto tras perderlo de vista
+  resume_ms: 180000         # de vuelta en una zona antes de esto, su tema sigue donde iba
+  gap_ms: [6000, 15000]     # entre dos temas de una zona, este silencio (al azar)
+  islands: { puerto: town_puerto }   # isla de world.yaml → pool
+  underground: cave                  # pisos z > 7 → pool
+  pools:                             # pool → sus temas (sonidos del canal music)
+    town_puerto: [music_puerto, music_puerto_2, music_puerto_3]
+    cave: [music_cueva, music_cueva_mine]
+    boss_forge: [music_boss_forge]
+  title: title                       # pool de fuera del juego (login y personajes)
+  bosses: { slagbound_warden: boss_forge }   # monstruo de data/monsters → pool
 ambient:
   fade_ms: 2000
   islands: { puerto: amb_olas }
 ```
+- **Pools:** cada lugar nombra una pool y el director la baraja: cada tema una vez por
+  vuelta y nunca el mismo dos veces seguidas. Una pool de un solo tema lo repite desde otro
+  punto de entrada. Los lugares son las islas, el subsuelo, el título, cada jefe y el área de
+  una quest importante (abajo). **Las peleas comunes no tienen música propia** (el dueño,
+  2026-11-18): ya no existen `combat` ni `combat_hold_ms`.
+- **Temas enteros:** `seconds`, `end` y `entries` solo van en sonidos `music`. `entries`
+  sube, nunca es 0 y nunca pasa de `end`; `end` no pasa de `seconds`. Los escribe
+  `make music-gemini` (medidos sobre la envolvente de nivel: dónde empieza una frase, a 15 s
+  o más uno de otro y nunca en los últimos 30 s del cuerpo); a mano solo para un tema de otro
+  origen.
 - `make validate` exige que cada archivo exista (y uno de `vendor/` tenga su fila en
-  `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada loop de `music`
-  (islas, `underground`, `title`, `combat` y los de `bosses`) sea del canal `music` y los
-  de `ambient` del suyo, que las islas existan en `world/world.yaml` y que las claves de
-  `bosses` sean monstruos de `data/monsters`.
-- **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos) y
-  `# gemini-music:rules:begin`/`end` (`title`, `combat`, `bosses`) las escribe
-  `make music-gemini` desde las elecciones del dueño; no se editan a mano. Lo que tiene
-  cada lugar (la toma, varias tomas, o `none`) está en `assets/sounds/music/gemini.yaml`:
-  `pick`, `provisional`, `file`/`volume` del sonido del lugar, `fallback` (el tema de
-  soundgen que vuelve con `none`) y `tracks` (cada toma con su fuente, el título que le dio
-  Gemini, su prompt y las medidas del loop). El resto del archivo es a mano.
+  `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada pool liste sonidos
+  del canal `music`, que islas, subsuelo, título, jefes y las quests nombren pools que
+  existen, que los loops de `ambient` sean de su canal, que las islas existan en
+  `world/world.yaml`, que las claves de `bosses` sean monstruos de `data/monsters`, que
+  `gap_ms` sea `[mínimo, máximo]` y que las medidas de cada tema quepan en él.
+- **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos),
+  `# gemini-music:pools:begin`/`end` (las pools de cada lugar con música de Gemini, dentro
+  de `pools:`) y `# gemini-music:rules:begin`/`end` (`title`, `bosses`) las escribe
+  `make music-gemini` desde las elecciones del dueño; no se editan a mano. Una pool hecha a
+  mano va en `pools:` fuera de las marcas. Lo que tiene cada lugar está en
+  `assets/sounds/music/gemini.yaml` (`format: 2`): `pick`, `provisional`, `extras` (las
+  versiones extra de las cuevas), `skipped` (las que quedaron afuera y por qué),
+  `file`/`volume` del sonido del lugar, `fallback` (el tema de soundgen que vuelve con
+  `none`), `pool` y `tracks` (cada toma con su fuente, el título que le dio Gemini, su
+  prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,
+  `lufs`, `kbps`, `bytes`). El resto del archivo es a mano.
+
+### Música de una quest importante (`music` en `data/quests/<id>.yaml`)
+Una quest importante puede tener música propia en un lugar: mientras el jugador está en uno
+de sus rectángulos, en uno de sus pisos, suena su pool en vez de la de la zona (un jefe a la
+vista igual le gana). Entra y sale como una zona: tras `dwell_ms` y con el fundido `zone`.
+```yaml
+music:
+  pool: boss_forge                     # una pool de assets/sounds.yaml music.pools
+  floors: [9]
+  rects:
+    - { x: 3690, y: 5790, w: 12, h: 10 }
+```
+- Lo lee solo el cliente (`vite/content.ts` `loadQuestMusic`, `audio/cues.ts`
+  `questPoolAt`); el servidor no lo usa ni lo necesita. `make validate` revisa la forma
+  (`quest.schema.json`) y que la pool exista.
+- Es por lugar, no por paso de la quest: el cliente no sabe en qué paso va el jugador. Una
+  música que dependa del paso necesitaría que el servidor lo mande (docs/14, pendientes).
+- Hoy ninguna quest la usa: falta un tema propio para la que la merezca.
 
 ## i18n
 ```yaml

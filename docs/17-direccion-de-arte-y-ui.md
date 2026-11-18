@@ -1203,15 +1203,17 @@ juego). Las reglas:
   (fondo fuera, grilla en frames, escala por vecino más cercano a 32 o 64, paleta de
   spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 donde ART-5 lo
   pide, es decir no en suelos ni efectos, y alfa 0 o 255); la música, por
-  `tools/gemini/music_convert.py` (sin fades, bucle cerrado con crossfade, -14 LUFS, Ogg
-  Opus). Nada se commitea sin mirarlo o escucharlo.
+  `tools/gemini/music_convert.py` (desde el 2026-11-18 el tema entero, sin cortes, a
+  -14 LUFS, Ogg Opus estéreo, con sus puntos de entrada medidos para el director de música).
+  Nada se commitea sin mirarlo o escucharlo.
 - **Un solo volumen para toda la música: -14 LUFS** (integrado, pico real ≤ -1,5 dBTP). Es
   el nivel de los temas que ya tiene el juego (soundgen: de -11,3 a -15,8, unos -14 en
   promedio), así un tema de Gemini no suena más bajo que los otros. Un tema nuevo, venga de
   donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`. Los
-  masters de Gemini traen picos de +1,5 a +5 dBTP, así que el techo de pico los deja entre
-  -16 y -19,5 LUFS (2026-11-18); `make music-gemini` compensa con el volumen de
-  `sounds.yaml`, hasta 1.
+  masters de Gemini traen picos de +1,5 a +5 dBTP; los loops mono del lote 7 quedaban
+  entre -16 y -19,5 LUFS por el techo de pico, los temas enteros en estéreo del 2026-11-18
+  llegan a -14 casi todos (el peor, -15). Donde no llega, `make music-gemini` compensa con
+  el volumen de `sounds.yaml`, hasta 1.
 - **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
   a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
   (criaturas con anatomía, retratos, música con instrumentos).

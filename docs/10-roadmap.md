@@ -143,8 +143,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`) y
   probar Opus en el WKWebView de macOS. Desde el 2026-11-18 la música es la que el dueño
   eligió entre las tomas de Gemini (`make music-gemini`), con música del título y del
-  guardián de la forja; el cliente también sabe tocar música de combate, pero el dueño la
-  apagó (solo jefes o quests importantes). Falta el director de música (docs/14).
+  guardián de la forja, y la toca el director de música (2026-11-18, pedido del dueño:
+  temas enteros transmitidos, pools por lugar con las tres de Puerto y siete de cueva,
+  arranque en un punto de entrada, fundidos de potencia constante y sin música de combate
+  común; solo jefes o el área de una quest importante la cambian). Pendiente: que el dueño
+  elija las versiones de cueva y escucharlo en el juego (docs/14).
 
 ## Hito 4 — Alpha pública
 - [x] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el

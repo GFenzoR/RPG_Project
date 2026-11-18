@@ -511,28 +511,38 @@ el punto 5:
     principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
     forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
     `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
-  - **Director de música (pedido del dueño, 2026-11-18):** las transiciones importan mucho
-    y un tema no debería empezar siempre desde el principio. Falta un director que alterne
-    las tomas de un lugar (Puerto ya tiene tres: `music_puerto`, `_2`, `_3`, hoy suena la
-    primera), empiece cada loop en un punto distinto y cuide los fundidos. El manifiesto
-    (`assets/sounds/music/gemini.yaml`, `tracks`) ya lista varias tomas por lugar, pero
-    `sounds.yaml` todavía espera un loop por isla: el director necesita una forma de
-    nombrar un grupo de tomas (y su validación).
-  - **Más versiones de cueva:** el mundo tiene muchas cuevas y el dueño quiere que la música
-    varíe al bajar a una. Hay que pedirlas (`music_queue.py`; la sesión principal ya
-    probó un `cave_mine_1` que terminó en `policy`).
-  - **Combate:** el dueño no quiere música de combate para peleas comunes, solo para un jefe
-    o una quest importante. El cliente ya sabe tocar la de un jefe (`music.bosses`) y la
-    de combate (`music.combat`, hoy sin usar); falta la regla de "quest importante".
-  - **Presupuesto de audio:** con mono a 20 kbps y loops de ~1 minuto, las 8 tomas de hoy
-    dejan el total en ~1454 de 1536 KiB (docs/07). Más tomas (las cuevas, otro lugar)
-    necesitan decidir con el dueño: subir el tope (el audio no cuenta en la descarga
-    inicial), bajar los kbps o acortar los loops.
-  - **Volumen:** los masters de Gemini vienen con picos de +1,5 a +5 dBTP; con una sola
-    ganancia y el techo de -1,5 dBTP los loops quedan entre -16 y -19,5 LUFS y, aun con
-    volumen 1 en `sounds.yaml`, suenan ~2 dB por debajo de los temas de soundgen. Nadie
-    los escuchó en el juego todavía: si se oyen bajos, un limitador suave antes de la
-    ganancia (con cuidado de la costura) o subir el canal de música.
+  - **Director de música (hecho, rama `feat/music-director`, pedido del dueño del
+    2026-11-18):** temas enteros en estéreo transmitidos, pools por lugar sin repetir el
+    mismo tema dos veces seguidas, arranque en un punto de entrada al azar, memoria por zona,
+    fundidos de potencia constante con largo por tipo, espera de 3 s en los bordes, respiro
+    de ambiente entre temas de una zona, y el combate común sin música (docs/02 "Sonido",
+    `client/src/audio/director.ts`). Lo que queda:
+    - **Las seis versiones nuevas de cueva son provisionales:** pasaron las medidas y suenan
+      todas con la toma 1 en la pool de las cuevas. Falta que el dueño las escuche y escriba
+      `cave_pool` en `picks.json` (`"cave_pool": ["mine", "crystal", ...]`) y corra
+      `make music-gemini`; las que no liste salen del juego.
+    - **Nadie lo escuchó en el juego todavía:** el largo de los fundidos (`fades`), la espera
+      en los bordes (`dwell_ms`), el respiro entre temas (`gap_ms`, 6–15 s) y la memoria
+      (`resume_ms`, 3 min) son datos de `sounds.yaml`: se ajustan sin código después de
+      jugar un rato. Los puntos de entrada salen de la envolvente de nivel; si alguno cae
+      feo en un tema, se puede bajar `ENTRY_MOST` o subir `ENTRY_GAP` en
+      `tools/gemini/music_convert.py` y volver a importar.
+    - **Música de quest por paso:** una quest importante ya puede tener música en un lugar
+      (`music` en su YAML, docs/06), pero ninguna la usa (falta un tema propio para
+      pedirle a Gemini) y el cliente no sabe en qué paso va el jugador: una música que
+      dependa del paso necesita que el servidor lo mande (un campo en el protocolo).
+    - **Safari/iOS y el WKWebView de macOS:** la música suena por un `<audio>` conectado a
+      Web Audio, que arranca después del primer gesto. Chromium (y el E2E) lo hacen sin
+      problema; falta probarlo en un iPhone y en la app de escritorio de macOS, donde un
+      `play()` fuera de un gesto podría rechazarse (se loguea un aviso y la música calla).
+  - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
+    estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
+    cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
+    está en la descarga inicial: cada zona baja el tema que suena y el siguiente. Caben
+    unas dos versiones más de cueva; más que eso, subir el tope de la pool o bajar a 32 kbps.
+  - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, la Isla Volcánica, a -14,8 con
+    volumen 0,77 para compensar), como los temas de soundgen. Si en el juego se oyen bajos o
+    altos, se ajusta `BASE_VOLUME` en `music_import.py` o el canal de música.
   - **Los primeros assets de Gemini son las siete criaturas** (rama
     `feat/gemini-creatures`, filas en "Generado con IA" de `assets/CREDITS.md` y prompts en
     `assets/prompts/sprites/creatures/`).
