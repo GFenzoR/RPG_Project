@@ -5,8 +5,9 @@
    and the drawer of client.css. */
 
 .game[data-ui="windows"] {
-  /* The dock is as narrow as it can be while the map gets its next whole scale: 1280 px
-     leaves 960 for a 2x map (15x11 tiles), 1920 px 1536 for a 3x map. */
+  /* The dock is as narrow as it can be while the map gets its next whole scale for the
+     classic 15x11 tiles: 1280 px leaves 960 for 2x, 1920 px 1536 for 3x. With the 31x21
+     window the fitted view there is 2x with 24x16 tiles (render/zoom.ts). */
   --dock-w: clamp(17rem, 100vw - 60rem, 24rem);
 }
 .game[data-ui="windows"] .game-body {
