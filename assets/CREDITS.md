@@ -50,14 +50,20 @@ sonidos. Las fuentes siguen la misma regla (`assets/vendor/font-<familia>/`, con
 
 ## Fuentes (OFL 1.1)
 
-Todavía ninguna. Las elegidas para la UI están en `docs/17-direccion-de-arte-y-ui.md`
-(UI-3). Cada familia va con una fila: los `.ttf` de `https://github.com/google/fonts` tal
-cual, en `assets/vendor/font-<familia>/`, junto con su `OFL.txt` y una copia como
-`LICENSE.txt`. Una familia con "Reserved Font Name" en su `OFL.txt` no se recorta ni se
-convierte con su nombre.
+Las de la UI (`docs/17-direccion-de-arte-y-ui.md`, UI-3). Cada familia va con una fila:
+los `.ttf` de `https://github.com/google/fonts` tal cual, en `assets/vendor/font-<familia>/`,
+junto con su `OFL.txt` y una copia como `LICENSE.txt`. Una familia con "Reserved Font
+Name" en su `OFL.txt` no se recorta ni se convierte con su nombre: ninguna de estas lo
+tiene. El cliente no usa los `.ttf` tal cual:
+`client/vite/fonts.ts` los recorta al latín que usa el juego y los pasa a woff2 al servirlos
+(`/fonts/`) y en el build; esos woff2 no se guardan en el repo.
 
 | Familia | Autor (copyright del `OFL.txt`) | Licencia | Fuente (URL con commit) | Carpeta |
 |---|---|---|---|---|
+| Cinzel (`Cinzel[wght].ttf`) | Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel) | OFL 1.1 | https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/cinzel | `assets/vendor/font-cinzel/` |
+| Grenze Gotisch (`GrenzeGotisch[wght].ttf`) | Copyright 2020 The Grenze Gotisch Project Authors (https://github.com/Omnibus-Type/Grenze-Gotisch) | OFL 1.1 | https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/grenzegotisch | `assets/vendor/font-grenzegotisch/` |
+| Alegreya Sans (`AlegreyaSans-{Regular,Italic,Medium,Bold}.ttf`) | Copyright 2013 The Alegreya Sans Project Authors (https://github.com/huertatipografica/Alegreya-Sans) | OFL 1.1 | https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/alegreyasans | `assets/vendor/font-alegreyasans/` |
+| Alegreya (`Alegreya[wght].ttf`, `Alegreya-Italic[wght].ttf`) | Copyright 2011 The Alegreya Project Authors (https://github.com/huertatipografica/Alegreya) | OFL 1.1 | https://github.com/google/fonts/tree/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/alegreya | `assets/vendor/font-alegreya/` |
 
 ## Obras derivadas de terceros
 

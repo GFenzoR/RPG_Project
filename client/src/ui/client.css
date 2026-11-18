@@ -1,3 +1,6 @@
+/* Fonts (docs/17 UI-3), self-hosted at /fonts/ (vite/fonts.ts). */
+@import "./fonts.css";
+
 :root {
   color-scheme: dark;
   --bg: #12151b;

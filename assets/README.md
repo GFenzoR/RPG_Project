@@ -185,6 +185,8 @@ en `docs/17-direccion-de-arte-y-ui.md` (UI-3).
   una copia como `LICENSE.txt` (el validador busca un archivo que empiece por `LICENSE`).
 - Una fila en la tabla "Fuentes" de `CREDITS.md`: el copyright de la primera línea del
   `OFL.txt`, OFL 1.1 y la URL de la carpeta con el commit.
-- Los woff2 recortados que usa el cliente se generan en el build y no se commitean. Recortar
+- Los woff2 recortados que usa el cliente los genera `client/vite/fonts.ts` (tabla `FONTS`:
+  una fila por archivo, con su `@font-face` en `client/src/ui/fonts.css`) al servirlos en
+  `/fonts/` y en el build, y no se commitean. Recortar
   o convertir es crear una versión modificada: no se hace con las familias que declaran un
   "Reserved Font Name" en su `OFL.txt`.

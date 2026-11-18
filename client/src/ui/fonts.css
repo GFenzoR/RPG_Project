@@ -1,0 +1,60 @@
+/* UI fonts (docs/17 UI-3): OFL families from github.com/google/fonts, kept as they come in
+   assets/vendor/font-<family>/ (assets/CREDITS.md) and served subset to woff2 at /fonts/ by
+   vite/fonts.ts. One @font-face per entry of its FONTS (vite/fonts.test.ts compares both).
+   The browser downloads a file only when the page draws text with it. */
+@font-face {
+  font-family: "Cinzel";
+  src: url("/fonts/cinzel.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Grenze Gotisch";
+  src: url("/fonts/grenze-gotisch.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/fonts/alegreya-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/fonts/alegreya-sans-400-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/fonts/alegreya-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/fonts/alegreya-sans-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya";
+  src: url("/fonts/alegreya.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alegreya";
+  src: url("/fonts/alegreya-italic.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: italic;
+  font-display: swap;
+}

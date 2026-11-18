@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import { rpgContent } from "./vite/content.ts";
+import { repoRoot, rpgContent } from "./vite/content.ts";
+import { rpgFonts } from "./vite/fonts.ts";
 
 const dir = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url));
 // The game server (HTTP API + /ws). The dev server proxies both, so the page, the API
@@ -15,7 +16,8 @@ const swVersion = process.env["RPG_BUILD_ID"] ?? Date.now().toString(36);
 const tauriDevHost = process.env["TAURI_DEV_HOST"];
 
 export default defineConfig({
-  plugins: [rpgContent()],
+  // The UI fonts (docs/17 UI-3) are subset to woff2 and served at /fonts/ (vite/fonts.ts).
+  plugins: [rpgContent(), rpgFonts(repoRoot())],
   // Two pages (T4.3): the public website at / (index.html: landing, /highscores, /news)
   // and the game at /play/ (play/index.html). The desktop app opens play/index.html.
   // The service worker (src/sw.ts) is a third entry with a fixed name at the root
