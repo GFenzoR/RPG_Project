@@ -124,12 +124,28 @@ el punto 5:
       animar al monstruo equivocado cuando varios rodean a un jugador.
     - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
       un hechizo o un arco juega el ataque (`slash`).
-    - **Animales:** los monstruos de Dungeon Crawl siguen con un frame y la animación
-      procedural. Ningún repo oficial de LPC en GitHub trae animales con licencia al lado
-      (el lobo del Starter Kit no la tiene); faltan ciclos propios de spritegen o hojas de
-      OpenGameArt con licencia por archivo.
+    - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
+      `feat/gemini-creatures`, docs/17 "Hecho: criaturas de Gemini"): lobo, rata de
+      sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
+      espinoso. Siguen con un frame y ANI-5 `hollow_crawler`, `ore_beetle`, los cinco del
+      Volcán (`ash_hound`, `cinder_salamander`, `slag_golem`, `ember_wyrmling`,
+      `slagbound_warden`) y la gaviota (arte propio de spritegen: hay una hoja de Gemini
+      buena en `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin
+      commitear ni usar; cambiarla es decisión del dueño). Mismo camino: `assets/README.md`, "Criaturas animadas de una sola
+      hoja".
+    - **Lo que las hojas de Gemini no trajeron:** ataques de frente o de espaldas en
+      cuatro de las siete (cangrejo al sur; murciélago y espinoso al norte; sapo al norte y
+      al sur, y sin quieto al norte): esas direcciones usan la embestida procedural con el
+      frame parado. El espinoso a 64x64 queda con algo de ruido de corteza (la ilustración
+      tiene mucha textura y el muestreo es por vecino más cercano). Un pedido nuevo de esas
+      filas sueltas no saldría con el mismo dibujo: si se quiere, una hoja entera nueva.
+    - **Revisar en el E2E** (no se corrió en la rama): las siete criaturas en el juego, su
+      tamaño al lado de los personajes y los monstruos de Dungeon Crawl que quedan, y el
+      murciélago (oscuro) sobre los suelos de la mina.
     - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
-      Dungeon Crawl, una (ART-2 lo acepta).
+      Dungeon Crawl, una (ART-2 lo acepta). Las criaturas de Gemini siguen la escala de LPC
+      (lobo, araña, sapo y espinoso de 64x64), así que ahora un lobo es más grande que el
+      jabalí de spritegen.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
       Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
@@ -466,17 +482,20 @@ el punto 5:
     volumen 1 en `sounds.yaml`, suenan ~2 dB por debajo de los temas de soundgen. Nadie
     los escuchó en el juego todavía: si se oyen bajos, un limitador suave antes de la
     ganancia (con cuidado de la costura) o subir el canal de música.
-  - **La página `/credits` no lista lo generado con IA** (`client/vite/credits.ts` solo lee
-    packs, fuentes y obras derivadas). Ya hay assets de Gemini en el juego: sumar una
-    sección que diga "Hecho con Gemini" y sus textos en `i18n/{es,en}/site.yaml`.
-  - **El pedido de imagen** (`gemini_web.py image`, eligiendo "Crear imagen" en el menú
-    nuevo) no se probó contra la página todavía: es un port del de Ants of Neque, que sí
-    funcionaba, y el primer pedido real es su prueba. Si "Crear imagen" pide controles
-    propios (como la música: duración, voces), hay que sumarlos como en `music_web.py`.
-  - **`import_art.py` sobre una hoja real** se probó con una de Ants of Neque (una palanca
-    en 5x2): con 8 a 10 colores antes de la paleta queda limpia; con 16 salía con ruido. Las
-    hojas que no son pixel art limpio (ilustración) quedan con algo de ruido: bajar
-    `--colors` o pedir "pixel art, flat shading" con más fuerza.
+  - **Los primeros assets de Gemini son las siete criaturas** (rama
+    `feat/gemini-creatures`, filas en "Generado con IA" de `assets/CREDITS.md` y prompts en
+    `assets/prompts/sprites/creatures/`).
+  - **La página `/credits` lista lo generado con IA** en "Hecho con IA" (rama
+    `feat/gemini-creatures`): falta mirarla en el E2E (`site-09`/`site-10`, la sección nueva
+    va antes de "Obra propia").
+  - **El pedido de imagen** funcionó en los diez pedidos del 2026-11-18 (Hydrogen, "Crear
+    imagen", ~30 s cada uno, sin cuota). Gemini elige el formato de la imagen y no respeta
+    la grilla pedida: por eso `import_art.py --cut rows|blobs`.
+  - **`import_art.py` sobre hojas reales:** las siete criaturas salieron limpias con 16
+    colores reducidos juntos (`--shared-colours`) y 24 el espinoso (el musgo se perdía);
+    la textura de una ilustración muy detallada queda como ruido al bajar por vecino más
+    cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
+    la herramienta).
 
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta

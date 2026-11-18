@@ -323,6 +323,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `/credits` del sitio (`site/Credits.tsx`, sin hooks): `SiteContent.credits` lo arma
   `vite/credits.ts` (`loadCredits`, puro en `creditsFrom`, con tests) desde
   `assets/CREDITS.md` y el `CREDITS.csv` de cada pack, con los lectores de spritepack.
+  "Hecho con IA" (`credits-ai`, `aiCredits`) lista las filas de "Generado con IA": sus
+  sprites, la fecha y el archivo de prompt (una fila sin fecha o sin prompt commiteado no
+  se muestra; el test exige que cada prompt exista).
   Cada frase es i18n (`site.credits.*`); el nombre y autor de un pack,
   `site.credits.pack.<carpeta>.*` (guiones como `_`; `vite/credits.test.ts` exige las dos claves en es y en
   para cada pack, y un enlace en `site/credits.ts` `licenceUrl` para cada licencia).
@@ -500,7 +503,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
   dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
   `<dir>_<n>` como quieto (0) y caminar (1..); si no, la textura única. Una acción sin todas
-  sus texturas se descarta.
+  sus texturas se descarta. Quieto y atacar (`OWN_FACINGS` de `packages/renderer`) quedan
+  vacíos hacia una dirección que no tiene frames (las criaturas de Gemini muerden de
+  perfil y no siempre de frente): ahí `clipTexture` da el frame parado de esa dirección y
+  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Caminar y morir
+  toman el sur (o la primera) como antes.
 - Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
   en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
   `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene

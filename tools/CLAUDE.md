@@ -105,6 +105,8 @@ python tools/gemini/music_web.py ask "<prompt>" --name N [--out-dir DIR]   |   f
 python tools/gemini/music_queue.py run|status [--slots a,b] [--takes 2] [--into DIR]
 python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide cada tema
 python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
+python tools/gemini/import_art.py <hoja.png> --cut rows|blobs --size 64 --names "walk_s_0,-,idle_s_0+attack_s_0,..."
+                                  [--mirror walk_w_0,...] [--shared-colours] [--scale 4.6]
 python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -14] [--channels 1] [--max-seconds 72]
 python tools/gemini/music_import.py [--from build/music-gemini]   = make music-gemini (las elecciones al juego)
 python tools/gemini/anim_sheet.py <carpeta> --out hoja.png   hoja de contacto para revisar con Read
@@ -128,6 +130,9 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
 - **Herramientas:** "Crear música", "Crear imagen", "Crear video", "Canvas" y "Deep
   Research", en "Cargas y herramientas", son `<gem-menu-item role=menuitemcheckbox>`, no
   botones (`gemini_web.CLICK_TOOL_JS`).
+- **Imagen (verificado el 2026-11-18, diez pedidos):** `image` elige "Crear imagen" en
+  Hydrogen y la hoja llega en ~30 s, una sola imagen de 1024x572 a 765x1024 (el formato lo
+  elige Gemini); ninguno topó con la cuota.
 
 **Lo que se mantiene de Ants of Neque (cada regla costó pedidos reales):**
 - **Se detecta el medio, nunca se cree el texto:** la respuesta puede decir "solo genero
@@ -173,6 +178,19 @@ centrado; colores reducidos (`--colors`) y llevados a la paleta de spritegen (se
 en `creature`, `character`, `object` y `wall`, los píxeles más oscuros que la banda pasan a
 contorno (los contornos de spritegen, calculados como su `darken`, ART-5); en `ground` (ART-5:
 "suelos: sin contorno") y `effect` se llevan a la banda como el resto. Alfa 0 o 255. Escribe los frames, `_preview.png` (revisar con Read) e `import.json`.
+Una hoja de criatura no vuelve en la grilla pedida (filas de 7 sobre filas de 6, dos
+paneles): `--cut rows` toma las filas como vinieron (cada fila en partes iguales si sus
+dibujos caen una en cada parte, ensanchadas lo que sobresale el más ancho, con los vecinos
+borrados; todas las filas a una escala) y `--cut blobs` cada dibujo suelto (rótulos por
+bloques de `BLOB_BLOCK` px, las partes chicas con el dibujo más cercano, en orden de
+lectura, cada uno centrado en su masa: `massed`). Con las dos, `_drawings.png` numera los
+dibujos para escribir `--names` (`-` descarta, `a+b` guarda uno como dos frames),
+`--mirror` espeja frames, `--shared-colours` reduce los colores de todos juntos
+(`reduced_together`: de a uno titilaban) y `--scale` fija la escala. El `import.json` guarda
+los nombres, lo espejado y la escala forzada, y `credit.py` sobre ese `import.json` escribe
+en el archivo de prompt la hoja (sha256) y el comando que la cortó (`import_command`).
+Flujo y lecciones de las siete criaturas: `assets/README.md`, "Criaturas animadas de una
+sola hoja".
 
 **Música (`music_convert.py`):** MP4/AAC (o lo que lea ffmpeg) a Ogg Opus 48 kHz con el
 ffmpeg del PATH (el de `make sounds`) o el de `imageio-ffmpeg`: corta los fades, cierra el
@@ -262,5 +280,7 @@ espuma, `<pieza>/frame_<n>`). Uso: `make sprites` (`STRICT=1` falla si algún sp
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
 terceros: `assets/README.md`. También arma las animaciones de criaturas (`src/anims.ts`,
 docs/17 ANI): compone capas de un pack con paletas (`palettes`, `animations`), corta los
-frames `<sprite>/<acción>_<dir>_<n>`, arma los clips de los archivos con esos nombres y
-escribe `anims` en `atlas.json` ("Sprites animados" en `assets/README.md`).
+frames `<sprite>/<acción>_<dir>_<n>`, arma los clips de los archivos con esos nombres (con
+las pistas `mirror`, `anchor` y `ms` de una entrada sin capas: el este espejado del oeste,
+los pies en la casilla y los ms por frame; las criaturas de Gemini) y escribe `anims` en
+`atlas.json` ("Sprites animados" en `assets/README.md`).

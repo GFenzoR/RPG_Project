@@ -372,7 +372,9 @@ mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
 ### ANI-1 Direcciones
 4 (N, E, S, O), como hoy (`render/outfit.ts` lleva las diagonales a la horizontal). No hace
 falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
-un escudo en un brazo, no.
+un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
+spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
+animados"); lo usan las criaturas de Gemini.
 
 ### ANI-2 Acciones, frames y tiempos
 
@@ -400,6 +402,10 @@ un escudo en un brazo, no.
   | shoot | 13 | arco | se recorta a 300–400 ms |
   | hurt | 6, solo hacia el sur | morir | |
 
+- **Quieto y atacar, solo hacia sus lados** (2026-11-18): una criatura con frames de
+  `idle` o `attack` en algunas direcciones y no en otras usa, en esas otras, el frame
+  parado de esa dirección y la embestida de ANI-5 (`OWN_FACINGS`), en vez de girar hacia
+  un lado que sí tiene frames. Caminar y morir siguen tomando el sur.
 - **Caminar por distancia** (como hace `outfitFrame` hoy): el frame sale del avance del
   paso, así los pies no patinan si cambia la velocidad. En pasos encadenados no vuelve al
   frame quieto (ANI-3).
@@ -1101,7 +1107,7 @@ Por impacto en pantalla y por costo:
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini") |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -1391,6 +1397,30 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
   parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
   docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
 
+
+### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
+Siete monstruos que eran un sprite de Dungeon Crawl con la animación de ANI-5 ahora tienen
+frames hechos con el Gemini del dueño (SRC-5): de la Isla del Puerto `wolf`, `bilge_rat`,
+`tide_crab`, `gloom_bat` y `moss_spider` (también en el Bosque), y del Bosque `mire_toad`
+y `thornling`. Una hoja por criatura (diez pedidos en total: tres para probar el formato
+con el lobo), cortada con `tools/gemini/import_art.py` y declarada como datos en
+`assets/sprites.yaml` (`mirror`, `anchor: bc`, `shadow: ellipse`, `ms`). Cómo se pide, se
+corta y se revisa: `assets/README.md`, "Criaturas animadas de una sola hoja".
+- **Direcciones (ANI-1):** sur, norte y oeste dibujados; el este, el oeste espejado.
+  Morir, solo hacia el sur, como LPC.
+- **Lo que no vino:** Gemini casi nunca dibuja un ataque de frente o de espaldas. Con un
+  frame de golpe usable se armó el clip (parado, golpe, parado); si no, esa dirección usa
+  la embestida de ANI-5 con su frame parado (ANI-2, "Quieto y atacar, solo hacia sus
+  lados"): el cangrejo no tiene mordisco al sur; el murciélago, el sapo y el espinoso, al
+  norte (el sapo tampoco al sur ni quieto al norte).
+- **Tamaño (ART-2):** rata y cangrejo en 32x32; lobo, araña, sapo, murciélago y espinoso en
+  64x64 con los pies en la casilla, a la escala de los personajes de LPC (el lobo ~36 px
+  de largo, el espinoso ~40 de alto). La escala mezclada con los monstruos de Dungeon Crawl
+  que quedan sigue (docs/14).
+- **Quedaron fuera:** la gaviota (`thieving_gull`) ya es arte propio de spritegen; su hoja
+  de Gemini salió bien pero cambiarla es decisión del dueño. Los del Volcán y
+  `hollow_crawler`, `ore_beetle` siguen con ANI-5.
+- **/credits** lista lo hecho con Gemini ("Hecho con IA", desde `CREDITS.md`).
 
 ### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
 Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en
