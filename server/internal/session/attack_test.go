@@ -3,6 +3,7 @@ package session_test
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -272,6 +273,88 @@ func TestAttackEventsSpells(t *testing.T) {
 	}
 }
 
+// The other ways to attack go through playerAttack too: a rune (its spell, from an item)
+// and a condition spell at a monster are SPELL attacks before their projectile.
+func TestAttackEventsRuneAndConditionSpell(t *testing.T) {
+	t.Run("rune", func(t *testing.T) {
+		h := magicHarness(t, worldtest.Open(t, 0, 0, 32, 32), spawnAt("dummy", 13, 10, 0, 60))
+		cl, p := arcanist(t, h, pos(10, 10))
+		ocl, _ := h.join("Watcher", at(12, 14))
+		d := h.dummy()
+		pack := openPack(t, h, cl)
+		h.castNow(cl, cast("test_conjure"))
+		h.sim.RunTicks(20) // the support group's cooldown
+		ocl.take()
+		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+			From: inContainer(pack, 0), ItemId: runeID,
+			To: &pb.ActionTarget{Target: &pb.ActionTarget_CreatureId{CreatureId: d.ID()}}}}})
+		h.sim.Step()
+		if h.w.MonsterHealth(d) == 1000 {
+			t.Fatal("the rune did not hit")
+		}
+		attackFirst(t, ocl, p.ID(), pos(13, 10))
+		wantAttack(t, "watcher", ocl.take(), p.ID(), spell, d.ID(), pos(13, 10), 0)
+	})
+	t.Run("condition spell", func(t *testing.T) {
+		h := condHarness(t, worldtest.Open(t, 0, 0, 32, 32), withMonster(targetDummyDef(), 13, 10))
+		cl, p := h.join("Binder", at(10, 10))
+		ocl, _ := h.join("Watcher", at(12, 14))
+		d := h.dummy()
+		ocl.take()
+		h.castNow(cl, castAt("root", d.ID()))
+		attackFirst(t, ocl, p.ID(), pos(13, 10))
+		wantAttack(t, "watcher", ocl.take(), p.ID(), spell, d.ID(), pos(13, 10), 0)
+	})
+}
+
+// PvP (T5.2): a bolt, a wand and a bow at a player are SPELL and RANGED attacks on it,
+// for the victim and whoever sees them, before their projectile. (Condition spells at a
+// player: TestPvPConditionSpellRules.)
+func TestAttackEventsAtPlayers(t *testing.T) {
+	type shooter struct {
+		name  string
+		kind  pb.AttackKind
+		setup func(*session.Character)
+		start func(g *pvpWorld, cl *fakeClient, v *session.Player)
+	}
+	arcanistOf := func(c *session.Character) { c.Vocation, c.Mana = "arcanist", arcanistMax }
+	fight := func(g *pvpWorld, cl *fakeClient, v *session.Player) { g.input(cl, setTarget(v.ID())) }
+	for _, sh := range []shooter{
+		{name: "bolt", kind: spell, setup: arcanistOf,
+			start: func(g *pvpWorld, cl *fakeClient, v *session.Player) { g.input(cl, castAt("test_bolt", v.ID())) }},
+		{name: "wand", kind: ranged, setup: arcanistOf, start: fight},
+		{name: "bow", kind: ranged, start: fight, setup: func(c *session.Character) {
+			c.Vocation = "ranger"
+			c.Inventory = append(c.Inventory, session.ItemState{ItemID: bowID, Count: 1, Slot: int(slotRight)},
+				session.ItemState{ItemID: arrowID, Count: 10, Slot: int(slotAmmo)})
+		}},
+	} {
+		t.Run(sh.name, func(t *testing.T) {
+			g := newPvP(t, nil, func(c *session.Config) {
+				c.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
+				c.Balance.Combat.WandMinFactor = 1 // wand hits are exact
+			})
+			ca, a := g.fighter("Ana", 0, 20, 20, 30, 0, sh.setup)
+			if sh.name == "wand" {
+				a.EquipForTest(testItems()["test_energy_wand"], nil)
+			}
+			cb, b := g.fighter("Bea", 0, 23, 20, 30, 0)
+			co, _ := g.fighter("Cid", 0, 21, 24, 30, 0)
+			g.unsafe(ca)
+			cb.take()
+			co.take()
+			sh.start(g, ca, b)
+			g.sim.RunTicks(2)
+			if cur, mx := b.Health(); cur == mx {
+				t.Fatalf("Bea was not hit (%v)", sysKeys(ca.take()))
+			}
+			attackFirst(t, co, a.ID(), b.Pos())
+			wantAttack(t, "victim", cb.take(), a.ID(), sh.kind, b.ID(), b.Pos(), 0)
+			wantAttack(t, "watcher", co.take(), a.ID(), sh.kind, b.ID(), b.Pos(), 0)
+		})
+	}
+}
+
 // PvP: a player's blow at another is a MELEE attack for the victim and whoever sees
 // them; a player killed by one leaves its tile as a DEATH.
 func TestAttackEventsPvP(t *testing.T) {
@@ -294,8 +377,9 @@ func TestAttackEventsPvP(t *testing.T) {
 
 // Every way out of the view carries its reason: a monster's death (after its empty health
 // bar) and despawn, a player's death, logout, dropped connection, teleport and
-// invisibility (as a teleport: nothing says it is still there), and walking out of view
-// either way.
+// invisibility (as a teleport: nothing says it is still there), stairs (a teleport too:
+// the step onto them is all the watcher sees) and walking out of view either way. (Out of
+// a house: TestHouseDoorsGuestsAndExpel.)
 func TestDisappearReasons(t *testing.T) {
 	const (
 		outOfView = pb.DisappearReason_DISAPPEAR_REASON_OUT_OF_VIEW
@@ -368,6 +452,18 @@ func TestDisappearReasons(t *testing.T) {
 		wantGone(t, "watcher", evs, cut.ID(), logoutWhy)
 		// The dead player's own client: what it knew is out of view (it moved away).
 		wantGone(t, "dead", dcl.take(), quit.ID(), outOfView)
+	})
+	t.Run("stairs", func(t *testing.T) {
+		h := portalHarness(t, 2)
+		cl, p := h.join("Delver", at(5, 1))
+		ocl, _ := h.join("Watcher", at(5, 5))
+		h.sim.RunFor(time.Second)
+		ocl.take()
+		h.step(cl, S)
+		if p.Pos().Z != 8 {
+			t.Fatalf("the delver did not go down: %v", p.Pos())
+		}
+		wantGone(t, "watcher", ocl.take(), p.ID(), teleport)
 	})
 	t.Run("walking", func(t *testing.T) {
 		h := newHarness(t, worldtest.Open(t, 0, 0, 64, 32))
