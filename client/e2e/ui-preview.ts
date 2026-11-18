@@ -101,79 +101,95 @@ const SIZES: Size[] = [
   touch("tablet-768x1024", 768, 1024),
 ];
 
-/** rpg.windows of each scene (ui/windows.ts format); absent = the defaults. */
+/** rpg.windows of each scene (ui/windows.ts format, version 3); absent = the defaults. */
 const WINDOWS: Record<string, unknown> = {
   windows: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["guild"],
     win: {
-      battle: { open: true, dock: true, collapsed: false },
-      inventory: { open: true, dock: true, collapsed: true },
-      skills: { open: true, dock: true, collapsed: false },
-      party: { open: true, dock: true, collapsed: false },
-      guild: { open: true, dock: false, collapsed: false },
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: true },
+      skills: { open: true, collapsed: false },
+      party: { open: true, collapsed: false },
+      guild: { open: true, collapsed: false },
     },
   },
   guild: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["guild"],
     win: {
-      battle: { open: true, dock: true, collapsed: false },
-      inventory: { open: true, dock: true, collapsed: false },
-      guild: { open: true, dock: false, collapsed: false, x: 40, y: 40 },
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      guild: { open: true, collapsed: false, x: 300, y: 40 },
     },
   },
   tooltip: {
-    v: 1,
-    order: ["inventory", "battle", "skills", "party"],
+    v: 3,
     z: [],
     win: {
-      inventory: { open: true, dock: true, collapsed: false },
-      battle: { open: true, dock: true, collapsed: true },
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
     },
   },
   // docs/17 UI-5: the inventory alone in the dock, an item held over it.
   inventory: {
-    v: 1,
-    order: ["inventory", "battle", "skills", "party"],
+    v: 3,
     z: [],
     win: {
-      inventory: { open: true, dock: true, collapsed: false },
-      battle: { open: true, dock: true, collapsed: true },
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
     },
   },
   // The inventory floating over the map, wider (hud-fullscreen floats every window).
   inventoryfloat: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["inventory"],
     win: {
-      battle: { open: true, dock: true, collapsed: false },
-      inventory: { open: true, dock: false, collapsed: false, x: 40, y: 24, w: 420 },
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false, x: 300, y: 24, w: 420 },
     },
   },
   options: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["help", "options"],
     win: {
-      options: { open: true, dock: false, collapsed: false },
-      help: { open: true, dock: false, collapsed: false, x: 24, y: 24 },
+      options: { open: true, collapsed: false },
+      help: { open: true, collapsed: false, x: 300, y: 24 },
     },
   },
-  // docs/17 UI-5: the corpse's container floats where the player left it, resized.
+  // docs/17 UI-5: the corpse's container where the player left it, resized.
   server: {
-    v: 2,
+    v: 3,
+    z: [],
+    win: {
+      battle: { open: true, collapsed: true },
+      inventory: { open: true, collapsed: false },
+    },
+    others: {
+      "container-creature_remains": { collapsed: false, x: 24, y: 300, w: 240 },
+    },
+  },
+  // The magnet (docs/17 UI-5): windows dropped edge to edge, as the magnet leaves them —
+  // the skills under the battle list, the party beside it.
+  magnet: {
+    v: 3,
+    z: ["party", "skills"],
+    win: {
+      battle: { open: true, collapsed: false, x: 0, y: 0, h: 300 },
+      skills: { open: true, collapsed: false, x: 0, y: 300 },
+      party: { open: true, collapsed: false, x: 256, y: 0 },
+      inventory: { open: true, collapsed: false },
+    },
+  },
+  // An old save (version 1, the dock): the docked windows float at their default places.
+  migrated: {
+    v: 1,
     order: ["battle", "inventory", "skills", "party"],
     z: [],
     win: {
-      battle: { open: true, dock: true, collapsed: true },
+      battle: { open: true, dock: true, collapsed: false, h: 400 },
       inventory: { open: true, dock: true, collapsed: false },
-    },
-    others: {
-      "container-creature_remains": { dock: false, collapsed: false, x: 24, y: 300, w: 240 },
+      skills: { open: true, dock: true, collapsed: false },
     },
   },
 };
@@ -189,6 +205,9 @@ const HOVERS: Record<string, string> = {
 const SCENES = [
   "game",
   "windows",
+  "magnet",
+  "migrated",
+  "chat",
   "server",
   "groundtip",
   "scale",
@@ -246,6 +265,9 @@ try {
       }, windows ?? null);
       const sceneParam = [
         "windows",
+        "magnet",
+        "migrated",
+        "chat",
         "options",
         "tooltip",
         "tooltipcoin",
@@ -286,6 +308,14 @@ try {
         if (await el.isVisible()) {
           await el.hover();
           await page.waitForTimeout(150);
+        }
+      }
+      if (scene === "chat") {
+        // docs/17 UI-10: the chat floats translucent; under the pointer it turns clear.
+        const chat = page.locator('.gwin[data-window="chat"]');
+        if (await chat.isVisible()) {
+          await chat.hover();
+          await page.waitForTimeout(300);
         }
       }
       await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });

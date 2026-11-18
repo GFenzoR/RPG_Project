@@ -1048,9 +1048,10 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await expect(page.getByTestId("experience")).toBeVisible();
   await expect(page.getByTestId("game")).toHaveAttribute("data-layout", "desktop");
   await page.screenshot({ path: join(shots, "mobile-desktop-1280-long-name.png") });
-  // No header on desktop (docs/17 UI-4): the name and its experience sit between the
-  // orbs of the dock, cut with an ellipsis, and the map keeps its 2x (before T5.6 the
-  // header grew to 6 lines with a name like this and pushed the map down to 1x).
+  // No header on desktop (docs/17 UI-4): the name and its experience sit on the plaque
+  // over the life orb of the bottom bar, cut with an ellipsis, and the map keeps its 2x
+  // (before T5.6 the header grew to 6 lines with a name like this and pushed the map down
+  // to 1x).
   await expect(page.locator("header.hud")).toHaveCount(0);
   const vitals = await page.locator(".vitals").boundingBox();
   expect(vitals?.height ?? 999).toBeLessThan(160);
@@ -1061,9 +1062,18 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await expect(page.getByTestId("touch-pad")).toHaveCount(0);
   await expect(page.getByTestId("zoom-buttons")).toHaveCount(0);
 
-  // The dock: the chat keeps its place at the bottom and the windows scroll above it, so
-  // the end of the inventory can be brought into view (the chat used to stay over it at
-  // 1280x800); the appearance window (toolbar, O) floats over the map.
+  // Full screen (docs/17 UI-4): the map covers the whole screen above the bottom bar, with
+  // no frame; every window floats over it, and the chat sits just above the bar. Nothing
+  // covers the end of the inventory; the appearance window (toolbar, O) floats over the
+  // map too.
+  const hud = await page.getByTestId("hud-bar").boundingBox();
+  const canvasBox = await page.getByTestId("game-canvas").boundingBox();
+  if (!hud || !canvasBox) throw new Error("no bar or canvas");
+  expect(hud.y + hud.height).toBeCloseTo(800, 0);
+  expect(canvasBox.x).toBeCloseTo(0, 0);
+  expect(canvasBox.y).toBeCloseTo(0, 0);
+  expect(canvasBox.width).toBeCloseTo(1280, 0);
+  expect(canvasBox.y + canvasBox.height).toBeCloseTo(hud.y, 0);
   const uncovered = (testid: string): Promise<boolean> =>
     page.getByTestId(testid).evaluate((el) => {
       el.scrollIntoView({ block: "end" });
@@ -1075,10 +1085,9 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await openWindow(page, "appearance");
   expect(await uncovered("appearance-panel")).toBe(true);
   const chat = await page.getByTestId("say").boundingBox();
-  const side = await page.locator("#side-panel").boundingBox();
-  if (!chat || !side) throw new Error("no chat or side panel");
-  expect(chat.y + chat.height).toBeLessThanOrEqual(side.y + side.height + 0.5);
-  await page.screenshot({ path: join(shots, "mobile-desktop-1280-side-end.png") });
+  if (!chat) throw new Error("no chat");
+  expect(chat.y + chat.height).toBeLessThanOrEqual(hud.y + 0.5);
+  await page.screenshot({ path: join(shots, "mobile-desktop-1280-full-screen.png") });
 
   // Ctrl+wheel over the map zooms by whole scales (and is remembered); a plain wheel
   // does not, and Ctrl+wheel the other way comes back to the fitted 2x, and then out to
@@ -1086,8 +1095,8 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   const map = await page.getByTestId("game-canvas").boundingBox();
   if (!map) throw new Error("no canvas");
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
-  // The fitted 2x fills the box with as much of the 31x21 window as fits: the 960 px the
-  // dock leaves are 15 columns, and the rows above the hotbar strip more than 11.
+  // The fitted 2x fills the box with as much of the 31x21 window as fits: the 1280 px are
+  // 20 columns, and the 712 px above the bar a little more than 11 rows.
   const fitted = await page.evaluate(() => window.__rpgClient?.view());
   expect(fitted?.server).toEqual({ width: 31, height: 21 });
   expect(fitted?.shown.width ?? 0).toBeGreaterThanOrEqual(15);
@@ -1099,7 +1108,7 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await page.keyboard.up("Control");
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(3);
   expect(await rememberedZoom(page)).toBe("3");
-  // Zoomed in, the canvas fills the map's box, stays inside it and shows fewer tiles.
+  // Zoomed in, the canvas fills the map's box, stays above the bar and shows fewer tiles.
   const zoomed = await page.getByTestId("game-canvas").boundingBox();
   const box = await page.locator(".viewport").boundingBox();
   if (!zoomed || !box) throw new Error("no canvas");
@@ -1107,7 +1116,7 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   expect(closer?.shown.width ?? 99).toBeLessThan(fitted?.shown.width ?? 0);
   expect(zoomed.width).toBeGreaterThanOrEqual(map.width - 3);
   expect(zoomed.x).toBeGreaterThanOrEqual(box.x - 0.5);
-  expect(zoomed.y + zoomed.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+  expect(zoomed.y + zoomed.height).toBeLessThanOrEqual(hud.y + 0.5);
   await page.screenshot({ path: join(shots, "mobile-desktop-1280-zoom3.png") });
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, 100);
@@ -1119,8 +1128,7 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await page.keyboard.up("Control");
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(1);
   expect(await rememberedZoom(page)).toBe("1");
-  // All 21 rows of the window; as many of its 31 columns as the box holds (the dock
-  // leaves 960 px: 30).
+  // All 21 rows of the window and all its 31 columns (the box is 1280x712).
   const whole = await page.evaluate(() => window.__rpgClient?.view());
   const viewport = await page.locator(".viewport").boundingBox();
   if (!whole || !viewport) throw new Error("no view");

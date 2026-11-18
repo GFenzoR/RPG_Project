@@ -1,9 +1,9 @@
 // The wide view (docs/00, client/CLAUDE.md "Zoom del mapa"): the server keeps the client up
-// to date with 31x21 tiles around the player (Welcome.view_width/height). The fitted view
-// is the largest one that fills the map's box at a whole scale, never less than the
-// classic 15x11 (docs/17 UI-4); Ctrl+wheel down zooms out to the whole window at 1x, a
-// tile 15 to the side and 10 up on the canvas. At 1920x1080 and 1280x800 with the dock:
-// screenshots 97, 97b, 98 and 98b (phones: mobile.spec.ts).
+// to date with 31x21 tiles around the player (Welcome.view_width/height). On the desktop the
+// map is full screen (docs/17 UI-4): its box is the screen above the bottom bar, and the
+// fitted view is the largest one that covers it at a whole scale; Ctrl+wheel down zooms out
+// to the whole window at 1x, a tile 15 to the side and 10 up on the canvas. At 1920x1080
+// and 1280x800: screenshots 97, 97b, 98 and 98b (phones: mobile.spec.ts).
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -84,9 +84,8 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   errors.length = 0; // the 401 of opening the page without a session cookie
 
-  // 1920x1080, the fitted view: the dock leaves a 1536x1080 box. 3x would show the
-  // classic 15x11 (16x11 of the window); 2x fills the box with 24x16 of it, above the
-  // hotbar's strip.
+  // 1920x1080, the fitted view: the bar (88 px) leaves a 1920x992 box. 2x covers it with
+  // 30x15.5 tiles of the window.
   const fitted = await viewOf(page);
   expect(fitted.scale).toBe(2);
   expect(await page.evaluate(() => window.__rpgClient?.zoom())).toEqual({
@@ -146,8 +145,8 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
   await expect.poll(async () => (await viewOf(page)).scale).toBe(2);
   expect(await page.evaluate(() => localStorage.getItem("rpg.zoom"))).toBeNull();
 
-  // 1280x800 (the size of the other desktop tests): the dock leaves 960x800, 2x with 15
-  // columns and more than 11 rows; 1x out shows 30 columns of the window and its 21 rows.
+  // 1280x800 (the size of the other desktop tests): a 1280x712 box, 2x with 20 columns and
+  // a little more than 11 rows; 1x out shows the whole window, 31x21.
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect.poll(async () => (await viewOf(page)).shown.width).toBeLessThan(fitted.shown.width);
   const small = await viewOf(page);

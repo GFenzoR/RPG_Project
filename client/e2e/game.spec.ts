@@ -1351,7 +1351,8 @@ test("chat on the local and global channels, then switch the language", async ({
   await expect(page.getByTestId("game-log")).toContainText(
     "para volver a escribir en el canal global.",
   );
-  await page.locator(".side").screenshot({ path: join(shots, "16-chat.png") });
+  // The chat floats over the map (docs/17 UI-10): its window.
+  await page.locator('.gwin[data-window="chat"]').screenshot({ path: join(shots, "16-chat.png") });
 
   // Switching the language (the Options window of the toolbar) translates every screen at
   // once, the running game included.
@@ -1447,7 +1448,9 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   const line = `[Anuncio] ${gm.name}: Reinicio en 5 minutos`;
   await expect(plPage.getByTestId("chat-log")).toContainText(line);
   await expect(gmPage.getByTestId("chat-log")).toContainText(line);
-  await plPage.locator(".side").screenshot({ path: join(shots, "18-gm-announce.png") });
+  await plPage
+    .locator('.gwin[data-window="chat"]')
+    .screenshot({ path: join(shots, "18-gm-announce.png") });
 
   // T4.1: a GM asks the player a presence check; any answer gets the same reply. It is
   // only asked to someone playing: the player says something first.
@@ -1611,7 +1614,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const matePage = await enter(mate.email);
 
   // Both wake up at the temple: the mate is in the leader's battle list, with "+". The
-  // party window (toolbar, P) docks under the battle list.
+  // party window (toolbar, P) floats beside the battle list.
   for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
@@ -1655,7 +1658,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await expect(leadPage.getByTestId("chat-log")).toContainText(
     `[Grupo] ${mate.name}: vamos a cazar`,
   );
-  await leadPage.locator(".side").screenshot({ path: join(shots, "25-party-panel.png") });
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "25-party-panel.png") });
 
   // T4.1: the mate reports the leader from the battle list; the server answers.
   await matePage
@@ -1671,7 +1676,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.keyboard.type("prueba de reporte E2E");
   await expect(report.getByRole("textbox")).toHaveValue("prueba de reporte E2E");
   expect(await self(matePage)).toEqual(before);
-  await matePage.locator(".side").screenshot({ path: join(shots, "37-report-form.png") });
+  await matePage
+    .locator('.gwin[data-window="battle"]')
+    .screenshot({ path: join(shots, "37-report-form.png") });
   await report.getByRole("button", { name: "Enviar reporte" }).click();
   await expect(report).toHaveCount(0);
   await expect(matePage.getByTestId("game-log")).toContainText(
@@ -1796,6 +1803,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   await openWindow(page, "skills");
   await expect(page.getByTestId("skills-panel")).toContainText("Cocina");
   await shot(page, "17-crafting-done");
+  // Escape closes the station first (the Game's own key), whatever window is on top.
   await page.keyboard.press("Escape");
   await expect(win).toBeHidden();
   expect(errors).toEqual([]);
@@ -2567,7 +2575,9 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   );
   await expect(hunterP.getByTestId("battle-list")).toBeVisible();
   await shot(preyP, "50-pvp-aggressor-skull");
-  await preyP.locator(".side").screenshot({ path: join(shots, "51-pvp-battle-list.png") });
+  await preyP
+    .locator('.gwin[data-window="battle"]')
+    .screenshot({ path: join(shots, "51-pvp-battle-list.png") });
 
   expect(errors).toEqual([]);
   await hunterP.close();
