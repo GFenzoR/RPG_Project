@@ -239,7 +239,15 @@ class TheCredits(unittest.TestCase):
         self.assertNotIn("Provisional", mi.credit_note(picked, picked.tracks[0]))
         nameless = entry("town_puerto", ("2",), record={"delivery": {"title": "", "gemini_title": "output"}})
         self.assertIn("Sin título (Gemini no le dio uno): toma 2", mi.credit_note(nameless, nameless.tracks[0]))
-        self.assertEqual(mi.title_of({"gemini_title": "iron_in_the_deep"}), "iron_in_the_deep")
+        # A take's file is named after its title: such a name reads as that title again.
+        self.assertEqual(mi.title_of({"gemini_title": "iron_in_the_deep"}), "Iron in the Deep")
+        self.assertEqual(mi.title_of({"gemini_title": "the_sunless_vault"}), "The Sunless Vault")
+        self.assertEqual(mi.title_of({"gemini_title": "beneath_the_blackened_ridge"}),
+                         "Beneath the Blackened Ridge")
+        self.assertEqual(mi.title_of({"gemini_title": "weight_of_the_mountain"}),
+                         mi.title_of({"title": "Weight of the Mountain"}))
+        self.assertEqual(mi.title_of({"gemini_title": "Salt-Stained Shore"}), "Salt-Stained Shore")
+        self.assertEqual(mi.title_of({"gemini_title": "Output"}), "")
         pool = entry("town_puerto", ("1", "2", "3"), record=record)
         self.assertIn("uno de los 3 temas que alterna el director de música", mi.credit_note(pool, pool.tracks[2]))
         cave = entry("cave", ("1",), record=record, extras=("mine_1",))
@@ -367,6 +375,29 @@ def write_piece(path: str, seconds: float, rate: int = 48000) -> None:
 
 
 @unittest.skipUnless(_has_opus(), "no ffmpeg with libopus (PATH or imageio-ffmpeg)")
+class TheReuse(unittest.TestCase):
+    RECORD = {"kbps": 48, "channels": mi.CHANNELS, "analysis": mc.ANALYSIS, "lufs_target": mc.LUFS,
+              "true_peak_ceiling": mc.TRUE_PEAK}
+
+    def test_a_piece_measured_with_other_entry_settings_is_converted_again(self):
+        now = mc.entry_settings()
+        self.assertTrue(mi._settings_match(dict(self.RECORD, entry_settings=now), 48))
+        self.assertFalse(mi._settings_match(dict(self.RECORD, entry_settings=dict(now, most=now["most"] - 2)), 48))
+        gap = mc.ENTRY_GAP
+        try:
+            mc.ENTRY_GAP = gap + 5  # raised in music_convert.py: every piece is measured again
+            self.assertFalse(mi._settings_match(dict(self.RECORD, entry_settings=now), 48))
+        finally:
+            mc.ENTRY_GAP = gap
+        # A record of before they were kept was measured with the settings of ANALYSIS 1.
+        self.assertEqual(mi._settings_match(self.RECORD, 48), now == mi.ENTRY_SETTINGS_1)
+
+    def test_other_settings_are_converted_again_too(self):
+        now = dict(self.RECORD, entry_settings=mc.entry_settings())
+        self.assertFalse(mi._settings_match(now, 40))
+        self.assertFalse(mi._settings_match(dict(now, analysis=mc.ANALYSIS - 1), 48))
+
+
 class TheImport(unittest.TestCase):
     def test_a_pick_comes_in_credited_and_none_takes_it_out(self):
         with tempfile.TemporaryDirectory() as root:

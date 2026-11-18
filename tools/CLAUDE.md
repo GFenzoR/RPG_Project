@@ -226,12 +226,15 @@ cerca; uno de Gemini que el techo de pico deja más bajo lo compensa con el volu
 `combat` solo `none`/`off`; `cave_pool` = las versiones extra de cueva, y sin ella entran
 como provisionales las de `Slot.extras` que pasan `piece_problems`), convierte cada toma
 entera en estéreo (`KBPS` = 48, `AMBIENT_KBPS` = 40 para las cuevas; las ya convertidas
-con los mismos ajustes, `ANALYSIS` incluido, se reusan desde `build/gemini/music-import/`),
+con los mismos ajustes, `ANALYSIS` y los `ENTRY_*` incluidos (`entry_settings` en el
+registro; uno de antes cuenta con los de `ANALYSIS` 1), se reusan desde
+`build/gemini/music-import/`),
 las copia a `assets/sounds/music/gemini/<lugar>_<toma>.ogg`, reescribe sus líneas de
 `assets/sounds.yaml` entre las marcas `# gemini-music:sounds:…` (cada tema con `seconds`,
 `end` y `entries`), `:pools:…` (la pool de cada lugar) y `:rules:…` (`title` y `bosses`,
 que nombran pools), escribe el archivo de prompt y la fila de `CREDITS.md` de cada toma
-(`credit.prompt_text`, `credit.credits_row`), el manifiesto
+(`credit.prompt_text`, `credit.credits_row`; el título es el que dio Gemini, o el nombre
+de su archivo escrito como título: `the_sunless_vault` es «The Sunless Vault», `title_case`), el manifiesto
 `assets/sounds/music/gemini.yaml` (`format: 2`), borra lo que ya no suena, y `make` revisa
 el presupuesto (`tools/soundgen check`, también por pool). El volumen en `sounds.yaml`
 (`volume_for`) devuelve lo que el techo de pico le quitó, hasta 1 (ffmpeg mide un mono como

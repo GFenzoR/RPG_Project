@@ -132,6 +132,11 @@ ALIASES = {("town_puerto", "3"): "probe_1"}
 VERSIONS = ("1", "2", "3")
 ## File names the page gave a take that had no title of its own (town_puerto_2: "output").
 NAMELESS = ("output", "audio", "track", "music", "download")
+## Words a title made from a file name keeps in lower case inside it (`title_case`).
+SMALL_WORDS = ("a", "an", "and", "at", "by", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with")
+## The entry settings of ANALYSIS 1 (`music_convert.entry_settings`), which its
+## records did not keep yet: a record without them was measured with these.
+ENTRY_SETTINGS_1 = {"head": 10.0, "tail": 30.0, "gap": 15.0, "most": 8, "hop": 0.1}
 ## What picks.json may say instead of a take: what played before Gemini.
 NONE = ("none", "off")
 ## An extra version: "mine", "mine_2", "cave_mine" or "cave_mine_1".
@@ -276,14 +281,25 @@ def kbps_of(slot: Slot, kbps: int = KBPS, ambient_kbps: int = AMBIENT_KBPS) -> i
     return ambient_kbps if slot.ambient else kbps
 
 
+def title_case(name: str) -> str:
+    """A file name as the title it was made from: "beneath_the_blackened_ridge" is
+    "Beneath the Blackened Ridge" (Gemini names a take's file after its title, like
+    "weight_of_the_mountain" for "Weight of the Mountain")."""
+    words = [w for w in re.split(r"[_\-]+", name) if w]
+    return " ".join(w.lower() if 0 < i < len(words) - 1 and w.lower() in SMALL_WORDS else w[:1].upper() + w[1:]
+                    for i, w in enumerate(words))
+
+
 def title_of(ask: dict) -> str:
     """The title Gemini gave a take: its `title`, or the name of its file
-    when that is not a generic one; "" when it gave none."""
+    when that is not a generic one (written as a title); "" when it gave none."""
     title = str(ask.get("title") or "").strip()
     if title:
         return title
     name = str(ask.get("gemini_title") or "").strip()
-    return "" if name.lower() in NAMELESS else name
+    if name.lower() in NAMELESS:
+        return ""
+    return name if " " in name else title_case(name)
 
 
 def volume_for(lufs_out: float | None, base: float = BASE_VOLUME, target: float = music_convert.LUFS) -> float:
@@ -506,8 +522,11 @@ def _sha256(path: str) -> str:
 
 
 def _settings_match(record: dict, kbps: int) -> bool:
+    """Whether a converted piece was made and measured as this run would: a
+    change of `music_convert.ENTRY_*` measures every piece again."""
     return (record.get("kbps") == kbps and record.get("channels") == CHANNELS
             and record.get("analysis") == music_convert.ANALYSIS
+            and record.get("entry_settings", ENTRY_SETTINGS_1) == music_convert.entry_settings()
             and record.get("lufs_target") == music_convert.LUFS
             and record.get("true_peak_ceiling") == music_convert.TRUE_PEAK)
 

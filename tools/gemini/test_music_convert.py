@@ -304,6 +304,7 @@ class TheWholeStep(unittest.TestCase):
             self.assertAlmostEqual(record["seconds"], 62.5, delta=0.05)
             self.assertAlmostEqual(record["body_end"], 62.5 - 2.0, delta=0.2)  # half of the 4 s fade
             self.assertEqual(record["analysis"], mc.ANALYSIS)
+            self.assertEqual(record["entry_settings"], mc.entry_settings())
             for e in record["entries"]:
                 self.assertTrue(mc.ENTRY_HEAD <= e <= record["body_end"] - mc.ENTRY_TAIL, record["entries"])
             self.assertEqual(record["longest_quiet"], 0.0)

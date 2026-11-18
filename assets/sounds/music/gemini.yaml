@@ -240,7 +240,7 @@ slots:
         provisional: true
         source: "cave_abyss_1.mp4"
         source_sha256: "448023e53f937faf5899939ffaa69df97453e7e85f95e409fb88122b0e4a191a"
-        title: "the_sunless_vault"
+        title: "The Sunless Vault"
         made: "2026-11-18"
         mode: "Hydrogen"
         prompt: "prompts/sounds/music/gemini/cave_abyss_1.txt"
@@ -276,7 +276,7 @@ slots:
         provisional: true
         source: "cave_ember_1.mp4"
         source_sha256: "fa68a87a81952e0eb9d838b61463b2a527098285c1a17bad8cb053a1e52fc98a"
-        title: "beneath_the_blackened_ridge"
+        title: "Beneath the Blackened Ridge"
         made: "2026-11-18"
         mode: "Hydrogen"
         prompt: "prompts/sounds/music/gemini/cave_ember_1.txt"

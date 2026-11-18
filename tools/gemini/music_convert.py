@@ -130,8 +130,14 @@ QUIET_DB = 30.0
 MAX_QUIET_SECONDS = 6.0
 MIN_ENTRIES = 2
 ## The version of a piece's measures (entries, holes): `music_import` converts
-## again a piece measured by an older one.
+## again a piece measured by an older one, or with other entry settings
+## (`entry_settings`: changing ENTRY_* is enough).
 ANALYSIS = 1
+
+
+def entry_settings() -> dict:
+    """What `entry_points` measures a piece with (ENTRY_*), kept in its record."""
+    return {"head": ENTRY_HEAD, "tail": ENTRY_TAIL, "gap": ENTRY_GAP, "most": ENTRY_MOST, "hop": ENTRY_HOP}
 
 
 # --- the pure parts (tested by test_music_convert.py) ------------------------------------
@@ -534,6 +540,7 @@ def convert(source: str, out: str, kbps: int = KBPS, channels: int = CHANNELS, l
         body_end = len(light) / ANALYSIS_RATE - tail
         record.update({
             "analysis": ANALYSIS,
+            "entry_settings": entry_settings(),
             "fade_in": round(head, 2),
             "fade_out": round(tail, 2),
             "body_end": round(body_end, 2),
