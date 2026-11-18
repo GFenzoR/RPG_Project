@@ -599,6 +599,18 @@ body.dragging-window * {
   margin: 0;
 }
 
+/* ---- The hotbar: a belt of slots in an iron strap along the bottom of the map --------
+   (desktop only: the phones count every pixel of the bar for their four slots). */
+.game[data-ui="windows"] .hotbar {
+  padding: 3px;
+  background: rgb(15 13 11 / 0.82);
+  border: 1px solid var(--ui-iron-900);
+  border-radius: var(--ui-radius);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    0 3px 10px rgb(0 0 0 / 0.6);
+}
+
 /* ---- Low health: the map's edge turns red and beats with the orb --------------------- */
 .viewport[data-low]::after {
   content: "";

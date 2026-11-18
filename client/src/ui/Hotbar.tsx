@@ -63,12 +63,19 @@ export function Hotbar(props: {
       const li = ol?.querySelector("li");
       if (!ol || !li) return;
       const gap = parseFloat(getComputedStyle(ol).columnGap) || 0;
-      const barGap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const bar = getComputedStyle(el);
+      const barGap = parseFloat(bar.columnGap) || 0;
+      // The bar's own padding and border (the desktop belt, docs/17): room the slots lack.
+      const frame =
+        (parseFloat(bar.paddingLeft) || 0) +
+        (parseFloat(bar.paddingRight) || 0) +
+        (parseFloat(bar.borderLeftWidth) || 0) +
+        (parseFloat(bar.borderRightWidth) || 0);
       const slot = li.getBoundingClientRect().width;
       const edit = el.querySelector<HTMLElement>(".edit")?.getBoundingClientRect().width ?? 0;
       // Stacked, the arrows and the edit button have a line of their own.
       const fit = hotbarFit({
-        available: hotbarRoom(host.clientWidth, reserve, SIDE_MARGIN_PX),
+        available: hotbarRoom(host.clientWidth, reserve, SIDE_MARGIN_PX) - frame,
         slot,
         gap,
         total,

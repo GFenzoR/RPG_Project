@@ -860,19 +860,11 @@ body.using-item canvas {
   position: absolute;
   bottom: 0.5rem;
   left: 50%;
-  z-index: 2;
   transform: translateX(-50%);
   display: flex;
   gap: 0.25rem;
   align-items: stretch;
   max-width: calc(100% - 1rem);
-  padding: 3px;
-  background: rgb(15 13 11 / 0.82);
-  border: 1px solid var(--ui-iron-900);
-  border-radius: var(--ui-radius);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-iron-600),
-    0 3px 10px rgb(0 0 0 / 0.6);
 }
 .hotbar ol {
   list-style: none;
@@ -957,10 +949,10 @@ body.using-item canvas {
 }
 /* Desktop: a slimmer bar closer to the edge, and the canvas keeps the strip it takes clear
    when the window has room, or moves up as far as it can (--map-reserve-bottom, read by
-   render/game-canvas.ts; px, the bar's height plus its bottom gap). At 1280x800 the bar
+   render/game-canvas.ts; px, the belt's height plus its bottom gap). At 1280x800 the bar
    covered most of the last row of tiles, and a click to walk there cast F1 or F2. */
 .game[data-layout="desktop"]:not([data-pad]) .viewport {
-  --map-reserve-bottom: 40px;
+  --map-reserve-bottom: 48px;
 }
 .game[data-layout="desktop"]:not([data-pad]) .hotbar {
   bottom: 0.2rem;
