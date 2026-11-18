@@ -1,5 +1,14 @@
 // Sprite atlas packer and placeholder generator (tools/CLAUDE.md, assets/README.md).
-export { buildAtlas, writeAtlas, DEFAULT_OUT_DIR, MANIFEST_FILE, SPRITES_DIR } from "./build.ts";
+export {
+  buildAtlas,
+  legacyFrame,
+  writeAtlas,
+  DEFAULT_OUT_DIR,
+  MANIFEST_FILE,
+  SPRITES_DIR,
+} from "./build.ts";
+export { ANIM_ACTIONS, ANIM_DIRS, PRESETS, frameName } from "./anims.ts";
+export type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
 export type {
   AtlasIndex,
   AtlasPageJson,
