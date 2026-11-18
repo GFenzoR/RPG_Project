@@ -105,15 +105,18 @@ python tools/gemini/music_web.py ask "<prompt>" --name N [--out-dir DIR]   |   f
 python tools/gemini/music_queue.py run|status [--slots a,b] [--takes 2] [--into DIR]
 python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide cada tema
 python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
-python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -14]
+python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -14] [--channels 1] [--max-seconds 72]
+python tools/gemini/music_import.py [--from build/music-gemini]   = make music-gemini (las elecciones al juego)
 python tools/gemini/anim_sheet.py <carpeta> --out hoja.png   hoja de contacto para revisar con Read
 python tools/gemini/credit.py <sidecar.json> --asset assets/...   prompt commiteado + fila de CREDITS
 make test-gemini                                     tests (Python 3.10+ y Pillow; ffmpeg opcional)
 ```
-Las salidas van por defecto a `build/gemini/{art,music,import,convert}/` (no se
-commitean); todas aceptan otra carpeta. La única que escribe en `assets/` es `credit.py`, y
-solo el archivo de prompt de `assets/prompts/`: los frames y los temas se copian a mano,
-después de mirarlos o escucharlos.
+Las salidas van por defecto a `build/gemini/{art,music,import,convert,music-import}/` (no
+se commitean); todas aceptan otra carpeta. Escriben en `assets/` solo `credit.py` (el
+archivo de prompt de `assets/prompts/`) y `music_import.py` (`make music-gemini`), que pone
+en el juego **lo que el dueño ya eligió** en `build/music-gemini/picks.json`: los frames se
+copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo haya escuchado
+(un lugar sin elegir suena con su toma 1 marcada `provisional`).
 
 **Lo que cambió en la web de Gemini (verificado el 2026-11-17):**
 - **Modos:** el menú ofrece "Ayuda todos los días 4 Hydrogen", "Código y análisis 4 Argon"
@@ -178,12 +181,33 @@ sola ganancia** a **-14 LUFS** sin pasar -1,5 dBTP (medida con `loudnorm`; una g
 varía rompería la costura) y, como el códec puede escalonar una costura limpia, rota el
 bucle de a 97 ms hasta que la costura codificada sea ordinaria (`seam_turns` en el JSON).
 Primeros temas reales (2026-11-18): costura de 3,3 a 0,9 tras rotar, ~650 KB a 32 kbps
-estéreo (más que los 256 KB de docs/07 por archivo de música: decisión del dueño).
+estéreo, más que los 256 KB de docs/07 por archivo de música y ~33 MB decodificado. Por eso
+`--max-seconds` corta un loop más corto (`loop_length`: entre 0,75 N y N segundos, donde lo
+que sigue al corte se parece al comienzo en la ventana del crossfade: ataques en fase, la
+misma curva de energía y el mismo nivel) y el juego los lleva mono a 20 kbps. Los masters de
+Gemini vienen calientes (+1,5 a +5 dBTP): el techo de pico pone la ganancia y el loop queda
+entre -16 y -19,5 LUFS (medido mono, como los temas de soundgen).
 **-14 LUFS es el objetivo de toda la música del juego:** los temas de soundgen miden -11,3
 (bosque), -13,7 (puerto), -14,2 (volcán) y -15,8 (cueva), unos -14 en promedio; a -18 un
 tema de Gemini sonaba ~4 dB más bajo. El test `TheGameMusic` mide los `.ogg` de
-`assets/sounds/music/` contra `music_convert.LUFS` (si hay ffmpeg): un tema nuevo de
-cualquier origen tiene que quedar cerca.
+`assets/sounds/music/` (los de soundgen, no la carpeta `gemini/`) contra
+`music_convert.LUFS` (si hay ffmpeg): un tema nuevo de cualquier origen tiene que quedar
+cerca; uno de Gemini que el techo de pico deja más bajo lo compensa con el volumen.
+
+**De las elecciones al juego (`music_import.py`, `make music-gemini`):** lee `picks.json`
+(una toma, una lista de tomas, `none` u `off`; un lugar sin elegir = toma 1 provisional),
+convierte cada toma mono a 20 kbps con loops de 54 a 72 s (las ya convertidas con los
+mismos ajustes se reusan desde `build/gemini/music-import/`), las copia a
+`assets/sounds/music/gemini/<lugar>_<toma>.ogg`, reescribe sus líneas de
+`assets/sounds.yaml` entre las marcas `# gemini-music:sounds:…` y `:rules:…` (el sonido de
+cada lugar, los de las otras tomas de una lista y las reglas `title`, `combat` y
+`bosses`), escribe el archivo de prompt y la fila de `CREDITS.md` de cada toma
+(`credit.prompt_text`, `credit.credits_row`), el manifiesto `assets/sounds/music/gemini.yaml`,
+borra lo que ya no suena, y `make` revisa el presupuesto (`tools/soundgen check`). El
+volumen en `sounds.yaml` (`volume_for`) devuelve lo que el techo de pico le quitó, hasta 1.
+`none` vuelve al tema de soundgen del lugar (`Slot.fallback`): por eso esos temas y sus
+recetas siguen en el repo. Las tablas de lugares (`SLOTS`: sonido, regla, tema de soundgen)
+y de nombres (`ALIASES`: la toma 3 de Puerto es `probe_1`) están en el script.
 
 **Tests:** `make test-gemini` (unittest; claves, cortes, escala, paleta y bandas, costura,
 crossfade, ganancia, lectura de respuestas y del menú, la regla del prompt, el candado, la

@@ -251,6 +251,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   vuelve a montar al entrar o salir del juego, y cada vez parte de
   `audio.currentPrefs()`.
 - Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
+- Música sobre la de la zona (`content.sounds.music`, opcionales): `Screens` (`ui/App.tsx`)
+  pone `music.title` fuera del juego (sin ambiente); al salir, `Game.destroy` calla los
+  loops y el efecto vuelve al título. Dentro, `Game.keepLoops` elige con `musicFor`
+  (`audio/cues.ts`, puro): un jefe de `music.bosses` en la lista de batalla, después un
+  combate (`music.combat`, si existe: objetivo propio o un golpe sobre la casilla propia,
+  `blowAt`, hace menos de `combatHoldMs`), después la zona. Corre tras cada batch y cada
+  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un combate termina sin mensaje.
+- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de cada
+  canal (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que

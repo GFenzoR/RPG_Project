@@ -965,6 +965,43 @@ más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `inne
 que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
 `i18n/<lang>/site.yaml` (claves `site.*`).
 
+## Sonido (`assets/sounds.yaml`, T3.7)
+El manifiesto de sonido vive en `assets/` (no en `data/`) pero se valida igual
+(`sounds.schema.json` y `make validate`); el cliente lo empaqueta como `content.sounds`.
+Qué suena con cada evento y cómo se juega está en `02-game-design.md`, "Sonido"; los
+archivos, su origen y su presupuesto, en `assets/README.md` "Sonido" y `07`, "Audio".
+```yaml
+format: 1
+sounds:          # id: archivo bajo assets/, canal, volumen 0..1, copias a la vez
+  hit: { file: sounds/sfx/hit.ogg, channel: sfx, volume: 0.8, max_voices: 4 }
+  music_puerto: { file: sounds/music/gemini/town_puerto_1.ogg, channel: music, volume: 1 }
+events:          # evento del cliente → sonido, o lista para elegir uno al azar
+  effect.hit: hit
+music:
+  fade_ms: 2500                       # fundido cruzado al cambiar de loop
+  islands: { puerto: music_puerto }   # isla de world.yaml → loop
+  underground: music_cueva            # pisos z > 7
+  title: music_title                  # fuera del juego (login y personajes)
+  combat: music_combat                # mientras pelea (hoy no hay: el dueño lo apagó)
+  combat_hold_ms: 8000                # cuánto sigue la de combate tras el último golpe u objetivo
+  bosses: { slagbound_warden: music_boss_forge }   # monstruo de data/monsters → loop
+ambient:
+  fade_ms: 2000
+  islands: { puerto: amb_olas }
+```
+- `make validate` exige que cada archivo exista (y uno de `vendor/` tenga su fila en
+  `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada loop de `music`
+  (islas, `underground`, `title`, `combat` y los de `bosses`) sea del canal `music` y los
+  de `ambient` del suyo, que las islas existan en `world/world.yaml` y que las claves de
+  `bosses` sean monstruos de `data/monsters`.
+- **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos) y
+  `# gemini-music:rules:begin`/`end` (`title`, `combat`, `bosses`) las escribe
+  `make music-gemini` desde las elecciones del dueño; no se editan a mano. Lo que tiene
+  cada lugar (la toma, varias tomas, o `none`) está en `assets/sounds/music/gemini.yaml`:
+  `pick`, `provisional`, `file`/`volume` del sonido del lugar, `fallback` (el tema de
+  soundgen que vuelve con `none`) y `tracks` (cada toma con su fuente, el título que le dio
+  Gemini, su prompt y las medidas del loop). El resto del archivo es a mano.
+
 ## i18n
 ```yaml
 # i18n/es/items.yaml

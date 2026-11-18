@@ -140,8 +140,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `client/src/audio/` con canales, voces y sonido posicional; eventos → sonidos en
   `assets/sounds.yaml`. Hay 27 efectos y 3 loops de música (Puerto, Bosque y Cueva) más 2
   de ambiente, todos generados por `make sounds` (`tools/soundgen`, CC0), y el panel
-  Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`),
-  música de combate y probar Opus en el WKWebView de macOS.
+  Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`) y
+  probar Opus en el WKWebView de macOS. Desde el 2026-11-18 la música es la que el dueño
+  eligió entre las tomas de Gemini (`make music-gemini`), con música del título y del
+  guardián de la forja; el cliente también sabe tocar música de combate, pero el dueño la
+  apagó (solo jefes o quests importantes). Falta el director de música (docs/14).
 
 ## Hito 4 — Alpha pública
 - [x] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el

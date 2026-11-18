@@ -439,17 +439,36 @@ el punto 5:
   "gemini"; `make test-gemini`, job `gemini` de la CI). El smoke de solo lectura
   (`gemini_web.py check --list-modes`) vio el 2026-11-18 el Chrome del dueño con sesión, en
   Hydrogen. Lo que falta:
-  - **Ningún asset de Gemini entró todavía al juego.** Los 14 temas que pidió la sesión
-    principal el 2026-11-17 (`build/music-gemini/` del repo principal, dos por lugar)
-    esperan que el dueño elija; los elegidos pasan por `music_convert.py`, `sounds.yaml` y
-    `credit.py`. La sección "Generado con IA" de `assets/CREDITS.md` está vacía.
-  - **Presupuesto de música:** un tema de Gemini (~2:40) pesa ~650 KB en Opus estéreo a
-    32 kbps y docs/07 da 256 KB por archivo de música (1,5 MB todo el audio). Hay que
-    decidir con el dueño: subir el tope (el audio no cuenta en la descarga inicial),
-    mono o menos kbps, o temas más cortos.
+  - **La música de Gemini ya suena** (2026-11-18, `make music-gemini`, `assets/README.md`
+    "Sonido"): las elecciones del dueño de `build/music-gemini/picks.json` del repo
+    principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
+    forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
+    `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
+  - **Director de música (pedido del dueño, 2026-11-18):** las transiciones importan mucho
+    y un tema no debería empezar siempre desde el principio. Falta un director que alterne
+    las tomas de un lugar (Puerto ya tiene tres: `music_puerto`, `_2`, `_3`, hoy suena la
+    primera), empiece cada loop en un punto distinto y cuide los fundidos. El manifiesto
+    (`assets/sounds/music/gemini.yaml`, `tracks`) ya lista varias tomas por lugar, pero
+    `sounds.yaml` todavía espera un loop por isla: el director necesita una forma de
+    nombrar un grupo de tomas (y su validación).
+  - **Más versiones de cueva:** el mundo tiene muchas cuevas y el dueño quiere que la música
+    varíe al bajar a una. Hay que pedirlas (`music_queue.py`; la sesión principal ya
+    probó un `cave_mine_1` que terminó en `policy`).
+  - **Combate:** el dueño no quiere música de combate para peleas comunes, solo para un jefe
+    o una quest importante. El cliente ya sabe tocar la de un jefe (`music.bosses`) y la
+    de combate (`music.combat`, hoy sin usar); falta la regla de "quest importante".
+  - **Presupuesto de audio:** con mono a 20 kbps y loops de ~1 minuto, las 8 tomas de hoy
+    dejan el total en ~1454 de 1536 KiB (docs/07). Más tomas (las cuevas, otro lugar)
+    necesitan decidir con el dueño: subir el tope (el audio no cuenta en la descarga
+    inicial), bajar los kbps o acortar los loops.
+  - **Volumen:** los masters de Gemini vienen con picos de +1,5 a +5 dBTP; con una sola
+    ganancia y el techo de -1,5 dBTP los loops quedan entre -16 y -19,5 LUFS y, aun con
+    volumen 1 en `sounds.yaml`, suenan ~2 dB por debajo de los temas de soundgen. Nadie
+    los escuchó en el juego todavía: si se oyen bajos, un limitador suave antes de la
+    ganancia (con cuidado de la costura) o subir el canal de música.
   - **La página `/credits` no lista lo generado con IA** (`client/vite/credits.ts` solo lee
-    packs, fuentes y obras derivadas). Con el primer asset de Gemini, sumar una sección
-    que diga "Hecho con Gemini" y sus textos en `i18n/{es,en}/site.yaml`.
+    packs, fuentes y obras derivadas). Ya hay assets de Gemini en el juego: sumar una
+    sección que diga "Hecho con Gemini" y sus textos en `i18n/{es,en}/site.yaml`.
   - **El pedido de imagen** (`gemini_web.py image`, eligiendo "Crear imagen" en el menú
     nuevo) no se probó contra la página todavía: es un port del de Ants of Neque, que sí
     funcionaba, y el primer pedido real es su prueba. Si "Crear imagen" pide controles

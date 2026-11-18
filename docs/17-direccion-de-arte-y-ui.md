@@ -1148,7 +1148,10 @@ juego). Las reglas:
 - **Un solo volumen para toda la música: -14 LUFS** (integrado, pico real ≤ -1,5 dBTP). Es
   el nivel de los temas que ya tiene el juego (soundgen: de -11,3 a -15,8, unos -14 en
   promedio), así un tema de Gemini no suena más bajo que los otros. Un tema nuevo, venga de
-  donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`.
+  donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`. Los
+  masters de Gemini traen picos de +1,5 a +5 dBTP, así que el techo de pico los deja entre
+  -16 y -19,5 LUFS (2026-11-18); `make music-gemini` compensa con el volumen de
+  `sounds.yaml`, hasta 1.
 - **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
   a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
   (criaturas con anatomía, retratos, música con instrumentos).

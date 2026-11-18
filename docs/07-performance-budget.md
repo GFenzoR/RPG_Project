@@ -201,14 +201,23 @@ El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez q
 
 | Métrica | Presupuesto | Hoy |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~645 KiB (34 archivos) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~1454 KiB (38 archivos; 1293 KiB de música) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~154 KiB / ~29 KiB |
+| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~188 KiB / ~29 KiB |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~27 MB con todo cargado |
+| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~36 MB en el peor caso |
 
-- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en música y 16 en
-  ambiente.
+- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en la música de
+  soundgen, 20 en la de Gemini y 16 en ambiente.
+- **Música de Gemini** (2026-11-18, `make music-gemini`, `assets/README.md` "Sonido"): un
+  tema de ~3 min decodificado ocupa ~33 MB, así que cada toma entra como un loop de 54 a
+  72 s (`music_import.py` `MAX_SECONDS`) a 20 kbps mono: 130–190 KiB por loop. Con las 8
+  tomas de hoy quedan ~80 KiB libres del total: más versiones (las cuevas que pidió el
+  dueño) necesitan subir el tope, bajar los kbps o acortar los loops.
+- **Memoria:** el motor (`client/src/audio/engine.ts`, `KEEP_LOOPS`) deja decodificados
+  solo los dos últimos loops que pidió cada canal (el que suena y el anterior, para ir y
+  volver sin decodificar de nuevo); los demás se olvidan. Peor caso: efectos e interfaz
+  (~3 MB), dos ambientes (~6 MB) y los dos loops de música más largos (~27 MB).
 - El test de `tools/soundgen` (`checkBudget`) falla si algún archivo o el total se pasan.
   También lo comprueba `make sounds`. Los límites están en `BUDGET`
   (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.

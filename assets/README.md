@@ -12,8 +12,10 @@
 ## Sonido (T3.7)
 | Ruta | Qué es | ¿Se commitea? |
 |---|---|---|
-| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla | Sí |
+| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla, música del título, de combate y de jefes | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
+| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), escrita por `make music-gemini` | Sí |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, con fuente, título y medidas | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -23,6 +25,40 @@
 - El render es determinista (mismos samples con la misma receta). Los bytes del `.ogg`
   pueden variar entre versiones de libopus: es normal ver diffs binarios al regenerar.
 - Presupuesto de tamaño en `docs/07-performance-budget.md`, "Audio".
+
+### La música de Gemini (`make music-gemini`)
+Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las tomas que
+Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
+Volcán, Cuevas, combate y el guardián de la forja). Las tomas están fuera de git, en
+`build/music-gemini/<lugar>_<n>.mp4` con su sidecar (la tercera de Puerto es `probe_1.mp4`),
+y las elecciones en `build/music-gemini/picks.json`:
+```json
+{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off"}}
+```
+- **Una toma** (`"1"`, `"2"`, `"3"`) suena en su lugar. **Varias** (una lista) entran
+  todas: la primera es el sonido del lugar (`music_puerto`) y las demás, sonidos propios
+  (`music_puerto_2`, `music_puerto_3`) para el director de música que las va a alternar
+  (pendiente, `docs/14`).
+- **Un lugar sin elegir** suena con su toma 1, marcada `provisional` en el manifiesto y en
+  su fila de `CREDITS.md`.
+- **`none` u `off`** deja lo que sonaba antes de Gemini: el tema de soundgen de ese lugar
+  (`puerto`, `bosque`, `volcan`, `cueva`: por eso siguen en el repo con sus recetas), o
+  nada propio donde no había (título, combate, jefe: sigue la música de la zona).
+
+Para cambiar una elección: editar `picks.json` y correr **`make music-gemini`** (con
+`FROM=<carpeta>` si las tomas están en otro lado). Hace todo de nuevo desde las elecciones:
+convierte cada toma con `music_convert.py` (sin fades, un loop de 54 a 72 s elegido donde
+lo que sigue al corte se parece al comienzo, cerrado con un crossfade, una sola ganancia
+hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **mono a 20 kbps**; una toma ya convertida
+con los mismos ajustes no se vuelve a convertir), la copia a `sounds/music/gemini/`,
+reescribe sus líneas de `sounds.yaml` (entre las marcas `# gemini-music:…`), el archivo de
+prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md` y
+`sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
+(`tools/soundgen check`). Los masters de Gemini vienen calientes (picos de +1,5 a +5 dBTP):
+el techo de pico deja los loops entre -16 y -19,5 LUFS, y el volumen de `sounds.yaml`
+devuelve esa diferencia hasta 1 (`volume_for`), así que suenan ~2 dB por debajo de los
+temas de soundgen. Después: `make test` (el test de soundgen compara el manifiesto con
+`sounds.yaml`, las filas y la carpeta), `make validate` y escucharlo con `make play`.
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
@@ -304,10 +340,10 @@ Música, del MP4 al loop:
    cola sobre la cabeza, a -14 LUFS (el nivel de la música que ya tiene el juego) y en
    Ogg Opus, con la costura medida después de
    codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
-3. Se copia a `assets/sounds/music/`, se apunta en `sounds.yaml` y se corre `credit.py`.
-   **Ojo con el presupuesto:** un tema de Gemini de ~2:40 en Opus estéreo a 32 kbps pesa
-   ~650 KB, y `docs/07` (Audio) da 256 KB por archivo de música. Subirlo es decisión del
-   dueño, antes de mergear el primer tema.
+3. El dueño elige en `build/music-gemini/picks.json` y `make music-gemini` lo pone en el
+   juego con sus créditos ("La música de Gemini", arriba). El presupuesto se respeta sin
+   subirlo: mono, 20 kbps y loops de ~1 minuto (un tema entero de ~3 min pesaría ~650 KB
+   en estéreo a 32 kbps y ocuparía ~33 MB decodificado).
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

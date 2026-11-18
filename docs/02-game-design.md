@@ -1613,8 +1613,22 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   mensajes, UI) no son posicionales.
 - **Música y ambiente**: un loop por isla (`world/world.yaml`) y otro para los pisos
   subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
-  Hoy hay cuatro loops: Puerto, Bosque, Volcán y Cueva. El ambiente son olas en Puerto,
-  bosque en Bosque y el volcán en la Isla Volcánica; bajo tierra no hay ambiente.
+  El ambiente son olas en Puerto, bosque en Bosque y el volcán en la Isla Volcánica; bajo
+  tierra no hay ambiente.
+- **Música sobre la de la zona** (`sounds.yaml` `music`, `client/src/audio/cues.ts`
+  `musicFor`), cada una opcional: `title` suena fuera del juego (login, registro y
+  personajes; sin ambiente); `bosses` da el loop de un jefe mientras uno está a la vista en
+  el piso propio (hoy el guardián de la forja, `slagbound_warden`); `combat`, mientras el
+  jugador tiene objetivo o recibió un golpe hace menos de `combat_hold_ms`. Un jefe gana a
+  un combate y un combate a la zona. **El dueño apagó la música de combate** (2026-11-18):
+  un combate común sigue con la de la zona; solo un jefe (o, más adelante, una quest
+  importante) la cambia.
+- **De dónde sale**: desde el 2026-11-18 la música es la que el dueño eligió entre las
+  tomas de Gemini (título, Puerto, Bosque, Volcán, Cuevas y el guardián de la forja;
+  `assets/sounds/music/gemini.yaml`). Los temas de soundgen siguen en el repo y vuelven a
+  sonar en el lugar que el dueño marque `none`. Puerto tiene tres tomas elegidas: hoy suena
+  la primera y las otras dos quedan listas para el director de música (pendiente, docs/14:
+  variar las tomas, empezar en otro punto y cuidar las transiciones).
 - **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
   navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
   los efectos se descartan, para que no suenen todos juntos al reanudarse.
