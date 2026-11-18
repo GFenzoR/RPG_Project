@@ -99,8 +99,11 @@ el punto 5:
 ## Pendientes conocidos (no bloquean)
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
-  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"). Lo que
-  falta, en el orden de su §7:
+  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
+  A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
+  del click derecho con la ficha del item, tooltip, doble click, opción de controles,
+  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones. Lo que falta,
+  en el orden de su §7:
   - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
     docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
     servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
@@ -109,8 +112,13 @@ el punto 5:
   - **A8, animación procedural** de los monstruos y NPCs de un solo frame (ANI-5). **A9**
     necesita protocolo: quién ataca a quién y si una criatura murió o salió de la vista
     (ANI-7).
-  - **A4 y A5, la UI** (cliente): click derecho con menú y ficha del item; diálogo y tienda
-    sin scroll.
+  - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
+    animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
+    canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
+  - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
+    (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
+    `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
+    no se desplaza: el E2E de la Isla de Pruebas busca la mochila y pagina.
   - **Lo que A3 dejó para después** (docs/17 §7, "Hecho: A2 y A3"): cada contenedor como
     ventana propia (hoy van dentro de Inventario); las ventanas del servidor (diálogo,
     tienda, crafteo, mercado, casa, intercambio) como `GameWindow` acoplables (hoy solo
@@ -183,14 +191,12 @@ el punto 5:
   correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
   puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
   `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
-  - **Dividir pilas (m1), propuesta.** Arrastrar mueve siempre la pila entera
-    (`client/src/game.ts` `moveItem` manda `count: Math.max(ref.count, 1)`), aunque
-    `MoveItem.count` existe y el servidor ya mueve una parte (`inventory.go` lee
-    `GetCount()`). Cliente solo: con Mayús (o Ctrl) al soltar una pila de más de 1, una
-    ventanita sobre el destino con un campo de cantidad (por defecto la mitad, máximo la
-    pila, Enter confirma y Escape cancela) y la misma regla pura de `shopCount`
-    (`ui/Dialog.tsx`); en táctil, un botón "Mover parte" del menú del toque largo. El
-    intercambio necesita protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
+  - **Dividir pilas (m1), a medias.** Desde A4 el menú de una pila (click derecho o toque
+    largo) tiene "Mover parte…": un campo con cuántos (la mitad por defecto) y el siguiente
+    click o toque en una casilla, un slot o una celda manda `MoveItem` con ese `count`.
+    Arrastrar sigue moviendo la pila entera; falta Mayús al soltar (una ventanita con la
+    cantidad, la regla pura `shopCount` de `state/shop.ts`). El intercambio necesita
+    protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
     que se suma `uint32 count = 6` (0 = la pila entera, compatible), el servidor separa la
     parte ofrecida al cerrar el trato (y revisa que siga habiendo esa cantidad) y la
     ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:

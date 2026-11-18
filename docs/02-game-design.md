@@ -37,6 +37,22 @@ Todos los números de este documento son **valores iniciales** que viven en
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
     volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
 
+## Controles del mouse (docs/17 UI-6)
+Desde A4 el click derecho sobre un **objeto** abre su menú con la ficha (tipo, stats,
+requisitos, efectos, descripción) y sus acciones: la primera, en negrita, es la acción por
+defecto (abrir, usar con, comer, equipar o usar). Para usar al instante: **doble click** o
+**Ctrl+click derecho**. Opciones → Controles → "Clic derecho sobre objetos" vuelve al modo
+**clásico** (click derecho = usar; Mayús+click derecho abre el menú). En los dos modos:
+- el click derecho sobre una **criatura** la ataca, o le habla si es un NPC (un solo click
+  para pelear); Mayús+click derecho abre su menú;
+- Mayús+click izquierdo mira (el texto del servidor); pasar el mouse sobre un objeto del
+  inventario, la tienda o el intercambio muestra su ficha;
+- con el dedo, el toque largo abre el mismo menú (T5.6).
+
+Donde este doc dice "click derecho" para usar algo del mapa (una escalera de mano, una
+estación, una puerta, un tablero), en el modo de menú es la acción por defecto de ese menú,
+el doble click o Ctrl+click derecho.
+
 ## Movimiento
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
@@ -78,7 +94,8 @@ Tibia:
   y no tiene vuelta; una escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
   así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
   mismo piso o llevar a otra isla.
-- **Escalera de mano (`ladder`): se usa.** Click derecho (o "Trepar" del toque largo) sobre
+- **Escalera de mano (`ladder`): se usa.** Click derecho ("Trepar" del menú, o el doble
+  click, en los controles de menú; "Trepar" del toque largo) sobre
   su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso y con línea de
   visión (como al recolectar: con un alcance mayor, nunca a través de un muro). Pisarla no
   hace nada. Lo que haya encima (un cadáver, monedas que alguien tiró) no la tapa: el

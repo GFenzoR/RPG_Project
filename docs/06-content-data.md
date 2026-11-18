@@ -358,6 +358,25 @@ Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
 acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
 
+**Tema de una opción (`tag`, opcional; docs/17 UI-8).** La ventana del diálogo agrupa los
+botones por tema, con un ícono y un borde de color: Misiones, Comercio, Viajes, Servicios y
+Conversación (más "Volver" y "Adiós" en su fila). El cliente lo deduce al compilar
+(`client/vite/content.ts` `dialogTopics`, por NPC): `close` o `dialog.bye` → Adiós;
+`dialog.back` → Volver; `open_shop` → Comercio; una condición o acción `quest_*` →
+Misiones; `heal`, `bless`, `train_skill` o `restore_mana` → Servicios; `teleport` o un
+nodo con `boat_routes` → Viajes; lo demás, Conversación. Una opción de conversación con
+`goto` mira el nodo siguiente: si ahí hay misiones, viajes o servicios, toma ese tema.
+`tag` manda sobre todo eso cuando la deducción se equivoca:
+```yaml
+        - text: npc.puerto_armorer.opt_advice
+          tag: trade                 # quests | trade | travel | services | talk
+          goto: advice
+```
+Es solo de presentación: el servidor lo ignora. Una misma clave de texto con dos temas en un
+mismo NPC hace fallar el test del cliente (`vite/content.test.ts`): ponle `tag` a una de
+las dos. Guía de escritura: como mucho 300 caracteres por texto de nodo y textos de opción
+cortos (el botón muestra 2 líneas y el resto va al `title`).
+
 **Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
 `16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
 gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs

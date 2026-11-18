@@ -54,7 +54,10 @@ normal) que monta la pantalla de juego con estados inventados
 lugar del canvas. `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
 desde el build (no levanta servidores) y guarda en
 `client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `options`,
-`dialog`, `danger` (vida baja y subida de nivel), `death`, `login` y `characters` a
+`dialog`, `shop` (la tienda con dos páginas), `dialog18` (18 opciones sin scroll),
+`itemmenu` (el menú del click derecho con la ficha), `tooltip` (la ficha con el mouse sobre
+un item), `guild` (la ventana del gremio), `danger` (vida baja y subida de nivel), `death`,
+`login` y `characters` a
 1920x1080, 1280x800, 1280x720, 960x700, un teléfono (390x844 y 844x390) y una tablet
 (768x1024). No reemplaza a `make e2e`: no hay mapa real, ni red, ni criaturas en el canvas.
 Sirve para revisar con Read el tema, el layout y las ventanas en todos los tamaños.

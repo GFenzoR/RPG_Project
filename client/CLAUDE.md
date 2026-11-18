@@ -39,9 +39,10 @@ client/
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
 - Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
-  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba (vista de 15x11,
-  click derecho = usar) cambian cuando se haga cada tarea de su plan (§7). A2 y A3 (tema,
-  fuentes, dock y ventanas) ya están.
+  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba (vista de 15x11)
+  cambian cuando se haga cada tarea de su plan (§7). A2 y A3 (tema, fuentes, dock y
+  ventanas) ya están, y A4 y A5 (menú del click derecho con la ficha, diálogo y tienda sin
+  scroll; ver "Notas de A4 y A5"): el click derecho sobre un item ya no lo usa por defecto.
 
 ## Notas de T1.5
 - Sin servidor propio de assets: el plugin de Vite empaqueta el contenido de `data/` e
@@ -100,6 +101,8 @@ client/
   DOM): `Game.pressItem` / `startDrag` y `dropTarget` (un `[data-drop]` o un tile del
   canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
   hay criatura), Mayús+click = mirar. En el DOM: click derecho = usar, Mayús+click = mirar.
+  Desde A4 eso es el modo `classic`; por defecto el click derecho abre el menú (ver "Notas
+  de A4 y A5").
 
 ## Notas de T1.9
 - `content.spells` (de `data/spells.yaml`) alimenta la barra de hotkeys `ui/Hotbar.tsx`:
@@ -114,9 +117,10 @@ client/
 ## Notas de T1.10
 - `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
   cierra con el `DialogClose` de su diálogo. `ui/Dialog.tsx` dibuja ambas ventanas sobre
-  el mapa (arriba a la izquierda).
+  el mapa (arriba a la izquierda; desde A5, abajo al centro).
 - Click derecho sobre un NPC (o `Game.attack` con un NPC) = `NpcTalk`. Con un diálogo
-  abierto, 1–9 eligen la n-ésima opción mostrada y Escape manda `DialogChoose` 0.
+  abierto, 1–9 eligen el botón con ese número (desde A5 los botones van por tema:
+  `state/dialog.ts` `dialogLayout`), 0 "Volver" y Escape manda `DialogChoose` 0.
 - Los NPCs no van en la lista de batalla. El plugin de Vite incluye `dialog.yaml` y
   `npcs.yaml` completos y los nombres de `quests.yaml`; un `content_id` llamado `quest`
   se traduce como `quest.<id>.name`.
@@ -868,3 +872,57 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones),
   `window-close-<id>`, `window-fold-<id>`, `[data-window-button]`, `[data-chat-tab]`,
   `[data-guild-tab]`, `reduced-motion`, `windows-reset`; la ayuda es `controls-help`.
+
+## Notas de A4 y A5 (docs/17 UI-6, UI-7 y UI-8)
+- **Controles** (`state/controls.ts`, `localStorage` `rpg.controls`, `menu` por defecto o
+  `classic`): Opciones → Controles (`ui/ControlsOptions.tsx`, `data-testid="controls-mode"`,
+  radios `[data-controls=…]`). `main.tsx` guarda la elección y la pasa por
+  `GameSettings.controlsMode`; `App.tsx` se la da al `Game` como `GameOptions.controls()`
+  (la lee en cada click). Las reglas son puras en `input/mouse.ts`: `mapPress` (con el modo
+  como quinto argumento: `menu` en una casilla sin criatura, Mayús+derecho siempre menú,
+  Ctrl+derecho usa) e `itemContext` (el click derecho en un item del DOM). La criatura
+  sigue con un click derecho: ataca o habla.
+- **Menú del item** (`ui/ActionMenu.tsx`, el del toque largo): `ActionMenuView` suma
+  `card` (la ficha), `mouse` (abierto con el mouse: `mousePlacement`, en el cursor, botones
+  de 30 px, `data-pointer="mouse"`) y `stack` (para "Mover parte…"). Las acciones van
+  arriba (la primera con la clase `default`), la ficha debajo y el alto nunca pasa el borde
+  del área segura (se desplaza adentro). Acciones nuevas (`input/actions.ts`): `use_with`,
+  `eat`, `equip` (`equipSlot` de `state/item-card.ts`; `MoveItem` al slot) y `split`
+  (un `<details>` con un campo: `Game.menuSplit` elige la parte con `ItemPicker`).
+  `ItemFacts.fixed` (`pickupable: false`) quita Mover. "Mover" y "Mover parte…" funcionan
+  con el mouse: el siguiente click en una casilla (`clickTile` mira `picker.picked`), un
+  slot o una celda deja el item.
+- **Doble click**: en un item del DOM, `Game.itemDefault` (la primera acción); en el mapa
+  (solo modo `menu`), el `dblclick` del canvas va a `Game.doubleClickTile`: manda
+  `StopWalk` si el primer click mandó un `WalkPath` hace menos de `DOUBLE_CLICK_STOP_MS`
+  y hace lo del click derecho clásico. Un toque de dedo reciente lo ignora.
+- **Ficha** (`state/item-card.ts` `itemCard`, puro, y `ui/ItemCard.tsx`, sin hooks): los
+  datos salen de `ItemDef` (`vite/content.ts` `cardFields`: `kind`, `weight`, `weapon`,
+  `ammo`, `armor`, `shield`, `consumable`, `rune`, `requires`, `fixed`; opcionales).
+  Quién mira (nivel, vocación, nivel mágico) decide si un requisito está en rojo
+  (`GameUi.vocation`). `BigIcon` dibuja un ícono del atlas a 2x (`.big-icon`).
+- **Tooltip** (`ui/ItemTooltip.tsx`, montado en `GameView` junto al menú): delegación en
+  `document` sobre `[data-tip-item]` (+ `data-tip-count`), 350 ms de mouse, o foco del
+  teclado con `:focus-visible`. Los items del inventario tienen `tabIndex=0`: Enter =
+  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`.
+- **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
+  (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
+  búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
+  estado. `.npc-windows` va de lado a lado sobre el mapa, abajo al centro; con la tienda,
+  `data-shop` pone la tienda a la izquierda y el diálogo en una columna. Los temas vienen de
+  `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
+  `state/dialog.ts` arma la grilla. Test ids: `dialog-filter`, `dialog-bye`,
+  `[data-topic]`, `shop-search`, `[data-filter]`, `[data-shop-tab]`, `shop-grid`,
+  `shop-prev`/`shop-next`, `shop-bar`, `shop-count`, `shop-minus`/`shop-plus`/`shop-max`,
+  `shop-total`, `shop-act`. Las reglas de la tienda son puras en `state/shop.ts`
+  (`shopLines`, `shopFilters`, `filterShop`, `shopPage`, `shopMax`, `shopCount`,
+  `shopGrid`).
+- **Gremio** (`ui/Guild.tsx`, sigue sin hooks): `GUILD_TABS` = summary, members, ranks,
+  invite, wars, motd, cada botón con su ícono (`ui/icons.tsx`: `ranks`, `invite`, `motd`
+  nuevos); las acciones sobre un miembro bajo un `<details class="member-menu">` "⋯". Test
+  ids nuevos: `guild-summary`, `guild-ranks` (`[data-rank]`), `guild-motd-form`.
+- **Vista previa:** escenas `shop`, `dialog18`, `itemmenu`, `tooltip` y `guild` en
+  `make ui-preview` (`src/preview/fixtures.ts`).
+- **E2E:** `useAt` (Ctrl+click derecho) en `e2e/game.spec.ts` para usar algo del mapa; la
+  mochila y el fogón pasan por el menú, el pico y las mochilas del intercambio por el doble
+  click. Screenshots nuevos: `09a-item-menu`, `09b-item-tooltip` y `14b-shop-sell`.

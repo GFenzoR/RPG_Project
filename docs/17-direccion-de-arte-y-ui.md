@@ -4,8 +4,10 @@ Este doc nace de la primera prueba del dueño (2026-11-17). Fija cómo se tiene 
 moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MOV-n`,
 `UI-n`, `SRC-n`) para citarla en tareas y PRs. Lo que todavía es código está en el plan
 del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
-que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; y A6
-en parte: movimiento fluido, "Hecho: A6 (parcial)" en §4).
+que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; A4 y
+A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
+gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
+"Hecho: A6 (parcial)" en §4).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -710,6 +712,9 @@ HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1
   puras de hoy (`mapPress`, `useMode`).
 
 ### UI-6 Click derecho en items: menú y ficha
+**Hecho (A4), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7. Sobre todo:
+el click derecho sobre una criatura sigue atacando o hablando (el menú de la criatura es
+Mayús+click derecho), y en el menú las acciones van arriba y la ficha debajo.
 - **Opción de controles** (Opciones → Controles, `localStorage` `rpg.controls`):
   - `menu`: **por defecto** para jugadores nuevos, porque es lo que pidió el dueño;
   - `classic`: click derecho = usar, como hoy y como en Tibia.
@@ -743,6 +748,8 @@ HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1
   una casa, cargas).
 
 ### UI-7 Gremios: ventana propia
+**Hecho:** A3 hizo la ventana; los botones con ícono (Resumen, Miembros, Rangos, Invitar,
+Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones del gremio".
 - Sale de la columna lateral. El botón **Gremio** (G) abre su ventana, con pestañas:
   - **Resumen:** nombre, mensaje del día, rango propio y la acción de salir;
   - **Miembros:** lista con punto de conectado, insignia de rango y un botón "⋯" por fila
@@ -758,6 +765,8 @@ HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1
   reglas de T5.1).
 
 ### UI-8 Diálogo de NPC y tienda sin scroll
+**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (sin texto
+letra por letra todavía; retrato a 2x; categorías deducidas por NPC).
 **Diálogo:**
 - **Lugar y tamaño:** abajo al centro, sobre el HUD, de `min(760px, 70vw)` de ancho y
   hasta el 65 % del alto. Retrato del NPC a la izquierda (su sprite a 3x, animado si tiene
@@ -939,8 +948,8 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A1 | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
-| A4 | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
-| A5 | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
+| A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
+| A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
 | A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 | Animación procedural de criaturas (ANI-5) | cliente | — |
@@ -996,8 +1005,88 @@ teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`)
 tecla no manda `StopWalk`. Quedan MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia
 simulada.
 
-Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
-y se pueden hacer ya.
+
+### Hecho: A4, A5 y los botones del gremio (2026-11-18, rama `feat/ui-interactions`)
+Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk` y
+`LookAt` ya existían). El detalle técnico está en `client/CLAUDE.md`, "Notas de A4 y A5".
+- **Controles (UI-6).** Opciones → Controles → "Clic derecho sobre objetos": `menu` (por
+  defecto) o `classic` (`localStorage` `rpg.controls`). En los dos modos:
+  - **sobre una criatura, el click derecho ataca o habla, como siempre**: pelear sigue
+    siendo un click. Es un cambio sobre UI-6, que pedía un menú también para las
+    criaturas; ese menú (atacar o hablar, mirar) sale con **Mayús+click derecho**;
+  - **Ctrl+click derecho** usa al instante el item de arriba (en el mapa, también el que
+    está sobre una escalera de mano, como antes);
+  - **doble click** hace la acción por defecto: en el equipo, los contenedores, la tienda
+    (compra o vende una unidad) y, en modo `menu`, en el mapa. En el mapa el primer click
+    del doble ya mandó caminar: el doble click manda `StopWalk` si ese camino salió hace
+    menos de 700 ms, y después usa;
+  - Mayús+click izquierdo sigue mirando (`LookAt`: el texto del servidor, con datos vivos).
+- **El menú del item** (`ui/ActionMenu.tsx`, el del toque largo de T5.6): título con el
+  ícono a 2x, **las acciones arriba** (la primera es la acción por defecto, en negrita y
+  dorada) y **la ficha debajo**. Arriba y no abajo porque así la acción por defecto queda
+  junto al cursor y, en un teléfono acostado, los botones nunca se cortan. Acciones:
+  Abrir (contenedor), Usar con… (herramienta), Comer (comida), Equipar (lo mueve a su slot
+  con `MoveItem`; el servidor revisa manos, nivel y vocación), Usar, Mirar, Mover (el
+  siguiente click o toque en una casilla, un slot o una celda lo deja ahí) y Mover parte…
+  (un campo con cuántos; manda `MoveItem.count`: resuelve el m1 de la prueba exploratoria
+  para el inventario y el mapa). Los objetos fijos del mapa (estaciones, tableros:
+  `pickupable: false`) no ofrecen Mover. Con el mouse el menú se abre en el cursor, con
+  botones compactos; con el dedo, como antes.
+- **La ficha** (`state/item-card.ts` puro + `ui/ItemCard.tsx`): tipo ("Arma — espada, una
+  mano"), ataque, defensa, armadura, alcance, lugares, cargas, peso (y el de toda la pila),
+  requisitos en rojo si no se cumplen (nivel, vocación, nivel mágico de una runa), efectos
+  (cura, maná, comida, elemento, munición), la descripción en itálica y las marcas "No se
+  puede intercambiar" / "No se vende en el mercado". Los datos los suma el plugin de Vite
+  al `ItemDef` (`cardFields`). **No se hizo:** el color de item de misión
+  (`--ui-item-quest`): `data/items` no marca los items de misión.
+- **Tooltip** (`ui/ItemTooltip.tsx`): la misma ficha a los 350 ms de mouse quieto sobre un
+  item del DOM (equipo, contenedores, tienda, intercambio, recetas) o con el foco del
+  teclado (los items del inventario toman el foco: Enter = acción por defecto, la tecla de
+  menú o Mayús+F10 = menú). No toma clicks y se va con cualquier click, la rueda o Escape.
+  Sobre el canvas no hay tooltip: ahí está el menú.
+- **Diálogo (UI-8):** abajo al centro, `min(47.5rem, 100%)` de ancho; retrato del NPC a 2x
+  (no 3x: los sprites de NPC son de 32 px y a 3x tapaban texto); el texto entra con un
+  fundido corto (**no** letra por letra: queda pendiente, y rompería las esperas de los
+  E2E); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
+  borde de color por tema, hasta 2 líneas y el texto completo en el `title`. Orden:
+  Misiones, Comercio, Viajes, Servicios, Conversación; dentro de cada tema, el orden del
+  servidor. Fila de abajo: Volver (0) y Adiós (Escape; si el nodo no tiene "Adiós",
+  cierra). Con 10 opciones o más aparece "Buscar tema…". 18 opciones entran sin scroll a
+  1280x720 (`make ui-preview`, escena `dialog18`). Las teclas 1–9 eligen el botón con ese
+  número (`state/dialog.ts` `dialogLayout`, el mismo orden que la ventana).
+- **Temas de las opciones:** el plugin de Vite los deduce **por NPC** (no por clave global:
+  `dialog.accept` es una misión en un NPC y podría ser otra cosa en otro) con
+  `dialogTopics`: `tag` → Adiós (`close`, `dialog.bye`) → Volver (`dialog.back`) →
+  Comercio (`open_shop`) → Misiones (condición o acción `quest_*`) → Servicios (`heal`,
+  `bless`, `train_skill`, `restore_mana`) → Viajes (`teleport`, o un nodo con
+  `boat_routes`) → Conversación. Una opción de conversación que lleva a otro nodo mira un
+  paso adelante: si allí hay misiones, viajes o servicios, toma ese tema ("¿Bendiciones?" →
+  Servicios). Las rutas de `boat_routes.yaml` son Viajes de su capitán. Una misma clave
+  con dos temas en un NPC hace fallar `vite/content.test.ts`; se resuelve con `tag`
+  (docs/06). Hoy no hay ningún conflicto.
+- **Tienda (UI-8):** ventana propia; en escritorio va a la izquierda del diálogo (que se
+  angosta a una columna). Pestañas Comprar y Vender, búsqueda por el nombre traducido (sin
+  mayúsculas ni tildes), filtros con ícono solo de las categorías que hay (Todo, Armas,
+  Armaduras, Herramientas, Consumibles, Materiales, por `kind`), grilla de celdas de 72 px
+  (ícono a 2x y precio). Columnas: las que entran, hasta 6; filas: hasta 4 según el alto
+  (24 a 1280x720 y 1280x800, 15 a 960x700). Lo que no entra se pagina ("‹ 1/2 ›"), nunca
+  scroll. Barra de abajo: el item elegido con su tipo, −, cantidad, + y Máx. (lo que paga
+  el dinero o lo que se lleva, hasta 100), el total (en rojo si no alcanza) y
+  Comprar/Vender; Enter confirma. Vender muestra primero lo que se lleva (con su cantidad)
+  y en gris lo que no. Click derecho en una celda: la ficha. En teléfonos la tienda va
+  primero en la hoja y el diálogo deja solo sus botones; ahí la hoja sí se desplaza.
+- **Gremio (UI-7):** una fila de botones con ícono propio (16x16, `ui/icons.tsx`):
+  Resumen (tu rango, miembros en línea, guerras, salir o disolver), Miembros (punto de
+  conectado, insignia de rango y "⋯" con lo que tu rango permite sobre cada uno), Rangos
+  (quién tiene cada rango y qué puede hacer), Invitar (el campo y las invitaciones
+  enviadas; a un miembro le dice quién invita), Guerras y Mensaje (el mensaje del día). Se
+  abre con el botón Gremio de la botonera o la G.
+- **Pendiente de esta parte:** texto letra por letra del diálogo; retrato animado;
+  color de items de misión; arrastrar con Mayús para dividir una pila (hoy es "Mover
+  parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
+  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
+
+Orden sugerido. A6 y A8 son lo que más se nota con menos riesgo y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
 
 ## 8. Cómo se verifica
