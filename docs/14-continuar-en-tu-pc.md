@@ -169,6 +169,10 @@ el punto 5:
       siendo un hueco en el muro. Un item de marco que no bloquea y `joins_walls` lo
       resolvería, pero cambia mapas.
     - **Muros altos (32x96), ventanas y `elevation`** (ART-3, ART-8): sin hacer.
+    - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
+      (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
+      recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
+      islas es `mapcli autoborder`: cambia mapas.
     - **Partículas de ambiente** (A13): polvo, brasas, hojas, ondas al pisar.
     - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
