@@ -25,6 +25,14 @@ export type StepChoice = NonNullable<ReturnType<WorldState["chooseStep"]>>;
 export const ROUTE_REPLANS = 10;
 
 /**
+ * The refused step that ends a click's route: the first is planned round (a creature the
+ * client did not see), the second ends it. Some refusals bring a message each (a house
+ * door, a protection zone while the PvP lock lasts): a route trying tile after tile of a
+ * zone it may not enter would repeat it.
+ */
+export const ROUTE_REFUSALS = 2;
+
+/**
  * How long a search toward the held cursor that found no way is not tried again from the
  * same tile to the same one: the mouse held against a wall decides every frame (canStep
  * stays open while the player stands), and an A* over the known area each frame is waste.
@@ -67,6 +75,8 @@ interface Route {
   /** Where the next step starts: the client's position when it was planned or last stepped. */
   from: Pos;
   replans: number;
+  /** Steps of this route the server refused (ROUTE_REFUSALS). */
+  refusals: number;
   /** Tiles the server refused during this route: plans keep off them. */
   avoid: Pos[];
   /** The server refused a step: plan again before the next one. */
@@ -111,7 +121,15 @@ export class Steering {
     const reachable = steps !== undefined && steps.length > 0;
     this.mark = { pos: { ...goal }, at: now, reachable };
     if (!reachable) return false;
-    this.route = { goal: { ...goal }, steps, from: s.pos, replans: 0, avoid: [], stale: false };
+    this.route = {
+      goal: { ...goal },
+      steps,
+      from: s.pos,
+      replans: 0,
+      refusals: 0,
+      avoid: [],
+      stale: false,
+    };
     return true;
   }
 
@@ -122,13 +140,18 @@ export class Steering {
 
   /**
    * A message of the server, after WorldState applied it: a refused step makes the route
-   * plan again around that tile; a teleport (FullMapView) ends it.
+   * plan again around that tile (the second ends it, ROUTE_REFUSALS); a teleport
+   * (FullMapView) ends it.
    */
   heard(msg: ServerMessage["message"]): void {
     const r = this.route;
     if (!r) return;
     if (msg.case === "fullMapView") this.route = undefined;
     else if (msg.case === "walkRejected") {
+      if (++r.refusals >= ROUTE_REFUSALS) {
+        this.route = undefined;
+        return;
+      }
       r.stale = true;
       const at = msg.value.pos;
       if (at && msg.value.dir !== Direction.UNSPECIFIED)
@@ -187,7 +210,16 @@ export class Steering {
     const steps = known ? undefined : this.plan(world, s.pos, goal, []);
     if (!known && !steps?.length) this.noWay = { from: s.pos, goal, at: now };
     if (steps && steps.length > 0) {
-      this.route = { goal, steps, from: s.pos, replans: 0, avoid: [], stale: false, heading: dir };
+      this.route = {
+        goal,
+        steps,
+        from: s.pos,
+        replans: 0,
+        refusals: 0,
+        avoid: [],
+        stale: false,
+        heading: dir,
+      };
       const next = this.follow(world, now);
       if (next) return next;
     }

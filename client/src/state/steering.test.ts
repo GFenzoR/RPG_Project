@@ -11,8 +11,8 @@ import {
 } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
-import { STEP_LEAD_MS } from "./motion.ts";
-import { NO_WAY_MS, ROUTE_REPLANS, Steering } from "./steering.ts";
+import { PREDICT_TIMEOUT_MS, STEP_LEAD_MS } from "./motion.ts";
+import { NO_WAY_MS, ROUTE_REFUSALS, ROUTE_REPLANS, Steering } from "./steering.ts";
 import type { StepChoice } from "./steering.ts";
 import { WorldState } from "./world.ts";
 import type { CreatureState } from "./world.ts";
@@ -262,7 +262,7 @@ describe("Steering: click-to-walk, predicted (docs/17 MOV-4)", () => {
     expect(s.goal).toEqual(at(5, 0));
   });
 
-  it("plans again round a step the server refused, and gives up after ROUTE_REPLANS", () => {
+  it("plans again round a step the server refused; the second refusal ends it", () => {
     const w = world(["@.....", "......"]);
     const s = steer();
     s.walkTo(w, at(5, 0), 0);
@@ -285,30 +285,36 @@ describe("Steering: click-to-walk, predicted (docs/17 MOV-4)", () => {
     const c = s.next(w, 700, {});
     expect(c).toMatchObject({ kind: "walk", dir: Direction.SOUTH });
     expect(s.goal).toEqual(at(5, 0));
-    // Refused again and again: the route ends instead of asking forever.
-    const r = new Steering({ diagonalCost: 1.5, maxPathTiles: 100 });
-    const v = world(["@.........."]);
-    r.walkTo(v, at(10, 0), 0);
-    let replans = 0;
-    for (let k = 0; k <= ROUTE_REPLANS + 1 && r.goal; k++) {
-      const t = 10_000 * (k + 1);
-      if (r.next(v, t, {})?.kind !== "walk") break;
-      const back = v.predicted[0]?.from ?? at(0, 0);
-      const no = {
-        case: "walkRejected" as const,
-        value: {
-          $typeName: "game.v1.WalkRejected" as const,
-          pos: pos(back.x, back.y),
-          dir: Direction.UNSPECIFIED, // no tile to keep off: the same way again
-          walkEpoch: k + 2,
-        },
-      };
-      v.apply(no, t + 100);
-      r.heard(no);
-      replans++;
+    // Refused again (a protection zone while the PvP lock lasts, each refusal with its
+    // message): the route ends there instead of trying tile after tile.
+    expect(ROUTE_REFUSALS).toBe(2);
+    const again = {
+      case: "walkRejected" as const,
+      value: { ...refusal.value, dir: Direction.SOUTH, walkEpoch: 3 },
+    };
+    w.apply(again, 900);
+    s.heard(again);
+    expect(s.goal).toBeUndefined();
+    expect(s.next(w, 1000, {})).toBeUndefined();
+  });
+
+  it("gives up after ROUTE_REPLANS, so a route never asks forever", () => {
+    // Every step it sends is lost (no answer): the client gives the prediction up and the
+    // player is back off the route, which is planned again each time.
+    const w = world(["@.........."]);
+    const s = steer();
+    s.walkTo(w, at(10, 0), 0);
+    let sent = 0;
+    let t = 0;
+    for (let k = 0; k <= ROUTE_REPLANS + 1 && s.goal; k++) {
+      if (s.next(w, t, {})?.kind !== "walk") break;
+      sent++;
+      t += STEP + PREDICT_TIMEOUT_MS + 10;
+      w.expirePredicted(t);
+      expect(self(w).pos).toEqual(at(0, 0));
     }
-    expect(r.goal).toBeUndefined();
-    expect(replans).toBe(ROUTE_REPLANS + 1);
+    expect(s.goal).toBeUndefined();
+    expect(sent).toBe(ROUTE_REPLANS + 1); // the first plan and its replans
   });
 
   it("is dropped by a teleport", () => {

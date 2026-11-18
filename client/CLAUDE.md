@@ -752,7 +752,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     personaje no está donde el camino esperaba (un paso de persecución, una predicción
     abandonada), si el próximo paso ya no está libre (una criatura) o tras un
     `WalkRejected` (`Steering.heard`, que `game.ts` llama tras `world.apply` de cada
-    mensaje): esa casilla va a `avoid`. Sin camino, o un `FullMapView`, lo termina.
+    mensaje): esa casilla va a `avoid`, y el segundo rechazo lo termina
+    (`ROUTE_REFUSALS`: un aviso por rechazo, como `house.no_access` o
+    `pvp.protection_locked`, no se repite casilla por casilla). Sin camino, o un
+    `FullMapView`, lo termina.
     `mark` (`WalkMark`: casilla, hora, si hay camino) es el anillo de MOV-7.
   - **Mouse mantenido** (`toward`, el punto bajo el cursor en casillas fraccionarias,
     `GameCanvas.worldAt`): dirección por el ángulo desde el centro del personaje dibujado
@@ -833,8 +836,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   después una flecha (cada `Walk` respondido por su paso), `Walk` perdidos y un corte de
   1 s de la red del observador (sin atraso que dure). Si cambias tiempos de `motion.ts`,
   córrelo. `state/steering.test.ts` prueba el camino (primer paso en el acto, después de
-  los predichos, rodeos, `ROUTE_REPLANS`, teletransporte) y el mouse (ángulo, deslizarse,
-  el rodeo de una U sin volver atrás, girar). E2E `e2e/movement.spec.ts`: mantiene una
+  los predichos, rodeos, `ROUTE_REFUSALS`, `ROUTE_REPLANS`, teletransporte) y el mouse
+  (ángulo, deslizarse, el rodeo de una U sin volver atrás, girar, `NO_WAY_MS`). E2E `e2e/movement.spec.ts`: mantiene una
   flecha 2 s (4 o 5 pasos; como mucho los que entran en el tiempo medido) sobre una recta
   libre y lee `__rpgClient.trail(ms)` (el `drawPos` del modelo en cada `frame`,
   `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia atrás (screenshot

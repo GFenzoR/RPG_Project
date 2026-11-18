@@ -528,9 +528,12 @@ vale esto.**
     espera a que no queden pasos sin confirmar.
   - **El rodeo lo hace el cliente.** El servidor no recalcula un `Walk` bloqueado por una
     criatura: lo rechaza. El cliente vuelve deslizándose, anota esa casilla y arma el
-    camino de nuevo sin ella (como mucho `ROUTE_REPLANS`, 10 veces por click). También lo
-    rearma si una criatura que ve se mete en el próximo paso, o si el servidor le dio otro
-    paso (persecución). Sin camino, se detiene.
+    camino de nuevo sin ella. Un segundo rechazo lo termina (`ROUTE_REFUSALS`): la puerta
+    de una casa o una zona de protección con el bloqueo de PvP mandan un aviso por
+    rechazo, y el camino no lo repite casilla por casilla. También lo rearma si una
+    criatura que ve se mete en el próximo paso, o si el servidor le dio otro paso
+    (persecución); como mucho `ROUTE_REPLANS` (10) veces por click. Sin camino, se
+    detiene.
   - Una flecha durante un camino por click entra en el próximo borde de casilla y termina
     el camino (antes casi nunca entraba: el frame solo leía las teclas sin camino).
   - El doble click en el mapa (controles de menú) ya no manda `StopWalk`: termina el

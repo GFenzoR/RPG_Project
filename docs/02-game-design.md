@@ -69,7 +69,8 @@ el doble click o Ctrl+click derecho.
   primer paso sale en el acto, al apretar el botón (al soltarlo si en la casilla hay un
   item para arrastrar), aunque haya pasos sin confirmar. Si el servidor rechaza un paso
   (una criatura que el cliente no veía) o una criatura se mete en el camino, el cliente
-  vuelve deslizándose y lo rodea (como mucho 10 veces por click). Un anillo dorado marca
+  vuelve deslizándose y lo rodea; un segundo paso rechazado lo detiene (así una zona en
+  la que no puede entrar no repite su aviso casilla por casilla). Un anillo dorado marca
   la casilla 300 ms; rojo si no hay camino, y el personaje se detiene. Una tecla durante
   el camino lo termina en el próximo borde de casilla. Con el doble click (controles de
   menú) el camino del primer click termina: los pasos ya mandados se dan.
