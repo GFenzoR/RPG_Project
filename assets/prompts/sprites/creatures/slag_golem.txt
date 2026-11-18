@@ -1,0 +1,39 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/creatures/slag_golem/*.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-18
+# Modo: Hydrogen
+# Hoja devuelta: slag_golem_b.png (sha256 2bafc7a3c9f92fc5e711e57bce3fbc6b8117fb29ede57fc9b3532281ea27df0f)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 64 --layer creature --margin 1 --scale 2.4 --colors 0 --shared-colours --names "walk_s_0,walk_s_1,walk_s_2,walk_s_3,walk_n_0,walk_n_1,walk_n_2,walk_n_3,walk_w_0,walk_w_1,walk_w_2,walk_w_3,idle_s_0,idle_s_1,idle_n_0,idle_n_1+attack_n_2,idle_w_0+attack_w_0,idle_w_1+attack_w_2,attack_s_0,-,attack_s_2,attack_n_0,attack_s_1,attack_n_1,attack_w_1,-,-,death_s_0,-,death_s_1,death_s_2" --mirror "attack_w_0,attack_w_1,attack_w_2,idle_w_0,idle_w_1,walk_w_0,walk_w_1,walk_w_2,walk_w_3"
+
+A pixel-art animation sprite sheet of one creature for a dark fantasy top-down role-playing game: a slag golem of the volcanic island's deep mine, a lumbering giant of cooled slag that the old forge woke up, a head taller than a man and twice as broad. A hulking body of heavy slabs of rough slag, charcoal and ash grey with lighter grey edges where the light falls on them, so its shape reads clearly; bright orange molten light glows in the cracks between the slabs and a still-hot glowing core burns in its chest, huge blocky fists on long arms, short thick legs, a small head sunk between its shoulders with two glowing slits for eyes.
+
+Eight rows of frames, each row a separate strip, every frame the same golem at the same scale on the same ground line. The camera always looks down at it from about 45 degrees, so its top shows in every view:
+- Row 1, four frames: the golem lumbering toward the camera, seen from above and in front (we see its glowing slit eyes, its chest core and fists, with its shoulders above them; the legs alternate).
+- Row 2, four frames: the golem lumbering away from the camera, seen from above and behind (we see its broad back of slag slabs and its fists; the legs alternate).
+- Row 3, four frames: the golem lumbering to the right, in profile facing right.
+- Row 4, six frames: the golem standing still, its glow slowly pulsing: two frames facing the camera, two frames seen from behind, two frames in profile facing right.
+- Row 5, three frames: the golem pounding toward the camera, seen from above and in front (raises a fist, smashes it down, recovers).
+- Row 6, three frames: the golem pounding away from the camera, seen from above and behind (raises a fist, smashes it down, recovers).
+- Row 7, three frames: the golem pounding to the right, in profile facing right (raises a fist, smashes it down, recovers).
+- Row 8, three frames: the golem dying, seen from the front (cracks apart, sags to its knees, crumbles into a heap of cooling slag).
+
+The same silhouette, proportions, colours and size in every frame: only the pose and the facing change. Draw no lines, borders, boxes or panels between the frames: only the flat magenta background separates the drawings.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

@@ -1,9 +1,11 @@
-"""Turns a delivered track (Gemini's MP4/AAC) into an Ogg Opus loop the client can play.
+"""Turns a delivered track (Gemini's MP4/AAC) into Ogg Opus the client can play: a loop, or the whole piece.
 
-The port of Ants of Neque's `tools/convert_beds.py`, for this game's audio: the
-client plays music with a Web Audio `AudioBufferSourceNode` and `loop = true`
-(`client/src/audio/engine.ts`), so a loop is the whole file, wrapped sample for
-sample, and Ogg Opus is the format `assets/sounds/` ships (`tools/soundgen`).
+The port of Ants of Neque's `tools/convert_beds.py`, for this game's audio. A
+loop is the whole file, wrapped sample for sample (the client loops a file
+with no entry points, `client/src/audio/engine.ts`), and Ogg Opus is the
+format `assets/sounds/` ships (`tools/soundgen`). Since 2026-11-18 the game
+ships whole pieces instead (see "A whole piece" below); the loop steps stay
+for a cue that has to loop.
 
 Every delivery is a finished *piece*: it opens, it closes, and it ends in
 silence, so it cannot loop as it is. These steps get from one to the other:
@@ -44,6 +46,15 @@ silence, so it cannot loop as it is. These steps get from one to the other:
    encoded seam is ordinary (`SEAM_GOOD`), or the best of `TURNS` (Ants of
    Neque did the same for MP3). A turn starts the music a few hundred
    milliseconds later; nothing is lost.
+
+**A whole piece** (`--no-loop`): what the game ships since the owner's request
+of 2026-11-18 (`music_import`): the full take, nothing cut or folded, one gain
+and Ogg Opus. The client's music director (`client/src/audio/director.ts`)
+streams it and starts it at one of its **entry points** (`entry_points`: where
+a phrase begins, read off the level envelope, never at 0, 15 s apart and none
+in the last 30 s of its body), so the record also keeps its fades, where the
+body ends (`body_end`: the composed ending starts) and its longest hole
+(`longest_quiet`); `piece_problems` says whether it may play.
 
 Needs ffmpeg with libopus: the one on PATH (as `make sounds` uses) or the copy
 inside `imageio-ffmpeg`. Build-time only; nothing of it reaches the game.
@@ -99,7 +110,34 @@ LOOP_RANGE = 0.75
 ## The hop of the envelopes `loop_length` compares (10 ms: a beat lands within 5 ms).
 ENVELOPE_HOP = 0.01
 ## docs/07 "Audio": one music file of assets/sounds.yaml (soundgen's budget).
-MUSIC_FILE_BUDGET = 256 * 1024
+MUSIC_FILE_BUDGET = 1536 * 1024
+## A whole piece (`--no-loop`, what `music_import` ships since 2026-11-18): the
+## envelope its entry points are read from (`entry_points`), one value a tenth
+## of a second.
+ENTRY_HOP = 0.1
+## No entry before this second (the piece's own start is not one), none in the
+## last ENTRY_TAIL seconds of its body, ENTRY_GAP apart, at most ENTRY_MOST.
+ENTRY_HEAD = 10.0
+ENTRY_TAIL = 30.0
+ENTRY_GAP = 15.0
+ENTRY_MOST = 8
+## What a piece needs to play (`piece_problems`): a whole take, music you can
+## hear, no hole longer than MAX_QUIET_SECONDS (QUIET_DB under the body), and
+## places to start.
+MIN_PIECE_SECONDS = 120.0
+MIN_LUFS = -40.0
+QUIET_DB = 30.0
+MAX_QUIET_SECONDS = 6.0
+MIN_ENTRIES = 2
+## The version of a piece's measures (entries, holes): `music_import` converts
+## again a piece measured by an older one, or with other entry settings
+## (`entry_settings`: changing ENTRY_* is enough).
+ANALYSIS = 1
+
+
+def entry_settings() -> dict:
+    """What `entry_points` measures a piece with (ENTRY_*), kept in its record."""
+    return {"head": ENTRY_HEAD, "tail": ENTRY_TAIL, "gap": ENTRY_GAP, "most": ENTRY_MOST, "hop": ENTRY_HOP}
 
 
 # --- the pure parts (tested by test_music_convert.py) ------------------------------------
@@ -241,6 +279,88 @@ def loop_length(mono, rate: int, shortest: float, longest: float, window: float,
         if score > best[0]:
             best = (score, lag)
     return round(best[1] * hop, 6), round(best[0], 3)
+
+
+def _mean(values, start: int, end: int) -> float:
+    start, end = max(start, 0), min(end, len(values))
+    return sum(values[start:end]) / (end - start) if end > start else float("-inf")
+
+
+def entry_points(levels: list[float], hop: float, body_start: float, body_end: float,
+                 head: float = ENTRY_HEAD, tail: float = ENTRY_TAIL, gap: float = ENTRY_GAP,
+                 most: int = ENTRY_MOST) -> list[float]:
+    """Where the music director may start a piece (seconds, ascending): places
+    where a phrase begins, read off its level envelope (`levels`, dB, one per
+    `hop`). A place scores the rise from the second and a half before it to
+    the one after (a phrase starting) plus half of how far the level just
+    before it dips under the twelve seconds around (a breath between
+    phrases). The best places are taken while they are at least `gap`
+    seconds from every one taken, from `head` seconds on (never at 0: the
+    piece's own start is not an entry) and never in the last `tail` seconds
+    of the body (`body_end`, where the composed ending fades), so an entry
+    always has that much music after it. A place whose next second and a
+    half is 20 dB under the body (a hole) is never one. Up to `most`."""
+    n = len(levels)
+    if n == 0 or hop <= 0:
+        return []
+    near = max(int(round(1.5 / hop)), 1)
+    around = max(int(round(6.0 / hop)), 1)
+    first = max(int(math.ceil(max(head, body_start) / hop)), 1)
+    last = min(int(math.floor((body_end - tail) / hop)), n - near)
+    if last < first:
+        return []
+    body = _mean(levels, int(body_start / hop), int(body_end / hop))
+    scored = []
+    for i in range(first, last + 1):
+        before, after = _mean(levels, i - near, i), _mean(levels, i, i + near)
+        if after < body - 20.0:
+            continue
+        dip = max(0.0, _mean(levels, i - around, i + around) - before)
+        scored.append((after - before + 0.5 * dip, i))
+    scored.sort(key=lambda s: (-s[0], s[1]))
+    taken: list[int] = []
+    span = gap / hop
+    for _score, i in scored:
+        if all(abs(i - t) >= span for t in taken):
+            taken.append(i)
+            if len(taken) >= most:
+                break
+    return [round(i * hop, 2) for i in sorted(taken)]
+
+
+def longest_quiet(levels: list[float], hop: float, start: float, end: float, under: float = QUIET_DB) -> float:
+    """The longest run, in seconds, of the envelope between `start` and `end`
+    that stays `under` dB below the body's mean level there: a hole in the
+    music (a take that cut out, or a long pause)."""
+    a, b = max(int(start / hop), 0), min(int(end / hop), len(levels))
+    if b <= a:
+        return 0.0
+    floor = _mean(levels, a, b) - under
+    best = run = 0
+    for value in levels[a:b]:
+        run = run + 1 if value < floor else 0
+        best = max(best, run)
+    return round(best * hop, 2)
+
+
+def piece_problems(record: dict) -> list[str]:
+    """Why a converted piece should not play in the game, from its measures
+    (`convert(loop=False)`): too short to be a whole take, silent or unmeasured
+    loudness, a hole in the music, or no place to start but its beginning.
+    Empty: it passes."""
+    problems = []
+    seconds = float(record.get("source_seconds") or 0.0)
+    if seconds < MIN_PIECE_SECONDS:
+        problems.append("%.0f s long, under %.0f s" % (seconds, MIN_PIECE_SECONDS))
+    lufs = record.get("lufs_in")
+    if not isinstance(lufs, (int, float)) or not math.isfinite(lufs) or lufs < MIN_LUFS:
+        problems.append("loudness %s LUFS, under %.0f" % (lufs, MIN_LUFS))
+    quiet = float(record.get("longest_quiet") or 0.0)
+    if quiet > MAX_QUIET_SECONDS:
+        problems.append("%.1f s of near silence inside the music" % quiet)
+    if len(record.get("entries") or []) < MIN_ENTRIES:
+        problems.append("%d entry points, under %d" % (len(record.get("entries") or []), MIN_ENTRIES))
+    return problems
 
 
 def percentile(values: list[float], share: float) -> float:
@@ -411,6 +531,22 @@ def convert(source: str, out: str, kbps: int = KBPS, channels: int = CHANNELS, l
         x = close_loop(x, channels, span)
         record["crossfade"] = crossfade
         record["seam_loop"] = round(seam_score(x, channels, RATE), 3)
+    else:
+        # A whole piece: nothing is cut; its fades, its entry points and its holes are
+        # measured for the music director (client/src/audio/director.ts).
+        light = decode(source, ANALYSIS_RATE, 1)
+        head, tail = fade_bounds(light, ANALYSIS_RATE)
+        levels = envelope(light, ANALYSIS_RATE, ENTRY_HOP)
+        body_end = len(light) / ANALYSIS_RATE - tail
+        record.update({
+            "analysis": ANALYSIS,
+            "entry_settings": entry_settings(),
+            "fade_in": round(head, 2),
+            "fade_out": round(tail, 2),
+            "body_end": round(body_end, 2),
+            "entries": entry_points(levels, ENTRY_HOP, head, body_end),
+            "longest_quiet": longest_quiet(levels, ENTRY_HOP, head, body_end),
+        })
     record["loop_seconds" if loop else "seconds"] = round(frames_of(x, channels) / RATE, 3)
     measured = measure_loudness(x, RATE, channels)
     gain = loudness_gain(float(measured.get("input_i", float("-inf"))), float(measured.get("input_tp", float("-inf"))), lufs, true_peak)

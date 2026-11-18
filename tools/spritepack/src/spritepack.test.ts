@@ -401,6 +401,7 @@ describe("buildAtlas", () => {
     for (const n of [1, 2, 3]) put(`assets/sprites/ground/grass/var_${n}.png`, tile);
     put("assets/sprites/ground/water.png", tile);
     for (const n of [1, 2, 3]) put(`assets/sprites/ground/water/frame_${n}.png`, tile);
+    put("assets/sprites/ground/sand.png", tile);
     put("assets/sprites/walls/stone.png", tall);
     for (let m = 0; m < 16; m++) put(`assets/sprites/walls/stone/wall_${m}.png`, tall);
     put("assets/sprites/decor/tree.png", tall);
@@ -412,6 +413,7 @@ describe("buildAtlas", () => {
 tiles:
   ground/water: { ms: 220, sync: world, particles: spray }
   ground/grass: { weight: 0.6 }
+  ground/sand: { steps: dust }
   decor/tree: { anchor: bc, particles: pollen }
   doors/gate: { joins_walls: true }
 `,
@@ -422,6 +424,7 @@ tiles:
       "decor/tree": { anchor: "bc", shadow: true, particles: "pollen" },
       "doors/gate": { joins: true },
       "ground/grass": { variants: 3, weight: 0.6 },
+      "ground/sand": { steps: "dust" },
       "ground/water": { frames: 4, ms: 220, sync: "world", particles: "spray" },
       "walls/stone": { wall: true },
     });
@@ -441,7 +444,7 @@ tiles:
 tiles:
   ground/sand: { ms: 200 }
   ground/nothing: { anchor: bc }
-  ground/grass: { sync: sometimes, particles: smoke }
+  ground/grass: { sync: sometimes, particles: smoke, steps: splash }
 `,
     );
     expect(errors(buildAtlas(root))).toContainEqual(
@@ -449,6 +452,9 @@ tiles:
     );
     expect(errors(buildAtlas(root))).toContainEqual(
       expect.stringMatching(/ground\/grass: particles must be one of embers, pollen, spray, dust/),
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/ground\/grass: steps must be one of dust, ripple/),
     );
     put(
       "assets/sprites.yaml",

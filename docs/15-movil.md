@@ -36,7 +36,7 @@ request lo decide `client/src/sw/policy.ts` (puro, con tests):
 
 | Request | Estrategia |
 |---|---|
-| `/api/*`, `/ws`, `/healthz`, `/grafana/*`, otro origen, no-GET, `Range` (audio), `/sw.js` | **Nunca** se intercepta: va a la red como sin worker |
+| `/api/*`, `/ws`, `/healthz`, `/grafana/*`, otro origen, no-GET, `Range` (audio), la música (`/audio/sounds/music/`), `/sw.js` | **Nunca** se intercepta: va a la red como sin worker |
 | Páginas (navegación) | Red primero; la caché solo si no hay red |
 | `/assets/*` (archivos con hash de Vite) | Caché primero (son inmutables) |
 | Resto (atlas, sonidos, íconos, manifest) | Se sirve la caché y se actualiza en segundo plano |

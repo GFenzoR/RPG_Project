@@ -22,7 +22,7 @@ import { RECIPES } from "./recipes/index.ts";
 
 export { RECIPES } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
-export { UI_ICON_BOX } from "./recipe.ts";
+export { UI_ICON_BOX, UI_SLOT_BOX, uiIconBox } from "./recipe.ts";
 
 export const TILE = 32;
 
@@ -38,9 +38,10 @@ export function render(path: string, recipe: Recipe = mustGet(path)): Image {
   const img = createImage(recipe.width ?? TILE, recipe.height ?? TILE);
   const seed = seedOf(path);
   recipe.draw(img, rng(seed), seed);
-  // Every creature of ours casts the shadow the Dungeon Crawl monsters have, so both
-  // sit on the map the same way (assets/README.md, "Sombra de las criaturas").
-  if (recipe.kind === "creature") castShadow(img, recipe.shadow);
+  // A creature of ours casts the shadow the Dungeon Crawl monsters have, so both sit on
+  // the map the same way (assets/README.md, "Sombra de las criaturas"), unless it stands
+  // on the renderer's contact ellipse like the animated monsters (shadow: false).
+  if (recipe.kind === "creature" && recipe.shadow !== false) castShadow(img, recipe.shadow);
   return img;
 }
 
@@ -80,7 +81,7 @@ export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
  * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
  * turns them into that sprite's clips.
  */
-export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|death)_(n|e|s|w)_[0-9]+$/;
+export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w)_[0-9]+$/;
 
 /**
  * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other
@@ -213,9 +214,12 @@ function cell(path: string, grass: Image): Image {
     for (let x = 0; x < w; x += TILE) blit(grass, 0, 0, TILE, TILE, out, x, y);
   const tileRight = w - 32;
   const tileBottom = h - 32;
-  // An effect plays over the creature on its tile: show it over a standing player.
-  if (recipe.kind === "effect" && RECIPES[PREVIEW_CREATURE])
-    composite(out, render(PREVIEW_CREATURE), tileRight - TILE, tileBottom - TILE);
+  // An effect plays over the creature on its tile: show it over one standing there, its
+  // bottom centred on the tile (the boar is 64x64, anchor bc).
+  if (recipe.kind === "effect" && RECIPES[PREVIEW_CREATURE]) {
+    const c = render(PREVIEW_CREATURE);
+    composite(out, c, tileRight - TILE / 2 - c.width / 2, tileBottom - c.height);
+  }
   composite(out, sprite, tileRight - sprite.width, tileBottom - sprite.height);
   return out;
 }

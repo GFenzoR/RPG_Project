@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { parse } from "yaml";
 import { psql } from "./psql.ts";
+import { stepKey } from "./keys.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
 
@@ -32,7 +33,15 @@ interface Caught {
   ids: number[];
   attacks: { id: number; kind: number; targetId: number }[];
   departures: { id: number; reason: string }[];
+  /** The tile of the first creature in the pose (a falling body: where it stays). */
+  at: { x: number; y: number };
 }
+
+/** A fall is shot in its last FALL_SHOT_MS (before its last 60): the hit's effect is ending. */
+const FALL_SHOT_MS = 300;
+/** Tiles round a fall that its close-up shows (it rises a tile over its own). */
+const CLOSE_W = 9;
+const CLOSE_H = 7;
 
 /**
  * A9 (docs/17 ANI-7): waits for a creature well into an attack pose (with clipOnly, an
@@ -41,7 +50,10 @@ interface Caught {
  * animation frame (after a third of it, before its last 60 ms), so the frame drawn last
  * is in it; holding requestAnimationFrame keeps the game from drawing the next one until
  * the shot is taken (an attack lasts 250-360 ms, a screenshot can take longer). Attack:
- * clips for the first 20 s, then any. Returns what it saw on that frame (Caught).
+ * clips for the first 20 s, then any; the whole page. A fall: late in it (its last
+ * FALL_SHOT_MS, when the effect of the blow that killed it is ending), and a close-up of
+ * CLOSE_W x CLOSE_H tiles round it, so the body is big in the shot (a body behind a taller
+ * creature also shows as a see-through copy). Returns what it saw on that frame (Caught).
  */
 async function shotPose(
   page: Page,
@@ -54,13 +66,17 @@ async function shotPose(
     const left = deadline - Date.now();
     const handle = await page
       .waitForFunction(
-        ({ k, clips }): Caught | false => {
+        ({ k, clips, late }): Caught | false => {
           const c = window.__rpgClient;
           const p = c?.poses();
           if (!c || !p) return false;
           const list = k === "death" ? p.dying : p.attacking.filter((a) => !clips || a.of > 300);
-          const ids = list.filter((x) => x.ms > x.of / 3 && x.ms < x.of - 60).map((x) => x.id);
-          if (ids.length === 0) return false;
+          const from = (x: { of: number }): number =>
+            k === "death" ? Math.max(x.of / 3, x.of - late) : x.of / 3;
+          const posed = list.filter((x) => x.ms > from(x) && x.ms < x.of - 60);
+          const first = posed[0];
+          if (!first) return false;
+          const ids = posed.map((x) => x.id);
           const w = window as unknown as PoseHold;
           const held: FrameRequestCallback[] = [];
           w.e2eHeld = held;
@@ -69,16 +85,22 @@ async function shotPose(
             held.push(cb);
             return 0;
           };
-          return { ids, attacks: c.attacks(5_000), departures: c.departures(5_000) };
+          return {
+            ids,
+            attacks: c.attacks(5_000),
+            departures: c.departures(5_000),
+            at: { x: first.x, y: first.y },
+          };
         },
-        { k: kind, clips: clipOnly },
+        { k: kind, clips: clipOnly, late: FALL_SHOT_MS },
         { timeout: clipOnly ? Math.min(20_000, left) : left, polling: "raf" },
       )
       .catch(() => undefined);
     if (!handle) continue;
     try {
       const caught = await handle.jsonValue();
-      await shot(page, name);
+      if (caught && kind === "death") await closeShot(page, name, caught.at);
+      else await shot(page, name);
       if (caught) return caught;
     } finally {
       await page.evaluate(() => {
@@ -93,6 +115,24 @@ async function shotPose(
     }
   }
   throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
+}
+
+/** Screenshot `name` of the CLOSE_W x CLOSE_H tiles round tile `at` (inside the page). */
+async function closeShot(page: Page, name: string, at: { x: number; y: number }): Promise<void> {
+  const { a, b } = await page.evaluate(({ x, y }) => {
+    const c = window.__rpgClient;
+    return { a: c?.tileToClient(x, y), b: c?.tileToClient(x + 1, y + 1) };
+  }, at);
+  const size = page.viewportSize();
+  if (!a || !b || !size) throw new Error("no canvas for the close-up");
+  const tw = b.x - a.x;
+  const th = b.y - a.y;
+  // The body rises about a tile over its own: one row more above than below.
+  const x = Math.max(0, Math.round(a.x - (CLOSE_W / 2) * tw));
+  const y = Math.max(0, Math.round(a.y - (CLOSE_H / 2 + 0.5) * th));
+  const width = Math.min(size.width - x, Math.round(CLOSE_W * tw));
+  const height = Math.min(size.height - y, Math.round(CLOSE_H * th));
+  await page.screenshot({ path: join(shots, `${name}.png`), clip: { x, y, width, height } });
 }
 
 /** Random letters with no vowels, so a name never contains a reserved word. */
@@ -250,7 +290,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   ];
   for (const [key, dx, dy] of keySteps) {
     expect(await walkable(x + dx, y + dy)).toBe(true);
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     x += dx;
     y += dy;
     await arrived(page, x, y);
@@ -296,8 +336,12 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "09b-item-tooltip");
   await page.mouse.move(1, 1);
   await expect(tooltip).toBeHidden();
-  const backpackWindow = inventory.locator('[data-container-item="backpack"]');
+  // docs/17 UI-5: on a desktop the backpack opens in a window of its own (docked under the
+  // equipment, with its own title bar), not inside the inventory window.
+  const backpackWindow = page.locator('[data-container-item="backpack"]');
   await expect(backpackWindow).toBeVisible();
+  await expect(page.getByTestId("window-container-backpack")).toBeVisible();
+  await expect(inventory.locator('[data-container-item="backpack"]')).toHaveCount(0);
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
   await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
   await expect(page.getByTestId("game-log")).toContainText("Ves: mochila (24 lugares)");
@@ -956,7 +1000,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await keysToGame(page);
   for (let i = 0; i < 3; i++) {
     const before = await self(page);
-    await page.keyboard.press("ArrowLeft");
+    await stepKey(page, "ArrowLeft");
     if (before) await arrived(page, before.x - 1, before.y);
   }
   await expect(dialog).toBeHidden();
@@ -1494,7 +1538,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   if (!start) throw new Error("no own creature");
   const t0 = Date.now();
   for (let i = 0; i < 3; i++) {
-    await page.keyboard.press("ArrowRight");
+    await stepKey(page, "ArrowRight");
     await arrived(page, start.x + i + 1, start.y);
   }
   expect(Date.now() - t0).toBeLessThan(10_000);
@@ -1958,18 +2002,29 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(e.message));
-  // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled.
+  // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled, and
+  // on the media elements the music streams on (the second each one starts from). An
+  // element with no file is the engine's play-and-pause within the first gesture (WebKit
+  // lets it play later: StreamLike.bless), not a track starting.
   await page.addInitScript(() => {
-    const w = window as unknown as { __audioStarts: number };
+    const w = window as unknown as { __audioStarts: number; __musicFrom: number[] };
     w.__audioStarts = 0;
+    w.__musicFrom = [];
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
       w.__audioStarts++;
       return start.apply(this, args);
     };
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      if (this.getAttribute("src") !== null) w.__musicFrom.push(this.currentTime);
+      return play.call(this);
+    };
   });
   const starts = (): Promise<number> =>
     page.evaluate(() => (window as unknown as { __audioStarts: number }).__audioStarts);
+  const musicFrom = (): Promise<number[]> =>
+    page.evaluate(() => (window as unknown as { __musicFrom: number[] }).__musicFrom);
   const history = (): Promise<string[]> => page.evaluate(() => window.__rpgAudio?.history() ?? []);
 
   const { email, password } = await newGuardian(playwright, "Hark");
@@ -1977,31 +2032,49 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Nothing may start before a gesture (browser autoplay rules).
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
   expect(await starts()).toBe(0);
-  // The first gesture starts the title screen's loop (the owner's Gemini pick in
-  // assets/sounds.yaml music.title; none if he picked none), and no ambient bed. Polling
-  // what plays proves its file loaded and decoded.
+  expect(await musicFrom()).toEqual([]);
+  // The first gesture starts the title screen's music (a track of the pool the owner picked
+  // in assets/sounds.yaml music.title, through the music director), and no ambient bed.
+  // Polling what plays proves its file arrived. The gesture is a click on the empty page: a
+  // modifier key alone is no user activation for Chromium, and the context stays suspended.
   const sounds = parse(
     readFileSync(join(import.meta.dirname, "..", "..", "assets", "sounds.yaml"), "utf8"),
-  ) as { music?: { title?: string } };
-  await page.keyboard.press("Shift");
+  ) as {
+    music: { title?: string; islands: Record<string, string>; pools: Record<string, string[]> };
+  };
+  const pool = (id: string | undefined): string[] => sounds.music.pools[id ?? ""] ?? [];
+  await page.mouse.click(4, 796);
   await expect
-    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
-    .toEqual({ music: sounds.music?.title, ambient: undefined });
+    .poll(async () => {
+      const l = await page.evaluate(() => window.__rpgAudio?.loops());
+      return l && l.ambient === undefined && pool(sounds.music.title).includes(l.music ?? "");
+    })
+    .toBe(true);
 
   await enterGame(page, email, password);
   errors.length = 0;
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(true);
-  // The test island plays the harbour loop and the waves (assets/sounds.yaml).
+  // The test island plays a track of the harbour's pool and the waves (assets/sounds.yaml).
   await expect
-    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
-    .toEqual({ music: "music_puerto", ambient: "amb_olas" });
+    .poll(async () => {
+      const l = await page.evaluate(() => window.__rpgAudio?.loops());
+      return (
+        l &&
+        l.ambient === "amb_olas" &&
+        pool(sounds.music.islands["testisle"]).includes(l.music ?? "")
+      );
+    })
+    .toBe(true);
+  // Each track started at one of its entry points, never at its first second.
+  await expect.poll(async () => (await musicFrom()).length).toBeGreaterThanOrEqual(1);
+  for (const from of await musicFrom()) expect(from).toBeGreaterThan(0);
   // An own step makes a sound too. The engine drops a sound whose file is still loading
   // after LATE_MS (a late sound is worse than none), so on a slow runner the first step can
   // be silent: walk back and forth until one plays (its file is cached by then).
   const start = await self(page);
   if (!start) throw new Error("no own creature");
   for (let i = 0; ; i++) {
-    await page.keyboard.press("ArrowRight");
+    await stepKey(page, "ArrowRight");
     await arrived(page, start.x + 1, start.y);
     const played = await expect
       .poll(history, { timeout: 2000 })
@@ -2011,11 +2084,11 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
         () => false,
       );
     if (played || i === 4) break;
-    await page.keyboard.press("ArrowLeft");
+    await stepKey(page, "ArrowLeft");
     await arrived(page, start.x, start.y);
   }
   expect(await history()).toContain("step");
-  expect(await starts()).toBeGreaterThanOrEqual(3); // two loops and a step
+  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambient bed and a step
 
   // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
   await page.getByTestId("options-button").click();
@@ -2038,7 +2111,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect(options).toHaveCount(0);
   const before = (await history()).length;
-  await page.keyboard.press("ArrowLeft");
+  await stepKey(page, "ArrowLeft");
   await arrived(page, start.x, start.y);
   expect((await history()).slice(before)).not.toContain("step");
   // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
@@ -2129,7 +2202,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     let key = "";
     for (const k of Object.keys(back)) {
       const before = await still();
-      await page.keyboard.press(k);
+      await stepKey(page, k);
       await page.waitForTimeout(700);
       const after = await still();
       if (after.x !== before.x || after.y !== before.y) {
@@ -2139,7 +2212,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     }
     expect(key).not.toBe("");
     await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 1 de 5.");
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     await page.waitForTimeout(700);
     await still();
     await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 2 de 5.");
@@ -2147,7 +2220,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await panel.screenshot({ path: join(shots, "40-tutorial-panel.png") });
     for (let i = 0; i < 3; i++) {
       key = back[key] ?? "";
-      await page.keyboard.press(key);
+      await stepKey(page, key);
       await page.waitForTimeout(700);
       await still();
     }
@@ -2189,15 +2262,19 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
     await openWindow(page, "help");
     const help = page.getByTestId("controls-help");
-    await expect(help.locator("p")).toContainText("Camina con las flechas");
+    await expect(help.locator("p.controls-text")).toContainText("Camina con las flechas");
+    await expect(help.locator("p.help-windows")).toContainText("Ventanas");
     await shot(page, "44-controls-help-960");
-    // The help wraps inside its window, and the window stays inside the screen.
+    // The help (the controls and the windows' paragraph) wraps inside its window, and the
+    // window stays inside the screen.
     const fits = await help
       .locator("p")
-      .evaluate(
-        (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
+      .evaluateAll((ps) =>
+        ps.map(
+          (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
+        ),
       );
-    expect(fits).toBe(true);
+    expect(fits).toEqual([true, true]);
     expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
     await closeWindow(page, "help");
     let prov: { id: number; x: number; y: number } | undefined;
@@ -2438,7 +2515,7 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
     const me = await self(page);
     if (!me) throw new Error("no position");
     for (let i = 0; i < 3; i++) {
-      await page.keyboard.press("ArrowDown");
+      await stepKey(page, "ArrowDown");
       await arrived(page, me.x, me.y + i + 1);
     }
   }
@@ -2514,9 +2591,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   for (const page of [a, b]) {
     const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
     await slot.locator("[data-item]").dblclick();
-    await expect(
-      page.getByTestId("inventory").locator('[data-container-item="backpack"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-container-item="backpack"]')).toBeVisible();
   }
 
   // Trade: the seller invites from the battle list, the buyer joins; fish for 50 coins.
@@ -2689,7 +2764,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await arrived(c, 3154, 6403);
   const step = async (page: Page, key: string, x: number, y: number): Promise<void> => {
     await keysToGame(page);
-    await page.keyboard.press(key);
+    await stepKey(page, key);
     await arrived(page, x, y);
   };
   const openDoor = async (page: Page): Promise<void> => {
@@ -2776,7 +2851,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await step(c, "ArrowLeft", 3153, 6403);
   await step(c, "ArrowUp", 3153, 6402);
   await keysToGame(c);
-  await c.keyboard.press("ArrowUp");
+  await stepKey(c, "ArrowUp");
   await expect(c.getByTestId("game-log")).toContainText(
     "La puerta de esta casa no se abre para ti.",
   );
@@ -3096,14 +3171,14 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   await standsOn(3693, 5796, 7);
 
   // One step west, onto the stairs: down to the mine, whose floor the client now draws.
-  await page.keyboard.press("ArrowLeft");
+  await stepKey(page, "ArrowLeft");
   await standsOn(3692, 5797, 8);
   await expect.poll(() => topOf(3692, 5796, 8)).toBe(ids.up);
   await page.waitForTimeout(300);
   await shot(page, "74-volcan-mine-floor-8");
 
   // One step north, onto the stairs up: back on the surface, south of the stairs down.
-  await page.keyboard.press("ArrowUp");
+  await stepKey(page, "ArrowUp");
   await standsOn(3692, 5797, 7);
   await expect.poll(() => topOf(3692, 5796, 7)).toBe(ids.down);
   await page.waitForTimeout(300);

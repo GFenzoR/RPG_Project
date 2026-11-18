@@ -34,7 +34,9 @@ import type {
   OutfitDef,
   SiteContent,
   LoopRules,
+  MusicFades,
   MusicRules,
+  QuestMusic,
   RecipeDef,
   SoundDef,
   SoundManifest,
@@ -283,6 +285,7 @@ export function loadClientContent(root: string): ClientContent {
       motdMax: num(guild["motd_max"], 255),
     },
     sounds: loadSounds(root),
+    questMusic: loadQuestMusic(root),
     islands: loadIslands(root),
     houseDoors: loadHouseDoors(root),
     portals: loadPortals(root),
@@ -393,6 +396,7 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
     };
   if (raw["pickupable"] === false) out.fixed = true;
   if (raw["market_board"] === true) out.board = true;
+  if (raw["quest"] === true) out.quest = true;
   return out;
 }
 
@@ -552,21 +556,59 @@ const loopRules = (v: unknown): LoopRules => {
   };
 };
 
-/** How long the fight music outlasts the last blow or target when sounds.yaml says nothing. */
-export const COMBAT_HOLD_MS = 8000;
+/** The music's timings when sounds.yaml says nothing (audio/director.ts). */
+export const MUSIC_DEFAULTS = {
+  fades: { zone: 5000, bossIn: 1500, bossOut: 6000, title: 3000, next: 4000 },
+  dwellMs: 3000,
+  bossHoldMs: 5000,
+  resumeMs: 180_000,
+  gapMs: [6000, 15000] as [number, number],
+};
 
-/** The music's rules: the zone's loops plus the title screen's, a fight's and a boss's. */
+const ms = (v: unknown, def: number): number => (typeof v === "number" && v >= 0 ? v : def);
+
+const poolMap = (v: unknown): Record<string, string[]> => {
+  const out: Record<string, string[]> = {};
+  if (isObj(v))
+    for (const [id, list] of Object.entries(v)) {
+      const ids = (Array.isArray(list) ? list : [list]).filter(
+        (s): s is string => typeof s === "string",
+      );
+      if (ids.length > 0) out[id] = ids;
+    }
+  return out;
+};
+
+/** The music's rules: pools, the places that name them, and the director's timings. */
 const musicRules = (v: unknown): MusicRules => {
   const l = isObj(v) ? v : {};
-  const str = (k: string): string | undefined => (typeof l[k] === "string" ? l[k] : undefined);
+  const f = isObj(l["fades"]) ? l["fades"] : {};
+  const d = MUSIC_DEFAULTS;
+  const fades: MusicFades = {
+    zone: ms(f["zone"], d.fades.zone),
+    bossIn: ms(f["boss_in"], d.fades.bossIn),
+    bossOut: ms(f["boss_out"], d.fades.bossOut),
+    title: ms(f["title"], d.fades.title),
+    next: ms(f["next"], d.fades.next),
+  };
+  const gap = Array.isArray(l["gap_ms"]) ? l["gap_ms"] : [];
+  const gapMin = ms(gap[0], d.gapMs[0]);
   return {
-    ...loopRules(l),
-    title: str("title"),
-    combat: str("combat"),
-    combatHoldMs: typeof l["combat_hold_ms"] === "number" ? l["combat_hold_ms"] : COMBAT_HOLD_MS,
+    pools: poolMap(l["pools"]),
+    islands: stringMap(l["islands"]),
+    underground: typeof l["underground"] === "string" ? l["underground"] : undefined,
+    title: typeof l["title"] === "string" ? l["title"] : undefined,
     bosses: stringMap(l["bosses"]),
+    fades,
+    dwellMs: ms(l["dwell_ms"], d.dwellMs),
+    bossHoldMs: ms(l["boss_hold_ms"], d.bossHoldMs),
+    resumeMs: ms(l["resume_ms"], d.resumeMs),
+    gapMs: [gapMin, Math.max(gapMin, ms(gap[1], d.gapMs[1]))],
   };
 };
+
+const seconds = (v: unknown): number[] | undefined =>
+  Array.isArray(v) ? v.filter((x): x is number => typeof x === "number" && x >= 0) : undefined;
 
 /** assets/sounds.yaml (make validate checks it); empty when there is none. */
 export function loadSounds(root: string): SoundManifest {
@@ -583,12 +625,19 @@ export function loadSounds(root: string): SoundManifest {
       if (!isObj(s) || typeof s["file"] !== "string") continue;
       const ch = s["channel"];
       if (ch !== "sfx" && ch !== "ui" && ch !== "music" && ch !== "ambient") continue;
-      sounds[id] = {
+      const def: SoundDef = {
         url: AUDIO_PREFIX + s["file"],
         channel: ch,
         volume: typeof s["volume"] === "number" ? s["volume"] : 1,
         maxVoices: typeof s["max_voices"] === "number" ? s["max_voices"] : 3,
       };
+      // A music track's measures (make music-gemini); none: a loop file.
+      if (ch === "music" && typeof s["seconds"] === "number" && s["seconds"] > 0) {
+        def.seconds = s["seconds"];
+        def.end = typeof s["end"] === "number" ? Math.min(s["end"], s["seconds"]) : s["seconds"];
+        def.entries = seconds(s["entries"]) ?? [];
+      }
+      sounds[id] = def;
     }
   const events: Record<string, string[]> = {};
   if (isObj(m["events"]))
@@ -599,6 +648,33 @@ export function loadSounds(root: string): SoundManifest {
       if (ids.length > 0) events[ev] = ids;
     }
   return { sounds, events, music: musicRules(m["music"]), ambient: loopRules(m["ambient"]) };
+}
+
+/**
+ * The music areas of important quests: the `music` block of data/quests/<id>.yaml (pool,
+ * floors, rects; make validate checks it against the quest schema and sounds.yaml).
+ */
+export function loadQuestMusic(root: string): QuestMusic[] {
+  const dir = join(root, "data", "quests");
+  if (!existsSync(dir)) return [];
+  const out: QuestMusic[] = [];
+  for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith(".yaml"))
+    .sort()) {
+    const q = readYaml(join(dir, file));
+    if (!isObj(q) || typeof q["id"] !== "string" || !isObj(q["music"])) continue;
+    const m = q["music"];
+    if (typeof m["pool"] !== "string") continue;
+    const floors = Array.isArray(m["floors"])
+      ? m["floors"].filter((z): z is number => typeof z === "number")
+      : [];
+    const rects = (Array.isArray(m["rects"]) ? m["rects"] : []).flatMap((r) =>
+      isObj(r) ? [{ x: num0(r["x"]), y: num0(r["y"]), w: num0(r["w"]), h: num0(r["h"]) }] : [],
+    );
+    if (floors.length > 0 && rects.length > 0)
+      out.push({ quest: q["id"], pool: m["pool"], floors, rects });
+  }
+  return out;
 }
 
 function loadIslands(root: string): IslandRect[] {

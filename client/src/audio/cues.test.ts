@@ -4,9 +4,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { blowAt, cuesOf, effectEvents, islandAt, loopFor, musicFor } from "./cues.ts";
+import { cuesOf, effectEvents, islandAt, loopFor, questPoolAt, sceneFor } from "./cues.ts";
 import type { CueContext } from "./cues.ts";
-import { loadSounds, repoRoot, soundFiles } from "../../vite/content.ts";
+import { loadQuestMusic, loadSounds, repoRoot, soundFiles } from "../../vite/content.ts";
+import { NO_SOUNDS } from "./cues.ts";
 
 type Msg = ServerMessage["message"];
 type Init = MessageInitShape<typeof ServerMessageSchema>;
@@ -116,38 +117,51 @@ describe("zones", () => {
   });
 
   const music = {
-    ...rules,
+    ...NO_SOUNDS.music,
+    islands: { puerto: "town", bosque: "forest" },
+    underground: "caves",
     title: "menu",
-    combat: "fight",
-    combatHoldMs: 8000,
     bosses: { slagbound_warden: "forge" },
   };
   const forest = { x: 210, y: 110, z: 7 };
+  const shrine = {
+    quest: "ch3_warden",
+    pool: "shrine",
+    floors: [7, 8],
+    rects: [{ x: 205, y: 105, w: 10, h: 10 }],
+  };
 
-  it("plays a boss's loop while one is in view, over a fight and the zone", () => {
-    expect(musicFor(forest, islands, music, ["wolf", "slagbound_warden"], true)).toBe("forge");
-    expect(musicFor(forest, islands, music, ["slagbound_warden"], false)).toBe("forge");
-    expect(musicFor(forest, islands, music, ["wolf"], true)).toBe("fight");
-    expect(musicFor(forest, islands, music, ["wolf"], false)).toBe("b");
-    expect(musicFor({ ...forest, z: 8 }, islands, music, [], false)).toBe("cave");
+  it("finds the quest area the player stands in, on its floors only", () => {
+    expect(questPoolAt(forest, [shrine])).toBe("shrine");
+    expect(questPoolAt({ ...forest, z: 8 }, [shrine])).toBe("shrine");
+    expect(questPoolAt({ ...forest, z: 9 }, [shrine])).toBeUndefined();
+    expect(questPoolAt({ x: 215, y: 110, z: 7 }, [shrine])).toBeUndefined(); // w is exclusive
+    expect(questPoolAt(forest, [])).toBeUndefined();
   });
 
-  it("keeps the zone's loop in a fight when there is no fight music", () => {
-    const quiet = { ...music, combat: undefined, bosses: {} };
-    expect(musicFor(forest, islands, quiet, ["slagbound_warden"], true)).toBe("b");
+  it("gives the director the zone, the quest area and a boss in view, closest first", () => {
+    expect(sceneFor(forest, islands, music, [shrine], ["wolf", "slagbound_warden"])).toEqual({
+      kind: "world",
+      zone: "forest",
+      quest: "shrine",
+      boss: "forge",
+    });
+    expect(sceneFor({ ...forest, z: 9 }, islands, music, [shrine], [])).toEqual({
+      kind: "world",
+      zone: "caves",
+      quest: undefined,
+      boss: undefined,
+    });
   });
 
-  it("a blow on the player's own tile is a fight; a heal there or a blow elsewhere is not", () => {
-    const effect = (effectId: number, pos = at): Msg =>
-      msg({ case: "effect", value: { pos, effectId } });
-    expect(blowAt(effect(1), at)).toBe(true); // hit
-    expect(blowAt(effect(2), at)).toBe(true); // block or miss
-    expect(blowAt(effect(11), at)).toBe(true); // fire
-    expect(blowAt(effect(3), at)).toBe(false); // heal
-    expect(blowAt(effect(5), at)).toBe(false); // gather
-    expect(blowAt(effect(1, { ...at, x: at.x + 1 }), at)).toBe(false);
-    expect(blowAt(effect(1, { ...at, z: 8 }), at)).toBe(false);
-    expect(blowAt(system("combat.cannot_attack"), at)).toBe(false);
+  it("an ordinary fight is not part of the scene: the zone's music goes on", () => {
+    // Monsters in view that are not bosses (a fight with wolves) leave only the zone.
+    expect(sceneFor(forest, islands, music, [], ["wolf", "wolf", "boar"])).toEqual({
+      kind: "world",
+      zone: "forest",
+      quest: undefined,
+      boss: undefined,
+    });
   });
 });
 
@@ -182,20 +196,44 @@ describe("assets/sounds.yaml", () => {
       for (const id of ids) expect(m.sounds[id]?.channel, `${e} → ${id}`).toMatch(/^(sfx|ui)$/);
   });
 
-  it("every island has music and the caves have their own", () => {
-    for (const island of ["puerto", "bosque", "testisle"]) {
-      expect(m.sounds[m.music.islands[island] ?? ""]?.channel).toBe("music");
+  it("every island has a pool of music, and the caves have their own", () => {
+    for (const island of ["puerto", "bosque", "testisle", "volcan"]) {
+      const pool = m.music.pools[m.music.islands[island] ?? ""] ?? [];
+      expect(pool.length, island).toBeGreaterThan(0);
+      for (const id of pool) expect(m.sounds[id]?.channel, `${island} ${id}`).toBe("music");
       expect(m.sounds[m.ambient.islands[island] ?? ""]?.channel).toBe("ambient");
     }
-    expect(m.music.underground).toBe("music_cueva");
+    expect(m.music.underground).toBe("cave");
+    // The owner's picks of 2026-11-18: Puerto alternates its three takes, the caves more.
+    expect(m.music.pools[m.music.islands["puerto"] ?? ""]?.length).toBe(3);
+    expect(m.music.pools["cave"]?.length ?? 0).toBeGreaterThan(1);
   });
 
-  it("the title screen's, a fight's and the bosses' music are music loops", () => {
-    // Which of them play is the owner's pick (assets/sounds/music/gemini.yaml); the ones
-    // there must be music, and a boss is a monster's content id.
-    for (const id of [m.music.title, m.music.combat, ...Object.values(m.music.bosses)])
-      if (id !== undefined) expect(m.sounds[id]?.channel, id).toBe("music");
-    expect(m.music.combatHoldMs).toBeGreaterThan(0);
+  it("the title screen's and the bosses' music are pools of music, and fights have none", () => {
+    for (const pool of [m.music.title, ...Object.values(m.music.bosses)])
+      if (pool !== undefined) {
+        expect(m.music.pools[pool]?.length, pool).toBeGreaterThan(0);
+        for (const id of m.music.pools[pool] ?? []) expect(m.sounds[id]?.channel, id).toBe("music");
+      }
+    expect(Object.keys(m.music)).not.toContain("combat");
+  });
+
+  it("every whole track starts somewhere other than its beginning, with music after it", () => {
+    for (const [id, def] of Object.entries(m.sounds)) {
+      if (def.channel !== "music" || def.seconds === undefined) continue;
+      expect(def.entries?.length, id).toBeGreaterThan(0);
+      for (const e of def.entries ?? []) {
+        expect(e, id).toBeGreaterThan(0);
+        expect(e, id).toBeLessThanOrEqual((def.end ?? 0) - 30);
+      }
+      const gaps = (def.entries ?? []).slice(1).map((e, i) => e - (def.entries?.[i] ?? 0));
+      for (const g of gaps) expect(g, id).toBeGreaterThanOrEqual(15 - 1e-6);
+    }
+  });
+
+  it("an important quest's music names a pool", () => {
+    for (const q of loadQuestMusic(repoRoot()))
+      expect(m.music.pools[q.pool]?.length, q.quest).toBeGreaterThan(0);
   });
 
   it("serves files under audio/", () => {

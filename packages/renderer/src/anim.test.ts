@@ -8,7 +8,11 @@ import {
   IDLE_AFTER_MS,
   LUNGE_OUT_MS,
   LUNGE_PX,
+  VANISH_FLICKER_MS,
+  VANISH_MS,
   animate,
+  attackClip,
+  attackClipAction,
   clipMs,
   hashId,
   newAnimInput,
@@ -17,6 +21,7 @@ import {
   startAttack,
   startDeath,
   startHit,
+  startVanish,
 } from "./anim.ts";
 import type { AnimInput, AnimMeta, AnimState, Pose } from "./anim.ts";
 
@@ -122,6 +127,45 @@ describe("clips", () => {
     expect(animate(s, LPC, in_, out)).toMatchObject({ action: "attack", frame: 2, x: 0 });
     in_.now = 1000 + clipMs(LPC, "attack");
     expect(animate(s, LPC, in_, out).action).toBe("idle");
+  });
+
+  it("plays its own clip for a ranged attack or a spell, else the melee swing (ANI-2)", () => {
+    // An LPC humanoid with every action: the bow (7 x 50 ms) and the spell (7 x 60 ms).
+    const ALL: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        shoot: { frames: 7, ms: 50, dirs: DIRS },
+        cast: { frames: 7, ms: 60, dirs: DIRS },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.dir = "e";
+    startAttack(s, 1000, 1, 0, "shoot");
+    in_.now = 1000 + 120;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "shoot", frame: 2, x: 0 });
+    in_.now = 1000 + clipMs(ALL, "shoot") - 1;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "shoot", frame: 6 });
+    in_.now = 1000 + clipMs(ALL, "shoot");
+    expect(animate(s, ALL, in_, out).action).toBe("idle");
+    startAttack(s, 2000, 0, 1, "cast");
+    in_.now = 2000 + 400;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "cast", frame: 6 });
+    // A melee blow after them plays the swing again.
+    startAttack(s, 3000, 0, 1);
+    in_.now = 3000 + 130;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "attack", frame: 2 });
+    // Without a cast clip (a monster that only throws), a spell swings; without any attack
+    // clip it lunges (ANI-5).
+    startAttack(s, 4000, 0, 1, "cast");
+    in_.now = 4000 + 130;
+    expect(animate(s, LPC, in_, out)).toMatchObject({ action: "attack", frame: 2, y: 0 });
+    expect(attackClipAction(LPC, "cast", "s")).toBe("attack");
+    expect(attackClipAction(ALL, "cast", "s")).toBe("cast");
+    expect(attackClip(STILL, "shoot", "s")).toBeUndefined();
+    startAttack(s, 5000, 0, 1, "shoot");
+    in_.now = 5000 + LUNGE_OUT_MS;
+    expect(animate(s, STILL, in_, out)).toMatchObject({ x: 0, y: LUNGE_PX });
   });
 
   it("bites and idles only facing its own ways: else the lunge and the standing frame", () => {
@@ -248,6 +292,41 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     expect(animate(s, STILL, in_, out)).toMatchObject({ scaleY: 0.75, alpha: 0.5, done: false });
     in_.now = DEATH_MS;
     expect(animate(s, STILL, in_, out).done).toBe(true);
+  });
+
+  it("shimmers away when it leaves by a teleport or a logout, never falling (ANI-7)", () => {
+    for (const meta of [LPC, STILL]) {
+      const { s, in_, out } = setup();
+      startVanish(s, 1000);
+      startVanish(s, 1100); // the first one counts
+      in_.now = 1000;
+      expect(animate(s, meta, in_, out)).toMatchObject({ shimmer: true, alpha: 1, done: false });
+      expect(out.action).toBe("idle"); // its stance: no death clip, no squash to the floor
+      in_.now = 1000 + VANISH_MS / 2;
+      animate(s, meta, in_, out);
+      expect(out.action).not.toBe("death");
+      expect(Math.abs(out.scaleX)).toBeCloseTo(0.65);
+      expect(out.scaleY).toBeCloseTo(1.1);
+      // It flickers while it fades: every VANISH_FLICKER_MS dimmer, then back.
+      const alphas = [0, 1, 2, 3].map((k) => {
+        in_.now = 1000 + 100 + k * VANISH_FLICKER_MS;
+        return animate(s, meta, in_, out).alpha;
+      });
+      expect(alphas[1]).toBeLessThan(alphas[0] ?? 0);
+      expect(alphas[2]).toBeGreaterThan(alphas[1] ?? 1);
+      in_.now = 1000 + VANISH_MS;
+      expect(animate(s, meta, in_, out)).toMatchObject({ alpha: 0, done: true });
+    }
+    // A death already under way keeps falling.
+    const { s, in_, out } = setup();
+    startDeath(s, 0);
+    startVanish(s, 0);
+    in_.now = 250;
+    expect(animate(s, LPC, in_, out)).toMatchObject({ action: "death", shimmer: false });
+    // The pose is reused: the next creature drawn with it is not pale.
+    const other = setup(8);
+    in_.now = 250;
+    expect(animate(other.s, LPC, in_, out).shimmer).toBe(false);
   });
 
   it("fades in when it appears", () => {

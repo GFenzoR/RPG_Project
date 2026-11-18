@@ -68,8 +68,6 @@ sprites:
   decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
   decor/stairs_up: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_up.png }
   decor/creature_remains: { source: vendor/dungeon-crawl/mon/undead/crawling_corpse.png }
-  creatures/ore_beetle: { source: vendor/dungeon-crawl/mon/animals/boulder_beetle.png }
-  creatures/hollow_crawler: { source: vendor/dungeon-crawl/UNUSED/monsters/giant_centipede.png }
 
   # NPCs: Liberated Pixel Cup characters, in `animations` below.
 
@@ -91,11 +89,6 @@ sprites:
   # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine and the practice
   # gate of the sandbox island, shut and open.
 
-  creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
-  creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }
-  creatures/slag_golem: { source: vendor/dungeon-crawl/mon/nonliving/earth_elemental.png }
-  creatures/ember_wyrmling: { source: vendor/dungeon-crawl/UNUSED/monsters/eastern_dragon.png }
-  creatures/slagbound_warden: { source: vendor/dungeon-crawl/mon/nonliving/iron_elemental.png }
   npcs/forge_echo: { source: vendor/dungeon-crawl/mon/nonliving/fire_elemental.png }
 
   # Content audit (2026-11): weapon tiers to the Isla Volcánica, crossbows and bolts, head,
@@ -158,7 +151,7 @@ palettes:
 # CC-BY-SA 3.0, and assets/CREDITS.md must name it in that row (make test checks it). Layer
 # order: body, legs, feet, torso, head, beard, hair, hat.
 animations:
-  # ---- player outfits (data/outfits.yaml): every action ------------------------------------
+  # ---- player outfits (data/outfits.yaml): every action (the bow and the spell too) ---------
   outfits/citizen:
     preset: lpc
     layers:
@@ -197,9 +190,10 @@ animations:
       - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
       - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_blond } }
 
-  # ---- humanoid monsters: every action ------------------------------------------------------
+  # ---- humanoid monsters: their own attacks (data/monsters: distance throws, a spell casts) --
   creatures/wreck_looter:
     preset: lpc
+    actions: [idle, walk, attack, shoot, death]
     layers:
       - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
@@ -210,6 +204,7 @@ animations:
       - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
   creatures/coffer_smuggler:
     preset: lpc
+    actions: [idle, walk, attack, shoot, death]
     layers:
       - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
@@ -219,6 +214,7 @@ animations:
       - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
   creatures/obsidian_delver:
     preset: lpc
+    actions: [idle, walk, attack, shoot, death]
     layers:
       - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_ash } }
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
@@ -229,6 +225,7 @@ animations:
       - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
   creatures/drowned_miner:
     preset: lpc
+    actions: [idle, walk, attack, cast, death]
     layers:
       - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_ghoul } }
       - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_teal } }
@@ -424,13 +421,11 @@ animations:
 
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.
-  creatures/hollow_crawler: { facing: left }
-  creatures/ash_hound: { facing: left }
-  creatures/cinder_salamander: { facing: left }
-  creatures/ember_wyrmling: { facing: left }
   creatures/thieving_gull: { facing: left, flying: true }
-  creatures/bristleback_boar: { facing: left }
-  creatures/bramble_stag: { facing: left }
+  # The spritegen boar and stag trot with frames looking left, 64x64 since docs/17 ART-2
+  # "Animales medianos": their feet on the tile and the contact shadow, like the Gemini animals.
+  creatures/bristleback_boar: { facing: left, anchor: bc, shadow: ellipse }
+  creatures/bramble_stag: { facing: left, anchor: bc, shadow: ellipse }
   npcs/forge_echo: { flying: true }
 
   # ---- monsters drawn with the owner's Gemini (assets/CREDITS.md "Generado con IA") ---------
@@ -444,6 +439,14 @@ animations:
   creatures/tide_crab: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
   creatures/bilge_rat: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 100, death: 180 } }
   creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/hollow_crawler: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/ore_beetle: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, death: 200 } }
+  # Isla Volcánica. The warden, the Chapter 3 boss, is 96x96: a head and a half above a person.
+  creatures/ash_hound: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 400, attack: 100, death: 200 } }
+  creatures/cinder_salamander: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
+  creatures/slag_golem: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 140, death: 240 } }
+  creatures/ember_wyrmling: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 220 } }
+  creatures/slagbound_warden: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 150, death: 260 } }
 
 # Map tile art (docs/17 ART-3, ART-4, ART-7; tools/spritepack tiles.ts). Ground looks
 # (<sprite>/var_<n>), animation frames (<sprite>/frame_<n>), wall pieces (<sprite>/wall_<mask>)
@@ -453,7 +456,14 @@ animations:
 # tiles of the light it gives in caves), the share of the main look (weight, default 0.7)
 # and particles: the ambient motes the client spawns there (docs/17 ART-7, A13: embers,
 # pollen, spray, which a ground gives off only where it meets another ground, or dust).
+# steps: what each step on a ground kicks up (docs/17 MOV-7): dust, a small puff at the
+# feet, or ripple, a ring of drops spreading on wet ground.
 tiles:
+  ground/sand: { steps: dust }
+  ground/dirt: { steps: dust }
+  ground/ash: { steps: dust }
+  ground/cinder_path: { steps: dust }
+  ground/wet_sand: { steps: ripple }
   ground/water_shallow: { ms: 240, sync: world, particles: spray }
   ground/water_shoal: { ms: 240, sync: world }
   ground/lava: { ms: 280, sync: world, particles: embers }

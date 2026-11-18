@@ -1,6 +1,13 @@
 import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
-import { MovementKeys, isTextField, takesText } from "./keyboard.ts";
+import {
+  MovementKeys,
+  TURN_TAP_MS,
+  TurnTap,
+  isTextField,
+  takesText,
+  turnKeyDirection,
+} from "./keyboard.ts";
 
 describe("MovementKeys", () => {
   it("maps arrows and WASD, the last held key wins", () => {
@@ -43,6 +50,80 @@ describe("MovementKeys", () => {
     k.up("KeyS");
     expect(k.take()).toBe(Direction.SOUTH);
     expect(k.take()).toBeUndefined();
+  });
+});
+
+describe("TurnTap (MOV-2)", () => {
+  const E = Direction.EAST;
+  const S = Direction.SOUTH;
+
+  it("standing still, a short tap toward another way only turns", () => {
+    const t = new TurnTap();
+    expect(t.decide(E, true, S, 1000)).toBe("turn");
+    // Held: it waits, then walks once held TURN_TAP_MS (it faces east by then).
+    expect(t.decide(E, true, E, 1016)).toBe("wait");
+    expect(t.decide(E, true, E, 1000 + TURN_TAP_MS - 1)).toBe("wait");
+    expect(t.decide(E, true, E, 1000 + TURN_TAP_MS)).toBe("walk");
+    // A tap let go before that: it turned and does not walk.
+    const u = new TurnTap();
+    expect(u.decide(E, true, S, 0)).toBe("turn");
+    expect(u.decide(undefined, true, E, 30)).toBeUndefined();
+    // Tapped again (now facing that way): one step.
+    expect(u.decide(E, true, E, 200)).toBe("walk");
+  });
+
+  it("a second tap before TURN_TAP_MS walks, instead of waiting with the first", () => {
+    // The player taps to turn and taps again so soon that no frame saw the key let go:
+    // the second press is a new tap (fresh), and the player faces that way now.
+    const t = new TurnTap();
+    expect(t.decide(E, true, S, 0, true)).toBe("turn");
+    expect(t.decide(E, true, E, 10, true)).toBe("walk");
+    // Held, the same key is not fresh: it waits as before.
+    const u = new TurnTap();
+    expect(u.decide(E, true, S, 0, true)).toBe("turn");
+    expect(u.decide(E, true, E, 10, false)).toBe("wait");
+  });
+
+  it("MovementKeys tells a new press from a key still held (or the OS auto-repeat)", () => {
+    const k = new MovementKeys();
+    k.down("ArrowRight");
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(true);
+    expect(k.take()).toBe(E); // still held
+    expect(k.fresh).toBe(false);
+    k.down("ArrowRight"); // the OS auto-repeat: still the same press
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(false);
+    k.up("ArrowRight");
+    k.down("ArrowRight"); // let go and pressed again between two frames
+    k.up("ArrowRight");
+    expect(k.take()).toBe(E);
+    expect(k.fresh).toBe(true);
+    expect(k.take()).toBeUndefined();
+    expect(k.fresh).toBe(false);
+  });
+
+  it("walks at once facing that way already, or while walking", () => {
+    const t = new TurnTap();
+    expect(t.decide(S, true, S, 0)).toBe("walk");
+    expect(t.decide(E, false, S, 10)).toBe("walk"); // during a step: MOV-2's buffer
+    expect(t.decide(undefined, true, S, 20)).toBeUndefined();
+  });
+
+  it("starts over for another way, and forgets with clear()", () => {
+    const t = new TurnTap();
+    expect(t.decide(E, true, S, 0)).toBe("turn");
+    // A second key makes the diagonal: a new way, turned to at once.
+    expect(t.decide(Direction.NORTH_EAST, true, E, 40)).toBe("turn");
+    expect(t.decide(Direction.NORTH_EAST, true, Direction.NORTH_EAST, 100)).toBe("wait");
+    t.clear();
+    expect(t.decide(Direction.NORTH_EAST, true, Direction.NORTH_EAST, 110)).toBe("walk");
+  });
+
+  it("turns with Ctrl and the arrows only, never with WASD", () => {
+    expect(turnKeyDirection("ArrowLeft")).toBe(Direction.WEST);
+    expect(turnKeyDirection("KeyA")).toBeUndefined();
+    expect(turnKeyDirection("Enter")).toBeUndefined();
   });
 });
 

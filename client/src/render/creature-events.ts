@@ -11,8 +11,9 @@
 //     strike monsters), the one facing the tile first, then the lowest id.
 //   - A damage number on a tile: the creature there flashes and is pushed away from its
 //     attacker (or back from where it faces).
-import { CreatureKind, DisappearReason } from "@rpg/protocol";
-import type { AttackKind, Direction } from "@rpg/protocol";
+import { AttackKind, CreatureKind, DisappearReason } from "@rpg/protocol";
+import type { Direction } from "@rpg/protocol";
+import type { AttackAction } from "@rpg/renderer";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 
@@ -112,6 +113,16 @@ export function attackDir(
   return [fx, fy];
 }
 
+/**
+ * The clip an attack plays (docs/17 ANI-2): a ranged attack shoots (the LPC bow), a spell
+ * casts (spellcast) and a melee blow, or a kind this client does not know, swings.
+ */
+export function attackAction(kind: AttackKind): AttackAction {
+  if (kind === AttackKind.RANGED) return "shoot";
+  if (kind === AttackKind.SPELL) return "cast";
+  return "attack";
+}
+
 /** Whether an area of `radius` around `centre` covers `p` (the server's round area). */
 export function inArea(centre: Pos, radius: number, p: Pos): boolean {
   const dx = p.x - centre.x;
@@ -145,4 +156,50 @@ export function attackerOf(
 export function leavesDying(reason: DisappearReason | undefined, health: number): boolean {
   if (reason === undefined || reason === DisappearReason.UNSPECIFIED) return health <= 0;
   return reason === DisappearReason.DEATH;
+}
+
+/**
+ * How a creature that left the view goes (docs/17 ANI-7): it falls where it died (a
+ * DEATH, or an older server's empty bar: leavesDying), shimmers away where it was after a
+ * TELEPORT or a LOGOUT (never the fall), and otherwise goes at once (OUT_OF_VIEW, DESPAWN).
+ */
+export type LeaveStyle = "fall" | "vanish" | "drop";
+
+export function leaveStyle(reason: DisappearReason | undefined, health: number): LeaveStyle {
+  if (leavesDying(reason, health)) return "fall";
+  return reason === DisappearReason.TELEPORT || reason === DisappearReason.LOGOUT
+    ? "vanish"
+    : "drop";
+}
+
+/** A CreatureDisappear the client got (state/world.ts `departures`). */
+export interface DepartureSeen {
+  id: number;
+  reason: DisappearReason;
+  /** When it arrived (the batch's time). */
+  start: number;
+}
+
+/**
+ * The departures not played yet, each once, by arrival: the canvas plays every one where
+ * its creature was drawn, also when the creature is already back in view (a player that
+ * died and woke up at a temple in view: the same id leaves and comes back in one batch).
+ * take() reuses one array, so a frame makes no garbage (docs/07).
+ */
+export class DepartureFeed {
+  private seen = Number.NEGATIVE_INFINITY;
+  private readonly fresh: DepartureSeen[] = [];
+
+  /** The departures of `list` that arrived since the last call, oldest first. */
+  take(list: readonly DepartureSeen[]): readonly DepartureSeen[] {
+    this.fresh.length = 0;
+    let newest = this.seen;
+    for (const d of list) {
+      if (d.start <= this.seen) continue;
+      newest = Math.max(newest, d.start);
+      this.fresh.push(d);
+    }
+    this.seen = newest;
+    return this.fresh;
+  }
 }

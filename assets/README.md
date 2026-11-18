@@ -12,10 +12,10 @@
 ## Sonido (T3.7)
 | Ruta | Qué es | ¿Se commitea? |
 |---|---|---|
-| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, loops por isla, música del título, de combate y de jefes | Sí |
+| `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, ambiente por isla, y la música: las pools de temas de cada lugar (islas, cuevas, título, jefes), las medidas de cada tema y los tiempos del director | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
-| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), escrita por `make music-gemini` | Sí |
-| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, con fuente, título y medidas | Sí (lo escribe `make music-gemini`) |
+| `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), temas enteros en estéreo escritos por `make music-gemini` | Sí |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de las cuevas, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -29,36 +29,56 @@
 ### La música de Gemini (`make music-gemini`)
 Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las tomas que
 Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
-Volcán, Cuevas, combate y el guardián de la forja). Las tomas están fuera de git, en
-`build/music-gemini/<lugar>_<n>.mp4` con su sidecar (la tercera de Puerto es `probe_1.mp4`),
-y las elecciones en `build/music-gemini/picks.json`:
+Volcán, Cuevas, combate y el guardián de la forja), más seis versiones de cueva pedidas
+el mismo día (`cave_mine`, `cave_crystal`, `cave_flooded`, `cave_abyss`, `cave_ossuary`,
+`cave_ember`). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
+sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
+`build/music-gemini/picks.json`:
 ```json
-{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off"}}
+{"picks": {"title": "1", "town_puerto": ["1", "2", "3"], "volcan": "2", "combat": "off",
+           "cave": "1", "cave_pool": ["mine", "crystal", "ember"]}}
 ```
 - **Una toma** (`"1"`, `"2"`, `"3"`) suena en su lugar. **Varias** (una lista) entran
-  todas: la primera es el sonido del lugar (`music_puerto`) y las demás, sonidos propios
-  (`music_puerto_2`, `music_puerto_3`) para el director de música que las va a alternar
-  (pendiente, `docs/14`).
-- **Un lugar sin elegir** suena con su toma 1, marcada `provisional` en el manifiesto y en
-  su fila de `CREDITS.md`.
+  todas: la primera es el sonido del lugar (`music_puerto`), las demás sonidos propios
+  (`music_puerto_2`, `music_puerto_3`), y todas forman la pool del lugar en `sounds.yaml`
+  (`music.pools.town_puerto`), que el director de música baraja.
+- **Las versiones de cueva** (`cave_pool`: `"mine"`, `"cave_mine"` o `"cave_mine_1"`) se
+  suman a la pool de las cuevas después de su toma (`music_cueva_mine`...). Mientras el dueño
+  no escriba `cave_pool`, entran las seis que pasan las medidas
+  (`music_convert.piece_problems`: tema entero de 2 minutos o más, volumen medible, ningún
+  hueco de silencio de más de 6 s, al menos dos puntos de entrada), marcadas
+  **provisionales** (en el manifiesto y en su fila de `CREDITS.md`); las que no pasan quedan
+  en `skipped` con el motivo.
+- **Un lugar sin elegir** suena con su toma 1, marcada `provisional`.
 - **`none` u `off`** deja lo que sonaba antes de Gemini: el tema de soundgen de ese lugar
   (`puerto`, `bosque`, `volcan`, `cueva`: por eso siguen en el repo con sus recetas), o
-  nada propio donde no había (título, combate, jefe: sigue la música de la zona).
+  nada propio donde no había (título, jefe: sigue la música de la zona). **El combate solo
+  acepta `none`/`off`**: el dueño no quiere música para peleas comunes (2026-11-18).
 
 Para cambiar una elección: editar `picks.json` y correr **`make music-gemini`** (con
 `FROM=<carpeta>` si las tomas están en otro lado). Hace todo de nuevo desde las elecciones:
-convierte cada toma con `music_convert.py` (sin fades, un loop de 54 a 72 s elegido donde
-lo que sigue al corte se parece al comienzo, cerrado con un crossfade, una sola ganancia
-hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **mono a 20 kbps**; una toma ya convertida
-con los mismos ajustes no se vuelve a convertir), la copia a `sounds/music/gemini/`,
-reescribe sus líneas de `sounds.yaml` (entre las marcas `# gemini-music:…`), el archivo de
-prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md` y
-`sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
-(`tools/soundgen check`). Los masters de Gemini vienen calientes (picos de +1,5 a +5 dBTP):
-el techo de pico deja los loops entre -16 y -19,5 LUFS, y el volumen de `sounds.yaml`
-devuelve esa diferencia hasta 1 (`volume_for`), así que suenan ~2 dB por debajo de los
-temas de soundgen. Después: `make test` (el test de soundgen compara el manifiesto con
-`sounds.yaml`, las filas y la carpeta), `make validate` y escucharlo con `make play`.
+convierte cada toma **entera** con `music_convert.py` (`loop=False`: nada se corta, una
+sola ganancia hacia -14 LUFS sin pasar -1,5 dBTP, Ogg Opus **estéreo a 48 kbps**, 40 las
+cuevas; una toma ya convertida con los mismos ajustes no se vuelve a convertir) y mide
+dónde puede empezar (`entries`: donde empieza una frase según la envolvente de nivel, a
+15 s o más uno de otro, nunca en el segundo 0 ni en los últimos 30 s del cuerpo), dónde
+termina su cuerpo (`end`: empieza el final compuesto) y su hueco más largo. Después la copia
+a `sounds/music/gemini/`, reescribe sus líneas de `sounds.yaml` (sonidos con `seconds`,
+`end` y `entries`, pools, título y jefes, entre las marcas `# gemini-music:…`), el archivo
+de prompt de cada toma (`assets/prompts/sounds/music/gemini/`), sus filas de `CREDITS.md`
+y `sounds/music/gemini.yaml`, borra lo que ya no se usa y al final revisa el presupuesto
+(`tools/soundgen check`, que ahora suma también cada pool). Los masters de Gemini vienen
+calientes (picos de +1,5 a +5 dBTP): donde el techo de pico deja una toma bajo -14 LUFS, el
+volumen de `sounds.yaml` devuelve la diferencia hasta 1 (`volume_for`; el medidor lee un
+archivo mono como dos parlantes, así que un tema estéreo y uno mono de soundgen al mismo
+LUFS suenan igual). Después: `make test` (el test de soundgen compara el manifiesto con
+`sounds.yaml`, las pools, las filas y la carpeta), `make validate` y escucharlo con
+`make play`.
+
+**Cómo suena en el juego** (el director de música, `client/src/audio/director.ts`; reglas
+en `docs/02`, "Sonido"): cada tema se transmite (no se decodifica entero, docs/07 "Audio"),
+empieza en un punto de entrada al azar, nunca se repite dos veces seguidas, y los cambios
+de lugar son fundidos de potencia constante con su largo según qué cambió.
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
@@ -99,8 +119,9 @@ Los monstruos, NPCs y atuendos se animan con datos de `sprites.yaml`, no con có
 detalle de cómo los juega el cliente está en `client/CLAUDE.md`, "Animación de criaturas".
 
 **Frames y nombres.** Cada frame es un sprite del atlas llamado
-`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` o `death`, `dir`
-es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
+`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` (cuerpo a
+cuerpo), `shoot` (a distancia), `cast` (conjurar) o `death`, `dir` es `n`, `e`, `s` o `w`, y
+`n` arranca en 0. Hay tres maneras de tenerlos:
 1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
    (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
    de LPC (`vendor/ulpc`).
@@ -119,7 +140,7 @@ palettes:                                  # colores de claro a oscuro
   cloth_navy: ["#7c96c4", "#5a76a8", "#435a87", "#304064", "#1d263e"]   # propia
 animations:
   outfits/sailor:
-    preset: lpc                            # hojas del generador ULPC: idle, walk, slash, hurt
+    preset: lpc                            # hojas ULPC: idle, walk, slash, shoot, spellcast, hurt
     actions: [idle, walk]                  # opcional: un subconjunto del preset (NPCs)
     layers:                                # "<sheet>" = la hoja de cada acción
       - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
@@ -129,11 +150,16 @@ animations:
 ```
 - **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
   norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
-  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `death` = `hurt`,
-  6 de 100 ms y solo hacia el sur (las otras direcciones usan esa).
+  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `shoot` = `shoot`
+  (el arco), sus 13 columnas tomadas de a una sí y una no (`step: 2`): 7 de 50 ms; `cast` =
+  `spellcast`, 7 de 60 ms; `death` = `hurt`, 6 de 100 ms y solo hacia el sur (las otras
+  direcciones usan esa). Un monstruo lista en `actions` solo las que usa: sus ataques de
+  `data/monsters` (`distance` juega `shoot`, `spell` juega `cast`); los NPCs, `idle` y `walk`.
+  El cliente elige el clip por `CreatureAttack.kind` (docs/17 ANI-2) y, si el sprite no lo
+  tiene, juega `attack`.
 - **Sin preset**, cada acción se describe entera:
   `walk: { sheet: walk, frame: [64, 64], rows: { n: 0, w: 1, s: 2, e: 3 }, col: 1, count: 8, per_tile: 4 }`
-  (`ms` para las demás acciones).
+  (`ms` para las demás acciones; `step`, columnas de un frame al siguiente, 1 por defecto).
 - **`recolor`** cambia cada color de la paleta de origen por el del mismo lugar de la de
   destino (mismo largo). Los píxeles de las capas quedan con alfa 0 o 255: lo que tiene
   menos de la mitad de opacidad se descarta.
@@ -151,7 +177,8 @@ animations:
   - `anchor: br | bc` (por defecto `br`): `bc` para frames de 64x64 o que no llenan la
     casilla: los pies van a `FEET_LINE`, medidos en los frames de caminar;
   - `ms: { idle: 500, attack: 110, death: 200 }`: ms por frame de cada acción que se juega
-    por tiempo (sin esto, 500, 60 y 100; caminar va por distancia). Un `ms` de una acción
+    por tiempo (sin esto, 500 quieto, 60 atacar y conjurar, 50 disparar y 100 morir;
+    caminar va por distancia). Un `ms` de una acción
     sin frames es error.
 - **Quieto y atacar solo hacia sus lados** (`OWN_FACINGS`, `packages/renderer/src/anim.ts`):
   una criatura que mira hacia un lado sin frames de `idle` o de `attack` no toma los de
@@ -175,11 +202,12 @@ animations:
   2x con Read, y en el juego (screenshots del E2E).
 
 ### Personajes de LPC (`vendor/ulpc`)
-92 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
+23 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
 en `vendor/ulpc/LICENSE.txt`), copiadas sin tocar con sus rutas: cuerpos (hombre, mujer,
 esqueleto), cabezas (hombre, mujer, anciano), camisa de manga larga, armaduras de cuero, placas
-y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Solo
-entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
+y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Cada
+capa trae seis hojas (138 archivos): `walk`, `idle`, `slash`, `shoot`, `spellcast` y `hurt`
+(las de disparar y conjurar se sumaron el 2026-11-18, del mismo commit). Solo entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
 sueltos no tienen fila: quedaron afuera). Las hojas base vienen en colores neutros (piel
 clara, tela blanca, pelo naranja): la variedad sale de las paletas propias de `palettes`.
 
@@ -208,10 +236,15 @@ tiles:
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
   ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
+  ground/sand: { steps: dust }   # lo que patea cada paso sobre este suelo
 ```
 - `particles` (docs/17 ART-7, A13): `embers` (brasas que suben), `pollen` (polen que flota
   alrededor de un árbol), `spray` (rocío; un suelo `spray` solo emite donde toca otro
   suelo) o `dust` (polvo). El cliente las dibuja (`client/src/render/particles.ts`).
+- `steps` (docs/17 MOV-7), solo para suelos: lo que patea cada paso que sale de una casilla
+  de ese suelo, a la altura de los pies: `dust` (unas motas de polvo que suben y se
+  asientan: arena, tierra, ceniza, senda de escoria) o `ripple` (un anillo de gotas que se
+  abre: la arena mojada). Partículas del mismo pool que `particles`.
 - Las piezas de muro pueden medir 32x96 (la muralla, `walls/rampart_wall`: cara de 64 px).
   El marco de las puertas de casa (`doors/house_door_frame`) también tiene 16 piezas: el
   renderer lo pone en cada puerta de `houses.yaml` sin que esté en el mapa.
@@ -253,11 +286,14 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
   bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
-- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
+- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo), salvo el jabalí y
+  el ciervo, que se paran sobre la sombra de contacto.
 - Todo determinista: ruido con semilla, nunca `Math.random`.
 - Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). El
   jabalí y el ciervo tienen un trote de 4 frames mirando a la izquierda (`walk_w_0..3`,
-  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales.
+  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales. Son 64x64: su
+  diseño de 32x32 dibujado 1,2 y 1,4 veces más grande (`scaleOnto`), centrado abajo para
+  `anchor: bc`, a la escala de los animales de Gemini (docs/17 ART-2, "Animales medianos").
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
   reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
@@ -280,7 +316,10 @@ de `render`:
 - pinta solo píxeles transparentes, desde el 40 % de la altura de la figura hacia abajo;
 - usa el color `SHADOW` (casi negro y opaco, como todo en un sprite).
 
-Una receta puede ajustarla con `shadow: { dx, dy, from }`.
+Una receta puede ajustarla con `shadow: { dx, dy, from }`, o quitarla con `shadow: false`
+cuando la criatura se para sobre la sombra de contacto del renderer como los animales
+animados (`shadow: ellipse` en `assets/sprites.yaml`): el jabalí y el ciervo desde que son
+de 64x64 (docs/17 ART-2, "Animales medianos").
 
 Se hace en spritegen y no en el renderer por tres razones:
 - los PNG de `vendor/` no se tocan, así que no se les puede quitar la sombra que traen;
@@ -307,6 +346,15 @@ Son mapas de píxeles hechos a mano, con un contorno casi negro por fuera. Cada 
 su propia silueta, para que se distinga también sin color. El canvas las dibuja junto al
 nombre a 1 píxel de pantalla por píxel del sprite (como el texto de 12 px), y la lista de
 batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de antes.
+
+Y los slots vacíos del equipo (docs/17 UI-5) `ui/slots/<slot>` (`head`, `neck`,
+`backpack`, `armor`, `right_hand`, `left_hand`, `legs`, `feet`, `ring`, `ammo`): un
+yelmo, un amuleto, una mochila, una túnica, una espada, un escudo con cruz, un pantalón,
+una bota, un anillo y tres flechas. Van dentro de `UI_SLOT_BOX` (20x20 en el centro;
+`uiIconBox` dice la caja de cada grupo) y el cliente los muestra enteros, como el ícono de
+un item, desvaídos bajo el slot que no tiene nada (`client/src/ui/Inventory.tsx`). Son
+máscaras de 20x20 en color hueso, sin contorno: el borde de arriba a la izquierda se
+aclara y el de abajo a la derecha se oscurece, como grabados en la piedra.
 
 ## Arte y música hechos con Gemini (desde el 2026-11-17)
 Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta de Gemini
@@ -350,9 +398,10 @@ Arte, de la hoja al sprite:
 3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
 
-**Criaturas animadas de una sola hoja** (así se hicieron las siete del 2026-11-18: lobo,
+**Criaturas animadas de una sola hoja** (así se hicieron las catorce del 2026-11-18: lobo,
 rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-espinoso; prompts en `assets/prompts/sprites/creatures/`):
+espinoso, y en la segunda tanda reptante hueco, escarabajo de mena y los cinco del Volcán;
+prompts en `assets/prompts/sprites/creatures/`):
 - **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
   `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña
   cubierta de musgo que escupe savia) y pide **ocho filas, cada una una tira**: caminar
@@ -367,7 +416,16 @@ espinoso; prompts en `assets/prompts/sprites/creatures/`):
   ataque que falta en una dirección lo hace la embestida de ANI-5 ("Quieto y atacar solo
   hacia sus lados", arriba), o se arma con el frame parado, el de golpe que sí haya y el
   parado otra vez. Una hoja con frames que no son la misma criatura se pide otra vez (dos
-  veces como mucho) o la criatura se deja.
+  veces como mucho) o la criatura se deja. **Sí se pide otra vez** (segunda tanda, con
+  una frase más en el prompt): una fila de frente dibujada de costado ("straight toward the
+  camera, head-on ... never turned to the side"), una hoja con líneas de grilla o paneles
+  entre los dibujos (no son magenta y el corte las toma por dibujo: "Draw no lines,
+  borders, boxes or panels between the frames") y una criatura casi negra que no se leería
+  sobre los suelos oscuros (se pide con bordes más claros donde da la luz). Un dibujo con
+  algo escrito encima (un "10" en la cabeza del gólem) se descarta con `-`.
+- **Una hoja nueva para los ataques que faltan** no sirvió (cangrejo, sapo y espinoso,
+  con un frame del juego como `--ref`): Gemini sigue sin dibujar el ataque de frente o de
+  espaldas que faltaba y cambia el aspecto (más verde, más liso). No se usó ninguna.
 - **El corte** no es una grilla pareja: `--cut rows` toma las filas tal como vinieron
   (cada una en partes iguales si sus dibujos caen una en cada parte, así conserva el
   registro con que se dibujaron; el que se sale de su parte no se corta y el vecino no se
@@ -378,9 +436,21 @@ espinoso; prompts en `assets/prompts/sprites/creatures/`):
   frames de perfil, `--shared-colours` reduce los colores de todos juntos (de a uno, el
   pelaje titilaba entre frames) y `--scale` fija la escala (fuente por píxel) cuando el
   dibujo más ancho, una muerte tendida o unas alas abiertas, achicaría al resto.
-- **Tamaño** (ART-2, al lado de un personaje de LPC de ~46 px): rata y cangrejo en 32x32;
-  lobo, araña, sapo, murciélago y espinoso en 64x64 con `anchor: bc` (el lobo mide ~36 px
-  de largo, el espinoso ~40 de alto). Todos con `shadow: ellipse` y `mirror: true`.
+  **`--colors 0`** cuando la criatura tiene un brillo chico (grietas de lava, una garganta
+  encendida, un horno): reducir los colores de todos juntos a 16 los funde con el marrón
+  de al lado; sin límite cada color va directo a la paleta, que tiene el naranja de
+  `ember`.
+- **El mismo tamaño en cada dirección:** con `--cut blobs` todos los dibujos van a una
+  escala, así que un "quieto de espaldas" dibujado más chico que su caminar hace que la
+  criatura se encoja al parar. Se mide con las cajas de cada frame (el sabueso: 33 px
+  caminando al norte, 24 quieto); si salta mucho, se deja esa dirección sin quieto y la
+  criatura se para en el primer frame de caminar.
+- **Tamaño** (ART-2, "Animales medianos": al lado de un personaje de LPC de ~46 px, ~25 px
+  por metro): rata, cangrejo y escarabajo en 32x32; lobo, araña, sapo, murciélago,
+  espinoso, reptante, sabueso, salamandra, gólem y dragoncillo en 64x64 con `anchor: bc`
+  (el lobo mide ~39 px de largo, el sabueso ~40, el gólem ~50 de alto); el jefe del Volcán
+  en 96x96 (~77 px de alto). Todos con `shadow: ellipse` y `mirror: true`. La escala se
+  elige con `--scale` mirando el dibujo de perfil (el largo) o de frente (el alto).
 - **Revisar** con Read: `_drawings.png`, `_preview.png`, `anim_sheet.py
   assets/sprites/creatures/<c>` y una fila de criaturas sobre pasto armada del atlas; en el
   juego, los screenshots del E2E. Después, `credit.py build/gemini/import/<c>/import.json
@@ -388,19 +458,18 @@ espinoso; prompts en `assets/prompts/sprites/creatures/`):
   assets/prompts/sprites/creatures/<c>.txt`: con el `import.json` (y no el sidecar) el
   archivo de prompt suma la hoja que volvió (sha256) y el comando exacto que la cortó.
 
-Música, del MP4 al loop:
+Música, del MP4 al juego:
 1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
    uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
    con su `.json`.
-2. Se escuchan, y el elegido pasa por `python tools/gemini/music_convert.py
-   build/gemini/music/<tema>_<n>.mp4`: sin fades, cerrado en bucle con un crossfade de la
-   cola sobre la cabeza, a -14 LUFS (el nivel de la música que ya tiene el juego) y en
-   Ogg Opus, con la costura medida después de
-   codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
+2. Se escuchan (para probar una conversión suelta: `python tools/gemini/music_convert.py
+   build/gemini/music/<tema>_<n>.mp4 --no-loop`, el tema entero a -14 LUFS en Ogg Opus con
+   sus puntos de entrada en el `.json`; sin `--no-loop` hace un loop cerrado con crossfade,
+   como antes del 2026-11-18).
 3. El dueño elige en `build/music-gemini/picks.json` y `make music-gemini` lo pone en el
-   juego con sus créditos ("La música de Gemini", arriba). El presupuesto se respeta sin
-   subirlo: mono, 20 kbps y loops de ~1 minuto (un tema entero de ~3 min pesaría ~650 KB
-   en estéreo a 32 kbps y ocuparía ~33 MB decodificado).
+   juego con sus créditos ("La música de Gemini", arriba): temas enteros en estéreo
+   (~1 MiB cada uno), que el cliente transmite. El presupuesto (docs/07 "Audio") se
+   revisó para eso el 2026-11-18.
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

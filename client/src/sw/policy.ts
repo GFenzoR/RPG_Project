@@ -1,7 +1,8 @@
 // What the service worker (src/sw.ts, T5.6) does with each request. Pure: no DOM, no
 // caches, so it runs under Vitest. Only the static shell of the client build is cached:
 // the pages, the hashed Vite assets, the atlas, the sounds, the icons and the manifest.
-// The game API, the WebSocket and anything cross-origin always go straight to the network.
+// The game API, the WebSocket, the music and anything cross-origin always go straight to
+// the network.
 //
 // This module must only be imported by src/sw.ts (and tests): if the page imported it too,
 // the bundler would move it to a shared chunk and sw.js would need an ES `import`, which a
@@ -14,7 +15,9 @@ export const CACHE_PREFIX = "rpg-shell-";
 export const SHELL_PAGES: readonly string[] = ["/", "/play/", "/manifest.webmanifest"];
 
 /**
- * - `network`: not handled (the browser does a normal request; nothing is stored);
+ * - `network`: not handled (the browser does a normal request; nothing is stored); the
+ *   music too: whole tracks of ~1 MB (13 MiB in all) that the audio engine fetches once per
+ *   session and keeps itself (docs/07 "Audio");
  * - `network-first`: pages, so a deploy is picked up on the next load; the cache is only the
  *   offline fallback;
  * - `cache-first`: Vite's hashed files under /assets/ (immutable, like Caddy says);
@@ -34,6 +37,12 @@ export interface RequestInfo {
 
 /** Paths that belong to the game server or to operations, never to the shell. */
 const BACKEND = [/^\/api(\/|$)/, /^\/ws(\/|$)/, /^\/healthz$/, /^\/grafana(\/|$)/];
+
+/**
+ * The music (assets/sounds/music/, served under /audio/). Stored by the worker, a PWA would
+ * keep every track it ever played and write a whole one into its cache at each zone change.
+ */
+const MUSIC = /^\/audio\/sounds\/music\//;
 
 /** The worker script itself: the browser revalidates it on its own. */
 const SELF = "/sw.js";
@@ -63,6 +72,7 @@ export function strategyFor(req: RequestInfo, origin: string): Strategy {
   if (path === SELF) return "network";
   // Partial responses (206) cannot be stored whole; let the browser stream audio itself.
   if (req.range) return "network";
+  if (MUSIC.test(path)) return "network";
   if (req.mode === "navigate") return "network-first";
   if (path.startsWith("/assets/")) return "cache-first";
   return "stale-while-revalidate";

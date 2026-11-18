@@ -16,7 +16,7 @@ export interface ClipSet<T> {
   still: T | undefined;
 }
 
-const ACTIONS: readonly AnimAction[] = ["idle", "walk", "attack", "death"];
+const ACTIONS: readonly AnimAction[] = ["idle", "walk", "attack", "shoot", "cast", "death"];
 
 /** Index of a facing in ANIM_DIRS (the second level of ClipSet.frames). */
 export const dirIndex = (d: AnimDir): number => (d === "n" ? 0 : d === "e" ? 1 : d === "s" ? 2 : 3);
@@ -41,8 +41,8 @@ export function spriteClips<T>(
     if (!a || a.frames < 1 || a.dirs.length === 0) continue;
     const byDir: T[][] = [];
     for (const dir of ANIM_DIRS) {
-      // Idle and attack only face their own ways: another facing gets no frames here, and
-      // clipTexture draws its standing frame (OWN_FACINGS, packages/renderer anim.ts).
+      // Idle and the attacks only face their own ways: another facing gets no frames here,
+      // and clipTexture draws its standing frame (OWN_FACINGS, packages/renderer anim.ts).
       if (OWN_FACINGS.has(action) && !a.dirs.includes(dir)) {
         byDir.push([]);
         continue;

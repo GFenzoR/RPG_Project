@@ -79,7 +79,12 @@ client/
   - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
     (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
   - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
-    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido.
+    `particles` del atlas y polvo en las cuevas; nada con movimiento reducido. Los pasos
+    (MOV-7): cuando una criatura empieza un paso (`animateBody` ve cambiar
+    `AnimState.walkStart`), la casilla que deja patea lo de su suelo (`steps` de
+    `atlas.json` `tiles`, `stepKindOf`) a la altura de los pies: `ParticleLayer.kick`
+    (`dust`: 6 motas; `ripple`: un anillo de 8 gotas achatado). Las de ambiente dejan
+    `STEP_RESERVE` (16) de las 100 libres para los pasos; los voladores no patean nada.
   - **Marco de puertas de casa:** `MapView` lee el mundo a través de un `DecoratedSource`
     (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el
     estado del juego no lo tiene.
@@ -242,8 +247,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Mientras el contexto no esté `running`, los efectos se descartan; los loops no.
   `Game` recibe el motor en `GameOptions.audio`: traduce cada mensaje con `cuesOf`
   (`audio/cues.ts`, puro) y, después del batch, los reproduce alrededor de la posición
-  propia. También fija la música y el ambiente con `loopFor` (isla de `content.islands` o
-  subsuelo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
+  propia. También fija el ambiente con `loopFor` (isla de `content.islands` o subsuelo) y
+  la escena de la música (abajo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
   de un efecto 5 en esa misma casilla. Se olvida al fabricar o al usar otro item.
 - Qué suena con cada evento está en `assets/sounds.yaml` (`content.sounds`). El plugin de
   Vite sirve esos archivos en `/audio/` y `vite build` los emite. No escribas nombres de
@@ -252,16 +257,60 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `ui/AudioOptions.tsx` y va junto al selector de idioma, dentro y fuera del juego. Se
   vuelve a montar al entrar o salir del juego, y cada vez parte de
   `audio.currentPrefs()`.
-- Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
-- Música sobre la de la zona (`content.sounds.music`, opcionales): `Screens` (`ui/App.tsx`)
-  pone `music.title` fuera del juego (sin ambiente); al salir, `Game.destroy` calla los
-  loops y el efecto vuelve al título. Dentro, `Game.keepLoops` elige con `musicFor`
-  (`audio/cues.ts`, puro): un jefe de `music.bosses` en la lista de batalla, después un
-  combate (`music.combat`, si existe: objetivo propio o un golpe sobre la casilla propia,
-  `blowAt`, hace menos de `combatHoldMs`), después la zona. Corre tras cada batch y cada
-  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un combate termina sin mensaje.
-- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de cada
-  canal (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+- Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`: el
+  tema que lleva la música y el ambiente; `music`: el estado del director, `MusicState`,
+  con la pool, y cada voz con su ganancia, su posición y si tiene elemento; con uno,
+  también `heard`, la ganancia que tiene el nodo ahora sobre el volumen del sonido, y
+  `time`, dónde va el elemento en su archivo: lo que de verdad suena).
+- **El director de música** (`audio/director.ts`, puro y con tests; pedido del dueño del
+  2026-11-18, reglas en docs/02 "Sonido"): recibe una `Scene` (`title`, `silent` o `world`
+  con las pools de la zona, del área de una quest importante y de un jefe a la vista), un
+  reloj y un azar inyectados, y lleva una lista de `Voice` (un tema desde un segundo, con
+  su envolvente de potencia constante: `gainAt`, `envelopePoints`). Baraja cada pool sin
+  repetir, arranca en un punto de entrada (`entries` de `sounds.yaml`), recuerda por pool
+  dónde iba (`resumeMs`; si vuelve mientras esa voz todavía se apaga, la misma voz vuelve
+  a subir en espejo de la otra, no una copia del tema), espera `dwellMs` antes de cambiar
+  de zona, sostiene al jefe `bossHoldMs`, deja respirar `gapMs` entre temas de una zona y
+  no arranca un tema hasta que su archivo está (`ready` da un `Readiness`: `ready`,
+  `loading` o `failed`; `wanted`). Un tema `failed` cede su lugar a otro de la pool; sin
+  otro, sigue la música de antes hasta que el archivo vuelve. `lost(voz)`: el motor no
+  puede tocarla (se va ya, también un loop). No sabe de combates: una pelea común no
+  cambia nada.
+- **El motor y la música** (`audio/engine.ts`): `setMusic(scene)` y una bomba cada
+  `PUMP_MS` (250 ms) sobre el reloj de audio (`ctx.currentTime`); nada se mueve mientras el
+  contexto no está `running`. Cada voz suena en un `<audio>` conectado al canal de música
+  por su propia ganancia (`StreamLike`, `AudioPorts.createStream`), que sigue la envolvente
+  con rampas lineales cada `RAMP_STEP_MS`; una voz que recibe su elemento tarde (archivo
+  lento o música recién activada) entra con `ATTACH_MS` de fundido (si la envolvente cambia
+  mientras tanto, sigue desde donde va esa rampa, sin salto). Cada tema se baja una
+  vez a un object URL (`loadStream`): se puede saltar a cualquier segundo sin `Range` del
+  servidor. Guarda `KEEP_STREAMS` (4) archivos; con la música silenciada no baja nada y
+  suelta los elementos. La CSP de escritorio permite `media-src blob:` por eso. Un
+  archivo que no llega o que el elemento no decodifica (`error` del `<audio>`,
+  `StreamLike.onError`) queda `failed` y se pide de nuevo a los `STREAM_RETRY_MS` (5 s),
+  doblando hasta `STREAM_RETRY_MAX_MS` (60 s); una voz sin elemento con su archivo
+  fallado se suelta (`lost`). Uno que el elemento no sabe tocar (`onError` con
+  `unsupported`: `MEDIA_ERR_SRC_NOT_SUPPORTED` o un `play()` con `NotSupportedError`) no se
+  vuelve a pedir en la sesión, y si `AudioPorts.canStream()` (`canPlayType` de Ogg Opus,
+  una vez al crear el motor) dice que no, ningún tema con `seconds` cuenta como listo ni
+  se baja: antes cada uno se bajaba entero (~1 MB) y fallaba otra vez en cada reintento. Un tema sin `seconds` (soundgen, el `none` de un lugar) se
+  decodifica y suena en un buffer source con `loop` (sin el hueco del `loop` de un
+  `<audio>`), y se suelta apenas deja de sonar.
+- **WebKit y los gestos** (Safari, iOS y el WKWebView de macOS): `unlock()` (cada gesto)
+  crea los `MUSIC_DECKS` (4) elementos y "bendice" cada uno nuevo con un `play()`/`pause()`
+  sin archivo dentro del gesto (`StreamLike.bless`): WebKit deja arrancar más tarde solo a
+  un elemento que tuvo un `play()` en un gesto. Si igual rechaza un `play()`
+  (`NotAllowedError`, `StreamLike.blocked`), el gesto siguiente lo vuelve a llamar desde
+  donde va la voz. Falta probarlo en un iPhone y en la app de macOS (docs/14).
+- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente); al
+  salir, `Game.destroy` calla el ambiente y el título entra con su fundido. Dentro,
+  `Game.keepLoops` arma la escena con `sceneFor` (`audio/cues.ts`, puro: `loopFor` para la
+  zona, `questPoolAt` para `content.questMusic`, de `music` en `data/quests`, y el primer
+  jefe de `music.bosses` en la lista de batalla). Corre tras cada batch y cada
+  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un jefe sale de la vista sin mensaje.
+- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de
+  ambiente (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+  La música no se decodifica entera (docs/07 "Audio").
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que
@@ -508,8 +557,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   sus texturas se descarta. Quieto y atacar (`OWN_FACINGS` de `packages/renderer`) quedan
   vacíos hacia una dirección que no tiene frames (las criaturas de Gemini muerden de
   perfil y no siempre de frente): ahí `clipTexture` da el frame parado de esa dirección y
-  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Caminar y morir
-  toman el sur (o la primera) como antes.
+  `animate` hace la embestida procedural, en vez de girar hacia otro lado. Disparar
+  (`shoot`) y conjurar (`cast`) son ataques también: `OWN_FACINGS` los incluye. Caminar y
+  morir toman el sur (o la primera) como antes.
 - Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
   en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
   `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene
@@ -521,26 +571,41 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
-  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira); un
+  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira), con el
+  clip de su tipo (`attackAction`: `RANGED` → `shoot`, el arco de LPC; `SPELL` → `cast`;
+  `MELEE` → `attack`; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
+  `attack` si el sprite no tiene ese clip, y en la embestida si no tiene ninguno); un
   número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
   la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
   viejo (sin `attack_events`) se deduce como antes: un `Projectile` anima a la criatura de
   su casilla de salida; un efecto de golpe, bloqueo o elemento sin proyectil en el mismo
   batch, al atacante cuerpo a cuerpo (el propio jugador si su objetivo está ahí y al lado;
   si no, una criatura del otro bando al lado, primero la que mira esa casilla).
-- Muerte: una criatura cuyo `CreatureDisappear` dice `DEATH` (`WorldState.departures`,
-  `leavesDying`; con un servidor viejo, la que sale con la barra en 0) murió ahí. Su
-  cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
-  LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
-  Cualquier otro motivo la saca en el momento.
-- Un motivo de salida vale hasta que la criatura vuelve: `addCreature` lo borra
-  (`forgetDeparture`) cuando reaparece, así un jugador que murió y despertó a la vista no
-  cae al salir después del piso dibujado.
+- Salidas (ANI-7): el canvas juega cada `CreatureDisappear` que llegó desde el frame
+  anterior una sola vez (`DepartureFeed` de `render/creature-events.ts`, por la hora del
+  batch, sobre `WorldState.departures`), antes de dibujar las criaturas, sobre el cuerpo
+  dibujado en el frame anterior. `leaveStyle` decide: `DEATH` (o, con un servidor viejo,
+  salir con la barra en 0: `leavesDying`) cae; `TELEPORT` y `LOGOUT` se desvanecen
+  (`startVanish`, `VANISH_MS` 350 ms: se angosta, se estira, tinte `SHIMMER_TINT`,
+  parpadea); `OUT_OF_VIEW` y `DESPAWN` salen en el acto. El cuerpo que cae o se desvanece
+  queda como "fantasma" (`ghosts`, una lista: puede convivir con la criatura de vuelta)
+  sin nombre ni barra hasta que termina. Así un jugador que muere a la vista y despierta
+  en un templo también a la vista (sale y vuelve en el mismo batch) deja su cuerpo cayendo
+  donde murió, y la criatura de vuelta es un sprite nuevo, con estado nuevo y su fundido
+  de 300 ms. Una criatura que deja de dibujarse sin salida propia (otro piso, un mapa
+  nuevo) se borra. Un fantasma tapado por una criatura más alta tiene su copia translúcida
+  (`DrawnBoxes.covered`).
+- `WorldState` no borra una salida cuando la criatura vuelve: la marca `back`, y
+  `departureOf` la ignora (así un jugador que murió y despertó a la vista no "muere" al
+  salir después del piso dibujado); el canvas igual la juega una vez.
 - E2E: `__rpgClient.attacks(ms)`, `departures(ms)` (el motivo por su nombre, `DEATH`...)
-  y `poses()` (quién está en pose de ataque y quién cae, y cuánto lleva); `shotPose` de
+  y `poses()` (quién está en pose de ataque, quién cae y quién se desvanece, cuánto lleva,
+  el clip, `attack`, `shoot`, `cast` o `lunge`, y su casilla); `shotPose` de
   `e2e/game.spec.ts` espera un frame en medio de la pose, retiene `requestAnimationFrame`
   (el juego no dibuja otro), saca la captura y devuelve lo que vio en ese frame
-  (`Caught`: quiénes estaban en la pose, y los ataques y salidas que el cliente guardaba).
+  (`Caught`: quiénes estaban en la pose, dónde, y los ataques y salidas que el cliente
+  guardaba). Una caída se saca en sus últimos 300 ms (`FALL_SHOT_MS`: el efecto del golpe
+  ya termina) y en primer plano, 9x7 casillas alrededor del cuerpo (`closeShot`).
   Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
   exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
@@ -613,8 +678,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     o cualquier `[data-drop]` (slot vacío o celda de contenedor), con un listener de
     captura en `window`. Arrastrar con el dedo sigue funcionando como con el mouse.
   - Pad direccional (`ui/TouchPad.tsx`, `HeldDirection`): se lee en `frame` como las
-    teclas (`keys.take() ?? pad.take()`); un toque es un paso y mantenerlo repite al ritmo
-    de caminar. Interruptor en Opciones (`AudioOptions` tiene un hueco `children`; el
+    teclas (`keys.take() ?? pad.take()`); un toque es un paso (o, quieto y hacia otro
+    lado, solo un giro: MOV-2, ver "Movimiento fluido") y mantenerlo repite al ritmo de
+    caminar. Interruptor en Opciones (`AudioOptions` tiene un hueco `children`; el
     estado vive en `main.tsx`), guardado en `localStorage` `rpg.touchPad`; sin elegir, se
     muestra con puntero grueso (pantalla táctil). Con pad, `.game[data-pad]`: la hotbar
     empieza después (`PAD_RESERVE_PX`) y en vertical el mapa sube y el pad va debajo.
@@ -676,7 +742,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
-  `/healthz` ni otros orígenes; páginas network-first, `/assets/*` cache-first.
+  `/healthz`, la música (`/audio/sounds/music/`, docs/07 "Audio") ni otros orígenes;
+  páginas network-first, `/assets/*` cache-first.
   `pwa.ts` lo registra solo en un build de producción, en contexto seguro y fuera de
   Tauri (lo importan `main.tsx` y `site/main.tsx`). Instalación y Tauri mobile:
   `docs/15-movil.md`.
@@ -873,7 +940,20 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
   (`walkBob`).
 - **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
-  con `combine`), también un toque perpendicular con otra tecla mantenida. Falta que el
+  con `combine`), también un toque perpendicular con otra tecla mantenida.
+- **Girar sin caminar** (docs/17 MOV-2, `input/keyboard.ts` `TurnTap`, puro y con tests):
+  `decideStep` pasa la dirección de las teclas o del pad por `TurnTap.decide` con
+  `WorldState.standingStill` (sin paso dibujado ni predicho) y la dirección propia. Quieto
+  y hacia otro lado: `turn` (manda `Turn` en el acto) y después `wait` hasta que la tecla
+  lleve `TURN_TAP_MS` (80 ms) apretada; soltada antes, solo giró. Un segundo toque antes
+  de esos 80 ms (soltar y volver a apretar entre dos cuadros: `MovementKeys.fresh` y
+  `HeldDirection.fresh` dicen si `take()` dio una pulsación nueva) no espera con el
+  primero: ya mira hacia ahí, así que camina. Mirando ya hacia ahí, o caminando, `walk`
+  como antes. Ctrl+flecha (`turnKeyDirection`, WASD no) solo gira. Un
+  botón del pad activado con el teclado (`padStep`) es un paso siempre. En el E2E, un paso
+  es `stepKey` / `stepToward` (`e2e/keys.ts`): un toque para girar si hace falta (y
+  comprueba que no se movió) y otro para caminar; `faceKey` solo gira (los tests de tecla
+  mantenida de `movement.spec.ts` giran antes de medir); `__rpgClient.self()` trae `dir`. Falta que el
   dueño decida si un cambio de dirección con las teclas solapadas debe dar ese paso
   diagonal (docs/14).
 - **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y
@@ -999,6 +1079,13 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   isla (2095,2086) junto a `pruebas_trainer`, y con `/tp` va a los corrales, al patio de
   portales y a la cueva del piso 8 (screenshots 90–93). El `-start-town pruebas` de
   `make play` se prueba a mano: elige el mismo templo para un personaje sin ciudad.
+- El test de música del mismo archivo (otro guardián gm de la isla) espera el tema de la
+  pool de Puerto solo, baja con `/tp` a la cueva y muestrea `__rpgAudio.music()` durante el
+  fundido: la voz de la isla baja, la de las cuevas sube y out² + in² = 1 en cada muestra,
+  sobre las envolventes del director y sobre las ganancias reales de los nodos (`heard`,
+  con un margen de 0,05: los dos nodos se leen hasta un render quantum aparte); después
+  queda solo el tema de cueva, con su elemento a menos de 1,5 s de donde el director cree
+  que va (`time` contra `position`), sin errores de consola (screenshot `93b-music-cave`).
 
 ## Notas de la prueba exploratoria (rama `fix/playtest`)
 - `ItemDef.blocks` aplica la regla de `packages/map-format`: un `kind: wall` bloquea salvo
@@ -1059,8 +1146,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   un campo de texto y después del listener del `Game`): I inventario, K habilidades,
   B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
   la flotante de arriba o, si no hay, abre Opciones. Un resaltado del tutorial abre su
-  ventana (`windowForHighlight`). Las ventanas del servidor (diálogo, tienda, crafteo,
-  mercado, casa, intercambio) siguen donde estaban, con el mismo marco.
+  ventana (`windowForHighlight`). Desde `feat/ui-windows-2` las ventanas del servidor
+  (diálogo, tienda, crafteo, mercado, casa, intercambio) y cada contenedor son
+  `GameWindow` también, y todas se mueven y cambian de tamaño con el mouse y el teclado:
+  ver "Notas de lo que quedaba de A3, A4 y A5".
 - **Gremio** (UI-7): ventana propia con pestañas Resumen, Miembros y Guerras
   (`GuildPanel` con `tab`; sin `tab` muestra todo, como en la pestaña de los teléfonos).
   Sigue sin hooks y `ui/Guild.test.ts` recorre las pestañas.
@@ -1132,8 +1221,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
   (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
   búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
-  estado. `.npc-windows` va de lado a lado sobre el mapa, abajo al centro; con la tienda,
-  `data-shop` pone la tienda a la izquierda y el diálogo en una columna. Los temas vienen de
+  estado. En tablets y teléfonos `.npc-windows` va de lado a lado sobre el mapa; en el
+  escritorio diálogo y tienda son `GameWindow` ("Notas de lo que quedaba de A3, A4 y A5"),
+  abajo al centro, y con la tienda `.game-body[data-shop]` la pone a la izquierda del
+  diálogo, que se angosta a una columna. Los temas vienen de
   `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
   `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
   `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
@@ -1152,3 +1243,90 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **E2E:** `useAt` (Ctrl+click derecho) en `e2e/game.spec.ts` para usar algo del mapa; la
   mochila y el fogón pasan por el menú, el pico y las mochilas del intercambio por el doble
   click. Screenshots nuevos: `09a-item-menu`, `09b-item-tooltip` y `14b-shop-sell`.
+
+## Notas de lo que quedaba de A3, A4 y A5 (rama `feat/ui-windows-2`)
+- **Tres clases de ventana, un solo estado** (`ui/windows.ts`, puro y con tests): las de la
+  botonera (`WINDOW_IDS`), las del servidor (`SERVER_WINDOWS`: `dialog`, `shop`,
+  `crafting`, `market`, `house`, `trade`) y una por contenedor abierto
+  (`container-<item>`, `-2`, `-3`… si hay varios del mismo item: `containerKeys` le deja
+  su clave mientras sigue abierto, así un segundo contenedor no toma el lugar del primero).
+  Las dos últimas viven en `WindowsState.others`; `placeOf(s, id)` da el lugar de
+  cualquiera. El servidor las abre y las cierra: `GameView` calcula cuáles muestra
+  (`serverWindows`, con la precedencia de antes: la tienda solo con su diálogo, el crafteo
+  y el mercado esperan al diálogo, la casa al diálogo y al mercado) y las sigue con
+  `syncWindows` en un `useLayoutEffect` (se ven en el mismo frame). Cerrar una (×, Escape
+  si es la flotante de arriba) se lo pide al servidor (`serverClose`: `closeDialog`,
+  `closeStation`, `marketClose`, `houseClose`, `tradeCancel`, `closeContainer`); la tienda
+  no tiene × (se cierra con su diálogo). `rpg.windows` pasa a `v: 2` con `others` (sin
+  `open`: el servidor las vuelve a abrir); una `v: 1` se sigue leyendo. Se recuerdan hasta
+  `MAX_CONTAINER_PLACES` contenedores (24), los que cambiaron último: `withPlace` deja al
+  final de `others` el contenedor que cambia, y `saveWindows` y `loadWindows` se quedan
+  con los últimos. "Restablecer ventanas" (`resetWindows`) deja abiertas
+  las del servidor que lo estaban, en su lugar de fábrica.
+- **Dónde salen la primera vez** (`windows.css`): los contenedores acoplados bajo lo que
+  haya (como en Tibia); el diálogo abajo al centro sobre la hotbar; con la tienda, los dos
+  lado a lado centrados (`.game-body[data-shop]`, `--shop-w`); crafteo, mercado y casa
+  arriba a la izquierda; el intercambio arriba a la derecha. Movidas, guardan su lugar.
+- **Componentes `framed`:** `DialogView`/`ShopView`, `CraftingWindow`, `MarketWindow`,
+  `HouseWindow`, `TradeWindow` y `ContainerView` (`ui/Inventory.tsx`) toman `framed`: sin
+  su encabezado (la barra del `GameWindow` lo nombra y lo cierra) y **sin su `data-testid`,
+  que pasa al marco**: `dialog`, `shop`, `crafting`, `market`, `house`, `trade` siguen
+  siendo los mismos test ids, y el marco tiene el título como `h2` (`dialog` →
+  `getByRole("heading")` da el nombre del NPC; `house-name` es el `titleTestid` del título)
+  y los mismos nombres del botón cerrar de antes (`closeLabel`). Un contenedor es
+  `window-container-<item>` con el `[data-testid=container][data-container-item=…]` adentro
+  (envuelto en `.inventory.container-window` para heredar los slots). En tablets y
+  teléfonos todo sigue como antes: hojas sobre el mapa y los contenedores bajo el equipo
+  (`InventoryPanel` con `containers`).
+- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView`): la barra
+  arrastra como antes; la esquina de abajo a la derecha (`.gwin-resize`; en una acoplada,
+  el borde de abajo y solo el alto) cambia el tamaño (`resizeWindow`, `clampSize` con
+  `MIN_SIZE`); el botón ✥ de la barra (`.gwin-move`, `window-move-<id>`) toma el teclado
+  (`windowNudge`): flechas mueven 16 px, Mayús+flechas cambian el tamaño, en una acoplada
+  arriba y abajo la cambian de lugar (`moveInDock`), Enter o Espacio la acoplan o la sueltan
+  junto al dock. El botón para la tecla (`preventDefault` + `stopPropagation`) para que la
+  flecha no camine; Alt no se toma (Alt+← es "atrás" del navegador). Después de acoplar o
+  soltar, el foco vuelve al ✥ de la ventana. La ayuda (H) lo explica (`client.help.windows`).
+- **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
+  `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
+  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock` y las ventanas flotantes (`--ui-zoom`
+  en `<html>`; la hotbar no: mide sus slots para paginarlos, y su texto sigue al tamaño
+  del texto); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
+  tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en `rem` crece. El
+  ancho del dock (`--dock-w`) pasó a px para que el texto grande no le quite un paso de zoom
+  al mapa; la escala sí (el dock crece y el mapa toma lo que queda). Los lugares y tamaños
+  de `rpg.windows` son px de pantalla: `GameWindow` los divide por la escala (`zoom`).
+- **Sacudida de cámara y destello de la hotbar** (UI-9): `WorldState.heavyHitAt` se marca
+  cuando un `PlayerStats` baja la vida un 10 % del máximo o más (`render/shake.ts`
+  `heavyHit`); `game-canvas.ts` corre la cámara `shakeOffset` (2 px, 120 ms, un patrón fijo
+  que se apaga, en px enteros del dispositivo) si `GameOptions.cameraShake()` (Opciones,
+  `rpg.shake`, encendida por defecto) y no hay movimiento reducido. Usar un hechizo de la
+  hotbar (tecla o click) publica `GameUi.cast` y su slot pinta un `.flash` de 150 ms
+  (`flashes` en `ui/Hotbar.tsx`); con movimiento reducido no se dibuja.
+- **Texto del NPC letra por letra** (UI-8): `DialogBox` cuenta el tiempo
+  (`typedLength`, 90 caracteres/s, `state/dialog.ts`) y `DialogView` recibe `typed`: lo que
+  falta va en `.npc-rest` invisible (la caja no crece mientras aparece) y el texto entero
+  en un `.visually-hidden` para lectores de pantalla y para los E2E (`toContainText` sigue
+  andando). Un click en el texto o Espacio (si el foco no está en un botón) lo completa;
+  con movimiento reducido sale entero. El retrato respira (`npc-idle`, 3,2 s, 1 px).
+- **Items de misión:** `ItemDef.quest` (`quest: true` en `data/items`, docs/06): el nombre
+  en `--ui-item-quest` en la ficha y el menú, la marca `client.card.mark.quest` y un anillo
+  dorado en la celda (`.item[data-quest]`). Los demás nombres pasaron a `--ui-text` (UI-6).
+- **Slots vacíos:** `emptySlotStyle` (`ui/Inventory.tsx`) pone el sprite `ui/slots/<slot>`
+  del atlas (spritegen, `kind: ui`, `UI_SLOT_BOX`) como `--slot-icon` del slot; el CSS lo
+  dibuja al 30 % detrás (`.equipment .slot::before`). Sin atlas, no hay nada.
+- **Ficha sobre el mapa:** `game-canvas.ts` avisa `restTile` cuando el mouse queda 350 ms
+  quieto en una casilla (y `undefined` al salir, apretar o usar la rueda); `Game.restTile`
+  elige `menuItem` si es algo que se lleva (`groundCard` de `state/item-card.ts`: ni
+  suelos, ni muros, ni decoración, ni estaciones) y publica `GameUi.groundTip`;
+  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`).
+- **Mayús+arrastrar** (`Game.pressItem`, y en el canvas un Mayús+click es una "pulsación de
+  mirar" que mira al soltar y arrastra si se mueve): con una pila (`splittable`) suelta
+  `GameUi.split` y `ui/SplitPrompt.tsx` pregunta cuántas (la mitad para empezar,
+  `halfStack`; `splitCount` de `state/items.ts`, el mismo de "Mover parte…": de 1 a la pila
+  menos una). Enter o "Mover" manda `MoveItem` con esa cantidad; Escape o "Cancelar" no
+  mueve nada. Mayús+click sigue mirando.
+- **Vista previa:** escenas `server`, `groundtip` y `scale` (`?ui=1.25&text=1.15`) en
+  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos.
+- **E2E:** `e2e/game.spec.ts` busca la mochila fuera de la ventana del inventario
+  (`page.locator('[data-container-item="backpack"]')`, `window-container-backpack`).

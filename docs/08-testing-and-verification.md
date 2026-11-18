@@ -55,7 +55,10 @@ lugar del canvas: las 33x23 casillas de la ventana del servidor con su margen, a
 la escala que tendría el canvas en la vista ajustada (la misma cuenta de
 `render/zoom.ts`). `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
 desde el build (no levanta servidores) y guarda en
-`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `options`,
+`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `server` (el
+fogón y el intercambio como ventanas, unos restos abiertos flotando y el cuadro de
+Mayús+arrastrar), `groundtip` (la ficha de un item del mapa bajo el mouse), `scale` (la
+interfaz al 125 % con el texto al 115 %; la página toma `?ui=` y `?text=`), `options`,
 `dialog`, `shop` (la tienda con dos páginas), `dialog18` (18 opciones sin scroll),
 `itemmenu` (el menú del click derecho con la ficha), `tooltip` (la ficha con el mouse sobre
 un item), `guild` (la ventana del gremio), `danger` (vida baja y subida de nivel), `death`,

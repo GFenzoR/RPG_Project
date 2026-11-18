@@ -121,7 +121,7 @@ export function ItemCard(props: {
       {props.name !== false && (
         <div class="card-head">
           {props.icon && <BigIcon icon={props.icon} class="card-icon" />}
-          <span class="card-name">{cardTitle(t, card)}</span>
+          <span class={card.quest ? "card-name quest" : "card-name"}>{cardTitle(t, card)}</span>
         </div>
       )}
       {type && <p class="card-type">{type}</p>}

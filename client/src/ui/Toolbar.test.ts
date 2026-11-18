@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import type { GameUi } from "../game.ts";
 import { GameWindow } from "./GameWindow.tsx";
+import type { GameWindowProps } from "./GameWindow.tsx";
 import { TOOLBAR, Toolbar, buttonHint } from "./Toolbar.tsx";
 import { defaultWindows, openWindow } from "./windows.ts";
 import { LOW_HEALTH, lowHealth, orbFill } from "./Vitals.tsx";
@@ -95,19 +96,27 @@ describe("Toolbar", () => {
 });
 
 describe("GameWindow", () => {
-  const frame = (dock: boolean, collapsed: boolean): VNode<Props> =>
+  const frame = (
+    dock: boolean,
+    collapsed: boolean,
+    more: Partial<GameWindowProps> = {},
+    size: { w?: number; h?: number } = {},
+  ): VNode<Props> =>
     GameWindow({
       t,
       id: "guild",
       icon: "guild",
       title: "Gremio",
-      place: { open: true, dock, collapsed, x: 40, y: 50 },
+      place: { open: true, dock, collapsed, x: 40, y: 50, ...size },
       stack: 2,
       onClose: noop,
       onCollapse: noop,
       onFocus: noop,
       onGrab: noop,
+      onResize: noop,
+      onMoveKey: () => false,
       children: "body",
+      ...more,
     }) as VNode<Props>;
 
   it("is a dialog over the map when it floats and a region in the dock", () => {
@@ -115,7 +124,57 @@ describe("GameWindow", () => {
     expect(float.props["role"]).toBe("dialog");
     expect(float.props["style"]).toEqual({ zIndex: 22, left: "40px", top: "50px" });
     expect(frame(true, false).props["role"]).toBe("region");
-    expect(frame(true, false).props["style"]).toBeUndefined();
+    expect(frame(true, false).props["style"]).toEqual({});
+  });
+
+  it("takes the size the player gave it, in the scale's own pixels (docs/17 UI-3, UI-5)", () => {
+    const sized = frame(false, false, { zoom: 1.25 }, { w: 300, h: 250 });
+    expect(sized.props["style"]).toEqual({
+      zIndex: 22,
+      left: "32px",
+      top: "40px",
+      width: "240px",
+      height: "200px",
+      maxHeight: "none",
+    });
+    expect(sized.props["data-sized"]).toBe("");
+    // Docked, only the height; folded, none.
+    expect(frame(true, false, {}, { w: 300, h: 250 }).props["style"]).toEqual({
+      height: "250px",
+      maxHeight: "none",
+    });
+    expect(frame(true, true, {}, { h: 250 }).props["style"]).toEqual({});
+  });
+
+  it("a window of the server without a close button (the shop closes with its dialog)", () => {
+    const labels = nodes(frame(false, false, { closable: false }))
+      .filter((v) => v.type === "button")
+      .map((b) => b.props["data-testid"]);
+    expect(labels).toEqual(["window-move-guild", "window-fold-guild"]);
+  });
+
+  it("its move handle hands the keys to the window and keeps them from walking", () => {
+    let asked = "";
+    const tree = frame(false, false, {
+      onMoveKey: (e) => {
+        asked = e.key;
+        return e.key === "ArrowLeft";
+      },
+    });
+    const move = nodes(tree).find((v) => v.props["class"] === "gwin-btn gwin-move");
+    let stopped = 0;
+    const key = (k: string): void =>
+      (move?.props["onKeyDown"] as (e: unknown) => void)({
+        key: k,
+        currentTarget: { closest: () => ({}) },
+        preventDefault: () => stopped++,
+        stopPropagation: () => stopped++,
+      });
+    key("ArrowLeft");
+    expect(asked).toBe("ArrowLeft");
+    expect(stopped).toBe(2);
+    key("KeyW");
+    expect(stopped).toBe(2); // not the window's: it walks as before
   });
 
   it("names its buttons after the window and hides its body when folded", () => {
@@ -124,6 +183,7 @@ describe("GameWindow", () => {
       .filter((v) => v.type === "button")
       .map((b) => b.props["aria-label"]);
     expect(labels).toEqual([
+      'client.window.move{"title":"Gremio"}',
       'client.window.expand{"title":"Gremio"}',
       'client.window.close{"title":"Gremio"}',
     ]);

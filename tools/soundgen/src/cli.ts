@@ -3,7 +3,7 @@
 //   node tools/soundgen/src/cli.ts check [--root DIR]                    size budget of sounds.yaml
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { buildSounds, checkBudget, manifestFiles } from "./index.ts";
+import { buildSounds, checkBudget, manifestFiles, manifestPools } from "./index.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -22,8 +22,14 @@ if (command === "build") {
     console.log(`${String(b.bytes).padStart(7)} B  assets/sounds/${b.path}.ogg`);
   console.log(`soundgen: ${built.length} sounds`);
 }
-const total = manifestFiles(root).reduce((s, f) => s + Math.max(f.bytes, 0), 0);
+const files = manifestFiles(root);
+const total = files.reduce((s, f) => s + Math.max(f.bytes, 0), 0);
 const problems = checkBudget(root);
 for (const p of problems) console.log(`error ${p}`);
+const size = new Map(files.map((f) => [f.id, Math.max(f.bytes, 0)]));
+for (const [pool, ids] of Object.entries(manifestPools(root))) {
+  const bytes = ids.reduce((s, id) => s + (size.get(id) ?? 0), 0);
+  console.log(`soundgen: pool ${pool}: ${ids.length} tracks, ${(bytes / 1024).toFixed(1)} KiB`);
+}
 console.log(`soundgen: sounds.yaml total ${(total / 1024).toFixed(1)} KiB`);
 if (problems.length > 0) process.exit(1);

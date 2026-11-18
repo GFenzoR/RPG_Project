@@ -44,6 +44,28 @@ describe("clip sets", () => {
     expect(c?.still).toBe("c/hero");
   });
 
+  it("indexes the bow and the spell of an LPC humanoid too (ANI-2)", () => {
+    const meta: AnimMeta = {
+      ...HERO,
+      actions: {
+        walk: { frames: 1, ms: 0, perTile: 1, dirs: DIRS },
+        shoot: { frames: 2, ms: 50, dirs: DIRS },
+        cast: { frames: 1, ms: 60, dirs: DIRS },
+      },
+    };
+    const keys = DIRS.flatMap((d) => [
+      `c/mage/walk_${d}_0`,
+      `c/mage/shoot_${d}_0`,
+      `c/mage/shoot_${d}_1`,
+      `c/mage/cast_${d}_0`,
+    ]);
+    const c = spriteClips("c/mage", { "c/mage": meta }, atlasOf(keys));
+    if (!c) throw new Error("no clips");
+    expect(Object.keys(c.meta?.actions ?? {})).toEqual(["walk", "shoot", "cast"]);
+    expect(clipTexture(c, "shoot", dirIndex("w"), 1)).toBe("c/mage/shoot_w_1");
+    expect(clipTexture(c, "cast", dirIndex("n"), 0)).toBe("c/mage/cast_n_0");
+  });
+
   it("falls back to the stance and the still texture for missing clips", () => {
     const c = spriteClips("c/hero", { "c/hero": HERO }, atlasOf(heroKeys));
     if (!c) throw new Error("no clips");

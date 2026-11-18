@@ -6,7 +6,9 @@
 //   rising into it from the tile below takes it (what the cursor's hint says, MOV-7);
 // - hidden creatures: a tall figure in front can cover most of a creature on the tile behind
 //   it (a wolf right north of a player). That one is drawn again over the map, see-through
-//   (a silhouette, like the own player behind a wall, ART-3), so it can still be seen.
+//   (a silhouette, like the own player behind a wall, ART-3), so it can still be seen. A
+//   body falling dead or shimmering away (not in the boxes: it is no longer a creature to
+//   click) asks covered() for its own box.
 // A box is the creature's tile column (one tile wide) from the bottom of its tile up to the
 // top of its drawing, at its drawn (interpolated, raised) position, in tiles. Pure, and a
 // frame reuses the same box objects.
@@ -90,13 +92,17 @@ export class DrawnBoxes {
   forEachHidden(fn: (box: DrawnBox) => void): void {
     for (let i = 0; i < this.count; i++) {
       const a = this.list[i] as DrawnBox;
-      for (let j = 0; j < this.count; j++) {
-        const b = this.list[j] as DrawnBox;
-        if (b.order <= a.order || coveredShare(a, b) < HIDDEN_SHARE) continue;
-        fn(a);
-        break;
-      }
+      if (this.covered(a)) fn(a);
     }
+  }
+
+  /** Whether a creature drawn after box `a` covers HIDDEN_SHARE of it or more. */
+  covered(a: DrawnBox): boolean {
+    for (let j = 0; j < this.count; j++) {
+      const b = this.list[j] as DrawnBox;
+      if (b !== a && b.order > a.order && coveredShare(a, b) >= HIDDEN_SHARE) return true;
+    }
+    return false;
   }
 }
 

@@ -66,14 +66,29 @@ export function buildSounds(root: string, only?: string): { path: string; bytes:
 
 // ---- size budget (docs/07-performance-budget.md, "Audio") ---------------------------
 
+// Since 2026-11-18 the music ships whole takes in stereo, streamed one at a time (the
+// owner's request: no one-minute loops; client/src/audio/engine.ts): a take is ~0.8–1.1 MiB
+// at 40–48 kbps, nothing of it is in the initial download, and a zone fetches the track it
+// plays and the next one. So a music file may be 1.5 MiB, a pool (everything a player who
+// stays in one zone ends up fetching) 8 MiB, and all the files together 16 MiB.
 export const BUDGET = {
   /** All files referenced by assets/sounds.yaml together. */
-  totalBytes: 1536 * 1024,
+  totalBytes: 16 * 1024 * 1024,
   /** One file, by its channel in sounds.yaml. */
-  fileBytes: { sfx: 32 * 1024, ui: 16 * 1024, music: 256 * 1024, ambient: 96 * 1024 },
+  fileBytes: { sfx: 32 * 1024, ui: 16 * 1024, music: 1536 * 1024, ambient: 96 * 1024 },
+  /** The files of one pool of sounds.yaml music.pools together. */
+  poolBytes: 8 * 1024 * 1024,
 } as const;
 
 export type Channel = keyof typeof BUDGET.fileBytes;
+
+/** The pools of sounds.yaml music.pools: pool id → its sound ids. */
+export function manifestPools(root: string): Record<string, string[]> {
+  const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
+    music?: { pools?: Record<string, string[]> };
+  };
+  return raw.music?.pools ?? {};
+}
 
 /** Files of assets/sounds.yaml with their size and channel (missing files: bytes -1). */
 export function manifestFiles(
@@ -108,5 +123,10 @@ export function checkBudget(root: string): string[] {
     if (f.bytes > max) problems.push(`${f.id}: ${f.bytes} B > ${max} B for a ${f.channel} sound`);
   }
   if (total > BUDGET.totalBytes) problems.push(`total ${total} B > ${BUDGET.totalBytes} B`);
+  const size = new Map(files.map((f) => [f.id, Math.max(f.bytes, 0)]));
+  for (const [pool, ids] of Object.entries(manifestPools(root))) {
+    const bytes = ids.reduce((sum, id) => sum + (size.get(id) ?? 0), 0);
+    if (bytes > BUDGET.poolBytes) problems.push(`pool ${pool}: ${bytes} B > ${BUDGET.poolBytes} B`);
+  }
   return problems;
 }

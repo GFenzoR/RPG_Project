@@ -8,7 +8,16 @@
   /* The dock is as narrow as it can be while the map gets its next whole scale for the
      classic 15x11 tiles: 1280 px leaves 960 for 2x, 1920 px 1536 for 3x. With the 31x21
      window the fitted view there is 2x with 24x16 tiles (render/zoom.ts). */
-  --dock-w: clamp(17rem, 100vw - 60rem, 24rem);
+  --dock-w: clamp(272px, 100vw - 960px, 384px);
+}
+/* The interface scale (docs/17 UI-3, Options → Interface; state/ui-prefs.ts sets --ui-zoom
+   on <html>): the dock and the windows grow or shrink, the map keeps its pixels and takes
+   what is left. The dock is in px, not rem: the text size option makes the text larger
+   without taking a zoom step from the map. GameView divides the windows' remembered
+   places and sizes (screen px) by it. The hotbar is left out: it measures its slots to
+   page them (Hotbar.tsx), and its text follows the text size anyway. */
+.game[data-ui="windows"] :is(.dock, .game-body > .gwin) {
+  zoom: var(--ui-zoom, 1);
 }
 .game[data-ui="windows"] .game-body {
   position: relative;
@@ -373,9 +382,102 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* A window the player sized: the body takes what the frame leaves under the bar. */
+.gwin[data-sized] > .gwin-body {
+  flex: 1 1 auto;
+}
+/* The move handle (docs/17 UI-1: windows move and resize from the keyboard too): quiet
+   until the bar is hovered or the handle has the focus. */
+.gwin-move {
+  opacity: 0.45;
+  cursor: grab;
+}
+.gwin-bar:hover .gwin-move,
+.gwin-move:focus-visible {
+  opacity: 1;
+}
+.gwin-move .icon {
+  width: 12px;
+  height: 12px;
+}
+/* The resize grip: the bottom right corner of a floating window, the bottom edge of a
+   docked one (the dock sets its width). */
+.gwin-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(
+    135deg,
+    transparent 0 55%,
+    var(--ui-iron-400) 55% 62%,
+    transparent 62% 72%,
+    var(--ui-iron-400) 72% 79%,
+    transparent 79%
+  );
+  opacity: 0.6;
+}
+.gwin-resize:hover {
+  opacity: 1;
+}
+.gwin[data-dock] > .gwin-resize {
+  left: 0;
+  width: auto;
+  height: 5px;
+  cursor: ns-resize;
+  background: none;
+}
+.gwin[data-dock] > .gwin-resize:hover {
+  background: linear-gradient(transparent 2px, var(--ui-gold-700) 2px);
+}
+body.resizing-window,
+body.resizing-window * {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+}
 /* The title bar names the window: the panel's own heading would say it twice. */
 .gwin-body > :is(.battle, .inventory, .skills, .party, .appearance) > h2 {
   display: none;
+}
+/* The server's windows in a GameWindow (docs/17 UI-5): the frame is the GameWindow's, so
+   their own frame, place and size go (they were boxes of their own over the map). */
+.game[data-ui="windows"] .gwin-body > :is(.dialog, .shop, .crafting, .market, .house, .trade) {
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  animation: none;
+}
+.gwin-body > .market .market-money {
+  margin: 0 0 0.35rem;
+  text-align: right;
+}
+.gwin-body > .shop .shop-top .money {
+  margin-left: auto;
+  white-space: nowrap;
+}
+/* A container's window: its cells fill the width it has (4 to 6 columns in the dock). */
+.container-window > .container.framed {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  animation: none;
+}
+.container-window > .container.framed .cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--ui-slot));
+  gap: 3px;
 }
 /* Docked: a window of the column, as wide as it, as tall as its content. */
 .gwin[data-dock] {
@@ -430,6 +532,70 @@ body.dragging-window * {
 .gwin[data-size="wide"] {
   --gwin-w: 25rem;
 }
+/* The server's windows before the player moves them: where they were over the map. The
+   dialog at the bottom centre over the hotbar; with the shop, the two side by side, the
+   shop on the left; crafting, market and house top left; the trade top right. */
+.game[data-ui="windows"] {
+  --shop-cell: 4.5rem;
+  --shop-w: calc(6 * var(--shop-cell) + 5 * 0.3rem + 1rem + 4px);
+}
+.gwin[data-window="dialog"] {
+  --gwin-w: min(47.5rem, calc(100% - var(--dock-w) - 1rem));
+}
+.game-body[data-shop] > .gwin[data-window="dialog"] {
+  --gwin-w: min(22rem, calc(40% - var(--dock-w) * 0.4));
+}
+.gwin[data-window="shop"] {
+  --gwin-w: min(var(--shop-w), calc(100% - var(--dock-w) - 24rem));
+}
+.gwin[data-float]:not([data-placed])[data-window="dialog"] {
+  top: auto;
+  bottom: 5rem;
+  left: calc((100% - var(--dock-w) - var(--gwin-w)) / 2);
+  max-height: calc(100% - 5.5rem);
+}
+.game-body[data-shop] > .gwin[data-float]:not([data-placed])[data-window="dialog"] {
+  left: calc(
+    (100% - var(--dock-w) + min(var(--shop-w), calc(100% - var(--dock-w) - 24rem))) / 2 - 11rem +
+      0.25rem
+  );
+}
+.gwin[data-float]:not([data-placed])[data-window="shop"] {
+  top: auto;
+  bottom: 5rem;
+  left: max(0.5rem, calc((100% - var(--dock-w) - var(--gwin-w) - 22.5rem) / 2));
+  max-height: calc(100% - 5.5rem);
+}
+.gwin[data-window="crafting"] {
+  --gwin-w: 24rem;
+}
+.gwin[data-window="market"] {
+  --gwin-w: 27rem;
+}
+.gwin[data-window="house"],
+.gwin[data-window="trade"] {
+  --gwin-w: 22rem;
+}
+.gwin[data-float]:not([data-placed]):is(
+    [data-window="crafting"],
+    [data-window="market"],
+    [data-window="house"]
+  ) {
+  top: 0.5rem;
+  left: 0.5rem;
+  max-height: calc(100% - 5rem);
+}
+.gwin[data-float]:not([data-placed])[data-window="trade"] {
+  top: 0.5rem;
+  left: calc(100% - var(--dock-w) - var(--gwin-w) - 0.5rem);
+  max-height: calc(100% - 5rem);
+}
+/* A container out of the dock, before it is moved: a step down and right of the last. */
+.gwin[data-float]:not([data-placed])[data-window^="container-"] {
+  top: 3rem;
+  left: calc(100% - var(--dock-w) - var(--gwin-w) - 1rem);
+}
+
 /* Where each floating window shows before the player moves it: over the map, clear of
    the NPC windows on its top left. */
 .gwin[data-float]:not([data-placed])[data-window="guild"] {
@@ -575,10 +741,35 @@ body.dragging-window * {
   gap: 0.6rem;
   font-size: 0.85rem;
 }
+/* Interface scale and text size: the label and its percentages on one line. */
+.interface-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.interface-options .scale {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--ui-text-muted);
+}
+.interface-options .scale select {
+  width: auto;
+  min-width: 5.5rem;
+}
+.interface-options .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ui-text-muted);
+}
 .options-body button {
   align-self: flex-start;
 }
-.help-body .controls-text {
+.help-body .controls-text,
+.help-body .help-windows {
   margin: 0;
   font-family: var(--ui-font-book);
   font-size: 0.92rem;

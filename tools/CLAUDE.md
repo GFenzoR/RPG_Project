@@ -110,7 +110,7 @@ python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide c
 python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
 python tools/gemini/import_art.py <hoja.png> --cut rows|blobs --size 64 --names "walk_s_0,-,idle_s_0+attack_s_0,..."
                                   [--mirror walk_w_0,...] [--shared-colours] [--scale 4.6]
-python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -14] [--channels 1] [--max-seconds 72]
+python tools/gemini/music_convert.py <tema.mp4> [--no-loop] [--kbps 32] [--lufs -14] [--channels 1] [--max-seconds 72]
 python tools/gemini/music_import.py [--from build/music-gemini]   = make music-gemini (las elecciones al juego)
 python tools/gemini/anim_sheet.py <carpeta> --out hoja.png   hoja de contacto para revisar con Read
 python tools/gemini/credit.py <sidecar.json> --asset assets/...   prompt commiteado + fila de CREDITS
@@ -135,7 +135,8 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
   botones (`gemini_web.CLICK_TOOL_JS`).
 - **Imagen (verificado el 2026-11-18, diez pedidos):** `image` elige "Crear imagen" en
   Hydrogen y la hoja llega en ~30 s, una sola imagen de 1024x572 a 765x1024 (el formato lo
-  elige Gemini); ninguno topó con la cuota.
+  elige Gemini); ninguno topó con la cuota. Ni los trece de la segunda tanda (ese mismo día,
+  uno tras otro, tres con `--ref`).
 
 **Lo que se mantiene de Ants of Neque (cada regla costó pedidos reales):**
 - **Se detecta el medio, nunca se cree el texto:** la respuesta puede decir "solo genero
@@ -201,13 +202,18 @@ bucle con un crossfade de potencia constante de la cola sobre la cabeza, normali
 sola ganancia** a **-14 LUFS** sin pasar -1,5 dBTP (medida con `loudnorm`; una ganancia que
 varía rompería la costura) y, como el códec puede escalonar una costura limpia, rota el
 bucle de a 97 ms hasta que la costura codificada sea ordinaria (`seam_turns` en el JSON).
-Primeros temas reales (2026-11-18): costura de 3,3 a 0,9 tras rotar, ~650 KB a 32 kbps
-estéreo, más que los 256 KB de docs/07 por archivo de música y ~33 MB decodificado. Por eso
-`--max-seconds` corta un loop más corto (`loop_length`: entre 0,75 N y N segundos, donde lo
-que sigue al corte se parece al comienzo en la ventana del crossfade: ataques en fase, la
-misma curva de energía y el mismo nivel) y el juego los lleva mono a 20 kbps. Los masters de
-Gemini vienen calientes (+1,5 a +5 dBTP): el techo de pico pone la ganancia y el loop queda
-entre -16 y -19,5 LUFS (medido mono, como los temas de soundgen).
+`--max-seconds` corta un loop más corto (`loop_length`: entre 0,75 N y N segundos, donde
+lo que sigue al corte se parece al comienzo en la ventana del crossfade: ataques en fase, la
+misma curva de energía y el mismo nivel). **Desde el 2026-11-18 el juego no usa loops**:
+`--no-loop` (`loop=False`, lo que usa `make music-gemini`) deja el tema entero, sin cortes,
+con una sola ganancia, y mide sus puntos de entrada (`entry_points`: sobre la envolvente de
+nivel cada 0,1 s, donde sube una frase después de un respiro; nunca antes de
+`ENTRY_HEAD` = 10 s, a `ENTRY_GAP` = 15 s o más uno de otro, nunca en los últimos
+`ENTRY_TAIL` = 30 s del cuerpo, hasta `ENTRY_MOST` = 8), dónde termina el cuerpo
+(`body_end`) y su hueco más largo (`longest_quiet`); `piece_problems` dice si puede sonar
+(2 minutos o más, volumen medible, ningún hueco de más de 6 s, al menos 2 entradas). Los
+masters de Gemini vienen calientes (+1,5 a +5 dBTP): el techo de pico puede dejar un tema
+bajo -14 LUFS (los enteros en estéreo del 2026-11-18 quedaron entre -14 y -15).
 **-14 LUFS es el objetivo de toda la música del juego:** los temas de soundgen miden -11,3
 (bosque), -13,7 (puerto), -14,2 (volcán) y -15,8 (cueva), unos -14 en promedio; a -18 un
 tema de Gemini sonaba ~4 dB más bajo. El test `TheGameMusic` mide los `.ogg` de
@@ -216,16 +222,23 @@ tema de Gemini sonaba ~4 dB más bajo. El test `TheGameMusic` mide los `.ogg` de
 cerca; uno de Gemini que el techo de pico deja más bajo lo compensa con el volumen.
 
 **De las elecciones al juego (`music_import.py`, `make music-gemini`):** lee `picks.json`
-(una toma, una lista de tomas, `none` u `off`; un lugar sin elegir = toma 1 provisional),
-convierte cada toma mono a 20 kbps con loops de 54 a 72 s (las ya convertidas con los
-mismos ajustes se reusan desde `build/gemini/music-import/`), las copia a
-`assets/sounds/music/gemini/<lugar>_<toma>.ogg`, reescribe sus líneas de
-`assets/sounds.yaml` entre las marcas `# gemini-music:sounds:…` y `:rules:…` (el sonido de
-cada lugar, los de las otras tomas de una lista y las reglas `title`, `combat` y
-`bosses`), escribe el archivo de prompt y la fila de `CREDITS.md` de cada toma
-(`credit.prompt_text`, `credit.credits_row`), el manifiesto `assets/sounds/music/gemini.yaml`,
-borra lo que ya no suena, y `make` revisa el presupuesto (`tools/soundgen check`). El
-volumen en `sounds.yaml` (`volume_for`) devuelve lo que el techo de pico le quitó, hasta 1.
+(una toma, una lista de tomas, `none` u `off`; un lugar sin elegir = toma 1 provisional;
+`combat` solo `none`/`off`; `cave_pool` = las versiones extra de cueva, y sin ella entran
+como provisionales las de `Slot.extras` que pasan `piece_problems`), convierte cada toma
+entera en estéreo (`KBPS` = 48, `AMBIENT_KBPS` = 40 para las cuevas; las ya convertidas
+con los mismos ajustes, `ANALYSIS` y los `ENTRY_*` incluidos (`entry_settings` en el
+registro; uno de antes cuenta con los de `ANALYSIS` 1), se reusan desde
+`build/gemini/music-import/`),
+las copia a `assets/sounds/music/gemini/<lugar>_<toma>.ogg`, reescribe sus líneas de
+`assets/sounds.yaml` entre las marcas `# gemini-music:sounds:…` (cada tema con `seconds`,
+`end` y `entries`), `:pools:…` (la pool de cada lugar) y `:rules:…` (`title` y `bosses`,
+que nombran pools), escribe el archivo de prompt y la fila de `CREDITS.md` de cada toma
+(`credit.prompt_text`, `credit.credits_row`; el título es el que dio Gemini, o el nombre
+de su archivo escrito como título: `the_sunless_vault` es «The Sunless Vault», `title_case`), el manifiesto
+`assets/sounds/music/gemini.yaml` (`format: 2`), borra lo que ya no suena, y `make` revisa
+el presupuesto (`tools/soundgen check`, también por pool). El volumen en `sounds.yaml`
+(`volume_for`) devuelve lo que el techo de pico le quitó, hasta 1 (ffmpeg mide un mono como
+dos parlantes: un tema estéreo y uno mono de soundgen al mismo LUFS suenan igual).
 `none` vuelve al tema de soundgen del lugar (`Slot.fallback`): por eso esos temas y sus
 recetas siguen en el repo. Las tablas de lugares (`SLOTS`: sonido, regla, tema de soundgen)
 y de nombres (`ALIASES`: la toma 3 de Puerto es `probe_1`) están en el script.
@@ -268,7 +281,9 @@ ART-6; la lava no). El
 preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
 los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
 `animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
-(`castShadow`, al final de `render`). Los PNG se commitean y el test exige que coincidan
+(`castShadow`, al final de `render`), salvo las de `shadow: false`: el jabalí y el ciervo,
+de 64x64 sobre la sombra de contacto del renderer como los animales de Gemini (docs/17
+ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)".
 

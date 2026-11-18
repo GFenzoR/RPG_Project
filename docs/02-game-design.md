@@ -95,6 +95,10 @@ el doble click o Ctrl+click derecho.
   - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
     con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
     horizontal o vertical libre (se "desliza" junto a un muro).
+  - **Girar sin caminar** (docs/17 MOV-2): quieto, una tecla (o el pad) hacia otro lado
+    gira al personaje en el acto y camina solo si sigue apretada 80 ms: un toque corto
+    solo gira. Mirando ya hacia ese lado, o caminando, camina enseguida. Ctrl+flecha gira
+    siempre sin caminar, como en Tibia (Ctrl con WASD no: Ctrl+W cierra la pestaña).
   - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
     sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos,
     aunque el cliente ya dibujara los `max_queued_steps` pasos predichos.
@@ -1611,27 +1615,53 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   jugador. Se oye hasta 8 casillas (distancia de Chebyshev), con paneo estéreo según la
   diferencia en x. No se oyen los eventos de otro piso. Los sonidos propios (pasos,
   mensajes, UI) no son posicionales.
-- **Música y ambiente**: un loop por isla (`world/world.yaml`) y otro para los pisos
-  subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
-  El ambiente son olas en Puerto, bosque en Bosque y el volcán en la Isla Volcánica; bajo
-  tierra no hay ambiente.
-- **Música sobre la de la zona** (`sounds.yaml` `music`, `client/src/audio/cues.ts`
-  `musicFor`), cada una opcional: `title` suena fuera del juego (login, registro y
-  personajes; sin ambiente); `bosses` da el loop de un jefe mientras uno está a la vista en
-  el piso propio (hoy el guardián de la forja, `slagbound_warden`); `combat`, mientras el
-  jugador tiene objetivo o recibió un golpe hace menos de `combat_hold_ms`. Un jefe gana a
-  un combate y un combate a la zona. **El dueño apagó la música de combate** (2026-11-18):
-  un combate común sigue con la de la zona; solo un jefe (o, más adelante, una quest
-  importante) la cambia.
+- **Ambiente**: un loop por isla (`world/world.yaml`): olas en Puerto, bosque en Bosque y
+  el volcán en la Isla Volcánica; bajo tierra no hay ambiente. Al cambiar de isla hay un
+  fundido cruzado (`ambient.fade_ms`).
+- **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
+  `sounds.yaml` `music`). Lo que oye el jugador:
+  - **Cada lugar tiene una pool de temas enteros** (~3 minutos cada uno): Puerto alterna sus
+    tres tomas, las cuevas siete versiones, cada isla la suya, el título la suya y el
+    guardián de la forja la suya. Un tema nunca se repite dos veces seguidas y la pool se
+    recorre entera antes de repetir.
+  - **Ningún tema empieza por el principio:** arranca en uno de sus puntos de entrada (donde
+    empieza una frase, medidos al importarlo), al azar. Bajar a una cueva no suena igual dos
+    veces.
+  - **Volver a una zona** antes de 3 minutos (`resume_ms`) sigue el tema donde iba; después,
+    un tema y un punto nuevos. Si vuelve mientras ese tema todavía se apaga (dio la vuelta
+    en un borde), el mismo tema vuelve a subir desde donde está: nunca suena dos veces
+    encima de sí mismo.
+  - **Un tema que no baja** (un corte de red, un deploy, un archivo roto) no deja silencio:
+    suena otro de la pool, o sigue la música de antes si la pool no tiene otro, y el
+    archivo se vuelve a pedir más tarde (a los 5 s, después 10, 20… hasta cada minuto).
+  - **Transiciones de potencia constante** (seno/coseno, sin pozo de volumen ni clics), con
+    su largo según qué cambió (`fades`): otra zona o el área de una quest ~5 s, aparece un
+    jefe ~1,5 s, se va el jefe ~6 s de vuelta al tema de la zona en un punto nuevo, título y
+    mundo ~3 s.
+  - **Sin aleteo en los bordes:** una zona nueva manda recién tras 3 s en ella
+    (`dwell_ms`); ir y venir por un borde no cambia nada.
+  - **Respiro entre temas:** el tema de una zona termina con su propio final y quedan entre
+    6 y 15 s de ambiente (`gap_ms`) antes del siguiente, que entra con un fundido de 4 s. El
+    del título y el de un jefe pasan al siguiente con un fundido antes del final, sin parar.
+  - **Una pelea común no cambia la música** (el dueño, 2026-11-18). La cambia un jefe a la
+    vista en el piso propio (`bosses`; hoy el guardián de la forja), que manda sobre todo y
+    se sostiene 5 s después de perderlo de vista (`boss_hold_ms`), y el área de una quest
+    importante (`music` en su YAML, docs/06), que manda sobre la zona.
 - **De dónde sale**: desde el 2026-11-18 la música es la que el dueño eligió entre las
   tomas de Gemini (título, Puerto, Bosque, Volcán, Cuevas y el guardián de la forja;
-  `assets/sounds/music/gemini.yaml`). Los temas de soundgen siguen en el repo y vuelven a
-  sonar en el lugar que el dueño marque `none`. Puerto tiene tres tomas elegidas: hoy suena
-  la primera y las otras dos quedan listas para el director de música (pendiente, docs/14:
-  variar las tomas, empezar en otro punto y cuidar las transiciones).
+  `assets/sounds/music/gemini.yaml`). Las seis versiones nuevas de cueva suenan como
+  provisionales hasta que el dueño elija (`cave_pool` en `picks.json`). Los temas de
+  soundgen siguen en el repo y vuelven a sonar, como loops sin hueco en la vuelta, en el
+  lugar que el dueño marque `none`.
+- **Volumen y silencio** de la música siguen en Opciones; con la música silenciada no se
+  baja ningún tema (el director sigue el tiempo y, al volver a subirla, entra con un fundido
+  corto donde va el tema).
 - **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
-  navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
-  los efectos se descartan, para que no suenen todos juntos al reanudarse.
+  navegadores y los webviews de la app de escritorio. Si el navegador igual rechaza la
+  música (Safari y los webviews de Apple piden un gesto por elemento), vuelve a intentarlo
+  en el gesto siguiente, desde donde va el tema. Mientras el audio esté suspendido,
+  los efectos se descartan, para que no suenen todos juntos al reanudarse, y la música no
+  avanza (sigue al reanudarse). Con la pestaña en segundo plano todo sigue sonando.
 - **Recolección**: el sonido de la herramienta (minería, tala, pesca) solo se oye en la
   casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
   estación al fabricar suenan como recolección genérica.

@@ -14,11 +14,11 @@
 // render/particles.ts).
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
-import type { Direction } from "@rpg/protocol";
+import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
+  FEET_LINE,
   DEATH_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
@@ -28,6 +28,8 @@ import {
   MapView,
   extrasByChunk,
   animate,
+  attackClip,
+  attackClipAction,
   clipMs,
   entityZIndex,
   newAnimInput,
@@ -38,26 +40,30 @@ import {
   startAttack,
   startDeath,
   startHit,
+  startVanish,
   tilePixels,
   tileToScreen,
+  VANISH_MS,
 } from "@rpg/renderer";
-import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
+import type { AnimState, AtlasIcon, Camera, StepKind, TileArt } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
-import { ParticleLayer } from "./particles.ts";
+import { ParticleLayer, stepKindOf } from "./particles.ts";
 import type { ParticleView } from "./particles.ts";
 import {
+  attackAction,
   attackDir,
   attackerOf,
+  DepartureFeed,
   isBlowEffect,
-  leavesDying,
+  leaveStyle,
   meleeAttacker,
   pushFrom,
 } from "./creature-events.ts";
-import type { Fighter } from "./creature-events.ts";
+import type { Fighter, LeaveStyle } from "./creature-events.ts";
 import { devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
@@ -90,6 +96,7 @@ import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
+import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
   FIRE_TINT,
   LightLayer,
@@ -157,10 +164,11 @@ export interface GameCanvas {
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
-   * E2E: the creatures in an attack pose now (its clip or lunge) and the ones falling dead
-   * (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its length.
+   * E2E: the creatures in an attack pose now (its clip or lunge), the ones falling dead
+   * and the ones shimmering away (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its
+   * length.
    */
-  poses(): { attacking: PoseTime[]; dying: PoseTime[] };
+  poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -171,6 +179,11 @@ export interface PoseTime {
   id: number;
   ms: number;
   of: number;
+  /** The clip it plays: attack, shoot or cast (lunge: a single image's), death, vanish. */
+  action: string;
+  /** Its tile (a body falling or shimmering away: where it stays). */
+  x: number;
+  y: number;
 }
 
 export interface GameCanvasOptions {
@@ -229,6 +242,16 @@ export interface GameCanvasOptions {
    * ("" = nothing to show).
    */
   hoverText?(x: number, y: number, z: number): string;
+  /**
+   * docs/17 UI-6: the mouse rested REST_MS on tile (x, y, z) at page (cx, cy) (the card of
+   * what lies there shows), or left it, pressed or scrolled (`undefined`: it goes).
+   */
+  restTile?(at: { x: number; y: number; z: number; cx: number; cy: number } | undefined): void;
+  /**
+   * docs/17 UI-9: whether a heavy hit shakes the camera now (the option, and never with
+   * reduced motion). Asked at each frame of a shake; without it, never.
+   */
+  shake?(): boolean;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -254,6 +277,9 @@ const HINT_REFRESH_MS = 250;
 
 /** Where the text beside the cursor goes, from the cursor (CSS px). */
 const HINT_OFFSET = { x: 14, y: 18 } as const;
+
+/** How long the mouse rests on a tile before the card of its item shows, ms (UI-9: 350). */
+const REST_MS = 350;
 
 /** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
 const MARK_HALF = MARK_BOX.w / 2;
@@ -413,6 +439,10 @@ export async function createGameCanvas(
   const showHidden = (box: DrawnBox): void => {
     const s = sprites.get(box.id);
     if (!s?.figure || s.body.alpha < 1) return;
+    showCopy(s.body, s.figure.sprite);
+  };
+  /** The see-through copy of a body's sprite `fig` (in `body`), from the pool. */
+  const showCopy = (body: Container, fig: Sprite): void => {
     let copy = hiddenPool[hiddenShown];
     if (!copy) {
       copy = new Sprite({
@@ -425,12 +455,26 @@ export async function createGameCanvas(
       hiddenLayer.addChild(copy);
     }
     hiddenShown++;
-    const fig = s.figure.sprite;
     copy.texture = fig.texture;
-    copy.position.set(s.body.x + fig.x, s.body.y + fig.y);
+    copy.position.set(body.x + fig.x, body.y + fig.y);
     copy.scale.copyFrom(fig.scale);
     copy.skew.copyFrom(fig.skew);
+    copy.alpha = HIDDEN_ALPHA * fig.alpha; // a body fading in, falling or shimmering away
     copy.visible = true;
+  };
+  /**
+   * A body falling dead or shimmering away (a ghost) mostly hidden by a creature in front
+   * (a wolf killed right north of the mage that killed it): its see-through copy too.
+   */
+  const ghostBox: DrawnBox = { id: 0, x: 0, bottom: 0, top: 0, order: 0 };
+  const showHiddenGhost = (g: { body: Container; figure: CreatureBody }): void => {
+    const x = g.body.x / T;
+    const y = g.body.y / T;
+    ghostBox.x = x;
+    ghostBox.bottom = y + 1;
+    ghostBox.top = y - g.figure.lift / T;
+    ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
+    if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure.sprite);
   };
   view.overlay.addChild(particles.view, hiddenLayer, behindWall);
   const effectLayer = new Container({ label: "effects" });
@@ -629,6 +673,20 @@ export async function createGameCanvas(
     }
     return st;
   };
+  // Steps (docs/17 MOV-7): what a step kicks up on each ground, by ground item, from the
+  // `steps` of its sprite in atlas.json `tiles` (assets/sprites.yaml): a puff of dust, a
+  // ripple. Particles of render/particles.ts, at the feet of the tile the step leaves.
+  const stepKinds = new Map<number, StepKind | null>();
+  const kickUp = (at: Pos): void => {
+    const ground = world.tile(at.x, at.y, at.z)?.[0];
+    if (ground === undefined) return;
+    let kind = stepKinds.get(ground);
+    if (kind === undefined) {
+      kind = stepKindOf(ground, content.items, atlas.index.tiles) ?? null;
+      stepKinds.set(ground, kind);
+    }
+    if (kind) particles.kick(kind, (at.x + 0.5) * T, (at.y + 1) * T - FEET_LINE);
+  };
   /** Draws a creature's body for `now` (its step, facing and what happened to it). */
   const animateBody = (
     figure: CreatureBody,
@@ -643,8 +701,11 @@ export async function createGameCanvas(
     animInput.walkStart = moving?.start;
     animInput.walkMs = moving?.duration ?? 0;
     animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
+    const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
+    // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
+    if (moving && st.walkStart !== stepBefore && !figure.clips.meta?.flying) kickUp(moving.from);
     return pose.done;
   };
 
@@ -665,7 +726,8 @@ export async function createGameCanvas(
         if (!by || by.pos.z !== z) continue;
         const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
         const [dx, dy] = attackDir(by, target, a.to);
-        startAttack(stateOf(by.id, now), now, dx, dy);
+        // Its own clip by kind (the bow, the spell), else the swing (docs/17 ANI-2).
+        startAttack(stateOf(by.id, now), now, dx, dy, attackAction(a.kind));
       }
     } else newest = Math.max(newest, inferAttacks(now, z));
     for (const f of world.floatingTexts) {
@@ -747,8 +809,6 @@ export async function createGameCanvas(
   };
 
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
-    // A creature that died in view and is back (a player's respawn) ends its fall at once.
-    if (ghosts.has(c.id)) dropGhost(c.id);
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
     const lk = isPlayer ? lookKey(c.cosmetics) : "";
@@ -845,46 +905,60 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Deaths (ANI-2, ANI-5, ANI-7): a creature that leaves the view because it died
-  // (CreatureDisappear.reason DEATH; from an older server, with an empty health bar:
-  // render/creature-events.ts leavesDying) stays where it fell, without name or bar, while
-  // its death plays (an LPC body its clip, a single image the procedural fall), over the
-  // corpse the server already put on the tile. Any other way out of the view drops it.
+  // Leaving the view (ANI-2, ANI-5, ANI-7), as CreatureDisappear.reason says
+  // (render/creature-events.ts leaveStyle): a creature that died stays where it fell,
+  // without name or bar, while its death plays (an LPC body its clip, a single image the
+  // procedural fall), over the corpse the server already put on the tile; one that left by
+  // a teleport or a logout shimmers away where it was (VANISH_MS). Any other way out of the
+  // view drops it. Each departure plays once, also when the creature is already back: a
+  // player that dies in view and wakes up at a temple in view leaves its falling body at
+  // the death spot and appears (fading in) at the temple.
   interface Ghost {
+    id: number;
     body: Container;
     figure: CreatureBody;
     state: AnimState;
     dir: CreatureState["dir"];
   }
-  const ghosts = new Map<number, Ghost>();
+  const ghosts: Ghost[] = [];
   const lastSeen = new Map<number, CreatureState["dir"]>();
-  const dropGhost = (id: number): void => {
-    const g = ghosts.get(id);
+  const departures = new DepartureFeed();
+  const dropGhost = (i: number): void => {
+    const g = ghosts[i];
     if (!g) return;
     view.removeEntity(g.body);
     g.body.destroy({ children: true });
-    ghosts.delete(id);
+    const last = ghosts.pop();
+    if (last && last !== g) ghosts[i] = last;
   };
-  /** A creature left the view: it falls if it died with a body to animate, else it goes. */
-  const leave = (id: number, now: number): void => {
+  /** A creature left the view: `style` says whether it falls, shimmers away or just goes. */
+  const leave = (id: number, now: number, style: LeaveStyle): void => {
     const s = sprites.get(id);
     const state = animStates.get(id);
     animStates.delete(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
-    const dying = s !== undefined && leavesDying(world.departureOf(id), s.drawnHealth);
-    if (!s || !s.figure || !state || !dying || dir === undefined) {
+    if (!s || !s.figure || !state || style === "drop" || dir === undefined) {
       dropSprite(id);
       return;
     }
     dropLabels(s);
     sprites.delete(id);
     s.frame.clear();
-    startDeath(state, now);
-    ghosts.set(id, { body: s.body, figure: s.figure, state, dir });
+    if (style === "fall") startDeath(state, now);
+    else startVanish(state, now);
+    ghosts.push({ id, body: s.body, figure: s.figure, state, dir });
+  };
+  /** Plays the departures that arrived since the last frame on the bodies drawn then. */
+  const depart = (now: number): void => {
+    for (const d of departures.take(world.departures)) {
+      const s = sprites.get(d.id);
+      if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
+    }
   };
   const drawGhosts = (now: number): void => {
-    for (const [id, g] of ghosts) {
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const g = ghosts[i] as Ghost;
       animInput.now = now;
       animInput.dir = outfitDir(g.dir);
       animInput.walkStart = undefined;
@@ -892,7 +966,7 @@ export async function createGameCanvas(
       animInput.moveDx = 0;
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
-      if (pose.done) dropGhost(id);
+      if (pose.done) dropGhost(i);
     }
   };
 
@@ -942,6 +1016,13 @@ export async function createGameCanvas(
     // canvas fits the new one at once.
     if (world.view !== sizedFor) resize();
     follow(now);
+    // A heavy hit to the player shakes the camera a little (render/shake.ts).
+    const hitAt = world.heavyHitAt;
+    if (hitAt !== undefined && now - hitAt < SHAKE_MS && opts.shake?.() === true) {
+      const unit = tilePixels(cam, T);
+      const o = shakeOffset(now - hitAt, window.devicePixelRatio || 1);
+      cam = { ...cam, x: cam.x + o.x / unit, y: cam.y + o.y / unit };
+    }
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
     behindWall.visible = false;
     const tilePx = tilePixels(cam, T);
@@ -955,6 +1036,7 @@ export async function createGameCanvas(
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
     react(now);
+    depart(now);
     for (const c of world.creatures.values()) {
       if (c.pos.z !== self.pos.z) continue;
       seen.add(c.id);
@@ -1033,13 +1115,16 @@ export async function createGameCanvas(
         );
       }
     }
-    // A creature mostly hidden by a taller one in front (a wolf right north of a player).
-    hiddenShown = 0;
-    drawnBoxes.forEachHidden(showHidden);
-    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
-    for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now);
+    // Gone without a departure of its own (another floor, a new map view): it just goes.
+    for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
+    // A creature mostly hidden by a taller one in front (a wolf right north of a player),
+    // and a body falling or shimmering away behind one.
+    hiddenShown = 0;
+    drawnBoxes.forEachHidden(showHidden);
+    for (const g of ghosts) showHiddenGhost(g);
+    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     world.expire(now);
     drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale);
@@ -1184,6 +1269,11 @@ export async function createGameCanvas(
     lp: LeftPress;
     /** The walk there started on the press: the release is no click. */
     walked: boolean;
+    /**
+     * A Shift press (docs/17 UI-6): released where it was it looks at this tile (a creature's
+     * head too, ART-2); dragged, it moves part of the top item's stack.
+     */
+    look?: Pos | undefined;
     pointerId: number;
     /** Where the cursor is now (page coordinates). */
     cx: number;
@@ -1221,6 +1311,31 @@ export async function createGameCanvas(
     hintTile = undefined;
     if (!hint.hidden) hint.hidden = true;
   };
+  // docs/17 UI-6: the card of the item on the tile the mouse rests on (ui/ItemTooltip.tsx).
+  let restTimer: ReturnType<typeof setTimeout> | undefined;
+  let restAt: Pos | undefined;
+  let resting = false;
+  const stopRest = (): void => {
+    clearTimeout(restTimer);
+    restTimer = undefined;
+    restAt = undefined;
+    if (resting) opts.restTile?.(undefined);
+    resting = false;
+  };
+  const watchRest = (cx: number, cy: number): void => {
+    if (!opts.restTile || press) return;
+    const tile = tileUnder(cx, cy);
+    if (tile && restAt && samePos(tile, restAt)) return; // still on it: the card stays
+    stopRest();
+    if (!tile) return;
+    restAt = tile;
+    restTimer = setTimeout(() => {
+      restTimer = undefined;
+      if (press || !hover) return;
+      resting = true;
+      opts.restTile?.({ ...tile, cx: hover.x, cy: hover.y });
+    }, REST_MS);
+  };
   const showHint = (now: number): void => {
     if (!hover || press || !opts.hoverText) {
       hideHint();
@@ -1231,6 +1346,9 @@ export async function createGameCanvas(
       hideHint();
       return;
     }
+    // The map moved under a still mouse (the player walks): the card of the old tile goes
+    // and the rest starts again on the new one.
+    if (restAt && !samePos(tile, restAt)) watchRest(hover.x, hover.y);
     if (hintTile && samePos(tile, hintTile) && now - hintAt < HINT_REFRESH_MS) return;
     hintTile = tile;
     hintAt = now;
@@ -1246,6 +1364,7 @@ export async function createGameCanvas(
       return;
     }
     hideHint();
+    stopRest();
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
@@ -1263,7 +1382,20 @@ export async function createGameCanvas(
     else if (act.kind === "use")
       opts.useTile(inDoor ? at.x : tile.x, inDoor ? at.y : tile.y, z, act.top);
     else if (act.kind === "menu") opts.menuTile?.(at.x, at.y, z, e.clientX, e.clientY);
-    else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
+    else if (act.kind === "look" && e.button === 0) {
+      endHold();
+      press = {
+        x: tile.x,
+        y: tile.y,
+        z,
+        lp: new LeftPress(performance.now(), p.x, p.y, { drag: true, hold: false }, DRAG_START_PX),
+        walked: false,
+        look: { x: at.x, y: at.y, z },
+        pointerId: e.pointerId,
+        cx: e.clientX,
+        cy: e.clientY,
+      };
+    } else if (act.kind === "look") opts.lookTile(at.x, at.y, z);
     else if (act.kind === "press") {
       endHold(); // a press left over (its release went elsewhere)
       const can = opts.pressTile?.(tile.x, tile.y, z) ?? { walked: false, drag: true, hold: false };
@@ -1286,6 +1418,7 @@ export async function createGameCanvas(
     }
     hover = { x: e.clientX, y: e.clientY };
     hint.style.transform = `translate(${e.clientX + HINT_OFFSET.x}px, ${e.clientY + HINT_OFFSET.y}px)`;
+    watchRest(e.clientX, e.clientY);
     if (!press) return;
     if ((e.buttons & 1) === 0) {
       endHold(); // the button went up where no pointerup reached the canvas
@@ -1315,6 +1448,7 @@ export async function createGameCanvas(
     const end = from.lp.up();
     press = undefined;
     if (end === "hold") opts.holdEnd?.();
+    else if (end === "click" && from.look) opts.lookTile(from.look.x, from.look.y, from.look.z);
     else if (end === "click" && !from.walked) opts.clickTile(from.x, from.y, from.z);
   });
   // A hold captures the pointer: it ends with its pointerup, or here if the capture is lost
@@ -1325,6 +1459,7 @@ export async function createGameCanvas(
   canvas.addEventListener("pointerleave", () => {
     hover = undefined;
     hideHint();
+    stopRest();
     // A hold has the pointer captured: it goes on outside the canvas.
     if (press && !press.lp.holding) press = undefined;
   });
@@ -1342,6 +1477,7 @@ export async function createGameCanvas(
   // instead of the page; a plain wheel does nothing, as before.
   const wheel = new WheelZoom();
   const onWheel = (e: WheelEvent): void => {
+    stopRest();
     if (!e.ctrlKey) return;
     e.preventDefault();
     const steps = wheel.add(e.deltaY, e.deltaMode, e.timeStamp);
@@ -1366,17 +1502,38 @@ export async function createGameCanvas(
       const now = performance.now();
       const attacking: PoseTime[] = [];
       for (const [id, st] of animStates) {
-        const of =
-          clipMs(sprites.get(id)?.figure?.clips.meta, "attack") || LUNGE_OUT_MS + LUNGE_BACK_MS;
+        const meta = sprites.get(id)?.figure?.clips.meta;
+        const c = world.creatures.get(id);
+        const dir = outfitDir(c ? world.facing(c, now) : Direction.SOUTH);
+        const clip = attackClip(meta, st.attackAction, dir);
+        const action = clip ? attackClipAction(meta, st.attackAction, dir) : "lunge";
+        const of = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
         const ms = now - st.attackAt;
-        if (ms >= 0 && ms < of) attacking.push({ id, ms, of });
+        if (ms >= 0 && ms < of)
+          attacking.push({ id, ms, of, action, x: c?.pos.x ?? 0, y: c?.pos.y ?? 0 });
       }
       const dying: PoseTime[] = [];
-      for (const [id, g] of ghosts) {
+      const vanishing: PoseTime[] = [];
+      for (const g of ghosts) {
+        // Where its body stays: the tile it was drawn on last.
+        const x = Math.round(g.body.x / T);
+        const y = Math.round(g.body.y / T);
+        if (Number.isNaN(g.state.diedAt)) {
+          const ms = now - g.state.vanishAt;
+          vanishing.push({ id: g.id, ms, of: VANISH_MS, action: "vanish", x, y });
+          continue;
+        }
         const clip = clipMs(g.figure.clips.meta, "death");
-        dying.push({ id, ms: now - g.state.diedAt, of: clip ? clip + DEATH_FADE_MS : DEATH_MS });
+        dying.push({
+          id: g.id,
+          ms: now - g.state.diedAt,
+          of: clip ? clip + DEATH_FADE_MS : DEATH_MS,
+          action: "death",
+          x,
+          y,
+        });
       }
-      return { attacking, dying };
+      return { attacking, dying, vanishing };
     },
     element: canvas,
     clientToTile(clientX, clientY) {
@@ -1417,12 +1574,13 @@ export async function createGameCanvas(
     },
     destroy() {
       clearTimeout(longPressTimer);
+      clearTimeout(restTimer);
       hint.remove();
       gestures.reset();
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
-      for (const id of [...ghosts.keys()]) dropGhost(id);
+      while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
       lights.destroy();
       view.destroy();

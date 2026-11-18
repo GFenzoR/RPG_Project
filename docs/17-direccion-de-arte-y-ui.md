@@ -10,7 +10,9 @@ gremio; "Hecho: A4, A5 y los botones del gremio"; A6: movimiento fluido, click p
 caminar manteniendo el mouse, "Hecho: A6" en §4; y A8 con la parte de criaturas de A10 y
 A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
 `feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
-`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13").
+`feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13"; y los restos
+de ANI y MOV, rama `feat/lpc-actions`, el 2026-11-18: "Hecho: disparar, conjurar,
+desvanecerse, pasos y girar").
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -146,8 +148,23 @@ parte de arriba transparente.
 | Muro (una pieza) | 32x64; 32x96 para murallas | abajo a la derecha | Cara de 32 px y tapa sobre la casilla de atrás (ART-3) |
 | Árbol | 64x64, 64x96 o 96x96 | abajo, tronco centrado (ver abajo) | Copa animada por viento (ART-7) |
 | Criatura chica (rata, murciélago) | 32x32 | abajo, centrada | Figura de 16–28 px |
+| Animal mediano (lobo, jabalí, ciervo, sabueso, araña, sapo) | 64x64 | pies centrados en la casilla | A la escala de la persona de LPC (ver "Animales medianos") |
 | Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
 | Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
+
+- **Animales medianos** (decidido el 2026-11-18, con la segunda tanda de Gemini): todos
+  los animales se miden contra la persona de LPC (~46 px, 1,8 m: ~25 px por metro) y no
+  contra la casilla. Con eso: lobo y sabueso ~40 px de largo, jabalí ~36 de largo y 23 de
+  alto, ciervo ~42 de alto con las astas (una persona), reptante hueco y salamandra ~45 de
+  largo, gólem ~50 de alto y ancho como dos, dragoncillo ~58 de largo, y el jefe del
+  Volcán (`slagbound_warden`) ~77 de alto en 96x96. Rata, cangrejo y escarabajo quedan en
+  32x32 (son chicos de verdad). El jabalí y el ciervo de spritegen eran de 32x32 con el
+  ancla de siempre y la sombra pintada: al lado del lobo de Gemini el ciervo parecía una
+  cría y los dos pisaban 4 px más abajo que el resto. Ahora son su mismo diseño dibujado
+  1,2 y 1,4 veces más grande en 64x64 (`scaleOnto` en `recipes/creatures.ts`), con
+  `anchor: bc` y la sombra de contacto (`shadow: false` en la receta, `shadow: ellipse` en
+  `assets/sprites.yaml`), como todo animal animado. La gaviota sigue de 32x32 con su
+  sombra pintada mientras el dueño no decida su arte.
 
 - **Ancla por sprite** (hecho para criaturas, 2026-11-17): `anchor: br` (abajo a la
   derecha, el de siempre) o `anchor: bc` (centrado; los pies `FEET_LINE` = 4 px por encima
@@ -325,7 +342,9 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
 - **Ambiente solo del cliente** (sin servidor, pool de ≤ 100 partículas en pantalla):
   - motas de polvo en cuevas, brasas en el Volcán, hojas en el Bosque, niebla y gaviotas
     sobre el mar;
-  - polvo al pisar tierra o arena (3 frames, 200 ms) y ondas al pisar agua baja;
+  - polvo al pisar tierra o arena (3 frames, 200 ms) y ondas al pisar agua baja (hecho:
+    "Hecho: disparar, conjurar, desvanecerse, pasos y girar"; no hay agua baja caminable,
+    así que las ondas van en la arena mojada);
   - el pasto alto se agita al pasar.
 - **Luz:**
   - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
@@ -398,8 +417,8 @@ animados"); lo usan las criaturas de Gemini.
   | walk | 9 por dirección (1 quieto + 8) | caminar | 4 frames por casilla |
   | slash | 6 | cuerpo a cuerpo | |
   | thrust | 8 | lanza | |
-  | spellcast | 7 | conjurar | 7 x 60 ms |
-  | shoot | 13 | arco | se recorta a 300–400 ms |
+  | spellcast | 7 | conjurar | 7 x 60 ms (`cast`) |
+  | shoot | 13 | arco | una columna sí y una no: 7 x 50 ms (`shoot`) |
   | hurt | 6, solo hacia el sur | morir | |
 
 - **Quieto y atacar, solo hacia sus lados** (2026-11-18): una criatura con frames de
@@ -464,22 +483,27 @@ session/attack.go`), y el cliente anima con eso (`client/src/render/creature-eve
 - **`CreatureAttack{id, kind, target_id, to, radius}`** antes del `Projectile`, el
   `Effect` y el `FloatingText` del ataque: `MELEE`, `RANGED` o `SPELL`, con el objetivo (si
   el cliente lo conoce), su casilla (o el borde de la ventana de su lado) o el centro y el
-  radio de un área. El atacante juega su clip `attack` hacia el objetivo (los humanoides
-  LPC, el `slash`; todavía no hay clips propios de disparo ni de conjuro, así que los tres
-  usan ese) y un sprite de un solo frame, la embestida de ANI-5. Un área se juega hacia
-  donde mira. La víctima retrocede alejándose del atacante o del centro del área.
+  radio de un área. El atacante juega el clip de ese tipo hacia el objetivo: `MELEE` el
+  `attack` (el `slash` de LPC), `RANGED` el `shoot` (el arco) y `SPELL` el `cast`
+  (`spellcast`); un sprite sin ese clip juega `attack`, y uno sin ninguno la embestida de
+  ANI-5. Un área se juega hacia donde mira. La víctima retrocede alejándose del atacante o
+  del centro del área.
 - **`CreatureDisappear.reason`**: `OUT_OF_VIEW`, `DEATH`, `DESPAWN`, `TELEPORT`,
-  `LOGOUT`. Solo `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la
-  hoja; un solo frame: la caída de ANI-5); el resto lo saca en el momento.
+  `LOGOUT`. `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la hoja;
+  un solo frame: la caída de ANI-5); `TELEPORT` y `LOGOUT` lo desvanecen donde estaba
+  (`VANISH_MS`, 350 ms: se angosta, sube un poco, pálido y parpadeando; nunca la caída);
+  `OUT_OF_VIEW` y `DESPAWN` lo sacan en el momento. Cada salida se juega una vez, también
+  si la criatura ya volvió en el mismo batch: un jugador que muere a la vista y despierta
+  en un templo también a la vista deja su cuerpo cayendo donde murió y aparece (con su
+  fundido) en el templo.
 - **Sin filtrar nada:** el ataque llega solo a quien conoce al atacante (el de un
   invisible lo hace visible antes), nunca habla de un objetivo invisible y de uno fuera de
   la ventana da solo el lado. Volverse invisible sale como `TELEPORT`.
 - **Servidor viejo:** `Welcome.attack_events` en `false` y el cliente sigue deduciéndolo
   como antes (abajo).
-- **Pendiente:** clips propios de disparo (`shoot`) y de conjuro (`spellcast`) para LPC;
-  un jugador que muere a la vista y reaparece en un templo también a la vista no deja
-  su cuerpo cayendo (el mismo id vuelve en el mismo batch); un efecto de desvanecerse para
-  `TELEPORT` y `LOGOUT`.
+- **Lo que quedaba pendiente** (clips de disparo y de conjuro, la muerte con reaparición a
+  la vista y el desvanecerse) está hecho: "Hecho: disparar, conjurar, desvanecerse, pasos
+  y girar" (§7). `DESPAWN` sigue saliendo en el momento.
 
 Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
@@ -524,8 +548,9 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
   dibujado, sin esperar la confirmación del anterior ni medir el RTT. Cada paso empieza en
   el `fin` del anterior.
 - **MOV-2, en parte.** Un toque durante un paso camina apenas termina
-  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. No se hizo
-  el toque corto que solo gira.
+  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. El toque
+  corto que solo gira se hizo después ("Hecho: disparar, conjurar, desvanecerse, pasos y
+  girar", §7).
 - **MOV-5, cambio.** No es `scheduleStep`: es un colchón de jitter (`Playout`) sobre la
   línea de ticks del servidor. Cada paso se encadena tras el que se dibuja y, si va
   atrasado, se dibuja hasta 25 % más rápido. Vale para las demás criaturas y para el
@@ -605,8 +630,8 @@ vale esto.**
     de CSS: no es texto de la página para los lectores de pantalla ni para los tests. Se
     oculta mientras hay un menú abierto (lo tapaba).
   - El primer paso sale en el acto (MOV-4).
-  - **No se hizo: polvo y ondas al pisar.** Son arte (partículas por terreno): quedan con
-    las partículas de ART-7 y A13.
+  - **Polvo y ondas al pisar:** no se hicieron acá; después, con las partículas de A13
+    ("Hecho: disparar, conjurar, desvanecerse, pasos y girar", §7).
 - **MOV-9, hecho.** E2E en `client/e2e/movement.spec.ts` con ~150 ms de RTT y jitter. Es
   un proxy en Playwright (`page.routeWebSocket`): 75 ms más 0–40 ms por sentido, en orden.
   El cliente no tiene un parámetro de latencia.
@@ -661,7 +686,8 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
     confirmaciones.
   - `WalkRejected` descarta todo lo previsto y vuelve a la posición del servidor,
     deslizándose.
-- **MOV-2 Buffer de entrada (A6, en parte: el toque durante un paso).**
+- **MOV-2 Buffer de entrada (✅ A6 y `feat/lpc-actions`: el toque durante un paso, y el
+  toque corto que solo gira con el teclado y con el pad).**
   - Una tecla apretada en el último 40 % del paso (o en sus últimos 150 ms) se guarda y se
     ejecuta en el borde de la casilla.
   - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
@@ -695,7 +721,7 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
     igual). Sin "mirar adelante", para que la vista sea igual para todos.
   - Probar a redondear cámara y criaturas a **píxel de pantalla** en vez de píxel de
     sprite, y comparar en 60 y 144 Hz. Si se ve mejor, queda.
-- **MOV-7 Respuesta visual (✅ A6 en parte: falta polvo y ondas, que van con ART-7).**
+- **MOV-7 Respuesta visual (✅ A6, y el polvo y las ondas en `feat/lpc-actions`).**
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
@@ -810,7 +836,8 @@ recortar y pasar a woff2 con su nombre.
 - **Escala:** títulos de 15–16 px en Cinzel 600 con `letter-spacing: .04em`; interfaz de 14
   px con interlineado 1.35; diálogos de 16 px con 1.45. Números con
   `font-variant-numeric: tabular-nums` (vida, oro, pesos).
-- **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`.
+- **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`. **Hecho**, con una escala
+  de la interfaz aparte ("Hecho: lo que quedaba de A3, A4 y A5").
 
 ### UI-4 Layout de escritorio y "ver más pantalla"
 **Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
@@ -966,8 +993,9 @@ Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones 
   reglas de T5.1).
 
 ### UI-8 Diálogo de NPC y tienda sin scroll
-**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (sin texto
-letra por letra todavía; retrato a 2x; categorías deducidas por NPC).
+**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (retrato a
+2x; categorías deducidas por NPC). El texto letra por letra y el retrato que respira, en
+"Hecho: lo que quedaba de A3, A4 y A5".
 **Diálogo:**
 - **Lugar y tamaño:** abajo al centro, sobre el HUD, de `min(760px, 70vw)` de ancho y
   hasta el 65 % del alto. Retrato del NPC a la izquierda (su sprite a 3x, animado si tiene
@@ -1133,7 +1161,7 @@ Por impacto en pantalla y por costo:
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini") |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -1175,15 +1203,17 @@ juego). Las reglas:
   (fondo fuera, grilla en frames, escala por vecino más cercano a 32 o 64, paleta de
   spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 donde ART-5 lo
   pide, es decir no en suelos ni efectos, y alfa 0 o 255); la música, por
-  `tools/gemini/music_convert.py` (sin fades, bucle cerrado con crossfade, -14 LUFS, Ogg
-  Opus). Nada se commitea sin mirarlo o escucharlo.
+  `tools/gemini/music_convert.py` (desde el 2026-11-18 el tema entero, sin cortes, a
+  -14 LUFS, Ogg Opus estéreo, con sus puntos de entrada medidos para el director de música).
+  Nada se commitea sin mirarlo o escucharlo.
 - **Un solo volumen para toda la música: -14 LUFS** (integrado, pico real ≤ -1,5 dBTP). Es
   el nivel de los temas que ya tiene el juego (soundgen: de -11,3 a -15,8, unos -14 en
   promedio), así un tema de Gemini no suena más bajo que los otros. Un tema nuevo, venga de
   donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`. Los
-  masters de Gemini traen picos de +1,5 a +5 dBTP, así que el techo de pico los deja entre
-  -16 y -19,5 LUFS (2026-11-18); `make music-gemini` compensa con el volumen de
-  `sounds.yaml`, hasta 1.
+  masters de Gemini traen picos de +1,5 a +5 dBTP; los loops mono del lote 7 quedaban
+  entre -16 y -19,5 LUFS por el techo de pico, los temas enteros en estéreo del 2026-11-18
+  llegan a -14 casi todos (el peor, -15). Donde no llega, `make music-gemini` compensa con
+  el volumen de `sounds.yaml`, hasta 1.
 - **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
   a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
   (criaturas con anatomía, retratos, música con instrumentos).
@@ -1199,17 +1229,71 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 |---|---|---|---|
 | A1 ✅ | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1") y los créditos dentro de la app de escritorio ("Hecho: el resto de A1, A10, A11 y A13") | cliente, sitio | — |
 | A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
-| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
+| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante. Lo que quedó (cada contenedor y las ventanas del servidor como `GameWindow`, mover y cambiar el tamaño con el teclado y el mouse, escala y tamaño de texto, slots vacíos, sacudida y destello) en "Hecho: lo que quedaba de A3, A4 y A5" | cliente | A2 |
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
-| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
+| A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1 a MOV-7 y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"; el toque corto que solo gira y el polvo y las ondas al pisar, "Hecho: disparar, conjurar, desvanecerse, pasos y girar") | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
-| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas) | servidor, proto, cliente | A8 |
+| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18; E2E del lote 7, capturas `07b-attack-pose` y `11b-death` revisadas). Después: disparo y conjuro de LPC, desvanecerse y la muerte con reaparición a la vista ("Hecho: disparar, conjurar, desvanecerse, pasos y girar") | servidor, proto, cliente | A8 |
 | A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
-| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; faltan los efectos al pisar y la niebla (ART-7) | cliente | A10 |
+| A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; los efectos al pisar después ("Hecho: disparar, conjurar, desvanecerse, pasos y girar"); falta la niebla (ART-7) | cliente | A10 |
+
+### Hecho: disparar, conjurar, desvanecerse, pasos y girar (2026-11-18, rama `feat/lpc-actions`)
+Lo que quedaba de ANI (A9) y de MOV (A6). Solo cliente y herramientas: el servidor y el
+protocolo no cambian.
+- **Disparar y conjurar (ANI-2, ANI-7).** Las 23 capas de LPC suman sus hojas `shoot` y
+  `spellcast` (46 archivos del mismo commit fijado del Universal LPC, con sus filas de
+  `CREDITS.csv` copiadas tal cual: todas listan OGA-BY 3.0 o CC-BY-SA 3.0; se bajaron del
+  repo oficial y se compararon byte a byte). El preset `lpc` de spritepack suma `shoot`
+  (las 13 columnas de la hoja, una sí y una no con la clave nueva `step: 2`: 7 x 50 ms,
+  350 ms) y `cast` (7 x 60 ms, 420 ms). Los atuendos tienen todas las acciones; los
+  monstruos humanoides solo las de sus ataques en `data/monsters`: `wreck_looter`,
+  `coffer_smuggler` y `obsidian_delver` (tiran botellas, cuchillos o esquirlas de
+  obsidiana: `distance`) disparan, `drowned_miner` (un hechizo de muerte) conjura. El
+  cliente elige el clip por `CreatureAttack.kind` (`render/creature-events.ts`
+  `attackAction`; `packages/renderer/src/anim.ts` `attackClip`): sin ese clip juega
+  `attack`, y sin ninguno la embestida. Con un servidor viejo (sin `attack_events`) todo sigue siendo `attack`: no
+  hay cómo distinguir un arco de un hechizo por el `Projectile`. Hojas sin arco: el
+  `shoot` de LPC es el gesto de tensar y soltar, sin el arma (no hay capas de armas). Se ve
+  como un tiro o un lanzamiento, que es lo que hacen esos monstruos.
+- **Desvanecerse (ANI-7).** `TELEPORT` y `LOGOUT` dejan el cuerpo donde estaba 350 ms
+  (`VANISH_MS`): se angosta (pierde el 70 % del ancho), se estira un 20 % hacia arriba, toma un tinte celeste
+  (`SHIMMER_TINT`, multiplicado), parpadea cada 50 ms y se desvanece. Nunca la caída. Vale
+  para la invisibilidad y las escaleras, que el servidor manda como `TELEPORT`.
+- **Una muerte con reaparición a la vista.** El servidor manda `CreatureDisappear{DEATH}` y
+  `CreatureAppear` del mismo id en el mismo batch. El canvas ya no pregunta "¿por qué se
+  fue?" a las criaturas que dejó de ver: juega cada salida que llegó desde el frame
+  anterior una vez (`DepartureFeed`), sobre el cuerpo dibujado entonces, aunque la
+  criatura ya esté de vuelta. `WorldState` ya no borra la salida cuando vuelve: la marca
+  (`back`), y `departureOf` la ignora. El cuerpo cae donde murió y el jugador aparece con
+  su fundido de 300 ms en el templo.
+- **Cuerpos tapados.** Un cuerpo que cae o se desvanece detrás de una criatura más alta (el
+  lobo muerto justo al norte del mago) también tiene la copia translúcida de ART-2
+  (`DrawnBoxes.covered`).
+- **Polvo y ondas al pisar (MOV-7, ART-7).** Dato: la clave `steps` de un suelo en la
+  sección `tiles` de `assets/sprites.yaml` (`dust` o `ripple`), que spritepack lleva a
+  `atlas.json`. Hoy: polvo en arena, tierra, ceniza y senda de escoria; ondas en la arena
+  mojada (el agua baja no se camina). Cuando una criatura empieza un paso, la casilla que
+  deja patea lo suyo a la altura de los pies (`ParticleLayer.kick`): 6 motas de polvo que
+  suben un poco y se asientan (220–340 ms) o un anillo de 8 gotas que se abre achatado
+  (380–460 ms). Usa el pool de A13: las partículas de ambiente dejan 16 de las 100 libres
+  para los pasos (`STEP_RESERVE`). Los voladores no patean nada; con movimiento reducido,
+  nada.
+- **El toque corto que solo gira (MOV-2).** Quieto, una tecla o el pad hacia un lado al que
+  no se mira gira al personaje en el acto (`Turn`) y camina solo si sigue apretado 80 ms
+  (`TURN_TAP_MS`, `input/keyboard.ts` `TurnTap`). Mirando ya hacia ese lado, o caminando,
+  camina enseguida, como antes. Un segundo toque que llega antes de esos 80 ms (soltar y
+  volver a apretar entre dos cuadros) es un paso, no la misma tecla mantenida: antes se
+  perdía (lo encontró el E2E del lote 8, que da los dos toques en ~10 ms). Ctrl+flecha siempre solo gira (con WASD no: Ctrl+W cierra
+  la pestaña). Un botón del pad activado con el teclado sigue siendo un paso. El E2E da un
+  paso como lo daría un jugador: un toque para girar si hace falta y otro para caminar
+  (`client/e2e/keys.ts`), y comprueba que el toque que gira no mueve.
+- **`11b-death` reencuadrada.** La captura espera los últimos 300 ms de la caída (el efecto
+  del golpe que mató termina) y recorta 9x7 casillas alrededor del cuerpo, que
+  `__rpgClient.poses()` ahora ubica.
 
 ### Hecho: A1, versión mínima (2026-11-18, lote 6)
 La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte
@@ -1320,10 +1404,12 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
     deshabilitado con la pista "usa un tablero" y, abierto, lo cierra;
   - "Salir del juego" es un botón más de la botonera, no de Opciones;
   - el modo de combate (postura, perseguir, modo seguro) va arriba de la ventana Batalla;
-  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias;
+  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias
+    (después: ventanas propias, "Hecho: lo que quedaba de A3, A4 y A5");
   - las ventanas del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio)
-    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda);
-  - mover ventanas con el teclado y cambiarles el tamaño no se hizo.
+    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda; después
+    son `GameWindow` acoplables);
+  - mover ventanas con el teclado y cambiarles el tamaño no se hizo (después sí).
 - **Gremio (UI-7):** ventana propia con pestañas Resumen, Miembros y Guerras. La
   administración quedó en Resumen (mensaje del día y disolver) y la invitación en Miembros.
   Una invitación al jugador sale sobre el mapa con Aceptar y Rechazar, como antes, y el
@@ -1333,7 +1419,8 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
   latido y viñeta roja con poca vida, barras con `transform`, avisos que entran y se van,
   subida de nivel con destello en la barra de experiencia y aviso en Grenze Gotisch, y la
   pantalla de muerte. Se apagan con `prefers-reduced-motion` o con "Animaciones reducidas"
-  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron.
+  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron
+  (después sí: "Hecho: lo que quedaba de A3, A4 y A5").
 - **Teléfonos:** encabezado compacto, pestañas y cajón como en T5.6, con el tema.
 - **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
   varios tamaños sin levantar nada.
@@ -1378,16 +1465,16 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
   (cura, maná, comida, elemento, munición), la descripción en itálica y las marcas "No se
   puede intercambiar" / "No se vende en el mercado". Los datos los suma el plugin de Vite
   al `ItemDef` (`cardFields`). **No se hizo:** el color de item de misión
-  (`--ui-item-quest`): `data/items` no marca los items de misión.
+  (`--ui-item-quest`): `data/items` no marca los items de misión (después: `quest: true`).
 - **Tooltip** (`ui/ItemTooltip.tsx`): la misma ficha a los 350 ms de mouse quieto sobre un
   item del DOM (equipo, contenedores, tienda, intercambio, recetas) o con el foco del
   teclado (los items del inventario toman el foco: Enter = acción por defecto, la tecla de
   menú o Mayús+F10 = menú). No toma clicks y se va con cualquier click, la rueda o Escape.
-  Sobre el canvas no hay tooltip: ahí está el menú.
+  Sobre el canvas no hay tooltip: ahí está el menú (después sí, para lo que se lleva).
 - **Diálogo (UI-8):** abajo al centro, `min(47.5rem, 100%)` de ancho; retrato del NPC a 2x
   (no 3x: los sprites de NPC son de 32 px y a 3x tapaban texto); el texto entra con un
   fundido corto (**no** letra por letra: queda pendiente, y rompería las esperas de los
-  E2E); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
+  E2E; después sí, sin romperlas: el texto entero sigue en la página); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
   borde de color por tema, hasta 2 líneas y el texto completo en el `title`. Orden:
   Misiones, Comercio, Viajes, Servicios, Conversación; dentro de cada tema, el orden del
   servidor. Fila de abajo: Volver (0) y Adiós (Escape; si el nodo no tiene "Adiós",
@@ -1424,7 +1511,77 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
 - **Pendiente de esta parte:** texto letra por letra del diálogo; retrato animado;
   color de items de misión; arrastrar con Mayús para dividir una pila (hoy es "Mover
   parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
-  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
+  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia. Todo hecho menos
+  el intercambio con cantidad: "Hecho: lo que quedaba de A3, A4 y A5".
+
+
+### Hecho: lo que quedaba de A3, A4 y A5 (2026-11-18, rama `feat/ui-windows-2`)
+Solo cliente (más `quest` en `data/items` y los íconos de spritegen): el servidor y el
+protocolo no cambian. El detalle técnico está en `client/CLAUDE.md`, "Notas de lo que
+quedaba de A3, A4 y A5".
+- **Cada contenedor es su ventana (UI-5).** Abrir una mochila (o los restos de un
+  monstruo) abre una ventana propia con su título, plegable, que se cierra con su × (o
+  Escape si es la flotante de arriba) y se acopla bajo el equipo, como en Tibia, o flota
+  donde el jugador la deje. La grilla toma las columnas que entran (de 4 a 6 en el dock).
+  El lugar se recuerda **por item** en el dispositivo (`container-backpack`; un segundo del
+  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. En
+  tablets y teléfonos siguen debajo del equipo, como antes.
+- **Las ventanas del servidor son `GameWindow`.** Diálogo, tienda, crafteo, mercado, casa e
+  intercambio tienen la barra de las demás (ícono, título, mover, plegar, cerrar), se
+  acoplan, flotan, se apilan y recuerdan su lugar. El servidor las sigue abriendo y
+  cerrando: su × hace lo que hacía el de antes (Adiós, cerrar la estación, cerrar el
+  mercado o la casa, cancelar el intercambio). La tienda no tiene ×: se cierra con su
+  diálogo. La primera vez salen donde estaban: el diálogo abajo al centro, con la tienda a
+  su izquierda; crafteo, mercado y casa arriba a la izquierda; el intercambio arriba a la
+  derecha. Los `data-testid` (`dialog`, `shop`, `crafting`, `market`, `house`, `trade`,
+  `house-name`) y los nombres de los botones de cerrar se mantienen.
+- **Mover y cambiar el tamaño, con el mouse y con el teclado (UI-1, UI-5).** La esquina de
+  abajo a la derecha cambia el tamaño (una ventana acoplada, el borde de abajo, solo el
+  alto), con un mínimo de 160x72 y nunca más grande que el área. El botón ✥ de la barra
+  arrastra como la barra y, con el foco (Tab), toma el teclado: las flechas mueven la
+  ventana 16 px, Mayús+flechas cambian su tamaño, en una acoplada arriba y abajo la cambian
+  de lugar en la columna, y Enter o Espacio la acoplan o la sueltan junto a la columna. Alt
+  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta.
+- **Escala de la interfaz y tamaño del texto (UI-3).** Opciones → Interfaz (y el menú ☰ del
+  teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock y las ventanas crecen; el
+  mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x; la hotbar no se escala:
+  mide sus slots para paginarlos) y "Tamaño del texto" de 90 % a 130 % (en `rem`, como
+  pedía UI-3). Cambio sobre el plan: son **dos**
+  opciones, porque el texto más grande no debería quitarle un paso de zoom al mapa (el
+  ancho del dock quedó en px) y la escala sí agranda los íconos y los slots. Se recuerdan
+  por dispositivo.
+- **Íconos de slot vacío (UI-5).** Diez siluetas propias de 20x20 (yelmo, amuleto, mochila,
+  túnica, espada, escudo, pantalón, bota, anillo y flechas), color hueso y grabadas en la
+  piedra, hechas con spritegen (`ui/slots/<slot>`, `kind: ui`); el equipo las muestra al
+  30 % en el slot que no tiene nada.
+- **Sacudida de cámara y destello de la hotbar (UI-9).** Un golpe que quita de una vez el
+  10 % de la vida máxima o más sacude la cámara 2 px durante 120 ms (un patrón fijo que se
+  apaga). Es opción aparte ("Sacudir la cámara con los golpes fuertes", encendida) y nunca
+  pasa con movimiento reducido. Usar un hechizo de la hotbar (tecla o click) hace destellar
+  su slot 150 ms; con movimiento reducido, no.
+- **Texto del NPC letra por letra y retrato (UI-8).** El texto aparece a 90 caracteres por
+  segundo; un click en él o Espacio lo completa y con movimiento reducido sale entero. La
+  caja tiene su tamaño final desde el principio (lo que falta espera invisible) y el texto
+  entero está en la página para los lectores de pantalla y para las esperas de los E2E. El
+  retrato "respira": sube un píxel en un bucle lento de 3,2 s. No se hizo "▼ más" (paginar
+  un texto que no entra): con los textos de hoy no hace falta.
+- **Items de misión con su color (UI-6).** Un item marcado `quest: true` en `data/items`
+  (esquema y docs/06; hoy `bosun_logbook`, `smuggler_tally`, `sealed_coffer`,
+  `delver_chart`, `forge_seal` y `tarnished_locket`) se nombra en `--ui-item-quest` en la ficha, el tooltip y el menú,
+  suma la marca "Objeto de misión" (el color no es la única señal) y tiene un anillo dorado
+  en su celda. Como pide UI-6, los demás nombres pasaron de oro a `--ui-text`.
+- **Tooltip sobre el canvas.** Con el mouse quieto 350 ms sobre una casilla sale la ficha
+  del item que está ahí, debajo del texto de la acción junto al cursor. Solo para lo que se
+  lleva y se puede levantar: ni suelos, ni muros, ni decoración, ni estaciones (de esos
+  dice lo que importa el texto del cursor).
+- **Mayús+arrastrar para dividir una pila.** Arrastrar con Mayús una pila (de un
+  contenedor, un slot o el mapa) pregunta, donde se suelta, cuántas unidades mover (la
+  mitad para empezar, de 1 a la pila menos una, como "Mover parte…"); Enter mueve, Escape
+  cancela. Mayús+click sigue mirando: en el mapa, ahora mira al soltar.
+- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); Pixelify Sans en
+  el canvas; el marco de hierro como PNG 9-slice; enfocar una ventana del servidor al
+  abrirse. (Si el jugador camina con el mouse quieto, la ficha de la casilla anterior se va
+  y la espera empieza de nuevo en la que queda bajo el cursor.)
 
 
 ### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
@@ -1448,8 +1605,35 @@ corta y se revisa: `assets/README.md`, "Criaturas animadas de una sola hoja".
   que quedan sigue (docs/14).
 - **Quedaron fuera:** la gaviota (`thieving_gull`) ya es arte propio de spritegen; su hoja
   de Gemini salió bien pero cambiarla es decisión del dueño. Los del Volcán y
-  `hollow_crawler`, `ore_beetle` siguen con ANI-5.
+  `hollow_crawler`, `ore_beetle` siguieron con ANI-5 hasta la segunda tanda (abajo).
 - **/credits** lista lo hecho con Gemini ("Hecho con IA", desde `CREDITS.md`).
+
+**Segunda tanda (2026-11-18, rama `feat/gemini-creatures-2`):** `hollow_crawler` y
+`ore_beetle` (Bosque y Puerto) y los cinco del Volcán: `ash_hound`, `cinder_salamander`,
+`slag_golem`, `ember_wyrmling` y el jefe `slagbound_warden`. Ya ningún monstruo usa un
+solo frame de Dungeon Crawl. Trece pedidos: uno por criatura, uno más para el sabueso
+(caminaba de costado hacia la cámara), el gólem (casi negro y chico en la hoja) y el
+custodio (vino con líneas de grilla y el martillo cambiando de mano), y tres hojas nuevas
+para los ataques que faltaban (abajo).
+- **Tamaños** (ART-2, "Animales medianos"): escarabajo en 32x32; reptante, sabueso,
+  salamandra, gólem y dragoncillo en 64x64; el custodio en **96x96**, ~77 px de alto, una
+  vez y media una persona, con su martillo.
+- **Los brillos:** las grietas de lava, la garganta y el fuego del dragoncillo, y el
+  horno del custodio se perdían al reducir los colores de todos los frames juntos a 16 (son
+  pocos píxeles). Los del Volcán se cortaron con `--colors 0`: cada color va directo a la
+  paleta de spritegen (que tiene el naranja de `ember`) y el brillo queda.
+- **Lo que no vino:** atacar al norte en todos menos el gólem y el custodio, al sur en la
+  salamandra, el escarabajo y el dragoncillo, y a los lados en el custodio (no dibujó un
+  martillazo de perfil) y el escarabajo (que no ataca con frames en ninguna dirección: sus
+  mandíbulas no se ven a 32 px y queda la embestida); quieto al
+  norte en el sabueso (su "quieto de espaldas" medía 9 px menos que su caminar y se encogía
+  al parar: se queda con el primer frame de caminar). Esas direcciones usan la embestida
+  de ANI-5, como en la primera tanda.
+- **Las hojas nuevas del cangrejo, el sapo y el espinoso** (con un frame del juego como
+  referencia, para tapar sus ataques que faltan): ninguna trajo el ataque que faltaba (el
+  cangrejo de frente sigue sin pinza, el sapo y el espinoso no atacan de espaldas) y el
+  sapo y el espinoso salieron con otro aspecto (más verde, más liso). No se usaron. El
+  murciélago no se pidió: en tres intentos Gemini no dibujó un ataque de espaldas.
 
 ### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
 Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en

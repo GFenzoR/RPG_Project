@@ -9,11 +9,13 @@ import type { Rng } from "./draw.ts";
  *   (the renderer anchors it at the bottom-right corner of its tile, extending up-left).
  * - item: 32x32 inventory/ground icon, centred, transparent background.
  * - creature: monster, NPC or outfit frame, 32x32 (or larger), standing on its tile. It
- *   gets the cast shadow of the Dungeon Crawl monsters (castShadow, see `shadow`).
+ *   gets the cast shadow of the Dungeon Crawl monsters (castShadow, see `shadow`), unless
+ *   it stands on the renderer's contact ellipse like the animated monsters (`shadow: false`).
  * - effect: one frame of a tile effect (effects/<name>/<frame>), transparent, drawn over
  *   the creatures of its tile; the client plays the frames in order (recipes/effects.ts).
  * - ui: a client interface icon (ui/<group>/<id>, such as the PvP marks): 32x32 with the
- *   drawing inside UI_ICON_BOX, which is all the client shows of it.
+ *   drawing inside its group's box (uiIconBox: UI_ICON_BOX for the marks, UI_SLOT_BOX for
+ *   the empty equipment slots), which is all the client shows of it.
  */
 export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature" | "effect" | "ui";
 
@@ -32,8 +34,12 @@ export interface Recipe {
   width?: number;
   /** Pixels, a multiple of 32 (default 32). */
   height?: number;
-  /** Creatures only: the cast shadow's options (default ones when absent). */
-  shadow?: ShadowOptions;
+  /**
+   * Creatures only: the cast shadow's options (default ones when absent), or false for none:
+   * a sprite whose assets/sprites.yaml entry says `shadow: ellipse` gets the renderer's
+   * contact shadow instead, and a painted one would make two.
+   */
+  shadow?: ShadowOptions | false;
   /**
    * Draws into img (already sized, transparent). rand and seed come from the sprite path,
    * so a recipe is reproducible and independent of the others.
@@ -48,3 +54,15 @@ export type RecipeBook = Record<string, Recipe>;
  * the same numbers (client/src/render/marks.ts MARK_BOX); a test checks both.
  */
 export const UI_ICON_BOX = { x: 10, y: 10, w: 12, h: 12 } as const;
+
+/**
+ * The part of a 32x32 `ui/slots/<slot>` sprite with the drawing: the empty equipment slot
+ * icons (docs/17 UI-5), which the client shows whole, like an item icon, under a slot that
+ * holds nothing (client/src/ui/Inventory.tsx).
+ */
+export const UI_SLOT_BOX = { x: 6, y: 6, w: 20, h: 20 } as const;
+
+/** The box a `ui` sprite draws in: UI_SLOT_BOX for ui/slots/*, UI_ICON_BOX for the rest. */
+export function uiIconBox(path: string): { x: number; y: number; w: number; h: number } {
+  return path.startsWith("ui/slots/") ? UI_SLOT_BOX : UI_ICON_BOX;
+}

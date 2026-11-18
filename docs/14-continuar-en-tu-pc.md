@@ -103,16 +103,18 @@ el punto 5:
   botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
-  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones; y A8 con la
+  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones (y lo que
+  quedaba de A3, A4 y A5, rama `feat/ui-windows-2`, abajo); y A8 con la
   parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
   `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
   en el orden de su §7:
   - **A6, movimiento fluido (hecho):** ramas `feat/movement-feel` y `feat/movement-more`
     (ver abajo y docs/17 §4 "Hecho: A6, primera parte" y "segunda parte"). No fue solo del
     cliente como decía el plan: el servidor encola los pasos de teclado (protocolo en
-    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. Quedan
-    el polvo y las ondas al pisar (MOV-7, con las partículas de ART-7) y el toque corto
-    que solo gira (MOV-2).
+    docs/05 "Caminar"); el click y el mouse mantenido caminan por esa misma cola. El
+    polvo y las ondas al pisar (MOV-7) y el toque corto que solo gira (MOV-2) se hicieron
+    después (rama `feat/lpc-actions`, docs/17 "Hecho: disparar, conjurar, desvanecerse,
+    pasos y girar"; ver "Movimiento fluido" abajo).
   - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
@@ -124,36 +126,60 @@ el punto 5:
       (`CreatureDisappear.reason`), y el cliente anima con eso en vez de deducirlo (docs/05
       "Quién ataca y por qué sale una criatura", docs/17 ANI-7). La deducción queda para un
       servidor viejo. Las capturas `07b-attack-pose` y `11b-death` ya se sacaron y
-      revisaron (en `11b-death` el lobo que cae queda casi todo detrás del mago y del
-      efecto del hechizo: se ve, pero poco). Pendiente de A9: `make bots`
-      contra un servidor real con los eventos (docs/07 "Eventos de ataque"); un jugador que
-      muere a la vista y reaparece en un templo también a la vista no deja su cuerpo
-      cayendo; un desvanecerse para `TELEPORT` y `LOGOUT`; `DESPAWN` no lo usa ningún camino
-      todavía (solo el hook de test `DespawnForTest`).
-    - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
-      un hechizo o un arco juega el ataque (`slash`).
-    - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
-      `feat/gemini-creatures`, docs/17 "Hecho: criaturas de Gemini"): lobo, rata de
-      sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-      espinoso. Siguen con un frame y ANI-5 `hollow_crawler`, `ore_beetle`, los cinco del
-      Volcán (`ash_hound`, `cinder_salamander`, `slag_golem`, `ember_wyrmling`,
-      `slagbound_warden`) y la gaviota (arte propio de spritegen: hay una hoja de Gemini
-      buena en `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin
-      commitear ni usar; cambiarla es decisión del dueño). Mismo camino: `assets/README.md`, "Criaturas animadas de una sola
-      hoja".
-    - **Lo que las hojas de Gemini no trajeron:** ataques de frente o de espaldas en
-      cuatro de las siete (cangrejo al sur; murciélago y espinoso al norte; sapo al norte y
-      al sur, y sin quieto al norte): esas direcciones usan la embestida procedural con el
-      frame parado. El espinoso a 64x64 queda con algo de ruido de corteza (la ilustración
-      tiene mucha textura y el muestreo es por vecino más cercano). Un pedido nuevo de esas
-      filas sueltas no saldría con el mismo dibujo: si se quiere, una hoja entera nueva.
-    - **Revisar en el E2E** (no se corrió en la rama): las siete criaturas en el juego, su
-      tamaño al lado de los personajes y los monstruos de Dungeon Crawl que quedan, y el
-      murciélago (oscuro) sobre los suelos de la mina.
-    - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
-      Dungeon Crawl, una (ART-2 lo acepta). Las criaturas de Gemini siguen la escala de LPC
-      (lobo, araña, sapo y espinoso de 64x64), así que ahora un lobo es más grande que el
-      jabalí de spritegen.
+      revisaron. Después (rama `feat/lpc-actions`, docs/17 "Hecho: disparar, conjurar,
+      desvanecerse, pasos y girar"): `11b-death` es un primer plano de 9x7 casillas al
+      final de la caída (antes el lobo quedaba casi todo detrás del mago y del efecto del
+      hechizo), y un cuerpo que cae detrás de una criatura más alta tiene su copia
+      translúcida; un jugador que muere a la vista y despierta en un templo a la vista deja
+      su cuerpo cayendo donde murió; `TELEPORT` y `LOGOUT` se desvanecen (350 ms). Queda
+      de A9: `make bots` contra un servidor real con los eventos (docs/07 "Eventos de
+      ataque"); `DESPAWN` no lo usa ningún camino todavía (solo el hook de test
+      `DespawnForTest`) y sale en el acto, sin desvanecerse.
+    - **Conjurar y disparar (hecho, rama `feat/lpc-actions`):** los humanoides de LPC juegan
+      `shoot` (el arco) para un `CreatureAttack{RANGED}` y `cast` (`spellcast`) para un
+      `SPELL`. Queda: las hojas no traen el arma (el arco, la varita): es el gesto solo,
+      porque no hay capas de armas de LPC en el repo (sumarlas es una tarea de arte, con
+      sus filas de `CREDITS.csv` como estas). Con un servidor sin `attack_events` todo
+      sigue jugando `attack`. Mirar en el E2E y en el playtest si el gesto de tensar sin
+      arco se lee como un tiro (los monstruos tiran botellas, cuchillos y esquirlas).
+    - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
+      Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
+      cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
+      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo de mena, sabueso de
+      ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el custodio de
+      escoria, jefe del Volcán en 96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
+      con un frame de spritegen: hay una hoja de Gemini buena en
+      `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin commitear ni usar;
+      cambiarla es decisión del dueño. Cómo se hace una: `assets/README.md`, "Criaturas
+      animadas de una sola hoja".
+    - **Lo que las hojas de Gemini no trajeron** (esas direcciones usan la embestida
+      procedural con el frame parado): primera tanda, cangrejo al sur; murciélago y
+      espinoso al norte; sapo al norte y al sur, y sin quieto al norte. Segunda tanda:
+      atacar al norte en el reptante, el sabueso, la salamandra y el dragoncillo; al sur en
+      la salamandra y el dragoncillo; a los lados en el custodio; el escarabajo no tiene
+      ataque con frames (a 32 px las mandíbulas no se ven); el sabueso, sin quieto al norte.
+      Hojas enteras nuevas del cangrejo, el sapo y el espinoso con su frame del juego como
+      referencia tampoco trajeron esos ataques y cambiaron el aspecto: no se usaron ni se
+      volverán a pedir así. El espinoso a 64x64 queda con algo de ruido de corteza.
+    - **Revisado en la verificación del lote 8** (2026-11-18): el E2E no llega a ningún
+      spawn de la segunda tanda, así que se sacaron capturas a mano (un gm de nivel 30 con
+      `/tp` al centro de cada spawn, `client/e2e/screenshots/actual/manual-*.png` del
+      worktree `.wt/vf`, no commiteadas). Todas pisan su casilla con la sombra de contacto
+      y a escala con la persona de LPC; el custodio (96x96) en la forja, con nombre y barra
+      sobre la cabeza y sin recortes; el jabalí y el ciervo de 64x64, el ciervo adulto; el
+      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso de ceniza mirando
+      al norte (su primer frame de caminar) es una silueta angosta y vertical y contrasta
+      poco sobre la ceniza; el escarabajo de mena fuera de la luz del jugador casi no se ve
+      (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
+      martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
+    - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
+      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo de spritegen
+      pasaron a 64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con
+      los pies en la casilla y la sombra de contacto como el resto. La gaviota queda de
+      32x32 con su sombra pintada hasta que el dueño elija su arte.
+    - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
+      (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
+      dibujo (`top` y el ancho del frame están en `atlas.json`) sería un cambio del cliente.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
       Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
@@ -164,20 +190,34 @@ el punto 5:
       Opciones que abre la misma página en una ventana sobre el juego (rama
       `feat/world-art-2`). Falta probar ese botón en la app real (`make desktop-dev`): el E2E
       corre en el navegador, donde Opciones sigue mostrando el enlace.
-  - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
-    animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
-    canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
+  - **Lo que A3, A4 y A5 dejaron (hecho, rama `feat/ui-windows-2`, docs/17 §7 "Hecho: lo que
+    quedaba de A3, A4 y A5"):** cada contenedor es su ventana; diálogo, tienda, crafteo,
+    mercado, casa e intercambio son `GameWindow` acoplables; las ventanas se mueven y
+    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥); escala de la
+    interfaz y tamaño del texto (Opciones → Interfaz); íconos de slot vacío (spritegen
+    `ui/slots/*`); sacudida de cámara con los golpes fuertes y destello de la hotbar (los
+    dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
+    letra por letra (click o Espacio lo completa) y retrato que respira; items de misión con
+    su color (`quest: true` en `data/items`); ficha sobre el canvas para lo que está en el
+    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
+    canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
+    cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+  - **Revisar en el E2E final de `feat/ui-windows-2`** (no se corrió en la rama; se miró
+    con `make ui-preview`, escenas `game`, `server`, `groundtip`, `scale`, `dialog` y
+    `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su ventana acoplada
+    (`window-container-backpack`, ya no dentro de Inventario: `09-inventory` la deja
+    afuera); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
+    lado a lado;
+    `16-crafting-window`, `52-trade-window`, `53-market-offer-posted`, `56-house-free` y
+    `57-house-rented` con la barra nueva (sus test ids y los nombres de los botones de
+    cerrar no cambiaron); que el texto del NPC aparezca letra por letra sin romper ninguna
+    espera; los slots vacíos con su silueta y que Mayús+click siga mirando en el mapa y en
+    el inventario (ahora mira al soltar). A 1280x800 la mochila acoplada queda bajo la
+    batalla y el inventario: la columna se desplaza.
   - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
     (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
     `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
     no se desplaza: el E2E de la Isla de Pruebas busca la mochila y pagina.
-  - **Lo que A3 dejó para después** (docs/17 §7, "Hecho: A2 y A3"): cada contenedor como
-    ventana propia (hoy van dentro de Inventario); las ventanas del servidor (diálogo,
-    tienda, crafteo, mercado, casa, intercambio) como `GameWindow` acoplables (hoy solo
-    tienen el marco nuevo); mover ventanas con el teclado y cambiarles el tamaño; tamaño de
-    fuente y escala de la UI (UI-3); Pixelify Sans en el canvas; íconos de slot vacío en el
-    equipo; sacudida de cámara y destello de la hotbar (UI-9). El marco de hierro es CSS:
-    el PNG 9-slice de spritegen (`ui/frame/iron`) queda como mejora.
   - **Revisar en el E2E final de la UI:** las ventanas flotantes (gremio, apariencia,
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
@@ -209,8 +249,9 @@ el punto 5:
       islas es `mapcli autoborder`: cambia mapas.
     - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
       polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
-      (`client/src/render/particles.ts`). Faltan el polvo y las ondas al pisar, el pasto
-      que se agita, la niebla y las gaviotas sobre el mar (ART-7).
+      (`client/src/render/particles.ts`); el polvo y las ondas al pisar, después
+      (`steps`, rama `feat/lpc-actions`). Faltan el pasto que se agita, la niebla y las
+      gaviotas sobre el mar (ART-7).
     - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
       lava enfriada ya entran en la banda de valor de ART-6.
@@ -295,8 +336,17 @@ el punto 5:
     mantenerlo quieto camina hacia el cursor (docs/17 MOV-3). Si en el playtest se arrastra
     un item sin querer al empezar a caminar, la opción es exigir Ctrl para arrastrar desde
     el mapa, o que el mantener empiece solo fuera de las casillas con items.
-  - **Polvo y ondas al pisar (MOV-7):** son arte por terreno; van con las partículas de
-    ART-7 y A13.
+  - **Polvo y ondas al pisar (MOV-7, hecho en `feat/lpc-actions`):** datos por suelo
+    (`steps` en `tiles` de `assets/sprites.yaml`): polvo en arena, tierra, ceniza y senda
+    de escoria; ondas en la arena mojada (no hay agua baja caminable). No pasaron por un
+    E2E propio: mirarlos en el playtest (que no ensucien con muchos monstruos caminando
+    sobre arena; el pool les reserva 16 de las 100 partículas). Pasto que se agita al
+    pasar y niebla (ART-7) siguen sin hacer.
+  - **El toque corto que solo gira (MOV-2, hecho en `feat/lpc-actions`):** quieto, una
+    tecla o el pad hacia otro lado gira y camina solo si sigue apretado 80 ms; Ctrl+flecha
+    solo gira. Mirar en el playtest si un toque rápido para dar un paso hacia un costado
+    (sobre todo con el dedo en el pad, donde un toque dura 50–120 ms) gira más veces de
+    las que se quiere; la salida sería bajar el umbral o dejarlo solo para el teclado.
   - **El texto junto al cursor** muestra la acción por defecto (atacar, hablar, trepar,
     abrir, usar una estación, el tablero o una puerta) apenas el mouse se apoya en la
     casilla, sin espera. Mirar en el playtest si molesta al caminar con el mouse por
@@ -468,28 +518,46 @@ el punto 5:
     principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
     forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
     `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
-  - **Director de música (pedido del dueño, 2026-11-18):** las transiciones importan mucho
-    y un tema no debería empezar siempre desde el principio. Falta un director que alterne
-    las tomas de un lugar (Puerto ya tiene tres: `music_puerto`, `_2`, `_3`, hoy suena la
-    primera), empiece cada loop en un punto distinto y cuide los fundidos. El manifiesto
-    (`assets/sounds/music/gemini.yaml`, `tracks`) ya lista varias tomas por lugar, pero
-    `sounds.yaml` todavía espera un loop por isla: el director necesita una forma de
-    nombrar un grupo de tomas (y su validación).
-  - **Más versiones de cueva:** el mundo tiene muchas cuevas y el dueño quiere que la música
-    varíe al bajar a una. Hay que pedirlas (`music_queue.py`; la sesión principal ya
-    probó un `cave_mine_1` que terminó en `policy`).
-  - **Combate:** el dueño no quiere música de combate para peleas comunes, solo para un jefe
-    o una quest importante. El cliente ya sabe tocar la de un jefe (`music.bosses`) y la
-    de combate (`music.combat`, hoy sin usar); falta la regla de "quest importante".
-  - **Presupuesto de audio:** con mono a 20 kbps y loops de ~1 minuto, las 8 tomas de hoy
-    dejan el total en ~1454 de 1536 KiB (docs/07). Más tomas (las cuevas, otro lugar)
-    necesitan decidir con el dueño: subir el tope (el audio no cuenta en la descarga
-    inicial), bajar los kbps o acortar los loops.
-  - **Volumen:** los masters de Gemini vienen con picos de +1,5 a +5 dBTP; con una sola
-    ganancia y el techo de -1,5 dBTP los loops quedan entre -16 y -19,5 LUFS y, aun con
-    volumen 1 en `sounds.yaml`, suenan ~2 dB por debajo de los temas de soundgen. Nadie
-    los escuchó en el juego todavía: si se oyen bajos, un limitador suave antes de la
-    ganancia (con cuidado de la costura) o subir el canal de música.
+  - **Director de música (hecho, rama `feat/music-director`, pedido del dueño del
+    2026-11-18):** temas enteros en estéreo transmitidos, pools por lugar sin repetir el
+    mismo tema dos veces seguidas, arranque en un punto de entrada al azar, memoria por zona,
+    fundidos de potencia constante con largo por tipo, espera de 3 s en los bordes, respiro
+    de ambiente entre temas de una zona, y el combate común sin música (docs/02 "Sonido",
+    `client/src/audio/director.ts`). Lo que queda:
+    - **Las seis versiones nuevas de cueva son provisionales:** pasaron las medidas y suenan
+      todas con la toma 1 en la pool de las cuevas. Falta que el dueño las escuche y escriba
+      `cave_pool` en `picks.json` (`"cave_pool": ["mine", "crystal", ...]`) y corra
+      `make music-gemini`; las que no liste salen del juego.
+    - **Nadie lo escuchó en el juego todavía:** el largo de los fundidos (`fades`), la espera
+      en los bordes (`dwell_ms`), el respiro entre temas (`gap_ms`, 6–15 s) y la memoria
+      (`resume_ms`, 3 min) son datos de `sounds.yaml`: se ajustan sin código después de
+      jugar un rato. Los puntos de entrada salen de la envolvente de nivel; si alguno cae
+      feo en un tema, se puede bajar `ENTRY_MOST` o subir `ENTRY_GAP` en
+      `tools/gemini/music_convert.py` y volver a correr `make music-gemini`: el importador
+      guarda con qué `ENTRY_*` midió cada tema y, si cambiaron, los vuelve a convertir y
+      medir (no hace falta `--fresh` ni subir `ANALYSIS`).
+    - **Música de quest por paso:** una quest importante ya puede tener música en un lugar
+      (`music` en su YAML, docs/06), pero ninguna la usa (falta un tema propio para
+      pedirle a Gemini) y el cliente no sabe en qué paso va el jugador: una música que
+      dependa del paso necesita que el servidor lo mande (un campo en el protocolo).
+    - **Safari/iOS y el WKWebView de macOS:** la música suena por un `<audio>` conectado a
+      Web Audio, que arranca después del primer gesto. Chromium (y el E2E) lo hacen sin
+      problema. WebKit pide un gesto por elemento: el motor crea sus cuatro elementos en el
+      primer gesto y les hace un `play()`/`pause()` vacío ahí mismo, y si igual rechaza un
+      `play()` lo vuelve a llamar en el gesto siguiente (desde donde va el tema; mientras
+      tanto esa voz calla). Falta probarlo en un iPhone y en la app de escritorio de macOS.
+      Un WebKit sin Ogg Opus en `<audio>` (`canPlayType` vacío; versiones viejas) queda sin
+      música y sin bajar nada (lote 8); si eso pasa en algún dispositivo que importe, la
+      salida es una segunda copia de los temas en otro códec (AAC en `.m4a`), con su costo
+      de presupuesto.
+  - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
+    estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
+    cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
+    está en la descarga inicial: cada zona baja el tema que suena y el siguiente. Caben
+    unas dos versiones más de cueva; más que eso, subir el tope de la pool o bajar a 32 kbps.
+  - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, la Isla Volcánica, a -14,8 con
+    volumen 0,77 para compensar), como los temas de soundgen. Si en el juego se oyen bajos o
+    altos, se ajusta `BASE_VOLUME` en `music_import.py` o el canal de música.
   - **Los primeros assets de Gemini son las siete criaturas** (rama
     `feat/gemini-creatures`, filas en "Generado con IA" de `assets/CREDITS.md` y prompts en
     `assets/prompts/sprites/creatures/`).
@@ -505,6 +573,11 @@ el punto 5:
     cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
     la herramienta).
 
+- **Tutorial sobre la ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
+  panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
+  ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
+  Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
+  abierta, como hace con el diálogo y la tienda.
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
@@ -784,14 +857,15 @@ y el modelo ya prevé las tablas `cosmetics` y `account_cosmetics`.
 T0.5 quedó hecha (PR #77) y ya no hay placeholders:
 - **Pack Dungeon Crawl** (CC0, `assets/vendor/dungeon-crawl/`): suelos de pasto, arena,
   tierra, piedra y agua, muros de piedra y roca, árboles, casi todos los monstruos y NPCs,
-  armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`.
+  armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`. Desde el
+  2026-11-18 ningún monstruo sale del pack: son de Gemini, personajes de LPC o spritegen.
 - **Arte propio** (`tools/spritegen`, CC0): lo que el pack no tenía (madera, muelle,
   yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
   materiales, comida, herramientas, monedas de cobre y plata, mochila), el jugador
   (outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`, y los
   atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
   propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
-  de las criaturas").
+  de las criaturas"), salvo el jabalí y el ciervo, de 64x64 sobre la sombra de contacto.
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

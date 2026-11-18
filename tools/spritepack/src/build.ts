@@ -14,6 +14,7 @@ import {
   measureFrames,
   mirrorImage,
   recolorImage,
+  specColumns,
 } from "./anims.ts";
 import type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
 import { collectSpriteRefs, listFiles } from "./content.ts";
@@ -474,10 +475,17 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
 }
 
 /** An animation frame's name: <sprite>/<action>_<dir>_<n> (docs/17 ANI-4). */
-const FRAME_NAME = /^(.+)\/(idle|walk|attack|death)_([nesw])_([0-9]+)$/;
+const FRAME_NAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_([nesw])_([0-9]+)$/;
 
 /** Default ms per frame of an action whose frames are files (walk plays by distance). */
-const FILE_FRAME_MS: Record<AnimAction, number> = { idle: 500, walk: 0, attack: 60, death: 100 };
+const FILE_FRAME_MS: Record<AnimAction, number> = {
+  idle: 500,
+  walk: 0,
+  attack: 60,
+  shoot: 50,
+  cast: 60,
+  death: 100,
+};
 
 /**
  * The clips that files named <sprite>/<action>_<dir>_<n> make: per action, the facings
@@ -607,11 +615,12 @@ function buildLayered(
         img = recolorImage(src, swaps);
         recolored.set(key, img);
       }
-      if ((spec.col + spec.count) * w > img.width || (maxRow + 1) * h > img.height) {
+      const cols = specColumns(spec);
+      if (cols * w > img.width || (maxRow + 1) * h > img.height) {
         diags.push({
           severity: "error",
           where,
-          message: `${name}: ${action} needs ${(spec.col + spec.count) * w}x${(maxRow + 1) * h} px but assets/${file} is ${img.width}x${img.height}`,
+          message: `${name}: ${action} needs ${cols * w}x${(maxRow + 1) * h} px but assets/${file} is ${img.width}x${img.height}`,
         });
         ok = false;
         continue;
@@ -623,7 +632,7 @@ function buildLayered(
       for (let n = 0; n < spec.count; n++) {
         const frame = createImage(w, h);
         const row = spec.rows[dir] ?? 0;
-        for (const img of layers) layerOver(img, (spec.col + n) * w, row * h, frame);
+        for (const img of layers) layerOver(img, (spec.col + n * spec.step) * w, row * h, frame);
         frames.set(frameName(name, action, dir, n), frame);
       }
     }

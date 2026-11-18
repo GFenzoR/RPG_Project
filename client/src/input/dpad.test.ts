@@ -61,6 +61,20 @@ describe("HeldDirection", () => {
     expect(h.take()).toBeUndefined();
   });
 
+  it("tells a new press from a finger still held (TurnTap: a second tap walks)", () => {
+    const h = new HeldDirection();
+    h.press(Direction.EAST);
+    expect(h.take()).toBe(Direction.EAST);
+    expect(h.fresh).toBe(true);
+    expect(h.take()).toBe(Direction.EAST);
+    expect(h.fresh).toBe(false);
+    h.release();
+    h.press(Direction.EAST); // lifted and tapped again between two frames
+    h.release();
+    expect(h.take()).toBe(Direction.EAST);
+    expect(h.fresh).toBe(true);
+  });
+
   it("sliding to another direction is taken at the next step", () => {
     const h = new HeldDirection();
     h.press(Direction.EAST);

@@ -14,6 +14,8 @@ import type { ClipSet } from "./clips.ts";
 
 /** Tint of a hit flash (multiplied: the sprite turns red for HIT_FLASH_MS). */
 export const FLASH_TINT = 0xff6a6a;
+/** Tint of a creature leaving by a teleport or a logout (VANISH_MS): a pale blue. */
+export const SHIMMER_TINT = 0xa8d0ff;
 
 let shadowContext: GraphicsContext | undefined;
 /** One ellipse shared by every contact shadow. */
@@ -75,7 +77,7 @@ export class CreatureBody {
     sp.scale.set(pose.scaleX, pose.scaleY);
     sp.skew.x = pose.skewX;
     sp.alpha = pose.alpha;
-    sp.tint = pose.flash ? FLASH_TINT : this.tint;
+    sp.tint = pose.flash ? FLASH_TINT : pose.shimmer ? SHIMMER_TINT : this.tint;
     if (this.shadow) {
       this.shadow.scale.set(pose.shadow * Math.abs(pose.scaleX));
       this.shadow.alpha = pose.alpha;

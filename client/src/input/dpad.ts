@@ -1,7 +1,8 @@
 // The on-screen direction pad (T5.6): which direction a finger on the pad points at, and the
 // direction held, read by the game loop like the movement keys. Holding repeats the step at
 // the walking speed (the loop takes a direction only when a step can start); a quick tap
-// still walks one step.
+// walks one step, or, standing still toward a way the player does not face, only turns it
+// (docs/17 MOV-2, TurnTap in keyboard.ts).
 import { Direction } from "@rpg/protocol";
 
 /** The pad's cells, row by row (top-left to bottom-right); undefined = the centre. */
@@ -67,6 +68,7 @@ export function dpadDirection(dx: number, dy: number, deadzone: number): Directi
 export class HeldDirection {
   private held: Direction | undefined;
   private tapped: Direction | undefined;
+  private fresh_ = false;
 
   press(d: Direction): void {
     if (this.held !== d) this.tapped = d;
@@ -94,7 +96,13 @@ export class HeldDirection {
   /** The direction to walk now: a press since the last call, else the one still held. */
   take(): Direction | undefined {
     const d = this.tapped ?? this.held;
+    this.fresh_ = this.tapped !== undefined;
     this.tapped = undefined;
     return d;
+  }
+
+  /** Whether the last take() answered a press since the call before, not a finger held. */
+  get fresh(): boolean {
+    return this.fresh_;
   }
 }

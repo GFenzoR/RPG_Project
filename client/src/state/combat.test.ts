@@ -170,7 +170,7 @@ describe("combat state", () => {
     expect(w.departureOf(6)).toBeUndefined();
   });
 
-  it("forgets why a creature left once it comes back (A9)", () => {
+  it("forgets why a creature left once it comes back, but keeps that it left (A9)", () => {
     const w = world();
     const died = create(CreatureDisappearSchema, { id: 6, reason: DisappearReason.DEATH });
     const back = create(CreatureSchema, {
@@ -191,6 +191,13 @@ describe("combat state", () => {
     expect(w.creatures.has(6)).toBe(true);
     expect(w.departureOf(6)).toBeUndefined();
     expect(w.departureOf(5)).toBe(DisappearReason.UNSPECIFIED); // the others stay
+    // The canvas still sees that it died there, to leave the falling body at that spot.
+    expect(w.departures).toContainEqual({
+      id: 6,
+      reason: DisappearReason.DEATH,
+      start: 100,
+      back: true,
+    });
     // A creature back through a map area (a FullMapView after a teleport) too.
     w.apply({ case: "creatureDisappear", value: died }, 200);
     w.apply(

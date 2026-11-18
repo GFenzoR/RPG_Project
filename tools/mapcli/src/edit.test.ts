@@ -15,8 +15,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emptyChunk, formatChunk, parseChunk } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { run } from "./index.ts";
+
+// Most of these run mapcli several times over a copy of world/ (and render reads the whole
+// atlas): a few seconds on a dev machine, over 5 s on a slow CI runner.
+vi.setConfig({ testTimeout: 30_000 });
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 // Sandboxes leave out the vendor PNGs that assets/sprites.yaml does not use: a pack has

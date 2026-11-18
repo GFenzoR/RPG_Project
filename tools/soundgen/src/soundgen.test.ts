@@ -70,10 +70,11 @@ describe("generated sounds", () => {
 
   it("the Isla Volcánica plays its own loops, not the cave's and the shore's (T5.5)", () => {
     const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
-      music: { islands: Record<string, string> };
+      music: { islands: Record<string, string>; pools: Record<string, string[]> };
       ambient: { islands: Record<string, string> };
     };
-    expect(raw.music.islands["volcan"]).toBe("music_volcan");
+    expect(raw.music.islands["volcan"]).toBe("volcan");
+    expect(raw.music.pools["volcan"]).toContain("music_volcan");
     expect(raw.ambient.islands["volcan"]).toBe("amb_volcan");
     const files = new Map(manifestFiles(root).map((f) => [f.id, f.file]));
     // Its own theme: soundgen's, or the Gemini take the owner picked for it.
@@ -101,8 +102,13 @@ interface GeminiTrack {
   sound: string;
   file: string;
   volume: number;
+  /** Not picked by the owner yet (a cave version until he lists his). */
+  provisional: boolean;
   source: string;
   prompt: string;
+  seconds: number;
+  end: number;
+  entries: number[];
   bytes: number;
 }
 
@@ -115,6 +121,8 @@ interface GeminiSlot {
   file?: string;
   volume?: number;
   fallback?: string;
+  /** The sounds of its pool in sounds.yaml music.pools. */
+  pool?: string[];
   tracks?: GeminiTrack[];
 }
 
@@ -132,7 +140,8 @@ describe("Gemini music (make music-gemini)", () => {
   );
   const files = new Map(manifestFiles(root).map((f) => [f.id, f]));
   const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
-    sounds: Record<string, { volume?: number }>;
+    sounds: Record<string, { volume?: number; seconds?: number; end?: number; entries?: number[] }>;
+    music: { pools: Record<string, string[]> };
   };
 
   it("sounds.yaml plays what the manifest says, at its volume", () => {
@@ -148,6 +157,8 @@ describe("Gemini music (make music-gemini)", () => {
       expect(raw.sounds[slot.sound]?.volume, id).toBe(slot.volume);
       if (slot.pick === "none") expect(slot.file, id).toBe(slot.fallback);
       else expect(slot.tracks?.[0]?.file, `${id}: a pool's first track`).toBe(slot.file);
+      // Its pool is the director's: every track, in order.
+      expect(raw.music.pools[id], `${id}: its pool`).toEqual(slot.pool);
     }
     // Every track ships as a sound of its own (a pool's others for the music director).
     for (const { id, track } of tracks) {
@@ -156,17 +167,25 @@ describe("Gemini music (make music-gemini)", () => {
       expect(played?.channel, `${id} ${track.take}`).toBe("music");
       expect(played?.bytes, `${id} ${track.take}`).toBe(track.bytes);
       expect(raw.sounds[track.sound]?.volume, `${id} ${track.take}`).toBe(track.volume);
+      // Whole takes, with where the director may start them.
+      const def = raw.sounds[track.sound];
+      expect(def?.seconds, `${id} ${track.take}`).toBe(track.seconds);
+      expect(def?.end, `${id} ${track.take}`).toBe(track.end);
+      expect(def?.entries, `${id} ${track.take}`).toEqual(track.entries);
+      expect(track.seconds, `${id} ${track.take}: a whole take`).toBeGreaterThan(120);
     }
   });
 
-  it("every Gemini loop is credited with its committed prompt, and nothing else is in its folder", () => {
+  it("every Gemini track is credited with its committed prompt, and nothing else is in its folder", () => {
     const credits = readFileSync(join(root, "assets", "CREDITS.md"), "utf8");
     const ai = credits.slice(credits.indexOf("## Generado con IA"));
-    for (const { id, slot, track } of tracks) {
+    for (const { id, track } of tracks) {
       const row = ai.split("\n").find((l) => l.startsWith(`| \`assets/${track.file}\``));
       expect(row, `${id} ${track.take}: CREDITS.md row`).toBeDefined();
       expect(row, id).toContain(`\`assets/${track.prompt}\``);
-      expect(row?.includes("Provisional"), `${id}: provisional in its row`).toBe(slot.provisional);
+      expect(row?.includes("Provisional"), `${id} ${track.take}: provisional in its row`).toBe(
+        track.provisional,
+      );
       expect(existsSync(join(root, "assets", track.prompt)), `${id}: prompt file`).toBe(true);
     }
     const folder = join(root, "assets", "sounds", "music", "gemini");
@@ -188,14 +207,26 @@ describe("size budget (docs/07)", () => {
       mkdirSync(join(dir, "assets", "sounds"), { recursive: true });
       writeFileSync(
         join(dir, "assets", "sounds.yaml"),
-        "sounds:\n  big: { file: sounds/big.ogg, channel: ui }\n  gone: { file: sounds/gone.ogg, channel: sfx }\n",
+        [
+          "sounds:",
+          "  big: { file: sounds/big.ogg, channel: ui }",
+          "  gone: { file: sounds/gone.ogg, channel: sfx }",
+          "  a: { file: sounds/a.ogg, channel: music }",
+          "  b: { file: sounds/b.ogg, channel: music }",
+          "music:",
+          "  pools: { zone: [a, b] }",
+        ].join("\n") + "\n",
       );
       writeFileSync(join(dir, "assets", "sounds", "big.ogg"), Buffer.alloc(BUDGET.totalBytes + 1));
+      // Two tracks of one pool, together over its budget.
+      const track = Buffer.alloc(BUDGET.poolBytes / 2 + 1);
+      writeFileSync(join(dir, "assets", "sounds", "a.ogg"), track);
+      writeFileSync(join(dir, "assets", "sounds", "b.ogg"), track);
       const problems = checkBudget(dir);
-      expect(problems).toHaveLength(3);
-      expect(problems[0]).toMatch(/^big: .* for a ui sound$/);
-      expect(problems[1]).toMatch(/^gone: .* does not exist/);
-      expect(problems[2]).toMatch(/^total /);
+      expect(problems.filter((p) => p.startsWith("big: "))).toHaveLength(1);
+      expect(problems.some((p) => /^gone: .* does not exist/.test(p))).toBe(true);
+      expect(problems.some((p) => p.startsWith("total "))).toBe(true);
+      expect(problems.some((p) => p.startsWith("pool zone: "))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -26,8 +26,9 @@ import type { ActionKind, ItemFacts, TileFacts } from "./input/actions.ts";
 import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
+import { motionReduced } from "./state/ui-prefs.ts";
 import type { ControlsMode } from "./state/controls.ts";
-import { equipSlot, itemCard } from "./state/item-card.ts";
+import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
 import { dialogLayout, optionForKey } from "./state/dialog.ts";
 import { HeldDirection } from "./input/dpad.ts";
@@ -36,7 +37,14 @@ import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
-import { MovementKeys, isTextField, keyDirection, typingInField } from "./input/keyboard.ts";
+import {
+  MovementKeys,
+  TurnTap,
+  isTextField,
+  keyDirection,
+  turnKeyDirection,
+  typingInField,
+} from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
@@ -45,7 +53,7 @@ import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, menuItem, tileUse, topItem } from "./state/items.ts";
+import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
@@ -55,7 +63,7 @@ import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { MotionTrail } from "./state/motion.ts";
-import { blowAt, cuesOf, loopFor, musicFor } from "./audio/cues.ts";
+import { cuesOf, loopFor, sceneFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
@@ -134,6 +142,27 @@ export interface GameUi {
   cosmetics?: CosmeticsStateView | undefined;
   /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
   zoom?: ZoomView | undefined;
+  /**
+   * Shift+drag of a stack (docs/17 UI-6): it was dropped at (x, y) and asks how many of
+   * its `count` units go there (ui/SplitPrompt.tsx).
+   */
+  split?: SplitView | undefined;
+  /** The last spell used from the hotbar and when (docs/17 UI-9: its slot flashes). */
+  cast?: { spellId: string; at: number } | undefined;
+  /**
+   * The item lying on the map tile the mouse rests on, at page (x, y): its card shows
+   * there (docs/17 UI-6, ui/ItemTooltip.tsx).
+   */
+  groundTip?: { itemId: number; count: number; x: number; y: number } | undefined;
+}
+
+/** A Shift+drag of a stack waiting for how many units move. */
+export interface SplitView {
+  /** Page coordinates of the drop. */
+  x: number;
+  y: number;
+  itemId: number;
+  count: number;
 }
 
 /**
@@ -168,7 +197,10 @@ export interface ClientTestHooks {
    * the player, so `tileToClient` points at the map (before the first frame too).
    */
   ready: boolean;
-  self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
+  /** The own creature: where, whether steps wait for the server or are drawn, and its facing (a Direction). */
+  self():
+    | { x: number; y: number; z: number; pending: boolean; walking: boolean; dir: Direction }
+    | undefined;
   /**
    * Where the own creature was on each frame of the last `ms` (`WorldState.drawPos` in
    * `frame`, what the canvas draws from: fractional tiles, oldest first, before rounding
@@ -212,12 +244,14 @@ export interface ClientTestHooks {
    */
   departures(ms: number): { id: number; reason: string }[];
   /**
-   * A9 (docs/17 ANI-7): creatures in an attack pose now and the ones falling dead (`ms`
-   * into it, `of` its length).
+   * A9 (docs/17 ANI-7): creatures in an attack pose now, the ones falling dead and the
+   * ones shimmering away after a teleport or a logout (`ms` into it, `of` its length,
+   * `action` the clip: attack, shoot, cast or lunge; death; vanish; `x`, `y` its tile).
    */
   poses(): {
-    attacking: { id: number; ms: number; of: number }[];
-    dying: { id: number; ms: number; of: number }[];
+    attacking: PoseView[];
+    dying: PoseView[];
+    vanishing: PoseView[];
   };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
@@ -231,13 +265,23 @@ export interface ClientTestHooks {
   players(): { id: number; name: string; cosmetics: CosmeticsView }[];
 }
 
+/** One creature in a pose (ClientTestHooks.poses): its id, how far in, the clip and its tile. */
+interface PoseView {
+  id: number;
+  ms: number;
+  of: number;
+  action: string;
+  x: number;
+  y: number;
+}
+
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
 const DRAG_START_PX = 4;
 
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
 
-/** How often the frame looks again at which loops should play (a fight ends silently). */
+/** How often the frame looks again at what should play (a boss leaves view silently). */
 const LOOPS_EVERY_MS = 500;
 
 declare global {
@@ -263,6 +307,11 @@ export interface GameOptions {
    * click; without it, what this device remembers (state/controls.ts).
    */
   controls?(): ControlsMode;
+  /**
+   * Whether a heavy hit shakes the camera (Options → Interface, docs/17 UI-9), read at each
+   * hit; reduced motion turns it off anyway. Without it, it shakes.
+   */
+  cameraShake?(): boolean;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -281,6 +330,10 @@ export class Game {
   private readonly world: WorldState;
   private readonly conn: Connection;
   private readonly keys = new MovementKeys();
+  /** MOV-2: a short tap toward another way, standing still, only turns. */
+  private readonly turnTap = new TurnTap();
+  /** A pad button activated from the keyboard (padStep): one step, never only a turn. */
+  private padStepped: Direction | undefined;
   private canvas: GameCanvas | undefined;
   private starting = false;
   /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
@@ -306,8 +359,6 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
-  /** performance.now() when the player last fought (a target, a blow on their tile). */
-  private foughtAt = Number.NEGATIVE_INFINITY;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
@@ -329,6 +380,12 @@ export class Game {
   private touchAt = Number.NEGATIVE_INFINITY;
   /** The last finger press on a DOM item already opened its menu. */
   private itemMenuOpened = false;
+  /** The last spell used from the hotbar (its slot flashes, docs/17 UI-9). */
+  private cast: { spellId: string; at: number } | undefined;
+  /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
+  private groundTip: GameUi["groundTip"];
+  /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
+  private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
   private zoomView: ZoomView | undefined;
@@ -355,11 +412,7 @@ export class Game {
         const at = this.world.batchTime(Number(batch.tick), now);
         const cues: Cue[] = [];
         for (const e of batch.events) {
-          if (opts.audio) {
-            cues.push(...cuesOf(e.message, this.cueContext()));
-            const self = this.world.self;
-            if (self && blowAt(e.message, self.pos)) this.foughtAt = now;
-          }
+          if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
           if (e.message.case === "welcome" && !this.safe) {
@@ -596,6 +649,7 @@ export class Game {
     if (!this.world.house) return;
     this.world.house = undefined;
     this.conn.send({ case: "houseCommand", value: { action: { case: "close", value: {} } } });
+    this.publish();
   }
 
   /** Closes the market window (the server forgets it too). */
@@ -697,6 +751,9 @@ export class Game {
 
   /** Casts a spell by ID (hotkey) on the current target, if any. */
   castSpell(spellId: string): void {
+    // Its slot flashes (docs/17 UI-9), whatever the server answers.
+    this.cast = { spellId, at: performance.now() };
+    this.publish();
     const aims = this.opts.content.spells.find((s) => s.id === spellId)?.aimsAtPlayer ?? false;
     this.setPending(afterCast(spellId, aims));
     if (aims) return;
@@ -896,7 +953,9 @@ export class Game {
 
   /**
    * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
-   * pointer travels a few pixels, and the item moves where it is released.
+   * pointer travels a few pixels, and the item moves where it is released. With Shift a
+   * click looks at the item and a drag moves part of a stack (docs/17 UI-6: it asks how
+   * many where it is dropped).
    */
   pressItem(ref: ItemRef, e: PointerEvent): void {
     if (isTouchPointer(e.pointerType)) {
@@ -905,29 +964,61 @@ export class Game {
     }
     const x0 = e.clientX;
     const y0 = e.clientY;
+    const shift = e.shiftKey;
     const move = (ev: PointerEvent): void => {
       if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < DRAG_START_PX) return;
       stop();
-      this.startDrag(ref);
+      this.startDrag(ref, shift);
+    };
+    const up = (): void => {
+      stop();
+      if (shift) this.lookAt(ref);
     };
     const stop = (): void => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointerup", up);
     };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointerup", up);
   }
 
-  /** Drags ref until the pointer is released over a drop target (canvas, slot, container). */
-  private startDrag(ref: ItemRef): void {
+  /**
+   * Drags ref until the pointer is released over a drop target (canvas, slot, container).
+   * `split` (a Shift+drag) of a stack asks first how many units go (splitDrop).
+   */
+  private startDrag(ref: ItemRef, split = false): void {
+    this.closeSplit();
     document.body.classList.add("dragging-item");
     const up = (ev: PointerEvent): void => {
       window.removeEventListener("pointerup", up);
       document.body.classList.remove("dragging-item");
       const to = this.dropTarget(ev.clientX, ev.clientY);
-      if (to) this.moveItem(ref, to);
+      if (!to) return;
+      if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
+        this.split = { ref, to, x: ev.clientX, y: ev.clientY };
+        this.publish();
+      } else this.moveItem(ref, to);
     };
     window.addEventListener("pointerup", up);
+  }
+
+  /** How many units of a Shift+dragged stack go where it was dropped (the prompt's OK). */
+  splitConfirm(count: number): void {
+    const s = this.split;
+    this.split = undefined;
+    if (s) this.moveItem({ ...s.ref, count: splitCount(count, s.ref.count) }, s.to);
+    this.publish();
+  }
+
+  /** Drops a Shift+drag without moving anything (the prompt's Cancel or Escape). */
+  splitCancel(): void {
+    if (this.closeSplit()) this.publish();
+  }
+
+  private closeSplit(): boolean {
+    if (!this.split) return false;
+    this.split = undefined;
+    return true;
   }
 
   /** Where a drop at page coordinates lands: a [data-drop] element or a map tile. */
@@ -1322,6 +1413,7 @@ export class Game {
   /** One step (a pad button activated from the keyboard). */
   padStep(dir: Direction): void {
     this.pad.tap(dir);
+    this.padStepped = dir;
     this.world.retryWalk();
   }
 
@@ -1411,6 +1503,14 @@ export class Game {
       vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
       zoom: this.zoomView,
+      cast: this.cast,
+      groundTip: this.groundTip,
+      split: this.split && {
+        x: this.split.x,
+        y: this.split.y,
+        itemId: this.split.ref.itemId,
+        count: this.split.ref.count,
+      },
     });
     this.armPresenceTimer();
   }
@@ -1435,31 +1535,29 @@ export class Game {
   }
 
   /**
-   * The music and ambient loops for now: the zone's, a fight's while the player has a
-   * target or took a blow less than `combatHoldMs` ago, a boss's while one is in view
-   * (assets/sounds.yaml `music`, audio/cues.ts musicFor). After each batch and, because a
-   * fight ends without a message, every LOOPS_EVERY_MS from the frame.
+   * The music's scene and the ambient loop for now: the zone, an important quest's area
+   * and a boss in view (assets/sounds.yaml `music`, audio/cues.ts sceneFor; the music
+   * director, audio/director.ts, decides what plays and when). An ordinary fight is not
+   * part of it: the owner keeps the zone's music on (2026-11-18). After each batch and,
+   * because a boss leaves the view without a message, every LOOPS_EVERY_MS from the frame.
    */
   private keepLoops(now: number): void {
     const audio = this.opts.audio;
     const self = this.world.self;
     if (!audio || !self) return;
     this.loopsAt = now;
-    const { islands, sounds } = this.opts.content;
-    if (this.world.target !== undefined) this.foughtAt = now;
-    const fighting = now - this.foughtAt < sounds.music.combatHoldMs;
+    const { islands, sounds, questMusic } = this.opts.content;
     const bosses = Object.keys(sounds.music.bosses).length > 0;
     const inView = bosses ? this.world.battleList().map((c) => c.contentId) : [];
-    audio.setLoops(
-      musicFor(self.pos, islands, sounds.music, inView, fighting),
-      loopFor(self.pos, islands, sounds.ambient),
-    );
+    audio.setMusic(sceneFor(self.pos, islands, sounds.music, questMusic ?? [], inView));
+    audio.setAmbient(loopFor(self.pos, islands, sounds.ambient));
   }
 
   destroy(): void {
     this.destroyed = true;
     clearTimeout(this.presenceTimer);
-    this.opts.audio?.setLoops(undefined, undefined);
+    // The ambient bed stops; the music goes on until the menus set the title's (App.tsx).
+    this.opts.audio?.setAmbient(undefined);
     this.cancelUse();
     this.picker.cancel();
     this.watchPick(false);
@@ -1538,6 +1636,8 @@ export class Game {
       },
       walkMark: () => this.steer.mark,
       hoverText: (x, y, z) => this.hoverText({ x, y, z }),
+      restTile: (at) => this.restTile(at),
+      shake: () => (this.opts.cameraShake?.() ?? true) && !motionReduced(document.documentElement),
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -1549,9 +1649,10 @@ export class Game {
         (this.opts.content.houseDoors?.includes(doorKey(x, y, z)) ?? false) ||
         (this.world.tile(x, y, z)?.some((id) => this.world.item(id)?.door === true) ?? false),
       ownUse: (x, y, z) => this.ownUse(x, y, z),
-      dragTile: (x, y, z) => {
+      dragTile: (x, y, z, e) => {
         const ref = topItem(this.world, x, y, z, false);
-        if (ref) this.startDrag(ref);
+        // Shift+drag from the map moves part of its stack too (docs/17 UI-6).
+        if (ref) this.startDrag(ref, e.shiftKey);
       },
       tapTile: (x, y, z) => this.tapTile({ x, y, z }),
       longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
@@ -1580,7 +1681,12 @@ export class Game {
         const s = world.self;
         if (!s) return undefined;
         const now = performance.now();
-        return { ...s.pos, pending: world.unconfirmed > 0, walking: world.walking(s, now) };
+        return {
+          ...s.pos,
+          pending: world.unconfirmed > 0,
+          walking: world.walking(s, now),
+          dir: s.dir,
+        };
       },
       trail: (ms) => this.trail.since(performance.now() - ms),
       stepMs: (x, y, z) => {
@@ -1664,7 +1770,20 @@ export class Game {
    */
   private decideStep(now: number): void {
     if (!this.world.canStep(now)) return;
-    const key = this.keys.take() ?? this.pad.take();
+    const fromKeys = this.keys.take();
+    const key = fromKeys ?? this.pad.take();
+    const fresh = fromKeys !== undefined ? this.keys.fresh : this.pad.fresh;
+    const stepped = this.padStepped;
+    this.padStepped = undefined;
+    const self = this.world.self;
+    // MOV-2: standing still, a short tap (key or pad) toward another way only turns.
+    if (key === undefined || key === stepped || !self) this.turnTap.clear();
+    else {
+      const still = this.world.standingStill(now);
+      const tap = this.turnTap.decide(key, still, self.dir, now, fresh);
+      if (tap === "turn") this.sendStep(this.world.turn(key));
+      if (tap === "turn" || tap === "wait") return;
+    }
     const hold = this.hold;
     const input = this.steerInput;
     input.key = key;
@@ -1735,6 +1854,25 @@ export class Game {
       : t(`client.touch.action.${kind}`);
   }
 
+  /**
+   * The mouse rested on a map tile (or left it): the card of the item lying there, if it is
+   * one people carry (state/item-card.ts groundCard); nothing while a menu, a pick or an
+   * aim is up.
+   */
+  private restTile(
+    at: { x: number; y: number; z: number; cx: number; cy: number } | undefined,
+  ): void {
+    let tip: GameUi["groundTip"];
+    if (at && !this.menu && !this.pending && !this.picker.picked) {
+      const ref = menuItem(this.world, at.x, at.y, at.z);
+      if (ref && groundCard(this.opts.content.items[ref.itemId]))
+        tip = { itemId: ref.itemId, count: Math.max(1, ref.count), x: at.cx, y: at.cy };
+    }
+    if (tip === undefined && this.groundTip === undefined) return;
+    this.groundTip = tip;
+    this.publish();
+  }
+
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     const slot = hotkeySlot(e.code);
     if (slot !== undefined) {
@@ -1780,6 +1918,13 @@ export class Game {
         return;
       }
     }
+    // MOV-2: Ctrl+arrow only turns, as in Tibia (with every step confirmed: WorldState.turn).
+    const turnTo = e.ctrlKey ? turnKeyDirection(e.code) : undefined;
+    if (turnTo !== undefined) {
+      e.preventDefault();
+      if (!e.repeat) this.sendStep(this.world.turn(turnTo));
+      return;
+    }
     if (this.keys.down(e.code)) {
       e.preventDefault();
       // A fresh press tries a refused step again; the OS auto-repeat of a held key does not.
@@ -1795,6 +1940,7 @@ export class Game {
   private readonly onBlur = (): void => {
     this.keys.clear();
     this.pad.clear();
+    this.turnTap.clear();
     this.hold = undefined;
     this.world.retryWalk();
   };

@@ -15,9 +15,9 @@ import {
   menuPlacement,
   mousePlacement,
   paddingInsets,
-  splitCount,
 } from "./ActionMenu.tsx";
 import { TouchPad, TouchPadToggle } from "./TouchPad.tsx";
+import { splitCount } from "../state/items.ts";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;

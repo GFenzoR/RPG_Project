@@ -106,6 +106,8 @@ export function baseScene(content: ClientContent, now: number): Scene {
         item("raw_fish", 12),
         item("copper_coin", 86),
         item("felling_axe"),
+        // A quest item: the gold ring of its colour (docs/17 UI-6).
+        item("smuggler_tally", 3),
       ],
     },
   ];
@@ -362,4 +364,62 @@ export function withItemMenu(
     },
   };
   return { ui, name: "itemmenu" };
+}
+
+/**
+ * docs/17 UI-5: the server's windows as GameWindows (a crafting station and a trade) and a
+ * second container (a corpse opened on the map, floating), with the Shift+drag split prompt and the card of an
+ * item lying on the map under a resting mouse (docs/17 UI-6).
+ */
+export function withServerWindows(
+  content: ClientContent,
+  s: Scene,
+  at: { x: number; y: number },
+): Scene {
+  const id = (name: string): number => itemNumber(content, name);
+  const ui: GameUi = {
+    ...s.ui,
+    station: {
+      pos: { x: 3160, y: 6380, z: 7 },
+      itemId: id("cooking_hearth"),
+      owned: new Map([[id("raw_fish"), 12]]),
+      tools: new Set(),
+    },
+    trade: {
+      partnerId: 13,
+      partnerName: "Brisa Molina",
+      invited: false,
+      negotiating: true,
+      own: [{ itemId: id("raw_fish"), count: 5 }],
+      partner: [{ itemId: id("copper_coin"), count: 20 }],
+      ownAccepted: false,
+      partnerAccepted: true,
+      maxItems: 8,
+    },
+    containers: [
+      ...s.ui.containers,
+      {
+        id: 2,
+        itemId: id("creature_remains"),
+        capacity: 8,
+        hasParent: true,
+        items: [{ itemId: id("ship_biscuit"), count: 4 }],
+      },
+    ],
+    split: { x: at.x, y: at.y, itemId: id("raw_fish"), count: 12 },
+  };
+  return { ui, name: "server" };
+}
+
+/** The card of an item lying on the map, under a resting mouse (docs/17 UI-6). */
+export function withGroundTip(
+  content: ClientContent,
+  s: Scene,
+  at: { x: number; y: number },
+): Scene {
+  const ui: GameUi = {
+    ...s.ui,
+    groundTip: { itemId: itemNumber(content, "iron_sword"), count: 1, x: at.x, y: at.y },
+  };
+  return { ui, name: "groundtip" };
 }

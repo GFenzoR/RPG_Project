@@ -143,8 +143,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`) y
   probar Opus en el WKWebView de macOS. Desde el 2026-11-18 la música es la que el dueño
   eligió entre las tomas de Gemini (`make music-gemini`), con música del título y del
-  guardián de la forja; el cliente también sabe tocar música de combate, pero el dueño la
-  apagó (solo jefes o quests importantes). Falta el director de música (docs/14).
+  guardián de la forja, y la toca el director de música (2026-11-18, pedido del dueño:
+  temas enteros transmitidos, pools por lugar con las tres de Puerto y siete de cueva,
+  arranque en un punto de entrada, fundidos de potencia constante y sin música de combate
+  común; solo jefes o el área de una quest importante la cambian). Pendiente: que el dueño
+  elija las versiones de cueva y escucharlo en el juego (docs/14).
 
 ## Hito 4 — Alpha pública
 - [x] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el
@@ -378,8 +381,8 @@ secundaria.
   correcciones que se deslizan. Segunda parte (docs/17 §4, "Hecho: A6, segunda parte"):
   click previsto (el camino lo arma el cliente y lo camina como `Walk`, MOV-4), caminar
   manteniendo el mouse (MOV-3), anillo en el destino y texto de la acción junto al cursor
-  (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. Falta: polvo y ondas al
-  pisar (con las partículas de ART-7) y el toque corto que solo gira (MOV-2).
+  (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. El polvo y las ondas al
+  pisar y el toque corto que solo gira (MOV-2), después: entrada de abajo.
 - [x] **Criaturas animadas con Gemini (docs/17 SRC-4 #6 y SRC-5; rama `feat/gemini-creatures`).**
   Lobo, rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de
   ciénaga y espinoso con caminar, quieto, atacar y morir (sur, norte y oeste; el este
@@ -387,3 +390,17 @@ secundaria.
   (`--cut rows|blobs`); pistas `mirror`, `anchor` y `ms` en spritepack; quieto y atacar solo
   hacia sus lados (embestida de ANI-5 en los otros); "Hecho con IA" en `/credits`. Lo que
   falta: docs/14, "Pendientes conocidos" (los demás animales y los ataques que no vinieron).
+- [x] **Disparar, conjurar, desvanecerse, pasos y girar (docs/17 ANI y MOV; rama
+  `feat/lpc-actions`).** Hojas `shoot` y `spellcast` de las 23 capas de LPC (46 archivos
+  del mismo commit, con sus créditos por archivo) y el clip por `CreatureAttack.kind`;
+  `TELEPORT` y `LOGOUT` se desvanecen; una muerte con reaparición a la vista deja el cuerpo
+  cayendo; polvo y ondas al pisar por suelo (`steps`, partículas de A13); el toque corto
+  que solo gira (MOV-2) y Ctrl+flecha; `11b-death` en primer plano. Lo que queda: docs/14,
+  "Pendientes conocidos".
+- [x] **Criaturas de Gemini, segunda tanda (docs/17 "Hecho: criaturas de Gemini"; rama
+  `feat/gemini-creatures-2`).** Reptante hueco, escarabajo de mena y los cinco del Volcán
+  (sabueso de ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el
+  custodio de escoria, jefe de 96x96) con caminar, quieto, atacar y morir; ningún monstruo
+  queda con un solo frame de Dungeon Crawl. Escala revisada (ART-2, "Animales medianos"): el
+  jabalí y el ciervo de spritegen pasan a 64x64 más grandes, con los pies en la casilla y la
+  sombra de contacto. La gaviota sigue de spritegen (decisión del dueño).

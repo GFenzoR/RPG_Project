@@ -6,7 +6,12 @@
 // motion of ANI-5 (a hop per tile, a lean, breathing, a lunge, a fall), so every creature
 // moves.
 
-export type AnimAction = "idle" | "walk" | "attack" | "death";
+export type AnimAction = "idle" | "walk" | "attack" | "shoot" | "cast" | "death";
+/**
+ * The clip an attack plays (ANI-2, ANI-7): attack for a melee blow (the LPC slash), shoot
+ * for a ranged one (the bow), cast for a spell. A sprite without that clip plays attack.
+ */
+export type AttackAction = "attack" | "shoot" | "cast";
 export type AnimDir = "n" | "e" | "s" | "w";
 export const ANIM_DIRS: readonly AnimDir[] = ["n", "e", "s", "w"];
 
@@ -30,7 +35,12 @@ export interface AnimActionMeta {
  * side and none to the front (the Gemini monsters, assets/README.md): turning the creature
  * sideways to bite south would be wrong, so it lunges with its own facing's frame (ANI-5).
  */
-export const OWN_FACINGS: ReadonlySet<AnimAction> = new Set<AnimAction>(["idle", "attack"]);
+export const OWN_FACINGS: ReadonlySet<AnimAction> = new Set<AnimAction>([
+  "idle",
+  "attack",
+  "shoot",
+  "cast",
+]);
 
 /** The action's clip when it may be drawn facing `dir` (see OWN_FACINGS). */
 export function clipFacing(
@@ -88,6 +98,12 @@ export const DEATH_MS = 400;
 /** A death clip holds its last frame this long while it fades. */
 export const DEATH_FADE_MS = 150;
 export const APPEAR_MS = 300;
+/**
+ * Leaving by a teleport or a logout (ANI-7): it narrows into a pale flickering sliver and
+ * fades out in VANISH_MS, never the fall of a death. The flicker toggles every VANISH_FLICKER_MS.
+ */
+export const VANISH_MS = 350;
+export const VANISH_FLICKER_MS = 50;
 
 /** What a creature's animation remembers between frames. One per creature, mutated in place. */
 export interface AnimState {
@@ -101,8 +117,9 @@ export interface AnimState {
   stepEnd: number;
   /** Walk frame drawn last, held between chained steps. */
   walkFrame: number;
-  /** Last lunge: when, and the unit direction towards the target. */
+  /** Last attack: when, its clip, and the unit direction towards the target (the lunge). */
   attackAt: number;
+  attackAction: AttackAction;
   attackDx: number;
   attackDy: number;
   /** Last hit taken: when, and the unit direction it is pushed. */
@@ -113,6 +130,8 @@ export interface AnimState {
   bornAt: number;
   /** When it died (NaN while alive). */
   diedAt: number;
+  /** When it left by a teleport or a logout (NaN while here). */
+  vanishAt: number;
   /** Single-frame sprites with `facing`: drawn mirrored (kept while walking north or south). */
   flip: boolean;
 }
@@ -125,6 +144,7 @@ export function newAnimState(id: number, now: number): AnimState {
     stepEnd: Number.NEGATIVE_INFINITY,
     walkFrame: 0,
     attackAt: Number.NEGATIVE_INFINITY,
+    attackAction: "attack",
     attackDx: 0,
     attackDy: 0,
     hitAt: Number.NEGATIVE_INFINITY,
@@ -132,6 +152,7 @@ export function newAnimState(id: number, now: number): AnimState {
     hitDy: 0,
     bornAt: now,
     diedAt: Number.NaN,
+    vanishAt: Number.NaN,
     flip: false,
   };
 }
@@ -171,6 +192,8 @@ export interface Pose {
   alpha: number;
   /** Hit flash. */
   flash: boolean;
+  /** Leaving by a teleport or a logout: drawn with a pale tint (VANISH_MS). */
+  shimmer: boolean;
   /** Contact shadow scale (a flying creature's shrinks as it rises). */
   shadow: number;
   /** A death finished: the caller can drop the sprite. */
@@ -187,13 +210,24 @@ export const newPose = (): Pose => ({
   skewX: 0,
   alpha: 1,
   flash: false,
+  shimmer: false,
   shadow: 1,
   done: false,
 });
 
-/** A lunge: the creature attacks towards (dx, dy) (any length; only the sign counts). */
-export function startAttack(s: AnimState, now: number, dx: number, dy: number): void {
+/**
+ * An attack towards (dx, dy) (any length; only the sign counts): its clip (`action`, else
+ * attack) or, without one, the lunge.
+ */
+export function startAttack(
+  s: AnimState,
+  now: number,
+  dx: number,
+  dy: number,
+  action: AttackAction = "attack",
+): void {
   s.attackAt = now;
+  s.attackAction = action;
   s.attackDx = Math.sign(dx);
   s.attackDy = Math.sign(dy);
 }
@@ -209,11 +243,38 @@ export function startDeath(s: AnimState, now: number): void {
   if (Number.isNaN(s.diedAt)) s.diedAt = now;
 }
 
+/** It leaves by a teleport or a logout: the shimmer of VANISH_MS (the first one counts). */
+export function startVanish(s: AnimState, now: number): void {
+  if (Number.isNaN(s.vanishAt)) s.vanishAt = now;
+}
+
 /** Duration of an action's clip, ms (0 without one). */
 export function clipMs(meta: AnimMeta | undefined, action: AnimAction): number {
   const a = meta?.actions[action];
   return a ? a.frames * a.ms : 0;
 }
+
+/**
+ * The clip an attack of `action` plays facing `dir`: its own (shoot, cast), else attack
+ * (the melee swing), else none (the lunge). Which of the two it is: attackClipAction.
+ */
+export function attackClip(
+  meta: AnimMeta | undefined,
+  action: AttackAction,
+  dir: AnimDir,
+): AnimActionMeta | undefined {
+  return (
+    clipFacing(meta, action, dir) ??
+    (action === "attack" ? undefined : clipFacing(meta, "attack", dir))
+  );
+}
+
+/** The action whose frames attackClip gives (its own, or attack in its place). */
+export const attackClipAction = (
+  meta: AnimMeta | undefined,
+  action: AttackAction,
+  dir: AnimDir,
+): AttackAction => (clipFacing(meta, action, dir) ? action : "attack");
 
 /**
  * Fills `out` with the pose of a creature at `in_.now`: the clip frame (walk by distance,
@@ -231,6 +292,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   out.skewX = 0;
   out.alpha = 1;
   out.flash = false;
+  out.shimmer = false;
   out.shadow = 1;
   out.done = false;
   const top = Math.max(8, meta?.top ?? 24);
@@ -255,9 +317,9 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
     dying(meta, now - s.diedAt, out);
   } else {
     const sinceAttack = now - s.attackAt;
-    const attack = clipFacing(meta, "attack", in_.dir);
+    const attack = attackClip(meta, s.attackAction, in_.dir);
     if (attack && sinceAttack >= 0 && sinceAttack < attack.frames * attack.ms) {
-      out.action = "attack";
+      out.action = attackClipAction(meta, s.attackAction, in_.dir);
       out.frame = Math.min(attack.frames - 1, Math.floor(sinceAttack / attack.ms));
     } else if (t !== undefined || now - s.stepEnd < IDLE_AFTER_MS) {
       walking(s, meta, in_, t, top, out);
@@ -294,8 +356,23 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
 
   const sinceBorn = now - s.bornAt;
   if (sinceBorn >= 0 && sinceBorn < APPEAR_MS) out.alpha *= sinceBorn / APPEAR_MS;
+  if (!Number.isNaN(s.vanishAt) && Number.isNaN(s.diedAt)) vanishing(now - s.vanishAt, out);
   if (s.flip) out.scaleX = -out.scaleX;
   return out;
+}
+
+/**
+ * Leaving by a teleport or a logout: the body narrows to a sliver and stretches up a
+ * little, pale and flickering, while it fades out; done after VANISH_MS.
+ */
+function vanishing(el: number, out: Pose): void {
+  const t = Math.min(1, Math.max(0, el) / VANISH_MS);
+  const flicker = Math.floor(Math.max(0, el) / VANISH_FLICKER_MS) % 2 === 0 ? 1 : 0.6;
+  out.scaleX *= 1 - 0.7 * t;
+  out.scaleY *= 1 + 0.2 * t;
+  out.alpha *= (1 - t) * flicker;
+  out.shimmer = true;
+  out.done = el >= VANISH_MS;
 }
 
 function walking(

@@ -65,6 +65,8 @@ export interface ItemDef {
   fixed?: true;
   /** `market_board: true` (T5.3): using it opens the global market. */
   board?: true;
+  /** `quest: true` (docs/17 UI-6): a quest item, named in the quest colour. */
+  quest?: true;
 }
 
 /** The `weapon` block of an item (data/items). */
@@ -161,6 +163,13 @@ export interface SoundDef {
   volume: number;
   /** Copies of this sound that may play at once. */
   maxVoices: number;
+  /**
+   * A music track's measures (make music-gemini): its length, where its body ends and the
+   * seconds the director may start it from. No `seconds`: a loop file.
+   */
+  seconds?: number | undefined;
+  end?: number | undefined;
+  entries?: number[] | undefined;
 }
 
 /** Which loop plays where: by island id, and under the sea floor (z > 7). */
@@ -170,18 +179,48 @@ export interface LoopRules {
   underground: string | undefined;
 }
 
+/** Crossfade lengths of the music, ms, by what changed (audio/director.ts Fades). */
+export interface MusicFades {
+  zone: number;
+  bossIn: number;
+  bossOut: number;
+  title: number;
+  next: number;
+}
+
 /**
- * The music's rules on top of the zone's loop: the title screen's, a fight's and a boss's
- * (audio/cues.ts musicFor). Each one is optional: without it, the zone's loop plays on.
+ * The music (assets/sounds.yaml `music`, audio/director.ts): every place names a pool of
+ * tracks. Islands and the underground are the zones; the title screen and each boss
+ * (monster content id) have their own, each optional. Ordinary fights have none: the owner
+ * keeps the zone's music on in a fight (2026-11-18).
  */
-export interface MusicRules extends LoopRules {
+export interface MusicRules {
+  /** Pool id → its tracks (music sound ids). */
+  pools: Record<string, string[]>;
+  /** Island id → pool. */
+  islands: Record<string, string>;
+  /** The pool of the floors under the sea (z > 7). */
+  underground: string | undefined;
   /** Outside the game: the login, sign-up and character screens. */
   title: string | undefined;
-  /** While the player fights, and combatHoldMs after the last blow or target. */
-  combat: string | undefined;
-  combatHoldMs: number;
-  /** Monster content id → the loop that plays while one is in view, over everything. */
+  /** Monster content id → the pool that plays while one is in view, over everything. */
   bosses: Record<string, string>;
+  fades: MusicFades;
+  dwellMs: number;
+  bossHoldMs: number;
+  resumeMs: number;
+  gapMs: [number, number];
+}
+
+/**
+ * An important quest's music (`music` in data/quests/<id>.yaml): its pool plays while the
+ * player stands in one of its rectangles on one of its floors, over the zone's.
+ */
+export interface QuestMusic {
+  quest: string;
+  pool: string;
+  floors: number[];
+  rects: { x: number; y: number; w: number; h: number }[];
 }
 
 /** assets/sounds.yaml as the client uses it (vite/content.ts). */
@@ -246,6 +285,8 @@ export interface ClientContent {
   guild?: { foundCost: number; foundMinLevel: number; nameMax: number; motdMax: number };
   /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
   sounds: SoundManifest;
+  /** The music areas of important quests (data/quests `music`; optional in fixtures). */
+  questMusic?: QuestMusic[] | undefined;
   islands: IslandRect[];
   /**
    * Door tiles of the houses ("x,y,z", world/islands/<id>/houses.yaml, T5.4): a right

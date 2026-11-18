@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
-import { dialogLayout, filterButtons, fold, optionForKey, optionTopic } from "./dialog.ts";
+import {
+  TYPE_CPS,
+  dialogLayout,
+  filterButtons,
+  fold,
+  optionForKey,
+  optionTopic,
+  typedLength,
+  typedParts,
+  typingMs,
+} from "./dialog.ts";
 
 const content: Pick<ClientContent, "dialogTopics"> = {
   dialogTopics: {
@@ -105,5 +115,22 @@ describe("filterButtons", () => {
     expect(filterButtons(layout.grid, "cura", text).map((b) => b.option.id)).toEqual([1]);
     expect(filterButtons(layout.grid, "  ", text)).toHaveLength(2);
     expect(fold("Ñandú")).toBe("nandu");
+  });
+});
+
+describe("NPC text letter by letter (docs/17 UI-8)", () => {
+  it("shows 90 characters a second, all once done", () => {
+    expect(TYPE_CPS).toBe(90);
+    expect(typedLength(300, 0)).toBe(0);
+    expect(typedLength(300, 1000)).toBe(90);
+    expect(typedLength(300, 60_000)).toBe(300);
+    expect(typedLength(300, Number.NaN)).toBe(300);
+    expect(typingMs(90)).toBe(1000);
+  });
+
+  it("cuts the text by the characters people see", () => {
+    expect(typedParts("¡Hola, Ñandú!", 3)).toEqual({ shown: "¡Ho", rest: "la, Ñandú!" });
+    expect(typedParts("a😀b", 2)).toEqual({ shown: "a😀", rest: "b" });
+    expect(typedParts("abc", 9)).toEqual({ shown: "abc", rest: "" });
   });
 });

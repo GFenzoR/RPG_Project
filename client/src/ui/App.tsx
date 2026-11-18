@@ -15,6 +15,7 @@ import { ServerPicker } from "./ServerPicker.tsx";
 import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
+import { loadCameraShake } from "../state/ui-prefs.ts";
 import type { GameSettings } from "./GameView.tsx";
 
 type Screen =
@@ -76,13 +77,16 @@ function Screens({
     );
   }, []);
 
-  // Outside the game the menus play the title screen's loop (assets/sounds.yaml
-  // music.title), and no ambient bed; the game sets its own loops from its first batch.
-  // Leaving the game silences it first (Game.destroy) and this starts the title again.
+  // Outside the game the menus play the title screen's music (assets/sounds.yaml
+  // music.title, through the music director) and no ambient bed; the game sets its own
+  // scene from its first batch. Leaving the game (Game.destroy stops the ambient bed)
+  // crossfades from the world's music back into the title's.
   const inGame = screen.name === "game";
   useEffect(() => {
-    if (!inGame) audio?.setLoops(content.sounds.music.title, undefined);
-  }, [inGame, audio, content]);
+    if (inGame || !audio) return;
+    audio.setMusic({ kind: "title" });
+    audio.setAmbient(undefined);
+  }, [inGame, audio]);
 
   const toCharacters = (): void => setScreen({ name: "characters" });
   const toLogin = (): void => setScreen({ name: "login" });
@@ -397,9 +401,12 @@ function GameScreen(props: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>(emptyGameUi);
   const [storage] = useState(safeStorage);
-  // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click.
+  // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click; the
+  // camera shake (docs/17 UI-9), at each heavy hit.
   const controls = useRef(props.settings?.controlsMode);
   controls.current = props.settings?.controlsMode;
+  const shake = useRef(props.settings?.cameraShake);
+  shake.current = props.settings?.cameraShake;
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -412,6 +419,7 @@ function GameScreen(props: {
       vocation: props.character.vocation,
       storage,
       controls: () => controls.current ?? loadControls(storage),
+      cameraShake: () => shake.current ?? loadCameraShake(storage),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),

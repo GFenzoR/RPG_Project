@@ -9,7 +9,8 @@ import type { Image } from "./image.ts";
 import { parseHexColor } from "./image.ts";
 import { TILE } from "./placeholder.ts";
 
-export const ANIM_ACTIONS = ["idle", "walk", "attack", "death"] as const;
+// attack: melee (the LPC slash); shoot: a ranged attack (bow); cast: a spell (docs/17 ANI-2).
+export const ANIM_ACTIONS = ["idle", "walk", "attack", "shoot", "cast", "death"] as const;
 export type AnimAction = (typeof ANIM_ACTIONS)[number];
 export const ANIM_DIRS = ["n", "e", "s", "w"] as const;
 export type AnimDir = (typeof ANIM_DIRS)[number];
@@ -17,7 +18,7 @@ export type Shadow = "baked" | "ellipse" | "none";
 
 /** Where one action's frames are in a sheet. */
 export interface ActionSpec {
-  /** Replaces "<sheet>" in the layer files (lpc: walk, idle, slash, hurt). */
+  /** Replaces "<sheet>" in the layer files (lpc: walk, idle, slash, shoot, spellcast, hurt). */
   sheet: string;
   frame: { w: number; h: number };
   /** Row (in frames) of each facing; a facing without a row falls back to "s" in the client. */
@@ -25,6 +26,8 @@ export interface ActionSpec {
   /** First column (in frames) and number of frames. */
   col: number;
   count: number;
+  /** Columns from one frame to the next (2: every other column, a clip cut short). */
+  step: number;
   /** Ms per frame (walk: 0, it plays by distance). */
   ms: number;
   /** Walk only: frames per tile walked (a cycle every count / perTile tiles). */
@@ -92,11 +95,21 @@ export const PRESETS: Record<string, Partial<Record<AnimAction, ActionSpec>>> = 
       rows: LPC_ROWS,
       col: 0,
       count: 2,
+      step: 1,
       ms: 500,
       perTile: 0,
     },
     // Column 0 is the standing pose; 1..8 the cycle, half of it per tile.
-    walk: { sheet: "walk", frame: LPC_FRAME, rows: LPC_ROWS, col: 1, count: 8, ms: 0, perTile: 4 },
+    walk: {
+      sheet: "walk",
+      frame: LPC_FRAME,
+      rows: LPC_ROWS,
+      col: 1,
+      count: 8,
+      step: 1,
+      ms: 0,
+      perTile: 4,
+    },
     // Wind-up, swing, recovery: 6 x 60 ms.
     attack: {
       sheet: "slash",
@@ -104,6 +117,30 @@ export const PRESETS: Record<string, Partial<Record<AnimAction, ActionSpec>>> = 
       rows: LPC_ROWS,
       col: 0,
       count: 6,
+      step: 1,
+      ms: 60,
+      perTile: 0,
+    },
+    // A bow raised, drawn and loosed: the sheet's 13 columns cut to every other one,
+    // 7 x 50 ms (ANI-2: a ranged attack takes 300-400 ms).
+    shoot: {
+      sheet: "shoot",
+      frame: LPC_FRAME,
+      rows: LPC_ROWS,
+      col: 0,
+      count: 7,
+      step: 2,
+      ms: 50,
+      perTile: 0,
+    },
+    // Arms raised and thrown open: 7 x 60 ms.
+    cast: {
+      sheet: "spellcast",
+      frame: LPC_FRAME,
+      rows: LPC_ROWS,
+      col: 0,
+      count: 7,
+      step: 1,
       ms: 60,
       perTile: 0,
     },
@@ -114,6 +151,7 @@ export const PRESETS: Record<string, Partial<Record<AnimAction, ActionSpec>>> = 
       rows: { s: 0 },
       col: 0,
       count: 6,
+      step: 1,
       ms: 100,
       perTile: 0,
     },
@@ -136,8 +174,8 @@ const ENTRY_KEYS = new Set([
   "notes",
 ]);
 /** The actions whose frames play by time (walk plays by the distance walked). */
-const TIMED_ACTIONS: readonly AnimAction[] = ["idle", "attack", "death"];
-const SPEC_KEYS = new Set(["sheet", "frame", "rows", "col", "count", "ms", "per_tile"]);
+const TIMED_ACTIONS: readonly AnimAction[] = ["idle", "attack", "shoot", "cast", "death"];
+const SPEC_KEYS = new Set(["sheet", "frame", "rows", "col", "count", "step", "ms", "per_tile"]);
 
 /** Parses the `palettes` section: name -> list of "#rrggbb" (light to dark). */
 export function parsePalettes(
@@ -394,6 +432,7 @@ function parseSpec(
   }
   const col = num("col", base?.col ?? 0, 0);
   const count = num("count", base?.count, 1);
+  const step = num("step", base?.step ?? 1, 1);
   const ms = num("ms", base?.ms ?? (action === "walk" ? 0 : undefined), action === "walk" ? 0 : 1);
   const perTile = num("per_tile", base?.perTile ?? (action === "walk" ? count : 0), 0);
   if (
@@ -402,6 +441,7 @@ function parseSpec(
     !rows ||
     col === undefined ||
     !count ||
+    step === undefined ||
     ms === undefined ||
     perTile === undefined
   ) {
@@ -412,8 +452,12 @@ function parseSpec(
     fail("walk: per_tile must be >= 1");
     return undefined;
   }
-  return { sheet, frame, rows, col, count, ms, perTile };
+  return { sheet, frame, rows, col, count, step, ms, perTile };
 }
+
+/** Columns an action's frames span in its sheet: from `col` to its last frame's column. */
+export const specColumns = (spec: ActionSpec): number =>
+  spec.col + (spec.count - 1) * spec.step + 1;
 
 /** The atlas name of one frame (docs/17 ANI-4). */
 export const frameName = (sprite: string, action: AnimAction, dir: AnimDir, n: number): string =>

@@ -2,7 +2,9 @@
 // (the forge, the hearth, braziers), pollen drifts round trees, spray leaps where the sea
 // meets the shore, and dust floats in the dark of caves. Where they come from is data: the
 // `particles` of a sprite in assets/sprites.yaml `tiles` (MapView.forEachEmitter); the dust
-// of caves fills the view on its own.
+// of caves fills the view on its own. Steps kick some up too (MOV-7): a puff of dust on
+// sand, dirt or ash, a ring of ripples on wet sand (`steps` of a ground in `tiles`); the
+// canvas calls ParticleLayer.kick when a creature starts a step there.
 //
 // Cheap on purpose (docs/07): at most MAX_PARTICLES alive, kept in typed arrays and drawn
 // by a fixed pool of 1-pixel sprites made once; a frame allocates nothing (the emitter
@@ -11,10 +13,33 @@
 // player's option or the system's), nothing is spawned and nothing is drawn.
 import { Container, Sprite, Texture } from "pixi.js";
 import { PARTICLE_KINDS } from "@rpg/renderer";
-import type { ParticleKind } from "@rpg/renderer";
+import type { ParticleKind, StepKind, TileMeta } from "@rpg/renderer";
 
 /** ART-7: at most this many particles on screen. */
 export const MAX_PARTICLES = 100;
+/** Room kept for the particles of steps (MOV-7): ambient ones stop short of it. */
+export const STEP_RESERVE = 16;
+/** MOV-7: particles a step kicks up. */
+export const STEP_PARTICLES: Readonly<Record<StepKind, number>> = { dust: 6, ripple: 8 };
+
+/** Every kind the sim draws: the ambient ones of tile art, then the steps' puff and ripple. */
+export const SIM_KINDS = [...PARTICLE_KINDS, "puff", "ripple"] as const;
+export type SimKind = (typeof SIM_KINDS)[number];
+/**
+ * What a step on ground item `ground` kicks up (MOV-7): the `steps` of its sprite in
+ * atlas.json `tiles` (assets/sprites.yaml), if any.
+ */
+export function stepKindOf(
+  ground: number,
+  items: Readonly<Record<number, { sprite: string } | undefined>>,
+  tiles: Readonly<Record<string, TileMeta>> | undefined,
+): StepKind | undefined {
+  const sprite = items[ground]?.sprite;
+  return sprite ? tiles?.[sprite]?.steps : undefined;
+}
+
+/** The kind of particle a step on a ground of that kind makes. */
+const STEP_SIM: Readonly<Record<StepKind, SimKind>> = { dust: "puff", ripple: "ripple" };
 /** A frame longer than this (a hidden tab) advances the particles this much only, ms. */
 export const MAX_STEP_MS = 100;
 
@@ -38,11 +63,18 @@ interface Style {
   /** Side to side sway, sprite px (pollen and dust drift, embers flicker). */
   sway: number;
   alpha: number;
+  /** Fade in and out over this much of its life at most, ms. */
+  fadeInMs: number;
+  fadeOutMs: number;
   /** Colours by age: young, middle, old. */
   colors: readonly [number, number, number];
 }
 
-export const STYLES: Readonly<Record<ParticleKind, Style>> = {
+/** Ambient particles fade in and out over this much of their life at most, ms. */
+const FADE_IN_MS = 200;
+const FADE_OUT_MS = 350;
+
+export const STYLES: Readonly<Record<SimKind, Style>> = {
   embers: {
     rate: 0.35,
     lifeMs: 1100,
@@ -58,6 +90,8 @@ export const STYLES: Readonly<Record<ParticleKind, Style>> = {
     gravity: 0,
     sway: 1.5,
     alpha: 1,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
     colors: [0xffe08a, 0xff9a3c, 0xd8461e],
   },
   pollen: {
@@ -75,6 +109,8 @@ export const STYLES: Readonly<Record<ParticleKind, Style>> = {
     gravity: 0,
     sway: 3,
     alpha: 0.8,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
     colors: [0xf4efb0, 0xe8e08a, 0xd6cf7a],
   },
   spray: {
@@ -92,6 +128,8 @@ export const STYLES: Readonly<Record<ParticleKind, Style>> = {
     gravity: 120,
     sway: 0,
     alpha: 0.9,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
     colors: [0xffffff, 0xe6f4ff, 0xc4e2f2],
   },
   dust: {
@@ -109,13 +147,52 @@ export const STYLES: Readonly<Record<ParticleKind, Style>> = {
     gravity: 0,
     sway: 2,
     alpha: 0.45,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
     colors: [0xd2c6ae, 0xbcb09a, 0xa49884],
   },
+  // MOV-7: a puff at the feet that rises a little and settles (about 3 frames, 200 ms).
+  puff: {
+    rate: 0,
+    lifeMs: 220,
+    lifeSpreadMs: 120,
+    x0: 0,
+    xw: 0,
+    y0: 0,
+    yh: 0,
+    vx: 0,
+    vxSpread: 18,
+    vy: -20,
+    vySpread: 8,
+    gravity: 50,
+    sway: 0,
+    alpha: 0.95,
+    fadeInMs: 30,
+    fadeOutMs: 150,
+    // Paler than the grounds it rises from (sand, dirt, ash), so it reads on them.
+    colors: [0xfbf6ea, 0xece2cc, 0xd6caae],
+  },
+  // MOV-7: a ring of drops spreading flat round the feet on wet ground.
+  ripple: {
+    rate: 0,
+    lifeMs: 380,
+    lifeSpreadMs: 80,
+    x0: 0,
+    xw: 0,
+    y0: 0,
+    yh: 0,
+    vx: 22,
+    vxSpread: 0,
+    vy: 11,
+    vySpread: 0,
+    gravity: 0,
+    sway: 0,
+    alpha: 0.75,
+    fadeInMs: 40,
+    fadeOutMs: 220,
+    colors: [0xffffff, 0xdcedf7, 0xb6d4e6],
+  },
 };
-
-/** Fade in and out over this much of a particle's life at most, ms. */
-const FADE_IN_MS = 200;
-const FADE_OUT_MS = 350;
 
 /** A small seeded generator (mulberry32): the same seed, the same particles. */
 export function seededRandom(seed: number): () => number {
@@ -154,9 +231,9 @@ export class ParticleSim {
     private readonly tile: number,
   ) {}
 
-  /** A particle of `kind` from tile (tx, ty), if there is room. */
+  /** An ambient particle of `kind` from tile (tx, ty), if there is room (STEP_RESERVE kept). */
   spawn(kind: ParticleKind, tx: number, ty: number): boolean {
-    if (this.count >= MAX_PARTICLES) return false;
+    if (this.count >= MAX_PARTICLES - STEP_RESERVE) return false;
     const s = STYLES[kind];
     const r = this.random;
     const i = this.count++;
@@ -167,8 +244,42 @@ export class ParticleSim {
     this.age[i] = 0;
     this.life[i] = s.lifeMs + r() * s.lifeSpreadMs;
     this.phase[i] = r() * Math.PI * 2;
-    this.kind[i] = PARTICLE_KINDS.indexOf(kind);
+    this.kind[i] = SIM_KINDS.indexOf(kind);
     return true;
+  }
+
+  /**
+   * What a step kicks up at the feet, (px, py) in sprite pixels (MOV-7): a puff of dust
+   * rising round them, or a ring of ripples spreading flat. As many as there is room for;
+   * returns how many.
+   */
+  kick(kind: StepKind, px: number, py: number): number {
+    const sim = STEP_SIM[kind];
+    const s = STYLES[sim];
+    const n = STEP_PARTICLES[kind];
+    const r = this.random;
+    let made = 0;
+    for (let k = 0; k < n && this.count < MAX_PARTICLES; k++) {
+      const i = this.count++;
+      if (kind === "dust") {
+        this.x[i] = px + (r() * 2 - 1) * 5;
+        this.y[i] = py - r() * 2;
+        this.vx[i] = (r() * 2 - 1) * s.vxSpread;
+        this.vy[i] = s.vy + (r() * 2 - 1) * s.vySpread;
+      } else {
+        const a = ((k + r() * 0.5) / n) * 2 * Math.PI;
+        this.x[i] = px + Math.cos(a) * 2;
+        this.y[i] = py + Math.sin(a);
+        this.vx[i] = Math.cos(a) * s.vx;
+        this.vy[i] = Math.sin(a) * s.vy;
+      }
+      this.age[i] = 0;
+      this.life[i] = s.lifeMs + r() * s.lifeSpreadMs;
+      this.phase[i] = 0;
+      this.kind[i] = SIM_KINDS.indexOf(sim);
+      made++;
+    }
+    return made;
   }
 
   /** Births from one emitter tile over `ms`: each a chance of rate × time. */
@@ -176,7 +287,7 @@ export class ParticleSim {
     const chance = (STYLES[kind].rate * ms) / 1000;
     // Rates are well under one birth per frame; a long frame may give one more.
     let left = chance;
-    while (left > 0 && this.count < MAX_PARTICLES) {
+    while (left > 0 && this.count < MAX_PARTICLES - STEP_RESERVE) {
       if (this.random() < Math.min(1, left)) this.spawn(kind, tx, ty);
       left -= 1;
     }
@@ -192,7 +303,7 @@ export class ParticleSim {
         this.remove(i);
         continue;
       }
-      const s = STYLES[PARTICLE_KINDS[this.kind[i] ?? 0] ?? "dust"];
+      const s = STYLES[SIM_KINDS[this.kind[i] ?? 0] ?? "dust"];
       this.age[i] = age;
       this.vy[i] = (this.vy[i] ?? 0) + s.gravity * dt;
       this.x[i] = (this.x[i] ?? 0) + (this.vx[i] ?? 0) * dt;
@@ -208,22 +319,22 @@ export class ParticleSim {
 
   /** How visible particle i is now (fades in, then out at the end of its life). */
   alpha(i: number): number {
-    const s = STYLES[PARTICLE_KINDS[this.kind[i] ?? 0] ?? "dust"];
+    const s = STYLES[SIM_KINDS[this.kind[i] ?? 0] ?? "dust"];
     const age = this.age[i] ?? 0;
     const left = (this.life[i] ?? 0) - age;
-    return s.alpha * Math.min(1, age / FADE_IN_MS, left / FADE_OUT_MS);
+    return s.alpha * Math.min(1, age / s.fadeInMs, left / s.fadeOutMs);
   }
 
   /** Its colour now: young, middle or old. */
   color(i: number): number {
-    const s = STYLES[PARTICLE_KINDS[this.kind[i] ?? 0] ?? "dust"];
+    const s = STYLES[SIM_KINDS[this.kind[i] ?? 0] ?? "dust"];
     const t = (this.age[i] ?? 0) / (this.life[i] || 1);
     return s.colors[t < 0.4 ? 0 : t < 0.75 ? 1 : 2];
   }
 
   /** Its drawn x: the position plus its sway. */
   drawX(i: number): number {
-    const s = STYLES[PARTICLE_KINDS[this.kind[i] ?? 0] ?? "dust"];
+    const s = STYLES[SIM_KINDS[this.kind[i] ?? 0] ?? "dust"];
     if (s.sway === 0) return this.x[i] ?? 0;
     return (this.x[i] ?? 0) + Math.sin((this.age[i] ?? 0) / 400 + (this.phase[i] ?? 0)) * s.sway;
   }
@@ -251,6 +362,8 @@ export class ParticleLayer {
   readonly sim: ParticleSim;
   private readonly sprites: Sprite[] = [];
   private last: number | undefined;
+  /** Reduced motion at the last update: steps kick nothing up either. */
+  private reduced = false;
   /** The frame being spawned: its length and the tiles in view (read by onEmitter). */
   private ms = 0;
   private x0 = 0;
@@ -290,6 +403,7 @@ export class ParticleLayer {
   ): void {
     const ms = this.last === undefined ? 0 : Math.min(MAX_STEP_MS, Math.max(0, now - this.last));
     this.last = now;
+    this.reduced = reduced;
     if (reduced) {
       this.sim.clear();
       this.view.visible = false;
@@ -310,7 +424,7 @@ export class ParticleLayer {
         const area = (tiles.width * tiles.height) / (32 * 32);
         const r = this.random;
         let left = (STYLES.dust.rate * area * ms) / 1000;
-        while (left > 0 && this.sim.count < MAX_PARTICLES) {
+        while (left > 0 && this.sim.count < MAX_PARTICLES - STEP_RESERVE) {
           if (r() < Math.min(1, left))
             this.sim.spawn("dust", tiles.x + r() * tiles.width, tiles.y + r() * tiles.height);
           left -= 1;
@@ -318,6 +432,14 @@ export class ParticleLayer {
       }
     }
     this.draw();
+  }
+
+  /**
+   * A step starts with the feet at (px, py), sprite pixels, on a ground that kicks up
+   * `kind` (MOV-7). Nothing with reduced motion. Drawn from the next update.
+   */
+  kick(kind: StepKind, px: number, py: number): void {
+    if (!this.reduced) this.sim.kick(kind, px, py);
   }
 
   destroy(): void {

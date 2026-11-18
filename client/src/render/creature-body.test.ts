@@ -2,7 +2,7 @@ import { Graphics, Texture } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { FEET_LINE, newPose } from "@rpg/renderer";
 import type { AnimMeta } from "@rpg/renderer";
-import { CreatureBody, FLASH_TINT } from "./creature-body.ts";
+import { CreatureBody, FLASH_TINT, SHIMMER_TINT } from "./creature-body.ts";
 import type { ClipSet } from "./clips.ts";
 
 const DIRS: ("n" | "e" | "s" | "w")[] = ["n", "e", "s", "w"];
@@ -48,6 +48,13 @@ describe("CreatureBody", () => {
     expect(body.sprite.scale.x).toBe(-1);
     expect(body.sprite.tint).toBe(FLASH_TINT);
     pose.flash = false;
+    body.draw(pose, 1);
+    expect(body.sprite.tint).toBe(0x808080);
+    // Leaving by a teleport or a logout: pale, then its own tint again (a reused pose).
+    pose.shimmer = true;
+    body.draw(pose, 1);
+    expect(body.sprite.tint).toBe(SHIMMER_TINT);
+    pose.shimmer = false;
     body.draw(pose, 1);
     expect(body.sprite.tint).toBe(0x808080);
   });

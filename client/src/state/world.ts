@@ -54,6 +54,7 @@ import { movesOnStep } from "./portals.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
+import { heavyHit } from "../render/shake.ts";
 import { houseFrom } from "./house.ts";
 import type { HouseView } from "./house.ts";
 import { applyMarket, tradeFrom } from "./market.ts";
@@ -171,6 +172,12 @@ export interface DepartureState {
   id: number;
   reason: DisappearReason;
   start: number;
+  /**
+   * It came back into view since (a player that died and woke up at a temple in view, a
+   * teleport within the view): departureOf no longer gives this reason, but the canvas
+   * still plays the leaving where it was (render/game-canvas.ts).
+   */
+  back: boolean;
 }
 
 /** A number rising from a tile: damage, healing, experience. */
@@ -419,6 +426,11 @@ export class WorldState implements TileSource {
   /** The creature the player attacks (SetTarget), if any. */
   target: number | undefined;
   stats: PlayerStatsState | undefined;
+  /**
+   * performance.now() of the last heavy hit to the player (render/shake.ts heavyHit: a
+   * tenth of the maximum health or more at once): the canvas shakes its camera (UI-9).
+   */
+  heavyHitAt: number | undefined;
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
@@ -617,7 +629,7 @@ export class WorldState implements TileSource {
         this.creatures.delete(msg.value.id);
         pushLive(
           this.departures,
-          { id: msg.value.id, reason: msg.value.reason, start: now },
+          { id: msg.value.id, reason: msg.value.reason, start: now, back: false },
           DEPARTURE_MS,
         );
         if (this.target === msg.value.id) this.target = undefined;
@@ -864,6 +876,7 @@ export class WorldState implements TileSource {
       case "playerStats": {
         const v = msg.value;
         const s = this.self;
+        if (heavyHit(this.stats?.health, v.health, v.maxHealth)) this.heavyHitAt = now;
         if (s && v.speed > 0) s.speed = v.speed;
         if (s && v.maxHealth > 0) s.health = Math.round((v.health * 100) / v.maxHealth);
         this.stats = {
@@ -992,7 +1005,7 @@ export class WorldState implements TileSource {
     const prev = this.creatures.get(c.id);
     // It is back: why it left last no longer holds (a player that died and woke up in
     // view must not fall when it later leaves the drawn floor).
-    if (!prev) this.forgetDeparture(c.id);
+    if (!prev) this.markBack(c.id);
     this.creatures.set(c.id, {
       id: c.id,
       kind: c.kind,
@@ -1166,19 +1179,14 @@ export class WorldState implements TileSource {
   departureOf(id: number): DisappearReason | undefined {
     for (let i = this.departures.length - 1; i >= 0; i--) {
       const d = this.departures[i];
-      if (d?.id === id) return d.reason;
+      if (d?.id === id) return d.back ? undefined : d.reason;
     }
     return undefined;
   }
 
-  /** Drops the departures of creature id, in place (it came back into view). */
-  private forgetDeparture(id: number): void {
-    let kept = 0;
-    for (let i = 0; i < this.departures.length; i++) {
-      const d = this.departures[i];
-      if (d && d.id !== id) this.departures[kept++] = d;
-    }
-    this.departures.length = kept;
+  /** Marks the departures of creature id as over: it came back into view. */
+  private markBack(id: number): void {
+    for (const d of this.departures) if (d.id === id) d.back = true;
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
@@ -1244,6 +1252,17 @@ export class WorldState implements TileSource {
     if (last && movesOnStep(this.content.portals, last.to.x, last.to.y, last.to.z)) return false;
     const w = s.walk;
     return !w || now >= w.start + w.duration - STEP_LEAD_MS;
+  }
+
+  /**
+   * The own creature stands still: no step drawn now and none predicted (MOV-2: a short
+   * tap toward another way only turns it then).
+   */
+  standingStill(now: number): boolean {
+    const s = this.self;
+    if (!s || this.predicted.length > 0) return false;
+    const w = s.walk;
+    return !w || now >= w.start + w.duration;
   }
 
   private get maxPredicted(): number {

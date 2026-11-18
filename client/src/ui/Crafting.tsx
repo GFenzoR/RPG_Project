@@ -13,28 +13,42 @@ interface Props {
   content: ClientContent;
   game: Game | undefined;
   ui: GameUi;
+  /** Inside a GameWindow (the desktop): the frame's title bar names and closes it. */
+  framed?: boolean | undefined;
 }
 
-export function CraftingWindow({ t, content, game, ui }: Props): JSX.Element | null {
+/** The title of the station window: the station's name ("Forge"). */
+export function stationTitle(t: Translate, content: ClientContent, itemId: number): string {
+  const def = content.items[itemId];
+  return def ? t(`item.${def.id}.name`) : t("client.craft.title");
+}
+
+export function CraftingWindow({ t, content, game, ui, framed }: Props): JSX.Element | null {
   const st = ui.station;
   if (!st) return null;
-  const def = content.items[st.itemId];
-  const title = def ? t(`item.${def.id}.name`) : t("client.craft.title");
+  const title = stationTitle(t, content, st.itemId);
   const views = stationRecipes(content.recipes, st, ui.skills);
   return (
-    <section class="crafting" data-testid="crafting" role="dialog" aria-label={title}>
-      <header>
-        <h2>{title}</h2>
-        <button
-          type="button"
-          class="close"
-          aria-label={t("client.dialog.close")}
-          title={t("client.dialog.close")}
-          onClick={() => game?.closeStation()}
-        >
-          ×
-        </button>
-      </header>
+    <section
+      class="crafting"
+      data-testid={framed ? undefined : "crafting"}
+      role={framed ? undefined : "dialog"}
+      aria-label={title}
+    >
+      {!framed && (
+        <header>
+          <h2>{title}</h2>
+          <button
+            type="button"
+            class="close"
+            aria-label={t("client.dialog.close")}
+            title={t("client.dialog.close")}
+            onClick={() => game?.closeStation()}
+          >
+            ×
+          </button>
+        </header>
+      )}
       {views.length === 0 ? (
         <p class="empty">{t("client.craft.empty")}</p>
       ) : (

@@ -53,6 +53,17 @@ describe("strategyFor", () => {
     expect(strategyFor(get("/audio/music.ogg", { range: "bytes=0-" }), ORIGIN)).toBe("network");
   });
 
+  it("never stores the music: whole tracks the audio engine keeps itself", () => {
+    const track = "/audio/sounds/music/gemini/cave_mine_1.ogg";
+    expect(strategyFor(get(track, { range: null }), ORIGIN)).toBe("network");
+    expect(strategyFor(get("/audio/sounds/music/puerto.ogg"), ORIGIN)).toBe("network");
+    // The effects and the ambient loops are small: still cached.
+    expect(strategyFor(get("/audio/sounds/sfx/hit.ogg"), ORIGIN)).toBe("stale-while-revalidate");
+    expect(strategyFor(get("/audio/sounds/ambient/olas.ogg"), ORIGIN)).toBe(
+      "stale-while-revalidate",
+    );
+  });
+
   it("pages are network-first, hashed assets cache-first, the rest revalidated", () => {
     expect(strategyFor(get("/play/?lang=es", { mode: "navigate" }), ORIGIN)).toBe("network-first");
     expect(strategyFor(get("/highscores", { mode: "navigate" }), ORIGIN)).toBe("network-first");

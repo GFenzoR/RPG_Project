@@ -13,7 +13,16 @@ import { describe, expect, it } from "vitest";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { tileActions } from "../input/actions.ts";
-import { formatOz, locationInit, menuItem, tileUse, topItem } from "./items.ts";
+import {
+  formatOz,
+  halfStack,
+  locationInit,
+  menuItem,
+  splitCount,
+  splittable,
+  tileUse,
+  topItem,
+} from "./items.ts";
 import { portalKey, useMode } from "./portals.ts";
 import { formatMessage } from "./messages.ts";
 import { WorldState } from "./world.ts";
@@ -269,5 +278,24 @@ describe("look messages", () => {
       );
     expect(got(20, 0)).toBe("You got iron sword.");
     expect(got(8, 3)).toBe("You got 3 copper coin.");
+  });
+});
+
+describe("Shift+drag splits a stack (docs/17 UI-6)", () => {
+  it("only a stackable item with more than one unit", () => {
+    expect(splittable({ stackable: true }, 5)).toBe(true);
+    expect(splittable({ stackable: true }, 1)).toBe(false);
+    expect(splittable({ stackable: false }, 5)).toBe(false);
+    expect(splittable(undefined, 5)).toBe(false);
+  });
+
+  it("asks half first and moves from 1 to the stack less one", () => {
+    expect(halfStack(37)).toBe(18);
+    expect(halfStack(1)).toBe(1);
+    expect(splitCount(12, 37)).toBe(12);
+    expect(splitCount(0, 37)).toBe(1);
+    expect(splitCount(500, 37)).toBe(36);
+    expect(splitCount(Number.NaN, 37)).toBe(1);
+    expect(splitCount(4.7, 10)).toBe(4);
   });
 });

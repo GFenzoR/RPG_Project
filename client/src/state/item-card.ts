@@ -55,6 +55,8 @@ export interface ItemCardView {
   desc?: string | undefined;
   /** i18n keys of the marks under it (client.card.mark.*). */
   marks: string[];
+  /** A quest item (data/items `quest: true`): its name takes the quest colour. */
+  quest?: boolean | undefined;
 }
 
 /** Kinds of items people carry (the rest are the map: ground, walls, decoration). */
@@ -145,6 +147,11 @@ export function itemCard(
       met: who.magicLevel === undefined ? undefined : who.magicLevel >= def.rune.magicLevel,
     });
   card.desc = def.desc;
+  // docs/17 UI-6: the colour says it is a quest item; the mark says it without colour.
+  if (def.quest === true) {
+    card.quest = true;
+    card.marks.push("client.card.mark.quest");
+  }
   if (carried && kind !== "currency") {
     if (def.tradeable !== true) card.marks.push("client.card.mark.no_trade");
     else if (def.marketable !== true) card.marks.push("client.card.mark.no_market");
@@ -227,4 +234,13 @@ export function cardLines(card: ItemCardView, withName: boolean): number {
     desc +
     card.marks.length
   );
+}
+
+/**
+ * Whether an item lying on the map gets its card under a resting mouse (docs/17 UI-6): what
+ * people carry and can pick up (a sword, a stack of coins, a corpse's loot), never the map
+ * itself (grounds, walls, decoration, a station or a board: their use is the cursor's hint).
+ */
+export function groundCard(def: ItemDef | undefined): boolean {
+  return def !== undefined && CARRIED.has(def.kind ?? "") && def.fixed !== true;
 }

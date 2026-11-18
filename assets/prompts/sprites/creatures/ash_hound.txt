@@ -1,0 +1,39 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/creatures/ash_hound/*.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-18
+# Modo: Hydrogen
+# Hoja devuelta: ash_hound_b.png (sha256 d52cb5aaa04c4829ae821ee7cb615af106504095cafb6c0588ad46fd257891c3)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 64 --layer creature --margin 1 --scale 4.1 --colors 0 --shared-colours --names "walk_s_0,walk_s_1,walk_s_2,walk_s_3,walk_n_0,walk_n_1,walk_n_2,walk_n_3,walk_w_0,walk_w_1,walk_w_2,walk_w_3,idle_s_0+attack_s_0,idle_s_1+attack_s_2,-,-,idle_w_0,idle_w_1,attack_s_1,-,-,-,-,-,attack_w_0,attack_w_1,attack_w_2,death_s_0,death_s_1,death_s_2" --mirror "attack_w_0,attack_w_1,attack_w_2,idle_w_0,idle_w_1,walk_w_0,walk_w_1,walk_w_2,walk_w_3"
+
+A pixel-art animation sprite sheet of one creature for a dark fantasy top-down role-playing game: an ash hound of the volcanic island's ash flats, a lean, long-legged hunting hound a little bigger than a wolf. A rough, shaggy coat of ash-grey fur that smells of a dead campfire, with soot-black patches along its back, a pale grey belly, a narrow head with small glowing orange eyes like embers, a thin ragged tail. A fast pack hunter whose coat does not burn.
+
+Eight rows of frames, each row a separate strip, every frame the same hound at the same scale on the same ground line. The camera always looks down at it from about 45 degrees, so its top shows in every view:
+- Row 1, four frames: the hound running straight toward the camera, head-on and seen from above and in front, its body foreshortened behind its head and never turned to the side (we see its face, chest and front legs, with its back above them; the legs alternate).
+- Row 2, four frames: the hound running straight away from the camera, seen from above and behind (we see its back, hindquarters and tail; the legs alternate).
+- Row 3, four frames: the hound running to the right, in profile facing right.
+- Row 4, six frames: the hound standing still and panting: two frames facing the camera, two frames seen from behind, two frames in profile facing right.
+- Row 5, three frames: the hound biting toward the camera, seen from above and in front (crouches, lunges with open jaws, recovers).
+- Row 6, three frames: the hound biting away from the camera, seen from above and behind (crouches, lunges with open jaws, recovers).
+- Row 7, three frames: the hound biting to the right, in profile facing right (crouches, lunges with open jaws, recovers).
+- Row 8, three frames: the hound dying, seen from the front (staggers, collapses, lies still on its side).
+
+The same silhouette, proportions, colours and size in every frame: only the pose and the facing change. Draw no shadow under the hound and no lines or borders between the frames.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

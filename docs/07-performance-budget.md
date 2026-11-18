@@ -197,32 +197,66 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
-(carga perezosa) y queda decodificado en memoria.
+(carga perezosa). Los efectos y el ambiente quedan decodificados en memoria; la música se
+transmite (ver abajo).
 
-| Métrica | Presupuesto | Hoy |
+| Métrica | Presupuesto | Hoy (2026-11-18) |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~1454 KiB (38 archivos; 1293 KiB de música) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
+| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~188 KiB / ~29 KiB |
+| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~29 KiB |
+| Descarga al cambiar de zona | el tema que suena y el siguiente de su pool (≤ 3 MiB) | ~1,7–2,2 MiB |
+| Música en memoria | `KEEP_STREAMS` (4) archivos comprimidos sin usar, más los que suenan o se esperan si son más (como mucho 6: 4 voces y 2 pedidos), + los decodificadores de 2–4 elementos | ~4–5 MB; ~7 MB en el peor caso |
+| Música en la caché de la PWA | nada (`client/src/sw/policy.ts`: `/audio/sounds/music/` va a la red) | 0 |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~36 MB en el peor caso |
+| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
 
-- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en la música de
-  soundgen, 20 en la de Gemini y 16 en ambiente.
-- **Música de Gemini** (2026-11-18, `make music-gemini`, `assets/README.md` "Sonido"): un
-  tema de ~3 min decodificado ocupa ~33 MB, así que cada toma entra como un loop de 54 a
-  72 s (`music_import.py` `MAX_SECONDS`) a 20 kbps mono: 130–190 KiB por loop. Con las 8
-  tomas de hoy quedan ~80 KiB libres del total: más versiones (las cuevas que pidió el
-  dueño) necesitan subir el tope, bajar los kbps o acortar los loops.
-- **Memoria:** el motor (`client/src/audio/engine.ts`, `KEEP_LOOPS`) deja decodificados
-  solo los dos últimos loops que pidió cada canal (el que suena y el anterior, para ir y
-  volver sin decodificar de nuevo); los demás se olvidan. Peor caso: efectos e interfaz
-  (~3 MB), dos ambientes (~6 MB) y los dos loops de música más largos (~27 MB).
-- El test de `tools/soundgen` (`checkBudget`) falla si algún archivo o el total se pasan.
-  También lo comprueba `make sounds`. Los límites están en `BUDGET`
-  (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
-- Un sonido silenciado no ocupa voz. Si el archivo llega más de 300 ms tarde, ese sonido
-  se descarta.
+- **Por qué cambió (pedido del dueño, 2026-11-18):** al escuchar la música de Gemini pidió
+  transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
+  Puerto y más versiones de cueva. Los loops de ~1 minuto mono a 20 kbps del lote 7 eran
+  justo la monotonía que no quiere y sonaban finos. Ahora cada toma entra **entera** (~3 min)
+  en **Ogg Opus estéreo**, y el tope pasó de 1,5 MiB a 16 MiB en total, con 8 MiB por pool.
+- **Bitrate medido** (2026-11-18, la toma 1 de Puerto y la 1 de Cuevas contra el AAC de
+  Gemini, error por tercio de octava y ancho estéreo): a 24 kbps el códec junta los canales
+  (se pierde un cuarto a un tercio del ancho); desde 32 kbps el estéreo queda entero y el
+  error baja despacio (Puerto 2,25 / 2,10 / 2,01 / 1,86 dB a 32 / 40 / 48 / 56 kbps; Cuevas
+  2,01 / 1,72 / 1,61 / 1,20). Los temas van a **48 kbps** (~1,1 MiB por toma); las cuevas,
+  drones y goteos ralos cuya fuente corta en 14 kHz, a **40 kbps** (~0,85 MiB), para que su
+  pool de 7 entre en el presupuesto con lugar para dos versiones más.
+- **Streaming:** un tema de 3 minutos en estéreo decodificado entero ocuparía ~66 MB, más que
+  todo el presupuesto de memoria. El motor (`client/src/audio/engine.ts`) baja el archivo una
+  vez a un object URL (los bytes comprimidos) y lo toca con un `<audio>` conectado a Web Audio
+  (`MediaElementAudioSourceNode`), que decodifica de a poco y puede saltar a cualquier
+  segundo sin depender de que el servidor acepte rangos (`Range`). Guarda los últimos
+  `KEEP_STREAMS` archivos (4) que no estén sonando ni esperándose; los que suenan o se
+  esperan se guardan además de esos, así que en el peor caso (cuatro voces durante un
+  corte y dos temas pedidos) son seis. Con la música silenciada no baja nada. Un archivo
+  que no llega (o que el elemento no puede decodificar) se vuelve a pedir a los
+  `STREAM_RETRY_MS` (5 s), con la espera doblada en cada falla hasta 60 s. Uno que el
+  elemento no sabe tocar (`MEDIA_ERR_SRC_NOT_SUPPORTED`, un códec que le falta) no se vuelve
+  a pedir en la sesión, y si el navegador dice que no toca Ogg Opus en `<audio>`
+  (`canPlayType`, WebKit viejo) no se baja ningún tema: la música queda en silencio en vez
+  de bajar ~1 MB por minuto para nada.
+- **La PWA no guarda la música:** el service worker deja `/audio/sounds/music/` a la red
+  (como `/api`). Con stale-while-revalidate una PWA instalada terminaba guardando los
+  ~13 MiB de música y escribía un tema entero (~1 MB) en su caché en cada cambio de zona;
+  el motor ya baja cada tema una sola vez por sesión y el navegador lo cachea por HTTP.
+  Efectos y ambiente (chicos) siguen en la caché.
+- **Los temas de soundgen** (sin `seconds`: lo que suena en un lugar que el dueño marca
+  `none`) son loops cortos: se decodifican (~10 MB de PCM mono cada uno) y suenan en un
+  `AudioBufferSourceNode` con `loop`, sin hueco en la vuelta (el `loop` de un `<audio>`
+  deja uno en Chromium). Se sueltan apenas dejan de sonar y de esperarse.
+- **Formatos:** efectos y ambiente **Ogg Opus mono** 48 kHz (32 kbps los efectos, 16 el
+  ambiente); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
+  música de Gemini estéreo a 48 kbps (40 las cuevas). `make music-gemini` escribe ese
+  formato (`tools/gemini/music_import.py`, `KBPS` y `AMBIENT_KBPS`).
+- El test de `tools/soundgen` (`checkBudget`) falla si algún archivo, una pool o el total se
+  pasan. También lo comprueban `make sounds` y `make music-gemini`. Los límites están en
+  `BUDGET` (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
+- Un sonido silenciado no ocupa voz. Si el archivo de un efecto llega más de 300 ms tarde,
+  ese sonido se descarta. Un tema que tarda en llegar no corta nada: la música anterior
+  sigue hasta que el nuevo puede sonar.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
@@ -358,12 +392,28 @@ y 2048x896), 1,83 MB + 884 KB de PNG y 358 KB + 289 KB de JSON, más 176 KB de
 sprites nuevos del mapa: 16 piezas de 32x64 por muro (5 materiales), looks de suelo, frames de
 agua, lava, espuma, copas y fuego, y sombras.
 
+**Disparar y conjurar de LPC** (2026-11-18, `feat/lpc-actions`): 336 frames más de 64x64
+(`shoot` y `cast` de los 4 atuendos, 7 por dirección cada uno, y el de su ataque de 4
+monstruos). Sigue en 2 páginas, las dos de 2048x2016: 1,67 MB + 1,88 MB de PNG y 361 KB +
+520 KB de JSON, más 240 KB de `atlas.json`. La próxima tanda de frames abre una tercera
+página: ahí conviene lo pendiente de arriba (PNG indexado, o los NPCs por demanda).
+
+**Atlas con la segunda tanda de criaturas de Gemini** (2026-11-18,
+`feat/gemini-creatures-2`): sigue en 2 páginas (2048x2016 y 2048x1888; la segunda era de
+2048x1344), 1,82 MB + 1,77 MB de PNG (antes 1,67 + 1,30) y 346 KB + 501 KB de JSON, más
+235 KB de `atlas.json`: unos 625 KB más de PNG y 110 KB más de JSON. Son ~235 frames: los
+siete monstruos que eran un tile de Dungeon Crawl (con sus espejos al este; el custodio en
+96x96) y el jabalí y el ciervo de spritegen, que pasaron de 32x32 a 64x64. A la segunda
+página le quedan 160 px de alto: unos 60 frames de 64x64 más y el atlas pasa a 3 páginas.
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
 chunk, `MapView.forEachEmitter`). Se apagan con movimiento reducido. Las cajas de las
 criaturas (click en la cabeza, siluetas) reusan sus objetos frame a frame; las siluetas
-salen de un pool que solo crece hasta las que se vieron juntas.
+salen de un pool que solo crece hasta las que se vieron juntas. Los pasos (MOV-7) usan el
+mismo pool: el ambiente deja 16 de las 100 libres para ellos (`STEP_RESERVE`), y cada paso
+sobre arena, tierra o ceniza suma 6 y sobre arena mojada 8, de 220 a 460 ms de vida.
 
 ### Vista ancha (31x21, 2026-11)
 La ventana de cada jugador pasó de 15x11 + 1 (17x13 = 221 casillas) a 31x21 + 1 (33x23 =

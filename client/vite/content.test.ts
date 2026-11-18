@@ -232,6 +232,13 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
     expect(byId.get("oak_tree")?.board).toBeUndefined();
   });
 
+  it("marks the quest items (quest: true), and only those (docs/17 UI-6)", () => {
+    for (const id of ["smuggler_tally", "sealed_coffer", "delver_chart", "forge_seal"])
+      expect(byId.get(id)?.quest, id).toBe(true);
+    expect(byId.get("iron_ore")?.quest).toBeUndefined();
+    expect(byId.get("iron_sword")?.quest).toBeUndefined();
+  });
+
   it("files every dialog option under one topic per NPC, with no conflicts", () => {
     const { topics, conflicts } = dialogTopics(REPO);
     expect(conflicts).toEqual([]);

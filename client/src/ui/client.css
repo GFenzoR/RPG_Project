@@ -1,4 +1,6 @@
 /* Fonts (docs/17 UI-3), self-hosted at /fonts/ (vite/fonts.ts). */
+/* The interface's text size (Options → Interface, docs/17 UI-3: 90 % to 130 %, in rem) is
+   the root font size, set by state/ui-prefs.ts as --ui-text-scale. */
 @import "./fonts.css";
 /* The desktop game screen: dock, orbs, toolbar and windows (docs/17 UI-4, UI-5). */
 @import "./windows.css";
@@ -69,11 +71,23 @@
   background: var(--ui-void);
   color: var(--ui-text);
 }
+html {
+  font-size: calc(100% * var(--ui-text-scale, 1));
+}
 html,
 body,
 #app {
   margin: 0;
   height: 100%;
+}
+/* Read by screen readers, not shown (a hint of the window's move handle). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 /* The panels' top margin stays inside the page (it used to push the body's background
    down and leave a black band over it). */
@@ -785,6 +799,33 @@ kbd {
   border: none;
   background: none;
 }
+/* An empty equipment slot shows what it takes (docs/17 UI-5): its silhouette, faded
+   (ui/slots/<slot> of the atlas, set as --slot-icon by Inventory.tsx emptySlotStyle). */
+.inventory .equipment .slot {
+  position: relative;
+}
+.inventory .equipment .slot::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  margin: auto;
+  width: 32px;
+  height: 32px;
+  background: var(--slot-icon) var(--slot-icon-pos, 0 0) no-repeat;
+  image-rendering: pixelated;
+  opacity: 0.3;
+  pointer-events: none;
+}
+/* A quest item (data/items quest: true): a thin ring of the quest colour around it. */
+.item[data-quest]::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  box-shadow:
+    inset 0 0 0 1px var(--ui-item-quest),
+    inset 0 0 6px rgb(226 196 122 / 0.35);
+  pointer-events: none;
+}
 .inventory .item {
   position: relative;
   display: block;
@@ -988,6 +1029,30 @@ body.picking-item .map-hint {
   box-shadow: 0 -1px 0 rgb(226 196 122 / 0.35);
   pointer-events: none;
 }
+/* docs/17 UI-9: a slot flashes gold when it is used (its key or a click), 150 ms. Off with
+   reduced motion (windows.css ends every animation there; this one is not even drawn). */
+.hotbar .flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 55%, rgb(255 236 170 / 0.75), transparent 75%);
+  box-shadow: inset 0 0 0 1px var(--ui-gold-300);
+  opacity: 0;
+  animation: hotbar-flash 150ms var(--ui-ease-out);
+}
+@keyframes hotbar-flash {
+  from {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hotbar .flash {
+    display: none;
+  }
+}
+:root[data-motion="reduced"] .hotbar .flash {
+  display: none;
+}
 .hotbar .edit {
   width: 1.8rem;
   padding: 0;
@@ -1100,6 +1165,24 @@ body.picking-item .map-hint {
   from {
     opacity: 0;
     transform: translateY(3px);
+  }
+}
+/* docs/17 UI-8: the words appear letter by letter; what is still to come keeps its place
+   (the box does not grow as they appear). A click shows them whole. */
+.npc-text[data-typing] {
+  cursor: pointer;
+}
+.npc-rest {
+  visibility: hidden;
+}
+/* The portrait breathes: a slow rise of a pixel, from its feet (off with reduced motion). */
+.npc-portrait .big-icon {
+  transform-origin: 50% 100%;
+  animation: npc-idle 3.2s ease-in-out infinite;
+}
+@keyframes npc-idle {
+  50% {
+    transform: translateY(-1px) scaleY(1.02);
   }
 }
 .dialog-filter,
@@ -2981,11 +3064,17 @@ button.credits-link {
   gap: 8px;
   margin-bottom: 2px;
 }
+/* docs/17 UI-6: the name in parchment, a quest item's in the quest colour (and its card says
+   it with a mark, for whoever does not see the colour). */
 .card-name {
   font-family: var(--ui-font-title);
   font-weight: 700;
   font-size: 14px;
-  color: var(--ui-gold-300);
+  color: var(--ui-text);
+}
+.card-name.quest,
+.touch-menu-name.quest {
+  color: var(--ui-item-quest);
 }
 .card-name::first-letter {
   text-transform: uppercase;
@@ -3055,6 +3144,45 @@ button.credits-link {
   image-rendering: pixelated;
 }
 /* The card as a tooltip: never takes the pointer. */
+/* Shift+drag of a stack (docs/17 UI-6): how many go where it was dropped. */
+.split-prompt {
+  position: fixed;
+  z-index: 61;
+  box-sizing: border-box;
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--ui-text);
+  background-color: rgb(15 13 11 / 0.96);
+  background-image: var(--ui-grain);
+  border: 2px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-frame-shadow);
+  animation: gwin-in var(--ui-dur) var(--ui-ease-out);
+}
+.split-prompt label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.split-prompt label span::first-letter {
+  text-transform: uppercase;
+}
+.split-prompt input {
+  width: 4.5rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+.split-prompt .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
 .item-tooltip {
   position: fixed;
   z-index: 60;
