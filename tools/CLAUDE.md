@@ -135,7 +135,8 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
   botones (`gemini_web.CLICK_TOOL_JS`).
 - **Imagen (verificado el 2026-11-18, diez pedidos):** `image` elige "Crear imagen" en
   Hydrogen y la hoja llega en ~30 s, una sola imagen de 1024x572 a 765x1024 (el formato lo
-  elige Gemini); ninguno topó con la cuota.
+  elige Gemini); ninguno topó con la cuota. Ni los trece de la segunda tanda (ese mismo día,
+  uno tras otro, tres con `--ref`).
 
 **Lo que se mantiene de Ants of Neque (cada regla costó pedidos reales):**
 - **Se detecta el medio, nunca se cree el texto:** la respuesta puede decir "solo genero
@@ -268,7 +269,9 @@ ART-6; la lava no). El
 preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
 los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
 `animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
-(`castShadow`, al final de `render`). Los PNG se commitean y el test exige que coincidan
+(`castShadow`, al final de `render`), salvo las de `shadow: false`: el jabalí y el ciervo,
+de 64x64 sobre la sombra de contacto del renderer como los animales de Gemini (docs/17
+ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)".
 

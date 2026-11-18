@@ -141,28 +141,37 @@ el punto 5:
       sus filas de `CREDITS.csv` como estas). Con un servidor sin `attack_events` todo
       sigue jugando `attack`. Mirar en el E2E y en el playtest si el gesto de tensar sin
       arco se lee como un tiro (los monstruos tiran botellas, cuchillos y esquirlas).
-    - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama
-      `feat/gemini-creatures`, docs/17 "Hecho: criaturas de Gemini"): lobo, rata de
-      sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-      espinoso. Siguen con un frame y ANI-5 `hollow_crawler`, `ore_beetle`, los cinco del
-      Volcán (`ash_hound`, `cinder_salamander`, `slag_golem`, `ember_wyrmling`,
-      `slagbound_warden`) y la gaviota (arte propio de spritegen: hay una hoja de Gemini
-      buena en `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin
-      commitear ni usar; cambiarla es decisión del dueño). Mismo camino: `assets/README.md`, "Criaturas animadas de una sola
-      hoja".
-    - **Lo que las hojas de Gemini no trajeron:** ataques de frente o de espaldas en
-      cuatro de las siete (cangrejo al sur; murciélago y espinoso al norte; sapo al norte y
-      al sur, y sin quieto al norte): esas direcciones usan la embestida procedural con el
-      frame parado. El espinoso a 64x64 queda con algo de ruido de corteza (la ilustración
-      tiene mucha textura y el muestreo es por vecino más cercano). Un pedido nuevo de esas
-      filas sueltas no saldría con el mismo dibujo: si se quiere, una hoja entera nueva.
-    - **Revisar en el E2E** (no se corrió en la rama): las siete criaturas en el juego, su
-      tamaño al lado de los personajes y los monstruos de Dungeon Crawl que quedan, y el
-      murciélago (oscuro) sobre los suelos de la mina.
-    - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
-      Dungeon Crawl, una (ART-2 lo acepta). Las criaturas de Gemini siguen la escala de LPC
-      (lobo, araña, sapo y espinoso de 64x64), así que ahora un lobo es más grande que el
-      jabalí de spritegen.
+    - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
+      Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
+      cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
+      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo de mena, sabueso de
+      ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el custodio de
+      escoria, jefe del Volcán en 96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
+      con un frame de spritegen: hay una hoja de Gemini buena en
+      `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin commitear ni usar;
+      cambiarla es decisión del dueño. Cómo se hace una: `assets/README.md`, "Criaturas
+      animadas de una sola hoja".
+    - **Lo que las hojas de Gemini no trajeron** (esas direcciones usan la embestida
+      procedural con el frame parado): primera tanda, cangrejo al sur; murciélago y
+      espinoso al norte; sapo al norte y al sur, y sin quieto al norte. Segunda tanda:
+      atacar al norte en el reptante, el sabueso, la salamandra y el dragoncillo; al sur en
+      la salamandra y el dragoncillo; a los lados en el custodio; el escarabajo no tiene
+      ataque con frames (a 32 px las mandíbulas no se ven); el sabueso, sin quieto al norte.
+      Hojas enteras nuevas del cangrejo, el sapo y el espinoso con su frame del juego como
+      referencia tampoco trajeron esos ataques y cambiaron el aspecto: no se usaron ni se
+      volverán a pedir así. El espinoso a 64x64 queda con algo de ruido de corteza.
+    - **Revisar en el E2E** (no se corrió en las ramas): las catorce criaturas en el juego,
+      su tamaño al lado de los personajes, el murciélago (oscuro) sobre los suelos de la mina,
+      el sabueso de ceniza sobre la ceniza del Volcán (gris sobre gris: en la fila de prueba
+      se lee por el lomo negro, pero contrasta poco) y el custodio en la forja.
+    - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
+      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo de spritegen
+      pasaron a 64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con
+      los pies en la casilla y la sombra de contacto como el resto. La gaviota queda de
+      32x32 con su sombra pintada hasta que el dueño elija su arte.
+    - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
+      (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
+      dibujo (`top` y el ancho del frame están en `atlas.json`) sería un cambio del cliente.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
       Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
@@ -803,14 +812,15 @@ y el modelo ya prevé las tablas `cosmetics` y `account_cosmetics`.
 T0.5 quedó hecha (PR #77) y ya no hay placeholders:
 - **Pack Dungeon Crawl** (CC0, `assets/vendor/dungeon-crawl/`): suelos de pasto, arena,
   tierra, piedra y agua, muros de piedra y roca, árboles, casi todos los monstruos y NPCs,
-  armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`.
+  armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`. Desde el
+  2026-11-18 ningún monstruo sale del pack: son de Gemini, personajes de LPC o spritegen.
 - **Arte propio** (`tools/spritegen`, CC0): lo que el pack no tenía (madera, muelle,
   yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
   materiales, comida, herramientas, monedas de cobre y plata, mochila), el jugador
   (outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`, y los
   atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
   propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
-  de las criaturas").
+  de las criaturas"), salvo el jabalí y el ciervo, de 64x64 sobre la sombra de contacto.
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

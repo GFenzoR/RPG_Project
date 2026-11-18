@@ -148,8 +148,23 @@ parte de arriba transparente.
 | Muro (una pieza) | 32x64; 32x96 para murallas | abajo a la derecha | Cara de 32 px y tapa sobre la casilla de atrás (ART-3) |
 | Árbol | 64x64, 64x96 o 96x96 | abajo, tronco centrado (ver abajo) | Copa animada por viento (ART-7) |
 | Criatura chica (rata, murciélago) | 32x32 | abajo, centrada | Figura de 16–28 px |
+| Animal mediano (lobo, jabalí, ciervo, sabueso, araña, sapo) | 64x64 | pies centrados en la casilla | A la escala de la persona de LPC (ver "Animales medianos") |
 | Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
 | Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
+
+- **Animales medianos** (decidido el 2026-11-18, con la segunda tanda de Gemini): todos
+  los animales se miden contra la persona de LPC (~46 px, 1,8 m: ~25 px por metro) y no
+  contra la casilla. Con eso: lobo y sabueso ~40 px de largo, jabalí ~36 de largo y 23 de
+  alto, ciervo ~42 de alto con las astas (una persona), reptante hueco y salamandra ~45 de
+  largo, gólem ~50 de alto y ancho como dos, dragoncillo ~58 de largo, y el jefe del
+  Volcán (`slagbound_warden`) ~77 de alto en 96x96. Rata, cangrejo y escarabajo quedan en
+  32x32 (son chicos de verdad). El jabalí y el ciervo de spritegen eran de 32x32 con el
+  ancla de siempre y la sombra pintada: al lado del lobo de Gemini el ciervo parecía una
+  cría y los dos pisaban 4 px más abajo que el resto. Ahora son su mismo diseño dibujado
+  1,2 y 1,4 veces más grande en 64x64 (`scaleOnto` en `recipes/creatures.ts`), con
+  `anchor: bc` y la sombra de contacto (`shadow: false` en la receta, `shadow: ellipse` en
+  `assets/sprites.yaml`), como todo animal animado. La gaviota sigue de 32x32 con su
+  sombra pintada mientras el dueño no decida su arte.
 
 - **Ancla por sprite** (hecho para criaturas, 2026-11-17): `anchor: br` (abajo a la
   derecha, el de siempre) o `anchor: bc` (centrado; los pies `FEET_LINE` = 4 px por encima
@@ -1144,7 +1159,7 @@ Por impacto en pantalla y por costo:
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini") |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -1511,8 +1526,35 @@ corta y se revisa: `assets/README.md`, "Criaturas animadas de una sola hoja".
   que quedan sigue (docs/14).
 - **Quedaron fuera:** la gaviota (`thieving_gull`) ya es arte propio de spritegen; su hoja
   de Gemini salió bien pero cambiarla es decisión del dueño. Los del Volcán y
-  `hollow_crawler`, `ore_beetle` siguen con ANI-5.
+  `hollow_crawler`, `ore_beetle` siguieron con ANI-5 hasta la segunda tanda (abajo).
 - **/credits** lista lo hecho con Gemini ("Hecho con IA", desde `CREDITS.md`).
+
+**Segunda tanda (2026-11-18, rama `feat/gemini-creatures-2`):** `hollow_crawler` y
+`ore_beetle` (Bosque y Puerto) y los cinco del Volcán: `ash_hound`, `cinder_salamander`,
+`slag_golem`, `ember_wyrmling` y el jefe `slagbound_warden`. Ya ningún monstruo usa un
+solo frame de Dungeon Crawl. Trece pedidos: uno por criatura, uno más para el sabueso
+(caminaba de costado hacia la cámara), el gólem (casi negro y chico en la hoja) y el
+custodio (vino con líneas de grilla y el martillo cambiando de mano), y tres hojas nuevas
+para los ataques que faltaban (abajo).
+- **Tamaños** (ART-2, "Animales medianos"): escarabajo en 32x32; reptante, sabueso,
+  salamandra, gólem y dragoncillo en 64x64; el custodio en **96x96**, ~77 px de alto, una
+  vez y media una persona, con su martillo.
+- **Los brillos:** las grietas de lava, la garganta y el fuego del dragoncillo, y el
+  horno del custodio se perdían al reducir los colores de todos los frames juntos a 16 (son
+  pocos píxeles). Los del Volcán se cortaron con `--colors 0`: cada color va directo a la
+  paleta de spritegen (que tiene el naranja de `ember`) y el brillo queda.
+- **Lo que no vino:** atacar al norte en todos menos el gólem y el custodio, al sur en la
+  salamandra, el escarabajo y el dragoncillo, y a los lados en el custodio (no dibujó un
+  martillazo de perfil) y el escarabajo (que no ataca con frames en ninguna dirección: sus
+  mandíbulas no se ven a 32 px y queda la embestida); quieto al
+  norte en el sabueso (su "quieto de espaldas" medía 9 px menos que su caminar y se encogía
+  al parar: se queda con el primer frame de caminar). Esas direcciones usan la embestida
+  de ANI-5, como en la primera tanda.
+- **Las hojas nuevas del cangrejo, el sapo y el espinoso** (con un frame del juego como
+  referencia, para tapar sus ataques que faltan): ninguna trajo el ataque que faltaba (el
+  cangrejo de frente sigue sin pinza, el sapo y el espinoso no atacan de espaldas) y el
+  sapo y el espinoso salieron con otro aspecto (más verde, más liso). No se usaron. El
+  murciélago no se pidió: en tres intentos Gemini no dibujó un ataque de espaldas.
 
 ### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
 Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en

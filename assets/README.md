@@ -266,11 +266,14 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
   bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
-- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
+- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo), salvo el jabalí y
+  el ciervo, que se paran sobre la sombra de contacto.
 - Todo determinista: ruido con semilla, nunca `Math.random`.
 - Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). El
   jabalí y el ciervo tienen un trote de 4 frames mirando a la izquierda (`walk_w_0..3`,
-  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales.
+  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales. Son 64x64: su
+  diseño de 32x32 dibujado 1,2 y 1,4 veces más grande (`scaleOnto`), centrado abajo para
+  `anchor: bc`, a la escala de los animales de Gemini (docs/17 ART-2, "Animales medianos").
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
   reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
@@ -293,7 +296,10 @@ de `render`:
 - pinta solo píxeles transparentes, desde el 40 % de la altura de la figura hacia abajo;
 - usa el color `SHADOW` (casi negro y opaco, como todo en un sprite).
 
-Una receta puede ajustarla con `shadow: { dx, dy, from }`.
+Una receta puede ajustarla con `shadow: { dx, dy, from }`, o quitarla con `shadow: false`
+cuando la criatura se para sobre la sombra de contacto del renderer como los animales
+animados (`shadow: ellipse` en `assets/sprites.yaml`): el jabalí y el ciervo desde que son
+de 64x64 (docs/17 ART-2, "Animales medianos").
 
 Se hace en spritegen y no en el renderer por tres razones:
 - los PNG de `vendor/` no se tocan, así que no se les puede quitar la sombra que traen;
@@ -363,9 +369,10 @@ Arte, de la hoja al sprite:
 3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
 
-**Criaturas animadas de una sola hoja** (así se hicieron las siete del 2026-11-18: lobo,
+**Criaturas animadas de una sola hoja** (así se hicieron las catorce del 2026-11-18: lobo,
 rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-espinoso; prompts en `assets/prompts/sprites/creatures/`):
+espinoso, y en la segunda tanda reptante hueco, escarabajo de mena y los cinco del Volcán;
+prompts en `assets/prompts/sprites/creatures/`):
 - **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
   `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña
   cubierta de musgo que escupe savia) y pide **ocho filas, cada una una tira**: caminar
@@ -380,7 +387,16 @@ espinoso; prompts en `assets/prompts/sprites/creatures/`):
   ataque que falta en una dirección lo hace la embestida de ANI-5 ("Quieto y atacar solo
   hacia sus lados", arriba), o se arma con el frame parado, el de golpe que sí haya y el
   parado otra vez. Una hoja con frames que no son la misma criatura se pide otra vez (dos
-  veces como mucho) o la criatura se deja.
+  veces como mucho) o la criatura se deja. **Sí se pide otra vez** (segunda tanda, con
+  una frase más en el prompt): una fila de frente dibujada de costado ("straight toward the
+  camera, head-on ... never turned to the side"), una hoja con líneas de grilla o paneles
+  entre los dibujos (no son magenta y el corte las toma por dibujo: "Draw no lines,
+  borders, boxes or panels between the frames") y una criatura casi negra que no se leería
+  sobre los suelos oscuros (se pide con bordes más claros donde da la luz). Un dibujo con
+  algo escrito encima (un "10" en la cabeza del gólem) se descarta con `-`.
+- **Una hoja nueva para los ataques que faltan** no sirvió (cangrejo, sapo y espinoso,
+  con un frame del juego como `--ref`): Gemini sigue sin dibujar el ataque de frente o de
+  espaldas que faltaba y cambia el aspecto (más verde, más liso). No se usó ninguna.
 - **El corte** no es una grilla pareja: `--cut rows` toma las filas tal como vinieron
   (cada una en partes iguales si sus dibujos caen una en cada parte, así conserva el
   registro con que se dibujaron; el que se sale de su parte no se corta y el vecino no se
@@ -391,9 +407,21 @@ espinoso; prompts en `assets/prompts/sprites/creatures/`):
   frames de perfil, `--shared-colours` reduce los colores de todos juntos (de a uno, el
   pelaje titilaba entre frames) y `--scale` fija la escala (fuente por píxel) cuando el
   dibujo más ancho, una muerte tendida o unas alas abiertas, achicaría al resto.
-- **Tamaño** (ART-2, al lado de un personaje de LPC de ~46 px): rata y cangrejo en 32x32;
-  lobo, araña, sapo, murciélago y espinoso en 64x64 con `anchor: bc` (el lobo mide ~36 px
-  de largo, el espinoso ~40 de alto). Todos con `shadow: ellipse` y `mirror: true`.
+  **`--colors 0`** cuando la criatura tiene un brillo chico (grietas de lava, una garganta
+  encendida, un horno): reducir los colores de todos juntos a 16 los funde con el marrón
+  de al lado; sin límite cada color va directo a la paleta, que tiene el naranja de
+  `ember`.
+- **El mismo tamaño en cada dirección:** con `--cut blobs` todos los dibujos van a una
+  escala, así que un "quieto de espaldas" dibujado más chico que su caminar hace que la
+  criatura se encoja al parar. Se mide con las cajas de cada frame (el sabueso: 33 px
+  caminando al norte, 24 quieto); si salta mucho, se deja esa dirección sin quieto y la
+  criatura se para en el primer frame de caminar.
+- **Tamaño** (ART-2, "Animales medianos": al lado de un personaje de LPC de ~46 px, ~25 px
+  por metro): rata, cangrejo y escarabajo en 32x32; lobo, araña, sapo, murciélago,
+  espinoso, reptante, sabueso, salamandra, gólem y dragoncillo en 64x64 con `anchor: bc`
+  (el lobo mide ~39 px de largo, el sabueso ~40, el gólem ~50 de alto); el jefe del Volcán
+  en 96x96 (~77 px de alto). Todos con `shadow: ellipse` y `mirror: true`. La escala se
+  elige con `--scale` mirando el dibujo de perfil (el largo) o de frente (el alto).
 - **Revisar** con Read: `_drawings.png`, `_preview.png`, `anim_sheet.py
   assets/sprites/creatures/<c>` y una fila de criaturas sobre pasto armada del atlas; en el
   juego, los screenshots del E2E. Después, `credit.py build/gemini/import/<c>/import.json

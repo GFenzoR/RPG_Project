@@ -364,6 +364,14 @@ monstruos). Sigue en 2 páginas, las dos de 2048x2016: 1,67 MB + 1,88 MB de PNG 
 520 KB de JSON, más 240 KB de `atlas.json`. La próxima tanda de frames abre una tercera
 página: ahí conviene lo pendiente de arriba (PNG indexado, o los NPCs por demanda).
 
+**Atlas con la segunda tanda de criaturas de Gemini** (2026-11-18,
+`feat/gemini-creatures-2`): sigue en 2 páginas (2048x2016 y 2048x1888; la segunda era de
+2048x1344), 1,82 MB + 1,77 MB de PNG (antes 1,67 + 1,30) y 346 KB + 501 KB de JSON, más
+235 KB de `atlas.json`: unos 625 KB más de PNG y 110 KB más de JSON. Son ~235 frames: los
+siete monstruos que eran un tile de Dungeon Crawl (con sus espejos al este; el custodio en
+96x96) y el jabalí y el ciervo de spritegen, que pasaron de 32x32 a 64x64. A la segunda
+página le quedan 160 px de alto: unos 60 frames de 64x64 más y el atlas pasa a 3 páginas.
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por

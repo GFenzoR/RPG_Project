@@ -394,3 +394,10 @@ secundaria.
   cayendo; polvo y ondas al pisar por suelo (`steps`, partículas de A13); el toque corto
   que solo gira (MOV-2) y Ctrl+flecha; `11b-death` en primer plano. Lo que queda: docs/14,
   "Pendientes conocidos".
+- [x] **Criaturas de Gemini, segunda tanda (docs/17 "Hecho: criaturas de Gemini"; rama
+  `feat/gemini-creatures-2`).** Reptante hueco, escarabajo de mena y los cinco del Volcán
+  (sabueso de ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el
+  custodio de escoria, jefe de 96x96) con caminar, quieto, atacar y morir; ningún monstruo
+  queda con un solo frame de Dungeon Crawl. Escala revisada (ART-2, "Animales medianos"): el
+  jabalí y el ciervo de spritegen pasan a 64x64 más grandes, con los pies en la casilla y la
+  sombra de contacto. La gaviota sigue de spritegen (decisión del dueño).
