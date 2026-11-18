@@ -1,6 +1,8 @@
 package session
 
 import (
+	"slices"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -281,7 +283,10 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 	var floors [SeaLevel + 1]uint8
 	var stack []tileEntry
 	for _, z := range viewFloors(p.pos.Z, floors[:0]) {
-		tiles := make([]int32, wd*ht)
+		if cap(w.tileBuf) < wd*ht {
+			w.tileBuf = make([]int32, wd*ht)
+		}
+		tiles := w.tileBuf[:wd*ht]
 		any := false
 		for y := range ht {
 			for x := range wd {
@@ -304,7 +309,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 			}
 		}
 		if any {
-			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: tiles})
+			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: slices.Clone(tiles)})
 		}
 	}
 	w.eachInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(c *Player) {

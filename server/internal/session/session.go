@@ -247,6 +247,9 @@ type World struct {
 	active     map[uint64]struct{}
 	activeKeys []uint64
 	thinkBuf   []*Monster
+	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
+	// tile in the area (most of the 8 surface floors today) costs no allocation.
+	tileBuf    []int32
 	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
 	corpses    map[world.Pos][]*Corpse
 	corpseItem *content.Item

@@ -371,7 +371,7 @@ tiempos de `go test -bench` (mediana de 3):
 | Tick, stress 300 (µs / asignaciones) | 912 / 1733 | 1020 / 1045 | sin crecimiento |
 | `BenchmarkTickPlayersWalking` 300 (µs / asignaciones) | 140 / 1341 | 177 / 1392 | |
 | `BenchmarkTickMonsters` 100 + 256 (µs / asignaciones) | 250 / 1005 | 237 / 589 | |
-| `FullMapView` en el Farol, superficie (bytes / µs para armarlo) | 352 / 14 | 967 / 46 | < 20 KB |
+| `FullMapView` en el Farol, superficie (bytes / µs para armarlo) | 352 / 14 | 967 / 42 | < 20 KB |
 | `FullMapView` en la mina volcánica, piso 8 (bytes / µs) | 295 / 6 | 843 / 13 | |
 | Subir y bajar sin parar por la mina (B/s) | 950 | 2262 | < 4096 |
 
@@ -388,8 +388,9 @@ tiempos de `go test -bench` (mediana de 3):
 - **El índice espacial no cambió:** sectores de 32x32. La ventana de 33x23 toca a lo sumo
   2x2 sectores por piso (el rectángulo de un paso, 34x24, hasta 3x2) y `eachInRect` filtra
   por casilla. Armar un `FullMapView` busca cada pila en la paleta del área en forma
-  lineal: con unas pocas decenas de pilas distintas, 46 µs en el pueblo, una vez por
-  teletransporte.
+  lineal: con unas pocas decenas de pilas distintas, 42 µs en el pueblo, una vez por
+  teletransporte. Cada piso se arma en un búfer del `World` y solo se copia si tiene
+  casillas: los 7 pisos vacíos de la superficie no asignan (5,8 KB por vista, no 27).
 - **Monstruos:** lo que nota un monstruo sigue siendo la ventana clásica (`InSight`) y
   `pickTarget` recorre solo ese rectángulo: la IA no cuesta más. Los sectores activos (2
   sectores alrededor de cada jugador, 64 casillas o más) ya cubrían la ventana ancha.
