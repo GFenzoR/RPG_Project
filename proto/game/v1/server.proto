@@ -59,6 +59,7 @@ message ServerMessage {
     HouseUpdate house_update = 40;
     CreatureCosmetics creature_cosmetics = 41;
     CosmeticsState cosmetics_state = 42;
+    CreatureAttack creature_attack = 43;
   }
 }
 
@@ -124,6 +125,10 @@ message Welcome {
   // 0 = a server from before the wide view: 15x11.
   uint32 view_width = 5;
   uint32 view_height = 6;
+  // The server says who attacks whom (CreatureAttack) and why a creature leaves the view
+  // (CreatureDisappear.reason), docs/05 "Quién ataca y por qué sale una criatura". false =
+  // a server from before them: the client works both out from what it sees.
+  bool attack_events = 7;
 }
 
 // ---- map --------------------------------------------------------------------
@@ -264,8 +269,30 @@ message CreatureAppear {
   Creature creature = 1;
 }
 
+// CreatureDisappear: the client stops knowing creature id. reason says why, as far as
+// the viewer may know (docs/05 "Quién ataca y por qué sale una criatura").
 message CreatureDisappear {
   uint32 id = 1;
+  DisappearReason reason = 2;
+}
+
+// DisappearReason is why a creature left a client's view.
+enum DisappearReason {
+  // A server from before the reasons (Welcome.attack_events false).
+  DISAPPEAR_REASON_UNSPECIFIED = 0;
+  // It walked out of the window, or the viewer walked or was moved away from it.
+  DISAPPEAR_REASON_OUT_OF_VIEW = 1;
+  // It died where it stood (a player wakes up at its temple, CreatureAppear there).
+  DISAPPEAR_REASON_DEATH = 2;
+  // The server took it out of the world without a death (a monster or an NPC).
+  DISAPPEAR_REASON_DESPAWN = 3;
+  // It left its tile without walking or dying: a portal, a boat, a staff /tp, an NPC's
+  // teleport, a house expulsion. A player that turns invisible gets this one too: to the
+  // viewer it is gone, and nothing says it still stands there.
+  DISAPPEAR_REASON_TELEPORT = 4;
+  // The player left the game: logout, a kick or a ban, idle, a dropped connection, a
+  // login elsewhere.
+  DISAPPEAR_REASON_LOGOUT = 5;
 }
 
 // CreatureMove is one step. walk_seq, only in the mover's own copy, is the seq of the Walk
@@ -310,6 +337,35 @@ message Projectile {
   Position from = 1;
   Position to = 2;
   uint32 projectile_id = 3;
+}
+
+// AttackKind is what an attack looks like (docs/17 ANI-2: the clip the attacker plays).
+enum AttackKind {
+  ATTACK_KIND_UNSPECIFIED = 0;
+  // A blow at an adjacent creature: a weapon, fists, a monster's melee attack.
+  ATTACK_KIND_MELEE = 1;
+  // A shot: a distance weapon, a wand, a monster's distance attack or spell.
+  ATTACK_KIND_RANGED = 2;
+  // A spell or a rune at a creature, or an area spell around the caster (radius > 0).
+  ATTACK_KIND_SPELL = 3;
+}
+
+// CreatureAttack tells a client that creature id attacked (docs/05 "Quién ataca y por qué
+// sale una criatura"). It goes only to clients that know the attacker, in the batch of the
+// attack, before its Projectile, Effect and FloatingText. Never about a target the client
+// must not see: an attack on an invisible player reaches only who sees that player.
+message CreatureAttack {
+  uint32 id = 1;
+  AttackKind kind = 2;
+  // The creature attacked, if the client knows it; 0 for an area spell or a target out of
+  // the client's window.
+  uint32 target_id = 3;
+  // Where the attack goes: the target's tile; for a target out of the window, the edge of
+  // the window on its side, in line with the attacker (as in Projectile); for an area
+  // spell, its centre.
+  Position to = 4;
+  // An area spell: the radius around `to` (docs/02 "Magia"); 0 for an attack on one target.
+  uint32 radius = 5;
 }
 
 // PlayerConditions is the full list of the player's own active conditions (T3.2): sent
