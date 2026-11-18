@@ -916,6 +916,11 @@ function useWindows(storage: Storage | undefined): WindowsApi {
       clearMarks();
       document.body.classList.remove("dragging-window");
       if (moving !== el) moving.remove();
+      else {
+        // The state places the window from now on (a docked one must not keep offsets).
+        el.style.left = "";
+        el.style.top = "";
+      }
       if (overDock) update((s) => dockWindow(s, id, before));
       else update((s) => floatWindow(s, id, place.x, place.y));
     };
