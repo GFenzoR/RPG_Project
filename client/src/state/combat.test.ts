@@ -7,12 +7,14 @@ import {
   CreatureKind,
   CreatureSchema,
   DisappearReason,
+  EffectSchema,
   FloatingTextKind,
   FloatingTextSchema,
   ItemStackSchema,
   MapSliceSchema,
   MessageKind,
   MessageSchema,
+  ProjectileSchema,
   TextParamSchema,
   WelcomeSchema,
   create,
@@ -22,7 +24,14 @@ import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { formatMessage } from "./messages.ts";
-import { ATTACK_MS, DEPARTURE_MS, FLOATING_TEXT_MS, WorldState } from "./world.ts";
+import {
+  ATTACK_MS,
+  DEPARTURE_MS,
+  EFFECT_MS,
+  FLOATING_TEXT_MS,
+  PROJECTILE_MS,
+  WorldState,
+} from "./world.ts";
 
 type Msg = ServerMessage["message"];
 
@@ -190,6 +199,48 @@ describe("combat state", () => {
     );
     expect(w.creatures.has(6)).toBe(true);
     expect(w.departureOf(6)).toBeUndefined();
+  });
+
+  it("keeps no more than what is still live when no frame expires it (a hidden tab)", () => {
+    const w = world();
+    const at = { x: 10, y: 10, z: 7 };
+    const batch: Msg[] = [
+      {
+        case: "creatureAttack",
+        value: create(CreatureAttackSchema, { id: 5, kind: AttackKind.MELEE, targetId: 1, to: at }),
+      },
+      {
+        case: "creatureDisappear",
+        value: create(CreatureDisappearSchema, { id: 7, reason: DisappearReason.OUT_OF_VIEW }),
+      },
+      { case: "effect", value: create(EffectSchema, { pos: at, effectId: 1 }) },
+      {
+        case: "floatingText",
+        value: create(FloatingTextSchema, { pos: at, kind: FloatingTextKind.DAMAGE, amount: 3n }),
+      },
+      {
+        case: "projectile",
+        value: create(ProjectileSchema, { from: at, to: at, projectileId: 1 }),
+      },
+    ];
+    // Ten batches a second for a minute without a frame: the canvas never calls expire
+    // (no requestAnimationFrame in a tab in the background).
+    const step = 100;
+    let last = 0;
+    for (let now = step; now <= 60_000; now += step) {
+      for (const m of batch) w.apply(m, now);
+      last = now;
+    }
+    const live = (ms: number): number => Math.ceil(ms / step);
+    expect(w.attacks.length).toBeLessThanOrEqual(live(ATTACK_MS));
+    expect(w.departures.length).toBeLessThanOrEqual(live(DEPARTURE_MS));
+    expect(w.effects.length).toBeLessThanOrEqual(live(EFFECT_MS));
+    expect(w.floatingTexts.length).toBeLessThanOrEqual(live(FLOATING_TEXT_MS));
+    expect(w.projectiles.length).toBeLessThanOrEqual(live(PROJECTILE_MS));
+    // What is still live stays, in order.
+    expect(w.attacks.at(-1)?.start).toBe(last);
+    expect(w.departureOf(7)).toBe(DisappearReason.OUT_OF_VIEW);
+    expect(w.projectiles.at(-1)?.start).toBe(last);
   });
 
   it("lists the battle closest first and drops a target that disappears", () => {

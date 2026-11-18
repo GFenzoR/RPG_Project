@@ -563,7 +563,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   comparten un `GraphicsContext` por id; un frame no asigna nada (los sprites y formas se
   toman por orden y los sobrantes se ocultan; un número conserva su `Text` mientras el
   mundo lo guarde y vuelve a una reserva al terminar). `WorldState.expire` filtra las
-  listas en el lugar (`dropFinished`), sin un array nuevo por frame.
+  listas en el lugar (`dropFinished`), sin un array nuevo por frame. Con la pestaña en
+  segundo plano no hay frames: `apply` las filtra también al agregar (`pushLive`, una
+  pasada por batch como mucho), así no crecen sin tope hasta que vuelve.
 - Para cambiar un efecto: su receta en `tools/spritegen/src/recipes/effects.ts`,
   `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
   servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.

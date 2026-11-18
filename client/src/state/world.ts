@@ -292,6 +292,21 @@ export function dropFinished(list: { start: number }[], now: number, ms: number)
   }
   list.length = kept;
 }
+
+/**
+ * Adds x (started now) to a list kept in start order, first dropping what finished if its
+ * oldest entry did. The canvas drops them every frame (WorldState.expire), but a tab in the
+ * background draws no frames: without this the lists would grow with every batch until it
+ * comes back, and so would what walks them on the way in (a departure forgotten on every
+ * CreatureAppear) and on the first frame back. One pass per batch at most: the entries of
+ * one batch start together.
+ */
+function pushLive<T extends { start: number }>(list: T[], x: T, ms: number): void {
+  const first = list[0];
+  if (first && x.start - first.start >= ms) dropFinished(list, x.start, ms);
+  list.push(x);
+}
+
 /** Status log length. */
 const LOG_SIZE = 5;
 /** Chat lines kept on screen. */
@@ -600,7 +615,11 @@ export class WorldState implements TileSource {
         break;
       case "creatureDisappear":
         this.creatures.delete(msg.value.id);
-        this.departures.push({ id: msg.value.id, reason: msg.value.reason, start: now });
+        pushLive(
+          this.departures,
+          { id: msg.value.id, reason: msg.value.reason, start: now },
+          DEPARTURE_MS,
+        );
         if (this.target === msg.value.id) this.target = undefined;
         break;
       case "creatureHealth": {
@@ -609,25 +628,37 @@ export class WorldState implements TileSource {
         break;
       }
       case "effect":
-        this.effects.push({ pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now });
+        pushLive(
+          this.effects,
+          { pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now },
+          EFFECT_MS,
+        );
         break;
       case "creatureAttack":
-        this.attacks.push({
-          id: msg.value.id,
-          kind: msg.value.kind,
-          targetId: msg.value.targetId,
-          to: posOf(msg.value.to),
-          radius: msg.value.radius,
-          start: now,
-        });
+        pushLive(
+          this.attacks,
+          {
+            id: msg.value.id,
+            kind: msg.value.kind,
+            targetId: msg.value.targetId,
+            to: posOf(msg.value.to),
+            radius: msg.value.radius,
+            start: now,
+          },
+          ATTACK_MS,
+        );
         break;
       case "projectile":
-        this.projectiles.push({
-          from: posOf(msg.value.from),
-          to: posOf(msg.value.to),
-          projectileId: msg.value.projectileId,
-          start: now,
-        });
+        pushLive(
+          this.projectiles,
+          {
+            from: posOf(msg.value.from),
+            to: posOf(msg.value.to),
+            projectileId: msg.value.projectileId,
+            start: now,
+          },
+          PROJECTILE_MS,
+        );
         break;
       case "partyUpdate":
         this.party.update(msg.value);
@@ -695,12 +726,16 @@ export class WorldState implements TileSource {
         break;
       }
       case "floatingText":
-        this.floatingTexts.push({
-          pos: posOf(msg.value.pos),
-          kind: msg.value.kind,
-          amount: Number(msg.value.amount),
-          start: now,
-        });
+        pushLive(
+          this.floatingTexts,
+          {
+            pos: posOf(msg.value.pos),
+            kind: msg.value.kind,
+            amount: Number(msg.value.amount),
+            start: now,
+          },
+          FLOATING_TEXT_MS,
+        );
         break;
       case "dialogOpen": {
         const v = msg.value;
