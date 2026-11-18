@@ -162,8 +162,8 @@ func (w *World) creaturePos(id uint32) (world.Pos, bool) {
 
 // observeMove tells every client around either end of a step of a creature (the player
 // pl or the monster mo) what it needs: CreatureMove if it keeps seeing it,
-// CreatureDisappear (out of view) if it stops, CreatureAppear if it starts. The mover's own client is
-// the caller's job. Every client gets the same CreatureMove, CreatureDisappear or
+// CreatureDisappear (out of view) if it stops, CreatureAppear if it starts. The mover's
+// own client is the caller's job. Every client gets the same CreatureMove, CreatureDisappear or
 // CreatureAppear (built once, on first need): with the wide view a step in a crowd goes
 // to a few hundred clients, and the batches are only read after the tick (the gateway's
 // writers marshal them, which protobuf allows concurrently).

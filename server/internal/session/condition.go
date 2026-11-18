@@ -498,9 +498,8 @@ func (w *World) combatSkill(p *Player, id string) int {
 }
 
 // hide makes p invisible: the clients that knew it get CreatureDisappear (as a teleport:
-// nothing tells them it still stands there, attack.go) and from now
-// on nobody else is sent it (AOI filters it, docs/01-architecture.md "Trampas y
-// anti-bot"). Monsters without sees_invisible drop it as a target on their next think.
+// nothing tells them it still stands there, attack.go) and from now on nobody else is
+// sent it (AOI filters it, docs/01-architecture.md "Trampas y anti-bot"). Monsters without sees_invisible drop it as a target on their next think.
 func (w *World) hide(_ *game.TickContext, p *Player) {
 	if p == nil || p.invisible {
 		return
