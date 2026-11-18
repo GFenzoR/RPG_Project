@@ -2,10 +2,11 @@
 // test island, walks 5 steps (keyboard and click) and saves screenshots for review.
 // Any console error or uncaught exception fails the test.
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { parse } from "yaml";
 import { psql } from "./psql.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
@@ -1857,6 +1858,16 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Nothing may start before a gesture (browser autoplay rules).
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
   expect(await starts()).toBe(0);
+  // The first gesture starts the title screen's loop (the owner's Gemini pick in
+  // assets/sounds.yaml music.title; none if he picked none), and no ambient bed. Polling
+  // what plays proves its file loaded and decoded.
+  const sounds = parse(
+    readFileSync(join(import.meta.dirname, "..", "..", "assets", "sounds.yaml"), "utf8"),
+  ) as { music?: { title?: string } };
+  await page.keyboard.press("Shift");
+  await expect
+    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
+    .toEqual({ music: sounds.music?.title, ambient: undefined });
 
   await enterGame(page, email, password);
   errors.length = 0;

@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,7 +76,8 @@ describe("generated sounds", () => {
     expect(raw.music.islands["volcan"]).toBe("music_volcan");
     expect(raw.ambient.islands["volcan"]).toBe("amb_volcan");
     const files = new Map(manifestFiles(root).map((f) => [f.id, f.file]));
-    expect(files.get("music_volcan")).toBe("sounds/music/volcan.ogg");
+    // Its own theme: soundgen's, or the Gemini take the owner picked for it.
+    expect(files.get("music_volcan")).toMatch(/^sounds\/music\/(volcan|gemini\/volcan_\d)\.ogg$/);
     expect(files.get("amb_volcan")).toBe("sounds/ambient/volcan.ogg");
   });
 
@@ -80,8 +89,91 @@ describe("generated sounds", () => {
   it("sounds.yaml uses every generated file and every own file exists", () => {
     const files = manifestFiles(root);
     const used = new Set(files.map((f) => f.file));
+    // A theme a Gemini pick replaced stays, with its recipe, to play again with "none".
+    for (const slot of Object.values(gemini().slots)) if (slot.fallback) used.add(slot.fallback);
     for (const g of GENERATED) expect(used, g.path).toContain(`sounds/${g.path}.ogg`);
     for (const f of files) expect(existsSync(join(root, "assets", f.file)), f.file).toBe(true);
+  });
+});
+
+interface GeminiTrack {
+  take: string;
+  sound: string;
+  file: string;
+  volume: number;
+  source: string;
+  prompt: string;
+  bytes: number;
+}
+
+interface GeminiSlot {
+  sound: string;
+  /** A take, a pool of takes, or "none". */
+  pick: string | string[];
+  provisional: boolean;
+  /** What the slot's own sound plays (a pool's first track, or the fallback with none). */
+  file?: string;
+  volume?: number;
+  fallback?: string;
+  tracks?: GeminiTrack[];
+}
+
+/** assets/sounds/music/gemini.yaml: what `make music-gemini` put in each slot. */
+function gemini(): { slots: Record<string, GeminiSlot> } {
+  return parse(readFileSync(join(root, "assets", "sounds", "music", "gemini.yaml"), "utf8")) as {
+    slots: Record<string, GeminiSlot>;
+  };
+}
+
+describe("Gemini music (make music-gemini)", () => {
+  const slots = Object.entries(gemini().slots);
+  const tracks = slots.flatMap(([id, slot]) =>
+    (slot.tracks ?? []).map((track) => ({ id, slot, track })),
+  );
+  const files = new Map(manifestFiles(root).map((f) => [f.id, f]));
+  const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
+    sounds: Record<string, { volume?: number }>;
+  };
+
+  it("sounds.yaml plays what the manifest says, at its volume", () => {
+    expect(slots.length).toBeGreaterThan(0);
+    for (const [id, slot] of slots) {
+      const played = files.get(slot.sound);
+      if (!slot.file) {
+        expect(played, `${id}: no music of its own`).toBeUndefined();
+        continue;
+      }
+      expect(played?.file, id).toBe(slot.file);
+      expect(played?.channel, id).toBe("music");
+      expect(raw.sounds[slot.sound]?.volume, id).toBe(slot.volume);
+      if (slot.pick === "none") expect(slot.file, id).toBe(slot.fallback);
+      else expect(slot.tracks?.[0]?.file, `${id}: a pool's first track`).toBe(slot.file);
+    }
+    // Every track ships as a sound of its own (a pool's others for the music director).
+    for (const { id, track } of tracks) {
+      const played = files.get(track.sound);
+      expect(played?.file, `${id} ${track.take}`).toBe(track.file);
+      expect(played?.channel, `${id} ${track.take}`).toBe("music");
+      expect(played?.bytes, `${id} ${track.take}`).toBe(track.bytes);
+      expect(raw.sounds[track.sound]?.volume, `${id} ${track.take}`).toBe(track.volume);
+    }
+  });
+
+  it("every Gemini loop is credited with its committed prompt, and nothing else is in its folder", () => {
+    const credits = readFileSync(join(root, "assets", "CREDITS.md"), "utf8");
+    const ai = credits.slice(credits.indexOf("## Generado con IA"));
+    for (const { id, slot, track } of tracks) {
+      const row = ai.split("\n").find((l) => l.startsWith(`| \`assets/${track.file}\``));
+      expect(row, `${id} ${track.take}: CREDITS.md row`).toBeDefined();
+      expect(row, id).toContain(`\`assets/${track.prompt}\``);
+      expect(row?.includes("Provisional"), `${id}: provisional in its row`).toBe(slot.provisional);
+      expect(existsSync(join(root, "assets", track.prompt)), `${id}: prompt file`).toBe(true);
+    }
+    const folder = join(root, "assets", "sounds", "music", "gemini");
+    const there = existsSync(folder)
+      ? readdirSync(folder).map((f) => `sounds/music/gemini/${f}`)
+      : [];
+    expect(there.sort()).toEqual(tracks.map(({ track }) => track.file).sort());
   });
 });
 
