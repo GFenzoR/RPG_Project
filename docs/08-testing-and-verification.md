@@ -138,8 +138,8 @@ subida en el hot path del tick se explica en el PR.
 `world/` con `mapcompile` y lo arranca en `:18080` contra `DATABASE_URL`, que debe tener
 Postgres arriba; aplica las migraciones solo) y el Vite del cliente en `:5176`, que hace de
 proxy de `/api` y `/ws`. El test crea cuenta y personaje por la API, entra por la UI
-(login con error y luego correcto, lista de personajes, Jugar), comprueba que el canvas es
-15x11 casillas con escala entera, camina 3 pasos con teclado (flechas y WASD, cada uno
+(login con error y luego correcto, lista de personajes, Jugar), comprueba que el canvas usa
+una escala entera y muestra al menos 15x11 casillas de la ventana de 31x21, camina 3 pasos con teclado (flechas y WASD, cada uno
 predicho y confirmado) y 2 con click (`WalkPath`), y sale del juego. Cualquier error de
 consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
@@ -157,6 +157,14 @@ redondeo a píxeles de pantalla lo cubre `client/src/render/viewport.test.ts`. L
 regla, con red simulada (latencia, jitter, 40 a 144 fps, un click y después una flecha,
 `Walk` perdidos, un corte de la red), la cubre `client/src/state/walking.test.ts` en
 `make test`.
+
+`client/e2e/view.spec.ts` revisa la vista ancha (`02-game-design.md`, "La vista"): a
+1920x1080 entra a 2x con unas 26x15 casillas (`__rpgClient.view()`: la ventana del
+`Welcome` y las casillas que muestra el canvas), casillas a 12 a los lados y 6 arriba y
+abajo en el canvas; Ctrl+rueda hacia abajo aleja a 1x con la ventana entera de 31x21
+(992x672 px, casillas a 15 y 10 en el canvas, a 17 no) y se recuerda; hacia arriba
+vuelve y lo olvida. A 1280x800, 2x con al menos 15x11, y 1x con las 31x21. Screenshots
+`97-view-1920x1080`, `97b-view-1920x1080-1x`, `98-view-1280x800` y `98b-view-1280x800-1x`.
 
 ### E2E móvil (T5.6)
 `client/e2e/mobile.spec.ts` corre el juego en dispositivos emulados de Playwright, con el
@@ -225,8 +233,10 @@ acepta en un evento sintético; el pad captura su dedo.
   mapa y sin nada encima.
 - En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
   (`localStorage` `rpg.zoom`); el canvas sigue dentro de la caja del mapa (en vertical,
-  sobre el pad); `−` vuelve a la escala que muestra las 15x11 casillas y la olvida; un
-  pellizco al doble de distancia acerca, y se vuelve con `−`. Acercado, el mapa sigue
+  sobre el pad); `−` vuelve a la escala que muestra las 15x11 casillas y la olvida; si se
+  puede, `−` aleja una escala más (más casillas de la ventana de 31x21, se recuerda,
+  screenshot `08b-zoomed-out`) y `+` vuelve; un pellizco al doble de distancia acerca, y
+  se vuelve con `−`. La vista ajustada muestra entre 15x11 y 31x21 casillas. Acercado, el mapa sigue
   dibujado (`mapDrawn`).
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
 - En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
@@ -234,13 +244,16 @@ acepta en un evento sintético; el pad captura su dedo.
 - A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia deja el encabezado
   en una línea y el mapa en 2x (`__rpgClient.scale()`); sin pad ni botones de zoom. El
   final del inventario y del panel "Apariencia" se ven sobre el chat al desplazar la
-  columna lateral. Ctrl+rueda sobre el mapa sube a 3x (el canvas llena la caja del mapa y
-  queda dentro) y la rueda al revés vuelve a 2x; la rueda sin Ctrl no hace zoom.
+  columna lateral. A 2x el canvas llena la caja con más de 15x11 casillas. Ctrl+rueda sobre
+  el mapa sube a 3x (el canvas queda dentro de la caja y muestra menos casillas), la rueda
+  al revés vuelve a 2x y luego aleja a 1x con la ventana entera de 31x21 (se recuerda),
+  y vuelve; la rueda sin Ctrl no hace zoom.
 
 Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` (`08-zoomed`: el
 mapa una escala más cerca), `mobile-desktop-1280-long-name.png`,
 `mobile-desktop-1280-side-end.png` (la columna lateral al final) y
-`mobile-desktop-1280-zoom3.png`; se revisan con Read como los de escritorio. Corre
+`mobile-desktop-1280-zoom3.png` y `mobile-desktop-1280-zoom1.png` (la ventana entera); se
+revisan con Read como los de escritorio. Corre
 dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde: ningún
 cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de desarrollo
 no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,

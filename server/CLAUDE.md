@@ -307,6 +307,15 @@ server/
   `FullMapView`), o su cliente se queda esperando confirmaciones que no llegan. El ritmo
   sigue siendo del servidor (`readyAt`).
 
+- **Vista (AOI, `session/aoi.go`, `docs/02` "La vista"):** la ventana de cada jugador es
+  31x21 + 1 de margen (`ViewTilesW`/`ViewTilesH`, `Sees`, `eachObserver`): lo que se le
+  manda y lo que puede elegir como objetivo, mirar o usar (con su `reach`). Lo que **nota y
+  persigue un monstruo** es la ventana clásica de 15x11 + 1 (`InSight`, `SightHalfW`/`H`):
+  una regla nueva de "ver" de un monstruo usa `InSight`, nunca `Sees`. Los rangos de armas,
+  hechizos y ataques salen de `data/`; `content.MaxReach` (6) sigue a la ventana clásica.
+  Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
+  comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
+
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
   `store/shop.go` + `httpapi/shop.go` + `app/shop.go` + `session/cosmetics.go`. Todo cambio

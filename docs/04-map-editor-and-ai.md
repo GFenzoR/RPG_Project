@@ -1020,4 +1020,5 @@ con cuenta, cola de moderación, comentarios por casilla.
   `R` rectángulo, `V` selección, `H` casa, `PgUp/PgDn` piso, rueda = zoom, espacio +
   arrastrar = mover.
 - Panel de validación siempre visible; click en un error lleva a la casilla.
-- Previsualización de la vista del jugador (rectángulo 15x11) para revisar composición.
+- Previsualización de la vista del jugador (rectángulos de 15x11 y 31x21, la vista por
+  defecto y la entera, `02-game-design.md` "La vista") para revisar composición.

@@ -38,7 +38,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height} + FullMapView + Stats + Inventory + Skills
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -56,6 +56,9 @@ Detalles (T1.4, `server/internal/net/gateway`):
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
   `Inventory` (equipo guardado, T1.8) y `PlayerSkills` (todas las skills de
   `balance.yaml → skills.base`, con el nivel guardado del personaje).
+  `view_width`/`view_height` (31 y 21) son la ventana de casillas que el servidor le
+  mantiene al día, sin el margen (ver "Formato de mapa"): el cliente dibuja como mucho
+  eso. Un servidor anterior a la vista ancha no los manda (0): el cliente toma 15x11.
 - **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
   ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
   ocupada, la casilla libre más cercana (hasta 3 de distancia).
@@ -1231,18 +1234,24 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `creatures`: criaturas paradas dentro del área.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
 
-Reglas del área de interés (T1.4):
-- El área es de 17x13 casillas centrada en el jugador: las 15x11 visibles más 1 de
-  margen por lado. `MapArea.x/y` es la esquina superior izquierda; cerca del borde del
-  mundo (coordenada 0) el área se recorta y `width`/`height` lo dicen.
+Reglas del área de interés (T1.4; vista ancha desde 2026-11):
+- El área es de 33x23 casillas centrada en el jugador: la ventana de 31x21
+  (`Welcome.view_width`/`view_height`) más 1 de margen por lado. Antes de la vista ancha
+  era de 17x13 (15x11 + 1): el formato no cambió, solo el tamaño, así que un cliente viejo
+  la recibe igual y dibuja sus 15x11 del centro. `MapArea.x/y` es la esquina superior
+  izquierda; cerca del borde del mundo (coordenada 0) el área se recorta y
+  `width`/`height` lo dicen.
+- La ventana es la misma para todos los jugadores, sea cual sea su pantalla o su zoom (que
+  son solo de dibujo): así "A ve a B" es simétrico. Lo que nota un monstruo no es esta
+  ventana, sino la clásica de 15x11 + 1 (`02-game-design.md`, "La vista").
 - **Pisos:** en la superficie o arriba (z ≤ 7) se mandan los pisos 0–7; bajo tierra solo
   el piso actual. Un piso sin ninguna casilla en el área no se manda. Las criaturas se
   ven con la misma regla, así que "A ve a B" es simétrico.
 - Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba, y encima los
   items del servidor (T1.8) con su `count` si son apilables (0 en los demás).
-- **Paso ortogonal:** un `MapSlice` con la columna (13 de alto) o la fila (17 de ancho) nueva. **Paso
-  diagonal:** dos `MapSlice`, primero la columna completa (13) y después la fila sin la
-  esquina (16).
+- **Paso ortogonal:** un `MapSlice` con la columna (23 de alto) o la fila (33 de ancho) nueva. **Paso
+  diagonal:** dos `MapSlice`, primero la columna completa (23) y después la fila sin la
+  esquina (32).
 - `MapArea.creatures` de un `MapSlice` trae las criaturas que entran a la vista por ese
   movimiento propio; las que salen llegan como `CreatureDisappear`. Cuando otra
   criatura se mueve: si el cliente la conocía y la sigue viendo → `CreatureMove`; si
@@ -1277,7 +1286,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 
 ## Límites
 - Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
-  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
+  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB
+  (~1 KB en el pueblo del Farol con la vista de 31x21).
 - Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
 - Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
   y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
@@ -1296,3 +1306,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ## Presupuesto de ancho de banda
 Objetivo: < 4 KB/s promedio por jugador en zona concurrida. Con 100 jugadores ≈ 400 KB/s
 de salida, cómodo para una instancia chica.
+
+Con la vista de 31x21 (`07-performance-budget.md`, "Vista ancha"), los escenarios de la
+prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por Puerto) y
+1676 B/s (300 en el pueblo, donde todos ven a todos); con 15x11 eran 309 y 785. Un
+`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B).

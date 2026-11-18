@@ -295,9 +295,11 @@ secundaria.
   preparado para `tauri android/ios init` (`docs/15-movil.md`). E2E
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
   Después (rama `fix/client-ux`): zoom del mapa por escalas enteras con el pellizco, botones
-  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo, nunca menos
-  que la vista de 15x11); hotbar en dos líneas a la derecha del pad en vertical (4 slots
-  en un teléfono de 390–412 px); el chat del panel lateral ya no tapa el final del
+  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo; desde la
+  vista ancha de 2026-11, rama `feat/wide-view`, por defecto la escala que muestra 15x11
+  con la caja llena y alejando hasta la ventana entera de 31x21, docs/02 "La vista");
+  hotbar en dos líneas a la derecha del pad en vertical (4 slots en un teléfono de
+  390–412 px); el chat del panel lateral ya no tapa el final del
   inventario a 1280x800; E2E también en WebKit (iPhone 13 e iPad Mini).
   👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
   compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).

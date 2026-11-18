@@ -28,9 +28,11 @@ client/
   los pasos que da el servidor se dibujan sobre su línea de ticks, uno detrás del otro.
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
-- Ventana visible por defecto 15x11 casillas; el canvas escala en múltiplos enteros
-  (pixel-perfect, `roundPixels`, sin suavizado). El jugador puede acercar el mapa por
-  escalas enteras (ver "Zoom del mapa"), nunca alejarlo por debajo de las 15x11.
+- El servidor manda una ventana de 31x21 casillas (+1 de margen; `WorldState.view`, del
+  `Welcome`). El canvas escala en múltiplos enteros (pixel-perfect, `roundPixels`, sin
+  suavizado): por defecto la escala más grande que muestra 15x11, con la caja del mapa
+  llena de la ventana; el jugador puede alejar hasta la ventana entera y acercar hasta 7x5
+  (ver "Zoom del mapa").
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
   ni columna fija: el mapa, el dock a su derecha y ventanas separadas (ver "Notas de la UI
@@ -618,13 +620,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
 
 ## Zoom del mapa
-- `render/zoom.ts` (puro, con tests) decide la escala. El mínimo es la que muestra las
-  15x11 casillas enteras (la de siempre, `pixelScale`). El máximo es la mayor que todavía
-  muestra 7x5 (`MIN_VIEW`). Siempre escalas enteras. Acercado, el canvas se corta a la
-  caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
-  jugador una vista de casillas fraccionarias, con la cámara en píxeles de pantalla
-  enteros (ver "Movimiento fluido"). El servidor sigue mandando las 15x11 (+1):
-  el zoom es solo de dibujo.
+- **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
+  manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
+  `state/view.ts`; 0 = un servidor viejo: 15x11). El zoom es solo de dibujo.
+- `render/zoom.ts` (puro, con tests) decide la escala (`ZoomRange {min, fit, max}`):
+  - `fit`, la vista ajustada (sin elección guardada): la mayor escala que muestra las 15x11
+    clásicas (`pixelScale`, la de antes de la vista ancha). A 1280x800 y 1920x1080, 2x.
+  - `min`: la mayor que muestra la ventana entera (`wholeScale`), al menos 1 y como mucho
+    `fit`. A 1280x800 y 1920x1080, 1x con las 31x21; a 2560x1440, 2x.
+  - `max`: la mayor que todavía muestra 7x5 (`MIN_VIEW`).
+  Siempre escalas enteras. El canvas muestra la ventana entera si entra y si no se corta
+  a la caja del mapa en píxeles de sprite enteros (`viewPixels`): a 2x en 1920x1080 son
+  unas 26x15 casillas. Cortado, deja libre la franja de la hotbar de escritorio
+  (`--map-reserve-bottom`) salvo que eso le quite filas a las 11 clásicas; la ventana
+  entera nunca se achica por ella (`mapLift` la sube). `followCamera` centra en el
+  jugador una vista de casillas fraccionarias (`shownTiles`), con la cámara en píxeles de
+  pantalla enteros (ver "Movimiento fluido"). Si llegara otra ventana, el canvas se
+  reajusta en el siguiente frame.
 - La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
   `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
   `ready`, `tileToClient` y los clicks ya apuntan al mapa. Antes solo la fijaba el primer
@@ -636,12 +648,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas
   (`WheelZoom`: una muesca o un pellizco corto de trackpad = un paso, `preventDefault`
   para que la página no haga zoom). La rueda sin Ctrl no hace nada.
-- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala). La vista ajustada
-  no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no admite la escala
-  guardada, se dibuja la mayor posible y se conserva la elección.
-- `GameUi.zoom` (`{ scale, min, max }`) llega a la UI desde el canvas
-  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hook
-  E2E: `__rpgClient.zoom()`.
+- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala, también alejada).
+  La vista ajustada no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no
+  admite la escala guardada, se dibuja la más cercana posible y se conserva la elección.
+- `GameUi.zoom` (`{ scale, min, fit, max }`) llega a la UI desde el canvas
+  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hooks
+  E2E: `__rpgClient.zoom()` y `__rpgClient.view()` (`{ server, shown }`: la ventana del
+  `Welcome` y las casillas, fraccionarias, que muestra el canvas).
 - Ubicación de los botones (`touch.css`): abajo a la derecha del mapa, sobre una hotbar
   de una línea y bajo el cajón. En vertical con pad van en la franja, sobre las flechas de
   la hotbar. Mientras hay un item elegido, el banner toma su lugar y se ocultan.

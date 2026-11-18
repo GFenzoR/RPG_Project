@@ -66,7 +66,13 @@ for each tick (50 ms):
   no-logout, pvp) para que el pathfinding y la línea de visión sean baratos.
 
 ## Área de interés (AOI)
-- Cada jugador ve 15x11 casillas (rango Tibia-like) + 1 de margen para animar entradas.
+- Cada jugador ve una ventana de 31x21 casillas centrada en él (la vista ancha de
+  `00-vision.md`; antes era la de 15x11 de Tibia) + 1 de margen para animar entradas:
+  33x23. Es la misma para todos (`session.Sees`, `ViewTilesW`/`ViewTilesH`) y
+  `Welcome.view_width`/`view_height` se la dicen al cliente, que dibuja lo que le entra en
+  pantalla (`client/CLAUDE.md`, "Zoom del mapa").
+- Lo que un monstruo nota y persigue no es la vista: es la ventana clásica de 15x11 + 1
+  (`session.InSight`). Reglas de juego de la vista en `02-game-design.md`, "La vista".
 - Al moverse, el servidor envía solo la fila o columna nueva de tiles y las criaturas
   que entran o salen. Nunca reenvía la pantalla completa salvo al teletransportarse.
 - Pisos: sobre el nivel del mar se ven los pisos inferiores visibles; bajo tierra solo
@@ -716,8 +722,9 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
    - detección por comportamiento en el servidor (T4.1).
 2. **Ver de más.** Todo lo que el servidor manda se puede leer, así que el servidor solo
    manda lo que las reglas dejan ver:
-   - **La ventana completa.** Se ve la ventana de 15x11 del piso visible. Lo que está
-     detrás de un muro dentro de esa ventana se ve por diseño: la línea de visión es una
+   - **La ventana completa.** Se ve la ventana de 31x21 del piso visible, igual para todos
+     (el zoom del cliente es solo de dibujo: quien acerca el mapa recibe lo mismo). Lo que
+     está detrás de un muro dentro de esa ventana se ve por diseño: la línea de visión es una
      regla de juego, no de dibujo (`03-world-and-maps.md`).
    - **De otras criaturas viaja solo lo público:** nombre, outfit, dirección, velocidad y
      `health_percent`. Nunca su vida exacta, maná, skills ni inventario.

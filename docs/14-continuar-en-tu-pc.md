@@ -152,9 +152,7 @@ el punto 5:
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
     después haga click en una casilla tiene que cerrarla o moverla.
-  - **A7, vista de hasta 31x21** (servidor, protocolo y cliente). Hoy el AOI fija 15x11 + 1
-    (`server/internal/session/aoi.go`, docs/01 y docs/05). Hay que volver a medir el
-    ancho de banda por jugador (docs/07).
+  - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
   - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
     piezas por material que el renderer elige por sus vecinos (también en el editor y en
     `mapcli render`), con la silueta del jugador propio detrás de un muro; suelos con
@@ -192,6 +190,35 @@ el punto 5:
     reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
     "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
   - Lo 👤 está en "Lo que es tuyo".
+- **Vista ancha de 31x21 (rama `feat/wide-view`, apilada sobre `feat/movement-feel`;
+  docs/17 A7).** Hecho: el servidor manda a todos una ventana de 31x21 (+1) y el `Welcome`
+  se la dice al cliente; los monstruos
+  siguen notando y persiguiendo solo la ventana clásica de 15x11 (+1); el cliente llena la
+  caja del mapa con la ventana a la escala de siempre (la que muestra 15x11) y deja alejar
+  hasta la ventana entera; medido en proceso dentro del presupuesto (docs/07 "Vista
+  ancha"; reglas en docs/02 "La vista"). Quedó:
+  - **`make bots` a 31x21:** la medición es en proceso (`TestCrowdBandwidth`, que con 15x11
+    dio lo mismo que `make bots`); falta repetir base y stress contra un servidor real con
+    el monitoreo y anotar los números en docs/07.
+  - **Ventana por cliente, descartada por ahora:** docs/17 proponía que el cliente pida su
+    vista (de 15x11 a 31x21) y el servidor mande esa área. Se dejó una sola para todos:
+    "A ve a B" sigue simétrico, nadie gana nada con un cliente modificado y el ancho de banda
+    entra en el presupuesto (1,7 KB/s en el peor escenario). Si un día molesta (teléfonos
+    con datos móviles), el `Hello` podría pedir una ventana menor y el servidor recortar
+    solo lo que manda, sin tocar las reglas.
+  - **Escala 1,5x "sharp-bilinear" (docs/17 UI-4), sin hacer:** dibujar a 2x y bajar a 1,5x
+    con filtro lineal, como opción de Gráficos apagada por defecto.
+  - **Bordes de la vista, para decidir:** docs/17 pide casillas enteras con lados impares y
+    el resto en `--ui-void`; hoy el canvas cortado muestra casillas fraccionarias en los
+    bordes (como el zoom de antes), centradas en el jugador, y llena toda la caja. Con el
+    marco de la UI oscura (A2–A5) se ve cuál queda mejor.
+  - **Respawns y la vista ancha:** un monstruo no reaparece donde un jugador lo ve, y ahora
+    se ve hasta 16 casillas a los lados: quien caza en un spawn frena los respawns de los
+    vecinos (están a 12–20). La capacidad del mundo (docs/07) no lo modela; mirarlo con
+    la telemetría del primer público o con un test de capacidad espacial.
+  - **Etiquetas a 1x:** alejado a la ventana entera los nombres se acomodan con la regla de
+    zoom 1x (`render/labels.ts`); en una multitud se ocultan muchos. Revisarlo en el
+    playtest.
 - **Movimiento fluido (rama `feat/movement-feel`, apilada sobre `feat/ui-theme`: se mergea
   después de ella o con ella).** Hecho: pasos de teclado predichos
   hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo

@@ -172,6 +172,45 @@ Tibia:
   ve la casilla de donde salió lo ve irse y quien ve el destino lo ve caer. Sobre una
   escalera de mano o un punto de soga lo que se tira queda ahí (se usan a mano).
 
+## La vista (decisión del dueño, 2026-11-17)
+El dueño eligió ver más mapa: la vista llega a **31x21 casillas** (antes 15x11, como en
+Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
+- **Qué manda el servidor.** A cada jugador, la ventana de 31x21 centrada en él más 1
+  casilla de margen por lado (33x23): mapa, criaturas, efectos y proyectiles
+  (`05-network-protocol.md`, "Formato de mapa"). Es la misma para todos, tenga la pantalla
+  que tenga: "A ve a B" sigue siendo simétrico, y nadie ve más por tener un monitor grande
+  o un cliente modificado (todo lo que manda el servidor se puede leer: `01-architecture.md`,
+  "Trampas y anti-bot").
+- **Qué dibuja el cliente.** Por defecto, la escala entera más grande que muestra las
+  15x11 de siempre, con el resto de la caja del mapa lleno de la ventana (en 1920x1080,
+  unas 26x15 a 2x). Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana
+  entera (31x21 a 1x en 1920x1080 y en 1280x800); acercando, a 7x5, como antes
+  (`client/CLAUDE.md`, "Zoom del mapa"). La elección se recuerda por dispositivo.
+- **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
+  (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, proponer
+  un intercambio, reportar a un jugador, la vida y el maná de los miembros del grupo y que
+  un monstruo no reaparezca donde un jugador lo vería. Un objetivo a 15 casillas se
+  conserva; para pegarle hay que llegar a su rango (con "perseguir", el personaje camina).
+- **No cambia con la vista:**
+  - **Los rangos:** cada arma a distancia, hechizo y ataque de monstruo tiene su `range`
+    en `data/` (hoy de 1 a 6). Ver más lejos no los alarga.
+  - **Lo que nota un monstruo:** un agresivo elige objetivo, y lo sigue persiguiendo, solo
+    dentro de la ventana clásica: 15x11 + 1 de margen, 8 casillas a los lados y 6 arriba y
+    abajo, en su piso (`session.InSight`). Un jugador lo ve desde 15 casillas sin que lo
+    note, y quien escapa a más de 8 lo pierde, como antes de la vista ancha.
+  - **El alcance de las manos** (`inventory.reach`, `resource.reach`: como mucho 6).
+  - **Lo que se oye:** decir llega a 7x5 casillas y gritar a 18x14 (`balance.yaml
+    chat.ranges`): a alguien a 12 casillas se lo ve, pero no se lo oye hablar. El sonido
+    se oye hasta 8 casillas ("Sonido").
+- **PvP:** la visión es la ventana entera, igual para todos. Quien juega con el mapa
+  acercado (o en un teléfono, que por defecto muestra menos) tiene en la lista de batalla
+  todo lo que su cliente conoce. La cámara va centrada en el jugador, sin "mirar adelante".
+- **Respawns:** un monstruo no reaparece en una casilla que algún jugador ve, y ahora se
+  ve más: quien caza en un spawn también frena los respawns de los spawns a menos de 16
+  casillas a los lados y 11 arriba y abajo (están a unas 12–20). Cada uno reintenta cada
+  5 s en otra casilla de su radio. Si la capacidad del mundo lo nota (`07`, "Capacidad del
+  mundo"), se ajusta con respawns y distancias, no con la regla.
+
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
 |---|---|---|---|---|
@@ -554,7 +593,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   área), resistencias, loot con probabilidades, experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
   Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
-  radio de su spawn; los agresivos eligen al jugador visible más cercano con línea de
+  radio de su spawn; los agresivos eligen al jugador más cercano a su vista (la ventana
+  clásica de 15x11 + 1, no la vista ancha de los jugadores: "La vista") con línea de
   visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
   la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
   ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
@@ -562,7 +602,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
   `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
+  jugador está mirando el punto, con la vista ancha de 31x21 (evita aparecer en la cara):
+  se reintenta cada 5 s.
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
@@ -1294,8 +1335,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
 ## Chat (T1.13)
 Números en `data/balance.yaml` (`chat`), nunca en código.
 - **Canal local**, mismo piso, alcance en casillas por eje (x, y) desde quien habla:
-  susurrar 1×1, decir 7×5 (la pantalla visible), gritar 18×14. Fuera de ese rectángulo
-  no se oye nada. Quien habla siempre recibe su propia línea.
+  susurrar 1×1, decir 7×5 (la pantalla clásica de 15x11, no la vista ancha: "La vista"),
+  gritar 18×14. Fuera de ese rectángulo no se oye nada. Quien habla siempre recibe su
+  propia línea.
 - **Canal global**: lo oyen todos los jugadores conectados; además del anti-flood, cada
   jugador espera `global_interval_ms` (10 s) entre dos mensajes globales
   (`chat.global_wait`).
