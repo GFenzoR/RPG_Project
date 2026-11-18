@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -138,9 +140,24 @@ class ThePalette(unittest.TestCase):
         text = 'a: material("#b38a58", "#8c6840", "#674a2b", "#47321c"),'
         colours = art.parse_palette(text)
         self.assertEqual(colours[0], (0xB3, 0x8A, 0x58))
-        # The outline: the deep shade 45% darker, rounded as palette.ts's darken does.
-        self.assertEqual(colours[4], (round(0x47 * 0.55), round(0x32 * 0.55), round(0x1C * 0.55)))
+        # The outline: the deep shade 45% darker, as palette.ts's darken computes it.
+        self.assertEqual(colours[4], (39, 28, 15))
         self.assertGreater(len(self.palette), 100)
+
+    def test_the_outline_rounds_halves_up_as_math_round_does(self):
+        # Each pair checked against palette.ts's darken in Node: Python's round
+        # goes to the even integer and drew outlines spritegen never does.
+        for deep, outline in (
+            ("#46443f", (39, 37, 35)),
+            ("#46433f", (39, 37, 35)),
+            ("#3e241e", (34, 20, 17)),
+            ("#665b46", (56, 50, 39)),
+            ("#1e3716", (17, 30, 12)),
+        ):
+            text = 'x: material("#ffffff", "#eeeeee", "#dddddd", "%s"),' % deep
+            self.assertEqual(art.parse_palette(text)[4], outline, deep)
+            self.assertEqual(art.outline_colours(text), [outline], deep)
+        self.assertEqual([art.js_round(x) for x in (0.5, 1.5, 2.5, 2.4999, -0.5)], [1, 2, 3, 2, 0])
 
     def test_lab_of_the_ends_and_grey(self):
         self.assertAlmostEqual(art.lab((255, 255, 255))[0], 100.0, places=1)
@@ -225,6 +242,70 @@ class TheWholeImport(unittest.TestCase):
                         self.assertLessEqual(art.lab(p[:3])[0], 85.0)
             with open(os.path.join(out, "import.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["layer"], "creature")
+
+    def sheet_of(self, folder, colour, name="sheet.png"):
+        """A 1x1 sheet: a 24x24 block of `colour` with a 4 px ring of a
+        darker one, on the magenta key."""
+        sheet = Image.new("RGBA", (32, 32), MAGENTA)
+        dark = tuple(c // 4 for c in colour[:3]) + (255,)
+        for y in range(4, 28):
+            for x in range(4, 28):
+                ring = x < 8 or x >= 24 or y < 8 or y >= 24
+                sheet.putpixel((x, y), dark if ring else colour)
+        path = os.path.join(folder, name)
+        sheet.save(path)
+        return path
+
+    def cli(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()):
+            art.main(list(argv))
+
+    def opaque(self, out, name="frame_0"):
+        return [p[:3] for p in art.pixels(Image.open(os.path.join(out, name + ".png"))) if p[3]]
+
+    def test_an_effect_imported_with_the_defaults_stays_in_its_band(self):
+        # 2026-11-18 review: with the CLI's outlines, an orange spark at L* 58
+        # came out as an outline at L* 15.
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.sheet_of(folder, (200, 120, 40, 255))
+            out = os.path.join(folder, "out")
+            self.cli(path, "--grid", "1x1", "--size", "16", "--layer", "effect", "--out-dir", out)
+            for colour in self.opaque(out):
+                self.assertGreaterEqual(art.lab(colour)[0], 60.0 - 1e-6, colour)
+
+    def test_ground_imported_with_the_defaults_has_no_outline(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.sheet_of(folder, (90, 110, 60, 255))
+            out = os.path.join(folder, "out")
+            self.cli(path, "--grid", "1x1", "--size", "16", "--layer", "ground", "--out-dir", out)
+            # The dark ring (L* ~10) is clamped into the band, never an outline under it.
+            for colour in self.opaque(out):
+                self.assertTrue(art.in_band(art.lab(colour), art.BANDS["ground"]), colour)
+            with open(os.path.join(out, "import.json"), encoding="utf-8") as handle:
+                self.assertFalse(json.load(handle)["outlines"])
+
+    def test_a_creature_imported_with_the_defaults_keeps_its_outline(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.sheet_of(folder, (120, 100, 80, 255))
+            out = os.path.join(folder, "out")
+            self.cli(path, "--grid", "1x1", "--size", "16", "--layer", "creature", "--out-dir", out)
+            self.assertTrue(set(self.opaque(out)) & set(art.load_outlines()))
+
+    def test_one_of_several_pictures_of_an_answer_finds_its_ask(self):
+        # gemini_web writes <name>_1.png, <name>_2.png and one <name>.json.
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.sheet_of(folder, (120, 100, 80, 255), "wolf_2.png")
+            with open(os.path.join(folder, "wolf.json"), "w", encoding="utf-8") as handle:
+                json.dump({"prompt": "a grey wolf", "tool": "gemini_web.py",
+                           "refs": [{"file": "assets/sprites/x.png", "sha256": "ab"}],
+                           "files": [{"file": "wolf_1.png"}, {"file": "wolf_2.png"}]}, handle)
+            record = art.import_sheet(path, (1, 1), (16, 16), "creature", [], os.path.join(folder, "out"))
+            self.assertEqual(record["delivery"]["prompt"], "a grey wolf")
+            self.assertEqual(record["delivery"]["refs"], [{"file": "assets/sprites/x.png", "sha256": "ab"}])
+            # A sidecar that does not list the picture is not its ask.
+            other = self.sheet_of(folder, (120, 100, 80, 255), "wolf_3.png")
+            record = art.import_sheet(other, (1, 1), (16, 16), "creature", [], os.path.join(folder, "out3"))
+            self.assertNotIn("delivery", record)
 
     def test_the_wrong_number_of_names_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:

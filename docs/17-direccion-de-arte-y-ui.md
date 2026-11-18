@@ -1059,17 +1059,28 @@ juego). Las reglas:
   de", "inspirado en" o "que suene como". La regla legal de arriba vale igual: de Tibia y
   de los demás se aprende el estilo con palabras propias, nunca se pide copiarlos.
   `tools/gemini/prompt_guard.py` frena los prompts que nombran o piden imitar.
+- **Las referencias también son nuestras:** lo que se sube con el pedido (`--ref`, y con
+  `--edit` se pide algo parecido a eso) es solo un archivo commiteado en `assets/`, ya
+  acreditado. Nunca un sprite, una captura ni un audio de terceros u otro juego, aunque el
+  prompt sea limpio. Los drivers rechazan otra ruta, y el registro nombra cada referencia
+  con su sha256.
 - **Registro:** cada archivo que se usa va en la sección "Generado con IA" de
-  `assets/CREDITS.md` con la herramienta (Gemini, app web, y el modo), la fecha y un
-  **archivo de prompt commiteado** (`assets/prompts/<ruta>.txt`, el prompt exacto). Lo arma
-  `tools/gemini/credit.py`.
+  `assets/CREDITS.md` con la herramienta (Gemini, app web, y el modo), la fecha, las
+  referencias y un **archivo de prompt commiteado** (`assets/prompts/<ruta>.txt`, el prompt
+  exacto). Lo arma `tools/gemini/credit.py`. La dirección de la conversación de Gemini no se
+  commitea: es el chat privado del dueño y queda en el sidecar de `build/`.
 - **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no reclama
   la propiedad de lo generado; su política pide no ocultar el origen.
 - **Pasa por nuestras reglas antes de entrar:** el arte, por `tools/gemini/import_art.py`
   (fondo fuera, grilla en frames, escala por vecino más cercano a 32 o 64, paleta de
-  spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 y alfa 0 o
-  255); la música, por `tools/gemini/music_convert.py` (sin fades, bucle cerrado con
-  crossfade, -18 LUFS, Ogg Opus). Nada se commitea sin mirarlo o escucharlo.
+  spritegen dentro de la banda de ART-6 de su capa, contorno oscuro de ART-5 donde ART-5 lo
+  pide, es decir no en suelos ni efectos, y alfa 0 o 255); la música, por
+  `tools/gemini/music_convert.py` (sin fades, bucle cerrado con crossfade, -14 LUFS, Ogg
+  Opus). Nada se commitea sin mirarlo o escucharlo.
+- **Un solo volumen para toda la música: -14 LUFS** (integrado, pico real ≤ -1,5 dBTP). Es
+  el nivel de los temas que ya tiene el juego (soundgen: de -11,3 a -15,8, unos -14 en
+  promedio), así un tema de Gemini no suena más bajo que los otros. Un tema nuevo, venga de
+  donde venga, se lleva ahí; `make test-gemini` mide los de `assets/sounds/music/`.
 - **Lo que sigue igual:** un pack de terceros sigue SRC-1 a SRC-3, y lo generado no reemplaza
   a spritegen donde una receta alcanza: Gemini sirve para lo que el código dibuja mal
   (criaturas con anatomía, retratos, música con instrumentos).

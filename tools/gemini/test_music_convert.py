@@ -77,9 +77,22 @@ class TheLoopSeam(unittest.TestCase):
         self.assertEqual(loop[20], 20.0)
 
     def test_equal_power_keeps_the_level_of_two_unrelated_signals(self):
-        span = 1000
-        turn = [(math.pi / 2.0) * i / (span - 1) for i in range(span)]
-        self.assertTrue(all(abs(math.sin(t) ** 2 + math.cos(t) ** 2 - 1.0) < 1e-12 for t in turn))
+        # The head is all on the left and the tail all on the right, so each
+        # crossfaded frame holds the head's gain on one channel and the tail's
+        # on the other: equal power is their squares summing to one at every
+        # frame (a linear crossfade would sink to a half in the middle).
+        n, span = 100, 20
+        x = array.array("f", [0.5, 0.5] * n)
+        for i in range(span):
+            x[2 * i], x[2 * i + 1] = 1.0, 0.0
+            tail = n - span + i
+            x[2 * tail], x[2 * tail + 1] = 0.0, 1.0
+        loop = mc.close_loop(x, 2, span)
+        for i in range(span):
+            head, tail = loop[2 * i], loop[2 * i + 1]
+            self.assertAlmostEqual(head * head + tail * tail, 1.0, places=5)
+        self.assertAlmostEqual(loop[1], 1.0, places=6)  # starts as the tail
+        self.assertAlmostEqual(loop[2 * (span - 1)], 1.0, places=6)  # ends as the head
 
     def test_a_cut_piece_clicks_and_the_closed_loop_does_not(self):
         rate = 8000
@@ -160,10 +173,28 @@ class TheWholeStep(unittest.TestCase):
             self.assertLess(record["seam_encoded"], 3.0)
             self.assertEqual(record["seam_encoded"], min(record["seam_turns"]))
             self.assertLess(abs(record["length_error_frames"]), 48000 * 0.05)
-            self.assertAlmostEqual(record["lufs_out"], -18.0, delta=1.5)
+            self.assertAlmostEqual(record["lufs_out"], mc.LUFS, delta=1.5)
             self.assertEqual(record["delivery"]["prompt"], "a calm test tone")
             with open(os.path.join(folder, "out", "piece.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["sha256"], record["sha256"])
+
+
+MUSIC = os.path.join(mc.ROOT, "assets", "sounds", "music")
+
+
+@unittest.skipUnless(_has_opus(), "no ffmpeg with libopus (PATH or imageio-ffmpeg)")
+class TheGameMusic(unittest.TestCase):
+    def test_a_converted_track_plays_as_loud_as_the_music_the_game_ships(self):
+        # 2026-11-18 review: at -18 LUFS a Gemini track played some 4 dB under
+        # the themes soundgen made. One target for all of them.
+        measured = []
+        for name in sorted(os.listdir(MUSIC)):
+            if name.endswith(".ogg"):
+                x = mc.decode(os.path.join(MUSIC, name), mc.RATE, mc.CHANNELS)
+                measured.append(float(mc.measure_loudness(x, mc.RATE, mc.CHANNELS)["input_i"]))
+        self.assertTrue(measured)
+        mean = sum(measured) / len(measured)
+        self.assertAlmostEqual(mc.LUFS, mean, delta=1.5, msg="the game's music measures %s LUFS" % measured)
 
 
 if __name__ == "__main__":

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
 import browser_lock
@@ -23,6 +25,27 @@ MENU = [
 ]
 
 
+class MenuPage:
+    """A page whose composer is in no mode of the list and whose mode menu
+    holds `items`: what `ensure_mode` reads."""
+
+    def __init__(self, items):
+        self.items = items
+        self.keyboard = types.SimpleNamespace(press=lambda key: None)
+
+    def evaluate(self, script, arg=None):
+        if script == gemini_web.STATE_JS:
+            return {"media": [], "labels": [], "text": "", "replies": 0, "asked": 0, "music_elements": 0,
+                    "mode": "", "composer": 0}
+        return [dict(item) for item in self.items]
+
+    def locator(self, _selector):
+        return types.SimpleNamespace(first=types.SimpleNamespace(click=lambda: None), all=lambda: [])
+
+    def wait_for_timeout(self, _ms):
+        pass
+
+
 class TheReplies(unittest.TestCase):
     def test_the_text_model_sentence_is_masked(self):
         self.assertEqual(rules.classify("Lo que me pides está fuera de mis capacidades programadas. Solo genero texto."), "masked")
@@ -37,6 +60,31 @@ class TheReplies(unittest.TestCase):
         self.assertEqual(rules.classify("¡Vaya, parece que he tocado una nota discordante!"), "policy")
         self.assertEqual(rules.classify("Hubo un problema técnico y no pude generar la música."), "error")
         self.assertEqual(rules.classify("Here is a sheet of wolves."), "nothing")
+
+    def test_a_brief_that_says_limited_or_resets_is_not_the_quota(self):
+        # Gemini describes the track it is making; "limited" held "limite".
+        for brief in (
+            "Here is a calm harbour theme with a limited palette.",
+            "Slow strings, limited instrumentation, a long fade.",
+            "The track resets the mood after the bridge.",
+            "Un tema tranquilo con percusión limitada.",
+        ):
+            self.assertEqual(rules.classify(brief), "nothing", brief)
+        self.assertEqual(rules.classify("Has alcanzado tu límite de hoy."), "quota")
+        self.assertEqual(rules.classify("Llegaste a los límites de uso."), "quota")
+        self.assertEqual(rules.classify("You've hit your limit for now."), "quota")
+
+    def test_only_a_refusal_that_cannot_be_a_brief_ends_a_busy_wait(self):
+        self.assertTrue(rules.ends_wait("policy", "¡Vaya, una nota discordante!"))
+        self.assertTrue(rules.ends_wait("error", "Algo salió mal."))
+        self.assertTrue(rules.ends_wait("quota", "El límite se restablece a las 14:30."))
+        self.assertTrue(rules.ends_wait("quota", "Has alcanzado el límite. Vuelve más tarde."))
+        self.assertTrue(rules.ends_wait("quota", "You've reached your music limit for today."))
+        # A brief can say "limit" or "quota" in passing: never while the page works.
+        self.assertFalse(rules.ends_wait("quota", "A theme with no limit to its quiet."))
+        self.assertFalse(rules.ends_wait("quota", "Each voice keeps its quota of the melody."))
+        self.assertFalse(rules.ends_wait("masked", "Solo genero texto."))
+        self.assertFalse(rules.ends_wait("nothing", "Generando tu pista"))
 
     def test_the_reset_hour_is_read_and_a_past_hour_is_tomorrow(self):
         now = datetime.datetime(2026, 11, 17, 16, 0)
@@ -87,6 +135,22 @@ class TheModes(unittest.TestCase):
         self.assertEqual(verdict, "wall")
         self.assertTrue(reset.endswith("T09:10"))
 
+    def test_greyed_modes_that_state_no_hour_are_a_wall_without_one(self):
+        greyed = [dict(MENU[0], off=True), dict(MENU[1], off=True), MENU[2]]
+        self.assertEqual(rules.pick_mode(greyed, rules.DEFAULT_MODES), ("wall", ""))
+        self.assertEqual(rules.pick_mode([], rules.DEFAULT_MODES), ("none", ""))
+
+    def test_a_menu_with_none_of_the_modes_is_the_page_not_the_quota(self):
+        with self.assertRaises(gemini_web.NotSent) as said:
+            gemini_web.ensure_mode(MenuPage([]), rules.DEFAULT_MODES)
+        self.assertIn("has the page changed", str(said.exception))
+        with self.assertRaises(gemini_web.NotSent):
+            gemini_web.ensure_mode(MenuPage([{"said": "Modelo Nuevo", "off": False}]), rules.DEFAULT_MODES)
+        greyed = [dict(MENU[0], off=True), dict(MENU[1], off=True), MENU[2]]
+        with self.assertRaises(gemini_web.ModeWall) as wall:
+            gemini_web.ensure_mode(MenuPage(greyed), rules.DEFAULT_MODES)
+        self.assertEqual(wall.exception.reset, "")
+
     def test_the_menu_item_of_a_mode(self):
         labels = [item["said"] for item in MENU]
         self.assertEqual(rules.menu_index(labels, "Código y análisis 4 Argon"), 1)
@@ -116,6 +180,11 @@ class ThePromptRule(unittest.TestCase):
             for take in (1, 2):
                 self.assertTrue(music_style.prompt(book, slot, take))
         self.assertEqual(prompt_guard.problems(gemini_web.HOUSE_RULES), [])
+
+    def test_the_house_rules_keep_every_hue_the_key_takes_out_of_a_subject(self):
+        # import_art keys by hue (red and blue above green): violets go too.
+        for hue in ("magenta", "pink", "purple", "violet"):
+            self.assertIn(hue, gemini_web.HOUSE_RULES)
 
     def test_an_imitation_or_a_name_is_refused(self):
         for bad in (
@@ -190,6 +259,36 @@ class TheCredit(unittest.TestCase):
         with self.assertRaises(SystemExit):
             credit.delivery_of({"source": "x.mp4"})
 
+    def test_the_conversation_address_is_never_committed(self):
+        ask = {"prompt": "Harbour theme.", "started": "2026-11-17T23:05:17",
+               "url": "https://gemini.google.com/app/1a2b3c4d5e6f"}
+        self.assertNotIn("gemini.google.com", credit.prompt_text(ask, ["assets/sounds/music/puerto.ogg"]))
+        self.assertNotIn("gemini.google.com", credit.credits_row(ask, ["assets/sounds/music/puerto.ogg"], "p.txt"))
+
+    def test_the_references_go_into_the_prompt_file_and_the_row(self):
+        ref = prompt_guard.ref_record(os.path.join(prompt_guard.ROOT, "assets", "CREDITS.md"))
+        ask = {"prompt": "A wolf facing west.", "started": "2026-11-18T10:00:00", "refs": [ref]}
+        self.assertEqual(credit.refs_of(ask), [ref])
+        text = credit.prompt_text(ask, ["assets/sprites/creatures/wolf/walk_w_0.png"])
+        self.assertIn("# Referencia: assets/CREDITS.md (sha256 %s)" % ref["sha256"], text)
+        row = credit.credits_row(ask, ["assets/sprites/creatures/wolf/walk_w_0.png"], "p.txt", "frames 0-3")
+        self.assertTrue(row.endswith("| Referencias: `assets/CREDITS.md`. frames 0-3 |"), row)
+
+    def test_a_reference_that_is_not_a_repo_asset_is_never_credited(self):
+        real = os.path.join(prompt_guard.ROOT, "assets", "CREDITS.md")
+        with open(real, "rb") as handle:
+            digest = hashlib.sha256(handle.read()).hexdigest()
+        for ref in (
+            {"file": "wolf.png", "sha256": digest},  # the old sidecars: a bare name
+            {"file": "assets/no/such/sprite.png", "sha256": digest},
+            {"file": "assets/../tools/gemini/credit.py", "sha256": digest},
+            {"file": "assets/CREDITS.md", "sha256": "0" * 64},  # not the file that was sent
+            {"file": "assets/CREDITS.md"},  # no digest: nothing shows it is the file that was sent
+            "assets/CREDITS.md",
+        ):
+            with self.assertRaises(SystemExit, msg=repr(ref)):
+                credit.refs_of({"prompt": "p", "refs": [ref]})
+
     def test_the_row_and_the_file_say_tool_date_and_prompt(self):
         ask = {"prompt": "Harbour town theme.", "started": "2026-11-17T23:05:17", "mode": "4 Hydrogen", "tool": "music_web.py"}
         row = credit.credits_row(ask, ["assets/sounds/music/puerto.ogg"], "assets/prompts/sounds/music/puerto.txt")
@@ -201,6 +300,39 @@ class TheCredit(unittest.TestCase):
         text = credit.prompt_text(ask, ["assets/sounds/music/puerto.ogg"])
         self.assertTrue(text.endswith("\n\nHarbour town theme.\n"))
         self.assertIn("# Fecha: 2026-11-17", text)
+
+
+class TheReferences(unittest.TestCase):
+    def test_a_committed_asset_may_be_sent_and_is_recorded_by_path_and_digest(self):
+        path = os.path.join(prompt_guard.ROOT, "assets", "CREDITS.md")
+        got = prompt_guard.ref_record(path)
+        self.assertEqual(got["file"], "assets/CREDITS.md")
+        with open(path, "rb") as handle:
+            self.assertEqual(got["sha256"], hashlib.sha256(handle.read()).hexdigest())
+
+    def test_a_file_outside_the_repos_assets_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            outside = os.path.join(folder, "someone_elses_sprite.png")
+            with open(outside, "wb") as handle:
+                handle.write(b"\x89PNG")
+            with self.assertRaises(SystemExit):
+                prompt_guard.ref_record(outside)
+        with self.assertRaises(SystemExit):
+            prompt_guard.ref_record(os.path.join(prompt_guard.ROOT, "assets", "..", "tools", "gemini", "credit.py"))
+        with self.assertRaises(SystemExit):
+            prompt_guard.ref_record(os.path.join(prompt_guard.ROOT, "assets", "no_such_file.png"))
+
+    def test_a_file_dropped_into_assets_but_never_committed_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            subprocess.run(["git", "init", "-q", root], check=True)
+            os.makedirs(os.path.join(root, "assets"))
+            path = os.path.join(root, "assets", "dropped.png")
+            with open(path, "wb") as handle:
+                handle.write(b"\x89PNG")
+            self.assertIn("not committed", prompt_guard.ref_problem(path, root))
+            subprocess.run(["git", "-C", root, "add", "assets/dropped.png"], check=True)
+            self.assertEqual(prompt_guard.ref_problem(path, root), "")
+            self.assertEqual(prompt_guard.ref_record(path, root)["file"], "assets/dropped.png")
 
 
 class TheNames(unittest.TestCase):

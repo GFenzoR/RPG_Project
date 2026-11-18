@@ -77,32 +77,43 @@ probadas: se queda en Python. Nunca es dependencia del juego, del servidor ni de
 Desde el 2026-11-17 el dueño permite usar lo generado con su Gemini (docs/17 SRC-5): el
 prompt describe contenido propio y **nunca nombra otro juego, artista ni obra**
 (`prompt_guard.py` lo frena), y lo que se usa va en `assets/CREDITS.md` ("Generado con IA")
-con un prompt commiteado (`credit.py`). Flujo completo en `assets/README.md`, "Arte y música
-hechos con Gemini".
+con un prompt commiteado (`credit.py`). **Una referencia (`--ref`) es solo un archivo
+commiteado en `assets/` del repo, ya acreditado** (arte propio o de un pack de
+`CREDITS.md`): la subida es parte del pedido tanto como el texto, y con `--edit` se pide
+algo parecido a ella. Los drivers rechazan cualquier otra (`prompt_guard.ref_record`), el
+sidecar la guarda con su ruta y su sha256, y `credit.py` la escribe en el archivo de
+prompt y en la fila (y no acredita un pedido cuya referencia no esté en el repo tal como
+se mandó). Flujo completo en `assets/README.md`, "Arte y música hechos con Gemini".
 
 **El navegador es del dueño.** Las herramientas se conectan por CDP a un Chrome que el
 dueño abre él mismo:
 `chrome.exe --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%/chrome-gemini`
 (un perfil propio: Chrome 136 no abre el puerto en el perfil por defecto). **Nunca inician
-sesión, nunca leen ni copian cookies, nunca abren ni cierran ese Chrome**: abren una
-pestaña propia, cierran solo esa y se desconectan. Si no está abierto, se dice y se sigue
-con otra cosa.
+sesión, su código nunca lee, copia ni guarda cookies, y nunca abren ni cierran ese
+Chrome**: abren una pestaña propia, cierran solo esa y se desconectan. Si no está abierto,
+se dice y se sigue con otra cosa. Una salvedad: una imagen o un tema con dirección
+`http(s)` se baja con la API de requests de Playwright del contexto conectado
+(`page.request.get`), que toma las cookies de ese contexto por CDP y las manda con ese
+pedido desde el lado de Playwright (Node), no desde la página. Nada nuestro las ve ni las
+guarda. Un `blob:` se lee dentro de la página.
 
 ```
 pip install -r tools/gemini/requirements.txt       Pillow, Playwright (sin bajar navegador), imageio-ffmpeg
 python tools/gemini/gemini_web.py check [--list-modes]       solo lectura: ¿conectado, con sesión, en qué modo?
-python tools/gemini/gemini_web.py image "<prompt>" --name N [--ref a.png] [--out-dir DIR]
+python tools/gemini/gemini_web.py image "<prompt>" --name N [--ref assets/....png] [--out-dir DIR]
 python tools/gemini/music_web.py ask "<prompt>" --name N [--out-dir DIR]   |   fetch <url> --name N
 python tools/gemini/music_queue.py run|status [--slots a,b] [--takes 2] [--into DIR]
 python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide cada tema
 python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
-python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -18]
+python tools/gemini/music_convert.py <tema.mp4> [--kbps 32] [--lufs -14]
 python tools/gemini/anim_sheet.py <carpeta> --out hoja.png   hoja de contacto para revisar con Read
 python tools/gemini/credit.py <sidecar.json> --asset assets/...   prompt commiteado + fila de CREDITS
 make test-gemini                                     tests (Python 3.10+ y Pillow; ffmpeg opcional)
 ```
 Las salidas van por defecto a `build/gemini/{art,music,import,convert}/` (no se
-commitean); todas aceptan otra carpeta. Ninguna escribe en `assets/`.
+commitean); todas aceptan otra carpeta. La única que escribe en `assets/` es `credit.py`, y
+solo el archivo de prompt de `assets/prompts/`: los frames y los temas se copian a mano,
+después de mirarlos o escucharlos.
 
 **Lo que cambió en la web de Gemini (verificado el 2026-11-17):**
 - **Modos:** el menú ofrece "Ayuda todos los días 4 Hydrogen", "Código y análisis 4 Argon"
@@ -126,39 +137,60 @@ commitean); todas aceptan otra carpeta. Ninguna escribe en `assets/`.
   el pedido termina `not_sent` sin apretar Enter.
 - **La cuota no se martilla:** una hora de reinicio dicha por la página o por el menú
   ("El límite se restablece el 18 nov, 11:53 p.m.") va al sidecar (`reset`) y la cola duerme
-  hasta ahí (`--max-sleep` la limita); se pacea por la ventana medida (~7 temas por hora); un
+  hasta ahí (`--max-sleep` la limita), nunca menos de 10 min (`QUOTA_MIN_SLEEP`: el menú
+  puede nombrar una hora que ya pasó), y 3 respuestas de cuota seguidas cortan la corrida
+  (`QUOTA_LIMIT`); se pacea por la ventana medida (~7 temas por hora); un
   `masked` (la respuesta de "soy un modelo de lenguaje") en un modo pasa al siguiente de la
-  lista; atascos y pedidos sin enviar tienen tope y enfriamiento. Una cola dormida sigue
+  lista; atascos y pedidos sin enviar tienen tope y enfriamiento, y tras un `nothing` o un
+  `error` el siguiente pedido espera 10 min (`--nothing-cooldown`). Una cola dormida sigue
   entregando: si se rechaza lo que trae, hay que matar su proceso además de borrar los
   archivos.
 - **Un sidecar JSON por salida** (`<nombre>.json`): prompt, referencias, modo, resultado,
   segundos, conversación, respuesta, y para un tema su título, duración y sha256. Se escribe
-  también al fallar, y apenas el pedido sale, para poder hacer `fetch` si el driver muere.
+  también al fallar (también con el navegador ocupado: `busy`), y apenas el pedido sale,
+  para poder hacer `fetch` si el driver muere. Un `fetch` que no llegó a leer la página
+  (Chrome cerrado) deja `fetch_error` y no pisa el resultado del pedido.
+- **Mientras la página trabaja, solo corta la espera un rechazo que no puede ser la
+  descripción del tema** (`page_rules.ends_wait`): política, error o una cuota dicha como
+  tal ("el límite se restablece", "has alcanzado el límite"). Gemini escribe un resumen del
+  tema mientras lo hace, y un "limited percussion" en él cortaba la espera a los 50 s.
+  `QUOTA_WORDS` va por palabras enteras (`límite` ya no se encuentra en "limited").
+- **Un menú de modos vacío o renombrado es la página que cambió, no la cuota:** el pedido
+  termina `not_sent` y dice que se mire `gemini_web.py check --list-modes`.
 
 **Arte (`import_art.py`):** fondo magenta (por tono, con el borde rosado reparado) o el alfa
-de la hoja; grilla cortada en frames (avisa si otra grilla con los mismos frames corta
+de la hoja. La clave por tono se lleva también los violetas y rosas del dibujo, así que
+`HOUSE_RULES` prohíbe magenta, rosa, púrpura y violeta en el sujeto; un sujeto violeta
+tiene que venir con su propio alfa (`--key alpha`). Grilla cortada en frames (avisa si otra grilla con los mismos frames corta
 menos dibujo; `--auto-grid` la toma); una caja común para todos los frames de una animación;
 escala por vecino más cercano a `--size` (32, o 64 para personas, ART-2) apoyado abajo y
 centrado; colores reducidos (`--colors`) y llevados a la paleta de spritegen (se lee de
 `tools/spritegen/src/palette.ts`) dentro de la banda de L* de ART-6 de `--layer` (`ground`
-20–50 con C* ≤ 35, `wall`/`object` 25–65, `creature`/`character` 10–85, `effect` 60–100),
-con los píxeles más oscuros que la banda como contorno (los contornos de spritegen, ART-5);
-alfa 0 o 255. Escribe los frames, `_preview.png` (revisar con Read) e `import.json`.
+20–50 con C* ≤ 35, `wall`/`object` 25–65, `creature`/`character` 10–85, `effect` 60–100);
+en `creature`, `character`, `object` y `wall`, los píxeles más oscuros que la banda pasan a
+contorno (los contornos de spritegen, calculados como su `darken`, ART-5); en `ground` (ART-5:
+"suelos: sin contorno") y `effect` se llevan a la banda como el resto. Alfa 0 o 255. Escribe los frames, `_preview.png` (revisar con Read) e `import.json`.
 
 **Música (`music_convert.py`):** MP4/AAC (o lo que lea ffmpeg) a Ogg Opus 48 kHz con el
 ffmpeg del PATH (el de `make sounds`) o el de `imageio-ffmpeg`: corta los fades, cierra el
 bucle con un crossfade de potencia constante de la cola sobre la cabeza, normaliza con **una
-sola ganancia** a -18 LUFS sin pasar -1,5 dBTP (medida con `loudnorm`; una ganancia que
+sola ganancia** a **-14 LUFS** sin pasar -1,5 dBTP (medida con `loudnorm`; una ganancia que
 varía rompería la costura) y, como el códec puede escalonar una costura limpia, rota el
 bucle de a 97 ms hasta que la costura codificada sea ordinaria (`seam_turns` en el JSON).
 Primeros temas reales (2026-11-18): costura de 3,3 a 0,9 tras rotar, ~650 KB a 32 kbps
 estéreo (más que los 256 KB de docs/07 por archivo de música: decisión del dueño).
+**-14 LUFS es el objetivo de toda la música del juego:** los temas de soundgen miden -11,3
+(bosque), -13,7 (puerto), -14,2 (volcán) y -15,8 (cueva), unos -14 en promedio; a -18 un
+tema de Gemini sonaba ~4 dB más bajo. El test `TheGameMusic` mide los `.ogg` de
+`assets/sounds/music/` contra `music_convert.LUFS` (si hay ffmpeg): un tema nuevo de
+cualquier origen tiene que quedar cerca.
 
 **Tests:** `make test-gemini` (unittest; claves, cortes, escala, paleta y bandas, costura,
 crossfade, ganancia, lectura de respuestas y del menú, la regla del prompt, el candado, la
 cola contra un Gemini falso, y una conversión real si hay ffmpeg con libopus). No están en
 `make test` (para no exigir Python al resto); la CI los corre en el job `gemini` cuando
-cambia `tools/gemini/`.
+cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` (la paleta que lee `import_art`) o
+`assets/sounds/music/`.
 
 ## soundgen
 `tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de

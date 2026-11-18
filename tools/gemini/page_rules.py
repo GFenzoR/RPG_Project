@@ -73,20 +73,25 @@ def mode_index(label: str | None, modes: tuple[str, ...]) -> int:
 
 def pick_mode(items: list[dict], modes: tuple[str, ...]) -> tuple[str, str]:
     """What the mode menu allows: ("pick", label) for the best open mode of
-    `modes`, ("wall", reset) when every such mode is greyed out and one names
-    the hour it comes back ("" when none does), or ("none", "") when the menu
-    shows none of them. `items` are {"said": label, "off": greyed}."""
+    `modes`, ("wall", reset) when every such mode is greyed out, with the hour
+    one of them names ("" when none does), or ("none", "") when the menu shows
+    none of them at all (empty, or renamed: the page changed, not the quota).
+    `items` are {"said": label, "off": greyed}."""
     walls = []
+    greyed = False
     for pattern in modes:
         for item in items:
             if not matches_mode(item.get("said", ""), pattern):
                 continue
             if not item.get("off"):
                 return "pick", item["said"]
+            greyed = True
             if any(re.search(word, item["said"], re.I) for word in LIMIT_WORDS):
                 walls.append(item["said"])
     if walls:
         return "wall", reset_of(walls[0])
+    if greyed:
+        return "wall", ""
     return "none", ""
 
 
@@ -121,14 +126,16 @@ def next_modes(sidecar: dict, modes: tuple[str, ...]) -> tuple[str, ...] | None:
 
 ## The refusals, read only when no media came. Spanish first: the owner's
 ## Gemini is es_419. Quota is matched before policy because a quota sentence
-## often also says it "cannot" do something.
+## often also says it "cannot" do something. **Whole words only**: a bare
+## "l[ií]mite" found "limite" inside "limited", and a reply describing "a
+## limited palette" or a track that "resets the mood" read as the quota
+## (2026-11-18 review).
 QUOTA_WORDS = (
-    r"l[ií]mite",
+    r"\bl[ií]mites?\b",
     r"\blimit\b",
-    r"cuota",
+    r"\bcuota\b",
     r"\bquota\b",
     r"restablec",
-    r"\bresets?\b",
     r"(?:vuelve|volver) a intentarlo (?:m[aá]s tarde|ma[nñ]ana|en|a las|el)",
     r"try again (?:later|tomorrow|in|at|on)",
     r"has alcanzado",
@@ -208,6 +215,28 @@ def classify(text: str) -> str:
     if _matches(text, MASKED_WORDS):
         return "masked"
     return "nothing"
+
+
+## A quota stated in words a track's description does not use: what may end
+## a wait while the page still claims to work (`ends_wait`).
+STATED_QUOTA = LIMIT_WORDS + (
+    r"(?:has alcanzado|alcanzaste) (?:el|tu) l[ií]mite",
+    r"(?:you'?ve|you have) reached (?:the|your) (?:\w+ )?(?:limit|quota)",
+)
+
+
+def ends_wait(verdict: str, text: str) -> bool:
+    """Whether a reply classified `verdict` ends a wait **while the page still
+    claims to work** (a stop button up, a player still empty). Only a refusal
+    that cannot be a description of the track does: `policy`, `error`, or a
+    quota stated as one (`STATED_QUOTA`). Gemini writes its brief of a track
+    above it as it makes it, and that brief can say "limited", "limit" or
+    "quota" in passing; a wait cut by it left a track half made and asked it
+    again (2026-11-18 review). A page that stopped working is still read by
+    `classify` alone."""
+    if verdict in ("policy", "error"):
+        return True
+    return verdict == "quota" and _matches(text, STATED_QUOTA)
 
 
 def fail_code(outcome: str) -> int:

@@ -11,6 +11,7 @@ import unittest
 
 import music_queue as mq
 import music_style
+import music_web
 import page_rules as rules
 
 NOW = datetime.datetime(2026, 11, 18, 10, 0, 0)
@@ -62,7 +63,7 @@ class Run(unittest.TestCase):
 
     def queue(self, script, **overrides):
         args = argparse.Namespace(into=self.into, takes=1, retries=2, limit=0, wait=720.0, fetch_wait=120.0,
-                                  max_sleep=6 * 3600.0, stall_cooldown=300.0, modes="")
+                                  max_sleep=6 * 3600.0, stall_cooldown=300.0, nothing_cooldown=600.0, modes="")
         for key, value in overrides.items():
             setattr(args, key, value)
         self.gemini = FakeGemini(self.into, script)
@@ -92,11 +93,25 @@ class Run(unittest.TestCase):
         self.assertEqual([a[2] for a in self.gemini.asks], [("Hydrogen", "Argon"), ("Argon",)])
         self.assertEqual(self.slept, [])
 
-    def test_a_masked_wall_in_the_last_mode_sleeps_once_by_the_window_then_stops(self):
+    def test_a_masked_wall_in_the_last_mode_with_no_track_in_the_window_stops_at_once(self):
         q = self.queue([("masked", {"mode": "4 Argon"}), ("masked", {"mode": "4 Argon"})], modes="Argon")
         q.run(BOOK["slots"][:1], BOOK)
         # No track in the window: nothing to sleep to, so it stops at once.
         self.assertEqual(len(self.gemini.asks), 1)
+        self.assertEqual(self.slept, [])
+        self.assertTrue(any("states no hour" in line for line in self.said))
+
+    def test_a_masked_wall_in_the_last_mode_sleeps_once_by_the_window_then_stops(self):
+        # Two tracks delivered 50 and 40 minutes ago: the window reopens when
+        # the older ages out, in ten minutes.
+        for n, minutes in enumerate((50, 40)):
+            with open(os.path.join(self.into, "old_%d.json" % n), "w", encoding="utf-8") as handle:
+                json.dump({"kind": "music", "outcome": "ok",
+                           "finished": (NOW - datetime.timedelta(minutes=minutes)).isoformat()}, handle)
+        q = self.queue([("masked", {"mode": "4 Argon"}), ("masked", {"mode": "4 Argon"}), ("ok", {})], modes="Argon")
+        q.run(BOOK["slots"][:1], BOOK)
+        self.assertEqual(self.slept, [10 * 60.0 + 60.0])
+        self.assertEqual(len(self.gemini.asks), 2)
         self.assertTrue(any("states no hour" in line for line in self.said))
 
     def test_a_stated_reset_is_slept_to_and_never_hammered(self):
@@ -104,6 +119,43 @@ class Run(unittest.TestCase):
         q.run(BOOK["slots"][:1], BOOK)
         self.assertEqual(self.slept, [2 * 3600.0 + 60.0])
         self.assertEqual(len(self.gemini.asks), 2)
+
+    def test_an_hour_already_past_is_never_a_reason_to_ask_at_once(self):
+        # The menu named a day and an hour that had gone by: seconds_until
+        # gave a minute, and the queue reloaded the page every minute.
+        q = self.queue([("quota", {"reset": "2026-11-18T09:00"})] * 10)
+        q.run(BOOK["slots"][:1], BOOK)
+        self.assertEqual(len(self.gemini.asks), mq.QUOTA_LIMIT)
+        self.assertEqual(self.slept, [mq.QUOTA_MIN_SLEEP] * (mq.QUOTA_LIMIT - 1))
+        self.assertTrue(any("quota answers in a row" in line for line in self.said))
+
+    def test_an_answer_with_nothing_in_it_is_not_asked_again_at_once(self):
+        q = self.queue([("nothing", {}), ("ok", {})])
+        q.run(BOOK["slots"][:1], BOOK)
+        self.assertEqual(len(self.gemini.asks), 2)
+        self.assertEqual(self.slept, [600.0])
+
+    def test_a_fetch_that_could_not_reach_chrome_is_not_asked_again(self):
+        url = "https://gemini.google.com/app/abcdef1234"
+        with open(os.path.join(self.into, "title_1.json"), "w", encoding="utf-8") as handle:
+            json.dump({"kind": "music", "slot": "title", "outcome": "timeout", "url": url}, handle)
+        q = self.queue([("ok", {})])
+
+        def fetch_without_chrome(slot_id, number, _url):
+            # What music_web's do_fetch leaves when Chrome is closed.
+            path = os.path.join(self.into, "%s_%d.json" % (slot_id, number))
+            with open(path, encoding="utf-8") as handle:
+                earlier = json.load(handle)
+            failed = {"kind": "fetch", "url": _url, "outcome": "", "fetch_error": "no Chrome answers"}
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(music_web.merged_fetch(earlier, failed), handle)
+            return 1
+
+        q.fetch = fetch_without_chrome
+        q.run(BOOK["slots"][:1], BOOK)
+        self.assertEqual(self.gemini.asks, [])
+        sidecar = mq.asks_of(self.into, "title")[1]["sidecar"]
+        self.assertEqual(sidecar["outcome"], "timeout")
 
     def test_a_reset_past_the_max_sleep_stops_the_run(self):
         q = self.queue([("quota", {"reset": "2026-11-19T12:00"})], max_sleep=3600.0)

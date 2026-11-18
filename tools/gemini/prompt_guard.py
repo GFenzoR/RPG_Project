@@ -11,12 +11,22 @@ prompt that has any, before they touch the browser. The list of names cannot be
 complete, so the phrasings that ask for an imitation ("in the style of",
 "al estilo de", "inspired by"...) are refused whatever follows them. A false
 positive costs a rewording; a prompt that names a work costs the asset.
+
+The same rule covers what is uploaded with a prompt (`--ref`): only a file
+committed under the repo's `assets/`, already credited (`ref_record`). The
+sidecar records its path and digest, and `credit.py` writes them into the
+prompt file and the `CREDITS.md` row.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
+import subprocess
 import unicodedata
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ## Phrasings that ask for an imitation, in both languages the prompts are
 ## written in. Matched on the folded text (lower case, no accents).
@@ -103,3 +113,56 @@ def check(prompt: str) -> None:
             "the prompt breaks the owner's rule (describe our own content, never name another "
             "game, artist or work):\n- " + "\n- ".join(found)
         )
+
+
+# --- the references -----------------------------------------------------------------------
+
+## **A reference is our own, already credited file** (2026-11-18 review): an
+## upload is part of the ask as much as the words are, and `--edit` asks for
+## something like it, so a third party's sprite or recording sent as one would
+## come back under a clean prompt. Only a file committed under the repo's
+## `assets/` (own work or a credited pack, `assets/CREDITS.md`) may be sent.
+REF_FOLDER = "assets"
+
+
+def digest_of(path: str) -> str:
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+def _tracked(rel: str, root: str) -> bool:
+    """Whether git tracks `rel` in `root`; False when git cannot say."""
+    try:
+        done = subprocess.run(["git", "-C", root, "ls-files", "--error-unmatch", "--", rel], capture_output=True)
+    except OSError:
+        return False
+    return done.returncode == 0
+
+
+def ref_problem(path: str, root: str = ROOT) -> str:
+    """Why `path` may not be sent as a reference, or "" when it may: a file
+    under `<root>/assets/` (links resolved) that git tracks."""
+    if not os.path.isfile(path):
+        return "no reference at %s" % path
+    real = os.path.realpath(path)
+    folder = os.path.realpath(os.path.join(root, REF_FOLDER))
+    try:
+        inside = os.path.commonpath([real, folder]) == folder
+    except ValueError:  # another drive
+        inside = False
+    if not inside:
+        return "%s is not under the repo's %s/: a reference is our own, already credited file" % (path, REF_FOLDER)
+    rel = os.path.relpath(real, os.path.realpath(root)).replace(os.sep, "/")
+    if not _tracked(rel, root):
+        return "%s is not committed: a reference is a file of the repo, already credited in assets/CREDITS.md" % rel
+    return ""
+
+
+def ref_record(path: str, root: str = ROOT) -> dict:
+    """The sidecar's record of a reference (its path under the repo and its
+    sha256), or SystemExit when it may not be sent (`ref_problem`)."""
+    why = ref_problem(path, root)
+    if why:
+        raise SystemExit(why)
+    rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
+    return {"file": rel, "sha256": digest_of(path)}

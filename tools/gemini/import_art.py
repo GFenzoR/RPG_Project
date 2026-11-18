@@ -11,7 +11,10 @@ asked for:
    so the anti-aliased blend around a drawing goes too, or the alpha the sheet
    already has. Then the pink fringe is repaired, not cut (`unfringe`): a
    blended pixel is a real edge wearing the wrong colour, and cutting it eats
-   the one-pixel legs and tips that make a creature read.
+   the one-pixel legs and tips that make a creature read. **The hue key takes
+   every violet and pink too** (red and blue above green is what they are), so
+   the house rules forbid those hues in a subject; a violet subject comes on
+   its own alpha (`--key alpha`) or not at all.
 2. **The grid cut into frames** (`cells`), in reading order. A sheet does not
    always come back in the shape asked for, so every grid with the same number
    of cells is scored by how much drawing its cut lines go through
@@ -26,8 +29,9 @@ asked for:
    (median cut, so noise does not buy colours), then every colour moved into
    its layer's ART-6 band of L* (and chroma, for ground) and snapped to the
    nearest colour of the spritegen palette (`tools/spritegen/src/palette.ts`,
-   read from the file: one source of truth) inside that band; a pixel darker
-   than the band is an outline (ART-5) and takes spritegen's nearest outline.
+   read from the file: one source of truth) inside that band; on the layers
+   that take one (`OUTLINED`: not ground, not effect), a pixel darker than the
+   band is an outline (ART-5) and takes spritegen's nearest outline.
 5. **1-bit alpha** (`binary_alpha`): 0 or 255, the rule of every sprite.
 
     python tools/gemini/import_art.py <sheet.png> --grid 4x2 --size 32 --layer creature
@@ -88,6 +92,12 @@ BANDS: dict[str, tuple[float, float, float | None]] = {
     "character": (10.0, 85.0, None),
     "effect": (60.0, 100.0, None),
 }
+## The layers that take an outline (docs/17 ART-5: creatures and characters
+## one dark pixel, objects a softer one, walls as objects). **Ground has none**
+## ("suelos: sin contorno") and an effect lives at L* 60-100: on those the
+## darkest pixels are clamped into the band like the rest, never turned into
+## an outline (an orange spark at L* 58 came out at L* 15 that way).
+OUTLINED = ("creature", "character", "object", "wall")
 ## Colours a frame may keep before the palette snap. Ants of Neque measured
 ## that a body under ~16 loses its shading and ground past ~12 reads as noise;
 ## here the snap to spritegen's ramps comes after, and on the first real sheet
@@ -98,6 +108,26 @@ COLOURS = {"ground": 8, "wall": 10, "object": 10, "creature": 16, "character": 1
 # --- colour ------------------------------------------------------------------------------
 
 
+## How much darker than its deep shade a material's outline is (`material`
+## in palette.ts: `darken(deep, 0.45)`).
+OUTLINE_DARKEN = 0.45
+
+
+def darkened(colour: tuple[int, ...], amount: float = OUTLINE_DARKEN) -> tuple[int, int, int]:
+    """palette.ts's `darken`, to the bit: each channel times `1 - amount`
+    (computed as it is there, not as 0.55, whose float differs) rounded half
+    up as `Math.round` does. Python's `round` goes to the even integer, and on
+    the halves (70 x 0.55 is 38.5) it gave outlines spritegen never draws."""
+    k = 1 - amount
+    return tuple(js_round(c * k) for c in colour[:3])  # type: ignore[return-value]
+
+
+def js_round(x: float) -> int:
+    """JavaScript's `Math.round`: the nearest integer, a half going up."""
+    whole = math.floor(x)
+    return whole + 1 if x - whole >= 0.5 else whole
+
+
 def parse_palette(text: str) -> list[tuple[int, int, int]]:
     """The colours of spritegen's `palette.ts`: the four shades of every
     `material(...)` and its outline (the deep shade 45% darker, as `material`
@@ -105,8 +135,7 @@ def parse_palette(text: str) -> list[tuple[int, int, int]]:
     found: list[tuple[int, int, int]] = []
     for match in re.finditer(r'material\(\s*"(#[0-9a-fA-F]{6})",\s*"(#[0-9a-fA-F]{6})",\s*"(#[0-9a-fA-F]{6})",\s*"(#[0-9a-fA-F]{6})"\s*\)', text):
         shades = [tuple(int(h[i : i + 2], 16) for i in (1, 3, 5)) for h in match.groups()]
-        deep = shades[3]
-        outline = tuple(round(c * 0.55) for c in deep)
+        outline = darkened(shades[3])
         for colour in shades + [outline]:
             if colour not in found:
                 found.append(colour)  # type: ignore[arg-type]
@@ -119,9 +148,9 @@ def outline_colours(text: str) -> list[tuple[int, int, int]]:
     found = []
     for match in re.finditer(r'material\(\s*"#[0-9a-fA-F]{6}",\s*"#[0-9a-fA-F]{6}",\s*"#[0-9a-fA-F]{6}",\s*"(#[0-9a-fA-F]{6})"\s*\)', text):
         h = match.group(1)
-        outline = tuple(round(int(h[i : i + 2], 16) * 0.55) for i in (1, 3, 5))
+        outline = darkened(tuple(int(h[i : i + 2], 16) for i in (1, 3, 5)))
         if outline in shades and outline not in found:
-            found.append(outline)  # type: ignore[arg-type]
+            found.append(outline)
     return found
 
 
@@ -447,6 +476,34 @@ def parse_grid(text: str) -> tuple[int, int]:
     return int(found.group(1)), int(found.group(2))
 
 
+def _read_json(path: str) -> dict | None:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            found = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def asked_with(sheet_path: str) -> dict | None:
+    """The `gemini_web` sidecar of the ask that drew this sheet, or None:
+    `<stem>.json` beside it, or, for one of several pictures of one answer
+    (`<name>_<n>.png`), the `<name>.json` that lists it in its `files`."""
+    stem = os.path.splitext(sheet_path)[0]
+    own = _read_json(stem + ".json")
+    if own is not None:
+        return own
+    one_of = re.fullmatch(r"(.+)_\d+", stem)
+    if not one_of:
+        return None
+    shared = _read_json(one_of.group(1) + ".json")
+    name = os.path.basename(sheet_path)
+    files = shared.get("files", []) if shared else []
+    if any(isinstance(f, dict) and f.get("file") == name for f in files):
+        return shared
+    return None
+
+
 def import_sheet(sheet_path: str, grid: tuple[int, int], size: tuple[int, int], layer: str, names: list[str],
                  out_dir: str, key_mode: str = "auto", fit: str = "union", anchor: str = "bottom", margin: int = 1,
                  colours: int | None = None, palette: list[tuple[int, int, int]] | None = None,
@@ -472,6 +529,7 @@ def import_sheet(sheet_path: str, grid: tuple[int, int], size: tuple[int, int], 
         if why:
             warnings.append("%s %s" % (name, why))
     shared = union_box(parts) if fit == "union" else None
+    outlines = outlines if layer in OUTLINED else None
     snap = Snapper(palette, BANDS[layer], outlines) if palette else None
     os.makedirs(out_dir, exist_ok=True)
     frames, written = [], []
@@ -518,21 +576,16 @@ def import_sheet(sheet_path: str, grid: tuple[int, int], size: tuple[int, int], 
         "frames": written,
         "warnings": warnings,
     }
-    gemini = os.path.splitext(sheet_path)[0] + ".json"
-    if os.path.exists(gemini):
-        try:
-            with open(gemini, encoding="utf-8") as handle:
-                asked = json.load(handle)
-            record["delivery"] = {k: asked[k] for k in ("tool", "prompt", "mode", "started", "url") if k in asked}
-        except (OSError, ValueError):
-            pass
+    asked = asked_with(sheet_path)
+    if asked:
+        record["delivery"] = {k: asked[k] for k in ("tool", "prompt", "mode", "started", "url", "refs") if k in asked}
     with open(os.path.join(out_dir, "import.json"), "w", encoding="utf-8") as handle:
         json.dump(record, handle, indent=1, ensure_ascii=False)
         handle.write("\n")
     return record
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("sheet")
     parser.add_argument("--grid", required=True, help="COLUMNSxROWS, e.g. 4x2")
@@ -547,9 +600,10 @@ def main() -> int:
     parser.add_argument("--margin", type=int, default=1)
     parser.add_argument("--colors", type=int, default=-1, help="colours before the palette snap (default by layer; 0: no limit)")
     parser.add_argument("--no-palette", action="store_true", help="keep the colours (no palette or band snap)")
-    parser.add_argument("--no-outline", action="store_true", help="clamp the darkest pixels into the band too")
+    parser.add_argument("--no-outline", action="store_true",
+                        help="clamp the darkest pixels into the band too (always so for ground and effect)")
     parser.add_argument("--auto-grid", action="store_true", help="take the grid that cuts the least drawing")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     grid = parse_grid(args.grid)
     names = [n.strip() for n in args.names.split(",") if n.strip()]
     if not names and args.prefix:

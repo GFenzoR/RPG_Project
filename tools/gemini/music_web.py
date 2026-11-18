@@ -2,9 +2,12 @@
 
 The twin of `gemini_web.py` and it uses that file's door: the same attach to the
 Chrome the owner started with `--remote-debugging-port=9222`, the same composer,
-the same tools menu, the same lock. **It never signs in, never reads a cookie and
-never handles a credential**: a download is a request the attached page makes
-as itself. Ported from Ants of Neque's `tools/music_web.py`.
+the same tools menu, the same lock. **It never signs in, and never reads, copies
+or stores a cookie or a credential in its own code.** A track at an `http(s)`
+address is downloaded with Playwright's request API of the attached context,
+which sends that context's cookies with the one request from Playwright's own
+side (nothing here sees or keeps them); a `blob:` is read inside the page.
+Ported from Ants of Neque's `tools/music_web.py`.
 
     python tools/gemini/music_web.py ask "<prompt>" --name title_1 [--out-dir build/gemini/music]
                                      [--modes Hydrogen,Argon] [--ref a.mp3 ...] [--wait 720]
@@ -285,8 +288,10 @@ def conversation_url(page, seconds: float = 30.0) -> str:
 
 
 def track_bytes(page, src: str) -> bytes:
-    """The track behind a src: fetched by the page itself (its own session),
-    or read out of the page when it is a blob."""
+    """The track behind a src: an `http(s)` one through Playwright's request
+    API of the attached context (it sends that context's cookies from
+    Playwright's side, not the page's), or read out of the page when it is a
+    blob."""
     if src.startswith("http"):
         return page.request.get(src, timeout=180000).body()
     encoded = page.evaluate(
@@ -307,9 +312,10 @@ def track_bytes(page, src: str) -> bytes:
 def wait_for_track(page, before: set[str], wait: float, modes, stall: bool = True, asked_before: int = 0, on_conversation=None):
     """Waits for the answer: ("ok", src, state) the moment a new media source
     is on the page; a reply that stopped working with no track, unchanged for
-    `QUIET_SECONDS`, is a refusal by its words (a refusal that is not
-    `masked`/`nothing` ends it after twice that even while the page claims to
-    work); `stalled` when no conversation was ever made (or the question was
+    `QUIET_SECONDS`, is a refusal by its words (a policy, an error or a quota
+    stated as one, `rules.ends_wait`, ends it after twice that even while the
+    page claims to work: never a brief that says "limited" over a track still
+    being made); `stalled` when no conversation was ever made (or the question was
     handed back); `timeout` otherwise. One line a minute for the queue's log."""
     start = time.time()
     quiet_since = time.time()
@@ -355,7 +361,7 @@ def wait_for_track(page, before: set[str], wait: float, modes, stall: bool = Tru
             continue
         held = time.time() - quiet_since
         verdict = rules.classify(st["text"])
-        if verdict not in ("nothing", "masked") and held >= 2.0 * QUIET_SECONDS:
+        if rules.ends_wait(verdict, st["text"]) and held >= 2.0 * QUIET_SECONDS:
             return verdict, "", st
         if why or st["replies"] == 0 or elapsed < 15.0:
             idle_since = None
@@ -410,9 +416,7 @@ def save_track(page, src: str, out: str, record: dict, started: float | None, se
 
 
 def do_ask(args) -> int:
-    for path in args.ref:
-        if not os.path.isfile(path):
-            raise SystemExit("no reference at %s" % path)
+    refs = [prompt_guard.ref_record(path) for path in args.ref]
     prompt_guard.check(args.prompt)
     modes = rules.configured_modes(args.modes)
     name = web.slug(args.name)
@@ -423,7 +427,7 @@ def do_ask(args) -> int:
         "tool": "Gemini web app (owner's account), music_web.py",
         "slot": args.slot or name,
         "prompt": args.prompt,
-        "refs": [{"file": os.path.basename(p), "sha256": web.digest_of(p)} for p in args.ref],
+        "refs": refs,
         "modes": list(modes),
         "started": web.now_iso(),
         "outcome": "not_sent",
@@ -433,6 +437,10 @@ def do_ask(args) -> int:
         "reply": "",
     }
     if not browser_lock.take(wait=args.lock_wait):
+        # Nothing was sent, and the sidecar says so, as gemini_web's does.
+        record["outcome"] = "busy"
+        record["finished"] = web.now_iso()
+        web.write_sidecar(stem, record)
         return rules.BUSY
     code = rules.NOTHING
     try:
@@ -521,6 +529,8 @@ def do_fetch(args) -> int:
     try:
         with web.playwright() as pw:
             browser = pw.chromium.connect_over_cdp(args.cdp)
+            if not browser.contexts:
+                raise SystemExit("attached, but that Chrome has no window open")
             page = browser.contexts[0].new_page()
             try:
                 page.goto(args.url, wait_until="domcontentloaded", timeout=90000)
@@ -545,21 +555,37 @@ def do_fetch(args) -> int:
                     code = rules.fail_code(outcome)
             finally:
                 web.close_tab(browser, page)
+    except BaseException as failed:
+        # Chrome closed, no window, a network error: the fetch says why, and
+        # the ask it was for keeps its own outcome (`merged_fetch`).
+        record["fetch_error"] = (str(failed) or type(failed).__name__)[:300]
+        raise
     finally:
         record["finished"] = web.now_iso()
         path = stem + ".json"
         if os.path.exists(path):
             with open(path, encoding="utf-8") as handle:
-                earlier = json.load(handle)
-            earlier.setdefault("fetched", []).append(record)
-            for key in ("outcome", "reset", "reply", "sha256", "bytes", "title", "album", "genre",
-                        "track_seconds", "audio", "gemini_title", "src_host"):
-                if key in record:
-                    earlier[key] = record[key]
-            record = earlier
+                record = merged_fetch(json.load(handle), record)
         web.write_sidecar(stem, record)
         browser_lock.drop()
     return code
+
+
+## What a fetch that found the track brings into the ask's own sidecar.
+FETCHED_KEYS = ("outcome", "reset", "reply", "sha256", "bytes", "title", "album", "genre",
+                "track_seconds", "audio", "gemini_title", "src_host")
+
+
+def merged_fetch(earlier: dict, fetch: dict) -> dict:
+    """The ask's sidecar with a fetch of it: the fetch appended to `fetched`,
+    and what it found copied over. **A fetch that never read the page (its
+    outcome still "") changes no outcome**: a `timeout` that became "" would
+    never be fetched again and would be asked again as if never sent."""
+    earlier.setdefault("fetched", []).append(fetch)
+    for key in FETCHED_KEYS:
+        if key in fetch and not (key == "outcome" and not fetch[key]):
+            earlier[key] = fetch[key]
+    return earlier
 
 
 def build_parser() -> argparse.ArgumentParser:

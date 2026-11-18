@@ -37,7 +37,7 @@ Needs ffmpeg with libopus: the one on PATH (as `make sounds` uses) or the copy
 inside `imageio-ffmpeg`. Build-time only; nothing of it reaches the game.
 
     python tools/gemini/music_convert.py <track.mp4> [--out build/gemini/convert/<stem>.ogg]
-        [--kbps 32] [--channels 2] [--lufs -18] [--true-peak -1.5] [--crossfade 4] [--no-loop]
+        [--kbps 32] [--channels 2] [--lufs -14] [--true-peak -1.5] [--crossfade 4] [--no-loop]
 
 It never writes into `assets/`: the owner listens to the `.ogg` first, and then
 it is copied by hand with its prompt file and its `CREDITS.md` row
@@ -62,7 +62,12 @@ OUT_DIR = os.path.join(ROOT, "build", "gemini", "convert")
 
 RATE = 48000  # Opus's own rate
 ANALYSIS_RATE = 8000  # the fades are found on a light mono copy
-LUFS = -18.0
+## **One loudness for all the game's music**: the four themes soundgen made
+## measure -11.3 (bosque), -13.7 (puerto), -14.2 (volcan) and -15.8 (cueva)
+## LUFS, about -14 together (2026-11-18 review), so a Gemini track comes to
+## that, never to -18, where it played some 4 dB under the rest. The test
+## `TheGameMusic` measures the shipped themes against it when ffmpeg is there.
+LUFS = -14.0
 TRUE_PEAK = -1.5
 CROSSFADE = 4.0
 KBPS = 32
@@ -289,7 +294,8 @@ def _delivery_record(source: str) -> dict:
         return {}
     if not isinstance(record, dict):
         return {}
-    keep = ("tool", "slot", "prompt", "mode", "started", "finished", "title", "gemini_title", "track_seconds", "sha256", "url")
+    keep = ("tool", "slot", "prompt", "mode", "started", "finished", "title", "gemini_title", "track_seconds", "sha256", "url",
+            "refs")
     return {key: record[key] for key in keep if key in record}
 
 

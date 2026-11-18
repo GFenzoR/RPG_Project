@@ -8,15 +8,23 @@ the same door.
 
 Google refuses a sign-in in a browser started by automation, and copying
 Chrome's cookie store into a profile the automation owns is the shape of
-credential theft. So this never signs in, never reads a cookie and never starts
-or closes the owner's Chrome. The owner starts it, signs in once in that window,
-and this **attaches over the DevTools protocol**:
+credential theft. So this never signs in, never reads, copies or stores a
+cookie in its own code, and never starts or closes the owner's Chrome. The
+owner starts it, signs in once in that window, and this **attaches over the
+DevTools protocol**:
 
     chrome.exe --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%/chrome-gemini
 
 A profile of its own because Chrome 136 stopped honouring the debugging port on
 the default profile. Every ask opens a tab of its own on a fresh chat and closes
 only that tab; the browser is detached, never shut down.
+
+**One thing is not the page's own doing**: an answer at an `http(s)` address is
+downloaded with Playwright's request API of the attached context
+(`page.request.get`). Playwright takes that context's cookies over the DevTools
+protocol and sends them with that one request from its own (Node) side. Nothing
+here sees, logs or keeps them, but it is a request made beside the page, not by
+it. A `blob:` answer is read inside the page.
 
     python tools/gemini/gemini_web.py check [--list-modes]
     python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk [--ref a.png ...]
@@ -139,7 +147,7 @@ Hard technical requirements, these matter more than the art direction:
   airbrush shading. Limited palette, flat shading in three or four tones, and a dark
   outline of the local colour (never pure black).
 - Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
-  a subject may be magenta or hot pink: that colour is the background key.
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
 - They are read at 32x32 pixels in game (people at 64x64), so favour a strong
   silhouette and clear separation of parts over fine detail.
 """
@@ -424,8 +432,13 @@ def ensure_mode(page, modes: tuple[str, ...]) -> str:
         page.wait_for_timeout(1500)
         return state(page, modes)["mode"]
     page.keyboard.press("Escape")
+    if verdict == "none":
+        # A menu that shows none of the modes (empty, or every one renamed) is
+        # the page changing, not the quota: nothing was sent.
+        raise NotSent("the mode menu shows none of %s (%d items read): has the page changed? "
+                      "`gemini_web.py check --list-modes`" % (", ".join(modes), len(items or [])))
     walled = [item["said"] for item in items if any(re.search(w, item["said"], re.I) for w in rules.LIMIT_WORDS)]
-    raise ModeWall(said if verdict == "wall" else "", "; ".join(walled) or "no mode of %s is open" % (modes,))
+    raise ModeWall(said, "; ".join(walled) or "every mode of %s is greyed out" % (modes,))
 
 
 def choose_tool(page, words: tuple[str, ...]) -> dict | None:
@@ -617,9 +630,11 @@ def is_one_of(blob: bytes, thumbs: list[list[int]], edit: bool = False) -> bool:
 
 
 def bytes_of(page, src: str) -> bytes:
-    """The image behind a src: fetched by the page itself (its own session),
-    or, for a `blob:` the request API refuses, read off the decoded element
-    through a canvas (same origin, so not tainted)."""
+    """The image behind a src: an `http(s)` one through Playwright's request
+    API of the attached context (which sends that context's cookies from
+    Playwright's side; see the module's notes), or, for a `blob:` the request
+    API refuses, read off the decoded element through a canvas inside the page
+    (same origin, so not tainted)."""
     if src.startswith("http"):
         return page.request.get(src).body()
     encoded = page.evaluate(
@@ -745,9 +760,7 @@ def _wait_for_pictures(page, before: set[str], sent: list[list[int]], edit: bool
 def do_image(args) -> int:
     """Asks for a picture (a sheet, most often) and saves every new PNG it
     answers with under `--out-dir`, with `<name>.json` beside them."""
-    for path in args.ref:
-        if not os.path.isfile(path):
-            raise SystemExit("no reference at %s" % path)
+    refs = [prompt_guard.ref_record(path) for path in args.ref]
     prompt = _prompt_of(args)
     modes = rules.configured_modes(args.modes)
     name = slug(args.name)
@@ -758,7 +771,7 @@ def do_image(args) -> int:
         "name": name,
         "prompt": prompt,
         "user_prompt": args.prompt,
-        "refs": [{"file": os.path.basename(p), "sha256": digest_of(p)} for p in args.ref],
+        "refs": refs,
         "started": now_iso(),
         "outcome": "not_sent",
         "seconds": 0.0,

@@ -106,9 +106,12 @@ Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitido
 - **El prompt describe nuestro contenido** y nunca nombra otro juego, artista, compositor
   ni obra, ni pide imitarlos. `tools/gemini` se niega a enviar uno que lo haga.
 - **Cada fila lleva su prompt commiteado**: `assets/prompts/<ruta del asset sin "assets/"
-  ni extensión>.txt`, con el prompt exacto y su encabezado (herramienta, modo, fecha).
-  `python tools/gemini/credit.py <sidecar.json> --asset <ruta>` lo escribe e imprime la
-  fila de abajo.
+  ni extensión>.txt`, con el prompt exacto y su encabezado (herramienta, modo, fecha y
+  referencias). `python tools/gemini/credit.py <sidecar.json> --asset <ruta>` lo escribe e
+  imprime la fila de abajo.
+- **Las referencias subidas con el pedido** (`--ref`) son solo archivos de `assets/` ya
+  acreditados aquí (u obra propia); la fila las nombra en "Notas" y el archivo de prompt
+  da su sha256.
 - **Se acredita a Gemini como herramienta**, nunca como obra hecha a mano. Google no
   reclama la propiedad de lo generado. Estos archivos no son "Obra propia" (spritegen,
   soundgen) ni de terceros: la página `/credits` todavía no los lista (pendiente, docs/14).

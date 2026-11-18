@@ -16,6 +16,11 @@ content (`prompt_guard`) and ask again.
 unless `--prompt-file` names one (one file for the frames of one sheet, say
 `assets/prompts/sprites/creatures/wolf.txt`). The row is printed, to paste
 into the table: the tool does not edit CREDITS.md.
+
+The references the ask was sent with (`--ref`) go into both, by path and
+sha256, and must be files of the repo's `assets/` still as they were sent
+(`refs_of`): an asset asked with anything else is not credited. The
+conversation's address stays in the sidecar: it is the owner's private chat.
 """
 
 from __future__ import annotations
@@ -61,8 +66,34 @@ def day_of(ask: dict) -> str:
     return started[:10] if len(started) >= 10 else datetime.date.today().isoformat()
 
 
+def refs_of(ask: dict, root: str = ROOT) -> list[dict]:
+    """The references the ask was sent with, each checked to be a file of the
+    repo's `assets/` (`prompt_guard`: our own, already credited) and still the
+    file that was sent (same sha256). SystemExit otherwise: an asset whose
+    reference cannot be shown to be ours is not credited."""
+    refs = ask.get("refs") or []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            raise SystemExit("the reference %r was recorded without its path and sha256: it cannot be credited" % (ref,))
+        name = str(ref.get("file", ""))
+        rel = name.replace("\\", "/")
+        if not rel.startswith(prompt_guard.REF_FOLDER + "/") or ".." in rel.split("/"):
+            raise SystemExit("the ask was sent with the reference %r, not a file of the repo's assets/: "
+                             "it cannot be credited (docs/17 SRC-5)" % name)
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            raise SystemExit("the reference %s is not in the repo: it cannot be credited (docs/17 SRC-5)" % rel)
+        if ref.get("sha256") != prompt_guard.digest_of(path):
+            raise SystemExit("%s is no longer the file the ask was sent with (sha256 differs): restore it, "
+                             "or ask again with the file as it is" % rel)
+    return refs
+
+
 def prompt_text(ask: dict, assets: list[str]) -> str:
-    """The prompt file: a short header, then the prompt exactly as sent."""
+    """The prompt file: a short header (with every reference sent, by path and
+    sha256), then the prompt exactly as sent. **Never the conversation's
+    address**: it is the owner's private chat, of no use to anyone else in a
+    public repo, and it stays in the sidecar."""
     lines = [
         "# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.",
         "# Assets: %s" % ", ".join(a.replace("\\", "/") for a in assets),
@@ -71,18 +102,22 @@ def prompt_text(ask: dict, assets: list[str]) -> str:
     ]
     if ask.get("mode"):
         lines.append("# Modo: %s" % ask["mode"])
-    if ask.get("url"):
-        lines.append("# Conversación: %s" % ask["url"])
+    for ref in ask.get("refs") or []:
+        lines.append("# Referencia: %s (sha256 %s)" % (ref.get("file", ""), ref.get("sha256", "?")))
     return "\n".join(lines) + "\n\n" + ask["prompt"].strip() + "\n"
 
 
 def credits_row(ask: dict, assets: list[str], prompt_file: str, note: str = "") -> str:
     """The row of CREDITS.md's "Generado con IA" table:
-    | Archivos | Herramienta | Fecha | Prompt | Notas |"""
+    | Archivos | Herramienta | Fecha | Prompt | Notas |
+    The references the ask was sent with lead the notes."""
     files = ", ".join("`%s`" % a.replace("\\", "/") for a in assets)
     mode = (" (modo %s)" % ask["mode"]) if ask.get("mode") else ""
+    refs = [str(ref.get("file", "")) for ref in ask.get("refs") or []]
+    notes = ["Referencias: %s" % ", ".join("`%s`" % ref for ref in refs)] if refs else []
+    notes += [note] if note else []
     return "| %s | Gemini, app web con la cuenta del dueño%s | %s | `%s` | %s |" % (
-        files, mode, day_of(ask), prompt_file, note or "—")
+        files, mode, day_of(ask), prompt_file, ". ".join(notes) or "—")
 
 
 def main() -> int:
@@ -95,6 +130,7 @@ def main() -> int:
     with open(args.record, encoding="utf-8") as handle:
         ask = delivery_of(json.load(handle))
     prompt_guard.check(ask["prompt"])
+    refs_of(ask)
     target = (args.prompt_file or prompt_path(args.asset[0])).replace("\\", "/")
     path = os.path.join(ROOT, target)
     os.makedirs(os.path.dirname(path), exist_ok=True)

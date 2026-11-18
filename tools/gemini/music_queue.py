@@ -9,6 +9,7 @@ and the quota.
     python tools/gemini/music_queue.py run [--into DIR] [--slots title,bosque] [--takes 2]
                                        [--retries 2] [--limit N] [--wait 720] [--max-sleep 21600]
                                        [--modes Hydrogen,Argon] [--stall-cooldown 300]
+                                       [--nothing-cooldown 600]
 
 ## What is on disk is the truth
 
@@ -23,7 +24,11 @@ runs. Only asks that reached Gemini and were answered count (`spent_of`).
 - **One ask at a time**, through `music_web.py`, which holds `browser_lock`.
 - **A stated reset hour is slept to** (`--max-sleep` caps it; past it the run
   stops and says when to come back). The menu's own "el límite se restablece"
-  is read the same way.
+  is read the same way. A quota sleep lasts at least `QUOTA_MIN_SLEEP` (an
+  hour already past is no reason to ask at once), and `QUOTA_LIMIT` quota
+  answers in a row stop the run.
+- **An answer with nothing in it is not asked again at once**: after a
+  `nothing` or an `error` the next ask waits `--nothing-cooldown`.
 - **Paced by the window** Ants of Neque measured: about `WINDOW_TRACKS` tracks
   in any `WINDOW`. With that many delivered in the last hour the queue sleeps
   until the oldest ages out. A masked wall with no hour is slept to that once a
@@ -76,6 +81,17 @@ FETCHES = 3
 ## measured once and not proven), so the queue paces itself by it.
 WINDOW = 3600.0
 WINDOW_TRACKS = 7
+## **A stated hour is never a reason to ask at once**: the menu can still name
+## a day and an hour already past (`page_rules.reset_of` takes the day as
+## said), which would make the sleep a minute's and the next ask reload the
+## page every minute. A quota sleep is at least this long, and this many quota
+## answers in a row stop the run whatever hour they state.
+QUOTA_MIN_SLEEP = 600.0
+QUOTA_LIMIT = 3
+## After an answer with no track and no reason (`nothing`) or a technical
+## `error`, the next ask waits this long: on 2026-11-17 (`run_music.log`) the
+## ask made ten minutes after a `nothing` came back fine.
+NOTHING_COOLDOWN = 600.0
 
 
 def _read(path: str) -> dict | None:
@@ -188,11 +204,13 @@ class Queue:
         self.say = say
         self.modes = rules.configured_modes(getattr(args, "modes", ""))
 
-    def sleep_until(self, when: str) -> bool:
-        """Sleeps to a stated hour, or says it will not (past `--max-sleep`)."""
+    def sleep_until(self, when: str, least: float = 0.0) -> bool:
+        """Sleeps to a stated hour, at least `least` seconds, or says it will
+        not (past `--max-sleep`)."""
         seconds = seconds_until(when, self.now())
         if seconds is None:
             return False
+        seconds = max(seconds, least)
         if seconds > self.args.max_sleep:
             self.say("the quota comes back at %s, past --max-sleep; run again then" % when)
             return False
@@ -204,8 +222,9 @@ class Queue:
         """Asks every slot until it has its takes or its retries are spent.
         Returns the number of asks that reached Gemini."""
         args = self.args
-        asked = unsent = trouble = 0
+        asked = unsent = trouble = walls = 0
         cool = masked_once = False
+        rest = 0.0
         for slot in slots:
             pending = self.collect(slot)
             if pending:
@@ -230,6 +249,10 @@ class Queue:
                     self.say("the last ask stalled: waiting %.0f s before the next" % args.stall_cooldown)
                     self.sleep(args.stall_cooldown)
                     cool = False
+                if rest:
+                    self.say("the last answer brought nothing: waiting %.0f s before the next" % rest)
+                    self.sleep(rest)
+                    rest = 0.0
                 number = max(asks) + 1 if asks else 1
                 text = music_style.prompt(book, slot, len(live) + 1)
                 code = self.ask(slot["id"], number, text, self.modes)
@@ -265,6 +288,7 @@ class Queue:
                     continue
                 if outcome not in NOT_SPENT:
                     trouble = 0
+                walls = walls + 1 if code == rules.QUOTA else 0
                 if code == rules.TIMEOUT and rules.is_conversation(sidecar.get("url", "")):
                     code = self.fetch(slot["id"], number, sidecar["url"])
                     sidecar = _read(os.path.join(args.into, "%s_%d.json" % (slot["id"], number))) or {}
@@ -280,6 +304,9 @@ class Queue:
                                  % (sidecar.get("mode"), ", ".join(after)))
                         self.modes = after
                         continue
+                    if walls >= QUOTA_LIMIT:
+                        self.say("%d quota answers in a row; stopping: run again later" % walls)
+                        return asked
                     when = sidecar.get("reset", "")
                     if not when and sidecar.get("outcome") == "masked" and not masked_once:
                         when = window_reopens(args.into, self.now(), any_count=True)
@@ -287,9 +314,11 @@ class Queue:
                     if not when:
                         self.say("the quota states no hour, and the window does not explain it; run again later")
                         return asked
-                    if not self.sleep_until(when):
+                    if not self.sleep_until(when, QUOTA_MIN_SLEEP):
                         return asked
                     continue
+                if outcome in ("nothing", "error"):
+                    rest = getattr(args, "nothing_cooldown", NOTHING_COOLDOWN)
                 self.say("%s: %s, an ask spent" % (slot["id"], sidecar.get("outcome", "no answer")))
         self.say("asked %d this run" % asked)
         return asked
@@ -309,7 +338,9 @@ class Queue:
                 self.say("%s #%d: fetching what %s left" % (slot["id"], number, sidecar["url"]))
                 self.fetch(slot["id"], number, sidecar["url"])
                 again = (_read(ask["stem"] + ".json") or {}).get("fetched", [])
-                waiting = bool(again) and again[-1].get("outcome") == "timeout"
+                # Still generating, or the fetch never read the page (Chrome
+                # closed): either way the track may yet land there.
+                waiting = bool(again) and (again[-1].get("outcome") == "timeout" or bool(again[-1].get("fetch_error")))
                 if not os.path.exists(ask["stem"] + ".mp4") and len(again) < FETCHES and waiting:
                     pending = True
         return pending
@@ -392,6 +423,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fetch-wait", type=float, default=120.0)
     run.add_argument("--max-sleep", type=float, default=6 * 3600.0)
     run.add_argument("--stall-cooldown", type=float, default=STALL_COOLDOWN)
+    run.add_argument("--nothing-cooldown", type=float, default=NOTHING_COOLDOWN,
+                     help="seconds before the next ask after a `nothing` or an `error`")
     run.add_argument("--modes", default="", help="mode patterns, best first (default GEMINI_MODES or Hydrogen,Argon)")
     run.set_defaults(run=do_run)
     return parser

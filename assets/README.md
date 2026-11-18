@@ -261,6 +261,12 @@ Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta
   trota hacia el sur) y cómo suena o se ve, nunca a qué se parece. **Nunca nombra otro
   juego, artista, compositor ni obra**, ni pide "al estilo de" o "inspirado en". Las
   herramientas se niegan a enviar un prompt así (`tools/gemini/prompt_guard.py`).
+- **Una referencia (`--ref`) es solo un archivo commiteado en `assets/`, ya acreditado**
+  (arte propio o de un pack de `CREDITS.md`). Lo que se sube es parte del pedido tanto
+  como el texto, y con `--edit` se pide algo parecido: un sprite o un audio de terceros
+  (y menos de Tibia u otro juego) nunca se manda. Los drivers rechazan otra ruta; el
+  sidecar guarda la ruta y el sha256, y `credit.py` los escribe en el archivo de prompt y
+  en la fila (y no acredita si la referencia ya no está en el repo tal como se mandó).
 - **Cada archivo que se usa queda registrado** en `CREDITS.md`, sección "Generado con
   IA": los archivos, la herramienta (Gemini, app web de la cuenta del dueño, y el modo),
   la fecha y un **archivo de prompt commiteado** en `assets/prompts/<ruta del asset sin
@@ -275,15 +281,17 @@ Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta
   `build/gemini/` (no se commitea).
 
 Arte, de la hoja al sprite:
-1. `python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk_s [--ref hoja.png]`
+1. `python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk_s [--ref assets/sprites/....png]`
    deja `build/gemini/art/wolf_walk_s.png` y su `.json`. Al prompt se le suman las reglas
    de la casa (`HOUSE_RULES`): fondo magenta plano, grilla pareja sin textos, 3/4 frontal,
-   luz desde arriba a la izquierda, contorno oscuro del color local, colores apagados.
+   luz desde arriba a la izquierda, contorno oscuro del color local, colores apagados, y
+   nada magenta, rosa, púrpura ni violeta en el sujeto (la clave por tono se los lleva).
 2. `python tools/gemini/import_art.py build/gemini/art/wolf_walk_s.png --grid 4x1 --size 32
    --layer creature --prefix walk_s` deja en `build/gemini/import/wolf_walk_s/` los frames
    en nuestra grilla (vecino más cercano), con la paleta de spritegen dentro de la banda
-   de ART-6 de su capa, el contorno oscuro y alfa 0 o 255, más `_preview.png` (mirarlo con
-   Read) e `import.json`.
+   de ART-6 de su capa, el contorno oscuro (en criaturas, personajes, objetos y muros; los
+   suelos y los efectos no llevan) y alfa 0 o 255, más `_preview.png` (mirarlo con Read) e
+   `import.json`.
 3. Los frames buenos se copian a `assets/sprites/` con los nombres de ANI-4
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
 
@@ -293,7 +301,8 @@ Música, del MP4 al loop:
    con su `.json`.
 2. Se escuchan, y el elegido pasa por `python tools/gemini/music_convert.py
    build/gemini/music/<tema>_<n>.mp4`: sin fades, cerrado en bucle con un crossfade de la
-   cola sobre la cabeza, a -18 LUFS y en Ogg Opus, con la costura medida después de
+   cola sobre la cabeza, a -14 LUFS (el nivel de la música que ya tiene el juego) y en
+   Ogg Opus, con la costura medida después de
    codificar (`build/gemini/convert/<tema>_<n>.ogg` y su `.json`).
 3. Se copia a `assets/sounds/music/`, se apunta en `sounds.yaml` y se corre `credit.py`.
    **Ojo con el presupuesto:** un tema de Gemini de ~2:40 en Opus estéreo a 32 kbps pesa
