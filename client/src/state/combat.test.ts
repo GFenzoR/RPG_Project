@@ -1,6 +1,7 @@
 import { NO_SOUNDS } from "../audio/cues.ts";
 import {
   AttackKind,
+  CreatureAppearSchema,
   CreatureAttackSchema,
   CreatureDisappearSchema,
   CreatureKind,
@@ -9,6 +10,7 @@ import {
   FloatingTextKind,
   FloatingTextSchema,
   ItemStackSchema,
+  MapSliceSchema,
   MessageKind,
   MessageSchema,
   TextParamSchema,
@@ -156,6 +158,37 @@ describe("combat state", () => {
     expect(w.attacks).toEqual([]);
     expect(w.departureOf(6)).toBe(DisappearReason.DEATH);
     w.expire(200 + DEPARTURE_MS);
+    expect(w.departureOf(6)).toBeUndefined();
+  });
+
+  it("forgets why a creature left once it comes back (A9)", () => {
+    const w = world();
+    const died = create(CreatureDisappearSchema, { id: 6, reason: DisappearReason.DEATH });
+    const back = create(CreatureSchema, {
+      id: 6,
+      kind: CreatureKind.PLAYER,
+      name: "Back",
+      pos: { x: 12, y: 10, z: 7 },
+      healthPercent: 100,
+    });
+    // A player dies and wakes up in view in the same batch: leaving the drawn floor a
+    // moment later is not a death.
+    w.apply({ case: "creatureDisappear", value: died }, 100);
+    w.apply({ case: "creatureDisappear", value: create(CreatureDisappearSchema, { id: 5 }) }, 100);
+    w.apply(
+      { case: "creatureAppear", value: create(CreatureAppearSchema, { creature: back }) },
+      100,
+    );
+    expect(w.creatures.has(6)).toBe(true);
+    expect(w.departureOf(6)).toBeUndefined();
+    expect(w.departureOf(5)).toBe(DisappearReason.UNSPECIFIED); // the others stay
+    // A creature back through a map area (a FullMapView after a teleport) too.
+    w.apply({ case: "creatureDisappear", value: died }, 200);
+    w.apply(
+      { case: "mapSlice", value: create(MapSliceSchema, { area: { creatures: [back] } }) },
+      200,
+    );
+    expect(w.creatures.has(6)).toBe(true);
     expect(w.departureOf(6)).toBeUndefined();
   });
 

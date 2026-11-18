@@ -23,30 +23,44 @@ interface PoseHold {
 }
 
 /**
+ * What shotPose saw on the frame it shot: the creatures in the pose there, and the
+ * server's attack events and departures the client still kept (`__rpgClient.attacks`,
+ * `departures`), read on that same frame. With them a test checks that the pose came
+ * from the server's word (A9) and not from the client's guess for an older server.
+ */
+interface Caught {
+  ids: number[];
+  attacks: { id: number; kind: number; targetId: number }[];
+  departures: { id: number; reason: string }[];
+}
+
+/**
  * A9 (docs/17 ANI-7): waits for a creature well into an attack pose (with clipOnly, an
  * attack clip like an LPC swing, not the 250 ms lunge of a single image) or a fall, holds
  * the canvas on that frame and takes screenshot `name`. The page sees the pose on an
  * animation frame (after a third of it, before its last 60 ms), so the frame drawn last
  * is in it; holding requestAnimationFrame keeps the game from drawing the next one until
  * the shot is taken (an attack lasts 250-360 ms, a screenshot can take longer). Attack:
- * clips for the first 20 s, then any.
+ * clips for the first 20 s, then any. Returns what it saw on that frame (Caught).
  */
 async function shotPose(
   page: Page,
   name: string,
   kind: "attack" | "death",
   timeout: number,
-): Promise<void> {
+): Promise<Caught> {
   const deadline = Date.now() + timeout;
   for (const clipOnly of kind === "attack" ? [true, false] : [false]) {
     const left = deadline - Date.now();
-    const caught = await page
+    const handle = await page
       .waitForFunction(
-        ({ k, clips }) => {
-          const p = window.__rpgClient?.poses();
-          if (!p) return false;
+        ({ k, clips }): Caught | false => {
+          const c = window.__rpgClient;
+          const p = c?.poses();
+          if (!c || !p) return false;
           const list = k === "death" ? p.dying : p.attacking.filter((a) => !clips || a.of > 300);
-          if (!list.some((x) => x.ms > x.of / 3 && x.ms < x.of - 60)) return false;
+          const ids = list.filter((x) => x.ms > x.of / 3 && x.ms < x.of - 60).map((x) => x.id);
+          if (ids.length === 0) return false;
           const w = window as unknown as PoseHold;
           const held: FrameRequestCallback[] = [];
           w.e2eHeld = held;
@@ -55,18 +69,17 @@ async function shotPose(
             held.push(cb);
             return 0;
           };
-          return true;
+          return { ids, attacks: c.attacks(5_000), departures: c.departures(5_000) };
         },
         { k: kind, clips: clipOnly },
         { timeout: clipOnly ? Math.min(20_000, left) : left, polling: "raf" },
       )
-      .then(
-        () => true,
-        () => false,
-      );
-    if (!caught) continue;
+      .catch(() => undefined);
+    if (!handle) continue;
     try {
+      const caught = await handle.jsonValue();
       await shot(page, name);
+      if (caught) return caught;
     } finally {
       await page.evaluate(() => {
         const w = window as unknown as PoseHold;
@@ -78,7 +91,6 @@ async function shotPose(
         w.e2eHeld = [];
       });
     }
-    return;
   }
   throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
 }
@@ -429,9 +441,26 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     })
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
-  // A9: an attack pose, the own player's swing or the wolf's lunge, from the server's
-  // CreatureAttack (docs/17 ANI-7).
-  await shotPose(page, "07b-attack-pose", "attack", 30_000);
+  // A9: the server says who attacks whom (docs/17 ANI-7): a CreatureAttack of the player
+  // at its wolf or of the wolf. Without those events the client still plays poses, guessed
+  // from the effects and projectiles (an older server), so the poses alone prove nothing.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (wolf) =>
+            (window.__rpgClient?.attacks(1_000) ?? []).some(
+              (a) => a.id === wolf || a.targetId === wolf,
+            ),
+          target,
+        ),
+      { timeout: 15_000, intervals: [100] },
+    )
+    .toBe(true);
+  // An attack pose, the own player's swing or the wolf's lunge, and on that same frame the
+  // CreatureAttack of a creature in it, which started it.
+  const swing = await shotPose(page, "07b-attack-pose", "attack", 30_000);
+  expect(swing.attacks.filter((a) => swing.ids.includes(a.id))).not.toEqual([]);
 
   // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
   // progress.
@@ -637,15 +666,22 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // A9: bolts (and fists) until a wolf dies, and its fall on screen: the server's
   // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
   let fell = false;
-  const fall = shotPose(page, "11b-death", "death", 150_000).then(() => {
-    fell = true;
-  });
-  fall.catch(() => undefined); // its failure surfaces in the race below
+  const fall = shotPose(page, "11b-death", "death", 150_000);
+  fall.then(
+    () => {
+      fell = true;
+    },
+    () => undefined, // its failure surfaces in the race below
+  );
   while (!fell) {
     if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) await targetWolf();
     await page.keyboard.press("F1");
     await Promise.race([fall, page.waitForTimeout(500)]);
   }
+  // It falls because its CreatureDisappear said DEATH, not because its health bar was
+  // empty (the client's guess with an older server, which would fall the same).
+  const dead = await fall;
+  for (const id of dead.ids) expect(dead.departures).toContainEqual({ id, reason: "DEATH" });
 
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");

@@ -531,9 +531,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
   LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
   Cualquier otro motivo la saca en el momento.
-- E2E: `__rpgClient.attacks(ms)` y `poses()` (quién está en pose de ataque y quién cae, y
-  cuánto lleva); `shotPose` de `e2e/game.spec.ts` espera un frame en medio de la pose,
-  retiene `requestAnimationFrame` (el juego no dibuja otro) y saca la captura.
+- Un motivo de salida vale hasta que la criatura vuelve: `addCreature` lo borra
+  (`forgetDeparture`) cuando reaparece, así un jugador que murió y despertó a la vista no
+  cae al salir después del piso dibujado.
+- E2E: `__rpgClient.attacks(ms)`, `departures(ms)` (el motivo por su nombre, `DEATH`...)
+  y `poses()` (quién está en pose de ataque y quién cae, y cuánto lleva); `shotPose` de
+  `e2e/game.spec.ts` espera un frame en medio de la pose, retiene `requestAnimationFrame`
+  (el juego no dibuja otro), saca la captura y devuelve lo que vio en ese frame
+  (`Caught`: quiénes estaban en la pose, y los ataques y salidas que el cliente guardaba).
+  Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
+  exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
+  la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames

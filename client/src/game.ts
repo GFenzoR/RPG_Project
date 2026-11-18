@@ -6,7 +6,14 @@ import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
-import { ChatChannel, CreatureKind, GuildAction, MarketSide, PartyAction } from "@rpg/protocol";
+import {
+  ChatChannel,
+  CreatureKind,
+  DisappearReason,
+  GuildAction,
+  MarketSide,
+  PartyAction,
+} from "@rpg/protocol";
 import type { Direction, DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
 import {
   ItemPicker,
@@ -194,8 +201,16 @@ export interface ClientTestHooks {
   itemNumber(id: string): number | undefined;
   /** Projectiles and effects (IDs) drawn less than `ms` ago. */
   magic(ms: number): { projectiles: number; effects: number[] };
-  /** A9: the CreatureAttack events of the last `ms` (attacker, kind, target). */
+  /**
+   * A9: the CreatureAttack events of the last `ms` (attacker, kind, target), while the
+   * world keeps them (`ATTACK_MS`).
+   */
   attacks(ms: number): { id: number; kind: number; targetId: number }[];
+  /**
+   * A9: why creatures left the view in the last `ms` (`reason`: the DisappearReason's
+   * name, `DEATH`, `OUT_OF_VIEW`...), while the world keeps them (`DEPARTURE_MS`).
+   */
+  departures(ms: number): { id: number; reason: string }[];
   /**
    * A9 (docs/17 ANI-7): creatures in an attack pose now and the ones falling dead (`ms`
    * into it, `of` its length).
@@ -1582,6 +1597,12 @@ export class Game {
         return world.attacks
           .filter((a) => now - a.start < ms)
           .map((a) => ({ id: a.id, kind: a.kind, targetId: a.targetId }));
+      },
+      departures: (ms) => {
+        const now = performance.now();
+        return world.departures
+          .filter((d) => now - d.start < ms)
+          .map((d) => ({ id: d.id, reason: DisappearReason[d.reason] }));
       },
       poses: () => canvas.poses(),
       npcs: () =>

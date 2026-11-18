@@ -955,6 +955,9 @@ export class WorldState implements TileSource {
 
   private addCreature(c: Creature): void {
     const prev = this.creatures.get(c.id);
+    // It is back: why it left last no longer holds (a player that died and woke up in
+    // view must not fall when it later leaves the drawn floor).
+    if (!prev) this.forgetDeparture(c.id);
     this.creatures.set(c.id, {
       id: c.id,
       kind: c.kind,
@@ -1121,13 +1124,26 @@ export class WorldState implements TileSource {
     dropFinished(this.departures, now, DEPARTURE_MS);
   }
 
-  /** Why creature id last left the view, while it is kept (DEPARTURE_MS). */
+  /**
+   * Why creature id last left the view, while it is kept (DEPARTURE_MS) and the creature
+   * has not come back since.
+   */
   departureOf(id: number): DisappearReason | undefined {
     for (let i = this.departures.length - 1; i >= 0; i--) {
       const d = this.departures[i];
       if (d?.id === id) return d.reason;
     }
     return undefined;
+  }
+
+  /** Drops the departures of creature id, in place (it came back into view). */
+  private forgetDeparture(id: number): void {
+    let kept = 0;
+    for (let i = 0; i < this.departures.length; i++) {
+      const d = this.departures[i];
+      if (d && d.id !== id) this.departures[kept++] = d;
+    }
+    this.departures.length = kept;
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
