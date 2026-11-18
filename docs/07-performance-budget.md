@@ -398,8 +398,29 @@ tiempos de `go test -bench` (mediana de 3):
   ancha: con la ancha, quien caza en un spawn frenaba los vecinos (a 12–20 casillas) y la
   "Eficiencia 2/3" de "Capacidad del mundo" quedaba optimista. Así la capacidad sigue
   como se midió con 15x11 (`TestRespawnWaitsOnlyForTheClassicWindow`).
-- **Pendiente:** repetir `make bots` (base y stress) contra un servidor real con la vista
-  de 31x21 y el monitoreo, para confirmar la medición en proceso (docs/14).
+- **`make bots` contra un servidor real (lote 6, 2026-11-18).** Punta del lote
+  (`lote6/verify`), mismo notebook y mismo script que "Resultados del stack T5.5–T5.7":
+  Windows nativo, servidor, bots y Postgres (Docker) en la misma máquina, 5 islas (146
+  sectores), ventana estable de 3 min con rampa de 20 s (base) y 60 s (stress). Sin
+  Grafana: los números salen del `/metrics` interno, como en las corridas anteriores.
+
+  | Métrica | Presupuesto | Base 100 · 31x21 | Stress 300 · 31x21 | 15x11 (stack T5.5–T5.7) |
+  |---|---|---|---|---|
+  | Tick p50 / p95 / p99 (ms) | p99 < 10 (100 jug.) | 0,03 / 1,03 / **1,95** | 0,73 / 3,69 / **4,77** | base 1,78 · stress 3,98–5,49 (p99) |
+  | Tick máx. / ticks lentos (> 50 ms) | — | ≤ 6 / 0 de 3600 | ≤ 8 / 0 de 3600 | ≤ 4 · ≤ 8 / 0 |
+  | RSS máx. / al final (MB) | < 600 | 163,3 / 125,1 | 125,7 / 91,7 | 108,9 · 120–122 |
+  | CPU del servidor (núcleos) | — | 0,13 | 0,32 | 0,12 · 0,26–0,27 |
+  | Salida por jugador (B/s) | < 4096 | **624** | **1580** | 308 · 753–880 |
+  | Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,4 / **48,6** / 51,0 | 27,8 / **49,8** / 52,8 | p95 48,4 · 48,9–49,8 |
+  | Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+  Todo dentro del presupuesto. Stress da lo que predijo `TestCrowdBandwidth` (1580 contra
+  1676 B/s). Base da más que el modelo (624 contra 490), y la diferencia no se investigó:
+  el modelo cuenta 60 s con el reloj simulado y la corrida real, 3 min de bots reales. Es
+  el doble que con 15x11 y queda en un 15 % de los 4 KB/s. El RSS máximo de base incluye la
+  primera corrida sobre la base nueva, que creó las cuentas y los 100 personajes (argon2id
+  en la rampa, como en "Resultados del stack T5.5–T5.7"). El tick sube poco: p99 de 1,78 a
+  1,95 ms en base, y stress queda dentro del ruido de las corridas de 15x11.
 - **Pendiente, el cliente:** a 1x en 1920x1080 se dibuja la ventana entera, unas 650
   casillas por capa en vez de las 165 de 15x11, más las etiquetas de una multitud. No se
   midieron FPS ni draw calls (no hay instrumentación y piden un navegador real con GPU,

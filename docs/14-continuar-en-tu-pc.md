@@ -209,9 +209,10 @@ el punto 5:
   - **Repetir `make e2e`:** la rama se rebasó sobre la punta de `feat/movement-feel`
     (`d9d80ca`, con f29dcc9 y f88d92a de `feat/ui-theme`); los screenshots de A7 (97b, 98b
     y los de teléfonos) se sacaron sin el CSS de hotbar y condiciones de f88d92a.
-  - **`make bots` a 31x21:** la medición es en proceso (`TestCrowdBandwidth`, que con 15x11
-    dio lo mismo que `make bots`); falta repetir base y stress contra un servidor real con
-    el monitoreo y anotar los números en docs/07.
+  - **`make bots` a 31x21:** hecho en el cierre del lote 6 contra un servidor real (docs/07,
+    "Vista ancha"): base 624 B/s por jugador y tick p99 1,95 ms; stress 1580 B/s y 4,77
+    ms. Todo dentro del presupuesto. Falta repetirlo con el monitoreo (Grafana) y con los
+    bots en otra máquina.
   - **Ventana por cliente, descartada por ahora:** docs/17 proponía que el cliente pida su
     vista (de 15x11 a 31x21) y el servidor mande esa área. Se dejó una sola para todos:
     "A ve a B" sigue simétrico, nadie gana nada con un cliente modificado y el ancho de banda
