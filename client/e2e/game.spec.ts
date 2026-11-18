@@ -291,9 +291,16 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   // Opening the page without a session cookie answers 401 (logged by the browser): expected.
   errors.length = 0;
   const battle = page.getByTestId("battle-list");
-  await expect(battle.getByText("No hay criaturas a la vista.")).toBeVisible();
+  // The wolves of testisle roam 11-19 tiles north of the temple: with the 31x21 view one
+  // on the south edge of its spawn is already in view (11 tiles is the margin).
+  await expect(
+    battle
+      .getByText("No hay criaturas a la vista.")
+      .or(battle.getByRole("button", { name: /lobo/ }))
+      .first(),
+  ).toBeVisible();
 
-  // The wolves of testisle roam 11-19 tiles north of the temple: walk towards them.
+  // Walk towards the wolves.
   const start = await self(page);
   if (!start) throw new Error("no own creature");
   const click = async (x: number, y: number): Promise<void> => {
@@ -306,9 +313,11 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   };
   await click(start.x, start.y - 5);
   await arrived(page, start.x, start.y - 5);
-  await click(start.x, start.y - 9);
 
-  // A wolf shows up in the battle list (and comes for us): attack it from there.
+  // A wolf shows up in the battle list: attack it from there. With the 31x21 view it may be
+  // farther than a wolf notices us (8 tiles to the sides, 6 up and down), so chase it; from
+  // here the northern rows of the spawn stay out of view, where a killed wolf respawns.
+  await page.getByLabel("Perseguir al objetivo").check();
   const wolf = battle.getByRole("button", { name: /lobo/ }).first();
   await expect(wolf).toBeVisible({ timeout: 30_000 });
   await wolf.click();
@@ -366,13 +375,15 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
 });
 
 /**
- * Where to wait for a wolf when none is in view: 7 tiles south of the centre of
+ * Where to wait for a wolf when none is in view: 11 tiles south of the centre of
  * testisle_wolves ((1056, 1041), radius 4, world/islands/testisle/spawns.yaml). The server
- * never respawns a monster on a tile a player sees (ViewHalfH is 6), so standing on the
- * spawn would keep it empty; from here most of it is out of view, and a respawned wolf
- * that wanders a step or two comes into view and, aggressive, comes for us.
+ * never respawns a monster on a tile a player sees (the 31x21 view: 11 rows up and down
+ * with the margin), so standing on the spawn would keep it empty; from here its 4 northern
+ * rows are out of view and the other 5 in it. A wolf notices us only within the classic
+ * 15x11 window (8 tiles to the sides, 6 up and down), so one in view but farther away is
+ * chased ("Perseguir al objetivo").
  */
-const WOLF_WAIT = { x: 1056, y: 1048 };
+const WOLF_WAIT = { x: 1056, y: 1052 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
   // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
@@ -824,6 +835,8 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
 });
 
 test("die to a wolf: death screen and wake up at the temple", async ({ page, playwright }) => {
+  // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests killed them.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -877,7 +890,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   const screen = page.getByTestId("death-screen");
   await click(start.x, start.y - 5);
   // A roaming wolf may bite first, on the way: then the character is already back at the
-  // temple and the second click is not needed.
+  // temple and nothing else is needed.
   await expect
     .poll(
       async () => {
@@ -888,9 +901,24 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
       { timeout: 20_000 },
     )
     .toBe(true);
-  if (!(await screen.isVisible())) await click(start.x, start.y - 9);
-
-  await expect(screen).toBeVisible({ timeout: 60_000 });
+  // Then chase the nearest wolf in view (as in the fight test): with the 31x21 view it may
+  // be farther than a wolf notices us, and from here the northern rows of the spawn stay
+  // out of view, where a killed wolf respawns.
+  if (!(await screen.isVisible())) await page.getByLabel("Perseguir al objetivo").check();
+  const wolf = page.getByTestId("battle-list").getByRole("button", { name: /lobo/ }).first();
+  await expect
+    .poll(
+      async () => {
+        if (await screen.isVisible()) return true;
+        const target = await page.evaluate(() => window.__rpgClient?.target());
+        // It may leave the list (dies, walks out of view) right now: try again then.
+        if (target === undefined && (await wolf.isVisible()))
+          await wolf.click({ timeout: 1_000 }).catch(() => undefined);
+        return false;
+      },
+      { timeout: 100_000, intervals: [500] },
+    )
+    .toBe(true);
   await expect(screen).toContainText("Has muerto");
   await page.waitForTimeout(300);
   await shot(page, "13-death");
