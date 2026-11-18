@@ -9,6 +9,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { faceKey } from "./keys.ts";
 import { serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -289,6 +290,8 @@ test("a held arrow key walks tile after tile without stopping between them", asy
   const start = await standing(page);
   const { way: dir, run } = await pickWay(page, start, 6, 10);
   await page.waitForTimeout(300); // let the atlas textures upload
+  // Facing another way, the key would turn first and walk 80 ms later (docs/17 MOV-2).
+  await faceKey(page, dir.key);
 
   // Hold the key 2 s (4 or 5 steps of 500 ms at level 1), then let go. The screenshot is
   // taken after letting go, on the last step: taken while the key is held, a slow capture
@@ -343,6 +346,7 @@ test("with ~150 ms of latency a held key, the mouse held and a click all walk wi
   //    stands still, although every Walk is confirmed ~150 ms later.
   const a = await standing(page);
   const { way: keyWay } = await pickWay(page, a, 10, 12);
+  await faceKey(page, keyWay.key); // so the held key walks at once (MOV-2)
   const ta = await now(page);
   await page.keyboard.down(keyWay.key);
   await predictedAway(page, a, 10); // the 10th step is predicted: let go

@@ -45,23 +45,31 @@ async function standStill(page: Page): Promise<Still> {
 }
 
 /**
- * One step toward `way` (a walking key, or a pad button's direction id): `tap` once if the
- * player faces that way, else once to turn (checking that it only turned) and again.
+ * Turns the player toward `way` (a walking key, or a pad button's direction id) without a
+ * step: one quick `tap` if it faces another way (MOV-2), checking that it did not move.
  */
-export async function stepToward(page: Page, way: string, tap: () => Promise<void>): Promise<void> {
+export async function faceToward(page: Page, way: string, tap: () => Promise<void>): Promise<void> {
   const want = DIRS[way];
   if (want === undefined) throw new Error(`not a way to walk: ${way}`);
   const before = await standStill(page);
-  if (before.dir !== want) {
-    await tap(); // MOV-2: turns, and does not walk
-    await expect
-      .poll(() => page.evaluate(() => window.__rpgClient?.self()?.dir), { timeout: 10_000 })
-      .toBe(want);
-    const turned = await standStill(page);
-    expect({ x: turned.x, y: turned.y }).toEqual({ x: before.x, y: before.y });
-  }
+  if (before.dir === want) return;
+  await tap();
+  await expect
+    .poll(() => page.evaluate(() => window.__rpgClient?.self()?.dir), { timeout: 10_000 })
+    .toBe(want);
+  const turned = await standStill(page);
+  expect({ x: turned.x, y: turned.y }).toEqual({ x: before.x, y: before.y });
+}
+
+/** One step toward `way`: a `tap` to turn if the player faces another way, and one to walk. */
+export async function stepToward(page: Page, way: string, tap: () => Promise<void>): Promise<void> {
+  await faceToward(page, way, tap);
   await tap();
 }
+
+/** Turns toward a walking key's way (ArrowUp, KeyD...) without a step. */
+export const faceKey = (page: Page, key: string): Promise<void> =>
+  faceToward(page, key, () => page.keyboard.press(key));
 
 /** One step with a walking key (ArrowUp, KeyD...), turning first if it must. */
 export const stepKey = (page: Page, key: string): Promise<void> =>
