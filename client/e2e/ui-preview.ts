@@ -266,6 +266,12 @@ try {
       await page.waitForTimeout(700);
       // Phones and tablets: the inventory scenes show the inventory tab.
       if (INVENTORY_TAB.includes(scene)) {
+        // A phone on its side keeps the panel in a drawer: open it first.
+        const drawer = page.getByTestId("panel-toggle");
+        if (await drawer.isVisible()) {
+          await drawer.click();
+          await page.waitForTimeout(300);
+        }
         const tab = page.locator('[data-testid="panel-tabs"] [data-tab="inventory"]');
         if (await tab.isVisible()) {
           await tab.click();

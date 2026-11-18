@@ -91,9 +91,10 @@ export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX
     equipped !== undefined && ui.containers.some((c) => c.itemId === equipped && !c.hasParent);
   const done = useRef<number | undefined>(undefined);
   useEffect(() => {
+    if (!game) return; // nothing is asked (nor remembered) before the session's Game is up
     const next = autoOpen({ equipped, docked, tutorial, lookalike, done: done.current });
     done.current = next.done;
-    if (next.open) game?.openBackpack();
+    if (next.open) game.openBackpack();
   }, [equipped, docked, tutorial, lookalike, game]);
   // While an item is dragged or picked, the slots that take it glow.
   const held = ui.dragging ?? ui.picked;
