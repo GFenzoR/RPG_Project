@@ -2,17 +2,14 @@
 // drawn on transparency in 3/4 view (top and south face visible), lit from the top-left.
 import type { Image, Rgba } from "@rpg/spritepack";
 import {
-  box,
   cylinderLight,
   domeLight,
   eachInEllipse,
   eachInRect,
   hash2,
-  line,
   opaque,
   outline,
   px,
-  rect,
   shadeOf,
   tileNoise,
   tint,
@@ -22,7 +19,7 @@ import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, weatheredWood, darkIron, rope, moss } = PALETTE;
+const { darkWood, weatheredWood, darkIron, rope, moss } = PALETTE;
 
 // ---- ground ------------------------------------------------------------------------------
 
@@ -265,38 +262,6 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
 
 // ---- objects -----------------------------------------------------------------------------
 
-/** Wooden cargo crate with a darker frame, a diagonal brace and nails. */
-function cargoCrate(img: Image): void {
-  const m = weatheredWood;
-  box(img, 5, 6, 22, 7, 18, wood);
-  // Top face planks.
-  for (const x of [12, 19]) line(img, x, 7, x, 12, wood.shadow);
-  // Front planks and frame.
-  for (const y of [18, 23]) line(img, 8, y, 23, y, darken(wood.shadow, 0.2));
-  rect(img, 5, 13, 3, 18, m.base);
-  rect(img, 24, 13, 3, 18, m.shadow);
-  rect(img, 5, 13, 22, 2, m.base);
-  rect(img, 5, 29, 22, 2, m.shadow);
-  rect(img, 5, 13, 1, 18, m.light);
-  rect(img, 5, 13, 22, 1, m.light);
-  // Diagonal brace from bottom-left to top-right.
-  for (let i = 0; i <= 15; i++) {
-    const x = 8 + i;
-    const y = 28 - Math.round((i * 12) / 15);
-    px(img, x, y, m.base);
-    px(img, x, y - 1, m.light);
-    px(img, x, y + 1, m.shadow);
-  }
-  for (const [x, y] of [
-    [6, 14],
-    [25, 14],
-    [6, 29],
-    [25, 29],
-  ] as const)
-    px(img, x, y, darkIron.base);
-  outline(img, { amount: 0.5 });
-}
-
 /** A wooden bollard with a mushroom cap and a coil of rope, for tying boats. */
 function mooringPost(img: Image, _rand: Rng, seed: number): void {
   const cx = 16;
@@ -399,7 +364,6 @@ export const TERRAIN: RecipeBook = {
   "ground/basalt": { kind: "ground", draw: basaltPaving },
   "ground/cinder_path": { kind: "ground", draw: cinderPath },
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
-  "decor/cargo_crate": { kind: "object", draw: cargoCrate },
   "decor/mooring_post": { kind: "object", draw: mooringPost },
   "decor/boulder": { kind: "object", draw: boulder },
 };
