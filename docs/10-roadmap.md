@@ -364,3 +364,9 @@ secundaria.
   de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
   tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
   con tope de 50 000 y precio de referencia por mediana.
+- [x] **Movimiento fluido (docs/17 A6, en parte; rama `feat/movement-feel`).** Pasos de
+  teclado predichos hasta `max_queued_steps` (4) y encolados en el servidor detrás de una
+  época de caminata, con su número (`seq`/`walk_seq`, docs/05 "Caminar"); los pasos del
+  servidor sobre su línea de ticks con colchón de jitter; cámara y criaturas a píxel de
+  pantalla; diagonal con dos flechas; correcciones que se deslizan. Falta (docs/17 §4,
+  "Hecho: A6 (parcial)"): MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia simulada.

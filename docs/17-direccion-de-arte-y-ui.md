@@ -4,7 +4,8 @@ Este doc nace de la primera prueba del dueño (2026-11-17). Fija cómo se tiene 
 moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MOV-n`,
 `UI-n`, `SRC-n`) para citarla en tareas y PRs. Lo que todavía es código está en el plan
 del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
-que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3").
+que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; y A6
+en parte: movimiento fluido, "Hecho: A6 (parcial)" en §4).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -361,7 +362,63 @@ siguen igual.
 
 ## 4. Sensación de movimiento (MOV)
 
-### Por qué hoy se siente "paso, pausa, paso"
+### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico está en
+`client/CLAUDE.md` ("Movimiento fluido"), `server/CLAUDE.md` ("Caminar") y docs/05
+("Caminar"). **Donde el plan y esto no coinciden, vale esto.**
+- **El servidor sí cambió** (el plan decía que no hacía falta). Con "`Walk` reemplaza la
+  cola por un paso", el cliente tenía que esperar la confirmación de N para mandar N+1 y
+  calcular con el RTT cuándo mandarlo; con RTT alto igual quedaban huecos. Ahora:
+  - **Cola de teclado en el servidor.** Cada `Walk` se encola detrás de los pasos de
+    teclado que esperan, con tope `movement.max_queued_steps` (`balance.yaml`, 4; el
+    `Welcome` se lo dice al cliente). Si en la cola hay un camino por click o un paso de
+    persecución, se descarta. Uno más que el tope reinicia la caminata (`WalkRejected` con
+    `dir` `UNSPECIFIED`). El ritmo sigue siendo del servidor (`readyAt` por paso).
+  - **Época de la caminata (`walk_epoch`).** Cada `WalkRejected` y cada teletransporte
+    (`FullMapView`) empiezan una época nueva. Un `Walk` de otra época se descarta sin
+    contestar.
+  - **Número de cada paso** (`Walk.seq`, que vuelve en `CreatureMove.walk_seq` solo en la
+    copia del propio jugador). El cliente empareja cada respuesta con su predicción aunque
+    el servidor haya dado antes un paso de un camino o de persecución, o se haya perdido un
+    `Walk`.
+  - **Sin `StopWalk` al soltar la tecla.** Soltar no manda nada: los pasos ya mandados se
+    dan. Garantía (docs/05): todo `Walk` aceptado termina en `CreatureMove`, `WalkRejected`
+    o `FullMapView`. **Ningún camino nuevo puede vaciar la cola en silencio**
+    (`server/CLAUDE.md`). Un `StopWalk` con pasos sin confirmar deja al cliente esperando
+    respuestas que no llegan, hasta que las abandona a los 3 s (`PREDICT_TIMEOUT_MS`).
+- **MOV-1, cambio.** El cliente va hasta `max_queued_steps` pasos sin confirmar (4, no 2).
+  Manda cada `Walk` apenas lo decide, `STEP_LEAD_MS` (50 ms) antes de que termine el paso
+  dibujado, sin esperar la confirmación del anterior ni medir el RTT. Cada paso empieza en
+  el `fin` del anterior.
+- **MOV-2, en parte.** Un toque durante un paso camina apenas termina
+  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. No se hizo
+  el toque corto que solo gira.
+- **MOV-5, cambio.** No es `scheduleStep`: es un colchón de jitter (`Playout`) sobre la
+  línea de ticks del servidor. Cada paso se encadena tras el que se dibuja y, si va
+  atrasado, se dibuja hasta 25 % más rápido. Vale para las demás criaturas y para el
+  camino propio por click.
+- **MOV-6.** Cámara y criaturas a píxel de pantalla (la prueba que proponía); quedó.
+- **Además:**
+  - dos flechas perpendiculares caminan en diagonal y, contra un muro, se desliza por la
+    mitad libre;
+  - toda corrección se desliza en 160 ms (`SLIDE_MS`), también la del propio jugador desde
+    los 4 pasos predichos;
+  - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
+    paso de su cola vuelve a fijar la dirección;
+  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
+- **Pendiente:**
+  - MOV-3 (caminar manteniendo el mouse);
+  - MOV-4 (click previsto). Hoy el click espera a que no queden pasos sin confirmar, manda
+    `WalkPath` y sus pasos se dibujan con MOV-5, sin predicción;
+  - MOV-7 (respuesta visual);
+  - el E2E de MOV-9 con 150 ms de latencia simulada en el WebSocket. Hoy lo cubre la
+    simulación de `client/src/state/walking.test.ts` (RTT de 2 a 300 ms con jitter);
+    `e2e/movement.spec.ts` corre sin latencia;
+  - lo que quedó anotado en docs/14 ("Movimiento fluido"), por ejemplo que una flecha
+    apretada durante un camino por click casi nunca entra.
+- MOV-8 es una decisión del dueño: no se tocó.
+
+### Por qué se sentía "paso, pausa, paso" (antes de A6)
 - **El cliente espera la confirmación.**
   - `Game.frame` (`client/src/game.ts`) no hace nada mientras `world.pending` exista, y
     `WorldState.canStep` exige `pending === undefined`. El paso siguiente sale cuando
@@ -385,27 +442,26 @@ siguen igual.
   se mueven y otros sí.
 
 ### Propuestas
-Todo es del cliente salvo donde se aclara. El servidor ya hace lo que hace falta: `Walk`
-reemplaza la cola por **un** paso, y si el personaje está a mitad de un paso, ese paso sale
-al terminar (docs/05, "Caminar").
+El plan, con lo que A6 hizo marcado. Antes de A6, `Walk` reemplazaba la cola por **un**
+paso y por eso el plan era solo del cliente. Ya no: el servidor encola los pasos de
+teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
 
-- **MOV-1 Pasos encadenados.**
+- **MOV-1 Pasos encadenados (✅ A6, distinto del plan original).**
   - El paso N+1 previsto empieza exactamente en `fin(N)`, no en `now`. Si el frame llega
     tarde, la interpolación arranca ya avanzada.
-  - El cliente puede ir **hasta 2 pasos sin confirmar** delante del servidor. Si en
-    `fin(N)` no llegó la confirmación de N, el paso N+1 se dibuja igual y su `Walk` sale
-    apenas llegue. Con 2 sin confirmar, espera.
-  - `Walk(N+1)` **sale solo después de la confirmación de N**, y antes de que termine la
-    animación: cuando a N le quedan `lead` ms, con `lead` = RTT/2 + 50 ms (el RTT se mide
-    con `Ping`/`Pong`) y como mucho medio paso. Así llega mientras el servidor todavía
-    ejecuta N, que lo encola y lo hace sin hueco. Nunca se manda un `Walk` mientras el
-    anterior podría no haber empezado en el servidor: lo reemplazaría.
-  - Si antes de `fin(N)` el jugador cambia de dirección, sale otro `Walk`, que reemplaza al
-    encolado (N todavía corre en el servidor). Si suelta la tecla, sale `StopWalk` y N+1
-    no se predice. Si alguno llega tarde y el servidor igual mueve, ese `CreatureMove` se
-    aplica como movimiento del servidor, sin salto.
-  - `WalkRejected` descarta todo lo previsto y vuelve a la posición del servidor, como hoy.
-- **MOV-2 Buffer de entrada.**
+  - El cliente puede ir **hasta `max_queued_steps` pasos sin confirmar** (4) delante del
+    servidor. Con ese tope, espera.
+  - `Walk(N+1)` sale cuando el cliente decide el paso, `STEP_LEAD_MS` (50 ms) antes de
+    `fin(N)`, **sin esperar la confirmación de N**: el servidor lo encola detrás de N (no
+    lo reemplaza) y lo da el tick en que N termina. Cada `Walk` lleva la época y su número
+    (`walk_epoch`, `seq`).
+  - Si el jugador cambia de dirección, el paso siguiente va hacia la nueva; los ya
+    mandados se dan. Al soltar la tecla **no** sale `StopWalk`: los pasos ya mandados se
+    dan. `StopWalk` vacía la cola sin contestar y el cliente se quedaría esperando sus
+    confirmaciones.
+  - `WalkRejected` descarta todo lo previsto y vuelve a la posición del servidor,
+    deslizándose.
+- **MOV-2 Buffer de entrada (A6, en parte: el toque durante un paso).**
   - Una tecla apretada en el último 40 % del paso (o en sus últimos 150 ms) se guarda y se
     ejecuta en el borde de la casilla.
   - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
@@ -414,22 +470,24 @@ al terminar (docs/05, "Caminar").
 - **MOV-3 Mantener el mouse (Diablo 2).**
   - Con el botón izquierdo mantenido sobre el mapa, en cada borde de casilla el cliente
     elige la dirección (de 8) hacia la casilla bajo el cursor. Si está bloqueada, usa el
-    primer paso de su A* hacia ella. Lo predice como un paso de teclado (MOV-1).
-  - Al soltar, termina el paso en curso.
+    primer paso de su A* hacia ella. Lo predice y lo manda como un paso de teclado
+    (`chooseStep` y `Walk` con época y `seq`, MOV-1).
+  - Al soltar, se dan los pasos ya mandados, como con la tecla: nada de `StopWalk`.
   - Un click corto (menos de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
 - **MOV-4 Click para caminar, previsto.** El camino lo arma el cliente, que manda los
-  pasos. Puede ir prediciendo esos pasos con MOV-1 (como mucho 2 adelante) mientras los
-  `CreatureMove` coincidan. Si el servidor rodea a una criatura (recalcula con A*), el
+  pasos. Puede ir prediciendo esos pasos con MOV-1 (como mucho `max_queued_steps`
+  adelante, cada uno como `Walk`) mientras los `CreatureMove` coincidan. Hoy un `WalkPath`
+  reemplaza la cola: el click lo manda solo sin pasos de teclado sin confirmar. Si el servidor rodea a una criatura (recalcula con A*), el
   cliente acepta sus pasos con la corrección de siempre. Como mínimo, predecir el primer
   paso para que el click responda en el acto.
-- **MOV-5 Línea de tiempo para los demás.** Función pura `scheduleStep(prev, move, now)`,
-  con tests:
+- **MOV-5 Línea de tiempo para los demás (✅ A6, como colchón de jitter: `Playout`).**
+  El plan era una función pura `scheduleStep(prev, move, now)`, con tests:
   - un `CreatureMove` empieza en `max(llegada, fin del paso anterior de esa criatura)`;
   - si va atrasado más de un paso, empieza ya y dura hasta un 40 % menos, para alcanzar;
   - nunca se salta hacia atrás. Solo se teletransporta si `from` no es el último `to`
     conocido;
   - opcional: retraso de dibujo de 50 ms (un tick) para absorber el jitter de los batches.
-- **MOV-6 Cámara y redondeo.**
+- **MOV-6 Cámara y redondeo (✅ A6).**
   - Velocidad constante dentro de la casilla: nada de suavizado por casilla, que frena y
     acelera en cada una.
   - Cámara clavada en la posición interpolada del jugador (Tibia y Diablo 2 la centran
@@ -448,7 +506,8 @@ al terminar (docs/05, "Caminar").
   - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
 
   Por eso queda propuesto y no aplicado.
-- **MOV-9 Criterio de aceptación:**
+- **MOV-9 Criterio de aceptación** (falta el E2E con latencia; hoy lo cubre la simulación
+  de `client/src/state/walking.test.ts`):
   - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
     flecha 10 casillas tarda 10 × la duración del paso ± 1 frame, y no hay frames con el
     sprite propio quieto.
@@ -882,7 +941,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
 | A4 | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
-| A6 | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E | cliente | — |
+| A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 | Animación procedural de criaturas (ANI-5) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
@@ -931,7 +990,14 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
 - **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
   varios tamaños sin levantar nada.
 
-Orden sugerido. A6 y A8 son lo que más se nota con menos riesgo y se pueden hacer ya.
+### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+Está en §4, al principio, porque cambia el plan de MOV-1: el servidor encola los pasos de
+teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y soltar la
+tecla no manda `StopWalk`. Quedan MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia
+simulada.
+
+Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
+y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
 
 ## 8. Cómo se verifica

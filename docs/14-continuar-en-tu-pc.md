@@ -66,7 +66,8 @@ el punto 5:
    las próximas tareas.
 5. De la primera prueba (2026-11-17) salió `17-direccion-de-arte-y-ui.md`. Su plan (§7, tareas
    A1–A13) es trabajo para la IA en lotes. Lo primero, por impacto y poco riesgo: A6
-   (movimiento fluido) y A8 (animación de los monstruos de un solo frame).
+   (movimiento fluido, hecho en parte en la rama `feat/movement-feel`) y A8 (animación de
+   los monstruos de un solo frame).
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -100,11 +101,11 @@ el punto 5:
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"). Lo que
   falta, en el orden de su §7:
-  - **A6, movimiento fluido** (cliente): hecho en la rama `feat/movement-feel` (ver abajo). Antes el cliente espera el `CreatureMove` de un paso
-    antes de prever el siguiente (`Game.frame` sale si existe `world.pending`).
-    `predictStep` empieza el paso en `now` y no donde terminó el anterior, y los pasos de
-    los demás empiezan cuando llega el paquete: por eso se siente "paso, pausa, paso". La
-    propuesta es MOV-1 a MOV-6, sin tocar el servidor.
+  - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
+    docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
+    servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
+    (caminar manteniendo el mouse), MOV-4 (click previsto), MOV-7 (respuesta visual) y el
+    E2E de MOV-9 con 150 ms de latencia simulada.
   - **A8, animación procedural** de los monstruos y NPCs de un solo frame (ANI-5). **A9**
     necesita protocolo: quién ataca a quién y si una criatura murió o salió de la vista
     (ANI-7).
@@ -134,7 +135,8 @@ el punto 5:
     reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
     "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
   - Lo 👤 está en "Lo que es tuyo".
-- **Movimiento fluido (rama `feat/movement-feel`).** Hecho: pasos de teclado predichos
+- **Movimiento fluido (rama `feat/movement-feel`, apilada sobre `feat/ui-theme`: se mergea
+  después de ella o con ella).** Hecho: pasos de teclado predichos
   hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo
   en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de pantalla, los pasos del
   servidor sobre su línea de ticks con colchón de jitter, correcciones que se deslizan,
@@ -164,6 +166,14 @@ el punto 5:
     buscó (×1,5 de duración, otra casilla). Opciones: dejarlo; que un toque ya soltado
     dé el paso lateral; o que la diagonal pida las dos teclas juntas un instante (~60 ms,
     a costa de que el primer paso de una diagonal buscada salga recto).
+  - **Una flecha durante un camino por click casi nunca entra** (viene de antes, no lo
+    trajo A6). El frame solo lee las teclas cuando `canStep`, y durante un camino por
+    click el paso dibujado casi siempre está lejos de terminar: en una simulación con un
+    camino de 16 pasos (~450 frames), `canStep` estuvo abierto de 2 a 12 frames (antes de
+    A6, de 2 a 10). La tecla suele esperar a que termine el camino. Para la sensación de
+    Diablo 2, una pulsación nueva (no la autorrepetición) debería predecir desde el próximo
+    paso del camino: mandar el `Walk` (que descarta el camino en el servidor) y dibujarlo
+    detrás del paso en curso.
   - **Eventos y pasos de los demás:** los pasos se dibujan sobre la línea de ticks
     (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
     desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe
