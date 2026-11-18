@@ -1052,6 +1052,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   isla (2095,2086) junto a `pruebas_trainer`, y con `/tp` va a los corrales, al patio de
   portales y a la cueva del piso 8 (screenshots 90–93). El `-start-town pruebas` de
   `make play` se prueba a mano: elige el mismo templo para un personaje sin ciudad.
+- El test de música del mismo archivo (otro guardián gm de la isla) espera el tema de la
+  pool de Puerto solo, baja con `/tp` a la cueva y muestrea `__rpgAudio.music()` durante el
+  fundido: la voz de la isla baja, la de las cuevas sube y out² + in² = 1 en cada muestra;
+  después queda solo el tema de cueva, sin errores de consola (screenshot `93b-music-cave`).
 
 ## Notas de la prueba exploratoria (rama `fix/playtest`)
 - `ItemDef.blocks` aplica la regla de `packages/map-format`: un `kind: wall` bloquea salvo
