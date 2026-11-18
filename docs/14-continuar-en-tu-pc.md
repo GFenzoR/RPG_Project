@@ -50,9 +50,11 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
-No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
+No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
+el punto 5:
 1. Elegir el proveedor de pagos y cargar sus claves (T5.7, `09-deployment-aws.md`
    "Tienda y pagos"); probar una compra en su modo prueba con el webhook expuesto.
 2. T1.18: cuenta de AWS, dominio y deploy.
@@ -62,6 +64,9 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
    ese archivo.
 4. Jugar y anotar lo que se siente mal (`make play`, `16-probar-el-juego.md`); de ahí salen
    las próximas tareas.
+5. De la primera prueba (2026-11-17) salió `17-direccion-de-arte-y-ui.md`. Su plan (§7, tareas
+   A1–A13) es trabajo para la IA en lotes. Lo primero, por impacto y poco riesgo: A6
+   (movimiento fluido) y A8 (animación de los monstruos de un solo frame).
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -91,6 +96,35 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
+  deja escrito qué cambiar y cómo. Por ahora es solo documentación: no se cambió código,
+  arte ni herramientas. Lo que falta, en el orden de su §7:
+  - **A6, movimiento fluido** (cliente). Hoy el cliente espera el `CreatureMove` de un paso
+    antes de prever el siguiente (`Game.frame` sale si existe `world.pending`).
+    `predictStep` empieza el paso en `now` y no donde terminó el anterior, y los pasos de
+    los demás empiezan cuando llega el paquete: por eso se siente "paso, pausa, paso". La
+    propuesta es MOV-1 a MOV-6, sin tocar el servidor.
+  - **A8, animación procedural** de los monstruos y NPCs de un solo frame (ANI-5). **A9**
+    necesita protocolo: quién ataca a quién y si una criatura murió o salió de la vista
+    (ANI-7).
+  - **A2 a A5, la UI** (cliente):
+    - fuentes OFL, tokens y marcos;
+    - HUD con orbes, botonera y ventanas separadas (el gremio sale de la columna lateral);
+    - click derecho con menú y ficha del item;
+    - diálogo y tienda sin scroll.
+  - **A7, vista de hasta 31x21** (servidor, protocolo y cliente). Hoy el AOI fija 15x11 + 1
+    (`server/internal/session/aoi.go`, docs/01 y docs/05). Hay que volver a medir el
+    ancho de banda por jugador (docs/07).
+  - **A10 y A11, renderer:** anclas por sprite, frames por acción, tiles animados,
+    variantes de suelo, sombras y muros por piezas con autotile (ART-2 a ART-8).
+  - **A12, assets de LPC** (SRC-4; lo primero, muros, pasto y agua) y **A1**, la pantalla de
+    créditos que piden CC-BY y CC-BY-SA.
+  - **Las herramientas no leen la licencia.** spritepack y `make validate` solo piden la
+    fila de `CREDITS.md` y el `LICENSE`. La política nueva (CC-BY-SA, OFL, licencia por
+    archivo) la hace cumplir la revisión, igual que antes. El texto de las reglas que
+    reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
+    "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
+  - Lo 👤 está en "Lo que es tuyo".
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
   correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
@@ -109,11 +143,12 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:
     la regla pura, un test de sesión del trato parcial y el E2E de T5.3 con 10 de 100.
   - **Sprites de las estaciones:** la fragua parece una fogata y el fogón un horno o un
-    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`).
+    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`). Está en la lista de
+    reemplazos de docs/17 (SRC-4, fila 8), animados (ART-7).
   - **Casa de Prueba:** el `wooden_wall` y el `wooden_floor` se confunden (tablones los
     dos) y la puerta de una casa es solo suelo (`houses.yaml` `doors`), sin nada que la
-    marque en el mapa. Un sprite de muro de troncos más oscuro, o un marco de puerta
-    decorativo que no bloquee, lo resolvería.
+    marque en el mapa. Lo resuelven los muros con altura y cara frontal, y el marco de
+    puerta decorativo que no bloquea (docs/17, ART-3, tarea A11).
   - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
     (`render/labels.ts` solo los acomoda a zoom 1).
   - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
@@ -517,3 +552,8 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
 Para cambiar un sprite: otro tile del pack en `sprites.yaml`, o una receta nueva en
 `tools/spritegen/src/recipes/` y `make spritegen ONLY=<ruta>` (estilo y reglas en
 `assets/README.md`, "Arte propio"). Después, `make sprites` y revisar con Read.
+
+Qué reemplazar primero y con qué está en `17-direccion-de-arte-y-ui.md` (SRC-4): muros,
+pasto y suelos, agua, atuendos, NPCs, monstruos y árboles. Desde el 2026-11-17 también se
+pueden usar assets CC-BY-SA (Liberated Pixel Cup, con licencia por archivo) y fuentes OFL
+(`assets/README.md`).
