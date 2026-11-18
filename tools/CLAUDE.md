@@ -88,7 +88,10 @@ se mandó). Flujo completo en `assets/README.md`, "Arte y música hechos con Gem
 **El navegador es del dueño.** Las herramientas se conectan por CDP a un Chrome que el
 dueño abre él mismo:
 `chrome.exe --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%/chrome-gemini`
-(un perfil propio: Chrome 136 no abre el puerto en el perfil por defecto). **Nunca inician
+(un perfil propio: Chrome 136 no abre el puerto en el perfil por defecto). El puerto
+escucha solo en 127.0.0.1, pero mientras ese Chrome está abierto cualquier proceso local
+puede manejar la sesión de Google que tiene iniciada: el dueño lo cierra al terminar de
+generar (las herramientas no lo hacen por él). **Nunca inician
 sesión, su código nunca lee, copia ni guarda cookies, y nunca abren ni cierran ese
 Chrome**: abren una pestaña propia, cierran solo esa y se desconectan. Si no está abierto,
 se dice y se sigue con otra cosa. Una salvedad: una imagen o un tema con dirección
