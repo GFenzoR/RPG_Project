@@ -426,14 +426,43 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Jugadores (propio y ajenos): outfit `citizen` de `content.outfits` (`data/outfits.yaml`).
   Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). `render/outfit.ts`
   (puro, con tests): `outfitDir` lleva las 8 direcciones a n/e/s/w (las diagonales usan
-  la horizontal: noreste mira al este); `outfitFrame` da 0 parado y, mientras interpola
-  un paso, reparte los frames de caminar por el avance (con 3 frames: 1 la primera
-  mitad, 2 la segunda), así pasos seguidos alternan 1, 2, 1, 2.
-- El canvas usa el outfit solo si el atlas tiene arte real para todos sus frames (origen
-  distinto de `auto` y `placeholder`); si no, el bloque. Los sprites de criatura van
-  anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
-  arriba y a la izquierda). Alpha de invisible, nombre, barras, marca PvP y marco de
-  objetivo no cambian.
+  la horizontal: noreste mira al este). El frame lo elige la animación ("Animación de
+  criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
+  segunda, así pasos seguidos alternan 1, 2, 1, 2.
+- El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
+  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde docs/17
+  los cuatro atuendos son personajes de LPC: ver "Animación de criaturas". Alpha de
+  invisible, nombre, barras, marca PvP y marco de objetivo no cambian.
+
+## Animación de criaturas (docs/17 ANI)
+- Todo cuerpo de criatura (monstruo, NPC o el atuendo de un jugador) es un `CreatureBody`
+  (`render/creature-body.ts`): la sombra de contacto (solo `shadow: ellipse`) y un sprite
+  anclado abajo al centro. Los `br` conservan la esquina de abajo a la derecha en la de su
+  casilla (como `MapView`); los `bc` (personajes de LPC de 64x64) pisan `FEET_LINE` px por
+  encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
+  sobre su casilla, de `top` y `foot` de `atlas.json`).
+- `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
+  dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
+  `<dir>_<n>` como quieto (0) y caminar (1..); si no, la textura única. Una acción sin todas
+  sus texturas se descarta.
+- Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
+  en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
+  `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene
+  100 ms entre pasos encadenados (ANI-3), ataque y muerte una vez. Sin clip, lo procedural
+  de ANI-5: salto de 2 px por casilla, inclinación de 1 px, aplastado al aterrizar,
+  respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
+  con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
+  y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
+- Quién ataca a quién (`render/creature-events.ts`, puro, con tests) se deduce de lo que
+  llegó desde el frame anterior, hasta que el protocolo lo diga (ANI-7, tarea A9): un
+  `Projectile` anima a la criatura de su casilla de salida; un efecto de golpe, bloqueo o
+  elemento sin proyectil en el mismo batch, al atacante cuerpo a cuerpo (el propio jugador
+  si su objetivo está ahí y al lado; si no, una criatura del otro bando al lado, primero la
+  que mira esa casilla); un número de daño hace destellar a la víctima.
+- Muerte: una criatura que sale de la vista con la barra en 0 murió ahí (el servidor manda
+  `CreatureHealth` 0 antes de `CreatureDisappear`). Su cuerpo queda como "fantasma" sin
+  nombre ni barra mientras juega su caída (`death` de LPC, o la procedural) sobre el
+  cadáver, y se borra al terminar o si la criatura vuelve.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames

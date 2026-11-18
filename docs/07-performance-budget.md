@@ -178,6 +178,13 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
   objetos de Pixi salen de pools y se reutilizan; dibujar un frame no crea objetos ni
   arrays (solo aparece algo nuevo con un efecto o un número nuevo, si el pool no alcanza).
   Los frames de los efectos salen del atlas (hoy una sola página, junto con el mapa).
+- Animación de criaturas (docs/17 ANI, `client/CLAUDE.md` "Animación de criaturas"): cada
+  criatura tiene un estado de animación (uno por criatura, mientras está en vista) y todas
+  comparten una entrada y una pose que `animate` sobrescribe; las texturas de cada sprite
+  se indexan una sola vez (`render/clips.ts`) y las sombras de contacto comparten un
+  `GraphicsContext`. Dibujar un frame no crea objetos para animar. Con los personajes de LPC
+  el atlas pasó a **2 páginas** (2048x2048 y 2048x640): Pixi agrupa hasta 16 texturas por
+  batch, así que no suma draw calls por página.
 
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
@@ -318,6 +325,14 @@ corrida: no hay instrumentación y piden un navegador real con GPU):
 El bundle creció 128 KB (34 KB con gzip) con lo nuevo del cliente: el layout táctil y la
 PWA (T5.6), la tienda (T5.7), el zoom y las tiras de efectos. Los efectos siguen saliendo
 del atlas único y de pools (ver "Cliente" arriba).
+
+**Atlas con criaturas animadas** (2026-11-17, `feat/creature-animation`): 2 páginas,
+1,84 MB + 652 KB de PNG y 374 KB + 209 KB de JSON, más 158 KB de `atlas.json` (antes, 1
+página de 287 KB). Son ~1300 frames de 64x64 de los personajes de LPC: 4 atuendos y 4
+monstruos con quieto, caminar, atacar y caer, y 17 NPCs con quieto y caminar. Se bajan
+aparte del bundle (el presupuesto de 5 MB no cuenta sprites), pero es lo primero que espera
+el juego. Pendiente si molesta: PNG indexado (las capas usan pocas decenas de colores) o
+una página por demanda para los NPCs.
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

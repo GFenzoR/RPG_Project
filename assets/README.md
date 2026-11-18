@@ -57,6 +57,82 @@ una página del atlas. Se mira en la cabecera antes de decodificarlo, porque el 
 PR de mapas arma el atlas con los sprites del PR (`docs/04`). Un `placeholder.size` llega
 hasta 256 px por lado.
 
+## Sprites animados (docs/17 ANI)
+Los monstruos, NPCs y atuendos se animan con datos de `sprites.yaml`, no con código. El
+detalle de cómo los juega el cliente está en `client/CLAUDE.md`, "Animación de criaturas".
+
+**Frames y nombres.** Cada frame es un sprite del atlas llamado
+`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` o `death`, `dir`
+es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
+1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
+   (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
+   de LPC (`vendor/ulpc`).
+2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, de spritegen:
+   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`). spritepack arma los
+   clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como tengan
+   todas sin huecos.
+3. **Ninguno:** el sprite único se anima por código (ANI-5). Una entrada de `animations`
+   sin `layers` le da pistas.
+
+```yaml
+palettes:                                  # colores de claro a oscuro
+  ulpc_cloth: ["#ffffff", "#e5e6c7", "#c4b59f", "#958080", "#4d4a5d"]   # base de las hojas ULPC
+  cloth_navy: ["#7c96c4", "#5a76a8", "#435a87", "#304064", "#1d263e"]   # propia
+animations:
+  outfits/sailor:
+    preset: lpc                            # hojas del generador ULPC: idle, walk, slash, hurt
+    actions: [idle, walk]                  # opcional: un subconjunto del preset (NPCs)
+    layers:                                # "<sheet>" = la hoja de cada acción
+      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
+      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
+  creatures/gloom_bat: { flying: true }    # pistas para un sprite de un solo frame
+  creatures/wolf: { facing: left }
+```
+- **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
+  norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
+  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `death` = `hurt`,
+  6 de 100 ms y solo hacia el sur (las otras direcciones usan esa).
+- **Sin preset**, cada acción se describe entera:
+  `walk: { sheet: walk, frame: [64, 64], rows: { n: 0, w: 1, s: 2, e: 3 }, col: 1, count: 8, per_tile: 4 }`
+  (`ms` para las demás acciones).
+- **`recolor`** cambia cada color de la paleta de origen por el del mismo lugar de la de
+  destino (mismo largo). Los píxeles de las capas quedan con alfa 0 o 255: lo que tiene
+  menos de la mitad de opacidad se descarta.
+- **Pistas** (con o sin capas): `facing: left | right` (hacia dónde mira el dibujo: se
+  espeja para ir al otro lado), `flying: true` (flota, su sombra se achica, no salta),
+  `shadow: baked | ellipse | none`. Con capas, la sombra por defecto es `ellipse` (la sombra
+  de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
+  `baked` (Dungeon Crawl y spritegen la pintan).
+- **Alias:** el nombre del sprite (`outfits/sailor`) apunta a su primer frame quieto (para
+  las referencias de `data/`, los íconos y la tienda del sitio), y los frames viejos de un
+  atuendo (`outfits/sailor/s_0`, `e_2`, T0.5) a la pose quieta y al ciclo de caminar.
+  Comparten el rectángulo del atlas: no ocupan lugar.
+- **Errores** (`make sprites`): una animación con capas no puede pisar un sprite que ya
+  existe (archivo o entrada de `sprites`); una entrada con pistas tiene que nombrar uno que
+  exista; falta una hoja o es más chica que lo que piden la acción y sus filas.
+- **atlas.json** suma `anims`: por sprite, `w`, `h`, `anchor` (`bc` con capas: los pies
+  sobre la casilla; `br`, el de siempre), `foot` (filas vacías bajo los pies), `top` (alto
+  del dibujo), `shadow`, `facing`, `flying` y por acción `frames`, `ms`, `perTile` y `dirs`.
+  `foot` y `top` se miden en los frames de caminar.
+- **Revisar:** `node --experimental-strip-types tools/spritepack/src/cli.ts preview --page 1
+  --scale 2 --out shot.png` muestra la página donde caen los personajes. Mirarlos a 1x y a
+  2x con Read, y en el juego (screenshots del E2E).
+
+### Personajes de LPC (`vendor/ulpc`)
+92 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
+en `vendor/ulpc/LICENSE.txt`), copiadas sin tocar con sus rutas: cuerpos (hombre, mujer,
+esqueleto), cabezas (hombre, mujer, anciano), camisa de manga larga, armaduras de cuero, placas
+y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Solo
+entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
+sueltos no tienen fila: quedaron afuera). Las hojas base vienen en colores neutros (piel
+clara, tela blanca, pelo naranja): la variedad sale de las paletas propias de `palettes`.
+
+Para un personaje nuevo: elegir capas de esa carpeta (o sumar otras del mismo commit, con su
+fila de `CREDITS.csv` copiada al subconjunto de la carpeta), escribir su entrada en
+`animations` en el orden cuerpo, piernas, pies, torso, cabeza, barba, pelo y sombrero, y
+revisar el preview. El lobo del "RPG Maker MZ LPC Starter Kit" quedó afuera: no trae
+licencia al lado del archivo (docs/17, SRC-2).
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
@@ -79,6 +155,9 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
 - Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
 - Todo determinista: ruido con semilla, nunca `Math.random`.
+- Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). El
+  jabalí y el ciervo tienen un trote de 4 frames mirando a la izquierda (`walk_w_0..3`,
+  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales.
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
   reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
@@ -87,15 +166,14 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 
 Para revisar: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out
 shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto;
-con `--only effects/`, cada tira en su fila sobre un jugador parado).
+con `--only effects/`, cada tira en su fila sobre el jabalí parado).
 Revisa a 1x además de a 4x: un item que solo se entiende ampliado no se entiende en el
 inventario.
 
 ### Sombra de las criaturas
 Los monstruos de Dungeon Crawl traen pintada una sombra proyectada casi negra, hacia abajo
 a la derecha y desde los hombros. Para que las criaturas propias se vean igual en el mapa,
-spritegen agrega la misma sombra a toda receta `kind: creature`: monstruos, NPCs y cada
-frame de outfit. La dibuja `castShadow` de `tools/spritegen/src/draw.ts`, como último paso
+spritegen agrega la misma sombra a toda receta `kind: creature`: monstruos y cada frame de sus ciclos. La dibuja `castShadow` de `tools/spritegen/src/draw.ts`, como último paso
 de `render`:
 - empuja la silueta hasta 3 px a la derecha y 1 px hacia abajo, con todos los pasos
   intermedios, para que nunca quede un trozo de sombra suelto (por ejemplo, el de un carcaj);
@@ -109,8 +187,9 @@ Se hace en spritegen y no en el renderer por tres razones:
 - una sombra del renderer se sumaría a esa, y las de Dungeon Crawl tendrían dos;
 - así cada criatura tiene una sola sombra, pixel-perfect, y el renderer no cambia.
 
-Si algún día se integra un pack de criaturas sin sombra, la decisión se toma ahí. Por
-ejemplo, con una receta que la agregue sobre el recorte del pack.
+Los personajes de LPC no traen sombra: los dibuja el renderer con la sombra de contacto
+(`shadow: ellipse`, una elipse de 20x6 al 35 % bajo los pies, ART-5), que no tiembla con
+los frames.
 
 ### Iconos de interfaz (`ui/`)
 `tools/spritegen/src/recipes/ui.ts` dibuja iconos del cliente que ningún archivo de
@@ -132,7 +211,9 @@ batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:
 - `atlas.json`: índice para cliente y editor: `tileSize`, lista de páginas y, por sprite,
-  `{page, origin}` con `origin` = `file | vendor | placeholder | auto`.
+  `{page, origin}` con `origin` = `file | vendor | placeholder | auto` (un frame compuesto
+  de capas de un pack es `vendor`). `anims`: las animaciones y pistas (ver "Sprites
+  animados").
 - `atlas-N.png` + `atlas-N.json`: páginas de hasta 2048x2048 en formato Spritesheet de
   PixiJS (hash). Las claves de `frames` son las rutas lógicas. Cada página lista a las
   demás en `meta.related_multi_packs`.

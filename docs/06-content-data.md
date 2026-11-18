@@ -844,16 +844,41 @@ Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`
 `data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.
 ```yaml
 - id: citizen
-  sprite: outfits/citizen   # carpeta: un PNG de 32x32 por dirección y frame
+  sprite: outfits/citizen   # carpeta de frames
   frames: 3                 # 0 = parado, 1 y 2 = los dos pasos (máximo 3)
 ```
 - El `sprite` de un outfit es una carpeta: el atlas tiene `<sprite>/<dir>_<frame>`
-  (`assets/sprites/outfits/citizen/s_0.png`), con `dir` en `n`, `e`, `s`, `w`.
-  spritepack cuenta cada frame como un sprite usado por `data/` (un frame sin arte recibe
-  el placeholder automático, como cualquier sprite).
+  (`outfits/citizen/s_0`), con `dir` en `n`, `e`, `s`, `w`. spritepack cuenta cada frame
+  como un sprite usado por `data/` (un frame sin arte recibe el placeholder automático,
+  como cualquier sprite).
+- **Desde docs/17 (A12) los cuatro atuendos son personajes animados de LPC:** la entrada
+  `animations` de su `sprite` en `assets/sprites.yaml` arma sus frames (quieto, caminar,
+  atacar y caer, de 64x64) y los nombres `<sprite>/<dir>_<frame>` de arriba pasan a ser
+  alias de esos frames (0 = la pose quieta, 1.. = el ciclo de caminar). `frames` sigue en
+  el esquema y en el servidor; con una animación, el cliente usa la animación
+  (`assets/README.md`, "Sprites animados").
 - Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
-  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, T0.5).
+  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, "Animación de
+  criaturas").
 - IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
+
+## Animación de criaturas (docs/17 ANI)
+El `sprite` de un monstruo, un NPC o un outfit sigue siendo una ruta lógica: **cómo se
+anima es un dato del sprite, no del monstruo**, y vive en `assets/sprites.yaml`
+(`palettes` y `animations`; formato en `assets/README.md`, "Sprites animados"). Así dos
+monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAML de
+`data/monsters` y `data/npcs` no cambia.
+- **Con frames:** una entrada con `layers` compone hojas de un pack (personajes de LPC) en
+  frames `<sprite>/<acción>_<dir>_<n>` (`idle`, `walk`, `attack`, `death`). Arte propio:
+  archivos con esos nombres en `assets/sprites/` (un ciclo de spritegen, como
+  `creatures/bristleback_boar/walk_w_0..3`).
+- **Sin frames:** el cliente mueve el sprite único (salto por casilla, inclinación,
+  respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
+  `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
+  y `flying: true` (flota y nunca salta).
+- Un monstruo humanoide o un NPC nuevo: su `sprite:` en `data/` y su entrada en
+  `animations` con las capas de `assets/vendor/ulpc/` (o arte propio), revisada con el
+  preview de `assets/README.md`.
 
 ## Tienda cosmética (T5.7)
 `data/cosmetics.yaml` (esquema `cosmetics`; reglas de juego en `02-game-design.md`, "Tienda
@@ -880,8 +905,9 @@ cosmetics:
 - `cosmetics[].kind`: `outfit`, `outfit_color` o `name_effect` (los valores del `CHECK` de
   `cosmetics.kind`; `mount` queda reservado). Cada tipo lleva solo su campo: `outfit` (id de
   `data/outfits.yaml`), `tint` (`#rrggbb` en minúsculas) o `style`. `price` es en nácar.
-- Un atuendo nuevo: su receta en `tools/spritegen` (los mismos frames que `citizen`), su
-  entrada en `data/outfits.yaml` y después el cosmético que lo vende.
+- Un atuendo nuevo: su entrada en `animations` de `assets/sprites.yaml` (capas de LPC y
+  paletas, como `outfits/citizen`), su entrada en `data/outfits.yaml` y después el
+  cosmético que lo vende.
 - Textos en `i18n/<idioma>/cosmetics.yaml`, con claves que salen del id (no se escriben en
   el YAML): `cosmetic.<id>.name` y `cosmetic.<id>.desc`, `cosmetic_pack.<id>.name`, y
   `premium.name` / `premium.amount` (`{count}`) para la moneda. El servidor lee

@@ -7,7 +7,8 @@ del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y l
 que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; A4 y
 A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
 gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
-"Hecho: A6 (parcial)" en §4).
+"Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
+2026-11-17).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -144,16 +145,17 @@ parte de arriba transparente.
 | Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
 | Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
 
-- **Ancla por sprite** (código pendiente, A10): `anchor: br` (abajo a la derecha, el de
-  hoy y el valor por defecto), `anchor: bc` (centro de la imagen sobre el centro de la
-  casilla) y `foot: <px>` (los píxeles transparentes bajo los pies). Va en
-  `assets/sprites.yaml` o en la receta de spritegen. Un humanoide de LPC es
-  `{ anchor: bc, foot: 2 }`.
+- **Ancla por sprite** (hecho para criaturas, 2026-11-17): `anchor: br` (abajo a la
+  derecha, el de siempre) o `anchor: bc` (centrado; los pies `FEET_LINE` = 4 px por encima
+  del borde de abajo de la casilla, donde va la sombra de contacto). `foot` (filas vacías
+  bajo los pies) y `top` (alto del dibujo) no se escriben: spritepack los mide en los
+  frames de caminar y los pone en `atlas.json` `anims`. Toda animación con capas es `bc`.
+  Para items y muebles sigue pendiente (A10).
 - **Click sobre sprites altos:** un click en la cabeza de un humanoide (que cae en la
   casilla de arriba) tiene que elegir a la criatura. Primero se prueban las cajas de las
-  criaturas dibujadas (de la última a la primera) y después la casilla (A10).
+  criaturas dibujadas (de la última a la primera) y después la casilla (pendiente, A10).
 - **Nombres y barras** van sobre la cabeza real (la parte opaca más alta del frame), no
-  sobre la casilla.
+  sobre la casilla (hecho: suben `lift` px, `client/CLAUDE.md`).
 
 ### ART-3 Muros con altura y autotile
 - **Un muro ocupa su casilla** (el formato de mapa no cambia). Su sprite de 32x64 se
@@ -328,14 +330,23 @@ un escudo en un brazo, no.
 ### ANI-4 Nombres en el atlas
 `<sprite>/<acción>_<dir>_<n>`, por ejemplo `creatures/wolf/walk_s_0` o
 `outfits/citizen/attack_e_2`.
-- Los atuendos de hoy (`outfits/<id>/<dir>_<0|1|2>`) se leen como `walk`, con el 0 como
-  pose quieta, sin migrar nada.
+- Los nombres T0.5 de los atuendos (`outfits/<id>/<dir>_<0|1|2>`) se siguen leyendo como
+  `walk`, con el 0 como pose quieta, sin migrar nada. Desde A12 los cuatro atuendos son de
+  LPC y esos nombres son alias de sus frames (`assets/README.md`, "Sprites animados").
 - Un monstruo con `sprite: creatures/wolf` usa sus frames si el atlas los tiene, y si no,
-  la imagen única con el procedural (ANI-5).
+  la imagen única con el procedural (ANI-5). Los frames salen de capas de un pack
+  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (el trote
+  de spritegen del jabalí y del ciervo).
 
 ### ANI-5 Animación procedural para sprites de un solo frame
 Es para los monstruos y NPCs de Dungeon Crawl de hoy, y para cualquier sprite futuro sin
 frames. Todo se redondea a píxel entero de sprite, para que siga siendo pixel-perfect.
+
+**Hecho (A8, 2026-11-17)** en `packages/renderer/src/anim.ts`, con estas diferencias con la
+tabla: el golpe destella en rojo (un tinte multiplicado: sin textura ni filtro extra) en vez
+de una silueta blanca, y morir y aparecer se desvanecen con alfa en vez del tramado Bayer.
+El golpe, la embestida y la aparición también valen para los sprites con frames; la muerte
+de un sprite con `death` juega su clip y se desvanece.
 
 | Estado | Qué hace | Tiempos |
 |---|---|---|
@@ -357,10 +368,14 @@ siguen igual.
 ### ANI-7 Lo que falta del servidor
 - **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
   hace falta `attacker_id` (y la víctima) en un mensaje nuevo o en `Effect`. Es protocolo:
-  docs/05 y revisión con `code-reviewer`.
+  docs/05 y revisión con `code-reviewer`. Mientras tanto el cliente lo deduce
+  (`client/src/render/creature-events.ts`): el `Projectile` sale de la casilla del
+  atacante, y un golpe cuerpo a cuerpo se atribuye a la criatura del otro bando que está al
+  lado (primero el jugador propio si su objetivo está ahí, después la que mira esa casilla).
+  Puede equivocarse con varios monstruos alrededor de un jugador.
 - **Muerte o salida de la vista.** Si `CreatureDisappear` no lo distingue, se suma un
-  motivo. Sin eso, el cliente lo deduce del cadáver nuevo en la misma casilla y el mismo
-  batch.
+  motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
+  en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -903,11 +918,12 @@ lee en la página de cada entrada y por archivo.
    - Fuente: URL con commit;
    - Carpeta y "Atribución requerida: Sí".
 6. **Derivados** (capas de LPC compuestas en un atuendo, recoloreados):
-   - los genera una herramienta propia desde `vendor/`, con test de que el PNG coincide
-     (como spritegen);
-   - van en `assets/sprites/derived/<pack>/`, con una fila en la sección "Obras
-     derivadas" de `CREDITS.md` que diga su licencia (la del origen; BY-SA sigue BY-SA) y
-     de qué archivos salen;
+   - los genera `tools/spritepack` desde `vendor/` con la receta de `animations` en
+     `assets/sprites.yaml` (capas y paletas), con tests del compositor. No se commitean como
+     PNG: salen en el atlas generado (decisión del 2026-11-17, en vez de
+     `assets/sprites/derived/<pack>/`: la receta es el dato y el atlas no se commitea);
+   - tienen una fila en la sección "Obras derivadas" de `CREDITS.md` que dice su licencia
+     (la del origen; BY-SA sigue BY-SA) y de qué archivos salen;
    - no van como "Obra propia CC0".
 7. **Fuentes:**
    - `assets/vendor/font-<familia>/` con los `.ttf` de google/fonts tal cual, su `OFL.txt`
@@ -927,9 +943,9 @@ Por impacto en pantalla y por costo:
 | 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | A10, A11 |
 | 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | A10 (variantes) |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | A10 (animación) |
-| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | A10, A12 |
-| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | A12 |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | A8, A12 |
+| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
+| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | A10 |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | ART-7 |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -952,11 +968,11 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
 | A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
-| A8 | Animación procedural de criaturas (ANI-5) | cliente | — |
+| A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
-| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` | renderer, spritepack, cliente, editor | — |
+| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **parcial:** frames por acción, anclas y sombra de contacto de criaturas, hechos; falta el resto | renderer, spritepack, cliente, editor | — |
 | A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) | renderer, spritegen o LPC, `data/items` | A10 |
-| A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
+| A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **parcial:** humanoides hechos; faltan suelos, agua y árboles | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
 | A13 | Luz en cuevas y partículas de ambiente | cliente | A10 |
 
 ### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)

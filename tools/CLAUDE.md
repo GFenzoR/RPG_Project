@@ -86,11 +86,13 @@ izquierda, ruido con semilla que hace mosaico). Determinista: la semilla sale de
 Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el resultado,
 `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out shot.png --scale 4
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
-exige que cada receta sea una ruta usada en `data/` (o un frame de outfit
-`outfits/<id>/<dir>_<frame>`, o de efecto `effects/<nombre>/<n>`, sin huecos en la tira, o
-un icono de interfaz `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente
-busca por ruta). El preview pone cada tira de efecto en su propia fila, sobre un jugador
-parado. Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
+exige que cada receta sea una ruta usada en `data/` (o un frame de animación
+`<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como el trote del jabalí, o de
+efecto `effects/<nombre>/<n>`, sin huecos en la tira, o un icono de interfaz
+`ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta). El
+preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
+los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
+`animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
 (`castShadow`, al final de `render`). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)".
@@ -103,4 +105,7 @@ Los PNG de bordes de `assets/sprites/borders/` salen de
 cambia `data/borders.yaml` o el sprite de un suelo: cada pieza recorta la textura del suelo
 de origen, o su color si es placeholder). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
-terceros: `assets/README.md`.
+terceros: `assets/README.md`. También arma las animaciones de criaturas (`src/anims.ts`,
+docs/17 ANI): compone capas de un pack con paletas (`palettes`, `animations`), corta los
+frames `<sprite>/<acción>_<dir>_<n>`, arma los clips de los archivos con esos nombres y
+escribe `anims` en `atlas.json` ("Sprites animados" en `assets/README.md`).

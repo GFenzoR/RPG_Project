@@ -102,16 +102,36 @@ el punto 5:
   botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
-  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones. Lo que falta,
+  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones; y A8 con la
+  parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo). Lo que falta,
   en el orden de su §7:
   - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
     docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
     servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
     (caminar manteniendo el mouse), MOV-4 (click previsto), MOV-7 (respuesta visual) y el
     E2E de MOV-9 con 150 ms de latencia simulada.
-  - **A8, animación procedural** de los monstruos y NPCs de un solo frame (ANI-5). **A9**
-    necesita protocolo: quién ataca a quién y si una criatura murió o salió de la vista
-    (ANI-7).
+  - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
+    (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
+    sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
+    cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
+    `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
+    Lo que quedó pendiente de eso:
+    - **A9 (protocolo):** quién ataca a quién y si una criatura murió o salió de la vista
+      (ANI-7). Hasta entonces el cliente lo deduce (`render/creature-events.ts`) y puede
+      animar al monstruo equivocado cuando varios rodean a un jugador.
+    - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
+      un hechizo o un arco juega el ataque (`slash`).
+    - **Animales:** los monstruos de Dungeon Crawl siguen con un frame y la animación
+      procedural. Ningún repo oficial de LPC en GitHub trae animales con licencia al lado
+      (el lobo del Starter Kit no la tiene); faltan ciclos propios de spritegen o hojas de
+      OpenGameArt con licencia por archivo.
+    - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
+      Dungeon Crawl, una (ART-2 lo acepta).
+    - **Click sobre la cabeza** de un personaje alto (cae en la casilla de arriba): sigue
+      eligiendo la casilla, no a la criatura (ART-2, A10).
+    - **Atlas:** pasó de 1 a 2 páginas (docs/07).
+    - **Pantalla de créditos (A1):** las capas de LPC son CC-BY-SA y OGA-BY, piden
+      atribución visible; hoy está solo en `assets/CREDITS.md`.
   - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
     animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
     canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
@@ -133,10 +153,11 @@ el punto 5:
   - **A7, vista de hasta 31x21** (servidor, protocolo y cliente). Hoy el AOI fija 15x11 + 1
     (`server/internal/session/aoi.go`, docs/01 y docs/05). Hay que volver a medir el
     ancho de banda por jugador (docs/07).
-  - **A10 y A11, renderer:** anclas por sprite, frames por acción, tiles animados,
-    variantes de suelo, sombras y muros por piezas con autotile (ART-2 a ART-8).
-  - **A12, assets de LPC** (SRC-4; lo primero, muros, pasto y agua) y **A1**, la pantalla de
-    créditos que piden CC-BY y CC-BY-SA.
+  - **A10 y A11, renderer:** tiles animados, variantes de suelo, capa de sombras, anclas
+    de items y muros por piezas con autotile (ART-2 a ART-8). Anclas, frames por acción y
+    sombra de contacto de criaturas ya están.
+  - **A12, assets de LPC** (SRC-4; lo primero, muros, pasto y agua; los humanoides ya
+    están) y **A1**, la pantalla de créditos que piden CC-BY y CC-BY-SA.
   - **Las herramientas no leen la licencia.** spritepack y `make validate` solo piden la
     fila de `CREDITS.md` y el `LICENSE`. La política nueva (CC-BY-SA, OFL, licencia por
     archivo) la hace cumplir la revisión, igual que antes. El texto de las reglas que
