@@ -404,3 +404,12 @@ secundaria.
   queda con un solo frame de Dungeon Crawl. Escala revisada (ART-2, "Animales medianos"): el
   jabalí y el ciervo de spritegen pasan a 64x64 más grandes, con los pies en la casilla y la
   sombra de contacto. La gaviota sigue de spritegen (decisión del dueño).
+- [x] **Motor de sprites (docs/17 "Motor de sprites"; rama `feat/sprite-engine`).** Pedido
+  del dueño del 2026-11-18: `tools/spritegen/src/engine/` dibuja sprites desde un modelo
+  con volumen (elipsoides, cajas, cilindros, cápsulas, extrusiones) y un rig de acciones
+  con keyframes, con las reglas de docs/17 como datos en un solo lugar y puertas de calidad
+  (paleta, alfa, tramado, contorno, tamaño y ancla de ART-2, siluetas, pistas de
+  `sprites.yaml`) en `make test` y `spritegen check`; `spritegen sheet` deja la hoja de
+  contacto y el lineup de cada sprite. El jabalí y el ciervo pasan a quieto, caminar,
+  atacar y morir en cuatro direcciones; el eco de la forja (era Dungeon Crawl) y el yunque
+  también salen del motor. Lo que queda: docs/14, "Pendientes conocidos".

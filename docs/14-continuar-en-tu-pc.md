@@ -119,7 +119,8 @@ el punto 5:
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
     cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
-    `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
+    `animations` de `assets/sprites.yaml`); jabalí, ciervo y el eco de la forja son modelos
+    del motor de sprites de spritegen (abajo, "Motor de sprites").
     Lo que quedó pendiente de eso:
     - **A9 (hecho, rama `feat/attack-events`, E2E del lote 7):** el servidor manda quién
       ataca a quién (`CreatureAttack`) y por qué sale una criatura
@@ -142,6 +143,23 @@ el punto 5:
       sus filas de `CREDITS.csv` como estas). Con un servidor sin `attack_events` todo
       sigue jugando `attack`. Mirar en el E2E y en el playtest si el gesto de tensar sin
       arco se lee como un tiro (los monstruos tiran botellas, cuchillos y esquirlas).
+    - **Motor de sprites (hecho, rama `feat/sprite-engine`, docs/17 "Motor de sprites"):**
+      `tools/spritegen/src/engine/` dibuja sprites desde un modelo con volumen y un rig de
+      acciones, con las reglas de docs/17 como datos (`engine/style.ts`) y puertas de
+      calidad en `make test` y `spritegen check`. Lo usan el jabalí y el ciervo (quieto,
+      caminar, atacar y morir en cuatro direcciones; antes un trote de perfil), el eco de la
+      forja (era el elemental de fuego de Dungeon Crawl) y el yunque. Cómo escribir uno:
+      `tools/CLAUDE.md`, "spritegen: el motor". Queda: pasar otros sprites propios de un
+      frame (cajón, bolardo, tablero, cartel; la gaviota si el dueño quiere), la acción de
+      recibir golpe (no existe en el cliente: sigue el destello procedural) y frames de
+      props animados (ART-7). **Revisar en el E2E** (no se corrió en la rama; se revisó con
+      las hojas y lineups de `spritegen sheet` y `mapcli render`): el jabalí y el ciervo en
+      el Bosque y el Puerto, en las cuatro direcciones, atacando y muriendo (la caída de
+      costado), su tamaño al lado del lobo y de los personajes; el eco de la forja en la
+      mina del Volcán (z 8, 3692,5826), que flote sobre la sombra y se lea como fuego sobre
+      la roca; el yunque en las herrerías (Isla de Pruebas 2073,2102). La barra y el nombre
+      del ciervo van más arriba que antes: `top` sale de su caminar al norte (las astas
+      lejos, ~54 px).
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
       cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
@@ -173,9 +191,10 @@ el punto 5:
       (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
       martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
     - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
-      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo de spritegen
-      pasaron a 64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con
-      los pies en la casilla y la sombra de contacto como el resto. La gaviota queda de
+      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo pasaron a
+      64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con los pies en
+      la casilla y la sombra de contacto como el resto; desde el motor de sprites son
+      modelos a esa escala. La gaviota queda de
       32x32 con su sombra pintada hasta que el dueño elija su arte.
     - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
       (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
@@ -866,6 +885,9 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
   propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
   de las criaturas"), salvo el jabalí y el ciervo, de 64x64 sobre la sombra de contacto.
+- **Motor de sprites** (arte propio, `tools/spritegen/src/engine/`, CC0): el jabalí, el
+  ciervo, el eco de la forja y el yunque salen de modelos con volumen y un rig de acciones
+  (`engine/specs/`), en cuatro direcciones (`tools/CLAUDE.md`, "spritegen: el motor").
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

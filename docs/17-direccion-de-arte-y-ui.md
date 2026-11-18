@@ -12,7 +12,8 @@ A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
 `feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
 `feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13"; y los restos
 de ANI y MOV, rama `feat/lpc-actions`, el 2026-11-18: "Hecho: disparar, conjurar,
-desvanecerse, pasos y girar").
+desvanecerse, pasos y girar"; y el motor de sprites, rama `feat/sprite-engine`, el
+2026-11-18: "Motor de sprites", al final de §3).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -160,9 +161,10 @@ parte de arriba transparente.
   Volcán (`slagbound_warden`) ~77 de alto en 96x96. Rata, cangrejo y escarabajo quedan en
   32x32 (son chicos de verdad). El jabalí y el ciervo de spritegen eran de 32x32 con el
   ancla de siempre y la sombra pintada: al lado del lobo de Gemini el ciervo parecía una
-  cría y los dos pisaban 4 px más abajo que el resto. Ahora son su mismo diseño dibujado
-  1,2 y 1,4 veces más grande en 64x64 (`scaleOnto` en `recipes/creatures.ts`), con
-  `anchor: bc` y la sombra de contacto (`shadow: false` en la receta, `shadow: ellipse` en
+  cría y los dos pisaban 4 px más abajo que el resto. Pasaron a ser su mismo diseño
+  dibujado 1,2 y 1,4 veces más grande en 64x64, y desde el 2026-11-18 son modelos del motor
+  de sprites ("Motor de sprites", al final de §3): ~38 px de largo el jabalí y ~46 de alto
+  el ciervo con las astas, con `anchor: bc` y la sombra de contacto (`shadow: ellipse` en
   `assets/sprites.yaml`), como todo animal animado. La gaviota sigue de 32x32 con su
   sombra pintada mientras el dueño no decida su arte.
 
@@ -393,7 +395,9 @@ mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
 falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
 un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
 spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
-animados"); lo usan las criaturas de Gemini.
+animados"); lo usan las criaturas de Gemini. El motor de sprites dibuja las cuatro desde su
+modelo, así el este conserva la luz desde la izquierda ("Motor de sprites", al final de
+§3).
 
 ### ANI-2 Acciones, frames y tiempos
 
@@ -444,8 +448,8 @@ animados"); lo usan las criaturas de Gemini.
   LPC y esos nombres son alias de sus frames (`assets/README.md`, "Sprites animados").
 - Un monstruo con `sprite: creatures/wolf` usa sus frames si el atlas los tiene, y si no,
   la imagen única con el procedural (ANI-5). Los frames salen de capas de un pack
-  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (el trote
-  de spritegen del jabalí y del ciervo).
+  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (los del
+  motor de sprites: el jabalí, el ciervo y el eco de la forja; o las hojas de Gemini).
 
 ### ANI-5 Animación procedural para sprites de un solo frame
 Es para los monstruos y NPCs de Dungeon Crawl de hoy, y para cualquier sprite futuro sin
@@ -516,6 +520,97 @@ Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Muerte o salida de la vista.** Si `CreatureDisappear` no lo distingue, se suma un
   motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
   en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
+
+### Motor de sprites (hecho, 2026-11-18, rama `feat/sprite-engine`)
+Pedido del dueño (2026-11-18): *"podrías poner un agente que arme el motor de generar
+sprites, basándose en las referencias que habíamos hablado"*. El motor está en
+`tools/spritegen/src/engine/` y convierte las referencias de §1 y las reglas ART y ANI en
+maquinaria: un sprite nuevo se **describe** (partes con volumen, materiales de
+`palette.ts` y, si es una criatura, un rig con acciones) y sale coherente con el resto, sin
+poner píxeles a mano y sin Gemini. Cómo escribir un spec y un rig: `tools/CLAUDE.md`,
+"spritegen: el motor".
+
+**Cómo dibuja.** Cada sprite es un modelo chico en píxeles de sprite (x al este, y al
+norte, z arriba) hecho de primitivas con volumen: elipsoides, cajas, cilindros, cápsulas
+que se afinan (patas, cuellos, colas, cuernos, llamas), extrusiones de un perfil (el
+cuerpo del yunque) y tarjetas finas. Un trazador de rayos ortográfico (un rayo por centro
+de píxel y un buffer de profundidad) resuelve qué se ve; después vienen las pasadas de
+pixel art: sombreado por umbrales, limpieza de píxeles sueltos, pliegues (la línea oscura
+donde una parte tapa a otra), marcas de un píxel (ojos, fosas, bayas), el borde iluminado
+y el contorno selectivo. Es determinista: el ruido de textura sale de la ruta del sprite y
+vive en el marco de cada parte, así acompaña a la parte y no hierve entre frames.
+
+**Cada regla, de dónde sale y dónde está** (todo en `engine/style.ts`, un solo lugar que
+leen el renderer, las puertas y las hojas de revisión):
+
+| Regla | Referencia (§1) | En el motor |
+|---|---|---|
+| ART-1 3/4 frontal | LPC: ortográfica, cámara a unos 60° | `PROJECTION`: la altura sube recta (1:1) y la profundidad se ve a tan 30° ≈ 0,58: se ven la cara de arriba y la sur |
+| ART-5 luz | LPC: desde arriba y apenas desde la izquierda | `LIGHT`: arriba, izquierda y un poco del lado de la cámara (el flanco que mira a la cámara queda en el tono base), con la misma curva que `domeLight` de las recetas; `depthCue` oscurece lo lejano (la pata de atrás, la grupa vista de frente) |
+| ART-5 3-4 tonos y un brillo | Realm of the Mad God y Stardew: pocos colores bien puestos | `SHADES`: umbrales que eligen el tono claro, base, sombra u hondo del material; `glint` en lo brillante (ojos, metal); `GLOW` para el fuego (lo que mira a la cámara, más claro) |
+| ART-5 contorno selectivo | LPC: fuerte en personajes, suave en objetos; RotMG: contorno oscuro que separa del fondo | `OUTLINE`: en criaturas, casi negro abajo y a la derecha (`outline`, nunca `#000`) y un tono más claro arriba y a la izquierda (`deep`); en objetos y fuego, más suave; `CREASE_DEPTH`: el contorno interno donde una parte tapa a otra; `RIM_LIGHT`: el borde iluminado, un tono más claro |
+| ART-6 paleta, valores, tramado | LPC Revised: paleta limitada; tramado casi nunca | solo las rampas de `palette.ts` (los materiales de las criaturas del motor se sumaron ahí); `VALUE_BAND` por tipo; umbrales duros y `DITHER_MAX_SHARE` (10 %); alfa 0 o 255 |
+| ART-2 tamaños y anclas | Tibia: lo grande crece hacia arriba; LPC: frames de 64x64 | `SIZES`: lienzo, ancla (`bc` o `br`), fila del suelo y alto y largo de la figura por clase; cada spec puede pedir un rango más angosto (las notas de "Animales medianos") |
+| ANI-1 direcciones | Diablo II: cada dirección sale del mismo modelo | el modelo mira al oeste y se gira para cada dirección (`FACING_YAW`): las cuatro se dibujan, el este **no** es el oeste espejado y la luz sigue viniendo de la izquierda; `mirror` no hace falta |
+| ANI-2 acciones y tiempos | Diablo II: muchos modos por monstruo; RotMG: ciclos cortos que se leen | `ACTIONS`: quieto 2-4 frames de 400-600 ms, caminar 2-4 (2 por casilla, por distancia), atacar 3-4 en 300-400 ms, disparar 3, conjurar 3-4, morir 4-6 en 500-700 ms; el validador los exige |
+| ANI-3 continuidad | — | el ciclo de caminar empieza en un frame de contacto y el quieto respira desde la pose parada |
+| ANI-4 nombres | — | `frameName`: `<sprite>/<acción>_<dir>_<n>`; spritepack arma los clips de esos archivos y el `CreatureBody` del cliente los juega sin cambios |
+| "Un mundo que respira" | Stardew | quieto con respiración, orejas, colas y llamas que se mueven; chispas que suben |
+
+De ningún juego se tomó un sprite, una forma ni una paleta: solo estas reglas de estilo.
+Los modelos son diseños propios (el jabalí, el ciervo y el yunque son los de spritegen
+llevados a volumen; el eco de la forja es nuevo).
+
+**Puertas de calidad** (`engine/gates.ts` y `engine/check.ts`; corren en `make test` y en
+`spritegen check`, que también corre al final de `make spritegen`): colores solo de sus
+materiales y nunca `#000`, alfa 0 o 255, tramado bajo el 10 %, nada recortado contra el
+borde del lienzo, contorno en al menos el 85 % de la silueta, una sola figura (aparte,
+solo chispas de hasta 10 px), al menos el 20 % de su caja lleno, media de L* en la banda
+de su tipo, alto y largo de perfil en el rango de ART-2, centrado de frente y de
+espaldas, pies en la fila del suelo, un caminar que cambia de silueta, un ataque y una
+muerte que se distinguen del parado, sur y oeste distinguibles, y las pistas de
+`assets/sprites.yaml` iguales al rig (`anchor`, `shadow: ellipse`, `flying`, los `ms`; sin
+`facing` ni `mirror`; sin entrada en `sprites`). Más el determinismo (mismo spec, mismos
+píxeles).
+
+**Revisión:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
+<prefijo>]` escribe en `build/spritegen/` la hoja de contacto de cada sprite del motor
+(todos los frames a 4x en una grilla, una fila por acción y dirección) y su lineup a 1x
+(como lo pone el cliente, con la sombra de contacto, al lado del lobo de Gemini y de una
+persona de LPC). Se miran con Read.
+
+**Hechos con el motor:**
+- **Jabalí espinudo y ciervo de zarza:** quieto, caminar, atacar (embestida con los
+  colmillos; carga con las astas) y morir (tambalea, se le doblan las patas y cae de lado)
+  en las cuatro direcciones: 68 frames cada uno. Antes: un trote de 4 frames mirando al
+  oeste (el este espejado; al norte y al sur, el mismo perfil), sin ataque ni muerte
+  propios. El jabalí mide ~38 px de largo y 26 de alto; el ciervo, ~35 de largo y 46 de
+  alto con las astas (una persona de LPC).
+- **Eco de la forja** (`npcs/forge_echo`, "lo que queda del último herrero de la
+  forja"): un espíritu de brasas con forma de herrero (pelo y lenguas de fuego, delantal
+  de cuero chamuscado, el martillo todavía en la mano, una llama en vez de piernas) que
+  flota; quieto y caminar en las cuatro direcciones. Antes: el elemental de fuego de
+  Dungeon Crawl, un solo frame.
+- **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
+  cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
+
+**Decisiones:**
+- **Un modelo con volumen y no recetas 2D:** las cuatro direcciones, la luz, el contorno y
+  los pliegues salen solos y siempre iguales; con recetas 2D cada dirección se dibuja a
+  mano.
+- **Specs como datos en TypeScript** (objetos planos, sin funciones): tipados y validados
+  (`validateSpec`); pueden salir de un helper (`motion.ts`: el trote en pares diagonales)
+  o, más adelante, de un JSON o un YAML.
+- **Sin acción de recibir golpe:** el cliente no la tiene (`AnimAction`) y el golpe
+  procedural de ANI-5 (destello y retroceso) ya se ve; sumarla es un cambio del cliente y
+  de spritepack.
+- **El eco no tiene ataque ni muerte:** es un NPC (los NPCs solo están quietos y caminan).
+- **La gaviota sigue a mano** hasta que el dueño elija su arte.
+
+**Pendiente:** pasar al motor otros sprites propios de un frame (cajón, bolardo, tablero,
+cartel; la gaviota si el dueño quiere), sumar primitivas si hacen falta (un toro para
+anillos, cajas redondeadas), frames `frame_<n>` para props animados (ART-7) y la revisión
+en el juego del E2E final (no se corrió en la rama).
 
 ## 4. Sensación de movimiento (MOV)
 

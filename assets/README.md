@@ -125,8 +125,8 @@ cuerpo), `shoot` (a distancia), `cast` (conjurar) o `death`, `dir` es `n`, `e`, 
 1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
    (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
    de LPC (`vendor/ulpc`).
-2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, de spritegen:
-   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`, o las hojas de
+2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, del motor de spritegen:
+   `sprites/creatures/bristleback_boar/walk_s_0.png` a `death_w_4.png`, o las hojas de
    Gemini de "Arte y música hechos con Gemini": `sprites/creatures/wolf/`). spritepack arma
    los clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como
    tengan todas sin huecos. Si no hay `sprites/<sprite>.png` ni entrada en `sprites`, el
@@ -286,14 +286,12 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
   bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
-- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo), salvo el jabalí y
-  el ciervo, que se paran sobre la sombra de contacto.
+- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo), salvo las del
+  motor de sprites (jabalí, ciervo y eco de la forja), que se paran sobre la sombra de
+  contacto.
 - Todo determinista: ruido con semilla, nunca `Math.random`.
-- Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). El
-  jabalí y el ciervo tienen un trote de 4 frames mirando a la izquierda (`walk_w_0..3`,
-  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales. Son 64x64: su
-  diseño de 32x32 dibujado 1,2 y 1,4 veces más grande (`scaleOnto`), centrado abajo para
-  `anchor: bc`, a la escala de los animales de Gemini (docs/17 ART-2, "Animales medianos").
+- Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). Los
+  dibuja el motor de sprites a partir de un modelo (abajo, "Sprites del motor").
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
   reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
@@ -305,6 +303,29 @@ shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sob
 con `--only effects/`, cada tira en su fila sobre el jabalí parado).
 Revisa a 1x además de a 4x: un item que solo se entiende ampliado no se entiende en el
 inventario.
+
+### Sprites del motor (`tools/spritegen/src/engine`, desde el 2026-11-18)
+El motor de sprites (docs/17, "Motor de sprites"; cómo escribir un spec y un rig en
+`tools/CLAUDE.md`, "spritegen: el motor") dibuja un sprite a partir de un modelo con
+volumen y, si es una criatura, de un rig con acciones. Sus reglas de estilo (cámara 3/4,
+luz, tonos de `palette.ts`, contorno selectivo, tamaños y anclas de ART-2, frames y
+tiempos de ANI-2) están en un solo lugar, `engine/style.ts`.
+- **Hoy:** `creatures/bristleback_boar` y `creatures/bramble_stag` (quieto, caminar,
+  atacar y morir: 68 frames cada uno), `npcs/forge_echo` (quieto y caminar: 32 frames) y
+  `decor/anvil` (una imagen).
+- **Frames:** una criatura tiene `sprites/<sprite>/<acción>_<dir>_<n>.png` en las cuatro
+  direcciones, dibujadas desde el modelo (el este no es el oeste espejado: la luz sigue a
+  la izquierda), de 64x64 sin sombra pintada. No hay `sprites/<sprite>.png`: el nombre del
+  sprite es un alias de su primer frame quieto hacia el sur.
+- **Pistas:** su entrada de `animations` dice `anchor: bc`, `shadow: ellipse`, `flying`
+  si flota y los `ms` del rig; nada de `facing` ni `mirror`, y ninguna entrada en
+  `sprites`. `spritegen check` y `make test` fallan si no coinciden con el spec.
+- **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet --only
+  <sprite>` deja en `build/spritegen/` la hoja de contacto (todos los frames a 4x) y el
+  lineup (a 1x, sobre su suelo, al lado del lobo y de una persona de LPC). Mirarlas con
+  Read, y en el juego (E2E).
+- Es obra propia (CC0), como el resto de spritegen: las reglas se aprendieron de las
+  referencias de docs/17 §1, pero ningún sprite de otro juego se copió ni se calcó.
 
 ### Sombra de las criaturas
 Los monstruos de Dungeon Crawl traen pintada una sombra proyectada casi negra, hacia abajo
@@ -318,8 +339,8 @@ de `render`:
 
 Una receta puede ajustarla con `shadow: { dx, dy, from }`, o quitarla con `shadow: false`
 cuando la criatura se para sobre la sombra de contacto del renderer como los animales
-animados (`shadow: ellipse` en `assets/sprites.yaml`): el jabalí y el ciervo desde que son
-de 64x64 (docs/17 ART-2, "Animales medianos").
+animados (`shadow: ellipse` en `assets/sprites.yaml`): las criaturas del motor de sprites
+(docs/17 ART-2, "Animales medianos").
 
 Se hace en spritegen y no en el renderer por tres razones:
 - los PNG de `vendor/` no se tocan, así que no se les puede quitar la sombra que traen;
