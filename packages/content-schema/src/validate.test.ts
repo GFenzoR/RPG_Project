@@ -685,9 +685,9 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
-  // The server answers nothing about a tile out of view (6 tiles up and down), so a longer
-  // reach could only ever fail (server content.MaxReach).
-  it("caps inventory.reach and resource.reach at the view half-height", () => {
+  // Hands reach the half-height of the classic 15x11 window (6 tiles up and down, server
+  // content.MaxReach): the 31x21 view did not stretch it.
+  it("caps inventory.reach and resource.reach at the classic window's half-height", () => {
     edit("data/balance.yaml", "  reach: 1 ", "  reach: 7 ");
     edit("data/items/ground.yaml", "    reach: 3\n", "    reach: 7\n");
     const out = messages(root);

@@ -504,7 +504,7 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
-          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the view half-height: the server answers nothing about a tile out of view).",
+          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the half-height of the classic 15x11 window, what a monster notices; the 31x21 view did not stretch it).",
           "type": "integer",
           "minimum": 1,
           "maximum": 6
