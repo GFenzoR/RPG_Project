@@ -67,7 +67,8 @@ el punto 5:
 5. De la primera prueba (2026-11-17) salió `17-direccion-de-arte-y-ui.md`. Su plan (§7, tareas
    A1–A13) es trabajo para la IA en lotes. Lo primero, por impacto y poco riesgo: A6
    (movimiento fluido, hecho en parte en la rama `feat/movement-feel`) y A8 (animación de
-   los monstruos de un solo frame).
+   los monstruos de un solo frame; hecho, junto con los personajes de LPC: ver "Pendientes
+   conocidos").
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
