@@ -122,7 +122,9 @@ Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitido
   espejados, escala), así se puede rehacer. El este de cada acción es el oeste espejado
   (`mirror: true` en `assets/sprites.yaml`). Reemplazan a los sprites de Dungeon Crawl que
   esas criaturas usaban (`wolf`, `zombie_rat`, `fire_crab`, `bat`, `jumping_spider`,
-  `giant_frog`, `thorn_hunter`), que siguen en `assets/vendor/dungeon-crawl/`.
+  `giant_frog`, `thorn_hunter` y, desde la segunda tanda, `giant_centipede`,
+  `boulder_beetle`, `war_dog`, `salamander`, `earth_elemental`, `eastern_dragon` e
+  `iron_elemental`), que siguen en `assets/vendor/dungeon-crawl/`.
 
 | Archivos | Herramienta | Fecha | Prompt | Notas |
 |---|---|---|---|---|
@@ -141,3 +143,10 @@ Arte y música hechos con la cuenta de Gemini del dueño (la app web), permitido
 | `assets/sprites/creatures/moss_spider/*.png` (frames de `creatures/moss_spider`, la araña de musgo) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/moss_spider.txt` | 64x64; caminar, quieto, morder y morir |
 | `assets/sprites/creatures/mire_toad/*.png` (frames de `creatures/mire_toad`, el sapo de ciénaga) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/mire_toad.txt` | 64x64; saltar, quieto (al sur y a los lados), atacar a los lados y morir |
 | `assets/sprites/creatures/thornling/*.png` (frames de `creatures/thornling`, el espinoso) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/thornling.txt` | 64x64; caminar, quieto, azotar (al sur y a los lados) y morir |
+| `assets/sprites/creatures/hollow_crawler/*.png` (frames de `creatures/hollow_crawler`, el reptante hueco) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/hollow_crawler.txt` | 64x64; caminar, quieto, morder (al sur y a los lados) y morir |
+| `assets/sprites/creatures/ore_beetle/*.png` (frames de `creatures/ore_beetle`, el escarabajo de mena) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/ore_beetle.txt` | 32x32; caminar, quieto y morir (ataca con la embestida) |
+| `assets/sprites/creatures/ash_hound/*.png` (frames de `creatures/ash_hound`, el sabueso de ceniza) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/ash_hound.txt` | 64x64; correr, quieto (al sur y a los lados), morder (al sur y a los lados) y morir. Segunda hoja (la primera caminaba de costado hacia la cámara) |
+| `assets/sprites/creatures/cinder_salamander/*.png` (frames de `creatures/cinder_salamander`, la salamandra de brasa) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/cinder_salamander.txt` | 64x64; caminar, quieto, morder a los lados y morir |
+| `assets/sprites/creatures/slag_golem/*.png` (frames de `creatures/slag_golem`, el gólem de escoria) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/slag_golem.txt` | 64x64; caminar, quieto, golpear y morir. Segunda hoja (la primera era casi negra y chica) |
+| `assets/sprites/creatures/ember_wyrmling/*.png` (frames de `creatures/ember_wyrmling`, el dragoncillo de ascua) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/ember_wyrmling.txt` | 64x64; caminar, quieto, morder a los lados y morir |
+| `assets/sprites/creatures/slagbound_warden/*.png` (frames de `creatures/slagbound_warden`, el custodio de escoria, jefe del capítulo 3) | Gemini, app web con la cuenta del dueño (modo Hydrogen) | 2026-11-18 | `assets/prompts/sprites/creatures/slagbound_warden.txt` | 96x96; marchar, quieto, golpear con el martillo (al sur y al norte) y morir. Segunda hoja (la primera venía con líneas de grilla y el martillo cambiaba de mano) |
