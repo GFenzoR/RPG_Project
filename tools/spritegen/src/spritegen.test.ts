@@ -92,7 +92,7 @@ describe("recipes", () => {
       let opaque = 0;
       let partial = -1;
       for (let i = 3; i < img.data.length; i += 4) {
-        const a = img.data[i];
+        const a = img.data[i] ?? 0;
         if (a === 255) opaque++;
         else if (a !== 0 && partial < 0) partial = a;
       }
