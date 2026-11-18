@@ -180,6 +180,63 @@ class TheLoopLength(unittest.TestCase):
         self.assertEqual(score, 0.0)
 
 
+def phrases(seconds: float, hop: float, every: float, rest: float, loud: float = -12.0, quiet: float = -40.0):
+    """A level envelope (dB, one per hop): `every` seconds of music, the last
+    `rest` of them a breath `quiet` dB down, over and over."""
+    out = []
+    for i in range(int(round(seconds / hop))):
+        t = (i * hop) % every
+        out.append(quiet if t >= every - rest else loud)
+    return out
+
+
+class TheEntryPoints(unittest.TestCase):
+    def test_they_fall_where_a_phrase_begins_after_a_breath(self):
+        # Phrases of 8 s with a 1 s breath at their end: each phrase starts at a multiple of 8.
+        levels = phrases(180.0, 0.1, 8.0, 1.0)
+        entries = mc.entry_points(levels, 0.1, 0.0, 180.0)
+        self.assertGreaterEqual(len(entries), 4)
+        for e in entries:
+            self.assertAlmostEqual(e / 8.0, round(e / 8.0), delta=0.02, msg=entries)
+
+    def test_never_at_the_start_nor_in_the_last_seconds_and_spaced(self):
+        levels = phrases(180.0, 0.1, 8.0, 1.0)
+        entries = mc.entry_points(levels, 0.1, 0.0, 170.0)
+        self.assertGreaterEqual(entries[0], mc.ENTRY_HEAD)
+        self.assertLessEqual(entries[-1], 170.0 - mc.ENTRY_TAIL)
+        for a, b in zip(entries, entries[1:]):
+            self.assertGreaterEqual(b - a, mc.ENTRY_GAP - 1e-6)
+        self.assertLessEqual(len(entries), mc.ENTRY_MOST)
+        self.assertEqual(entries, sorted(entries))
+
+    def test_a_steady_drone_still_gets_places_to_start(self):
+        entries = mc.entry_points([-20.0] * 1800, 0.1, 0.0, 180.0)
+        self.assertGreaterEqual(len(entries), 2)
+
+    def test_never_where_the_music_is_a_hole(self):
+        # 60 s of music, 20 s of near silence, 100 s of music: no entry inside the hole.
+        levels = [-15.0] * 600 + [-60.0] * 200 + [-15.0] * 1000
+        for e in mc.entry_points(levels, 0.1, 0.0, 180.0):
+            self.assertFalse(59.0 <= e < 80.0, e)
+
+    def test_a_short_piece_has_none(self):
+        self.assertEqual(mc.entry_points([-15.0] * 390, 0.1, 0.0, 39.0), [])  # 30 s after 10 s: none fit
+        self.assertEqual(mc.entry_points([], 0.1, 0.0, 0.0), [])
+
+    def test_the_longest_hole_is_measured_against_the_body(self):
+        levels = [-15.0] * 600 + [-60.0] * 70 + [-15.0] * 300
+        self.assertAlmostEqual(mc.longest_quiet(levels, 0.1, 0.0, 97.0), 7.0, delta=0.11)
+        self.assertEqual(mc.longest_quiet([-15.0] * 100, 0.1, 0.0, 10.0), 0.0)
+
+    def test_a_piece_passes_its_measures_or_says_why_not(self):
+        good = {"source_seconds": 176.0, "lufs_in": -12.0, "longest_quiet": 0.5, "entries": [12.0, 40.0, 70.0]}
+        self.assertEqual(mc.piece_problems(good), [])
+        bad = mc.piece_problems({"source_seconds": 60.0, "lufs_in": float("-inf"), "longest_quiet": 9.0,
+                                 "entries": [12.0]})
+        self.assertEqual(len(bad), 4)
+        self.assertIn("60 s long", bad[0])
+
+
 class TheLoudness(unittest.TestCase):
     def test_a_loud_track_comes_down_to_the_target(self):
         self.assertEqual(mc.loudness_gain(-12.0, -0.5, -18.0, -1.5), -6.0)
@@ -232,6 +289,27 @@ class TheWholeStep(unittest.TestCase):
             self.assertEqual(record["delivery"]["prompt"], "a calm test tone")
             with open(os.path.join(folder, "out", "piece.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["sha256"], record["sha256"])
+
+    def test_a_whole_piece_is_kept_whole_with_its_measures(self):
+        rate = 48000
+        x = faded(rate, 0.5, 58.0, 4.0, channels=2)
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, "piece.wav")
+            with wave.open(source, "wb") as out:
+                out.setnchannels(2)
+                out.setsampwidth(2)
+                out.setframerate(rate)
+                out.writeframes(array.array("h", (int(v * 32767) for v in x)).tobytes())
+            record = mc.convert(source, os.path.join(folder, "piece.ogg"), kbps=48, channels=2, loop=False)
+            self.assertAlmostEqual(record["seconds"], 62.5, delta=0.05)
+            self.assertAlmostEqual(record["body_end"], 62.5 - 2.0, delta=0.2)  # half of the 4 s fade
+            self.assertEqual(record["analysis"], mc.ANALYSIS)
+            for e in record["entries"]:
+                self.assertTrue(mc.ENTRY_HEAD <= e <= record["body_end"] - mc.ENTRY_TAIL, record["entries"])
+            self.assertEqual(record["longest_quiet"], 0.0)
+            self.assertNotIn("loop_seconds", record)
+            self.assertEqual(record["channels"], 2)
+            self.assertAlmostEqual(record["lufs_out"], mc.LUFS, delta=1.5)
 
     def test_a_long_piece_loops_over_its_first_seconds_in_mono(self):
         rate = 48000
