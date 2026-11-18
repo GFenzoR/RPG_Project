@@ -192,13 +192,20 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   de la caja oscuro; acercando, a 7x5, como antes (`client/CLAUDE.md`, "Zoom del mapa").
   La elección se recuerda por dispositivo.
 - **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
-  (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, proponer
-  un intercambio, reportar a un jugador, la vida y el maná de los miembros del grupo y que
-  un monstruo no reaparezca donde un jugador lo vería. Un objetivo a 15 casillas se
-  conserva; para pegarle hay que llegar a su rango (con "perseguir", el personaje camina).
+  (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, reportar
+  a un jugador, la vida y el maná de los miembros del grupo y que un monstruo no
+  reaparezca donde un jugador lo vería. Un objetivo a 15 casillas se conserva; para
+  pegarle hay que llegar a su rango (con "perseguir", el personaje camina). Proponer un
+  intercambio sigue pidiendo estar al lado: la ventana solo cambia la respuesta ("no es
+  posible" a quien no se ve, "muy lejos" a quien se ve y no está al lado).
 - **No cambia con la vista:**
   - **Los rangos:** cada arma a distancia, hechizo y ataque de monstruo tiene su `range`
-    en `data/` (hoy de 1 a 6). Ver más lejos no los alarga.
+    en `data/`. Ver más lejos no los alarga. El de un arma, un hechizo de daño o de
+    curación y una condición a distancia es como mucho 6 (el esquema y
+    `content.MaxRange`), el medio alto de la ventana clásica: un monstruo golpeado desde
+    tan lejos como apunta un jugador siempre lo nota y devuelve el golpe (si no, se lo
+    mataría gratis desde fuera de lo que nota). El de un ataque de monstruo no tiene ese
+    tope: un monstruo solo ataca a un objetivo que nota.
   - **Lo que nota un monstruo:** un agresivo elige objetivo, y lo sigue persiguiendo, solo
     dentro de la ventana clásica: 15x11 + 1 de margen, 8 casillas a los lados y 6 arriba y
     abajo, en su piso (`session.InSight`). Un jugador lo ve desde 15 casillas sin que lo
