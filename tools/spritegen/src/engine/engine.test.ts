@@ -574,6 +574,24 @@ describe("quality gates", () => {
     );
   });
 
+  it("fail a creature that reads as a stripe from the front or the back", () => {
+    const c = critter();
+    const thin = critter(
+      {},
+      c.parts.map((p) =>
+        p.name === "body"
+          ? { ...p, shapes: [{ type: "ellipsoid", radii: [11, 2.5, 5] }] }
+          : p.name === "head"
+            ? { ...p, shapes: [{ type: "ellipsoid", center: [-2, 0, 0], radii: [3.5, 2, 3] }] }
+            : p.name.startsWith("leg_")
+              ? { ...p, at: [p.at?.[0] ?? 0, Math.sign(p.at?.[1] ?? 0) * 1.2, -4] }
+              : p,
+      ),
+    );
+    expect(gateProblems(thin).join("\n")).toMatch(/a stripe at 1x/);
+    expect(gateProblems(c).join("\n")).not.toMatch(/a stripe at 1x/);
+  });
+
   it("pass on a well-made creature", () => {
     expect(gateProblems(critter())).toEqual([]);
   });

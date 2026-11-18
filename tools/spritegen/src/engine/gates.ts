@@ -195,6 +195,12 @@ export const GATES = {
   deathMaxIoU: 0.75,
   /** Facing south and facing west are told apart by the silhouette alone. */
   facingMaxIoU: 0.85,
+  /**
+   * Seen from the front or the back, a creature is at least this share of its profile's
+   * length wide: a profile turned to the camera reads as a thin stripe at 1x (the review of
+   * the engine boar, 2026-11-18: 16 px from the front against 38 of profile; it ships 22).
+   */
+  frontWidth: 0.45,
   /** bc sprites: the figure seen from the front or the back is centred within this. */
   centre: 2,
   /** Extra rows a hovering (flying) sprite may keep under its lowest point. */
@@ -318,6 +324,19 @@ export function gateProblems(spec: SpriteSpec): string[] {
     const wv = get("walk", "w", 0);
     if (s && wv && silhouetteIoU(s, wv) > GATES.facingMaxIoU)
       out.push(`${spec.sprite}: facing south and west look the same`);
+    const widths = (dirs: readonly string[]): number[] =>
+      frames
+        .filter((f) => f.ref?.action === "walk" && dirs.includes(f.ref.dir))
+        .map((f) => box(f.image))
+        .filter((b) => b !== undefined)
+        .map((b) => b[2] - b[0] + 1);
+    const front = Math.min(...widths(["s", "n"]));
+    const profile = Math.max(...widths(["w", "e"]));
+    if (Number.isFinite(front) && Number.isFinite(profile) && front < GATES.frontWidth * profile)
+      out.push(
+        `${spec.sprite}: ${front} px wide from the front or the back against a ${profile} px ` +
+          `profile: under ${Math.round(GATES.frontWidth * 100)} %, a stripe at 1x`,
+      );
   }
   return out;
 }
