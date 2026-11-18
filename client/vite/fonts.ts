@@ -124,10 +124,22 @@ export function subsetText(ranges = SUBSET_RANGES): string {
 export const fontSource = (root: string, f: FontFile): string =>
   join(root, "assets", "vendor", f.pack, f.source);
 
-/** Cuts one font down to SUBSET_RANGES as woff2. */
-export async function buildFont(root: string, f: FontFile): Promise<Buffer> {
+/**
+ * The `name` table entries every served font keeps. Harfbuzz keeps only 0-6 unless told;
+ * the OFL asks each copy to carry its copyright (0) and licence, which the fonts give as
+ * the licence description (13) and its URL (14).
+ */
+export const KEPT_NAME_IDS: readonly number[] = [0, 1, 2, 3, 4, 5, 6, 13, 14];
+
+/** Cuts one font down to SUBSET_RANGES as woff2 (or another format, for the tests). */
+export async function buildFont(
+  root: string,
+  f: FontFile,
+  format: "woff2" | "truetype" = "woff2",
+): Promise<Buffer> {
   const out = await subsetFont(readFileSync(fontSource(root, f)), subsetText(), {
-    targetFormat: "woff2",
+    targetFormat: format,
+    preserveNameIds: [...KEPT_NAME_IDS],
   });
   return Buffer.from(out);
 }

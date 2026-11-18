@@ -23,6 +23,32 @@ function faces(): { family: string; url: string; weight: string; style: string }
   });
 }
 
+/**
+ * The Windows Unicode English strings (platform 3, language 0x409) of an sfnt's `name`
+ * table, by name id: what a font viewer shows as its copyright, licence and so on.
+ */
+function nameTable(font: Buffer): Map<number, string> {
+  const out = new Map<number, string>();
+  const tables = font.readUInt16BE(4);
+  for (let i = 0; i < tables; i++) {
+    const rec = 12 + i * 16;
+    if (font.toString("latin1", rec, rec + 4) !== "name") continue;
+    const at = font.readUInt32BE(rec + 8);
+    const count = font.readUInt16BE(at + 2);
+    const strings = at + font.readUInt16BE(at + 4);
+    for (let j = 0; j < count; j++) {
+      const r = at + 6 + j * 12;
+      if (font.readUInt16BE(r) !== 3 || font.readUInt16BE(r + 4) !== 0x409) continue;
+      const len = font.readUInt16BE(r + 8);
+      const off = strings + font.readUInt16BE(r + 10);
+      // UTF-16BE: swap a copy (swap16 works in place, and records may share strings).
+      const utf16 = Buffer.from(font.subarray(off, off + len)).swap16();
+      out.set(font.readUInt16BE(r + 6), utf16.toString("utf16le"));
+    }
+  }
+  return out;
+}
+
 describe("UI fonts (docs/17 UI-3)", () => {
   it("keeps every original file with its OFL licence and a CREDITS.md row", () => {
     for (const f of FONTS) {
@@ -52,6 +78,20 @@ describe("UI fonts (docs/17 UI-3)", () => {
   it("keeps the letters Spanish and English need", () => {
     const text = subsetText();
     for (const c of "AZaz09¿¡ñÑáéíóúüÜ×–—…‹›“”€") expect(text).toContain(c);
+  });
+
+  it("keeps the copyright and the OFL notice in every served font (OFL 1.1 §2)", async () => {
+    for (const f of FONTS) {
+      // The same subset as the woff2, uncompressed so its name table can be read.
+      const names = nameTable(await buildFont(root, f, "truetype"));
+      const original = nameTable(readFileSync(fontSource(root, f)));
+      for (const id of [0, 13, 14]) {
+        expect(original.get(id), `${f.source} has name ${id}`).toBeTruthy();
+        expect(names.get(id), `${f.out} keeps name ${id}`).toBe(original.get(id));
+      }
+      expect(names.get(13)).toMatch(/SIL Open Font License, Version 1\.1/);
+      expect(names.get(14)).toMatch(/openfontlicense\.org|scripts\.sil\.org\/OFL/);
+    }
   });
 
   it("cuts a font down to a small woff2", async () => {
