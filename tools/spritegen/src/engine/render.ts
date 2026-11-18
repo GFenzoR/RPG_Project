@@ -63,6 +63,11 @@ export interface FrameRef {
   frame: number;
 }
 
+/** Which frame of an animated prop's loop to render (objects with `loop`, ART-7). */
+export interface LoopRef {
+  loop: number;
+}
+
 /** The canvas size and the size class of a spec. */
 export function canvasOf(spec: SpriteSpec): { w: number; h: number; size: SizeClass } {
   const size: SizeClass = SIZES[spec.size];
@@ -143,7 +148,11 @@ function hash3(x: number, y: number, z: number, seed: number): number {
  * `ref`). `seed` drives the texture noise; by default it comes from the sprite path, so
  * every frame of a sprite shares it and its texture stays put while it moves.
  */
-export function renderSpec(spec: SpriteSpec, ref?: FrameRef, seed = seedOf(spec.sprite)): Image {
+export function renderSpec(
+  spec: SpriteSpec,
+  ref?: FrameRef | LoopRef,
+  seed = seedOf(spec.sprite),
+): Image {
   const { w, h, size } = canvasOf(spec);
   const ox = size.anchor === "bc" ? w / 2 : w - 16;
   const oy = h - size.ground;
@@ -154,7 +163,11 @@ export function renderSpec(spec: SpriteSpec, ref?: FrameRef, seed = seedOf(spec.
 
   let pose = REST;
   let dir: Dir | undefined;
-  if (ref) {
+  if (ref && "loop" in ref) {
+    const l = spec.loop;
+    if (!l) throw new Error(`${spec.sprite}: no loop`);
+    pose = poseAt(l, ref.loop / l.frames, true);
+  } else if (ref) {
     const a = spec.actions?.[ref.action];
     if (!a) throw new Error(`${spec.sprite}: no ${ref.action} action`);
     pose = poseAt(a, frameTime(ref.action, ref.frame, a.frames), ACTIONS[ref.action].loop);

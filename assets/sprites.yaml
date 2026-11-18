@@ -480,6 +480,7 @@ tiles:
   decor/brazier: { ms: 120, sync: tile, light: 3.5, particles: embers }
   decor/fountain: { ms: 150, sync: world }
   decor/wall_banner: { ms: 170, sync: tile }
+  decor/market_board: { ms: 180, sync: tile }   # engine loop: a note lifts in the wind
   doors/pruebas_gate: { joins_walls: true }
   doors/pruebas_gate_open: { joins_walls: true }
   doors/forge_gate: { joins_walls: true }

@@ -180,6 +180,19 @@ export const SIZES = {
 export type SizeName = keyof typeof SIZES;
 
 /**
+ * ART-7 animated props (a note in the wind, a flag, a hanging lantern): an object's loop is
+ * the sprite (frame 0) and <sprite>/frame_<n>, played by the map renderer with the timing of
+ * its assets/sprites.yaml `tiles` entry, like the props of recipes/props.ts. The ranges cover
+ * the ART-7 table (a torch 3-4 frames of 100-140 ms, a flag 150-180, water 4-8 of 200-250, a
+ * tree's crown 600-900).
+ */
+export const LOOP = {
+  frames: [2, 8],
+  ms: [80, 900],
+  syncs: ["world", "tile", "random"],
+} as const;
+
+/**
  * ANI-2 actions: frames per facing and timing. idle loops by time (ms per frame), walk by
  * distance (spritepack gives it 2 frames per tile: a cycle every 2 steps), the rest play once
  * in `total` ms. ANI-4 names the frames <sprite>/<action>_<dir>_<n>.

@@ -6,7 +6,7 @@
 import { PALETTE } from "../palette.ts";
 import type { MaterialName } from "../palette.ts";
 import type { Vec3 } from "./math.ts";
-import { ACTIONS, SIZES } from "./style.ts";
+import { ACTIONS, LOOP, SIZES } from "./style.ts";
 import type { ActionName, Dir, SizeName, Tone } from "./style.ts";
 
 /** What every primitive can say about its look (on top of its part's). */
@@ -112,6 +112,18 @@ export interface ActionSpec {
   dirs?: readonly Dir[];
 }
 
+/**
+ * An animated prop's loop (ART-7, style.ts LOOP): `frames` frames of `ms` each, keyed like an
+ * action (frame f at f/frames, wrapping from the last key to the first); `sync` is how the
+ * map plays a row of them (world: in step; tile: each with its own phase; random).
+ */
+export interface LoopSpec {
+  frames: number;
+  ms: number;
+  sync: (typeof LOOP.syncs)[number];
+  keys: readonly KeySpec[];
+}
+
 export interface SpriteSpec {
   /** Atlas path: the sprite field of data/ (creatures/bristleback_boar). */
   sprite: string;
@@ -124,6 +136,8 @@ export interface SpriteSpec {
   parts: readonly PartSpec[];
   /** Creatures: the rig's actions (idle and walk at least). Objects: none (one image). */
   actions?: Partial<Record<ActionName, ActionSpec>>;
+  /** Objects: an ART-7 loop (the sprite and <sprite>/frame_<n>) instead of one image. */
+  loop?: LoopSpec;
   /** Extra turn of the model for a facing (degrees), to show a 3/4 rather than a pure view. */
   views?: Partial<Record<Dir, number>>;
   /** Hovers (assets/sprites.yaml `flying: true`): the client bobs it. */
@@ -198,6 +212,25 @@ export function validateSpec(spec: SpriteSpec): string[] {
     });
   }
 
+  // Keys of an action or a loop: in order, in 0..1, moving parts that exist.
+  const checkKeys = (where: string, keys: readonly KeySpec[]): void => {
+    if (keys.length === 0) bad(`${where}: has no keys`);
+    let last = -Infinity;
+    for (const k of keys) {
+      if (!isNum(k.at) || k.at < 0 || k.at > 1) bad(`${where}: key at ${k.at} is not in 0..1`);
+      if (k.at < last) bad(`${where}: keys must go in order of at`);
+      last = k.at;
+      for (const [part, pose] of Object.entries(k.pose)) {
+        if (part !== "*" && !names.has(part))
+          bad(`${where}: key at ${k.at} moves unknown part ${part}`);
+        if (pose.rot !== undefined && !isVec(pose.rot))
+          bad(`${where}: ${part}.rot must be [x, y, z]`);
+        if (pose.move !== undefined && !isVec(pose.move))
+          bad(`${where}: ${part}.move must be [x, y, z]`);
+      }
+    }
+  };
+
   // Actions.
   if (size.kind === "creature") {
     const actions = spec.actions ?? {};
@@ -222,26 +255,26 @@ export function validateSpec(spec: SpriteSpec): string[] {
         if (rule.total && (total < rule.total[0] || total > rule.total[1]))
           bad(`${where}: ${total} ms in all, ANI-2 wants ${rule.total[0]}-${rule.total[1]}`);
       }
-      if (a.keys.length === 0) bad(`${where}: has no keys`);
-      let last = -Infinity;
-      for (const k of a.keys) {
-        if (!isNum(k.at) || k.at < 0 || k.at > 1) bad(`${where}: key at ${k.at} is not in 0..1`);
-        if (k.at < last) bad(`${where}: keys must go in order of at`);
-        last = k.at;
-        for (const [part, pose] of Object.entries(k.pose)) {
-          if (part !== "*" && !names.has(part))
-            bad(`${where}: key at ${k.at} moves unknown part ${part}`);
-          if (pose.rot !== undefined && !isVec(pose.rot))
-            bad(`${where}: ${part}.rot must be [x, y, z]`);
-          if (pose.move !== undefined && !isVec(pose.move))
-            bad(`${where}: ${part}.move must be [x, y, z]`);
-        }
-      }
+      checkKeys(where, a.keys);
       for (const d of a.dirs ?? [])
         if (!["n", "e", "s", "w"].includes(d)) bad(`${where}: dir ${d}`);
     }
   } else if (spec.actions && Object.keys(spec.actions).length > 0) {
     bad(`a ${spec.size} has no actions (only creatures are rigged)`);
+  }
+
+  // An animated prop's loop (ART-7).
+  const loop = spec.loop;
+  if (loop) {
+    if (size.kind !== "object") bad("loop: only objects loop (a creature plays its actions)");
+    const [f0, f1] = LOOP.frames;
+    if (!Number.isInteger(loop.frames) || loop.frames < f0 || loop.frames > f1)
+      bad(`loop: ${loop.frames} frames, ART-7 wants ${f0}-${f1}`);
+    if (!isNum(loop.ms) || loop.ms < LOOP.ms[0] || loop.ms > LOOP.ms[1])
+      bad(`loop: ${loop.ms} ms per frame, ART-7 wants ${LOOP.ms[0]}-${LOOP.ms[1]}`);
+    if (!(LOOP.syncs as readonly string[]).includes(loop.sync))
+      bad(`loop: sync ${String(loop.sync)} is not one of ${LOOP.syncs.join(", ")}`);
+    checkKeys("loop", loop.keys);
   }
   return out;
 }

@@ -2,7 +2,8 @@
 // dark frame on two square posts, under a little gabled roof, with notes pinned on it. The
 // design spritegen drew by hand (recipes/terrain.ts until 2026-11-18), now a model: the posts
 // and the board have depth, the roof is a swept gable and every note is a thin card with its
-// lines and its pin.
+// lines and its pin. One note lifts in the wind (an ART-7 loop: the sprite and frame_1..3),
+// so the board people use for the market catches the eye.
 import type { PartSpec, ShapeSpec, SpriteSpec } from "../spec.ts";
 
 const FRONT = -1.2; // the board's front face (y)
@@ -10,24 +11,35 @@ const BOTTOM = 15;
 const TOP = 37;
 const HALF = 12.6;
 
-/** A pinned note: a paper card at (x, z) of w x h, with its written lines and its pin. */
-function note(x: number, z: number, w: number, h: number, pin: "redCloth" | "iron"): PartSpec[] {
+/**
+ * A pinned note: a paper card at (x, z) of w x h, with its written lines and its pin. The
+ * part hangs from its pin (top centre), so a key that turns it about x lifts its foot.
+ */
+function note(
+  name: string,
+  x: number,
+  z: number,
+  w: number,
+  h: number,
+  pin: "redCloth" | "iron",
+): PartSpec {
+  const px = x + w / 2;
+  const pz = z + h;
   const lines: ShapeSpec[] = [];
   for (let lz = z + h - 2.5; lz > z + 1; lz -= 2)
     lines.push({
       type: "box",
-      min: [x + 1, FRONT - 0.75, lz - 0.45],
-      max: [x + w - 1 - ((lz * 7) % 3), FRONT - 0.55, lz + 0.45],
+      min: [x + 1 - px, -0.75, lz - 0.45 - pz],
+      max: [x + w - 1 - ((lz * 7) % 3) - px, -0.55, lz + 0.45 - pz],
       bias: -0.9,
     });
-  return [
-    {
-      name: `note_${x}_${z}`.replace(/-/g, "m").replace(/\./g, "_"),
-      material: "paper",
-      shapes: [{ type: "box", min: [x, FRONT - 0.6, z], max: [x + w, FRONT, z + h] }, ...lines],
-      marks: [{ at: [x + w / 2, FRONT - 0.7, z + h - 0.6], material: pin, tone: "base" }],
-    },
-  ];
+  return {
+    name,
+    at: [px, FRONT, pz],
+    material: "paper",
+    shapes: [{ type: "box", min: [-w / 2, -0.6, -h], max: [w / 2, 0, 0] }, ...lines],
+    marks: [{ at: [0, -0.7, -0.6], material: pin, tone: "base" }],
+  };
 }
 
 export const MARKET_BOARD: SpriteSpec = {
@@ -98,10 +110,22 @@ export const MARKET_BOARD: SpriteSpec = {
         },
       ],
     },
-    ...note(-10.5, 25.5, 7, 9, "redCloth"),
-    ...note(-1.5, 27, 6, 7.5, "iron"),
-    ...note(6, 24, 5, 9, "redCloth"),
-    ...note(-9, 16.5, 8, 7, "iron"),
-    ...note(1.5, 17, 7, 8.5, "redCloth"),
+    note("note_a", -10.5, 25.5, 7, 9, "redCloth"),
+    note("note_b", -1.5, 27, 6, 7.5, "iron"),
+    note("note_c", 6, 24, 5, 9, "redCloth"),
+    note("note_d", -9, 16.5, 8, 7, "iron"),
+    note("note_e", 1.5, 17, 7, 8.5, "redCloth"),
   ],
+  // A gust lifts the foot of the lower right note toward the passer-by and lets it fall.
+  loop: {
+    frames: 4,
+    ms: 180,
+    sync: "tile",
+    keys: [
+      { at: 0, pose: { note_e: { rot: [0, 0, 0] } } },
+      { at: 0.25, pose: { note_e: { rot: [-28, 0, 4] } } },
+      { at: 0.5, pose: { note_e: { rot: [-48, 0, 8] } } },
+      { at: 0.75, pose: { note_e: { rot: [-22, 0, 3] } } },
+    ],
+  },
 };

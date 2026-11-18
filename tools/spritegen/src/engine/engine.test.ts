@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createImage, encodePng, parseManifest } from "@rpg/spritepack";
+import { createImage, encodePng, parseManifest, tileMetas } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import * as CLIENT_ANIM from "../../../../packages/renderer/src/anim.ts";
@@ -17,6 +17,7 @@ import {
   offPalette,
   outlineCoverage,
   partialAlpha,
+  pixelsChanged,
   silhouetteIoU,
 } from "./gates.ts";
 import { apply, compose, euler, rotZ, toWorld } from "./math.ts";
@@ -27,7 +28,7 @@ import { frameTime, partTransforms, poseAt } from "./rig.ts";
 import { intersect } from "./shapes.ts";
 import { contactSheet, reviewLineup } from "./sheet.ts";
 import { validateSpec } from "./spec.ts";
-import type { PartSpec, ShapeSpec, SpriteSpec } from "./spec.ts";
+import type { LoopSpec, PartSpec, ShapeSpec, SpriteSpec } from "./spec.ts";
 import { ENGINE_SPECS } from "./specs/index.ts";
 import {
   ACTIONS,
@@ -730,5 +731,107 @@ describe("assets/sprites.yaml hints of an engine sprite", () => {
     expect(SIZES.mediumAnimal.canvases).toEqual([[64, 64]]);
     expect(SIZES.humanoid.anchor).toBe("bc");
     expect(SIZES.object.anchor).toBe("br");
+  });
+});
+
+describe("animated props (ART-7 loops)", () => {
+  /** A pole with a cloth that swings on it: an object with a loop. */
+  const flag = (loop: Partial<LoopSpec> = {}, over: Partial<SpriteSpec> = {}): SpriteSpec => ({
+    sprite: "decor/test_flag",
+    size: "object",
+    parts: [
+      {
+        name: "pole",
+        material: "darkWood",
+        shapes: [{ type: "cylinder", a: [0, 0, 0], b: [0, 0, 18], radius: 1 }],
+      },
+      {
+        name: "cloth",
+        at: [0, 0, 17],
+        material: "redCloth",
+        shapes: [{ type: "box", min: [0.5, -0.5, -7], max: [9, 0.5, 0] }],
+      },
+    ],
+    loop: {
+      frames: 4,
+      ms: 170,
+      sync: "tile",
+      keys: [
+        { at: 0, pose: {} },
+        { at: 0.5, pose: { cloth: { rot: [0, 0, 40] } } },
+      ],
+      ...loop,
+    },
+    ...over,
+  });
+  const board = must(ENGINE_SPECS.find((s) => s.sprite === "decor/market_board"));
+  const tile = (yaml: string) =>
+    parseManifest(`tiles:
+  decor/market_board: ${yaml}
+`).manifest.tiles.get("decor/market_board");
+
+  it("are the sprite and <sprite>/frame_<n>, the names spritepack reads as an animated tile", () => {
+    const spec = flag();
+    const frames = engineFrames(spec);
+    expect(frames.map((f) => f.path)).toEqual([
+      "decor/test_flag",
+      "decor/test_flag/frame_1",
+      "decor/test_flag/frame_2",
+      "decor/test_flag/frame_3",
+    ]);
+    const [f0, , f2] = frames.map((f) => f.image);
+    expect(pixelsChanged(must(f0), must(f2))).toBeGreaterThan(4);
+    expect(encodePng(must(f0)).equals(encodePng(renderSpec(spec, { loop: 0 })))).toBe(true);
+    // The market board's frames are recipes, and spritepack makes them a 4-frame tile with
+    // the timing of assets/sprites.yaml.
+    const paths = framePaths(board).map((f) => f.path);
+    for (const p of paths) expect(RECIPES[p], p).toBeDefined();
+    const entries = parseManifest(
+      `tiles:
+  decor/market_board: { ms: 180, sync: tile }
+`,
+    ).manifest.tiles;
+    const { tiles, problems } = tileMetas(paths, entries);
+    expect(problems).toEqual([]);
+    expect(tiles["decor/market_board"]).toEqual({ frames: 4, ms: 180, sync: "tile" });
+  });
+
+  it("are validated against ART-7", () => {
+    expect(validateSpec(flag())).toEqual([]);
+    expect(validateSpec(flag({ frames: 1 })).join()).toMatch(/ART-7 wants 2-8/);
+    expect(validateSpec(flag({ ms: 20 })).join()).toMatch(/20 ms per frame/);
+    expect(validateSpec(flag({ sync: "often" as LoopSpec["sync"] })).join()).toMatch(/sync often/);
+    expect(
+      validateSpec(flag({ keys: [{ at: 0, pose: { sail: { rot: [0, 0, 9] } } }] })).join(),
+    ).toMatch(/unknown part sail/);
+    expect(validateSpec(critter({ loop: must(flag().loop) })).join()).toMatch(/only objects loop/);
+  });
+
+  it("fail a loop that does not move or that hops off its spot", () => {
+    expect(gateProblems(flag({ keys: [{ at: 0, pose: {} }] })).join()).toMatch(
+      /loop does not move/,
+    );
+    expect(
+      gateProblems(
+        flag({
+          keys: [
+            { at: 0, pose: {} },
+            { at: 0.5, pose: { "*": { move: [-6, 0, 0] } } },
+          ],
+        }),
+      ).join(),
+    ).toMatch(/drifts from frame 0/);
+  });
+
+  it("need their timing in assets/sprites.yaml tiles, and a still object none", () => {
+    expect(hintProblems(board, undefined, false, tile("{ ms: 180, sync: tile }"))).toEqual([]);
+    expect(hintProblems(board, undefined, false).join()).toMatch(/needs tiles.*ms: 180/);
+    expect(hintProblems(board, undefined, false, tile("{ ms: 120, sync: tile }")).join()).toMatch(
+      /needs tiles/,
+    );
+    const anvil = must(ENGINE_SPECS.find((s) => s.sprite === "decor/anvil"));
+    expect(hintProblems(anvil, undefined, false, tile("{ ms: 120, sync: tile }")).join()).toMatch(
+      /has tiles ms or sync/,
+    );
   });
 });

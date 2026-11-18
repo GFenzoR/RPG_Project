@@ -67,7 +67,7 @@ export function contactSheet(spec: SpriteSpec, scale = 4): Image {
   const ch = (y1 - y0 + 1 + 2 * m) * scale;
   const rows = new Map<string, typeof frames>();
   for (const f of frames) {
-    const key = f.ref ? `${f.ref.action} ${f.ref.dir}` : "still";
+    const key = f.ref ? `${f.ref.action} ${f.ref.dir}` : f.loop !== undefined ? "loop" : "still";
     rows.set(key, [...(rows.get(key) ?? []), f]);
   }
   const cols = Math.max(...[...rows.values()].map((r) => r.length));
@@ -200,12 +200,14 @@ export function reviewLineup(root: string, spec: SpriteSpec): Image {
   const person = atlasFrame(root, "outfits/citizen/walk_s_0");
   if (person) refs.push({ image: person, anchor: "bc", foot: footOf([person]), shadow: true });
   if (!spec.actions) {
-    const img = frames[0]?.image;
-    return lineup(
-      root,
-      [...refs, ...(img ? [{ image: img, anchor: size.anchor, foot: 0, shadow: false }] : [])],
-      ground,
-    );
+    // An object: its one image, or every frame of its loop.
+    const own = frames.map((f) => ({
+      image: f.image,
+      anchor: size.anchor,
+      foot: 0,
+      shadow: false,
+    }));
+    return lineup(root, [...refs, ...own], ground);
   }
   const foot = footOf(frames.filter((f) => f.ref?.action === "walk").map((f) => f.image));
   const pick = (name: string): Image | undefined =>

@@ -205,7 +205,25 @@ export const GATES = {
   centre: 2,
   /** Extra rows a hovering (flying) sprite may keep under its lowest point. */
   hover: 4,
+  /** An animated prop's loop moves: some frame differs from frame 0 in this many pixels. */
+  loopMoves: 4,
+  /** ...and stays on its spot: no frame's box is further than this from frame 0's (px). */
+  loopDrift: 3,
 } as const;
+
+/** Pixels where two same-sized images differ. */
+export function pixelsChanged(a: Image, b: Image): number {
+  let n = 0;
+  for (let i = 0; i < a.data.length; i += 4)
+    if (
+      a.data[i] !== b.data[i] ||
+      a.data[i + 1] !== b.data[i + 1] ||
+      a.data[i + 2] !== b.data[i + 2] ||
+      a.data[i + 3] !== b.data[i + 3]
+    )
+      n++;
+  return n;
+}
 
 /** Every gate on every frame of a spec; problems as "<frame>: <what>" lines. */
 export function gateProblems(spec: SpriteSpec): string[] {
@@ -337,6 +355,25 @@ export function gateProblems(spec: SpriteSpec): string[] {
         `${spec.sprite}: ${front} px wide from the front or the back against a ${profile} px ` +
           `profile: under ${Math.round(GATES.frontWidth * 100)} %, a stripe at 1x`,
       );
+  }
+
+  // An animated prop (ART-7): its loop moves, and moves in place (a note in the wind, not a
+  // board that hops on its tile).
+  if (spec.loop) {
+    const first = frames[0]?.image;
+    const firstBox = first ? box(first) : undefined;
+    if (first && firstBox) {
+      const most = Math.max(...frames.slice(1).map((f) => pixelsChanged(first, f.image)));
+      if (most < GATES.loopMoves)
+        out.push(`${spec.sprite}: its loop does not move (${most} px change at most)`);
+      for (const f of frames.slice(1)) {
+        const b = box(f.image);
+        if (b && b.some((v, i) => Math.abs(v - (firstBox[i] ?? v)) > GATES.loopDrift))
+          out.push(
+            `${f.path}: drifts from frame 0 (box ${b.join(",")} against ${firstBox.join(",")})`,
+          );
+      }
+    }
   }
   return out;
 }

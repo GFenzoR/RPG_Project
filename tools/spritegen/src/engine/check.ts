@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MANIFEST_FILE, parseManifest } from "@rpg/spritepack";
-import type { AnimEntry } from "@rpg/spritepack";
+import type { AnimEntry, TileEntry } from "@rpg/spritepack";
 import { gateProblems } from "./gates.ts";
 import { canvasOf } from "./render.ts";
 import type { SpriteSpec } from "./spec.ts";
@@ -15,12 +15,15 @@ import type { ActionName } from "./style.ts";
  * What the manifest must say about an engine sprite. A creature: an `animations` entry with
  * no layers, `anchor` of its size class, `shadow: ellipse` (the frames paint none), `flying`
  * as the spec, no `facing` or `mirror` (the four facings are drawn) and the `ms` of every
- * action that plays by time. Any sprite: no `sprites` entry (its pixels are files).
+ * action that plays by time. An animated prop (an object with a loop, ART-7): a `tiles`
+ * entry with the loop's `ms` and `sync`; an object without one has no timing there. Any
+ * sprite: no `sprites` entry (its pixels are files).
  */
 export function hintProblems(
   spec: SpriteSpec,
   entry: AnimEntry | undefined,
   inSprites: boolean,
+  tile?: TileEntry,
 ): string[] {
   const out: string[] = [];
   const bad = (msg: string): void => {
@@ -29,7 +32,12 @@ export function hintProblems(
   if (inSprites) bad("must not list it under sprites: the engine draws its files");
   const { size } = canvasOf(spec);
   if (!spec.actions) {
-    if (entry) bad("has animations hints for an object the engine draws as one image");
+    if (entry) bad("has animations hints for an object (only creatures have them)");
+    const loop = spec.loop;
+    if (loop && (tile?.ms !== loop.ms || tile.sync !== loop.sync))
+      bad(`needs tiles: ${spec.sprite}: { ms: ${loop.ms}, sync: ${loop.sync} } (its loop's)`);
+    if (!loop && (tile?.ms !== undefined || tile?.sync !== undefined))
+      bad("has tiles ms or sync for an object the engine draws as one image");
     return out;
   }
   if (!entry) {
@@ -68,6 +76,7 @@ export function engineProblems(
         spec,
         manifest.animations.get(spec.sprite),
         manifest.sprites.has(spec.sprite),
+        manifest.tiles.get(spec.sprite),
       ),
     );
   }
