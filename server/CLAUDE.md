@@ -330,8 +330,10 @@ server/
   `disappearFromObservers` y `relocate` lo piden; un camino nuevo que saque o mueva una
   criatura elige el que corresponde (`goneDeath`, `goneTeleport`, `goneLogout`,
   `goneDespawn`, `goneOutOfView`) sin decir más de lo que quien mira ya ve (volverse
-  invisible es `goneTeleport`). Los tests (`attack_test.go`) revisan que ningún cliente
-  reciba un ataque de o a una criatura que no conoce.
+  invisible es `goneTeleport`). Ningún cliente recibe un ataque de o a una criatura que
+  no conoce: el `fakeClient` de los tests lleva la cuenta de las que conoce por lo que
+  recibe (`follow`) y el harness falla el test si alguno recibió uno así, en todos los
+  tests de `session` (los clientes que entran con `join`/`joinChar` o mandan `input`).
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

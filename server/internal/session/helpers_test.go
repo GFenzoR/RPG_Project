@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"slices"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -20,14 +21,53 @@ type fakeClient struct {
 	reason  pb.DisconnectReason
 	closes  int  // calls to Close (the loop makes at most one)
 	full    bool // Send fails (slow client)
+	// known is the creatures the client knows by what it got (follow), and strangers
+	// every CreatureAttack it got that names another one (A9: the AOI never tells a
+	// client about a creature it does not know). The harness fails the test on any
+	// (newHarness), for every client of every test.
+	known     map[uint32]bool
+	strangers []*pb.CreatureAttack
 }
 
 func (c *fakeClient) Send(b *pb.ServerBatch) bool {
 	if c.full {
 		return false
 	}
+	c.follow(b.Events)
 	c.batches = append(c.batches, b)
 	return true
+}
+
+// follow replays what a client knows from its events, in order (a FullMapView replaces
+// it, a MapSlice adds its creatures, CreatureAppear and CreatureDisappear add and remove
+// one), and keeps the CreatureAttacks whose attacker or target is not among them.
+func (c *fakeClient) follow(evs []*pb.ServerMessage) {
+	if c.known == nil {
+		c.known = map[uint32]bool{}
+	}
+	learn := func(a *pb.MapArea) {
+		for _, cr := range a.GetCreatures() {
+			c.known[cr.GetId()] = true
+		}
+	}
+	for _, e := range evs {
+		switch m := e.GetMessage().(type) {
+		case *pb.ServerMessage_FullMapView:
+			clear(c.known)
+			learn(m.FullMapView.GetArea())
+		case *pb.ServerMessage_MapSlice:
+			learn(m.MapSlice.GetArea())
+		case *pb.ServerMessage_CreatureAppear:
+			c.known[m.CreatureAppear.GetCreature().GetId()] = true
+		case *pb.ServerMessage_CreatureDisappear:
+			delete(c.known, m.CreatureDisappear.GetId())
+		case *pb.ServerMessage_CreatureAttack:
+			a := m.CreatureAttack
+			if !c.known[a.GetId()] || a.GetTargetId() != 0 && !c.known[a.GetTargetId()] {
+				c.strangers = append(c.strangers, a)
+			}
+		}
+	}
 }
 
 func (c *fakeClient) Close(r pb.DisconnectReason) { c.closed, c.reason, c.closes = true, r, c.closes+1 }
@@ -97,6 +137,29 @@ type harness struct {
 	economy       []session.EconomyEntry
 	alerts        []string
 	allowMismatch bool
+	// clients is every client that joined through the harness or sent it input (watch):
+	// at the end of the test none may have got an attack naming a creature it does not
+	// know (fakeClient.strangers).
+	clients []*fakeClient
+}
+
+// watch adds cl to the clients checked at the end of the test (once; nil, a client the
+// World does not know, is skipped).
+func (h *harness) watch(cl *fakeClient) {
+	if cl != nil && !slices.Contains(h.clients, cl) {
+		h.clients = append(h.clients, cl)
+	}
+}
+
+// checkStrangers fails the test for every attack a client got about a creature it did
+// not know (A9, session/attack.go).
+func (h *harness) checkStrangers() {
+	h.t.Helper()
+	for i, cl := range h.clients {
+		for _, a := range cl.strangers {
+			h.t.Errorf("client %d got an attack naming a creature it does not know: %v", i, a)
+		}
+	}
 }
 
 type option func(*session.Config)
@@ -124,6 +187,7 @@ func newHarness(t *testing.T, m *world.Map, opts ...option) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(h.checkStrangers)
 	h.w = w
 	mv, fight, flush := w.Systems()
 	h.sim = sim.New(t, sim.WithSeed(7), sim.WithSystems(mv, fight, flush))
@@ -160,6 +224,7 @@ func (h *harness) join(name string, pos *world.Pos) (*fakeClient, *session.Playe
 func (h *harness) joinChar(c session.Character) (*fakeClient, *session.Player) {
 	h.t.Helper()
 	cl := &fakeClient{}
+	h.watch(cl)
 	h.sim.Command(h.w.Join(c, cl))
 	h.sim.Step()
 	p := h.w.PlayerByCharacter(c.ID)
@@ -169,7 +234,10 @@ func (h *harness) joinChar(c session.Character) (*fakeClient, *session.Player) {
 	return cl, p
 }
 
-func (h *harness) input(cl *fakeClient, m *pb.ClientMessage) { h.sim.Command(h.w.Input(cl, m)) }
+func (h *harness) input(cl *fakeClient, m *pb.ClientMessage) {
+	h.watch(cl)
+	h.sim.Command(h.w.Input(cl, m))
+}
 
 func walk(d pb.Direction) *pb.ClientMessage {
 	return &pb.ClientMessage{Message: &pb.ClientMessage_Walk{Walk: &pb.Walk{Dir: d}}}

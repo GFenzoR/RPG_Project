@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -96,34 +97,41 @@ func attackFirst(t *testing.T, cl *fakeClient, id uint32, to world.Pos) {
 	}
 }
 
-// attacksKnown replays a client's events from its login and fails t if a CreatureAttack
-// names a creature (attacker or target) the client does not know at that point.
-func attacksKnown(t *testing.T, who string, evs []*pb.ServerMessage) {
-	t.Helper()
-	known := map[uint32]bool{}
-	add := func(a *pb.MapArea) {
-		for _, c := range a.GetCreatures() {
-			known[c.GetId()] = true
-		}
+// A client's own record of the creatures it knows (fakeClient.follow, which the harness
+// checks for every client of every test) catches an attack by or at a creature the
+// client never got or already saw leave, and accepts one between creatures it knows.
+func TestClientsFollowWhoTheyKnow(t *testing.T) {
+	creature := func(id uint32) *pb.Creature { return &pb.Creature{Id: id} }
+	appear := func(id uint32) *pb.ServerMessage {
+		return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: creature(id)}}}
 	}
-	for i, e := range evs {
-		switch {
-		case e.GetFullMapView() != nil:
-			clear(known)
-			add(e.GetFullMapView().GetArea())
-		case e.GetMapSlice() != nil:
-			add(e.GetMapSlice().GetArea())
-		case e.GetCreatureAppear() != nil:
-			known[e.GetCreatureAppear().GetCreature().GetId()] = true
-		case e.GetCreatureDisappear() != nil:
-			delete(known, e.GetCreatureDisappear().GetId())
-		case e.GetCreatureAttack() != nil:
-			a := e.GetCreatureAttack()
-			if !known[a.GetId()] || a.GetTargetId() != 0 && !known[a.GetTargetId()] {
-				t.Errorf("%s: event %d, attack %v names a creature the client does not know", who, i, a)
-			}
-		}
+	leave := func(id uint32) *pb.ServerMessage {
+		return disappearMsg(id, pb.DisappearReason_DISAPPEAR_REASON_OUT_OF_VIEW)
 	}
+	attack := func(id, target uint32) *pb.ServerMessage {
+		return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAttack{CreatureAttack: &pb.CreatureAttack{Id: id, TargetId: target}}}
+	}
+	full := &pb.ServerMessage{Message: &pb.ServerMessage_FullMapView{FullMapView: &pb.FullMapView{
+		Area: &pb.MapArea{Creatures: []*pb.Creature{creature(1), creature(2)}}}}}
+	cl := &fakeClient{}
+	cl.Send(&pb.ServerBatch{Events: []*pb.ServerMessage{
+		full, attack(1, 2), attack(2, 0), // known from the full view
+		attack(3, 1), appear(3), attack(3, 1), // 3 before and after it appears
+		leave(2), attack(1, 2), // 2 after it left
+		full, attack(3, 1), // a full view forgets what it does not list
+	}})
+	got := make([][2]uint32, 0, len(cl.strangers))
+	for _, a := range cl.strangers {
+		got = append(got, [2]uint32{a.GetId(), a.GetTargetId()})
+	}
+	if want := [][2]uint32{{3, 1}, {1, 2}, {3, 1}}; !slices.Equal(got, want) {
+		t.Errorf("strangers = %v, want %v", got, want)
+	}
+}
+
+// disappearMsg is the CreatureDisappear of id, for why.
+func disappearMsg(id uint32, why pb.DisappearReason) *pb.ServerMessage {
+	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureDisappear{CreatureDisappear: &pb.CreatureDisappear{Id: id, Reason: why}}}
 }
 
 // A melee round of a player and the blow a monster answers with go, as CreatureAttack,
@@ -150,6 +158,29 @@ func TestAttackEventsMelee(t *testing.T) {
 	wantAttack(t, "watcher", evs, d.ID(), melee, p.ID(), pos(21, 20), 0)
 	if got := find(fcl.take(), (*pb.ServerMessage).GetCreatureAttack); len(got) != 0 {
 		t.Errorf("a client out of the window got %v", got)
+	}
+}
+
+// A blow from the edge of a client's window (its margin) at a creature just beyond it:
+// the side of the target is the attacker's own tile, and the client still gets the
+// attack, without a target, on that tile (it plays it where the attacker faces; a
+// monster turns to its target before it strikes). A Projectile drops that case (it
+// would fly nowhere); a swing still shows.
+func TestAttackEventsMeleeAtTheEdge(t *testing.T) {
+	h := monsterHarness(t, []*content.Monster{targetDummyDef()}, spawnAt("dummy", 10+session.ViewHalfW, 10, 0, 60))
+	cl, p := h.join("Hunter", at(11+session.ViewHalfW, 10))
+	ecl, _ := h.join("Edge", at(10, 10)) // sees the dummy on its margin, not the hunter
+	d := onlyMonster(t, h)
+	ecl.take()
+	h.input(cl, setTarget(d.ID()))
+	h.sim.RunTicks(45) // the first round and the answer
+	if d.Pos() != pos(10+session.ViewHalfW, 10) || p.Pos() != pos(11+session.ViewHalfW, 10) {
+		t.Fatalf("they moved: dummy %v, hunter %v", d.Pos(), p.Pos())
+	}
+	evs := ecl.take()
+	wantAttack(t, "edge", evs, d.ID(), melee, 0, d.Pos(), 0)
+	if got := attacksBy(evs, p.ID()); len(got) != 0 {
+		t.Errorf("edge: got the attacks of a player beyond its window: %v", got)
 	}
 }
 
@@ -379,9 +410,10 @@ func TestAttackEventsInvisible(t *testing.T) {
 		if p.Invisible() {
 			t.Fatal("attacking did not end the invisibility")
 		}
-		evs := ocl.take()
-		attacksKnown(t, "watcher", evs)
-		wantAttack(t, "watcher", evs, p.ID(), melee, d.ID(), pos(13, 10), 0)
+		if len(ocl.strangers) != 0 {
+			t.Errorf("the watcher got an attack before p appeared again: %v", ocl.strangers)
+		}
+		wantAttack(t, "watcher", ocl.take(), p.ID(), melee, d.ID(), pos(13, 10), 0)
 	})
 	t.Run("target", func(t *testing.T) {
 		bat := &content.Monster{ID: "bat", Health: 1000, Speed: 100,
@@ -402,9 +434,7 @@ func TestAttackEventsInvisible(t *testing.T) {
 			t.Fatalf("the bat did not bite the invisible player (bitten %v, invisible %v)", bitten, p.Invisible())
 		}
 		h.sim.RunTicks(45) // another bite
-		evs := ocl.take()
-		attacksKnown(t, "watcher", evs)
-		if got := attacksBy(evs, b.ID()); len(got) != 0 {
+		if got := attacksBy(ocl.take(), b.ID()); len(got) != 0 {
 			t.Errorf("the watcher got the bites at the invisible player: %v", got)
 		}
 	})

@@ -225,7 +225,7 @@ func (w *World) initCombat() error {
 		k.reach = 1
 		for _, a := range def.Attacks {
 			k.attackTicks = append(k.attackTicks, ticksFor(a.IntervalMs))
-			if a.Type != "melee" {
+			if a.Type != attackMelee {
 				k.reach = max(k.reach, a.Range)
 			}
 		}

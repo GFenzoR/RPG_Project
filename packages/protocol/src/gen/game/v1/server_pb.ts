@@ -2865,9 +2865,10 @@ export enum DisappearReason {
   DESPAWN = 3,
 
   /**
-   * It left its tile without walking or dying: a portal, a boat, a staff /tp, an NPC's
-   * teleport, a house expulsion. A player that turns invisible gets this one too: to the
-   * viewer it is gone, and nothing says it still stands there.
+   * It left its tile without walking or dying: a portal (stairs, a hole, a teleporter,
+   * a ladder, a rope spot), a boat, a staff /tp, an NPC's teleport, a house expulsion. A
+   * player that turns invisible gets this one too: to the viewer it is gone, and nothing
+   * says it still stands there.
    *
    * @generated from enum value: DISAPPEAR_REASON_TELEPORT = 4;
    */

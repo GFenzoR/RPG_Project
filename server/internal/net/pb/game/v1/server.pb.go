@@ -200,9 +200,10 @@ const (
 	DisappearReason_DISAPPEAR_REASON_DEATH DisappearReason = 2
 	// The server took it out of the world without a death (a monster or an NPC).
 	DisappearReason_DISAPPEAR_REASON_DESPAWN DisappearReason = 3
-	// It left its tile without walking or dying: a portal, a boat, a staff /tp, an NPC's
-	// teleport, a house expulsion. A player that turns invisible gets this one too: to the
-	// viewer it is gone, and nothing says it still stands there.
+	// It left its tile without walking or dying: a portal (stairs, a hole, a teleporter,
+	// a ladder, a rope spot), a boat, a staff /tp, an NPC's teleport, a house expulsion. A
+	// player that turns invisible gets this one too: to the viewer it is gone, and nothing
+	// says it still stands there.
 	DisappearReason_DISAPPEAR_REASON_TELEPORT DisappearReason = 4
 	// The player left the game: logout, a kick or a ban, idle, a dropped connection, a
 	// login elsewhere.

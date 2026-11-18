@@ -49,9 +49,12 @@ func attackMsg(id uint32, kind pb.AttackKind, target uint32, to world.Pos, radiu
 // the creature target on to (hidden: an invisible player), or with target 0 the area of
 // radius around to. A client that does not know the target gets nothing if it sees the
 // target's tile or the target is hidden (a blow at an empty tile would give an invisible
-// player away), and only the side of it if the target is beyond its window. Every client
-// that knows both gets the same message, built once (observeMove explains why that is
-// safe).
+// player away), and only the side of it if the target is beyond its window. That side is
+// the attacker's own tile when the attacker stands on the window's edge (a blow at a
+// creature just beyond it): unlike a Projectile, which drops that case (it would fly
+// nowhere), the attack still goes, and the client plays it where the attacker faces (a
+// monster turns to its target before it strikes). Every client that knows both gets the
+// same message, built once (observeMove explains why that is safe).
 func (w *World) attackEvent(id uint32, from world.Pos, kind pb.AttackKind, target uint32, to world.Pos, hidden bool, radius int) {
 	var full *pb.ServerMessage
 	w.eachObserver(nil, from, func(o *Player) {

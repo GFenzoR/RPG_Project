@@ -1236,6 +1236,11 @@ dice que el servidor los manda.
     invisible o está en una casilla que ve (un golpe a una casilla vacía delataría al
     invisible: el de un monstruo que ve invisibles solo le llega al invisible). Si el
     objetivo está fuera de su ventana, le llega sin `target_id` y con `to` en el borde.
+    Con el atacante parado en ese borde (el margen de la ventana) y su objetivo justo
+    afuera, el borde es la casilla del propio atacante (`to` = su casilla): el ataque
+    llega igual (a diferencia de un `Projectile`, que no volaría a ningún lado y no se
+    manda) y el cliente lo juega hacia donde mira el atacante (un monstruo se gira hacia
+    su objetivo antes de golpear).
   - Quien ve al objetivo pero no al atacante no recibe `CreatureAttack` (no tiene a quién
     animar): le llegan, como antes, el `Projectile` desde el borde y el golpe.
 - **`CreatureDisappear{id, reason}`**: por qué salió de la vista, sin decir más de lo que

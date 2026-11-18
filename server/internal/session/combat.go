@@ -279,7 +279,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z {
 			continue
 		}
-		ranged := a.Type != "melee"
+		ranged := a.Type != attackMelee
 		if !ranged && d > 1 || ranged && (d > max(a.Range, 1) || !w.m.LineOfSight(m.pos, t.pos)) {
 			continue
 		}

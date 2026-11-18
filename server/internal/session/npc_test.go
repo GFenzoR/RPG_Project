@@ -39,6 +39,7 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(h.checkStrangers) // as newHarness
 	h.w = w
 	mv, fight, flush := w.Systems()
 	h.sim = sim.New(t, sim.WithSeed(11), sim.WithSystems(mv, fight, flush))
