@@ -1489,7 +1489,8 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     pila); lo mismo al cargar un lugar guardado en una pantalla más grande.
   - **Migración:** una `rpg.windows` v1 o v2 se sigue leyendo; lo que estaba acoplado vuelve a
     su lugar de fábrica (pierde `x`, `y`, `w` y `h`, que eran del dock); lo que flotaba
-    conserva todo. Se guarda como v3.
+    conserva todo. Se guarda como v3, con los últimos `MAX_CONTAINER_PLACES` (24)
+    contenedores que cambiaron, como en el lote 8 (`lastContainers`).
   - **El chat** es `chat` en `WINDOW_IDS` (sin botón ni tecla), en `FIXED_WINDOWS`: no se
     cierra (sin ×; `closeWindow` no hace nada) y Escape lo salta; se pliega y se mueve como
     las demás. Sus pestañas van en la barra de título (`GameWindow` `barExtra`, con el título

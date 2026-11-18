@@ -667,7 +667,11 @@ el punto 5:
   panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
   ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
   Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
-  abierta, como hace con el diálogo y la tienda.
+  abierta, como hace con el diálogo y la tienda. Con la pantalla completa (A14) cambian
+  los dos lugares, pero por cuenta siguen pisándose: la ayuda (25rem) sale centrada al 8 %
+  del alto y el panel a la izquierda de la columna del inventario, así que a 960x700 tapa
+  la mitad derecha de la barra de la Ayuda, con sus botones. Mirarlo en el
+  `44-controls-help-960` del E2E final.
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
