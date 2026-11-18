@@ -87,14 +87,19 @@ describe("recipes", () => {
       const img = render(p);
       expect(img.width % 32, p).toBe(0);
       expect(img.height % 32, p).toBe(0);
+      // One expect per image, not per pixel: with the wall pieces, looks and frames of the
+      // world art there are hundreds of recipes, and a per-pixel expect timed out on CI.
       let opaque = 0;
+      let partial = -1;
       for (let i = 3; i < img.data.length; i += 4) {
-        expect([0, 255], p).toContain(img.data[i]);
-        if (img.data[i] === 255) opaque++;
+        const a = img.data[i];
+        if (a === 255) opaque++;
+        else if (a !== 0 && partial < 0) partial = a;
       }
+      expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
       expect(opaque, p).toBeGreaterThan(20);
     }
-  });
+  }, 30_000);
 
   it("ground and walls are opaque and tile seamlessly", () => {
     for (const p of paths) {
