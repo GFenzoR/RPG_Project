@@ -6,7 +6,9 @@ import {
   attackerOf,
   faces,
   inArea,
+  DepartureFeed,
   isBlowEffect,
+  leaveStyle,
   leavesDying,
   meleeAttacker,
   pushFrom,
@@ -141,5 +143,31 @@ describe("what the server says", () => {
     expect(leavesDying(DisappearReason.UNSPECIFIED, 0)).toBe(true);
     expect(leavesDying(undefined, 0)).toBe(true);
     expect(leavesDying(undefined, 12)).toBe(false);
+  });
+
+  it("falls after a death, shimmers away after a teleport or a logout, else just goes", () => {
+    expect(leaveStyle(DisappearReason.DEATH, 40)).toBe("fall");
+    expect(leaveStyle(DisappearReason.TELEPORT, 0)).toBe("vanish"); // never the fall
+    expect(leaveStyle(DisappearReason.LOGOUT, 100)).toBe("vanish");
+    expect(leaveStyle(DisappearReason.OUT_OF_VIEW, 0)).toBe("drop");
+    expect(leaveStyle(DisappearReason.DESPAWN, 0)).toBe("drop");
+    expect(leaveStyle(DisappearReason.UNSPECIFIED, 0)).toBe("fall"); // an older server
+    expect(leaveStyle(DisappearReason.UNSPECIFIED, 50)).toBe("drop");
+  });
+
+  it("plays each departure once, also when the creature is already back (A9)", () => {
+    const feed = new DepartureFeed();
+    // A player dies in view and wakes up at a temple in view: the same batch says it died
+    // and brings it back. The departure stays in the list (state/world.ts marks it back).
+    const died = { id: 6, reason: DisappearReason.DEATH, start: 100, back: true };
+    const quit = { id: 7, reason: DisappearReason.LOGOUT, start: 100, back: false };
+    const list = [died, quit];
+    expect(feed.take(list)).toEqual([died, quit]);
+    expect(feed.take(list)).toEqual([]); // the next frame: nothing new
+    const moved = { id: 8, reason: DisappearReason.TELEPORT, start: 150, back: false };
+    list.push(moved);
+    expect(feed.take(list)).toEqual([moved]);
+    // The array is reused: a frame makes no garbage.
+    expect(feed.take(list)).toBe(feed.take(list));
   });
 });

@@ -171,6 +171,12 @@ export interface DepartureState {
   id: number;
   reason: DisappearReason;
   start: number;
+  /**
+   * It came back into view since (a player that died and woke up at a temple in view, a
+   * teleport within the view): departureOf no longer gives this reason, but the canvas
+   * still plays the leaving where it was (render/game-canvas.ts).
+   */
+  back: boolean;
 }
 
 /** A number rising from a tile: damage, healing, experience. */
@@ -617,7 +623,7 @@ export class WorldState implements TileSource {
         this.creatures.delete(msg.value.id);
         pushLive(
           this.departures,
-          { id: msg.value.id, reason: msg.value.reason, start: now },
+          { id: msg.value.id, reason: msg.value.reason, start: now, back: false },
           DEPARTURE_MS,
         );
         if (this.target === msg.value.id) this.target = undefined;
@@ -992,7 +998,7 @@ export class WorldState implements TileSource {
     const prev = this.creatures.get(c.id);
     // It is back: why it left last no longer holds (a player that died and woke up in
     // view must not fall when it later leaves the drawn floor).
-    if (!prev) this.forgetDeparture(c.id);
+    if (!prev) this.markBack(c.id);
     this.creatures.set(c.id, {
       id: c.id,
       kind: c.kind,
@@ -1166,19 +1172,14 @@ export class WorldState implements TileSource {
   departureOf(id: number): DisappearReason | undefined {
     for (let i = this.departures.length - 1; i >= 0; i--) {
       const d = this.departures[i];
-      if (d?.id === id) return d.reason;
+      if (d?.id === id) return d.back ? undefined : d.reason;
     }
     return undefined;
   }
 
-  /** Drops the departures of creature id, in place (it came back into view). */
-  private forgetDeparture(id: number): void {
-    let kept = 0;
-    for (let i = 0; i < this.departures.length; i++) {
-      const d = this.departures[i];
-      if (d && d.id !== id) this.departures[kept++] = d;
-    }
-    this.departures.length = kept;
+  /** Marks the departures of creature id as over: it came back into view. */
+  private markBack(id: number): void {
+    for (const d of this.departures) if (d.id === id) d.back = true;
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */

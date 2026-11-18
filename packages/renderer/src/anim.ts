@@ -98,6 +98,12 @@ export const DEATH_MS = 400;
 /** A death clip holds its last frame this long while it fades. */
 export const DEATH_FADE_MS = 150;
 export const APPEAR_MS = 300;
+/**
+ * Leaving by a teleport or a logout (ANI-7): it narrows into a pale flickering sliver and
+ * fades out in VANISH_MS, never the fall of a death. The flicker toggles every VANISH_FLICKER_MS.
+ */
+export const VANISH_MS = 350;
+export const VANISH_FLICKER_MS = 50;
 
 /** What a creature's animation remembers between frames. One per creature, mutated in place. */
 export interface AnimState {
@@ -124,6 +130,8 @@ export interface AnimState {
   bornAt: number;
   /** When it died (NaN while alive). */
   diedAt: number;
+  /** When it left by a teleport or a logout (NaN while here). */
+  vanishAt: number;
   /** Single-frame sprites with `facing`: drawn mirrored (kept while walking north or south). */
   flip: boolean;
 }
@@ -144,6 +152,7 @@ export function newAnimState(id: number, now: number): AnimState {
     hitDy: 0,
     bornAt: now,
     diedAt: Number.NaN,
+    vanishAt: Number.NaN,
     flip: false,
   };
 }
@@ -183,6 +192,8 @@ export interface Pose {
   alpha: number;
   /** Hit flash. */
   flash: boolean;
+  /** Leaving by a teleport or a logout: drawn with a pale tint (VANISH_MS). */
+  shimmer: boolean;
   /** Contact shadow scale (a flying creature's shrinks as it rises). */
   shadow: number;
   /** A death finished: the caller can drop the sprite. */
@@ -199,6 +210,7 @@ export const newPose = (): Pose => ({
   skewX: 0,
   alpha: 1,
   flash: false,
+  shimmer: false,
   shadow: 1,
   done: false,
 });
@@ -229,6 +241,11 @@ export function startHit(s: AnimState, now: number, dx: number, dy: number): voi
 
 export function startDeath(s: AnimState, now: number): void {
   if (Number.isNaN(s.diedAt)) s.diedAt = now;
+}
+
+/** It leaves by a teleport or a logout: the shimmer of VANISH_MS (the first one counts). */
+export function startVanish(s: AnimState, now: number): void {
+  if (Number.isNaN(s.vanishAt)) s.vanishAt = now;
 }
 
 /** Duration of an action's clip, ms (0 without one). */
@@ -275,6 +292,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   out.skewX = 0;
   out.alpha = 1;
   out.flash = false;
+  out.shimmer = false;
   out.shadow = 1;
   out.done = false;
   const top = Math.max(8, meta?.top ?? 24);
@@ -338,8 +356,23 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
 
   const sinceBorn = now - s.bornAt;
   if (sinceBorn >= 0 && sinceBorn < APPEAR_MS) out.alpha *= sinceBorn / APPEAR_MS;
+  if (!Number.isNaN(s.vanishAt) && Number.isNaN(s.diedAt)) vanishing(now - s.vanishAt, out);
   if (s.flip) out.scaleX = -out.scaleX;
   return out;
+}
+
+/**
+ * Leaving by a teleport or a logout: the body narrows to a sliver and stretches up a
+ * little, pale and flickering, while it fades out; done after VANISH_MS.
+ */
+function vanishing(el: number, out: Pose): void {
+  const t = Math.min(1, Math.max(0, el) / VANISH_MS);
+  const flicker = Math.floor(Math.max(0, el) / VANISH_FLICKER_MS) % 2 === 0 ? 1 : 0.6;
+  out.scaleX *= 1 - 0.7 * t;
+  out.scaleY *= 1 + 0.2 * t;
+  out.alpha *= (1 - t) * flicker;
+  out.shimmer = true;
+  out.done = el >= VANISH_MS;
 }
 
 function walking(

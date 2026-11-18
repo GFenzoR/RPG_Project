@@ -39,8 +39,10 @@ import {
   startAttack,
   startDeath,
   startHit,
+  startVanish,
   tilePixels,
   tileToScreen,
+  VANISH_MS,
 } from "@rpg/renderer";
 import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
@@ -54,12 +56,13 @@ import {
   attackAction,
   attackDir,
   attackerOf,
+  DepartureFeed,
   isBlowEffect,
-  leavesDying,
+  leaveStyle,
   meleeAttacker,
   pushFrom,
 } from "./creature-events.ts";
-import type { Fighter } from "./creature-events.ts";
+import type { Fighter, LeaveStyle } from "./creature-events.ts";
 import { devicePixels, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
@@ -159,10 +162,11 @@ export interface GameCanvas {
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
-   * E2E: the creatures in an attack pose now (its clip or lunge) and the ones falling dead
-   * (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its length.
+   * E2E: the creatures in an attack pose now (its clip or lunge), the ones falling dead
+   * and the ones shimmering away (docs/17 ANI-2, ANI-7): `ms` since it started, `of` its
+   * length.
    */
-  poses(): { attacking: PoseTime[]; dying: PoseTime[] };
+  poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -173,7 +177,7 @@ export interface PoseTime {
   id: number;
   ms: number;
   of: number;
-  /** The clip it plays: attack, shoot or cast (lunge: a single image's), death. */
+  /** The clip it plays: attack, shoot or cast (lunge: a single image's), death, vanish. */
   action: string;
 }
 
@@ -752,8 +756,6 @@ export async function createGameCanvas(
   };
 
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
-    // A creature that died in view and is back (a player's respawn) ends its fall at once.
-    if (ghosts.has(c.id)) dropGhost(c.id);
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
     const lk = isPlayer ? lookKey(c.cosmetics) : "";
@@ -850,46 +852,60 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Deaths (ANI-2, ANI-5, ANI-7): a creature that leaves the view because it died
-  // (CreatureDisappear.reason DEATH; from an older server, with an empty health bar:
-  // render/creature-events.ts leavesDying) stays where it fell, without name or bar, while
-  // its death plays (an LPC body its clip, a single image the procedural fall), over the
-  // corpse the server already put on the tile. Any other way out of the view drops it.
+  // Leaving the view (ANI-2, ANI-5, ANI-7), as CreatureDisappear.reason says
+  // (render/creature-events.ts leaveStyle): a creature that died stays where it fell,
+  // without name or bar, while its death plays (an LPC body its clip, a single image the
+  // procedural fall), over the corpse the server already put on the tile; one that left by
+  // a teleport or a logout shimmers away where it was (VANISH_MS). Any other way out of the
+  // view drops it. Each departure plays once, also when the creature is already back: a
+  // player that dies in view and wakes up at a temple in view leaves its falling body at
+  // the death spot and appears (fading in) at the temple.
   interface Ghost {
+    id: number;
     body: Container;
     figure: CreatureBody;
     state: AnimState;
     dir: CreatureState["dir"];
   }
-  const ghosts = new Map<number, Ghost>();
+  const ghosts: Ghost[] = [];
   const lastSeen = new Map<number, CreatureState["dir"]>();
-  const dropGhost = (id: number): void => {
-    const g = ghosts.get(id);
+  const departures = new DepartureFeed();
+  const dropGhost = (i: number): void => {
+    const g = ghosts[i];
     if (!g) return;
     view.removeEntity(g.body);
     g.body.destroy({ children: true });
-    ghosts.delete(id);
+    const last = ghosts.pop();
+    if (last && last !== g) ghosts[i] = last;
   };
-  /** A creature left the view: it falls if it died with a body to animate, else it goes. */
-  const leave = (id: number, now: number): void => {
+  /** A creature left the view: `style` says whether it falls, shimmers away or just goes. */
+  const leave = (id: number, now: number, style: LeaveStyle): void => {
     const s = sprites.get(id);
     const state = animStates.get(id);
     animStates.delete(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
-    const dying = s !== undefined && leavesDying(world.departureOf(id), s.drawnHealth);
-    if (!s || !s.figure || !state || !dying || dir === undefined) {
+    if (!s || !s.figure || !state || style === "drop" || dir === undefined) {
       dropSprite(id);
       return;
     }
     dropLabels(s);
     sprites.delete(id);
     s.frame.clear();
-    startDeath(state, now);
-    ghosts.set(id, { body: s.body, figure: s.figure, state, dir });
+    if (style === "fall") startDeath(state, now);
+    else startVanish(state, now);
+    ghosts.push({ id, body: s.body, figure: s.figure, state, dir });
+  };
+  /** Plays the departures that arrived since the last frame on the bodies drawn then. */
+  const depart = (now: number): void => {
+    for (const d of departures.take(world.departures)) {
+      const s = sprites.get(d.id);
+      if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
+    }
   };
   const drawGhosts = (now: number): void => {
-    for (const [id, g] of ghosts) {
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const g = ghosts[i] as Ghost;
       animInput.now = now;
       animInput.dir = outfitDir(g.dir);
       animInput.walkStart = undefined;
@@ -897,7 +913,7 @@ export async function createGameCanvas(
       animInput.moveDx = 0;
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
-      if (pose.done) dropGhost(id);
+      if (pose.done) dropGhost(i);
     }
   };
 
@@ -960,6 +976,7 @@ export async function createGameCanvas(
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
     react(now);
+    depart(now);
     for (const c of world.creatures.values()) {
       if (c.pos.z !== self.pos.z) continue;
       seen.add(c.id);
@@ -1042,7 +1059,8 @@ export async function createGameCanvas(
     hiddenShown = 0;
     drawnBoxes.forEachHidden(showHidden);
     for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
-    for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now);
+    // Gone without a departure of its own (another floor, a new map view): it just goes.
+    for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
     world.expire(now);
@@ -1381,16 +1399,21 @@ export async function createGameCanvas(
         if (ms >= 0 && ms < of) attacking.push({ id, ms, of, action });
       }
       const dying: PoseTime[] = [];
-      for (const [id, g] of ghosts) {
+      const vanishing: PoseTime[] = [];
+      for (const g of ghosts) {
+        if (Number.isNaN(g.state.diedAt)) {
+          vanishing.push({ id: g.id, ms: now - g.state.vanishAt, of: VANISH_MS, action: "vanish" });
+          continue;
+        }
         const clip = clipMs(g.figure.clips.meta, "death");
         dying.push({
-          id,
+          id: g.id,
           ms: now - g.state.diedAt,
           of: clip ? clip + DEATH_FADE_MS : DEATH_MS,
           action: "death",
         });
       }
-      return { attacking, dying };
+      return { attacking, dying, vanishing };
     },
     element: canvas,
     clientToTile(clientX, clientY) {
@@ -1436,7 +1459,7 @@ export async function createGameCanvas(
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
-      for (const id of [...ghosts.keys()]) dropGhost(id);
+      while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
       lights.destroy();
       view.destroy();

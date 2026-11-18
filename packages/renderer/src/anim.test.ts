@@ -8,6 +8,8 @@ import {
   IDLE_AFTER_MS,
   LUNGE_OUT_MS,
   LUNGE_PX,
+  VANISH_FLICKER_MS,
+  VANISH_MS,
   animate,
   attackClip,
   attackClipAction,
@@ -19,6 +21,7 @@ import {
   startAttack,
   startDeath,
   startHit,
+  startVanish,
 } from "./anim.ts";
 import type { AnimInput, AnimMeta, AnimState, Pose } from "./anim.ts";
 
@@ -289,6 +292,41 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     expect(animate(s, STILL, in_, out)).toMatchObject({ scaleY: 0.75, alpha: 0.5, done: false });
     in_.now = DEATH_MS;
     expect(animate(s, STILL, in_, out).done).toBe(true);
+  });
+
+  it("shimmers away when it leaves by a teleport or a logout, never falling (ANI-7)", () => {
+    for (const meta of [LPC, STILL]) {
+      const { s, in_, out } = setup();
+      startVanish(s, 1000);
+      startVanish(s, 1100); // the first one counts
+      in_.now = 1000;
+      expect(animate(s, meta, in_, out)).toMatchObject({ shimmer: true, alpha: 1, done: false });
+      expect(out.action).toBe("idle"); // its stance: no death clip, no squash to the floor
+      in_.now = 1000 + VANISH_MS / 2;
+      animate(s, meta, in_, out);
+      expect(out.action).not.toBe("death");
+      expect(Math.abs(out.scaleX)).toBeCloseTo(0.65);
+      expect(out.scaleY).toBeCloseTo(1.1);
+      // It flickers while it fades: every VANISH_FLICKER_MS dimmer, then back.
+      const alphas = [0, 1, 2, 3].map((k) => {
+        in_.now = 1000 + 100 + k * VANISH_FLICKER_MS;
+        return animate(s, meta, in_, out).alpha;
+      });
+      expect(alphas[1]).toBeLessThan(alphas[0] ?? 0);
+      expect(alphas[2]).toBeGreaterThan(alphas[1] ?? 1);
+      in_.now = 1000 + VANISH_MS;
+      expect(animate(s, meta, in_, out)).toMatchObject({ alpha: 0, done: true });
+    }
+    // A death already under way keeps falling.
+    const { s, in_, out } = setup();
+    startDeath(s, 0);
+    startVanish(s, 0);
+    in_.now = 250;
+    expect(animate(s, LPC, in_, out)).toMatchObject({ action: "death", shimmer: false });
+    // The pose is reused: the next creature drawn with it is not pale.
+    const other = setup(8);
+    in_.now = 250;
+    expect(animate(other.s, LPC, in_, out).shimmer).toBe(false);
   });
 
   it("fades in when it appears", () => {
