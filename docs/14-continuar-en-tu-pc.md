@@ -148,18 +148,25 @@ el punto 5:
       acciones, con las reglas de docs/17 como datos (`engine/style.ts`) y puertas de
       calidad en `make test` y `spritegen check`. Lo usan el jabalí y el ciervo (quieto,
       caminar, atacar y morir en cuatro direcciones; antes un trote de perfil), el eco de la
-      forja (era el elemental de fuego de Dungeon Crawl) y el yunque. Cómo escribir uno:
+      forja (era el elemental de fuego de Dungeon Crawl) y el yunque. Tras la revisión de
+      las hojas (2026-11-18) el jabalí ganó ancho de frente y de espaldas (era una raya de
+      16 px a 1x; ahora 22, y la puerta `frontWidth` lo cuida) y el eco se rehízo: la primera
+      versión se leía peor que el elemental (una mancha naranja sobre dos palitos oscuros, de
+      costado un tronco ardiendo); la nueva es un espíritu de fuego con forma de herrero,
+      núcleo al rojo blanco, llamas que suben y el martillo en alto. Cómo escribir uno:
       `tools/CLAUDE.md`, "spritegen: el motor". Queda: pasar otros sprites propios de un
       frame (cajón, bolardo, tablero, cartel; la gaviota si el dueño quiere), la acción de
       recibir golpe (no existe en el cliente: sigue el destello procedural) y frames de
       props animados (ART-7). **Revisar en el E2E** (no se corrió en la rama; se revisó con
       las hojas y lineups de `spritegen sheet` y `mapcli render`): el jabalí y el ciervo en
       el Bosque y el Puerto, en las cuatro direcciones, atacando y muriendo (la caída de
-      costado), su tamaño al lado del lobo y de los personajes; el eco de la forja en la
-      mina del Volcán (z 8, 3692,5826), que flote sobre la sombra y se lea como fuego sobre
-      la roca; el yunque en las herrerías (Isla de Pruebas 2073,2102). La barra y el nombre
-      del ciervo van más arriba que antes: `top` sale de su caminar al norte (las astas
-      lejos, ~54 px).
+      costado; de frente y de espaldas, ancho y no una raya), su tamaño al lado del lobo y
+      de los personajes; el eco de la forja en la mina del Volcán (z 8, 3692,5826, sobre la
+      tierra), que flote sobre la sombra y se lea al instante como un espíritu de fuego con
+      forma de herrero y el martillo en alto, también de costado; el yunque en las
+      herrerías (Isla de Pruebas 2073,2102). La barra y el nombre del ciervo van más arriba
+      que antes: `top` sale de su caminar al norte (las astas lejos, ~54 px); los del eco,
+      sobre el martillo alzado.
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
       cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso

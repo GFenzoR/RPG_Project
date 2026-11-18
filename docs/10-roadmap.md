@@ -412,4 +412,6 @@ secundaria.
   `sprites.yaml`) en `make test` y `spritegen check`; `spritegen sheet` deja la hoja de
   contacto y el lineup de cada sprite. El jabalí y el ciervo pasan a quieto, caminar,
   atacar y morir en cuatro direcciones; el eco de la forja (era Dungeon Crawl) y el yunque
-  también salen del motor. Lo que queda: docs/14, "Pendientes conocidos".
+  también salen del motor. Tras revisar las hojas, el jabalí ganó ancho de frente y de
+  espaldas (puerta `frontWidth`) y el eco se rehízo como espíritu de fuego con forma de
+  herrero y el martillo en alto. Lo que queda: docs/14, "Pendientes conocidos".

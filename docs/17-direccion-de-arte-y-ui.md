@@ -163,8 +163,9 @@ parte de arriba transparente.
   ancla de siempre y la sombra pintada: al lado del lobo de Gemini el ciervo parecía una
   cría y los dos pisaban 4 px más abajo que el resto. Pasaron a ser su mismo diseño
   dibujado 1,2 y 1,4 veces más grande en 64x64, y desde el 2026-11-18 son modelos del motor
-  de sprites ("Motor de sprites", al final de §3): ~38 px de largo el jabalí y ~46 de alto
-  el ciervo con las astas, con `anchor: bc` y la sombra de contacto (`shadow: ellipse` en
+  de sprites ("Motor de sprites", al final de §3): ~38 px de largo el jabalí (22 de ancho
+  visto de frente) y ~46 de alto el ciervo con las astas, con `anchor: bc` y la sombra de
+  contacto (`shadow: ellipse` en
   `assets/sprites.yaml`), como todo animal animado. La gaviota sigue de 32x32 con su
   sombra pintada mientras el dueño no decida su arte.
 
@@ -548,7 +549,7 @@ leen el renderer, las puertas y las hojas de revisión):
 | ART-1 3/4 frontal | LPC: ortográfica, cámara a unos 60° | `PROJECTION`: la altura sube recta (1:1) y la profundidad se ve a tan 30° ≈ 0,58: se ven la cara de arriba y la sur |
 | ART-5 luz | LPC: desde arriba y apenas desde la izquierda | `LIGHT`: arriba, izquierda y un poco del lado de la cámara (el flanco que mira a la cámara queda en el tono base), con la misma curva que `domeLight` de las recetas; `depthCue` oscurece lo lejano (la pata de atrás, la grupa vista de frente) |
 | ART-5 3-4 tonos y un brillo | Realm of the Mad God y Stardew: pocos colores bien puestos | `SHADES`: umbrales que eligen el tono claro, base, sombra u hondo del material; `glint` en lo brillante (ojos, metal); `GLOW` para el fuego (lo que mira a la cámara, más claro) |
-| ART-5 contorno selectivo | LPC: fuerte en personajes, suave en objetos; RotMG: contorno oscuro que separa del fondo | `OUTLINE`: en criaturas, casi negro abajo y a la derecha (`outline`, nunca `#000`) y un tono más claro arriba y a la izquierda (`deep`); en objetos y fuego, más suave; `CREASE_DEPTH`: el contorno interno donde una parte tapa a otra; `RIM_LIGHT`: el borde iluminado, un tono más claro |
+| ART-5 contorno selectivo | LPC: fuerte en personajes, suave en objetos; RotMG: contorno oscuro que separa del fondo | `OUTLINE`: en criaturas, casi negro abajo y a la derecha (`outline`, nunca `#000`) y un tono más claro arriba y a la izquierda (`deep`); en objetos, más suave; `GLOW_OUTLINE`: el fuego lleva el suyo en cualquier sprite, su tono hondo (el rojo del borde de una llama) arriba y a la izquierda y su contorno (una brasa oscura) del otro lado, y su pliegue en el tono de sombra (una llama más oscura, nunca una línea negra); `CREASE_DEPTH`: el contorno interno donde una parte tapa a otra; `RIM_LIGHT`: el borde iluminado, un tono más claro |
 | ART-6 paleta, valores, tramado | LPC Revised: paleta limitada; tramado casi nunca | solo las rampas de `palette.ts` (los materiales de las criaturas del motor se sumaron ahí); `VALUE_BAND` por tipo; umbrales duros y `DITHER_MAX_SHARE` (10 %); alfa 0 o 255 |
 | ART-2 tamaños y anclas | Tibia: lo grande crece hacia arriba; LPC: frames de 64x64 | `SIZES`: lienzo, ancla (`bc` o `br`), fila del suelo y alto y largo de la figura por clase; cada spec puede pedir un rango más angosto (las notas de "Animales medianos") |
 | ANI-1 direcciones | Diablo II: cada dirección sale del mismo modelo | el modelo mira al oeste y se gira para cada dirección (`FACING_YAW`): las cuatro se dibujan, el este **no** es el oeste espejado y la luz sigue viniendo de la izquierda; `mirror` no hace falta |
@@ -567,8 +568,10 @@ materiales y nunca `#000`, alfa 0 o 255, tramado bajo el 10 %, nada recortado co
 borde del lienzo, contorno en al menos el 85 % de la silueta, una sola figura (aparte,
 solo chispas de hasta 10 px), al menos el 20 % de su caja lleno, media de L* en la banda
 de su tipo, alto y largo de perfil en el rango de ART-2, centrado de frente y de
-espaldas, pies en la fila del suelo, un caminar que cambia de silueta, un ataque y una
-muerte que se distinguen del parado, sur y oeste distinguibles, y las pistas de
+espaldas, de frente y de espaldas al menos el 45 % de ancho de lo que mide de perfil
+(`frontWidth`: un perfil girado hacia la cámara se lee como una raya a 1x; lo agregó la
+revisión del jabalí), pies en la fila del suelo, un caminar que cambia de silueta, un
+ataque y una muerte que se distinguen del parado, sur y oeste distinguibles, y las pistas de
 `assets/sprites.yaml` iguales al rig (`anchor`, `shadow: ellipse`, `flying`, los `ms`; sin
 `facing` ni `mirror`; sin entrada en `sprites`). Más el determinismo (mismo spec, mismos
 píxeles).
@@ -584,13 +587,33 @@ persona de LPC). Se miran con Read.
   colmillos; carga con las astas) y morir (tambalea, se le doblan las patas y cae de lado)
   en las cuatro direcciones: 68 frames cada uno. Antes: un trote de 4 frames mirando al
   oeste (el este espejado; al norte y al sur, el mismo perfil), sin ataque ni muerte
-  propios. El jabalí mide ~38 px de largo y 26 de alto; el ciervo, ~35 de largo y 46 de
-  alto con las astas (una persona de LPC).
+  propios. El jabalí mide ~38 px de largo, 29 de alto y 22 de ancho visto de frente; el
+  ciervo, ~35 de largo y 46 de alto con las astas (una persona de LPC).
+  Revisión del 2026-11-18: de costado el jabalí del motor ya era mejor que el de antes,
+  pero de frente y de espaldas se leía como una raya de 16 px a 1x. Se le ensancharon el
+  cuerpo, los hombros, la cabeza y el hocico, las orejas y los colmillos salen hacia los
+  lados y las patas se abren un poco (`SPLAY`): de frente es una cabeza ancha con el hocico
+  y los colmillos delante del lomo con su cresta, y de espaldas la grupa con las patas
+  abiertas. La puerta `frontWidth` lo cuida desde entonces.
 - **Eco de la forja** (`npcs/forge_echo`, "lo que queda del último herrero de la
-  forja"): un espíritu de brasas con forma de herrero (pelo y lenguas de fuego, delantal
-  de cuero chamuscado, el martillo todavía en la mano, una llama en vez de piernas) que
-  flota; quieto y caminar en las cuatro direcciones. Antes: el elemental de fuego de
-  Dungeon Crawl, un solo frame.
+  forja"): un espíritu de fuego con forma de herrero que flota. El pecho, la cabeza y la
+  mandíbula son un núcleo al rojo blanco (`fireCore` de `palette.ts`), con dos ojos de
+  carbón; los brazos, la barba, el pelo que sube y se va hacia atrás, las lenguas de los
+  hombros y la cola son llama (`flame`: amarillo, naranja y un borde rojo); en vez de
+  piernas, el cuerpo se afina en una llama que se enrosca; con la mano derecha alza el
+  martillo de herrero (mango de madera, cabeza de hierro con su brillo) delante de la
+  cara, y la izquierda cuelga con el puño cerrado. De costado se ve girado 20° hacia la
+  cámara (`views: { w: 20, e: -20 }`), para que se vean la cara, el pecho y el martillo.
+  Quieto (las llamas lamen hacia arriba, suben chispas y el martillo se mece) y caminar
+  (se desliza con la cola y el pelo hacia atrás) en las cuatro direcciones; se revisa
+  sobre el suelo donde está, la tierra de la mina del Volcán (`seenOn: ground/dirt`).
+  Antes: el elemental de fuego de Dungeon Crawl, un solo frame. Revisión del 2026-11-18:
+  la primera versión del motor (un herrero de brasas con delantal de cuero) se leía peor
+  que ese elemental: sobre la roca era una mancha naranja sobre dos palitos oscuros (el
+  delantal y el martillo colgando) y de costado, un tronco ardiendo. Se rehízo sin nada
+  oscuro abajo, con el núcleo claro, la cabeza, los brazos y el martillo alzado legibles y
+  una silueta de costado de figura con el martillo en alto; se compararon las tres
+  versiones lado a lado sobre su suelo y quedó la nueva.
 - **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
   cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
 
@@ -1255,8 +1278,8 @@ Por impacto en pantalla y por costo:
 | 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
-| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
+| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen (desde el 2026-11-18, del motor de sprites con quieto, caminar, atacar y morir en cuatro direcciones). Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |

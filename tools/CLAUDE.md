@@ -300,7 +300,7 @@ Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`),
 
 | Archivo | Qué hace |
 |---|---|
-| `style.ts` | ART-1 a ART-8 y ANI-1 a ANI-4 como datos: `PROJECTION`, `LIGHT`, `SHADES`, `GLOW`, `OUTLINE`, `CREASE_DEPTH`, `RIM_LIGHT`, `VALUE_BAND`, `SIZES`, `ACTIONS`, `FACING_YAW`, `frameName` |
+| `style.ts` | ART-1 a ART-8 y ANI-1 a ANI-4 como datos: `PROJECTION`, `LIGHT`, `SHADES`, `GLOW`, `OUTLINE`, `CREASE_DEPTH`, `RIM_LIGHT`, `VALUE_BAND`, `SIZES`, `ACTIONS`, `FACING_YAW`, `frameName`; `GLOW_OUTLINE`, el contorno del fuego |
 | `spec.ts` | Los tipos del spec y `validateSpec` |
 | `shapes.ts` | Las primitivas: dónde las corta un rayo y su normal |
 | `render.ts` | `renderSpec`: rayos con buffer de profundidad, sombreado, limpieza, pliegues, borde iluminado, marcas y contorno |
@@ -322,7 +322,10 @@ cámara), z arriba; el suelo es z = 0.
   raíz, en el del modelo). `rot` es su giro de reposo en grados (x, después y, después z).
   Opcionales: `bias` (más claro u oscuro), `texture: { amount, cell }` (ruido en el marco
   de la parte: celdas largas en un eje hacen pelo o vetas), `shiny` (brillo especular),
-  `glow` (fuego: brilla de frente, sin sombra, contorno suave) y `marks` (píxeles sueltos:
+  `glow` (fuego: brilla de frente, sin sombra, con su propio contorno, `GLOW_OUTLINE`: el
+  tono `deep` arriba y a la izquierda, `outline` del otro lado y un pliegue en `shadow`
+  donde otra parte encendida lo tapa; un fuego que se lea pide un material con el núcleo
+  casi blanco y el `deep` rojo, como `fireCore` y `flame`) y `marks` (píxeles sueltos:
   ojos, fosas, bayas; se ven solo si nada los tapa).
 - `shapes` (en el marco de la parte; cada una puede cambiar `material` y `bias`):
   `ellipsoid { center, radii }`, `box { min, max }`, `cylinder { a, b, radius }`,
@@ -335,8 +338,10 @@ cámara), z arriba; el suelo es z = 0.
   centro de sus patas sobre el suelo: el motor la gira para cada dirección y dibuja las
   cuatro (no hace falta `mirror`). Un **objeto** se arma como se ve, con el origen en el
   suelo, en el centro de su casilla.
-- `flying: true` si flota (el cliente lo mece); `seenOn: "ground/ash"` es el suelo de su
-  lineup de revisión; `views: { s: 10 }` gira un poco una dirección si hiciera falta.
+- `flying: true` si flota (el cliente lo mece); `seenOn: "ground/dirt"` es el suelo de su
+  lineup de revisión (el de donde está en el mapa); `views: { w: 20, e: -20 }` gira un poco
+  una dirección hacia la cámara (+ en el oeste, - en el este): una figura de costado muestra
+  la cara y lo que lleva en la mano del lado lejano (el eco de la forja).
 
 **Escribir un rig:** `actions` con `idle` y `walk` como mínimo, y `attack`, `shoot`,
 `cast` o `death` si los usa (un NPC: solo quieto y caminar). Cada acción tiene `frames`
@@ -377,10 +382,12 @@ materiales y nunca `#000`; alfa 0 o 255; menos del 10 % de píxeles en damero; n
 contra el borde del lienzo; contorno en al menos el 85 % de la silueta; una sola figura
 (sueltos solo de hasta 10 px: una chispa); al menos el 20 % de la caja lleno; media de L*
 en la banda de su tipo (ART-6); alto y largo de perfil dentro del rango de ART-2 o de
-`figure`; de frente y de espaldas centrado (±2 px); los pies en la fila del suelo (más
-holgura si flota); caminar que cambia de silueta, un ataque y una muerte que se distinguen
-del parado y sur distinto de oeste; las pistas de `sprites.yaml` iguales al rig; y el
-determinismo (mismo spec, mismos píxeles). El test del motor es `src/engine/engine.test.ts`.
+`figure`; de frente y de espaldas centrado (±2 px) y al menos el 45 % de ancho de su largo
+de perfil (`frontWidth`: si no, de frente se lee como una raya a 1x, como el primer
+jabalí); los pies en la fila del suelo (más holgura si flota); caminar que cambia de
+silueta, un ataque y una muerte que se distinguen del parado y sur distinto de oeste; las
+pistas de `sprites.yaml` iguales al rig; y el determinismo (mismo spec, mismos píxeles).
+El test del motor es `src/engine/engine.test.ts`.
 
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
