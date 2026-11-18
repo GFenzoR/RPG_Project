@@ -5,6 +5,10 @@
 //
 // No hooks: the forms are uncontrolled and read their fields on submit, so the panel
 // renders as a plain function (ui/Guild.test.ts walks its tree without a DOM).
+//
+// In the desktop guild window (docs/17 UI-7) the panel shows one tab at a time under its
+// own buttons (Summary, Members, Wars); the tab lives in the caller. Without `tab` (the
+// side panel of small screens) every section shows, one under the other.
 import type { JSX } from "preact";
 import { GuildAction, GuildRank } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
@@ -30,6 +34,16 @@ function clear(e: JSX.TargetedSubmitEvent<HTMLFormElement>): void {
   e.currentTarget.reset();
 }
 
+/** The tabs of the guild window. */
+export const GUILD_TABS = ["summary", "members", "wars"] as const;
+export type GuildTab = (typeof GUILD_TABS)[number];
+
+const GUILD_TAB_TITLE: Record<GuildTab, string> = {
+  summary: "client.guild.tab.summary",
+  members: "client.guild.tab.members",
+  wars: "client.guild.tab.wars",
+};
+
 export function GuildPanel(props: {
   t: Translate;
   content: ClientContent;
@@ -37,6 +51,9 @@ export function GuildPanel(props: {
   ui: GameUi;
   /** ms clock for the invitations' expiry (performance.now()). */
   now: number;
+  /** The tab shown (desktop window); undefined shows every section. */
+  tab?: GuildTab | undefined;
+  onTab?(tab: GuildTab): void;
 }): JSX.Element {
   const { t, ui } = props;
   const g = ui.guild;
@@ -71,32 +88,27 @@ export function GuildPanel(props: {
   }
   const powers = guildPowers(g.rank);
   const online = g.members.filter((m) => m.online).length;
-  return (
-    <section class="guild" data-testid="guild-panel" aria-label={t("client.guild.title")}>
-      <h2>
-        {g.name} <span class="tag">{t(rankKey(g.rank))}</span>
-      </h2>
-      <p class="motd" data-testid="guild-motd">
-        {g.motd || t("client.guild.motd_empty")}
-      </p>
-      {powers.motd && (
-        <form
-          class="guild-row"
-          onSubmit={(e) => {
-            send(GuildAction.MOTD, "", field(e, "motd"));
-            clear(e);
-          }}
-        >
-          <input
-            name="motd"
-            maxLength={rules?.motdMax ?? 255}
-            placeholder={t("client.guild.motd_placeholder")}
-            aria-label={t("client.guild.motd_placeholder")}
-            autoComplete="off"
-          />
-          <button type="submit">{t("client.guild.motd_save")}</button>
-        </form>
-      )}
+  const shows = (tab: GuildTab): boolean => props.tab === undefined || props.tab === tab;
+  const motdForm = powers.motd && (
+    <form
+      class="guild-row"
+      onSubmit={(e) => {
+        send(GuildAction.MOTD, "", field(e, "motd"));
+        clear(e);
+      }}
+    >
+      <input
+        name="motd"
+        maxLength={rules?.motdMax ?? 255}
+        placeholder={t("client.guild.motd_placeholder")}
+        aria-label={t("client.guild.motd_placeholder")}
+        autoComplete="off"
+      />
+      <button type="submit">{t("client.guild.motd_save")}</button>
+    </form>
+  );
+  const members = (
+    <>
       <h3>{t("client.guild.members", { online, count: g.members.length })}</h3>
       <ul class="guild-members">
         {g.members.map((m) => {
@@ -160,110 +172,145 @@ export function GuildPanel(props: {
           <button type="submit">{t("client.guild.invite")}</button>
         </form>
       )}
-      {g.pending.length > 0 && (
-        <>
-          <h3>{t("client.guild.pending")}</h3>
-          <ul class="guild-pending">
-            {g.pending.map((p) => (
-              <li key={p.name}>
-                {t("client.guild.pending_entry", {
-                  name: p.name,
-                  hours: hoursLeft(p.until, props.now),
-                })}
-                <button type="button" onClick={() => send(GuildAction.REVOKE, p.name)}>
-                  {t("client.guild.revoke")}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {(g.wars.length > 0 || g.rank === GuildRank.LEADER) && (
-        <>
-          <h3>{t("client.guild.wars")}</h3>
-          <ul class="guild-wars" data-testid="guild-wars">
-            {g.wars.map((w) => {
-              const line = warLine(w, props.now);
-              const a = warActions(g.rank, w);
-              const war = (action: GuildAction): void => props.game?.guildWar(action, "", w.id);
-              return (
-                <li key={String(w.id)} data-war={w.enemy} class={w.active ? "active" : "pending"}>
-                  <span>{t(line.key, line.params)}</span>
-                  {(a.accept || a.decline || a.surrender) && (
-                    <span class="actions">
-                      {a.accept && (
-                        <button type="button" onClick={() => war(GuildAction.WAR_ACCEPT)}>
-                          {t("client.guild.war_accept")}
-                        </button>
-                      )}
-                      {a.decline && (
-                        <button type="button" onClick={() => war(GuildAction.WAR_DECLINE)}>
-                          {t("client.guild.war_decline")}
-                        </button>
-                      )}
-                      {a.surrender && (
-                        <button
-                          type="button"
-                          class="danger"
-                          onClick={() => war(GuildAction.WAR_SURRENDER)}
-                        >
-                          {t("client.guild.war_surrender")}
-                        </button>
-                      )}
-                    </span>
-                  )}
-                </li>
-              );
+    </>
+  );
+  const pending = g.pending.length > 0 && (
+    <>
+      <h3>{t("client.guild.pending")}</h3>
+      <ul class="guild-pending">
+        {g.pending.map((p) => (
+          <li key={p.name}>
+            {t("client.guild.pending_entry", {
+              name: p.name,
+              hours: hoursLeft(p.until, props.now),
             })}
-          </ul>
-          {g.rank === GuildRank.LEADER && (
-            <form
-              class="guild-row"
-              data-testid="guild-war-declare"
-              onSubmit={(e) => {
-                const name = field(e, "enemy");
-                if (name) props.game?.guildWar(GuildAction.WAR_DECLARE, name);
-                clear(e);
-              }}
-            >
-              <input
-                name="enemy"
-                maxLength={rules?.nameMax ?? 32}
-                placeholder={t("client.guild.war_declare_placeholder")}
-                aria-label={t("client.guild.war_declare_placeholder")}
-                autoComplete="off"
-              />
-              <button type="submit">{t("client.guild.war_declare")}</button>
-            </form>
-          )}
-        </>
-      )}
-      <div class="guild-actions">
-        {g.rank !== GuildRank.LEADER && (
-          <button type="button" data-testid="guild-leave" onClick={() => send(GuildAction.LEAVE)}>
-            {t("client.guild.leave")}
-          </button>
-        )}
-        {powers.disband && (
-          <form
-            class="guild-row"
-            onSubmit={(e) => {
-              send(GuildAction.DISBAND, field(e, "confirm"));
-              clear(e);
-            }}
-          >
-            <input
-              name="confirm"
-              placeholder={t("client.guild.disband_placeholder")}
-              aria-label={t("client.guild.disband_placeholder")}
-              autoComplete="off"
-            />
-            <button type="submit" class="danger">
-              {t("client.guild.disband")}
+            <button type="button" onClick={() => send(GuildAction.REVOKE, p.name)}>
+              {t("client.guild.revoke")}
             </button>
-          </form>
-        )}
-      </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+  const wars = (g.wars.length > 0 || g.rank === GuildRank.LEADER) && (
+    <>
+      <h3>{t("client.guild.wars")}</h3>
+      <ul class="guild-wars" data-testid="guild-wars">
+        {g.wars.map((w) => {
+          const line = warLine(w, props.now);
+          const a = warActions(g.rank, w);
+          const war = (action: GuildAction): void => props.game?.guildWar(action, "", w.id);
+          return (
+            <li key={String(w.id)} data-war={w.enemy} class={w.active ? "active" : "pending"}>
+              <span>{t(line.key, line.params)}</span>
+              {(a.accept || a.decline || a.surrender) && (
+                <span class="actions">
+                  {a.accept && (
+                    <button type="button" onClick={() => war(GuildAction.WAR_ACCEPT)}>
+                      {t("client.guild.war_accept")}
+                    </button>
+                  )}
+                  {a.decline && (
+                    <button type="button" onClick={() => war(GuildAction.WAR_DECLINE)}>
+                      {t("client.guild.war_decline")}
+                    </button>
+                  )}
+                  {a.surrender && (
+                    <button
+                      type="button"
+                      class="danger"
+                      onClick={() => war(GuildAction.WAR_SURRENDER)}
+                    >
+                      {t("client.guild.war_surrender")}
+                    </button>
+                  )}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {g.rank === GuildRank.LEADER && (
+        <form
+          class="guild-row"
+          data-testid="guild-war-declare"
+          onSubmit={(e) => {
+            const name = field(e, "enemy");
+            if (name) props.game?.guildWar(GuildAction.WAR_DECLARE, name);
+            clear(e);
+          }}
+        >
+          <input
+            name="enemy"
+            maxLength={rules?.nameMax ?? 32}
+            placeholder={t("client.guild.war_declare_placeholder")}
+            aria-label={t("client.guild.war_declare_placeholder")}
+            autoComplete="off"
+          />
+          <button type="submit">{t("client.guild.war_declare")}</button>
+        </form>
+      )}
+    </>
+  );
+  const actions = (
+    <div class="guild-actions">
+      {g.rank !== GuildRank.LEADER && (
+        <button type="button" data-testid="guild-leave" onClick={() => send(GuildAction.LEAVE)}>
+          {t("client.guild.leave")}
+        </button>
+      )}
+      {powers.disband && (
+        <form
+          class="guild-row"
+          onSubmit={(e) => {
+            send(GuildAction.DISBAND, field(e, "confirm"));
+            clear(e);
+          }}
+        >
+          <input
+            name="confirm"
+            placeholder={t("client.guild.disband_placeholder")}
+            aria-label={t("client.guild.disband_placeholder")}
+            autoComplete="off"
+          />
+          <button type="submit" class="danger">
+            {t("client.guild.disband")}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+  return (
+    <section class="guild" data-testid="guild-panel" aria-label={t("client.guild.title")}>
+      <h2>
+        {g.name} <span class="tag">{t(rankKey(g.rank))}</span>
+      </h2>
+      <p class="motd" data-testid="guild-motd">
+        {g.motd || t("client.guild.motd_empty")}
+      </p>
+      {props.tab !== undefined && (
+        <div class="guild-tabs" role="tablist" aria-label={t("client.guild.title")}>
+          {GUILD_TABS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              data-guild-tab={id}
+              aria-selected={props.tab === id}
+              onClick={() => props.onTab?.(id)}
+            >
+              {t(GUILD_TAB_TITLE[id])}
+            </button>
+          ))}
+        </div>
+      )}
+      {shows("summary") && motdForm}
+      {shows("members") && members}
+      {shows("members") && pending}
+      {props.tab === "wars"
+        ? wars || <p class="empty">{t("client.guild.no_wars")}</p>
+        : shows("wars") && wars}
+      {shows("summary") && actions}
     </section>
   );
 }
