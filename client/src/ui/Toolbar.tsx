@@ -1,4 +1,5 @@
-// The toolbar of the desktop game screen (docs/17 UI-5): a row of icon buttons, Tibia-like,
+// The toolbar of the desktop game screen (docs/17 UI-5): icon buttons, Tibia-like, in the
+// bottom bar (ui/HudBar.tsx, two rows of five beside the hotbar, one row on wide screens),
 // that open and close the windows (ui/windows.ts), plus the market and leaving the game.
 // Each button names its window and key in its tooltip and in aria-keyshortcuts.
 import type { JSX } from "preact";
@@ -20,8 +21,9 @@ export const TOOLBAR: readonly { id: WindowId; icon: IconName }[] = [
   { id: "help", icon: "help" },
 ];
 
-/** The icon of a window (its title bar shows it too). */
+/** The icon of a window (its title bar shows it too; the chat has no button: a speech one). */
 export function windowIcon(id: WindowId): IconName {
+  if (id === "chat") return "talk";
   return TOOLBAR.find((b) => b.id === id)?.icon ?? "help";
 }
 

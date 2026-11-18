@@ -1,5 +1,5 @@
-// The toolbar and a window frame render as plain functions (no hooks): these tests walk
-// their element trees without a DOM, like ui/Guild.test.ts.
+// The toolbar, a window frame and the bottom bar render as plain functions (no hooks):
+// these tests walk their element trees without a DOM, like ui/Guild.test.ts.
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import type { GameUi } from "../game.ts";
@@ -8,6 +8,7 @@ import type { GameWindowProps } from "./GameWindow.tsx";
 import { TOOLBAR, Toolbar, buttonHint } from "./Toolbar.tsx";
 import { defaultWindows, openWindow } from "./windows.ts";
 import { LOW_HEALTH, lowHealth, orbFill } from "./Vitals.tsx";
+import { HudBar } from "./HudBar.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;
@@ -97,17 +98,16 @@ describe("Toolbar", () => {
 
 describe("GameWindow", () => {
   const frame = (
-    dock: boolean,
     collapsed: boolean,
     more: Partial<GameWindowProps> = {},
-    size: { w?: number; h?: number } = {},
+    place: { x?: number; y?: number; w?: number; h?: number } = { x: 40, y: 50 },
   ): VNode<Props> =>
     GameWindow({
       t,
       id: "guild",
       icon: "guild",
       title: "Gremio",
-      place: { open: true, dock, collapsed, x: 40, y: 50, ...size },
+      place: { open: true, collapsed, ...place },
       stack: 2,
       onClose: noop,
       onCollapse: noop,
@@ -119,43 +119,58 @@ describe("GameWindow", () => {
       ...more,
     }) as VNode<Props>;
 
-  it("is a dialog over the map when it floats and a region in the dock", () => {
-    const float = frame(false, false);
-    expect(float.props["role"]).toBe("dialog");
-    expect(float.props["style"]).toEqual({ zIndex: 22, left: "40px", top: "50px" });
-    expect(frame(true, false).props["role"]).toBe("region");
-    expect(frame(true, false).props["style"]).toEqual({});
+  it("is a dialog over the map, at its place, never taller than the room above the bar", () => {
+    const placed = frame(false);
+    expect(placed.props["role"]).toBe("dialog");
+    expect(placed.props["style"]).toEqual({
+      zIndex: 22,
+      left: "40px",
+      top: "50px",
+      maxHeight: "calc(100% - 50px)",
+    });
+    expect(placed.props["data-placed"]).toBe("");
+    // Never moved: its default place is windows.css's; only the stacking is set.
+    const unplaced = frame(false, {}, {});
+    expect(unplaced.props["style"]).toEqual({ zIndex: 22 });
+    expect(unplaced.props["data-placed"]).toBeUndefined();
+    // The n-th container steps down from the last (windows.css reads --nth).
+    expect(frame(false, { nth: 2 }, {}).props["style"]).toEqual({ zIndex: 22, "--nth": "2" });
   });
 
   it("takes the size the player gave it, in the scale's own pixels (docs/17 UI-3, UI-5)", () => {
-    const sized = frame(false, false, { zoom: 1.25 }, { w: 300, h: 250 });
+    const sized = frame(false, { zoom: 1.25 }, { x: 40, y: 50, w: 300, h: 250 });
     expect(sized.props["style"]).toEqual({
       zIndex: 22,
       left: "32px",
       top: "40px",
+      maxHeight: "calc(100% - 40px)",
       width: "240px",
       height: "200px",
-      maxHeight: "none",
     });
     expect(sized.props["data-sized"]).toBe("");
-    // Docked, only the height; folded, none.
-    expect(frame(true, false, {}, { w: 300, h: 250 }).props["style"]).toEqual({
-      height: "250px",
-      maxHeight: "none",
-    });
-    expect(frame(true, true, {}, { h: 250 }).props["style"]).toEqual({});
+    // Folded, no height.
+    expect(frame(true, {}, { h: 250 }).props["style"]).toEqual({ zIndex: 22 });
   });
 
-  it("a window of the server without a close button (the shop closes with its dialog)", () => {
-    const labels = nodes(frame(false, false, { closable: false }))
+  it("a window without a close button (the shop closes with its dialog, the chat never)", () => {
+    const labels = nodes(frame(false, { closable: false }))
       .filter((v) => v.type === "button")
       .map((b) => b.props["data-testid"]);
     expect(labels).toEqual(["window-move-guild", "window-fold-guild"]);
   });
 
+  it("puts more in its bar and keeps the title for screen readers (the chat's tabs)", () => {
+    const tabs = { type: "div", props: { class: "chat-tabs" }, key: null } as unknown as VNode;
+    const tree = frame(false, { hideTitle: true, barExtra: tabs });
+    const title = nodes(tree).find((v) => v.type === "h2");
+    expect(title?.props["class"]).toBe("gwin-title visually-hidden");
+    expect(title?.props.children).toBe("Gremio");
+    expect(nodes(tree).some((v) => v.props["class"] === "chat-tabs")).toBe(true);
+  });
+
   it("its move handle hands the keys to the window and keeps them from walking", () => {
     let asked = "";
-    const tree = frame(false, false, {
+    const tree = frame(false, {
       onMoveKey: (e) => {
         asked = e.key;
         return e.key === "ArrowLeft";
@@ -175,10 +190,13 @@ describe("GameWindow", () => {
     expect(stopped).toBe(2);
     key("KeyW");
     expect(stopped).toBe(2); // not the window's: it walks as before
+    expect(move?.props["title"]).toBe(
+      'client.window.move{"title":"Gremio"} · client.window.move_hint',
+    );
   });
 
   it("names its buttons after the window and hides its body when folded", () => {
-    const tree = frame(true, true);
+    const tree = frame(true);
     const labels = nodes(tree)
       .filter((v) => v.type === "button")
       .map((b) => b.props["aria-label"]);
@@ -190,6 +208,70 @@ describe("GameWindow", () => {
     const body = nodes(tree).find((v) => v.props["class"] === "gwin-body");
     expect(body?.props["hidden"]).toBe(true);
     expect(tree.props["data-collapsed"]).toBe("");
+  });
+});
+
+describe("HudBar (docs/17 UI-4: the gothic bottom bar)", () => {
+  const stats = {
+    health: 20,
+    maxHealth: 100,
+    mana: 45,
+    maxMana: 60,
+    level: 7,
+    levelPercent: 40,
+    experience: 4200,
+  } as GameUi["stats"];
+  const bar = (s: GameUi["stats"], levelUp = false): VNode<Props> =>
+    HudBar({
+      t,
+      name: "Aldric Varn",
+      stats: s,
+      levelUp,
+      conditions: "conditions",
+      hotbar: "hotbar",
+      toolbar: "toolbar",
+    }) as VNode<Props>;
+  // HudBar is a plain function: its children are calls of Vitals, Orb and ExperienceBar
+  // (also plain), rendered here to walk their trees.
+  const rendered = (v: VNode<Props>): VNode<Props>[] =>
+    nodes(v).flatMap((n) =>
+      typeof n.type === "function"
+        ? [n, ...rendered((n.type as (p: Props) => VNode<Props>)(n.props))]
+        : [n],
+    );
+
+  it("has the orbs at its ends, the plaque over the life orb, and the slots between", () => {
+    const tree = bar(stats);
+    expect(tree.props["data-testid"]).toBe("hud-bar");
+    expect(tree.props["aria-label"]).toBe("client.hud.bar");
+    const all = rendered(tree);
+    const byTestid = (id: string): VNode<Props> | undefined =>
+      all.find((v) => v.props["data-testid"] === id);
+    expect(byTestid("health")?.props.children).toBe('client.game.health{"health":20,"max":100}');
+    expect(byTestid("mana")?.props.children).toBe('client.game.mana{"mana":45,"max":60}');
+    expect(byTestid("level")?.props.children).toBe('client.game.level{"level":7,"percent":40}');
+    expect(byTestid("experience")?.props.children).toBe(
+      'client.game.experience{"experience":4200}',
+    );
+    const plaque = all.find((v) => v.props["class"] === "vitals");
+    expect(plaque?.props["data-tutorial"]).toBe("stats");
+    // The orbs: life low (a fifth), mana three quarters full.
+    const orbs = all.filter((v) => v.props["class"] === "orb");
+    expect(orbs.map((o) => o.props["data-low"])).toEqual(["", undefined]);
+    const levels = all
+      .filter((v) => v.props["class"] === "orb-liquid")
+      .map((v) => (v.props["style"] as { transform: string }).transform);
+    expect(levels).toEqual(["translateY(80.00%)", "translateY(25.00%)"]);
+    const xp = all.find((v) => v.props["role"] === "progressbar");
+    expect(xp?.props["aria-valuenow"]).toBe(40);
+    const centre = all.find((v) => v.props["class"] === "bar-hotbar");
+    expect(centre?.props.children).toBe("hotbar");
+  });
+
+  it("before the first stats: full orbs without numbers, and a flash on a level up", () => {
+    const all = rendered(bar(undefined, true));
+    expect(all.some((v) => v.props["data-testid"] === "health")).toBe(false);
+    expect(all.find((v) => v.props["role"] === "progressbar")?.props["class"]).toBe("xpbar flash");
   });
 });
 

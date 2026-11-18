@@ -1,4 +1,4 @@
-// Options → Interface (docs/17 UI-3, UI-9): the interface scale (the dock and the windows),
+// Options → Interface (docs/17 UI-3, UI-9): the interface scale (the bottom bar and the windows),
 // the text size and the camera shake on heavy hits. Without hooks: the choices
 // live in main.tsx, kept per device in localStorage (state/ui-prefs.ts).
 import type { JSX } from "preact";

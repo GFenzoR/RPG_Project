@@ -6,6 +6,8 @@
 // Portrait with the touch pad (`stacked`): the bar sits right of the pad, the slots on one
 // line along the bottom and the arrows and the edit button on a line above them, so a
 // 412 px phone shows four slots without taking height from the map.
+// On the desktop it lives in the bottom bar (ui/HudBar.tsx, docs/17 UI-4), which the
+// interface scale zooms: it measures its slots in its own CSS px (cssZoom).
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
@@ -35,6 +37,18 @@ const ARROW_PX = 44;
 /** Room left free on each side of the bar (max-width: calc(100% - 1rem) in client.css). */
 const SIDE_MARGIN_PX = 8;
 
+/**
+ * The zoom an element is drawn at (CSS `zoom` of its ancestors: the bottom bar takes the
+ * interface scale). getBoundingClientRect is in screen px, clientWidth and computed styles
+ * in the element's own: divide the first by this to compare them.
+ */
+export function cssZoom(el: HTMLElement): number {
+  const z = (el as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom;
+  if (typeof z === "number" && z > 0) return z;
+  const w = el.offsetWidth;
+  return w > 0 ? el.getBoundingClientRect().width / w : 1;
+}
+
 interface Measure {
   fit: HotbarFit;
   slot: number;
@@ -50,10 +64,13 @@ export function Hotbar(props: {
   reserve?: number;
   /** Arrows and edit button on their own line above the slots (portrait with the pad). */
   stacked?: boolean;
+  /** CSS px kept free on each side (none in the desktop bar, which has its own gaps). */
+  margin?: number;
 }): JSX.Element {
   const { t, game } = props;
   const reserve = props.reserve ?? 0;
   const stacked = props.stacked === true;
+  const margin = props.margin ?? SIDE_MARGIN_PX;
   const [editing, setEditing] = useState(false);
   const [now, setNow] = useState(() => performance.now());
   const root = useRef<HTMLElement>(null);
@@ -86,11 +103,13 @@ export function Hotbar(props: {
         (parseFloat(bar.paddingRight) || 0) +
         (parseFloat(bar.borderLeftWidth) || 0) +
         (parseFloat(bar.borderRightWidth) || 0);
-      const slot = li.getBoundingClientRect().width;
-      const edit = el.querySelector<HTMLElement>(".edit")?.getBoundingClientRect().width ?? 0;
+      // Screen px to the bar's own (the desktop bar is zoomed by the interface scale).
+      const k = cssZoom(el);
+      const slot = li.getBoundingClientRect().width / k;
+      const edit = (el.querySelector<HTMLElement>(".edit")?.getBoundingClientRect().width ?? 0) / k;
       // Stacked, the arrows and the edit button have a line of their own.
       const fit = hotbarFit({
-        available: hotbarRoom(host.clientWidth, reserve, SIDE_MARGIN_PX) - frame,
+        available: hotbarRoom(host.clientWidth, reserve, margin) - frame,
         slot,
         gap,
         total,
@@ -107,7 +126,7 @@ export function Hotbar(props: {
     observer.observe(host);
     update();
     return () => observer.disconnect();
-  }, [total, reserve, stacked]);
+  }, [total, reserve, stacked, margin]);
 
   const slider = measure?.fit.slider === true;
   const onScroll = (): void => {

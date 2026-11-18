@@ -1,15 +1,18 @@
-// Windows of the desktop game screen (docs/17 UI-5), pure and unit-tested: which are open,
-// which sit in the dock (the column right of the map, Tibia-like) and which float over the
-// map, where, how big, folded or not, and which is on top. Three kinds share these rules:
-// - the toolbar's windows (WINDOW_IDS): the toolbar and its keys open and close them;
+// Windows of the desktop game screen (docs/17 UI-4, UI-5), pure and unit-tested: which are
+// open, where they float over the full-screen map, how big, folded or not, and which is on
+// top. Nothing docks any more: the only fixed piece is the bottom bar (ui/HudBar.tsx), and
+// every window is dropped anywhere above it, with a magnet (snapPlace) that aligns it to the
+// screen's edges, the bar's top and the other windows. Three kinds share these rules:
+// - the toolbar's windows (WINDOW_IDS): the toolbar and its keys open and close them, and
+//   the chat, which is always open (FIXED_WINDOWS: no ×, Escape skips it);
 // - the server's windows (SERVER_WINDOWS: dialog, shop, crafting, market, house, trade);
 // - one window per open container ("container-<item>", containerKeys).
 // The server opens and closes the last two (syncWindows follows it); the player still
-// docks, moves, resizes and folds them. App.tsx only renders what this state says.
+// moves, resizes and folds them. GameView.tsx only renders what this state says.
 // Remembered per device in localStorage (`rpg.windows`, a convenience: if it is lost or
 // unreadable, the defaults come back).
 
-/** The windows the toolbar opens. */
+/** The windows the toolbar opens, and the chat (always open, no toolbar button). */
 export const WINDOW_IDS = [
   "battle",
   "inventory",
@@ -19,6 +22,7 @@ export const WINDOW_IDS = [
   "appearance",
   "options",
   "help",
+  "chat",
 ] as const;
 export type WindowId = (typeof WINDOW_IDS)[number];
 
@@ -32,32 +36,31 @@ export type ContainerKey = `container-${string}`;
 /** Any window of the screen. */
 export type WinKey = WindowId | ServerWindowId | ContainerKey;
 
+/** Windows that never close: the chat (RO-like, it only folds). */
+export const FIXED_WINDOWS: readonly WinKey[] = ["chat"];
+
+export const isClosable = (id: WinKey): boolean => !FIXED_WINDOWS.includes(id);
+
 export interface WindowPlace {
   open: boolean;
-  /** In the dock (true) or floating over the map (false). */
-  dock: boolean;
   /** Folded to its title bar. */
   collapsed: boolean;
   /**
-   * Top left corner of a floating window in CSS px from the top left of the game area;
-   * undefined until the player moves it (it then shows at its default place).
+   * Top left corner in CSS px from the top left of the windows' area (the screen above
+   * the bar); undefined until the player moves it: it then shows at its default place
+   * (windows.css).
    */
   x?: number | undefined;
   y?: number | undefined;
-  /**
-   * The size the player gave it, CSS px; undefined = its default. A docked window is as
-   * wide as the dock: only its height counts there.
-   */
+  /** The size the player gave it, CSS px; undefined = its default. */
   w?: number | undefined;
   h?: number | undefined;
 }
 
 export interface WindowsState {
-  /** Dock order, top to bottom (every docked window, open or not). */
-  order: WinKey[];
-  /** Stacking of the floating windows, bottom to top. */
+  /** Stacking, bottom to top: the windows opened or touched (raised) this far. */
   z: WinKey[];
-  /** The toolbar's windows. */
+  /** The toolbar's windows and the chat. */
   win: Record<WindowId, WindowPlace>;
   /** The server's windows and the containers' (`open` follows the server, syncWindows). */
   others: Record<string, WindowPlace>;
@@ -65,6 +68,9 @@ export interface WindowsState {
 
 /** localStorage key of the remembered windows. */
 export const WINDOWS_STORAGE_KEY = "rpg.windows";
+
+/** Version of the stored JSON (1 and 2 had a dock: their docked windows float now). */
+export const WINDOWS_VERSION = 3;
 
 /**
  * Containers remembered at most: the ones whose window changed last (`others` keeps them in
@@ -86,33 +92,30 @@ export const isContainerKey = (v: unknown): v is ContainerKey =>
 const isKey = (v: unknown): v is WinKey =>
   isToolWindow(v) || isServerWindow(v) || isContainerKey(v);
 
-/**
- * Where a server or container window shows the first time: containers in the dock (as in
- * Tibia: under the equipment), the server's windows over the map (where they were before
- * they became windows: the dialog at the bottom centre, the market top left...).
- */
-export function defaultPlace(id: WinKey): WindowPlace {
-  return { open: false, dock: isContainerKey(id), collapsed: false };
+/** A server or container window seen for the first time: closed, at its default place. */
+export function defaultPlace(): WindowPlace {
+  return { open: false, collapsed: false };
 }
 
 /**
- * A new player: the battle list and the equipment open in the dock, as in Tibia; skills and
- * party wait closed in the dock; the guild, the appearance, the options and the help float.
+ * A new player: the battle list (top left), the equipment (top right) and the chat
+ * (bottom left, over the bar) open at their default places (windows.css); the rest wait
+ * closed.
  */
 export function defaultWindows(): WindowsState {
-  const place = (open: boolean, dock: boolean): WindowPlace => ({ open, dock, collapsed: false });
+  const place = (open: boolean): WindowPlace => ({ open, collapsed: false });
   return {
-    order: ["battle", "inventory", "skills", "party"],
     z: [],
     win: {
-      battle: place(true, true),
-      inventory: place(true, true),
-      skills: place(false, true),
-      party: place(false, true),
-      guild: place(false, false),
-      appearance: place(false, false),
-      options: place(false, false),
-      help: place(false, false),
+      battle: place(true),
+      inventory: place(true),
+      skills: place(false),
+      party: place(false),
+      guild: place(false),
+      appearance: place(false),
+      options: place(false),
+      help: place(false),
+      chat: place(true),
     },
     others: {},
   };
@@ -120,7 +123,7 @@ export function defaultWindows(): WindowsState {
 
 /** The place of any window (a server or container window never seen: its default). */
 export function placeOf(s: WindowsState, id: WinKey): WindowPlace {
-  return isToolWindow(id) ? s.win[id] : (s.others[id] ?? defaultPlace(id));
+  return isToolWindow(id) ? s.win[id] : (s.others[id] ?? defaultPlace());
 }
 
 const finite = (v: unknown): number | undefined =>
@@ -133,10 +136,12 @@ const size = (v: unknown): number | undefined => {
 };
 
 /**
- * The remembered state (the JSON of saveWindows, version 1 or 2), checked field by field: an
- * unknown window is dropped, a missing one gets its default, and anything unreadable gives
- * the defaults. The server's and the containers' windows come back closed: the server
- * opens them again.
+ * The remembered state (the JSON of saveWindows, version 1 to 3), checked field by field:
+ * an unknown window is dropped, a missing one gets its default, and anything unreadable
+ * gives the defaults. Versions 1 and 2 had a dock: a window that was docked floats now, at
+ * its default place and size (its x, y and size were the dock's). The server's and the
+ * containers' windows come back closed: the server opens them again. The chat is always
+ * open.
  */
 export function loadWindows(raw: string | null | undefined): WindowsState {
   const base = defaultWindows();
@@ -148,15 +153,18 @@ export function loadWindows(raw: string | null | undefined): WindowsState {
     return base;
   }
   if (typeof data !== "object" || data === null) return base;
-  const d = data as { v?: unknown; order?: unknown; z?: unknown; win?: unknown; others?: unknown };
-  if (d.v !== 1 && d.v !== 2) return base;
+  const d = data as { v?: unknown; z?: unknown; win?: unknown; others?: unknown };
+  if (d.v !== 1 && d.v !== 2 && d.v !== WINDOWS_VERSION) return base;
   const read = (p: unknown, def: WindowPlace): WindowPlace | undefined => {
     if (typeof p !== "object" || p === null) return undefined;
     const w = p as Record<string, unknown>;
+    const open = typeof w["open"] === "boolean" ? w["open"] : def.open;
+    const collapsed = typeof w["collapsed"] === "boolean" ? w["collapsed"] : false;
+    // Docked (versions 1 and 2): out of the dock, at its default place.
+    if (w["dock"] === true) return { open, collapsed };
     return {
-      open: typeof w["open"] === "boolean" ? w["open"] : def.open,
-      dock: typeof w["dock"] === "boolean" ? w["dock"] : def.dock,
-      collapsed: typeof w["collapsed"] === "boolean" ? w["collapsed"] : false,
+      open,
+      collapsed,
       x: finite(w["x"]),
       y: finite(w["y"]),
       w: size(w["w"]),
@@ -170,27 +178,25 @@ export function loadWindows(raw: string | null | undefined): WindowsState {
       const place = read(p, base.win[id]);
       if (place) win[id] = place;
     }
+  win.chat = { ...win.chat, open: true };
   const others: Record<string, WindowPlace> = {};
-  if (d.v === 2 && typeof d.others === "object" && d.others !== null) {
+  if (d.v !== 1 && typeof d.others === "object" && d.others !== null) {
     const places: [string, WindowPlace][] = [];
     for (const [id, p] of Object.entries(d.others as Record<string, unknown>)) {
       if (!isServerWindow(id) && !isContainerKey(id)) continue;
-      const place = read(p, defaultPlace(id));
+      const place = read(p, defaultPlace());
       if (place) places.push([id, { ...place, open: false }]);
     }
     for (const [id, place] of lastContainers(places)) others[id] = place;
   }
-  const s: WindowsState = { order: [], z: [], win, others };
-  const ids = (v: unknown): WinKey[] =>
-    Array.isArray(v) ? [...new Set(v.filter(isKey))] : ([] as WinKey[]);
-  const known = (id: WinKey): boolean => isToolWindow(id) || id in others;
-  // Every docked window has a place in the dock order; nothing floating keeps one.
-  const order = ids(d.order).filter((id) => known(id) && placeOf(s, id).dock);
-  for (const id of WINDOW_IDS) if (win[id].dock && !order.includes(id)) order.push(id);
-  for (const id of Object.keys(others) as WinKey[])
-    if (placeOf(s, id).dock && !order.includes(id)) order.push(id);
-  const z = ids(d.z).filter((id) => known(id) && !placeOf(s, id).dock);
-  return { order, z, win, others };
+  const s: WindowsState = { z: [], win, others };
+  // Only open windows stack (the server's come back closed: they leave the stack).
+  const z = Array.isArray(d.z)
+    ? [...new Set(d.z.filter(isKey))].filter(
+        (id) => (isToolWindow(id) || id in others) && placeOf(s, id).open,
+      )
+    : [];
+  return { z, win, others };
 }
 
 /**
@@ -207,10 +213,10 @@ export function saveWindows(s: WindowsState): string {
   const others = Object.fromEntries(
     lastContainers(Object.entries(s.others)).map(([id, p]) => [
       id,
-      { dock: p.dock, collapsed: p.collapsed, x: p.x, y: p.y, w: p.w, h: p.h },
+      { collapsed: p.collapsed, x: p.x, y: p.y, w: p.w, h: p.h },
     ]),
   );
-  return JSON.stringify({ v: 2, order: s.order, z: s.z, win: s.win, others });
+  return JSON.stringify({ v: WINDOWS_VERSION, z: s.z, win: s.win, others });
 }
 
 const withPlace = (s: WindowsState, id: WinKey, p: Partial<WindowPlace>): WindowsState => {
@@ -224,9 +230,9 @@ const withPlace = (s: WindowsState, id: WinKey, p: Partial<WindowPlace>): Window
   return { ...s, others };
 };
 
-/** Brings a floating window to the top (a docked one has no stacking). */
+/** Brings a window to the top. */
 export function focusWindow(s: WindowsState, id: WinKey): WindowsState {
-  if (placeOf(s, id).dock || s.z[s.z.length - 1] === id) return s;
+  if (s.z[s.z.length - 1] === id) return s;
   return { ...s, z: [...s.z.filter((w) => w !== id), id] };
 }
 
@@ -237,8 +243,9 @@ export function openWindow(s: WindowsState, id: WinKey): WindowsState {
   return focusWindow(next, id);
 }
 
+/** Closes a window (the chat never closes). */
 export function closeWindow(s: WindowsState, id: WinKey): WindowsState {
-  if (!placeOf(s, id).open) return s;
+  if (!placeOf(s, id).open || !isClosable(id)) return s;
   return { ...withPlace(s, id, { open: false }), z: s.z.filter((w) => w !== id) };
 }
 
@@ -251,73 +258,64 @@ export function collapseWindow(s: WindowsState, id: WinKey, collapsed: boolean):
   return placeOf(s, id).collapsed === collapsed ? s : withPlace(s, id, { collapsed });
 }
 
-/** Takes a window out of the dock (or moves a floating one) to x, y, on top. */
-export function floatWindow(s: WindowsState, id: WinKey, x: number, y: number): WindowsState {
-  const moved = withPlace(s, id, { dock: false, x: Math.round(x), y: Math.round(y) });
-  return focusWindow(
-    { ...moved, order: s.order.filter((w) => w !== id), z: s.z.filter((w) => w !== id) },
-    id,
-  );
+/** Puts a window at x, y (its stacking stays: a resize of the screen moves it in). */
+export function placeWindow(s: WindowsState, id: WinKey, x: number, y: number): WindowsState {
+  const p = placeOf(s, id);
+  const nx = Math.round(x);
+  const ny = Math.round(y);
+  return p.x === nx && p.y === ny ? s : withPlace(s, id, { x: nx, y: ny });
 }
 
-/**
- * Puts a window in the dock right before `before` (a docked window), or at the end when
- * `before` is undefined, not docked or the window itself.
- */
-export function dockWindow(s: WindowsState, id: WinKey, before: WinKey | undefined): WindowsState {
-  const order = s.order.filter((w) => w !== id);
-  const at = before === undefined || before === id ? -1 : order.indexOf(before);
-  order.splice(at < 0 ? order.length : at, 0, id);
-  return {
-    ...withPlace(s, id, { dock: true }),
-    order,
-    z: s.z.filter((w) => w !== id),
-  };
+/** The player moved a window to x, y: it goes there, on top. */
+export function moveWindow(s: WindowsState, id: WinKey, x: number, y: number): WindowsState {
+  return focusWindow(placeWindow(s, id, x, y), id);
 }
 
 /** Every window the state knows: the toolbar's, then the server's and the containers'. */
-const allKeys = (s: WindowsState): WinKey[] => [
+export const knownWindows = (s: WindowsState): WinKey[] => [
   ...WINDOW_IDS,
   ...(Object.keys(s.others) as WinKey[]),
 ];
 
-/** The open docked windows, top to bottom. */
-export const dockedWindows = (s: WindowsState): WinKey[] =>
-  s.order.filter((id) => placeOf(s, id).open && placeOf(s, id).dock);
-
-/** The open floating windows, bottom to top (later ones are drawn over the earlier). */
-export function floatingWindows(s: WindowsState): WinKey[] {
-  const open = allKeys(s).filter((id) => placeOf(s, id).open && !placeOf(s, id).dock);
-  const rank = (id: WinKey): number => {
-    const i = s.z.indexOf(id);
-    return i < 0 ? -1 : i;
-  };
+/**
+ * The open windows, bottom to top (later ones are drawn over the earlier): first those
+ * never raised, in the order the state knows them, then the stack.
+ */
+export function openWindows(s: WindowsState): WinKey[] {
+  const open = knownWindows(s).filter((id) => placeOf(s, id).open);
+  const rank = (id: WinKey): number => s.z.indexOf(id);
   return open.sort((a, b) => rank(a) - rank(b));
 }
 
-/** The window Escape closes: the floating one on top; undefined when none floats. */
+/**
+ * The window Escape closes: the one on top of the stack (the last opened or touched) that
+ * can close; undefined when there is none (Escape then opens the options). The windows a
+ * new player starts with (battle, equipment) sit under the stack until they are touched,
+ * so Escape still opens the options on a fresh screen, as with the old dock.
+ */
 export function topWindow(s: WindowsState): WinKey | undefined {
-  const f = floatingWindows(s);
-  return f[f.length - 1];
+  for (let i = s.z.length - 1; i >= 0; i--) {
+    const id = s.z[i];
+    if (id !== undefined && placeOf(s, id).open && isClosable(id)) return id;
+  }
+  return undefined;
 }
 
 /**
  * Follows the server: the server and container windows in `open` are open, the others are
- * closed. A window that just opened comes on top (floating) or takes its place in the dock
- * (a container seen for the first time goes at the end). The same state when nothing
- * changes, so it can run on every update.
+ * closed. A window that just opened comes on top (a server's window over a container that
+ * opened with it). The same state when nothing changes, so it can run on every update.
  */
 export function syncWindows(s: WindowsState, open: readonly WinKey[]): WindowsState {
   let next = s;
   const want = new Set<WinKey>(open.filter((id) => !isToolWindow(id)));
   for (const id of Object.keys(s.others) as WinKey[])
     if (s.others[id]?.open && !want.has(id)) next = closeWindow(next, id);
-  for (const id of want) {
+  // Containers first: a dialog or a station that opens with them comes above them.
+  const order = [...want].sort((a, b) => Number(!isContainerKey(a)) - Number(!isContainerKey(b)));
+  for (const id of order) {
     if (placeOf(next, id).open && id in next.others) continue;
-    next = withPlace(next, id, { open: true });
-    const p = placeOf(next, id);
-    if (p.dock && !next.order.includes(id)) next = { ...next, order: [...next.order, id] };
-    next = focusWindow(next, id);
+    next = focusWindow(withPlace(next, id, { open: true }), id);
   }
   return next;
 }
@@ -362,21 +360,66 @@ export interface Box {
   height: number;
 }
 
-/** Part of a window that always stays on screen, so its title bar can be grabbed. */
-export const GRIP = { x: 64, y: 32 } as const;
+/** A window's box in CSS px from the top left of the windows' area. */
+export interface Rect extends Box {
+  x: number;
+  y: number;
+}
 
 /**
- * Where a floating window of `size` may sit in an area of `area`: its title bar never
- * leaves the area (at least GRIP of it shows), and it never starts above the top.
+ * Where a window of `size` may sit in an area of `area` (the screen above the bar): all of
+ * it inside, never off the screen nor under the bar. One larger than the area sits at its
+ * top left (its max-height in windows.css keeps it above the bar).
  */
 export function clampPlace(x: number, y: number, size: Box, area: Box): { x: number; y: number } {
-  const minX = Math.min(0, GRIP.x - size.width);
-  const maxX = Math.max(0, area.width - GRIP.x);
-  const maxY = Math.max(0, area.height - GRIP.y);
+  const maxX = Math.max(0, area.width - size.width);
+  const maxY = Math.max(0, area.height - size.height);
   return {
-    x: Math.round(Math.min(Math.max(x, minX), maxX)),
+    x: Math.round(Math.min(Math.max(x, 0), maxX)),
     y: Math.round(Math.min(Math.max(y, 0), maxY)),
   };
+}
+
+/** How near (CSS px) an edge has to come to another for the magnet to take it. */
+export const SNAP_PX = 10;
+
+/**
+ * The magnet (the owner's choice, docs/17 UI-5): a window dropped near an edge snaps to
+ * it, on each axis to the nearest edge within `within` px:
+ * - the screen's edges, and the bar's top (the area's bottom);
+ * - another window's edges, both ways: beside it (its left to the other's right, and so
+ *   on) or aligned with it (left with left, top with top...), only when the two are side
+ *   by side or one over the other (near on the other axis), so a far window never pulls.
+ * Then it is kept inside the area (clampPlace).
+ */
+export function snapPlace(
+  r: Rect,
+  area: Box,
+  others: readonly Rect[],
+  within: number = SNAP_PX,
+): { x: number; y: number } {
+  const xs: number[] = [0, area.width - r.width];
+  const ys: number[] = [0, area.height - r.height];
+  for (const o of others) {
+    const nearY = r.y < o.y + o.height + within && r.y + r.height > o.y - within;
+    const nearX = r.x < o.x + o.width + within && r.x + r.width > o.x - within;
+    if (nearY) xs.push(o.x + o.width, o.x - r.width, o.x, o.x + o.width - r.width);
+    if (nearX) ys.push(o.y + o.height, o.y - r.height, o.y, o.y + o.height - r.height);
+  }
+  // The nearest edge on the axis (the first one listed on a tie: the screen's), if near.
+  const pick = (v: number, targets: readonly number[]): number => {
+    let best = v;
+    let gap = Number.POSITIVE_INFINITY;
+    for (const t of targets) {
+      const d = Math.abs(t - v);
+      if (d < gap) {
+        gap = d;
+        best = t;
+      }
+    }
+    return gap <= within ? best : v;
+  };
+  return clampPlace(pick(r.x, xs), pick(r.y, ys), r, area);
 }
 
 /** The smallest a window gets (docs/17 UI-5: "un tamaño mínimo"), CSS px. */
@@ -392,51 +435,34 @@ export function clampSize(width: number, height: number, area: Box): Box {
   };
 }
 
-/** Sets the size of a window (a docked one keeps only the height). */
+/** Sets the size of a window. */
 export function resizeWindow(
   s: WindowsState,
   id: WinKey,
   width: number,
   height: number,
 ): WindowsState {
-  const dock = placeOf(s, id).dock;
-  return withPlace(s, id, {
-    w: dock ? placeOf(s, id).w : Math.round(width),
-    h: Math.round(height),
-  });
-}
-
-/** Moves a docked window `by` places up (negative) or down the dock. */
-export function moveInDock(s: WindowsState, id: WinKey, by: number): WindowsState {
-  const shown = dockedWindows(s);
-  const i = shown.indexOf(id);
-  if (i < 0) return s;
-  const to = Math.min(Math.max(i + by, 0), shown.length - 1);
-  if (to === i) return s;
-  // Before the window that will follow it (by > 0: the one after the target).
-  const before = by < 0 ? shown[to] : shown[to + 1];
-  return dockWindow(s, id, before);
+  return withPlace(s, id, { w: Math.round(width), h: Math.round(height) });
 }
 
 /** How far one arrow press moves or resizes a window, CSS px. */
 export const KEY_STEP = 16;
 
-/** Where a window is and where it may go, for windowNudge. */
+/** Where a window is and what is around it, for windowNudge. */
 export interface NudgeContext {
-  /** Its box now (CSS px from the top left of the game area). */
-  rect: { x: number; y: number; width: number; height: number };
-  /** The game area. */
+  /** Its box now (CSS px from the top left of the windows' area). */
+  rect: Rect;
+  /** The windows' area (the screen above the bar). */
   area: Box;
-  /** Where it floats when it leaves the dock from the keyboard (beside the dock). */
-  floatAt: { x: number; y: number };
+  /** The other open windows (the magnet aligns with them too). */
+  others?: readonly Rect[] | undefined;
 }
 
 /**
- * The keyboard on a window's move handle (docs/17 UI-1, UI-5: everything with the keyboard).
- * Floating: the arrows move it, Shift+arrows resize it (right and down grow); docked: up
- * and down move it in the dock, Shift+up and down change its height. Enter or Space docks a
- * floating window, or floats a docked one beside the dock. Undefined for any other key (it
- * then does what it does elsewhere); Alt is left to the browser (Alt+Left goes back).
+ * The keyboard on a window's move handle (docs/17 UI-1, UI-5: everything with the keyboard):
+ * the arrows move it KEY_STEP px (with the magnet, inside the area), Shift+arrows resize it
+ * (right and down grow; the top left corner stays). Undefined for any other key (it then does what it does
+ * elsewhere); Alt is left to the browser (Alt+Left goes back).
  */
 export function windowNudge(
   s: WindowsState,
@@ -445,10 +471,6 @@ export function windowNudge(
   ctx: NudgeContext,
 ): WindowsState | undefined {
   if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
-  const p = placeOf(s, id);
-  if (e.key === "Enter" || e.key === " ") {
-    return p.dock ? floatWindow(s, id, ctx.floatAt.x, ctx.floatAt.y) : dockWindow(s, id, undefined);
-  }
   const d: Record<string, [number, number]> = {
     ArrowLeft: [-1, 0],
     ArrowRight: [1, 0],
@@ -457,17 +479,21 @@ export function windowNudge(
   };
   const dir = d[e.key];
   if (!dir) return undefined;
-  const step = KEY_STEP;
   const [dx, dy] = dir;
   const { rect, area } = ctx;
   if (e.shiftKey) {
-    if (p.dock && dx !== 0) return s; // the dock sets the width
-    const size = clampSize(rect.width + dx * step, rect.height + dy * step, area);
-    return resizeWindow(s, id, size.width, size.height);
+    const room = { width: area.width - rect.x, height: area.height - rect.y };
+    const size = clampSize(rect.width + dx * KEY_STEP, rect.height + dy * KEY_STEP, room);
+    // Pinned where it is: one at a default place that hangs from the bottom (the chat, the
+    // dialog) would otherwise grow upwards.
+    return resizeWindow(placeWindow(s, id, rect.x, rect.y), id, size.width, size.height);
   }
-  if (p.dock) return dy === 0 ? s : moveInDock(s, id, dy);
-  const at = clampPlace(rect.x + dx * step, rect.y + dy * step, rect, area);
-  return floatWindow(s, id, at.x, at.y);
+  const at = snapPlace(
+    { ...rect, x: rect.x + dx * KEY_STEP, y: rect.y + dy * KEY_STEP },
+    area,
+    ctx.others ?? [],
+  );
+  return moveWindow(s, id, at.x, at.y);
 }
 
 /**
@@ -517,6 +543,7 @@ export const WINDOW_KEY_LABEL: Readonly<Record<WindowId, string>> = {
   appearance: "O",
   options: "Escape",
   help: "H",
+  chat: "",
 };
 
 /** Title key of each window. */
@@ -529,13 +556,14 @@ export const WINDOW_TITLE: Readonly<Record<WindowId, string>> = {
   appearance: "client.appearance.title",
   options: "client.options.button",
   help: "client.help.title",
+  chat: "client.chat.title",
 };
 
 /**
  * What a key press does to the windows, or undefined when it is not a window key: a
- * window key toggles its window; Escape closes the floating window on top (a server's or a
- * container's too: App.tsx asks the server), or opens the options when nothing floats. Keys
- * with Ctrl, Alt or Meta are never window keys.
+ * window key toggles its window; Escape closes the window on top (a server's or a
+ * container's too: GameView asks the server), or opens the options when there is none.
+ * Keys with Ctrl, Alt or Meta are never window keys.
  */
 export function windowKey(
   s: WindowsState,
@@ -551,15 +579,16 @@ export function windowKey(
 }
 
 /**
- * The window that holds a tutorial highlight (a `data-tutorial` value), opened so the
- * highlighted element is on screen; undefined when it is not in a window (stats, hotbar,
- * chat are always shown).
+ * The window that holds a tutorial highlight (a `data-tutorial` value), opened (and
+ * unfolded) so the highlighted element is on screen; undefined when it is not in a window
+ * (the stats and the hotbar are in the bar, always shown).
  */
 export function windowForHighlight(highlight: string | undefined): WindowId | undefined {
   switch (highlight) {
     case "battle":
     case "inventory":
     case "skills":
+    case "chat":
       return highlight;
     default:
       return undefined;

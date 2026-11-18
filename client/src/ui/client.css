@@ -2,7 +2,8 @@
 /* The interface's text size (Options → Interface, docs/17 UI-3: 90 % to 130 %, in rem) is
    the root font size, set by state/ui-prefs.ts as --ui-text-scale. */
 @import "./fonts.css";
-/* The desktop game screen: dock, orbs, toolbar and windows (docs/17 UI-4, UI-5). */
+/* The desktop game screen: full-screen map, the bottom bar and the windows (docs/17 UI-4,
+   UI-5). */
 @import "./windows.css";
 
 :root {
@@ -410,7 +411,8 @@ kbd {
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
 /* The header of tablets and phones is always one line (T5.6): a wrapped header pushed the
-   map down a zoom step. The desktop has no header (docs/17 UI-4: the dock has it all). */
+   map down a zoom step. The desktop has no header (docs/17 UI-4: the bottom bar has it
+   all). */
 .hud {
   display: flex;
   align-items: center;
@@ -625,7 +627,7 @@ kbd {
   min-height: 0;
   /* overflow: clip (below) is not a scroll container, so without this the flex item would
      keep the canvas's width as its minimum: made narrower, the window kept the map as wide
-     as before and pushed the dock off the screen. */
+     as before and pushed the side panel off the screen. */
   min-width: 0;
   display: flex;
   align-items: center;
@@ -1142,25 +1144,7 @@ body.picking-item .map-hint {
   width: 1.8rem;
   padding: 0;
 }
-/* Desktop: a slimmer bar closer to the edge, and the canvas keeps the strip it takes clear
-   when the window has room, or moves up as far as it can (--map-reserve-bottom, read by
-   render/game-canvas.ts; px, the belt's height plus its bottom gap). At 1280x800 the bar
-   covered most of the last row of tiles, and a click to walk there cast F1 or F2. */
-.game[data-layout="desktop"]:not([data-pad]) .viewport {
-  --map-reserve-bottom: 48px;
-}
-.game[data-layout="desktop"]:not([data-pad]) .hotbar {
-  bottom: 0.2rem;
-}
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li button,
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li select {
-  height: 2.3rem;
-}
-/* The key and two lines of the name fit the slimmer slot whole. */
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li button {
-  padding-block: 1px 0;
-  line-height: 1.02;
-}
+/* On the desktop the hotbar is in the bottom bar (windows.css), not over the map. */
 
 /* ---- NPC dialog and shop (T1.10; docs/17 UI-8: no scrolling) ---------------------- */
 /* The box spans the map down to the hotbar and lets clicks through; only its windows take

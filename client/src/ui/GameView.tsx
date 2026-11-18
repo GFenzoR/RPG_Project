@@ -1,7 +1,8 @@
 // The game screen's DOM over the canvas (docs/17 UI-4, UI-5). Two shapes:
-// - desktop (layout "sidebar"): no header; the map takes everything but a column on its
-//   right (the dock: vitals, toolbar, docked windows and the chat), and the toolbar opens
-//   separate windows (ui/windows.ts) that dock there or float over the map;
+// - desktop (layout "sidebar"): full screen, as the owner asked (2026-11-18): the map
+//   fills the screen above the gothic bottom bar (ui/HudBar.tsx: orbs, experience, hotbar
+//   and toolbar), the only fixed piece; every window (ui/windows.ts) floats over the map,
+//   anywhere the player drops it, with a magnet that aligns it to the edges;
 // - tablets and phones (T5.6): the compact header and the side panel as tabs or a drawer.
 // It draws what the Game publishes (GameUi) and sends intents through it. App.tsx's
 // GameScreen creates the Game; the UI preview (src/preview) feeds this a made-up GameUi.
@@ -45,10 +46,11 @@ import { GameWindow } from "./GameWindow.tsx";
 import type { IconName } from "./icons.tsx";
 import { SplitPrompt } from "./SplitPrompt.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
-import { Vitals, lowHealth } from "./Vitals.tsx";
+import { lowHealth } from "./Vitals.tsx";
+import { HudBar } from "./HudBar.tsx";
+import { ornamentStyle } from "./ornaments.ts";
 import {
   WINDOWS_STORAGE_KEY,
-  WINDOW_IDS,
   WINDOW_KEYS,
   WINDOW_TITLE,
   clampPlace,
@@ -56,25 +58,28 @@ import {
   closeWindow,
   collapseWindow,
   containerKeys,
-  dockWindow,
-  floatWindow,
-  floatingWindows,
   focusWindow,
+  isClosable,
   isToolWindow,
+  knownWindows,
   loadWindows,
+  moveWindow,
   openWindow,
+  openWindows,
   placeOf,
+  placeWindow,
   resetWindows,
   resizeWindow,
   saveWindows,
   serverWindows,
+  snapPlace,
   syncWindows,
   toggleWindow,
   windowForHighlight,
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { ContainerKey, WinKey, WindowId, WindowsState } from "./windows.ts";
+import type { ContainerKey, Rect, WinKey, WindowId, WindowsState } from "./windows.ts";
 
 /** The pieces of the desktop Options window (main.tsx builds them: they outlive a game). */
 export interface GameSettings {
@@ -91,7 +96,7 @@ export interface GameSettings {
    * Interface; main.tsx keeps them).
    */
   interfaceOptions?: JSX.Element | undefined;
-  /** The interface scale (1 = 100 %): the CSS zoom of the dock and the windows. */
+  /** The interface scale (1 = 100 %): the CSS zoom of the bottom bar and the windows. */
   uiScale?: number | undefined;
   /** The camera shakes on a heavy hit (off with reduced motion whatever this says). */
   cameraShake?: boolean | undefined;
@@ -231,8 +236,8 @@ export function GameView(props: GameViewProps): JSX.Element {
   useEffect(() => {
     if (chatTab === "log") setLogSeen(lastLog);
   }, [chatTab, lastLog]);
-  // With the log out of view (tabs, drawer, or the chat tab on desktop) every message
-  // floats over the map, not only the important ones.
+  // With the log out of view (tabs, drawer, or the chat tab of the desktop's chat window)
+  // every message floats over the map, not only the important ones.
   const notices = activeNotices(ui.log, performance.now(), {
     all: tabbed || chatTab !== "log",
   });
@@ -253,7 +258,7 @@ export function GameView(props: GameViewProps): JSX.Element {
     if (tabFor) setTab(tabFor);
     const w = windowForHighlight(highlight);
     if (w) win.update((s) => openWindow(s, w));
-    // The chat sits behind the log tab on desktop: a step about the chat shows it.
+    // The chat window may show its log tab: a step about the chat shows the chat.
     if (highlight === "chat") setChatTab("chat");
   }, [highlight]);
 
@@ -442,7 +447,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         </select>
       </label>
       <label class="check" title={t("client.fight.chase")}>
-        {/* The narrow dock shows "Chase": the box keeps its whole name. */}
+        {/* The narrow battle window shows "Chase": the box keeps its whole name. */}
         <input
           type="checkbox"
           aria-label={t("client.fight.chase")}
@@ -538,7 +543,8 @@ export function GameView(props: GameViewProps): JSX.Element {
           </button>
         </div>
       )}
-      {props.entered && (
+      {/* The hotbar: in the bottom bar on the desktop (below), over the map elsewhere. */}
+      {props.entered && !windowed && (
         <Hotbar
           t={t}
           content={props.content}
@@ -644,11 +650,33 @@ export function GameView(props: GameViewProps): JSX.Element {
           return <OptionsBody t={t} settings={props.settings} onReset={() => win.reset()} />;
         case "help":
           return <HelpBody t={t} />;
+        case "chat":
+          return (
+            <ChatPanes tab={chatTab} log={log}>
+              {chat}
+            </ChatPanes>
+          );
       }
     };
     const common = { t, content: props.content, game, ui, framed: true } as const;
     /** What a window shows: its title, icon and body (undefined: nothing to show now). */
     const windowOf = (id: WinKey): ShownWindow | undefined => {
+      if (id === "chat")
+        return {
+          title: t(WINDOW_TITLE.chat),
+          icon: windowIcon("chat"),
+          body: toolBody("chat"),
+          // The tabs (chat and log) take the title's place in the bar (RO-like).
+          barExtra: (
+            <ChatTabs
+              t={t}
+              tab={chatTab}
+              onTab={setChatTab}
+              unread={chatTab !== "log" && lastLog > logSeen}
+            />
+          ),
+          hideTitle: true,
+        };
       if (isToolWindow(id))
         return {
           title: t(WINDOW_TITLE[id]),
@@ -737,6 +765,8 @@ export function GameView(props: GameViewProps): JSX.Element {
             ),
             size: "narrow",
             closeLabel: t("client.inventory.close"),
+            // Unmoved, each container steps down from the last (windows.css).
+            nth: [...ckeys.values()].indexOf(id),
           }
         : undefined;
     };
@@ -757,8 +787,11 @@ export function GameView(props: GameViewProps): JSX.Element {
           testid={w.testid ?? `window-${id}`}
           titleTestid={w.titleTestid}
           size={w.size}
-          closable={w.closable}
+          closable={w.closable ?? isClosable(id)}
           closeLabel={w.closeLabel}
+          barExtra={w.barExtra}
+          hideTitle={w.hideTitle}
+          nth={w.nth}
           badge={id === "guild" && ui.guildInvitations.length > 0}
           onClose={() => win.close(id)}
           onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
@@ -771,13 +804,10 @@ export function GameView(props: GameViewProps): JSX.Element {
         </GameWindow>
       );
     };
-    const shownDocked = win.state.order.filter((id) => {
-      const p = placeOf(win.state, id);
-      return p.dock && (p.open || win.closing.has(id));
-    });
-    const shownFloating = floatingWindows(win.state);
-    for (const id of win.closing)
-      if (!placeOf(win.state, id).dock && !shownFloating.includes(id)) shownFloating.push(id);
+    // Bottom to top (Tab goes through them in that order too); a closing one stays drawn
+    // for its fade.
+    const shown = openWindows(win.state);
+    for (const id of win.closing) if (!shown.includes(id)) shown.push(id);
     return (
       <div
         ref={gameBox}
@@ -789,46 +819,40 @@ export function GameView(props: GameViewProps): JSX.Element {
         data-ui="windows"
         data-pad={props.touchPad ? "" : undefined}
         data-touch={touch ? "" : undefined}
+        style={ornamentStyle()}
       >
-        <div
-          class="game-body"
-          key="body"
-          ref={win.bodyRef}
-          data-shop={ui.dialog && ui.shop ? "" : undefined}
-        >
+        <div class="game-body" key="body" data-shop={ui.dialog && ui.shop ? "" : undefined}>
           <div class="viewport" key="viewport" ref={props.host} data-low={low ? "" : undefined}>
             {overMap}
           </div>
-          <aside class="side dock" id="side-panel" ref={win.dockRef}>
-            <Vitals
-              t={t}
-              name={props.characterName}
-              stats={stats}
-              levelUp={levelNotice !== undefined}
-            >
-              <ConditionBar t={t} conditions={ui.conditions} />
-            </Vitals>
-            <Toolbar
-              t={t}
-              windows={win.state}
-              onToggle={(id) => win.toggle(id)}
-              marketOpen={ui.market !== undefined}
-              onCloseMarket={() => game?.marketClose()}
-              guildBadge={ui.guildInvitations.length > 0}
-              onLogout={() => game?.logout()}
-            />
-            <div class="dock-stack">{shownDocked.map((id) => frame(id, 0))}</div>
-            <ChatBox
-              t={t}
-              tab={chatTab}
-              onTab={setChatTab}
-              unread={chatTab !== "log" && lastLog > logSeen}
-              log={log}
-            >
-              {chat}
-            </ChatBox>
-          </aside>
-          {shownFloating.map((id, i) => frame(id, i))}
+          <HudBar
+            key="bar"
+            t={t}
+            name={props.characterName}
+            stats={stats}
+            levelUp={levelNotice !== undefined}
+            conditions={<ConditionBar t={t} conditions={ui.conditions} />}
+            hotbar={
+              props.entered && (
+                <Hotbar t={t} content={props.content} game={game} ui={ui} margin={0} />
+              )
+            }
+            toolbar={
+              <Toolbar
+                t={t}
+                windows={win.state}
+                onToggle={(id) => win.toggle(id)}
+                marketOpen={ui.market !== undefined}
+                onCloseMarket={() => game?.marketClose()}
+                guildBadge={ui.guildInvitations.length > 0}
+                onLogout={() => game?.logout()}
+              />
+            }
+          />
+          {/* The windows' area: the screen above the bar (windows never go under it). */}
+          <div class="win-layer" key="windows" ref={win.layerRef}>
+            {shown.map((id, i) => frame(id, i))}
+          </div>
         </div>
         {menu}
       </div>
@@ -953,10 +977,15 @@ interface ShownWindow {
   closable?: boolean | undefined;
   /** The close button's name when it is not "Close <title>" (what it did before). */
   closeLabel?: string | undefined;
+  /** More in the title bar (the chat's tabs), and the title only for screen readers. */
+  barExtra?: JSX.Element | undefined;
+  hideTitle?: boolean | undefined;
+  /** Its place among the windows of its kind (the n-th open container). */
+  nth?: number | undefined;
 }
 
-/** Width of each floating window (client.css .gwin[data-size]). */
-const WINDOW_SIZE: Record<WindowId, "narrow" | "normal" | "wide"> = {
+/** Width of each window (windows.css .gwin[data-size]; the chat has its own). */
+const WINDOW_SIZE: Record<Exclude<WindowId, "chat">, "narrow" | "normal" | "wide"> = {
   battle: "narrow",
   inventory: "narrow",
   skills: "narrow",
@@ -972,7 +1001,7 @@ const isPanelTab = (id: string): id is PanelTab => (PANEL_TABS as readonly strin
 /** Pointer travel (CSS px) before a press on a title bar becomes a drag. */
 const DRAG_START_PX = 5;
 
-/** How long a closing window fades out (matches .gwin[data-closing] in client.css), ms. */
+/** How long a closing window fades out (matches .gwin[data-closing] in windows.css), ms. */
 const CLOSE_MS = 100;
 
 interface WindowsApi {
@@ -985,29 +1014,45 @@ interface WindowsApi {
   close(id: WinKey): void;
   key(e: KeyboardEvent): void;
   reset(): void;
+  /** The title bar: the window follows the pointer, with the magnet (snapPlace). */
   grab(id: WinKey, e: PointerEvent, el: HTMLElement): void;
-  /** The resize grip: the window follows the pointer's corner (a docked one, its height). */
+  /** The resize grip: the window's corner follows the pointer. */
   resize(id: WinKey, e: PointerEvent, el: HTMLElement): void;
   /** A key on the move handle (ui/windows.ts windowNudge): true when it was the window's. */
   moveKey(id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean;
-  /** .game-body: floating windows are placed in it. */
-  bodyRef: Ref<HTMLDivElement>;
-  /** The dock: a window dropped on it docks. */
-  dockRef: Ref<HTMLElement>;
+  /** The windows' area (.win-layer: the screen above the bar). */
+  layerRef: Ref<HTMLDivElement>;
 }
 
-/** Every window the state knows (the toolbar's, the server's, the containers'). */
-const knownWindows = (s: WindowsState): WinKey[] => [
-  ...WINDOW_IDS,
-  ...(Object.keys(s.others) as WinKey[]),
-];
+/** A box on screen in px from the top left of `area`. */
+const rectIn = (r: DOMRect, area: DOMRect): Rect => ({
+  x: r.left - area.left,
+  y: r.top - area.top,
+  width: r.width,
+  height: r.height,
+});
+
+/** The boxes of the other windows in the area, for the magnet (not those fading out). */
+function otherRects(layer: HTMLElement, el: HTMLElement, area: DOMRect): Rect[] {
+  return [...layer.children]
+    .filter(
+      (w): w is HTMLElement =>
+        w instanceof HTMLElement &&
+        w !== el &&
+        w.classList.contains("gwin") &&
+        !w.hasAttribute("data-closing"),
+    )
+    .map((w) => rectIn(w.getBoundingClientRect(), area));
+}
 
 /**
  * The desktop windows: their state (ui/windows.ts) saved on every change, the close fade,
- * dragging a title bar (a floating window follows the pointer; a docked one leaves a
- * ghost; dropped on the dock it docks before the window under the pointer), the resize grip
- * and the keys of the move handle. Positions and sizes are screen px; with the interface
- * scale (`zoom`) a window's own lengths are those divided by it.
+ * dragging a title bar (the window follows the pointer and the magnet snaps it to the
+ * screen's edges, the bar's top and the other windows), the resize grip, the keys of the
+ * move handle, and moving back inside the screen whatever a smaller window (or a larger
+ * interface scale) left outside. Positions and sizes are screen px from the top left of the
+ * windows' area; with the interface scale (`zoom`) a window's own lengths are those divided
+ * by it.
  */
 function useWindows(
   storage: Storage | undefined,
@@ -1023,8 +1068,7 @@ function useWindows(
   stateRef.current = state;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom > 0 ? zoom : 1;
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try {
       storage?.setItem(WINDOWS_STORAGE_KEY, saveWindows(state));
@@ -1035,6 +1079,33 @@ function useWindows(
   useEffect(() => () => timers.current.forEach((t) => clearTimeout(t)), []);
 
   const update = (f: (s: WindowsState) => WindowsState): void => setState((s) => f(s));
+
+  // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
+  // window, a larger interface scale) or a remembered place came from a larger screen, the
+  // windows the player placed move back inside, all of them.
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer || typeof ResizeObserver === "undefined") return undefined;
+    const keepInside = (): void => {
+      const area = layer.getBoundingClientRect();
+      const moves: [WinKey, number, number][] = [];
+      for (const el of layer.children) {
+        if (!(el instanceof HTMLElement) || !el.hasAttribute("data-placed")) continue;
+        const id = el.dataset["window"] as WinKey | undefined;
+        if (!id) continue;
+        const p = placeOf(stateRef.current, id);
+        if (p.x === undefined || p.y === undefined) continue;
+        const at = clampPlace(p.x, p.y, el.getBoundingClientRect(), area);
+        if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
+      }
+      if (moves.length > 0)
+        update((s) => moves.reduce((acc, [id, x, y]) => placeWindow(acc, id, x, y), s));
+    };
+    const observer = new ResizeObserver(keepInside);
+    observer.observe(layer);
+    return () => observer.disconnect();
+  }, []);
+
   const stopClosing = (id: WinKey): void => {
     const timer = timers.current.get(id);
     if (timer === undefined) return;
@@ -1047,6 +1118,7 @@ function useWindows(
     });
   };
   const close = (id: WinKey): void => {
+    if (!isClosable(id)) return;
     // The server's windows close when the server says so (syncWindows).
     if (!isToolWindow(id)) {
       serverClose.current(id);
@@ -1097,83 +1169,55 @@ function useWindows(
   };
 
   const grab = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
-    const bodyEl = bodyRef.current;
-    if (e.button !== 0 || !bodyEl) return;
+    const layer = layerRef.current;
+    if (e.button !== 0 || !layer) return;
     e.preventDefault();
-    const docked = placeOf(stateRef.current, id).dock;
-    const area = bodyEl.getBoundingClientRect();
+    const area = layer.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     const off = { x: e.clientX - r.left, y: e.clientY - r.top };
-    const size = { width: r.width, height: Math.min(r.height, 160) };
-    let moving: HTMLElement | undefined;
+    // Measured once: the others do not move while this one does.
+    const others = otherRects(layer, el, area);
     let place = { x: r.left - area.left, y: r.top - area.top };
-    let before: WinKey | undefined;
-    let overDock = false;
-    const marks = (): HTMLElement[] =>
-      [...(dockRef.current?.querySelectorAll<HTMLElement>(".dock-stack > .gwin") ?? [])].filter(
-        (w) => w !== el,
-      );
-    const clearMarks = (): void => {
-      for (const w of marks()) delete w.dataset["dropBefore"];
-      const stack = dockRef.current?.querySelector<HTMLElement>(".dock-stack");
-      if (stack) delete stack.dataset["dropEnd"];
-    };
+    let moved = false;
     const onMove = (ev: PointerEvent): void => {
-      if (!moving) {
+      if (!moved) {
         if (Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < DRAG_START_PX) return;
-        // A docked window leaves a ghost of itself to drag; a floating one moves itself.
-        if (docked) {
-          const ghost = document.createElement("div");
-          ghost.className = "gwin-ghost";
-          ghost.style.width = `${r.width}px`;
-          ghost.style.height = `${size.height}px`;
-          bodyEl.appendChild(ghost);
-          moving = ghost;
-        } else moving = el;
+        moved = true;
         document.body.classList.add("dragging-window");
+        el.dataset["dragging"] = "";
+        // Its default place may hang from the right or the bottom (windows.css): from now
+        // on only left and top place it.
+        el.style.right = "auto";
+        el.style.bottom = "auto";
       }
-      place = clampPlace(ev.clientX - area.left - off.x, ev.clientY - area.top - off.y, size, area);
-      // The ghost is not scaled; a floating window is (its own px are screen px / zoom).
-      const k = moving === el ? zoomRef.current : 1;
-      moving.style.left = `${place.x / k}px`;
-      moving.style.top = `${place.y / k}px`;
-      const dock = dockRef.current?.getBoundingClientRect();
-      overDock =
-        dock !== undefined &&
-        ev.clientX >= dock.left &&
-        ev.clientX <= dock.right &&
-        ev.clientY >= dock.top &&
-        ev.clientY <= dock.bottom;
-      clearMarks();
-      before = undefined;
-      if (overDock) {
-        const next = marks().find((w) => {
-          const b = w.getBoundingClientRect();
-          return ev.clientY < b.top + b.height / 2;
-        });
-        before = next?.dataset["window"] as WinKey | undefined;
-        if (next) next.dataset["dropBefore"] = "";
-        else {
-          const stack = dockRef.current?.querySelector<HTMLElement>(".dock-stack");
-          if (stack) stack.dataset["dropEnd"] = "";
-        }
-      }
+      place = snapPlace(
+        {
+          x: ev.clientX - area.left - off.x,
+          y: ev.clientY - area.top - off.y,
+          width: r.width,
+          height: r.height,
+        },
+        area,
+        others,
+      );
+      // A window's own px are screen px / zoom.
+      const k = zoomRef.current;
+      el.style.left = `${place.x / k}px`;
+      el.style.top = `${place.y / k}px`;
     };
     const onUp = (): void => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      if (!moving) return;
-      clearMarks();
+      if (!moved) return;
       document.body.classList.remove("dragging-window");
-      if (moving !== el) moving.remove();
-      else {
-        // The state places the window from now on (a docked one must not keep offsets).
-        el.style.left = "";
-        el.style.top = "";
-      }
-      if (overDock) update((s) => dockWindow(s, id, before));
-      else update((s) => floatWindow(s, id, place.x, place.y));
+      delete el.dataset["dragging"];
+      // The state places the window from now on.
+      el.style.left = "";
+      el.style.top = "";
+      el.style.right = "";
+      el.style.bottom = "";
+      update((s) => moveWindow(s, id, place.x, place.y));
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -1181,24 +1225,32 @@ function useWindows(
   };
 
   const resize = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
-    const bodyEl = bodyRef.current;
-    if (e.button !== 0 || !bodyEl) return;
+    const layer = layerRef.current;
+    if (e.button !== 0 || !layer) return;
     e.preventDefault();
     e.stopPropagation();
-    const docked = placeOf(stateRef.current, id).dock;
-    const area = bodyEl.getBoundingClientRect();
+    const area = layer.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    // As far as the area goes from where the window starts.
+    // As far as the area goes from where the window starts (never under the bar).
     const room = { width: area.right - r.left, height: area.bottom - r.top };
+    // The top left corner stays: a window at a default place that hangs from the bottom
+    // (the chat, the dialog) is pinned where it is, or it would grow upwards.
+    const at = { x: r.left - area.left, y: r.top - area.top };
     let size = { width: r.width, height: r.height };
     let moved = false;
     const onMove = (ev: PointerEvent): void => {
       size = clampSize(r.width + ev.clientX - e.clientX, r.height + ev.clientY - e.clientY, room);
       const k = zoomRef.current;
-      if (!docked) el.style.width = `${size.width / k}px`;
+      if (!moved) {
+        document.body.classList.add("resizing-window");
+        el.style.left = `${at.x / k}px`;
+        el.style.top = `${at.y / k}px`;
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.maxHeight = "none";
+      }
+      el.style.width = `${size.width / k}px`;
       el.style.height = `${size.height / k}px`;
-      el.style.maxHeight = "none";
-      if (!moved) document.body.classList.add("resizing-window");
       moved = true;
     };
     const onUp = (): void => {
@@ -1207,7 +1259,17 @@ function useWindows(
       window.removeEventListener("pointercancel", onUp);
       if (!moved) return;
       document.body.classList.remove("resizing-window");
-      update((s) => resizeWindow(s, id, size.width, size.height));
+      for (const prop of [
+        "width",
+        "height",
+        "left",
+        "top",
+        "right",
+        "bottom",
+        "maxHeight",
+      ] as const)
+        el.style[prop] = "";
+      update((s) => resizeWindow(placeWindow(s, id, at.x, at.y), id, size.width, size.height));
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -1215,26 +1277,17 @@ function useWindows(
   };
 
   const moveKey = (id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean => {
-    const bodyEl = bodyRef.current;
-    if (!bodyEl) return false;
-    const area = bodyEl.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const dock = dockRef.current?.getBoundingClientRect();
-    // Leaving the dock from the keyboard, it floats just left of the dock, at its height.
-    const floatAt = clampPlace(
-      (dock ? dock.left : area.right) - area.left - r.width - 16,
-      r.top - area.top,
-      r,
-      area,
-    );
+    const layer = layerRef.current;
+    if (!layer) return false;
+    const area = layer.getBoundingClientRect();
     const next = windowNudge(stateRef.current, id, e, {
-      rect: { x: r.left - area.left, y: r.top - area.top, width: r.width, height: r.height },
+      rect: rectIn(el.getBoundingClientRect(), area),
       area: { width: area.width, height: area.height },
-      floatAt,
+      others: otherRects(layer, el, area),
     });
     if (!next) return false;
     update(() => next);
-    // Docking or floating moves the window to another parent: keep the focus on its handle.
+    // A move raises the window (it is drawn later in the layer): keep the focus on its handle.
     requestAnimationFrame(() =>
       document.querySelector<HTMLElement>(`.gwin[data-window="${id}"] .gwin-move`)?.focus(),
     );
@@ -1252,8 +1305,7 @@ function useWindows(
     grab,
     resize,
     moveKey,
-    bodyRef,
-    dockRef,
+    layerRef,
   };
 }
 
@@ -1266,16 +1318,14 @@ function readStorage(storage: Storage | undefined, key: string): string | null {
 }
 
 /**
- * The chat box at the bottom of the dock: the chat, and the system log as a second tab
- * (its notices float over the map meanwhile; a dot says there is something new).
+ * The tabs of the chat window, in its title bar: the chat, and the system log as a second
+ * tab (its notices float over the map meanwhile; a dot says there is something new).
  */
-function ChatBox(props: {
+function ChatTabs(props: {
   t: Translate;
   tab: "chat" | "log";
   onTab(tab: "chat" | "log"): void;
   unread: boolean;
-  log: JSX.Element;
-  children: ComponentChildren;
 }): JSX.Element {
   const { t } = props;
   const tabButton = (id: "chat" | "log", label: string): JSX.Element => (
@@ -1294,22 +1344,34 @@ function ChatBox(props: {
     </button>
   );
   return (
+    <div
+      class="chat-tabs"
+      role="tablist"
+      aria-label={t("client.chat.tabs")}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        // The tab's arrows, not the character's.
+        e.stopPropagation();
+        const next = props.tab === "chat" ? "log" : "chat";
+        props.onTab(next);
+        document.getElementById(`chat-tab-${next}`)?.focus();
+      }}
+    >
+      {tabButton("chat", t("client.chat.title"))}
+      {tabButton("log", t("client.chat.log"))}
+    </div>
+  );
+}
+
+/** The two panes of the chat window: the chat and the system log. */
+function ChatPanes(props: {
+  tab: "chat" | "log";
+  log: JSX.Element;
+  children: ComponentChildren;
+}): JSX.Element {
+  return (
     <div class="chat-box">
-      <div
-        class="chat-tabs"
-        role="tablist"
-        aria-label={t("client.chat.tabs")}
-        onKeyDown={(e) => {
-          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-          e.preventDefault();
-          const next = props.tab === "chat" ? "log" : "chat";
-          props.onTab(next);
-          document.getElementById(`chat-tab-${next}`)?.focus();
-        }}
-      >
-        {tabButton("chat", t("client.chat.title"))}
-        {tabButton("log", t("client.chat.log"))}
-      </div>
       <div
         class="chat-pane"
         id="chat-pane-chat"
