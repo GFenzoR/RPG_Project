@@ -495,7 +495,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && ui.picked && (
         <PickBanner t={t} content={props.content} picked={ui.picked} game={game} />
       )}
-      {props.entered && <DialogWindow t={t} content={props.content} game={game} ui={ui} />}
+      {props.entered && (
+        <DialogWindow t={t} content={props.content} game={game} ui={ui} compact={tabbed} />
+      )}
       {props.entered && !ui.dialog && (
         <CraftingWindow t={t} content={props.content} game={game} ui={ui} />
       )}

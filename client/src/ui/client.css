@@ -980,35 +980,48 @@ body.using-item canvas {
   line-height: 1.02;
 }
 
-/* ---- NPC dialog and shop (T1.10) ------------------------------------------------- */
-/* The box reaches down to the hotbar (bottom, not max-height): a definite height, so the
-   max-height: 100% of the dialog and the shop applies and each scrolls inside it (the shop
-   of the provisioner was taller than a 1280x800 window). The box itself lets clicks
-   through to the map; only its windows take them. */
+/* ---- NPC dialog and shop (T1.10; docs/17 UI-8: no scrolling) ---------------------- */
+/* The box spans the map down to the hotbar and lets clicks through; only its windows take
+   them. On a desktop the dialog sits at the bottom centre (the map stays visible above);
+   with the shop open the two stand side by side, the shop on the left. */
 .npc-windows {
   position: absolute;
   top: 0.5rem;
   bottom: 5rem;
   left: 0.5rem;
+  right: 0.5rem;
   display: flex;
   gap: 0.5rem;
-  align-items: flex-start;
-  max-width: calc(100% - 1rem);
+  align-items: flex-end;
+  justify-content: center;
   z-index: 2;
   pointer-events: none;
+  --shop-cell: 4.5rem;
 }
 .npc-windows > * {
   pointer-events: auto;
 }
 .dialog,
 .shop {
-  width: 20rem;
-  /* The box of .npc-windows, less this window's padding and border (content-box). */
-  max-height: calc(100% - 1rem - 2px);
+  box-sizing: border-box;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.5rem 0.6rem;
   font-size: 0.85rem;
+}
+.dialog {
+  width: min(47.5rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.npc-windows[data-shop] {
+  flex-direction: row-reverse;
+}
+.npc-windows[data-shop] .dialog {
+  width: min(22rem, 40%);
+  flex: 0 1 auto;
 }
 .dialog header,
 .shop header {
@@ -1024,77 +1037,302 @@ body.using-item canvas {
 .dialog .close {
   padding: 0 0.4rem;
 }
+.dialog-body {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+/* The NPC's sprite at 2x in a sunken frame. */
+.npc-portrait {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 4.5rem;
+  min-height: 4.5rem;
+  background: var(--ui-stone-950);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 2px 6px rgb(0 0 0 / 0.7);
+}
 /* What the NPC says: book type (Alegreya), like a page of a chronicle (docs/17 UI-8). */
 .npc-text {
-  margin: 0.4rem 0 0.6rem;
+  margin: 0.1rem 0 0;
   font-family: var(--ui-font-book);
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.45;
   color: #e8dcc0;
+  animation: npc-text-in var(--ui-dur-slow) var(--ui-ease-out);
 }
-.dialog .options {
+@keyframes npc-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+.dialog-filter,
+.shop-search {
+  box-sizing: border-box;
+  width: 100%;
+}
+/* The options: a grid of buttons, each with its number, its topic's icon and a coloured
+   edge; the text takes up to two lines, the whole text is in the title. */
+.dialog-options {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.3rem;
 }
-.dialog .options button {
+.npc-windows[data-shop] .dialog-options {
+  grid-template-columns: 1fr;
+}
+.dialog-option {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   width: 100%;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.35rem;
   text-align: left;
   font-weight: 500;
   color: var(--ui-text);
+  border-left: 3px solid var(--topic, var(--ui-iron-400));
+  animation: option-in var(--ui-dur) var(--ui-ease-out) both;
+}
+.dialog-options li:nth-child(2) .dialog-option {
+  animation-delay: 20ms;
+}
+.dialog-options li:nth-child(3) .dialog-option {
+  animation-delay: 40ms;
+}
+.dialog-options li:nth-child(n + 4) .dialog-option {
+  animation-delay: 60ms;
+}
+@keyframes option-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.dialog-option .otext {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.2;
+}
+.dialog-option .topic-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.topic-quests {
+  --topic: var(--ui-gold-300);
+}
+.topic-trade {
+  --topic: var(--ui-gold-500);
+}
+.topic-travel {
+  --topic: var(--ui-mana-300);
+}
+.topic-services {
+  --topic: var(--ui-ok);
+}
+.topic-talk {
+  --topic: var(--ui-iron-400);
 }
 .dialog kbd {
-  margin-right: 0.3rem;
+  flex: none;
+  min-width: 0.9rem;
+  margin: 0;
   background: none;
   border: 0;
   padding: 0;
   font-weight: 700;
+  color: var(--ui-gold-300);
+  text-align: center;
+}
+.dialog-options .empty {
+  color: var(--ui-text-muted);
+}
+.dialog-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgb(74 69 64 / 0.5);
+}
+.dialog-foot .dialog-bye {
+  margin-left: auto;
+}
+
+/* The shop: tabs and search, category filters, a grid of cells (pages, never a scroll
+   bar) and the bar of the chosen item. */
+.shop {
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.shop-top {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.shop-top .shop-search {
+  flex: 1;
+  min-width: 6rem;
 }
 .shop .tabs {
   display: flex;
   gap: 0.25rem;
-  margin: 0.4rem 0;
 }
 .shop .tabs [aria-selected="true"],
 .guild-tabs [aria-selected="true"],
-.chat-tabs [aria-selected="true"] {
+.chat-tabs [aria-selected="true"],
+.shop-filters [aria-pressed="true"] {
   color: #f6e7bd;
   background: var(--ui-stone-950);
   box-shadow:
     inset 0 0 0 1px var(--ui-gold-500),
     inset 0 2px 5px rgb(0 0 0 / 0.6);
 }
-.shop ul {
+.shop-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.shop-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.78rem;
+}
+.shop-filters .icon {
+  width: 14px;
+  height: 14px;
+}
+/* As many cells as the window takes, up to --shop-columns (six on a desktop): the shop
+   is as wide as that, and narrower beside the dialog on a small window. */
+.shop-grid {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.shop li {
   display: grid;
-  grid-template-columns: auto 1fr auto 3.2rem auto;
-  align-items: center;
   gap: 0.3rem;
-  padding: 0.15rem 0;
+  grid-template-columns: repeat(auto-fill, var(--shop-cell));
+  justify-content: start;
+  width: calc(var(--shop-columns, 6) * var(--shop-cell) + (var(--shop-columns, 6) - 1) * 0.3rem);
+  max-width: 100%;
 }
-.shop li .owned {
-  grid-column: 2;
-  grid-row: 2;
-  color: var(--ui-text-muted);
-  font-size: 0.75rem;
-}
-/* The count fills its 3.2rem column, padding and border included: content-box made it
-   ~4.5rem and a phone's 44 px field went under the Buy button. */
-.shop li input {
-  width: 100%;
+.shop {
   min-width: 0;
+}
+.shop-cell {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--shop-cell);
+  height: 5.25rem;
+  padding: 0.2rem 0.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ui-stone-950);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+}
+.shop-cell:hover {
+  box-shadow: inset 0 0 0 1px var(--ui-gold-500);
+}
+.shop-cell[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 2px var(--ui-gold-300),
+    0 0 8px rgb(226 196 122 / 0.35);
+}
+.shop-cell.none {
+  opacity: 0.45;
+}
+.shop-cell .price {
+  font-size: 0.78rem;
+}
+.shop-cell .owned {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--ui-text);
+  text-shadow: 0 1px 0 #000;
+}
+.shop-cell .missing-name {
+  position: absolute;
+  top: 1.4rem;
+  color: var(--ui-text-muted);
+}
+.shop-pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.shop-pages button {
+  min-width: 2rem;
+}
+.shop-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin: 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ui-gold-700);
+}
+.shop-bar .hint {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+.shop-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.shop-pick > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shop-pick .card-name::first-letter {
+  text-transform: uppercase;
+}
+.shop-count {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.shop-count input {
+  width: 3.4rem;
   box-sizing: border-box;
   padding-inline: 0.4rem;
+  text-align: center;
 }
-.shop li + li {
-  border-top: 1px solid rgb(74 69 64 / 0.35);
+.shop-count button {
+  min-width: 1.8rem;
+}
+.shop-total {
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-gold-300);
+}
+.shop-total.short {
+  color: var(--ui-danger);
+}
+.shop-act {
+  margin-left: auto;
+  font-weight: 700;
 }
 .shop .price,
 .shop .money {
@@ -2332,10 +2570,23 @@ body.using-item canvas {
   max-height: none;
 }
 /* The dialog and its shop one under the other, each full width. */
+/* With the shop open on a small screen the shop comes first and the dialog keeps only its
+   buttons: the items show without scrolling down past the NPC's words. */
+.game:not([data-layout="desktop"]) .npc-windows[data-shop] .shop {
+  order: -1;
+}
+.game:not([data-layout="desktop"]) .npc-windows[data-shop] .dialog-body {
+  display: none;
+}
+.game:not([data-layout="desktop"]) .npc-windows[data-shop] .dialog-options {
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+}
 .game:not([data-layout="desktop"]) .npc-windows {
   pointer-events: auto;
   flex-direction: column;
   align-items: stretch;
+  justify-content: flex-start;
+  --shop-cell: 4.25rem;
   gap: 0.25rem;
   padding: 0.25rem;
   background: rgba(10, 10, 16, 0.9);
@@ -2632,4 +2883,25 @@ body.using-item canvas {
   padding: 0;
   margin-bottom: 0.2rem;
   color: var(--ui-text-muted);
+}
+/* The shop's filters on a small screen: icons only (the name is in the title). */
+.game:not([data-layout="desktop"]) .shop-filters button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.game:not([data-layout="desktop"]) .shop-filters .icon {
+  width: 20px;
+  height: 20px;
+}
+/* The dialog's options on a small screen: two columns, up to three lines each (no title
+   to hover there). */
+.game:not([data-layout="desktop"]) .dialog-options {
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+}
+.game:not([data-layout="desktop"]) .dialog-option .otext {
+  -webkit-line-clamp: 3;
 }
