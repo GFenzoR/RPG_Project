@@ -4,7 +4,8 @@
 // the engine plays the first one sounds.yaml maps.
 import { MessageKind } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
-import type { IslandRect, LoopRules, MusicRules, SoundManifest } from "../content-types.ts";
+import type { IslandRect, MusicRules, QuestMusic, SoundManifest } from "../content-types.ts";
+import type { Scene } from "./director.ts";
 import { samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import {
@@ -100,53 +101,49 @@ export function islandAt(p: Pos, islands: readonly IslandRect[]): string | undef
   return islands.find((i) => p.x >= i.x && p.x < i.x + i.w && p.y >= i.y && p.y < i.y + i.h)?.id;
 }
 
-/** The loop of a set of rules for where the player stands (undefined = none). */
+/**
+ * What a set of rules plays where the player stands: the island's, or the underground's
+ * below the sea floor (undefined = none). The ambient bed's loop, or the music's zone pool.
+ */
 export function loopFor(
   p: Pos,
   islands: readonly IslandRect[],
-  rules: LoopRules,
+  rules: { islands: Record<string, string>; underground: string | undefined },
 ): string | undefined {
   if (p.z > 7) return rules.underground;
   const island = islandAt(p, islands);
   return island === undefined ? undefined : rules.islands[island];
 }
 
-/** Effects that are a blow: a hit, a block or a miss, a magic hit or an area tile. */
-const isBlow = (effectId: number): boolean =>
-  effectId === EFFECT_HIT ||
-  effectId === EFFECT_BLOCK ||
-  (effectId >= EFFECT_ELEMENT && ELEMENTS[effectId - EFFECT_ELEMENT] !== undefined);
-
-/**
- * Whether a server message is a fight reaching the player: a blow on their own tile (a
- * monster's hit, block or spell; or their own area spell around them). Attacking is the
- * other half, the player's target (game.ts).
- */
-export function blowAt(msg: ServerMessage["message"], self: Pos): boolean {
-  if (msg.case !== "effect") return false;
-  const at = pos(msg.value.pos);
-  return at !== undefined && samePos(at, self) && isBlow(msg.value.effectId);
+/** The pool of the first important quest area the player stands in (data/quests `music`). */
+export function questPoolAt(p: Pos, areas: readonly QuestMusic[]): string | undefined {
+  for (const a of areas) {
+    if (!a.floors.includes(p.z)) continue;
+    for (const r of a.rects)
+      if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) return a.pool;
+  }
+  return undefined;
 }
 
 /**
- * The music for where the player is and what goes on around them: a boss in view (its
- * content id in `bosses`, the first one listed in `inView`, closest first), then a fight
- * (`fighting`, with a `combat` loop), then the zone's loop (loopFor). The title screen's
- * loop is the menus' (App.tsx), never this.
+ * The music director's scene for where the player is (audio/director.ts): the zone's pool
+ * (loopFor), an important quest area's, and a boss's while one is in view (its content id
+ * in `bosses`, the first one of `inView`, closest first). An ordinary fight is not part of
+ * it: the owner keeps the zone's music on in a fight (2026-11-18).
  */
-export function musicFor(
+export function sceneFor(
   p: Pos,
   islands: readonly IslandRect[],
   rules: MusicRules,
+  quests: readonly QuestMusic[],
   inView: readonly string[],
-  fighting: boolean,
-): string | undefined {
+): Scene {
+  let boss: string | undefined;
   for (const id of inView) {
-    const boss = rules.bosses[id];
-    if (boss !== undefined) return boss;
+    boss = rules.bosses[id];
+    if (boss !== undefined) break;
   }
-  if (fighting && rules.combat !== undefined) return rules.combat;
-  return loopFor(p, islands, rules);
+  return { kind: "world", zone: loopFor(p, islands, rules), quest: questPoolAt(p, quests), boss };
 }
 
 /** A manifest with no sounds (tests, a build without assets/sounds.yaml). */
@@ -154,13 +151,16 @@ export const NO_SOUNDS: SoundManifest = {
   sounds: {},
   events: {},
   music: {
-    fadeMs: 0,
+    pools: {},
     islands: {},
     underground: undefined,
     title: undefined,
-    combat: undefined,
-    combatHoldMs: 0,
     bosses: {},
+    fades: { zone: 0, bossIn: 0, bossOut: 0, title: 0, next: 0 },
+    dwellMs: 0,
+    bossHoldMs: 0,
+    resumeMs: 0,
+    gapMs: [0, 0],
   },
   ambient: { fadeMs: 0, islands: {}, underground: undefined },
 };

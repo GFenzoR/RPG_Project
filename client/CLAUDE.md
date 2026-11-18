@@ -247,8 +247,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Mientras el contexto no esté `running`, los efectos se descartan; los loops no.
   `Game` recibe el motor en `GameOptions.audio`: traduce cada mensaje con `cuesOf`
   (`audio/cues.ts`, puro) y, después del batch, los reproduce alrededor de la posición
-  propia. También fija la música y el ambiente con `loopFor` (isla de `content.islands` o
-  subsuelo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
+  propia. También fija el ambiente con `loopFor` (isla de `content.islands` o subsuelo) y
+  la escena de la música (abajo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
   de un efecto 5 en esa misma casilla. Se olvida al fabricar o al usar otro item.
 - Qué suena con cada evento está en `assets/sounds.yaml` (`content.sounds`). El plugin de
   Vite sirve esos archivos en `/audio/` y `vite build` los emite. No escribas nombres de
@@ -257,16 +257,37 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `ui/AudioOptions.tsx` y va junto al selector de idioma, dentro y fuera del juego. Se
   vuelve a montar al entrar o salir del juego, y cada vez parte de
   `audio.currentPrefs()`.
-- Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
-- Música sobre la de la zona (`content.sounds.music`, opcionales): `Screens` (`ui/App.tsx`)
-  pone `music.title` fuera del juego (sin ambiente); al salir, `Game.destroy` calla los
-  loops y el efecto vuelve al título. Dentro, `Game.keepLoops` elige con `musicFor`
-  (`audio/cues.ts`, puro): un jefe de `music.bosses` en la lista de batalla, después un
-  combate (`music.combat`, si existe: objetivo propio o un golpe sobre la casilla propia,
-  `blowAt`, hace menos de `combatHoldMs`), después la zona. Corre tras cada batch y cada
-  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un combate termina sin mensaje.
-- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de cada
-  canal (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+- Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`: el
+  tema que lleva la música y el ambiente; `music`: el estado del director, `MusicState`,
+  con la pool, y cada voz con su ganancia, su posición y si tiene elemento).
+- **El director de música** (`audio/director.ts`, puro y con tests; pedido del dueño del
+  2026-11-18, reglas en docs/02 "Sonido"): recibe una `Scene` (`title`, `silent` o `world`
+  con las pools de la zona, del área de una quest importante y de un jefe a la vista), un
+  reloj y un azar inyectados, y lleva una lista de `Voice` (un tema desde un segundo, con
+  su envolvente de potencia constante: `gainAt`, `envelopePoints`). Baraja cada pool sin
+  repetir, arranca en un punto de entrada (`entries` de `sounds.yaml`), recuerda por pool
+  dónde iba (`resumeMs`), espera `dwellMs` antes de cambiar de zona, sostiene al jefe
+  `bossHoldMs`, deja respirar `gapMs` entre temas de una zona y no arranca un tema hasta
+  que su archivo está (`ready`, `wanted`). No sabe de combates: una pelea común no cambia
+  nada.
+- **El motor y la música** (`audio/engine.ts`): `setMusic(scene)` y una bomba cada
+  `PUMP_MS` (250 ms) sobre el reloj de audio (`ctx.currentTime`); nada se mueve mientras el
+  contexto no está `running`. Cada voz suena en un `<audio>` conectado al canal de música
+  por su propia ganancia (`StreamLike`, `AudioPorts.createStream`), que sigue la envolvente
+  con rampas lineales cada `RAMP_STEP_MS`; una voz que recibe su elemento tarde (archivo
+  lento o música recién activada) entra con `ATTACH_MS` de fundido. Cada tema se baja una
+  vez a un object URL (`loadStream`): se puede saltar a cualquier segundo sin `Range` del
+  servidor. Guarda `KEEP_STREAMS` (4) archivos; con la música silenciada no baja nada y
+  suelta los elementos. La CSP de escritorio permite `media-src blob:` por eso.
+- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente); al
+  salir, `Game.destroy` calla el ambiente y el título entra con su fundido. Dentro,
+  `Game.keepLoops` arma la escena con `sceneFor` (`audio/cues.ts`, puro: `loopFor` para la
+  zona, `questPoolAt` para `content.questMusic`, de `music` en `data/quests`, y el primer
+  jefe de `music.bosses` en la lista de batalla). Corre tras cada batch y cada
+  `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un jefe sale de la vista sin mensaje.
+- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de
+  ambiente (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+  La música no se decodifica entera (docs/07 "Audio").
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que

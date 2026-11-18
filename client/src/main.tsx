@@ -29,6 +29,7 @@ import {
 } from "./state/ui-prefs.ts";
 import { InterfaceOptions } from "./ui/InterfaceOptions.tsx";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
+import type { MusicState } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
 import "./ui/client.css";
 // Installable web client (T5.6): registers the service worker on import (production only).
@@ -65,6 +66,8 @@ declare global {
       unlocked(): boolean;
       history(): string[];
       loops(): { music: string | undefined; ambient: string | undefined };
+      /** The music director's state: its pool and voices (audio/engine.ts MusicState). */
+      music(): MusicState;
     };
   }
 }
@@ -72,6 +75,7 @@ window.__rpgAudio = {
   unlocked: () => audio.unlocked,
   history: () => [...audio.history],
   loops: () => audio.playingLoops(),
+  music: () => audio.musicState(),
 };
 
 function readStored(): string | null {

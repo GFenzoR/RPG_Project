@@ -37,7 +37,7 @@
         "font-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost",
         "worker-src": "'self' blob:",
-        "media-src": "'self'",
+        "media-src": "'self' blob:",
         "object-src": "'none'",
         "frame-src": "'none'",
         "base-uri": "'none'",

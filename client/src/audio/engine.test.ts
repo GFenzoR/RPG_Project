@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { SoundManifest } from "../content-types.ts";
-import { AudioEngine, HEAR_RANGE, MAX_PAN, MAX_VOICES, spatial } from "./engine.ts";
+import {
+  ATTACH_MS,
+  AudioEngine,
+  HEAR_RANGE,
+  KEEP_STREAMS,
+  MAX_PAN,
+  MAX_VOICES,
+  directorConfig,
+  spatial,
+} from "./engine.ts";
 import type {
   AudioPorts,
   BufferLike,
@@ -10,6 +19,7 @@ import type {
   PannerLike,
   ParamLike,
   SourceLike,
+  StreamLike,
 } from "./engine.ts";
 import { defaultPrefs, withMuted, withVolume } from "./prefs.ts";
 
@@ -102,11 +112,45 @@ class FakeContext implements ContextLike {
   }
 }
 
+/** A media element: remembers what it was asked to play. */
+class FakeStream implements StreamLike {
+  readonly output = new FakeNode();
+  url: string | undefined;
+  at = 0;
+  loop = false;
+  plays = 0;
+  stops = 0;
+  private ended: () => void = () => undefined;
+  play(url: string, at: number, loop: boolean): void {
+    this.url = url;
+    this.at = at;
+    this.loop = loop;
+    this.plays++;
+  }
+  stop(): void {
+    this.url = undefined;
+    this.stops++;
+  }
+  onEnded(fn: () => void): void {
+    this.ended = fn;
+  }
+  end(): void {
+    this.ended();
+  }
+}
+
 const sound = (url: string, channel: "sfx" | "ui" | "music" | "ambient", maxVoices = 3) => ({
   url,
   channel,
   volume: 0.5,
   maxVoices,
+});
+
+const track = (url: string, seconds: number, entries: number[]) => ({
+  ...sound(url, "music"),
+  seconds,
+  end: seconds - 5,
+  entries,
 });
 
 const MANIFEST: SoundManifest = {
@@ -116,9 +160,15 @@ const MANIFEST: SoundManifest = {
     a: sound("audio/a.ogg", "sfx", 8),
     b: sound("audio/b.ogg", "sfx", 8),
     tune: sound("audio/tune.ogg", "music"),
-    other: sound("audio/other.ogg", "music"),
-    third: sound("audio/third.ogg", "music"),
+    menu: track("audio/menu.ogg", 100, [10, 30]),
+    town1: track("audio/town1.ogg", 120, [12, 40]),
+    town2: track("audio/town2.ogg", 110, [15, 50]),
+    cave1: track("audio/cave1.ogg", 90, [20, 45]),
+    cave2: track("audio/cave2.ogg", 95, [25]),
+    cave3: track("audio/cave3.ogg", 95, [25]),
     waves: sound("audio/waves.ogg", "ambient"),
+    wind: sound("audio/wind.ogg", "ambient"),
+    rain: sound("audio/rain.ogg", "ambient"),
   },
   events: {
     "effect.hit": ["hit"],
@@ -128,13 +178,21 @@ const MANIFEST: SoundManifest = {
     loopy: ["tune"],
   },
   music: {
-    fadeMs: 2000,
+    pools: {
+      title: ["menu"],
+      town: ["town1", "town2"],
+      cave: ["cave1", "cave2", "cave3"],
+      odd: ["tune", "hit"], // a sound of another channel in a pool is left out
+    },
     islands: {},
-    underground: undefined,
-    title: undefined,
-    combat: undefined,
-    combatHoldMs: 8000,
+    underground: "cave",
+    title: "title",
     bosses: {},
+    fades: { zone: 2000, bossIn: 1000, bossOut: 3000, title: 1000, next: 1000 },
+    dwellMs: 1000,
+    bossHoldMs: 2000,
+    resumeMs: 60_000,
+    gapMs: [1000, 2000],
   },
   ambient: { fadeMs: 1000, islands: {}, underground: undefined },
 };
@@ -142,24 +200,57 @@ const MANIFEST: SoundManifest = {
 function setup(prefs = defaultPrefs()) {
   const ctx = new FakeContext();
   const fetched: string[] = [];
+  const streamed: string[] = [];
+  const released: string[] = [];
+  const streams: FakeStream[] = [];
+  const pumps: (() => void)[] = [];
+  /** Files that only arrive when the test says so. */
+  const held = new Map<string, () => void>();
+  let hold = false;
   let now = 0;
   let rand = 0;
   const ports: AudioPorts = {
     createContext: () => ctx,
     fetch: async (url) => {
       fetched.push(url);
-      return new ArrayBuffer(url.includes("tune") || url.includes("other") ? 60 : 1);
+      return new ArrayBuffer(url.includes("waves") || url.includes("wind") ? 60 : 1);
     },
     now: () => now,
     random: () => rand,
+    createStream: () => {
+      const s = new FakeStream();
+      streams.push(s);
+      return s;
+    },
+    loadStream: (url) => {
+      streamed.push(url);
+      if (!hold) return Promise.resolve(`blob:${url}`);
+      return new Promise((resolve) => held.set(url, () => resolve(`blob:${url}`)));
+    },
+    releaseStream: (url) => released.push(url),
+    every: (_ms, fn) => {
+      pumps.push(fn);
+      return () => undefined;
+    },
   };
   const engine = new AudioEngine(MANIFEST, prefs, ports);
   return {
     ctx,
     engine,
     fetched,
+    streamed,
+    released,
+    streams,
+    held,
+    holdFiles: (on: boolean) => (hold = on),
     setNow: (ms: number) => (now = ms),
     setRandom: (r: number) => (rand = r),
+    /** The audio clock moves to `s` seconds and the engine's timer fires. */
+    at: async (s: number) => {
+      ctx.currentTime = s;
+      for (const p of pumps) p();
+      await flush();
+    },
   };
 }
 
@@ -343,88 +434,225 @@ describe("spatial", () => {
   });
 });
 
-describe("loops", () => {
+describe("the ambient bed", () => {
   it("remembers the wanted loop while locked and fades it in on unlock", async () => {
     const { ctx, engine } = setup();
-    engine.setLoops("tune", "waves");
+    engine.setAmbient("waves");
     expect(ctx.sources).toHaveLength(0);
     await unlockNow(engine);
     await flush();
-    expect(engine.playingLoops()).toEqual({ music: "tune", ambient: "waves" });
+    expect(engine.playingLoops().ambient).toBe("waves");
     const src = ctx.sources.find((s) => s.loop && (s.buffer?.duration ?? 0) === 60);
     expect(src?.loop).toBe(true);
     const fade = (src?.outputs[0] as FakeGain).gain.events;
     expect(fade).toEqual([
       ["set", 0, 0],
-      ["ramp", 0.5, 2],
+      ["ramp", 0.5, 1],
     ]);
   });
 
   it("crossfades to a new loop and stops the old one after the fade", async () => {
     const { ctx, engine } = setup();
     await unlockNow(engine);
-    engine.setLoops("tune", undefined);
+    engine.setAmbient("waves");
     await flush();
     const first = ctx.sources[0];
     ctx.currentTime = 10;
-    engine.setLoops("other", undefined);
+    engine.setAmbient("wind");
     await flush();
-    expect(first?.stopped).toBe(12);
-    const oldFade = (first?.outputs[0] as FakeGain).gain.events.at(-1);
-    expect(oldFade).toEqual(["ramp", 0, 12]);
-    expect(engine.playingLoops().music).toBe("other");
-    // Same loop again: nothing restarts.
-    engine.setLoops("other", undefined);
+    expect(first?.stopped).toBe(11);
+    expect((first?.outputs[0] as FakeGain).gain.events.at(-1)).toEqual(["ramp", 0, 11]);
+    expect(engine.playingLoops().ambient).toBe("wind");
+    engine.setAmbient("wind"); // the same loop again: nothing restarts
     await flush();
     expect(ctx.sources).toHaveLength(2);
-    // Leaving to silence fades it out too.
-    engine.setLoops(undefined, undefined);
-    expect(ctx.sources[1]?.stopped).toBe(12);
-    expect(engine.playingLoops()).toEqual({ music: undefined, ambient: undefined });
+    engine.setAmbient(undefined);
+    expect(ctx.sources[1]?.stopped).toBe(11);
+    expect(engine.playingLoops().ambient).toBeUndefined();
   });
 
-  it("keeps the last two loops of a slot decoded and forgets older ones", async () => {
+  it("keeps the last two loops decoded and forgets older ones", async () => {
     const { ctx, engine, fetched } = setup();
     await unlockNow(engine);
-    engine.setLoops("tune", "waves");
+    engine.setAmbient("waves");
     await flush();
-    engine.setLoops("other", "waves");
+    engine.setAmbient("wind");
     await flush();
-    // Back and forth (the zone, a fight, the zone): nothing is fetched or decoded again.
-    engine.setLoops("tune", "waves");
+    engine.setAmbient("waves"); // back and forth: nothing is fetched or decoded again
     await flush();
-    expect(fetched.filter((u) => u.includes("tune"))).toHaveLength(1);
-    expect(ctx.decoded).toBe(3);
-    // A third loop pushes out the oldest of the slot; the ambient bed is its own slot.
-    engine.setLoops("third", "waves");
+    expect(fetched.filter((u) => u.includes("waves"))).toHaveLength(1);
+    expect(ctx.decoded).toBe(2);
+    engine.setAmbient("rain");
     await flush();
-    expect(engine.isCached("other")).toBe(false);
-    expect(engine.isCached("tune")).toBe(true);
+    expect(engine.isCached("wind")).toBe(false);
     expect(engine.isCached("waves")).toBe(true);
-    engine.setLoops("other", "waves");
-    await flush();
-    expect(fetched.filter((u) => u.includes("other"))).toHaveLength(2);
-    expect(engine.playingLoops().music).toBe("other");
-  });
-
-  it("does not cache again a loop forgotten while it loaded", async () => {
-    const { engine } = setup();
-    await unlockNow(engine);
-    engine.setLoops("tune", undefined);
-    engine.setLoops("other", undefined);
-    engine.setLoops("third", undefined);
-    await flush();
-    expect(engine.isCached("tune")).toBe(false);
-    expect(engine.playingLoops().music).toBe("third");
   });
 
   it("does not start a loop that stopped being wanted while it loaded", async () => {
     const { ctx, engine } = setup();
     await unlockNow(engine);
-    engine.setLoops("tune", undefined);
-    engine.setLoops("other", undefined);
+    engine.setAmbient("waves");
+    engine.setAmbient("wind");
     await flush();
     expect(ctx.sources).toHaveLength(1);
-    expect(engine.playingLoops().music).toBe("other");
+    expect(engine.playingLoops().ambient).toBe("wind");
+  });
+});
+
+/** The gain of a stream's element (stream → its gain → the music channel). */
+const deckGain = (s: FakeStream | undefined): FakeParam =>
+  (s?.output.outputs[0] as FakeGain | undefined)?.gain ?? new FakeParam();
+
+const world = (zone: string) =>
+  ({ kind: "world", zone, quest: undefined, boss: undefined }) as const;
+
+describe("the music", () => {
+  it("takes the director's pools, leaving out what is not music", () => {
+    const c = directorConfig(MANIFEST);
+    expect(c.pools).toEqual({
+      title: ["menu"],
+      town: ["town1", "town2"],
+      cave: ["cave1", "cave2", "cave3"],
+      odd: ["tune"],
+    });
+    expect(c.tracks["tune"]).toEqual({ seconds: undefined, end: 0, entries: [] });
+    expect(c.tracks["town1"]).toEqual({ seconds: 120, end: 115, entries: [12, 40] });
+  });
+
+  it("remembers the scene while locked, then streams the title's track from an entry, fading in", async () => {
+    const { engine, streams, streamed, at } = setup();
+    engine.setMusic({ kind: "title" });
+    expect(streamed).toEqual([]);
+    await unlockNow(engine);
+    await at(0);
+    expect(streamed[0]).toBe("audio/menu.ogg");
+    const s = streams[0];
+    expect(s?.url).toBe("blob:audio/menu.ogg");
+    expect([10, 30]).toContain(s?.at);
+    expect(s?.loop).toBe(false);
+    expect(engine.playingLoops().music).toBe("menu");
+    const g = deckGain(s).events;
+    expect(g[0]).toEqual(["cancel", 0, 0]);
+    expect(g[1]).toEqual(["set", 0, 0]);
+    expect(g.at(-1)).toEqual(["ramp", 0.5, 1]); // the sound's volume at the end of the fade
+    expect(engine.history).toContain("menu");
+  });
+
+  it("plays a loop file looping, from its start", async () => {
+    const { engine, streams, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("odd"));
+    await at(0);
+    expect(streams[0]).toMatchObject({ url: "blob:audio/tune.ogg", at: 0, loop: true });
+  });
+
+  it("crossfades a zone change on two elements with equal power", async () => {
+    const { engine, streams, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    await at(10);
+    engine.setMusic(world("cave"));
+    await at(10.5);
+    expect(engine.musicState().pool).toBe("town"); // the dwell
+    await at(11.25);
+    expect(engine.musicState().pool).toBe("cave");
+    const [town, cave] = streams;
+    expect(cave?.url).toMatch(/^blob:audio\/cave\d\.ogg$/);
+    const out = deckGain(town).events.filter((e) => e[0] === "ramp");
+    const into = deckGain(cave).events.filter((e) => e[0] === "ramp");
+    expect(out.at(-1)).toEqual(["ramp", 0, 13.25]);
+    expect(into.at(-1)?.[1]).toBeCloseTo(0.5, 9);
+    // Point for point, (out/vol)² + (in/vol)² = 1: the same power through the crossfade.
+    const byTime = new Map(into.map((e) => [e[2].toFixed(3), e[1]]));
+    let checked = 0;
+    for (const [, g, t] of out) {
+      const g2 = byTime.get(t.toFixed(3));
+      if (g2 === undefined || t <= 11.25) continue;
+      expect((g / 0.5) ** 2 + (g2 / 0.5) ** 2).toBeCloseTo(1, 6);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(20);
+    const state = engine.musicState();
+    expect(state.voices.map((v) => v.pool)).toEqual(["town", "cave"]);
+    expect(state.voices.every((v) => v.playing)).toBe(true);
+    await at(14);
+    expect(town?.stops).toBe(1); // faded out: its element is let go of
+    expect(engine.musicState().voices).toHaveLength(1);
+  });
+
+  it("keeps the old music until the new file arrives", async () => {
+    const { engine, streams, held, holdFiles, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    holdFiles(true);
+    engine.setMusic(world("cave"));
+    await at(1.5);
+    await at(4);
+    expect(engine.musicState().pool).toBe("town");
+    expect(streams).toHaveLength(1);
+    const wanted = engine.musicState().wanted[0] ?? "";
+    expect(wanted).toMatch(/^cave/);
+    held.get(`audio/${wanted}.ogg`)?.();
+    await flush();
+    await at(4.25);
+    expect(engine.musicState().pool).toBe("cave");
+    expect(streams[1]?.url).toBe(`blob:audio/${wanted}.ogg`);
+  });
+
+  it("fetches nothing while the music is muted, and comes in where the track is when unmuted", async () => {
+    const muted = withMuted(defaultPrefs(), "music", true);
+    const { engine, streams, streamed, at } = setup(muted);
+    await unlockNow(engine);
+    engine.setMusic({ kind: "title" });
+    await at(0);
+    await at(20);
+    expect(streamed).toEqual([]);
+    expect(streams).toHaveLength(0);
+    const [voice] = engine.musicState().voices;
+    expect(voice).toMatchObject({ sound: "menu", playing: false });
+    engine.setPrefs(defaultPrefs()); // the file is fetched now, and starts when it arrives
+    await flush();
+    const s = streams[0];
+    expect(s?.url).toBe("blob:audio/menu.ogg");
+    expect(s?.at).toBeCloseTo(voice?.position ?? 0, 6);
+    const g = deckGain(s).events;
+    expect(g[1]).toEqual(["set", 0, 20]); // from silence, not a jump
+    expect(g[2]?.[2]).toBeCloseTo(20 + ATTACH_MS / 1000, 9);
+    // Muted again: the element goes, the track goes on without it.
+    engine.setPrefs(muted);
+    expect(s?.stops).toBe(1);
+    expect(engine.musicState().voices[0]?.playing).toBe(false);
+  });
+
+  it("an element that ends is a track that ended: a rest, then the next one", async () => {
+    const { engine, streams, at } = setup();
+    await unlockNow(engine);
+    engine.setMusic(world("town"));
+    await at(0);
+    const first = streams[0];
+    const firstUrl = first?.url;
+    first?.end();
+    await flush();
+    expect(engine.musicState().voices).toHaveLength(0);
+    await at(2.5); // gap_ms is 1–2 s
+    expect(engine.musicState().voices).toHaveLength(1);
+    expect(streams).toHaveLength(1); // the same element, reused
+    expect(first?.plays).toBe(2);
+    expect(first?.url).not.toBe(firstUrl); // the other track of the pool
+  });
+
+  it("keeps a few files and lets go of older ones it does not need", async () => {
+    const { engine, released, at } = setup();
+    await unlockNow(engine);
+    let t = 0;
+    for (const zone of ["town", "cave", "odd", "title", "town", "cave", "odd", "title"]) {
+      engine.setMusic(world(zone));
+      for (let i = 0; i < 16; i++) await at((t += 0.25));
+    }
+    expect(released.length).toBeGreaterThan(0);
+    const kept = Object.keys(MANIFEST.sounds).filter((id) => engine.isStreamed(id));
+    expect(kept.length).toBeLessThanOrEqual(KEEP_STREAMS + 2);
   });
 });
