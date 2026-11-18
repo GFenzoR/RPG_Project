@@ -126,6 +126,28 @@ describe("recipes", () => {
     }
   });
 
+  it("grounds stay in the value band of docs/17 ART-6 (mean L* 20-50), but lava, which glows", () => {
+    const linear = (c: number): number => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    for (const p of paths) {
+      if (RECIPES[p]?.kind !== "ground" || /^ground\/lava(\/|$)/.test(p)) continue;
+      const img = render(p);
+      let sum = 0;
+      for (let i = 0; i < img.data.length; i += 4) {
+        const y =
+          0.2126 * linear(img.data[i] ?? 0) +
+          0.7152 * linear(img.data[i + 1] ?? 0) +
+          0.0722 * linear(img.data[i + 2] ?? 0);
+        sum += y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+      }
+      const mean = sum / (img.data.length / 4);
+      expect(mean, p).toBeGreaterThanOrEqual(20);
+      expect(mean, p).toBeLessThanOrEqual(50);
+    }
+  });
+
   it("the committed PNGs equal the generator output (run make spritegen)", () => {
     for (const p of paths) {
       const file = spriteFile(root, p);

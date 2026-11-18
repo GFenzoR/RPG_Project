@@ -251,7 +251,7 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
     }
     const tone = (hash2(id, 8, seed) - 0.5) * 0.3;
     const mottle = (tileNoise(x, y, 4, 4, seed + 6) - 0.5) * 0.3;
-    let level = 0.52 + tone + mottle;
+    let level = 0.62 + tone + mottle;
     if (slabOf(x, y + 2) !== id || slabOf(x + 2, y) !== id)
       level -= 0.25; // far rim
     else if (slabOf(x, y - 1) !== id || slabOf(x - 1, y) !== id) level += 0.3; // lit rim
