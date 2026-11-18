@@ -17,3 +17,24 @@
   sprite: walls/rock_wall
   name: item.rock_wall.name
   pickupable: false
+
+# docs/17 A11, for map builders: a rampart, a wall two tiles tall (32x96, ART-2 and ART-3), for
+# town walls and cliffs; and stone and log walls with a window in their face. They join the
+# walls round them like any wall (the renderer counts every wall), so a window goes in a run.
+- id: rampart_wall
+  kind: wall
+  sprite: walls/rampart_wall
+  name: item.rampart_wall.name
+  pickupable: false
+
+- id: stone_wall_window
+  kind: wall
+  sprite: walls/stone_wall_window
+  name: item.stone_wall_window.name
+  pickupable: false
+
+- id: wooden_wall_window
+  kind: wall
+  sprite: walls/wooden_wall_window
+  name: item.wooden_wall_window.name
+  pickupable: false

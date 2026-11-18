@@ -10,6 +10,7 @@ import { buildAtlas, createImage, drawText, encodePng, GLYPH_H, textWidth } from
 import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format";
 import type { ContentIndex, Rect, World } from "@rpg/map-format";
+import { HOUSE_DOOR_FRAME } from "@rpg/renderer/decorated";
 import {
   pickVariant,
   resolveTileArt,
@@ -192,6 +193,12 @@ export function renderArea(
     if (!f && track) missing.add(id);
     return f;
   };
+  // docs/17 A11: the timber frame of every house door, drawn as the game does (not in the map).
+  const houseDoors = new Set<string>();
+  if (content.items.has(HOUSE_DOOR_FRAME))
+    for (const isl of world.islands.values())
+      for (const h of isl.houses ?? [])
+        for (const d of h.doors) if (d.z === floor) houseDoors.add(`${d.x},${d.y}`);
   const tileAt = (x: number, y: number) => {
     for (const isl of world.islands.values()) {
       if (!rectContains(isl.meta.rect, x, y)) continue;
@@ -201,9 +208,10 @@ export function renderArea(
       if (!c) return undefined;
       const lx = x % CHUNK_SIZE;
       const ly = y % CHUNK_SIZE;
+      const stack = c.items.find((s) => s.x === lx && s.y === ly)?.stack ?? [];
       return {
         ground: c.ground[ly * CHUNK_SIZE + lx] ?? null,
-        stack: c.items.find((s) => s.x === lx && s.y === ly)?.stack ?? [],
+        stack: houseDoors.has(`${x},${y}`) ? [HOUSE_DOOR_FRAME, ...stack] : stack,
       };
     }
     return undefined;

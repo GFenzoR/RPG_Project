@@ -138,6 +138,42 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 5, 6, 24, 16)).toEqual(at(bare, 5, 6, 24, 16));
   });
 
+  it("draws the frame of a house door on its tile, under what lies there (docs/17 A11)", () => {
+    const frames = framesOf([
+      ["ground/grass", 32, 32, [0, 80, 0, 255]],
+      ["doors/house_door_frame", 32, 32, [140, 90, 50, 255]],
+      ["items/coin", 32, 4, [250, 220, 0, 255]],
+    ]);
+    const w = world("grass", [{ x: 3, y: 2, stack: ["coin"] }]);
+    const isle = w.islands.get("isle") as unknown as { houses: unknown[] };
+    isle.houses.push({
+      id: "h",
+      doors: [
+        { x: 3, y: 2, z: 7 },
+        { x: 5, y: 2, z: 6 },
+      ],
+    });
+    const c = content([
+      item("grass", "ground/grass"),
+      item("house_door_frame", "doors/house_door_frame"),
+      item("coin", "items/coin"),
+    ]);
+    const img = decodePng(renderArea(w, c, frames, opts).png);
+    expect(at(img, 3, 2)).toEqual([140, 90, 50]);
+    expect(at(img, 3, 2, 16, 30)).toEqual([250, 220, 0]); // the coin, over the frame
+    expect(at(img, 5, 2)).toEqual([0, 80, 0]); // a door of another floor
+    // Without the item in data/items, nothing is drawn (and nothing is missing).
+    const bare = decodePng(
+      renderArea(
+        w,
+        content([item("grass", "ground/grass"), item("coin", "items/coin")]),
+        frames,
+        opts,
+      ).png,
+    );
+    expect(at(bare, 3, 2)).toEqual([0, 80, 0]);
+  });
+
   it("draws what is stacked on a crate higher by its elevation (ART-8)", () => {
     const frames = framesOf([
       ["ground/grass", 32, 32, [0, 80, 0, 255]],

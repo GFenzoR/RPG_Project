@@ -15,3 +15,5 @@ export type {
 } from "./map-view.ts";
 export * from "./retry.ts";
 export * from "./tile-art.ts";
+export { DecoratedSource, HOUSE_DOOR_FRAME, extrasByChunk, withExtras } from "./decorated.ts";
+export type { ExtraItem } from "./decorated.ts";

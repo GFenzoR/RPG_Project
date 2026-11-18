@@ -17,8 +17,11 @@ import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import type { Direction } from "@rpg/protocol";
 import {
   Atlas,
+  DecoratedSource,
+  HOUSE_DOOR_FRAME,
   MISSING_TEXTURE,
   MapView,
+  extrasByChunk,
   animate,
   entityZIndex,
   newAnimInput,
@@ -288,8 +291,19 @@ export async function createGameCanvas(
     }
     return a ?? undefined;
   };
+  // docs/17 A11: the timber frame of every house door (a gap in the wall the server knows by
+  // its tile), drawn by the renderer only: the world state never holds it.
+  const frameId = Object.entries(content.items).find(([, d]) => d.id === HOUSE_DOOR_FRAME)?.[0];
+  const frames = extrasByChunk(
+    frameId
+      ? (content.houseDoors ?? []).map((key) => {
+          const [x = -1, y = -1, z = -1] = key.split(",").map(Number);
+          return { x, y, z, id: frameId };
+        })
+      : [],
+  );
   const view = new MapView({
-    source: world,
+    source: new DecoratedSource(world, (z, cx, cy) => frames.get(`${z}/${cx}/${cy}`)),
     texture,
     art,
     // ART-8: tables and crates raise what is stacked on them (data/items elevation).

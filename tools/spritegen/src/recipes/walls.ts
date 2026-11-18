@@ -13,6 +13,9 @@
 // Light comes from the top-left (ART-5): the top is the lightest surface with a lit rim on
 // its north and west edges, the face is darker, shadows lean to blue-violet. The sprite
 // itself (walls/<material>) is the east-west piece, for icons and the editor's palette.
+// Also (A11): a tall rampart (32x96: a face of two tiles, ART-2 and ART-3), stone and log walls
+// with a window in their face (their own 16 pieces, the texture of the plain wall), and the
+// timber frame the client draws on the door of a house (doors/house_door_frame).
 import type { Image, Rgba } from "@rpg/spritepack";
 import { hash2, opaque, outline, px, tileNoise } from "../draw.ts";
 import type { Rng } from "../draw.ts";
@@ -27,6 +30,8 @@ export const WALL_W = 8;
 export const ICON_MASK = WALL_E | WALL_W;
 /** Height of a wall's face, px: one tile. */
 export const FACE = 32;
+/** Height of a tall wall's face (a rampart), px: two tiles. */
+export const TALL_FACE = 64;
 /**
  * Where a wall stands on its tile, px [from, to): x, the columns of a north-south arm; y, the
  * rows of an east-west arm (always up to the south edge, so the face fills the tile).
@@ -55,6 +60,8 @@ export interface FaceSpot {
   /** Columns to the face's left and right ends (1 = the end column itself), capped. */
   left: number;
   right: number;
+  /** The face's height, px (FACE, or TALL_FACE for a rampart). */
+  h: number;
 }
 
 export interface WallStyle {
@@ -105,8 +112,14 @@ function hasFace(mask: number, band: Footprint, x: number): boolean {
   return southEdge(mask, band, x) >= 0;
 }
 
-/** Draws piece `mask` of a style into a 32x64 image. */
-export function drawPiece(img: Image, style: WallStyle, mask: number, seed: number): void {
+/** Draws piece `mask` of a style into a 32x(32 + face) image. */
+export function drawPiece(
+  img: Image,
+  style: WallStyle,
+  mask: number,
+  seed: number,
+  face = FACE,
+): void {
   const { band } = style;
   const dist = (x: number, y: number, dx: number, dy: number): number => {
     let d = 1;
@@ -121,8 +134,8 @@ export function drawPiece(img: Image, style: WallStyle, mask: number, seed: numb
     while (left < CAP && hasFace(mask, band, x - left)) left++;
     let right = 1;
     while (right < CAP && hasFace(mask, band, x + right)) right++;
-    for (let r = 0; r < FACE; r++)
-      px(img, x, edge + 1 + r, style.face({ x, r, left, right }, seed));
+    for (let r = 0; r < face; r++)
+      px(img, x, edge + 1 + r, style.face({ x, r, left, right, h: face }, seed));
   }
   for (let y = 0; y < 32; y++)
     for (let x = 0; x < 32; x++) {
@@ -138,8 +151,9 @@ export function drawPiece(img: Image, style: WallStyle, mask: number, seed: numb
   // A dark outline where the wall meets the open air, never at a seam with a neighbour.
   outline(img, { amount: 0.42, edges: false });
   // The foot of a block's face is on the image's bottom border: give it its contact line.
+  const foot = img.height - 1;
   for (let x = 0; x < 32; x++)
-    if (opaque(img, x, 63) && southEdge(mask, band, x) === 31) px(img, x, 63, CONTACT);
+    if (opaque(img, x, foot) && southEdge(mask, band, x) === 31) px(img, x, foot, CONTACT);
 }
 
 const CONTACT = hex("#1c1a1f");
@@ -197,7 +211,8 @@ export const STONE: WallStyle = {
     if (level > 0.95 && (e.n === 2 || e.w === 2)) return STONE_RIM;
     return ramp(STONE_TOP, level);
   },
-  face({ x, r, left, right }, seed) {
+  face(spot, seed) {
+    const { x, r, left, right } = spot;
     if (r === 0) return STONE_UNDER; // shadow under the coping
     const k = Math.floor((r - 1) / 8);
     const yy = (r - 1) % 8;
@@ -209,7 +224,7 @@ export const STONE: WallStyle = {
     if (yy === 0 || x === b.from + 1) level += 0.3;
     if (yy === 6 || x === b.to - 1) level -= 0.22;
     // Darker near the ground and at the ends; the left end catches the light.
-    if (r >= FACE - 3) level -= 0.25;
+    if (r >= spot.h - 3) level -= 0.25;
     if (right === 1) level -= 0.25;
     if (left === 1) level += 0.2;
     // Chips and pits.
@@ -241,7 +256,8 @@ export const WOOD: WallStyle = {
     if ((alongX ? x : y) % 11 === 5) level -= 0.35;
     return ramp(WOOD_TOP, level);
   },
-  face({ x, r, left, right }, seed) {
+  face(spot, seed) {
+    const { x, r, left, right } = spot;
     if (r === 0) return WOOD_GAP;
     const yy = (r - 1) % 8;
     const k = Math.floor((r - 1) / 8);
@@ -259,7 +275,7 @@ export const WOOD: WallStyle = {
     }
     const grain = tileNoise(x, k * 8 + yy * 4, 8, 1, seed) - 0.5;
     let level = (LOG_ROWS[yy] ?? 0.5) + grain * 0.3 + (hash2(k, 1, seed) - 0.5) * 0.12;
-    if (r >= FACE - 2) level -= 0.2;
+    if (r >= spot.h - 2) level -= 0.2;
     if (hash2(x, r, seed + 3) < 0.02) level -= 0.3; // knots
     return ramp(WOOD_LOG, level);
   },
@@ -322,14 +338,15 @@ export const ROCK: WallStyle = {
     if (e.e <= 2) level -= 0.2;
     return ramp(ROCK_TOP, level);
   },
-  face({ x, r, left, right }, seed) {
+  face(spot, seed) {
+    const { x, r, left, right } = spot;
     if (r === 0) return ROCK_CRACK; // shadow under the lip
     // Fractured facets, taller than wide; each faces the light or away from it, darker
     // toward the foot of the cliff.
     const st = stones(x, r, 8, 16, seed + 7);
     if (st.gap < 0.1) return ROCK_CRACK;
     const facing = hash2(st.id, 3, seed) - 0.5;
-    let level = 0.62 - (r / FACE) * 0.35 + facing * 0.45 - st.dx * 0.35 - st.dy * 0.2;
+    let level = 0.62 - (r / spot.h) * 0.35 + facing * 0.45 - st.dx * 0.35 - st.dy * 0.2;
     if (st.gap < 0.2) level -= 0.2;
     if (r <= 2) level += 0.12;
     if (left === 1) level += 0.12;
@@ -471,15 +488,25 @@ function doorPiece(style: WallStyle, wall: string, kind: "wood" | "iron", open: 
 
 /**
  * The 16 pieces of a wall and its icon sprite (the east-west piece). `material` gives the
- * texture seed: a vein shares the rock's, so it meets the rock round it seamlessly.
+ * texture seed: a vein shares the rock's, so it meets the rock round it seamlessly. `face`:
+ * the height of its face (TALL_FACE for a rampart); `extra` draws over each piece (a window).
  */
-function wallSet(sprite: string, style: WallStyle, material = sprite): RecipeBook {
+function wallSet(
+  sprite: string,
+  style: WallStyle,
+  material = sprite,
+  face = FACE,
+  extra?: (img: Image, mask: number) => void,
+): RecipeBook {
   const book: RecipeBook = {};
   const piece = (mask: number): Recipe => ({
     kind: "object",
-    height: 64,
+    height: 32 + face,
     // Every piece of a material shares the seed: the textures meet at the seams.
-    draw: (img) => drawPiece(img, style, mask, seedOfWall(material)),
+    draw: (img) => {
+      drawPiece(img, style, mask, seedOfWall(material), face);
+      extra?.(img, mask);
+    },
   });
   book[sprite] = piece(ICON_MASK);
   for (let m = 0; m < 16; m++) book[`${sprite}/wall_${m}`] = piece(m);
@@ -496,9 +523,129 @@ function seedOfWall(sprite: string): number {
   return h >>> 0;
 }
 
+// ---- windows (A11) ---------------------------------------------------------------------------
+
+const GLASS = ["#1a2230", "#26344a", "#3b5270", "#8fb4cf"].map(hex);
+const SILL = ["#3f3a37", "#6f6a63", "#8a847a"].map(hex);
+const SHUTTER = ["#2d4034", "#3e5646", "#506d58"].map(hex);
+/** Columns of a window, [from, to]; it sits in the middle of the face, one tile wide. */
+const WIN_X: readonly [number, number] = [11, 20];
+
+/**
+ * A window in the face of a piece whose face spans the middle of its tile (an east-west run):
+ * dark glass with a cross of mullions and a glint, under a lintel and over a sill (stone), or
+ * between two green shutters (logs). Pieces without that face (a north-south run, a corner
+ * turning south) stay plain wall: a window shows only where its face is seen.
+ */
+function windowOver(kind: "stone" | "wood"): (img: Image, mask: number) => void {
+  return (img, mask) => {
+    const band = BAND;
+    for (let x = WIN_X[0] - 3; x <= WIN_X[1] + 3; x++) if (southEdge(mask, band, x) < 0) return;
+    const top = southEdge(mask, band, 16) + 1; // first face row
+    const y0 = top + 8;
+    const y1 = top + 20;
+    const [x0, x1] = WIN_X;
+    for (let y = y0 - 1; y <= y1 + 1; y++)
+      for (let x = x0 - 1; x <= x1 + 1; x++) {
+        const edge = x === x0 - 1 || x === x1 + 1 || y === y0 - 1 || y === y1 + 1;
+        if (edge) {
+          // The frame: lit on the top-left, a heavier sill at the bottom.
+          const lit = y === y0 - 1 || x === x0 - 1;
+          if (kind === "stone") px(img, x, y, SILL[y === y1 + 1 ? 2 : lit ? 1 : 0] as Rgba);
+          else px(img, x, y, (lit ? WOOD_END[1] : WOOD_END[0]) as Rgba);
+          continue;
+        }
+        const mullion = x === Math.floor((x0 + x1) / 2) || y === Math.floor((y0 + y1) / 2);
+        if (mullion) {
+          px(img, x, y, (kind === "stone" ? SILL[0] : WOOD_GAP) as Rgba);
+          continue;
+        }
+        // Glass: darker low and right, a soft sky reflection top-left, one glint.
+        let level = 0.55 - ((y - y0) / (y1 - y0)) * 0.35 - ((x - x0) / (x1 - x0)) * 0.15;
+        if (x - x0 + (y - y0) <= 2) level += 0.3;
+        const glint = (x === x0 + 1 && y === y0 + 1) || (x === x0 + 2 && y === y0 + 1);
+        px(img, x, y, glint ? (GLASS[3] as Rgba) : ramp(GLASS.slice(0, 3), level));
+      }
+    if (kind === "stone") {
+      // A lintel stone over the opening.
+      for (let x = x0 - 2; x <= x1 + 2; x++) px(img, x, y0 - 2, SILL[x < 16 ? 2 : 1] as Rgba);
+      for (let x = x0 - 2; x <= x1 + 2; x++) px(img, x, y1 + 2, CONTACT);
+      return;
+    }
+    // Shutters folded open on both sides, planks with a dark gap.
+    for (let y = y0 - 1; y <= y1 + 1; y++)
+      for (const [from, to] of [
+        [x0 - 5, x0 - 2],
+        [x1 + 2, x1 + 5],
+      ] as const)
+        for (let x = from; x <= to; x++) {
+          const gap = x === from + 2 && y % 5 !== 0;
+          const lit = x === from;
+          px(img, x, y, gap ? WOOD_GAP : (SHUTTER[lit ? 2 : y % 5 === 0 ? 0 : 1] as Rgba));
+        }
+  };
+}
+
+// ---- the frame of a house door (A11) ----------------------------------------------------------
+
+const FRAME_WOOD = ["#2e2015", "#4a3324", "#6b4d32", "#8a6a45"].map(hex);
+
+/**
+ * The timber frame of a house door (houses.yaml `doors`, a gap in the wall), one piece per
+ * mask like a wall, so the walls on either side join it and run on to the doorway. In an
+ * east-west wall, a beam across at the height of the walls' tops and two posts at its sides;
+ * in a north-south wall, the beam runs along the wall over the gap. Walkable and open in the
+ * middle: the client, the editor and mapcli render draw it on every house door, it is not in
+ * the maps.
+ */
+function houseDoorFrame(mask: number): Recipe {
+  return {
+    kind: "object",
+    height: 64,
+    draw(img: Image, _rand: Rng, seed: number) {
+      const across = (mask & (WALL_E | WALL_W)) !== 0 || (mask & (WALL_N | WALL_S)) === 0;
+      const wood = (x: number, y: number, along: number, lit: boolean, dark: boolean): void => {
+        let level = 0.55 + (tileNoise(along, y * 4, 8, 2, seed) - 0.5) * 0.35;
+        if (lit) level += 0.35;
+        if (dark) level -= 0.35;
+        px(img, x, y, ramp(FRAME_WOOD, level));
+      };
+      if (!across) {
+        // Along a north-south wall: a beam down the middle of the tile, lifted like a top.
+        const [x0, x1] = BAND.x;
+        for (let y = 0; y < 32; y++)
+          for (let x = x0; x < x1; x++) wood(x, y, y, x === x0, x === x1 - 1);
+        outline(img, { amount: 0.42, edges: false });
+        return;
+      }
+      const beamTop = BAND.y[0];
+      const beamBottom = 32 + 3; // the beam reaches a little into the face
+      for (let x = 0; x < 32; x++)
+        for (let y = beamTop; y <= beamBottom; y++)
+          if (y === beamBottom) px(img, x, y, FRAME_WOOD[0] as Rgba);
+          else wood(x, y, x, y === beamTop, y >= 32);
+      for (const from of [0, 28])
+        for (let x = from; x < from + 4; x++)
+          for (let y = beamBottom + 1; y < 64; y++) wood(x, y, x * 4, x === from, x === from + 3);
+      outline(img, { amount: 0.42, edges: false });
+    },
+  };
+}
+
+/** The frame's 16 pieces and its sprite (the east-west piece). */
+function frameSet(sprite: string): RecipeBook {
+  const book: RecipeBook = { [sprite]: houseDoorFrame(ICON_MASK) };
+  for (let m = 0; m < 16; m++) book[`${sprite}/wall_${m}`] = houseDoorFrame(m);
+  return book;
+}
+
 export const WALLS: RecipeBook = {
   ...wallSet("walls/stone_wall", STONE),
   ...wallSet("walls/wooden_wall", WOOD),
+  ...wallSet("walls/rampart_wall", STONE, "walls/stone_wall", TALL_FACE),
+  ...wallSet("walls/stone_wall_window", STONE, "walls/stone_wall", FACE, windowOver("stone")),
+  ...wallSet("walls/wooden_wall_window", WOOD, "walls/wooden_wall", FACE, windowOver("wood")),
+  ...frameSet("doors/house_door_frame"),
   ...wallSet("walls/rock_wall", ROCK),
   ...wallSet("decor/iron_vein", IRON_VEIN, "walls/rock_wall"),
   ...wallSet("decor/ember_vein", EMBER_VEIN, "walls/rock_wall"),

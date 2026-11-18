@@ -3,8 +3,17 @@
 import { Application, Graphics, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { chunkKey, tilesToRects } from "@rpg/map-format/ops";
-import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tilePixels } from "@rpg/renderer";
-import type { TileArt, TileSource } from "@rpg/renderer";
+import {
+  Atlas,
+  DecoratedSource,
+  HOUSE_DOOR_FRAME,
+  MISSING_TEXTURE,
+  MapView,
+  extrasByChunk,
+  screenToTile,
+  tilePixels,
+} from "@rpg/renderer";
+import type { ExtraItem, TileArt, TileSource } from "@rpg/renderer";
 import type { EditorController } from "../state/editor.ts";
 import { TOOL_KEYS, brushCells } from "../tools/tools.ts";
 import { entityKey, entityPos } from "../state/editor.ts";
@@ -76,7 +85,7 @@ export async function createMapCanvas(
     }
     return tex;
   };
-  const source: TileSource = {
+  const mapSource: TileSource = {
     chunk(z, cx, cy) {
       const key = chunkKey(z, cx, cy);
       for (const isl of ctl.viewWorld().islands.values()) {
@@ -86,6 +95,17 @@ export async function createMapCanvas(
       return undefined;
     },
   };
+  // docs/17 A11: the timber frame on every house door, as the game draws it (not in the map).
+  let framesOf = ctl.viewWorld();
+  let frames = houseFrames(framesOf);
+  const source = new DecoratedSource(mapSource, (z, cx, cy) => {
+    const w = ctl.viewWorld();
+    if (w !== framesOf) {
+      framesOf = w;
+      frames = houseFrames(w);
+    }
+    return frames.get(`${z}/${cx}/${cy}`);
+  });
   // The same tile art as the game (docs/17): wall pieces, ground looks, animations, shadows.
   const arts = new Map<string, TileArt<Texture> | null>();
   const art = (id: string): TileArt<Texture> | undefined => {
@@ -515,4 +535,12 @@ export async function createMapCanvas(
       app.destroy(true);
     },
   };
+}
+
+/** The door frames of a world's houses, by chunk (docs/17 A11). */
+function houseFrames(world: ReturnType<EditorController["viewWorld"]>) {
+  const doors: ExtraItem[] = [];
+  for (const isl of world.islands.values())
+    for (const h of isl.houses) for (const d of h.doors) doors.push({ ...d, id: HOUSE_DOOR_FRAME });
+  return extrasByChunk(doors);
 }

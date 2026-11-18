@@ -257,3 +257,7 @@ items:
   wall_banner: 254
   brazier: 255
   fountain: 256
+  house_door_frame: 257
+  rampart_wall: 258
+  stone_wall_window: 259
+  wooden_wall_window: 260
