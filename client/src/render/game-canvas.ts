@@ -24,7 +24,7 @@ import {
   startHit,
   tileToScreen,
 } from "@rpg/renderer";
-import type { AnimState, AtlasIcon, Camera } from "@rpg/renderer";
+import type { AnimState, AtlasIcon, Camera, TileArt } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
@@ -79,6 +79,10 @@ const COLORS = {
 /** Health bar size in sprite pixels. */
 const BAR_W = 26;
 const BAR_H = 4;
+
+/** The own player seen through a wall (ART-3): its sprite, light and translucent. */
+const BEHIND_WALL_ALPHA = 0.45;
+const BEHIND_WALL_TINT = 0xd6e2ff;
 
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
@@ -245,7 +249,36 @@ export async function createGameCanvas(
     }
     return tex;
   };
-  const view = new MapView({ source: world, texture, tileSize: T, floor: world.self?.pos.z ?? 7 });
+  // Tile art (docs/17 ART-3, ART-4, ART-7): ground looks, wall pieces, animated tiles, anchors
+  // and cast shadows, resolved once per item.
+  const arts = new Map<string, TileArt<Texture> | null>();
+  const art = (id: string): TileArt<Texture> | undefined => {
+    let a = arts.get(id);
+    if (a === undefined) {
+      const sprite = content.items[Number(id)]?.sprite;
+      a = (sprite && atlas.tileArt(sprite)) || null;
+      arts.set(id, a);
+    }
+    return a ?? undefined;
+  };
+  const view = new MapView({
+    source: world,
+    texture,
+    art,
+    tileSize: T,
+    floor: world.self?.pos.z ?? 7,
+  });
+  // ART-3: when a wall hides the own player (the wall right south of it covers its tile), a
+  // see-through copy of its sprite is drawn over the map, so the player never loses itself.
+  // The others stay hidden: hiding behind a wall is part of the game.
+  const behindWall = new Sprite({
+    anchor: { x: 0.5, y: 1 },
+    alpha: BEHIND_WALL_ALPHA,
+    tint: BEHIND_WALL_TINT,
+    visible: false,
+    roundPixels: true,
+  });
+  view.overlay.addChild(behindWall);
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
@@ -661,7 +694,8 @@ export async function createGameCanvas(
     if (!self) return;
     if (view.floor !== self.pos.z) view.setFloor(self.pos.z);
     follow(now);
-    view.render(cam, { width: app.screen.width, height: app.screen.height });
+    view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
+    behindWall.visible = false;
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
@@ -687,6 +721,14 @@ export async function createGameCanvas(
           ? step.from
           : step.to;
       view.placeEntity(s.body, later.x, later.y);
+      if (c.id === world.selfId && s.figure && view.wallAt(Math.round(p.x), Math.round(p.y) + 1)) {
+        const fig = s.figure.sprite;
+        behindWall.texture = fig.texture;
+        behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
+        behindWall.scale.copyFrom(fig.scale);
+        behindWall.skew.copyFrom(fig.skew);
+        behindWall.visible = s.body.alpha === 1;
+      }
       // Over the head of a figure taller than its tile (ART-2).
       const head = tileToScreen(cam, p.x + 0.5, p.y - (s.figure?.lift ?? 0) / T, T);
       const barTop = Math.round(head.y) - BAR_H * scale;

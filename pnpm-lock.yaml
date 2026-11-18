@@ -158,6 +158,9 @@ importers:
       '@rpg/map-format':
         specifier: workspace:*
         version: link:../../packages/map-format
+      '@rpg/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
       '@rpg/spritepack':
         specifier: workspace:*
         version: link:../spritepack

@@ -1,13 +1,17 @@
 // `mapcli render` / MCP `map_render`: a PNG of one floor of an area, drawn with the sprite
 // atlas (tools/spritepack, built in memory) and the same draw order as packages/renderer:
-// every ground first, then the stacks tile by tile in row-major order, bottom to top;
-// sprites bigger than a tile are anchored at the bottom-right of their tile. Meant for
+// every ground first, then the cast shadows, then the stacks tile by tile in row-major order,
+// bottom to top; sprites bigger than a tile are anchored at the bottom-right of their tile (or
+// centred, tile art bc). The tile art is the game's too (@rpg/renderer/tile-art, docs/17):
+// a ground's look by tile, a wall's piece by its neighbours; animations show frame 0. Meant for
 // reviewing edits with the Read tool, so it adds what the game would not show: coordinate
 // rulers, a grid, and overlays for zones, spawns, NPCs, portals, signs and the temple.
 import { buildAtlas, createImage, drawText, encodePng, GLYPH_H, textWidth } from "@rpg/spritepack";
 import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format";
 import type { ContentIndex, Rect, World } from "@rpg/map-format";
+import { pickVariant, resolveTileArt, tileHash, wallMask } from "@rpg/renderer/tile-art";
+import type { TileArt, TileMeta } from "@rpg/renderer/tile-art";
 
 /** Largest area side, in tiles. */
 export const MAX_RENDER_SIZE = 256;
@@ -42,6 +46,13 @@ interface Frame {
   w: number;
   h: number;
 }
+
+/** Sprite frames by sprite path, and the tile art of map sprites (atlas.json tiles). */
+export type SpriteFrames = Map<string, Frame> & { tiles?: Record<string, TileMeta> };
+
+/** Cast shadows, as the game draws them (packages/renderer MapView). */
+const CAST_SHADOW: Rgba = [22, 20, 40, 255];
+const CAST_SHADOW_ALPHA = 0.32;
 
 const ZONE_COLORS: Record<string, Rgba> = {
   protection: [80, 220, 255, 255],
@@ -85,8 +96,18 @@ function outline(img: Image, x: number, y: number, w: number, h: number, t: numb
   rect(img, x + w - t, y + t, t, h - 2 * t, c);
 }
 
-/** Draws a sprite scaled by tile/32 with its bottom-right corner at (right, bottom). */
-function drawSprite(img: Image, f: Frame, right: number, bottom: number, scale: number): void {
+/**
+ * Draws a sprite scaled by tile/32 with its bottom-right corner at (right, bottom); with
+ * `shadow`, only its shape, in that colour and alpha.
+ */
+function drawSprite(
+  img: Image,
+  f: Frame,
+  right: number,
+  bottom: number,
+  scale: number,
+  shadow?: { color: Rgba; alpha: number },
+): void {
   const w = Math.max(1, Math.round(f.w * scale));
   const h = Math.max(1, Math.round(f.h * scale));
   for (let dy = 0; dy < h; dy++) {
@@ -96,6 +117,10 @@ function drawSprite(img: Image, f: Frame, right: number, bottom: number, scale: 
       const si = (sy * f.page.width + sx) * 4;
       const a = (f.page.data[si + 3] as number) / 255;
       if (a === 0) continue;
+      if (shadow) {
+        blend(img, right - w + dx, bottom - h + dy, shadow.color, a * shadow.alpha);
+        continue;
+      }
       const c: Rgba = [
         f.page.data[si] as number,
         f.page.data[si + 1] as number,
@@ -108,7 +133,7 @@ function drawSprite(img: Image, f: Frame, right: number, bottom: number, scale: 
 }
 
 /** Sprite frames by sprite path, from an atlas built in memory (no files written). */
-export function loadFrames(root: string): Map<string, Frame> {
+export function loadFrames(root: string): SpriteFrames {
   return tryLoadFrames(root) ?? new Map();
 }
 
@@ -116,7 +141,7 @@ export function loadFrames(root: string): Map<string, Frame> {
  * Like loadFrames, but undefined when the atlas does not build (any error in assets/, or a
  * throw): the caller can draw with other sprites instead of every one missing.
  */
-export function tryLoadFrames(root: string): Map<string, Frame> | undefined {
+export function tryLoadFrames(root: string): SpriteFrames | undefined {
   let atlas;
   try {
     atlas = buildAtlas(root).atlas;
@@ -124,7 +149,8 @@ export function tryLoadFrames(root: string): Map<string, Frame> | undefined {
     return undefined;
   }
   if (!atlas) return undefined;
-  const frames = new Map<string, Frame>();
+  const frames: SpriteFrames = new Map<string, Frame>();
+  frames.tiles = atlas.index.tiles;
   for (const page of atlas.pages)
     for (const [name, fr] of Object.entries(page.json.frames))
       frames.set(name, { page: page.image, ...fr.frame });
@@ -134,7 +160,7 @@ export function tryLoadFrames(root: string): Map<string, Frame> | undefined {
 export function renderArea(
   world: World,
   content: ContentIndex,
-  frames: Map<string, Frame>,
+  frames: SpriteFrames,
   opts: RenderOptions,
 ): RenderResult {
   const { area, floor } = opts;
@@ -153,10 +179,11 @@ export function renderArea(
   const py = (y: number): number => top + (y - area.y) * T;
 
   const missing = new Set<string>();
-  const frameOf = (id: string): Frame | undefined => {
+  /** The sprite of an item; one without it is reported when track is set (inside the area). */
+  const frameOf = (id: string, track = true): Frame | undefined => {
     const sprite = content.items.get(id)?.sprite;
     const f = sprite ? frames.get(sprite) : undefined;
-    if (!f) missing.add(id);
+    if (!f && track) missing.add(id);
     return f;
   };
   const tileAt = (x: number, y: number) => {
@@ -175,23 +202,61 @@ export function renderArea(
     }
     return undefined;
   };
+  // Tile art by item ID (looks, wall pieces, anchor, shadow), resolved once.
+  const arts = new Map<string, TileArt<Frame> | null>();
+  const artOf = (id: string): TileArt<Frame> | undefined => {
+    let a = arts.get(id);
+    if (a === undefined) {
+      const sprite = content.items.get(id)?.sprite;
+      a = (sprite && resolveTileArt(sprite, frames.tiles?.[sprite], (n) => frames.get(n))) || null;
+      arts.set(id, a);
+    }
+    return a ?? undefined;
+  };
+  const wallAt = (x: number, y: number): boolean =>
+    (tileAt(x, y)?.stack ?? []).some((id) => artOf(id)?.joinsWalls === true);
   const x1 = area.x + area.w;
   const y1 = area.y + area.h;
-  // Grounds, then stacks.
+  // Grounds, then cast shadows, then stacks. Tall sprites of the rows just below the area
+  // (a wall's top, a tree) reach up into it, so those rows are drawn too (clipped).
   for (let y = area.y; y < y1; y++)
     for (let x = area.x; x < x1; x++) {
       const g = tileAt(x, y)?.ground;
       if (!g) continue;
-      const f = frameOf(g);
+      const art = artOf(g);
+      const f = art?.variants
+        ? art.variants[pickVariant(tileHash(x, y, floor), art.variants.length, art.weight)]
+        : frameOf(g);
       if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale);
       else rect(img, px(x), py(y), T, T, MISSING);
     }
-  for (let y = area.y; y < y1; y++)
-    for (let x = area.x; x < x1; x++)
+  /** Where an item's sprite goes: its bottom-right corner (bc: centred on the tile). */
+  const rightOf = (x: number, f: Frame, art: TileArt<Frame> | undefined): number =>
+    art?.anchorX === 0.5 ? px(x) + T / 2 + Math.round((f.w * scale) / 2) : px(x) + T;
+  for (let y = area.y; y < y1 + 2; y++)
+    for (let x = area.x; x <= x1; x++)
       for (const id of tileAt(x, y)?.stack ?? []) {
-        const f = frameOf(id);
-        if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale);
-        else outline(img, px(x) + 2, py(y) + 2, T - 4, T - 4, Math.max(1, T >> 3), MISSING);
+        const art = artOf(id);
+        const f = art?.shadow;
+        if (f)
+          drawSprite(img, f, rightOf(x, f, art), py(y) + T, scale, {
+            color: CAST_SHADOW,
+            alpha: CAST_SHADOW_ALPHA,
+          });
+      }
+  for (let y = area.y; y < y1 + 2; y++)
+    for (let x = area.x; x <= x1; x++)
+      for (const id of tileAt(x, y)?.stack ?? []) {
+        const art = artOf(id);
+        const inside = y < y1 && x < x1;
+        const f = art?.wall
+          ? art.wall[
+              wallMask(wallAt(x, y - 1), wallAt(x + 1, y), wallAt(x, y + 1), wallAt(x - 1, y))
+            ]
+          : frameOf(id, inside);
+        if (f) drawSprite(img, f, rightOf(x, f, art), py(y) + T, scale);
+        else if (inside)
+          outline(img, px(x) + 2, py(y) + 2, T - 4, T - 4, Math.max(1, T >> 3), MISSING);
       }
 
   if (opts.grid !== false && T >= 16)
