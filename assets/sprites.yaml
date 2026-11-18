@@ -450,20 +450,22 @@ animations:
 # and cast shadows (<sprite>/shadow) are found by name; this section adds what names cannot
 # say: ms and sync of an animation (world: in step; tile: a phase per tile; random: a rare
 # glint), a centred anchor (bc), joins_walls for a door set in a wall, light (the radius in
-# tiles of the light it gives in caves) and the share of the main look (weight, default 0.7).
+# tiles of the light it gives in caves), the share of the main look (weight, default 0.7)
+# and particles: the ambient motes the client spawns there (docs/17 ART-7, A13: embers,
+# pollen, spray, which a ground gives off only where it meets another ground, or dust).
 tiles:
-  ground/water_shallow: { ms: 240, sync: world }
+  ground/water_shallow: { ms: 240, sync: world, particles: spray }
   ground/water_shoal: { ms: 240, sync: world }
-  ground/lava: { ms: 280, sync: world }
-  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }
-  decor/elm_tree: { anchor: bc, ms: 850, sync: tile }
-  decor/birch_tree: { anchor: bc, ms: 700, sync: tile }
-  decor/pine_tree: { anchor: bc, ms: 900, sync: tile }
+  ground/lava: { ms: 280, sync: world, particles: embers }
+  decor/oak_tree: { anchor: bc, ms: 800, sync: tile, particles: pollen }
+  decor/elm_tree: { anchor: bc, ms: 850, sync: tile, particles: pollen }
+  decor/birch_tree: { anchor: bc, ms: 700, sync: tile, particles: pollen }
+  decor/pine_tree: { anchor: bc, ms: 900, sync: tile, particles: pollen }
   decor/bush: { ms: 750, sync: tile }
-  decor/smelting_forge: { ms: 120, sync: tile, light: 3.5 }
-  decor/cooking_hearth: { ms: 110, sync: tile, light: 3 }
+  decor/smelting_forge: { ms: 120, sync: tile, light: 3.5, particles: embers }
+  decor/cooking_hearth: { ms: 110, sync: tile, light: 3, particles: embers }
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }
-  decor/brazier: { ms: 120, sync: tile, light: 3.5 }
+  decor/brazier: { ms: 120, sync: tile, light: 3.5, particles: embers }
   decor/fountain: { ms: 150, sync: world }
   decor/wall_banner: { ms: 170, sync: tile }
   doors/pruebas_gate: { joins_walls: true }

@@ -14,6 +14,7 @@
   pickupable: false
   blocks_movement: true
   blocks_sight: true
+  elevation: 8              # what is put on it is drawn this much higher (docs/17 ART-8)
 
 # Ore vein (T1.12): use a pickaxe on it. Our own numbers.
 - id: iron_vein

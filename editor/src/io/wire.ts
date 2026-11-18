@@ -52,6 +52,8 @@ export interface PaletteItem {
   lock?: string;
   /** A key: the key id of the doors it opens (data/items `key`). */
   key?: string;
+  /** docs/17 ART-8: sprite pixels it raises what is stacked on it (data/items `elevation`). */
+  elevation?: number;
 }
 
 /** Same shape as map-format's Diagnostic (that module pulls in Node). */

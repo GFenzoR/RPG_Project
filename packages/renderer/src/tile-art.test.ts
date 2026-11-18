@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GLINT_MIN_MS,
   GLINT_SPREAD_MS,
+  MAX_ELEVATION,
   TILE_PART,
   WALL_E,
   WALL_N,
@@ -11,6 +12,7 @@ import {
   framePhase,
   pickVariant,
   resolveTileArt,
+  stackElevation,
   tileHash,
   wallMask,
   wallTiles,
@@ -124,6 +126,11 @@ describe("resolveTileArt", () => {
   ]);
   const lookup = (name: string): string | undefined => (atlas.has(name) ? name : undefined);
 
+  it("carries the particles a sprite gives off (A13)", () => {
+    expect(resolveTileArt("decor/tree", { particles: "pollen" }, lookup)?.particles).toBe("pollen");
+    expect(resolveTileArt("decor/tree", { anchor: "bc" }, lookup)?.particles).toBeUndefined();
+  });
+
   it("lists variants, frames, wall pieces and the shadow the atlas has", () => {
     const grass = resolveTileArt("ground/grass", { variants: 3 }, lookup);
     // var_3 is missing: the looks stop at the first gap.
@@ -159,5 +166,17 @@ describe("resolveTileArt", () => {
       expect(TILE_PART.exec(p)?.[1], p).toBeDefined();
     for (const p of ["walls/stone/wall_16", "ground/grass/var_0", "effects/hit/0"])
       expect(TILE_PART.test(p), p).toBe(false);
+  });
+});
+
+describe("stackElevation (ART-8)", () => {
+  const elev = (id: string): number => (id === "table" ? 8 : id === "pit" ? -5 : 0);
+  it("sums the items under an index, ignores negatives and caps at MAX_ELEVATION", () => {
+    expect(stackElevation(["table", "coin"], 0, elev)).toBe(0);
+    expect(stackElevation(["table", "coin"], 1, elev)).toBe(8);
+    expect(stackElevation(["table", "coin"], 2, elev)).toBe(8);
+    expect(stackElevation(["pit", "table"], 2, elev)).toBe(8);
+    expect(stackElevation(["table", "table", "table", "table"], 9, elev)).toBe(MAX_ELEVATION);
+    expect(MAX_ELEVATION).toBe(24);
   });
 });

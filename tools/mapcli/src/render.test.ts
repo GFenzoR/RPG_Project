@@ -137,4 +137,23 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 5, 6, 8, 16)[1]).toBeLessThan((at(bare, 5, 6, 8, 16)[1] ?? 0) * 0.8);
     expect(at(img, 5, 6, 24, 16)).toEqual(at(bare, 5, 6, 24, 16));
   });
+
+  it("draws what is stacked on a crate higher by its elevation (ART-8)", () => {
+    const frames = framesOf([
+      ["ground/grass", 32, 32, [0, 80, 0, 255]],
+      ["decor/crate", 32, 32, [120, 80, 40, 255]],
+      ["items/coin", 32, 4, [250, 220, 0, 255]],
+    ]);
+    // The coin sprite is a 4 px strip: drawn bottom-right, it sits on the tile's last rows.
+    const w = world("grass", [
+      { x: 2, y: 2, stack: ["crate", "coin"] },
+      { x: 4, y: 2, stack: ["coin"] },
+    ]);
+    const crate = { ...item("crate", "decor/crate"), elevation: 8 };
+    const c = content([item("grass", "ground/grass"), crate, item("coin", "items/coin")]);
+    const img = decodePng(renderArea(w, c, frames, opts).png);
+    expect(at(img, 4, 2, 16, 30)).toEqual([250, 220, 0]); // on the ground: the bottom rows
+    expect(at(img, 2, 2, 16, 30)).toEqual([120, 80, 40]); // on the crate: 8 px up
+    expect(at(img, 2, 2, 16, 22)).toEqual([250, 220, 0]);
+  });
 });

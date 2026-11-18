@@ -142,6 +142,10 @@ items:
 - **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
   `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
+- **Elevación** (`elevation`, docs/17 ART-8, solo de dibujo): cuántos píxeles de sprite
+  sube lo que se apila encima de este item del mapa, y la criatura que pisa su casilla
+  (mesas y cajones: 8). Las de una pila se suman hasta 24. El servidor la ignora; la leen
+  el cliente, el editor y `mapcli render`.
 - **Equipo:** `weapon`, `shield` y `armor` (con `armor.slot`) definen el slot; `requires`
   (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.

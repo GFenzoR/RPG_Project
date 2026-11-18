@@ -7,10 +7,14 @@
 //   <sprite>/shadow      its cast shadow, drawn translucent under the items.
 // spritepack finds them by name (own art or `sprites` entries) and writes what each sprite
 // has into atlas.json `tiles`; the `tiles` section of sprites.yaml adds what names cannot
-// say: the timing of an animation, a centred anchor, that a door joins the walls, and the
-// share of the main look. packages/renderer tile-art.ts reads it (same TileMeta shape).
+// say: the timing of an animation, a centred anchor, that a door joins the walls, the
+// share of the main look, the light it gives and the ambient particles it gives off. packages/renderer tile-art.ts reads it (same TileMeta shape).
 
 export type TileSync = "world" | "tile" | "random";
+
+/** Ambient particles (docs/17 ART-7, A13): same list as PARTICLE_KINDS in tile-art.ts. */
+export const PARTICLE_KINDS = ["embers", "pollen", "spray", "dust"] as const;
+export type ParticleKind = (typeof PARTICLE_KINDS)[number];
 
 /** atlas.json `tiles[sprite]`: see TileMeta in packages/renderer tile-art.ts. */
 export interface TileMeta {
@@ -24,6 +28,7 @@ export interface TileMeta {
   joins?: true;
   shadow?: true;
   light?: number;
+  particles?: ParticleKind;
 }
 
 /** One entry of the `tiles` section of assets/sprites.yaml. */
@@ -35,6 +40,8 @@ export interface TileEntry {
   weight?: number;
   /** Radius of the light it gives in dark places (caves), tiles. */
   light?: number;
+  /** Ambient particles the client spawns around it. */
+  particles?: ParticleKind;
 }
 
 /** A part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow (same as tile-art.ts). */
@@ -44,7 +51,16 @@ export const WALL_PIECES = 16;
 export const MIN_FRAME_MS = 50;
 export const MAX_FRAME_MS = 5000;
 
-const ENTRY_KEYS = new Set(["ms", "sync", "anchor", "joins_walls", "weight", "light", "notes"]);
+const ENTRY_KEYS = new Set([
+  "ms",
+  "sync",
+  "anchor",
+  "joins_walls",
+  "weight",
+  "light",
+  "particles",
+  "notes",
+]);
 /** Largest light radius, tiles. */
 export const MAX_LIGHT = 8;
 
@@ -88,6 +104,11 @@ export function parseTileEntry(
     if (typeof l !== "number" || !(l > 0) || l > MAX_LIGHT)
       fail(`light must be a radius in tiles, above 0 and up to ${MAX_LIGHT}`);
     else entry.light = l;
+  }
+  if (r["particles"] !== undefined) {
+    const k = PARTICLE_KINDS.find((p) => p === r["particles"]);
+    if (k) entry.particles = k;
+    else fail(`particles must be one of ${PARTICLE_KINDS.join(", ")}`);
   }
   if (r["notes"] !== undefined && typeof r["notes"] !== "string") fail("notes must be a string");
   return entry;
@@ -165,6 +186,7 @@ export function tileMetas(
       if (entry.weight !== undefined) meta.weight = entry.weight;
       if (entry.anchor) meta.anchor = entry.anchor;
       if (entry.light !== undefined) meta.light = entry.light;
+      if (entry.particles) meta.particles = entry.particles;
       if (entry.joins) {
         if (meta.wall) fail("a wall already joins its neighbours: drop joins_walls");
         else meta.joins = true;

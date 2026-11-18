@@ -10,7 +10,13 @@ import { buildAtlas, createImage, drawText, encodePng, GLYPH_H, textWidth } from
 import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format";
 import type { ContentIndex, Rect, World } from "@rpg/map-format";
-import { pickVariant, resolveTileArt, tileHash, wallMask } from "@rpg/renderer/tile-art";
+import {
+  pickVariant,
+  resolveTileArt,
+  stackElevation,
+  tileHash,
+  wallMask,
+} from "@rpg/renderer/tile-art";
 import type { TileArt, TileMeta } from "@rpg/renderer/tile-art";
 
 /** Largest area side, in tiles. */
@@ -244,9 +250,12 @@ export function renderArea(
             alpha: CAST_SHADOW_ALPHA,
           });
       }
+  // What is stacked on a table or a crate is drawn higher (docs/17 ART-8), as in MapView.
+  const elevationOf = (id: string): number => content.items.get(id)?.elevation ?? 0;
   for (let y = area.y; y < y1 + 2; y++)
-    for (let x = area.x; x <= x1; x++)
-      for (const id of tileAt(x, y)?.stack ?? []) {
+    for (let x = area.x; x <= x1; x++) {
+      const stack = tileAt(x, y)?.stack ?? [];
+      for (const [i, id] of stack.entries()) {
         const art = artOf(id);
         const inside = y < y1 && x < x1;
         const f = art?.wall
@@ -254,10 +263,12 @@ export function renderArea(
               wallMask(wallAt(x, y - 1), wallAt(x + 1, y), wallAt(x, y + 1), wallAt(x - 1, y))
             ]
           : frameOf(id, inside);
-        if (f) drawSprite(img, f, rightOf(x, f, art), py(y) + T, scale);
+        const raised = Math.round(stackElevation(stack, i, elevationOf) * scale);
+        if (f) drawSprite(img, f, rightOf(x, f, art), py(y) + T - raised, scale);
         else if (inside)
           outline(img, px(x) + 2, py(y) + 2, T - 4, T - 4, Math.max(1, T >> 3), MISSING);
       }
+    }
 
   if (opts.grid !== false && T >= 16)
     for (let y = area.y; y < y1; y++)

@@ -27,6 +27,11 @@ export interface ItemInfo {
   /** Sprite path (assets/sprites.yaml key), for renders. */
   sprite?: string;
   /**
+   * docs/17 ART-8: sprite pixels it raises what is stacked on it (a table, a crate), for
+   * renders. Absent when it raises nothing.
+   */
+  elevation?: number;
+  /**
    * i18n key shown when the item is looked at. A sign item (T5.5) is one whose description
    * is a map text (`text.*`): it must stand where texts.yaml puts a sign with that text.
    */
@@ -158,6 +163,8 @@ export function loadContent(root: string): ContentIndex {
       };
       if (typeof raw["sprite"] === "string") info.sprite = raw["sprite"];
       if (typeof raw["description"] === "string") info.description = raw["description"];
+      if (typeof raw["elevation"] === "number" && raw["elevation"] > 0)
+        info.elevation = raw["elevation"];
       const door = raw["door"];
       if (isObj(door)) {
         info.door = true;

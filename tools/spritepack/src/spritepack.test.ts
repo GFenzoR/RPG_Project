@@ -410,19 +410,19 @@ describe("buildAtlas", () => {
       "assets/sprites.yaml",
       `sprites: {}
 tiles:
-  ground/water: { ms: 220, sync: world }
+  ground/water: { ms: 220, sync: world, particles: spray }
   ground/grass: { weight: 0.6 }
-  decor/tree: { anchor: bc }
+  decor/tree: { anchor: bc, particles: pollen }
   doors/gate: { joins_walls: true }
 `,
     );
     const r = buildAtlas(root);
     expect(errors(r)).toEqual([]);
     expect(r.atlas?.index.tiles).toEqual({
-      "decor/tree": { anchor: "bc", shadow: true },
+      "decor/tree": { anchor: "bc", shadow: true, particles: "pollen" },
       "doors/gate": { joins: true },
       "ground/grass": { variants: 3, weight: 0.6 },
-      "ground/water": { frames: 4, ms: 220, sync: "world" },
+      "ground/water": { frames: 4, ms: 220, sync: "world", particles: "spray" },
       "walls/stone": { wall: true },
     });
   });
@@ -441,11 +441,14 @@ tiles:
 tiles:
   ground/sand: { ms: 200 }
   ground/nothing: { anchor: bc }
-  ground/grass: { sync: sometimes }
+  ground/grass: { sync: sometimes, particles: smoke }
 `,
     );
     expect(errors(buildAtlas(root))).toContainEqual(
       expect.stringMatching(/ground\/grass: sync must be world, tile or random/),
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/ground\/grass: particles must be one of embers, pollen, spray, dust/),
     );
     put(
       "assets/sprites.yaml",

@@ -97,7 +97,16 @@ export async function createMapCanvas(
     }
     return a ?? undefined;
   };
-  const view = new MapView({ source, texture, art, tileSize: T, floor: ctl.state.floor });
+  // ART-8: what is stacked on a table or a crate is drawn higher, as in the game.
+  const elevation = (id: string): number => ctl.items.get(id)?.elevation ?? 0;
+  const view = new MapView({
+    source,
+    texture,
+    art,
+    elevation,
+    tileSize: T,
+    floor: ctl.state.floor,
+  });
   const bounds = new Graphics();
   const grid = new Graphics();
   const cursor = new Graphics();

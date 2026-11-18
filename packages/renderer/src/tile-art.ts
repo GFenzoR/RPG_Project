@@ -7,7 +7,10 @@
 // - walls: a wall sprite has 16 pieces (<sprite>/wall_<mask>), one per set of wall
 //   neighbours (north, east, south, west), and the renderer puts the right one on each tile;
 // - anchor: centred on the tile (trees) instead of the bottom-right corner;
-// - shadow: <sprite>/shadow, drawn on the shadow layer under the items.
+// - shadow: <sprite>/shadow, drawn on the shadow layer under the items;
+// - particles: ambient motes the client spawns around it (docs/17 ART-7, A13);
+// - elevation (data/items, not the atlas): what stands on a table or a crate is drawn
+//   higher (ART-8), stackElevation below.
 // tools/spritepack writes what each sprite has into atlas.json `tiles` (TileMeta).
 
 /** atlas.json `tiles[sprite]` (tools/spritepack): the extra art a map sprite has. */
@@ -32,9 +35,19 @@ export interface TileMeta {
   shadow?: true;
   /** Gives light in dark places (caves, ART-7): its radius in tiles. */
   light?: number;
+  /** Ambient particles the client spawns around it (ART-7, A13). */
+  particles?: ParticleKind;
 }
 
 export type TileSync = "world" | "tile" | "random";
+
+/**
+ * Ambient particles (ART-7, client only): embers rise from lava and fires, pollen drifts
+ * around trees, spray leaps where water meets another ground (a ground with `spray` emits
+ * only on its edges), dust floats in caves.
+ */
+export const PARTICLE_KINDS = ["embers", "pollen", "spray", "dust"] as const;
+export type ParticleKind = (typeof PARTICLE_KINDS)[number];
 
 /** The textures (or images) of a sprite's tile art, resolved from its TileMeta. */
 export interface TileArt<T> {
@@ -56,6 +69,8 @@ export interface TileArt<T> {
   shadow?: T;
   /** Light radius in tiles, 0 for none. */
   light: number;
+  /** Ambient particles around it (ART-7), if any. */
+  particles?: ParticleKind;
 }
 
 /** Share of the tiles that keep a ground's main look (ART-4: about 70 %). */
@@ -175,6 +190,7 @@ export function resolveTileArt<T>(
     joinsWalls: meta.wall === true || meta.joins === true,
     light: meta.light ?? 0,
   };
+  if (meta.particles) art.particles = meta.particles;
   if (meta.variants) {
     const v = list(meta.variants + 1, (n) => variantName(sprite, n));
     if (v.length > 1) art.variants = v;
@@ -211,4 +227,23 @@ export function wallTiles(
   const out = new Uint8Array(size * size);
   for (const s of items) if (s.stack.some(joins)) out[s.y * size + s.x] = 1;
   return out;
+}
+
+/** ART-8: what is stacked on raising items never rises more than this, sprite pixels. */
+export const MAX_ELEVATION = 24;
+
+/**
+ * ART-8: how high item `index` of a stack is drawn (sprite pixels up): the elevation of the
+ * items under it, summed and capped at MAX_ELEVATION. With index = stack.length, the height
+ * a creature standing on the tile is drawn at.
+ */
+export function stackElevation(
+  stack: readonly string[],
+  index: number,
+  elevationOf: (itemId: string) => number,
+): number {
+  let h = 0;
+  const n = Math.min(index, stack.length);
+  for (let i = 0; i < n && h < MAX_ELEVATION; i++) h += Math.max(0, elevationOf(stack[i] ?? ""));
+  return Math.min(h, MAX_ELEVATION);
 }

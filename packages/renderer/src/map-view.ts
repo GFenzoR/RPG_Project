@@ -13,12 +13,29 @@
 // tile; a wall shows the piece for its wall neighbours (also across chunk borders: a chunk
 // is rebuilt when a neighbour its border walls depend on changes); animated grounds and
 // items step their frames in render() from a flat list, with nothing allocated per frame.
+//
+// Elevation (ART-8, optional `elevation`): an item stacked on a table or a crate is drawn
+// higher by the elevation of the items under it (tile-art.ts stackElevation, capped); the
+// caller lifts a creature standing there by elevationAt. Cast shadows stay on the ground.
+//
+// Particles (ART-7, A13): the tiles whose tile art has `particles` are listed per chunk, so
+// the caller can spawn its ambient motes there (forEachEmitter) without scanning the map.
 import { Container, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CHUNK_TILES, tilePixels, visibleChunks } from "./camera.ts";
 import type { Camera, ViewSize } from "./camera.ts";
-import { frameAt, framePhase, pickVariant, tileHash, wallMask, wallTiles } from "./tile-art.ts";
-import type { TileArt, TileSync } from "./tile-art.ts";
+import {
+  MAX_ELEVATION,
+  PARTICLE_KINDS,
+  frameAt,
+  framePhase,
+  pickVariant,
+  stackElevation,
+  tileHash,
+  wallMask,
+  wallTiles,
+} from "./tile-art.ts";
+import type { ParticleKind, TileArt, TileSync } from "./tile-art.ts";
 
 /** One 32x32 chunk: row-major ground IDs and sparse item stacks (local coordinates). */
 export interface ChunkData {
@@ -44,11 +61,16 @@ export type TextureLookup = (itemId: string) => Texture;
 /** Tile art of an item ID (tile-art.ts), or undefined to draw its texture as is. */
 export type ArtLookup = (itemId: string) => TileArt<Texture> | undefined;
 
+/** ART-8: how many sprite pixels an item raises what is stacked on it (data/items elevation). */
+export type ElevationLookup = (itemId: string) => number;
+
 export interface MapViewOptions {
   source: TileSource;
   texture: TextureLookup;
   /** Ground looks, animations, wall pieces, anchors and shadows (docs/17 ART-3/4/7). */
   art?: ArtLookup | undefined;
+  /** Elevation of an item (ART-8); absent: nothing raises anything. */
+  elevation?: ElevationLookup | undefined;
   /** Sprite pixels per tile (the atlas tileSize). */
   tileSize: number;
   floor: number;
@@ -74,6 +96,8 @@ interface CachedChunk {
   animated: Animated[];
   /** Light sources (tile art light): x, y (global tile) and radius in tiles, flat. */
   lights: number[];
+  /** Particle emitters (tile art particles): x, y (global tile), PARTICLE_KINDS index, flat. */
+  emitters: number[];
   /** Neighbour chunks the wall pieces on this chunk's border were picked from. */
   deps: { cx: number; cy: number; data: ChunkData | undefined }[];
 }
@@ -132,6 +156,7 @@ export class MapView {
   private source: TileSource;
   private readonly texture: TextureLookup;
   private readonly art: ArtLookup | undefined;
+  private readonly elevation: ElevationLookup | undefined;
   private floorZ: number;
   /** Every animated sprite of the cached chunks; rebuilt when chunks come or go. */
   private animated: Animated[] = [];
@@ -139,11 +164,14 @@ export class MapView {
   /** Which tiles of a chunk object hold a wall (or an item that joins walls). */
   private readonly walls = new WeakMap<ChunkData, Uint8Array>();
   private readonly joins = new Map<string, boolean>();
+  /** Elevation of each tile of a chunk object (ART-8), null when nothing there raises. */
+  private readonly heights = new WeakMap<ChunkData, Uint8Array | null>();
 
   constructor(opts: MapViewOptions) {
     this.source = opts.source;
     this.texture = opts.texture;
     this.art = opts.art;
+    this.elevation = opts.elevation;
     this.tileSize = opts.tileSize;
     this.floorZ = opts.floor;
     this.world.addChild(this.groundLayer, this.shadowLayer, this.itemLayer, this.overlay);
@@ -246,6 +274,38 @@ export class MapView {
       : false;
   }
 
+  /**
+   * ART-8: how many sprite pixels a creature standing on tile (x, y) of the current floor is
+   * raised (a table, a crate), 0 for tiles the source does not have.
+   */
+  elevationAt(x: number, y: number): number {
+    if (!this.elevation || x < 0 || y < 0) return 0;
+    const data = this.source.chunk(
+      this.floorZ,
+      Math.floor(x / CHUNK_TILES),
+      Math.floor(y / CHUNK_TILES),
+    );
+    if (!data) return 0;
+    let h = this.heights.get(data);
+    if (h === undefined) {
+      h = this.heightsOf(data);
+      this.heights.set(data, h);
+    }
+    return h ? (h[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)] ?? 0) : 0;
+  }
+
+  /**
+   * Calls fn for every tile of the built chunks whose ground or items give off ambient
+   * particles (tile art particles, ART-7): its tile and the kind. Allocates nothing.
+   */
+  forEachEmitter(fn: (x: number, y: number, kind: ParticleKind) => void): void {
+    for (const c of this.cache.values()) {
+      const e = c.emitters;
+      for (let i = 0; i + 2 < e.length; i += 3)
+        fn(e[i] as number, e[i + 1] as number, PARTICLE_KINDS[e[i + 2] as number] ?? "dust");
+    }
+  }
+
   /** Number of chunks currently built (for tests and the debug overlay). */
   get chunkCount(): number {
     return this.cache.size;
@@ -314,6 +374,19 @@ export class MapView {
     return w;
   }
 
+  private heightsOf(data: ChunkData): Uint8Array | null {
+    const elev = this.elevation;
+    if (!elev) return null;
+    let out: Uint8Array | null = null;
+    for (const s of data.items) {
+      const h = stackElevation(s.stack, s.stack.length, elev);
+      if (h <= 0) continue;
+      out ??= new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+      out[s.y * CHUNK_TILES + s.x] = h;
+    }
+    return out;
+  }
+
   private depsChanged(c: CachedChunk): boolean {
     for (const d of c.deps) if (this.source.chunk(this.floorZ, d.cx, d.cy) !== d.data) return true;
     return false;
@@ -327,6 +400,7 @@ export class MapView {
     const gx = cx * CHUNK_TILES;
     const gy = cy * CHUNK_TILES;
     const animated: Animated[] = [];
+    const emitters: number[] = [];
     const ground = new Container({ label: `ground ${key}`, x: ox, y: oy });
     for (let ly = 0; ly < CHUNK_TILES; ly++) {
       for (let lx = 0; lx < CHUNK_TILES; lx++) {
@@ -339,6 +413,8 @@ export class MapView {
           tex = art.variants[pickVariant(hash, art.variants.length, art.weight)] ?? tex;
         const sprite = new Sprite({ texture: tex, x: lx * T, y: ly * T, width: T, height: T });
         if (art?.frames) animated.push(animatedOf(sprite, art, hash));
+        if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
+          emitters.push(gx + lx, gy + ly, PARTICLE_KINDS.indexOf(art.particles));
         ground.addChild(sprite);
       }
     }
@@ -368,9 +444,12 @@ export class MapView {
     const items: Sprite[] = [];
     const lights: number[] = [];
     let shadows: Container | undefined;
+    const elev = this.elevation;
     for (const s of data.items) {
       const x = gx + s.x;
       const y = gy + s.y;
+      let raised = 0;
+      let emits = -1;
       for (const [i, id] of s.stack.entries()) {
         const art = this.art?.(id);
         let tex = art?.base ?? this.texture(id);
@@ -385,8 +464,11 @@ export class MapView {
         }
         const ax = art?.anchorX ?? 1;
         const sprite = new Sprite({ texture: tex, anchor: { x: ax, y: 1 } });
-        sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T);
+        sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
         sprite.zIndex = itemZIndex(x, y, i);
+        if (elev && raised < MAX_ELEVATION)
+          raised = Math.min(MAX_ELEVATION, raised + Math.max(0, elev(id)));
+        if (art?.particles && emits < 0) emits = PARTICLE_KINDS.indexOf(art.particles);
         items.push(sprite);
         if (art?.frames) animated.push(animatedOf(sprite, art, tileHash(x, y, z + i)));
         if (art && art.light > 0) lights.push(x, y, art.light);
@@ -397,10 +479,11 @@ export class MapView {
             anchor: { x: ax, y: 1 },
             tint: CAST_SHADOW_TINT,
           });
-          sh.position.copyFrom(sprite.position);
+          sh.position.set(sprite.x, oy + (s.y + 1) * T);
           shadows.addChild(sh);
         }
       }
+      if (emits >= 0) emitters.push(x, y, emits);
     }
     this.groundLayer.addChild(ground);
     if (shadows) this.shadowLayer.addChild(shadows);
@@ -412,6 +495,7 @@ export class MapView {
       items,
       animated,
       lights,
+      emitters,
       deps: deps.size > 0 ? [...deps.values()] : NO_DEPS,
     });
     if (animated.length > 0) this.animatedStale = true;
@@ -433,6 +517,13 @@ export class MapView {
 }
 
 const EMPTY_WALLS = new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+
+/** Whether ground tile (lx, ly) of a chunk borders another ground (inside the chunk). */
+function edgeOf(ground: ChunkData["ground"], lx: number, ly: number, id: string): boolean {
+  const same = (x: number, y: number): boolean =>
+    x < 0 || y < 0 || x >= CHUNK_TILES || y >= CHUNK_TILES || ground[y * CHUNK_TILES + x] === id;
+  return !same(lx, ly - 1) || !same(lx + 1, ly) || !same(lx, ly + 1) || !same(lx - 1, ly);
+}
 
 function animatedOf(sprite: Sprite, art: TileArt<Texture>, hash: number): Animated {
   const frames = art.frames ?? [];

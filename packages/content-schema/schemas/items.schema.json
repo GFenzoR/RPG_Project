@@ -36,6 +36,12 @@
         "max_stack": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "tradeable": { "type": "boolean" },
         "pickupable": { "type": "boolean" },
+        "elevation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24,
+          "description": "docs/17 ART-8, display only: sprite pixels this map item raises what is stacked on it and the creature standing on its tile (a table or a crate: 8). Raised heights on one tile add up to 24 at most."
+        },
         "market_board": {
           "type": "boolean",
           "description": "Using this map item opens the global market (T5.3, docs/02 \"Economía\")."
