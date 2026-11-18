@@ -34,6 +34,11 @@ export interface ItemDef {
   /** A map door (a `door` block in data/items: open or shut). Absent on any other item. */
   door?: true;
   /**
+   * docs/17 ART-8: sprite pixels it raises what is stacked on it and the creature standing
+   * there (a table, a crate). Display only. Absent when it raises nothing.
+   */
+  elevation?: number;
+  /**
    * i18n key of its `description` in data/items ("item.iron_sword.desc", or a sign's
    * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.
    */
