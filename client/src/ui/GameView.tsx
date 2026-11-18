@@ -34,6 +34,8 @@ import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
 import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
 import { ActionMenu, PickBanner, paddingInsets } from "./ActionMenu.tsx";
+import { ItemTooltip } from "./ItemTooltip.tsx";
+import type { ControlsMode } from "../state/controls.ts";
 import { LoadStatus } from "./LoadStatus.tsx";
 import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
 import { ZoomButtons } from "./ZoomButtons.tsx";
@@ -67,6 +69,9 @@ export interface GameSettings {
   language: JSX.Element;
   sound: JSX.Element;
   touchPad: JSX.Element;
+  /** What the right button does on items (docs/17 UI-6): the choice and its radios. */
+  controlsMode: ControlsMode;
+  controls: JSX.Element;
   reducedMotion: boolean;
   setReducedMotion(on: boolean): void;
 }
@@ -505,14 +510,25 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && <TutorialPanel t={t} game={game} ui={ui} />}
     </>
   );
-  const menu = props.entered && ui.menu && (
-    <ActionMenu
-      t={t}
-      menu={ui.menu}
-      game={game}
-      viewport={{ width: window.innerWidth, height: window.innerHeight }}
-      insets={gameBox.current ? paddingInsets(getComputedStyle(gameBox.current)) : undefined}
-    />
+  const menu = props.entered && (
+    <>
+      {ui.menu && (
+        <ActionMenu
+          t={t}
+          menu={ui.menu}
+          game={game}
+          viewport={{ width: window.innerWidth, height: window.innerHeight }}
+          insets={gameBox.current ? paddingInsets(getComputedStyle(gameBox.current)) : undefined}
+        />
+      )}
+      <ItemTooltip
+        t={t}
+        content={props.content}
+        game={game}
+        ui={ui}
+        blocked={ui.menu !== undefined || ui.picked !== undefined}
+      />
+    </>
   );
 
   // Both shapes keep the same .game-body and .viewport (keys): the Game's canvas lives in
@@ -1023,7 +1039,10 @@ function OptionsBody(props: {
           <h3>{t("client.options.sound")}</h3>
           <div class="options-group">{settings.sound}</div>
           <h3>{t("client.options.controls")}</h3>
-          <div class="options-group">{settings.touchPad}</div>
+          <div class="options-group">
+            {settings.controls}
+            {settings.touchPad}
+          </div>
           <h3>{t("client.options.interface")}</h3>
           <div class="options-group">
             {settings.language}

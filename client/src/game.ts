@@ -7,8 +7,14 @@ import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
 import { ChatChannel, CreatureKind, GuildAction, MarketSide, PartyAction } from "@rpg/protocol";
 import type { Direction, DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
-import { ItemPicker, itemActions, tileActions } from "./input/actions.ts";
-import type { ActionKind } from "./input/actions.ts";
+import { ItemPicker, itemActions, itemPrimary, tileActions } from "./input/actions.ts";
+import type { ActionKind, ItemFacts } from "./input/actions.ts";
+import { itemContext } from "./input/mouse.ts";
+import { loadControls } from "./state/controls.ts";
+import type { ControlsMode } from "./state/controls.ts";
+import { equipSlot, itemCard } from "./state/item-card.ts";
+import type { ItemCardView, Viewer } from "./state/item-card.ts";
+import { dialogLayout, optionForKey } from "./state/dialog.ts";
 import { HeldDirection } from "./input/dpad.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
@@ -103,15 +109,20 @@ export interface GameUi {
   selfId: number;
   /** T5.6: the item picked by a tap, waiting for a tap on its destination. */
   picked?: ItemRef | undefined;
-  /** T5.6: the contextual menu of a long press, or undefined. */
+  /** T5.6: the contextual menu of a long press (or a right click, docs/17 UI-6). */
   menu?: ActionMenuView | undefined;
+  /** The character's vocation (an item card's requirements). */
+  vocation?: string | undefined;
   /** T5.7: owned cosmetics, premium balance and what is equipped (undefined until sent). */
   cosmetics?: CosmeticsStateView | undefined;
   /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
   zoom?: ZoomView | undefined;
 }
 
-/** The contextual menu of a long press (T5.6): where it was pressed and its buttons. */
+/**
+ * The contextual menu of a long press (T5.6) or a right click (docs/17 UI-6): where it was
+ * pressed, its buttons and the card of its item.
+ */
 export interface ActionMenuView {
   /** Page coordinates of the press (the menu opens next to it). */
   x: number;
@@ -119,10 +130,19 @@ export interface ActionMenuView {
   /** What was pressed: a creature's or an item's name ("" = a bare tile). */
   title: string;
   actions: ActionKind[];
+  /** The card of the item it is about (docs/17 UI-6), if any. */
+  card?: ItemCardView | undefined;
+  /** Opened by the mouse: at the pointer, with compact buttons (ui/ActionMenu.tsx). */
+  mouse?: boolean | undefined;
+  /** The units of the stack ("Move part…" asks for fewer). */
+  stack?: number | undefined;
 }
 
-/** What a menu acts on: a map tile (resolved again when a button is chosen) or a DOM item. */
-type MenuTarget = { tile: Pos; creature: number | undefined } | { ref: ItemRef };
+/**
+ * What a menu acts on: a map tile (resolved again when a button is chosen), a DOM item, or
+ * nothing (a shop's item: only its card).
+ */
+type MenuTarget = { tile: Pos; creature: number | undefined } | { ref: ItemRef } | { card: true };
 
 /** Read-only hooks for the E2E tests (client/e2e). */
 export interface ClientTestHooks {
@@ -178,6 +198,9 @@ const DRAG_START_PX = 4;
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
 
+/** A walk a click sent this recently is the first click of a double click: it stops. */
+const DOUBLE_CLICK_STOP_MS = 700;
+
 declare global {
   interface Window {
     __rpgClient?: ClientTestHooks;
@@ -196,6 +219,11 @@ export interface GameOptions {
   audio?: AudioEngine | undefined;
   /** Where the hotkey bar is remembered (localStorage; undefined in tests). */
   storage?: Storage | undefined;
+  /**
+   * What the right button does on items (Options → Controls, docs/17 UI-6), read at each
+   * click; without it, what this device remembers (state/controls.ts).
+   */
+  controls?(): ControlsMode;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -251,6 +279,8 @@ export class Game {
   private touchAt = Number.NEGATIVE_INFINITY;
   /** The last finger press on a DOM item already opened its menu. */
   private itemMenuOpened = false;
+  /** performance.now() of the last WalkPath a click sent (a double click stops it). */
+  private clickWalkAt = Number.NEGATIVE_INFINITY;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
   private zoomView: ZoomView | undefined;
@@ -984,28 +1014,124 @@ export class Game {
    * (a ladder's own item) gets no "use" or "move" (state/items.ts menuItem), only its name
    * as the title.
    */
-  private longPressTile(pos: Pos, x: number, y: number): void {
+  private longPressTile(pos: Pos, x: number, y: number, mouse = false): void {
     const { x: tx, y: ty, z } = pos;
     const c = this.world.creatureAt(tx, ty, z);
     const top = topItem(this.world, tx, ty, z, false);
     const item = menuItem(this.world, tx, ty, z);
     const actions = tileActions({
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: item && { container: (this.opts.content.items[item.itemId]?.slots ?? 0) > 0 },
+      item: item && this.itemFacts(item),
       door: this.usesGround(tx, ty, z),
       climb: climbable(this.opts.content.portals, tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
-    const title = c ? creatureName(c, this.opts.t) : top ? this.itemTitle(top.itemId) : "";
-    this.openMenu({ x, y, title, actions }, { tile: { ...pos }, creature: c?.id });
+    // The player itself on the tile: the menu is about what lies there.
+    const other = c && c.id !== this.world.selfId ? c : undefined;
+    const title = other
+      ? creatureName(other, this.opts.t)
+      : top
+        ? this.itemTitle(top.itemId)
+        : c
+          ? creatureName(c, this.opts.t)
+          : "";
+    // The card of the item there (docs/17 UI-6), unless the menu is about a creature.
+    const card = !other && top ? this.card(top) : undefined;
+    // A right click on bare ground opens nothing: the mouse looks with Shift+click.
+    if (mouse && !card && actions.length === 1 && actions[0] === "look") return;
+    this.openMenu(
+      { x, y, title, actions, card, mouse, stack: item?.count },
+      { tile: { ...pos }, creature: c?.id },
+    );
   }
 
-  /** A long press on a DOM item: use or open, look, move. */
-  private openItemMenu(ref: ItemRef, x: number, y: number): void {
-    const container = (this.opts.content.items[ref.itemId]?.slots ?? 0) > 0;
-    const actions = itemActions(container);
-    this.openMenu({ x, y, title: this.itemTitle(ref.itemId), actions }, { ref });
+  /** The menu of a DOM item: its default action first, look, move, maybe move part. */
+  private openItemMenu(ref: ItemRef, x: number, y: number, mouse = false): void {
+    const actions = itemActions(this.itemFacts(ref));
+    const title = this.itemTitle(ref.itemId);
+    this.openMenu({ x, y, title, actions, card: this.card(ref), mouse, stack: ref.count }, { ref });
+  }
+
+  /** What the menu needs to know of an item to offer its buttons (input/actions.ts). */
+  private itemFacts(ref: ItemRef): ItemFacts {
+    const def = this.opts.content.items[ref.itemId];
+    return {
+      container: (def?.slots ?? 0) > 0,
+      useWith: def?.useWith === true,
+      food: (def?.consumable?.foodMs ?? 0) > 0,
+      equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
+      split: def?.stackable === true && ref.count > 1,
+      fixed: def?.fixed === true,
+    };
+  }
+
+  /** Who looks at an item card: the player's level, vocation and magic level. */
+  private viewer(): Viewer {
+    const magic = this.world.skills.find((s) => s.id === "magic");
+    return {
+      level: this.world.stats?.level,
+      vocation: this.opts.vocation,
+      magicLevel: magic?.level,
+    };
+  }
+
+  /** The card of an item (docs/17 UI-6) for the player. */
+  card(ref: { itemId: number; count: number }): ItemCardView {
+    return itemCard(this.opts.content.items[ref.itemId], ref.itemId, ref.count, this.viewer());
+  }
+
+  /** The controls mode now (Options → Controls). */
+  private controls(): ControlsMode {
+    return this.opts.controls?.() ?? loadControls(this.opts.storage);
+  }
+
+  /**
+   * A right click (contextmenu) on a DOM item: its menu or use it, by the controls mode
+   * (input/mouse.ts itemContext). A finger's long press also fires contextmenu: it opens
+   * the menu (touchContextMenu) instead.
+   */
+  itemContextMenu(
+    ref: ItemRef,
+    e: Pick<MouseEvent, "clientX" | "clientY" | "shiftKey" | "ctrlKey">,
+  ): void {
+    if (this.touchContextMenu(ref, e.clientX, e.clientY)) return;
+    // A right click drops the crosshair of a "use with" tool or an aimed spell, as on the map.
+    if (this.cancelUse()) return;
+    if (itemContext(e, this.controls()) === "menu")
+      this.openItemMenu(ref, e.clientX, e.clientY, true);
+    else this.useItem(ref);
+  }
+
+  /** A double click on a DOM item: its default action (open, use with, eat, equip, use). */
+  itemDefault(ref: ItemRef): void {
+    this.closeMenuQuietly();
+    this.itemAction(itemPrimary(this.itemFacts(ref)), ref);
+    this.publish();
+  }
+
+  /** A menu with only an item's card (a shop's item: in no place the player reaches). */
+  openCardMenu(itemId: number, x: number, y: number): void {
+    const card = this.card({ itemId, count: 1 });
+    this.openMenu(
+      { x, y, title: this.itemTitle(itemId), actions: [], card, mouse: true },
+      { card: true },
+    );
+  }
+
+  /** Does one of an item's menu actions (use, open, use with, eat, equip, look, move). */
+  private itemAction(kind: ActionKind, ref: ItemRef): void {
+    if (kind === "use" || kind === "open" || kind === "use_with" || kind === "eat")
+      this.useItem(ref);
+    else if (kind === "equip") this.equip(ref);
+    else if (kind === "look") this.lookAt(ref);
+    else if (kind === "move") this.pickItem(ref);
+  }
+
+  /** Moves an item to its equipment slot (the menu's "Equip"; the server checks it). */
+  private equip(ref: ItemRef): void {
+    const slot = equipSlot(this.opts.content.items[ref.itemId]);
+    if (slot !== undefined) this.moveItem(ref, { kind: "slot", slot });
   }
 
   private itemTitle(itemId: number): string {
@@ -1046,21 +1172,56 @@ export class Game {
     if (!m) return;
     const t = m.target;
     if ("ref" in t) {
-      if (kind === "use" || kind === "open") this.useItem(t.ref);
-      else if (kind === "look") this.lookAt(t.ref);
-      else if (kind === "move") this.pickItem(t.ref);
-    } else {
+      this.itemAction(kind, t.ref);
+    } else if ("tile" in t) {
       const { x, y, z } = t.tile;
       if ((kind === "attack" || kind === "talk") && t.creature !== undefined)
         this.attack(t.creature);
       else if (kind === "climb") this.useTop(x, y, z);
-      else if (kind === "use" || kind === "open") this.useTop(x, y, z, true);
+      else if (kind === "use" || kind === "open" || kind === "use_with" || kind === "eat")
+        this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
-      else if (kind === "move") {
+      else if (kind === "move" || kind === "equip") {
         const ref = menuItem(this.world, x, y, z);
-        if (ref) this.pickItem(ref);
+        if (ref) this.itemAction(kind, ref);
       }
     }
+    this.publish();
+  }
+
+  /** "Move part…" of the menu: picks `count` units of its stack, placed by the next click. */
+  menuSplit(count: number): void {
+    const m = this.menu;
+    this.menu = undefined;
+    if (!m) return;
+    const t = m.target;
+    const ref =
+      "ref" in t
+        ? t.ref
+        : "tile" in t
+          ? menuItem(this.world, t.tile.x, t.tile.y, t.tile.z)
+          : undefined;
+    if (ref) this.pickItem({ ...ref, count: Math.max(1, Math.min(count, ref.count)) });
+    this.publish();
+  }
+
+  /**
+   * A double click on a map tile (menu controls, docs/17 UI-6): what the classic right
+   * click does there (attack or talk to its creature, climb, use its top item). The walk
+   * the double click's first click started is stopped: it meant this, not walking.
+   */
+  private doubleClickTile(pos: Pos): void {
+    if (this.controls() !== "menu") return;
+    if (performance.now() - this.touchAt < TOUCH_CONTEXTMENU_MS) return; // a finger's taps
+    this.clickTarget = undefined;
+    if (performance.now() - this.clickWalkAt < DOUBLE_CLICK_STOP_MS) {
+      this.clickWalkAt = Number.NEGATIVE_INFINITY;
+      this.conn.send({ case: "stopWalk", value: {} });
+    }
+    this.closeMenuQuietly();
+    const c = this.world.creatureAt(pos.x, pos.y, pos.z);
+    if (c && c.id !== this.world.selfId) this.attack(c.id);
+    else if (!this.cancelUse()) this.useTop(pos.x, pos.y, pos.z);
     this.publish();
   }
 
@@ -1108,6 +1269,11 @@ export class Game {
   /** Atlas rectangle of an item's sprite, for DOM icons (undefined until the canvas is up). */
   itemIcon(itemId: number): ReturnType<GameCanvas["itemIcon"]> {
     return this.canvas?.itemIcon(itemId);
+  }
+
+  /** Atlas rectangle of any sprite (an NPC's portrait), undefined until the canvas is up. */
+  spriteIcon(path: string): ReturnType<GameCanvas["spriteIcon"]> {
+    return this.canvas?.spriteIcon(path);
   }
 
   /** Atlas rectangle of a PvP mark's sprite, for the battle list (undefined without art). */
@@ -1163,6 +1329,7 @@ export class Game {
       selfId: w.selfId,
       picked: this.picker.picked,
       menu: this.menu?.view,
+      vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
       zoom: this.zoomView,
     });
@@ -1253,7 +1420,17 @@ export class Game {
       content: this.opts.content,
       t: this.opts.t,
       frame: (now) => this.frame(now),
-      clickTile: (x, y, z) => this.click({ pos: { x, y, z } }),
+      clickTile: (x, y, z) => {
+        // A picked item (the menu's "Move", docs/17 UI-6) goes where the mouse clicks.
+        if (this.picker.picked) this.placePicked({ kind: "pos", pos: { x, y, z } });
+        else this.click({ pos: { x, y, z } });
+      },
+      menuTile: (x, y, z, cx, cy) => {
+        if (this.cancelUse()) return;
+        this.longPressTile({ x, y, z }, cx, cy, true);
+      },
+      doubleClickTile: (x, y, z) => this.doubleClickTile({ x, y, z }),
+      controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
         if (this.cancelUse()) return;
@@ -1362,7 +1539,10 @@ export class Game {
         diagonalCost: this.opts.content.movement.diagonalCost,
         maxSteps: this.opts.content.movement.maxPathTiles,
       });
-      if (steps && steps.length > 0) this.conn.send({ case: "walkPath", value: { steps } });
+      if (steps && steps.length > 0) {
+        this.conn.send({ case: "walkPath", value: { steps } });
+        this.clickWalkAt = now;
+      }
       return;
     }
     // The next step is decided just before the drawn one ends (STEP_LEAD_MS): its Walk
@@ -1409,10 +1589,11 @@ export class Game {
     }
     const d = this.world.dialog;
     if (d && !e.repeat) {
-      // 1–9 pick the n-th option shown; Escape closes (docs/02-game-design.md).
-      const n = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)?.[1];
+      // 1–9 pick the button with that number, 0 "Back" (state/dialog.ts: the dialog's grid
+      // sorted by topic); Escape closes (docs/02-game-design.md, docs/17 UI-8).
+      const n = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)?.[1];
       if (n !== undefined) {
-        const opt = d.options[Number(n) - 1];
+        const opt = optionForKey(dialogLayout(this.opts.content, d), Number(n));
         if (opt) this.chooseOption(opt.id);
         e.preventDefault();
         return;

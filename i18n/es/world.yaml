@@ -22,8 +22,8 @@ text.pruebas.craft_sign: "Recolección y oficios. Al norte del camino, vetas de 
 text.pruebas.market_sign: "Tablero del mercado: úsalo para comprar y vender con otros jugadores. Al suroeste hay una casa en alquiler: usa su puerta para alquilarla (desde el nivel 12)."
 text.pruebas.dock_sign: "Muelle de pruebas. Remo Vaivén lleva a la Isla del Puerto, a la Isla del Bosque y a la Isla Volcánica. Es solo de ida: ningún barco vuelve aquí."
 text.pruebas.vault_sign: "Puerta de práctica. Se abre y se cierra con la llave de latón que vende Tobías Muestra en la plaza. Cerrada, sin la llave no se entra; abierta, pasa cualquiera hasta que alguien con la llave la cierre, y desde adentro siempre se abre."
-text.pruebas.portal_sign: "Patio de portales. La escalera baja al piso 8 al pisarla. La trampilla se usa (clic derecho) para bajar por la escalera de mano. Si pisas el agujero, caes. Abajo esperan un punto de luz para subir con cuerda y un teletransporte."
-text.pruebas.dungeon_sign: "Piso 8. La escalera de mano sube con clic derecho. Bajo el agujero entra luz: usa una cuerda ahí para subir. Al fondo, el teletransporte devuelve a la plaza. Cuidado con los murciélagos del este."
+text.pruebas.portal_sign: "Patio de portales. La escalera baja al piso 8 al pisarla. La trampilla se usa (doble clic, o clic derecho y «Trepar») para bajar por la escalera de mano. Si pisas el agujero, caes. Abajo esperan un punto de luz para subir con cuerda y un teletransporte."
+text.pruebas.dungeon_sign: "Piso 8. La escalera de mano sube con doble clic (o clic derecho y «Trepar»). Bajo el agujero entra luz: usa una cuerda ahí para subir. Al fondo, el teletransporte devuelve a la plaza. Cuidado con los murciélagos del este."
 text.pruebas.arena_sign: "Arena. Si los dos están adentro se pelea sin marcas ni castigo. Fuera de la arena y de la plaza rige el PvP abierto, con marcas. Hace falta nivel 20, y el personal no puede pelear."
 # Player houses (T5.4, world/islands/<id>/houses.yaml).
 house.puerto_house_net.name: "Casa de la Red Tendida"

@@ -12,6 +12,8 @@ import { App } from "./ui/App.tsx";
 import { LanguagePicker } from "./ui/LanguagePicker.tsx";
 import { AudioOptions, SoundOptions } from "./ui/AudioOptions.tsx";
 import { TouchPadToggle } from "./ui/TouchPad.tsx";
+import { ControlsOptions } from "./ui/ControlsOptions.tsx";
+import { loadControls, saveControls } from "./state/controls.ts";
 import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
 import { applyReducedMotion, loadReducedMotion, saveReducedMotion } from "./state/ui-prefs.ts";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
@@ -91,6 +93,8 @@ function Root(): JSX.Element {
   const t = useMemo(() => translator(content.i18n[lang] ?? {}, lang), [lang]);
   // T5.6: the on-screen direction pad, switched in Options (on by default on touch screens).
   const [touchPad, setTouchPad] = useState(() => loadTouchPad(storage, coarsePointer()));
+  // docs/17 UI-6: what the right button does on items (Options → Controls).
+  const [controls, setControls] = useState(() => loadControls(storage));
   // docs/17 UI-9: "reduced animations" (Options), on top of prefers-reduced-motion.
   const [reducedMotion, setReducedMotion] = useState(() => loadReducedMotion(storage));
   useEffect(() => {
@@ -140,6 +144,17 @@ function Root(): JSX.Element {
         language: language(),
         sound: <SoundOptions t={t} audio={audio} storage={storage} />,
         touchPad: padToggle(),
+        controlsMode: controls,
+        controls: (
+          <ControlsOptions
+            t={t}
+            mode={controls}
+            onChange={(m) => {
+              saveControls(m, storage);
+              setControls(m);
+            }}
+          />
+        ),
         reducedMotion,
         setReducedMotion: (on) => {
           saveReducedMotion(on, storage);

@@ -6,7 +6,46 @@
 import type { ItemLoc, ItemRef } from "../state/items.ts";
 
 /** One button of the contextual menu (i18n: client.touch.action.<kind>). */
-export type ActionKind = "attack" | "talk" | "climb" | "use" | "open" | "look" | "move";
+export type ActionKind =
+  | "attack"
+  | "talk"
+  | "climb"
+  | "use"
+  | "open"
+  | "use_with"
+  | "eat"
+  | "equip"
+  | "look"
+  | "move"
+  | "split";
+
+/**
+ * What the client knows of an item a menu offers buttons for (docs/17 UI-6): its first
+ * button (open, use with, eat, equip or use) is its default action, the one a double click
+ * does. `split`: a stack of more than one unit can move part of it.
+ */
+export interface ItemFacts {
+  container: boolean;
+  /** A tool: "Use with…" (the next click picks where). */
+  useWith?: boolean | undefined;
+  /** Food: "Eat". */
+  food?: boolean | undefined;
+  /** Equipment not in a slot yet: "Equip" moves it to its slot. */
+  equip?: boolean | undefined;
+  /** More than one unit: "Move part…". */
+  split?: boolean | undefined;
+  /** A map fixture nobody carries (a station, a board): nothing to move. */
+  fixed?: boolean | undefined;
+}
+
+/** The default action of an item: the first button of its menu. */
+export function itemPrimary(f: ItemFacts): ActionKind {
+  if (f.container) return "open";
+  if (f.useWith) return "use_with";
+  if (f.food) return "eat";
+  if (f.equip) return "equip";
+  return "use";
+}
 
 /** What the client knows of a long-pressed map tile. */
 export interface TileFacts {
@@ -16,7 +55,7 @@ export interface TileFacts {
    * Its top item above the ground, if any, but not the look of a portal (state/items.ts
    * menuItem): a bare ladder offers "climb", not "use" and "move" of its own item.
    */
-  item?: { container: boolean } | undefined;
+  item?: ItemFacts | undefined;
   /** A bare house door (T5.4) or rope spot: using its ground opens the house window, or says a rope is needed. */
   door?: boolean;
   /** A ladder: climbing it comes first, whatever lies on it (the item there keeps its own buttons). */
@@ -31,16 +70,21 @@ export function tileActions(f: TileFacts): ActionKind[] {
   const c = f.creature;
   if (c && !c.self) out.push(c.npc ? "talk" : "attack");
   if (f.climb) out.push("climb");
-  if (f.item) out.push(f.item.container ? "open" : "use");
+  if (f.item) out.push(itemPrimary(f.item));
   else if (f.door && !f.climb) out.push("use");
   if (c || f.known) out.push("look");
-  if (f.item) out.push("move");
+  if (f.item && !f.item.fixed) {
+    out.push("move");
+    if (f.item.split) out.push("split");
+  }
   return out;
 }
 
-/** The menu of a long press on a DOM item (inventory slot or container cell). */
-export function itemActions(container: boolean): ActionKind[] {
-  return [container ? "open" : "use", "look", "move"];
+/** The menu of a DOM item (inventory slot, container cell): its default action first. */
+export function itemActions(f: ItemFacts): ActionKind[] {
+  const out: ActionKind[] = [itemPrimary(f), "look", "move"];
+  if (f.split) out.push("split");
+  return out;
 }
 
 /** Same item at the same place (the client's view of the stack may lag a step). */

@@ -14,6 +14,7 @@ import type { Character } from "../net/api.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
 import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { GameView, emptyGameUi } from "./GameView.tsx";
+import { loadControls } from "../state/controls.ts";
 import type { GameSettings } from "./GameView.tsx";
 
 type Screen =
@@ -388,6 +389,9 @@ function GameScreen(props: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>(emptyGameUi);
   const [storage] = useState(safeStorage);
+  // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click.
+  const controls = useRef(props.settings?.controlsMode);
+  controls.current = props.settings?.controlsMode;
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -399,6 +403,7 @@ function GameScreen(props: {
       sessionToken: props.sessionToken,
       vocation: props.character.vocation,
       storage,
+      controls: () => controls.current ?? loadControls(storage),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),

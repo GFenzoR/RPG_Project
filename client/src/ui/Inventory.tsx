@@ -1,7 +1,10 @@
 // Inventory (T1.8): the equipment slots and the open container windows. Items are
 // dragged with the pointer (Game.pressItem) and dropped on a slot, a container cell or
-// the map; right click uses an item (opens a container, eats) and shift+click looks at
-// it. The server validates every move: this UI only shows what it says.
+// the map; shift+click looks at an item. Since docs/17 UI-6 a right click opens its menu
+// with its card (or uses it, in the classic controls: Game.itemContextMenu), a double
+// click does its default action (open, use with, eat, equip, use) and hovering shows its
+// card (ui/ItemTooltip.tsx reads data-tip-item). The server validates every move: this UI
+// only shows what it says.
 import { EquipmentSlot } from "@rpg/protocol";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
@@ -171,22 +174,46 @@ function ItemCell(props: {
       class={(icon ? "item" : "item missing") + (picked ? " picked" : "")}
       data-picked={picked ? "" : undefined}
       style={style}
-      title={name}
       aria-label={
         item.count > 1 ? props.t("client.log.item_count", { count: item.count, name }) : name
       }
       data-item={props.content.items[item.itemId]?.id ?? item.itemId}
+      // docs/17 UI-6: the card on hover and on keyboard focus (ui/ItemTooltip.tsx).
+      data-tip-item={item.itemId}
+      data-tip-count={item.count}
+      tabIndex={0}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
         if (e.shiftKey) game?.lookAt(ref);
         else game?.pressItem(ref, e);
       }}
+      onDblClick={(e) => {
+        if (e.shiftKey) return;
+        e.preventDefault();
+        game?.itemDefault(ref);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
-        // T5.6: a finger's long press also fires contextmenu; it opens the menu instead.
-        if (game?.touchContextMenu(ref, e.clientX, e.clientY)) return;
-        game?.useItem(ref);
+        // A finger's long press also fires contextmenu (T5.6): its menu, never a use.
+        game?.itemContextMenu(ref, e);
+      }}
+      onKeyDown={(e) => {
+        // The keyboard: Enter does the default action, the menu key (or Shift+F10) opens
+        // the menu beside the item.
+        if (e.key === "Enter") {
+          e.preventDefault();
+          game?.itemDefault(ref);
+        } else if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          game?.itemContextMenu(ref, {
+            clientX: r.right,
+            clientY: r.bottom,
+            shiftKey: true,
+            ctrlKey: false,
+          });
+        }
       }}
     >
       {!icon && name.slice(0, 2)}

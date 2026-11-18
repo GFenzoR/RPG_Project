@@ -13,7 +13,9 @@ import {
   menuClickCounts,
   menuHeight,
   menuPlacement,
+  mousePlacement,
   paddingInsets,
+  splitCount,
 } from "./ActionMenu.tsx";
 import { TouchPad, TouchPadToggle } from "./TouchPad.tsx";
 
@@ -290,5 +292,99 @@ describe("TouchPad", () => {
     expect(input?.props["checked"]).toBe(false);
     (input?.props["onChange"] as (e: unknown) => void)({ currentTarget: { checked: true } });
     expect(seen).toEqual([true]);
+  });
+});
+
+describe("the right-click menu (docs/17 UI-6)", () => {
+  const card = {
+    itemId: 7,
+    id: "raw_fish",
+    count: 12,
+    type: ["client.card.kind.consumable", "client.card.food"],
+    stats: [{ id: "weight" as const, value: "5.00", total: "60.00" }],
+    requires: [],
+    effects: [{ id: "food" as const, seconds: 60 }],
+    desc: "item.raw_fish.desc",
+    marks: [],
+  };
+  const menu = {
+    x: 300,
+    y: 200,
+    title: "pescado crudo",
+    actions: ["eat", "look", "move", "split"] as ActionKind[],
+    card,
+    mouse: true,
+    stack: 12,
+  };
+
+  it("opens at the mouse, right of and below it, and flips at the edges", () => {
+    expect(mousePlacement(300, 200, 1280, 800, 288, 300)).toEqual({ left: 304, top: 204 });
+    // Near the right edge: left of the pointer; near the bottom: above it.
+    expect(mousePlacement(1200, 700, 1280, 800, 288, 300)).toEqual({ left: 908, top: 396 });
+    // Too tall for either side: as low as it fits; taller than the screen: it scrolls.
+    expect(mousePlacement(300, 400, 1280, 800, 288, 700)).toEqual({ left: 304, top: 92 });
+    expect(mousePlacement(300, 400, 1280, 600, 288, 700)).toEqual({
+      left: 304,
+      top: 8,
+      maxHeight: 584,
+    });
+  });
+
+  it("the mouse's buttons are compact and the card adds its lines", () => {
+    expect(menuHeight(3, true, true)).toBe(2 * 8 + 2 + 34 + 3 * 30 + 2 * 2);
+    // The card's lines, and the title grows to hold the item's icon at 2x.
+    expect(menuHeight(3, true, true, 4)).toBe(menuHeight(3, true, true) + 34 + 2 + 12 + 4 * 19);
+  });
+
+  it("the default action first and bold, the card under the buttons, Move part as a form", () => {
+    const chosen: ActionKind[] = [];
+    const split: number[] = [];
+    const game = {
+      menuPressed: true,
+      menuChoose: (k: ActionKind) => void chosen.push(k),
+      closeMenu: () => undefined,
+      menuPress: () => undefined,
+      menuSplit: (n: number) => void split.push(n),
+      itemIcon: () => undefined,
+    };
+    const tree = ActionMenu({ t, menu, game, viewport: { width: 1280, height: 800 } });
+    const box = byAttr(tree, "data-testid", "action-menu")[0];
+    expect(box?.props["class"]).toBe("touch-menu with-card");
+    expect(box?.props["data-pointer"]).toBe("mouse");
+    const buttons = byAttr(tree, "data-action");
+    expect(buttons.map((b) => b.props["data-action"])).toEqual([
+      "eat",
+      "look",
+      "move",
+      "split",
+      "cancel",
+    ]);
+    expect(buttons[0]?.props["class"]).toBe("touch-menu-action default");
+    expect(buttons[1]?.props["class"]).toBe("touch-menu-action");
+    click(buttons[0], { detail: 1 });
+    expect(chosen).toEqual(["eat"]);
+    // The card is there, without its name (the header has it).
+    const cardNode = nodes(tree).filter((n) => n.props["card"] === card);
+    expect(cardNode).toHaveLength(1);
+    expect(cardNode[0]?.props["name"]).toBe(false);
+    // Move part: the field is read on submit, kept within 1..stack-1.
+    const field = byAttr(tree, "data-testid", "split-count")[0];
+    expect(field?.props["defaultValue"]).toBe("6");
+    expect(field?.props["max"]).toBe(11);
+    const form = nodes(tree).find((n) => n.props["class"] === "touch-menu-split-form");
+    const input = { value: "40" };
+    (form?.props["onSubmit"] as (e: unknown) => void)({
+      preventDefault: () => undefined,
+      currentTarget: { elements: { namedItem: () => input } },
+    });
+    expect(split).toEqual([11]);
+  });
+
+  it("splitCount keeps a whole number from 1 to the stack less one", () => {
+    expect(splitCount(5, 12)).toBe(5);
+    expect(splitCount(40, 12)).toBe(11);
+    expect(splitCount(0, 12)).toBe(1);
+    expect(splitCount(Number.NaN, 12)).toBe(1);
+    expect(splitCount(2.7, 12)).toBe(2);
   });
 });

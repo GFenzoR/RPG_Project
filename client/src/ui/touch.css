@@ -284,3 +284,57 @@ body.picking-item [data-drop] {
   flex-direction: row;
   bottom: 108px;
 }
+
+/* ---- the right-click menu (docs/17 UI-6): compact for the mouse, with the item's card ---- */
+.touch-menu.with-card {
+  width: 288px; /* CARD_MENU_WIDTH in ActionMenu.tsx */
+}
+.touch-menu[data-pointer="mouse"] {
+  gap: 2px;
+}
+.touch-menu[data-pointer="mouse"] .touch-menu-action {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.touch-menu-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.touch-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.touch-menu-name::first-letter {
+  text-transform: uppercase;
+}
+/* The default action: the one a double click does. */
+.touch-menu-action.default {
+  font-weight: 700;
+  color: var(--ui-gold-300);
+}
+.touch-menu-split > summary {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+}
+.touch-menu-split > summary::-webkit-details-marker {
+  display: none;
+}
+.touch-menu-split-form {
+  display: flex;
+  gap: 6px;
+  padding: 4px 4px 2px;
+}
+.touch-menu-split-form input {
+  width: 4.5rem;
+}
+.touch-menu .item-card {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-gold-700);
+}

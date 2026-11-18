@@ -28,6 +28,7 @@ import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
 import { mapPress } from "../input/mouse.ts";
+import type { ControlsMode } from "../state/controls.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
@@ -79,6 +80,8 @@ export interface GameCanvas {
   clientToTile(clientX: number, clientY: number): Pos | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
+  /** Where any sprite of the atlas is (an NPC's portrait in its dialog), real art or not. */
+  spriteIcon(path: string): AtlasIcon | undefined;
   /** Where a PvP mark's sprite is in the atlas (real art only), for the battle list. */
   markIcon(mark: Skull): AtlasIcon | undefined;
   /** Current device pixels per sprite pixel. */
@@ -109,6 +112,15 @@ export interface GameCanvasOptions {
   useTile(x: number, y: number, z: number, top: boolean): void;
   /** A tile was shift-clicked (look at its top item). */
   lookTile(x: number, y: number, z: number): void;
+  /**
+   * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
+   * Shift+right click in both), at page coordinates (cx, cy).
+   */
+  menuTile?(x: number, y: number, z: number, cx: number, cy: number): void;
+  /** docs/17 UI-6: a tile was double-clicked with the mouse (its default action). */
+  doubleClickTile?(x: number, y: number, z: number): void;
+  /** What the right button does on items now (state/controls.ts); "classic" without it. */
+  controls?(): ControlsMode;
   /** The tile is a door (a map door item or a house door): right-clicked, it is used. */
   doorAt?(x: number, y: number, z: number): boolean;
   /** The left button was pressed on a tile and dragged (move its top item). */
@@ -693,9 +705,10 @@ export async function createGameCanvas(
     const other = c && c.id !== world.selfId ? c : undefined;
     const inDoor =
       other?.kind === CreatureKind.PLAYER && (opts.doorAt?.(tile.x, tile.y, z) ?? false);
-    const act = mapPress(e.button, e, other?.id, inDoor);
+    const act = mapPress(e.button, e, other?.id, inDoor, opts.controls?.() ?? "classic");
     if (act.kind === "attack") opts.clickCreature(act.creature);
     else if (act.kind === "use") opts.useTile(tile.x, tile.y, z, act.top);
+    else if (act.kind === "menu") opts.menuTile?.(tile.x, tile.y, z, e.clientX, e.clientY);
     else if (act.kind === "look") opts.lookTile(tile.x, tile.y, z);
     else if (act.kind === "press") press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
   });
@@ -723,6 +736,15 @@ export async function createGameCanvas(
   });
   canvas.addEventListener("pointerleave", () => {
     press = undefined;
+  });
+  // docs/17 UI-6: a double click does the tile's default action (the Game decides whether
+  // it counts: only in the menu controls, and never right after a finger).
+  canvas.addEventListener("dblclick", (e) => {
+    const self = world.self;
+    if (!self || e.button !== 0 || e.shiftKey) return;
+    const p = toCanvas(e.clientX, e.clientY);
+    const tile = screenToTile(cam, p.x, p.y, T);
+    opts.doubleClickTile?.(tile.x, tile.y, self.pos.z);
   });
 
   // Ctrl+wheel (and a trackpad pinch, which browsers send as Ctrl+wheel) zooms the map
@@ -763,6 +785,9 @@ export async function createGameCanvas(
     itemIcon(itemId) {
       const sprite = content.items[itemId]?.sprite;
       return sprite ? atlas.icon(sprite) : undefined;
+    },
+    spriteIcon(path) {
+      return atlas.icon(path);
     },
     tileToClient(x, y) {
       const s = tileToScreen(cam, x + 0.5, y + 0.5, T);

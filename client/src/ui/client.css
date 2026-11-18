@@ -2499,3 +2499,137 @@ body.using-item canvas {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---- The item card (docs/17 UI-6): menu, tooltip and shop ---------------------------- */
+.item-card {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--ui-text);
+}
+.item-card p,
+.item-card ul,
+.item-card dl {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.card-name {
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ui-gold-300);
+}
+.card-name::first-letter {
+  text-transform: uppercase;
+}
+.card-type {
+  color: var(--ui-text-muted);
+  font-style: italic;
+}
+.card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+  margin-top: 2px;
+}
+.card-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.card-stats dt {
+  color: var(--ui-text-muted);
+}
+.card-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* The weight of a whole stack: its own row across both columns. */
+.card-stats > div[data-stat="weight"]:has(.card-total) {
+  grid-column: 1 / -1;
+}
+.card-total {
+  color: var(--ui-text-muted);
+}
+.card-requires li.unmet {
+  color: var(--ui-danger);
+}
+.card-requires li.met {
+  color: var(--ui-text-muted);
+}
+.card-effects li {
+  color: var(--ui-mana-300);
+}
+.card-desc {
+  margin-top: 3px;
+  font-family: var(--ui-font-book);
+  font-style: italic;
+  color: #cbbf9f;
+}
+.card-marks li {
+  color: var(--ui-warn);
+  font-size: 12px;
+}
+/* An atlas icon at 2x: a box twice its size, the icon scaled pixel by pixel. */
+.big-icon {
+  display: inline-block;
+  position: relative;
+  flex: none;
+}
+.big-icon > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-repeat: no-repeat;
+  transform: scale(2);
+  transform-origin: 0 0;
+  image-rendering: pixelated;
+}
+/* The card as a tooltip: never takes the pointer. */
+.item-tooltip {
+  position: fixed;
+  z-index: 60;
+  width: 288px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: rgb(15 13 11 / 0.96);
+  background-image: var(--ui-grain);
+  border: 2px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-frame-shadow);
+  animation: tip-in var(--ui-dur-fast) var(--ui-ease-out);
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+/* Items in the DOM take the keyboard focus (their card shows, Enter uses them). */
+.item[tabindex]:focus-visible {
+  outline: 2px solid var(--ui-gold-300);
+  outline-offset: 1px;
+}
+/* Options → Controls: what the right click does. */
+.controls-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  border: 0;
+}
+.controls-mode legend {
+  padding: 0;
+  margin-bottom: 0.2rem;
+  color: var(--ui-text-muted);
+}

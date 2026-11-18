@@ -1,7 +1,7 @@
 import { EquipmentSlot } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ItemRef } from "../state/items.ts";
-import { ItemPicker, itemActions, sameLoc, sameRef, tileActions } from "./actions.ts";
+import { ItemPicker, itemActions, itemPrimary, sameLoc, sameRef, tileActions } from "./actions.ts";
 
 const onTile = (x: number, itemId = 10, stackIndex = 1): ItemRef => ({
   loc: { kind: "pos", pos: { x, y: 5, z: 7 } },
@@ -62,8 +62,34 @@ describe("tileActions", () => {
 
 describe("itemActions", () => {
   it("use or open, look, move", () => {
-    expect(itemActions(false)).toEqual(["use", "look", "move"]);
-    expect(itemActions(true)).toEqual(["open", "look", "move"]);
+    expect(itemActions({ container: false })).toEqual(["use", "look", "move"]);
+    expect(itemActions({ container: true })).toEqual(["open", "look", "move"]);
+  });
+
+  it("docs/17 UI-6: the default action first (use with, eat, equip), and part of a stack", () => {
+    expect(itemActions({ container: false, useWith: true })).toEqual(["use_with", "look", "move"]);
+    expect(itemActions({ container: false, food: true, split: true })).toEqual([
+      "eat",
+      "look",
+      "move",
+      "split",
+    ]);
+    expect(itemActions({ container: false, equip: true })).toEqual(["equip", "look", "move"]);
+    // A container wins: a backpack opens even where it could be worn.
+    expect(itemPrimary({ container: true, equip: true })).toBe("open");
+  });
+
+  it("a fixture (a station, a board) is used and looked at, never moved", () => {
+    expect(tileActions({ item: { container: false, fixed: true }, known: true })).toEqual([
+      "use",
+      "look",
+    ]);
+  });
+
+  it("a tile's item gets the same default action and its split", () => {
+    expect(
+      tileActions({ item: { container: false, food: true, split: true }, known: true }),
+    ).toEqual(["eat", "look", "move", "split"]);
   });
 });
 

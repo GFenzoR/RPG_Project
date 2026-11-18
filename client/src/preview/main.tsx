@@ -22,6 +22,7 @@ import { SoundOptions } from "../ui/AudioOptions.tsx";
 import { defaultPrefs } from "../audio/prefs.ts";
 import type { AudioPrefs } from "../audio/prefs.ts";
 import type { AudioEngine } from "../audio/engine.ts";
+import { ControlsOptions } from "../ui/ControlsOptions.tsx";
 import { pixelScale } from "../render/viewport.ts";
 import { loadIcons } from "../site/shop.ts";
 import type { SpriteIcon } from "../site/shop.ts";
@@ -114,6 +115,8 @@ function Preview(props: { game: Game }): JSX.Element {
     ),
     sound: <SoundOptions t={t} audio={audio} storage={undefined} />,
     touchPad: <TouchPadToggle t={t} on={false} onChange={() => {}} />,
+    controlsMode: "menu",
+    controls: <ControlsOptions t={t} mode="menu" onChange={() => {}} />,
     reducedMotion: false,
     setReducedMotion: () => {},
   };
