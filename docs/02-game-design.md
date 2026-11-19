@@ -931,7 +931,8 @@ Valores iniciales (balance.yaml):
 La muerte es el riesgo del juego (`00-vision.md`, "Muerte como Tibia"): cerrar el juego en
 medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
 - **En combate** quiere decir: durante `travel.combat_block_ms` (12 s) desde la última vez
-  que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño (también de
+  que un monstruo atacó al jugador (aunque falle; también su área, "Habilidades", aunque
+  el jugador no sea su objetivo), que el jugador recibió daño (también de
   veneno o fuego, de un monstruo o de otro jugador, también en la arena) o que le pegó a un
   monstruo o a un jugador; o mientras dura su bloqueo PvP ("PvP", "Castigo"). Es la misma
   ventana que impide zarpar ("Viajes en barco"), la desconexión por inactividad y los

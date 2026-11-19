@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -206,6 +207,70 @@ attacks:
 			t.Errorf("%v: health %d after the victim died, want 135", p.Pos(), health(p))
 		}
 	}
+}
+
+// An area hit is a fight for the logout block too (docs/02 "Bloqueo de logout en
+// combate"), not only the monster's target's: a bystander that closed its connection
+// next to the fight stays link-dead while the circle keeps reaching it, long past
+// travel.combat_block_ms from its leave, and leaves once it is out of the area for that
+// long.
+func TestLinkDeadInAMonsterArea(t *testing.T) {
+	slam := parsedMonster(t, `id: slammer
+health: 500
+speed: 100
+behavior: {aggressive: true}
+attacks:
+  - { type: spell, element: fire, min: 3, max: 3, interval_ms: 2000, area: { shape: circle, radius: 2 } }
+`)
+	m := worldtest.Open(t, 0, 0, 64, 64)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("slammer", 10, 10, 0, 60)}
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"slammer": slam}
+		c.Items = testItems()
+		c.Balance.Conditions = testConditions()
+	}, blockMs)
+	// The target is next to the slammer, the bystander two tiles away: in the circle,
+	// never the closest.
+	cls, ps := h.joinAll([]world.Pos{pos(10, 11), pos(12, 10)}, nil)
+	target, by := ps[0], ps[1]
+	mo := onlyMonster(t, h)
+	h.sim.RunUntil(func() bool { return health(by) < 145 }, sim.MaxSeconds(5))
+	h.sim.Command(h.w.Leave(cls[1]))
+	h.sim.Step()
+	if !by.LinkDead() {
+		t.Fatal("the bystander hit by the circle left the world at once")
+	}
+	left, n := health(by), len(h.saves)
+	h.sim.RunFor(3 * combatBlock)
+	// Health regenerates in between: 3 every 2 s outruns it. No final save yet (an
+	// autosave may come in between): the character only leaves with its final one.
+	if h.w.PlayerByCharacter(by.CharacterID()) != by || !by.LinkDead() || health(by) >= left ||
+		mo.TargetID() != target.ID() || finalSaves(h.savesOf(by.CharacterID(), n)) != 0 {
+		t.Fatalf("3 blocks after the leave: in the world %v, link-dead %v, health %d (was %d), the slammer targets %d (target %d), final saves %d",
+			h.w.PlayerByCharacter(by.CharacterID()) == by, by.LinkDead(), health(by), left, mo.TargetID(), target.ID(),
+			finalSaves(h.savesOf(by.CharacterID(), n)))
+	}
+	h.away(by)
+	out := h.sim.Now()
+	h.runTo(out, combatBlock-time.Second)
+	if h.w.PlayerByCharacter(by.CharacterID()) != by {
+		t.Fatal("the bystander left before its block ended")
+	}
+	h.runTo(out, combatBlock+time.Second)
+	if s := h.savesOf(by.CharacterID(), n); h.w.PlayerByCharacter(by.CharacterID()) != nil || finalSaves(s) != 1 || !s[len(s)-1].Final {
+		t.Fatalf("out of the area for a block: in the world %v, saves %+v", h.w.PlayerByCharacter(by.CharacterID()) != nil, s)
+	}
+}
+
+// finalSaves counts the Final snapshots in s.
+func finalSaves(s []session.Snapshot) int {
+	n := 0
+	for _, x := range s {
+		if x.Final {
+			n++
+		}
+	}
+	return n
 }
 
 // A beam goes length tiles from the monster towards its target and stops at a wall: it
