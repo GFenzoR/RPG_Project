@@ -103,17 +103,17 @@ describe("placeKey (the card is measured again only when it or its place changes
 });
 
 describe("TipGate (no card until the mouse moves after a window opened)", () => {
-  it("stays shut for the browser's pointerover of a window that opened under a still mouse", () => {
+  it("stays shut while the mouse stays where it was when a window opened", () => {
     const gate = new TipGate();
     expect(gate.open).toBe(true);
-    gate.moved(500, 400); // the player clicks "Quiero comerciar" there
-    gate.opened(); // the shop opens, its grid under the mouse
-    gate.seen(500, 400); // the browser's pointerover at the same point
+    gate.moved(500, 400); // the mouse comes to "Quiero comerciar"
+    gate.pressed(500, 400); // and clicks it
+    gate.opened(); // the shop opens, its grid under the mouse (the browser's pointerover)
     expect(gate.open).toBe(false);
     // A pointermove at the same point is not the player moving.
     expect(gate.moved(500, 400)).toBe(false);
     expect(gate.open).toBe(false);
-    // The mouse moves: the gate opens, once.
+    // The mouse moves (its pointerover comes first and does not count): the gate opens, once.
     expect(gate.moved(503, 401)).toBe(true);
     expect(gate.open).toBe(true);
     expect(gate.moved(510, 401)).toBe(false);
@@ -128,7 +128,7 @@ describe("TipGate (no card until the mouse moves after a window opened)", () => 
 
   it("opens for the keyboard whatever the mouse did", () => {
     const gate = new TipGate();
-    gate.seen(1, 1);
+    gate.pressed(1, 1);
     gate.opened();
     gate.release();
     expect(gate.open).toBe(true);

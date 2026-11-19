@@ -92,7 +92,9 @@ export function groundAnchor(tile: Rect, cursorY: number): Rect {
  * under a still mouse brings a pointerover from the browser, not from the player: the shop
  * opens left of its dialog, its grid where the dialog's button was clicked, and the card of
  * the item there covered the shop's filters. `opened` shuts the gate; a pointermove away
- * from where the mouse was then (or the first one, if that is unknown) opens it again.
+ * from where the mouse last moved or pressed (or the first one, if that is unknown) opens
+ * it again. Only moves and presses say where the mouse is: a real move brings its
+ * pointerover first, at the new point, and it must not count as where the mouse was.
  */
 export class TipGate {
   private at: { x: number; y: number } | undefined;
@@ -113,8 +115,8 @@ export class TipGate {
     this.shut = false;
   }
 
-  /** Where the mouse is, from any pointer event: a still mouse over the new window. */
-  seen(x: number, y: number): void {
+  /** A press at x, y: the mouse is there (the click that opened a window). */
+  pressed(x: number, y: number): void {
     this.at = { x, y };
   }
 
@@ -213,7 +215,6 @@ export function ItemTooltip(props: {
     };
     const onOver = (e: PointerEvent): void => {
       if (e.pointerType !== "mouse") return;
-      gate.current.seen(e.clientX, e.clientY);
       if (!gate.current.open) return; // a window opened under a still mouse
       const host = (e.target as Element | null)?.closest?.("[data-tip-item]") ?? undefined;
       if (host === over) return;
@@ -252,7 +253,8 @@ export function ItemTooltip(props: {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") hide();
     };
-    const onPress = (): void => {
+    const onPress = (e: Event): void => {
+      if (e instanceof PointerEvent) gate.current.pressed(e.clientX, e.clientY);
       over = undefined;
       hide();
     };
