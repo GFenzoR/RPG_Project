@@ -31,10 +31,11 @@ import {
   UI_ICON,
   UI_ICON_BOX,
   UI_SLOT_BOX,
+  UI_STATUS_BOX,
   uiIconBox,
 } from "./index.ts";
 import { EFFECT_FRAMES, MAX_ORB_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
-import { SLOT_MASKS } from "./recipes/ui.ts";
+import { SLOT_MASKS, STATUS_ART } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
 import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
 
@@ -411,6 +412,7 @@ describe("ui icons", () => {
     expect(icons.length).toBeGreaterThan(0);
     expect(uiIconBox("ui/marks/murderer")).toEqual(UI_ICON_BOX);
     expect(uiIconBox("ui/slots/head")).toEqual(UI_SLOT_BOX);
+    expect(uiIconBox("ui/status/poison")).toEqual(UI_STATUS_BOX);
     for (const p of icons) {
       const img = render(p);
       const box = uiIconBox(p);
@@ -433,6 +435,34 @@ describe("ui icons", () => {
       return bits;
     });
     expect(new Set(masks).size).toBe(marks.length);
+  });
+
+  it("draw every status of the tray (docs/17), each its own 14x14 map outlined to 16x16", () => {
+    // The conditions of data/balance.yaml and the statuses of server/internal/session/status.go.
+    const balance = readFileSync(resolve(root, "data", "balance.yaml"), "utf8");
+    const conditions = [...balance.matchAll(/^ {2}([a-z_]+):\s*\{\s*kind:/gm)].map((m) => m[1]);
+    expect(conditions.length).toBeGreaterThan(0);
+    const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone"];
+    expect(Object.keys(STATUS_ART).sort()).toEqual([...ids].sort());
+    const masks = ids.map((id) => {
+      const art = STATUS_ART[id];
+      expect(art?.rows.length, id).toBe(14);
+      for (const r of art?.rows ?? []) {
+        expect(r.length, id).toBe(14);
+        for (const ch of r) if (ch !== ".") expect(art?.colours[ch], `${id} ${ch}`).toBeDefined();
+      }
+      const img = render(`ui/status/${id}`);
+      let bits = "";
+      let on = 0;
+      for (let i = 3; i < img.data.length; i += 4) {
+        bits += img.data[i] ? "1" : "0";
+        if (img.data[i]) on++;
+      }
+      // Fills a good part of its box, to read at 1x in a phone's header.
+      expect(on, id).toBeGreaterThan(70);
+      return bits;
+    });
+    expect(new Set(masks).size).toBe(ids.length);
   });
 
   it("draw every equipment slot (docs/17 UI-5), each its own 20x20 silhouette", () => {

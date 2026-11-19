@@ -2,7 +2,9 @@
 // 32x32 sprite (uiIconBox: UI_ICON_BOX for the marks, UI_SLOT_BOX for the slots), which is
 // all the client shows of them. The client finds them by path, not by a data/ field:
 // ui/marks/<id> are the PvP marks of client/src/render/marks.ts, ui/slots/<slot> the empty
-// equipment slots of client/src/ui/Inventory.tsx.
+// equipment slots of client/src/ui/Inventory.tsx, ui/status/<id> the icons of the status
+// tray (client/src/ui/StatusTray.tsx: one per condition of balance.yaml and per status the
+// server sends).
 //
 // PvP marks (T5.2): original sigils, one silhouette per mark so they read without colour
 // too, in the colours of docs/02 "Marcas": amber crossed blades for the aggressor (drew
@@ -14,7 +16,7 @@ import { opaque, px } from "../draw.ts";
 import { hex, material } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
-import { UI_ICON_BOX, UI_SLOT_BOX } from "../recipe.ts";
+import { UI_ICON_BOX, UI_SLOT_BOX, UI_STATUS_BOX } from "../recipe.ts";
 
 /** The outline of every mark: near black, warm, like the cast shadows. */
 const INK: Rgba = hex("#140e0c");
@@ -394,6 +396,301 @@ export const SLOT_MASKS: Readonly<Record<string, readonly string[]>> = {
   ammo: SLOT_AMMO,
 };
 
+// ---- Status tray (docs/17 "Bandeja de estados") ----------------------------------------
+// One icon per condition (balance.yaml conditions) and per status the server sends
+// (server/internal/session/status.go), shown in the tray by the chat at 2x: 14x14 maps of
+// our own, each with its own silhouette and colours, lit from the top-left and outlined in
+// INK to 16x16 (UI_STATUS_BOX). Whether it helps or harms is the client's frame (green or
+// red), not the drawing. The characters are each map's own palette; "." is nothing.
+
+/** A status map: its rows (14x14) and the colour of each character. */
+export interface StatusArt {
+  rows: readonly string[];
+  colours: Readonly<Record<string, string>>;
+}
+
+/** Draws a status map at UI_STATUS_BOX's inner corner and outlines it in INK. */
+function statusIcon(img: Image, art: StatusArt): void {
+  const x0 = UI_STATUS_BOX.x + 1;
+  const y0 = UI_STATUS_BOX.y + 1;
+  art.rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      const c = art.colours[ch];
+      if (c) px(img, x0 + x, y0 + y, hex(c));
+    });
+  });
+  outsideOutline(img, INK);
+}
+
+/** poison: a drop of venom, green, with bubbles rising beside it. */
+const POISON: StatusArt = {
+  rows: [
+    "......BS......",
+    "......BS...G..",
+    ".....LBBS.....",
+    ".....LBBS..GG.",
+    "....LBBBBS.GG.",
+    "....LWBBBS....",
+    "...LWBBBBBS...",
+    "...LWBBdBBS...",
+    "..LWBBBBBBBS..",
+    "..LBBdBBBBBS..",
+    "..LBBBBBBdBS..",
+    "...BBBBBBBS...",
+    "....SBBBSD....",
+    ".....SDDD.....",
+  ],
+  colours: {
+    L: "#d2f07a",
+    B: "#7cc22a",
+    S: "#46881c",
+    D: "#24500e",
+    W: "#f2ffe0",
+    G: "#b8ea5a",
+    d: "#3a7a16",
+  },
+};
+
+/** burning: a flame with a tongue on its side, red outside, yellow and white in its heart. */
+const BURNING: StatusArt = {
+  rows: [
+    ".....D........",
+    ".....OD.......",
+    "....OOD....D..",
+    "....OOOD..OD..",
+    "...OOYOOD.OD..",
+    "...OYYOOOOOD..",
+    "..OOYYYOOOOD..",
+    "..OYYWYYOOOOD.",
+    ".OOYWWWYYOOOD.",
+    ".OYYWWWWYYOOD.",
+    ".OYYWWWWWYYOD.",
+    ".OOYYWWWYYOOD.",
+    "..DOOYYYOOODD.",
+    "...DDDDDDDD...",
+  ],
+  colours: { D: "#a8281a", O: "#ee6a1c", Y: "#ffc93a", W: "#fff4c2" },
+};
+
+/** shocked: a bolt of lightning, yellow with a white edge, and two sparks. */
+const SHOCKED: StatusArt = {
+  rows: [
+    "......LBBBB...",
+    ".....LBBBBS...",
+    ".....LBBBS..c.",
+    "....LBBBS.....",
+    "....LBBS......",
+    "...LBBBBBBBB..",
+    "...LWWWBBBBS..",
+    "......LBBBS...",
+    "..c..LBBBS....",
+    ".....LBBS.....",
+    "....LBBS......",
+    "....LBS.......",
+    "...LBS........",
+    "...BS.........",
+  ],
+  colours: { L: "#fffbe0", W: "#fff3a0", B: "#ffd23c", S: "#c28e12", c: "#8fe0ff" },
+};
+
+/** slowed: a snail, its spiral shell on its back, crawling to the right. */
+const SLOWED: StatusArt = {
+  rows: [
+    "..............",
+    "......SSSS....",
+    ".....SBBBBS...",
+    "....SBLLLLBS..",
+    "....SBLSSLBBS.",
+    "....SBLSLSLBS.",
+    "....SBLSSSLBS.",
+    "g.g.SBBLLLBBS.",
+    ".g.g.SBBBBBS..",
+    ".ghh..SSSSS...",
+    ".hhhhhhhhhhhh.",
+    "..kkkkkkkkkkkk",
+    "..............",
+    "..............",
+  ],
+  colours: {
+    L: "#f0c27a",
+    B: "#b9782e",
+    S: "#6e4318",
+    g: "#c9d6a0",
+    h: "#8fa064",
+    k: "#566238",
+  },
+};
+
+/** hasted: a winged boot with speed lines behind it. */
+const HASTED: StatusArt = {
+  rows: [
+    "..............",
+    "......LBBBS...",
+    "......LBBBS...",
+    "WW....LBBBS...",
+    ".WWW..LBBBS...",
+    "WWWWW.LBBBS...",
+    ".WWWwwLBBBS...",
+    "..WWwwLBBBBS..",
+    "....wwLBBBBBS.",
+    "gg....LBBBBBBS",
+    "..ggg.LBBBBBBS",
+    "gg....SSSSSSSD",
+    "..............",
+    "..............",
+  ],
+  colours: {
+    W: "#fffaf0",
+    w: "#cfd8e8",
+    L: "#d89a5a",
+    B: "#9a5f2c",
+    S: "#5e3816",
+    D: "#3a220c",
+    g: "#a8e0ff",
+  },
+};
+
+/** invisible: an open eye struck through, pale violet. */
+const INVISIBLE: StatusArt = {
+  rows: [
+    "............D.",
+    "...........D..",
+    "....SSSSS.D...",
+    "..SSWWWWWDSS..",
+    ".SWWWBBBDWWWS.",
+    "SWWWBBBDBBWWWS",
+    "SWWWBBDkBBWWWS",
+    "SWWWBDBBBBWWWS",
+    ".SWWDBBBBWWWS.",
+    "..SDWWWWWWSS..",
+    "..DSSSSSSS....",
+    ".D............",
+    "D.............",
+    "..............",
+  ],
+  colours: { W: "#f4eeff", B: "#9a78e0", S: "#6a54a0", D: "#3a2a66", k: "#1c1430" },
+};
+
+/** keen_eye: a target, red and white rings, with an arrow in its gold heart. */
+const KEEN_EYE: StatusArt = {
+  rows: [
+    "....SSSSS..fa.",
+    "..SSWWWWWSSfa.",
+    ".SWWRRRRRWfa..",
+    ".SWRRWWWRRa...",
+    "SWRRWWRWWa....",
+    "SWRWWRRRa.....",
+    "SWRWRRGa......",
+    "SWRWWRRRWWRWS.",
+    "SWRRWWRWWRRWS.",
+    ".SWRRWWWRRWS..",
+    ".SWWRRRRRWWS..",
+    "..SSWWWWWSS...",
+    "....SSSSS.....",
+    "..............",
+  ],
+  colours: { W: "#f4eee0", R: "#d23a3a", S: "#8a7f6a", G: "#ffd23c", a: "#8a5a2c", f: "#e8e2d0" },
+};
+
+/** well_fed: a roast drumstick, its bone end down to the left. */
+const WELL_FED: StatusArt = {
+  rows: [
+    "........LBBS..",
+    "......LLBBBBS.",
+    ".....LBBBBBBS.",
+    "....LBBBBBBBS.",
+    "....LBBBBBBSS.",
+    "....LBBBBBSSD.",
+    ".....BBBBSSD..",
+    "....wSSSSDD...",
+    "...wwD........",
+    "..wwW.........",
+    ".WwW..........",
+    "WWW...........",
+    ".W............",
+    "..............",
+  ],
+  colours: { L: "#f0b070", B: "#c26a2c", S: "#8a4418", D: "#5a2a0c", W: "#fffaf0", w: "#e0d6c0" },
+};
+
+/** in_combat: a sword held up in front of a round shield. */
+const IN_COMBAT: StatusArt = {
+  rows: [
+    "LS..........SL",
+    ".LS........SL.",
+    "..LS......SL..",
+    "...LS....SL...",
+    "....LS..SL....",
+    ".....LSSL.....",
+    "......LL......",
+    ".....SLLS.....",
+    "...gSL..LSg...",
+    "....g....g....",
+    "...h.g..g.h...",
+    "..h........h..",
+    ".G..........G.",
+    "..............",
+  ],
+  colours: { L: "#f4f6fa", S: "#9aa4b4", g: "#e2b84a", G: "#c9962e", h: "#7a4a22" },
+};
+
+/** pvp_locked: a padlock, an iron shackle over a crimson body with its keyhole. */
+const PVP_LOCKED: StatusArt = {
+  rows: [
+    ".....SSSSS....",
+    "....SLLLLLS...",
+    "...SL.....LS..",
+    "...SL.....LS..",
+    "...SL.....LS..",
+    "..GGGGGGGGGGG.",
+    "..GLLLLLLLLLG.",
+    "..GLBBDDDBBBG.",
+    "..GLBBDDDBBBG.",
+    "..GLBBBDBBBBG.",
+    "..GLBBBDBBBBG.",
+    "..GLBBBBBBBBG.",
+    "..GSSSSSSSSSG.",
+    "...GGGGGGGGG..",
+  ],
+  colours: { S: "#5a5650", L: "#c8c2b8", G: "#b8923f", B: "#a3201b", D: "#2a0606" },
+};
+
+/** protection_zone: a shield with a gold rim and a white cross on blue. */
+const PROTECTION_ZONE: StatusArt = {
+  rows: [
+    ".GGGGGGGGGGGG.",
+    ".GLLLLLLLLLLG.",
+    ".GLBBBBWBBBSG.",
+    ".GLBBBBWBBBSG.",
+    ".GLBBWWWWWBSG.",
+    ".GLBBBBWBBBSG.",
+    ".GLBBBBWBBBSG.",
+    ".GLBBBBBBBBSG.",
+    "..GLBBBBBBSG..",
+    "..GLBBBBBBSG..",
+    "...GLBBBBSG...",
+    "....GLBBSG....",
+    ".....GSSG.....",
+    "......GG......",
+  ],
+  colours: { G: "#e2c47a", L: "#7fb0f0", B: "#2f5fb8", S: "#1c3a78", W: "#fffaf0" },
+};
+
+/** The art of each status tray icon, by condition or status id. */
+export const STATUS_ART: Readonly<Record<string, StatusArt>> = {
+  poison: POISON,
+  burning: BURNING,
+  shocked: SHOCKED,
+  slowed: SLOWED,
+  hasted: HASTED,
+  invisible: INVISIBLE,
+  keen_eye: KEEN_EYE,
+  well_fed: WELL_FED,
+  in_combat: IN_COMBAT,
+  pvp_locked: PVP_LOCKED,
+  protection_zone: PROTECTION_ZONE,
+};
+
 export const UI: RecipeBook = {
   "ui/marks/aggressor": { kind: "ui", draw: (img) => pixelMap(img, AGGRESSOR, AMBER, STEEL_GRIP) },
   "ui/marks/murderer": { kind: "ui", draw: (img) => pixelMap(img, MURDERER, CRIMSON) },
@@ -402,6 +699,12 @@ export const UI: RecipeBook = {
     Object.entries(SLOT_MASKS).map(([slot, rows]) => [
       `ui/slots/${slot}`,
       { kind: "ui" as const, draw: (img: Image) => slotMask(img, rows) },
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(STATUS_ART).map(([id, art]) => [
+      `ui/status/${id}`,
+      { kind: "ui" as const, draw: (img: Image) => statusIcon(img, art) },
     ]),
   ),
 };

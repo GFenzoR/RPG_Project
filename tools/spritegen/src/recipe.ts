@@ -62,7 +62,19 @@ export const UI_ICON_BOX = { x: 10, y: 10, w: 12, h: 12 } as const;
  */
 export const UI_SLOT_BOX = { x: 6, y: 6, w: 20, h: 20 } as const;
 
-/** The box a `ui` sprite draws in: UI_SLOT_BOX for ui/slots/*, UI_ICON_BOX for the rest. */
+/**
+ * The part of a 32x32 `ui/status/<id>` sprite with the drawing: the icons of the status
+ * tray (docs/17 "Bandeja de estados"), one per condition and status, which the client shows
+ * at 2x on the desktop (client/src/state/status.ts STATUS_BOX keeps the same numbers).
+ */
+export const UI_STATUS_BOX = { x: 8, y: 8, w: 16, h: 16 } as const;
+
+/**
+ * The box a `ui` sprite draws in: UI_SLOT_BOX for ui/slots/*, UI_STATUS_BOX for ui/status/*,
+ * UI_ICON_BOX for the rest.
+ */
 export function uiIconBox(path: string): { x: number; y: number; w: number; h: number } {
-  return path.startsWith("ui/slots/") ? UI_SLOT_BOX : UI_ICON_BOX;
+  if (path.startsWith("ui/slots/")) return UI_SLOT_BOX;
+  if (path.startsWith("ui/status/")) return UI_STATUS_BOX;
+  return UI_ICON_BOX;
 }
