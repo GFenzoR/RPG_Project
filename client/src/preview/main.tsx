@@ -3,7 +3,7 @@
 // server, Postgres or a character (docs/08). Only built with RPG_UI_PREVIEW=1
 // (vite.config.ts): it never ships.
 //
-//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|
+//   /preview/?scene=game|status|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|
 //     trade|chattabs|tutorialhelp|tutorialshop|forge|forgerisk|forgeresult|book|scroll|danger|
 //     death|login|characters&lang=es|en
 //     [&ui=1.25&text=1.15]
@@ -45,12 +45,14 @@ import {
   withLaterChat,
   withServerWindows,
   withShop,
+  withStatuses,
   withTrade,
   withTutorial,
 } from "./fixtures.ts";
 import { InterfaceOptions } from "../ui/InterfaceOptions.tsx";
 import { applyScales } from "../state/ui-prefs.ts";
 import { SLOT_KEYS } from "../ui/Inventory.tsx";
+import { STATUS_ORDER } from "../state/status.ts";
 import "../ui/client.css";
 
 const params = new URLSearchParams(location.search);
@@ -216,6 +218,7 @@ function Preview(props: { game: Game }): JSX.Element {
       y: Math.round(window.innerHeight * 0.3),
     });
   if (scene === "danger") s = withDanger(s, now);
+  if (scene === "status") s = withStatuses(s, now);
   if (scene === "death") s = withDeath(s, now);
   if (scene === "server")
     s = withServerWindows(content, s, {
@@ -291,6 +294,8 @@ if (root) {
       ...Object.values<string>(content.npcSprites ?? {}),
       // The empty equipment slots (docs/17 UI-5).
       ...Object.values(SLOT_KEYS).map((k) => `ui/slots/${k}`),
+      // The status tray's icons (docs/17 "Bandeja de estados").
+      ...STATUS_ORDER.map((id) => `ui/status/${id}`),
     ];
     loadIcons(names, { base: new URL("/atlas/", location.href).href }).then(
       (icons) => render(<Preview game={stubGame(icons)} />, root),

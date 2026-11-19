@@ -240,7 +240,12 @@ export function baseScene(content: ClientContent, now: number): Scene {
     balance: 120,
     equipped: { outfit: "", color: "", nameEffect: "" },
   };
-  ui.conditions = [{ id: "well_fed", until: now + 60_000, ticks: 0 }];
+  // Puerto's temple square is a protection zone; a meal lasts minutes (docs/17 "Bandeja de
+  // estados": the tray over the life orb).
+  ui.conditions = [
+    { id: "well_fed", until: now + 18 * 60_000 + 20_000, ticks: 0 },
+    { id: "protection_zone", until: undefined, ticks: 0 },
+  ];
   ui.quests = questLog(Date.now());
   ui.clockOffset = 0;
   return { ui, name: "base" };
@@ -328,7 +333,8 @@ export function withDanger(s: Scene, now: number): Scene {
   if (ui.stats) ui.stats = { ...ui.stats, health: 74, mana: 20, level: 16, levelPercent: 3 };
   ui.conditions = [
     { id: "poison", until: now + 9000, ticks: 3 },
-    { id: "hasted", until: now + 20_000, ticks: 0 },
+    { id: "in_combat", until: now + 11_500, ticks: 0 },
+    { id: "hasted", until: now + 4200, ticks: 0 },
   ];
   ui.levelUp = { level: 16, at: now };
   ui.log = [
@@ -343,6 +349,27 @@ export function withDanger(s: Scene, now: number): Scene {
     },
   ];
   return { ui, name: "danger" };
+}
+
+/**
+ * The status tray full (docs/17 "Bandeja de estados"): every harm and every help at once,
+ * the burn and the keen eye in their last seconds (flashing), the attack lock for minutes.
+ */
+export function withStatuses(s: Scene, now: number): Scene {
+  const ui = { ...s.ui };
+  ui.conditions = [
+    { id: "well_fed", until: now + 18 * 60_000 + 20_000, ticks: 0 },
+    { id: "poison", until: now + 8800, ticks: 4 },
+    { id: "burning", until: now + 3300, ticks: 1 },
+    { id: "slowed", until: now + 12_000, ticks: 0 },
+    { id: "in_combat", until: now + 11_500, ticks: 0 },
+    { id: "pvp_locked", until: now + 6 * 60_000 + 5000, ticks: 0 },
+    { id: "hasted", until: now + 31_000, ticks: 0 },
+    { id: "invisible", until: now + 80_000, ticks: 0 },
+    { id: "keen_eye", until: now + 2500, ticks: 0 },
+    { id: "shocked", until: now + 5100, ticks: 3 },
+  ];
+  return { ui, name: "status" };
 }
 
 /** Dead: the death screen over the map. */

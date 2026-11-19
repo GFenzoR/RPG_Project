@@ -240,12 +240,21 @@ export interface SkillState {
 }
 
 /** The last death (death.died), for the death screen. */
-/** One of the player's own active conditions (PlayerConditions, T3.2). */
+/**
+ * One of the player's own active conditions (PlayerConditions, T3.2), or a status the
+ * server adds to them (in_combat, pvp_locked, protection_zone: docs/05 "Condiciones").
+ */
 export interface ConditionView {
-  /** balance.yaml conditions id: poison, hasted... (name: condition.<id>.name). */
+  /**
+   * balance.yaml conditions id (poison, hasted...) or a status id (name:
+   * condition.<id>.name, what it does: condition.<id>.desc).
+   */
   id: string;
-  /** performance.now() at which it ends (or its last hit lands). */
-  until: number;
+  /**
+   * performance.now() at which it ends (or its last hit lands); undefined for one with no
+   * end (remaining_ms 0: protection_zone).
+   */
+  until: number | undefined;
   /** Hits left of a damage condition (0 for the others). */
   ticks: number;
 }
@@ -764,7 +773,7 @@ export class WorldState implements TileSource {
       case "playerConditions":
         this.conditions = msg.value.conditions.map((c) => ({
           id: c.conditionId,
-          until: now + c.remainingMs,
+          until: c.remainingMs > 0 ? now + c.remainingMs : undefined,
           ticks: c.ticks,
         }));
         break;

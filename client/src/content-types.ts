@@ -326,6 +326,16 @@ export interface IslandRect {
   h: number;
 }
 
+/** balance.yaml experience as the client reads it (vite/content.ts). */
+export interface ExperienceCurve {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  /** The highest level (0 = none known). */
+  maxLevel: number;
+}
+
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
@@ -382,6 +392,13 @@ export interface ClientContent {
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
+  /**
+   * balance.yaml experience: the level curve (total experience for level n is
+   * a·n³ + b·n² + c·n + d) and the top level, for the experience bar's tooltip (state/
+   * experience.ts). Optional so fixtures can leave it out (then the tooltip has no "to the
+   * next level").
+   */
+  experience?: ExperienceCurve | undefined;
   /**
    * balance.yaml guild (T5.1): shown in the guild panel and caps its inputs; the server
    * enforces it. Optional so test fixtures can leave it out.

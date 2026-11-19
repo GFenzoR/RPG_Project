@@ -168,6 +168,8 @@ export function loadClientContent(root: string): ClientContent {
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
+  const xp = isObj(balance) && isObj(balance["experience"]) ? balance["experience"] : {};
+  const curve = isObj(xp["curve"]) ? xp["curve"] : {};
   const i18n: Record<string, Record<string, string>> = {};
   for (const lang of LANGUAGES) {
     const texts: Record<string, string> = {};
@@ -313,6 +315,13 @@ export function loadClientContent(root: string): ClientContent {
       maxPathTiles: num(mv["max_path_tiles"], 100),
     },
     chat: { maxLength: num(chat["max_length"], 255) },
+    experience: {
+      a: num(curve["a"], 0),
+      b: num(curve["b"], 0),
+      c: num(curve["c"], 0),
+      d: num(curve["d"], 0),
+      maxLevel: num(xp["max_level"], 0),
+    },
     guild: {
       foundCost: num(guild["found_cost"], 0),
       foundMinLevel: num(guild["found_min_level"], 1),

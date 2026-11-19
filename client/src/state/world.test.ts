@@ -560,6 +560,15 @@ describe("conditions (T3.2)", () => {
     expect(w.invisible).toBe(false);
   });
 
+  it("keeps the statuses the server adds, one with no time as one with no end", () => {
+    const w = entered();
+    w.apply(conditions(["in_combat", 12000, 0], ["protection_zone", 0, 0]), 1000);
+    expect(w.conditions).toEqual([
+      { id: "in_combat", until: 13000, ticks: 0 },
+      { id: "protection_zone", until: undefined, ticks: 0 },
+    ]);
+  });
+
   it("walks at the speed of its PlayerStats (haste)", () => {
     const w = entered();
     const before = w.self?.speed ?? 0;

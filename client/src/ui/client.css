@@ -503,42 +503,177 @@ kbd {
 .hud .stat[data-testid="mana"] {
   color: #8fb0f0;
 }
-/* Own conditions (T3.2): one named badge each, coloured by kind. */
-.conditions {
-  display: flex;
-  gap: 0.3rem;
-  flex-shrink: 1;
+/* ---- The status tray (docs/17 "Bandeja de estados", ui/StatusTray.tsx) ---------------
+   One pixel-art icon per own condition and status (ui/status/<id> of the atlas, its 16x16
+   box at --status-scale), in a green frame if it helps and a red one if it harms, the
+   seconds left on it, a flash in its last 5 s and a tooltip. windows.css places it on the
+   desktop (2x, over the life orb); here it is the phones' and tablets' row in the header
+   (1.5x), whose tooltip hangs under the header (.hud is its containing block: nothing
+   between them is positioned, so the row's clipping does not cut it). */
+.status-box {
+  --status-scale: 1.5;
+  --status-cell: calc(16px * var(--status-scale) + 4px);
   min-width: 0;
-  overflow: hidden;
 }
-/* None: no empty item, so no gap for it in the header. */
-.conditions:empty {
+.status-box[data-count="0"] {
   display: none;
 }
-.condition {
-  padding: 0.05rem 0.45rem;
-  border-radius: 0.6rem;
-  font-size: 0.75rem;
-  border: 1px solid currentColor;
-  background: rgb(0 0 0 / 0.35);
-  white-space: nowrap;
-  /* A phone's one-line header has little room: a badge gets "…" inside its own border
-     instead of being cut through it. */
-  flex-shrink: 1;
+.status-tray {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.status {
+  flex: none;
+  cursor: help;
+  outline: none;
+}
+.status-frame {
+  position: relative;
+  display: block;
   box-sizing: border-box;
-  min-width: 2.6rem;
+  width: var(--status-cell);
+  height: var(--status-cell);
   overflow: hidden;
-  text-overflow: ellipsis;
+  border: 2px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  background: var(--ui-stone-950);
+  box-shadow:
+    0 0 0 1px #000,
+    inset 0 0 6px rgb(0 0 0 / 0.8);
   animation: notice-in var(--ui-dur) var(--ui-ease-out);
 }
-.condition-damage {
-  color: #e8a050;
+.status-buff .status-frame {
+  border-color: var(--ui-ok);
 }
-.condition-debuff {
-  color: #c890ff;
+.status-harm .status-frame {
+  border-color: var(--ui-danger);
 }
-.condition-buff {
-  color: #8fe0a8;
+.status:focus-visible .status-frame {
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 3px var(--ui-gold-300);
+}
+.status-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  background: var(--status-icon) var(--status-pos, 0 0) no-repeat;
+  transform: scale(var(--status-scale));
+  transform-origin: 0 0;
+  image-rendering: pixelated;
+}
+/* No sprite in the atlas: the name's first letter. */
+.status-letter {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--ui-text);
+}
+/* The seconds left, in the bottom right corner over the icon. */
+.status-left {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff4e0;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  text-shadow:
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 -1px 0 #000;
+}
+/* The last 5 s: it blinks (state/status.ts sets data-flash only without reduced motion;
+   the reduced motion rule of windows.css stops it as well). */
+.status[data-flash] .status-frame {
+  animation: status-flash 1s ease-in-out infinite;
+}
+@keyframes status-flash {
+  50% {
+    opacity: 0.35;
+  }
+}
+/* The tooltip: name and kind, what it does, the hits and the time left. */
+.status-tip {
+  display: none;
+  position: absolute;
+  z-index: 30;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(17rem, calc(100vw - 1rem));
+  padding: 0.45rem 0.6rem;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: var(--ui-stone-900);
+  border: 2px solid var(--ui-iron-600);
+  box-shadow: var(--ui-frame-shadow);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ui-text);
+  white-space: normal;
+  text-align: start;
+  pointer-events: none;
+}
+.status:is(:focus-visible, [data-open]) .status-tip {
+  display: flex;
+}
+@media (hover: hover) {
+  .status:hover .status-tip {
+    display: flex;
+  }
+}
+.status-tip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.status-name {
+  font-family: var(--ui-font-title);
+  color: var(--ui-gold-300);
+}
+.status-kind {
+  font-size: 0.72rem;
+}
+.status-buff .status-kind {
+  color: var(--ui-ok);
+}
+.status-harm .status-kind {
+  color: var(--ui-danger);
+}
+.status-hits,
+.status-time {
+  color: var(--ui-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The header's row (phones and tablets): it takes the room the line has left, never less
+   than one icon (the header stays one line, with the menu in it); icons that do not fit
+   wrap to a second line that is cut off, so only whole icons show, the most urgent first.
+   Its tooltip hangs under the header. */
+.hud .status-box {
+  flex: 1 1 0;
+  min-width: calc(var(--status-cell) + 6px);
+}
+.hud .status-tray {
+  flex-wrap: wrap;
+  height: var(--status-cell);
+  overflow: hidden;
+  padding: 3px;
+}
+.hud .status-tip {
+  top: 100%;
+  left: 0.5rem;
+  margin-top: 0.25rem;
 }
 .game-body {
   flex: 1;
