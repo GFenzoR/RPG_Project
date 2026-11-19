@@ -671,6 +671,11 @@ el punto 5:
       pegado y solo: un área le pega como un ataque a él y nada mide cuánto castiga a un
       grupo pegado; los invocados los mata primero. El custodio se probó en el duelo (71,6
       s, 170 % de la vida a nivel 44), no jugado a mano con las salamandras.
+    - **Para decidir (el dueño):** el gólem de escoria y el espinoso cambiaron su hechizo a
+      distancia (`range: 3`) por el estallido alrededor (círculo de 1): ya no castigan a un
+      montaraz o un mago que les pega desde lejos. Si se quiere que sigan haciéndolo, se
+      suma el hechizo como otro ataque y se revisa su balance (docs/02 "Habilidades",
+      "Contenido").
     - Ningún monstruo usa `heal_self` todavía (solo los tests): queda para el mundo nuevo
       de los próximos lotes, como las áreas en las islas nuevas.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de

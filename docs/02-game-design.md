@@ -752,7 +752,10 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     lo esquiva), que se corta en la primera casilla que tapa la vista. Alcance (a qué
     distancia del objetivo lo usa): el radio de un círculo alrededor de sí, el largo de un
     rayo, y un círculo alrededor del objetivo como el ataque sin área (1 cuerpo a cuerpo,
-    `range` si no), siempre con línea de visión al objetivo. Pega a **cada jugador del
+    `range` si no), siempre con línea de visión al objetivo. Ese alcance, y en un círculo
+    alrededor del objetivo ese alcance más el radio, no pasa de 6 (lo que nota un
+    monstruo: más lejos dañaría a un jugador que ni lo conoce; `make validate` y el
+    arranque lo rechazan). Pega a **cada jugador del
     área** que el monstruo ve (a un invisible solo si tiene `sees_invisible`), fuera de
     zonas de protección, cada uno con su tirada, el elemento del ataque (uno físico con
     armadura y defensa, como un golpe) y su condición. Nunca a monstruos ni NPCs. Los
@@ -761,13 +764,19 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     apuntada a un invisible (el círculo en su casilla, el rayo hacia él) solo la ven los
     que lo ven: si no, delataría dónde está.
   - **Bajo cierta vida** (`below_hp_pct` en cualquier ataque): lo usa solo mientras su
-    vida está por debajo de ese porcentaje.
+    vida está por debajo de ese porcentaje, y solo entonces cuenta su alcance (para la
+    correa, "decide si te alcanza"): un lobo con un hechizo de 4 casillas para cuando le
+    queda poca vida no "alcanza" antes a un montaraz al otro lado del agua, lo abandona
+    como cualquier lobo en vez de quedarse 20 s de muñeco de entrenamiento
+    (`TestLeashCountsOnlyTheAttacksInUse`).
   - **Curarse** (`type: heal_self`, `min`–`max`): solo peleando (con objetivo, aunque no
     lo tenga a su alcance) y herido; a vida llena la ronda espera sin gastarse. Efecto de
     curación, número verde y barra de vida para quien lo ve.
   - **Invocar** (`type: summon`, `summon: {monster, count, max_alive}`): `count` criaturas
     en casillas libres junto a él (con el efecto de conjurar), nunca más de `max_alive`
-    vivas a la vez (si ya están todas, la ronda espera y en cuanto muere una llama otra).
+    vivas a la vez (si ya están todas, la ronda espera sin gastarse: cuando muere una,
+    llama otra en cuanto pasó su `interval_ms` desde el último llamado; al custodio, una
+    ronda por minuto, una salamandra muerta se le repone hasta 60 s después).
     Pelean contra su objetivo y comparten su spawn (su correa y su casa), pero **no dan
     experiencia, botín ni restos, no cuentan para quests ni reportes y no reaparecen**: un
     jefe que invoca no es una granja. Se van (`DESPAWN`) cuando muere o se rinde (correa)
@@ -785,7 +794,12 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     una ronda por minuto) y bajo el 30 % se enfurece (×1,3 velocidad, ×0,75 intervalos);
     el gólem de escoria y el espinoso estallan alrededor (círculo de 1) y la esquirla del
     minero de obsidiana revienta sobre su objetivo y sus vecinos (círculo de 1 en el
-    objetivo). Un grupo pegado sufre las áreas: conviene abrirse.
+    objetivo). Un grupo pegado sufre las áreas: conviene abrirse. **Ojo (para el dueño):**
+    el estallido del gólem y del espinoso reemplazó su hechizo a distancia (`range: 3`):
+    ahora su alcance es 1, así que un montaraz o un mago que les pega desde lejos ya no
+    recibe ese hechizo (solo los alcanza quien está pegado). Si se quiere que sigan
+    castigando a distancia, se vuelve a sumar el hechizo como otro ataque (y se revisa su
+    balance: los duelos de `foe_test.go` ponen al cazador pegado y no lo miden).
   - **Balance:** los duelos de los tests de balance (`server/internal/sim/foe_test.go`)
     simulan las habilidades: las fases, `heal_self`, `below_hp_pct` y las invocaciones, que
     el cazador mata primero (no dan nada) mientras le pegan. En un duelo el cazador está
