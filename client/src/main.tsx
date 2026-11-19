@@ -17,12 +17,15 @@ import { loadControls, saveControls } from "./state/controls.ts";
 import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
 import {
   applyReducedMotion,
+  applyChatOpacity,
   applyScales,
   loadCameraShake,
+  loadChatOpacity,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   saveCameraShake,
+  saveChatOpacity,
   saveReducedMotion,
   saveTextScale,
   saveUiScale,
@@ -123,6 +126,11 @@ function Root(): JSX.Element {
   useEffect(() => {
     applyScales(document.documentElement, uiScale, textScale);
   }, [uiScale, textScale]);
+  // docs/17 UI-10: how much the chat's background covers the map (Options → Interface).
+  const [chatOpacity, setChatOpacity] = useState(() => loadChatOpacity(storage));
+  useEffect(() => {
+    applyChatOpacity(document.documentElement, chatOpacity);
+  }, [chatOpacity]);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("client.title");
@@ -154,6 +162,7 @@ function Root(): JSX.Element {
       uiScale={uiScale}
       textScale={textScale}
       shake={shake}
+      chatOpacity={chatOpacity}
       onUiScale={(v) => {
         saveUiScale(v, storage);
         setUiScale(v);
@@ -165,6 +174,10 @@ function Root(): JSX.Element {
       onShake={(on) => {
         saveCameraShake(on, storage);
         setShake(on);
+      }}
+      onChatOpacity={(v) => {
+        saveChatOpacity(v, storage);
+        setChatOpacity(v);
       }}
     />
   );

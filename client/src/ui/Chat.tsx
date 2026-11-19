@@ -1,6 +1,7 @@
 // Chat panel (T1.13): the last lines of every channel and the line to speak, with the
 // channel picker (say, yell, whisper, global, party, guild). Lines are DOM text: Preact escapes them,
-// so nothing a player types can become markup.
+// so nothing a player types can become markup. On the desktop the chat window's tab
+// (docs/17 UI-10, state/chat.ts) filters the lines and sets the channel the line starts on.
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { ChatChannel, MessageKind } from "@rpg/protocol";
@@ -8,6 +9,8 @@ import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { formatChat } from "../state/messages.ts";
+import { chatFilter, tabChannel } from "../state/chat.ts";
+import type { ChatTab } from "../state/chat.ts";
 
 const CHANNELS: { channel: ChatChannel; key: string }[] = [
   { channel: ChatChannel.SAY, key: "client.chat.channel.say" },
@@ -40,21 +43,31 @@ export function ChatPanel(props: {
   content: ClientContent;
   game: Game | undefined;
   ui: GameUi;
+  /** The chat window's tab (desktop): the lines it shows; All when absent. */
+  tab?: ChatTab | undefined;
 }): JSX.Element {
   const { t } = props;
+  const tab = props.tab ?? "chat";
   const [text, setText] = useState("");
   const [channel, setChannel] = useState(ChatChannel.SAY);
+  // A channel's tab chosen: the line to speak starts on that channel (the player can still
+  // pick another in the selector).
+  useEffect(() => {
+    const c = tabChannel(tab);
+    if (c !== undefined) setChannel(c);
+  }, [tab]);
+  const lines = chatFilter(props.ui.chat, tab);
   const list = useRef<HTMLUListElement>(null);
-  const last = props.ui.chat[props.ui.chat.length - 1];
+  const last = lines[lines.length - 1];
   // Keep the newest line in view.
   useEffect(() => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [last?.at, props.ui.chat.length]);
+  }, [last?.at, lines.length, tab]);
   return (
     <section class="chat" data-tutorial="chat" aria-label={t("client.chat.title")}>
       <ul class="chat-lines" data-testid="chat-log" ref={list} aria-live="polite">
-        {props.ui.chat.map((l, i) => (
+        {lines.map((l, i) => (
           <li key={`${l.at}-${i}`} class={KIND_CLASS[l.kind] ?? ""}>
             {formatChat(l, props.content, t)}
           </li>

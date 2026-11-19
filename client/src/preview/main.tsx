@@ -193,9 +193,11 @@ function Preview(props: { game: Game }): JSX.Element {
         uiScale={uiScale}
         textScale={textScale}
         shake={true}
+        chatOpacity={50}
         onUiScale={() => {}}
         onTextScale={() => {}}
         onShake={() => {}}
+        onChatOpacity={() => {}}
       />
     ),
   };

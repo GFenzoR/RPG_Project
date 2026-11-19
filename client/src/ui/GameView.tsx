@@ -12,6 +12,9 @@ import { CreatureKind, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
+import { CHAT_TABS, CHAT_TAB_LABEL, chatFilter, nextTab, unreadTabs } from "../state/chat.ts";
+import type { ChatTab } from "../state/chat.ts";
+import type { ChatLine } from "../state/world.ts";
 import { skullId } from "../state/pvp.ts";
 import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -247,12 +250,24 @@ export function GameView(props: GameViewProps): JSX.Element {
         }
   };
   const [guildTab, setGuildTab] = useState<GuildTab>("summary");
-  const [chatTab, setChatTab] = useState<"chat" | "log">("chat");
+  // The chat window's tabs (docs/17 UI-10, state/chat.ts): the lines shown on the open tab
+  // count as seen (marked as they render, so a dot never blinks on for a line in view);
+  // a tab with lines not seen yet gets a dot, the log one when its newest message is.
+  const [chatTab, setChatTab] = useState<ChatTab>("chat");
   const [logSeen, setLogSeen] = useState(0);
   const lastLog = ui.log[ui.log.length - 1]?.at ?? 0;
   useEffect(() => {
     if (chatTab === "log") setLogSeen(lastLog);
   }, [chatTab, lastLog]);
+  const chatSeen = useRef(new WeakSet<ChatLine>());
+  if (chatTab !== "log") for (const l of chatFilter(ui.chat, chatTab)) chatSeen.current.add(l);
+  const chatUnread = unreadTabs(
+    ui.chat,
+    (l) => chatSeen.current.has(l),
+    chatTab,
+    props.characterName,
+  );
+  if (chatTab !== "log" && lastLog > logSeen) chatUnread.add("log");
   // With the log out of view (tabs, drawer, or the chat tab of the desktop's chat window)
   // every message floats over the map, not only the important ones.
   const notices = activeNotices(ui.log, performance.now(), {
@@ -494,7 +509,15 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
-  const chat = <ChatPanel t={t} content={props.content} game={game} ui={ui} />;
+  const chat = (
+    <ChatPanel
+      t={t}
+      content={props.content}
+      game={game}
+      ui={ui}
+      tab={windowed && chatTab !== "log" ? chatTab : undefined}
+    />
+  );
   const guild = (tabs: boolean): JSX.Element => (
     <GuildPanel
       t={t}
@@ -692,15 +715,8 @@ export function GameView(props: GameViewProps): JSX.Element {
           title: t(WINDOW_TITLE.chat),
           icon: windowIcon("chat"),
           body: toolBody("chat"),
-          // The tabs (chat and log) take the title's place in the bar (RO-like).
-          barExtra: (
-            <ChatTabs
-              t={t}
-              tab={chatTab}
-              onTab={setChatTab}
-              unread={chatTab !== "log" && lastLog > logSeen}
-            />
-          ),
+          // The tabs (the channels and the log) take the title's place in the bar (RO-like).
+          barExtra: <ChatTabs t={t} tab={chatTab} onTab={setChatTab} unread={chatUnread} />,
           hideTitle: true,
         };
       if (isToolWindow(id))
@@ -1371,31 +1387,17 @@ function readStorage(storage: Storage | undefined, key: string): string | null {
 }
 
 /**
- * The tabs of the chat window, in its title bar: the chat, and the system log as a second
- * tab (its notices float over the map meanwhile; a dot says there is something new).
+ * The tabs of the chat window, in its title bar (docs/17 UI-10): All, Local, Party, Guild
+ * and Global filter the chat lines (state/chat.ts), and the system log is the last one
+ * (its notices float over the map meanwhile). A dot says a tab has something new.
  */
 function ChatTabs(props: {
   t: Translate;
-  tab: "chat" | "log";
-  onTab(tab: "chat" | "log"): void;
-  unread: boolean;
+  tab: ChatTab;
+  onTab(tab: ChatTab): void;
+  unread: ReadonlySet<ChatTab>;
 }): JSX.Element {
   const { t } = props;
-  const tabButton = (id: "chat" | "log", label: string): JSX.Element => (
-    <button
-      type="button"
-      role="tab"
-      id={`chat-tab-${id}`}
-      data-chat-tab={id}
-      aria-selected={props.tab === id}
-      aria-controls={`chat-pane-${id}`}
-      tabIndex={props.tab === id ? 0 : -1}
-      onClick={() => props.onTab(id)}
-    >
-      {label}
-      {id === "log" && props.unread && <span class="tab-dot" aria-hidden="true" />}
-    </button>
-  );
   return (
     <div
       class="chat-tabs"
@@ -1406,20 +1408,35 @@ function ChatTabs(props: {
         e.preventDefault();
         // The tab's arrows, not the character's.
         e.stopPropagation();
-        const next = props.tab === "chat" ? "log" : "chat";
+        const next = nextTab(props.tab, e.key === "ArrowRight" ? 1 : -1);
         props.onTab(next);
         document.getElementById(`chat-tab-${next}`)?.focus();
       }}
     >
-      {tabButton("chat", t("client.chat.title"))}
-      {tabButton("log", t("client.chat.log"))}
+      {CHAT_TABS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          id={`chat-tab-${id}`}
+          data-chat-tab={id}
+          data-unread={props.unread.has(id) ? "" : undefined}
+          aria-selected={props.tab === id}
+          aria-controls={id === "log" ? "chat-pane-log" : "chat-pane-chat"}
+          tabIndex={props.tab === id ? 0 : -1}
+          onClick={() => props.onTab(id)}
+        >
+          {t(CHAT_TAB_LABEL[id])}
+          {props.unread.has(id) && <span class="tab-dot" aria-hidden="true" />}
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The two panes of the chat window: the chat and the system log. */
+/** The two panes of the chat window: the chat (its tab filters it) and the system log. */
 function ChatPanes(props: {
-  tab: "chat" | "log";
+  tab: ChatTab;
   log: JSX.Element;
   children: ComponentChildren;
 }): JSX.Element {
@@ -1429,8 +1446,8 @@ function ChatPanes(props: {
         class="chat-pane"
         id="chat-pane-chat"
         role="tabpanel"
-        aria-labelledby="chat-tab-chat"
-        hidden={props.tab !== "chat"}
+        aria-labelledby={`chat-tab-${props.tab === "log" ? "chat" : props.tab}`}
+        hidden={props.tab === "log"}
       >
         {props.children}
       </div>
