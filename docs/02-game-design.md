@@ -852,6 +852,9 @@ pesado +2, túnica, cabeza, piernas y pies +1, cada joya +1 cada dos bandas, y V
 - **Botín de antes:** el saqueador suelta el alfanje, la cabilla (en lugar del garrote de
   deriva) y la gorra; el contrabandista, las calzas de ciervo y su ballesta; el
   dragoncillo, el sable de ascua; el minero, el yelmo, la varita y la vara.
+- **Recompensas:** el capitán del puerto sigue dando el kit inicial de cada vocación y, al
+  cerrar el capítulo 1, la espada de hierro al guardián; los demás reciben su valor, 150
+  monedas (antes 120, lo que valía la espada). Las demás quests dan oro y experiencia.
 - **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta ni diálogo las
   da (el test del catálogo lo comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
   isla de la banda). La cota de escamas y la hoja de colmillo de dragoncillo pasaron a la

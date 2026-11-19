@@ -113,7 +113,8 @@ el punto 5:
   - **Para el dueño, precios y niveles que cambiaron:** el escudo de tablones pide nivel 5 y
     vale 110 (antes nivel 1 y 25); la tapa de barril, 25 (antes 10); el sable de abordaje y
     el hacha barbada, 600 (antes 400); las varas y varitas de la banda 3 bajaron de 1080 a
-    750 en el Bosque. La cota de escamas y la hoja de colmillo de dragoncillo piden nivel 50
+    750 en el Bosque; el capítulo 1 da 150 monedas a quien no recibe la espada (antes
+    120). La cota de escamas y la hoja de colmillo de dragoncillo piden nivel 50
     (antes 45) y son más fuertes: quien ya forjó una la conserva pero no se la pone hasta
     el 50. El torso pesado pide guardián o montaraz (cambia la regla m6: antes ningún cuero
     estaba restringido); un mago que ya lo tiene puesto lo conserva puesto.

@@ -43,7 +43,7 @@ dialog:
             - { vocation_in: [arcanist, ranger, druid] }
           action:
             - { take_item: { item: bosun_logbook } }
-            - { give_gold: 120 }
+            - { give_gold: 150 } # the iron sword's value (lote 11)
           goto: ch1_logbook_read
         - text: npc.harbor_master.opt_island
           goto: island
