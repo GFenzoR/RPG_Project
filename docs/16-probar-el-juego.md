@@ -103,6 +103,15 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
    servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
    lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego.
+   - **Atributos (docs/02 "Atributos de items"):** cada arma, escudo o pieza de armadura
+     que compras trae un atributo al azar. Pasa el mouse por encima (en la mochila, en el
+     equipo o en el suelo) y la ficha lo muestra en verde jade bajo las stats ("+12 de vida
+     máxima", "+2 de ataque"); en la tienda la ficha dice "Trae un atributo al azar".
+     Compra dos iguales para ver dos atributos distintos y equípate uno de vida: la vida
+     máxima de las barras sube (y baja al sacártelo). Tobías no compra equipo; los NPCs que
+     sí (el armero de Puerto) pagan lo mismo con cualquier atributo. Un `/item iron_sword 3`
+     del admin (sección 5) también tira uno por espada, y lo que da el capitán del capítulo 1
+     en Puerto tira igual.
    - **Runa de arco:** todo personaje empieza en nivel mágico 0 y la runa pide 1. Con
      "Entréname" → "El combate" cualquier vocación pasa de 1 (la arcanista queda en 25) y la
      runa funciona en el acto, sin subir de nivel. Sin entrenar, una arcanista llega a 1
@@ -146,7 +155,10 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    tronco (4 minerales y 3 troncos en total, con la fragua). Las recetas no cambiaron: la
    herrería sigue empezando en 1 en el juego real.
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
-   con otro personaje. El personal (GM/admin) no puede usar el mercado: prueba con cuentas
+   con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
+   vender (un selector por atributo) y la oferta sale con su atributo en el listado; una
+   oferta de compra de espadas se llena eligiendo cuál de las tuyas entregar, de a una, y
+   la que llega al buzón del comprador es esa. El personal (GM/admin) no puede usar el mercado: prueba con cuentas
    sin rol. El intercambio directo se propone desde la lista de batalla ("Proponer un
    intercambio").
 6. **Casa (sur de la plaza).** Con nivel 12 o más y dinero, usa su puerta para alquilarla;

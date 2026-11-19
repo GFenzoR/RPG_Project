@@ -36,6 +36,7 @@ Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nomb
 | Hosting | Una instancia AWS con Docker Compose (~USD 10–20/mes) |
 | Arte | Arte propio más packs libres: CC0, CC-BY, OGA-BY y, desde el 2026-11-17 (decisión del dueño), CC-BY-SA (p. ej. Liberated Pixel Cup); fuentes OFL. Licencias y obligaciones en `assets/CREDITS.md`; dirección de arte en `17-direccion-de-arte-y-ui.md` |
 | Combate | Como Tibia: movimiento por casillas, auto-ataque al objetivo, hechizos y runas con hotkeys |
+| Items | Pocos items, como Tibia, y cada equipable con **un** atributo al azar con valor al azar, sin rarezas ni colores por calidad; nunca se apila (reabierto por el dueño el 2026-11-18). Reglas en `02-game-design.md`, "Atributos de items" |
 | Vocaciones | 4 fijas, con nombres propios (equivalentes a knight, paladin, sorcerer, druid) |
 | Skills | Como Tibia (puños, espada, hacha, maza, distancia, escudo, nivel mágico, pesca) **más oficios** (minería, herrería, cocina, etc.) |
 | Catálogo de equipo | Pocos items, para que el juego sea simple (decisión del dueño, 2026-11-18): unas 60-80 piezas en total, una por línea (arma, armadura, escudo, joya) y banda de nivel del 1 al 100+, cada una con su nivel. Sin rarezas ni colores: la variedad la dan el atributo al azar de cada pieza y el refinado (sus ramas del lote 11). Detalle en `02-game-design.md`, "Catálogo de equipo" |

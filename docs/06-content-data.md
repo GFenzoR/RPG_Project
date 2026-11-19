@@ -27,8 +27,8 @@ i18n/
 
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
-  `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `boat_routes`,
-  `borders`, `outfits`, `cosmetics`, `i18n`,
+  `vocations`, `items`, `attributes`, `monster`, `npc`, `quest`, `spells`, `recipes`,
+  `boat_routes`, `borders`, `outfits`, `cosmetics`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -58,7 +58,8 @@ i18n/
     escudo declara `requires.level`.
   - Aviso si una quest no tiene ningún `start_quest` en `data/npcs/`.
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
-    solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
+    solo con `stackable: true`, ningún equipable (`weapon`, `armor`, `shield`) apilable
+    (cada uno lleva su atributo, "Atributo"), `count` de loot > 1 solo para items apilables,
     `min <= max` en ataques, bordes solo entre items `ground`.
   - `balance.yaml` define todas las skills y cada vocación todos sus factores.
   - i18n: mismas claves y en el mismo archivo para `es` y `en`, mismos `{parámetros}`,
@@ -289,6 +290,48 @@ items:
   puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
   diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo sin llaves
   ni herramientas; nadie entra a una sala sin su llave).
+
+## Atributo
+`data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,
+nada tira atributos): el pool del que cada equipable tira **un** atributo al crearse
+(reglas, efectos y la tabla de valores en `02-game-design.md`, "Atributos de items"). Los
+nombres y números son propios.
+```yaml
+- id: max_health            # id del atributo (lo guarda cada instancia: ItemMods.attribute)
+  effect: max_health        # max_health | max_mana | attack | armor | defense | skill | speed |
+                            # health_regen | mana_regen | protection | life_leech | mana_leech
+  text: attribute.max_health   # la línea de la ficha, con {value} (i18n/<idioma>/items.yaml)
+  on: [shield, head, body, legs, feet, neck, ring]   # quién lo tira: el weapon.type de un
+                            # arma (sword, axe, club, distance, wand), shield o el armor.slot
+  weight: 12                # chance relativa entre los atributos que el item puede tirar
+  bands:                    # rango por el requires.level del item (sin requisito = 1): la
+    - { level: 1, min: 4, max: 10 }    # última banda con level <= el del item
+    - { level: 10, min: 8, max: 18 }
+- id: fire_protection
+  effect: protection
+  element: fire             # solo con protection: fire | ice | energy | earth | holy | death
+  text: attribute.fire_protection
+  on: [shield, head, body]
+  weight: 3
+  cap: 40                   # lo más que suman todas las piezas puestas (% en protección y robo)
+  bands: [{ level: 1, min: 1, max: 3 }]
+- id: sword_skill
+  effect: skill
+  skill: sword              # solo con skill: sword | axe | club | distance | magic (nivel mágico)
+  text: attribute.sword_skill
+  on: [sword]
+  weight: 10
+  bands: [{ level: 1, min: 1, max: 1 }]
+```
+- `make validate` (y el cargador del servidor, `content.LoadAttributes`): ids únicos, la
+  primera banda es nivel 1 y los niveles crecen, `1 <= min <= max`, `skill` solo (y siempre)
+  con `effect: skill`, `element` solo (y siempre) con `protection`, y el `text` existe en
+  `es` y `en`. Un equipable sin ningún atributo posible no tira (y el test de
+  `content/attributes_test.go` lo marca para el catálogo).
+- El cliente recibe de cada atributo solo su `text` (`virtual:rpg-content`,
+  `ClientContent.attributes`) y toma las claves `attribute.*` de `items.yaml`.
+- Cambiar o quitar un atributo no toca las instancias guardadas: un id que ya no está en el
+  pool sigue en el item pero no suma nada ni se muestra.
 
 ## Monstruo
 ```yaml

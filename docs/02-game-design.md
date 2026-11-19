@@ -678,7 +678,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
   varita dispara a distancia desde T1.9), el escudo de la izquierda y el arma la defensa
   (se suman, m3) y la suma de `armor` de todo el equipo la armadura del jugador contra
-  golpes físicos.
+  golpes físicos. A eso se suma el atributo de cada pieza puesta ("Atributos de items").
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
   lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
   mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
@@ -909,6 +909,91 @@ después. Ningún objetivo documentado cambió:
   el arco a su nivel. El montaraz va del 1 al 8 en 1,18 h (el guardián, 1,40 h).
 - **Amuletos sí, anillos no:** el kit lleva el amuleto (se vende) y no el anillo (botín
   raro; los de las bandas 3 y 4 no dan armadura).
+## Atributos de items (decisión del dueño, 2026-11-18)
+El dueño reabrió el diseño de items: pocos items, como en Tibia, para que el juego siga
+simple, pero cada uno con **un atributo al azar** (la idea viene de los juegos de botín, con
+nombres y números propios). Hecho en el lote 11, rama `feat/item-attributes`
+(`server/internal/session/attributes.go`, `content/attributes.go`, `data/attributes.yaml`).
+La forja (refinar +1..+10) y el catálogo compacto son otras ramas del lote: el refinado ya
+tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
+- **Un atributo, siempre uno.** Todo equipable (arma, escudo o pieza de armadura; nunca
+  munición, contenedores, consumibles, herramientas ni materiales) lleva exactamente un
+  atributo con un valor. No hay rarezas ni colores por calidad: el atributo es una línea más
+  de la ficha, en su propio color. Un item con atributo **nunca se apila** (`make validate`
+  rechaza un equipable `stackable`).
+- **Cuándo se tira:** en **cada creación** de un equipable, con la fuente sembrada del loop
+  (`session.Config.Rand`, la misma del `game.Loop`): botín de monstruos, compra a un NPC
+  (también la tienda de la Isla de Pruebas), recompensas de quest y de diálogo (el kit del
+  capítulo 1), oficios, `/item` del staff y la recompensa del tutorial. Se elige entre los
+  atributos cuyo `on` nombra la clase del item (el `weapon.type` de un arma, `shield`, o el
+  `armor.slot`) por su `weight`, con un valor uniforme en la banda del `requires.level` del
+  item (sin requisito = nivel 1). El inventario inicial es una mochila (no tira) y los items
+  fijos del mapa (`world.bin`) no son instancias: nunca tiran.
+- **Items de antes:** un equipable guardado sin atributo (de antes de este cambio) tira el
+  suyo una vez al cargarse y se guarda con él: el personaje en su próximo guardado, el
+  suelo de una casa en la escritura de la casa que la carga provoca al arrancar, y lo que
+  espera en el buzón del mercado al retirarlo (una oferta de venta vieja se compra sin
+  atributo y lo tira en el inventario del comprador).
+- **Nada lo cambia ni lo pierde:** mover (equipo, contenedores, suelo, portales), el
+  intercambio (las dos ofertas), el suelo de una casa (y el buzón al liberarla), el cadáver
+  y lo que suelta la muerte, el buzón y las ofertas del mercado, el guardado y el log de
+  economía (cada instancia con atributo es una fila propia con `details.mods`) mueven la
+  instancia tal cual. Persistencia: `inventory_items.attributes`, la columna nueva
+  `market_offers.attributes` (migración 00019) y `mods` dentro del JSON de
+  `market_mail_items.item` y `house_items.item` (docs/05 `ItemMods`).
+- **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Se lleva las
+  unidades en el orden de la mochila (lo que vende un jugador sigue siendo "N de este item").
+- **Mercado:** una oferta de **venta** de un equipable es **una instancia** (cantidad 1) que
+  elige quien vende entre las suyas (`MarketUpdate.owned_mods`); cada una es una fila propia
+  del listado con su atributo, y el comprador recibe exactamente esa. Una oferta de
+  **compra** de un equipable la llena **cualquier instancia**: quien le vende elige cuál, de
+  a una por vez, y esa es la que llega al buzón del comprador. El precio de referencia es por
+  item, sin mirar atributos.
+- **Qué suma:** solo lo que se lleva puesto (la mochila no cuenta). Todo se suma por
+  atributo y cada uno, si tiene `cap`, no pasa de él.
+
+  | Atributo | Efecto | Lo tiran | Bandas (nivel del item: rango) | Peso | Tope |
+  |---|---|---|---|---|---|
+  | `max_health` | + vida máxima | escudo, cabeza, torso, piernas, pies, cuello, anillo | 1: 4-10 · 10: 8-18 · 25: 14-30 · 50: 25-50 · 80: 40-80 | 12 | — |
+  | `max_mana` | + maná máximo | varita/vara, cabeza, torso, piernas, pies, cuello, anillo | igual que la vida | 12 | — |
+  | `health_regen` | + vida por tic de regeneración | escudo, cabeza, torso, cuello, anillo | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 6 | — |
+  | `mana_regen` | + maná por tic de regeneración | varita/vara, cabeza, torso, cuello, anillo | igual que la vida | 6 | — |
+  | `attack` | + ataque del arma (cuerpo a cuerpo, disparo o varita) | espada, hacha, maza, distancia | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
+  | `armor` | + armadura | cabeza, torso, piernas, pies | 1: 1 · 25: 1-2 · 50: 2-3 · 80: 2-4 | 14 | — |
+  | `defense` | + defensa de las manos | escudo | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
+  | `sword_skill`, `axe_skill`, `club_skill`, `distance_skill` | + la skill del arma en los ataques | el arma de esa skill | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 10 | — |
+  | `magic_level` | + nivel mágico de los hechizos | varita/vara | 1: 1 · 25: 1-2 · 50: 1-3 · 80: 2-4 | 12 | — |
+  | `speed` | + velocidad (puntos) | pies | 1: 2-4 · 10: 3-6 · 25: 4-8 · 50: 6-11 · 80: 8-14 | 14 | — |
+  | `fire_protection`, `ice_`, `energy_`, `earth_`, `holy_`, `death_protection` | − % del daño de ese elemento | escudo, cabeza, torso, piernas, pies, cuello, anillo | 1: 1-3 · 10: 2-4 · 25: 3-6 · 50: 4-8 · 80: 5-10 | 3 (sagrado y muerte 2) | 40 % |
+  | `life_leech`, `mana_leech` | % del daño de un golpe del arma vuelve como vida o maná | armas (el maná también las varitas) | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 2-5 · 80: 3-6 | 6 | 15 % |
+
+  Sin experiencia ni oro extra: alimentarían la economía. La skill de escudo no tiene
+  atributo porque todavía no entra en ninguna fórmula (la defensa del escudo sí).
+- **En las fórmulas** (`attributes.go` `wornGear`, recalculado con el equipo en
+  `equipmentChanged`): la vida y el maná máximos son los de la vocación más el equipo (al
+  sacarse una pieza la vida baja con el máximo si hace falta, nunca sube sola; el login
+  restaura la vida guardada después de cargar el equipo); el ataque suma al del arma
+  (`meleeSkill`, el disparo, la varita); la armadura a la del equipo; la defensa a la de las
+  manos (`handsDefense`, también en PvP); las skills a `combatSkill` (lo que usan ataques y
+  hechizos, como `keen_eye`: no lo que se entrena ni el panel) y el nivel mágico a lo que
+  escalan los hechizos (no a sus requisitos); la velocidad a la base antes de las condiciones
+  (`refreshSpeed`); la regeneración a cada tic de la vocación; la protección baja todo daño
+  de su elemento que recibe un jugador (monstruos, condiciones, PvP: `damagePlayerBy`; la
+  armadura sigue sin frenar la magia); el robo devuelve su parte del daño que hizo un golpe
+  del arma (cuerpo a cuerpo, disparo o varita, a monstruos o en PvP; los hechizos y las
+  condiciones no roban).
+- **Balance:** los atributos son bonos, así que las simulaciones de `server/internal/sim`
+  visten a cada cazador con su kit con atributos tirados por pelea (la media sobre las
+  peleas). Para que las metas de las islas sigan valiendo, el bestiario de Puerto pega uno
+  a tres puntos más de máximo (rata de sentina y gaviota ladrona 9, lobo 19, murciélago 18,
+  jabalí 20, araña de musgo 16, saqueador 25, escarabajo de mena 28) y el espinoso y el
+  reptante hueco del Bosque dan un poco menos de experiencia (204 y 248).
+- **Cliente:** la ficha (tooltip y menú) muestra el atributo traducido, con su valor, bajo
+  las stats y en su color (`--ui-item-attribute`); la de un equipable sin atributo (una
+  tienda, una receta) dice que trae uno al azar. Equipo, contenedores, suelo, intercambio y
+  mercado usan la misma ficha.
+- **Pendiente:** el refinado (rama `feat/item-forge`); un atributo del collar o del anillo
+  (no hay ninguno en el catálogo todavía); la skill de escudo en las fórmulas.
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
@@ -1260,6 +1345,9 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
 - **Límites:** `max_offers` (15) ofertas activas por personaje; solo items `tradeable`
   que no son moneda; sin contenedores con algo adentro; las runas, solo con todas sus
   cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
+- **Equipables** ("Atributos de items"): una oferta de venta es una instancia con su
+  atributo, elegida por quien vende, y se lista como una fila propia; una oferta de compra
+  la llena cualquier instancia, de a una, la que elija quien le vende.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
   historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora

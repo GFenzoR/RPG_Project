@@ -23,7 +23,16 @@
   (`ContainerSlot {container_id, index}`; `container_id` lo asigna el servidor en
   `ContainerOpen` y vale solo durante la sesión).
 - `ActionTarget`: `oneof` de `pos` o `creature_id`.
-- `ItemStack {item_id, count}`: `item_id` es el ID estable de `data/ids.lock.yaml`.
+- `ItemStack {item_id, count, mods}`: `item_id` es el ID estable de `data/ids.lock.yaml`;
+  `mods` (`ItemMods`) son los datos propios de la instancia, sin poner en un item común.
+- `ItemMods {attribute, value, refine}` (docs/02 "Atributos de items"): el único atributo
+  que tiró un equipable (`attribute` = id de `data/attributes.yaml`, `value` su cantidad;
+  el cliente muestra el `text` del atributo con `{value}`) y su nivel de refinado de la
+  forja (`refine`, 0 = sin refinar). Viaja en todo `ItemStack` de una instancia: equipo
+  (`Inventory`), contenedores (`ContainerOpen`/`ContainerUpdate`), el suelo (`Tile`), el
+  intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
+  cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
+  viejo lo ignora.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
   `TextParam {name, value}`. Es una lista y no un `map` para que la codificación sea
   determinista. `value` tiene tipo (`text` sin traducir, `number`, `content_id` o
@@ -1003,15 +1012,22 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
 - **Mercado.** Se abre con `UseItem` sobre un tablero del mapa (item con
   `market_board: true`); el servidor contesta `MarketUpdate{open: true, ...}`. Cada
   `MarketCommand` exige seguir junto al tablero y responde otra `MarketUpdate` completa:
-  `browse{item_id}`, `create{side, item_id, amount, price, duration_index}`,
-  `cancel{offer_id}`, `accept{offer_id, amount}`, `withdraw{}` y `close{}` (sin
-  respuesta). `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
-  (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own}`,
+  `browse{item_id}`, `create{side, item_id, amount, price, duration_index, mods}`,
+  `cancel{offer_id}`, `accept{offer_id, amount, mods}`, `withdraw{}` y `close{}` (sin
+  respuesta). **Equipables** (docs/02 "Atributos de items"): vender uno, en `create` con
+  `side` SELL o en `accept` de una oferta de compra, es una instancia: `amount` 1 y `mods`
+  = los de la instancia elegida (sin `mods`: una sin atributo); otra cantidad responde
+  `market.bad_amount` (`max` 1) y unos `mods` que el jugador no tiene en la mochila
+  `market.not_enough_items`. `mods` es solo una clave para encontrarla: la instancia
+  conserva los suyos. `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
+  (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own, mods}`;
+  `mods`, en una oferta de venta de un equipable, los de su instancia: cada una es una fila),
   hasta `list_size` por lado) y `reference_price`, las ofertas propias (`own`), el buzón
   (`mailbox_gold`, `mailbox_items` hasta `mailbox_shown` y `mailbox_more`), el
   `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
   `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y
-  `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
+  `owned` (unidades del item buscado en la mochila; si es un equipable, `owned_mods` trae
+  los `mods` de cada una, en orden, para elegir cuál vender) y `read_only` (solo se puede buscar
   hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
   `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
   items en orden mientras entren y después todo el oro que entre.

@@ -232,6 +232,19 @@ server/
   aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
 
+- **Atributos de items (`session/attributes.go`, `content/attributes.go`, docs/02
+  "Atributos de items"):** cada instancia lleva `Item.mods` (atributo, valor, refinado). Todo
+  camino que **crea** un equipable lo hace con `w.created` o `giveItem` (tira el atributo
+  con `World.rng`, el `Config.Rand` del loop; nunca `newItem` para algo que la gente
+  lleva); uno que lo **recrea** desde lo guardado o desde una oferta usa `w.instance(def,
+  count, mods)` o `giveMods` (conserva los `mods`; uno sin atributo tira el suyo). Un camino
+  que **mueve** una instancia la mueve entera (nunca la copia) y, si la registra en la
+  economía, con `econInstance` / `econMade` / `econTaken` (una fila por instancia con sus
+  `mods`). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
+  guarda (`store.ItemMods`). Una fórmula nueva que deba sumar un atributo puesto lee
+  `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`); un efecto nuevo necesita su
+  `content.Effect*`, su caso en `wornGear` y en el esquema `attributes.schema.json`.
+
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +

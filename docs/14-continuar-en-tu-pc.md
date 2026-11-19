@@ -156,6 +156,28 @@ el punto 5:
     la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
     hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
     "Balance" del catálogo).
+- **Atributos de items (hecho, rama `feat/item-attributes`, lote 11; docs/02 "Atributos de
+  items"):** cada equipable tira un atributo de `data/attributes.yaml` al crearse y todos
+  los caminos lo conservan (mover, intercambio, muerte, casa, mercado, buzón, log de
+  economía); los atributos puestos entran en las fórmulas. Queda:
+  - **Forja y catálogo:** el refinado (`ItemMods.refine`, hoy siempre 0) es la rama
+    `feat/item-forge`; el catálogo compacto con `requires.level` en toda armadura es
+    `feat/item-catalog` (hasta entonces casi toda armadura tira en la banda de nivel 1).
+    Al juntarlas, correr de nuevo `go test ./internal/sim` y `content/attributes_test.go`:
+    las bandas y pesos de `data/attributes.yaml` se afinaron con el catálogo de hoy.
+  - **Balance:** para que las metas de docs/02 sigan con los atributos, el bestiario de
+    Puerto pega 1-3 puntos más y dos monstruos del Bosque dan algo menos de experiencia.
+    Las simulaciones visten un kit con atributos tirados por pelea; si el dueño quiere
+    atributos más fuertes, hay que volver a afinar monstruos.
+  - **Integración con Postgres sin correr en la rama:** `store/itemmods_integration_test.go`
+    (inventario anidado, oferta, buzón, casa y log con `mods`) corre en el `make
+    test-integration` del final del lote, con la migración 00019.
+  - **Vender a un NPC un equipable en particular:** el NPC se lleva las unidades en orden de
+    mochila (paga igual cualquier atributo). Elegir cuál necesitaría un campo en `ShopSell`.
+  - **Collares y anillos:** el catálogo compacto ya los trae; el pool tiene sus atributos (`neck`, `ring`).
+  - **Escudo:** no hay atributo de skill de escudo porque la skill todavía no entra en
+    ninguna fórmula.
+  - **El mensaje de "Mirar"** (`look.*`) sigue sin el atributo: lo muestra la ficha.
 - **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
   `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
   fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por
