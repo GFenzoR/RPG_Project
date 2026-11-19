@@ -29,7 +29,8 @@ import {
   PARTICLE_KINDS,
   frameAt,
   framePhase,
-  pickVariant,
+  framesOfLook,
+  lookOf,
   stackElevation,
   tileHash,
   wallMask,
@@ -409,10 +410,9 @@ export class MapView {
         const art = this.art?.(id);
         const hash = art ? tileHash(gx + lx, gy + ly, z) : 0;
         let tex = art?.base ?? this.texture(id);
-        if (art?.variants)
-          tex = art.variants[pickVariant(hash, art.variants.length, art.weight)] ?? tex;
+        if (art?.variants) tex = art.variants[lookOf(art, hash, true)] ?? tex;
         const sprite = new Sprite({ texture: tex, x: lx * T, y: ly * T, width: T, height: T });
-        if (art?.frames) animated.push(animatedOf(sprite, art, hash));
+        if (art?.frames) animated.push(animatedOf(sprite, art, hash, 0));
         if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
           emitters.push(gx + lx, gy + ly, PARTICLE_KINDS.indexOf(art.particles));
         ground.addChild(sprite);
@@ -453,6 +453,9 @@ export class MapView {
       for (const [i, id] of s.stack.entries()) {
         const art = this.art?.(id);
         let tex = art?.base ?? this.texture(id);
+        // A border piece's look (ART-4): the same number for every piece of the tile.
+        const look = art?.variants ? lookOf(art, tileHash(x, y, z), false) : 0;
+        if (art?.variants) tex = art.variants[look] ?? tex;
         if (art?.wall) {
           const mask = wallMask(
             wallAt(x, y - 1),
@@ -470,7 +473,7 @@ export class MapView {
           raised = Math.min(MAX_ELEVATION, raised + Math.max(0, elev(id)));
         if (art?.particles && emits < 0) emits = PARTICLE_KINDS.indexOf(art.particles);
         items.push(sprite);
-        if (art?.frames) animated.push(animatedOf(sprite, art, tileHash(x, y, z + i)));
+        if (art?.frames) animated.push(animatedOf(sprite, art, tileHash(x, y, z + i), look));
         if (art && art.light > 0) lights.push(x, y, art.light);
         if (art?.shadow) {
           shadows ??= new Container({ label: `shadows ${key}` });
@@ -525,8 +528,8 @@ function edgeOf(ground: ChunkData["ground"], lx: number, ly: number, id: string)
   return !same(lx, ly - 1) || !same(lx + 1, ly) || !same(lx, ly + 1) || !same(lx - 1, ly);
 }
 
-function animatedOf(sprite: Sprite, art: TileArt<Texture>, hash: number): Animated {
-  const frames = art.frames ?? [];
+function animatedOf(sprite: Sprite, art: TileArt<Texture>, hash: number, look: number): Animated {
+  const frames = framesOfLook(art, look) ?? [];
   return {
     sprite,
     frames,

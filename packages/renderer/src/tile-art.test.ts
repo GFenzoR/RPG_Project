@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TileArt } from "./tile-art.ts";
 import {
   GLINT_MIN_MS,
   GLINT_SPREAD_MS,
@@ -10,6 +11,8 @@ import {
   WALL_W,
   frameAt,
   framePhase,
+  framesOfLook,
+  lookOf,
   pickVariant,
   resolveTileArt,
   stackElevation,
@@ -54,6 +57,48 @@ describe("pickVariant", () => {
     expect(main / 10000).toBeGreaterThan(0.66);
     expect(main / 10000).toBeLessThan(0.74);
     for (const c of counts.slice(1)) expect(c).toBeGreaterThan(800);
+  });
+});
+
+describe("lookOf (ART-4)", () => {
+  const art = (weight?: number): TileArt<string> => ({
+    base: "b",
+    variants: ["b", "b/var_1", "b/var_2", "b/var_3"],
+    ...(weight === undefined ? {} : { weight }),
+    ms: 250,
+    sync: "world",
+    anchorX: 1,
+    joinsWalls: false,
+    light: 0,
+  });
+  const share = (a: TileArt<string>, ground: boolean): number[] => {
+    const counts = [0, 0, 0, 0];
+    for (let y = 0; y < 100; y++)
+      for (let x = 0; x < 100; x++) {
+        const v = lookOf(a, tileHash(x, y, 7), ground);
+        counts[v] = (counts[v] ?? 0) + 1;
+      }
+    return counts.map((c) => c / 10000);
+  };
+
+  it("keeps a ground's main look on most tiles and spreads a border piece's looks evenly", () => {
+    const ground = share(art(), true);
+    expect(ground[0]).toBeGreaterThan(0.66);
+    expect(ground[0]).toBeLessThan(0.74);
+    // A border piece: every look on about a quarter of the tiles, so no shape repeats.
+    for (const s of share(art(), false)) {
+      expect(s).toBeGreaterThan(0.22);
+      expect(s).toBeLessThan(0.28);
+    }
+    // A weight the atlas sets wins for both.
+    expect(share(art(0.4), false)[0]).toBeCloseTo(0.4, 1);
+    // The same tile, the same look: every piece of a tile keeps one shape.
+    const h = tileHash(12, 34, 7);
+    expect(lookOf(art(), h, false)).toBe(lookOf(art(), h, false));
+    expect(lookOf({ ...art(), variants: ["b"] }, 0.99, false)).toBe(0);
+    expect(
+      lookOf({ ...art(), variants: undefined } as unknown as TileArt<string>, 0.99, false),
+    ).toBe(0);
   });
 });
 
@@ -123,6 +168,15 @@ describe("resolveTileArt", () => {
     "walls/stone",
     "walls/broken",
     "walls/broken/wall_0",
+    // The surf: 3 looks of 3 frames each, but look 2 lacks a frame.
+    "borders/surf/n",
+    "borders/surf/n/frame_1",
+    "borders/surf/n/frame_2",
+    "borders/surf/n/var_1",
+    "borders/surf/n/var_1/frame_1",
+    "borders/surf/n/var_1/frame_2",
+    "borders/surf/n/var_2",
+    "borders/surf/n/var_2/frame_1",
   ]);
   const lookup = (name: string): string | undefined => (atlas.has(name) ? name : undefined);
 
@@ -135,7 +189,8 @@ describe("resolveTileArt", () => {
     const grass = resolveTileArt("ground/grass", { variants: 3 }, lookup);
     // var_3 is missing: the looks stop at the first gap.
     expect(grass?.variants).toEqual(["ground/grass", "ground/grass/var_1", "ground/grass/var_2"]);
-    expect(grass?.weight).toBe(0.7);
+    expect(grass?.weight).toBeUndefined(); // lookOf's default
+    expect(resolveTileArt("ground/grass", { variants: 2, weight: 0.5 }, lookup)?.weight).toBe(0.5);
     const water = resolveTileArt("ground/water", { frames: 3, ms: 200, sync: "world" }, lookup);
     expect(water?.frames).toHaveLength(3);
     expect(water?.ms).toBe(200);
@@ -146,6 +201,29 @@ describe("resolveTileArt", () => {
     expect(wall?.wall?.[WALL_N | WALL_S]).toBe("walls/stone/wall_5");
     expect(wall?.joinsWalls).toBe(true);
     expect(wall?.anchorX).toBe(1);
+  });
+
+  it("gives each look of an animated sprite its own frames (the surf, ART-4)", () => {
+    const surf = resolveTileArt("borders/surf/n", { variants: 2, frames: 3 }, lookup);
+    expect(surf?.variants).toEqual([
+      "borders/surf/n",
+      "borders/surf/n/var_1",
+      "borders/surf/n/var_2",
+    ]);
+    expect(surf?.variantFrames).toEqual([
+      ["borders/surf/n", "borders/surf/n/frame_1", "borders/surf/n/frame_2"],
+      ["borders/surf/n/var_1", "borders/surf/n/var_1/frame_1", "borders/surf/n/var_1/frame_2"],
+      // Without all its frames a look stays still: the base frames are another shape.
+      ["borders/surf/n/var_2"],
+    ]);
+    if (!surf) return;
+    expect(framesOfLook(surf, 1)?.[2]).toBe("borders/surf/n/var_1/frame_2");
+    expect(framesOfLook(surf, 2)).toEqual(["borders/surf/n/var_2"]);
+    // A sprite with looks and no frames, or frames and no looks, has no per-look frames.
+    expect(resolveTileArt("ground/grass", { variants: 2 }, lookup)?.variantFrames).toBeUndefined();
+    const water = resolveTileArt("ground/water", { frames: 3 }, lookup);
+    expect(water?.variantFrames).toBeUndefined();
+    if (water) expect(framesOfLook(water, 0)).toBe(water.frames);
   });
 
   it("ignores a wall without all 16 pieces, but it still joins its neighbours", () => {

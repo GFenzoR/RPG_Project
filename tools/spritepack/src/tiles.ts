@@ -208,5 +208,35 @@ export function tileMetas(
     }
     if (Object.keys(meta).length > 0) tiles[base] = meta;
   }
-  return { tiles, problems };
+  // An animated sprite with looks (the surf, docs/17 ART-4): every look plays its own frames,
+  // <sprite>/var_<n>/frame_<m>, as many as the sprite's. They are part of the sprite's entry.
+  const folded = new Set<string>();
+  for (const [base, meta] of Object.entries(tiles)) {
+    const m = TILE_PART.exec(base);
+    if (m?.[2] !== "var" || !m[1] || meta.frames === undefined) continue;
+    if (tiles[m[1]]?.frames !== meta.frames)
+      problems.push({
+        sprite: base,
+        message: `a look's frames go with the sprite's: ${m[1]} needs frame_1..frame_${meta.frames - 1} too`,
+      });
+    if (Object.keys(meta).length === 1) folded.add(base);
+  }
+  for (const [base, meta] of Object.entries(tiles)) {
+    if (!meta.variants || !meta.frames) continue;
+    const frames = meta.frames;
+    const missing = Array.from({ length: meta.variants }, (_, i) => i + 1)
+      .flatMap((n) =>
+        Array.from({ length: frames - 1 }, (_, f) => `${base}/var_${n}/frame_${f + 1}`),
+      )
+      .find((name) => !all.has(name));
+    if (missing)
+      problems.push({
+        sprite: base,
+        message: `an animated sprite's looks need their frames: ${missing} is missing`,
+      });
+  }
+  return {
+    tiles: Object.fromEntries(Object.entries(tiles).filter(([base]) => !folded.has(base))),
+    problems,
+  };
 }

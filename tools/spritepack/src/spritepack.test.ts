@@ -407,6 +407,9 @@ describe("buildAtlas", () => {
     put("assets/sprites/decor/tree.png", tall);
     put("assets/sprites/decor/tree/shadow.png", tall);
     put("assets/sprites/doors/gate.png", tall);
+    // A surf piece: 2 looks, each with its own 2 frames (docs/17 ART-4, ART-7).
+    for (const n of ["", "/frame_1", "/var_1", "/var_1/frame_1"])
+      put(`assets/sprites/borders/surf/n${n}.png`, tile);
     put(
       "assets/sprites.yaml",
       `sprites: {}
@@ -421,6 +424,8 @@ tiles:
     const r = buildAtlas(root);
     expect(errors(r)).toEqual([]);
     expect(r.atlas?.index.tiles).toEqual({
+      // The look's frames are part of the sprite's entry, not one of their own.
+      "borders/surf/n": { variants: 1, frames: 2 },
       "decor/tree": { anchor: "bc", shadow: true, particles: "pollen" },
       "doors/gate": { joins: true },
       "ground/grass": { variants: 3, weight: 0.6 },
@@ -438,6 +443,11 @@ tiles:
     put("assets/sprites/walls/stone/wall_0.png", tile);
     put("assets/sprites/decor/lost/shadow.png", tile);
     put("assets/sprites/ground/sand.png", tile);
+    // An animated sprite whose second look lacks its frames, and frames on a look of a still one.
+    for (const n of ["", "/frame_1", "/var_1", "/var_1/frame_1", "/var_2"])
+      put(`assets/sprites/borders/surf/n${n}.png`, tile);
+    for (const n of ["", "/var_1", "/var_1/frame_1"])
+      put(`assets/sprites/borders/odd/n${n}.png`, tile);
     put(
       "assets/sprites.yaml",
       `sprites: {}
@@ -470,6 +480,10 @@ tiles:
       expect.stringMatching(/ground\/nothing: a tiles entry needs a sprite of that name/),
       expect.stringMatching(/ground\/sand: ms and sync need frames/),
       expect.stringMatching(/walls\/stone: a wall needs all 16 pieces/),
+      expect.stringMatching(/borders\/odd\/n\/var_1: a look's frames go with the sprite's/),
+      expect.stringMatching(
+        /borders\/surf\/n: an animated sprite's looks need their frames: .*var_2\/frame_1 is missing/,
+      ),
     ]);
   });
 

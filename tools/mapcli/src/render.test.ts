@@ -94,6 +94,29 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 5, 5)).toEqual([0, 80, 0]);
   });
 
+  it("shows a border piece's look by tile, evenly, as the game does (docs/17 ART-4)", () => {
+    const sprites: [string, number, number, Rgba][] = [
+      ["ground/sand", 32, 32, [90, 80, 60, 255]],
+      ["borders/grass/n", 32, 32, [0, 100, 0, 255]],
+    ];
+    for (const k of [1, 2, 3])
+      sprites.push([`borders/grass/n/var_${k}`, 32, 32, [0, 100, k * 50, 255]]);
+    const frames = framesOf(sprites);
+    frames.tiles = { "borders/grass/n": { variants: 3 } };
+    const all: { x: number; y: number; stack: string[] }[] = [];
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) all.push({ x, y, stack: ["edge"] });
+    const c = content([item("sand", "ground/sand"), item("edge", "borders/grass/n")]);
+    const img = decodePng(renderArea(world("sand", all), c, frames, opts).png);
+    const seen = new Set<number>();
+    for (let y = 0; y < 8; y++)
+      for (let x = 0; x < 8; x++) {
+        const k = pickVariant(tileHash(x, y, 7), 4, 0.25);
+        seen.add(k);
+        expect(at(img, x, y)).toEqual([0, 100, k * 50]);
+      }
+    expect(seen.size).toBe(4);
+  });
+
   it("shows a ground's look by tile, centres bc sprites and darkens under cast shadows", () => {
     const frames = framesOf([
       ["ground/grass", 32, 32, [0, 80, 0, 255]],

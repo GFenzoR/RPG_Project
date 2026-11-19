@@ -259,14 +259,18 @@ tiles:
 - `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
   casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
   entrada: 250 ms y `world`.
-- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7).
+- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7 en un suelo; en
+  un item, las piezas de borde, los looks salen parejos).
 - `ms` y `sync` sin frames, `weight` sin looks, piezas de muro incompletas o partes sin su
   sprite son errores de `make sprites`.
 
 spritepack escribe lo que tiene cada sprite en `atlas.json` `tiles` (`TileMeta` de
 `packages/renderer/src/tile-art.ts`, puro y compartido con `mapcli render`). Los bordes de
-orilla (`borders/sand_water_*`) traen 3 frames de espuma que hace `gen-borders`, no
-spritegen.
+piezas de borde (`borders/<suelo>/<pieza>`, 4 looks cada una) y la espuma de la orilla
+(`borders/surf/<pieza>`, con 3 frames más en cada look: `<pieza>/frame_<n>` y
+`<pieza>/var_<n>/frame_<m>`) las hace `make borders` (`gen-borders`), no spritegen. Un look
+de un sprite animado lleva sus propios frames, tantos como el sprite (si no, error de
+`make sprites`).
 
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
