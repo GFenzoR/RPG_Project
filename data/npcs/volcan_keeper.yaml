@@ -1,6 +1,16 @@
 id: volcan_keeper
 name: npc.volcan_keeper.name
-sprite: npcs/forge_keeper
+sprite: npcs/volcan_keeper
+look:
+  body: slender
+  skin: deep
+  hair: long
+  hair_color: black
+  beard: none
+  worn:
+    torso: { shape: tunic, tint: ember }
+    legs: { shape: trousers, tint: black }
+    feet: { shape: boots, tint: tar }
 notes: >-
   Keeper of the forge records of Brasal and the quest giver of Chapter 3 (ch3_embers, then
   ch3_gate; ch3_warden is started by volcan_forge_echo and returned here). She only talks

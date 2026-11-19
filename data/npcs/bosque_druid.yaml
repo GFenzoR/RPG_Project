@@ -1,6 +1,16 @@
 id: bosque_druid
 name: npc.bosque_druid.name
-sprite: npcs/druid_elder
+sprite: npcs/bosque_druid
+look:
+  body: sturdy
+  skin: fair
+  hair: long
+  hair_color: grey
+  beard: full
+  worn:
+    torso: { shape: robe, tint: moss }
+    feet: { shape: shoes, tint: tan_leather }
+    weapon: { shape: staff, tint: sapling }
 notes: >-
   Keeper of the grove of Raigal and the quest giver of Chapter 2 (ch2_roots, then
   ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level. With

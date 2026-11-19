@@ -1,6 +1,17 @@
 id: bosque_ferryman
 name: npc.bosque_ferryman.name
-sprite: npcs/ferryman
+sprite: npcs/bosque_ferryman
+look:
+  body: sturdy
+  skin: fair
+  hair: short
+  hair_color: brown
+  beard: short
+  worn:
+    head: { shape: cap, tint: green }
+    torso: { shape: tunic, tint: linen }
+    legs: { shape: trousers, tint: green }
+    feet: { shape: boots, tint: dark_leather }
 notes: >-
   Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
   bosque_to_volcan). Chapter 2 part 1

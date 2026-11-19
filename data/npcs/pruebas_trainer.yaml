@@ -1,6 +1,18 @@
 id: pruebas_trainer
 name: npc.pruebas_trainer.name
-sprite: npcs/sandbox_trainer
+sprite: npcs/pruebas_trainer
+look:
+  body: sturdy
+  skin: fair
+  hair: short
+  hair_color: black
+  beard: short
+  worn:
+    torso: { shape: mail, tint: iron }
+    legs: { shape: trousers, tint: grey }
+    feet: { shape: boots, tint: tar }
+    weapon: { shape: sword, tint: iron }
+    shield: { shape: round, tint: oak }
 notes: >-
   Instructor of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md), in its
   temple: free experience (houses ask for level 12, PvP for level 20), money, healing with

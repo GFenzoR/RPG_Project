@@ -1,6 +1,17 @@
 id: pruebas_merchant
 name: npc.pruebas_merchant.name
-sprite: npcs/sandbox_merchant
+sprite: npcs/pruebas_merchant
+look:
+  body: sturdy
+  skin: brown
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    head: { shape: cap, tint: wine }
+    torso: { shape: tunic, tint: ochre }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: shoes, tint: tar }
 notes: >-
   Provisioner of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): the
   tools of every trade (no shovel: nothing digs yet), food, poultices, runes, the basic

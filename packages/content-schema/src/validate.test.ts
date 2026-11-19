@@ -747,7 +747,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:49:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:59:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -1068,7 +1068,7 @@ describe("validator diagnostics", () => {
     // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:46:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:56:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(
@@ -1102,7 +1102,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:117:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:126:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
@@ -1406,12 +1406,57 @@ describe("validator diagnostics", () => {
     );
     edit(
       "data/items/equipment.yaml",
-      "  shield: { defense: 9 }\n  requires: { level: 1 }\n",
-      "  shield: { defense: 9 }\n",
+      "  shield: { defense: 9 }\n  worn: { shape: buckler, tint: weathered }\n  requires: { level: 1 }\n",
+      "  shield: { defense: 9 }\n  worn: { shape: buckler, tint: weathered }\n",
     );
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
       expect.stringMatching(/equipment\.yaml:.*shield "barrel_lid_shield" has no requires\.level/),
       expect.stringMatching(/weapons\.yaml:.*weapon "rusty_cutlass" has no requires\.level/),
+    ]);
+  });
+
+  it("checks every look, worn piece and outfit against data/looks.yaml (docs/06 Looks)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/items/weapons.yaml",
+      "worn: { shape: sword, tint: rust }",
+      "worn: { shape: plate, tint: rust }",
+    );
+    edit(
+      "data/items/weapons.yaml",
+      "worn: { shape: axe, tint: rust }",
+      "worn: { shape: axe, tint: rost }",
+    );
+    edit(
+      "data/items/equipment.yaml",
+      "  armor: { slot: neck, armor: 1 }\n",
+      "  armor: { slot: neck, armor: 1 }\n  worn: { shape: circlet, tint: gold }\n",
+    );
+    edit("data/npcs/harbor_master.yaml", "  skin: tan\n", "  skin: tann\n");
+    edit("data/npcs/harbor_master.yaml", "legs: { shape: trousers", "legs: { shape: robe");
+    edit(
+      "data/outfits.yaml",
+      "skin: fair, hair: short, hair_color: brown",
+      "skin: ashen, hair: short, hair_color: brown",
+    );
+    const out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out).toEqual([
+      expect.stringMatching(
+        /equipment\.yaml:.*worn: only weapons, shields and head, body, legs and feet armour/,
+      ),
+      expect.stringMatching(/weapons\.yaml:.*worn\.shape: unknown weapon shape "plate"/),
+      expect.stringMatching(
+        /weapons\.yaml:.*worn\.tint: unknown tint "rost" in data\/looks\.yaml \(did you mean "rust"\?\)/,
+      ),
+      expect.stringMatching(
+        /harbor_master\.yaml:.*look\.skin: unknown skin "tann" in data\/looks\.yaml \(did you mean "tan"\?\)/,
+      ),
+      expect.stringMatching(
+        /harbor_master\.yaml:.*look\.worn\.legs\.shape: unknown legs shape "robe"/,
+      ),
+      expect.stringMatching(
+        /outfits\.yaml:.*\[0\]\.look\.skin: skin "ashen" is creatures_only: not for a player/,
+      ),
     ]);
   });
 

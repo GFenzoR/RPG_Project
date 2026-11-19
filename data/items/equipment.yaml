@@ -14,6 +14,7 @@
   weight: 3500
   tradeable: true
   shield: { defense: 9 }
+  worn: { shape: buckler, tint: weathered }
   requires: { level: 1 }
   value: 25
 
@@ -25,6 +26,7 @@
   weight: 800
   tradeable: true
   armor: { slot: head, armor: 1 }
+  worn: { shape: cap, tint: canvas }
   requires: { level: 1 }
   value: 10
 
@@ -36,6 +38,7 @@
   weight: 2000
   tradeable: true
   armor: { slot: body, armor: 2 }
+  worn: { shape: tunic, tint: canvas }
   requires: { level: 1 }
   value: 20
 
@@ -47,6 +50,7 @@
   weight: 1600
   tradeable: true
   armor: { slot: legs, armor: 1 }
+  worn: { shape: trousers, tint: canvas }
   requires: { level: 1 }
   value: 10
 
@@ -58,6 +62,7 @@
   weight: 1200
   tradeable: true
   armor: { slot: feet, armor: 1 }
+  worn: { shape: boots, tint: tar }
   requires: { level: 1 }
   value: 10
 
@@ -72,6 +77,7 @@
   weight: 4100
   tradeable: true
   shield: { defense: 12 }
+  worn: { shape: tower, tint: weathered }
   requires: { level: 5 }
   value: 110
 
@@ -86,6 +92,7 @@
   weight: 4700
   tradeable: true
   shield: { defense: 18 }
+  worn: { shape: round, tint: elm }
   requires: { level: 15 }
   value: 450
 
@@ -97,6 +104,7 @@
   weight: 8000
   tradeable: true
   armor: { slot: body, armor: 6 }
+  worn: { shape: leather, tint: stagleather }
   requires: { level: 15, vocations: [guardian, ranger] }
   value: 540
 
@@ -108,6 +116,7 @@
   weight: 2600
   tradeable: true
   armor: { slot: body, armor: 3 }
+  worn: { shape: robe, tint: moss }
   requires: { level: 15 }
   value: 360
 
@@ -119,6 +128,7 @@
   weight: 1600
   tradeable: true
   armor: { slot: head, armor: 2 }
+  worn: { shape: hood, tint: stagleather }
   requires: { level: 15 }
   value: 240
 
@@ -130,6 +140,7 @@
   weight: 2600
   tradeable: true
   armor: { slot: legs, armor: 2 }
+  worn: { shape: trousers, tint: stagleather }
   requires: { level: 15 }
   value: 240
 
@@ -141,6 +152,7 @@
   weight: 2000
   tradeable: true
   armor: { slot: feet, armor: 2 }
+  worn: { shape: boots, tint: stagleather }
   requires: { level: 15 }
   value: 240
 
@@ -176,6 +188,7 @@
   weight: 5300
   tradeable: true
   shield: { defense: 22 }
+  worn: { shape: kite, tint: embersteel }
   requires: { level: 30 }
   value: 1500
 
@@ -187,6 +200,7 @@
   weight: 9000
   tradeable: true
   armor: { slot: body, armor: 8 }
+  worn: { shape: plate, tint: embersteel }
   requires: { level: 30, vocations: [guardian, ranger] }
   value: 1800
 
@@ -198,6 +212,7 @@
   weight: 2900
   tradeable: true
   armor: { slot: body, armor: 4 }
+  worn: { shape: robe, tint: ash }
   requires: { level: 30 }
   value: 1200
 
@@ -209,6 +224,7 @@
   weight: 2000
   tradeable: true
   armor: { slot: head, armor: 3 }
+  worn: { shape: open_helm, tint: embersteel }
   requires: { level: 30 }
   value: 800
 
@@ -220,6 +236,7 @@
   weight: 3100
   tradeable: true
   armor: { slot: legs, armor: 3 }
+  worn: { shape: greaves, tint: embersteel }
   requires: { level: 30 }
   value: 800
 
@@ -231,6 +248,7 @@
   weight: 2400
   tradeable: true
   armor: { slot: feet, armor: 3 }
+  worn: { shape: sabatons, tint: embersteel }
   requires: { level: 30 }
   value: 800
 
@@ -267,6 +285,7 @@
   weight: 5900
   tradeable: true
   shield: { defense: 26 }
+  worn: { shape: tower, tint: wyrmscale }
   requires: { level: 50 }
   value: 3750
 
@@ -278,6 +297,7 @@
   weight: 10000
   tradeable: true
   armor: { slot: body, armor: 10 }
+  worn: { shape: mail, tint: wyrmscale }
   requires: { level: 50, vocations: [guardian, ranger] }
   value: 4500
 
@@ -289,6 +309,7 @@
   weight: 3200
   tradeable: true
   armor: { slot: body, armor: 5 }
+  worn: { shape: robe, tint: dusk }
   requires: { level: 50 }
   value: 3000
 
@@ -300,6 +321,7 @@
   weight: 2400
   tradeable: true
   armor: { slot: head, armor: 4 }
+  worn: { shape: full_helm, tint: wyrmscale }
   requires: { level: 50 }
   value: 2000
 
@@ -311,6 +333,7 @@
   weight: 3600
   tradeable: true
   armor: { slot: legs, armor: 4 }
+  worn: { shape: greaves, tint: wyrmhide }
   requires: { level: 50 }
   value: 2000
 
@@ -322,6 +345,7 @@
   weight: 2800
   tradeable: true
   armor: { slot: feet, armor: 4 }
+  worn: { shape: boots, tint: wyrmhide }
   requires: { level: 50 }
   value: 2000
 
@@ -357,6 +381,7 @@
   weight: 6500
   tradeable: true
   shield: { defense: 30 }
+  worn: { shape: kite, tint: tidesteel }
   requires: { level: 75 }
   value: 9000
 
@@ -368,6 +393,7 @@
   weight: 11000
   tradeable: true
   armor: { slot: body, armor: 12 }
+  worn: { shape: plate, tint: tidesteel }
   requires: { level: 75, vocations: [guardian, ranger] }
   value: 10800
 
@@ -379,6 +405,7 @@
   weight: 3500
   tradeable: true
   armor: { slot: body, armor: 6 }
+  worn: { shape: robe, tint: pearlcloth }
   requires: { level: 75 }
   value: 7200
 
@@ -390,6 +417,7 @@
   weight: 2800
   tradeable: true
   armor: { slot: head, armor: 5 }
+  worn: { shape: full_helm, tint: tidesteel }
   requires: { level: 75 }
   value: 4800
 
@@ -401,6 +429,7 @@
   weight: 4100
   tradeable: true
   armor: { slot: legs, armor: 5 }
+  worn: { shape: greaves, tint: tidesteel }
   requires: { level: 75 }
   value: 4800
 
@@ -412,6 +441,7 @@
   weight: 3200
   tradeable: true
   armor: { slot: feet, armor: 5 }
+  worn: { shape: sabatons, tint: tidesteel }
   requires: { level: 75 }
   value: 4800
 
@@ -448,6 +478,7 @@
   weight: 7400
   tradeable: true
   armor: { slot: body, armor: 4 }
+  worn: { shape: leather, tint: tan_leather }
   requires: { level: 6 }
   value: 150
   retired: true
@@ -460,6 +491,7 @@
   weight: 6400
   tradeable: true
   shield: { defense: 15 }
+  worn: { shape: round, tint: iron }
   requires: { level: 8 }
   value: 220
   retired: true
@@ -472,6 +504,7 @@
   weight: 3650
   tradeable: true
   armor: { slot: body, armor: 3 }
+  worn: { shape: leather, tint: hide }
   requires: { level: 1 }
   value: 45
   retired: true

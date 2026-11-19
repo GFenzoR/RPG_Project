@@ -1,0 +1,105 @@
+# The looks of the engine humanoids (docs/06 "Looks", docs/17 "Humanoides del motor"):
+# players, NPCs and humanoid monsters are one body drawn by the sprite engine with layers
+# over it (the paper doll). Every layer is drawn once in a neutral ramp and tinted by the
+# client, so a colour here costs no atlas space. The lists below are the layers the engine
+# draws (a spritegen test keeps them equal); `make validate` checks every look, `worn` and
+# `clothes` of data/ against them.
+
+# Body types: the same skeleton, two trunks.
+builds: [sturdy, slender]
+
+# Skin tones (multiply tint of the body). `creatures_only`: for NPCs and monsters (the
+# drowned, the ashen), never a player's choice (feat/character-look).
+skins:
+  pale: { color: "#f6dcc8" }
+  fair: { color: "#ecc4a2" }
+  tan: { color: "#d8a47c" }
+  olive: { color: "#bc9068" }
+  brown: { color: "#96603e" }
+  deep: { color: "#6a4230" }
+  ashen: { color: "#b2aaa6", creatures_only: true }
+  drowned: { color: "#a9b89a", creatures_only: true }
+
+# Hair styles (bald draws nothing) and beards (none draws nothing); the hair colour tints
+# both.
+hair_styles: [bald, short, crop, long, ponytail, topknot, curly]
+beards: [none, short, full]
+hair_colors:
+  black: "#2e2a30"
+  dark_brown: "#4e3626"
+  brown: "#7a5232"
+  auburn: "#9a4a26"
+  red: "#b8502c"
+  blond: "#e0c27a"
+  ash: "#c0b8a8"
+  grey: "#a8a4a4"
+  white: "#ece8e2"
+
+# The shapes the engine draws per slot (data/items `worn: {shape, tint}`). The torso is
+# drawn per build. `hides`: what a head piece covers.
+shapes:
+  head: [cap, hood, open_helm, full_helm, circlet]
+  torso: [tunic, robe, leather, mail, plate]
+  legs: [trousers, greaves]
+  feet: [shoes, boots, sabatons]
+  shield: [buckler, round, kite, tower]
+  weapon: [sword, axe, mace, dagger, spear, bow, crossbow, staff, wand]
+hides:
+  hood: [hair]
+  full_helm: [hair, beard]
+
+# Material tints of the worn pieces (multiply over the neutral ramp: a light tint keeps the
+# shading's range). By family; the bands of the catalog (docs/02 "Catálogo de equipo") take
+# their metal or cloth.
+tints:
+  # Metals
+  rust: "#c0906c"
+  iron: "#a8aeb6"
+  steel: "#c4ced8"
+  embersteel: "#9c8a80"
+  wyrmscale: "#7cb48c"
+  tidesteel: "#86b0bc"
+  bone: "#e2d8c0"
+  gold: "#e8c060"
+  silver: "#dadde2"
+  obsidian: "#6a6078"
+  # Woods
+  oak: "#b0885c"
+  weathered: "#a09884"
+  elm: "#a07c58"
+  yew: "#c49a64"
+  thornwood: "#7a5a46"
+  drownwood: "#7c8c96"
+  sapling: "#c8b480"
+  # Magic and stone
+  spark: "#f0d870"
+  coral: "#ead6cc"
+  stormglass: "#a898f0"
+  pearl: "#e8e2ec"
+  ice: "#c8ecfa"
+  blackice: "#6c80b8"
+  # Cloth
+  linen: "#ece2c8"
+  canvas: "#d8cba8"
+  white: "#f2f0ec"
+  grey: "#9a9a9a"
+  black: "#5a5662"
+  brown: "#977049"
+  navy: "#5a76a8"
+  wine: "#a54b4c"
+  red: "#b04038"
+  ochre: "#c9a04c"
+  teal: "#579f97"
+  green: "#779856"
+  ember: "#d87838"
+  moss: "#8aa060"
+  ash: "#9c968e"
+  dusk: "#8a74b8"
+  pearlcloth: "#c4cede"
+  # Leather
+  hide: "#9a7a5c"
+  tan_leather: "#a8805a"
+  dark_leather: "#6a5040"
+  tar: "#5c4a3b"
+  stagleather: "#b07a50"
+  wyrmhide: "#5f8a68"

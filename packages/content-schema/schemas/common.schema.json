@@ -21,6 +21,44 @@
       "pattern": "^[a-z0-9_]+(/[a-z0-9_]+)*$"
     },
     "notes": { "description": "Internal comment, never shown to players.", "type": "string" },
+    "hexColor": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+    "wornPiece": {
+      "description": "How a piece shows on the engine humanoid (docs/06 \"Looks\"): a shape of data/looks.yaml shapes for its slot and a tint of data/looks.yaml tints.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape", "tint"],
+      "properties": {
+        "shape": { "$ref": "#/$defs/id" },
+        "tint": { "$ref": "#/$defs/id" }
+      }
+    },
+    "wornSet": {
+      "description": "What an engine humanoid wears, by slot (shapes and tints of data/looks.yaml).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "head": { "$ref": "#/$defs/wornPiece" },
+        "torso": { "$ref": "#/$defs/wornPiece" },
+        "legs": { "$ref": "#/$defs/wornPiece" },
+        "feet": { "$ref": "#/$defs/wornPiece" },
+        "shield": { "$ref": "#/$defs/wornPiece" },
+        "weapon": { "$ref": "#/$defs/wornPiece" }
+      }
+    },
+    "look": {
+      "description": "An engine humanoid (docs/17 \"Humanoides del motor\"): body build, skin, hair style and colour, beard (ids of data/looks.yaml) and, for an NPC or a monster, what it wears.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body", "skin", "hair", "hair_color", "beard"],
+      "properties": {
+        "body": { "$ref": "#/$defs/id" },
+        "skin": { "$ref": "#/$defs/id" },
+        "hair": { "$ref": "#/$defs/id" },
+        "hair_color": { "$ref": "#/$defs/id" },
+        "beard": { "$ref": "#/$defs/id" },
+        "worn": { "$ref": "#/$defs/wornSet" }
+      }
+    },
     "itemRef": { "$ref": "#/$defs/id", "x-ref": "item" },
     "monsterRef": { "$ref": "#/$defs/id", "x-ref": "monster" },
     "npcRef": { "$ref": "#/$defs/id", "x-ref": "npc" },

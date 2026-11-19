@@ -1,6 +1,18 @@
 id: bosque_hunter
 name: npc.bosque_hunter.name
-sprite: npcs/hunter_forest
+sprite: npcs/bosque_hunter
+look:
+  body: sturdy
+  skin: tan
+  hair: short
+  hair_color: auburn
+  beard: short
+  worn:
+    head: { shape: hood, tint: brown }
+    torso: { shape: leather, tint: tan_leather }
+    legs: { shape: trousers, tint: green }
+    feet: { shape: boots, tint: dark_leather }
+    weapon: { shape: bow, tint: yew }
 notes: >-
   Huntsman of Raigal (lote 12): keeps the hunt board, the town's standing bounties on what
   threatens the woods, as three repeatable tasks (data/quests/bounty_*.yaml): 25 coffer

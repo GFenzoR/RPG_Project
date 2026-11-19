@@ -1,6 +1,17 @@
 id: wreck_looter
 name: monster.wreck_looter.name
-sprite: creatures/wreck_looter
+look:
+  body: sturdy
+  skin: tan
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    head: { shape: cap, tint: wine }
+    torso: { shape: leather, tint: hide }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: tar }
+    weapon: { shape: sword, tint: rust }
 health: 110
 experience: 85
 speed: 200

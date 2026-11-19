@@ -1,6 +1,17 @@
 id: volcan_ferryman
 name: npc.volcan_ferryman.name
-sprite: npcs/ferryman_volcanic
+sprite: npcs/volcan_ferryman
+look:
+  body: sturdy
+  skin: brown
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    head: { shape: cap, tint: ember }
+    torso: { shape: tunic, tint: grey }
+    legs: { shape: trousers, tint: black }
+    feet: { shape: boots, tint: tar }
 notes: >-
   Captain of the Brasal dock (data/boat_routes.yaml: volcan_to_bosque and
   volcan_to_puerto). Since lote 12 she gives the side quest captain_fenders (level 30):

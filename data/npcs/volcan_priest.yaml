@@ -1,6 +1,16 @@
 id: volcan_priest
 name: npc.volcan_priest.name
-sprite: npcs/priest_volcanic
+sprite: npcs/volcan_priest
+look:
+  body: slender
+  skin: tan
+  hair: long
+  hair_color: auburn
+  beard: none
+  worn:
+    head: { shape: hood, tint: ember }
+    torso: { shape: robe, tint: black }
+    feet: { shape: shoes, tint: tar }
 notes: >-
   Temple of the Still Flame in Brasal (respawn point of the island). Heals for free and sells
   the same five blessings as the other temples at the same level-based price (docs/02 "Muerte").

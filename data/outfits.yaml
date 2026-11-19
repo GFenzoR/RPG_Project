@@ -1,28 +1,48 @@
-# Player outfits (T0.5). Each outfit is a sprite folder of frames: <sprite>/<dir>_<frame>,
-# dir in n|e|s|w, frame 0 = standing, 1..frames-1 = the walking steps. Since docs/17 (A12)
-# the four outfits are animated Liberated Pixel Cup characters (`animations` in
-# assets/sprites.yaml): those names are aliases of their idle and walk frames, and the client
-# plays the animation. `frames` (at most 3) still counts those T0.5 names, not the animation:
-# 0 is the idle pose and 1 and 2 are two walk frames half a cycle apart (tools/spritepack,
-# legacyFrame). The full walk cycle (8 frames: the LPC sheet's 9 columns minus the standing
-# one) lives in the animation. Every player wears "citizen" until Outfit.look_id picks one
-# (docs/06-content-data.md).
+# Player outfits (docs/06 "Looks"). A player is an engine humanoid (docs/17 "Humanoides del
+# motor"): `look` is the body it is drawn with until the character's own look arrives
+# (feat/character-look), and `clothes` its torso, legs and feet. The default outfit
+# (citizen) shows its clothes only where nothing is equipped; a shop outfit (`costume:
+# true`, sold in data/cosmetics.yaml) covers the torso, legs and feet even over armour,
+# while the helmet, the shield and the weapon still show. The sprite folder holds a still
+# preview per facing (<sprite>/<dir>_0, drawn by the sprite engine) for the shop and as
+# the client's fallback.
 - id: citizen
   sprite: outfits/citizen
-  frames: 3
+  frames: 1
+  look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: none }
+  clothes:
+    torso: { shape: tunic, tint: linen }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: shoes, tint: dark_leather }
   notes: Plain tunic and trousers; the default look of every new character.
 
-# Shop outfits (T5.7): sold for premium currency in data/cosmetics.yaml, looks only. The same
-# body and animations as citizen, other LPC clothes and colours (assets/sprites.yaml).
+# Shop outfits (T5.7): sold for premium currency in data/cosmetics.yaml, looks only.
 - id: sailor
   sprite: outfits/sailor
-  frames: 3
-  notes: Striped deck shirt, blue sailor trousers and a knotted neckerchief; bare-headed.
+  frames: 1
+  costume: true
+  look: { body: sturdy, skin: tan, hair: short, hair_color: black, beard: none }
+  clothes:
+    torso: { shape: tunic, tint: white }
+    legs: { shape: trousers, tint: navy }
+    feet: { shape: shoes, tint: tar }
+  notes: White deck shirt, blue sailor trousers; bare-headed.
 - id: ranger
   sprite: outfits/ranger
-  frames: 3
-  notes: Hooded green cloak over a leather jerkin, a quiver strap and tall boots.
+  frames: 1
+  costume: true
+  look: { body: slender, skin: fair, hair: ponytail, hair_color: auburn, beard: none }
+  clothes:
+    torso: { shape: leather, tint: green }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: dark_leather }
+  notes: A green leather jerkin, brown trousers and tall boots.
 - id: noble
   sprite: outfits/noble
-  frames: 3
-  notes: Burgundy doublet with gold trim, cream sash, dark hose and a small black cap.
+  frames: 1
+  costume: true
+  look: { body: sturdy, skin: pale, hair: short, hair_color: blond, beard: none }
+  clothes:
+    torso: { shape: robe, tint: wine }
+    feet: { shape: shoes, tint: black }
+  notes: A long burgundy coat and black shoes.

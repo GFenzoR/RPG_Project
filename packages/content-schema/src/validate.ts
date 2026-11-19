@@ -336,6 +336,9 @@ class Validator {
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
     if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
+    const looks = single("looks.yaml", "looks", false);
+    this.checkLooks(looks, outfits);
+
     const tutorial = single("tutorial.yaml", "tutorial", false);
     this.tutorial = tutorial;
     if (tutorial) this.checkTutorial(tutorial, dataDir);
@@ -454,6 +457,119 @@ class Validator {
    * and .desc, cosmetic_pack.<id>.name and premium.name / premium.amount. No pack is worth
    * more than limits.daily_premium (it could never be bought).
    */
+  /**
+   * data/looks.yaml (docs/06 "Looks"): every look, worn piece and outfit of data/ names its
+   * build, skin, hair, beard, shape (of the right slot) and tint there. An item's `worn`
+   * takes the slot it is equipped in; jewellery is never drawn. A player's outfit uses no
+   * creatures_only skin and wears nothing but its clothes.
+   */
+  private checkLooks(looks: SourceFile | undefined, outfits: SourceFile | undefined): void {
+    const data = looks && isObj(looks.data) ? looks.data : undefined;
+    const ids = (v: unknown): Set<string> =>
+      new Set(
+        isObj(v) ? Object.keys(v) : asList(v).filter((x): x is string => typeof x === "string"),
+      );
+    const shapes = isObj(data?.["shapes"]) ? data["shapes"] : {};
+    const t = {
+      builds: ids(data?.["builds"]),
+      skins: ids(data?.["skins"]),
+      hair: ids(data?.["hair_styles"]),
+      hairColors: ids(data?.["hair_colors"]),
+      beards: ids(data?.["beards"]),
+      tints: ids(data?.["tints"]),
+    };
+    const creaturesOnly = new Set(
+      Object.entries(isObj(data?.["skins"]) ? data["skins"] : {})
+        .filter(([, v]) => isObj(v) && v["creatures_only"] === true)
+        .map(([k]) => k),
+    );
+    if (looks && data)
+      for (const shape of Object.keys(isObj(data["hides"]) ? data["hides"] : {}))
+        if (!ids(shapes["head"]).has(shape))
+          this.error(looks, ["hides", shape], `"${shape}" is not a head shape of shapes.head`);
+    const where = "data/looks.yaml";
+    const known = (
+      src: SourceFile,
+      path: PathSegment[],
+      value: unknown,
+      set: Set<string>,
+      what: string,
+    ): void => {
+      if (typeof value !== "string" || set.has(value)) return;
+      const hint = suggest(value, [...set]);
+      this.error(
+        src,
+        path,
+        `unknown ${what} "${value}" in ${where}${hint ? ` (did you mean "${hint}"?)` : ""}`,
+      );
+    };
+    const piece = (src: SourceFile, path: PathSegment[], v: unknown, slot: string): void => {
+      if (!isObj(v)) return;
+      known(src, [...path, "shape"], v["shape"], ids(shapes[slot]), `${slot} shape`);
+      known(src, [...path, "tint"], v["tint"], t.tints, "tint");
+    };
+    const lookOf = (src: SourceFile, path: PathSegment[], v: unknown, player: boolean): void => {
+      if (!isObj(v)) return;
+      if (!data) {
+        this.error(src, path, `a look needs ${where}`);
+        return;
+      }
+      known(src, [...path, "body"], v["body"], t.builds, "build");
+      known(src, [...path, "skin"], v["skin"], t.skins, "skin");
+      known(src, [...path, "hair"], v["hair"], t.hair, "hair style");
+      known(src, [...path, "hair_color"], v["hair_color"], t.hairColors, "hair colour");
+      known(src, [...path, "beard"], v["beard"], t.beards, "beard");
+      if (player && typeof v["skin"] === "string" && creaturesOnly.has(v["skin"]))
+        this.error(
+          src,
+          [...path, "skin"],
+          `skin "${v["skin"]}" is creatures_only: not for a player`,
+        );
+      const worn = v["worn"];
+      if (player && worn !== undefined)
+        this.error(src, [...path, "worn"], "a player's outfit wears its clothes, not worn");
+      for (const [slot, w] of Object.entries(isObj(worn) ? worn : {}))
+        piece(src, [...path, "worn", slot], w, slot);
+    };
+    for (const { item, src, path } of this.items) {
+      const worn = item["worn"];
+      if (worn === undefined) continue;
+      if (!data) {
+        this.error(src, [...path, "worn"], `worn needs ${where}`);
+        continue;
+      }
+      const armor = isObj(item["armor"]) ? item["armor"]["slot"] : undefined;
+      const slot =
+        item["kind"] === "weapon"
+          ? "weapon"
+          : item["kind"] === "shield"
+            ? "shield"
+            : armor === "body"
+              ? "torso"
+              : armor === "head" || armor === "legs" || armor === "feet"
+                ? armor
+                : undefined;
+      if (!slot) {
+        this.error(
+          src,
+          [...path, "worn"],
+          "only weapons, shields and head, body, legs and feet armour are drawn on the figure",
+        );
+        continue;
+      }
+      piece(src, [...path, "worn"], worn, slot);
+    }
+    for (const list of [this.npcs, this.monsters])
+      for (const src of list) if (isObj(src.data)) lookOf(src, ["look"], src.data["look"], false);
+    if (outfits)
+      for (const [i, o] of asList(outfits.data).entries()) {
+        if (!isObj(o)) continue;
+        lookOf(outfits, [i, "look"], o["look"], true);
+        for (const [slot, w] of Object.entries(isObj(o["clothes"]) ? o["clothes"] : {}))
+          piece(outfits, [i, "clothes", slot], w, slot);
+      }
+  }
+
   private checkCosmetics(src: SourceFile, outfits: SourceFile | undefined): void {
     if (!isObj(src.data)) return;
     const key = (value: string, path: PathSegment[]): void => {

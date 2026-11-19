@@ -1,6 +1,16 @@
 id: puerto_diver
 name: npc.puerto_diver.name
-sprite: npcs/diver_old
+sprite: npcs/puerto_diver
+look:
+  body: slender
+  skin: tan
+  hair: curly
+  hair_color: grey
+  beard: none
+  worn:
+    torso: { shape: tunic, tint: teal }
+    legs: { shape: trousers, tint: teal }
+    feet: { shape: shoes, tint: tar }
 notes: >-
   Retired reef diver on the beach near the wreck. Lore about the sunken empire, the
   diver_locket side quest and a small shop: the casters' wands and staffs of bands 1-3

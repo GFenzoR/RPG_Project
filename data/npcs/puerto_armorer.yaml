@@ -1,6 +1,16 @@
 id: puerto_armorer
 name: npc.puerto_armorer.name
-sprite: npcs/armorer
+sprite: npcs/puerto_armorer
+look:
+  body: sturdy
+  skin: fair
+  hair: crop
+  hair_color: brown
+  beard: full
+  worn:
+    torso: { shape: plate, tint: iron }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: tar }
 notes: >-
   Weapons, armor and shields for levels 1-10. Sells at the item value; buys back at about a
   third of it, so trading between players stays worth it (docs/02-game-design.md).

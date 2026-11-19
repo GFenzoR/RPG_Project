@@ -4,11 +4,19 @@
   "title": "NPC (data/npcs/<id>.yaml)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "sprite"],
+  "required": ["id", "name"],
+  "anyOf": [{ "required": ["sprite"] }, { "required": ["look"] }],
   "properties": {
     "id": { "$ref": "common.schema.json#/$defs/id" },
     "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
-    "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
+    "sprite": {
+      "description": "An atlas sprite (a spirit, a beast). A person's is its still portrait (the dialog's), drawn by spritegen from its look.",
+      "$ref": "common.schema.json#/$defs/sprite"
+    },
+    "look": {
+      "description": "A person, drawn as an engine humanoid with what it wears (docs/06 \"Looks\"); it wins over sprite.",
+      "$ref": "common.schema.json#/$defs/look"
+    },
     "dialog": {
       "type": "object",
       "additionalProperties": false,

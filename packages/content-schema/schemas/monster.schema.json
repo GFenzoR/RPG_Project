@@ -4,7 +4,8 @@
   "title": "Monster (data/monsters/<id>.yaml)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "sprite", "health", "experience", "speed", "attacks"],
+  "required": ["id", "name", "health", "experience", "speed", "attacks"],
+  "anyOf": [{ "required": ["sprite"] }, { "required": ["look"] }],
   "$defs": {
     "attack": {
       "description": "One attack of a monster. melee, distance and spell hurt the target (or, with area, every player of the area the monster sees, out of protection zones); heal_self heals the monster (not at full health) and summon calls monsters next to it: those two need a fight, not a target in reach. With below_hp_pct the attack is used only while the monster's health is below that percent.",
@@ -109,6 +110,10 @@
     "id": { "$ref": "common.schema.json#/$defs/id" },
     "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
     "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
+    "look": {
+      "description": "A humanoid monster (a bandit, a smuggler), drawn as an engine humanoid with what it wears (docs/06 \"Looks\"); it wins over sprite.",
+      "$ref": "common.schema.json#/$defs/look"
+    },
     "health": { "$ref": "common.schema.json#/$defs/positiveInt" },
     "experience": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
     "speed": { "$ref": "common.schema.json#/$defs/positiveInt" },
