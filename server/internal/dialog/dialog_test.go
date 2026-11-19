@@ -119,6 +119,24 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 	}
 }
 
+// Chapter 1's reward flag forest_route_unlocked (data/quests/ch1_shipwreck.yaml) is what
+// the harbour master's boat talk reads (audit of 2026-11-18: nothing read it): the line
+// about the forest island comes with the flag, not with the quest's state alone.
+func TestHarborMasterForestLineReadsTheFlag(t *testing.T) {
+	hm := load(t, "harbor_master")
+	f := newFake(t, "guardian")
+	travel := hm.Dialog.Nodes["travel"]
+	const line = "npc.harbor_master.opt_ch1_after"
+	f.log.Set("quest.ch1_shipwreck", int64(quest.Completed))
+	if got := texts(travel, f); slices.Contains(got, line) {
+		t.Fatalf("without the flag: %v", got)
+	}
+	f.SetFlag("forest_route_unlocked", 1)
+	if got := texts(travel, f); !slices.Contains(got, line) {
+		t.Fatalf("with the flag: %v", got)
+	}
+}
+
 // Content audit M6: a blessing costs more the higher the buyer: price + per_level × level.
 func TestBlessingPriceGrowsWithLevel(t *testing.T) {
 	priest := load(t, "puerto_priest")

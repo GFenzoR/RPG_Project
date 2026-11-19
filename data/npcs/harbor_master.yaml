@@ -151,7 +151,8 @@ dialog:
       text: npc.harbor_master.travel
       boat_routes: true             # data/boat_routes.yaml: routes with captain harbor_master
       options:
+        # Chapter 1's reward (data/quests/ch1_shipwreck.yaml set_flag): the forest route.
         - text: npc.harbor_master.opt_ch1_after
-          if: { quest_state: { quest: ch1_shipwreck, state: completed } }
+          if: { flag_equals: { key: forest_route_unlocked, value: 1 } }
           goto: ch1_after
         - { text: dialog.back, goto: greet }
