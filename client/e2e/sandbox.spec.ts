@@ -9,6 +9,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { stepKey } from "./keys.ts";
 import { psql } from "./psql.ts";
+import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -351,5 +352,120 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   expect(await page.locator(".viewport").evaluate((el) => el.scrollTop)).toBe(0);
   await page.waitForTimeout(300);
   await shot(page, "95-sandbox-shop-scrolled");
+  expect(errors).toEqual([]);
+});
+
+// The quest log (docs/02 "Diario de misiones") and the books and chests of the temple's
+// north-east corner (docs/16 4c, docs/02 "Libros y cofres"). The character comes with
+// Chapter 1 at its wolves (2 of 6) and the sandbox's task done a moment ago, still cooling
+// down: the window "Misiones" shows one active quest with its kills and, in "Terminadas",
+// the countdown. Then the lectern opens the reading window, and the reward chest gives once.
+test("sandbox: the quest log, a lectern's book and a reward chest that gives once", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Lector");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT c.id, v.key, v.value FROM characters c, (VALUES
+       ('quest.ch1_shipwreck', 1::bigint),
+       ('quest.ch1_shipwreck.kills', 2::bigint),
+       ('quest.pruebas_rats', 2::bigint),
+       ('quest.pruebas_rats.done_at', extract(epoch from now())::bigint)) AS v(key, value)
+     WHERE c.name = '${who.name}';`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(`${x},${y},${z}`);
+  };
+  const tileClient = async (x: number, y: number): Promise<{ x: number; y: number }> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    return p;
+  };
+  const item = (id: string): Promise<number | undefined> =>
+    page.evaluate((i) => window.__rpgClient?.itemNumber(i), id);
+  await standsOn(2095, 2086, 7);
+
+  // The quest log of the login: Chapter 1 in progress at 2/6 wolves, the task cooling down.
+  await openWindow(page, "quests");
+  const quests = page.getByTestId("quests");
+  await expect(quests.locator('[data-quest-tab="active"]')).toHaveText("Activas (1)");
+  await expect(quests.locator('[data-quest-tab="finished"]')).toHaveText("Terminadas (1)");
+  const ch1 = quests.locator('.quest[data-quest="ch1_shipwreck"]');
+  await expect(ch1.getByTestId("quest-kills")).toContainText("2/6");
+  await expect(ch1.getByTestId("quest-step")).not.toBeEmpty();
+  await page.waitForTimeout(300); // let the atlas textures upload before the screenshot
+  await shot(page, "96-sandbox-quests");
+  await quests.locator('[data-quest-tab="finished"]').click();
+  const rats = quests.locator('.quest[data-quest="pruebas_rats"]');
+  await expect(rats.getByTestId("quest-cooldown")).toContainText("Disponible otra vez en");
+  await page.locator('.gwin[data-window="quests"]').screenshot({
+    path: join(shots, "96b-sandbox-quests-finished.png"),
+  });
+  await closeWindow(page, "quests");
+
+  // Next to the lectern (2099,2084) and the chest (2098,2084), inside the temple.
+  const lectern = await item("book_lantern_rowers");
+  const chest = await item("chest_pruebas");
+  expect(await page.evaluate(() => window.__rpgClient?.tile(2099, 2084, 7)?.at(-1))).toBe(lectern);
+  expect(await page.evaluate(() => window.__rpgClient?.tile(2098, 2084, 7)?.at(-1))).toBe(chest);
+  let p = await tileClient(2099, 2085);
+  await page.mouse.click(p.x, p.y);
+  await standsOn(2099, 2085, 7);
+
+  // A right click on the lectern: "Leer", in bold, opens the reading window at page 1 of 3.
+  p = await tileClient(2099, 2084);
+  await page.mouse.click(p.x, p.y, { button: "right" });
+  const menu = page.getByTestId("action-menu");
+  await expect(menu.locator('[data-action="read"]')).toHaveClass(/default/);
+  await menu.locator('[data-action="read"]').click();
+  const book = page.getByTestId("book");
+  await expect(book).toBeVisible();
+  expect(await page.evaluate(() => window.__rpgClient?.book())).toBe(lectern);
+  await expect(book.getByTestId("book-page-number")).toHaveText("Página 1 de 3");
+  await expect(book.getByTestId("book-prev")).toBeDisabled();
+  const first = await book.getByTestId("book-page").textContent();
+  await book.getByTestId("book-next").click();
+  await expect(book.getByTestId("book-page-number")).toHaveText("Página 2 de 3");
+  await expect(book.getByTestId("book-page")).not.toHaveText(first ?? "");
+  await shot(page, "97-sandbox-book");
+  await page.keyboard.press("Escape");
+  await expect(book).toBeHidden();
+  expect(await page.evaluate(() => window.__rpgClient?.book())).toBeUndefined();
+
+  // The chest: "Abrir" gives its rewards once (an iron sword among them); again, nothing.
+  const log = page.getByTestId("game-log");
+  await page.locator('[data-chat-tab="log"]').click();
+  p = await tileClient(2098, 2084);
+  await page.mouse.click(p.x, p.y, { button: "right" });
+  await expect(menu.locator('[data-action="open"]')).toHaveClass(/default/);
+  await menu.locator('[data-action="open"]').click();
+  await expect(log).toContainText("Abres el cofre y encuentras:", SLOW);
+  await expect(log).toContainText("espada de hierro");
+  await page.mouse.click(p.x, p.y, { button: "right" });
+  await menu.locator('[data-action="open"]').click();
+  await expect(log).toContainText("El cofre está vacío", SLOW);
+  await shot(page, "98-sandbox-chest");
   expect(errors).toEqual([]);
 });
