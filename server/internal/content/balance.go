@@ -287,6 +287,10 @@ type Travel struct {
 	// took damage or it hit a monster or a player: no sailing and no logout (a closed
 	// connection leaves it link-dead, session/linkdead.go).
 	CombatBlockMs int `yaml:"combat_block_ms"`
+	// LinkDeadMaxMs: the longest a player that lost its connection in a fight stays in the
+	// world link-dead while monsters keep the fight going (0: no cap); a PvP lock still
+	// holds it until the lock ends.
+	LinkDeadMaxMs int `yaml:"link_dead_max_ms"`
 	// ArrivalRadius: a taken arrival tile falls back to the nearest free one this far.
 	ArrivalRadius int `yaml:"arrival_radius"`
 }
@@ -781,6 +785,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {
 		return Balance{}, errors.New("travel: combat_block_ms must be in 0..600000 and arrival_radius in 0..5")
+	}
+	if t := b.Travel; t.LinkDeadMaxMs != 0 && (t.LinkDeadMaxMs < t.CombatBlockMs || t.LinkDeadMaxMs > 3_600_000) {
+		return Balance{}, errors.New("travel: link_dead_max_ms must be 0 (no cap) or in combat_block_ms..3600000")
 	}
 	if err := b.Economy.check(); err != nil {
 		return Balance{}, err

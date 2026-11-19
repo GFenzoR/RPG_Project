@@ -1106,7 +1106,7 @@
     "travel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["combat_block_ms", "arrival_radius"],
+      "required": ["combat_block_ms", "link_dead_max_ms", "arrival_radius"],
       "description": "Boat travel (T3.5).",
       "properties": {
         "combat_block_ms": {
@@ -1114,6 +1114,12 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 600000
+        },
+        "link_dead_max_ms": {
+          "description": "The longest a character that lost its connection in a fight stays in the world link-dead while monsters keep the fight going; a PvP lock still holds it until the lock ends. 0: no cap; otherwise at least combat_block_ms (the server checks it). Link-dead, it trains no skill and earns no party contribution (docs/02 \"Bloqueo de logout en combate\").",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600000
         },
         "arrival_radius": {
           "description": "If the arrival tile of a boat route or a portal is taken, the nearest free walkable tile at most this far (Chebyshev).",

@@ -214,6 +214,11 @@ travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes 
   # closed in combat leaves the character in the world, link-dead, until the fight is over
   # (docs/02 "Bloqueo de logout en combate").
   combat_block_ms: 12000
+  # A link-dead character leaves after this long even if monsters keep the fight going (a
+  # weak spawn biting a strong character for nothing would hold it forever); a PvP lock
+  # still holds it until the lock ends. 0: no cap. Link-dead, it trains no skill and earns
+  # no party contribution.
+  link_dead_max_ms: 120000
   # Arrival taken: nearest free walkable tile at most this far. Portals (stairs, ladders,
   # holes, rope spots, teleports) land with the same radius.
   arrival_radius: 2

@@ -42,6 +42,9 @@ type route struct {
 // tiles of an island. A captain's node may not end up with more than 9 options.
 func (w *World) initTravel() error {
 	w.fightFor = ticksFor(w.cfg.Balance.Travel.CombatBlockMs)
+	if ms := w.cfg.Balance.Travel.LinkDeadMaxMs; ms > 0 {
+		w.linkDeadFor = ticksFor(ms) // 0 (the zero value): no cap
+	}
 	w.arrivalRadius = w.cfg.Balance.Travel.ArrivalRadius
 	w.routes = map[string][]*route{}
 	if len(w.cfg.BoatRoutes) == 0 {

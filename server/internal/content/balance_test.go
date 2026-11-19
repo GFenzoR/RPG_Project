@@ -2,8 +2,11 @@ package content
 
 import (
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -63,6 +66,27 @@ func TestParseBalanceErrors(t *testing.T) {
 	} {
 		if _, err := ParseBalance([]byte(src)); err == nil {
 			t.Errorf("%s: expected error", name)
+		}
+	}
+}
+
+// travel.link_dead_max_ms is 0 (no cap) or at least combat_block_ms: a cap below the block
+// would cut every fight short of it.
+func TestLinkDeadMaxMs(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "data", "balance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const repo = "link_dead_max_ms: 120000"
+	if !strings.Contains(string(raw), repo) {
+		t.Fatalf("data/balance.yaml has no %q", repo)
+	}
+	for v, ok := range map[string]bool{"0": true, "12000": true, "3600000": true, "11999": false, "3600001": false, "-1": false} {
+		b, err := ParseBalance([]byte(strings.Replace(string(raw), repo, "link_dead_max_ms: "+v, 1)))
+		if (err == nil) != ok {
+			t.Errorf("link_dead_max_ms %s: error %v", v, err)
+		} else if ok && strconv.Itoa(b.Travel.LinkDeadMaxMs) != v {
+			t.Errorf("link_dead_max_ms %s read as %d", v, b.Travel.LinkDeadMaxMs)
 		}
 	}
 }

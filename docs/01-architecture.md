@@ -128,7 +128,8 @@ segundo recorre solo a los jugadores con marca y las guerras abiertas (como much
 `max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión en
 combate (el bloqueo PvP o `travel.combat_block_ms` desde su última pelea, `inCombat`;
 `session/linkdead.go`, docs/02 "Bloqueo de logout en combate") sigue en el mundo
-(link-dead: su lote se descarta en el flush) hasta que la pelea termina; `checkLinkDead`,
+(link-dead: su lote se descarta en el flush) hasta que la pelea termina o pasa
+`travel.link_dead_max_ms` (`holdsLinkDead`; el bloqueo PvP no tiene tope); `checkLinkDead`,
 que en cada tick recorre solo `World.linkDead` (casi siempre vacía), lo saca y guarda su
 snapshot final, y una muerte lo saca al final de ese tick (`deathSave` lo marca y
 `checkLinkDead` lo saca: el guardado de la muerte es el final; nunca en medio de un

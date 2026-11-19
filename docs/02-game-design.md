@@ -792,7 +792,9 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     Pelean contra su objetivo y comparten su spawn (su correa y su casa), pero **no dan
     experiencia, botín ni restos, no cuentan para quests ni reportes y no reaparecen**: un
     jefe que invoca no es una granja. Se van (`DESPAWN`) cuando muere o se rinde (correa)
-    el que las llamó. Una criatura invocada no puede invocar (`make validate` y el
+    el que las llamó, y también cuando se queda sin objetivo sin rendirse (su objetivo
+    murió, salió del juego, se metió en una zona de protección o salió de su vista): no
+    esperan en la guarida al próximo que entre; él conserva sus heridas. Una criatura invocada no puede invocar (`make validate` y el
     arranque lo rechazan: no tendría tope).
   - **Fases** (`phases`, para jefes): cada una está activa mientras la vida está por
     debajo de su `below_hp_pct`, todas las alcanzadas a la vez. Sus `attacks_add` se suman
@@ -947,11 +949,22 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   conexión haya mandado después no se ejecuta y su intercambio se cancela), pero se lo
   puede atacar, los monstruos lo siguen teniendo de objetivo y sus condiciones siguen
   corriendo; cada golpe renueva el bloqueo. Cuando el bloqueo vence, se guarda y sale.
+- **Tope de link-dead:** aunque los monstruos sigan peleando con él, sale a los
+  `travel.link_dead_max_ms` (2 min) de quedar link-dead, con su guardado final (si no, un
+  spawn débil que no le hace daño a un personaje fuerte lo tendría en el mundo para
+  siempre). El bloqueo PvP no tiene tope: lo retiene hasta que vence, como antes. `0` en
+  el balance quita el tope.
+- **Nadie lo juega:** link-dead no sube skills (los golpes que recibe no entrenan escudo)
+  ni cuenta como activo para la experiencia compartida del grupo (recibir golpes no es
+  ayudar: pasados `party.contribution_ms` de su último aporte con conexión, no cobra parte
+  de las muertes de su grupo). Regenera vida y maná como cualquiera.
 - **Morir link-dead** paga lo mismo que cualquier muerte (experiencia, skills, equipo al
   cuerpo, bendiciones) y el personaje sale del mundo en ese momento, con un solo guardado
   (el de la muerte, que es su guardado final). Si todavía lo retiene un bloqueo PvP, espera
   en el templo a que venza, como antes. Al volver a entrar, el jugador ve la pantalla de
-  muerte con lo que perdió (salvo que el servidor se haya reiniciado entretanto).
+  muerte con lo que perdió (salvo que el servidor se haya reiniciado entretanto). Una
+  derrota en la arena estando link-dead (no cuesta nada) se avisa igual al volver a entrar
+  con `pvp.arena_defeat`, sin tapar el aviso de una muerte.
 - **Volver a entrar** mientras está link-dead retoma ese mismo personaje, como un relogueo
   (posición, vida, condiciones y la pelea: el logout sigue bloqueado hasta que vence); nunca
   hay dos en el mundo.

@@ -174,7 +174,11 @@ func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
 	w.refreshSpeed(holder{p: p})
 	w.wakeAtTemple(ctx, p, true)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	p.emit(systemMsg(msgPvPArenaDefeat))
+	defeat := systemMsg(msgPvPArenaDefeat)
+	p.emit(defeat)
+	if _, died := w.diedAway[p.charID]; !died { // a death's notice says more: it stays
+		w.diedLinkDeadNotice(p, defeat)
+	}
 	w.deathSave(ctx, p)
 }
 

@@ -714,6 +714,12 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		w.updatePhase(m)
 	}
 	if m.target == nil {
+		if len(m.summons) > 0 {
+			// Its fight is over without a give-up (its target died, left, hid in a protection
+			// zone or went out of sight): what it called goes too, as when it gives up, rather
+			// than wait in its lair for the next one to come in.
+			w.despawnSummons(ctx, m)
+		}
 		// Looking around is the expensive part of idling: once every targetScanTicks,
 		// staggered by id so monsters spread the work over ticks.
 		if b.Aggressive && (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {

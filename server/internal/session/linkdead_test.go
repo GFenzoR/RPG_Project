@@ -420,6 +420,18 @@ func TestLinkDeadArenaDefeat(t *testing.T) {
 	if g.w.PlayerByCharacter(a.CharacterID()) != a || a.Target() != 0 {
 		t.Fatalf("Ana in the world %v, target %d", g.w.PlayerByCharacter(a.CharacterID()) == a, a.Target())
 	}
+	// Nobody saw the defeat: Bea's next login says it (pvp.arena_defeat), only once.
+	back := session.Character{ID: b.CharacterID(), AccountID: b.CharacterID(), Name: "Bea", Vocation: "guardian", Level: 30}
+	cl2, _ := g.joinChar(back)
+	if keys := sysKeys(cl2.take()); !slices.Contains(keys, "pvp.arena_defeat") {
+		t.Fatalf("first login after the defeat: system messages %v", keys)
+	}
+	g.input(cl2, logout())
+	g.sim.Step()
+	cl3, _ := g.joinChar(back)
+	if keys := sysKeys(cl3.take()); slices.Contains(keys, "pvp.arena_defeat") {
+		t.Fatalf("the defeat was told again at the second login: %v", keys)
+	}
 }
 
 // withLongPoison gives the world the test conditions with a poison of up to 40 hits.
@@ -600,5 +612,84 @@ func TestCheckLinkDeadDropsAStrayEntry(t *testing.T) {
 	}
 	if p.LinkDead() || !strings.Contains(buf.String(), "a link-dead player out of the world was still listed") {
 		t.Fatalf("link-dead %v, log %q", p.LinkDead(), buf.String())
+	}
+}
+
+// withLinkDeadCap is a harness option: travel.link_dead_max_ms is d.
+func withLinkDeadCap(d time.Duration) option {
+	return func(c *session.Config) { c.Balance.Travel.LinkDeadMaxMs = int(d / time.Millisecond) }
+}
+
+// A wolf that keeps biting a link-dead character holds it in the world no longer than
+// travel.link_dead_max_ms from its leave: then it leaves with its final save though the
+// fight goes on (a weak spawn biting a strong character would otherwise hold it for
+// good), and the wolf has nobody to bite. A PvP lock still holds a link-dead character
+// past the cap, until the lock ends.
+func TestLinkDeadCappedInAnEndlessFight(t *testing.T) {
+	const capped = 30 * time.Second
+	h := fightHarness(t, 15, withLinkDeadCap(capped))
+	cl, p := h.hunter("Tank", 40)
+	co, o := h.join("Outlaw", &far)
+	h.bitten(p)
+	wolf := onlyMonster(t, h)
+	h.do(func(ctx *game.TickContext) { h.w.SetPvPLockForTest(o, ctx.Tick+game.TicksFor(45*time.Second)) })
+	n := len(h.saves)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Command(h.w.Leave(co))
+	h.sim.Step()
+	left := h.sim.Now()
+	h.runTo(left, capped-time.Second)
+	if h.w.PlayerByCharacter(p.CharacterID()) != p || !p.LinkDead() || wolf.TargetID() != p.ID() ||
+		finalSaves(h.savesOf(p.CharacterID(), n)) != 0 || !o.LinkDead() {
+		t.Fatalf("before the cap: in the world %v, link-dead %v, the wolf targets %d (player %d), final saves %d, outlaw link-dead %v",
+			h.w.PlayerByCharacter(p.CharacterID()) == p, p.LinkDead(), wolf.TargetID(), p.ID(),
+			finalSaves(h.savesOf(p.CharacterID(), n)), o.LinkDead())
+	}
+	h.runTo(left, capped+time.Second)
+	if s := h.savesOf(p.CharacterID(), n); h.w.PlayerByCharacter(p.CharacterID()) != nil || finalSaves(s) != 1 ||
+		!s[len(s)-1].Final || wolf.TargetID() != 0 {
+		t.Fatalf("past the cap: in the world %v, saves %+v, the wolf targets %d",
+			h.w.PlayerByCharacter(p.CharacterID()) != nil, s, wolf.TargetID())
+	}
+	if h.w.PlayerByCharacter(o.CharacterID()) != o || !o.LinkDead() || finalSaves(h.savesOf(o.CharacterID(), n)) != 0 {
+		t.Fatalf("the cap cut a PvP lock short: in the world %v, link-dead %v",
+			h.w.PlayerByCharacter(o.CharacterID()) == o, o.LinkDead())
+	}
+	h.runTo(left, 46*time.Second)
+	if s := h.savesOf(o.CharacterID(), n); h.w.PlayerByCharacter(o.CharacterID()) != nil || finalSaves(s) != 1 {
+		t.Fatalf("after the PvP lock: in the world %v, saves %+v", h.w.PlayerByCharacter(o.CharacterID()) != nil, s)
+	}
+}
+
+// Nobody plays a link-dead character: the wolf that keeps biting it trains no shield, and
+// the bites are no help in its party's fights (party.contribution_ms after its leave it
+// shares no kill: its mate keeps it all).
+func TestLinkDeadLearnsNothing(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Idle", 40)
+	nextChar++
+	cm, mate := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Mate", Vocation: "guardian", Level: 40,
+		Experience: testBalance().Experience.TotalFor(40) + 100, Health: 1 << 20, Pos: pos(30, 20), HasPos: true})
+	h.form(cm, mate, member{cl, p})
+	h.input(cm, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_ON, 0))
+	h.bitten(p)
+	shield := h.w.Skill(p, "shield")
+	if shield.Tries == 0 && shield.Level == 10 {
+		t.Fatal("the bites before the leave trained no shield: the test proves nothing")
+	}
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	shield = h.w.Skill(p, "shield")
+	h.sim.RunFor(70 * time.Second) // more than party.contribution_ms (60 s)
+	if now := h.w.Skill(p, "shield"); !p.LinkDead() || now.Level != shield.Level || now.Tries != shield.Tries {
+		t.Fatalf("link-dead %v, shield %d (%d tries), was %d (%d tries)", p.LinkDead(), now.Level, now.Tries, shield.Level, shield.Tries)
+	}
+	xm, xp := mate.Experience(), p.Experience()
+	h.do(func(ctx *game.TickContext) {
+		h.w.ContributeForTest(ctx, mate)
+		h.w.ShareForTest(ctx, pos(25, 20), 100, session.Share{P: mate, Amount: 30})
+	})
+	if dm, dp := mate.Experience()-xm, p.Experience()-xp; dm != 100 || dp != 0 {
+		t.Fatalf("a kill by its mate: mate +%d, link-dead +%d (want 100 and 0: no sharing)", dm, dp)
 	}
 }

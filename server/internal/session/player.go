@@ -185,8 +185,9 @@ type Player struct {
 	lockUntil  game.Tick
 	fightUntil game.Tick
 	// linkDead: its connection closed in a fight (inCombat); it stays until the fight is
-	// over (linkdead.go).
-	linkDead bool
+	// over or travel.link_dead_max_ms passed since linkDeadAt (linkdead.go holdsLinkDead).
+	linkDead   bool
+	linkDeadAt game.Tick
 	// dropped: the loop closed its connection (Client.Close) while it stayed link-dead (a
 	// slow client, a password reset); nothing is sent or closed when it leaves.
 	dropped bool

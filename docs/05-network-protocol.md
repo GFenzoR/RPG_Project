@@ -1292,7 +1292,7 @@ dice que el servidor los manda.
   |---|---|
   | `OUT_OF_VIEW` | Caminó fuera de la ventana, o quien mira caminó o fue movido lejos (lo que se borra antes de un `FullMapView`) |
   | `DEATH` | Murió ahí: un monstruo (después de su `CreatureHealth` 0) o un jugador, también en una arena (reaparece en su templo con `CreatureAppear`) |
-  | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera: los invocados de un monstruo que murió o se rindió (docs/02 "Habilidades"). Queda también para monstruos de eventos |
+  | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera: los invocados de un monstruo que murió, se rindió o se quedó sin objetivo (docs/02 "Habilidades"). Queda también para monstruos de eventos |
   | `TELEPORT` | Dejó su casilla sin caminar ni morir: un portal (escalera, agujero, teletransporte, escalera de mano, soga), un barco, `/tp`, el teleport de un NPC, la expulsión de una casa. **Volverse invisible también** manda `TELEPORT`: para quien mira se fue, y nada dice que sigue ahí |
   | `LOGOUT` | El jugador salió del juego: `Logout`, la conexión cerrada, una expulsión o un ban, la inactividad, un cliente lento, entrar desde otra conexión, el fin de la pelea de un link-dead (o su muerte: sale del templo) |
   | `UNSPECIFIED` | Un servidor anterior (`attack_events` en `false`) |

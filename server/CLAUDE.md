@@ -139,7 +139,10 @@ server/
   `Logout` en combate se rechaza (`logoutBlock`: `pvp.logout_locked` o
   `combat.logout_locked`). `Leave` en combate deja al jugador link-dead
   (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkLinkDead` (cada tick, solo sobre
-  `World.linkDead`) lo saca; un login nuevo lo retoma con `carryFight` (`fightAt` y
+  `World.linkDead`) lo saca: cuando `holdsLinkDead` deja de valer (la pelea terminó o pasó
+  `travel.link_dead_max_ms` desde `Player.linkDeadAt`; el bloqueo PvP no tiene tope). Un
+  link-dead no entrena (`trainBy`) ni aporta al grupo (`contribute`): un camino nuevo que
+  entrene o cuente aporte tiene que pasar por ellos. Un login nuevo lo retoma con `carryFight` (`fightAt` y
   `pvpCarry`). Un corte de la conexión que decide el servidor (cliente lento,
   `KickAccount`) pasa por `disconnect`, que en combate cierra la conexión una vez
   (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
@@ -150,8 +153,10 @@ server/
   `checkLinkDead`) y ese es su único guardado. Nunca saques a un jugador del mundo
   (`remove`) desde un camino de daño: el sistema de combate puede estar recorriendo
   `World.players`. Un camino nuevo que guarde una muerte usa `deathSave`, no `save`. El
-  `death.died` de una muerte link-dead queda en `World.diedAway` (`diedLinkDeadNotice`) y
-  lo recibe el próximo login (`tellDiedAway` en `join`).
+  `death.died` de una muerte link-dead (o el `pvp.arena_defeat` de una derrota en la arena,
+  que nunca reemplaza al de una muerte) queda en `World.diedAway` (`diedLinkDeadNotice`) y
+  lo recibe el próximo login (`tellDiedAway` en `join`); una entrada por personaje hasta
+  que vuelva o se reinicie el servidor (aceptado así: acotado por los personajes).
 
 - **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +
   `store/market.go` + `app/market.go` (`balance.yaml trade` / `market`; sin bloque, o sin

@@ -161,16 +161,16 @@ el punto 5:
   - **Para que lo decida el dueño:** una zona de protección no corta el bloqueo (como el
     PvP de T5.2; en el género, entrar a una zona de protección suele terminar el combate,
     pero no el bloqueo PvP). Si se quiere, es una condición más en `inCombat`.
-  - **Para que lo decida el dueño (revisión del lote 10):** un link-dead no tiene tiempo
-    máximo. `markFight` corre antes de la tirada de acierto del monstruo
-    (`monsterAttacks`, `session/combat.go`), así que un monstruo que falla siempre o no
-    llega a hacer daño (armadura) lo mantiene en el mundo sin límite, y mientras tanto
-    entrena escudo y suma a la experiencia compartida del grupo, sin el cliente abierto.
-    Es lo que pasa en el género y lo mismo que un AFK conectado (la inactividad y el
-    chequeo de presencia ya se saltan en combate; tampoco salta la alerta a los GM por un
-    chequeo de presencia esquivado, porque no se le pide ninguno). Si se quiere cortar:
-    un tope de tiempo link-dead (sale y se guarda al vencer, aunque siga en combate) o no
-    entrenar escudo ni contar para el grupo mientras está link-dead.
+  - **Link-dead sin fin (revisión final del lote 10, hecho en `lote10/verify`):** un
+    monstruo que falla siempre o no llega a hacer daño (armadura) renovaba la pelea en cada
+    ronda (`markFight` corre antes de la tirada) y dejaba al link-dead en el mundo sin
+    límite, entrenando escudo y sumando a la experiencia compartida del grupo sin el
+    cliente abierto. Ahora hay un tope, `travel.link_dead_max_ms` (2 min; el bloqueo PvP
+    sigue sin tope), y un link-dead no entrena skills ni cuenta como activo para el grupo.
+    **Para el dueño:** el valor del tope es una decisión de balance (con 2 min, una pelea
+    que no lo mata en 2 min sin curarse no lo mata; `0` lo quita). La tercera opción de
+    la revisión (que los monstruos no tomen de objetivo nuevo a un link-dead) no se hizo:
+    cerrar el juego sacaría de encima a los que todavía no lo atacaban.
   - las **zonas sin logout** (`no_logout` de `zones.yaml`, el muelle de cada isla) siguen
     sin rechazar el `Logout`: solo las miran la inactividad y los chequeos de presencia.
     Es otra regla (no depende de pelear) y queda para cuando se decida qué pasa al cerrar la

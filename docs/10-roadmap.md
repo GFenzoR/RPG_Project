@@ -447,7 +447,8 @@ secundaria.
   `feat/pve-logout-lock`).** El bloqueo de logout del PvP vale para toda pelea: no se sale
   del juego a menos de `travel.combat_block_ms` (12 s) de un golpe dado o recibido
   (`combat.logout_locked`), y quien cierra la conexión en ese tiempo queda link-dead
-  (atacable, presa de los monstruos, con sus condiciones) hasta que la pelea termina; una
+  (atacable, presa de los monstruos, con sus condiciones, sin entrenar ni aportar al
+  grupo) hasta que la pelea termina o pasa `travel.link_dead_max_ms` (2 min); una
   muerte así paga lo de siempre y sale con un solo guardado, y un relogueo retoma al mismo
   personaje con su pelea. Expulsiones, bans, guardados fallidos y el apagado sacan en el
   acto, como antes. `server/internal/session/linkdead.go`, docs/02 "Bloqueo de logout en

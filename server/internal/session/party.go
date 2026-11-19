@@ -304,9 +304,10 @@ func (w *World) partySay(p *Player, text string) {
 // ---- shared experience -------------------------------------------------------------
 
 // contribute marks that p just helped a fight: it hit a monster, healed a party member
-// or a monster attacked it.
+// or a monster attacked it. A link-dead p helps nothing (a monster biting it would keep
+// it a sharer of its party's kills offline).
 func (w *World) contribute(ctx *game.TickContext, p *Player) {
-	if p != nil && p.party != nil {
+	if p != nil && p.party != nil && !p.linkDead {
 		p.contributedAt = max(ctx.Tick, 1)
 	}
 }

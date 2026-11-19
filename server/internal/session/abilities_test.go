@@ -751,6 +751,44 @@ func TestMonsterSummonsGoWhenItGivesUp(t *testing.T) {
 	}
 }
 
+// A caller left without a target that it did not give up (its target died) takes its
+// summons away too (DESPAWN): they do not wait in its lair for whoever comes in next. It
+// keeps its wounds (no give-up). A watcher sees it all from beyond the caller's sight (12
+// tiles east: in its own wide view, out of the classic window the caller notices).
+func TestMonsterSummonsGoWhenItsTargetDies(t *testing.T) {
+	h := abilityHarness(t, worldtest.Open(t, 0, 0, 64, 64), summonerDefs(t), spawnAt("caller", 40, 40, 0, 60))
+	_, p := h.join("Hunter", at(40, 42))
+	cl, _ := h.join("Watcher", at(52, 40))
+	h.sim.RunTicks(60)
+	boss := onlyMonster(t, h)
+	h.sim.Command(gameFunc(func() { boss.SetHealth(500) }))
+	h.sim.RunTicks(2)
+	imps := monstersOf(h, "imp")
+	if len(imps) != 2 || boss.TargetID() != p.ID() {
+		t.Fatalf("%d imps, the caller targets %d (want 2 and the hunter)", len(imps), boss.TargetID())
+	}
+	cl.take()
+	h.do(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, p, 1_000_000) })
+	if temple := h.w.Map().Islands()[0].Temple; p.Pos() != temple {
+		t.Fatalf("the hunter is on %v, want dead and woken at the temple %v", p.Pos(), temple)
+	}
+	if hp, maxHP := boss.Health(); boss.TargetID() != 0 || hp >= maxHP {
+		t.Fatalf("the caller targets %d at %d/%d health: want no target and its wounds", boss.TargetID(), hp, maxHP)
+	}
+	if n := len(monstersOf(h, "imp")); n != 0 {
+		t.Errorf("%d imps after the caller's target died", n)
+	}
+	gone := map[uint32]pb.DisappearReason{}
+	for _, d := range find(cl.take(), (*pb.ServerMessage).GetCreatureDisappear) {
+		gone[d.GetId()] = d.GetReason()
+	}
+	for _, imp := range imps {
+		if gone[imp.ID()] != pb.DisappearReason_DISAPPEAR_REASON_DESPAWN {
+			t.Errorf("imp %d left as %v, want DESPAWN", imp.ID(), gone[imp.ID()])
+		}
+	}
+}
+
 // A boss's phase is on while its health is below below_hp_pct: its speed (speed_mult,
 // told to who sees it), its attack intervals (attack_interval_mult) and its attacks_add
 // follow; healed above it, it is back as it was.

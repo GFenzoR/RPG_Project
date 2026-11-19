@@ -865,7 +865,10 @@ trade:
   números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`). La llegada
   por un portal (escaleras y demás) usa el mismo `arrival_radius`. `combat_block_ms`
   también es el bloqueo de logout de cualquier pelea (`02-game-design.md`, "Bloqueo de
-  logout en combate").
+  logout en combate"), y `link_dead_max_ms` (obligatorio; `0` = sin tope, si no al menos
+  `combat_block_ms` y hasta 1 h, lo revisa el servidor) es lo más que un personaje que
+  perdió la conexión en una pelea con monstruos queda en el mundo aunque la pelea siga (el
+  bloqueo PvP no tiene tope).
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Tutorial (T4.2)

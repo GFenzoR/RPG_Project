@@ -463,6 +463,7 @@ type World struct {
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
 	fightFor      game.Tick
+	linkDeadFor   game.Tick // travel.link_dead_max_ms; 0: no cap (linkdead.go holdsLinkDead)
 	arrivalRadius int
 
 	// Economy log (T4.1): this tick's entries, entries the queue did not take yet, how

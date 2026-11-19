@@ -31,8 +31,9 @@ func (w *World) logoutBlock(tick game.Tick, p *Player) string {
 // linkDeadOnLeave keeps p in the world when its connection closes while it is in combat
 // (inCombat): link-dead, it does nothing (Input ignores it, its trade is cancelled and its
 // market window closed) but can still be attacked, monsters keep it as their target and
-// its conditions keep ticking (each hit renews the block), until the block ends;
-// checkLinkDead then saves it and takes it out, or a death does (deathSave). It reports
+// its conditions keep ticking (each hit renews the block), until holdsLinkDead ends;
+// checkLinkDead then saves it and takes it out, or a death does (deathSave). Nobody plays
+// it: it trains no skill (trainBy) and helps no party fight (contribute). It reports
 // whether p stays: a player already link-dead stays as it is. A new login of the character
 // takes it over (join).
 func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
@@ -42,7 +43,7 @@ func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
 	if !w.inCombat(tick, p) {
 		return false
 	}
-	p.linkDead = true
+	p.linkDead, p.linkDeadAt = true, tick
 	p.target, p.ptarget = nil, nil
 	p.stopWalk()
 	p.out = p.out[:0]
@@ -72,13 +73,22 @@ func (w *World) disconnect(ctx *game.TickContext, p *Player, reason pb.Disconnec
 // LinkDead reports whether p lost its connection and stays in the world for its fight.
 func (p *Player) LinkDead() bool { return p.linkDead }
 
-// checkLinkDead takes out the link-dead players whose fight is over, or that died
-// (deathSave), saving them (remove). It runs every tick, at the end, over World.linkDead
-// only (usually empty).
+// holdsLinkDead reports whether link-dead p stays in the world: its PvP lock lasts, or it
+// is in combat (inCombat) and has not been link-dead for balance travel.link_dead_max_ms
+// yet. Without that cap a weak spawn that keeps biting a strong character for nothing
+// would hold it there for good (the review of the logout block: it would regenerate and
+// stand in its party's fights offline).
+func (w *World) holdsLinkDead(now game.Tick, p *Player) bool {
+	return w.pvpLocked(now, p) || w.inCombat(now, p) && (w.linkDeadFor == 0 || now-p.linkDeadAt < w.linkDeadFor)
+}
+
+// checkLinkDead takes out the link-dead players whose fight is over or capped
+// (holdsLinkDead), or that died (deathSave), saving them (remove). It runs every tick, at
+// the end, over World.linkDead only (usually empty).
 func (w *World) checkLinkDead(ctx *game.TickContext) {
 	for i := 0; i < len(w.linkDead); {
 		p := w.linkDead[i]
-		if !p.diedLinkDead && w.inCombat(ctx.Tick, p) {
+		if !p.diedLinkDead && w.holdsLinkDead(ctx.Tick, p) {
 			i++
 			continue
 		}
@@ -109,7 +119,7 @@ func (w *World) forgetLinkDead(p *Player) {
 // not here, where a fight loop may be going over the players), and its final snapshot is
 // that save: the death is saved once, as anyone's.
 func (w *World) deathSave(ctx *game.TickContext, p *Player) {
-	if p.linkDead && !w.inCombat(ctx.Tick, p) {
+	if p.linkDead && !w.holdsLinkDead(ctx.Tick, p) {
 		p.diedLinkDead = true
 		return
 	}
@@ -119,7 +129,11 @@ func (w *World) deathSave(ctx *game.TickContext, p *Player) {
 // diedLinkDeadNotice keeps died, the death.died message of p's death, for p's next login
 // when p is link-dead (nobody to tell now: flushPlayer drops it): that login opens with the
 // death screen (tellDiedAway) instead of a character at the temple with less experience
-// and nothing said. It lives in memory only: a restart in between loses it.
+// and nothing said. An arena defeat keeps its pvp.arena_defeat the same way (arenaDefeat),
+// but never in place of a death's. It lives in memory only, one message per character
+// until its next login: a restart in between loses it, and a character that never comes
+// back keeps its one entry until then (bounded by the characters, a few bytes each; the
+// review of the logout block accepted it rather than age it out).
 func (w *World) diedLinkDeadNotice(p *Player, died *pb.ServerMessage) {
 	if p.linkDead {
 		w.diedAway[p.charID] = died

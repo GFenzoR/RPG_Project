@@ -247,7 +247,7 @@ func (m *Monster) summoned(i int) int {
 // conjuring effect; with no such tile, fewer. A summon fights m's target from the start
 // and shares m's spawn
 // (its leash area and its home), but gives no experience nor loot and never respawns
-// (killMonster); it goes when m dies or gives up (despawnSummons).
+// (killMonster); it goes when m dies, gives up or is left without a target (despawnSummons).
 func (w *World) summon(ctx *game.TickContext, m *Monster, i int) {
 	s := m.kind.attacks[i].def.Summon
 	k := w.kinds[s.Monster]
@@ -273,7 +273,8 @@ func (w *World) summon(ctx *game.TickContext, m *Monster, i int) {
 	}
 }
 
-// despawnSummons takes m's summons out of the world (their master died or gave up).
+// despawnSummons takes m's summons out of the world (their master died, gave up or lost
+// its target: think).
 func (w *World) despawnSummons(ctx *game.TickContext, m *Monster) {
 	for len(m.summons) > 0 {
 		s := m.summons[len(m.summons)-1]
