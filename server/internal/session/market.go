@@ -265,6 +265,7 @@ func (w *World) initMarket() {
 	w.refVotes = map[[2]int64]priceVote{}
 	w.refSellers = map[int64]bool{}
 	w.refAccounts = map[int64]bool{}
+	w.mkKinds = map[pieceKind]bool{}
 	d := w.cfg.Market
 	if d == nil {
 		return
@@ -1248,8 +1249,8 @@ func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 		u.Owned = uint32(w.marketUnits(p, w.byNum[item]))
 		u.OwnedMods = w.ownedMods(p, w.byNum[item])
 		if b := w.books[item]; b != nil {
-			u.Sells = w.listing(b.sells, p, now)
-			u.Buys = w.listing(b.buys, p, now)
+			u.Sells = w.listing(b.sells, p, now, true)
+			u.Buys = w.listing(b.buys, p, now, false)
 		}
 	}
 	for _, o := range w.byOwner[p.charID] {
@@ -1279,19 +1280,40 @@ func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_MarketUpdate{MarketUpdate: u}})
 }
 
-// listing is the first list_size visible offers of one side. Hidden offers (banned
-// owners) are skipped; there are few, so the walk stays short.
-func (w *World) listing(list []*offer, p *Player, now time.Time) []*pb.MarketOffer {
+// listing is the best visible offers of one side, in its order: the first list_size and,
+// for the sells of an item that rolls an attribute (pieces), also the best one of every
+// kind of piece further down: one per attribute and refine level (pieceKind). Each sell
+// of a piece is an offer of its own, so without them a refined piece or a rare attribute
+// dearer than list_size common ones would show to nobody and nobody could take it
+// (docs/02 "Mercado global", final review of lote 11). The rows stay in price order and
+// are at most list_size plus the kinds on sale. Hidden offers (banned owners) are
+// skipped; there are few. The walk is the whole book only for the sells of pieces.
+func (w *World) listing(list []*offer, p *Player, now time.Time, kinds bool) []*pb.MarketOffer {
 	var out []*pb.MarketOffer
+	kinds = kinds && len(list) > 0 && content.Rolls(list[0].def)
+	clear(w.mkKinds)
 	for _, o := range list {
-		if len(out) == w.mk.ListSize {
+		if len(out) >= w.mk.ListSize && !kinds {
 			break
 		}
-		if !w.isBanned(o.AccountID, now) {
+		if w.isBanned(o.AccountID, now) {
+			continue
+		}
+		k := pieceKind{attr: o.Mods.Attr, refine: o.Mods.Refine}
+		if len(out) < w.mk.ListSize || kinds && !w.mkKinds[k] {
+			w.mkKinds[k] = true
 			out = append(out, w.offerMsg(o, p))
 		}
 	}
 	return out
+}
+
+// pieceKind is what tells one sell of a piece from another in the listing: its attribute
+// and its refine level (the value of the attribute does not: the cheapest of a kind
+// shows, and the next one once it is taken).
+type pieceKind struct {
+	attr   string
+	refine int
 }
 
 // ---- staff ---------------------------------------------------------------------------

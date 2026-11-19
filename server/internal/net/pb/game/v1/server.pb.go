@@ -4842,7 +4842,9 @@ type MarketUpdate struct {
 	Money uint64 `protobuf:"varint,2,opt,name=money,proto3" json:"money,omitempty"`
 	// The browsed item (0: none), its best offers per side and its reference price
 	// (the median of the recent votes, one per seller account and day; 0 = none, too few
-	// votes or sellers: balance market.reference_min_votes / reference_min_sellers).
+	// votes or sellers: balance market.reference_min_votes / reference_min_sellers). The
+	// best offers: list_size per side, in price order; the sells of an equipable add the
+	// cheapest of every other kind of piece (attribute and refine level, docs/02).
 	ItemId         uint32         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	Sells          []*MarketOffer `protobuf:"bytes,4,rep,name=sells,proto3" json:"sells,omitempty"`
 	Buys           []*MarketOffer `protobuf:"bytes,5,rep,name=buys,proto3" json:"buys,omitempty"`

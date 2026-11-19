@@ -197,10 +197,12 @@ el punto 5:
     pasarlos a esa clase.
   - **La pieza se elige de una lista** (las puestas y las de los contenedores abiertos), no
     arrastrándola a la ventana, y el inventario no muestra "+N" sobre el ícono (lo dicen la
-    ficha, el tooltip, "Mirar" y la lista de la forja). La lista también muestra lo de un
-    contenedor abierto del suelo (un cadáver, un cofre de casa): el cliente no sabe qué
-    ventana lleva el jugador, y el servidor lo rechaza con `refine.not_carried`. Separarlo
-    pide que `ContainerOpen`/`ContainerUpdate` digan si el contenedor va encima.
+    ficha, el tooltip, "Mirar" y la lista de la forja). Desde la revisión final del lote 11
+    la lista ya no muestra un contenedor abierto sin padre que no es del tipo puesto (un
+    cadáver, un cofre, una bolsa del suelo: `maybeCarried`); todavía muestra una bolsa
+    dentro de un cofre o de un cadáver (el servidor la rechaza con `refine.not_carried`).
+    Separarlo del todo pide que `ContainerOpen`/`ContainerUpdate` digan si el contenedor va
+    encima.
   - **Lo que se lleva se cuenta al usar el yunque y tras cada intento** (`StationOpen`, como
     las recetas): piedras o monedas juntadas con la ventana abierta no se ven hasta volver
     a usarlo. Arreglarlo pide que el servidor recuerde la estación abierta y la reenvíe al
@@ -215,10 +217,20 @@ el punto 5:
     hasta +10 y uno de +3 de protección recién a +4, aunque cada intento desde +5 cuesta y
     arriesga la pieza (la ventana muestra 0 → 0). Si el dueño quiere, un mínimo de 1 por
     nivel desde cierto punto o un aviso en la ventana.
-  - **Vender a un NPC una pieza refinada:** el NPC se lleva primero la de refinado más bajo
-    (`spareFirst`), pero si la única copia en los contenedores es una +7, la vende al precio
-    base sin aviso. Opciones (decisión del dueño): sacar las refinadas de la venta a NPCs, o
-    un aviso en la tienda; elegir cuál pide el `mods` en `ShopSell` de arriba.
+  - **Vender a un NPC una pieza refinada (resuelto en la revisión final del lote 11):** un
+    NPC, un `take_item`/`has_item` de diálogo y una receta ya no cuentan ni toman piezas
+    refinadas (`spareable`); salen por el mercado, el intercambio o el suelo. Si el dueño
+    prefiere poder vendérselas a un NPC, hace falta el `mods` en `ShopSell` y una
+    confirmación en la tienda.
+  - **Mercado con muchas piezas (revisión final del lote 11):** las ventas de un equipable
+    listan, después de las `list_size` más baratas, la más barata de cada clase de pieza
+    (atributo y refinado). Si el dueño quiere más (ver todas las de una clase, filtrar por
+    valor mínimo), hace falta un filtro en `MarketBrowse` o paginar.
+  - **El precio de referencia mezcla piezas refinadas y comunes** (revisión final del lote
+    11, menor, sin cambiar): las ventas de piezas refinadas votan como las comunes. La
+    mediana por cuenta y día ya amortigua unas pocas ventas caras; sacarlas del voto
+    también después de reiniciar pide guardar el refinado en `market_history` (migración
+    nueva) y filtrarlo en `LoadMarketSales`.
   - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Brasal y la
     suelta el custodio; las islas nuevas (lotes siguientes) traen sus fuentes.
   - **+10 es una leyenda a propósito** (unos 1 900 ámbares de promedio con ámbar en cada

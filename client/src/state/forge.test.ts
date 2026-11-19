@@ -320,12 +320,17 @@ describe("forgeCandidates", () => {
           { itemId: 4, count: 1 },
         ],
       },
+      // A corpse or a chest (top-level, not worn): the server would refuse its pieces.
+      { id: 5, itemId: 99, capacity: 8, hasParent: false, items: [{ itemId: 1, count: 1 }] },
+      // A bag inside another container: it may be carried.
+      { id: 6, itemId: 98, capacity: 8, hasParent: true, items: [{ itemId: 2, count: 1 }] },
     ];
     const got = forgeCandidates(content, inventory, containers);
     expect(got.map((c) => [c.loc, c.itemId])).toEqual([
       [{ kind: "slot", slot: EquipmentSlot.HEAD }, 2],
       [{ kind: "slot", slot: EquipmentSlot.RIGHT_HAND }, 1],
       [{ kind: "container", id: 4, index: 1 }, 4],
+      [{ kind: "container", id: 6, index: 0 }, 2],
     ]);
     expect(got[1]?.mods?.refine).toBe(2);
     expect(

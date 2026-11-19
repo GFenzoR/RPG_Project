@@ -67,8 +67,9 @@ func (w *World) instance(def *content.Item, count int, mods Mods) *Item {
 func (w *World) created(def *content.Item, count int) *Item { return w.instance(def, count, Mods{}) }
 
 // spareFirst orders the instances of an equipable that a path takes without the player
-// picking one (an NPC buying it, a dialog's take_item, a recipe's ingredient): the ones
-// in containers before the worn ones, then the lowest refine, then the weakest roll (no
+// picking one (an NPC buying it, a dialog's take_item, a recipe's ingredient; those never
+// take a refined one: spareable) and the market's picker (ownedMods): the ones in
+// containers before the worn ones, then the lowest refine, then the weakest roll (no
 // attribute, or one retired from the pool, first; then the value's place in the band of
 // its attribute); ties keep the order eachCarried walks them. Anything else keeps that
 // order.

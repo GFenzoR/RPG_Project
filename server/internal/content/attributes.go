@@ -15,6 +15,10 @@ import (
 // Item attributes (docs/02-game-design.md "Atributos de items", docs/06 "Atributo"): every
 // equipable rolls exactly one attribute of data/attributes.yaml when it is created.
 
+// MaxAttributeValue bounds an attribute's value (its bands' max): a saved value above it
+// (only a hand edit of the database writes one) loads as this.
+const MaxAttributeValue = 1000
+
 // Attribute effects (attributes.yaml effect): what an attribute adds to the player who
 // wears the item.
 const (
@@ -201,8 +205,8 @@ func (a *Attribute) check() error {
 		if i > 0 && b.Level <= a.Bands[i-1].Level {
 			return errors.New("band levels must grow")
 		}
-		if b.Min < 1 || b.Max < b.Min {
-			return fmt.Errorf("band of level %d: need 1 <= min <= max", b.Level)
+		if b.Min < 1 || b.Max < b.Min || b.Max > MaxAttributeValue {
+			return fmt.Errorf("band of level %d: need 1 <= min <= max <= %d", b.Level, MaxAttributeValue)
 		}
 	}
 	return nil

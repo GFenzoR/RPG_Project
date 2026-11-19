@@ -409,6 +409,7 @@ type World struct {
 	refVotes     map[[2]int64]priceVote
 	refSellers   map[int64]bool
 	refAccounts  map[int64]bool
+	mkKinds      map[pieceKind]bool // listing's scratch: the kinds of piece already listed
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64

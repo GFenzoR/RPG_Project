@@ -77,9 +77,22 @@ export interface ForgeCandidate {
 }
 
 /**
- * The items the player can refine and sees: the equipment, then each open container's
- * content (the equipped backpack's too). Items in closed containers do not show: the
- * client does not see them.
+ * Whether the open window c may be one the player carries. A top-level window (no parent
+ * item) is carried only when it is of the kind worn in an equipment slot (the backpack);
+ * corpses, chests and bags on the floor are top-level and not worn, and the server
+ * refuses a piece in them (refine.not_carried). A window with a parent passes: ContainerOpen
+ * does not say whether that parent is carried, so a bag inside a chest still shows.
+ */
+export function maybeCarried(c: ContainerState, inventory: ReadonlyMap<number, ItemView>): boolean {
+  if (c.hasParent) return true;
+  for (const v of inventory.values()) if (v.itemId === c.itemId) return true;
+  return false;
+}
+
+/**
+ * The items the player can refine and sees: the equipment, then the content of each open
+ * container it may carry (maybeCarried: the equipped backpack's too). Items in closed
+ * containers do not show: the client does not see them.
  */
 export function forgeCandidates(
   content: ClientContent,
@@ -91,10 +104,11 @@ export function forgeCandidates(
   for (const [slot, v] of [...inventory.entries()].sort((a, b) => a[0] - b[0]))
     if (takes(v)) out.push({ loc: { kind: "slot", slot }, itemId: v.itemId, mods: v.mods });
   for (const c of containers)
-    c.items.forEach((v, index) => {
-      if (takes(v))
-        out.push({ loc: { kind: "container", id: c.id, index }, itemId: v.itemId, mods: v.mods });
-    });
+    if (maybeCarried(c, inventory))
+      c.items.forEach((v, index) => {
+        if (takes(v))
+          out.push({ loc: { kind: "container", id: c.id, index }, itemId: v.itemId, mods: v.mods });
+      });
   return out;
 }
 

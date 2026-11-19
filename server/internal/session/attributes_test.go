@@ -220,6 +220,56 @@ func TestShopAndDialogItemsRoll(t *testing.T) {
 	}
 }
 
+// Final review of lote 11: a path that takes an equipable without the player picking
+// which (an NPC buying it, a dialog's take_item, a recipe) never takes a refined piece:
+// the shop neither counts nor buys it, has_item does not see it, and with a plain one
+// too the plain one goes.
+func TestRefinedPiecesAreNeverTakenUnpicked(t *testing.T) {
+	h := dataHarnessWith(t, func(c *session.Config) {
+		withAttributes(t)(c)
+		is := c.Map.Islands()[0]
+		is.NPCs = append(is.NPCs, world.NPCPlacement{NPC: "puerto_armorer", Pos: pos(16, 10)})
+	})
+	items, err := content.LoadItems(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutlass := items["rusty_cutlass"]
+	c := session.Character{ID: 9602, AccountID: 9602, Name: "Keep", Vocation: "guardian", Level: 1, Health: 145, Mana: 20,
+		Pos: pos(15, 10), HasPos: true, InventoryLoaded: true, Inventory: []session.ItemState{
+			{ItemID: uint16(items["backpack"].Numeric), Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{
+				rolledAt(uint16(cutlass.Numeric), 0, "attack", 2, 3)}}}}
+	cl, p := h.joinChar(c)
+	d := h.lastDialog(h.send(cl, talkMsg(h.npc("puerto_armorer").ID())))
+	shop := find(h.pick(cl, d, "dialog.trade"), (*pb.ServerMessage).GetShopOpen)[0]
+	for _, l := range shop.GetOffers() {
+		if l.GetItemId() == uint32(cutlass.Numeric) && l.GetOwned() != 0 {
+			t.Fatalf("the shop counts the +3: %v", l)
+		}
+	}
+	sell := &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: shop.GetDialogId(),
+		ItemId: uint32(cutlass.Numeric), Count: 1}}}
+	if !hasKey(h.send(cl, sell), "shop.not_enough") || len(h.w.ItemsForTest(p, "rusty_cutlass")) != 1 {
+		t.Fatal("the NPC bought the only cutlass, a +3")
+	}
+	// With a plain one too, the NPC takes the plain one; a take_item would as well.
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "rusty_cutlass", 1) }))
+	h.sim.Step()
+	h.send(cl, sell)
+	if left := h.w.ItemsForTest(p, "rusty_cutlass"); len(left) != 1 || left[0].Mods() != refinedMods("attack", 2, 3) {
+		t.Fatalf("left %v", left)
+	}
+	took, counted := -1, -1
+	h.sim.Command(gameFunc(func() {
+		counted = h.w.CountItemForTest(p, "rusty_cutlass")
+		took = h.w.TakeItemForTest(p, "rusty_cutlass", 1)
+	}))
+	h.sim.Step()
+	if left := h.w.ItemsForTest(p, "rusty_cutlass"); counted != 0 || took != 0 || len(left) != 1 || left[0].Mods().Refine != 3 {
+		t.Fatalf("has_item counted %d, take_item took %d: left %v", counted, took, left)
+	}
+}
+
 // A crafted equipable rolls its attribute; the log names it.
 func TestCraftedEquipableRolls(t *testing.T) {
 	h := craftHarness(t, worldtest.Map(t, 0, 0, 7, forgeMap...), withAttributes(t))
@@ -533,6 +583,48 @@ func TestMarketOwnedModsLowestRefineFirst(t *testing.T) {
 	want := []session.Mods{refinedMods("attack", 3, 0), refinedMods("attack", 1, 7), refinedMods("attack", 3, 7)}
 	if !slices.Equal(got, want) {
 		t.Fatalf("owned mods %+v, want %+v", got, want)
+	}
+}
+
+// Final review of lote 11: each sell of a piece is an offer of its own, so the listing
+// shows the list_size cheapest and then the cheapest of every other kind of piece (its
+// attribute and refine level), in price order: a refined sword dearer than five common
+// ones still shows, and can be taken. A dearer one of a kind already shown does not.
+func TestMarketListsEveryKindOfPiece(t *testing.T) {
+	sell := func(id int64, attr string, v, r int, price int64) session.MarketOffer {
+		return session.MarketOffer{ID: id, CharacterID: 77, AccountID: 77, Name: "Ana", Sell: true, ItemID: swordID,
+			Amount: 1, Price: price, Created: clock.Epoch, Expires: clock.Epoch.Add(time.Hour), Mods: refinedMods(attr, v, r)}
+	}
+	h := newMarketHarness(t, withAttributes(t), func(c *session.Config) {
+		c.Market = &session.MarketData{OfferHigh: 20, Offers: []session.MarketOffer{
+			sell(1, "attack", 1, 0, 10), sell(2, "attack", 2, 0, 11), sell(3, "attack", 1, 0, 12),
+			sell(4, "attack", 1, 0, 13), sell(5, "attack", 2, 0, 14), sell(6, "attack", 1, 0, 15),
+			sell(7, "attack", 2, 0, 16), sell(8, "attack", 2, 0, 30), sell(9, "sword_skill", 1, 0, 40),
+			sell(10, "attack", 1, 4, 60), sell(11, "attack", 2, 4, 50), sell(12, "attack", 1, 9, 90),
+		}}
+	})
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(coinID, 100, 1))
+	browse := marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: swordID}}})
+	listed := func() []int64 {
+		var ids []int64
+		for _, o := range lastMarket(h.send(cb, browse)).GetSells() {
+			ids = append(ids, int64(o.GetOfferId()))
+		}
+		return ids
+	}
+	if got, want := listed(), []int64{1, 2, 3, 4, 5, 9, 11, 12}; !slices.Equal(got, want) {
+		t.Fatalf("listed %v, want %v", got, want)
+	}
+	h.send(cb, acceptOffer(12, 1)) // the +9, dearer than five common ones
+	if got := h.w.ItemsForTest(b, "test_sword"); len(got) != 1 || got[0].Mods() != refinedMods("attack", 1, 9) {
+		t.Fatalf("Bruno bought %v", got)
+	}
+	if got, want := listed(), []int64{1, 2, 3, 4, 5, 9, 11}; !slices.Equal(got, want) {
+		t.Fatalf("after the +9: listed %v, want %v", got, want)
+	}
+	h.send(cb, acceptOffer(11, 1)) // the cheaper +4: the dearer one shows now
+	if got, want := listed(), []int64{1, 2, 3, 4, 5, 9, 10}; !slices.Equal(got, want) {
+		t.Fatalf("after the +4: listed %v, want %v", got, want)
 	}
 }
 

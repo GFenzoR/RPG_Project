@@ -63,6 +63,20 @@ func (w *World) TakeForTest(p *Player, id string, n int) {
 	w.econItem(p, EconGM, "test", w.cfg.Items[id], -n) // keeps the economy ledger right
 }
 
+// CountItemForTest counts item id as a dialog's has_item does (tests only, loop goroutine).
+func (w *World) CountItemForTest(p *Player, id string) int {
+	return w.countItem(p, w.cfg.Items[id], true)
+}
+
+// TakeItemForTest takes n units of item id as a dialog's take_item does and returns how
+// many instances went (tests only, loop goroutine).
+func (w *World) TakeItemForTest(p *Player, id string, n int) int {
+	def := w.cfg.Items[id]
+	taken := w.takeItem(p, def, n, true)
+	w.econTaken(p, EconNPC, "test", def, n, taken)
+	return len(taken)
+}
+
 // HurtForTest makes p take dmg as if a monster hit it (tests only, loop goroutine).
 func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
 	w.damagePlayer(ctx, p, dmg, "")

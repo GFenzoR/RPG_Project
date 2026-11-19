@@ -79,8 +79,12 @@
           "required": ["level", "min", "max"],
           "properties": {
             "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
-            "min": { "$ref": "common.schema.json#/$defs/positiveInt" },
-            "max": { "$ref": "common.schema.json#/$defs/positiveInt" }
+            "min": { "$ref": "common.schema.json#/$defs/positiveInt", "maximum": 1000 },
+            "max": {
+              "$ref": "common.schema.json#/$defs/positiveInt",
+              "maximum": 1000,
+              "description": "At most content.MaxAttributeValue (a saved value above it loads as it)."
+            }
           }
         }
       },

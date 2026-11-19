@@ -1065,7 +1065,10 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   conserva los suyos. `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
   (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own, mods}`;
   `mods`, en una oferta de venta de un equipable, los de su instancia: cada una es una fila),
-  hasta `list_size` por lado) y `reference_price`, las ofertas propias (`own`), el buzón
+  hasta `list_size` por lado, en orden de precio; en las ventas de un equipable, después
+  de esas, la más barata de cada clase de pieza que quede, un par atributo y nivel de
+  refinado, para que una pieza refinada o un atributo raro más caros se vean: docs/02
+  "Atributos de items", Mercado) y `reference_price`, las ofertas propias (`own`), el buzón
   (`mailbox_gold`, `mailbox_items` hasta `mailbox_shown` y `mailbox_more`), el
   `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
   `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y

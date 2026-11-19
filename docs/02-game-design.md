@@ -955,16 +955,27 @@ son otras ramas del lote: el refinado vive en los datos de cada instancia (`refi
 - **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Lo que vende un
   jugador sigue siendo "N de este item", sin elegir cuál: el NPC (y un `take_item` de
   diálogo o el ingrediente de una receta) se lleva primero lo que está en los contenedores
-  y lo puesto al final (un NPC nunca compra lo puesto), primero el refinado más bajo y,
-  entre esas, la tirada más floja: sin atributo, después la que cae más abajo en la banda
-  de su atributo (de 0 en el mínimo a 1 en el máximo); a igual, en el orden de la mochila
-  (`spareFirst`). Para guardar una pieza buena, el jugador la lleva puesta.
+  y lo puesto al final (un NPC nunca compra lo puesto) y, entre esas, la tirada más floja:
+  sin atributo, después la que cae más abajo en la banda de su atributo (de 0 en el mínimo
+  a 1 en el máximo); a igual, en el orden de la mochila (`spareFirst`). Para guardar una
+  pieza buena, el jugador la lleva puesta. **Una pieza refinada (+1 o más) nunca se toma
+  así** (revisión final del lote 11, `spareable`): para esos caminos es como si el jugador
+  no la llevara (la tienda no la cuenta ni la compra, `has_item` no la ve, una receta no la
+  gasta), así un +9 no se vende al precio base ni se pierde en una receta sin elegirlo.
+  Sale solo por mano del jugador: el mercado (con su selector), el intercambio o el suelo.
 - **Mercado:** una oferta de **venta** de un equipable es **una instancia** (cantidad 1) que
   elige quien vende entre las suyas (`MarketUpdate.owned_mods`); cada una es una fila propia
   del listado con su atributo, y el comprador recibe exactamente esa. Una oferta de
   **compra** de un equipable la llena **cualquier instancia**: quien le vende elige cuál, de
   a una por vez, y esa es la que llega al buzón del comprador. El precio de referencia es por
-  item, sin mirar atributos.
+  item, sin mirar atributos. **El listado** (revisión final del lote 11): como cada venta de
+  un equipable es una fila, las `list_size` más baratas podían tapar todo lo demás (quince
+  espadas comunes escondían una +8 o un atributo raro más caros, y nadie podía aceptarlos
+  porque no conocía su oferta). Por eso, en las ventas de un equipable, después de las
+  `list_size` más baratas se lista además la más barata de **cada clase de pieza** que
+  quede (cada par atributo y nivel de refinado), siempre en orden de precio: a lo sumo
+  `list_size` filas más una por clase en venta. El valor del atributo no separa clases: se
+  ve la más barata de la clase, y la siguiente cuando alguien la compra.
 - **Qué suma:** solo lo que se lleva puesto (la mochila no cuenta). Todo se suma por
   atributo y cada uno, si tiene `cap`, no pasa de él.
 
@@ -1040,7 +1051,10 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   tiene que ser suya y estar a mano: puesta o en un contenedor abierto que lleva (nunca en el
   suelo ni en un contenedor que no lleva, un cadáver o un cofre: "solo puedes refinar lo que
   llevas"; ni ofrecida en el intercambio; lo publicado en el mercado ya no está en su
-  mochila).
+  mochila). La ventana no ofrece las piezas de un contenedor abierto sin padre que no es
+  del tipo que lleva puesto (cadáver, cofre, bolsa del suelo: `maybeCarried`); una bolsa
+  dentro de otro contenedor sí se muestra, porque `ContainerOpen` no dice si su padre se
+  lleva, y si no se lleva el servidor contesta `refine.not_carried`.
   Piedras y ámbar se toman de los contenedores (como los ingredientes de una receta); el oro,
   de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido,
   al ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar). El
@@ -1521,7 +1535,8 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   atributo, elegida por quien vende, y se lista como una fila propia; una oferta de compra
   la llena cualquier instancia, de a una, la que elija quien le vende.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
-  baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
+  baratas primero; las de un equipable, además, la más barata de cada clase de pieza:
+  "Atributos de items", Mercado) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
   historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora
   vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
   mediana de los votos de los últimos `reference_days` días (con un número par, la menor).

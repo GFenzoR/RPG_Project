@@ -532,12 +532,17 @@ func storeMods(m session.Mods) *store.ItemMods {
 	return &store.ItemMods{Attribute: m.Attr, Value: m.Value, Refine: m.Refine}
 }
 
-// sessionMods is saved mods as the loop holds them (nil: a plain item).
+// sessionMods is saved mods as the loop holds them (nil: a plain item). Only a hand edit
+// of the database writes numbers out of range, and the loop must not trust them (a
+// negative refine level would index the forge's table before its first level): the
+// refine level is kept to 0..content.MaxRefineLevel and the value to
+// 0..content.MaxAttributeValue (final review of lote 11).
 func sessionMods(m *store.ItemMods) session.Mods {
 	if m == nil {
 		return session.Mods{}
 	}
-	return session.Mods{Attr: m.Attribute, Value: m.Value, Refine: m.Refine}
+	return session.Mods{Attr: m.Attribute, Value: min(max(m.Value, 0), content.MaxAttributeValue),
+		Refine: min(max(m.Refine, 0), content.MaxRefineLevel)}
 }
 
 // adminDone hands a ban or unban result to the loop. It must not be lost (a banned

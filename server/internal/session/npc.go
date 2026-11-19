@@ -413,7 +413,8 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 		return
 	}
 	// The NPC pays the base value: an equipable's attribute never changes the price
-	// (docs/02 "Atributos de items"); it takes the weakest instances first (spareFirst).
+	// (docs/02 "Atributos de items"); it takes the weakest instances first (spareFirst)
+	// and never a refined one (spareable).
 	amount := l.sell * int64(n)
 	taken := w.takeItem(p, l.def, n, false)
 	w.giveMoney(p, amount)
@@ -471,15 +472,15 @@ func (p *Player) eachCarried(equipped bool, fn func(*Item)) {
 	}
 }
 
-// countItem counts the units of def p carries (has_item counts equipment too; shops
-// only what is inside containers).
+// countItem counts the units of def p carries that a path may take without p picking
+// which (spareable): has_item counts equipment too; shops only what is inside containers.
 func (w *World) countItem(p *Player, def *content.Item, equipped bool) int {
 	n := 0
 	if def == nil {
 		return 0
 	}
 	p.eachCarried(equipped, func(it *Item) {
-		if takeable(it, def) {
+		if spareable(it, def) {
 			n += units(it)
 		}
 	})
@@ -492,13 +493,23 @@ func takeable(it *Item, def *content.Item) bool {
 	return it.def == def && len(it.items) == 0
 }
 
-// takeItem removes n units of def from p (the caller checked p has them), in the order
-// eachCarried walks them (an equipable's instances spareFirst), and returns the instances
-// it removed whole (for econTaken).
+// spareable reports whether it is a unit of def that a path may count and take without
+// the player picking which one (an NPC buying it, a dialog's has_item and take_item, a
+// recipe's ingredient, a ticket): takeable and never a refined piece (docs/02 "Forja",
+// final review of lote 11). A refined piece leaves only by the player's own hand: the
+// market's picker, a trade, the ground; to the rest it is as if the player did not carry
+// it, so a +9 is never sold at the base value nor used up by a recipe by mistake.
+func spareable(it *Item, def *content.Item) bool {
+	return takeable(it, def) && it.mods.Refine == 0
+}
+
+// takeItem removes n units of def from p (the caller checked p has them with countItem:
+// spareable ones), in the order eachCarried walks them (an equipable's instances
+// spareFirst), and returns the instances it removed whole (for econTaken).
 func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) []*Item {
 	var found, taken []*Item
 	p.eachCarried(equipped, func(it *Item) {
-		if takeable(it, def) {
+		if spareable(it, def) {
 			found = append(found, it)
 		}
 	})

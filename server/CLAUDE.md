@@ -241,8 +241,13 @@ server/
   que **mueve** una instancia la mueve entera (nunca la copia) y, si la registra en la
   economía, con `econInstance` / `econMade` / `econTaken` (una fila por instancia con sus
   `mods`). Uno que se **lleva** un equipable sin que el jugador elija cuál (NPC, `take_item`,
-  receta) pasa por `takeItem`, que ordena con `spareFirst` (la tirada más floja de los
-  contenedores primero, lo puesto al final). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
+  receta) cuenta con `countItem` y pasa por `takeItem`, que ordena con `spareFirst` (la
+  tirada más floja de los contenedores primero, lo puesto al final); los dos usan
+  `spareable`, que nunca toma una pieza refinada (sale solo por el selector del mercado, el
+  intercambio o el suelo). Los `mods` que vienen de la base pasan por `app.sessionMods`,
+  que acota el refinado a `0..content.MaxRefineLevel` y el valor a
+  `0..content.MaxAttributeValue`. En el listado del mercado, las ventas de un equipable
+  suman la más barata de cada clase de pieza (atributo y refinado, `listing`). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
   guarda (`store.ItemMods`). Una fórmula nueva que deba sumar un atributo puesto lee
   `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`, solo si cambiaron las
   instancias puestas con atributo, `Player.gearFrom`: un camino que cambie los `mods` de una

@@ -324,7 +324,10 @@ nombres y números son propios.
   bands: [{ level: 1, min: 1, max: 1 }]
 ```
 - `make validate` y el cargador del servidor (`content.LoadAttributes`): ids únicos, la
-  primera banda es nivel 1 y los niveles crecen, `1 <= min <= max`, `skill` solo (y siempre)
+  primera banda es nivel 1 y los niveles crecen, `1 <= min <= max <= 1000`
+  (`content.MaxAttributeValue`: un valor guardado fuera de `0..1000` o un refinado fuera de
+  `0..content.MaxRefineLevel`, que solo escribe una edición a mano de la base, se cargan
+  acotados), `skill` solo (y siempre)
   con `effect: skill` y `element` solo (y siempre) con `protection`. Que el `text` exista en
   `es` y `en` lo comprueba solo `make validate` (el servidor no lee textos). Un equipable sin ningún atributo posible no tira (y el test de
   `content/attributes_test.go` lo marca para el catálogo).
