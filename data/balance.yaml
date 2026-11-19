@@ -169,6 +169,39 @@ trade:                      # T5.3: the trade window between two adjacent player
   action_burst: 6           # anti-flood: 6 trade actions at once, then one every 300 ms
   action_refill_ms: 300     # (a completed trade writes both characters)
 
+forge:                      # refine +1..+10 at an anvil (docs/02-game-design.md, "Forja"). Own numbers.
+  enabled: true             # false: the anvil only crafts
+  station: anvil            # the map item that refines (within 1 tile, like crafting)
+  time_ms: 2000             # pace: no other attempt (nor crafting or gathering) for this long
+  safe_level: 4             # up to +4 an attempt never fails
+  protection: warding_amber # rare drop, never sold by NPCs: a failure loses one level, not the item
+  smithing_bonus:           # + chance points of the attempts that can fail
+    skill: smithing         # the craft whose level gives them
+    per_levels: 6           # +1 every 6 smithing levels...
+    max: 5                  # ...at most +5 (smithing 30, the top recipes)
+  jewelry_pct: 10           # neck and ring: each level adds 10 % of the attribute's value
+  levels:                   # the attempt to reach +1, +2...: success % and temper stones spent
+    - { chance: 100, stones: 1 }  # +1
+    - { chance: 100, stones: 1 }  # +2
+    - { chance: 100, stones: 1 }  # +3
+    - { chance: 100, stones: 1 }  # +4
+    - { chance: 70, stones: 2 }   # +5: from here a failure breaks the item
+    - { chance: 55, stones: 2 }   # +6
+    - { chance: 40, stones: 2 }   # +7
+    - { chance: 25, stones: 3 }   # +8
+    - { chance: 15, stones: 3 }   # +9
+    - { chance: 8, stones: 3 }    # +10
+  bands:                    # by the item's requires.level (the catalog's bands): the stone, the
+                            # copper per attempt per level aimed at (+n costs gold × n) and what
+                            # each level adds (floor(level × value)) to a weapon's attack, an
+                            # armor piece's armor and a shield's defense
+    - { level: 1, stone: lesser_temper_stone, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 }
+    - { level: 5, stone: lesser_temper_stone, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 }
+    - { level: 10, stone: greater_temper_stone, gold: 40, attack: 1, armor: 0.3, defense: 0.6 }
+    - { level: 30, stone: greater_temper_stone, gold: 120, attack: 1.4, armor: 0.3, defense: 0.8 }
+    - { level: 50, stone: radiant_temper_stone, gold: 300, attack: 1.8, armor: 0.4, defense: 1 }
+    - { level: 75, stone: radiant_temper_stone, gold: 700, attack: 2.2, armor: 0.5, defense: 1.2 }
+
 houses:                     # T5.4 (docs/02-game-design.md, "Casas"). Own numbers.
   enabled: true             # false: doors answer "closed" and nobody rents
   min_level: 12             # to rent or receive a house

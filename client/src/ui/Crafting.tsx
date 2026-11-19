@@ -1,12 +1,18 @@
 // Crafting station window (T3.4): the recipes of the station the player used, with the
 // inputs it lacks, the level and tool they need and the success chance at the player's
-// skill. The server checks everything again (distance, inputs, room, time) on Craft.
+// skill. The server checks everything again (distance, inputs, room, time) on Craft. At the
+// forge's station (the anvil, docs/02 "Forja") a second tab refines items (ui/Forge.tsx).
 import type { JSX } from "preact";
+import { useState } from "preact/hooks";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { stationRecipes } from "../state/recipes.ts";
 import type { RecipeView } from "../state/recipes.ts";
+import { ForgePanel } from "./Forge.tsx";
+
+/** The tabs of the anvil's window. */
+export type StationTab = "recipes" | "forge";
 
 interface Props {
   t: Translate;
@@ -24,13 +30,16 @@ export function stationTitle(t: Translate, content: ClientContent, itemId: numbe
 }
 
 export function CraftingWindow({ t, content, game, ui, framed }: Props): JSX.Element | null {
+  const [tab, setTab] = useState<StationTab>("recipes");
   const st = ui.station;
   if (!st) return null;
   const title = stationTitle(t, content, st.itemId);
   const views = stationRecipes(content.recipes, st, ui.skills);
+  const forge = content.forge && content.forge.station === st.itemId ? content.forge : undefined;
+  const shown: StationTab = forge ? tab : "recipes";
   return (
     <section
-      class="crafting"
+      class={forge ? "crafting with-forge" : "crafting"}
       data-testid={framed ? undefined : "crafting"}
       role={framed ? undefined : "dialog"}
       aria-label={title}
@@ -49,7 +58,25 @@ export function CraftingWindow({ t, content, game, ui, framed }: Props): JSX.Ele
           </button>
         </header>
       )}
-      {views.length === 0 ? (
+      {forge && (
+        <div class="station-tabs" role="tablist" aria-label={title}>
+          {(["recipes", "forge"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={shown === id}
+              data-station-tab={id}
+              onClick={() => setTab(id)}
+            >
+              {t(`client.craft.tab.${id}`)}
+            </button>
+          ))}
+        </div>
+      )}
+      {shown === "forge" && forge ? (
+        <ForgePanel t={t} content={content} game={game} ui={ui} rules={forge} station={st} />
+      ) : views.length === 0 ? (
         <p class="empty">{t("client.craft.empty")}</p>
       ) : (
         <ul>

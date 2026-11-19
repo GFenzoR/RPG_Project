@@ -3,7 +3,11 @@
 //   cell cropped to the box all the frames share, on a flat backdrop;
 // - the lineup: the sprite at 1x and 2x as the client draws it (bc: feet FEET_LINE px above
 //   the tile's bottom, the contact shadow under them; br: bottom-right of its tile) on a
-//   ground, beside reference sprites (a Gemini wolf, an LPC person from the atlas) for scale.
+//   ground, beside reference sprites (a Gemini wolf, an LPC person from the atlas) for scale;
+//   an item icon also in the client's inventory slots, at 1x and at 2x (the big slots of the
+//   equipment figure);
+// - the icon board: many item icons in rows (a line of the catalog per row, a level band per
+//   column), each in a slot at 2x and 1x and on a tile of grass, or each at 4x.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -182,6 +186,26 @@ export function atlasFrame(root: string, name: string): Image | undefined {
   return out;
 }
 
+/** The client's inventory slot (client/src/ui/client.css `.inventory .slot`): a near-black
+ * well (--ui-stone-950) in a dark iron rim (--ui-iron-900) with a lighter inner line. */
+const SLOT_WELL: Rgba = [15, 13, 11, 255];
+const SLOT_RIM: Rgba = [26, 24, 22, 255];
+const SLOT_INNER: Rgba = [56, 53, 49, 255];
+
+/**
+ * An icon in an inventory slot at `scale` (1: a 36 px slot; 2: the 2x big slots of the
+ * equipment figure), drawn as the client does: centred, pixel for pixel.
+ */
+export function slotCell(icon: Image, scale: number): Image {
+  const side = icon.width * scale + 4;
+  const out = createImage(side, side);
+  fillRect(out, 0, 0, side, side, SLOT_RIM);
+  fillRect(out, 1, 1, side - 2, side - 2, SLOT_INNER);
+  fillRect(out, 2, 2, side - 4, side - 4, SLOT_WELL);
+  over(out, scale === 1 ? icon : scaleImage(icon, scale), 2, 2);
+  return out;
+}
+
 /** The frames a lineup shows of a creature: one per facing walking, the strongest attack and death. */
 const LINEUP_FRAMES = ["idle_s_0", "walk_s_1", "walk_w_0", "walk_w_1", "walk_n_2", "walk_e_3"];
 
@@ -207,7 +231,21 @@ export function reviewLineup(root: string, spec: SpriteSpec): Image {
       foot: 0,
       shadow: false,
     }));
-    return lineup(root, [...refs, ...own], ground);
+    const field = lineup(root, [...refs, ...own], ground);
+    const icon = frames[0]?.image;
+    if (size.kind !== "item" || !icon) return field;
+    // An item: also in an inventory slot at 1x and at 2x, under the ground row.
+    const one = slotCell(icon, 1);
+    const two = slotCell(icon, 2);
+    const out = createImage(
+      Math.max(field.width, one.width + two.width + 24),
+      field.height + two.height + 8,
+    );
+    fillRect(out, 0, 0, out.width, out.height, PAPER);
+    over(out, field, 0, 0);
+    over(out, one, 8, field.height + 4 + two.height - one.height);
+    over(out, two, 16 + one.width, field.height + 4);
+    return out;
   }
   const foot = footOf(frames.filter((f) => f.ref?.action === "walk").map((f) => f.image));
   const pick = (name: string): Image | undefined =>
@@ -222,6 +260,61 @@ export function reviewLineup(root: string, spec: SpriteSpec): Image {
     .filter((img): img is Image => img !== undefined)
     .map((image) => ({ image, anchor: "bc" as const, foot, shadow: true }));
   return lineup(root, [...refs, ...own], ground);
+}
+
+/** One row of an icon board: a label and the icons of that row (undefined: an empty cell). */
+export interface IconRow {
+  label: string;
+  specs: readonly (SpriteSpec | undefined)[];
+}
+
+const boardLabel = (s: string): string => s.toUpperCase().replace(/[^A-Z0-9]+/g, " ");
+
+/**
+ * Item icons in rows, as the player meets them: each one in an inventory slot at 2x (the
+ * equipment figure), at 1x (the backpack) and on a tile of grass (dropped on the ground);
+ * or, with `detail`, each at 4x on the sheet's backdrop to read its pixels.
+ */
+export function iconBoard(
+  root: string,
+  rows: readonly IconRow[],
+  detail = false,
+  title = "ITEM ICONS",
+): Image {
+  const grassFile = join(root, "assets/sprites/ground/grass.png");
+  const grass = existsSync(grassFile) ? decodePng(readFileSync(grassFile)) : undefined;
+  const cellW = detail ? 32 * 4 + 6 : 68 + 4 + 36 + 6;
+  const cellH = detail ? 32 * 4 + 6 : 68 + 6;
+  const labelW = 150;
+  const cols = Math.max(1, ...rows.map((r) => r.specs.length));
+  const head = GLYPH_H * 2 + 10;
+  const sheet = createImage(labelW + cols * cellW, head + rows.length * cellH);
+  fillRect(sheet, 0, 0, sheet.width, sheet.height, PAPER);
+  drawText(sheet, boardLabel(title), 4, 4, 2, LABEL);
+  rows.forEach((row, r) => {
+    const y = head + r * cellH;
+    drawText(sheet, boardLabel(row.label), 4, y + Math.floor(cellH / 2) - 4, 1, LABEL);
+    row.specs.forEach((spec, c) => {
+      if (!spec) return;
+      const icon = engineFrames(spec)[0]?.image;
+      if (!icon) return;
+      const x = labelW + c * cellW;
+      if (detail) {
+        const cell = createImage(icon.width, icon.height);
+        fillRect(cell, 0, 0, cell.width, cell.height, BACKDROP);
+        over(cell, icon, 0, 0);
+        over(sheet, scaleImage(cell, 4), x, y);
+        return;
+      }
+      over(sheet, slotCell(icon, 2), x, y);
+      over(sheet, slotCell(icon, 1), x + 72, y);
+      const tile = createImage(32, 32);
+      if (grass) blit(grass, 0, 0, 32, 32, tile, 0, 0);
+      over(tile, icon, 0, 0);
+      over(sheet, tile, x + 74, y + 36);
+    });
+  });
+  return sheet;
 }
 
 /** The canvas of a spec (re-exported for the CLI). */

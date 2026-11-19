@@ -105,6 +105,9 @@ func (w *World) sendStation(p *Player, pos world.Pos, id uint16) {
 			m.Tools = append(m.Tools, t.Use)
 		}
 	})
+	if w.forge != nil && id == w.forgeStation {
+		m.Money = uint64(max(w.money(p), 0)) // the forge's cost (refine.go)
+	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_StationOpen{StationOpen: m}})
 }
 
@@ -190,8 +193,8 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		w.addTries(p, w.skillIdx[r.Craft], int64(r.XP))
 	}
 	for _, in := range r.Inputs {
-		w.takeItem(p, w.cfg.Items[in.Item], in.Count, false)
-		w.econItem(p, EconCraft, r.ID, w.cfg.Items[in.Item], -in.Count)
+		def := w.cfg.Items[in.Item]
+		w.econTaken(p, EconCraft, r.ID, def, in.Count, w.takeItem(p, def, in.Count, false))
 	}
 	if ctx.Rand.Float64() >= chance {
 		w.gatherEffect(pos, EffectGatherMiss)
@@ -199,8 +202,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 	} else {
 		w.gatherEffect(pos, EffectGather)
 		p.emit(systemMsg(msgCraftDone, itemParam(out, r.Output.Count)))
-		w.giveItem(p, out, r.Output.Count)
-		w.econItem(p, EconCraft, r.ID, out, r.Output.Count)
+		w.econMade(p, EconCraft, r.ID, 0, out, r.Output.Count, w.giveItem(p, out, r.Output.Count))
 		w.tutorialEvent(p, content.TriggerCraft, r.ID)
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

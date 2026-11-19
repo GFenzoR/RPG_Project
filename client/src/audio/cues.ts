@@ -11,6 +11,8 @@ import type { Pos } from "../state/geometry.ts";
 import {
   EFFECT_BLOCK,
   EFFECT_BUFF,
+  EFFECT_REFINE,
+  EFFECT_SHATTER,
   EFFECT_CONJURE,
   EFFECT_ELEMENT,
   EFFECT_GATHER,
@@ -47,6 +49,8 @@ const EFFECT_NAMES: Record<number, string> = {
   [EFFECT_GATHER]: "gather",
   [EFFECT_GATHER_MISS]: "gather_miss",
   [EFFECT_BUFF]: "buff",
+  [EFFECT_REFINE]: "refine",
+  [EFFECT_SHATTER]: "shatter",
 };
 
 const pos = (p: { x: number; y: number; z: number } | undefined): Pos | undefined =>

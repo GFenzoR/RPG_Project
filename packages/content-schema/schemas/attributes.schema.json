@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/attributes.schema.json",
+  "title": "Item attributes (data/attributes.yaml)",
+  "description": "The pool every equipable rolls exactly one attribute from (docs/02 \"Atributos de items\", docs/06 \"Atributo\").",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "effect", "text", "on", "weight", "bands"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "effect": {
+        "description": "What the attribute adds to the player who wears the item.",
+        "enum": [
+          "max_health",
+          "max_mana",
+          "attack",
+          "armor",
+          "defense",
+          "skill",
+          "speed",
+          "health_regen",
+          "mana_regen",
+          "protection",
+          "life_leech",
+          "mana_leech"
+        ]
+      },
+      "skill": {
+        "description": "effect skill: the skill it raises in fights (magic = magic level).",
+        "enum": ["sword", "axe", "club", "distance", "magic"]
+      },
+      "element": {
+        "description": "effect protection: the element whose damage it lowers, in %.",
+        "enum": ["fire", "ice", "energy", "earth", "holy", "death"]
+      },
+      "text": {
+        "description": "The tooltip line, with {value} (i18n/<lang>/items.yaml, attribute.*).",
+        "$ref": "common.schema.json#/$defs/i18nKey"
+      },
+      "on": {
+        "description": "The kinds of equipable that may roll it: a weapon by weapon.type, a shield, or an armor by armor.slot.",
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "enum": [
+            "sword",
+            "axe",
+            "club",
+            "distance",
+            "wand",
+            "shield",
+            "head",
+            "body",
+            "legs",
+            "feet",
+            "neck",
+            "ring"
+          ]
+        }
+      },
+      "weight": {
+        "description": "Relative chance among the attributes the item may roll.",
+        "$ref": "common.schema.json#/$defs/positiveInt"
+      },
+      "cap": {
+        "description": "The most all the worn items add up to (protection and leech: %). Omitted: no cap.",
+        "$ref": "common.schema.json#/$defs/positiveInt"
+      },
+      "bands": {
+        "description": "Value range by the item's requires.level: the last band whose level is <= it. The first band is level 1, levels grow.",
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "min", "max"],
+          "properties": {
+            "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "min": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "description": "At most content.MaxAttributeValue (a saved value above it loads as it)."
+            }
+          }
+        }
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    },
+    "allOf": [
+      {
+        "if": { "properties": { "effect": { "const": "skill" } }, "required": ["effect"] },
+        "then": { "required": ["skill"] },
+        "else": { "properties": { "skill": false } }
+      },
+      {
+        "if": { "properties": { "effect": { "const": "protection" } }, "required": ["effect"] },
+        "then": { "required": ["element"] },
+        "else": { "properties": { "element": false } }
+      }
+    ]
+  }
+}

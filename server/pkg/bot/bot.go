@@ -629,6 +629,14 @@ var logoutLocked = map[string]bool{"combat.logout_locked": true, "pvp.logout_loc
 // link-dead until the fight is over, as for a player who closes the game mid-fight.
 var ErrLogoutLocked = errors.New("refused: in combat")
 
+// logoutSendTimeout bounds the write of one Logout request. The request is not written
+// with Logout's ctx: coder/websocket closes the connection when a write's ctx ends before
+// the write returns, and the server can read the request and answer it before that (the
+// bytes are flushed first). Ending ctx means "stop asking", never "drop the connection":
+// a caller that ended it right after a refusal got "disconnected" instead of
+// ErrLogoutLocked (TestLogoutLockedUntilTheDeadline on a loaded CI runner).
+const logoutSendTimeout = 10 * time.Second
+
 // Logout asks to leave and waits until the server closes the connection, asking again
 // every LogoutRetry while it refuses (the bot fought a moment ago). A bot still under
 // attack never gets out: stop fighting and walk away first, or bound ctx; when ctx ends
@@ -643,7 +651,10 @@ func (b *Bot) Logout(ctx context.Context) error {
 			return b.loggedOut()
 		default:
 		}
-		if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}); err != nil {
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), logoutSendTimeout)
+		err := b.send(sctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+		cancel() // after the write returned: its timeout is already cleared
+		if err != nil {
 			select {
 			case <-b.done: // closed while asking: the answer is in the Disconnect
 				return b.loggedOut()

@@ -68,15 +68,56 @@ type kit struct {
 	shield string
 }
 
-// kitFor is what the island's shops and loot provide at each level.
+// kitFor is the guardian's kit at each level: the band of the compact catalog it has
+// reached (lote 11, docs/02 "Catálogo de equipo"), what the shops of the three islands sell
+// or smith. A new character wears the tunic and the barrel lid; the cap, trousers and boots
+// of band 1 come with the first coins, at level 5 with the band 2 sword and shield. Band 3
+// brings its weapons at level 10 and its armor, shield and amulet at 15; band 4 everything
+// at 30. The rings are rare loot (and band 3 and 4 ones carry no armor): out of the kit.
 func kitFor(level int) kit {
+	band1 := []string{"sailcloth_cap", "patched_tunic", "canvas_trousers", "tarred_boots"}
 	switch {
+	case level >= 30:
+		return kit{"embersteel_sabre", []string{"embersteel_helm", "embersteel_cuirass", "embersteel_greaves",
+			"embersteel_sabatons", "cinder_amulet"}, "embersteel_shield"}
+	case level >= 15:
+		return kit{"boarding_saber", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings",
+			"stagleather_boots", "antler_amulet"}, "elmwood_shield"}
 	case level >= 10:
-		return kit{"boarding_saber", []string{"sailcloth_cap", "leather_jerkin", "canvas_trousers", "tarred_boots"}, "riveted_round_shield"}
+		return kit{"boarding_saber", band1, "plank_shield"}
 	case level >= 5:
-		return kit{"iron_sword", []string{"sailcloth_cap", "patched_tunic", "canvas_trousers", "tarred_boots"}, "plank_shield"}
+		return kit{"iron_sword", band1, "plank_shield"}
 	default:
 		return kit{"rusty_cutlass", []string{"patched_tunic"}, "barrel_lid_shield"}
+	}
+}
+
+// wearable fails t unless a character of voc and level can wear every item of ids: it is
+// in the catalog (not retired) and asks for no more level and no other vocation. The kits
+// of the balance sims are the catalog's, not a wish list.
+func (d *balanceData) wearable(t *testing.T, voc string, level int, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		it := d.item(t, id)
+		switch {
+		case it.Retired:
+			t.Errorf("level %d %s kit: %s is retired", level, voc, id)
+		case it.Requires.Level > level:
+			t.Errorf("level %d %s kit: %s asks for level %d", level, voc, id, it.Requires.Level)
+		case len(it.Requires.Vocations) > 0 && !slices.Contains(it.Requires.Vocations, voc):
+			t.Errorf("level %d %s kit: %s is for %v", level, voc, id, it.Requires.Vocations)
+		}
+	}
+}
+
+func TestGuardianKitIsTheCatalogs(t *testing.T) {
+	d := loadData(t)
+	for level := 1; level <= 60; level++ {
+		k := kitFor(level)
+		d.wearable(t, "guardian", level, append([]string{k.weapon, k.shield}, k.armor...)...)
 	}
 }
 
@@ -87,6 +128,8 @@ type balanceData struct {
 	vocations content.Vocations
 	spells    content.Spells
 	balance   content.Balance
+	// attrs is the attribute pool every kit piece rolls from (gear_test.go).
+	attrs content.Attributes
 }
 
 func loadData(t *testing.T) *balanceData {
@@ -111,7 +154,12 @@ func loadData(t *testing.T) *balanceData {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], vocations: vs, spells: spells, balance: b}
+	attrs, err := content.LoadAttributes(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], vocations: vs, spells: spells, balance: b,
+		attrs: attrs}
 }
 
 func (d *balanceData) item(t *testing.T, id string) *content.Item {
@@ -150,33 +198,47 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 		shield = s.Defense
 	}
 	balanced := c.Modes["balanced"]
-	maxHP := d.guardian.AtLevel(level).Health
-	skill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
-	maxHit := combat.MaxHit(c, skill, weapon.Attack, level, balanced.Attack)
-	player := combat.PlayerTarget{Armor: armor, Defense: shield + weapon.Defense, ModeDefense: balanced.Defense}
+	pieces := []*content.Item{d.item(t, k.weapon), d.item(t, k.shield)}
+	for _, id := range k.armor {
+		pieces = append(pieces, d.item(t, id))
+	}
+	baseHP := float64(d.guardian.AtLevel(level).Health)
+	baseSkill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
 
-	totalMs, totalDmg := 0, 0
+	totalMs, totalDmg := 0, 0.0
 	f := newFoe(m, d.monsters, c, r) // its abilities and summons: foe_test.go
 	for range fights {
-		taken, now, nextPlayer := 0, 0, 0
+		// Each fight is a kit with its own rolled attributes (gear_test.go): over the
+		// fights, a kit's mean attributes.
+		g := d.rollGear(r, pieces...)
+		maxHit := combat.MaxHit(c, baseSkill+int(g.skill[weapon.Type]), weapon.Attack+int(g.attack), level, balanced.Attack)
+		player := combat.PlayerTarget{Armor: armor + int(g.armor), Defense: shield + int(g.defense) + weapon.Defense,
+			ModeDefense: balanced.Defense}
+		f.protect = g.protect
+		// lost is the health missing: what the foe took, less what leech gave back.
+		lost, now, nextPlayer := 0, 0, 0
 		f.start(0)
 		for f.alive() && now < maxFightMs {
 			tMonster := f.nextAt()
 			if nextPlayer <= tMonster {
 				now = nextPlayer
-				f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+				dealt := f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+				// The server's integer leech (session.leech): a share of what the hit dealt,
+				// never more than the health missing at that moment.
+				lost -= min(dealt*int(g.lifeLeech)/100, lost)
 				nextPlayer += c.AttackIntervalMs
 				continue
 			}
 			now = tMonster
-			taken += f.act(now, player)
+			lost += f.act(now, player)
 		}
 		totalMs += now
-		totalDmg += taken
+		// Health lost, as a share of this kit's maximum.
+		totalDmg += float64(lost) / (baseHP + g.health)
 	}
 	return fightStats{
 		seconds:   float64(totalMs) / fights / 1000,
-		damagePct: 100 * float64(totalDmg) / fights / float64(maxHP),
+		damagePct: 100 * totalDmg / fights,
 	}
 }
 

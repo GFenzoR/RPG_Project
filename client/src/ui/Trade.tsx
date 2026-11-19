@@ -3,10 +3,12 @@
 // room and every change; any change clears both confirmations. No hooks: the tests walk
 // the element tree (Trade.test.ts).
 import type { JSX } from "preact";
-import type { ClientContent } from "../content-types.ts";
+import type { ClientContent, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { TradeItemView, TradeView } from "../state/market.ts";
+import { refinedName } from "../state/forge.ts";
+import { tipMods } from "../state/mods.ts";
 
 interface Props {
   t: Translate;
@@ -24,10 +26,20 @@ export function ItemLabel(props: {
   game: Game | undefined;
   itemId: number;
   count: number;
+  /** The instance's mods (an equipable's attribute): its card shows them. */
+  mods?: ItemMods | undefined;
+  /**
+   * Without mods, it stands for any instance someone else picks (the market: a search, a
+   * buy offer, the history): its card says each piece has its own attribute, not that it
+   * rolls one.
+   */
+  anyInstance?: boolean | undefined;
 }): JSX.Element {
   const { t, game, itemId, count } = props;
   const def = props.content.items[itemId];
-  const name = def ? t(`item.${def.id}.name`) : String(itemId);
+  const base = def ? t(`item.${def.id}.name`) : String(itemId);
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
+  const name = refinedName(t, base, props.mods?.refine);
   const icon = game?.itemIcon(itemId);
   const style: JSX.CSSProperties = icon
     ? {
@@ -43,9 +55,11 @@ export function ItemLabel(props: {
       data-item={def?.id ?? itemId}
       data-tip-item={itemId}
       data-tip-count={count}
+      data-tip-mods={tipMods(props.mods)}
+      data-tip-any={props.anyInstance && !props.mods ? "" : undefined}
     >
       <span class={icon ? "item" : "item missing"} style={style} aria-hidden="true">
-        {!icon && name.slice(0, 2)}
+        {!icon && base.slice(0, 2)}
       </span>
       <span class="iname">{count > 1 ? t("client.trade.count", { count, name }) : name}</span>
     </span>
@@ -67,7 +81,7 @@ function OfferList(
     <ul data-testid={props.testid}>
       {items.map((it, i) => (
         <li key={`${i}-${it.itemId}`}>
-          <ItemLabel {...props} itemId={it.itemId} count={it.count} />
+          <ItemLabel {...props} itemId={it.itemId} count={it.count} mods={it.mods} />
           {own && (
             <button
               type="button"
@@ -91,11 +105,17 @@ function OfferList(
  * first, docs/17 UI-5), with their location for TradeOffer.
  */
 function offerable(ui: GameUi, content: ClientContent) {
-  const out: { container: number; index: number; itemId: number; count: number }[] = [];
+  const out: {
+    container: number;
+    index: number;
+    itemId: number;
+    count: number;
+    mods?: ItemMods | undefined;
+  }[] = [];
   for (const c of ui.backpack ? [ui.backpack, ...ui.containers] : ui.containers) {
     c.items.forEach((it, index) => {
       if (content.items[it.itemId]?.tradeable) {
-        out.push({ container: c.id, index, itemId: it.itemId, count: it.count });
+        out.push({ container: c.id, index, itemId: it.itemId, count: it.count, mods: it.mods });
       }
     });
   }
@@ -187,7 +207,7 @@ export function TradeWindow(props: Props): JSX.Element | null {
         <ul class="offerable" data-testid="trade-offerable">
           {items.map((it) => (
             <li key={`${it.container}-${it.index}`}>
-              <ItemLabel {...props} itemId={it.itemId} count={it.count} />
+              <ItemLabel {...props} itemId={it.itemId} count={it.count} mods={it.mods} />
               <button
                 type="button"
                 disabled={full}

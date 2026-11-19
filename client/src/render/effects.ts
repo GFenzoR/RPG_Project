@@ -9,6 +9,8 @@
 import {
   EFFECT_BLOCK,
   EFFECT_BUFF,
+  EFFECT_REFINE,
+  EFFECT_SHATTER,
   EFFECT_CONJURE,
   EFFECT_ELEMENT,
   EFFECT_GATHER,
@@ -29,6 +31,8 @@ const FOLDERS: ReadonlyMap<number, string> = new Map<number, string>([
   [EFFECT_GATHER, "effects/gather"],
   [EFFECT_GATHER_MISS, "effects/gather_miss"],
   [EFFECT_BUFF, "effects/buff"],
+  [EFFECT_REFINE, "effects/refine"],
+  [EFFECT_SHATTER, "effects/shatter"],
   ...ELEMENTS.map((e, i): [number, string] => [EFFECT_ELEMENT + i, `effects/${e}`]),
 ]);
 

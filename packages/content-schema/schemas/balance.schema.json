@@ -888,6 +888,97 @@
         "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     },
+    "forge": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The forge: refine +1..+N of an equipable that rolls attributes at the station item (docs/02 \"Forja\"). Absent or enabled: false turns it off. Each attempt spends the stones of the item's band and gold × the level it aims at; up to safe_level it never fails, after it a failure breaks the item unless the protection item is spent in that attempt (then it loses one level).",
+      "required": [
+        "enabled",
+        "station",
+        "time_ms",
+        "safe_level",
+        "protection",
+        "smithing_bonus",
+        "jewelry_pct",
+        "levels",
+        "bands"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "station": {
+          "description": "Item id of the map station that refines (the anvil).",
+          "$ref": "common.schema.json#/$defs/itemRef"
+        },
+        "time_ms": {
+          "description": "After an attempt, no other one (nor crafting or gathering) for this long.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60000
+        },
+        "safe_level": {
+          "description": "An attempt to reach this level or a lower one never fails (its chance must be 100).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "protection": {
+          "description": "Item id of the rare protection material (a stackable material never sold by an NPC of a production island).",
+          "$ref": "common.schema.json#/$defs/itemRef"
+        },
+        "smithing_bonus": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "+1 chance point per per_levels levels of skill (smithing), at most max, on the attempts that can fail.",
+          "required": ["skill", "per_levels", "max"],
+          "properties": {
+            "skill": {
+              "description": "The skill whose level gives the bonus (the smithing craft).",
+              "$ref": "common.schema.json#/$defs/skill"
+            },
+            "per_levels": { "type": "integer", "minimum": 0 },
+            "max": { "type": "integer", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "jewelry_pct": {
+          "description": "What a level adds to a neck or ring piece: this percentage of its attribute's value.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "levels": {
+          "description": "The attempt to reach +1, +2... in order: its success chance in percent and the temper stones it spends. After safe_level each one lower than the one before.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["chance", "stones"],
+            "properties": {
+              "chance": { "type": "integer", "minimum": 1, "maximum": 100 },
+              "stones": { "$ref": "common.schema.json#/$defs/positiveInt" }
+            }
+          }
+        },
+        "bands": {
+          "description": "By the item's requires.level, ascending from 1: the temper stone, the copper per attempt per level aimed at, and what each level adds (floor(level × value)) to a weapon's attack, an armor piece's armor and a shield's defense.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["level", "stone", "gold", "attack", "armor", "defense"],
+            "properties": {
+              "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+              "stone": { "$ref": "common.schema.json#/$defs/itemRef" },
+              "gold": { "type": "integer", "minimum": 0 },
+              "attack": { "type": "number", "minimum": 0 },
+              "armor": { "type": "number", "minimum": 0 },
+              "defense": { "type": "number", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
     "houses": {
       "type": "object",
       "additionalProperties": false,

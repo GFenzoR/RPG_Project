@@ -60,6 +60,7 @@ message ServerMessage {
     CreatureCosmetics creature_cosmetics = 41;
     CosmeticsState cosmetics_state = 42;
     CreatureAttack creature_attack = 43;
+    RefineResult refine_result = 44;
   }
 }
 
@@ -587,6 +588,9 @@ message MarketOffer {
   uint64 expires_at = 6;
   string owner_name = 7;
   bool own = 8;
+  // A sell offer of an equipable is one instance: its attribute (each such offer is a row
+  // of its own). Unset on a buy offer, which any instance fills.
+  ItemMods mods = 9;
 }
 
 // MarketMailItem is an item waiting in the mailbox.
@@ -612,7 +616,9 @@ message MarketUpdate {
   uint64 money = 2;
   // The browsed item (0: none), its best offers per side and its reference price
   // (the median of the recent votes, one per seller account and day; 0 = none, too few
-  // votes or sellers: balance market.reference_min_votes / reference_min_sellers).
+  // votes or sellers: balance market.reference_min_votes / reference_min_sellers). The
+  // best offers: list_size per side, in price order; the sells of an equipable add the
+  // cheapest of every other kind of piece (attribute and refine level, docs/02).
   uint32 item_id = 3;
   repeated MarketOffer sells = 4;
   repeated MarketOffer buys = 5;
@@ -646,6 +652,10 @@ message MarketUpdate {
   // switch to read-only goes out at once). A client whose window is already closed
   // ignores it (it must not open the window again).
   bool refresh = 21;
+  // For an equipable browsed item: the mods of each instance counted in owned (one entry
+  // per instance, the lowest refine level and then the weakest roll first), so the player
+  // picks which one to sell (MarketCreate.mods, MarketAccept.mods).
+  repeated ItemMods owned_mods = 22;
 }
 
 // HouseUpdate opens or refreshes the house window (T5.4); open = false closes it (the
@@ -874,9 +884,37 @@ message CreatureGuild {
 // station is item_id and sends Craft with pos. owned is how many units of each input of
 // those recipes the player carries in its containers, and tools the tool.use of every
 // tool it carries. Nothing is sent when the player walks away: Craft is checked again.
+// At the forge's station (the anvil, docs/02 "Forja") owned also counts the temper stones
+// and the protection material, and money is the money the player carries (smallest
+// coin) for the cost of a Refine; it comes again after every Refine.
 message StationOpen {
   Position pos = 1;
   uint32 item_id = 2;
   repeated ItemStack owned = 3;
   repeated string tools = 4;
+  uint64 money = 5;
+}
+
+// RefineOutcome is how a forge attempt ended (docs/02 "Forja").
+enum RefineOutcome {
+  REFINE_OUTCOME_UNSPECIFIED = 0;
+  // The item went up one level.
+  REFINE_OUTCOME_SUCCESS = 1;
+  // It failed and the item broke: it is gone.
+  REFINE_OUTCOME_BROKEN = 2;
+  // It failed, the protection material held: the item lost one level instead.
+  REFINE_OUTCOME_PROTECTED = 3;
+}
+
+// RefineResult answers a Refine that happened: what was spent is gone whatever the
+// outcome. item is the instance after it (item_id and mods, the new refine level; only
+// item_id when it broke: text names the piece as it was) and level its refine level now (0
+// when it broke). text is the message to
+// show (refine.success, refine.broken, refine.protected), also in the log. Everyone who sees
+// the anvil gets an Effect on it: 8 sparks on a success, 9 a shatter otherwise.
+message RefineResult {
+  RefineOutcome outcome = 1;
+  ItemStack item = 2;
+  uint32 level = 3;
+  LocalizedText text = 4;
 }

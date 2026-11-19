@@ -174,3 +174,46 @@ describe("BigIcon", () => {
     expect(nodes(double.props.children)[0]?.props["style"]).not.toHaveProperty("transform");
   });
 });
+
+// docs/02 "Atributos de items": the attribute's line, in its own colour, under the stats.
+describe("ItemCard's attribute line", () => {
+  const rolled: ItemCardView = { ...card, attribute: { text: "attribute.attack", value: 3 } };
+  it("both forms draw it after the stats, with its value", () => {
+    for (const tree of [ItemCard({ t, card: rolled }), TipCard({ t, card: rolled })]) {
+      const line = nodes(tree).find((n) => n.props["data-testid"] === "card-attribute");
+      expect(line?.props["class"]).toBe("card-attribute");
+      expect(texts(line)).toEqual(['attribute.attack{"value":3}']);
+      const all = nodes(tree);
+      const stats = all.findIndex(
+        (n) => n.props["class"] === "card-stats" || n.props["class"] === "tip-stats",
+      );
+      const req = all.findIndex((n) => n.props["class"] === "card-requires");
+      expect(stats).toBeGreaterThanOrEqual(0);
+      expect(all.indexOf(line as Node)).toBeGreaterThan(stats);
+      expect(all.indexOf(line as Node)).toBeLessThan(req);
+    }
+  });
+  it("an equipable that rolls when made says so, dimmer; a card without one has no line", () => {
+    const shop: ItemCardView = { ...card, attribute: { random: true } };
+    const line = nodes(TipCard({ t, card: shop })).find(
+      (n) => n.props["data-testid"] === "card-attribute",
+    );
+    expect(line?.props["class"]).toBe("card-attribute random");
+    expect(texts(line)).toEqual(["client.card.attribute_random"]);
+    expect(
+      nodes(ItemCard({ t, card })).some((n) => n.props["data-testid"] === "card-attribute"),
+    ).toBe(false);
+  });
+  it("any instance (the market) and a retired attribute have their own dimmer lines", () => {
+    for (const [attribute, key] of [
+      [{ any: true }, "client.card.attribute_any"],
+      [{ retired: true }, "client.card.attribute_retired"],
+    ] as const) {
+      const line = nodes(TipCard({ t, card: { ...card, attribute } })).find(
+        (n) => n.props["data-testid"] === "card-attribute",
+      );
+      expect(line?.props["class"]).toBe("card-attribute random");
+      expect(texts(line)).toEqual([key]);
+    }
+  });
+});

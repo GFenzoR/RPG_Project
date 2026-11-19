@@ -72,60 +72,126 @@ type hunterKit struct {
 	shield       string // "" with a two-handed weapon
 }
 
-// armorAt is the armor and shield the islands' shops sell at level (the guardian's kit:
-// no armor piece is limited to a vocation, content audit m6).
+// armorAt is the armor and shield of the guardian's kit at level (kitFor): the ranger's
+// too, the other vocation the heavy torso pieces of the compact catalog are for (lote 11).
 func armorAt(level int) ([]string, string) {
-	k := volcanKit(level)
+	k := kitFor(level)
 	return k.armor, k.shield
 }
 
-// casterKit: the wand or staff line of each caster (content audit M3, m5).
-func casterKit(voc string, level int) hunterKit {
-	type tier struct {
-		from   int
-		weapon string
+// robesAt is a caster's armor at level: the guardian's kit with the light torso line of
+// the catalog (the robes) in place of the heavy one, and the same shield.
+func robesAt(level int) ([]string, string) {
+	switch {
+	case level >= 30:
+		return []string{"embersteel_helm", "ashweave_robe", "embersteel_greaves", "embersteel_sabatons", "cinder_amulet"},
+			"embersteel_shield"
+	case level >= 15:
+		return []string{"stagleather_hood", "mossweave_robe", "stagleather_leggings", "stagleather_boots", "antler_amulet"},
+			"elmwood_shield"
 	}
-	lines := map[string][]tier{
-		"arcanist": {{1, "spark_wand"}, {6, "coral_wand"}, {16, "stormglass_wand"}, {32, "obsidian_wand"}},
-		"druid":    {{1, "sapling_staff"}, {6, "rimewood_staff"}, {16, "hoarfrost_staff"}, {32, "blackfrost_staff"}},
-	}
-	k := hunterKit{}
-	for _, t := range lines[voc] {
+	return armorAt(level) // bands 1 and 2: the same clothes for everyone
+}
+
+// tier is a weapon of a line from its band's level.
+type tier struct {
+	from   int
+	weapon string
+}
+
+// weaponAt is the weapon of line at level.
+func weaponAt(line []tier, level int) string {
+	w := ""
+	for _, t := range line {
 		if level >= t.from {
-			k.weapon = t.weapon
+			w = t.weapon
 		}
 	}
-	k.armor, k.shield = armorAt(level)
+	return w
+}
+
+// casterLines: the wand and staff lines of the casters, one per band (lote 11).
+var casterLines = map[string][]tier{
+	"arcanist": {{1, "spark_wand"}, {5, "coral_wand"}, {10, "stormglass_wand"}, {30, "obsidian_wand"}},
+	"druid":    {{1, "sapling_staff"}, {5, "rimewood_staff"}, {10, "hoarfrost_staff"}, {30, "blackfrost_staff"}},
+}
+
+// casterKit: the wand or staff line of each caster (content audit M3, m5) and the robes.
+func casterKit(voc string, level int) hunterKit {
+	k := hunterKit{weapon: weaponAt(casterLines[voc], level)}
+	k.armor, k.shield = robesAt(level)
 	return k
 }
 
+// bowLine and crossbowLine: the ranger's bows (two hands, no shield) and crossbows, each
+// from the level it asks for, like every kit of the sims (TestKitWeaponsFromTheirLevel).
+var (
+	bowLine      = []tier{{1, "short_bow"}, {5, "yew_longbow"}, {10, "thornwood_longbow"}, {30, "embersteel_longbow"}}
+	crossbowLine = []tier{{10, "smuggler_crossbow"}, {30, "embersteel_crossbow"}}
+)
+
 // bowKit: the ranger's two-handed bows (no shield).
 func bowKit(level int) hunterKit {
-	k := hunterKit{weapon: "short_bow", ammo: "arrow"}
-	switch {
-	case level >= 32:
-		k.weapon = "embersteel_longbow"
-	case level >= 16:
-		k.weapon = "thornwood_longbow"
-	case level >= 8:
-		k.weapon = "yew_longbow"
-	}
+	k := hunterKit{weapon: weaponAt(bowLine, level), ammo: "arrow"}
 	k.armor, _ = armorAt(level)
 	return k
 }
 
 // crossbowKit: the ranger's one-handed crossbows and a shield (content audit M4); before
-// the first crossbow (level 12) it is the bow kit.
+// the first crossbow (band 3, level 10) it is the bow kit.
 func crossbowKit(level int) hunterKit {
-	if level < 12 {
+	if level < crossbowLine[0].from {
 		return bowKit(level)
 	}
-	k := hunterKit{weapon: "smuggler_crossbow", ammo: "bolt"}
-	if level >= 34 {
-		k.weapon = "embersteel_crossbow"
-	}
+	k := hunterKit{weapon: weaponAt(crossbowLine, level), ammo: "bolt"}
 	k.armor, k.shield = armorAt(level)
 	return k
+}
+
+// TestVocationKitsAreTheCatalogs: every kit of the careers is wearable at its level by
+// its vocation (TestGuardianKitIsTheCatalogs does the guardian's).
+func TestVocationKitsAreTheCatalogs(t *testing.T) {
+	d := loadData(t)
+	for level := 1; level < careerTo; level++ {
+		for voc, kit := range map[string]hunterKit{
+			"arcanist": casterKit("arcanist", level), "druid": casterKit("druid", level),
+			"ranger": crossbowKit(level),
+		} {
+			d.wearable(t, voc, level, append([]string{kit.weapon, kit.shield}, kit.armor...)...)
+		}
+		b := bowKit(level)
+		d.wearable(t, "ranger", level, append([]string{b.weapon}, b.armor...)...)
+	}
+}
+
+// TestKitWeaponsFromTheirLevel: every kit of the sims takes a weapon at the level it asks
+// for, not later. The sims model no purchase (the guardian's iron sword and every band 2
+// weapon come at level 5, though chapter 1's coins pay for them at ~6-7): a weapon taken
+// later than its level would hide what the catalog's piece does at its level, as the band 2
+// longbow bought at 8 did (review of lote 11).
+func TestKitWeaponsFromTheirLevel(t *testing.T) {
+	d := loadData(t)
+	kits := map[string]func(int) string{
+		"guardian":        func(l int) string { return kitFor(l).weapon },
+		"arcanist":        func(l int) string { return casterKit("arcanist", l).weapon },
+		"druid":           func(l int) string { return casterKit("druid", l).weapon },
+		"bow ranger":      func(l int) string { return bowKit(l).weapon },
+		"crossbow ranger": func(l int) string { return crossbowKit(l).weapon },
+	}
+	for name, weaponAt := range kits {
+		checked := map[string]bool{}
+		for level := 1; level < careerTo; level++ {
+			w := weaponAt(level)
+			if checked[w] {
+				continue
+			}
+			checked[w] = true
+			from := max(1, d.item(t, w).Requires.Level)
+			if got := weaponAt(from); got != w {
+				t.Errorf("%s kit: %s asks for level %d but the kit holds %s there (it takes it later)", name, w, from, got)
+			}
+		}
+	}
 }
 
 // commonTargets is every common monster of the three islands and its target level.
@@ -167,12 +233,17 @@ type hunter struct {
 	level, magic, skill int
 	weapon, ammo        *content.Item
 	armor, shield       int
-	attacks, heals      []*content.Spell
-	conjure             *content.Spell // conjures the ammo (the ranger's arrows)
-	regenPct            int            // extra regeneration while fed (balance.yaml well_fed)
-	draught             *content.Item
-	potions             []*content.Item // health potions the shops of its level sell, biggest first
-	food                *content.Item   // eaten all along: what keeps well_fed going
+	// kit is what it wears: each fight rolls their attributes (gear_test.go). magicBonus
+	// is the kit's mean magic level attribute, for ranking the spells (it raises what they
+	// do, never what they require).
+	kit            []*content.Item
+	magicBonus     int
+	attacks, heals []*content.Spell
+	conjure        *content.Spell // conjures the ammo (the ranger's arrows)
+	regenPct       int            // extra regeneration while fed (balance.yaml well_fed)
+	draught        *content.Item
+	potions        []*content.Item // health potions the shops of its level sell, biggest first
+	food           *content.Item   // eaten all along: what keeps well_fed going
 }
 
 func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunterKit) *hunter {
@@ -186,9 +257,17 @@ func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunte
 	for _, id := range k.armor {
 		h.armor += d.item(t, id).Armor.Armor
 	}
+	h.kit = append(h.kit, h.weapon)
+	for _, id := range k.armor {
+		h.kit = append(h.kit, d.item(t, id))
+	}
+	shieldID := ""
 	if k.shield != "" && h.weapon.Weapon.Hands < 2 {
 		h.shield = d.item(t, k.shield).Shield.Defense
+		shieldID = k.shield
+		h.kit = append(h.kit, d.item(t, k.shield))
 	}
+	h.magicBonus = round(d.gearMean(t, append([]string{k.weapon, shieldID}, k.armor...)...).skill["magic"])
 	for _, id := range d.spells.IDs() {
 		s := d.spells[id]
 		if !s.CastBy(voc) || s.Level > level || s.MagicLevel > magic {
@@ -239,7 +318,7 @@ const fedCondition = "well_fed"
 
 // amount is the average of a spell scaling for h, without spread.
 func (h *hunter) amount(s content.Scaling) float64 {
-	v := s.Base + float64(h.level)*s.PerLevel + float64(h.magic)*s.PerMagicLevel
+	v := s.Base + float64(h.level)*s.PerLevel + float64(h.magic+h.magicBonus)*s.PerMagicLevel
 	if s.Skill != "" {
 		v += float64(h.skill) * s.PerSkill
 	}
@@ -259,6 +338,7 @@ type hunt struct {
 	secondsPerKil float64 // fight plus overhead
 	damagePct     float64 // health lost per fight, % of max
 	deaths        float64 // per fight
+	low           float64 // share of fights that took the hunter under healBelowPct
 	manaPerKill   float64 // spent on spells (magic level tries)
 	spendPerKill  float64 // copper: draughts, potions and ammo
 	lootPerKill   float64 // copper: coins plus a third of the items' value
@@ -280,11 +360,34 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	c := h.d.balance.Combat
 	balanced := c.Modes["balanced"]
 	stats := h.voc.AtLevel(h.level)
-	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
-	player := combat.PlayerTarget{Armor: h.armor, Defense: h.shield + h.weapon.Weapon.Defense, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
 	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
-	regenHP, regenMP := float64(tickHP), float64(tickMP)
+	// Each fight is the kit with its own rolled attributes (gear_test.go): over the fights,
+	// the kit's mean. wear rolls it: maximums, armor and defense, regeneration, the skill,
+	// magic level and attack the attacks use, leech and protection.
+	var g gearMean
+	var maxHP, maxMP, regenHP, regenMP float64
+	var player combat.PlayerTarget
+	var skill, magic, attack int
+	var hp, mp float64
+	var f *foe
+	wear := func() {
+		g = h.d.rollGear(r, h.kit...)
+		maxHP, maxMP = float64(stats.Health)+g.health, float64(stats.Mana)+g.mana
+		player = combat.PlayerTarget{Armor: h.armor + int(g.armor), Defense: h.shield + int(g.defense) + h.weapon.Weapon.Defense,
+			ModeDefense: balanced.Defense}
+		regenHP, regenMP = float64(tickHP)+g.regenHP, float64(tickMP)+g.regenMP
+		skill, magic, attack = h.skill+int(g.skill[h.weapon.Weapon.Type]), h.magic+int(g.skill["magic"]), int(g.attack)
+		hp, mp = math.Min(hp, maxHP), math.Min(mp, maxMP)
+	}
+	// shot lands a weapon hit of dmg on the foe and gives the leech attributes' share of
+	// what it dealt back (the server's integer leech, up to the maximums).
+	shot := func(now, dmg int) {
+		dealt := f.hit(now, dmg)
+		hp = math.Min(maxHP, hp+float64(dealt*int(g.lifeLeech)/100))
+		mp = math.Min(maxMP, mp+float64(dealt*int(g.manaLeech)/100))
+	}
+	wear()
 	useMs := h.d.balance.Inventory.UseCooldownMs
 
 	// Spells sorted by what they do on m; the best ready and affordable one is cast.
@@ -302,8 +405,8 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		reserve = float64(heals[0].Mana)
 	}
 
-	hp, mp := maxHP, maxMP
-	var mana, spend, loot, damage, deaths float64
+	hp, mp = maxHP, maxMP
+	var mana, spend, loot, damage, deaths, low float64
 	stock := 0 // conjured ammo left
 	var nDraught, nPotion, nAmmo float64
 	casts, potionsBy := map[string]float64{}, map[string]float64{}
@@ -319,9 +422,11 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		return false
 	}
 	totalMs := 0
-	f := newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
+	f = newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
 	ready := map[string]int{}
 	for range careerFights {
+		wear() // this fight's kit
+		f.protect = g.protect
 		f.start(0)
 		now, nextShot, nextAttackGroup, nextHealGroup, nextUse := 0, 0, 0, 0, 0
 		nextRegen := regen.IntervalMs
@@ -329,6 +434,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 			ready[k] = 0
 		}
 		lost := 0.0
+		wounded := false       // under healBelowPct in this fight: a self-heal had its occasion
 		drink := func() bool { // a mana draught, if the habit and the consumable cooldown allow
 			if hb == dry || now < nextUse || mp >= maxMP {
 				return false
@@ -342,6 +448,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		for f.alive() && now < maxFightMs {
 			// Heal first: the healing group is apart from the attack group.
 			if hp < maxHP*healBelowPct/100 {
+				wounded = true
 				healed := false
 				if now >= nextHealGroup {
 					for _, s := range heals {
@@ -357,7 +464,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						mp -= float64(s.Mana)
 						mana += float64(s.Mana)
 						casts[s.ID]++
-						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, h.magic, h.skill)))
+						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, magic, skill)))
 						ready[s.ID] = now + s.CooldownMs
 						nextHealGroup = now + s.GroupCooldownMs
 						healed = true
@@ -378,10 +485,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				w := h.weapon.Weapon
 				switch {
 				case w.Type == "wand":
-					f.hit(now, combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
+					shot(now, combat.Resist(combat.WandHit(r, w.Attack+attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
 				case h.ammo != nil: // a bow or crossbow and its ammo
-					maxHit := combat.MaxHit(c, h.skill, w.Attack+h.ammo.Ammo.Attack, h.level, balanced.Attack)
-					f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+					maxHit := combat.MaxHit(c, skill, w.Attack+h.ammo.Ammo.Attack+attack, h.level, balanced.Attack)
+					shot(now, combat.HitMonster(r, maxHit, f.target()))
 					if stock > 0 {
 						stock--
 					} else {
@@ -389,7 +496,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						nAmmo++
 					}
 				default: // melee: the guardian's reference career
-					f.hit(now, combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), f.target()))
+					shot(now, combat.HitMonster(r, combat.MaxHit(c, skill, w.Attack+attack, h.level, balanced.Attack), f.target()))
 				}
 			}
 			if now >= nextAttackGroup && f.alive() {
@@ -414,7 +521,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 					mana += float64(s.Mana)
 					casts[s.ID]++
 					d := s.Effect.Damage
-					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), f.cur().Resistances[d.Element]))
+					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, magic, skill), f.cur().Resistances[d.Element]))
 					ready[s.ID] = now + s.CooldownMs
 					nextAttackGroup = now + s.GroupCooldownMs
 					break
@@ -446,6 +553,9 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		}
 		totalMs += now
 		damage += lost
+		if wounded {
+			low++
+		}
 		loot += h.d.huntLoot(m)
 		if h.regenPct > 0 { // the food that kept well_fed going through fight and walk
 			spend += float64(h.food.Value) * (float64(now) + overheadSeconds*1000) / float64(h.food.Consumable.FoodMs)
@@ -483,6 +593,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		secondsPerKil: float64(totalMs)/n/1000 + overheadSeconds,
 		damagePct:     100 * damage / n / maxHP,
 		deaths:        deaths / n,
+		low:           low / n,
 		manaPerKill:   mana / n,
 		spendPerKill:  spend / n,
 		lootPerKill:   loot / n,
@@ -577,8 +688,8 @@ func (c career) spendShare(from, to int) float64 {
 func (c career) String() string {
 	var b strings.Builder
 	for _, l := range c.levels {
-		fmt.Fprintf(&b, "%s lvl %2d ml %2d  %-17s %-6s %5.1f s/kill %5.1f%% hp  %6.0f xp/h  mana/kill %5.1f  spend %5.1f / loot %5.1f  %5.2f h%s\n",
-			c.voc, l.level, l.magic, l.best.monster, l.best.habit, l.best.secondsPerKil, l.best.damagePct,
+		fmt.Fprintf(&b, "%s lvl %2d ml %2d  %-17s %-6s %5.1f s/kill %5.1f%% hp (%4.1f%% under half)  %6.0f xp/h  mana/kill %5.1f  spend %5.1f / loot %5.1f  %5.2f h%s\n",
+			c.voc, l.level, l.magic, l.best.monster, l.best.habit, l.best.secondsPerKil, l.best.damagePct, 100*l.best.low,
 			l.best.xpPerHour, l.best.manaPerKill, l.best.spendPerKill, l.best.lootPerKill, l.hours,
 			map[bool]string{true: "", false: "  (unaffordable)"}[l.affordable])
 		ids := make([]string, 0, len(l.best.casts))
@@ -651,7 +762,7 @@ func TestVocationCareers(t *testing.T) {
 	d := loadData(t)
 	// The guardian's career is the yardstick: the same harness with its melee kit.
 	guardianKit := func(level int) hunterKit {
-		k := volcanKit(level)
+		k := kitFor(level)
 		return hunterKit{weapon: k.weapon, armor: k.armor, shield: k.shield}
 	}
 	guardian := d.runCareer(t, "guardian", guardianKit)
@@ -803,14 +914,37 @@ func TestVocationCareers(t *testing.T) {
 				if e.Heal != nil && e.Heal.Range > 0 || e.Damage != nil && e.Damage.Radius > 0 && single {
 					continue
 				}
-				casts := 0.0
+				casts, low := 0.0, 0.0
 				for _, l := range careers[v].levels {
 					if l.level >= s.Level && l.level <= s.Level+4 {
 						casts += l.best.casts[id]
+						low += l.best.low
 					}
 				}
-				if casts == 0 {
+				switch {
+				case casts > 0:
+				case e.Heal == nil || low > 0: // an attack, or a heal its hunts needed and lacked
 					t.Errorf("%s: no hunt of levels %d-%d casts %s", v, s.Level, min(s.Level+4, careerTo-1), id)
+				default:
+					// A self-heal those hunts never had an occasion for: none took the hunter
+					// under half its health. The ranger shoots from range, and with the band 2
+					// longbow from level 5 Puerto's duels never do (review of lote 11): its
+					// heal of level 4 is for packs and slips, which a duel does not model. It
+					// must then serve the first hunt that does wound that far.
+					first := careerLevel{}
+					for _, l := range careers[v].levels {
+						if l.level > s.Level+4 && l.best.low > 0 {
+							first = l
+							break
+						}
+					}
+					switch {
+					case first.level == 0:
+						t.Errorf("%s: no hunt from level %d takes it under half its health: %s has no use", v, s.Level, id)
+					case first.best.casts[id] == 0:
+						t.Errorf("%s: level %d is the first hunt under half health past %s's level %d, and it does not cast it",
+							v, first.level, id, s.Level)
+					}
 				}
 			}
 		}

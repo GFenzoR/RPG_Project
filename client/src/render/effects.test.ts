@@ -26,6 +26,8 @@ import {
   EFFECT_HEAL,
   EFFECT_HIT,
   EFFECT_MS,
+  EFFECT_REFINE,
+  EFFECT_SHATTER,
   ELEMENTS,
   PROJECTILE_ELEMENT,
 } from "../state/world.ts";
@@ -39,17 +41,20 @@ describe("effect folders", () => {
     expect(effectFolder(EFFECT_GATHER)).toBe("effects/gather");
     expect(effectFolder(EFFECT_GATHER_MISS)).toBe("effects/gather_miss");
     expect(effectFolder(EFFECT_BUFF)).toBe("effects/buff");
+    // The forge (docs/02 "Forja"): sparks on a success, a shatter on a break.
+    expect(effectFolder(EFFECT_REFINE)).toBe("effects/refine");
+    expect(effectFolder(EFFECT_SHATTER)).toBe("effects/shatter");
     // 10 + element index, in the server's order (physical … death).
     expect(effectFolder(EFFECT_ELEMENT)).toBe("effects/physical");
     expect(effectFolder(EFFECT_ELEMENT + 1)).toBe("effects/fire");
     expect(effectFolder(EFFECT_ELEMENT + 4)).toBe("effects/earth");
     expect(effectFolder(EFFECT_ELEMENT + ELEMENTS.length - 1)).toBe("effects/death");
-    expect(EFFECT_IDS).toHaveLength(7 + ELEMENTS.length);
+    expect(EFFECT_IDS).toHaveLength(9 + ELEMENTS.length);
   });
 
   it("knows no other id", () => {
     expect(effectFolder(0)).toBeUndefined();
-    expect(effectFolder(8)).toBeUndefined();
+    expect(effectFolder(99)).toBeUndefined();
     expect(effectFolder(EFFECT_ELEMENT + ELEMENTS.length)).toBeUndefined();
   });
 

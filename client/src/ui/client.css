@@ -42,6 +42,10 @@
   --ui-item-coin: #f0bf3c;
   --ui-item-stat: #f4f0e8;
   --ui-item-effect: #8ea6ff;
+  /* An equipable's attribute (docs/02 "Atributos de items"): its own colour, one for all. */
+  --ui-item-attribute: #7fd8b0;
+  /* A refine level (the forge, docs/02 "Forja"): the glow of hot metal. */
+  --ui-item-refine: #f2a14a;
   --ui-chat-party: #7fb2ff;
   --ui-chat-guild: #7fd07a;
   --ui-chat-private: #d48cff;
@@ -1592,6 +1596,245 @@ body.picking-item .map-hint {
 .crafting .recipe button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* The anvil's tabs and the forge (docs/02 "Forja", ui/Forge.tsx): the item and the chance
+   at the top, the cost, the protection and the risk, the confirm step in red, and the items
+   the player can pick at the bottom. */
+.station-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.2rem 0 0.4rem;
+  border-bottom: 1px solid var(--ui-iron-600);
+}
+.station-tabs button {
+  padding: 0.2rem 0.8rem;
+  font-family: var(--ui-font-title);
+  font-size: 0.8rem;
+  color: var(--ui-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+}
+.station-tabs button[aria-selected="true"] {
+  color: var(--ui-gold-300);
+  background: var(--ui-stone-800);
+  border-color: var(--ui-iron-600);
+}
+.forge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.forge-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.forge-slot {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  background: radial-gradient(
+    circle at 50% 60%,
+    color-mix(in srgb, var(--ui-item-refine) 16%, transparent),
+    color-mix(in srgb, var(--ui-void) 70%, transparent) 70%
+  );
+  border: 1px solid var(--ui-iron-900);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 0 12px color-mix(in srgb, var(--ui-void) 80%, transparent);
+}
+.forge-slot-hint {
+  font-size: 0.7rem;
+  color: var(--ui-text-dim);
+  text-align: center;
+}
+.forge-head {
+  min-width: 0;
+  margin: 0;
+}
+.forge-head.empty {
+  color: var(--ui-text-muted);
+  font-style: italic;
+}
+.forge-name {
+  display: block;
+  color: var(--ui-item-plain);
+  font-family: var(--ui-font-title);
+  font-size: 0.85rem;
+}
+.forge-levels {
+  margin: 0.1rem 0 0;
+  color: var(--ui-item-refine);
+  font-family: var(--ui-font-title);
+  font-size: 1.05rem;
+}
+.forge-gain {
+  margin: 0;
+  color: var(--ui-item-stat);
+  font-size: 0.78rem;
+}
+.forge-chance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 5.2rem;
+  color: var(--ui-ok);
+}
+.forge-chance.risky {
+  color: var(--ui-warn);
+}
+.forge-chance .pct {
+  font-family: var(--ui-font-title);
+  font-size: 1.9rem;
+  line-height: 1;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--ui-void) 90%, transparent);
+}
+.forge-chance .label {
+  font-size: 0.68rem;
+  color: var(--ui-text-muted);
+}
+.forge-cost {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: color-mix(in srgb, var(--ui-void) 50%, transparent);
+  border: 1px solid var(--ui-iron-900);
+  font-size: 0.78rem;
+}
+.forge-cost li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.3rem;
+}
+.forge-cost li[data-cost="gold"] {
+  color: var(--ui-item-coin);
+}
+.forge-cost li.lacking,
+.forge-cost li.lacking[data-cost="gold"] {
+  color: var(--ui-danger);
+}
+.forge-cost .item,
+.forge-protect .item {
+  flex: none;
+  transform: scale(0.75);
+  margin: -4px;
+}
+.forge-protect {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--ui-text);
+}
+.forge-risk {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ui-danger);
+}
+.forge-risk.protected {
+  color: var(--ui-warn);
+}
+.forge-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+.forge-actions button {
+  padding: 0.3rem 0.9rem;
+}
+.forge-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.forge-confirm {
+  padding: 0.4rem 0.5rem;
+  background: color-mix(in srgb, var(--ui-life-700) 45%, transparent);
+  border: 1px solid var(--ui-life-500);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--ui-void) 60%, transparent);
+}
+.forge-confirm p.danger {
+  margin: 0 0 0.35rem;
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.forge-actions button.danger {
+  color: var(--ui-item-plain);
+  background: var(--ui-life-700);
+  border-color: var(--ui-life-500);
+}
+.forge-result {
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--ui-iron-600);
+  background: color-mix(in srgb, var(--ui-void) 60%, transparent);
+  font-size: 0.82rem;
+}
+.forge-result strong {
+  font-family: var(--ui-font-title);
+}
+.forge-result.success {
+  color: var(--ui-item-refine);
+  border-color: var(--ui-gold-700);
+}
+.forge-result.broken {
+  color: var(--ui-danger);
+  border-color: var(--ui-life-500);
+}
+.forge-result.protected {
+  color: var(--ui-warn);
+}
+.forge-pick {
+  border-top: 1px solid var(--ui-iron-900);
+  padding-top: 0.3rem;
+}
+.forge-pick-title {
+  margin: 0 0 0.25rem;
+  color: var(--ui-text-muted);
+  font-size: 0.72rem;
+}
+.forge-pick ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.forge-item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ui-slot);
+  height: var(--ui-slot);
+  padding: 0;
+  background: color-mix(in srgb, var(--ui-void) 60%, transparent);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+}
+.forge-item.on {
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-500),
+    0 0 6px color-mix(in srgb, var(--ui-item-refine) 50%, transparent);
+}
+.forge-plus {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--ui-item-refine);
+  text-shadow:
+    0 0 2px var(--ui-void),
+    0 0 2px var(--ui-void);
 }
 
 /* Death screen (T1.11): over the map until the player closes it; the map turns to blood. */
@@ -3192,6 +3435,16 @@ button.credits-link {
 .card-effects li {
   color: var(--ui-mana-300);
 }
+/* The attribute's line, under the stats; a line without a value (one to roll, any
+   instance, a retired one), dimmer. */
+.card-attribute {
+  margin: 2px 0;
+  color: var(--ui-item-attribute);
+}
+.card-attribute.random {
+  color: var(--ui-text-muted);
+  font-style: italic;
+}
 .card-desc {
   margin-top: 3px;
   font-family: var(--ui-font-book);
@@ -3311,6 +3564,21 @@ button.credits-link {
 }
 .item-card.tip .card-effects li {
   color: var(--ui-item-effect);
+}
+.item-card.tip .card-attribute {
+  margin: 1px 0;
+  color: var(--ui-item-attribute);
+}
+/* The refine level's line (the forge): over the attribute, in the colour of hot metal. */
+.card-refine {
+  margin: 2px 0;
+  color: var(--ui-item-refine);
+}
+.item-card.tip .card-refine {
+  margin: 1px 0;
+}
+.item-card.tip .card-attribute.random {
+  color: var(--ui-text-muted);
 }
 .item-card.tip .card-desc {
   margin-top: 2px;

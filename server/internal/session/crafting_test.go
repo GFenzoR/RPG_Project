@@ -44,7 +44,7 @@ var craftRecipes = content.Recipes{
 		Output: content.RecipeStack{Item: "test_blade", Count: 1}, BaseSuccess: 1},
 }
 
-func craftHarness(t *testing.T, m *world.Map) *harness {
+func craftHarness(t *testing.T, m *world.Map, opts ...option) *harness {
 	t.Helper()
 	items := testItems()
 	for n, src := range craftItemDefs {
@@ -60,6 +60,9 @@ func craftHarness(t *testing.T, m *world.Map) *harness {
 		c.Recipes = craftRecipes
 		c.Balance.Skills.Base["smithing"] = content.SkillBase{StartLevel: 1, BaseTries: 20}
 		c.Balance.Gathering.UseIntervalMs = 1500
+		for _, o := range opts {
+			o(c)
+		}
 	})
 }
 

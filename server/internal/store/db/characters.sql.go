@@ -188,7 +188,7 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 }
 
 const getCharacterInventory = `-- name: GetCharacterInventory :many
-SELECT id, container_id, slot, item_id, count
+SELECT id, container_id, slot, item_id, count, attributes
 FROM inventory_items
 WHERE character_id = $1
 ORDER BY container_id NULLS FIRST, slot
@@ -200,6 +200,7 @@ type GetCharacterInventoryRow struct {
 	Slot        int16
 	ItemID      int32
 	Count       int32
+	Attributes  []byte
 }
 
 // Every item of a character; the server rebuilds the tree from container_id.
@@ -218,6 +219,7 @@ func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) 
 			&i.Slot,
 			&i.ItemID,
 			&i.Count,
+			&i.Attributes,
 		); err != nil {
 			return nil, err
 		}
@@ -329,8 +331,9 @@ func (q *Queries) GetCharacterUnjustKills(ctx context.Context, arg GetCharacterU
 }
 
 const insertInventoryItem = `-- name: InsertInventoryItem :one
-INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes)
+VALUES ($1, $2, $3, $4, $5,
+        $6)
 RETURNING id
 `
 
@@ -340,6 +343,7 @@ type InsertInventoryItemParams struct {
 	Slot        int16
 	ItemID      int32
 	Count       int32
+	Attributes  []byte
 }
 
 func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error) {
@@ -349,6 +353,7 @@ func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryIt
 		arg.Slot,
 		arg.ItemID,
 		arg.Count,
+		arg.Attributes,
 	)
 	var id int64
 	err := row.Scan(&id)

@@ -2,10 +2,10 @@
 // their element trees without a DOM and press their buttons with a fake Game.
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
-import type { ClientContent } from "../content-types.ts";
+import type { ClientContent, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { ItemRef } from "../state/items.ts";
-import type { MarketView, TradeView } from "../state/market.ts";
+import type { MarketView, OfferView, TradeView } from "../state/market.ts";
 import { TradeWindow } from "./Trade.tsx";
 import { MarketWindow } from "./Market.tsx";
 
@@ -14,10 +14,18 @@ const t = (key: string, params?: Record<string, string | number>): string =>
 
 const content = {
   items: {
+    60: {
+      id: "iron_sword",
+      tradeable: true,
+      marketable: true,
+      stackable: false,
+      weapon: { type: "sword", attack: 13 },
+    },
     66: { id: "backpack", tradeable: true, marketable: true },
     68: { id: "salve", tradeable: true, marketable: true },
     70: { id: "quest_note", tradeable: false },
   },
+  attributes: { attack: { text: "attribute.attack" }, armor: { text: "attribute.armor" } },
 } as unknown as ClientContent;
 
 type Node = VNode<Record<string, unknown> & { children?: unknown }>;
@@ -28,6 +36,8 @@ function nodes(n: unknown, out: Node[] = []): Node[] {
   } else if (n && typeof n === "object" && "props" in n) {
     const v = n as Node;
     out.push(v);
+    // A component (the market's offer table, an item label): walk what it draws.
+    if (typeof v.type === "function") nodes((v.type as (p: unknown) => unknown)(v.props), out);
     nodes(v.props.children, out);
   }
   return out;
@@ -63,11 +73,21 @@ function recorder(): { game: Game; sent: string[] } {
     tradeRemove: (i: number) => sent.push(`remove ${i}`),
     tradeOffer: (r: ItemRef) => sent.push(`offer ${JSON.stringify(r.loc)} ${r.itemId}`),
     marketBrowse: (id: number) => sent.push(`browse ${id}`),
-    marketAccept: (id: bigint, n: number) => sent.push(`accept ${id} ${n}`),
+    marketAccept: (id: bigint, n: number, m?: ItemMods) =>
+      sent.push(`accept ${id} ${n}${m ? ` ${m.attribute}:${m.value}` : ""}`),
     marketCancel: (id: bigint) => sent.push(`cancel ${id}`),
     marketWithdraw: () => sent.push("withdraw"),
-    marketCreate: (sell: boolean, item: number, amount: number, price: number, d: number) =>
-      sent.push(`create ${sell ? "sell" : "buy"} ${item} ${amount} ${price} ${d}`),
+    marketCreate: (
+      sell: boolean,
+      item: number,
+      amount: number,
+      price: number,
+      d: number,
+      m?: ItemMods,
+    ) =>
+      sent.push(
+        `create ${sell ? "sell" : "buy"} ${item} ${amount} ${price} ${d}${m ? ` ${m.attribute}:${m.value}` : ""}`,
+      ),
     marketClose: () => sent.push("close"),
   } as unknown as Game;
   return { game, sent };
@@ -183,6 +203,7 @@ const market = (over: Partial<MarketView>): MarketView => ({
     durationsHours: [12, 48],
   },
   owned: 4,
+  ownedMods: [],
   readOnly: false,
   priceDefault: 1,
   ...over,
@@ -279,5 +300,159 @@ describe("MarketWindow read-only", () => {
       ui: { market: market({ readOnly: true }) } as GameUi,
     });
     expect(byAttr(tree, "data-testid", "market-read-only")).toHaveLength(1);
+  });
+});
+
+// docs/02 "Atributos de items": an equipable is one instance per offer and per sale.
+describe("MarketWindow with an equipable", () => {
+  const attack = { attribute: "attack", value: 2, refine: 0 };
+  const armor = { attribute: "armor", value: 1, refine: 0 };
+  const offer = (over: Partial<OfferView>): OfferView => ({
+    id: 5n,
+    sell: true,
+    itemId: 60,
+    amount: 1,
+    price: 30,
+    expiresAt: 0,
+    owner: "Sela",
+    own: false,
+    ...over,
+  });
+  const sword = market({
+    itemId: 60,
+    owned: 2,
+    ownedMods: [attack, armor],
+    sells: [offer({ mods: attack })],
+    buys: [offer({ id: 6n, sell: false, amount: 3, price: 10 })],
+  });
+
+  it("its card in the market says each piece has its own attribute, not that it rolls one", () => {
+    const own = market({
+      itemId: 60,
+      own: [
+        offer({ id: 8n, own: true, mods: attack }),
+        offer({ id: 9n, own: true, sell: false, amount: 2 }),
+      ],
+      history: [{ sold: false, itemId: 60, amount: 1, price: 30, at: 1 }],
+    });
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: own } as GameUi });
+    const browse = byAttr(tree, "data-testid", "market-browse")[0];
+    const label = (n: unknown): Node | undefined =>
+      nodes(n).find((x) => x.props["class"] === "item-label");
+    expect(label(browse)?.props).toHaveProperty("data-tip-any", "");
+    // An own sell offer is one instance (its mods); an own buy offer is any.
+    expect(label(byAttr(tree, "data-offer", "8")[0])?.props["data-tip-any"]).toBeUndefined();
+    expect(label(byAttr(tree, "data-offer", "8")[0])?.props["data-tip-mods"]).toBe("attack:2:0");
+    expect(label(byAttr(tree, "data-offer", "9")[0])?.props).toHaveProperty("data-tip-any", "");
+    expect(label(byAttr(tree, "data-testid", "market-history")[0])?.props).toHaveProperty(
+      "data-tip-any",
+      "",
+    );
+  });
+
+  it("names an attribute retired from the pool as retired, not as none", () => {
+    const gone = market({
+      itemId: 60,
+      sells: [offer({ mods: { attribute: "gone", value: 2, refine: 0 } })],
+    });
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: gone } as GameUi });
+    const line = nodes(byAttr(tree, "data-offer", "5")[0]).find(
+      (n) => n.props["class"] === "attribute card-attribute",
+    );
+    expect(line?.props["children"]).toBe("client.card.attribute_retired");
+    expect(line?.props["data-tip-mods"]).toBe("gone:2:0");
+  });
+
+  it("lists each sell offer with its attribute", () => {
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: sword } as GameUi });
+    const row = byAttr(tree, "data-offer", "5")[0];
+    const line = nodes(row).find((n) => n.props["class"] === "attribute card-attribute");
+    expect(line?.props["data-tip-mods"]).toBe("attack:2:0");
+    expect(line?.props["children"]).toBe('attribute.attack{"value":2}');
+  });
+
+  it("posts a sell of the instance the picker names, one at a time", () => {
+    const { game, sent } = recorder();
+    const tree = MarketWindow({ t, content, game, ui: { market: sword } as GameUi });
+    const create = byAttr(tree, "data-testid", "market-create")[0];
+    const picker = nodes(create).find((n) => n.props["name"] === "instance");
+    expect(nodes(picker).filter((n) => n.type === "option")).toHaveLength(2);
+    submit(create, { side: "sell", amount: "1", price: "40", duration: "0", instance: "1" });
+    submit(create, { side: "sell", amount: "2", price: "40", duration: "0", instance: "0" });
+    submit(create, { side: "buy", amount: "2", price: "40", duration: "0", instance: "0" });
+    expect(sent).toEqual(["create sell 60 1 40 0 armor:1", "create buy 60 2 40 0"]);
+  });
+
+  it("hides the instance picker while the form posts a buy offer", () => {
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: sword } as GameUi });
+    const create = byAttr(tree, "data-testid", "market-create")[0];
+    const side = nodes(create).find((n) => n.props["name"] === "side");
+    const picker = { hidden: false };
+    const change = (value: string): void =>
+      (side?.props["onChange"] as ((e: unknown) => void) | undefined)?.({
+        currentTarget: {
+          value,
+          form: { elements: { namedItem: (n: string) => (n === "instance" ? picker : null) } },
+        },
+      });
+    change("buy");
+    expect(picker.hidden).toBe(true);
+    change("sell");
+    expect(picker.hidden).toBe(false);
+  });
+
+  it("names a refined instance with its level in the picker and in another's offer", () => {
+    // Two swords of one roll, +0 and +7 (the server lists the lowest level first): the
+    // options must not look alike, or accepting a buy offer sells the +7 at a +0's price.
+    const { game, sent } = recorder();
+    const plus7 = { ...attack, refine: 7 };
+    const m = market({
+      itemId: 60,
+      owned: 2,
+      ownedMods: [attack, plus7],
+      sells: [offer({ mods: plus7 })],
+      buys: [offer({ id: 6n, sell: false, amount: 3, price: 10 })],
+    });
+    const tree = MarketWindow({ t, content, game, ui: { market: m } as GameUi });
+    const options = (n: unknown): unknown[] =>
+      nodes(n)
+        .filter((x) => x.type === "option")
+        .map((x) => x.props["children"]);
+    // "+7 sword · +2 attack": the refined name, then the attribute.
+    const refined = t("client.market.refined_line", {
+      name: t("client.item.refined", { level: 7, name: "item.iron_sword.name" }),
+      attribute: 'attribute.attack{"value":2}',
+    });
+    const buyRow = byAttr(tree, "data-offer", "6")[0];
+    expect(options(buyRow)).toEqual(['attribute.attack{"value":2}', refined]);
+    const create = byAttr(tree, "data-testid", "market-create")[0];
+    expect(options(nodes(create).find((n) => n.props["name"] === "instance"))).toEqual([
+      'attribute.attack{"value":2}',
+      refined,
+    ]);
+    // Another's sell offer of a +7: its row says so, not only its tooltip.
+    const line = nodes(byAttr(tree, "data-offer", "5")[0]).find(
+      (n) => n.props["class"] === "attribute card-attribute",
+    );
+    expect(line?.props["children"]).toBe(refined);
+    // The default option is the +0: the sale takes it unless the player picks the +7.
+    submit(
+      nodes(buyRow).find((n) => n.type === "form"),
+      { instance: "0" },
+    );
+    expect(sent).toEqual(["accept 6 1 attack:2"]);
+  });
+
+  it("sells into a buy offer the instance the picker names", () => {
+    const { game, sent } = recorder();
+    const tree = MarketWindow({ t, content, game, ui: { market: sword } as GameUi });
+    const buyRow = byAttr(tree, "data-offer", "6")[0];
+    const form = nodes(buyRow).find((n) => n.type === "form");
+    expect(nodes(form).some((n) => n.props["name"] === "amount")).toBe(false);
+    submit(form, { instance: "0" });
+    // Buying from a sell offer is the offer's instance: no picker.
+    const sellForm = nodes(byAttr(tree, "data-offer", "5")[0]).find((n) => n.type === "form");
+    submit(sellForm, { amount: "1" });
+    expect(sent).toEqual(["accept 6 1 attack:2", "accept 5 1"]);
   });
 });

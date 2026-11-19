@@ -10,66 +10,10 @@
 // Units are sprite pixels, x east, y north, z up; the origin is the middle of the tile on the
 // ground. Every body lies along x and a little across the tile, so it fits from its nose to
 // its tail without touching the canvas border.
-import type { MarkSpec, PartSpec, ShapeSpec, SpriteSpec } from "../spec.ts";
-import type { Vec3 } from "../math.ts";
+import type { PartSpec, SpriteSpec } from "../spec.ts";
+import { grow } from "./grow.ts";
 
 const FUR = { amount: 0.1, cell: [3, 2, 1.2] } as const;
-
-const times = (v: Vec3, k: number): Vec3 => [v[0] * k, v[1] * k, v[2] * k];
-
-/** A shape `k` times its size about the part's origin. */
-function growShape(sh: ShapeSpec, k: number): ShapeSpec {
-  switch (sh.type) {
-    case "ellipsoid":
-      return {
-        ...sh,
-        ...(sh.center && { center: times(sh.center, k) }),
-        radii: times(sh.radii, k),
-      };
-    case "box":
-      return { ...sh, min: times(sh.min, k), max: times(sh.max, k) };
-    case "cylinder":
-      return { ...sh, a: times(sh.a, k), b: times(sh.b, k), radius: sh.radius * k };
-    case "capsule":
-      return {
-        ...sh,
-        a: times(sh.a, k),
-        b: times(sh.b, k),
-        radius: sh.radius * k,
-        ...(sh.radius2 !== undefined && { radius2: sh.radius2 * k }),
-      };
-    case "extrusion":
-      return {
-        ...sh,
-        points: sh.points.map(([u, v]) => [u * k, v * k] as const),
-        from: sh.from * k,
-        to: sh.to * k,
-      };
-    case "polygon":
-      return {
-        ...sh,
-        points: sh.points.map(([u, v]) => [u * k, v * k] as const),
-        ...(sh.at !== undefined && { at: sh.at * k }),
-        thickness: (sh.thickness ?? 1) * k,
-      };
-  }
-}
-
-/**
- * The model `k` times its size (joints, shapes and marks): every corpse is drawn at the
- * proportions of its family and then grown to fill its tile, 24-30 px long.
- */
-function grow(spec: SpriteSpec, k: number): SpriteSpec {
-  return {
-    ...spec,
-    parts: spec.parts.map((p): PartSpec => ({
-      ...p,
-      ...(p.at && { at: times(p.at, k) }),
-      shapes: p.shapes.map((sh) => growShape(sh, k)),
-      ...(p.marks && { marks: p.marks.map((m): MarkSpec => ({ ...m, at: times(m.at, k) })) }),
-    })),
-  };
-}
 
 /** A leg lying on the ground, from the hip (a, on the body) to the foot (b). */
 const limb = (

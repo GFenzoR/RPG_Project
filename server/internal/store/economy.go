@@ -14,7 +14,8 @@ import (
 
 // EconomyEntry is one row of the append-only economy_log (T4.1). Count and Amount are
 // signed (positive created, negative destroyed); ItemID 0 is a money row. Zero ids and
-// counts are stored as NULL; Ref goes to details.ref.
+// counts are stored as NULL; Ref goes to details.ref and Mods (an equipable's own data:
+// which instance moved) to details.mods.
 type EconomyEntry struct {
 	At               time.Time
 	Kind             string
@@ -24,6 +25,13 @@ type EconomyEntry struct {
 	Count            int
 	Amount           int64
 	Ref              string
+	Mods             *ItemMods
+}
+
+// economyDetails is the details column of an entry.
+type economyDetails struct {
+	Ref  string    `json:"ref,omitempty"`
+	Mods *ItemMods `json:"mods,omitempty"`
 }
 
 // economyCols are the columns AppendEconomy writes (staging table and economy_log).
@@ -38,8 +46,11 @@ func (s *Store) AppendEconomy(ctx context.Context, batchID string, es []EconomyE
 	rows := make([][]any, len(es))
 	for i, e := range es {
 		details := []byte("{}")
-		if e.Ref != "" {
-			raw, err := json.Marshal(map[string]string{"ref": e.Ref})
+		if e.Mods != nil && *e.Mods == (ItemMods{}) {
+			e.Mods = nil
+		}
+		if e.Ref != "" || e.Mods != nil {
+			raw, err := json.Marshal(economyDetails{Ref: e.Ref, Mods: e.Mods})
 			if err != nil {
 				return fmt.Errorf("economy details: %w", err)
 			}
@@ -85,15 +96,13 @@ func (s *Store) ListEconomy(ctx context.Context, characterID int64, n int) ([]Ec
 	}
 	out := make([]EconomyEntry, len(rows))
 	for i, r := range rows {
-		var d struct {
-			Ref string `json:"ref"`
-		}
+		var d economyDetails
 		if err := json.Unmarshal(r.Details, &d); err != nil {
 			return nil, fmt.Errorf("economy %d details: %w", r.ID, err)
 		}
 		out[i] = EconomyEntry{At: r.At.Time, Kind: r.Kind, CharacterID: r.CharacterID.Int64,
 			OtherCharacterID: r.OtherCharacterID.Int64, ItemID: int(r.ItemID.Int32), Count: int(r.Count.Int32),
-			Amount: r.Amount.Int64, Ref: d.Ref}
+			Amount: r.Amount.Int64, Ref: d.Ref, Mods: d.Mods}
 	}
 	return out, nil
 }

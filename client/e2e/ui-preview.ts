@@ -255,6 +255,9 @@ const SCENES = [
   "tooltip",
   "tooltipcoin",
   "guild",
+  "forge",
+  "forgerisk",
+  "forgeresult",
   "danger",
   "death",
   "login",
@@ -344,6 +347,26 @@ try {
           await el.hover();
           await page.waitForTimeout(150);
         }
+      }
+      if (scene.startsWith("forge")) {
+        // docs/02 "Forja": the anvil's Forge tab. "forge": the +2 sword in hand (a safe
+        // level, 100 %); "forgerisk": the +6 helmet (the amber toggle there, off), after
+        // "Refine": the confirm step that warns in red that it may break; "forgeresult":
+        // the last attempt broke a +7 saber.
+        const tab = page.locator('[data-station-tab="forge"]');
+        if (await tab.isVisible()) {
+          await tab.click();
+          await page.waitForTimeout(150);
+        }
+        const items = page.locator(".forge-item");
+        if (scene === "forge" && (await items.count()) > 1) await items.nth(1).click();
+        if (scene === "forgerisk" && (await items.count()) > 0) {
+          await items.nth(0).click();
+          const attempt = page.getByTestId("forge-attempt");
+          if (await attempt.isEnabled()) await attempt.click();
+        }
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(200);
       }
       if (scene === "chattabs") {
         // docs/17 UI-10: the Local tab picked (the line to speak goes to "Decir"); lines of

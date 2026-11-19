@@ -356,8 +356,7 @@ func (w *World) cmdItem(ctx *game.TickContext, p *Player, args []string) bool {
 		return true
 	}
 	auditArgs["item"] = def.ID
-	w.giveItem(p, def, count)
-	w.econItem(p, EconGM, "", def, count)
+	w.econMade(p, EconGM, "", 0, def, count, w.giveItem(p, def, count))
 	p.emit(systemMsg(msgGMItemCreated, itemParam(def, count)))
 	w.audit(ctx, p, "create_item", nil, auditArgs, auditOK)
 	return true

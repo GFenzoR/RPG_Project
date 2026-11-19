@@ -203,6 +203,13 @@ export const GATES = {
   frontWidth: 0.45,
   /** bc sprites: the figure seen from the front or the back is centred within this. */
   centre: 2,
+  /**
+   * Item icons (a centred size class): the figure's box is centred on the canvas within this
+   * on both axes, so it sits in the middle of an inventory slot, and its longest side is at
+   * least `iconSpan` px, half a slot or more: smaller reads as a speck at 1x.
+   */
+  iconCentre: 1.5,
+  iconSpan: 16,
   /** Extra rows a hovering (flying) sprite may keep under its lowest point. */
   hover: 4,
   /** An animated prop's loop moves: some frame differs from frame 0 in this many pixels. */
@@ -304,6 +311,15 @@ export function gateProblems(spec: SpriteSpec): string[] {
         if (Math.abs(off) > GATES.centre) out.push(`${f.path}: ${off} px off centre (bc anchor)`);
       }
     } else if (b[3] < h - 32) out.push(`${f.path}: does not stand on its tile (br anchor)`);
+    if ((size as { centred?: boolean }).centred) {
+      const dx = (b[0] + b[2] + 1) / 2 - w / 2;
+      const dy = (b[1] + b[3] + 1) / 2 - h / 2;
+      if (Math.abs(dx) > GATES.iconCentre || Math.abs(dy) > GATES.iconCentre)
+        out.push(`${f.path}: ${dx}, ${dy} px off the canvas centre (an icon is centred)`);
+      const span = Math.max(b[2] - b[0] + 1, b[3] - b[1] + 1);
+      if (span < GATES.iconSpan)
+        out.push(`${f.path}: ${span} px at its longest, under ${GATES.iconSpan}: a speck at 1x`);
+    }
   }
 
   // Readability at 1x: the actions and the facings are told apart by their silhouettes.

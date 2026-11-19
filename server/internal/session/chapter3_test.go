@@ -289,8 +289,10 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	h.input(cl, walkPath(S, S, S))
 	h.sim.RunFor(3 * time.Second)
-	if p.Pos() != pos(30, 42) {
-		t.Fatalf("through the forge gate: at %v", p.Pos())
+	// Past the gate: the third step may meet a monster of the forge room (where they stand
+	// depends on the fights before, so on every number of the kit).
+	if at := p.Pos(); at.X != forgeGate.X || at.Y <= forgeGate.Y || at.Z != forgeGate.Z {
+		t.Fatalf("through the forge gate: at %v", at)
 	}
 	h.sim.Command(gameFunc(func() {
 		arm("embersteel_sabre", "embersteel_shield")
@@ -356,7 +358,7 @@ func TestBrasalNPCs(t *testing.T) {
 	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))
 	h.sim.Command(gameFunc(func() {
-		h.w.GiveForTest(p, "gold_coin", 2)
+		h.w.GiveForTest(p, "gold_coin", 3) // the whole smithy (lote 11 added the shield) and the blessings
 		h.w.GiveForTest(p, "copper_coin", 250)
 		h.w.GiveForTest(p, "ash_pelt", 3)
 		for _, id := range []string{"pickaxe", "rope", "ship_biscuit"} {
@@ -372,6 +374,11 @@ func TestBrasalNPCs(t *testing.T) {
 		t.Fatal("no shop")
 	}
 	money := h.w.Money(p)
+	items, err := content.LoadItems(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byNum := items.ByNumeric()
 	for _, o := range shops[0].Offers {
 		if o.BuyPrice == 0 {
 			continue
@@ -384,6 +391,14 @@ func TestBrasalNPCs(t *testing.T) {
 		if h.w.Money(p) != money {
 			t.Fatalf("after item %d: money %d, want %d", o.ItemId, h.w.Money(p), money)
 		}
+		// The band 4 kit and the forge's temper stones are more lines than one pack holds:
+		// each bought piece leaves so the next one is about money, not room.
+		def := byNum[uint16(o.ItemId)]
+		if def == nil {
+			t.Fatalf("item %d not in data/items", o.ItemId)
+		}
+		h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, def.ID, 1) }))
+		h.sim.Step()
 	}
 	pelt := itemNum(t, h, p, "ash_pelt")
 	evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: d.DialogId, ItemId: pelt, Count: 3}}})

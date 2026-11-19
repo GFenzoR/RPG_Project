@@ -309,7 +309,10 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     maná de su nivel, que su nivel mágico esté a lo sumo 4 niveles después de su nivel (el
     guardián que compra brebajes de maná llega a ~4 al 30 y ~6 al 49) y que las cazas de sus
     primeros niveles lo lancen: cada cura propia, cada ataque a un objetivo y, para quien no
-    tiene ataques a un objetivo (el guardián), sus áreas. Las áreas de los magos y del
+    tiene ataques a un objetivo (el guardián), sus áreas. Una cura propia que esas cazas
+    nunca necesitan (ninguna deja al cazador bajo la mitad de su vida) la tiene que lanzar
+    la primera caza que sí la necesita (lote 11: el montaraz con el arco de tejo, "Catálogo
+    de equipo"). Las áreas de los magos y del
     montaraz quedan para grupos: en un duelo un área le pega a un solo monstruo y un rayo
     barato hace lo mismo por menos maná, así que la simulación no las necesita y tampoco las
     exige. Por eso `frost_bloom` y `scatter_volley` le pegan a cada monstruo un poco menos que
@@ -465,8 +468,9 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   decoración no se talan.
 - **Estaciones:** fragua (`smelting_forge`), yunque (`anvil`) y fogón (`cooking_hearth`) son
   items del mapa. Usarlas (click derecho) a 1 casilla abre la ventana de recetas de esa
-  estación, con lo que falta y la chance a tu nivel. Herrería: mineral + tronco → lingote en
-  la fragua; lingotes → hacha de leñador, pico o espada corta forjada en el yunque (con el
+  estación, con lo que falta y la chance a tu nivel (el yunque, además, la pestaña de la
+  forja: "Forja"). Herrería: mineral + tronco → lingote en
+  la fragua; lingotes → hacha de leñador, pico o hacha forjada en el yunque (con el
   martillo de herrero encima). Cocina: pescado crudo, carne de jabalí y algas → pescado a la
   brasa, jabalí asado y guiso del puerto (más `food_ms` que lo crudo; el guiso cura un poco).
 - **Intento:** el servidor comprueba receta, estación en esa casilla, distancia (1 casilla,
@@ -675,7 +679,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
   varita dispara a distancia desde T1.9), el escudo de la izquierda y el arma la defensa
   (se suman, m3) y la suma de `armor` de todo el equipo la armadura del jugador contra
-  golpes físicos.
+  golpes físicos. A eso se suma el atributo de cada pieza puesta ("Atributos de items").
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
   lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
   mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
@@ -700,17 +704,16 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
   capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
   arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
-  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y el
-  chaleco de piel (para cualquier vocación: ninguna pieza de cuero está restringida, m6);
-  el buzo vende las varitas, las varas y el brebaje de maná. En el Bosque las varas, las
+  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y la
+  ropa del kit inicial (para cualquier vocación: desde el lote 11 solo el torso pesado pide
+  guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
+  brebaje de maná. En el Bosque las varas, las
   varitas y los brebajes los tiene la druida Velia (opción "¿Qué es este lugar?") y el
   resto la curtidora; en Brasal, el herrero y el templo (brebajes, cataplasmas, la varita
-  de obsidiana y la vara de escarcha negra).
-- **Escalones de equipo (auditoría de contenido M3, 2026-11):** cada línea de arma llega a
-  la Isla Volcánica con su fuente (tienda, botín o receta): maza 15 → 23 (Bosque) → 28
-  (Brasal), arco 7 → 12 → 17, ballesta 7 → 13, varita y vara 13 → 21 → 30; y cada slot
-  crece con las islas: cabeza 1 → 2 (capucha de ciervo) → 3, piernas 1 → 2 → 3 (grebas de
-  acero de ascua), pies 1 → 2 (botas de ciervo) → 3 (escarpes).
+  de obsidiana, la vara de escarcha negra, la túnica de ceniza y el amuleto de brasa).
+- **Escalones de equipo:** desde el lote 11 los da el catálogo compacto por bandas, una
+  pieza por línea y banda ("Catálogo de equipo", abajo). Antes (auditoría de contenido M3)
+  cada línea tenía sus propios escalones.
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
   suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
   de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
@@ -721,6 +724,460 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+
+### Catálogo de equipo (lote 11, 2026-11)
+Pedido del dueño (2026-11-18): pocos items, como en los MMORPG de casillas clásicos, para
+que el juego sea simple, y a cambio un atributo al azar por pieza (`feat/item-attributes`)
+y el refinado (`feat/item-forge`). El catálogo se rehízo compacto: **78 piezas** (40
+armas, 6 escudos y 32 armaduras y joyas) más las dos municiones, en **seis bandas** de
+nivel del 1 al 100+, con una pieza por línea y banda. Cada arma, armadura y escudo pide su
+nivel (`requires.level`, regla de `make validate`): el de su banda.
+
+**Bandas.**
+
+| Banda | Niveles | Nivel que piden | Dónde se consiguen |
+|---|---|---|---|
+| 1 | 1–4 | 1 | Puerto: el kit inicial |
+| 2 | 5–9 | 5 | Puerto: armas y escudo (sin armadura) |
+| 3 | 10–29 | armas 10; armadura, escudo y joyas 15 | Puerto (armas) y el Bosque |
+| 4 | 30–49 | 30 | Isla Volcánica (Brasal) |
+| 5 | 50–74 | 50 | todavía sin isla |
+| 6 | 75–100+ | 75 | todavía sin isla |
+
+No son las bandas que se propusieron al pedirlo (1–8, 8–20, 20–35, 35–50, 50–70, 70–85,
+85–100+):
+- **Abajo manda la caza de Puerto y del Bosque**, que la simulación de balance mide
+  monstruo por monstruo (5–15 s y 10–40 % de la vida a su nivel, "Monstruos"). Con un solo
+  escalón entre 1 y 8, o la gaviota muere en menos de 5 s al nivel 1 o el cangrejo y el
+  jabalí tardan más de 15 s a los niveles 5 y 7: hace falta un escalón en el 5. Con uno
+  solo entre 8 y 20, el saqueador (nivel 10) o el contrabandista (16) se salen. El arma de
+  la banda 3 (ataque 22) cubre del 10 al 29, porque la caza del Bosque pide 22 al nivel 20,
+  pero con su armadura al 10 el saqueador ya no lastima (menos del 10 % de la vida): por
+  eso la armadura, el escudo y las joyas de la banda 3 piden nivel 15. Por lo mismo la
+  banda 2 no trae armadura (la del kit inicial alcanza).
+- **Arriba**, con tres bandas (50–70, 70–85, 85–100+) el catálogo pasaba de 90 piezas. Dos
+  bandas anchas, con el refinado haciendo crecer cada pieza dentro de la suya, lo dejan en
+  78. Las islas de esas bandas (las Islas Heladas, 40–80, y la Isla Hundida, 70+, "Mundo e
+  islas") traen sus fuentes; si una isla pide una banda intermedia, se agrega con la
+  fórmula de abajo.
+
+**Líneas, por vocación.**
+- **Guardián:** espada, hacha y maza (una por skill de cuerpo a cuerpo), escudo y el torso
+  pesado.
+- **Montaraz:** arco (dos manos, flechas), ballesta (desde la banda 3: una mano, virotes, y
+  la izquierda para el escudo) y el torso pesado.
+- **Arcanista:** varita. **Druida:** vara (un arma `wand` de una mano). Los dos, la túnica.
+- **Para todos:** escudo, cabeza, piernas, pies, amuleto (cuello) y anillo.
+- **Clases de peso:** solo el torso tiene dos. La **armadura pesada** pide
+  `requires.vocations: [guardian, ranger]` (abrigo de cuero de ciervo, coraza de acero de
+  ascua...); la **túnica** es para cualquiera y es la línea de los magos. Esto cambia la
+  regla m6 de la auditoría de contenido ("ninguna pieza de cuero está restringida"): el
+  abrigo de cuero de ciervo es pesado. La clase media del montaraz se fundió con la pesada
+  para que el catálogo quede chico; cabeza, piernas y pies son de una sola clase.
+- **Joyas** (los slots de cuello y anillo ya existían en el protocolo, sin items): el
+  servidor suma la `armor` de cualquier slot, así que el amuleto da 1–2 de armadura y el
+  anillo 0–1. Sobre todo llevan el atributo al azar de `feat/item-attributes`. Los anillos
+  de las bandas 3 y 4 salen solo como botín raro.
+
+**El catálogo** (id y su número principal: ataque/defensa, ataque y rango, defensa o
+armadura).
+
+| Línea | Banda 1 | Banda 2 | Banda 3 | Banda 4 | Banda 5 | Banda 6 |
+|---|---|---|---|---|---|---|
+| Espada | `rusty_cutlass` 10/5 | `iron_sword` 13/7 | `boarding_saber` 22/11 | `embersteel_sabre` 29/15 | `wyrmfang_blade` 36/18 | `tidesteel_sword` 43/22 |
+| Hacha | `hatchet` 12/3 | `forged_axe` 15/4 | `bearded_axe` 24/7 | `embersteel_axe` 31/9 | `wyrmbone_axe` 38/11 | `tidesteel_axe` 45/13 |
+| Maza | `belaying_pin` 11/4 | `spiked_cudgel` 14/5 | `elmroot_maul` 23/9 | `embersteel_mace` 30/12 | `wyrmbone_maul` 37/14 | `tidesteel_mace` 44/17 |
+| Arco | `short_bow` 2, 5 | `yew_longbow` 7, 6 | `thornwood_longbow` 12, 6 | `embersteel_longbow` 17, 6 | `wyrmsinew_bow` 22, 6 | `drownwood_bow` 27, 6 |
+| Ballesta | — | — | `smuggler_crossbow` 8, 5 | `embersteel_crossbow` 13, 5 | `wyrmsinew_crossbow` 18, 5 | `tidesteel_crossbow` 23, 5 |
+| Varita (arcanista) | `spark_wand` 8 energía | `coral_wand` 13 hielo | `stormglass_wand` 21 energía | `obsidian_wand` 30 energía | `wyrmhorn_wand` 39 energía | `pearlstorm_wand` 48 energía |
+| Vara (druida) | `sapling_staff` 8 tierra | `rimewood_staff` 13 hielo | `hoarfrost_staff` 21 hielo | `blackfrost_staff` 30 hielo | `glacierheart_staff` 39 hielo | `deepfrost_staff` 48 hielo |
+| Escudo | `barrel_lid_shield` 9 | `plank_shield` 12 | `elmwood_shield` 18 | `embersteel_shield` 22 | `wyrmscale_pavise` 26 | `tidesteel_shield` 30 |
+| Torso pesado | — | — | `stagleather_coat` 6 | `embersteel_cuirass` 8 | `wyrmscale_mail` 10 | `tidesteel_plate` 12 |
+| Túnica | `patched_tunic` 2 | — | `mossweave_robe` 3 | `ashweave_robe` 4 | `duskweave_robe` 5 | `pearlweave_robe` 6 |
+| Cabeza | `sailcloth_cap` 1 | — | `stagleather_hood` 2 | `embersteel_helm` 3 | `wyrmcrest_helm` 4 | `tidesteel_helm` 5 |
+| Piernas | `canvas_trousers` 1 | — | `stagleather_leggings` 2 | `embersteel_greaves` 3 | `wyrmhide_greaves` 4 | `tidesteel_greaves` 5 |
+| Pies | `tarred_boots` 1 | — | `stagleather_boots` 2 | `embersteel_sabatons` 3 | `wyrmhide_boots` 4 | `tidesteel_sabatons` 5 |
+| Amuleto | — | — | `antler_amulet` 1 | `cinder_amulet` 1 | `wyrmtooth_amulet` 2 | `blackpearl_amulet` 2 |
+| Anillo | — | — | `briar_ring` 0 | `obsidian_ring` 0 | `emberheart_ring` 1 | `tidestone_ring` 1 |
+
+La munición (`arrow`, 9, y `bolt`, 10) no tiene bandas: se apila y no lleva atributo. Cada
+pieza tiene su propio ícono, dibujado con el motor de sprites (`feat/item-icons`, docs/17
+"Íconos de items"): una banda mejor se reconoce de un vistazo por su material y su acento
+(óxido y madera, hierro, acero, acero de ascua con brasa, hueso y escamas de dragoncillo
+con oro, acero de marea con runas) y por una silueta más grande y más trabajada.
+
+**La fórmula** (la comprueba `packages/content-schema/src/catalog.test.ts`: una pieza nueva
+la sigue, o la fórmula, el test y este doc cambian juntos). Valores base por banda *b*:
+
+| b | A (cuerpo a cuerpo) | Arco | Varita y vara | Escudo | Torso pesado | Túnica | Cabeza, piernas, pies | Amuleto | Anillo | V (valor) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 10 | 2 | 8 | 9 | — | 2 | 1 | — | — | 30 |
+| 2 | 13 | 7 | 13 | 12 | — | — | — | — | — | 150 |
+| 3 | 22 | 12 | 21 | 18 | 6 | 3 | 2 | 1 | 0 | 600 |
+| 4 | 29 | 17 | 30 | 22 | 8 | 4 | 3 | 1 | 0 | 2000 |
+| 5 | 36 | 22 | 39 | 26 | 10 | 5 | 4 | 2 | 1 | 5000 |
+| 6 | 43 | 27 | 48 | 30 | 12 | 6 | 5 | 2 | 1 | 12000 |
+
+Desde la banda 3, cada banda nueva suma: A +7, arco +5, varita y vara +9, escudo +4, torso
+pesado +2, túnica, cabeza, piernas y pies +1 y cada joya +1 cada dos bandas. V no sigue una
+razón fija: es el de la tabla (de una banda a la siguiente, × 4; × 3,3; × 2,5 y × 2,4: el
+salto se achica arriba). Una banda intermedia que pida una isla toma, en cada columna, un
+número entre los de sus vecinas (para V, la media geométrica, redondeada como abajo), y la
+tabla, `catalog.test.ts` y este doc cambian juntos.
+- **Cuerpo a cuerpo:** espada, ataque A y defensa 0,5·A; maza, A + 1 y 0,4·A; hacha, A + 2
+  y 0,3·A (redondeo al entero más cercano, ,5 hacia arriba). La espada para más y el hacha
+  pega más.
+- **Distancia:** el arco, dos manos, rango 6 (el corto, 5) y flechas. La ballesta, el
+  ataque del arco − 4, una mano, rango 5 y virotes. Varita y vara: rango 4, una mano; el
+  elemento de la vocación (arcanista energía, druida hielo; las de las bandas 1 y 2
+  conservan el suyo: chispa de energía, coral y madera de escarcha de hielo, retoño de
+  tierra).
+- **Peso** (gramos, *i* = b − 1): espada 3000 + 150·i; hacha 4000 + 300·i; maza 3800 +
+  400·i; arco 2400 + 300·i; ballesta 3200 + 400·(b − 3); varita 1200 + 100·i; vara 1400 +
+  100·i; escudo 3500 + 600·i; torso pesado 8000 + 1000·(b − 3); túnica 2000 + 300·i; cabeza
+  800 + 400·i; piernas 1600 + 500·i; pies 1200 + 400·i; amuleto 300; anillo 100.
+- **Valor:** V de la banda por el factor de la línea (armas 1; ballesta 0,9; escudo 0,75;
+  torso pesado 0,9; túnica 0,6; cabeza, piernas y pies 0,4; amuleto 0,8; anillo 0,6),
+  redondeado a 5 debajo de 100, a 10 debajo de 1000, a 50 debajo de 5000 y a 100 arriba.
+- **Precios de los NPCs** ("Economía"): venden al valor en Puerto y a 1,25 veces el valor
+  en el Bosque y el Volcán; compran a un tercio del valor o menos. Así ningún par de
+  tiendas deja ganar comprando y revendiendo (`make validate`; el test del catálogo lo
+  mira para todo el equipo).
+
+**Dónde se consigue** (bandas 1 a 4).
+- **Puerto:** el armero vende las bandas 1 y 2 y las armas de cuerpo a cuerpo y el arco de
+  la banda 3 (desde el nivel 10, para las últimas cazas de la isla); el buzo, las varitas y
+  varas de las bandas 1 a 3. El hacha forjada también sale del yunque (herrería 6), en
+  lugar de la espada corta forjada.
+- **Bosque:** la curtidora vende las armas, el torso pesado, la capucha, las calzas, las
+  botas y el escudo de olmo (que también se forja) de la banda 3; la druida Velia, las
+  varitas y varas, la túnica de musgo y el amuleto de asta. El anillo de zarza es botín
+  raro de espinosos y reptantes huecos.
+- **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
+  solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
+  escarcha negra, la túnica de ceniza y el amuleto de brasa. El anillo de obsidiana es
+  botín raro de mineros de obsidiana y gólems de escoria.
+- **Botín de antes:** el saqueador suelta el alfanje, la cabilla (en lugar del garrote de
+  deriva) y la gorra; el contrabandista, las calzas de ciervo y su ballesta; el
+  dragoncillo, el sable de ascua; el minero, el yelmo, la varita y la vara.
+- **Recompensas:** el capitán del puerto sigue dando el kit inicial de cada vocación y, al
+  cerrar el capítulo 1, la espada de hierro al guardián; los demás reciben su valor, 150
+  monedas (antes 120, lo que valía la espada). Las demás quests dan oro y experiencia.
+- **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta, diálogo,
+  recompensa (de quest o del tutorial) ni hechizo las da (el test del catálogo lo
+  comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
+  isla de la banda). La cota de escamas y la hoja de colmillo de dragoncillo pasaron a la
+  banda 5 (nivel 50, más fuertes): sus recetas (herrería 20 y 22, con escamas de
+  dragoncillo y núcleos de escoria) vuelven con esa isla; las que ya están en un
+  inventario se quedan. Los requisitos se miran al equipar, no al entrar: quien ya tenía
+  puesta una pieza que ahora pide más nivel u otra vocación (la cota o la hoja antes del
+  50, el torso pesado en un mago, el escudo de tablones antes del 5) la sigue usando hasta
+  que se la saca. Ningún NPC compra la cota ni la hoja hasta que llegue su isla (`make
+  validate` no deja un comprador sin fuente salvo para un retirado): se pueden intercambiar
+  entre jugadores.
+
+**Retirados** (`retired: true`, `06-content-data.md` "Item"): el garrote de deriva, la
+espada corta forjada, la hoja de espino, el jubón de cuero, el chaleco de piel y la rodela
+remachada repetían otra pieza de su banda. Siguen definidos con sus números de antes (quien
+tiene uno lo conserva) y el armero de Puerto o la curtidora los compran, pero
+`make validate` rechaza cualquier fuente nueva.
+
+**Balance.** Los kits de las simulaciones son los del catálogo (`kitFor` en
+`sim/balance_test.go` para el guardián y los montaraces; túnicas y líneas de cada vocación
+en `balance_vocations_test.go`) y dos tests comprueban que cada pieza se puede llevar a ese
+nivel y con esa vocación; un tercero, que cada arma entra al kit en el nivel que pide, no
+después. Ningún objetivo documentado cambió:
+- **Guardián:** Puerto, nivel 8 en 1,10 h y 15 en 3,32 h (antes 3,46); Bosque, 15→20 en
+  2,30 h y 20→25 en 3,13 h; Volcán, 25→30 en 3,92 h, 30→40 en 10,13 h y 40→50 en 15,30 h;
+  el custodio, 65 s y 149 % de la vida. El más justo es el minero de obsidiana al nivel 35:
+  10,2 % de la vida (el piso es 10 %).
+- **Carreras del 1 al 50:** el guardián en 34,4 h (antes 34,6) y 39,4 h sin brebajes de
+  maná; magos y montaraces siguen entre 0,5 y 1,5 veces el guardián en cada tramo, con niveles
+  mágicos casi iguales. Los magos llevan ahora la túnica (3 a 4 de armadura menos que el
+  guardián) y su ritmo casi no cambió.
+- **Cada arma entra al kit en el nivel que pide** (`TestKitWeaponsFromTheirLevel`): las
+  simulaciones no modelan la compra, así que el arco de tejo, la espada de hierro y las
+  varitas y varas de la banda 2 llegan al nivel 5, aunque en el juego las paga el capítulo
+  1 (150 monedas de la quest y, a quien no recibe la espada, 150 más del capitán, hacia el
+  nivel 6-7). Con el arco de tejo desde el 5, ningún duelo de Puerto deja al montaraz bajo
+  la mitad de su vida (tira de lejos: 0-2 % de la vida por lobo) y su cura (nivel 4) no se
+  lanza hasta las arañas del musgo del Bosque (nivel 10). El chequeo "cada hechizo se usa a
+  su nivel" lo acepta a propósito: una cura propia que las cazas de sus primeros niveles
+  nunca necesitan la tiene que lanzar la primera caza que sí la necesita (una caza que deja
+  al cazador bajo la mitad y no la lanza falla igual). En Puerto la cura sirve contra
+  varios lobos a la vez y en los errores, que un duelo no modela. Antes la simulación
+  compraba el arco al nivel 8 para que el chequeo viejo pasara, y eso escondía lo que hace
+  el arco a su nivel. El montaraz va del 1 al 8 en 1,18 h (el guardián, 1,40 h).
+- **Amuletos sí, anillos no:** el kit lleva el amuleto (se vende) y no el anillo (botín
+  raro; los de las bandas 3 y 4 no dan armadura).
+## Atributos de items (decisión del dueño, 2026-11-18)
+El dueño reabrió el diseño de items: pocos items, como en Tibia, para que el juego siga
+simple, pero cada uno con **un atributo al azar** (la idea viene de los juegos de botín, con
+nombres y números propios). Hecho en el lote 11, rama `feat/item-attributes`
+(`server/internal/session/attributes.go`, `content/attributes.go`, `data/attributes.yaml`).
+La forja (refinar +1..+10, rama `feat/item-forge`: "Forja", abajo) y el catálogo compacto
+son otras ramas del lote: el refinado vive en los datos de cada instancia (`refine`).
+- **Un atributo, siempre uno.** Todo equipable (arma, escudo o pieza de armadura; nunca
+  munición, contenedores, consumibles, herramientas ni materiales) lleva exactamente un
+  atributo con un valor. No hay rarezas ni colores por calidad: el atributo es una línea más
+  de la ficha, en su propio color. Un item con atributo **nunca se apila** (`make validate`
+  rechaza un equipable `stackable`).
+- **Cuándo se tira:** en **cada creación** de un equipable, con la fuente sembrada del loop
+  (`session.Config.Rand`, la misma del `game.Loop`): botín de monstruos, compra a un NPC
+  (también la tienda de la Isla de Pruebas), recompensas de quest y de diálogo (el kit del
+  capítulo 1), oficios, `/item` del staff, la recompensa del tutorial y un botín de quest
+  (`each_player`); también un hechizo que conjure o una recolección que dé un equipable
+  (ningún dato lo hace todavía). Se elige entre los
+  atributos cuyo `on` nombra la clase del item (el `weapon.type` de un arma, `shield`, o el
+  `armor.slot`) por su `weight`, con un valor uniforme en la banda del `requires.level` del
+  item (sin requisito = nivel 1). El inventario inicial es una mochila (no tira) y los items
+  fijos del mapa (`world.bin`) no son instancias: nunca tiran.
+- **Items de antes:** un equipable guardado sin atributo (de antes de este cambio) tira el
+  suyo una vez al cargarse y se guarda con él: el personaje en el mismo login (un guardado
+  aparte, así una caída antes del autoguardado no tira otro al volver a entrar), el
+  suelo de una casa en la escritura de la casa que la carga provoca al arrancar, y lo que
+  espera en el buzón del mercado al retirarlo (una oferta de venta vieja se compra sin
+  atributo y lo tira en el inventario del comprador; si tenía varias unidades, se compran
+  todas las que se pidan y cada una tira el suyo).
+- **Nada lo cambia ni lo pierde:** mover (equipo, contenedores, suelo, portales), el
+  intercambio (las dos ofertas), el suelo de una casa (y el buzón al liberarla), el cadáver
+  y lo que suelta la muerte, el buzón y las ofertas del mercado, el guardado y el log de
+  economía (cada instancia con atributo es una fila propia con `details.mods`) mueven la
+  instancia tal cual. Persistencia: `inventory_items.attributes`, la columna nueva
+  `market_offers.attributes` (migración 00019) y `mods` dentro del JSON de
+  `market_mail_items.item` y `house_items.item` (docs/05 `ItemMods`). Una columna
+  `attributes` que no se puede leer (solo una edición a mano de la base la escribe) se
+  registra con nivel error y se lee como item sin atributo: el personaje entra igual y el
+  mercado arranca, y el equipable tira uno nuevo al cargarse.
+- **Intercambio:** lo ofrecido es la instancia tal como se ofreció: si sus `mods` cambian
+  en el lugar (la forja), sale de la oferta como si se hubiera movido y se borran las
+  confirmaciones (`checkTrade`).
+- **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Lo que vende un
+  jugador sigue siendo "N de este item", sin elegir cuál: el NPC (y un `take_item` de
+  diálogo o el ingrediente de una receta) se lleva primero lo que está en los contenedores
+  y lo puesto al final (un NPC nunca compra lo puesto) y, entre esas, la tirada más floja:
+  sin atributo, después la que cae más abajo en la banda de su atributo (de 0 en el mínimo
+  a 1 en el máximo); a igual, en el orden de la mochila (`spareFirst`). Para guardar una
+  pieza buena, el jugador la lleva puesta. **Una pieza refinada (+1 o más) nunca se toma
+  así** (revisión final del lote 11, `spareable`): para esos caminos es como si el jugador
+  no la llevara (la tienda no la cuenta ni la compra, `has_item` no la ve, una receta no la
+  gasta), así un +9 no se vende al precio base ni se pierde en una receta sin elegirlo.
+  Sale solo por mano del jugador: el mercado (con su selector), el intercambio o el suelo.
+- **Mercado:** una oferta de **venta** de un equipable es **una instancia** (cantidad 1) que
+  elige quien vende entre las suyas (`MarketUpdate.owned_mods`); cada una es una fila propia
+  del listado con su atributo, y el comprador recibe exactamente esa. Una oferta de
+  **compra** de un equipable la llena **cualquier instancia**: quien le vende elige cuál, de
+  a una por vez, y esa es la que llega al buzón del comprador. El precio de referencia es por
+  item, sin mirar atributos. **El listado** (revisión final del lote 11): como cada venta de
+  un equipable es una fila, las `list_size` más baratas podían tapar todo lo demás (quince
+  espadas comunes escondían una +8 o un atributo raro más caros, y nadie podía aceptarlos
+  porque no conocía su oferta). Por eso, en las ventas de un equipable, después de las
+  `list_size` más baratas se lista además la más barata de **cada clase de pieza** que
+  quede (cada par atributo y nivel de refinado), siempre en orden de precio: a lo sumo
+  `list_size` filas más una por clase en venta. El valor del atributo no separa clases: se
+  ve la más barata de la clase, y la siguiente cuando alguien la compra.
+- **Qué suma:** solo lo que se lleva puesto (la mochila no cuenta). Todo se suma por
+  atributo y cada uno, si tiene `cap`, no pasa de él.
+
+  | Atributo | Efecto | Lo tiran | Bandas (nivel del item: rango) | Peso | Tope |
+  |---|---|---|---|---|---|
+  | `max_health` | + vida máxima | escudo, cabeza, torso, piernas, pies, cuello, anillo | 1: 4-10 · 10: 8-18 · 25: 14-30 · 50: 25-50 · 80: 40-80 | 12 | — |
+  | `max_mana` | + maná máximo | varita/vara, cabeza, torso, piernas, pies, cuello, anillo | igual que la vida | 12 | — |
+  | `health_regen` | + vida por tic de regeneración | escudo, cabeza, torso, cuello, anillo | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 6 | — |
+  | `mana_regen` | + maná por tic de regeneración | varita/vara, cabeza, torso, cuello, anillo | igual que la vida | 6 | — |
+  | `attack` | + ataque del arma (cuerpo a cuerpo o disparo) | espada, hacha, maza, distancia | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
+  | `armor` | + armadura | cabeza, torso, piernas, pies | 1: 1 · 25: 1-2 · 50: 2-3 · 80: 2-4 | 14 | — |
+  | `defense` | + defensa de las manos | escudo | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
+  | `sword_skill`, `axe_skill`, `club_skill`, `distance_skill` | + la skill del arma en los ataques | el arma de esa skill | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 10 | — |
+  | `magic_level` | + nivel mágico de los hechizos | varita/vara | 1: 1 · 25: 1-2 · 50: 1-3 · 80: 2-4 | 12 | — |
+  | `speed` | + velocidad (puntos) | pies | 1: 2-4 · 10: 3-6 · 25: 4-8 · 50: 6-11 · 80: 8-14 | 14 | — |
+  | `fire_protection`, `ice_`, `energy_`, `earth_`, `holy_`, `death_protection` | − % del daño de ese elemento | escudo, cabeza, torso, piernas, pies, cuello, anillo | 1: 1-3 · 10: 2-4 · 25: 3-6 · 50: 4-8 · 80: 5-10 | 3 (sagrado y muerte 2) | 40 % |
+  | `life_leech`, `mana_leech` | % del daño de un golpe del arma vuelve como vida o maná | armas (el maná también las varitas) | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 2-5 · 80: 3-6 | 6 | 15 % |
+
+  Sin experiencia ni oro extra: alimentarían la economía. La skill de escudo no tiene
+  atributo porque todavía no entra en ninguna fórmula (la defensa del escudo sí).
+- **En las fórmulas** (`attributes.go` `wornGear`, recalculado con el equipo en
+  `equipmentChanged`): la vida y el maná máximos son los de la vocación más el equipo (al
+  sacarse una pieza la vida baja con el máximo si hace falta, nunca sube sola; el login
+  restaura la vida guardada después de cargar el equipo); el ataque suma al del arma
+  (`meleeSkill`, el disparo; `wandFight` también lo lee, pero ninguna pieza que se lleve
+  con una varita tira `attack`, así que ahí vale 0); la armadura a la del equipo; la defensa a la de las
+  manos (`handsDefense`, también en PvP); las skills a `combatSkill` (lo que usan ataques y
+  hechizos, como `keen_eye`: no lo que se entrena ni el panel) y el nivel mágico a lo que
+  escalan los hechizos (no a sus requisitos); la velocidad a la base antes de las condiciones
+  (`refreshSpeed`); la regeneración a cada tic de la vocación (también si la vocación
+  sola no regenera nada); la protección baja todo daño
+  de su elemento que recibe un jugador (monstruos, condiciones, PvP: `damagePlayerBy`; la
+  armadura sigue sin frenar la magia); el robo devuelve su parte del daño que hizo un golpe
+  del arma (cuerpo a cuerpo, disparo o varita, a monstruos o en PvP; los hechizos y las
+  condiciones no roban).
+- **Balance:** los atributos son bonos, así que las simulaciones de `server/internal/sim`
+  visten a cada cazador con su kit con atributos tirados por pelea (la media sobre las
+  peleas). Para que las metas de las islas sigan valiendo, el bestiario de Puerto pega uno
+  a tres puntos más de máximo (rata de sentina y gaviota ladrona 9, lobo 19, murciélago 18,
+  jabalí 20, araña de musgo 16, saqueador 25, escarabajo de mena 28) y el espinoso y el
+  reptante hueco del Bosque dan un poco menos de experiencia (204 y 248).
+- **Cliente:** la ficha (tooltip y menú) muestra el atributo traducido, con su valor, bajo
+  las stats y en su color (`--ui-item-attribute`); la de un equipable sin atributo (una
+  tienda, una receta) dice que trae uno al azar; en el mercado (la búsqueda, una oferta de
+  compra, el historial) dice en cambio que cada pieza trae el suyo, porque llega la que
+  elige quien vende. Un atributo retirado del pool se muestra como retirado (no suma nada),
+  en la ficha y en el mercado. Equipo, contenedores, suelo, intercambio y mercado usan la
+  misma ficha.
+- **Pendiente:** un atributo del collar o del anillo (no hay ninguno en el catálogo
+  todavía); la skill de escudo en las fórmulas.
+
+## Forja (decisión del dueño, 2026-11-18)
+Pedido del dueño: *"me gustaría agregar el sistema de forja de ragnarok, para que el item
+vaya pegando más pero forjar es difícil"*. De ese juego se toma solo la mecánica (refinar por
+niveles, seguro hasta un punto, después cada intento arriesga la pieza); nombres, materiales,
+números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
+(`server/internal/session/refine.go`, `content/forge.go`, `balance.yaml → forge`,
+`data/items/forge.yaml`, ventana `client/src/ui/Forge.tsx`).
+- **Qué se refina:** todo equipable que tira un atributo ("Atributos de items": arma, escudo,
+  pieza de armadura o joya; nunca munición, contenedores ni nada que se apila), de **+1 a
+  +10** (`forge.levels`: su largo es el tope). Un +10 no se refina más.
+- **Dónde:** en un **yunque** del mapa (`forge.station: anvil`, la estación de herrería de
+  `data/recipes.yaml`), a 1 casilla y en el mismo piso, como las recetas. Usar el yunque abre
+  su ventana con dos pestañas: **Recetas** y **Forja**. Hay uno en cada pueblo (Puerto, Raigal
+  en el Bosque y Brasal en la Isla Volcánica, más el de la mina) y en la Isla de Pruebas: no
+  hizo falta agregar ninguno con mapcli. Se eligió el yunque y no un NPC herrero: la estación
+  ya es "el lugar del oficio", funciona igual en todos los pueblos y no ata la forja a un
+  diálogo; los herreros venden las piedras.
+- **Cada intento** gasta, de una vez y pase lo que pase: las **piedras de temple** de la banda
+  del item (`forge.levels[n].stones`: 1 hasta +4, 2 de +5 a +7, 3 de +8 a +10), el **oro**
+  (`forge.bands[].gold` × el nivel al que apunta: el intento a +7 de una pieza de nivel 30
+  cuesta 120 × 7 = 840 cobre) y, si el jugador lo pide, **un ámbar de resguardo**. La pieza
+  tiene que ser suya y estar a mano: puesta o en un contenedor abierto que lleva (nunca en el
+  suelo ni en un contenedor que no lleva, un cadáver o un cofre: "solo puedes refinar lo que
+  llevas"; ni ofrecida en el intercambio; lo publicado en el mercado ya no está en su
+  mochila). La ventana no ofrece las piezas de un contenedor abierto sin padre que no es
+  del tipo que lleva puesto (cadáver, cofre, bolsa del suelo: `maybeCarried`); una bolsa
+  dentro de otro contenedor sí se muestra, porque `ContainerOpen` no dice si su padre se
+  lleva, y si no se lleva el servidor contesta `refine.not_carried`.
+  Piedras y ámbar se toman de los contenedores (como los ingredientes de una receta); el oro,
+  de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido,
+  al ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar). El
+  pedido dice la pieza que ve el cliente con todos sus `mods` (atributo, valor y nivel): un
+  click repetido después de un éxito ya no coincide y no hace nada. Después de una rotura las
+  piezas de ese contenedor suben un lugar: un segundo click mandado antes del resultado (con
+  lag) nombra la pieza rota, y el servidor no refina la que ocupó su lugar salvo que sea
+  igual en todo (entonces da lo mismo cuál); eso no depende del ritmo de `balance.yaml`. La
+  ventana, además, no deja mandar otro intento hasta que llega la respuesta del anterior (un
+  resultado o un aviso; 10 s como mucho) y suelta la pieza rota en vez de apuntar a la que
+  quedó en su lugar.
+- **La chance** (`forge.levels[n].chance`, en %): hasta **+4 nunca falla** (`safe_level`);
+  desde +5 baja en cada nivel: **+5 70 %, +6 55 %, +7 40 %, +8 25 %, +9 15 %, +10 8 %**. La
+  tira la fuente sembrada del loop (`TickContext.Rand`, `IntN(100) < chance`).
+  - **Herrería:** suma 1 punto cada 6 niveles del oficio, como mucho **+5** (herrería 30, la
+    de las recetas más altas: `smithing_bonus`, cuya `skill` nombra el oficio), y solo en
+    los intentos que pueden fallar. La forja no entrena herrería: el oficio se sube
+    fabricando.
+- **El resultado:**
+  - **éxito:** la pieza sube un nivel (chispas sobre el yunque, efecto 8);
+  - **fallo desde +5, sin ámbar:** la pieza **se rompe y desaparece** (efecto 9, una pieza que
+    se parte; el log de economía la registra con sus `mods`);
+  - **fallo con ámbar:** el ámbar se quiebra en su lugar y la pieza **baja un nivel** (+7 → +6;
+    efecto 9). El ámbar se gasta en **cada** intento en que se usa, salga bien o mal: es un
+    seguro que se paga; marcarlo en un nivel seguro no lo gasta.
+
+  No hay "fallo que no cuesta nada": desde +5 todo fallo rompe la pieza o la baja un nivel.
+- **Qué da cada nivel** (`forge.bands`, por el `requires.level` del item, las bandas del
+  catálogo compacto; el bono del nivel *n* es `floor(n × valor)`):
+
+  | Banda (nivel del item) | Piedra | Oro por nivel | Ataque (armas) | Armadura (cabeza, torso, piernas, pies) | Defensa (escudos) |
+  |---|---|---|---|---|---|
+  | 1–4 | menor | 3 | 0,5 | 0,2 | 0,3 |
+  | 5–9 | menor | 12 | 0,7 | 0,2 | 0,4 |
+  | 10–29 | mayor | 40 | 1 | 0,3 | 0,6 |
+  | 30–49 | mayor | 120 | 1,4 | 0,3 | 0,8 |
+  | 50–74 | radiante | 300 | 1,8 | 0,4 | 1 |
+  | 75+ | radiante | 700 | 2,2 | 0,5 | 1,2 |
+
+  Un +10 suma así al arma entre 5 (banda 1) y 22 de ataque (banda 6: la espada de 43 llega a
+  65), a una pieza de armadura entre 2 y 5 y a un escudo entre 3 y 12: más en las bandas
+  altas, como pidió el dueño ("vaya pegando más"). Los primeros niveles de una pieza de banda
+  baja pueden no sumar todavía (0,2 × 4 = 0,8 → 0): la ventana muestra el bono de ahora y el
+  del nivel siguiente. Las **joyas** (cuello y anillo) no suman armadura: cada nivel agrega el
+  **10 %** del valor de su atributo (`jewelry_pct`, redondeado hacia abajo; un anillo de +20
+  de vida a +5 da 30), y ese total sigue con el tope del atributo. Con un atributo
+  chico el redondeo se come los primeros niveles: un anillo de +1 de regeneración no gana
+  nada hasta +10 y uno de +3 de protección recién a +4 (3 × 10 % × 4 = 1,2 → 1), aunque cada
+  intento desde +5 cuesta y arriesga la pieza; la ventana lo muestra (el bono de ahora y el
+  del nivel siguiente, 0 → 0). El ataque cuenta solo para
+  el arma de la mano derecha y la defensa para el escudo de la izquierda; la armadura, en
+  cualquier slot de armadura. Lo de la mochila no suma.
+- **En las fórmulas** (`attributes.go` `wornGear`, que llama a `refineGain` de `refine.go`): el
+  ataque se suma al del arma como el atributo `attack` (cuerpo a cuerpo, disparo y varita),
+  la armadura a la del equipo y la defensa a la de las manos (también en PvP). Refinar una
+  pieza puesta recalcula el equipo en el acto (`setRefine` limpia `Player.gearFrom`).
+- **Los materiales** (`data/items/forge.yaml`, nombres propios; sprites del motor de sprites):
+  - **piedra de temple menor** (items de nivel 1–9; 10 cobre), **mayor** (10–49; 150) y
+    **radiante** (50+; 600): las venden los herreros (el armero de Puerto y la curtidora de
+    Raigal la menor y la mayor; el herrero de Brasal las tres) y caen de algunos monstruos (la
+    menor, de saqueadores, mineros ahogados y escarabajos de mena; la mayor, de reptantes
+    huecos, contrabandistas, excavadores de obsidiana y gólems de escoria; la radiante, del
+    custodio de la forja, 30 %, mientras no haya islas de esas bandas). Ningún NPC las compra:
+    no hay vuelta de compra y venta.
+  - **ámbar de resguardo** (3000 de valor de referencia): **ningún NPC lo vende ni lo da**
+    (regla de `make validate`, salvo el mercader de la Isla de Pruebas, que es solo de
+    desarrollo); cae del custodio de la forja (25 %) y, raro, de los monstruos más fuertes de
+    la Isla Volcánica (cría de wyrm 0,5 %; excavador, gólem y salamandra 0,3 %). Se comercia
+    entre jugadores.
+- **Costo esperado** (lo comprueba `content/forge_test.go` `TestForgeExpectedCosts`, a ±5 %),
+  en cobre, con el valor de referencia V de cada banda del catálogo compacto y cada pieza rota
+  reemplazada por una nueva de valor V:
+
+  | Banda (V) | Hasta +4 | Hasta +7 sin ámbar | Hasta +7 con ámbar desde +5 | Ámbares hasta +7 |
+  |---|---|---|---|---|
+  | 1 (30) | 70 | 1 100 | 530 | 11 |
+  | 2 (150) | 160 | 3 100 | 1 300 | 11 |
+  | 3 (600) | 1 000 | 17 000 | 7 500 | 11 |
+  | 4 (2 000) | 1 800 | 36 000 | 14 000 | 11 |
+  | 5 (5 000) | 5 400 | 102 000 | 41 000 | 11 |
+  | 6 (12 000) | 9 400 | 197 000 | 74 000 | 11 |
+
+  Las metas: **+4 cuesta más o menos lo que la pieza** (entre 0,5 y 3 V: seguro y
+  accesible); **+7 es un proyecto** (entre 10 y 40 V sin ámbar; con la caza de la banda 4,
+  36 000 cobre son unas 14 h de botín neto de la simulación de balance; menos con ámbar);
+  **+10 es una leyenda** (sin ámbar, miles de veces el valor de la pieza; con ámbar en cada
+  intento arriesgado, unos 1 900 ámbares en promedio). Es lo que pidió el dueño: "forjar es
+  difícil".
+- **Persistencia y seguridad:** el intento entero pasa en un comando del loop (todos los
+  chequeos primero, después se gasta todo junto y se tira la chance), así una desconexión lo
+  ve hecho o sin empezar, nunca a medias ni dos veces; el personaje se guarda en el acto
+  después de cada intento que puede fallar (desde +5, como una muerte), así una caída del
+  servidor no devuelve una pieza rota ni quita un nivel ganado. Un nivel seguro (hasta +4)
+  espera el guardado de siempre: volver a antes de él devuelve juntos el nivel, las piedras y
+  el oro, sin nada que ganar, y no se escribe en la base cada 2 s por cada jugador que
+  refina. El nivel viaja con la instancia por todos los caminos que
+  mueven un item ("Atributos de items": mover, intercambio, muerte, casa, mercado, buzón,
+  guardado). El log de economía (fuente `forge`) registra el oro, las piedras y el ámbar
+  gastados, la pieza rota y cada cambio de nivel (la instancia sale con su nivel viejo y entra
+  con el nuevo); no cuenta como ganancia para el detector de anomalías.
+- **Nombre y ficha:** una pieza refinada se llama "+7 espada…" en todo el cliente (ficha,
+  tooltip, intercambio, mercado y los mensajes del servidor: la clave `client.item.refined`
+  con `{level}` y `{name}`, nunca texto armado en el código). En el mercado, el selector de
+  cuál vender y las filas de ofertas ajenas dicen "+7 espada · +3 ataque"
+  (`client.market.refined_line`), y el selector empieza por el refinado más bajo
+  (`MarketUpdate.owned_mods` viene ordenado como `spareFirst`): aceptar una oferta de compra
+  vende en el acto, así que nunca se elige una +7 sin verla. La ficha agrega la línea
+  "Refinado +7: +3 de ataque" en el color del metal caliente (la de una joya no pasa del
+  tope de su atributo). "Mirar" (`look.*`) nombra la pieza con su nivel y da su ataque,
+  armadura o defensa con lo que suma el refinado.
+- **La ventana** (pestaña Forja del yunque, estilo oscuro de docs/17): la pieza elegida (de
+  las puestas y las de los contenedores abiertos), su nivel y el siguiente con el bono de
+  cada uno, la **chance en grande** (verde si es segura, ámbar si arriesga), las piedras y el
+  oro con lo que se lleva, el interruptor del ámbar cuando se lleva uno y el intento puede
+  fallar (avisa que se gasta salga bien o mal), y un **paso de confirmación** desde +5 que
+  avisa en rojo que la pieza se puede romper. Si un intento gastó el último ámbar, el
+  interruptor desaparece y el próximo intento va sin él, con su aviso de rotura. Lo que se
+  lleva (piedras, ámbar, oro) se cuenta al usar el yunque y después de cada intento, como
+  en las recetas: lo que se junta con la ventana abierta se ve al volver a usarlo. El
+  resultado del último intento queda arriba unos segundos.
+- **Pendiente:** elegir la pieza arrastrándola a la ventana (hoy se elige de la lista); una
+  marca "+N" sobre los íconos del inventario (hoy la dicen la ficha y la lista de la forja);
+  islas de las bandas 5 y 6 con fuentes propias de la piedra radiante.
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
@@ -992,7 +1449,8 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   conseguir tiene un NPC que lo compra, y un material con valor, un comprador, una receta
   o una quest que lo pide; un item de quest (no comerciable) cae solo como botín
   `each_player`, así deja de caer como basura cuando la quest terminó. Por eso los
-  saqueadores sueltan el garrote de deriva, el armero compra la espada corta forjada, la
+  saqueadores sueltan la cabilla (antes el garrote de deriva, que el lote 11 retiró: el
+  armero lo sigue comprando, como todo lo retirado), el armero compra el hacha forjada, la
   piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Brasal la piedra,
   la curtidora la hoja de espino, y la tarja, el cofre sellado y la carta del minero salen
   solo a quien los necesita.
@@ -1025,7 +1483,9 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   franja). Donde más sirven es en grupos y contra golpes fuertes, cuando una cura por
   segundo no alcanza, y eso la simulación de duelos no lo mide.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
-  fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
+  fundación de un gremio, la comisión del mercado, el alquiler de las casas (T5.4) y la
+  forja (cada intento cuesta oro y piedras de temple, y un fallo puede destruir la pieza:
+  "Forja").
 - Log de economía para detectar duplicación y bots.
 
 Mecánicas de comercio entre jugadores conocidas del género; reglas, números y textos
@@ -1071,8 +1531,12 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
 - **Límites:** `max_offers` (15) ofertas activas por personaje; solo items `tradeable`
   que no son moneda; sin contenedores con algo adentro; las runas, solo con todas sus
   cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
+- **Equipables** ("Atributos de items"): una oferta de venta es una instancia con su
+  atributo, elegida por quien vende, y se lista como una fila propia; una oferta de compra
+  la llena cualquier instancia, de a una, la que elija quien le vende.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
-  baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
+  baratas primero; las de un equipable, además, la más barata de cada clase de pieza:
+  "Atributos de items", Mercado) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
   historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora
   vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
   mediana de los votos de los últimos `reference_days` días (con un número par, la menor).
@@ -1534,12 +1998,12 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 - **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
   pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
   (16, cuchillos a distancia), espinoso (20, estallido de espinas alrededor, débil al fuego) y reptante
-  hueco (24, cueva, mordida venenosa, ve invisibles). Con el equipo del pueblo un guardián
-  pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
+  hueco (24, cueva, mordida venenosa, ve invisibles). Con la banda 3 del catálogo un
+  guardián pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
 - **Oficios en el Bosque:** el olmo (`elm_tree`) se tala como el abedul y da troncos de
   olmo (y resina desde woodcutting 4). Recetas: escudo de olmo en el yunque y caldo de
-  hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y la hoja
-  de espino.
+  hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y las
+  armas de la banda 3 (la hoja de espino se retiró en el lote 11; ella la sigue comprando).
 
 **Capítulo 3 "Fuego bajo la piedra" (T5.5, Isla Volcánica).** Lo da Casia Hollín, la
 guardiana de los registros de Brasal, solo a quien tiene el flag `ember_root_found` del
@@ -1583,17 +2047,18 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
   pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
   es la norma: todos resisten fuego y
-  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,8 h, de
-  30 a 40 en ~10,4 h y de 40 a 50 en ~15,2 h (el test pide 0,4–1,2 veces el `pace`).
+  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,9 h, de
+  30 a 40 en ~10,1 h y de 40 a 50 en ~15,3 h (el test pide 0,4–1,2 veces el `pace`; con el
+  catálogo del lote 11, antes 3,8, 10,4 y 15,2).
 - **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale
   desde minería 8) y el botín de mineros y gólems dan mineral de ascua. En la fragua, 3
   minerales + 1 lingote de hierro + 1 tronco de olmo (del Bosque: las islas comercian) dan
-  un lingote de acero de ascua (herrería 10). En el yunque: yelmo (herrería 12, nivel 30),
-  sable (13, nivel 30), hacha (14, nivel 32), coraza (16, nivel 34), escudo (17, nivel 36),
-  cota de escamas de dragoncillo (20, nivel 45) y hoja de colmillo de dragoncillo (22,
-  nivel 45). El ataque sigue el +4 por escalón de Puerto y Bosque (27–31), así que el PvP
-  (escalado a `damage_pct`) no cambia de forma. Bram Tizón vende las primeras piezas de
-  acero de ascua y compra los materiales de la isla a un tercio de su valor.
+  un lingote de acero de ascua (herrería 10). En el yunque, la banda 4 del catálogo (todas
+  nivel 30, "Catálogo de equipo"): yelmo (herrería 12), sable (13), hacha, maza, arco y
+  escarpes (14), ballesta y grebas (15), coraza (16) y escudo (17). La cota de escamas y la
+  hoja de colmillo de dragoncillo (herrería 20 y 22) son de la banda 5 desde el lote 11:
+  sus recetas vuelven con la isla de esa banda. Bram Tizón vende la banda 4 y compra los
+  materiales de la isla a un tercio de su valor.
 - **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Brasal al oeste (templo de la Llama
   Quieta, plaza con fragua, yunque y fogón, el archivo de Casia y una casa), muelle al oeste
   con Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se

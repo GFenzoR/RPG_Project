@@ -4,7 +4,9 @@
 // The server's "look" text is still the one that knows live data (a house's owner,
 // charges): "Look" in the menu keeps sending LookAt.
 import { EquipmentSlot } from "@rpg/protocol";
-import type { ItemDef } from "../content-types.ts";
+import type { AttributeDef, ForgeRules, ItemDef, ItemMods } from "../content-types.ts";
+import { refineGain, refineKind } from "./forge.ts";
+import type { RefineKind } from "./forge.ts";
 import { formatOz } from "./items.ts";
 
 /** What the card needs to know of the player looking. Unknown fields skip the check. */
@@ -59,6 +61,34 @@ export interface ItemCardView {
   quest?: boolean | undefined;
   /** Money (`kind: currency`): its name is gold in the tooltip (docs/17 UI-6). */
   currency?: boolean | undefined;
+  /**
+   * The instance's attribute (docs/02 "Atributos de items"), drawn in its own colour under
+   * the stats: its line's i18n key with {value}. On an equipable seen without one,
+   * `random` when it rolls one as it is made (a shop's, a recipe's output) and `any` when
+   * it stands for any instance someone else picks (the market: a search, a buy offer, the
+   * history). `retired` for an attribute no longer in the pool: the item keeps it, it does
+   * nothing.
+   */
+  attribute?:
+    | { text: string; value: number }
+    | { random: true }
+    | { any: true }
+    | { retired: true }
+    | undefined;
+  /**
+   * The instance's refine level (the forge, docs/02 "Forja"): the name says "+7" and a line
+   * what it adds (gain points of kind, from balance.yaml forge; 0 when the client does not
+   * know the forge's rules). Absent on a plain item.
+   */
+  refine?: { level: number; kind: RefineKind; gain: number } | undefined;
+}
+
+/**
+ * Whether def is an equipable that rolls an attribute (the server's content.Rolls: a
+ * weapon, a shield or an armor piece, never a stack).
+ */
+export function rollsAttribute(def: ItemDef | undefined): boolean {
+  return !!def && !def.stackable && (!!def.weapon || !!def.shield || !!def.armor);
 }
 
 /** Kinds of items people carry (the rest are the map: ground, walls, decoration). */
@@ -75,12 +105,21 @@ const CARRIED = new Set([
   "ammo",
 ]);
 
-/** The card of an item (an unknown item gets an empty card with its number). */
+/**
+ * The card of an item (an unknown item gets an empty card with its number). mods are the
+ * instance's (its attribute, named in attributes: content.attributes); without them an
+ * equipable's card says it rolls one, or, with anyInstance (the market), that each piece
+ * has its own.
+ */
 export function itemCard(
   def: ItemDef | undefined,
   itemId: number,
   count: number,
   who: Viewer = {},
+  mods?: ItemMods | undefined,
+  attributes?: Record<string, AttributeDef> | undefined,
+  anyInstance = false,
+  forge?: ForgeRules | undefined,
 ): ItemCardView {
   const card: ItemCardView = {
     itemId,
@@ -107,9 +146,23 @@ export function itemCard(
     card.stats.push({ id: "attack", value: def.ammo.attack });
     card.effects.push({ id: "ammo", ammo: def.ammo.type });
   }
-  if (def.armor) card.stats.push({ id: "armor", value: def.armor.armor });
+  if (def.armor && def.armor.armor > 0) card.stats.push({ id: "armor", value: def.armor.armor });
   if (def.shield) card.stats.push({ id: "defense", value: def.shield.defense });
   if (def.slots > 0) card.stats.push({ id: "slots", value: def.slots });
+  if (mods && mods.attribute !== "") {
+    const a = attributes?.[mods.attribute];
+    if (a) card.attribute = { text: a.text, value: mods.value };
+    else if (attributes) card.attribute = { retired: true }; // no pool given: no line
+  } else if (rollsAttribute(def)) card.attribute = anyInstance ? { any: true } : { random: true };
+  const refined = refineKind(def);
+  if (refined && mods && mods.refine > 0) {
+    let gain = forge ? refineGain(forge, def, mods.refine, mods.value) : 0;
+    // A jewel's share goes to its attribute, which never passes its cap (the server's
+    // wornGear): the card does not promise more than the piece can give.
+    const cap = refined === "jewel" ? attributes?.[mods.attribute]?.cap : undefined;
+    if (cap !== undefined && cap > 0) gain = Math.min(gain, Math.max(cap - mods.value, 0));
+    card.refine = { level: mods.refine, kind: refined, gain };
+  }
   if (def.rune) {
     card.stats.push({ id: "charges", value: def.rune.charges });
     card.effects.push({ id: "rune", spell: def.rune.spell });
@@ -233,6 +286,7 @@ export function cardLines(card: ItemCardView, withName: boolean): number {
     (card.type.length > 0 ? 1 : 0) +
     Math.ceil(card.stats.length / 2) +
     card.requires.length +
+    (card.attribute ? 1 : 0) +
     card.effects.length +
     desc +
     card.marks.length

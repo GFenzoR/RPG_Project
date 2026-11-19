@@ -32,6 +32,13 @@ func (w *World) DropForTest(def *content.Item, count int, pos world.Pos) {
 	w.tileChanged(pos)
 }
 
+// DropInstanceForTest puts one instance of def with mods on the ground at pos (tests
+// only, loop goroutine).
+func (w *World) DropInstanceForTest(def *content.Item, mods Mods, pos world.Pos) {
+	w.drop(w.instance(def, def.StackLimit(), mods), pos)
+	w.tileChanged(pos)
+}
+
 // Viewers returns how many players have container it open (tests only).
 func (it *Item) Viewers() int { return len(it.viewers) }
 
@@ -54,6 +61,20 @@ func (w *World) GiveForTest(p *Player, id string, n int) {
 func (w *World) TakeForTest(p *Player, id string, n int) {
 	w.takeItem(p, w.cfg.Items[id], n, true)
 	w.econItem(p, EconGM, "test", w.cfg.Items[id], -n) // keeps the economy ledger right
+}
+
+// CountItemForTest counts item id as a dialog's has_item does (tests only, loop goroutine).
+func (w *World) CountItemForTest(p *Player, id string) int {
+	return w.countItem(p, w.cfg.Items[id], true)
+}
+
+// TakeItemForTest takes n units of item id as a dialog's take_item does and returns how
+// many instances went (tests only, loop goroutine).
+func (w *World) TakeItemForTest(p *Player, id string, n int) int {
+	def := w.cfg.Items[id]
+	taken := w.takeItem(p, def, n, true)
+	w.econTaken(p, EconNPC, "test", def, n, taken)
+	return len(taken)
 }
 
 // HurtForTest makes p take dmg as if a monster hit it (tests only, loop goroutine).
@@ -492,4 +513,59 @@ func (m *Monster) ChaseWayForTest() []world.Pos {
 		out = append(out, at)
 	}
 	return out
+}
+
+// ItemsForTest returns every instance of item id p carries: equipment, then containers
+// depth-first (tests only).
+func (w *World) ItemsForTest(p *Player, id string) []*Item {
+	var out []*Item
+	p.eachCarried(true, func(it *Item) {
+		if it.def.ID == id {
+			out = append(out, it)
+		}
+	})
+	return out
+}
+
+// GearForTest returns what p's equipment gives the formulas: armor, the hands' defense,
+// the melee attack, the speed and the combat skill skill (tests only).
+func (w *World) GearForTest(p *Player, skill string) (armor, defense, attack, speed, level int) {
+	_, attack = w.meleeSkill(p)
+	return p.armor, handsDefense(p), attack, p.speed, w.combatSkill(p, skill)
+}
+
+// ElementHitForTest makes p take dmg of element as if a monster hit it (tests only).
+func (w *World) ElementHitForTest(ctx *game.TickContext, p *Player, dmg int, element string) {
+	w.damagePlayer(ctx, p, dmg, element)
+}
+
+// LeechForTest is p's leech after one of its weapon hits dealt dmg (tests only).
+func (w *World) LeechForTest(p *Player, dmg int) { w.leech(p, dmg) }
+
+// PhysicalHitForTest lands one melee or shot hit of up to maxHit of p on monster m or
+// player v, as its fight does after the attack round (tests only, loop goroutine).
+func (w *World) PhysicalHitForTest(ctx *game.TickContext, p *Player, m *Monster, v *Player, maxHit int) {
+	w.physicalHit(ctx, p, foe{m: m, p: v}, maxHit, "sword")
+}
+
+// WandShotForTest shoots p's wand at monster m or player v with its attack round due
+// (tests only, loop goroutine): nothing when the target is out of range or sight.
+func (w *World) WandShotForTest(ctx *game.TickContext, p *Player, m *Monster, v *Player) {
+	p.nextAttack = ctx.Tick
+	w.wandFight(ctx, p, foe{m: m, p: v})
+}
+
+// SetModsForTest changes it's mods in place, as the forge will (tests only, loop
+// goroutine).
+func (it *Item) SetModsForTest(m Mods) { it.mods = m }
+
+// RegenForTest runs one regeneration tick of p (tests only).
+func (w *World) RegenForTest(p *Player) { w.regenerate(p) }
+
+// MarketOfferModsForTest returns the mods of offer id (tests only).
+func (w *World) MarketOfferModsForTest(id int64) Mods {
+	if o := w.offers[id]; o != nil {
+		return o.Mods
+	}
+	return Mods{}
 }

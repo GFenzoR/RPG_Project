@@ -57,6 +57,11 @@ export interface Scene {
 export function baseScene(content: ClientContent, now: number): Scene {
   const ui = emptyGameUi();
   const item = (id: string, count = 1): ItemView => ({ itemId: itemNumber(content, id), count });
+  // An equipable carries its rolled attribute (docs/02 "Atributos de items").
+  const rolled = (id: string, attribute: string, value: number): ItemView => ({
+    ...item(id),
+    mods: { attribute, value, refine: 0 },
+  });
   ui.stats = {
     health: 312,
     maxHealth: 420,
@@ -85,12 +90,18 @@ export function baseScene(content: ClientContent, now: number): Scene {
     level: Number(level),
     percent: Number(percent),
   })) as GameUi["skills"];
+  // Every slot filled with the engine's item icons (docs/17 "Íconos de items"): the level 15
+  // pieces of the catalog's band 3 and the iron sword of band 2.
   ui.inventory = new Map([
-    [EquipmentSlot.HEAD, item("embersteel_helm")],
+    [EquipmentSlot.HEAD, rolled("stagleather_hood", "max_health", 14)],
+    [EquipmentSlot.NECK, item("antler_amulet")],
     [EquipmentSlot.BACKPACK, item("backpack")],
-    [EquipmentSlot.LEFT_HAND, item("plank_shield")],
-    [EquipmentSlot.RIGHT_HAND, item("iron_sword")],
-    [EquipmentSlot.FEET, item("tarred_boots")],
+    [EquipmentSlot.ARMOR, item("stagleather_coat")],
+    [EquipmentSlot.LEFT_HAND, rolled("elmwood_shield", "defense", 2)],
+    [EquipmentSlot.RIGHT_HAND, rolled("iron_sword", "attack", 2)],
+    [EquipmentSlot.LEGS, item("stagleather_leggings")],
+    [EquipmentSlot.FEET, rolled("stagleather_boots", "speed", 4)],
+    [EquipmentSlot.RING, item("briar_ring")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
   // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
@@ -109,6 +120,11 @@ export function baseScene(content: ClientContent, now: number): Scene {
       // A quest item: the gold ring of its colour (docs/17 UI-6).
       item("smuggler_tally", 3),
       item("boarding_saber"),
+      // Pieces of the next bands, waiting in the backpack.
+      item("embersteel_helm"),
+      item("smuggler_crossbow"),
+      item("bolt", 24),
+      item("cinder_amulet"),
     ],
   };
   ui.containers = [];
@@ -290,11 +306,16 @@ export function withDeath(s: Scene, now: number): Scene {
 /** The armorer's shop with many items (docs/17 UI-8: categories, a second page). */
 export function withShop(content: ClientContent, s: Scene): Scene {
   const ui = { ...s.ui };
-  const kinds = new Set(["weapon", "armor", "shield", "ammo", "tool", "consumable", "rune"]);
-  const ids = Object.entries(content.items)
-    .filter(([, d]) => kinds.has(d.kind ?? "") && d.sprite !== "")
-    .slice(0, 30)
-    .map(([n]) => Number(n));
+  // Mostly equipment, the engine's item icons (docs/17 "Íconos de items"), and a few tools,
+  // consumables and runes so every category shows.
+  const gear = new Set(["weapon", "armor", "shield", "ammo"]);
+  const other = new Set(["tool", "consumable", "rune"]);
+  const pick = (kinds: Set<string>, n: number): number[] =>
+    Object.entries(content.items)
+      .filter(([, d]) => kinds.has(d.kind ?? "") && d.sprite !== "")
+      .slice(0, n)
+      .map(([id]) => Number(id));
+  const ids = [...pick(gear, 24), ...pick(other, 6)];
   ui.dialog = {
     id: 8,
     npcId: 51,
@@ -352,7 +373,14 @@ export function withItemMenu(
   at: { x: number; y: number },
 ): Scene {
   const id = itemNumber(content, "boarding_saber");
-  const card = itemCard(content.items[id], id, 1, { level: 9, vocation: "guardian" });
+  const card = itemCard(
+    content.items[id],
+    id,
+    1,
+    { level: 9, vocation: "guardian" },
+    { attribute: "sword_skill", value: 2, refine: 0 },
+    content.attributes,
+  );
   const ui: GameUi = {
     ...s.ui,
     menu: {
@@ -540,4 +568,62 @@ export function withHeld(content: ClientContent, s: Scene): Scene {
     },
   };
   return { ui, name: "inventory" };
+}
+
+/**
+ * The forge (docs/02 "Forja"): the anvil's window open with its stones, the amber and the
+ * money, smithing 18 (+3 points), a +2 iron sword in hand and a +6 helmet; the screenshot
+ * script opens the Forge tab and picks the item (e2e/ui-preview.ts). "result": the last
+ * attempt broke a +7 boarding saber (it is gone from the backpack).
+ */
+export function withForge(
+  content: ClientContent,
+  s: Scene,
+  variant: "pick" | "result",
+  now: number,
+): Scene {
+  const id = (name: string): number => itemNumber(content, name);
+  const inventory = new Map(s.ui.inventory);
+  const refined = (slot: EquipmentSlot, refine: number): void => {
+    const it = inventory.get(slot);
+    if (it?.mods) inventory.set(slot, { ...it, mods: { ...it.mods, refine } });
+  };
+  refined(EquipmentSlot.RIGHT_HAND, 2);
+  refined(EquipmentSlot.HEAD, 6);
+  const backpack = s.ui.backpack && {
+    ...s.ui.backpack,
+    items: s.ui.backpack.items.filter(
+      (it) => variant !== "result" || it.itemId !== id("boarding_saber"),
+    ),
+  };
+  const ui: GameUi = {
+    ...s.ui,
+    inventory,
+    backpack,
+    skills: [...s.ui.skills, { id: "smithing", level: 18, percent: 40 }] as GameUi["skills"],
+    station: {
+      pos: { x: 3160, y: 6380, z: 7 },
+      itemId: id("anvil"),
+      owned: new Map([
+        [id("lesser_temper_stone"), 12],
+        [id("greater_temper_stone"), 9],
+        [id("warding_amber"), 2],
+        [id("iron_ingot"), 4],
+      ]),
+      tools: new Set(["smithing"]),
+      money: 4860,
+    },
+    refine:
+      variant === "result"
+        ? {
+            outcome: "broken",
+            level: 0,
+            itemId: id("boarding_saber"),
+            mods: undefined,
+            from: 7,
+            at: now,
+          }
+        : undefined,
+  };
+  return { ui, name: `forge-${variant}` };
 }

@@ -29,49 +29,56 @@ dialog:
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
+# Lote 11 (docs/02 "Catálogo de equipo"): bands 1 and 2 and the band 3 weapons (from level
+# 10, for the island's last hunts) at their value; it buys them at a third, and the retired
+# pieces of the island too (the old copies).
 shop:
   id: armorer_shop
   sells:
-    - { item: belaying_pin, price: 20 }
-    - { item: rusty_cutlass, price: 25 }
-    - { item: hatchet, price: 60 }
-    - { item: iron_sword, price: 120 }
-    - { item: spiked_cudgel, price: 140 }
-    - { item: boarding_saber, price: 400 }
-    - { item: bearded_axe, price: 420 }
+    - { item: rusty_cutlass, price: 30 }
+    - { item: hatchet, price: 30 }
+    - { item: belaying_pin, price: 30 }
+    - { item: barrel_lid_shield, price: 25 }
     - { item: sailcloth_cap, price: 10 }
     - { item: patched_tunic, price: 20 }
-    - { item: canvas_trousers, price: 15 }
-    - { item: tarred_boots, price: 15 }
-    - { item: leather_jerkin, price: 150 }
-    - { item: barrel_lid_shield, price: 10 }
-    - { item: plank_shield, price: 25 }
-    - { item: riveted_round_shield, price: 220 }
-    - { item: short_bow, price: 40 }
-    - { item: yew_longbow, price: 380 }
+    - { item: canvas_trousers, price: 10 }
+    - { item: tarred_boots, price: 10 }
+    - { item: short_bow, price: 30 }
     - { item: arrow, price: 1 }
-    - { item: hide_vest, price: 45 }
+    - { item: iron_sword, price: 150 }
+    - { item: forged_axe, price: 150 }
+    - { item: spiked_cudgel, price: 150 }
+    - { item: plank_shield, price: 110 }
+    - { item: yew_longbow, price: 150 }
+    - { item: boarding_saber, price: 600 }
+    - { item: bearded_axe, price: 600 }
+    - { item: elmroot_maul, price: 600 }
+    - { item: thornwood_longbow, price: 600 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
   buys:
-    - { item: driftwood_club, price: 1 }
-    - { item: belaying_pin, price: 6 }
-    - { item: rusty_cutlass, price: 8 }
-    - { item: hatchet, price: 20 }
-    - { item: iron_sword, price: 40 }
-    - { item: spiked_cudgel, price: 45 }
-    - { item: boarding_saber, price: 130 }
-    - { item: bearded_axe, price: 140 }
+    - { item: rusty_cutlass, price: 10 }
+    - { item: hatchet, price: 10 }
+    - { item: belaying_pin, price: 10 }
+    - { item: barrel_lid_shield, price: 8 }
     - { item: sailcloth_cap, price: 3 }
     - { item: patched_tunic, price: 6 }
-    - { item: canvas_trousers, price: 5 }
-    - { item: tarred_boots, price: 5 }
-    - { item: leather_jerkin, price: 50 }
-    - { item: barrel_lid_shield, price: 3 }
-    - { item: plank_shield, price: 8 }
-    - { item: riveted_round_shield, price: 70 }
-    - { item: short_bow, price: 12 }
-    - { item: yew_longbow, price: 120 }
-    - { item: hide_vest, price: 15 }
+    - { item: canvas_trousers, price: 3 }
+    - { item: tarred_boots, price: 3 }
+    - { item: short_bow, price: 10 }
+    - { item: iron_sword, price: 50 }
+    - { item: forged_axe, price: 50 }
+    - { item: spiked_cudgel, price: 50 }
+    - { item: plank_shield, price: 36 }
+    - { item: yew_longbow, price: 50 }
+    - { item: boarding_saber, price: 200 }
+    - { item: bearded_axe, price: 200 }
+    - { item: elmroot_maul, price: 200 }
+    - { item: thornwood_longbow, price: 200 }
+    - { item: driftwood_club, price: 1 }
     - { item: forged_shortsword, price: 50 }
-    # Content audit m4: what the iron veins give besides ore (whetstones and flux).
+    - { item: leather_jerkin, price: 50 }
+    - { item: hide_vest, price: 15 }
+    - { item: riveted_round_shield, price: 70 }
     - { item: rough_stone, price: 1 }
     - { item: quartz_crystal, price: 13 }

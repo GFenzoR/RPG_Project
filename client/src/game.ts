@@ -3,6 +3,8 @@
 // says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
 // route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
+import { refineMessage } from "./state/forge.ts";
+import type { ForgeCandidate, RefineState } from "./state/forge.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
@@ -36,7 +38,7 @@ import { HeldDirection } from "./input/dpad.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
-import type { ClientContent } from "./content-types.ts";
+import type { ClientContent, ItemMods } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import {
   MovementKeys,
@@ -119,6 +121,8 @@ export interface GameUi {
   shop: ShopState | undefined;
   /** The crafting station window (T3.4). */
   station: StationState | undefined;
+  /** The last forge attempt (docs/02 "Forja"), for the forge window. */
+  refine: RefineState | undefined;
   /** The trade and market windows (T5.3). */
   trade: TradeView | undefined;
   market: MarketView | undefined;
@@ -166,6 +170,7 @@ export interface GameUi {
     | {
         itemId: number;
         count: number;
+        mods?: ItemMods | undefined;
         x: number;
         y: number;
         tile: { left: number; top: number; width: number; height: number };
@@ -517,6 +522,17 @@ export class Game {
     if (s) this.conn.send({ case: "craft", value: { recipeId, station: { ...s.pos } } });
   }
 
+  /**
+   * One forge attempt (docs/02 "Forja") on item at the open station: the piece's mods as the
+   * client sees them go along (refineMessage), so a repeated click never refines twice nor
+   * another piece. The server answers with RefineResult or a system message.
+   */
+  refine(item: ForgeCandidate, protect: boolean): void {
+    const s = this.world.station;
+    if (!s) return;
+    this.conn.send({ case: "refine", value: refineMessage(s.pos, item, protect) });
+  }
+
   closeStation(): void {
     if (!this.world.station) return;
     this.world.station = undefined;
@@ -568,12 +584,14 @@ export class Game {
     });
   }
 
+  /** mods: the instance of an equipable to sell (MarketUpdate.owned_mods). */
   marketCreate(
     sell: boolean,
     itemId: number,
     amount: number,
     price: number,
     durationIndex: number,
+    mods?: ItemMods | undefined,
   ): void {
     const side = sell ? MarketSide.SELL : MarketSide.BUY;
     this.conn.send({
@@ -581,16 +599,24 @@ export class Game {
       value: {
         action: {
           case: "create",
-          value: { side, itemId, amount, price: BigInt(price), durationIndex },
+          value: {
+            side,
+            itemId,
+            amount,
+            price: BigInt(price),
+            durationIndex,
+            ...(mods ? { mods } : {}),
+          },
         },
       },
     });
   }
 
-  marketAccept(offerId: bigint, amount: number): void {
+  /** mods: selling an equipable to a buy offer, the instance the player picked. */
+  marketAccept(offerId: bigint, amount: number, mods?: ItemMods | undefined): void {
     this.conn.send({
       case: "marketCommand",
-      value: { action: { case: "accept", value: { offerId, amount } } },
+      value: { action: { case: "accept", value: { offerId, amount, ...(mods ? { mods } : {}) } } },
     });
   }
 
@@ -1334,9 +1360,19 @@ export class Game {
     };
   }
 
-  /** The card of an item (docs/17 UI-6) for the player. */
-  card(ref: { itemId: number; count: number }): ItemCardView {
-    return itemCard(this.opts.content.items[ref.itemId], ref.itemId, ref.count, this.viewer());
+  /** The card of an item (docs/17 UI-6) for the player, with the instance's attribute. */
+  card(ref: { itemId: number; count: number; mods?: ItemMods | undefined }): ItemCardView {
+    const c = this.opts.content;
+    return itemCard(
+      c.items[ref.itemId],
+      ref.itemId,
+      ref.count,
+      this.viewer(),
+      ref.mods,
+      c.attributes,
+      false,
+      c.forge,
+    );
   }
 
   /** The controls mode now (Options → Controls). */
@@ -1578,6 +1614,7 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
+      refine: w.refine,
       trade: w.trade,
       market: w.market,
       house: w.house,
@@ -1984,6 +2021,7 @@ export class Game {
         tip = {
           itemId: ref.itemId,
           count: Math.max(1, ref.count),
+          mods: ref.mods,
           x: at.cx,
           y: at.cy,
           tile: { left: c.x - width / 2, top: c.y - height / 2, width, height },

@@ -53,6 +53,9 @@ type Config struct {
 	Spells content.Spells
 	// Recipes come from data/recipes.yaml (T3.4); nil means no crafting.
 	Recipes content.Recipes
+	// Attributes come from data/attributes.yaml (docs/02 "Atributos de items"); nil means
+	// no equipable rolls one.
+	Attributes content.Attributes
 	// BoatRoutes come from data/boat_routes.yaml (T3.5); nil means no boat travel.
 	BoatRoutes content.BoatRoutes
 	// Tutorial comes from data/tutorial.yaml (T4.2); nil means no tutorial.
@@ -218,6 +221,8 @@ func New(cfg Config) (*App, error) {
 	a.handler = mux
 
 	var systems []game.System
+	// The loop's seeded source; the World rolls item attributes with it too (session.Config.Rand).
+	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed))
 	if cfg.Map != nil {
 		ms, _ := cfg.Store.(MarketStore)
 		var writeTransfer func(context.Context, session.Transfer) error
@@ -290,6 +295,8 @@ func New(cfg Config) (*App, error) {
 			Items:          cfg.Items,
 			Spells:         cfg.Spells,
 			Recipes:        cfg.Recipes,
+			Attributes:     cfg.Attributes,
+			Rand:           rng,
 			BoatRoutes:     cfg.BoatRoutes,
 			Tutorial:       cfg.Tutorial,
 			Cosmetics:      cfg.Cosmetics,
@@ -323,7 +330,7 @@ func New(cfg Config) (*App, error) {
 
 	loop, err := game.New(game.Config{
 		Clock:   cfg.Clock,
-		Rand:    rand.New(rand.NewPCG(cfg.Seed, cfg.Seed)),
+		Rand:    rng,
 		Systems: systems,
 		Logger:  cfg.Logger,
 		OnTick:  onTick(cfg.Metrics),
@@ -511,9 +518,31 @@ func storeSkills(in []session.SkillState) []store.Skill {
 func storeItems(in []session.ItemState) []store.InventoryItem {
 	var out []store.InventoryItem
 	for _, it := range in {
-		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot, Items: storeItems(it.Items)})
+		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot,
+			Mods: storeMods(it.Mods), Items: storeItems(it.Items)})
 	}
 	return out
+}
+
+// storeMods is an instance's mods as saved (nil: a plain item).
+func storeMods(m session.Mods) *store.ItemMods {
+	if m.Zero() {
+		return nil
+	}
+	return &store.ItemMods{Attribute: m.Attr, Value: m.Value, Refine: m.Refine}
+}
+
+// sessionMods is saved mods as the loop holds them (nil: a plain item). Only a hand edit
+// of the database writes numbers out of range, and the loop must not trust them (a
+// negative refine level would index the forge's table before its first level): the
+// refine level is kept to 0..content.MaxRefineLevel and the value to
+// 0..content.MaxAttributeValue (final review of lote 11).
+func sessionMods(m *store.ItemMods) session.Mods {
+	if m == nil {
+		return session.Mods{}
+	}
+	return session.Mods{Attr: m.Attribute, Value: min(max(m.Value, 0), content.MaxAttributeValue),
+		Refine: min(max(m.Refine, 0), content.MaxRefineLevel)}
 }
 
 // adminDone hands a ban or unban result to the loop. It must not be lost (a banned

@@ -47,6 +47,7 @@ message ClientMessage {
     HouseCommand house_command = 33;
     EquipCosmetic equip_cosmetic = 34;
     UnequipCosmetic unequip_cosmetic = 35;
+    Refine refine = 36;
   }
 }
 
@@ -229,13 +230,16 @@ message MarketBrowse {
 
 // MarketCreate posts an offer: SELL takes the units from the backpack, BUY takes amount
 // × price in coins; both pay the posting fee. duration_index points into
-// MarketUpdate.durations_hours.
+// MarketUpdate.durations_hours. A SELL of an item that rolls attributes (an equipable,
+// docs/02 "Atributos de items") is one instance: amount 1 and mods, the instance's
+// ItemMods as MarketUpdate.owned_mods lists them (unset: one without mods).
 message MarketCreate {
   MarketSide side = 1;
   uint32 item_id = 2;
   uint32 amount = 3;
   uint64 price = 4;
   uint32 duration_index = 5;
+  ItemMods mods = 6;
 }
 
 // MarketCancel takes an own offer down; its deposit goes to the mailbox.
@@ -243,10 +247,13 @@ message MarketCancel {
   uint64 offer_id = 1;
 }
 
-// MarketAccept buys from a sell offer or sells to a buy offer, amount units.
+// MarketAccept buys from a sell offer or sells to a buy offer, amount units. Selling an
+// equipable to a buy offer gives one instance the seller picks: amount 1 and its mods
+// (as in MarketCreate).
 message MarketAccept {
   uint64 offer_id = 1;
   uint32 amount = 2;
+  ItemMods mods = 3;
 }
 
 // MarketWithdraw moves the mailbox into the inventory: the items in order while they fit,
@@ -442,6 +449,28 @@ message GuildCommand {
 message Craft {
   string recipe_id = 1;
   Position station = 2;
+}
+
+// Refine is one attempt of the forge (docs/02 "Forja") on the item at item (an equipment
+// slot or an open container the player carries: never the ground) at the anvil on the
+// tile station. item_id and mods are the piece the client saw, with all of its mods (its
+// attribute and value and its refine level; none for a plain piece): a stale view
+// (another item, another roll, another level) is refused, so a click repeated after a
+// success does nothing, and after a break, when a container's items move up, a click
+// sent before the result never refines the piece that took that place unless it is the
+// same in every way (then the two are interchangeable). The mods are only a key: the
+// instance keeps its own. protect spends one protection material in this attempt (only
+// from the first level that can fail; ignored below it). The server checks everything
+// (the station within reach, an equipable that rolls attributes below the top level,
+// carried, not offered in the trade window, the temper stones, the protection and the
+// gold carried, the pace of crafting) and answers with RefineResult, or a system Message
+// (refine.* or another refusal) when the attempt did not happen.
+message Refine {
+  Position station = 1;
+  ItemLocation item = 2;
+  uint32 item_id = 3;
+  ItemMods mods = 4;
+  bool protect = 5;
 }
 
 // ReportPlayer reports another player to the staff (T4.1): the report button of the

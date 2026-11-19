@@ -5,7 +5,8 @@ notes: >-
   Provisioner of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): the
   tools of every trade (no shovel: nothing digs yet), food, poultices, runes, the basic
   gear of each vocation, the key of the practice gate and a spare backpack, at the
-  prices of the real islands. Buys a few hunting and trade goods back at the
+  prices of the real islands; and the forge's temper stones and its warding amber (no real
+  NPC sells the amber: here it is to try the forge, docs/16). Buys a few hunting and trade goods back at the
   provisioner's prices, to try selling.
 dialog:
   start: greet
@@ -48,25 +49,29 @@ shop:
     - { item: health_draught, price: 60 }
     - { item: concentrated_health_draught, price: 125 }
     - { item: arc_rune, price: 30 }
-    - { item: hatchet, price: 60 }
-    - { item: iron_sword, price: 120 }
-    - { item: spark_wand, price: 40 }
-    - { item: coral_wand, price: 300 }
-    - { item: short_bow, price: 40 }
+    - { item: hatchet, price: 30 }
+    - { item: iron_sword, price: 150 }
+    - { item: spark_wand, price: 30 }
+    - { item: coral_wand, price: 150 }
+    - { item: short_bow, price: 30 }
     - { item: arrow, price: 1 }
-    - { item: smuggler_crossbow, price: 420 }
+    - { item: smuggler_crossbow, price: 540 }
     - { item: bolt, price: 1 }
-    - { item: sapling_staff, price: 40 }
-    - { item: barrel_lid_shield, price: 10 }
-    - { item: plank_shield, price: 25 }
+    - { item: sapling_staff, price: 30 }
+    - { item: barrel_lid_shield, price: 25 }
+    - { item: plank_shield, price: 110 }
     - { item: patched_tunic, price: 20 }
-    - { item: hide_vest, price: 45 }
-    - { item: leather_jerkin, price: 150 }
+    - { item: mossweave_robe, price: 360 }
+    - { item: stagleather_coat, price: 540 }
     - { item: sailcloth_cap, price: 10 }
-    - { item: canvas_trousers, price: 15 }
-    - { item: tarred_boots, price: 15 }
+    - { item: canvas_trousers, price: 10 }
+    - { item: tarred_boots, price: 10 }
     - { item: pruebas_key, price: 10 }
     - { item: backpack, price: 20 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
+    - { item: radiant_temper_stone, price: 600 }
+    - { item: warding_amber, price: 3000 } # sandbox only: no real NPC sells it
   buys:
     - { item: raw_fish, price: 1 }
     - { item: grilled_fish, price: 2 }

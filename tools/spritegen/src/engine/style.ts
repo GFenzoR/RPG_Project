@@ -9,8 +9,11 @@ export type Dir = "n" | "e" | "s" | "w";
 export type ActionName = "idle" | "walk" | "attack" | "shoot" | "cast" | "death";
 /** The shades of a palette.ts material, lightest first, plus its outline. */
 export type Tone = "light" | "base" | "shadow" | "deep" | "outline";
-/** What a sprite is, for the outline policy and the value band. */
-export type SpriteKind = "creature" | "object";
+/**
+ * What a sprite is, for the outline policy and the value band: an item is an inventory and
+ * ground icon (docs/17 "Íconos de items"), an object a prop of the map.
+ */
+export type SpriteKind = "creature" | "object" | "item";
 
 /**
  * ART-1 (and the LPC style guide of docs/17 §1): orthographic 3/4 front view. Heights rise
@@ -68,6 +71,12 @@ export const GLOW = { core: 0.9, rim: 0.05 } as const;
 export const OUTLINE: Record<SpriteKind, { lit: Tone; dark: Tone; crease: Tone }> = {
   creature: { lit: "deep", dark: "outline", crease: "deep" },
   object: { lit: "shadow", dark: "deep", crease: "shadow" },
+  /**
+   * An item icon sits on the near-black well of an inventory slot and, dropped, on any
+   * ground: it keeps the creatures' dark outline (the one Dungeon Crawl's item tiles have)
+   * so it stands off the grass at 1x, and the softer crease of an object inside it.
+   */
+  item: { lit: "deep", dark: "outline", crease: "shadow" },
 };
 export const CREASE_DEPTH = 2.5;
 
@@ -102,6 +111,8 @@ export const DITHER_MAX_SHARE = 0.1;
 export const VALUE_BAND: Record<SpriteKind, readonly [number, number]> = {
   creature: [10, 85],
   object: [25, 65],
+  /** Items are objects (ART-6 "Muros y objetos"): the same band. */
+  item: [25, 65],
 };
 
 /**
@@ -120,6 +131,8 @@ export interface SizeClass {
   /** Figure height and width ranges (px), when the rule gives them. */
   height?: readonly [number, number];
   width?: readonly [number, number];
+  /** The figure is centred on the canvas on both axes (item icons), not standing on a row. */
+  centred?: boolean;
 }
 
 export const SIZES = {
@@ -174,6 +187,22 @@ export const SIZES = {
     ],
     anchor: "br",
     ground: 10,
+  },
+  /**
+   * Item icons (docs/17 "Íconos de items"): one 32x32 image the client shows centred in an
+   * inventory slot (at 1x, or 2x in the big slots of the equipment figure) and on its tile
+   * when it lies on the ground. No ground row: the model origin is the canvas centre, the
+   * item is built as it is seen (a weapon leaning from bottom-left to top-right, armour
+   * upright and facing the camera) and its figure is centred on both axes, 12 to 30 px.
+   */
+  icon: {
+    kind: "item",
+    canvases: [[32, 32]],
+    anchor: "br",
+    ground: 16,
+    height: [8, 30],
+    width: [8, 30],
+    centred: true,
   },
 } as const satisfies Record<string, SizeClass>;
 

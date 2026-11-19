@@ -24,9 +24,11 @@ import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
+  AttributeDef,
   ClientContent,
   CosmeticDef,
   DialogTopic,
+  ForgeRules,
   NameEffectStyle,
   IslandRect,
   ItemDef,
@@ -141,6 +143,9 @@ export function loadClientContent(root: string): ClientContent {
       };
     }
   }
+  const attributes = loadAttributes(root);
+  // The attributes' card lines live in items.yaml (attribute.*): the client takes them too.
+  for (const a of Object.values(attributes)) descKeys.add(a.text);
   const balance = readYaml(join(root, "data", "balance.yaml"));
   const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
@@ -260,8 +265,10 @@ export function loadClientContent(root: string): ClientContent {
         ];
       })
     : [];
+  const forge = loadForge(balance, ids);
   return {
     items,
+    attributes,
     monsterSprites: monsters,
     // A topic conflict is the content test's to report (vite/content.test.ts): the build
     // keeps the first topic.
@@ -272,6 +279,7 @@ export function loadClientContent(root: string): ClientContent {
     vocations,
     spells,
     recipes,
+    ...(forge ? { forge } : {}),
     movement: {
       baseStepMs: num(mv["base_step_ms"], 1000),
       diagonalCost: num(mv["diagonal_cost"], 1.5),
@@ -398,6 +406,80 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
   if (raw["market_board"] === true) out.board = true;
   if (raw["quest"] === true) out.quest = true;
   return out;
+}
+
+/**
+ * data/attributes.yaml by id (docs/02 "Atributos de items"): the text key of each
+ * attribute's card line and its cap (what a refined jewel's card may add). No file: no
+ * attributes; a file that does not parse fails the build (a card without its lines would
+ * go unnoticed).
+ */
+export function loadAttributes(root: string): Record<string, AttributeDef> {
+  const file = join(root, "data", "attributes.yaml");
+  if (!existsSync(file)) return {};
+  const raw = readYaml(file);
+  const out: Record<string, AttributeDef> = {};
+  for (const a of Array.isArray(raw) ? raw : []) {
+    if (isObj(a) && typeof a["id"] === "string" && typeof a["text"] === "string")
+      out[a["id"]] =
+        typeof a["cap"] === "number" && a["cap"] > 0
+          ? { text: a["text"], cap: a["cap"] }
+          : { text: a["text"] };
+  }
+  return out;
+}
+
+/**
+ * balance.yaml forge (docs/02 "Forja") with numeric item ids, for the forge window; undefined
+ * when it is off or names an item without an id (the server would not start either).
+ */
+export function loadForge(balance: unknown, ids: Record<string, unknown>): ForgeRules | undefined {
+  const f = isObj(balance) ? balance["forge"] : undefined;
+  if (!isObj(f) || f["enabled"] !== true) return undefined;
+  const n = (v: unknown): number => (typeof v === "number" ? v : 0);
+  const id = (v: unknown): number | undefined => {
+    const x = typeof v === "string" ? ids[v] : undefined;
+    return typeof x === "number" ? x : undefined;
+  };
+  const station = id(f["station"]);
+  const protection = id(f["protection"]);
+  const bonus = isObj(f["smithing_bonus"]) ? f["smithing_bonus"] : {};
+  const levels = (Array.isArray(f["levels"]) ? f["levels"] : []).map((l: unknown) =>
+    isObj(l) ? { chance: n(l["chance"]), stones: n(l["stones"]) } : { chance: 0, stones: 0 },
+  );
+  const bands: ForgeRules["bands"] = [];
+  for (const b of Array.isArray(f["bands"]) ? f["bands"] : []) {
+    const stone = isObj(b) ? id(b["stone"]) : undefined;
+    if (!isObj(b) || stone === undefined) return undefined;
+    bands.push({
+      level: n(b["level"]),
+      stone,
+      gold: n(b["gold"]),
+      attack: n(b["attack"]),
+      armor: n(b["armor"]),
+      defense: n(b["defense"]),
+    });
+  }
+  if (
+    station === undefined ||
+    protection === undefined ||
+    levels.length === 0 ||
+    bands.length === 0
+  )
+    return undefined;
+  return {
+    station,
+    safeLevel: n(f["safe_level"]),
+    protection,
+    smithingBonus: {
+      skill: typeof bonus["skill"] === "string" ? bonus["skill"] : "",
+      perLevels: n(bonus["per_levels"]),
+      max: n(bonus["max"]),
+    },
+    jewelryPct: n(f["jewelry_pct"]),
+    levels,
+    bands,
+  };
 }
 
 /** The topics a dialog option leads to, in the order they win when one looks ahead. */

@@ -43,40 +43,46 @@ dialog:
         - text: dialog.trade
           action: { open_shop: brasal_smithy }
         - { text: dialog.back, goto: greet }
+# Lote 11 (docs/02 "Catálogo de equipo"): band 4 (embersteel) at 1.25 times its value, the
+# shield included; it buys it at a third and the obsidian ring. The wyrm pieces are band 5:
+# not obtainable until its island, so their recipes and buyers left with them.
 shop:
   id: brasal_smithy
   sells:
-    - { item: embersteel_sabre, price: 2400 }
+    - { item: embersteel_sabre, price: 2500 }
     - { item: embersteel_axe, price: 2500 }
-    - { item: embersteel_helm, price: 1150 }
-    - { item: embersteel_cuirass, price: 2200 }
+    - { item: embersteel_mace, price: 2500 }
+    - { item: embersteel_longbow, price: 2500 }
+    - { item: embersteel_crossbow, price: 2250 }
+    - { item: embersteel_shield, price: 1900 }
+    - { item: embersteel_cuirass, price: 2250 }
+    - { item: embersteel_helm, price: 1000 }
+    - { item: embersteel_greaves, price: 1000 }
+    - { item: embersteel_sabatons, price: 1000 }
+    - { item: arrow, price: 2 }
+    - { item: bolt, price: 2 }
     - { item: smithing_hammer, price: 105 }
     - { item: pickaxe, price: 60 }
     - { item: elm_log, price: 12 }
-    - { item: embersteel_mace, price: 2500 }
-    - { item: embersteel_longbow, price: 2600 }
-    - { item: embersteel_crossbow, price: 2400 }
-    - { item: embersteel_greaves, price: 1200 }
-    - { item: embersteel_sabatons, price: 1100 }
-    - { item: arrow, price: 2 }
-    - { item: bolt, price: 2 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
+    - { item: radiant_temper_stone, price: 600 }
   buys:
-    - { item: embersteel_sabre, price: 600 }
-    - { item: embersteel_axe, price: 620 }
-    - { item: embersteel_helm, price: 280 }
-    - { item: embersteel_cuirass, price: 540 }
-    - { item: embersteel_shield, price: 480 }
-    - { item: wyrmscale_mail, price: 1200 }
-    - { item: wyrmfang_blade, price: 1300 }
+    - { item: embersteel_sabre, price: 660 }
+    - { item: embersteel_axe, price: 660 }
+    - { item: embersteel_mace, price: 660 }
+    - { item: embersteel_longbow, price: 660 }
+    - { item: embersteel_crossbow, price: 600 }
+    - { item: embersteel_shield, price: 500 }
+    - { item: embersteel_cuirass, price: 600 }
+    - { item: embersteel_helm, price: 260 }
+    - { item: embersteel_greaves, price: 260 }
+    - { item: embersteel_sabatons, price: 260 }
+    - { item: obsidian_ring, price: 400 }
     - { item: embersteel_ingot, price: 26 }
     - { item: ember_ore, price: 7 }
     - { item: ash_pelt, price: 20 }
     - { item: salamander_scale, price: 16 }
     - { item: slag_core, price: 36 }
     - { item: wyrm_scale, price: 45 }
-    - { item: embersteel_mace, price: 650 }
-    - { item: embersteel_longbow, price: 680 }
-    - { item: embersteel_crossbow, price: 620 }
-    - { item: embersteel_greaves, price: 310 }
-    - { item: embersteel_sabatons, price: 280 }
     - { item: rough_stone, price: 1 } # content audit m4: the ember veins give it too

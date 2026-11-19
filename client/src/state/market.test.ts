@@ -156,6 +156,54 @@ describe("fees and the create form", () => {
     expect(createProblem(m, true, 5, 5)).toBe("client.market.not_enough_items");
     expect(createProblem(m, false, 10, 5)).toBe("client.market.not_enough_money");
     expect(createProblem(m, true, 4, 5)).toBeUndefined();
+    // docs/02 "Atributos de items": an equipable is sold one instance at a time.
+    expect(createProblem(m, true, 2, 5, true)).toBe("client.market.one_instance");
+    expect(createProblem(m, true, 1, 5, true)).toBeUndefined();
+    expect(createProblem(m, false, 2, 5, true)).toBeUndefined();
+  });
+});
+
+describe('an equipable in the market (docs/02 "Atributos de items")', () => {
+  it("keeps each sell offer's, each mailbox item's and each owned instance's attribute", () => {
+    const m = marketFrom(
+      create(MarketUpdateSchema, {
+        open: true,
+        itemId: 60,
+        sells: [
+          {
+            offerId: 1n,
+            side: MarketSide.SELL,
+            itemId: 60,
+            amount: 1,
+            mods: { attribute: "attack", value: 2 },
+          },
+          {
+            offerId: 2n,
+            side: MarketSide.SELL,
+            itemId: 60,
+            amount: 1,
+            mods: { attribute: "armor", value: 1 },
+          },
+        ],
+        buys: [{ offerId: 3n, side: MarketSide.BUY, itemId: 60, amount: 4 }],
+        mailboxItems: [
+          { id: 7n, item: { itemId: 60, mods: { attribute: "speed", value: 5, refine: 1 } } },
+        ],
+        owned: 2,
+        ownedMods: [{ attribute: "attack", value: 1 }, {}],
+      }),
+    );
+    if (!m) throw new Error("no view");
+    expect(m.sells.map((o) => o.mods)).toEqual([
+      { attribute: "attack", value: 2, refine: 0 },
+      { attribute: "armor", value: 1, refine: 0 },
+    ]);
+    expect(m.buys[0]?.mods).toBeUndefined();
+    expect(m.mailbox[0]?.mods).toEqual({ attribute: "speed", value: 5, refine: 1 });
+    expect(m.ownedMods).toEqual([
+      { attribute: "attack", value: 1, refine: 0 },
+      { attribute: "", value: 0, refine: 0 },
+    ]);
   });
 });
 
@@ -200,5 +248,25 @@ describe("searchItems ranking", () => {
     expect(marketFrom(create(MarketUpdateSchema, { open: true, readOnly: true }))?.readOnly).toBe(
       true,
     );
+  });
+});
+
+describe("an equipable in the trade window", () => {
+  it("keeps each offered instance's attribute", () => {
+    const { view } = tradeFrom(
+      create(TradeUpdateSchema, {
+        state: TradeState.NEGOTIATING,
+        ownOffer: [
+          { itemId: 60, mods: { attribute: "life_leech", value: 2 } },
+          { itemId: 68, count: 3 },
+        ],
+        partnerOffer: [{ itemId: 63, mods: { attribute: "armor", value: 1 } }],
+      }),
+    );
+    expect(view?.own).toEqual([
+      { itemId: 60, count: 0, mods: { attribute: "life_leech", value: 2, refine: 0 } },
+      { itemId: 68, count: 3 },
+    ]);
+    expect(view?.partner[0]?.mods).toEqual({ attribute: "armor", value: 1, refine: 0 });
   });
 });

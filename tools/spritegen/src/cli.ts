@@ -4,14 +4,17 @@
 //   node tools/spritegen/src/cli.ts check [--root DIR]     every recipe path is used by data/,
 //        and every engine spec is valid, passes the gates and matches its sprites.yaml hints
 //   node tools/spritegen/src/cli.ts sheet [--only PREFIX] [--out DIR] [--scale N]
-//        contact sheet (every frame at N x, default 4) and 1x lineup of each engine sprite
+//        contact sheet (every frame at N x, default 4) and 1x lineup of each engine sprite;
+//        with item icons among them, also icons.slots.png (each in an inventory slot at 2x
+//        and 1x and on grass, a row per line of the catalog) and icons.detail.png (at 4x)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { encodePng, scaleImage } from "@rpg/spritepack";
 import { engineProblems } from "./engine/check.ts";
-import { contactSheet, reviewLineup } from "./engine/sheet.ts";
+import { contactSheet, iconBoard, reviewLineup } from "./engine/sheet.ts";
 import { ENGINE_SPECS } from "./engine/specs/index.ts";
+import { ICON_ROWS } from "./engine/specs/items/index.ts";
 import { buildSprites, checkPaths, previewPng, recipePaths } from "./index.ts";
 
 const { positionals, values } = parseArgs({
@@ -60,6 +63,17 @@ if (command === "build") {
     writeFileSync(`${base}.sheet.png`, encodePng(contactSheet(spec, scale)));
     writeFileSync(`${base}.lineup.png`, encodePng(scaleImage(reviewLineup(root, spec), 3)));
     console.log(`spritegen: ${base}.sheet.png and .lineup.png`);
+  }
+  // Item icons: the board of every selected one, by line and band.
+  const chosen = new Set(specs.map((s) => s.sprite));
+  const rows = ICON_ROWS.map((r) => ({
+    ...r,
+    specs: r.specs.map((s) => (s && chosen.has(s.sprite) ? s : undefined)),
+  })).filter((r) => r.specs.some((s) => s));
+  if (rows.length > 0) {
+    writeFileSync(join(out, "icons.slots.png"), encodePng(iconBoard(root, rows)));
+    writeFileSync(join(out, "icons.detail.png"), encodePng(iconBoard(root, rows, true)));
+    console.log(`spritegen: ${join(out, "icons.slots.png")} and icons.detail.png`);
   }
 }
 const problems = [...checkPaths(root), ...engineProblems(root)];

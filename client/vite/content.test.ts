@@ -7,7 +7,9 @@ import { loadContent } from "@rpg/map-format";
 import {
   GAME_SITE_KEYS,
   dialogTopics,
+  loadAttributes,
   loadClientContent,
+  loadForge,
   loadPortals,
   loadSiteContent,
 } from "./content.ts";
@@ -16,6 +18,56 @@ const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
 describe("client content (T0.5)", () => {
   const content = loadClientContent(REPO);
+
+  it("ships the item attributes and their card lines in both languages (docs/02)", () => {
+    const attrs = content.attributes ?? {};
+    expect(attrs["max_health"]?.text).toBe("attribute.max_health");
+    // The caps go along (a refined jewel's card stops at its attribute's).
+    expect(attrs["max_health"]?.cap).toBeUndefined();
+    expect(attrs["life_leech"]?.cap).toBe(15);
+    expect(Object.keys(attrs).length).toBeGreaterThan(10);
+    for (const lang of ["es", "en"])
+      for (const a of Object.values(attrs))
+        expect(content.i18n[lang]?.[a.text]).toContain("{value}");
+  });
+
+  it('ships the forge\'s rules with numeric item ids, and its texts (docs/02 "Forja")', () => {
+    const f = content.forge;
+    const ids = Object.fromEntries(
+      Object.entries(content.items).map(([n, d]) => [d.id, Number(n)]),
+    );
+    expect(f?.station).toBe(ids["anvil"]);
+    expect(f?.protection).toBe(ids["warding_amber"]);
+    expect(f?.levels.map((l) => l.chance)).toEqual([100, 100, 100, 100, 70, 55, 40, 25, 15, 8]);
+    expect(f?.safeLevel).toBe(4);
+    // The bonus's skill is data (balance.yaml forge.smithing_bonus.skill), not code.
+    expect(f?.smithingBonus).toEqual({ skill: "smithing", perLevels: 6, max: 5 });
+    expect(f?.bands[0]).toMatchObject({ level: 1, stone: ids["lesser_temper_stone"] });
+    expect(f?.bands.at(-1)).toMatchObject({ level: 75, stone: ids["radiant_temper_stone"] });
+    for (const lang of ["es", "en"]) {
+      expect(content.i18n[lang]?.["client.item.refined"]).toContain("{level}");
+      expect(content.i18n[lang]?.["refine.broken"]).toContain("{item}");
+    }
+    expect(loadForge({ forge: { enabled: false } }, ids)).toBeUndefined();
+    expect(loadForge({ forge: { enabled: true, station: "nowhere" } }, ids)).toBeUndefined();
+  });
+
+  it("reads no attributes without the file and fails on a broken one", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-attributes-"));
+    try {
+      expect(loadAttributes(root)).toEqual({});
+      mkdirSync(join(root, "data"));
+      writeFileSync(
+        join(root, "data", "attributes.yaml"),
+        "- { id: armor, text: attribute.armor }\n",
+      );
+      expect(loadAttributes(root)).toEqual({ armor: { text: "attribute.armor" } });
+      writeFileSync(join(root, "data", "attributes.yaml"), "- { id: armor, text: [\n");
+      expect(() => loadAttributes(root)).toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   it("exposes each NPC's sprite like the monsters'", () => {
     expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/ferryman");
@@ -208,8 +260,8 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
   it("ships what the item card shows: kind, weight, stats and requirements", () => {
     expect(byId.get("iron_sword")).toMatchObject({
       kind: "weapon",
-      weight: 3300,
-      weapon: { type: "sword", attack: 13, defense: 9, hands: 1, range: 0, element: "", ammo: "" },
+      weight: 3150,
+      weapon: { type: "sword", attack: 13, defense: 7, hands: 1, range: 0, element: "", ammo: "" },
       requires: { level: 5, vocations: [] },
     });
     expect(byId.get("coral_wand")?.weapon).toMatchObject({ range: 4, element: "ice" });

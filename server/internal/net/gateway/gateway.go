@@ -372,7 +372,11 @@ func itemStates(in []store.InventoryItem) []session.ItemState {
 		if it.ItemID <= 0 || it.ItemID > 0xFFFF {
 			continue
 		}
-		out = append(out, session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Items: itemStates(it.Items)})
+		s := session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Items: itemStates(it.Items)}
+		if m := it.Mods; m != nil {
+			s.Mods = session.Mods{Attr: m.Attribute, Value: m.Value, Refine: m.Refine} // the instance's attribute
+		}
+		out = append(out, s)
 	}
 	return out
 }

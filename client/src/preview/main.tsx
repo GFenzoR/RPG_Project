@@ -4,7 +4,8 @@
 // (vite.config.ts): it never ships.
 //
 //   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|
-//     trade|chattabs|tutorialhelp|tutorialshop|danger|death|login|characters&lang=es|en
+//     trade|chattabs|tutorialhelp|tutorialshop|forge|forgerisk|forgeresult|danger|death|login|
+//     characters&lang=es|en
 //     [&ui=1.25&text=1.15]
 //
 // The windows' state comes from localStorage (rpg.windows), as in the game: the screenshot
@@ -35,6 +36,7 @@ import {
   withDanger,
   withDeath,
   withDialog,
+  withForge,
   withGroundTip,
   withHeld,
   withItemMenu,
@@ -220,6 +222,8 @@ function Preview(props: { game: Game }): JSX.Element {
       y: Math.round(window.innerHeight * 0.55),
     });
   if (scene === "inventory") s = withHeld(content, s);
+  if (scene === "forge" || scene === "forgerisk") s = withForge(content, s, "pick", now);
+  if (scene === "forgeresult") s = withForge(content, s, "result", now);
   if (scene === "groundtip")
     s = withGroundTip(content, s, {
       x: Math.round(window.innerWidth * 0.3),

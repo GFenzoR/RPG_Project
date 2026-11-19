@@ -242,6 +242,40 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   servidor (`owned`, `tools`), porque el cliente no ve las mochilas cerradas. Se cierra con
   ×, Escape o al alejarse más de 1 casilla; "Hacer" manda `Craft`.
 
+## Notas de la forja (docs/02 "Forja", rama `feat/item-forge`)
+- `content.forge` (`ForgeRules`, de `balance.yaml → forge` con ids numéricos:
+  `vite/content.ts` `loadForge`; ausente si está apagada). El yunque (`forge.station`) abre la
+  ventana de la estación con dos pestañas (`data-station-tab`: `recipes`, `forge`;
+  `ui/Crafting.tsx`); la de la forja es `ui/Forge.tsx`: `ForgePanel` guarda la pieza elegida,
+  el interruptor del ámbar y el paso de confirmación; `ForgeBody` dibuja sin hooks
+  (`ui/Forge.test.ts`). Las reglas y la vista son puras en `state/forge.ts` (`refineKind`,
+  `forgeBand`, `forgeChance`, `refineGain`, `forgeCandidates`, `forgeView`, con tests): las
+  mismas fórmulas que `server/internal/content/forge.go`. Lo que se lleva lo dice el
+  `StationOpen` (`owned` con piedras y ámbar, `StationState.money`).
+- `Game.refine(candidato, protect)` manda `Refine` con todos los `mods` que se ven
+  (`refineMessage`; el servidor no refina otra pieza que subió a ese lugar salvo que sea igual
+  en todo) y la ventana no manda otro hasta la respuesta (`refineInFlight`: un `RefineResult`
+  o un mensaje de sistema después del envío, o `IN_FLIGHT_MS`; botones con `disabled`);
+  `WorldState.refine` (`RefineState`) es el último `RefineResult`, que la ventana muestra
+  `RESULT_MS` (8 s) arriba. La pieza elegida es `chosenPiece`: la de su lugar con el mismo
+  item y los mismos `mods`, que siguen al resultado de los intentos sobre ella (una rota se
+  suelta: la que sube a su índice del contenedor no es ella). El ámbar va solo si
+  `ForgeView.protect` (pedido, donde cuenta y llevado): un interruptor que quedó prendido
+  tras gastar el último no traba el botón. La skill del bono es
+  `forge.smithingBonus.skill`, no un string del código.
+- El nombre de una pieza refinada pasa siempre por `refinedName` (`client.item.refined`):
+  la ficha (`cardTitle`, con la línea `card-refine` de `ItemCardView.refine`), el
+  intercambio y el mercado (`ItemLabel`; el selector de cuál vender y las filas de ofertas
+  ajenas, `instanceLine` de `ui/Market.tsx`, "+7 espada · +3 ataque") y los parámetros `item`
+  de los mensajes (`state/messages.ts`). Color `--ui-item-refine`.
+- Efectos 8 (`effects/refine`) y 9 (`effects/shatter`) en `render/effects.ts`, con su sonido
+  (`effect.refine`, `effect.shatter` en `assets/sounds.yaml`).
+- Test ids: `forge`, `forge-slot`, `forge-levels`, `forge-gain`, `forge-chance`,
+  `forge-cost` (`[data-cost=stone|gold]`), `forge-protect`, `forge-risk`, `forge-attempt`,
+  `forge-confirm`, `forge-go`, `forge-cancel`, `forge-result` (`data-outcome`),
+  `.forge-item[data-forge-item]`, `card-refine`. Vista previa: escenas `forge`, `forgerisk` y
+  `forgeresult` de `make ui-preview`.
+
 ## Notas de T3.5
 - `WorldState.voyage` (del mensaje `travel.sailed`, parámetro `island`) dispara el fundido
   `.voyage` de `ui/App.tsx` (`VOYAGE_MS`, misma duración que la animación CSS) con
@@ -634,11 +668,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
 
 ## Sprites de efectos
-- Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
+- Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
   en el atlas: `effects/<nombre>/<n>` (`n` = 0, 1, …), 32x32, arte propio de
   `tools/spritegen` (`recipes/effects.ts`, 6 frames por tira). Nombres: `hit`, `block`,
-  `heal`, `conjure`, `gather`, `gather_miss`, `buff` y los 7 elementos de `ELEMENTS`
-  (`physical` … `death`, ids 10 + índice).
+  `heal`, `conjure`, `gather`, `gather_miss`, `buff`, `refine` y `shatter` (8 y 9, la
+  forja) y los 7 elementos de `ELEMENTS` (`physical` … `death`, ids 10 + índice).
 - `render/effects.ts` (puro, con tests): `effectFolder(id)` da la carpeta de un id;
   `effectFrames(id, hasArt)` lista los frames con arte real hasta el primero que falte
   (máximo `MAX_EFFECT_FRAMES`); `effectFrame(elapsed, frames)` reparte los frames en
@@ -1507,7 +1541,11 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   derecha brilla y la izquierda, bajo el puntero, se tiñe de rojo), `inventoryfloat` (el
   inventario flotando, de 420 px), `tooltip` (la espada de la mano derecha) y
   `tooltipcoin` (las monedas de la mochila); en teléfono y tablet abren la pestaña del
-  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`.
+  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`. Desde
+  `feat/item-icons` la base tiene los diez slots llenos (la banda 3 del catálogo y la
+  espada de hierro) y la mochila lleva piezas de las bandas siguientes, y la tienda (`shop`)
+  muestra 24 piezas de equipo antes de 6 de las otras categorías: así esas escenas muestran
+  los íconos del motor de sprites (docs/17 "Íconos de items").
 - **E2E:** el primer test de `e2e/game.spec.ts` encuentra la mochila abierta bajo la figura
   (`[data-container-item="backpack"][data-docked]` dentro de `inventory`, 24 celdas, sin
   `window-container-backpack`), la cierra con su ×, la abre de nuevo con "Abrir" del menú

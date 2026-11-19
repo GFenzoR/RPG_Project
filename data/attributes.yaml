@@ -1,0 +1,254 @@
+# Item attributes (docs/02-game-design.md "Atributos de items", docs/06 "Atributo"). Every
+# equipable (a weapon, a shield or an armor piece; never ammo, containers, consumables,
+# tools or materials) rolls exactly ONE attribute when it is created: one of those whose
+# `on` names its kind (the weapon's weapon.type, `shield`, or the armor's armor.slot),
+# picked by `weight`, with a value uniform in [min, max] of the band of the item's
+# requires.level (the last band whose `level` is <= it; no requirement = level 1).
+# Effects (server/internal/session/attributes.go): what all the worn items add up to,
+# never more than `cap` when it has one. No experience nor gold bonus: they would feed
+# the economy. Our own names and numbers.
+
+# ---- life and mana ---------------------------------------------------------------------
+- id: max_health
+  effect: max_health
+  text: attribute.max_health
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 12
+  bands:
+    - { level: 1, min: 4, max: 10 }
+    - { level: 10, min: 8, max: 18 }
+    - { level: 25, min: 14, max: 30 }
+    - { level: 50, min: 25, max: 50 }
+    - { level: 80, min: 40, max: 80 }
+
+- id: max_mana
+  effect: max_mana
+  text: attribute.max_mana
+  on: [wand, head, body, legs, feet, neck, ring]
+  weight: 12
+  bands:
+    - { level: 1, min: 4, max: 10 }
+    - { level: 10, min: 8, max: 18 }
+    - { level: 25, min: 14, max: 30 }
+    - { level: 50, min: 25, max: 50 }
+    - { level: 80, min: 40, max: 80 }
+
+- id: health_regen
+  effect: health_regen
+  text: attribute.health_regen
+  on: [shield, head, body, neck, ring]
+  weight: 6
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+- id: mana_regen
+  effect: mana_regen
+  text: attribute.mana_regen
+  on: [wand, head, body, neck, ring]
+  weight: 6
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+# ---- the weapon's and the armor's own numbers ------------------------------------------
+- id: attack
+  effect: attack
+  text: attribute.attack
+  on: [sword, axe, club, distance]
+  weight: 14
+  bands:
+    - { level: 1, min: 1, max: 2 }
+    - { level: 10, min: 1, max: 3 }
+    - { level: 25, min: 2, max: 4 }
+    - { level: 50, min: 3, max: 5 }
+    - { level: 80, min: 4, max: 7 }
+
+- id: armor
+  effect: armor
+  text: attribute.armor
+  on: [head, body, legs, feet]
+  weight: 14
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 25, min: 1, max: 2 }
+    - { level: 50, min: 2, max: 3 }
+    - { level: 80, min: 2, max: 4 }
+
+- id: defense
+  effect: defense
+  text: attribute.defense
+  on: [shield]
+  weight: 14
+  bands:
+    - { level: 1, min: 1, max: 2 }
+    - { level: 10, min: 1, max: 3 }
+    - { level: 25, min: 2, max: 4 }
+    - { level: 50, min: 3, max: 5 }
+    - { level: 80, min: 4, max: 7 }
+
+# ---- skills (what attacks and spells use; never what trains nor the skills panel) -------
+- id: sword_skill
+  effect: skill
+  skill: sword
+  text: attribute.sword_skill
+  on: [sword]
+  weight: 10
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+- id: axe_skill
+  effect: skill
+  skill: axe
+  text: attribute.axe_skill
+  on: [axe]
+  weight: 10
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+- id: club_skill
+  effect: skill
+  skill: club
+  text: attribute.club_skill
+  on: [club]
+  weight: 10
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+- id: distance_skill
+  effect: skill
+  skill: distance
+  text: attribute.distance_skill
+  on: [distance]
+  weight: 10
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 10, min: 1, max: 2 }
+    - { level: 25, min: 1, max: 3 }
+    - { level: 50, min: 2, max: 4 }
+    - { level: 80, min: 3, max: 5 }
+
+- id: magic_level
+  effect: skill
+  skill: magic
+  text: attribute.magic_level
+  on: [wand]
+  weight: 12
+  bands:
+    - { level: 1, min: 1, max: 1 }
+    - { level: 25, min: 1, max: 2 }
+    - { level: 50, min: 1, max: 3 }
+    - { level: 80, min: 2, max: 4 }
+
+# ---- movement -------------------------------------------------------------------------
+- id: speed
+  effect: speed
+  text: attribute.speed
+  on: [feet]
+  weight: 14
+  bands:
+    - { level: 1, min: 2, max: 4 }
+    - { level: 10, min: 3, max: 6 }
+    - { level: 25, min: 4, max: 8 }
+    - { level: 50, min: 6, max: 11 }
+    - { level: 80, min: 8, max: 14 }
+
+# ---- protection against an element (% less damage of it; armor never stops magic) ------
+- id: fire_protection
+  effect: protection
+  element: fire
+  text: attribute.fire_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 3
+  cap: 40
+  bands: &protection
+    - { level: 1, min: 1, max: 3 }
+    - { level: 10, min: 2, max: 4 }
+    - { level: 25, min: 3, max: 6 }
+    - { level: 50, min: 4, max: 8 }
+    - { level: 80, min: 5, max: 10 }
+
+- id: ice_protection
+  effect: protection
+  element: ice
+  text: attribute.ice_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 3
+  cap: 40
+  bands: *protection
+
+- id: energy_protection
+  effect: protection
+  element: energy
+  text: attribute.energy_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 3
+  cap: 40
+  bands: *protection
+
+- id: earth_protection
+  effect: protection
+  element: earth
+  text: attribute.earth_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 3
+  cap: 40
+  bands: *protection
+
+- id: holy_protection
+  effect: protection
+  element: holy
+  text: attribute.holy_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 2
+  cap: 40
+  bands: *protection
+
+- id: death_protection
+  effect: protection
+  element: death
+  text: attribute.death_protection
+  on: [shield, head, body, legs, feet, neck, ring]
+  weight: 2
+  cap: 40
+  bands: *protection
+
+# ---- leech: a share of the damage a weapon's hit deals comes back -----------------------
+- id: life_leech
+  effect: life_leech
+  text: attribute.life_leech
+  on: [sword, axe, club, distance]
+  weight: 6
+  cap: 15
+  bands: &leech
+    - { level: 1, min: 1, max: 2 }
+    - { level: 10, min: 1, max: 3 }
+    - { level: 25, min: 2, max: 4 }
+    - { level: 50, min: 2, max: 5 }
+    - { level: 80, min: 3, max: 6 }
+
+- id: mana_leech
+  effect: mana_leech
+  text: attribute.mana_leech
+  on: [sword, axe, club, distance, wand]
+  weight: 6
+  cap: 15
+  bands: *leech

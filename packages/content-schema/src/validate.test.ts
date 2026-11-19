@@ -1,8 +1,10 @@
 import {
   appendFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -10,11 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
 import type { SchemaName } from "./index.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
+
+// Many of these validate the whole content several times (about half a second each on a
+// dev machine, more than twice that on a slow CI runner): over 5 s for the longest ones.
+vi.setConfig({ testTimeout: 30_000 });
 
 function messages(root: string): string[] {
   const out = validateContent(root).diagnostics.map(formatDiagnostic);
@@ -31,6 +37,7 @@ describe("repository content", () => {
   it("compiles every schema", () => {
     const set = new SchemaSet();
     const names: SchemaName[] = [
+      "attributes",
       "balance",
       "vocations",
       "items",
@@ -87,6 +94,89 @@ describe("validator diagnostics", () => {
     ).toBe(true);
     expect(has('item "backpack" must be a container with pickupable: false')).toBe(true);
     expect(has('unknown item "no_such_remains"')).toBe(true);
+  });
+
+  it("checks the attribute pool: bands, fields of the effect, texts and stacking equipables", () => {
+    edit(
+      "data/attributes.yaml",
+      "    - { level: 1, min: 4, max: 10 }",
+      "    - { level: 2, min: 12, max: 10 }",
+    );
+    edit("data/attributes.yaml", "  effect: max_mana\n", "  effect: max_mana\n  skill: sword\n");
+    edit(
+      "data/attributes.yaml",
+      "    - { level: 25, min: 2, max: 4 }",
+      "    - { level: 5, min: 2, max: 4 }",
+    );
+    edit("data/attributes.yaml", "text: attribute.speed", "text: attribute.nowhere");
+    edit("data/attributes.yaml", "- id: ice_protection", "- id: fire_protection");
+    edit("data/items/weapons.yaml", "  weight: 3300\n", "  weight: 3300\n  stackable: true\n");
+    const out = messages(root);
+    expect(out.some((m) => m.includes("the first band is level 1"))).toBe(true);
+    expect(out.some((m) => m.includes("min is greater than max"))).toBe(true);
+    expect(out.some((m) => m.includes("band levels must grow"))).toBe(true);
+    expect(out.some((m) => m.includes('i18n key "attribute.nowhere" is missing'))).toBe(true);
+    expect(out.some((m) => m.includes('duplicate id "fire_protection"'))).toBe(true);
+    expect(out.some((m) => m.includes("never stacks"))).toBe(true);
+    expect(out.some((m) => m.includes("[1].skill: not allowed here"))).toBe(true);
+  });
+
+  it('checks the forge: its items, stones that are spent and a protection no NPC sells (docs/02 "Forja")', () => {
+    const forgeErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("the forge's"));
+    expect(forgeErrors()).toEqual([]);
+    // The real world (where each NPC stands): the sandbox merchant sells the amber, but
+    // stands only on the sandbox island.
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    for (const island of readdirSync(join(REPO, "world", "islands"))) {
+      const npcs = join(REPO, "world", "islands", island, "npcs.yaml");
+      if (!existsSync(npcs)) continue;
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      cpSync(npcs, file(`world/islands/${island}/npcs.yaml`));
+    }
+    expect(forgeErrors()).toEqual([]);
+    // A smith of a real island selling it.
+    const radiant = "    - { item: radiant_temper_stone, price: 600 }\n";
+    edit(
+      "data/npcs/volcan_smith.yaml",
+      radiant,
+      `${radiant}    - { item: warding_amber, price: 3000 }\n`,
+    );
+    expect(forgeErrors()).toEqual([
+      expect.stringMatching(
+        /volcan_smith\.yaml:.*"warding_amber" is the forge's rare protection: no NPC sells it/,
+      ),
+    ]);
+    // A stone that does not stack, a station people carry, an unknown stone, and a stone
+    // nothing gives.
+    edit(
+      "data/items/forge.yaml",
+      "  weight: 300\n  stackable: true\n  max_stack: 100\n",
+      "  weight: 300\n",
+    );
+    edit(
+      "data/items/decoration.yaml",
+      "  description: item.anvil.desc\n  pickupable: false\n",
+      "  description: item.anvil.desc\n",
+    );
+    edit(
+      "data/balance.yaml",
+      "stone: radiant_temper_stone, gold: 700",
+      "stone: no_such_stone, gold: 700",
+    );
+    edit("data/npcs/volcan_smith.yaml", radiant, "");
+    edit("data/npcs/pruebas_merchant.yaml", radiant, "");
+    edit(
+      "data/monsters/slagbound_warden.yaml",
+      "  - { item: radiant_temper_stone, chance: 0.3 } # the forge\n",
+      "",
+    );
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.startsWith("error") && m.includes(s));
+    expect(has(`the forge's "lesser_temper_stone" must be a stackable material`)).toBe(true);
+    expect(has(`the forge's station "anvil" needs pickupable: false`)).toBe(true);
+    expect(has(`unknown item "no_such_stone"`)).toBe(true);
+    expect(has(`nothing gives the forge's "radiant_temper_stone" in production`)).toBe(true);
   });
 
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
@@ -810,7 +900,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:118:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:117:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
@@ -908,8 +998,12 @@ describe("validator diagnostics", () => {
 
   it("wants a source for what NPCs buy, a buyer for gear and materials, and quest drops each_player (m4)", () => {
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
-    edit("data/monsters/wreck_looter.yaml", "  - { item: driftwood_club, chance: 0.06 }", "");
-    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_shortsword, price: 50 }\n", "");
+    // The armorer stops selling the belaying pin and the looters stop dropping it, but the
+    // armorer still buys it; the forged axe loses its buyer (its recipe still makes it).
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_axe, price: 150 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_axe, price: 50 }\n", "");
     edit("data/npcs/puerto_armorer.yaml", "    - { item: quartz_crystal, price: 13 }\n", "");
     edit(
       "data/monsters/coffer_smuggler.yaml",
@@ -919,15 +1013,91 @@ describe("validator diagnostics", () => {
     const errors = messages(root).filter((m) => m.startsWith("error"));
     expect(errors).toEqual([
       expect.stringMatching(
-        /puerto_armorer\.yaml:.*an NPC buys "driftwood_club" but nothing gives it/,
+        /puerto_armorer\.yaml:.*an NPC buys "belaying_pin" but nothing gives it/,
       ),
       expect.stringMatching(/misc\.yaml:.*material "quartz_crystal" can be had.*no NPC buys it/),
-      expect.stringMatching(
-        /weapons\.yaml:.*"forged_shortsword" \(weapon\) can be had.*no NPC buys it/,
-      ),
+      expect.stringMatching(/weapons\.yaml:.*"forged_axe" \(weapon\) can be had.*no NPC buys it/),
       expect.stringMatching(
         /coffer_smuggler\.yaml:.*quest item "smuggler_tally" drops as plain loot/,
       ),
+    ]);
+  });
+
+  it("refuses every source of a retired item and lets an NPC buy it (lote 11)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    // The armorer buys the retired driftwood club with no source: no error (above).
+    edit(
+      "data/monsters/wreck_looter.yaml",
+      "  - { item: belaying_pin, chance: 0.04 }",
+      "  - { item: driftwood_club, chance: 0.04 }",
+    );
+    edit(
+      "data/npcs/puerto_armorer.yaml",
+      "    - { item: rusty_cutlass, price: 30 }\n",
+      "    - { item: rusty_cutlass, price: 30 }\n    - { item: hide_vest, price: 45 }\n",
+    );
+    edit(
+      "data/recipes.yaml",
+      "  output: { item: forged_axe, count: 1 }",
+      "  output: { item: forged_shortsword, count: 1 }",
+    );
+    edit(
+      "data/npcs/harbor_master.yaml",
+      "- { give_item: iron_sword }",
+      "- { give_item: thornwood_blade }",
+    );
+    edit("data/quests/foreman_ore.yaml", "  - { item: pickaxe }", "  - { item: leather_jerkin }");
+    // The tutorial's reward is a source too (review of lote 11).
+    edit(
+      "data/tutorial.yaml",
+      "  - { gold: 20 }",
+      "  - { gold: 20 }\n  - { item: riveted_round_shield }",
+    );
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /wreck_looter\.yaml:.*"driftwood_club" is retired.*no monster drops it/,
+        ),
+        expect.stringMatching(/puerto_armorer\.yaml:.*"hide_vest" is retired.*no shop sells it/),
+        expect.stringMatching(/recipes\.yaml:.*"forged_shortsword" is retired.*no recipe makes it/),
+        expect.stringMatching(
+          /harbor_master\.yaml:.*"thornwood_blade" is retired.*no dialog gives it/,
+        ),
+        expect.stringMatching(
+          /foreman_ore\.yaml:.*"leather_jerkin" is retired.*no quest rewards it/,
+        ),
+        expect.stringMatching(
+          /tutorial\.yaml:.*"riveted_round_shield" is retired.*no tutorial rewards it/,
+        ),
+      ]),
+    );
+    expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(6);
+  });
+
+  it("counts the tutorial's reward as a source of what NPCs buy (review of lote 11)", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    expect(messages(root).filter((m) => m.includes('buys "belaying_pin"'))).toHaveLength(1);
+    edit("data/tutorial.yaml", "  - { gold: 20 }", "  - { gold: 20 }\n  - { item: belaying_pin }");
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+  });
+
+  it("wants a level on every weapon, armor and shield (lote 11)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/items/weapons.yaml",
+      "  requires: { level: 1 }\n  value: 30\n",
+      "  requires: { vocations: [guardian] }\n  value: 30\n",
+    );
+    edit(
+      "data/items/equipment.yaml",
+      "  shield: { defense: 9 }\n  requires: { level: 1 }\n",
+      "  shield: { defense: 9 }\n",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(/equipment\.yaml:.*shield "barrel_lid_shield" has no requires\.level/),
+      expect.stringMatching(/weapons\.yaml:.*weapon "rusty_cutlass" has no requires\.level/),
     ]);
   });
 

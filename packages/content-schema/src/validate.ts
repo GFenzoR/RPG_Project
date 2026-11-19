@@ -136,6 +136,7 @@ class Validator {
   private balance: SourceFile | undefined;
   private recipes: SourceFile | undefined;
   private spells: SourceFile | undefined;
+  private tutorial: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -160,6 +161,9 @@ class Validator {
     this.checkQuestItemSources();
     this.checkToolTargets();
     this.checkItemTrade();
+    this.checkRetiredItems();
+    this.checkEquipLevels();
+    this.checkForge();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -271,10 +275,14 @@ class Validator {
       if (schema === "recipes") this.recipes = src;
     }
 
+    const attributes = single("attributes.yaml", "attributes", false);
+    if (attributes) this.checkAttributes(attributes);
+
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
     if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
     const tutorial = single("tutorial.yaml", "tutorial", false);
+    this.tutorial = tutorial;
     if (tutorial) this.checkTutorial(tutorial, dataDir);
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
@@ -360,6 +368,29 @@ class Validator {
   }
 
   // ---- per-type rules --------------------------------------------------------
+
+  /**
+   * data/attributes.yaml (docs/06 "Atributo"): unique ids, bands from level 1 with growing
+   * levels and min <= max.
+   */
+  private checkAttributes(src: SourceFile): void {
+    this.checkUniqueIds(src);
+    for (const [i, attr] of asList(src.data).entries()) {
+      if (!isObj(attr)) continue;
+      let last = 0;
+      for (const [j, band] of asList(attr["bands"]).entries()) {
+        if (!isObj(band)) continue;
+        const level = Number(band["level"]);
+        if (j === 0 && level !== 1)
+          this.error(src, [i, "bands", j, "level"], "the first band is level 1");
+        if (j > 0 && level <= last)
+          this.error(src, [i, "bands", j, "level"], "band levels must grow");
+        last = level;
+        if (Number(band["min"]) > Number(band["max"]))
+          this.error(src, [i, "bands", j], "min is greater than max");
+      }
+    }
+  }
 
   /**
    * data/cosmetics.yaml (T5.7): unique ids (packs and cosmetics apart), each cosmetic only
@@ -482,6 +513,11 @@ class Validator {
     }
     if ("max_stack" in item && item["stackable"] !== true) {
       this.error(src, [...path, "max_stack"], "max_stack requires stackable: true");
+    }
+    // An equipable rolls one attribute of its own (docs/02 "Atributos de items"): it is an
+    // instance, never part of a pile.
+    if (item["stackable"] === true && ["weapon", "armor", "shield"].some((k) => k in item)) {
+      this.error(src, [...path, "stackable"], "an equipable (weapon, armor, shield) never stacks");
     }
     const portal = item["portal"];
     if (isObj(portal)) this.checkPortalItem(item, portal, src, [...path, "portal"]);
@@ -1110,11 +1146,100 @@ class Validator {
     }
   }
 
+  /** The forge's temper stones and protection (balance.yaml forge), when it is on. */
+  private forgeMaterials(): string[] {
+    const forge = isObj(this.balance?.data) ? this.balance.data["forge"] : undefined;
+    if (!isObj(forge) || forge["enabled"] !== true) return [];
+    const out: string[] = [];
+    if (typeof forge["protection"] === "string") out.push(forge["protection"]);
+    for (const b of asList(forge["bands"]))
+      if (isObj(b) && typeof b["stone"] === "string") out.push(b["stone"]);
+    return out;
+  }
+
+  /**
+   * The forge (docs/02 "Forja", same rules as content.Forge.CheckItems in Go): its station is
+   * an item nobody picks up; its stones and protection are stackable materials (counted and
+   * spent by units); the protection is rare, so no NPC of a production island sells it or
+   * gives it (checked with world/ only, where NPCs placed only on dev_only islands do not
+   * count: the sandbox merchant sells it); every band's stone and the protection have a way
+   * to be had in production (a shop or loot).
+   */
+  private checkForge(): void {
+    const src = this.balance;
+    const forge = isObj(src?.data) ? src.data["forge"] : undefined;
+    if (!src || !isObj(forge) || forge["enabled"] !== true) return;
+    const byId = new Map<string, Obj>();
+    for (const { item } of this.items) {
+      const id = idOf(item);
+      if (id !== undefined) byId.set(id, item);
+    }
+    const station = typeof forge["station"] === "string" ? byId.get(forge["station"]) : undefined;
+    if (station && station["pickupable"] !== false)
+      this.error(
+        src,
+        ["forge", "station"],
+        `the forge's station "${String(forge["station"])}" needs pickupable: false`,
+      );
+    const materials = (): { id: string; path: PathSegment[] }[] => {
+      const out: { id: string; path: PathSegment[] }[] = [];
+      if (typeof forge["protection"] === "string")
+        out.push({ id: forge["protection"], path: ["forge", "protection"] });
+      for (const [i, b] of asList(forge["bands"]).entries())
+        if (isObj(b) && typeof b["stone"] === "string")
+          out.push({ id: b["stone"], path: ["forge", "bands", i, "stone"] });
+      return out;
+    };
+    for (const { id, path } of materials()) {
+      const it = byId.get(id);
+      if (it && (it["kind"] !== "material" || it["stackable"] !== true))
+        this.error(src, path, `the forge's "${id}" must be a stackable material (spent by units)`);
+    }
+    const placed = this.npcPlacements();
+    const prodNpc = (id: string): boolean => !placed || (placed.get(id) ?? []).some((p) => !p.dev);
+    const sold = new Set<string>();
+    const protection = typeof forge["protection"] === "string" ? forge["protection"] : "";
+    for (const npcSrc of this.npcs) {
+      const npc = isObj(npcSrc.data) ? npcSrc.data : undefined;
+      const id = typeof npc?.["id"] === "string" ? npc["id"] : "";
+      if (!prodNpc(id)) continue;
+      const shop = npc?.["shop"];
+      for (const [i, o] of (isObj(shop) ? asList(shop["sells"]) : []).entries()) {
+        if (!isObj(o) || typeof o["item"] !== "string") continue;
+        sold.add(o["item"]);
+        if (placed && o["item"] === protection)
+          this.error(
+            npcSrc,
+            ["shop", "sells", i, "item"],
+            `"${protection}" is the forge's rare protection: no NPC sells it (only the boss and strong monsters drop it)`,
+          );
+      }
+      for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (placed && key === "give_item" && value === protection)
+          this.error(
+            npcSrc,
+            path,
+            `"${protection}" is the forge's rare protection: no NPC gives it`,
+          );
+    }
+    const dropped = new Set<string>();
+    for (const m of this.monsters)
+      for (const drop of isObj(m.data) ? asList(m.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") dropped.add(drop["item"]);
+    for (const { id, path } of materials())
+      if (byId.has(id) && !sold.has(id) && !dropped.has(id))
+        this.error(
+          src,
+          path,
+          `nothing gives the forge's "${id}" in production: a smith that sells it or a monster that drops it`,
+        );
+  }
+
   /**
    * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
    * that is not dev_only count (without it, tests, every NPC):
    * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
-   *   a shop, a dialog give_item, a quest reward or a conjuring spell);
+   *   a shop, a dialog give_item, a quest or tutorial reward or a conjuring spell);
    * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
    *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
    *   quest or dialog that takes it;
@@ -1146,6 +1271,7 @@ class Validator {
       const conj = isObj(effect) ? effect["conjure"] : undefined;
       if (isObj(conj) && typeof conj["item"] === "string") got.add(conj["item"]);
     }
+    for (const r of this.tutorialRewards()) got.add(r.item);
     const questItems = new Set<string>();
     for (const src of this.quests) {
       const q = isObj(src.data) ? src.data : undefined;
@@ -1175,12 +1301,18 @@ class Validator {
           used.add(value["item"]);
       }
     }
+    const retired = new Set(
+      this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
+    );
+    // The forge (balance.yaml forge, docs/02 "Forja") spends its stones and protection.
+    for (const id of this.forgeMaterials()) used.add(id);
     for (const [id, at] of bought)
-      if (this.index.ids.item.has(id) && !got.has(id))
+      // A retired item (lote 11) has no source on purpose: its buyer is for old copies.
+      if (this.index.ids.item.has(id) && !got.has(id) && !retired.has(id))
         this.error(
           at.src,
           at.path,
-          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest reward or a spell)`,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward or a spell)`,
         );
     for (const { item, src, path } of this.items) {
       const id = item["id"];
@@ -1198,7 +1330,7 @@ class Validator {
         this.error(
           src,
           [...path, "value"],
-          `material "${id}" can be had and has a value, but no NPC buys it and no recipe or quest takes it`,
+          `material "${id}" can be had and has a value, but no NPC buys it and no recipe, quest or the forge takes it`,
         );
     }
     const untradeable = new Set(
@@ -1215,6 +1347,102 @@ class Validator {
             `quest item "${drop["item"]}" drops as plain loot: make it each_player (only players whose quest needs it get one), or it keeps dropping as junk after the quest`,
           );
       }
+  }
+
+  /**
+   * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
+   * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
+   * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
+   * no quest or tutorial rewards it, no spell conjures it and no character starts with it.
+   * An NPC may still buy it (checkItemTrade lets that buyer be).
+   */
+  private checkRetiredItems(): void {
+    const retired = new Set(
+      this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
+    );
+    if (retired.size === 0) return;
+    const refuse = (src: SourceFile, path: PathSegment[], id: unknown, how: string): void => {
+      if (typeof id === "string" && retired.has(id))
+        this.error(src, path, `"${id}" is retired (retired: true): ${how}`);
+    };
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries())
+        if (isObj(drop)) refuse(src, ["loot", i, "item"], drop["item"], "no monster drops it");
+    for (const { item, src, path } of this.items) {
+      const res = item["resource"];
+      for (const [i, d] of (isObj(res) ? asList(res["drops"]) : []).entries())
+        if (isObj(d))
+          refuse(src, [...path, "resource", "drops", i, "item"], d["item"], "no resource drops it");
+    }
+    if (this.recipes)
+      for (const [i, r] of asList(this.recipes.data).entries()) {
+        const out = isObj(r) ? r["output"] : undefined;
+        if (isObj(out))
+          refuse(this.recipes, [i, "output", "item"], out["item"], "no recipe makes it");
+      }
+    if (this.spells)
+      for (const [i, sp] of asList(this.spells.data).entries()) {
+        const effect = isObj(sp) ? sp["effect"] : undefined;
+        const conj = isObj(effect) ? effect["conjure"] : undefined;
+        if (isObj(conj))
+          refuse(
+            this.spells,
+            [i, "effect", "conjure", "item"],
+            conj["item"],
+            "no spell conjures it",
+          );
+      }
+    for (const src of this.quests)
+      for (const [i, r] of (isObj(src.data) ? asList(src.data["rewards"]) : []).entries())
+        if (isObj(r)) refuse(src, ["rewards", i, "item"], r["item"], "no quest rewards it");
+    if (this.tutorial)
+      for (const r of this.tutorialRewards())
+        refuse(this.tutorial, ["rewards", r.index, "item"], r.item, "no tutorial rewards it");
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const shop = npc?.["shop"];
+      for (const [i, o] of (isObj(shop) ? asList(shop["sells"]) : []).entries())
+        if (isObj(o)) refuse(src, ["shop", "sells", i, "item"], o["item"], "no shop sells it");
+      for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (key === "give_item") refuse(src, path, value, "no dialog gives it");
+    }
+    const balance = this.balance;
+    const inv = balance && isObj(balance.data) ? balance.data["inventory"] : undefined;
+    if (balance && isObj(inv))
+      refuse(
+        balance,
+        ["inventory", "start_container"],
+        inv["start_container"],
+        "no character starts with it",
+      );
+  }
+
+  /** The items data/tutorial.yaml gives when its last step completes (rewards: { item }). */
+  private tutorialRewards(): { item: string; index: number }[] {
+    const t = this.tutorial && isObj(this.tutorial.data) ? this.tutorial.data : undefined;
+    const out: { item: string; index: number }[] = [];
+    for (const [index, r] of asList(t?.["rewards"]).entries())
+      if (isObj(r) && typeof r["item"] === "string") out.push({ item: r["item"], index });
+    return out;
+  }
+
+  /**
+   * Lote 11 (compact catalog, docs/02 "Catálogo de equipo"): every weapon, armor piece and
+   * shield states the level it asks for (requires.level), the band it belongs to; the item
+   * attributes roll by it.
+   */
+  private checkEquipLevels(): void {
+    for (const { item, src, path } of this.items) {
+      const kind = item["kind"];
+      if (kind !== "weapon" && kind !== "armor" && kind !== "shield") continue;
+      const req = item["requires"];
+      if (isObj(req) && typeof req["level"] === "number") continue;
+      this.error(
+        src,
+        [...path, "requires"],
+        `${String(kind)} "${String(item["id"])}" has no requires.level: every weapon, armor and shield states its level (docs/02 "Catálogo de equipo")`,
+      );
+    }
   }
 
   /**
@@ -1434,6 +1662,7 @@ class Validator {
     this.checkCodeKeys(catalogs);
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
     const dataPrefixes = [
+      "attribute.",
       "item.",
       "monster.",
       "npc.",

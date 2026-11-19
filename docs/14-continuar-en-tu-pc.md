@@ -98,6 +98,146 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
+  "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
+  tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa
+  ningún ícono de Dungeon Crawl para el equipo. Queda:
+  - **Que el dueño los mire:** las hojas de revisión (`spritegen sheet`:
+    `build/spritegen/icons.slots.png`, en el slot a 2x y 1x y sobre el pasto, e
+    `icons.detail.png` a 4x) y las escenas `inventory`, `inventoryfloat` y `shop` de
+    `make ui-preview`. Esto reabre SRC-4 de docs/17 ("se quedan los íconos de Dungeon
+    Crawl") por su pedido del 2026-11-18 (un sprite propio por pieza). Los que menos
+    convencieron en la revisión: el yelmo de acero de marea (la caracola se lee como un
+    copete), la culata de las ballestas (gruesa) y el arco de tejo (se parece al corto).
+  - **Siguen de Dungeon Crawl** la comida, los materiales, las pociones, los items de
+    quest, el hacha de leñador, el martillo de herrero, la runa y las escaleras: el mismo
+    motor puede dibujarlos (una clase `icon` ya existe), pero no eran parte del pedido.
+  - **El E2E no se corrió en la rama** (lo corre el lote al final): la tienda de la Isla de
+    Pruebas (`95-sandbox-shop-scrolled`, que vende armas, escudos y ropa del catálogo) y la
+    figura del inventario en las capturas del juego (`04-world`, `09a-item-menu`,
+    `09b-item-tooltip`) deberían mostrar los íconos nuevos.
+  - **Un ícono es una sola imagen:** sin brillo animado (una runa que late, la brasa del
+    acero de ascua). Con `loop` del motor se podría, pero el cliente anima los items del
+    mapa, no los del inventario.
+  - **La figura del personaje no muestra el equipo:** el sprite del jugador es el atuendo
+    de LPC; ponerle el arma o el yelmo que lleva es otro pedido (capas de LPC por pieza).
+- **Catálogo compacto de equipo (hecho, rama `feat/item-catalog`, lote 11; docs/02
+  "Catálogo de equipo"):** 78 piezas en seis bandas (1, 5, 10/15, 30, 50 y 75), una por
+  línea y banda, con la fórmula que comprueba `catalog.test.ts`; amuletos y anillos nuevos;
+  seis items retirados (`retired: true`, docs/06). Queda:
+  - **Bandas 5 y 6 sin fuente:** ninguna tienda, botín ni receta las da hasta que llegue su
+    isla. Esa isla agrega las fuentes, devuelve las recetas de la cota de escamas y la hoja
+    de colmillo de dragoncillo (herrería 20 y 22) y sube `OBTAINABLE_BANDS` en el test.
+  - **Sprites:** resuelto en `feat/item-icons` (abajo): cada pieza tiene su ícono.
+  - **Las joyas solo dan armadura** (amuleto 1-2, anillo 0-1): su gracia es el atributo al
+    azar de `feat/item-attributes`. Los anillos de las bandas 3 y 4 son botín raro
+    (0,5-1 %) y hasta que entre esa rama no hacen nada (armadura 0; la tarjeta ya no
+    muestra una armadura 0): conviene mergearla antes que esta o junto con ella.
+  - **Para el dueño, precios y niveles que cambiaron:** el escudo de tablones pide nivel 5 y
+    vale 110 (antes nivel 1 y 25); la tapa de barril, 25 (antes 10); el sable de abordaje y
+    el hacha barbada, 600 (antes 400); las varas y varitas de la banda 3 bajaron de 1080 a
+    750 en el Bosque; el capítulo 1 da 150 monedas a quien no recibe la espada (antes
+    120). La cota de escamas y la hoja de colmillo de dragoncillo piden nivel 50
+    (antes 45) y son más fuertes, y el herrero ya no las compra (antes pagaba 1200 y 1300)
+    hasta que llegue su isla. El torso pesado pide guardián o montaraz (cambia la regla m6:
+    antes ningún cuero estaba restringido; la clase media del montaraz se fundió con la
+    pesada). Los requisitos se miran al equipar, no al entrar: quien ya tenía puesta una
+    pieza que ahora pide más (un mago con el torso pesado, la cota o la hoja antes del 50,
+    el escudo de tablones antes del 5, el cuero de ciervo antes del 15) la sigue usando
+    hasta que se la saca.
+  - **Pesos:** varias piezas pesan más que antes (el hacha de mano 4000 g, la cabilla 3800,
+    el cuero de ciervo): un personaje cargado puede quedar sobre su capacidad. No lo deja
+    atascado; solo no puede levantar más hasta soltar algo.
+  - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
+    forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.
+  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 11,0 % de la vida (el piso
+    es 10 %; con los atributos del kit su golpe cuerpo a cuerpo subió de 52 a 60). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
+    la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
+    hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
+    "Balance" del catálogo).
+- **Atributos de items (hecho, rama `feat/item-attributes`, lote 11; docs/02 "Atributos de
+  items"):** cada equipable tira un atributo de `data/attributes.yaml` al crearse y todos
+  los caminos lo conservan (mover, intercambio, muerte, casa, mercado, buzón, log de
+  economía); los atributos puestos entran en las fórmulas. Queda:
+  - **Catálogo:** el catálogo compacto con `requires.level` en toda armadura es
+    `feat/item-catalog` (hasta entonces casi toda armadura tira en la banda de nivel 1).
+    Al juntarlas, correr de nuevo `go test ./internal/sim` y `content/attributes_test.go`:
+    las bandas y pesos de `data/attributes.yaml` se afinaron con el catálogo de hoy.
+  - **Balance:** para que las metas de docs/02 sigan con los atributos, el bestiario de
+    Puerto pega 1-3 puntos más y dos monstruos del Bosque dan algo menos de experiencia.
+    Las simulaciones visten un kit con atributos tirados por pelea; si el dueño quiere
+    atributos más fuertes, hay que volver a afinar monstruos.
+  - **Integración con Postgres sin correr en la rama:** `store/itemmods_integration_test.go`
+    (inventario anidado, oferta, buzón, casa y log con `mods`) corre en el `make
+    test-integration` del final del lote, con la migración 00019.
+  - **Vender a un NPC un equipable en particular:** el NPC se lleva la tirada más floja de
+    los contenedores (`spareFirst`, docs/02) y paga igual cualquier atributo. Elegir cuál
+    necesitaría un campo `mods` en `ShopSell` y un selector en la tienda, como el mercado.
+  - **Collares y anillos:** el catálogo compacto ya los trae; el pool tiene sus atributos (`neck`, `ring`).
+  - **Escudo:** no hay atributo de skill de escudo porque la skill todavía no entra en
+    ninguna fórmula.
+  - **El mensaje de "Mirar"** (`look.*`) sigue sin el atributo: lo muestra la ficha.
+- **Forja (hecho, rama `feat/item-forge`, lote 11; docs/02 "Forja"):** refinar +1..+10 en
+  el yunque (pestaña Forja), seguro hasta +4, después rompe la pieza o, con el ámbar de
+  resguardo, la baja un nivel; piedras de temple y oro por intento; el nivel suma ataque,
+  armadura, defensa o una parte del atributo de una joya y viaja con la instancia por todos
+  los caminos. Queda:
+  - **Rebasada sobre `feat/item-attributes`** (con el catálogo compacto y los íconos, después
+    de la revisión): `make gen-ids` dio a las piedras y al ámbar los ids 306–309 (eran
+    271–274, los del catálogo); los conflictos de loot (`hollow_crawler`,
+    `obsidian_delver`, `slag_golem`) y de tiendas (`puerto_armorer`, `volcan_smith`)
+    suman las dos líneas. `go test ./internal/sim`, `TestForgeExpectedCosts` y
+    `content/attributes_test.go` siguen verdes; con el catálogo hay collares y anillos de
+    verdad, así que el camino de las joyas (`JewelGain`, con el tope del atributo) ya se
+    usa, y las armaduras con `requires.level` caen en su banda de la forja.
+    `TestBrasalNPCs` saca cada compra del herrero (la banda 4 y las tres piedras son más
+    líneas que una mochila).
+  - **Los materiales de la forja** se dibujaron con la clase `object` (32x32, abajo a la
+    derecha); `feat/item-icons` dibuja el catálogo con la clase de ícono del motor:
+    pasarlos a esa clase.
+  - **La pieza se elige de una lista** (las puestas y las de los contenedores abiertos), no
+    arrastrándola a la ventana, y el inventario no muestra "+N" sobre el ícono (lo dicen la
+    ficha, el tooltip, "Mirar" y la lista de la forja). Desde la revisión final del lote 11
+    la lista ya no muestra un contenedor abierto sin padre que no es del tipo puesto (un
+    cadáver, un cofre, una bolsa del suelo: `maybeCarried`); todavía muestra una bolsa
+    dentro de un cofre o de un cadáver (el servidor la rechaza con `refine.not_carried`).
+    Separarlo del todo pide que `ContainerOpen`/`ContainerUpdate` digan si el contenedor va
+    encima.
+  - **Lo que se lleva se cuenta al usar el yunque y tras cada intento** (`StationOpen`, como
+    las recetas): piedras o monedas juntadas con la ventana abierta no se ven hasta volver
+    a usarlo. Arreglarlo pide que el servidor recuerde la estación abierta y la reenvíe al
+    cambiar el inventario (para la forja y las recetas).
+  - **Confirmar con el dueño:** el ámbar se gasta en cada intento en que se usa, también
+    cuando sale bien (un seguro que se paga; docs/02 y los textos de la ventana lo dicen).
+    Su pedido admite la otra lectura (gastarlo solo al fallar).
+  - **Los primeros niveles de una pieza de banda baja pueden no sumar** (0,2 de armadura por
+    nivel: +4 da 0): es la tabla de `balance.yaml`; si el dueño lo prefiere, subir esos
+    valores o mostrar el próximo nivel que sí suma. Lo mismo pasa con las **joyas de atributo
+    chico** (`JewelGain` redondea hacia abajo): un anillo de +1 de regeneración no gana nada
+    hasta +10 y uno de +3 de protección recién a +4, aunque cada intento desde +5 cuesta y
+    arriesga la pieza (la ventana muestra 0 → 0). Si el dueño quiere, un mínimo de 1 por
+    nivel desde cierto punto o un aviso en la ventana.
+  - **Vender a un NPC una pieza refinada (resuelto en la revisión final del lote 11):** un
+    NPC, un `take_item`/`has_item` de diálogo y una receta ya no cuentan ni toman piezas
+    refinadas (`spareable`); salen por el mercado, el intercambio o el suelo. Si el dueño
+    prefiere poder vendérselas a un NPC, hace falta el `mods` en `ShopSell` y una
+    confirmación en la tienda.
+  - **Mercado con muchas piezas (revisión final del lote 11):** las ventas de un equipable
+    listan, después de las `list_size` más baratas, la más barata de cada clase de pieza
+    (atributo y refinado). Si el dueño quiere más (ver todas las de una clase, filtrar por
+    valor mínimo), hace falta un filtro en `MarketBrowse` o paginar.
+  - **El precio de referencia mezcla piezas refinadas y comunes** (revisión final del lote
+    11, menor, sin cambiar): las ventas de piezas refinadas votan como las comunes. La
+    mediana por cuenta y día ya amortigua unas pocas ventas caras; sacarlas del voto
+    también después de reiniciar pide guardar el refinado en `market_history` (migración
+    nueva) y filtrarlo en `LoadMarketSales`.
+  - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Brasal y la
+    suelta el custodio; las islas nuevas (lotes siguientes) traen sus fuentes.
+  - **+10 es una leyenda a propósito** (unos 1 900 ámbares de promedio con ámbar en cada
+    intento arriesgado): si el dueño lo quiere más alcanzable, subir las chances altas o
+    `smithing_bonus` en `balance.yaml` y ajustar las metas de `TestForgeExpectedCosts`.
+  - **E2E sin correr en la rama** (lo corre el final del lote): ningún spec usa la forja
+    todavía; la vista previa (`make ui-preview ONLY=forge|forgerisk|forgeresult`) la muestra.
 - **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
   `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
   fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por

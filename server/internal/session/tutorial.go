@@ -189,8 +189,7 @@ func (w *World) tutorialReward(p *Player, r content.TutorialReward) {
 		return
 	}
 	def := w.cfg.Items[r.Item]
-	w.giveItem(p, def, r.N())
-	w.econItem(p, EconTutorial, EconTutorial, def, r.N())
+	w.econMade(p, EconTutorial, EconTutorial, 0, def, r.N(), w.giveItem(p, def, r.N()))
 	p.questDirty = true
 }
 

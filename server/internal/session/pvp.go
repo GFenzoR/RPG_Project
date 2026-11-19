@@ -370,10 +370,10 @@ func (w *World) playerDefense(v *Player) combat.PlayerTarget {
 }
 
 // handsDefense is the defense of p's hands against a physical hit: the shield's plus the
-// weapon's (content audit m3: a weapon's defense used to show and do nothing). Only the
-// shield trains the shield skill.
+// weapon's (content audit m3: a weapon's defense used to show and do nothing) plus the
+// defense attributes of what p wears. Only the shield trains the shield skill.
 func handsDefense(p *Player) int {
-	d := 0
+	d := p.gear.defend // the defense attributes of what p wears (attributes.go)
 	if p.shield != nil && p.shield.Shield != nil {
 		d += p.shield.Shield.Defense
 	}
@@ -385,15 +385,19 @@ func handsDefense(p *Player) int {
 
 // hurtPlayer applies a hit of player a on player v (already rolled, before
 // balance pvp.damage_pct): the aggression is judged and recorded, then v takes the
-// scaled damage. direct is false for a condition's hit (it does not end a's
-// invisibility). The caller checked pvpPlace.
-func (w *World) hurtPlayer(ctx *game.TickContext, a, v *Player, dmg int, element string, direct bool) {
+// scaled damage (less v's protection of element). direct is false for a condition's hit
+// (it does not end a's invisibility). The caller checked pvpPlace. It returns the damage
+// v took.
+func (w *World) hurtPlayer(ctx *game.TickContext, a, v *Player, dmg int, element string, direct bool) int {
 	w.aggress(ctx, a, v)
 	if direct {
 		w.reveal(ctx, a)
 	}
 	w.markFight(ctx, a)
-	w.damagePlayerBy(ctx, v, dmg*w.pvp.DamagePct/100, element, a)
+	dmg = dmg * w.pvp.DamagePct / 100
+	dealt := min(protected(v, element, dmg), max(v.health, 0))
+	w.damagePlayerBy(ctx, v, dmg, element, a)
+	return dealt
 }
 
 // aggress judges and records an attack of a on v: v remembers it (self-defense and

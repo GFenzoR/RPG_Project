@@ -19,6 +19,7 @@ loot:
   - { item: wyrm_scale, chance: 0.2 }
   - { item: copper_coin, chance: 0.9, count: [30, 110] }
   - { item: embersteel_sabre, chance: 0.02 }
+  - { item: warding_amber, chance: 0.005 } # rare: the forge's protection
 tags: [dragon, crater, volcan]
 notes: Young drakes nesting on the crater rim, levels 48-58. The top of the island; its breath is a 4-tile line of fire that can leave you burning, so step off its line.
 corpse: remains_scales

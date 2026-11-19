@@ -29,6 +29,9 @@ type Balance struct {
 	// enabled: false turns each off.
 	Market Market `yaml:"market"`
 	Trade  Trade  `yaml:"trade"`
+	// Forge is the refine of equipables at an anvil (docs/02 "Forja"); absent or enabled:
+	// false turns it off.
+	Forge Forge `yaml:"forge"`
 	// Houses are the player houses (T5.4); absent or enabled: false turns them off.
 	Houses  Houses  `yaml:"houses"`
 	Travel  Travel  `yaml:"travel"`
@@ -775,6 +778,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Trade.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Forge.check(); err != nil {
 		return Balance{}, err
 	}
 	if err := b.Houses.check(); err != nil {

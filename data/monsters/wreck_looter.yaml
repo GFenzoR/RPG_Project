@@ -11,15 +11,16 @@ behavior:
   flee_at_health_pct: 10
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 22, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 25, interval_ms: 2000 }
   - { type: distance, min: 0, max: 14, interval_ms: 2000, chance: 0.3, range: 4 }
 loot:
   - { item: copper_coin, chance: 0.8, count: [5, 25] }
   - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
   - { item: rusty_cutlass, chance: 0.05 }
-  - { item: driftwood_club, chance: 0.06 } # content audit m4: its only source
+  - { item: belaying_pin, chance: 0.04 } # lote 11: the retired driftwood club's place
   - { item: sailcloth_cap, chance: 0.04 }
   - { item: tarnished_locket, chance: 0.08 }
+  - { item: lesser_temper_stone, chance: 0.06 } # the forge (docs/02 "Forja")
 tags: [human, shore, puerto]
 notes: Scavengers picking over the Chapter 1 wreck. Throws bottles (physical) at range.
 corpse: remains_humanoid

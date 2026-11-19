@@ -131,6 +131,11 @@ describe("itemCard", () => {
     const helm: ItemDef = { ...base, kind: "armor", armor: { slot: "head", armor: 2 } };
     expect(itemCard(helm, 1, 1).type).toEqual(["client.card.kind.armor", "client.card.slot.head"]);
     expect(itemCard(helm, 1, 1).stats).toEqual([{ id: "armor", value: 2 }]);
+    // A ring of bands 3 and 4 (lote 11) has armor 0: no "Armor 0" line, like a weapon's
+    // defense 0; its type line still says where it goes.
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    expect(itemCard(ring, 1, 1).stats).toEqual([]);
+    expect(itemCard(ring, 1, 1).type).toEqual(["client.card.kind.armor", "client.card.slot.ring"]);
     const shield: ItemDef = { ...base, kind: "shield", shield: { defense: 12 } };
     expect(itemCard(shield, 1, 1).stats).toEqual([{ id: "defense", value: 12 }]);
     const bag: ItemDef = { ...base, kind: "container", slots: 20, weight: 1800 };
@@ -179,9 +184,61 @@ describe("itemCard", () => {
 
   it("counts the lines it takes (the menu and the tooltip place it before drawing)", () => {
     const card = itemCard(sword, 7, 1, { level: 3 });
-    // name, type, 3 stats in 2 rows, 1 requirement, 3 lines of description.
-    expect(cardLines(card, true)).toBe(1 + 1 + 2 + 1 + 3);
-    expect(cardLines(card, false)).toBe(7);
+    // name, type, 3 stats in 2 rows, the attribute it rolls, 1 requirement, 3 lines of
+    // description.
+    expect(cardLines(card, true)).toBe(1 + 1 + 2 + 1 + 1 + 3);
+    expect(cardLines(card, false)).toBe(8);
+  });
+});
+
+// docs/02 "Atributos de items": an instance's attribute is a line of its own.
+describe("itemCard's attribute", () => {
+  const attributes = { attack: { text: "attribute.attack" }, armor: { text: "attribute.armor" } };
+  it("an instance with an attribute: its text and value", () => {
+    const card = itemCard(
+      sword,
+      7,
+      1,
+      {},
+      { attribute: "attack", value: 3, refine: 0 },
+      attributes,
+    );
+    expect(card.attribute).toEqual({ text: "attribute.attack", value: 3 });
+  });
+  it("an equipable without one (a shop's) says it rolls one", () => {
+    expect(itemCard(sword, 7, 1).attribute).toEqual({ random: true });
+    const tunic: ItemDef = { ...base, kind: "armor", armor: { slot: "body", armor: 2 } };
+    expect(itemCard(tunic, 8, 1, {}, undefined, attributes).attribute).toEqual({ random: true });
+  });
+  it("in the market (any instance) it says each piece has its own, not that it rolls", () => {
+    expect(itemCard(sword, 7, 1, {}, undefined, attributes, true).attribute).toEqual({ any: true });
+    // An instance shown there is still that instance.
+    const own = itemCard(
+      sword,
+      7,
+      1,
+      {},
+      { attribute: "attack", value: 3, refine: 0 },
+      attributes,
+      true,
+    );
+    expect(own.attribute).toEqual({ text: "attribute.attack", value: 3 });
+  });
+  it("an attribute retired from the pool says so (without the pool, nothing)", () => {
+    const gone = { attribute: "gone", value: 2, refine: 0 };
+    expect(itemCard(sword, 7, 1, {}, gone, attributes).attribute).toEqual({ retired: true });
+    expect(itemCard(sword, 7, 1, {}, gone).attribute).toBeUndefined();
+  });
+  it("never on a stack, ammo, a container or a consumable", () => {
+    const stack: ItemDef = { ...base, kind: "material", stackable: true };
+    const arrows: ItemDef = {
+      ...base,
+      kind: "ammo",
+      stackable: true,
+      ammo: { type: "arrow", attack: 9 },
+    };
+    const bag: ItemDef = { ...base, kind: "container", slots: 8 };
+    for (const d of [stack, arrows, bag]) expect(itemCard(d, 9, 3).attribute).toBeUndefined();
   });
 });
 
@@ -205,5 +262,63 @@ describe("shopCategory and equipSlot", () => {
     expect(equipSlot({ ...base, armor: { slot: "feet", armor: 1 } })).toBe(EquipmentSlot.FEET);
     expect(equipSlot({ ...base, kind: "material" })).toBeUndefined();
     expect(equipSlot(undefined)).toBeUndefined();
+  });
+});
+
+describe('a refined instance (the forge, docs/02 "Forja")', () => {
+  const forge = {
+    station: 95,
+    safeLevel: 4,
+    protection: 309,
+    smithingBonus: { skill: "smithing", perLevels: 6, max: 5 },
+    jewelryPct: 10,
+    levels: [{ chance: 100, stones: 1 }],
+    bands: [
+      { level: 1, stone: 306, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
+      { level: 5, stone: 306, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
+    ],
+  };
+
+  it("says its level and what it adds; a plain one says nothing", () => {
+    const mods = { attribute: "attack", value: 2, refine: 7 };
+    expect(itemCard(sword, 20, 1, {}, mods, undefined, false, forge).refine).toEqual({
+      level: 7,
+      kind: "attack",
+      gain: 4,
+    });
+    // Without the forge's rules, the level alone.
+    expect(itemCard(sword, 20, 1, {}, mods).refine).toEqual({ level: 7, kind: "attack", gain: 0 });
+    expect(
+      itemCard(sword, 20, 1, {}, { ...mods, refine: 0 }, undefined, false, forge).refine,
+    ).toBeUndefined();
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    expect(
+      itemCard(
+        ring,
+        21,
+        1,
+        {},
+        { attribute: "max_health", value: 20, refine: 5 },
+        undefined,
+        false,
+        forge,
+      ).refine,
+    ).toEqual({ level: 5, kind: "jewel", gain: 10 });
+  });
+
+  it("a jewel's share stops at its attribute's cap", () => {
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    const attributes = {
+      fire_protection: { text: "attribute.fire_protection", cap: 12 },
+      max_health: { text: "attribute.max_health" },
+    };
+    const card = (attribute: string, value: number, refine: number) =>
+      itemCard(ring, 21, 1, {}, { attribute, value, refine }, attributes, false, forge).refine;
+    // 10 at +5 adds 5, but the cap of 12 leaves room for 2.
+    expect(card("fire_protection", 10, 5)).toEqual({ level: 5, kind: "jewel", gain: 2 });
+    expect(card("fire_protection", 12, 5)).toEqual({ level: 5, kind: "jewel", gain: 0 });
+    expect(card("fire_protection", 4, 5)).toEqual({ level: 5, kind: "jewel", gain: 2 });
+    // No cap: the whole share.
+    expect(card("max_health", 20, 5)).toEqual({ level: 5, kind: "jewel", gain: 10 });
   });
 });

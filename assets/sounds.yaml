@@ -79,6 +79,8 @@ events:
   effect.gather.woodcutting: woodcutting
   effect.gather.fishing: fishing
   effect.gather_miss: miss
+  effect.refine: smithing
+  effect.shatter: craft_fail
   effect.element.physical: hit
   effect.element.fire: spell_fire
   effect.element.ice: spell_ice

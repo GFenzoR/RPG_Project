@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"time"
@@ -88,12 +89,65 @@ type Condition struct {
 }
 
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the
-// equipment slot of a top-level item and the index inside its container otherwise.
+// equipment slot of a top-level item and the index inside its container otherwise. Mods
+// is the instance's own data (inventory_items.attributes; nil: a plain item).
 type InventoryItem struct {
 	ItemID int             `json:"item_id"`
 	Count  int             `json:"count"`
 	Slot   int             `json:"slot,omitempty"`
+	Mods   *ItemMods       `json:"mods,omitempty"`
 	Items  []InventoryItem `json:"items,omitempty"`
+}
+
+// ItemMods is an item instance's own data (docs/02 "Atributos de items", docs/05
+// ItemMods): its attribute (an id of data/attributes.yaml) with its value, and its refine
+// level. Saved as a JSON object in inventory_items.attributes and market_offers.attributes
+// ('{}' for a plain item, migration 00019) and as "mods" inside a saved instance
+// (market_mail_items.item, house_items.item).
+type ItemMods struct {
+	Attribute string `json:"attribute,omitempty"`
+	Value     int    `json:"value,omitempty"`
+	Refine    int    `json:"refine,omitempty"`
+}
+
+// modsJSON is m as its column value: '{}' for nil or a zero m.
+func modsJSON(m *ItemMods) []byte {
+	if m == nil || *m == (ItemMods{}) {
+		return []byte("{}")
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return []byte("{}") // unreachable: three plain fields
+	}
+	return raw
+}
+
+// readMods reads the attributes column of row id of table (modsOf). A value that does
+// not decode (only a hand edit of the database writes one) must not keep a character
+// from playing nor the market from loading: it is logged and read as a plain item, so an
+// equipable rolls a new attribute when it loads and is saved with it.
+func readMods(raw []byte, table string, id int64) *ItemMods {
+	m, err := modsOf(raw)
+	if err != nil {
+		slog.Error("store: unreadable item attributes read as none", "table", table, "id", id, "err", err)
+		return nil
+	}
+	return m
+}
+
+// modsOf reads a column written by modsJSON (nil: a plain item).
+func modsOf(raw []byte) (*ItemMods, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var m ItemMods
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("item attributes: %w", err)
+	}
+	if m == (ItemMods{}) {
+		return nil, nil
+	}
+	return &m, nil
 }
 
 // Skill is one row of character_skills.
@@ -175,6 +229,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("character inventory: %w", err)
 	}
+	tree := inventoryTree(inv)
 	qs, err := s.q.GetCharacterQuestState(ctx, id)
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("character quest state: %w", err)
@@ -211,7 +266,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 		PvP:        pvp,
 		Conditions: conds,
 		Storage:    storage,
-		Inventory:  inventoryTree(inv),
+		Inventory:  tree,
 		Skills:     skills,
 		ID:         row.ID,
 		AccountID:  row.AccountID,
@@ -318,7 +373,7 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgtype.Int8, items []InventoryItem) error {
 	for _, it := range items {
 		id, err := q.InsertInventoryItem(ctx, db.InsertInventoryItemParams{CharacterID: charID, ContainerID: container,
-			Slot: int16(it.Slot), ItemID: int32(it.ItemID), Count: int32(it.Count)})
+			Slot: int16(it.Slot), ItemID: int32(it.ItemID), Count: int32(it.Count), Attributes: modsJSON(it.Mods)})
 		if err != nil {
 			return err
 		}
@@ -330,8 +385,12 @@ func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgt
 }
 
 // inventoryTree rebuilds the item tree from inventory_items rows (top level first,
-// then by slot). Rows whose container is missing are dropped.
+// then by slot), with each row's attributes. Rows whose container is missing are dropped.
 func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
+	mods := make(map[int64]*ItemMods, len(rows))
+	for _, r := range rows {
+		mods[r.ID] = readMods(r.Attributes, "inventory_items", r.ID)
+	}
 	children := map[int64][]db.GetCharacterInventoryRow{}
 	var top []db.GetCharacterInventoryRow
 	for _, r := range rows {
@@ -348,7 +407,8 @@ func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
 		}
 		out := make([]InventoryItem, len(rs))
 		for i, r := range rs {
-			out[i] = InventoryItem{ItemID: int(r.ItemID), Count: int(r.Count), Slot: int(r.Slot), Items: build(children[r.ID], depth+1)}
+			out[i] = InventoryItem{ItemID: int(r.ItemID), Count: int(r.Count), Slot: int(r.Slot), Mods: mods[r.ID],
+				Items: build(children[r.ID], depth+1)}
 		}
 		return out
 	}

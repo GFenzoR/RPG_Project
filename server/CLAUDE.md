@@ -232,6 +232,48 @@ server/
   aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
 
+- **Atributos de items (`session/attributes.go`, `content/attributes.go`, docs/02
+  "Atributos de items"):** cada instancia lleva `Item.mods` (atributo, valor, refinado). Todo
+  camino que **crea** un equipable lo hace con `w.created` o `giveItem` (tira el atributo
+  con `World.rng`, el `Config.Rand` del loop; nunca `newItem` para algo que la gente
+  lleva); uno que lo **recrea** desde lo guardado o desde una oferta usa `w.instance(def,
+  count, mods)` o `giveMods` (conserva los `mods`; uno sin atributo tira el suyo). Un camino
+  que **mueve** una instancia la mueve entera (nunca la copia) y, si la registra en la
+  economía, con `econInstance` / `econMade` / `econTaken` (una fila por instancia con sus
+  `mods`). Uno que se **lleva** un equipable sin que el jugador elija cuál (NPC, `take_item`,
+  receta) cuenta con `countItem` y pasa por `takeItem`, que ordena con `spareFirst` (la
+  tirada más floja de los contenedores primero, lo puesto al final); los dos usan
+  `spareable`, que nunca toma una pieza refinada (sale solo por el selector del mercado, el
+  intercambio o el suelo). Los `mods` que vienen de la base pasan por `app.sessionMods`,
+  que acota el refinado a `0..content.MaxRefineLevel` y el valor a
+  `0..content.MaxAttributeValue`. En el listado del mercado, las ventas de un equipable
+  suman la más barata de cada clase de pieza (atributo y refinado, `listing`). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
+  guarda (`store.ItemMods`). Una fórmula nueva que deba sumar un atributo puesto lee
+  `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`, solo si cambiaron las
+  instancias puestas con atributo, `Player.gearFrom`: un camino que cambie los `mods` de una
+  pieza puesta sin moverla, como la forja, limpia `gearFrom` y llama a `equipmentChanged`; una
+  pieza ofrecida en un intercambio cuyos `mods` cambian sale sola de la oferta, `checkTrade`); un efecto nuevo necesita su
+  `content.Effect*`, su caso en `wornGear` y en el esquema `attributes.schema.json`.
+
+- **Forja (`session/refine.go`, `content/forge.go`, `balance.yaml forge`, docs/02 "Forja"):**
+  `Refine` hace todos los chequeos antes de tocar nada (yunque a 1 casilla, la pieza del
+  jugador en un slot o un contenedor abierto con todos los `mods` que vio el cliente, no ofrecida en
+  el intercambio, piedras, ámbar, oro y su vuelto, el ritmo de los oficios `nextGather`),
+  después gasta todo junto, tira con `ctx.Rand` y sube, baja o rompe la pieza en el mismo
+  comando, y guarda el personaje (`w.save`) si el intento podía fallar (los niveles seguros
+  esperan el guardado periódico). Una pieza en un contenedor que no lleva se rechaza con
+  `refine.not_carried`. La skill del bono es dato (`forge.smithing_bonus.skill`, revisada
+  contra `skills.base` en `initForge`). "Mirar" suma lo del nivel con `refinedStat`. Un cambio de nivel en el lugar pasa por
+  `setRefine` (registra la instancia que sale con sus `mods` viejos y la que entra con los
+  nuevos, avisa al lugar que la tiene y, si está puesta, limpia `gearFrom` y llama a
+  `equipmentChanged`); una pieza rota, por `econInstance(-1)` + `removeItem`. Lo que suma un
+  nivel lo calcula `refineGain` dentro de `wornGear` (ataque solo en la mano derecha, defensa
+  en la izquierda, armadura en cualquier slot de armadura, una joya una parte de su
+  atributo antes del tope). La fuente del log es `EconForge` (no cuenta como ganancia en
+  `earns`). Un material nuevo de la forja va en `balance.yaml forge` (validado por
+  `Forge.CheckItems` al arrancar y por `checkForge` de `make validate`); el yunque cuenta
+  esos materiales en su `StationOpen` y manda `money`.
+
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +

@@ -64,7 +64,9 @@ const (
 )
 
 // MarketOffer is one market offer as stored (market_offers). Name and AccountID are the
-// owner's, for the listing and the ban check.
+// owner's, for the listing and the ban check. Mods: a sell offer of an equipable is one
+// instance (Amount 1) and keeps its attribute (docs/02 "Atributos de items"); zero on
+// anything else.
 type MarketOffer struct {
 	ID          int64
 	CharacterID int64
@@ -76,6 +78,7 @@ type MarketOffer struct {
 	Price       int64
 	Created     time.Time
 	Expires     time.Time
+	Mods        Mods
 }
 
 // MarketMail is one item waiting in a mailbox (market_mail_items).
@@ -262,6 +265,7 @@ func (w *World) initMarket() {
 	w.refVotes = map[[2]int64]priceVote{}
 	w.refSellers = map[int64]bool{}
 	w.refAccounts = map[int64]bool{}
+	w.mkKinds = map[pieceKind]bool{}
 	d := w.cfg.Market
 	if d == nil {
 		return
@@ -703,7 +707,8 @@ func (w *World) marketCommand(ctx *game.TickContext, p *Player, m *pb.MarketComm
 	case *pb.MarketCommand_Cancel:
 		w.marketCancel(ctx, p, int64(min(a.Cancel.GetOfferId(), 1<<62)))
 	case *pb.MarketCommand_Accept:
-		w.marketAccept(ctx, p, int64(min(a.Accept.GetOfferId(), 1<<62)), a.Accept.GetAmount())
+		w.marketAccept(ctx, p, int64(min(a.Accept.GetOfferId(), 1<<62)), a.Accept.GetAmount(),
+			modsOf(a.Accept.GetMods()))
 	case *pb.MarketCommand_Withdraw:
 		w.marketWithdraw(ctx, p)
 	default:
@@ -724,6 +729,46 @@ func marketItem(def *content.Item) bool {
 // charges), so the buyer gets exactly what the seller gave.
 func marketUnit(it *Item, def *content.Item) bool {
 	return takeable(it, def) && (def.Stackable || it.count == def.StackLimit())
+}
+
+// marketInstance returns the first unit of def p carries (in its containers) with exactly
+// mods, or nil: the instance of an equipable the player picked (MarketCreate.mods,
+// MarketAccept.mods). The mods are only a key: the instance keeps its own.
+func (w *World) marketInstance(p *Player, def *content.Item, mods Mods) *Item {
+	var found *Item
+	p.eachCarried(false, func(it *Item) {
+		if found == nil && marketUnit(it, def) && it.mods == mods {
+			found = it
+		}
+	})
+	return found
+}
+
+// ownedMods are the mods of every market unit of an equipable def p carries
+// (MarketUpdate.owned_mods; nil for anything else), the ones a path that takes without
+// the player picking would take first at the top (spareFirst: the lowest refine level,
+// then the weakest roll): the client's instance picker starts on the first one, so
+// selling a +7 always takes a choice.
+func (w *World) ownedMods(p *Player, def *content.Item) []*pb.ItemMods {
+	if !content.Rolls(def) {
+		return nil
+	}
+	var units []*Item
+	p.eachCarried(false, func(it *Item) {
+		if marketUnit(it, def) {
+			units = append(units, it)
+		}
+	})
+	w.spareFirst(units)
+	out := make([]*pb.ItemMods, 0, len(units))
+	for _, it := range units {
+		m := it.mods.msg()
+		if m == nil {
+			m = &pb.ItemMods{}
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func (w *World) marketUnits(p *Player, def *content.Item) int {
@@ -830,6 +875,19 @@ func (w *World) marketCreate(ctx *game.TickContext, p *Player, m *pb.MarketCreat
 		p.emit(systemMsg(msgMarketTooMany, num("max", w.mk.MaxOffers)))
 		return
 	}
+	// docs/02 "Atributos de items": a sell offer of an equipable is one instance, the one
+	// the player picked by its mods.
+	var inst *Item
+	if sell && content.Rolls(def) {
+		if m.GetAmount() != 1 {
+			p.emit(systemMsg(msgMarketBadAmount, num("max", 1)))
+			return
+		}
+		if inst = w.marketInstance(p, def, modsOf(m.GetMods())); inst == nil {
+			p.emit(systemMsg(msgMarketNoItems))
+			return
+		}
+	}
 	amount, price := int(m.GetAmount()), int64(m.GetPrice())
 	total := int64(amount) * price
 	fee := w.marketFee(total)
@@ -849,7 +907,14 @@ func (w *World) marketCreate(ctx *game.TickContext, p *Player, m *pb.MarketCreat
 		p.emit(systemMsg(msgMarketNoItems))
 		return
 	}
-	if sell {
+	var mods Mods
+	switch {
+	case inst != nil:
+		mods = inst.mods
+		w.removeItem(inst)
+		p.questDirty = true
+		w.econInstance(p, EconMarket, "offer", 0, inst, -1)
+	case sell:
 		w.takeMarketUnits(p, def, amount)
 		w.econItem(p, EconMarket, "offer", def, -amount)
 	}
@@ -863,6 +928,7 @@ func (w *World) marketCreate(ctx *game.TickContext, p *Player, m *pb.MarketCreat
 		ID: w.nextOffer, CharacterID: p.charID, AccountID: p.accountID, Name: p.name, Sell: sell,
 		ItemID: def.Numeric, Amount: amount, Price: price, Created: ctx.Now,
 		Expires: ctx.Now.Add(time.Duration(w.mk.DurationsHours[m.GetDurationIndex()]) * time.Hour),
+		Mods:    mods,
 	}}
 	w.addOffer(o)
 	w.transfer([]*Player{p}, MarketOp{Kind: MarketOfferAdd, Offer: o.MarketOffer})
@@ -890,7 +956,7 @@ func (w *World) closeOffer(o *offer, now time.Time) {
 	w.dropOffer(o)
 	ops := []MarketOp{{Kind: MarketOfferRemove, ID: o.ID, Units: o.Amount}}
 	if o.Sell {
-		ops = append(ops, w.mailItems(o.CharacterID, o.def, o.Amount, now)...)
+		ops = append(ops, w.mailItems(o.CharacterID, o.def, o.Amount, o.Mods, now)...)
 	} else {
 		gold := int64(o.Amount) * o.Price
 		w.box(o.CharacterID).gold += gold
@@ -902,8 +968,9 @@ func (w *World) closeOffer(o *offer, now time.Time) {
 }
 
 // mailItems puts n units of def in charID's mailbox, one entry per full stack (or per
-// unit when it does not stack), and returns the inserts.
-func (w *World) mailItems(charID int64, def *content.Item, n int, at time.Time) []MarketOp {
+// unit when it does not stack), each with mods (an equipable's instance: n is 1), and
+// returns the inserts.
+func (w *World) mailItems(charID int64, def *content.Item, n int, mods Mods, at time.Time) []MarketOp {
 	var ops []MarketOp
 	b := w.box(charID)
 	for n > 0 {
@@ -914,14 +981,15 @@ func (w *World) mailItems(charID int64, def *content.Item, n int, at time.Time) 
 		}
 		n -= k
 		w.nextMail++
-		m := MarketMail{ID: w.nextMail, CharacterID: charID, Item: ItemState{ItemID: def.Numeric, Count: count}, Created: at}
+		m := MarketMail{ID: w.nextMail, CharacterID: charID, Item: ItemState{ItemID: def.Numeric, Count: count, Mods: mods},
+			Created: at}
 		b.items = append(b.items, m)
 		ops = append(ops, MarketOp{Kind: MarketMailAdd, Mail: m})
 	}
 	return ops
 }
 
-func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint32) {
+func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint32, mods Mods) {
 	o := w.offers[id]
 	switch {
 	case o == nil || w.isBanned(o.AccountID, ctx.Now):
@@ -936,6 +1004,18 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 	}
 	units := int(n)
 	total := int64(units) * o.Price
+	// Selling an equipable to a buy offer gives the one instance the seller picked.
+	var inst *Item
+	if !o.Sell && content.Rolls(o.def) {
+		if units != 1 {
+			p.emit(systemMsg(msgMarketBadAmount, num("max", 1)))
+			return
+		}
+		if inst = w.marketInstance(p, o.def, mods); inst == nil {
+			p.emit(systemMsg(msgMarketNoItems))
+			return
+		}
+	}
 	var ops []MarketOp
 	if o.Sell {
 		// p buys: pays now, gets the items now; the seller's gold goes to its mailbox.
@@ -948,9 +1028,19 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 			return
 		}
 		w.pay(p, total)
-		w.giveItem(p, o.def, units)
+		var made []*Item
+		if content.Rolls(o.def) {
+			// Each unit is its own instance: a new offer is one (Amount 1, with its mods);
+			// one posted before attributes existed may hold several without mods, and each
+			// unit rolls its own as it is created.
+			for range units {
+				made = append(made, w.giveMods(p, o.def, o.Mods)...)
+			}
+		} else {
+			made = w.giveItem(p, o.def, units)
+		}
 		w.econGoldWith(p, EconMarket, "buy", o.CharacterID, -total)
-		w.econItemWith(p, EconMarket, "buy", o.CharacterID, o.def, units)
+		w.econMade(p, EconMarket, "buy", o.CharacterID, o.def, units, made)
 		w.box(o.CharacterID).gold += total
 		ops = append(ops, MarketOp{Kind: MarketGoldAdd, CharacterID: o.CharacterID, Gold: total})
 		p.emit(systemMsg(msgMarketBought, itemParam(o.def, units), num("price", int(total))))
@@ -965,11 +1055,19 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 			p.emit(systemMsg(msgMarketNoRoom))
 			return
 		}
-		w.takeMarketUnits(p, o.def, units)
+		var given Mods // the instance's, which the buyer gets
+		if inst != nil {
+			given = inst.mods
+			w.removeItem(inst)
+			p.questDirty = true
+			w.econInstance(p, EconMarket, "sell", o.CharacterID, inst, -1)
+		} else {
+			w.takeMarketUnits(p, o.def, units)
+			w.econItemWith(p, EconMarket, "sell", o.CharacterID, o.def, -units)
+		}
 		w.giveMoney(p, total)
-		w.econItemWith(p, EconMarket, "sell", o.CharacterID, o.def, -units)
 		w.econGoldWith(p, EconMarket, "sell", o.CharacterID, total)
-		ops = append(ops, w.mailItems(o.CharacterID, o.def, units, ctx.Now)...)
+		ops = append(ops, w.mailItems(o.CharacterID, o.def, units, given, ctx.Now)...)
 		p.emit(systemMsg(msgMarketSold, itemParam(o.def, units), num("price", int(total))))
 	}
 	o.Amount -= units
@@ -1022,9 +1120,11 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 		if !def.Stackable {
 			n = 1
 		}
-		if !def.Stackable && (len(m.Item.Items) > 0 || m.Item.Count != def.StackLimit()) {
+		if !def.Stackable && (len(m.Item.Items) > 0 || m.Item.Count != def.StackLimit() || content.Rolls(def) ||
+			!m.Item.Mods.Zero()) {
 			// The saved instance itself (T5.4): a rune keeps its charges (a container that
-			// still has content, from before houses mailed them flat, keeps it).
+			// still has content, from before houses mailed them flat, keeps it), an
+			// equipable its attribute (one mailed without, from before attributes, rolls it).
 			it := w.loadItem(m.Item)
 			bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 			if it == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() ||
@@ -1123,7 +1223,7 @@ func (w *World) offerMsg(o *offer, p *Player) *pb.MarketOffer {
 	return &pb.MarketOffer{
 		OfferId: uint64(o.ID), Side: side, ItemId: uint32(o.ItemID), Amount: uint32(o.Amount),
 		Price: uint64(o.Price), ExpiresAt: uint64(max(o.Expires.UnixMilli(), 0)), OwnerName: o.Name,
-		Own: o.CharacterID == p.charID,
+		Own: o.CharacterID == p.charID, Mods: o.Mods.msg(),
 	}
 }
 
@@ -1147,9 +1247,10 @@ func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 		u.ItemId = uint32(item)
 		u.ReferencePrice = uint64(w.referencePrice(item, now))
 		u.Owned = uint32(w.marketUnits(p, w.byNum[item]))
+		u.OwnedMods = w.ownedMods(p, w.byNum[item])
 		if b := w.books[item]; b != nil {
-			u.Sells = w.listing(b.sells, p, now)
-			u.Buys = w.listing(b.buys, p, now)
+			u.Sells = w.listing(b.sells, p, now, true)
+			u.Buys = w.listing(b.buys, p, now, false)
 		}
 	}
 	for _, o := range w.byOwner[p.charID] {
@@ -1163,7 +1264,7 @@ func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 				break
 			}
 			u.MailboxItems = append(u.MailboxItems, &pb.MarketMailItem{Id: uint64(m.ID),
-				Item: &pb.ItemStack{ItemId: uint32(m.Item.ItemID), Count: uint32(m.Item.Count)}})
+				Item: &pb.ItemStack{ItemId: uint32(m.Item.ItemID), Count: uint32(m.Item.Count), Mods: m.Item.Mods.msg()}})
 		}
 	}
 	hist := w.history[p.charID]
@@ -1179,19 +1280,40 @@ func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_MarketUpdate{MarketUpdate: u}})
 }
 
-// listing is the first list_size visible offers of one side. Hidden offers (banned
-// owners) are skipped; there are few, so the walk stays short.
-func (w *World) listing(list []*offer, p *Player, now time.Time) []*pb.MarketOffer {
+// listing is the best visible offers of one side, in its order: the first list_size and,
+// for the sells of an item that rolls an attribute (pieces), also the best one of every
+// kind of piece further down: one per attribute and refine level (pieceKind). Each sell
+// of a piece is an offer of its own, so without them a refined piece or a rare attribute
+// dearer than list_size common ones would show to nobody and nobody could take it
+// (docs/02 "Mercado global", final review of lote 11). The rows stay in price order and
+// are at most list_size plus the kinds on sale. Hidden offers (banned owners) are
+// skipped; there are few. The walk is the whole book only for the sells of pieces.
+func (w *World) listing(list []*offer, p *Player, now time.Time, kinds bool) []*pb.MarketOffer {
 	var out []*pb.MarketOffer
+	kinds = kinds && len(list) > 0 && content.Rolls(list[0].def)
+	clear(w.mkKinds)
 	for _, o := range list {
-		if len(out) == w.mk.ListSize {
+		if len(out) >= w.mk.ListSize && !kinds {
 			break
 		}
-		if !w.isBanned(o.AccountID, now) {
+		if w.isBanned(o.AccountID, now) {
+			continue
+		}
+		k := pieceKind{attr: o.Mods.Attr, refine: o.Mods.Refine}
+		if len(out) < w.mk.ListSize || kinds && !w.mkKinds[k] {
+			w.mkKinds[k] = true
 			out = append(out, w.offerMsg(o, p))
 		}
 	}
 	return out
+}
+
+// pieceKind is what tells one sell of a piece from another in the listing: its attribute
+// and its refine level (the value of the attribute does not: the cheapest of a kind
+// shows, and the next one once it is taken).
+type pieceKind struct {
+	attr   string
+	refine int
 }
 
 // ---- staff ---------------------------------------------------------------------------

@@ -1,25 +1,22 @@
-- id: patched_tunic
-  kind: armor
-  sprite: armor/patched_tunic
-  name: item.patched_tunic.name
-  description: item.patched_tunic.desc
-  weight: 5600
-  tradeable: true
-  armor: { slot: body, armor: 2 }
-  value: 20
+# Shields, armor and jewelry: the compact catalog (lote 11, docs/02 "Catálogo de equipo").
+# One piece per line, slot and band, numbers from the band formula of docs/02. The torso
+# has two weight classes: armor (heavy, the guardian's and the ranger's) and robes (light,
+# for anyone: the casters' line). Head, legs, feet, shields and jewelry are for everyone.
+# Amulets and rings (neck and ring slots) carry a small armor and, with the item
+# attributes, their random attribute.
 
-- id: plank_shield
+# ---- Band 1 (levels 1-4): the starting kit, Isla del Puerto.
+- id: barrel_lid_shield
   kind: shield
-  sprite: shields/plank_shield
-  name: item.plank_shield.name
-  description: item.plank_shield.desc
-  weight: 5000
+  sprite: shields/barrel_lid_shield
+  name: item.barrel_lid_shield.name
+  description: item.barrel_lid_shield.desc
+  weight: 3500
   tradeable: true
-  shield: { defense: 12 }
+  shield: { defense: 9 }
+  requires: { level: 1 }
   value: 25
 
-# Isla del Puerto starter kit. A full early set (cap + tunic/jerkin + trousers + boots)
-# gives armor 5-7; shields 9-16.
 - id: sailcloth_cap
   kind: armor
   sprite: armor/sailcloth_cap
@@ -28,8 +25,421 @@
   weight: 800
   tradeable: true
   armor: { slot: head, armor: 1 }
+  requires: { level: 1 }
   value: 10
 
+- id: patched_tunic
+  kind: armor
+  sprite: armor/patched_tunic
+  name: item.patched_tunic.name
+  description: item.patched_tunic.desc
+  weight: 2000
+  tradeable: true
+  armor: { slot: body, armor: 2 }
+  requires: { level: 1 }
+  value: 20
+
+- id: canvas_trousers
+  kind: armor
+  sprite: armor/canvas_trousers
+  name: item.canvas_trousers.name
+  description: item.canvas_trousers.desc
+  weight: 1600
+  tradeable: true
+  armor: { slot: legs, armor: 1 }
+  requires: { level: 1 }
+  value: 10
+
+- id: tarred_boots
+  kind: armor
+  sprite: armor/tarred_boots
+  name: item.tarred_boots.name
+  description: item.tarred_boots.desc
+  weight: 1200
+  tradeable: true
+  armor: { slot: feet, armor: 1 }
+  requires: { level: 1 }
+  value: 10
+
+
+# ---- Band 2 (levels 5-9): Isla del Puerto. No armor: a new piece here makes the island's
+# mid hunts too safe (TestPuertoBalance); the plank shield is the step.
+- id: plank_shield
+  kind: shield
+  sprite: shields/plank_shield
+  name: item.plank_shield.name
+  description: item.plank_shield.desc
+  weight: 4100
+  tradeable: true
+  shield: { defense: 12 }
+  requires: { level: 5 }
+  value: 110
+
+
+# ---- Band 3 (levels 10-29): the Isla del Bosque. Armor, shields and jewelry ask for level 15,
+# not the 10 of the band's weapons: with them at 10 the wreck looters stop hurting.
+- id: elmwood_shield
+  kind: shield
+  sprite: shields/elmwood_shield
+  name: item.elmwood_shield.name
+  description: item.elmwood_shield.desc
+  weight: 4700
+  tradeable: true
+  shield: { defense: 18 }
+  requires: { level: 15 }
+  value: 450
+
+- id: stagleather_coat
+  kind: armor
+  sprite: armor/stagleather_coat
+  name: item.stagleather_coat.name
+  description: item.stagleather_coat.desc
+  weight: 8000
+  tradeable: true
+  armor: { slot: body, armor: 6 }
+  requires: { level: 15, vocations: [guardian, ranger] }
+  value: 540
+
+- id: mossweave_robe
+  kind: armor
+  sprite: armor/mossweave_robe
+  name: item.mossweave_robe.name
+  description: item.mossweave_robe.desc
+  weight: 2600
+  tradeable: true
+  armor: { slot: body, armor: 3 }
+  requires: { level: 15 }
+  value: 360
+
+- id: stagleather_hood
+  kind: armor
+  sprite: armor/stagleather_hood
+  name: item.stagleather_hood.name
+  description: item.stagleather_hood.desc
+  weight: 1600
+  tradeable: true
+  armor: { slot: head, armor: 2 }
+  requires: { level: 15 }
+  value: 240
+
+- id: stagleather_leggings
+  kind: armor
+  sprite: armor/stagleather_leggings
+  name: item.stagleather_leggings.name
+  description: item.stagleather_leggings.desc
+  weight: 2600
+  tradeable: true
+  armor: { slot: legs, armor: 2 }
+  requires: { level: 15 }
+  value: 240
+
+- id: stagleather_boots
+  kind: armor
+  sprite: armor/stagleather_boots
+  name: item.stagleather_boots.name
+  description: item.stagleather_boots.desc
+  weight: 2000
+  tradeable: true
+  armor: { slot: feet, armor: 2 }
+  requires: { level: 15 }
+  value: 240
+
+- id: antler_amulet
+  kind: armor
+  sprite: jewelry/antler_amulet
+  name: item.antler_amulet.name
+  description: item.antler_amulet.desc
+  weight: 300
+  tradeable: true
+  armor: { slot: neck, armor: 1 }
+  requires: { level: 15 }
+  value: 480
+
+- id: briar_ring
+  kind: armor
+  sprite: jewelry/briar_ring
+  name: item.briar_ring.name
+  description: item.briar_ring.desc
+  weight: 100
+  tradeable: true
+  armor: { slot: ring, armor: 0 }
+  requires: { level: 15 }
+  value: 360
+
+
+# ---- Band 4 (levels 30-49): the Isla Volcánica (Brasal's smithy and temple).
+- id: embersteel_shield
+  kind: shield
+  sprite: shields/embersteel_shield
+  name: item.embersteel_shield.name
+  description: item.embersteel_shield.desc
+  weight: 5300
+  tradeable: true
+  shield: { defense: 22 }
+  requires: { level: 30 }
+  value: 1500
+
+- id: embersteel_cuirass
+  kind: armor
+  sprite: armor/embersteel_cuirass
+  name: item.embersteel_cuirass.name
+  description: item.embersteel_cuirass.desc
+  weight: 9000
+  tradeable: true
+  armor: { slot: body, armor: 8 }
+  requires: { level: 30, vocations: [guardian, ranger] }
+  value: 1800
+
+- id: ashweave_robe
+  kind: armor
+  sprite: armor/ashweave_robe
+  name: item.ashweave_robe.name
+  description: item.ashweave_robe.desc
+  weight: 2900
+  tradeable: true
+  armor: { slot: body, armor: 4 }
+  requires: { level: 30 }
+  value: 1200
+
+- id: embersteel_helm
+  kind: armor
+  sprite: armor/embersteel_helm
+  name: item.embersteel_helm.name
+  description: item.embersteel_helm.desc
+  weight: 2000
+  tradeable: true
+  armor: { slot: head, armor: 3 }
+  requires: { level: 30 }
+  value: 800
+
+- id: embersteel_greaves
+  kind: armor
+  sprite: armor/embersteel_greaves
+  name: item.embersteel_greaves.name
+  description: item.embersteel_greaves.desc
+  weight: 3100
+  tradeable: true
+  armor: { slot: legs, armor: 3 }
+  requires: { level: 30 }
+  value: 800
+
+- id: embersteel_sabatons
+  kind: armor
+  sprite: armor/embersteel_sabatons
+  name: item.embersteel_sabatons.name
+  description: item.embersteel_sabatons.desc
+  weight: 2400
+  tradeable: true
+  armor: { slot: feet, armor: 3 }
+  requires: { level: 30 }
+  value: 800
+
+- id: cinder_amulet
+  kind: armor
+  sprite: jewelry/cinder_amulet
+  name: item.cinder_amulet.name
+  description: item.cinder_amulet.desc
+  weight: 300
+  tradeable: true
+  armor: { slot: neck, armor: 1 }
+  requires: { level: 30 }
+  value: 1600
+
+- id: obsidian_ring
+  kind: armor
+  sprite: jewelry/obsidian_ring
+  name: item.obsidian_ring.name
+  description: item.obsidian_ring.desc
+  weight: 100
+  tradeable: true
+  armor: { slot: ring, armor: 0 }
+  requires: { level: 30 }
+  value: 1200
+
+
+# ---- Band 5 (levels 50-74): not obtainable yet (no island): no shop, loot table, recipe or
+# dialog gives them until an island of the band does (docs/02).
+- id: wyrmscale_pavise
+  kind: shield
+  sprite: shields/wyrmscale_pavise
+  name: item.wyrmscale_pavise.name
+  description: item.wyrmscale_pavise.desc
+  weight: 5900
+  tradeable: true
+  shield: { defense: 26 }
+  requires: { level: 50 }
+  value: 3750
+
+- id: wyrmscale_mail
+  kind: armor
+  sprite: armor/wyrmscale_mail
+  name: item.wyrmscale_mail.name
+  description: item.wyrmscale_mail.desc
+  weight: 10000
+  tradeable: true
+  armor: { slot: body, armor: 10 }
+  requires: { level: 50, vocations: [guardian, ranger] }
+  value: 4500
+
+- id: duskweave_robe
+  kind: armor
+  sprite: armor/duskweave_robe
+  name: item.duskweave_robe.name
+  description: item.duskweave_robe.desc
+  weight: 3200
+  tradeable: true
+  armor: { slot: body, armor: 5 }
+  requires: { level: 50 }
+  value: 3000
+
+- id: wyrmcrest_helm
+  kind: armor
+  sprite: armor/wyrmcrest_helm
+  name: item.wyrmcrest_helm.name
+  description: item.wyrmcrest_helm.desc
+  weight: 2400
+  tradeable: true
+  armor: { slot: head, armor: 4 }
+  requires: { level: 50 }
+  value: 2000
+
+- id: wyrmhide_greaves
+  kind: armor
+  sprite: armor/wyrmhide_greaves
+  name: item.wyrmhide_greaves.name
+  description: item.wyrmhide_greaves.desc
+  weight: 3600
+  tradeable: true
+  armor: { slot: legs, armor: 4 }
+  requires: { level: 50 }
+  value: 2000
+
+- id: wyrmhide_boots
+  kind: armor
+  sprite: armor/wyrmhide_boots
+  name: item.wyrmhide_boots.name
+  description: item.wyrmhide_boots.desc
+  weight: 2800
+  tradeable: true
+  armor: { slot: feet, armor: 4 }
+  requires: { level: 50 }
+  value: 2000
+
+- id: wyrmtooth_amulet
+  kind: armor
+  sprite: jewelry/wyrmtooth_amulet
+  name: item.wyrmtooth_amulet.name
+  description: item.wyrmtooth_amulet.desc
+  weight: 300
+  tradeable: true
+  armor: { slot: neck, armor: 2 }
+  requires: { level: 50 }
+  value: 4000
+
+- id: emberheart_ring
+  kind: armor
+  sprite: jewelry/emberheart_ring
+  name: item.emberheart_ring.name
+  description: item.emberheart_ring.desc
+  weight: 100
+  tradeable: true
+  armor: { slot: ring, armor: 1 }
+  requires: { level: 50 }
+  value: 3000
+
+
+# ---- Band 6 (levels 75-100+): not obtainable yet, like band 5.
+- id: tidesteel_shield
+  kind: shield
+  sprite: shields/tidesteel_shield
+  name: item.tidesteel_shield.name
+  description: item.tidesteel_shield.desc
+  weight: 6500
+  tradeable: true
+  shield: { defense: 30 }
+  requires: { level: 75 }
+  value: 9000
+
+- id: tidesteel_plate
+  kind: armor
+  sprite: armor/tidesteel_plate
+  name: item.tidesteel_plate.name
+  description: item.tidesteel_plate.desc
+  weight: 11000
+  tradeable: true
+  armor: { slot: body, armor: 12 }
+  requires: { level: 75, vocations: [guardian, ranger] }
+  value: 10800
+
+- id: pearlweave_robe
+  kind: armor
+  sprite: armor/pearlweave_robe
+  name: item.pearlweave_robe.name
+  description: item.pearlweave_robe.desc
+  weight: 3500
+  tradeable: true
+  armor: { slot: body, armor: 6 }
+  requires: { level: 75 }
+  value: 7200
+
+- id: tidesteel_helm
+  kind: armor
+  sprite: armor/tidesteel_helm
+  name: item.tidesteel_helm.name
+  description: item.tidesteel_helm.desc
+  weight: 2800
+  tradeable: true
+  armor: { slot: head, armor: 5 }
+  requires: { level: 75 }
+  value: 4800
+
+- id: tidesteel_greaves
+  kind: armor
+  sprite: armor/tidesteel_greaves
+  name: item.tidesteel_greaves.name
+  description: item.tidesteel_greaves.desc
+  weight: 4100
+  tradeable: true
+  armor: { slot: legs, armor: 5 }
+  requires: { level: 75 }
+  value: 4800
+
+- id: tidesteel_sabatons
+  kind: armor
+  sprite: armor/tidesteel_sabatons
+  name: item.tidesteel_sabatons.name
+  description: item.tidesteel_sabatons.desc
+  weight: 3200
+  tradeable: true
+  armor: { slot: feet, armor: 5 }
+  requires: { level: 75 }
+  value: 4800
+
+- id: blackpearl_amulet
+  kind: armor
+  sprite: jewelry/blackpearl_amulet
+  name: item.blackpearl_amulet.name
+  description: item.blackpearl_amulet.desc
+  weight: 300
+  tradeable: true
+  armor: { slot: neck, armor: 2 }
+  requires: { level: 75 }
+  value: 9600
+
+- id: tidestone_ring
+  kind: armor
+  sprite: jewelry/tidestone_ring
+  name: item.tidestone_ring.name
+  description: item.tidestone_ring.desc
+  weight: 100
+  tradeable: true
+  armor: { slot: ring, armor: 1 }
+  requires: { level: 75 }
+  value: 7200
+
+# ---- Retired (lote 11): out of the catalog, of every shop, loot table and recipe, but still
+# defined so the characters that have one keep it (and its old numbers); an NPC still buys
+# it. `retired: true` makes `make validate` refuse any source of it (docs/06).
 - id: leather_jerkin
   kind: armor
   sprite: armor/leather_jerkin
@@ -40,36 +450,7 @@
   armor: { slot: body, armor: 4 }
   requires: { level: 6 }
   value: 150
-
-- id: canvas_trousers
-  kind: armor
-  sprite: armor/canvas_trousers
-  name: item.canvas_trousers.name
-  description: item.canvas_trousers.desc
-  weight: 1600
-  tradeable: true
-  armor: { slot: legs, armor: 1 }
-  value: 15
-
-- id: tarred_boots
-  kind: armor
-  sprite: armor/tarred_boots
-  name: item.tarred_boots.name
-  description: item.tarred_boots.desc
-  weight: 1200
-  tradeable: true
-  armor: { slot: feet, armor: 1 }
-  value: 15
-
-- id: barrel_lid_shield
-  kind: shield
-  sprite: shields/barrel_lid_shield
-  name: item.barrel_lid_shield.name
-  description: item.barrel_lid_shield.desc
-  weight: 3500
-  tradeable: true
-  shield: { defense: 9 }
-  value: 10
+  retired: true
 
 - id: riveted_round_shield
   kind: shield
@@ -81,10 +462,8 @@
   shield: { defense: 15 }
   requires: { level: 8 }
   value: 220
+  retired: true
 
-# Light armor (T3.1): less armor than a jerkin, half its weight, and no level. Leather is
-# for every vocation (content audit m6): no leather piece is restricted, as the jerkin
-# and the stag-leather ones never were; the casters, with the least capacity, like it best.
 - id: hide_vest
   kind: armor
   sprite: armor/hide_vest
@@ -93,130 +472,6 @@
   weight: 3650
   tradeable: true
   armor: { slot: body, armor: 3 }
+  requires: { level: 1 }
   value: 45
-
-# Isla del Bosque gear (T3.6, levels 12-25). Our own numbers.
-- id: elmwood_shield
-  kind: shield
-  sprite: shields/elmwood_shield
-  name: item.elmwood_shield.name
-  description: item.elmwood_shield.desc
-  weight: 5600
-  tradeable: true
-  shield: { defense: 18 }
-  requires: { level: 12 }
-  value: 360
-
-- id: stagleather_coat
-  kind: armor
-  sprite: armor/stagleather_coat
-  name: item.stagleather_coat.name
-  description: item.stagleather_coat.desc
-  weight: 8200
-  tradeable: true
-  armor: { slot: body, armor: 6 }
-  requires: { level: 14 }
-  value: 520
-
-- id: stagleather_leggings
-  kind: armor
-  sprite: armor/stagleather_leggings
-  name: item.stagleather_leggings.name
-  description: item.stagleather_leggings.desc
-  weight: 2350
-  tradeable: true
-  armor: { slot: legs, armor: 2 }
-  requires: { level: 12 }
-  value: 140
-
-# Isla Volcánica gear (T5.5, levels 30-50): embersteel and wyrm scale from the anvil.
-# Our own numbers.
-- id: embersteel_helm
-  kind: armor
-  sprite: armor/embersteel_helm
-  name: item.embersteel_helm.name
-  description: item.embersteel_helm.desc
-  weight: 3200
-  tradeable: true
-  armor: { slot: head, armor: 3 }
-  requires: { level: 30 }
-  value: 900
-
-- id: embersteel_cuirass
-  kind: armor
-  sprite: armor/embersteel_cuirass
-  name: item.embersteel_cuirass.name
-  description: item.embersteel_cuirass.desc
-  weight: 10500
-  tradeable: true
-  armor: { slot: body, armor: 8 }
-  requires: { level: 34 }
-  value: 1700
-
-- id: embersteel_shield
-  kind: shield
-  sprite: shields/embersteel_shield
-  name: item.embersteel_shield.name
-  description: item.embersteel_shield.desc
-  weight: 6400
-  tradeable: true
-  shield: { defense: 22 }
-  requires: { level: 36 }
-  value: 1500
-
-- id: wyrmscale_mail
-  kind: armor
-  sprite: armor/wyrmscale_mail
-  name: item.wyrmscale_mail.name
-  description: item.wyrmscale_mail.desc
-  weight: 9000
-  tradeable: true
-  armor: { slot: body, armor: 10 }
-  requires: { level: 45 }
-  value: 3800
-
-# Content audit M3 (2026-11): head, legs and feet pieces between the starter kit and
-# the Volcán helm, so every slot grows with the islands. Our own numbers.
-- id: stagleather_hood
-  kind: armor
-  sprite: armor/stagleather_hood
-  name: item.stagleather_hood.name
-  description: item.stagleather_hood.desc
-  weight: 1100
-  tradeable: true
-  armor: { slot: head, armor: 2 }
-  requires: { level: 14 }
-  value: 180
-
-- id: stagleather_boots
-  kind: armor
-  sprite: armor/stagleather_boots
-  name: item.stagleather_boots.name
-  description: item.stagleather_boots.desc
-  weight: 1500
-  tradeable: true
-  armor: { slot: feet, armor: 2 }
-  requires: { level: 14 }
-  value: 170
-
-- id: embersteel_greaves
-  kind: armor
-  sprite: armor/embersteel_greaves
-  name: item.embersteel_greaves.name
-  description: item.embersteel_greaves.desc
-  weight: 4200
-  tradeable: true
-  armor: { slot: legs, armor: 3 }
-  requires: { level: 32 }
-  value: 950
-
-- id: embersteel_sabatons
-  kind: armor
-  sprite: armor/embersteel_sabatons
-  name: item.embersteel_sabatons.name
-  description: item.embersteel_sabatons.desc
-  weight: 2800
-  tradeable: true
-  armor: { slot: feet, armor: 3 }
-  requires: { level: 34 }
-  value: 850
+  retired: true

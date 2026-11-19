@@ -183,8 +183,8 @@ func (q *Queries) InsertMarketMailItem(ctx context.Context, arg InsertMarketMail
 }
 
 const insertMarketOffer = `-- name: InsertMarketOffer :exec
-INSERT INTO market_offers (id, character_id, side, item_id, amount, price, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO market_offers (id, character_id, side, item_id, amount, price, created_at, expires_at, attributes)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertMarketOfferParams struct {
@@ -196,6 +196,7 @@ type InsertMarketOfferParams struct {
 	Price       int64
 	CreatedAt   pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
+	Attributes  []byte
 }
 
 func (q *Queries) InsertMarketOffer(ctx context.Context, arg InsertMarketOfferParams) error {
@@ -208,6 +209,7 @@ func (q *Queries) InsertMarketOffer(ctx context.Context, arg InsertMarketOfferPa
 		arg.Price,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+		arg.Attributes,
 	)
 	return err
 }
@@ -375,7 +377,8 @@ func (q *Queries) LoadMarketMailItems(ctx context.Context) ([]MarketMailItem, er
 
 const loadMarketOffers = `-- name: LoadMarketOffers :many
 
-SELECT o.id, o.character_id, c.account_id, c.name, o.side, o.item_id, o.amount, o.price, o.created_at, o.expires_at
+SELECT o.id, o.character_id, c.account_id, c.name, o.side, o.item_id, o.amount, o.price, o.created_at, o.expires_at,
+       o.attributes
 FROM market_offers o JOIN characters c ON c.id = o.character_id
 ORDER BY o.id
 `
@@ -391,6 +394,7 @@ type LoadMarketOffersRow struct {
 	Price       int64
 	CreatedAt   pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
+	Attributes  []byte
 }
 
 // Global market (T5.3). The loop owns the market in memory: these queries load it at
@@ -415,6 +419,7 @@ func (q *Queries) LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, 
 			&i.Price,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.Attributes,
 		); err != nil {
 			return nil, err
 		}

@@ -17,6 +17,7 @@ resistances: { fire: 100, earth: 10, ice: -25 }
 loot:
   - { item: salamander_scale, chance: 0.3 }
   - { item: copper_coin, chance: 0.85, count: [15, 65] }
+  - { item: warding_amber, chance: 0.003 } # rare: the forge's protection
 tags: [reptile, lava, volcan]
 notes: Lava pools on the slopes, levels 29-33. Spits burning slag at range (T3.2 burning); immune to fire, weak to ice.
 corpse: remains_scales

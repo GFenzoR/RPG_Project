@@ -23,7 +23,16 @@
   (`ContainerSlot {container_id, index}`; `container_id` lo asigna el servidor en
   `ContainerOpen` y vale solo durante la sesión).
 - `ActionTarget`: `oneof` de `pos` o `creature_id`.
-- `ItemStack {item_id, count}`: `item_id` es el ID estable de `data/ids.lock.yaml`.
+- `ItemStack {item_id, count, mods}`: `item_id` es el ID estable de `data/ids.lock.yaml`;
+  `mods` (`ItemMods`) son los datos propios de la instancia, sin poner en un item común.
+- `ItemMods {attribute, value, refine}` (docs/02 "Atributos de items"): el único atributo
+  que tiró un equipable (`attribute` = id de `data/attributes.yaml`, `value` su cantidad;
+  el cliente muestra el `text` del atributo con `{value}`) y su nivel de refinado de la
+  forja (`refine`, 0 = sin refinar). Viaja en todo `ItemStack` de una instancia: equipo
+  (`Inventory`), contenedores (`ContainerOpen`/`ContainerUpdate`), el suelo (`Tile`, en
+  `TileUpdate` y en la `palette` de un `MapArea`), el intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
+  cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
+  viejo lo ignora.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
   `TextParam {name, value}`. Es una lista y no un `map` para que la codificación sea
   determinista. `value` tiene tipo (`text` sin traducir, `number`, `content_id` o
@@ -497,6 +506,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 | `CloseContainer` | `container_id` (T1.8) |
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
+| `Refine` | `station` (el yunque), `item` (slot o contenedor), `item_id`, `level` (el nivel de refinado que ve el cliente), `protect` (gastar un ámbar) (la forja) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
 | `PresenceAnswer` | `check_id`, `option_id` (respuesta a un `PresenceCheck`, T4.1) |
 | `TutorialSkip` | — (termina el tutorial sin premio, T4.2) |
@@ -733,9 +743,51 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   `gather.got{item}`. Lo obtenido va a la mochila como una compra (lo que no entra cae al
   suelo con `inventory.item_on_floor`).
 - **Efectos**: 5 = cosecha lograda, 6 = intento sin resultado, en la casilla del recurso,
-  para todos los que la ven.
+  para todos los que la ven. 8 y 9 son de la forja ("Forja", abajo).
 - El cliente entra en modo "usar con" al usar una herramienta (click derecho) y el
   siguiente click en el mapa manda el `UseItemOn`; Escape o click derecho lo cancelan.
+
+### Forja (`server/internal/session/refine.go`)
+Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (docs/06).
+- **`Refine{station, item, item_id, mods, protect}`**: un intento sobre la pieza de `item`
+  (un slot de equipo o un contenedor abierto que el jugador lleva; nunca una posición del
+  suelo) en el yunque de `station`. `item_id` y `mods` (todos: atributo, valor y nivel de
+  refinado; sin `mods`, una pieza común) son la pieza que el cliente ve: otra pieza, otra
+  tirada u otro nivel (una vista vieja, o el mismo click mandado de nuevo después de un
+  éxito) se rechaza con `inventory.not_possible` sin gastar nada. Así, con lag, un segundo
+  click mandado antes del resultado de una rotura (las piezas de ese contenedor ya subieron
+  un lugar) nunca refina la que ocupó su índice, salvo que sea igual en todo (entonces da lo
+  mismo cuál). Los `mods` son solo una clave: la instancia conserva los suyos. Además la
+  ventana no manda otro intento hasta que llega la respuesta del anterior (abajo). `protect`
+  gasta un ámbar de resguardo, solo si el intento puede fallar (por encima de
+  `forge.safe_level`; abajo se ignora); el cliente no lo pide sin uno.
+- **Rechazos** (`Message` de sistema; nada se gasta): `refine.unavailable` (forja apagada),
+  `inventory.not_possible` (otro piso o fuera de la vista, item que no está ahí o de otro
+  nivel, una posición del suelo), `refine.not_carried` (en un contenedor abierto que no
+  lleva: un cadáver, un cofre del suelo), `craft.no_station{item}` (no hay yunque en esa
+  casilla),
+  `inventory.too_far` (a más de 1 casilla), `refine.not_refinable` (no tira atributos:
+  munición, contenedores, materiales...), `refine.top_level{level}` (ya está en el tope),
+  `refine.in_trade` (ofrecida en el intercambio), `refine.no_stones{item}` (las que faltan
+  de la piedra de su banda), `refine.no_protection{item}`, `refine.no_money{price}`,
+  `refine.no_change_room` (el vuelto de una moneda partida no entra) y `refine.not_ready`
+  (antes de `forge.time_ms` desde el último intento de un oficio).
+- **Respuesta:** `RefineResult` con `outcome`, la instancia después (`item` con sus `mods`; al
+  romperse, solo `item_id`), su `level` (0 rota) y `text`: `refine.success{item, level}`,
+  `refine.broken{item}` o `refine.protected{item, level}`, donde `item` es la pieza como era
+  (con sus `mods`: el cliente la nombra "+6 …") y `level` el nivel de ahora (también va
+  `from`, el de antes). El mismo texto llega como `Message` de sistema (el log). En el mismo
+  lote, **antes** del `RefineResult`, llegan el `Inventory` o `ContainerUpdate` de las monedas,
+  las piedras, el ámbar y la pieza (sus `mods` nuevos, o sin ella; con la pieza puesta,
+  también lo que cambia su equipo); **después**, `PlayerStats` y el `StationOpen` del yunque
+  con lo que queda (y la `MarketUpdate` de una ventana del mercado abierta). Toda respuesta a
+  un `Refine` es un `RefineResult` o un `Message` de sistema: el cliente espera una de las dos
+  (o 10 s) antes de dejar mandar otro intento.
+- **Efectos** en la casilla del yunque, para todos los que la ven: **8** chispas (éxito),
+  **9** una pieza que se parte (rota, o el ámbar que se quiebra en su lugar).
+- La pieza refinada lleva su nivel en `ItemMods.refine` en todo mensaje que la nombra
+  (inventario, contenedores, suelo, intercambio, mercado, parámetros `item`, también el de
+  `look.*`, cuyo `attack`, `armor` o `defense` incluye lo que suma el nivel).
 
 ### Chat (T1.13, `server/internal/session/chat.go`)
 Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.
@@ -1003,16 +1055,29 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
 - **Mercado.** Se abre con `UseItem` sobre un tablero del mapa (item con
   `market_board: true`); el servidor contesta `MarketUpdate{open: true, ...}`. Cada
   `MarketCommand` exige seguir junto al tablero y responde otra `MarketUpdate` completa:
-  `browse{item_id}`, `create{side, item_id, amount, price, duration_index}`,
-  `cancel{offer_id}`, `accept{offer_id, amount}`, `withdraw{}` y `close{}` (sin
-  respuesta). `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
-  (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own}`,
-  hasta `list_size` por lado) y `reference_price`, las ofertas propias (`own`), el buzón
+  `browse{item_id}`, `create{side, item_id, amount, price, duration_index, mods}`,
+  `cancel{offer_id}`, `accept{offer_id, amount, mods}`, `withdraw{}` y `close{}` (sin
+  respuesta). **Equipables** (docs/02 "Atributos de items"): vender uno, en `create` con
+  `side` SELL o en `accept` de una oferta de compra, es una instancia: `amount` 1 y `mods`
+  = los de la instancia elegida (sin `mods`: una sin atributo); otra cantidad responde
+  `market.bad_amount` (`max` 1) y unos `mods` que el jugador no tiene en la mochila
+  `market.not_enough_items`. `mods` es solo una clave para encontrarla: la instancia
+  conserva los suyos. `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
+  (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own, mods}`;
+  `mods`, en una oferta de venta de un equipable, los de su instancia: cada una es una fila),
+  hasta `list_size` por lado, en orden de precio; en las ventas de un equipable, después
+  de esas, la más barata de cada clase de pieza que quede, un par atributo y nivel de
+  refinado, para que una pieza refinada o un atributo raro más caros se vean: docs/02
+  "Atributos de items", Mercado) y `reference_price`, las ofertas propias (`own`), el buzón
   (`mailbox_gold`, `mailbox_items` hasta `mailbox_shown` y `mailbox_more`), el
   `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
   `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y
-  `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
-  hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
+  `owned` (unidades del item buscado en la mochila; si es un equipable, `owned_mods` trae
+  los `mods` de cada una para elegir cuál vender: primero el refinado más bajo y después la
+  tirada más floja, como `spareFirst`, así la opción de entrada nunca es la pieza más
+  refinada; el cliente nombra cada opción con su nivel, "+7 espada · +3 ataque") y
+  `read_only` (solo se puede buscar hasta que el servidor reinicie; las demás acciones
+  responden `market.read_only`).
   `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
   items en orden mientras entren y después todo el oro que entre.
   **Refresco en vivo:** el servidor también manda, por su cuenta, una `MarketUpdate`
@@ -1319,7 +1384,8 @@ dice que el servidor los manda.
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
 | `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
-| `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4) |
+| `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4). En el yunque, `owned` también cuenta las piedras de temple y el ámbar, y `money` es el dinero que se lleva; llega también tras cada `Refine` |
+| `RefineResult` | Cómo terminó un intento de la forja: `outcome` (`SUCCESS`, `BROKEN`, `PROTECTED`), `item` (la instancia después, sin `mods` si se rompió), `level` y `text` (el mismo `LocalizedText` del mensaje del log) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |
@@ -1341,7 +1407,8 @@ jugadores, `speaker_content_id` para NPCs y monstruos).
 
 ### Formato de mapa en `FullMapView` / `MapSlice`
 Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}`:
-- `palette`: pilas de tile (`Tile {items[]}`, suelo primero) distintas del área.
+- `palette`: pilas de tile (`Tile {items[]}`, suelo primero) distintas del área (los
+  `mods` cuentan: dos espadas con distinto atributo son dos pilas).
 - `floors[]`: `MapFloor {z, tiles[]}` con `width × height` índices a `palette`, fila
   por fila (y, luego x). `-1` = sin tile.
 - `creatures`: criaturas paradas dentro del área.

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"sort"
 	"time"
 
@@ -88,8 +89,13 @@ type Player struct {
 	// Items (T1.8): equipment by pb.EquipmentSlot, the armor it adds up to, the open
 	// container windows (oldest first), the last window id, the first tick a
 	// consumable can be used again and the first tick p may open or close a door again.
-	equip         [equipSlots]*Item
-	armor         int
+	equip [equipSlots]*Item
+	armor int
+	// gear is what the attributes of the worn items add up to (attributes.go): already
+	// in maxHealth, maxMana and armor; the rest is read by the formulas. gearFrom are the
+	// worn instances with an attribute it was summed from.
+	gear          gearBonus
+	gearFrom      [equipSlots]*Item
 	open          []openContainer
 	nextContainer uint32
 	nextUse       game.Tick
@@ -490,14 +496,19 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		safe:       true, // T5.2: until the client says otherwise
 		walkEpoch:  1,
 	}
+	p.pos = w.placement(c)
+	w.loadSkills(p, c.Skills)
+	// An equipable saved before attributes existed rolls its own while loading: the
+	// character is saved at once with it (below), so a crash before its first autosave
+	// does not roll another at the next login.
+	rolled := slices.ContainsFunc(c.Inventory, w.needsRoll)
+	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
+	// After the equipment: its attributes may raise the maximums (attributes.go).
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
 		p.health = p.maxHealth // never spawn a dead character (death respawns with full health)
 	}
 	p.mana = min(max(c.Mana, 0), p.maxMana)
-	p.pos = w.placement(c)
-	w.loadSkills(p, c.Skills)
-	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	p.storage = quest.NewLog(c.Storage)
 	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
 	if carry != nil {
@@ -548,6 +559,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
 	w.scheduleAutosave(ctx, p, first)
 	w.scheduleRegen(ctx, p)
+	if rolled {
+		w.save(w.snapshot(p, false))
+	}
 }
 
 // state returns c with the in-memory state of the online player p.

@@ -1,5 +1,22 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
 
+/** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
+export interface AttributeDef {
+  text: string;
+  /** What all worn items add up to, at most (0 or absent: no cap). */
+  cap?: number;
+}
+
+/**
+ * An item instance's own data (ItemStack.mods, docs/05): the one attribute an equipable
+ * rolled, with its value, and its refine level (the forge; 0 = none).
+ */
+export interface ItemMods {
+  attribute: string;
+  value: number;
+  refine: number;
+}
+
 export interface ItemDef {
   /** Content ID in data/items ("grass"). */
   id: string;
@@ -151,6 +168,34 @@ export interface RecipeDef {
   maxSuccess: number;
 }
 
+/**
+ * balance.yaml forge (docs/02 "Forja"): the refine of an equipable at the station item. The
+ * server keeps every rule; the forge window shows the chance, the cost and the gain with it.
+ */
+export interface ForgeRules {
+  /** Numeric id of the station item (the anvil). */
+  station: number;
+  /** An attempt to reach this level or a lower one never fails. */
+  safeLevel: number;
+  /** Numeric id of the protection material. */
+  protection: number;
+  /** +1 chance point every perLevels levels of skill (smithing), at most max. */
+  smithingBonus: { skill: string; perLevels: number; max: number };
+  /** % of a jewel's attribute value each level adds. */
+  jewelryPct: number;
+  /** The attempt to reach +1, +2...: success % and stones; its length is the top level. */
+  levels: { chance: number; stones: number }[];
+  /** By the item's requires.level, ascending from 1. stone is a numeric item id. */
+  bands: {
+    level: number;
+    stone: number;
+    gold: number;
+    attack: number;
+    armor: number;
+    defense: number;
+  }[];
+}
+
 /** Audio channels with their own volume (T3.7); "master" scales all of them. */
 export type SoundChannel = "sfx" | "ui" | "music" | "ambient";
 
@@ -244,6 +289,12 @@ export interface IslandRect {
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
+  /**
+   * The item attributes of data/attributes.yaml by id (docs/02 "Atributos de items"): what
+   * an instance's ItemMods.attribute names. Optional so fixtures can leave it out (then an
+   * attribute shows no line).
+   */
+  attributes?: Record<string, AttributeDef>;
   /** Atlas sprite path of each monster (data/monsters id → "creatures/wolf"). */
   monsterSprites: Record<string, string>;
   /**
@@ -271,6 +322,11 @@ export interface ClientContent {
   spells: SpellDef[];
   /** data/recipes.yaml in file order (T3.4). */
   recipes: RecipeDef[];
+  /**
+   * balance.yaml forge (docs/02 "Forja"); absent when it is off or in fixtures that leave it
+   * out (then the anvil only crafts).
+   */
+  forge?: ForgeRules | undefined;
   /**
    * balance.yaml movement: the step formula and the click-to-walk limit. How many keyboard
    * steps the client predicts ahead comes from the server (Welcome.max_queued_steps).

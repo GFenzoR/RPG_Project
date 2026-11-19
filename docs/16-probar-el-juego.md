@@ -96,11 +96,24 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    el común y el concentrado), runa de arco (pide nivel
    mágico 1: ver más abajo), el equipo de cada vocación (guardián: hacha de mano o espada
    de hierro desde el nivel 5 y escudos; arcanista: varita de chispa, o de coral desde el
-   nivel 6; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
-   nivel 12, que deja usar escudo; druida: vara de retoño), la llave de latón y una mochila
+   nivel 5; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
+   nivel 10, que deja usar escudo; druida: vara de retoño), ropa (la del kit inicial y,
+   desde el nivel 15, la túnica de musgo para todos y el abrigo de cuero de ciervo para
+   guardián y montaraz: el catálogo de docs/02), la llave de latón y una mochila
    de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
    servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
-   lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego.
+   lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego. Vende
+   también lo de la forja: las tres piedras de temple y el **ámbar de resguardo** (3000;
+   en el juego real ningún NPC lo vende: aquí está para probar la forja, punto 4b).
+   - **Atributos (docs/02 "Atributos de items"):** cada arma, escudo o pieza de armadura
+     que compras trae un atributo al azar. Pasa el mouse por encima (en la mochila, en el
+     equipo o en el suelo) y la ficha lo muestra en verde jade bajo las stats ("+12 de vida
+     máxima", "+2 de ataque"); en la tienda la ficha dice "Trae un atributo al azar".
+     Compra dos iguales para ver dos atributos distintos y equípate uno de vida: la vida
+     máxima de las barras sube (y baja al sacártelo). Tobías no compra equipo; los NPCs que
+     sí (el armero de Puerto) pagan lo mismo con cualquier atributo. Un `/item iron_sword 3`
+     del admin (sección 5) también tira uno por espada, y lo que da el capitán del capítulo 1
+     en Puerto tira igual.
    - **Runa de arco:** todo personaje empieza en nivel mágico 0 y la runa pide 1. Con
      "Entréname" → "El combate" cualquier vocación pasa de 1 (la arcanista queda en 25) y la
      runa funciona en el acto, sin subir de nivel. Sin entrenar, una arcanista llega a 1
@@ -143,8 +156,33 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    (herrería 25) el yunque hace todo: por ejemplo, un hacha de leñador con 2 lingotes y 1
    tronco (4 minerales y 3 troncos en total, con la fragua). Las recetas no cambiaron: la
    herrería sigue empezando en 1 en el juego real.
+4b. **Forja (el yunque del taller, 2073,2102; docs/02 "Forja").** Usa el yunque y elige la
+   pestaña **Forja**. Abajo están tus piezas (las puestas y las de las mochilas abiertas):
+   elige una (una espada de hierro de Tobías, por ejemplo) y la ventana dice su nivel, el
+   siguiente, lo que suma, la chance en grande y lo que cuesta. Lo necesario, con Tobías y la
+   instructora:
+   - **piedras de temple:** la menor para piezas de nivel 1 a 9 (la espada, los escudos, la
+     ropa del kit), la mayor de 10 a 49 (la ballesta) y la radiante de 50 en adelante; 1 por
+     intento hasta +4, 2 de +5 a +7 y 3 de +8 a +10;
+   - **oro:** "Necesito dinero" con la instructora (cada intento cuesta el oro por nivel de
+     la banda por el nivel al que apunta: 3 × 5 = 15 cobre el +5 de una pieza de nivel 1);
+   - **herrería** (opcional): con "Entréname" → "Los oficios" (herrería 25) la chance de los
+     intentos arriesgados sube 4 puntos.
+
+   Prueba en orden: de +0 a +4 nunca falla (chispas sobre el yunque, sin confirmación); desde
+   +5 la chance baja (70, 55, 40, 25, 15 y 8 %) y el botón pide **confirmar** con el aviso en
+   rojo de que la pieza se puede romper. Sin ámbar, un fallo la **rompe** (se parte sobre el
+   yunque y desaparece); con el interruptor del ámbar marcado, un fallo la **baja un nivel** y
+   el ámbar se gasta (se gasta también si sale bien). Pasa el mouse por la pieza: se llama
+   "+5 espada de hierro" y la ficha dice "Refinado +5: +3 de ataque". Un +10 no se refina
+   más. Una pieza ofrecida en el intercambio no se puede refinar hasta sacarla; lo que está
+   publicado en el mercado no está en la mochila. Para probar muchos intentos seguidos sin
+   gastar tanto, compra piezas de nivel 1 (las más baratas de refinar).
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
-   con otro personaje. El personal (GM/admin) no puede usar el mercado: prueba con cuentas
+   con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
+   vender (un selector por atributo) y la oferta sale con su atributo en el listado; una
+   oferta de compra de espadas se llena eligiendo cuál de las tuyas entregar, de a una, y
+   la que llega al buzón del comprador es esa. El personal (GM/admin) no puede usar el mercado: prueba con cuentas
    sin rol. El intercambio directo se propone desde la lista de batalla ("Proponer un
    intercambio").
 6. **Casa (sur de la plaza).** Con nivel 12 o más y dinero, usa su puerta para alquilarla;

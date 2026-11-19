@@ -3,11 +3,14 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_OPS, McpServer } from "./server.ts";
 import type { Response } from "./server.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
+// Each test copies world/ and data/ to a sandbox and runs map operations and validation over
+// it: a few seconds on a dev machine, over 5 s on a slow CI runner.
+vi.setConfig({ testTimeout: 30_000 });
 // Sandboxes leave out the vendor PNGs that assets/sprites.yaml does not use: a pack has
 // thousands of files, and copying them all makes every sandbox seconds slower.
 const spriteManifest = readFileSync(join(repo, "assets/sprites.yaml"), "utf8");

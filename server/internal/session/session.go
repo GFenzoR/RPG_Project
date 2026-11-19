@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"sync/atomic"
 	"time"
 
@@ -146,6 +147,12 @@ type Config struct {
 	// Tutorial comes from data/tutorial.yaml (T4.2): its island must be on the map and
 	// what its steps reference must exist. Nil means no tutorial.
 	Tutorial *content.Tutorial
+	// Attributes is the pool of data/attributes.yaml (docs/02 "Atributos de items"): every
+	// equipable rolls one when it is created. Empty: nothing rolls, items keep what they have.
+	Attributes content.Attributes
+	// Rand is the seeded source of the attribute rolls: the loop's (game.Config.Rand), so
+	// a roll at start (a house floor's old item) and in a tick share it. Nil: a fixed seed.
+	Rand *rand.Rand
 	// Cosmetics is the catalog of data/cosmetics.yaml (T5.7). Nil: nothing can be
 	// equipped (EquipCosmetic answers shop.unavailable) and no CosmeticsState is sent.
 	Cosmetics *content.CosmeticShop
@@ -257,7 +264,9 @@ type World struct {
 	areaHit   []*Player
 	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
-	tileBuf    []int32
+	tileBuf []int32
+	// stackBuf holds one tile's stack while mapArea builds it (reused between areas).
+	stackBuf   []tileEntry
 	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
 	corpses    map[world.Pos][]*Corpse
 	corpseItem *content.Item
@@ -278,9 +287,11 @@ type World struct {
 	// inventory rules of balance.yaml.
 	byNum          map[uint16]*content.Item
 	startContainer *content.Item
-	useFor         game.Tick
-	reach          int
-	maxOpen        int
+	// rng is Config.Rand: the attribute rolls (attributes.go).
+	rng     *rand.Rand
+	useFor  game.Tick
+	reach   int
+	maxOpen int
 
 	// Doors (door.go): every tile of the map with a door item, the rooms behind locked
 	// doors and the room of each of their tiles (ids of rooms, 1-based), all worked out at
@@ -315,6 +326,9 @@ type World struct {
 	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
 	// their recipes, for StationOpen.
 	stations map[uint16][]*content.Item
+	// Forge (refine.go): balance.yaml forge when enabled (nil: off) and its station item.
+	forge        *content.Forge
+	forgeStation uint16
 
 	// Chat (T1.13): balance.yaml chat converted to ticks.
 	chatRefill game.Tick
@@ -395,6 +409,7 @@ type World struct {
 	refVotes     map[[2]int64]priceVote
 	refSellers   map[int64]bool
 	refAccounts  map[int64]bool
+	mkKinds      map[pieceKind]bool // listing's scratch: the kinds of piece already listed
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64
@@ -567,6 +582,10 @@ func New(cfg Config) (*World, error) {
 		heldGround:  map[*Item]groundHold{},
 		shopPending: map[int64]pendingShop{},
 		pf:          world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
+		rng:         cfg.Rand,
+	}
+	if w.rng == nil {
+		w.rng = rand.New(rand.NewPCG(1, 2))
 	}
 	if err := w.initCombat(); err != nil {
 		return nil, err
@@ -610,6 +629,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {
+		return nil, err
+	}
+	if err := w.initForge(); err != nil {
 		return nil, err
 	}
 	if err := w.initTutorial(); err != nil {

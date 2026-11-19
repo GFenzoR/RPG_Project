@@ -271,3 +271,42 @@ items:
   remains_feathers: 268
   remains_humanoid: 269
   remains_bramble: 270
+  mossweave_robe: 271
+  antler_amulet: 272
+  briar_ring: 273
+  ashweave_robe: 274
+  cinder_amulet: 275
+  obsidian_ring: 276
+  wyrmscale_pavise: 277
+  duskweave_robe: 278
+  wyrmcrest_helm: 279
+  wyrmhide_greaves: 280
+  wyrmhide_boots: 281
+  wyrmtooth_amulet: 282
+  emberheart_ring: 283
+  tidesteel_shield: 284
+  tidesteel_plate: 285
+  pearlweave_robe: 286
+  tidesteel_helm: 287
+  tidesteel_greaves: 288
+  tidesteel_sabatons: 289
+  blackpearl_amulet: 290
+  tidestone_ring: 291
+  forged_axe: 292
+  wyrmbone_axe: 293
+  wyrmbone_maul: 294
+  wyrmsinew_bow: 295
+  wyrmsinew_crossbow: 296
+  wyrmhorn_wand: 297
+  glacierheart_staff: 298
+  tidesteel_sword: 299
+  tidesteel_axe: 300
+  tidesteel_mace: 301
+  drownwood_bow: 302
+  tidesteel_crossbow: 303
+  pearlstorm_wand: 304
+  deepfrost_staff: 305
+  lesser_temper_stone: 306
+  greater_temper_stone: 307
+  radiant_temper_stone: 308
+  warding_amber: 309

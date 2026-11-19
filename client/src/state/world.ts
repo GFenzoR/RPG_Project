@@ -8,6 +8,8 @@
 // where the server says it is, gliding. Steps the server takes (other creatures, a
 // click-to-walk path) are drawn on the server's tick timeline (state/motion.ts Playout).
 import type { StationState } from "./recipes.ts";
+import { refineOutcome } from "./forge.ts";
+import type { RefineState } from "./forge.ts";
 
 /** How long before its time a presence check closes (covers the latency). */
 export const PRESENCE_GRACE_MS = 3000;
@@ -34,9 +36,10 @@ import type {
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
-import type { ClientContent, ItemDef } from "../content-types.ts";
+import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
+import { modsOf } from "./mods.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
   PLAYOUT_CATCH_UP,
@@ -278,6 +281,10 @@ export const EFFECT_GATHER = 5;
 export const EFFECT_GATHER_MISS = 6;
 /** A condition spell on its target, or a cure (T3.2, server/internal/session/condition.go). */
 export const EFFECT_BUFF = 7;
+/** The forge (docs/02 "Forja", server/internal/session/refine.go) on the anvil: sparks on a
+ * success, a shatter on a break or when the protection breaks instead. */
+export const EFFECT_REFINE = 8;
+export const EFFECT_SHATTER = 9;
 /** Projectile ids are PROJECTILE_ELEMENT + index of ELEMENTS. */
 export const PROJECTILE_ELEMENT = 1;
 export const ELEMENTS = ["physical", "fire", "ice", "energy", "earth", "holy", "death"] as const;
@@ -324,6 +331,8 @@ interface ChunkTiles {
   tiles: (readonly number[] | undefined)[];
   /** Stack sizes per tile, only for tiles with a stackable item (0 = not stackable). */
   counts: (readonly number[] | undefined)[];
+  /** Each item's mods, only for tiles with an item that has some (an equipable's attribute). */
+  mods: (readonly (ItemMods | undefined)[] | undefined)[];
   /** What the renderer sees; rebuilt (new object) after a change. */
   data: ChunkData | undefined;
 }
@@ -336,10 +345,14 @@ const chunkKey = (z: number, cx: number, cy: number): string => `${z}/${cx}/${cy
 const posOf = (p: { x: number; y: number; z: number } | undefined): Pos =>
   p ? { x: p.x, y: p.y, z: p.z } : { x: 0, y: 0, z: 0 };
 
-/** One item as the client sees it: numeric ID and stack size (0 when it does not stack). */
+/**
+ * One item as the client sees it: numeric ID, stack size (0 when it does not stack) and, on
+ * an instance with them, its mods (an equipable's attribute, docs/02 "Atributos de items").
+ */
 export interface ItemView {
   itemId: number;
   count: number;
+  mods?: ItemMods | undefined;
 }
 
 /** An open container window (ContainerOpen): its session ID, item and content. */
@@ -351,7 +364,10 @@ export interface ContainerState {
   hasParent: boolean;
 }
 
-const itemView = (s: ItemStack): ItemView => ({ itemId: s.itemId, count: s.count });
+const itemView = (s: ItemStack): ItemView => {
+  const mods = modsOf(s);
+  return mods ? { itemId: s.itemId, count: s.count, mods } : { itemId: s.itemId, count: s.count };
+};
 
 /** An open NPC dialog (DialogOpen): the NPC's text and the options the player sees. */
 export interface DialogState {
@@ -434,6 +450,8 @@ export class WorldState implements TileSource {
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
+  /** The last forge attempt's result (docs/02 "Forja"), for the forge window. */
+  refine: RefineState | undefined;
   /**
    * A presence check waiting for an answer (T4.1), until answered or out of time (see
    * `activePresence`). The server's clock runs only while the player plays, it is sent
@@ -509,6 +527,15 @@ export class WorldState implements TileSource {
       chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
     );
     return c?.tiles[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)];
+  }
+
+  /** The mods of each item of a known tile (undefined: none has any), parallel to tile(). */
+  tileMods(x: number, y: number, z: number): readonly (ItemMods | undefined)[] | undefined {
+    if (x < 0 || y < 0) return undefined;
+    const c = this.chunks.get(
+      chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
+    );
+    return c?.mods[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)];
   }
 
   /** Stack size of each item of a known tile (0 = not stackable), parallel to tile(). */
@@ -778,6 +805,19 @@ export class WorldState implements TileSource {
           itemId: v.itemId,
           owned: new Map(v.owned.map((o) => [o.itemId, o.count])),
           tools: new Set(v.tools),
+          money: Number(v.money),
+        };
+        break;
+      }
+      case "refineResult": {
+        const v = msg.value;
+        this.refine = {
+          outcome: refineOutcome(v.outcome),
+          level: v.level,
+          itemId: v.item?.itemId ?? 0,
+          mods: v.item ? modsOf(v.item) : undefined,
+          from: Number(v.text?.params.find((p) => p.name === "from")?.value.value ?? 0),
+          at: now,
         };
         break;
       }
@@ -986,6 +1026,7 @@ export class WorldState implements TileSource {
       c = {
         tiles: new Array<readonly number[] | undefined>(CHUNK_TILES * CHUNK_TILES),
         counts: new Array<readonly number[] | undefined>(CHUNK_TILES * CHUNK_TILES),
+        mods: new Array<readonly (ItemMods | undefined)[] | undefined>(CHUNK_TILES * CHUNK_TILES),
         data: undefined,
       };
       this.chunks.set(key, c);
@@ -993,6 +1034,7 @@ export class WorldState implements TileSource {
     const i = (y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES);
     c.tiles[i] = items;
     c.counts[i] = stack?.some((s) => s.count > 0) ? stack.map((s) => s.count) : undefined;
+    c.mods[i] = stack?.some((s) => modsOf(s)) ? stack.map(modsOf) : undefined;
     c.data = undefined;
   }
 

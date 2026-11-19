@@ -140,13 +140,15 @@ func healScaling(h *content.SpellHeal) *content.Scaling {
 }
 
 // scaled rolls s for caster p: its level, magic level and, when s names one, the level
-// of s.Skill (the ranger's spells scale with distance, T3.1), with its skill conditions.
+// of s.Skill (the ranger's spells scale with distance, T3.1), with its skill conditions
+// and the skill attributes of its worn items (a magic level attribute raises the magic
+// level a spell uses, never the one its requirements read; attributes.go).
 func (w *World) scaled(ctx *game.TickContext, s content.Scaling, p *Player) int {
 	skill := 0
 	if s.Skill != "" {
 		skill = w.combatSkill(p, w.scalingSkill(p, s.Skill))
 	}
-	return combat.Scaled(ctx.Rand, s, p.level, w.magicLevel(p), skill)
+	return combat.Scaled(ctx.Rand, s, p.level, w.magicLevel(p)+p.gear.skill[SkillMagic], skill)
 }
 
 // scalingSkill is the skill id a scaling's skill names for p: content.SkillWeapon is the
@@ -535,14 +537,15 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 			p.emit(systemMsg(msgNoRoom))
 			return false
 		}
-		it := newItem(def, def.StackLimit()) // a rune with all its charges
+		// A rune with all its charges; an equipable rolls its attribute (attributes.go).
+		it := w.created(def, def.StackLimit())
 		if it.weight() > p.capacity-p.carried() {
 			p.emit(systemMsg(msgTooHeavy))
 			return false
 		}
 		w.attach(p, it, place{kind: locContainer, cont: bp})
 		w.containerChanged(bp)
-		w.econItem(p, EconConjure, "", def, 1)
+		w.econMade(p, EconConjure, "", 0, def, 1, []*Item{it})
 		shown = it.stack()
 	}
 	w.eachWatcher(p, func(o *Player) {
@@ -746,12 +749,12 @@ func (w *World) wandFight(ctx *game.TickContext, p *Player, f foe) {
 	}
 	w.playerAttack(ctx, p, pb.AttackKind_ATTACK_KIND_RANGED, f)
 	w.projectile(p.pos, f.pos(), element)
-	dmg := combat.WandHit(ctx.Rand, wp.Attack, w.cfg.Balance.Combat.WandMinFactor)
+	dmg := combat.WandHit(ctx.Rand, wp.Attack+p.gear.attack, w.cfg.Balance.Combat.WandMinFactor)
 	if f.p != nil {
-		w.hurtPlayer(ctx, p, f.p, dmg, element, true) // T5.2: players have no resistances
+		w.leech(p, w.hurtPlayer(ctx, p, f.p, dmg, element, true)) // T5.2: no resistances, but protections
 		return
 	}
-	w.damageMonster(ctx, f.m, p, combat.Resist(dmg, f.m.kind.def.Resistances[element]), element)
+	w.leech(p, w.damageMonster(ctx, f.m, p, combat.Resist(dmg, f.m.kind.def.Resistances[element]), element))
 }
 
 // rangedReady reports whether p can shoot at pos this tick: within rng tiles (at least

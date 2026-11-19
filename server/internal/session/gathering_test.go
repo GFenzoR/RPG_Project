@@ -42,7 +42,7 @@ var gatherItemDefs = map[uint16]string{
 		drops: [{item: iron_ore, weight: 1}, {item: rough_stone, weight: 1, count: [2, 3]}]}}`,
 }
 
-func gatherHarness(t *testing.T, m *world.Map, afkMs int) *harness {
+func gatherHarness(t *testing.T, m *world.Map, afkMs int, opts ...option) *harness {
 	t.Helper()
 	items := testItems()
 	for n, src := range gatherItemDefs {
@@ -53,13 +53,13 @@ func gatherHarness(t *testing.T, m *world.Map, afkMs int) *harness {
 		it.Numeric = n
 		items[it.ID] = &it
 	}
-	return newHarness(t, m, func(c *session.Config) {
+	return newHarness(t, m, append([]option{func(c *session.Config) {
 		c.Items = items
 		c.Balance.Skills.Base["fishing"] = content.SkillBase{StartLevel: 10, BaseTries: 22}
 		c.Balance.Skills.Base["mining"] = content.SkillBase{StartLevel: 1, BaseTries: 20}
 		c.Balance.Gathering.UseIntervalMs = 1500
 		c.Balance.Gathering.AFK.AfterMs, c.Balance.Gathering.AFK.Factor = afkMs, 0.25
-	})
+	}}, opts...)...)
 }
 
 // gatherer joins a character at p holding tool in the right hand and an empty backpack.

@@ -11,38 +11,19 @@
 # Pack art: Dungeon Crawl Stone Soup tiles (CC0, vendor/dungeon-crawl). What the pack does not
 # cover is original art drawn by tools/spritegen into assets/sprites/ (make spritegen), so it is
 # not listed here. That includes the frames no data/ file names: outfit frames
-# (outfits/<id>/<dir>_<n>) and the combat and spell effect strips (effects/<name>/<n>).
+# (outfits/<id>/<dir>_<n>) and the combat and spell effect strips (effects/<name>/<n>). Every
+# weapon, shield, armour piece, jewel and ammunition (weapons/, shields/, armor/, jewelry/,
+# ammo/) is drawn by the sprite engine since lote 11 (docs/17 "Íconos de items"): none of them
+# is listed here.
 sprites:
 
   # Items
-  armor/patched_tunic: { source: vendor/dungeon-crawl/item/armour/robe1.png }
-  shields/plank_shield: { source: vendor/dungeon-crawl/UNUSED/armour/elven_buckler1.png }
   currency/gold_coin: { source: vendor/dungeon-crawl/item/gold/03.png }
   materials/wolf_pelt: { source: vendor/dungeon-crawl/item/armour/animal_skin1.png }
-  weapons/iron_sword: { source: vendor/dungeon-crawl/item/weapon/long_sword1.png }
-  weapons/hatchet: { source: vendor/dungeon-crawl/item/weapon/hand_axe1.png }
-  weapons/driftwood_club: { source: vendor/dungeon-crawl/item/weapon/giant_club.png }
 
   # Items: Isla del Puerto
-  weapons/rusty_cutlass: { source: vendor/dungeon-crawl/item/weapon/falchion1.png }
-  weapons/boarding_saber: { source: vendor/dungeon-crawl/item/weapon/scimitar1.png }
-  weapons/bearded_axe: { source: vendor/dungeon-crawl/item/weapon/hand_axe2.png }
-  weapons/belaying_pin: { source: vendor/dungeon-crawl/item/weapon/club.png }
-  weapons/spiked_cudgel: { source: vendor/dungeon-crawl/item/weapon/giant_spiked_club.png }
-  weapons/coral_wand: { source: vendor/dungeon-crawl/item/wand/gem_ivory.png }
   runes/arc_rune: { source: vendor/dungeon-crawl/item/misc/runes/generic.png }
-  # Items: ranger and druid (T3.1)
-  weapons/short_bow: { source: vendor/dungeon-crawl/item/weapon/ranged/shortbow1.png }
-  weapons/yew_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow1.png }
-  weapons/sapling_staff: { source: vendor/dungeon-crawl/item/staff/staff05.png }
-  weapons/rimewood_staff: { source: vendor/dungeon-crawl/item/wand/gem_glass.png }
-  ammo/arrow: { source: vendor/dungeon-crawl/effect/arrow3.png }
-  armor/hide_vest: { source: vendor/dungeon-crawl/item/armour/animal_skin2.png }
-  armor/sailcloth_cap: { source: vendor/dungeon-crawl/UNUSED/armour/cap1.png }
-  armor/leather_jerkin: { source: vendor/dungeon-crawl/item/armour/leather_armour1.png }
-  armor/tarred_boots: { source: vendor/dungeon-crawl/item/armour/boots1_brown.png }
-  shields/barrel_lid_shield: { source: vendor/dungeon-crawl/item/armour/shields/buckler1.png }
-  shields/riveted_round_shield: { source: vendor/dungeon-crawl/UNUSED/armour/dwarven_buckler1.png }
+  # Items: food and materials of T3.1
   food/ship_biscuit: { source: vendor/dungeon-crawl/item/food/bread_ration.png }
   food/boar_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
   materials/spider_silk: { source: vendor/dungeon-crawl/item/weapon/ranged/throwing_net.png }
@@ -56,13 +37,9 @@ sprites:
   tools/smithing_hammer: { source: vendor/dungeon-crawl/UNUSED/weapons/hammer1.png }
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
   food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
-  weapons/forged_shortsword: { source: vendor/dungeon-crawl/item/weapon/short_sword1.png }
 
   # Items: Isla del Bosque (T3.6)
   quest/sealed_coffer: { source: vendor/dungeon-crawl/item/misc/misc_box.png }
-  shields/elmwood_shield: { source: vendor/dungeon-crawl/item/armour/shields/large_shield1.png }
-  armor/stagleather_coat: { source: vendor/dungeon-crawl/item/armour/cloak1_leather.png }
-  weapons/thornwood_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/urand_wyrmbane.png }
 
   # Creatures
   decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
@@ -77,35 +54,11 @@ sprites:
   quest/ember_root: { source: vendor/dungeon-crawl/item/misc/runes/rune_gehenna.png }
   quest/delver_chart: { source: vendor/dungeon-crawl/item/scroll/scroll-brown.png }
   quest/forge_seal: { source: vendor/dungeon-crawl/item/misc/misc_disc.png }
-  weapons/embersteel_sabre: { source: vendor/dungeon-crawl/item/weapon/falchion3.png }
-  weapons/embersteel_axe: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_wrath_of_trog.png }
-  weapons/wyrmfang_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_sword_of_cerebov.png }
-  armor/embersteel_helm: { source: vendor/dungeon-crawl/item/armour/headgear/helmet5.png }
-  armor/embersteel_cuirass: { source: vendor/dungeon-crawl/item/armour/plate1.png }
-  shields/embersteel_shield: { source: vendor/dungeon-crawl/item/armour/shields/lshield_dd_dk.png }
-  armor/wyrmscale_mail: { source: vendor/dungeon-crawl/item/armour/artefact/urand_salamander.png }
 
   # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine and the practice
   # gate of the sandbox island, shut and open.
 
-  # Content audit (2026-11): weapon tiers to the Isla Volcánica, crossbows and bolts, head,
-  # feet and leg pieces, the arcanist's starting wand and the mana draughts. The embersteel
-  # greaves are spritegen art (assets/sprites/armor), like the other leg pieces.
-  weapons/spark_wand: { source: vendor/dungeon-crawl/item/wand/gem_brass.png }
-  weapons/stormglass_wand: { source: vendor/dungeon-crawl/item/wand/gem_silver.png }
-  weapons/obsidian_wand: { source: vendor/dungeon-crawl/item/wand/gem_iron.png }
-  weapons/hoarfrost_staff: { source: vendor/dungeon-crawl/item/staff/staff02.png }
-  weapons/blackfrost_staff: { source: vendor/dungeon-crawl/item/staff/staff00.png }
-  weapons/elmroot_maul: { source: vendor/dungeon-crawl/item/weapon/club2.png }
-  weapons/embersteel_mace: { source: vendor/dungeon-crawl/item/weapon/morningstar2.png }
-  weapons/thornwood_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow2.png }
-  weapons/embersteel_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow3.png }
-  weapons/smuggler_crossbow: { source: vendor/dungeon-crawl/item/weapon/ranged/hand_crossbow.png }
-  weapons/embersteel_crossbow: { source: vendor/dungeon-crawl/item/weapon/ranged/hand_crossbow2.png }
-  ammo/bolt: { source: vendor/dungeon-crawl/effect/bolt2.png }
-  armor/stagleather_hood: { source: vendor/dungeon-crawl/item/armour/headgear/elven_leather_helm.png }
-  armor/stagleather_boots: { source: vendor/dungeon-crawl/item/armour/boots4_green.png }
-  armor/embersteel_sabatons: { source: vendor/dungeon-crawl/UNUSED/armour/boots_iron2.png }
+  # Content audit (2026-11): the mana and health draughts.
   potions/mana_draught: { source: vendor/dungeon-crawl/item/potion/sky_blue.png }
   potions/concentrated_mana_draught: { source: vendor/dungeon-crawl/item/potion/brilliant_blue.png }
   potions/health_draught: { source: vendor/dungeon-crawl/item/potion/ruby.png }

@@ -124,6 +124,48 @@ export const PALETTE = {
    */
   fireCore: material("#fff8d8", "#ffe070", "#ffab30", "#f0661c"),
   flame: material("#ffd447", "#ff9021", "#e9511a", "#b3260f"),
+  // Equipment icons (engine/specs/items, docs/17 "Íconos de items"): each level band of the
+  // catalog has its own metal and accent, so a better piece reads as better at a glance.
+  /** Band 1: pitted, rusty iron (the cutlass, the hatchet's head, hoops and nails). */
+  rust: material("#b78a68", "#8d654a", "#664632", "#432d20"),
+  /** Band 3: bright, cold forged steel with a blue cast. */
+  steel: material("#dfe7ee", "#a9b5c1", "#76838f", "#4b5661"),
+  /** Band 5: wyrmling scales, jade green. */
+  wyrmScale: material("#8cc49a", "#5a9a72", "#3c7053", "#264a37"),
+  /** Band 6: tidesteel, sea-blue steel, dark enough for its runes to glow on it. */
+  tidesteel: material("#bfe2e8", "#7eb0bd", "#55808f", "#365766"),
+  /** Band 6: the runes that light tidesteel (a `glow` part: brightest toward the camera). */
+  rune: material("#b4fff6", "#45e3e8", "#1fa9c6", "#136f93"),
+  /** Pearl and nacre: the pearlstorm wand, the pearlweave robe, the pommels of band 6. */
+  pearl: material("#f8f3f5", "#dcd2dc", "#b0a4b5", "#7c7086"),
+  /** Wood that spent centuries under the sea: dark blue-grey. */
+  drownwood: material("#74838c", "#55626c", "#3d4750", "#283037"),
+  /** White coral, still cold from the sea floor. */
+  coral: material("#f4ece6", "#d9c9c2", "#ad9a95", "#7a6866"),
+  /** Glass that keeps a lightning strike: violet blue (the stormglass wand). */
+  stormglass: material("#dcd6ff", "#a093f2", "#6c5cc6", "#44388c"),
+  /** Volcanic glass: near black with a violet sheen. */
+  obsidian: material("#7a7088", "#4b4358", "#322c3c", "#1f1a27"),
+  /** Ice that never melts: pale cyan crystal (the druid's staffs). */
+  ice: material("#f2fbff", "#c2e7f6", "#88bfd9", "#5689a8"),
+  /** Black ice from the volcano's basalt: dark blue. */
+  blackIce: material("#93a9d8", "#5d72aa", "#3e4e7e", "#283357"),
+  /** The spark wand's charge: a yellow-white crackle (a `glow` part). */
+  spark: material("#fffbd0", "#ffe46e", "#f0b02e", "#b0711a"),
+  /** Tarred, salt-stained leather: near black brown (the tarred boots). */
+  tar: material("#806a57", "#5c4a3b", "#42352a", "#2b221b"),
+  /** Robe cloths by band: moss green, ash grey, dusk violet and pearl white. */
+  mossCloth: material("#a3b672", "#768f4d", "#556b36", "#384823"),
+  ashCloth: material("#aea8a0", "#86817a", "#635f59", "#43403c"),
+  duskCloth: material("#a28bc9", "#7761a2", "#55437a", "#372b53"),
+  pearlCloth: material("#d9e1ec", "#a8b5c8", "#7a87a0", "#4e5972"),
+  /** The emberheart ring's stone, a red that beats (a `glow` part). */
+  heartstone: material("#ffd2c4", "#ff6a52", "#d8332d", "#8e1822"),
+  // The forge's materials (engine/specs/forge-materials.ts, docs/02 "Forja"): the greater
+  // temper stone's blue-grey whetstone, the radiant one's pale stone, and the warding amber.
+  temperBlue: material("#a3b6c8", "#768a9e", "#566678", "#3a4653"),
+  paleStone: material("#c8c3b3", "#a19c8d", "#7b776c", "#56534b"),
+  amber: material("#ffd27a", "#e8a03a", "#b4661c", "#723c10"),
 } as const satisfies Record<string, Material>;
 
 export type MaterialName = keyof typeof PALETTE;

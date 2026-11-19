@@ -153,6 +153,7 @@ export function emptyGameUi(): GameUi {
     dialog: undefined,
     shop: undefined,
     station: undefined,
+    refine: undefined,
     trade: undefined,
     market: undefined,
     house: undefined,

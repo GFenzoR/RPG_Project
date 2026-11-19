@@ -65,6 +65,8 @@ const equipSlots = int(pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO) + 1
 type Item struct {
 	def   *content.Item
 	count int // stack size; 1 for items that do not stack
+	// mods is the instance's own data: its attribute and refine level (attributes.go).
+	mods Mods
 	// items is the content of a container, index 0 first.
 	items []*Item
 
@@ -147,11 +149,16 @@ func (it *Item) contains(c *Item) bool {
 }
 
 func (it *Item) stack() *pb.ItemStack {
-	s := &pb.ItemStack{ItemId: uint32(it.def.Numeric)}
+	return &pb.ItemStack{ItemId: uint32(it.def.Numeric), Count: it.wireCount(), Mods: it.mods.msg()}
+}
+
+// wireCount is the count an ItemStack of it carries: a stack's size, a rune's charges, 0
+// for anything else.
+func (it *Item) wireCount() uint32 {
 	if it.def.Stackable || it.def.Rune != nil {
-		s.Count = uint32(it.count) // a rune's count is its charges
+		return uint32(it.count) // a rune's count is its charges
 	}
-	return s
+	return 0
 }
 
 func (it *Item) stacks() []*pb.ItemStack {
@@ -171,17 +178,18 @@ type openContainer struct {
 // ---- saved state ---------------------------------------------------------------
 
 // ItemState is a saved item: its numeric id (data/ids.lock.yaml), stack size, slot
-// (pb.EquipmentSlot for an equipped item, index for an item inside a container) and the
-// content of a container.
+// (pb.EquipmentSlot for an equipped item, index for an item inside a container), its mods
+// (attribute and refine, attributes.go) and the content of a container.
 type ItemState struct {
 	ItemID uint16
 	Count  int
 	Slot   int
+	Mods   Mods
 	Items  []ItemState
 }
 
 func (it *Item) state(slot int) ItemState {
-	s := ItemState{ItemID: it.def.Numeric, Count: it.count, Slot: slot}
+	s := ItemState{ItemID: it.def.Numeric, Count: it.count, Slot: slot, Mods: it.mods}
 	for i, c := range it.items {
 		s.Items = append(s.Items, c.state(i))
 	}
@@ -198,14 +206,16 @@ func (p *Player) inventoryStates() []ItemState {
 	return out
 }
 
-// loadItem builds an item from its saved state; unknown (retired) items are dropped.
+// loadItem builds an item from its saved state, with its mods; unknown (retired) items
+// are dropped. An equipable saved without an attribute rolls it now (instance): the next
+// save of its place keeps it.
 func (w *World) loadItem(s ItemState) *Item {
 	def := w.byNum[s.ItemID]
 	if def == nil {
 		w.log.Warn("session: unknown item in saved inventory dropped", "item", s.ItemID)
 		return nil
 	}
-	it := newItem(def, min(s.Count, def.StackLimit()))
+	it := w.instance(def, min(s.Count, def.StackLimit()), s.Mods)
 	for _, cs := range s.Items {
 		if len(it.items) >= def.Slots() {
 			break
@@ -278,6 +288,7 @@ func (w *World) equipmentChanged(p *Player) {
 			p.armor += it.def.Armor.Armor
 		}
 	}
+	w.applyGear(p) // the attributes of what p wears (attributes.go)
 }
 
 var armorSlots = map[string]pb.EquipmentSlot{
@@ -634,6 +645,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if count < it.count {
 		it.count -= count
 		moving = newItem(it.def, count)
+		moving.mods = it.mods // a split keeps the instance's data (stackables have none)
 		w.changed(it)
 	} else {
 		w.detach(it)
@@ -696,11 +708,12 @@ func mergeTarget(list []*Item, it *Item, count int) *Item {
 
 // mergeTargetIf is mergeTarget among the stacks ok accepts (nil: any).
 func mergeTargetIf(list []*Item, it *Item, count int, ok func(*Item) bool) *Item {
-	if !it.def.Stackable {
-		return nil
+	if !it.def.Stackable || !it.mods.Zero() {
+		return nil // an instance with mods never stacks (attributes.go)
 	}
 	for _, c := range list {
-		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() && (ok == nil || ok(c)) {
+		if c != it && c.def.Numeric == it.def.Numeric && c.mods.Zero() && c.count+count <= it.def.StackLimit() &&
+			(ok == nil || ok(c)) {
 			return c
 		}
 	}
@@ -1028,9 +1041,12 @@ func (w *World) useUp(p *Player, it *Item) {
 // lookAt answers a LookAt with a system message: the item (the client adds its
 // translated name and description), its weight in grams and its combat numbers. Any
 // visible item can be looked at, including the ground and the map's own items; the
-// ground and fixed items (pickupable: false, not containers) say only their name.
+// ground and fixed items (pickupable: false, not containers) say only their name. An
+// instance goes with its mods (a refined one is named "+7 sword") and its numbers with
+// what its refine level adds (the forge, refine.go refinedStat).
 func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	var def *content.Item
+	var inst *Item
 	weight, count := 0, 0
 	if pos, ok := posFromMsg(m.GetFrom().GetPos()); ok {
 		if pos.Z != p.pos.Z || !Sees(p.pos, pos) {
@@ -1065,11 +1081,16 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 			p.emit(systemMsg(msgTooFar))
 			return
 		}
-		def, weight, count = it.def, it.weight(), it.count
+		def, weight, count, inst = it.def, it.weight(), it.count, it
 	}
 	stack := &pb.ItemStack{ItemId: uint32(def.Numeric)}
 	if def.Stackable || def.Rune != nil {
 		stack.Count = uint32(count)
+	}
+	refined := 0
+	if inst != nil {
+		stack.Mods = inst.mods.msg()
+		refined = w.refinedStat(inst)
 	}
 	num := func(name string, v int) *pb.TextParam {
 		return &pb.TextParam{Name: name, Value: &pb.TextParam_Number{Number: int64(v)}}
@@ -1084,13 +1105,13 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 		return
 	case def.Weapon != nil:
 		key = msgLookWeapon
-		params = append(params, num("attack", def.Weapon.Attack), num("defense", def.Weapon.Defense))
+		params = append(params, num("attack", def.Weapon.Attack+refined), num("defense", def.Weapon.Defense))
 	case def.Armor != nil:
 		key = msgLookArmor
-		params = append(params, num("armor", def.Armor.Armor))
+		params = append(params, num("armor", def.Armor.Armor+refined))
 	case def.Shield != nil:
 		key = msgLookShield
-		params = append(params, num("defense", def.Shield.Defense))
+		params = append(params, num("defense", def.Shield.Defense+refined))
 	case def.Container != nil:
 		key = msgLookContainer
 		params = append(params, num("slots", def.Slots()))

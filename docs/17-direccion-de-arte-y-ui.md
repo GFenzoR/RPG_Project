@@ -627,6 +627,7 @@ persona de LPC). Se miran con Read.
   oscuro abajo, con el núcleo claro, la cabeza, los brazos y el martillo alzado legibles y
   una silueta de costado de figura con el martillo en alto; se compararon las tres
   versiones lado a lado sobre su suelo y quedó la nueva.
+- **Íconos de items** (2026-11-19): las 86 piezas de equipo; ver "Íconos de items", abajo.
 - **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
   cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
 - **Props de una casilla** (2026-11-18, pedido del dueño: *"si bien las gráficas no están
@@ -679,10 +680,87 @@ persona de LPC). Se miran con Read.
 
 **Pendiente:** otros props animados con `loop` (una bandera o un farol colgado si llegan
 al mapa; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
-dueño quiere, sumar primitivas si hacen falta (un toro para anillos, cajas redondeadas) y
+dueño quiere, sumar primitivas si hacen falta (cajas redondeadas; los anillos de los
+íconos de items salieron bien con un aro de cápsulas, sin toro) y
 mirar en el juego el jabalí, el ciervo, el eco de la forja, el yunque y los cajones: el E2E
 del lote 9 (verde) solo los muestra de pasada (los carteles de Brasal se leen claros) y
 ningún screenshot los tiene (docs/14).
+
+### Íconos de items (hecho, 2026-11-19, rama `feat/item-icons`, lote 11)
+Pedido del dueño (2026-11-18, al rehacer el catálogo de equipo, docs/02 "Catálogo de
+equipo"): pocas piezas, **cada una con su propio sprite dibujado con el motor de
+sprites**. Eso reabre SRC-4, que dejaba los íconos de Dungeon Crawl: desde esta rama
+ninguna pieza de equipo usa uno. Se dibujaron **86 íconos**: las 78 piezas del catálogo,
+las 6 retiradas (siguen en inventarios viejos: el garrote de deriva, la espada corta
+forjada, la hoja de espino, la rodela remachada, el jubón de cuero y el chaleco de piel) y
+las dos municiones. La mochila, el único contenedor del equipo, ya era arte propio.
+
+**La clase `icon`** (`engine/style.ts` `SIZES.icon`): una sola imagen de 32x32 con el
+origen del modelo en el centro del lienzo (sin fila de suelo), que el cliente muestra
+centrada en un slot del inventario (a 1x, o a 2x en los slots grandes de la figura) y en
+su casilla cuando está en el suelo. Es de tipo `item`: el contorno oscuro de las criaturas
+(`OUTLINE.item`: el slot es un pozo casi negro y el pasto es oscuro; con el contorno suave
+de los objetos se perdía) con el pliegue suave de un objeto, y la banda de valor de los
+objetos (ART-6, L\* 25-65). Puertas propias además de las de siempre (`GATES`): la caja
+de la figura centrada a 1,5 px o menos en los dos ejes (`iconCentre`) y su lado más largo
+de 16 px o más (`iconSpan`: más chico es una mancha a 1x); de alto y de ancho, de 8 a 30.
+
+**Cómo se arman** (`engine/specs/items/`: `kit.ts`, `weapons.ts`, `armor.ts`,
+`jewelry.ts`; `index.ts` los registra y arma las filas de la hoja de revisión):
+- **Un constructor por línea** (espada, hacha, maza, arco, ballesta, varita, vara,
+  escudo, torso pesado, túnica, cabeza, piernas, pies, amuleto, anillo, munición) y una
+  llamada por banda con su forma y sus materiales: así una banda mejor se reconoce de un
+  vistazo, y una pieza nueva es una llamada más.
+- **Armas** a lo largo de +z, inclinadas 45° (`lean`): la cabeza arriba a la derecha y el
+  lado -x (el filo de un hacha, el lomo de un arco) arriba a la izquierda, donde pega la
+  luz. Una hoja son dos placas (`blade`): la mitad de arriba a la izquierda iluminada y la
+  otra en sombra, así se lee la arista del medio.
+- **Armaduras** de pie y de frente a la cámara, con un poco de `bulge` para que la luz
+  de arriba a la izquierda las redondee: escudos con borde, cara, tablas, bandas y umbo;
+  torsos con cuello, cinturón, hombreras; túnicas largas con mangas de campana y capucha;
+  yelmos con la visera por delante de la cúpula; un par de botas de costado, una detrás de
+  la otra.
+- **Joyas:** el amuleto cuelga de frente (cordón o cadena de cuentas y el colgante
+  abajo); el anillo, acostado e inclinado 15° hacia la cámara, con el agujero a la vista y
+  la piedra arriba, es un aro de cápsulas (no hizo falta un toro). **Munición:** un atado
+  de tres flechas o virotes, que se lee como una pila.
+- `centred` mueve el modelo de a píxeles enteros hasta centrar la figura (un movimiento
+  entero solo traslada los píxeles); `resized` agranda o achica una línea entera y la
+  vuelve a centrar (`grow`, `specs/grow.ts`, compartido con los restos).
+
+**Las bandas** (los materiales nuevos están en `palette.ts`, sección "Equipment icons"):
+
+| Banda | Niveles | Metal y materiales | Acento | Silueta |
+|---|---|---|---|---|
+| 1 | 1–4 | hierro picado de óxido (`rust`), madera, lona, cuero alquitranado | ninguno | chica y simple |
+| 2 | 5–9 | hierro (`iron`), madera clara | ninguno | un poco más grande |
+| 3 | 10–29 | acero frío (`steel`), olmo, cuero de ciervo, musgo, espino | cristales de hielo y vidrio de tormenta en las de magos | más larga, guarnición, umbo, barba |
+| 4 | 30–49 | acero de ascua (`darkIron`), ceniza, obsidiana, basalto | brasa que brilla (`ember`, `glow`) en el filo, las ranuras y las juntas | ancha, con púas, aletas o hombreras |
+| 5 | 50–74 | hueso y escamas de dragoncillo (`bone`, `wyrmScale`) | oro y jade (`gold`), hielo grande | cuernos, colmillos, pavés alto |
+| 6 | 75–100+ | acero de marea (`tidesteel`), madera ahogada, nácar (`pearl`) | runas que brillan (`rune`, `glow`) y perlas | la más grande y trabajada |
+
+Un test (`engine/items.test.ts`) exige que cada banda de una línea cambie la imagen y no
+use los mismos materiales que la anterior.
+
+**Revisión:** `spritegen sheet` escribe, además de la hoja y el lineup de cada ícono (que
+lo pone junto a una persona de LPC sobre el pasto y debajo en un slot del inventario a 1x
+y a 2x), `build/spritegen/icons.slots.png` (todos, una fila por línea y una columna por
+banda: en el slot a 2x, a 1x y sobre una casilla de pasto) e `icons.detail.png` (a 4x).
+`make ui-preview`: la escena `inventory` y `inventoryfloat` llevan la figura completa con
+la banda 3 y la mochila con piezas de las bandas siguientes; la tienda (`shop`) es casi
+toda de equipo.
+
+**Lo que aprendió la revisión** (2026-11-19, hojas a 1x, 2x y 4x): las hojas cortas y
+anchas se leían como hojas de árbol (se alargaron hasta llenar ~26 px en diagonal); el
+alfanje de óxido puro parecía de madera (hierro oscurecido con manchas de óxido); el acero
+de marea muy claro tapaba sus runas (más oscuro, y la runa un cian saturado); las túnicas
+con mangas cortas eran camisetas (mangas de campana, falda que se abre y capucha); el hacha
+de doble filo parecía un martillo (un pico curvo como una ola atrás); las botas
+alquitranadas, el anillo de zarza y el amuleto de brasa quedaban bajo L\* 25 (más claros).
+
+**Siguen de Dungeon Crawl:** la comida, los materiales, las pociones, los items de quest,
+el hacha de leñador, el martillo de herrero, la runa y las escaleras. El pack queda entero
+en `assets/vendor/dungeon-crawl/` (se guarda tal como se bajó).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -1396,7 +1474,10 @@ la misma convención de nombres (`var_`, `frame_`, `wall_`, `shadow`) como entra
 `sprites.yaml`.
 
 Se quedan:
-- los íconos de items de Dungeon Crawl, que se leen bien a 32x32;
+- los íconos de items de Dungeon Crawl que no son equipo (comida, materiales, pociones,
+  items de quest, algunas herramientas). Los del equipo los reemplazó el motor de sprites
+  por pedido del dueño (2026-11-18, lote 11: un sprite propio por pieza; "Íconos de
+  items", en §3);
 - los efectos propios (`effects/*`);
 - las marcas PvP.
 

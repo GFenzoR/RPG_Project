@@ -4,6 +4,7 @@
 // centred, no icon, the description last). The data is state/item-card.ts (pure); this only
 // draws it. No hooks: ItemCard.test.ts walks its tree without a DOM.
 import type { JSX } from "preact";
+import { refinedName } from "../state/forge.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { CardEffect, CardRequirement, CardStat, ItemCardView } from "../state/item-card.ts";
 
@@ -64,7 +65,12 @@ export function BigIcon(props: {
 
 /** The item's name with its count ("arrow ×37"). */
 export function cardTitle(t: Translate, card: ItemCardView): string {
-  const name = card.id ? t(`item.${card.id}.name`) : String(card.itemId);
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
+  const name = refinedName(
+    t,
+    card.id ? t(`item.${card.id}.name`) : String(card.itemId),
+    card.refine?.level,
+  );
   return card.count > 1 ? t("client.card.count", { name, count: card.count }) : name;
 }
 
@@ -115,6 +121,52 @@ export function nameClass(card: ItemCardView): string {
   return card.quest ? "card-name quest" : card.currency ? "card-name coin" : "card-name";
 }
 
+/**
+ * The attribute's line (docs/02 "Atributos de items"): "+12 maximum health"; for an
+ * equipable without one, that it rolls one when it is made or (the market) that each
+ * piece has its own; or that the instance's attribute was retired.
+ */
+export function attributeText(t: Translate, card: ItemCardView): string {
+  const a = card.attribute;
+  if (!a) return "";
+  if ("random" in a) return t("client.card.attribute_random");
+  if ("any" in a) return t("client.card.attribute_any");
+  if ("retired" in a) return t("client.card.attribute_retired");
+  return t(a.text, { value: a.value });
+}
+
+/** The refine level's line (the forge, docs/02 "Forja"): "Refined +7: +7 attack". */
+export function refineText(t: Translate, card: ItemCardView): string {
+  const r = card.refine;
+  if (!r) return "";
+  return r.gain > 0
+    ? t(`client.card.refine.${r.kind}`, { level: r.level, gain: r.gain })
+    : t("client.card.refine.level", { level: r.level });
+}
+
+function RefineLine(props: { t: Translate; card: ItemCardView }): JSX.Element | null {
+  if (!props.card.refine) return null;
+  return (
+    <p class="card-refine" data-testid="card-refine">
+      {refineText(props.t, props.card)}
+    </p>
+  );
+}
+
+/** The attribute's line in its own colour, under the stats (both forms of the card). */
+function AttributeLine(props: { t: Translate; card: ItemCardView }): JSX.Element | null {
+  const a = props.card.attribute;
+  if (!a) return null;
+  return (
+    <p
+      class={"text" in a ? "card-attribute" : "card-attribute random"}
+      data-testid="card-attribute"
+    >
+      {attributeText(props.t, props.card)}
+    </p>
+  );
+}
+
 /** A stat's value as the card writes it ("13", "33.00 oz", "33.00 oz (330.00 oz in total)"). */
 function statValue(t: Translate, s: CardStat): string {
   if (s.id !== "weight") return String(s.value);
@@ -159,6 +211,8 @@ export function ItemCard(props: {
           ))}
         </dl>
       )}
+      {RefineLine({ t, card })}
+      {AttributeLine({ t, card })}
       {card.requires.length > 0 && (
         <ul class="card-requires">
           {card.requires.map((r) => (
@@ -216,6 +270,8 @@ export function TipCard(props: { t: Translate; card: ItemCardView }): JSX.Elemen
           ))}
         </ul>
       )}
+      {RefineLine({ t, card })}
+      {AttributeLine({ t, card })}
       {card.requires.length > 0 && (
         <ul class="card-requires">
           {card.requires.map((r) => (

@@ -1,7 +1,8 @@
 package sim_test
 
 // Balance check for the Isla Volcánica bestiary (levels 25-60, Chapter 3, T5.5), with the
-// same Monte Carlo duel as TestPuertoBalance and the embersteel kit Brasal sells or smiths.
+// same Monte Carlo duel as TestPuertoBalance and the catalog's kit (kitFor: band 4 from
+// level 30, the embersteel Brasal sells or smiths).
 //
 // Targets: each common monster lasts 5-15 s and costs 10-40 % of max health at its target
 // level; XP grows with the target level (and beyond Bosque's); hunting the island's best
@@ -27,30 +28,6 @@ var volcanTargetLevel = map[string]int{
 // volcanBoss is the Chapter 3 boss (ch3_warden) and its target level.
 var volcanBoss = map[string]int{"slagbound_warden": 44}
 
-// volcanKit is what Brasal (smith's shop and embersteel recipes) adds to the forest kit;
-// the greaves and sabatons arrived with the content audit (M3, 2026-11).
-func volcanKit(level int) kit {
-	legs := []string{"stagleather_leggings", "stagleather_boots"}
-	switch {
-	case level >= 34:
-		legs = []string{"embersteel_greaves", "embersteel_sabatons"}
-	case level >= 32:
-		legs = []string{"embersteel_greaves", "stagleather_boots"}
-	}
-	switch {
-	case level >= 45:
-		return kit{"wyrmfang_blade", append([]string{"embersteel_helm", "wyrmscale_mail"}, legs...), "embersteel_shield"}
-	case level >= 36:
-		return kit{"embersteel_sabre", append([]string{"embersteel_helm", "embersteel_cuirass"}, legs...), "embersteel_shield"}
-	case level >= 34:
-		return kit{"embersteel_sabre", append([]string{"embersteel_helm", "embersteel_cuirass"}, legs...), "elmwood_shield"}
-	case level >= 30:
-		return kit{"embersteel_sabre", append([]string{"embersteel_helm", "stagleather_coat"}, legs...), "elmwood_shield"}
-	default:
-		return bosqueKit(level)
-	}
-}
-
 func TestVolcanBalance(t *testing.T) {
 	d := loadData(t)
 	volcan := d.island("volcan")
@@ -73,10 +50,10 @@ func TestVolcanBalance(t *testing.T) {
 				t.Errorf("unknown monster %s", id)
 				continue
 			}
-			s := d.simulateWith(t, m, level, volcanKit(level))
+			s := d.simulateWith(t, m, level, kitFor(level))
 			if debug {
 				t.Logf("%-17s lvl %2d  %5.1f s  %5.1f %% hp  %6.0f xp/h  loot %.1f",
-					id, level, s.seconds, s.damagePct, d.xpPerHourWith(t, m, level, volcanKit(level)), d.lootValue(t, m))
+					id, level, s.seconds, s.damagePct, d.xpPerHourWith(t, m, level, kitFor(level)), d.lootValue(t, m))
 			}
 			if s.seconds < 5 || s.seconds > 15 || s.damagePct < 10 || s.damagePct > 40 {
 				t.Errorf("%s at level %d: %.1f s (want 5-15), %.1f %% health (want 10-40)",
@@ -91,7 +68,7 @@ func TestVolcanBalance(t *testing.T) {
 			if m == nil {
 				t.Fatalf("unknown boss %s", id)
 			}
-			s := d.simulateWith(t, m, level, volcanKit(level))
+			s := d.simulateWith(t, m, level, kitFor(level))
 			if debug {
 				t.Logf("%-17s lvl %2d  %5.1f s  %5.1f %% hp  loot %.1f", id, level, s.seconds, s.damagePct, d.lootValue(t, m))
 			}
@@ -133,12 +110,12 @@ func TestVolcanBalance(t *testing.T) {
 				best := 0.0
 				for id, tl := range volcanTargetLevel {
 					if tl <= lvl {
-						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, volcanKit(lvl)))
+						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, kitFor(lvl)))
 					}
 				}
 				for id, tl := range bosqueTargetLevel {
 					if tl <= lvl {
-						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, volcanKit(lvl)))
+						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, kitFor(lvl)))
 					}
 				}
 				h += float64(cv.TotalFor(lvl+1)-cv.TotalFor(lvl)) / best
