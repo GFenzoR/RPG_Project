@@ -186,8 +186,8 @@ reports: ## Print the open player reports with their context: make reports [N=20
 	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin reports -n "$(or $(N),20)"
 
 .PHONY: gen-ids
-gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
-	$(CONTENT_CLI) gen-ids
+gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only; RETIRE=1 lists deleted items as retired)
+	$(CONTENT_CLI) gen-ids $(if $(RETIRE),--retire)
 
 # spritepack runs TypeScript directly, like the content tooling.
 .PHONY: sprites

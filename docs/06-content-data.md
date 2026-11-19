@@ -90,7 +90,9 @@ items:
 - `make gen-ids` asigna `max + 1` a cada item nuevo y reescribe el archivo ordenado por
   número. Commitea el resultado junto con el item.
 - Solo se agrega: si borras un item su número queda en el lock (aviso "retired id") y
-  nunca se reutiliza. `make validate` compara con la rama base (`origin/main`, o la ref
+  nunca se reutiliza. Si lo borraste a propósito, `make gen-ids RETIRE=1` lo anota en
+  `retired` (lote 13): el número sigue tomado y el aviso no sale; si el item vuelve a
+  `data/items`, `make gen-ids` lo saca de la lista (mientras tanto, `make validate` falla). `make validate` compara con la rama base (`origin/main`, o la ref
   de `CONTENT_BASE_REF`) y falla si un número cambió o desapareció.
 - `chests` (lote 12): `make gen-ids` agrega cada cofre nuevo (bloque `chest` de un item,
   "Libros y cofres" más abajo) con su item, en el orden en que aparecen; no agrega uno

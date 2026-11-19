@@ -12,6 +12,12 @@
       "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
       "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 65535 }
     },
+    "retired": {
+      "description": "Items deleted from data/items on purpose (make gen-ids RETIRE=1): their numbers under items stay taken, without a warning.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/id" }
+    },
     "chests": {
       "description": "Reward chest id (its storage key chest.<id>) to the item whose chest block has it. Append-only: never rename or reuse a chest id.",
       "type": "object",
