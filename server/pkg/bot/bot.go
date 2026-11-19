@@ -611,16 +611,41 @@ func (b *Bot) WalkPath(ctx context.Context, steps []Direction) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_WalkPath{WalkPath: &pb.WalkPath{Steps: ds}}})
 }
 
-// Logout asks to leave and waits until the server closes the connection.
+// LogoutRetry is how often Logout asks again while the server refuses it: in a fight
+// (travel.combat_block_ms since the bot fought, or a PvP lock) the server answers a
+// system message and the connection stays (docs/02 "Bloqueo de logout en combate").
+const LogoutRetry = time.Second
+
+// Logout asks to leave and waits until the server closes the connection, asking again
+// every LogoutRetry while it refuses (the bot fought a moment ago). A bot still under
+// attack never gets out: stop fighting and walk away first, or bound ctx.
 func (b *Bot) Logout(ctx context.Context) error {
-	if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}); err != nil {
-		return err
+	for {
+		select {
+		case <-b.done:
+			return b.loggedOut()
+		default:
+		}
+		if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}); err != nil {
+			select {
+			case <-b.done: // closed while asking: the answer is in the Disconnect
+				return b.loggedOut()
+			default:
+				return err
+			}
+		}
+		select {
+		case <-b.done:
+			return b.loggedOut()
+		case <-ctx.Done():
+			return fmt.Errorf("logout: %w", ctx.Err())
+		case <-b.clock.After(LogoutRetry):
+		}
 	}
-	select {
-	case <-b.done:
-	case <-ctx.Done():
-		return fmt.Errorf("logout: %w", ctx.Err())
-	}
+}
+
+// loggedOut reports whether the closed connection ended with LOGGED_OUT.
+func (b *Bot) loggedOut() error {
 	if r := b.Disconnected(); r != "LOGGED_OUT" {
 		return fmt.Errorf("logout: disconnected with %q", r)
 	}
