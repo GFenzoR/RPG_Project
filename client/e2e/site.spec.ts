@@ -213,9 +213,9 @@ test.describe.serial("public website", () => {
     expect(errors).toEqual([]);
   });
 
-  // docs/17 A1: the LPC characters (OGA-BY, CC-BY-SA) and the OFL fonts ask to show the
-  // player each author, work, licence and link. The page reads assets/CREDITS.md and LPC's
-  // CREDITS.csv at build time.
+  // docs/17 A1: third-party art (CC-BY, OGA-BY, CC-BY-SA) and the OFL fonts ask to show the
+  // player each author, work, licence and link. The page reads assets/CREDITS.md and each
+  // per-file pack's CREDITS.csv at build time.
   test("credits: every third-party pack, file, character and font", async ({ page }) => {
     const errors = watchErrors(page);
     await page.goto("/?lang=es");
