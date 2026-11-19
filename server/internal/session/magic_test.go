@@ -250,6 +250,52 @@ func TestResistanceApplied(t *testing.T) {
 	}
 }
 
+// A `skill: weapon` scaling (the guardian's strikes) uses the skill of the weapon held: a
+// sword's with a sword, a bow's distance, and fist with bare hands or a wand (wands train
+// no skill).
+func TestSpellScalesWithTheWeaponHeld(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		weapon uint16
+		want   int
+	}{
+		{"bare hands", 0, 5 + 2*12},
+		{"sword", swordID, 5 + 2*30},
+		{"wand", energyWand, 5 + 2*12},
+		{"bow", bowID, 5 + 2*25},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := worldtest.Open(t, 0, 0, 32, 32)
+			m.Islands()[0].Spawns = []world.Spawn{spawnAt("dummy", 11, 10, 0, 60)}
+			h := newHarness(t, m, func(cfg *session.Config) {
+				cfg.Monsters = content.Monsters{"dummy": targetDummyDef()}
+				cfg.Items = testItems()
+				cfg.Spells = testSpells()
+				cfg.Spells["test_strike"] = &content.Spell{ID: "test_strike", Words: "test strike",
+					Vocations: []string{"guardian"}, Level: 1, Mana: 5, Group: "attack",
+					Effect: content.SpellEffect{Damage: &content.SpellDamage{Element: "physical", Radius: 1,
+						Scaling: content.Scaling{Base: 5, Skill: content.SkillWeapon, PerSkill: 2}}}}
+				cfg.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
+			})
+			nextChar++
+			inv := []session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack)}}
+			if c.weapon != 0 {
+				inv = append(inv, session.ItemState{ItemID: c.weapon, Count: 1, Slot: int(slotRight)})
+			}
+			cl, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Knight", Vocation: "guardian",
+				Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: pos(10, 10), Inventory: inv,
+				Skills: []session.SkillState{{ID: "fist", Level: 12}, {ID: "sword", Level: 30}, {ID: "distance", Level: 25}}})
+			h.sim.Step() // the dummy spawns
+			cl.take()
+			d := h.dummy()
+			evs := h.castNow(cl, cast("test_strike"))
+			if got := 1000 - h.w.MonsterHealth(d); got != c.want {
+				t.Errorf("strike did %d, want %d (messages %v)", got, c.want, systemKeys(evs))
+			}
+		})
+	}
+}
+
 // Words said on the say channel cast (any case and spacing); other channels do not.
 func TestSayCastsSpell(t *testing.T) {
 	h := magicHarness(t, worldtest.Open(t, 0, 0, 32, 32))

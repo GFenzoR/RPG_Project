@@ -550,10 +550,16 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   con línea de visión, nunca al que lanza) o `conjure: { item, count }` (crea ese item en la
   mochila: una runa con todas sus cargas o, con `count`, esa cantidad de un item apilable,
   juntada con las pilas que ya hay; si no entra entera, el hechizo falla sin gastar maná).
-- T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance` o
-  `shield`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la skill ×
-  per_skill`. Los hechizos del montaraz escalan así con la distancia. `light` está en el
-  esquema para un hito futuro y el servidor lo rechaza todavía.
+- T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance`,
+  `shield` o `weapon`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la
+  skill × per_skill` (en combate: con las condiciones de skill, como `keen_eye`). Los
+  hechizos del montaraz escalan así con la distancia. **`skill: weapon`** (progresión de
+  hechizos, 2026-11) es la skill del arma que el que lanza tiene en la mano: la de su tipo
+  (`sword`, `axe`, `club`; `distance` con un arco o una ballesta) y `fist` sin arma o con
+  una varita, que no entrena skill (`session/magic.go` `scalingSkill`, la misma regla que
+  el golpe cuerpo a cuerpo). Así los golpes de área del guardián crecen con la espada, el
+  hacha o la maza que entrena. `light` está en el esquema para un hito futuro y el
+  servidor lo rechaza todavía.
 - T3.2: dos efectos más. `condition: { id, duration_ms | ticks + damage, chance, range }`
   pone una condición al que lanza o, con `range`, a un monstruo o, con PvP (T5.2), a un
   jugador, a esa distancia con línea de visión (los chequeos de un hechizo de un objetivo;

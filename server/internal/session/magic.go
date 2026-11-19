@@ -96,7 +96,7 @@ func (w *World) initMagic() error {
 			}
 		}
 		for _, sc := range []*content.Scaling{damageScaling(e.Damage), healScaling(e.Heal)} {
-			if sc == nil || sc.Skill == "" {
+			if sc == nil || sc.Skill == "" || sc.Skill == content.SkillWeapon {
 				continue
 			}
 			if _, ok := w.skillIdx[sc.Skill]; !ok {
@@ -140,13 +140,23 @@ func healScaling(h *content.SpellHeal) *content.Scaling {
 }
 
 // scaled rolls s for caster p: its level, magic level and, when s names one, the level
-// of s.Skill (the ranger's spells scale with distance, T3.1).
+// of s.Skill (the ranger's spells scale with distance, T3.1), with its skill conditions.
 func (w *World) scaled(ctx *game.TickContext, s content.Scaling, p *Player) int {
 	skill := 0
 	if s.Skill != "" {
-		skill = w.combatSkill(p, s.Skill)
+		skill = w.combatSkill(p, w.scalingSkill(p, s.Skill))
 	}
 	return combat.Scaled(ctx.Rand, s, p.level, w.magicLevel(p), skill)
+}
+
+// scalingSkill is the skill id a scaling's skill names for p: content.SkillWeapon is the
+// skill of the weapon p holds (meleeSkill: its type if that is a skill, so a bow is
+// distance; fist with no weapon or a wand), any other id itself.
+func (w *World) scalingSkill(p *Player, id string) string {
+	if id == content.SkillWeapon {
+		id, _ = w.meleeSkill(p)
+	}
+	return id
 }
 
 func num(name string, v int) *pb.TextParam {

@@ -119,8 +119,8 @@
         "per_level": { "type": "number", "minimum": 0 },
         "per_magic_level": { "type": "number", "minimum": 0 },
         "skill": {
-          "description": "T3.1: a weapon skill (distance...) whose level adds per_skill each.",
-          "enum": ["fist", "sword", "axe", "club", "distance", "shield"]
+          "description": "T3.1: a weapon skill (distance...) whose level adds per_skill each; weapon = the skill of the weapon the caster holds (fist with none or a wand).",
+          "enum": ["fist", "sword", "axe", "club", "distance", "shield", "weapon"]
         },
         "per_skill": { "type": "number", "minimum": 0 },
         "spread": {
