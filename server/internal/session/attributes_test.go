@@ -237,8 +237,8 @@ func TestRefinedPiecesAreNeverTakenUnpicked(t *testing.T) {
 	cutlass := items["rusty_cutlass"]
 	c := session.Character{ID: 9602, AccountID: 9602, Name: "Keep", Vocation: "guardian", Level: 1, Health: 145, Mana: 20,
 		Pos: pos(15, 10), HasPos: true, InventoryLoaded: true, Inventory: []session.ItemState{
-			{ItemID: uint16(items["backpack"].Numeric), Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{
-				rolledAt(uint16(cutlass.Numeric), 0, "attack", 2, 3)}}}}
+			{ItemID: items["backpack"].Numeric, Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{
+				rolledAt(cutlass.Numeric, 0, "attack", 2, 3)}}}}
 	cl, p := h.joinChar(c)
 	d := h.lastDialog(h.send(cl, talkMsg(h.npc("puerto_armorer").ID())))
 	shop := find(h.pick(cl, d, "dialog.trade"), (*pb.ServerMessage).GetShopOpen)[0]
