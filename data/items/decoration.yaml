@@ -145,6 +145,99 @@
   pickupable: false
   blocks_movement: true
 
+# Town prop kit (docs/17 "Kit de props de pueblo", lote 12): one-tile props drawn with the
+# sprite engine (tools/spritegen/src/engine/specs/town.ts) that furnish temples, depots,
+# plazas and houses. A table or a barrel lifts what is stacked on it (elevation, ART-8). The
+# bench, the bed and the flower box never block, so a rented house keeps every tile for its
+# tenant's items (docs/03 "Muebles y luces"); the rest block like furniture. The lamp post
+# gives light in caves (assets/sprites.yaml `light`); the lamp, the stall and the flag loop.
+- id: barrel
+  kind: decoration
+  sprite: decor/barrel
+  name: item.barrel.name
+  pickupable: false
+  blocks_movement: true
+  elevation: 8
+
+- id: table
+  kind: decoration
+  sprite: decor/table
+  name: item.table.name
+  pickupable: false
+  blocks_movement: true
+  elevation: 8
+
+- id: bench
+  kind: decoration
+  sprite: decor/bench
+  name: item.bench.name
+  pickupable: false
+
+- id: shelf
+  kind: decoration
+  sprite: decor/shelf
+  name: item.shelf.name
+  description: item.shelf.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: bed
+  kind: decoration
+  sprite: decor/bed
+  name: item.bed.name
+  pickupable: false
+
+- id: lamp_post
+  kind: decoration
+  sprite: decor/lamp_post
+  name: item.lamp_post.name
+  pickupable: false
+  blocks_movement: true
+
+- id: well
+  kind: decoration
+  sprite: decor/well
+  name: item.well.name
+  description: item.well.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: sacks
+  kind: decoration
+  sprite: decor/sacks
+  name: item.sacks.name
+  pickupable: false
+  blocks_movement: true
+
+- id: fishing_net
+  kind: decoration
+  sprite: decor/fishing_net
+  name: item.fishing_net.name
+  pickupable: false
+  blocks_movement: true
+
+- id: flower_box
+  kind: decoration
+  sprite: decor/flower_box
+  name: item.flower_box.name
+  pickupable: false
+
+- id: market_stall
+  kind: decoration
+  sprite: decor/market_stall
+  name: item.market_stall.name
+  description: item.market_stall.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: flag_pole
+  kind: decoration
+  sprite: decor/flag_pole
+  name: item.flag_pole.name
+  description: item.flag_pole.desc
+  pickupable: false
+  blocks_movement: true
+
 # Portals (T1.16, docs/02 "Cambiar de piso"): only the look of a portal of portals.yaml,
 # which does the moving. `portal` says which one each item shows: make validate wants it
 # on the entrance of every portal of that kind and way (docs/03 "Validación").
