@@ -84,7 +84,10 @@ func BenchmarkTickPlayersWalking(b *testing.B) {
 // 100 players (docs/07-performance-budget.md). The portal variants add one teleport in a
 // corner: a map with portals reads FlagPortalStep in every A* expansion, reroute and
 // monsterCanEnter (Map.MovesOnStep), which a map without any skips; every island of the
-// real world has portals.
+// real world has portals. The leash variant runs with balance combat.monster_leash_tiles
+// 6, as data/balance.yaml (its checks of the way to the target, chase); the areas variant
+// gives the wolves a circle of radius 2 around themselves every 2 s (monsterArea: its
+// tiles, their line of sight and effects, the players in it).
 func BenchmarkTickMonsters(b *testing.B) {
 	for _, n := range []int{256, 1024} {
 		for _, portal := range []bool{false, true} {
@@ -92,12 +95,21 @@ func BenchmarkTickMonsters(b *testing.B) {
 			if portal {
 				name += "/portal"
 			}
-			b.Run(name, func(b *testing.B) { benchMonsters(b, n, portal) })
+			b.Run(name, func(b *testing.B) { benchMonsters(b, n, portal, benchPlain) })
 		}
 	}
+	b.Run("players=100/monsters=1024/leash", func(b *testing.B) { benchMonsters(b, 1024, false, benchLeash) })
+	b.Run("players=100/monsters=1024/areas", func(b *testing.B) { benchMonsters(b, 1024, false, benchAreas) })
 }
 
-func benchMonsters(b *testing.B, n int, portal bool) {
+// Variants of benchMonsters.
+const (
+	benchPlain = iota
+	benchLeash
+	benchAreas
+)
+
+func benchMonsters(b *testing.B, n int, portal bool, variant int) {
 	m := worldtest.Open(b, 0, 0, 256, 256)
 	step := 256 / int(math.Sqrt(float64(n/4)))
 	var spawns []world.Spawn
@@ -111,11 +123,19 @@ func benchMonsters(b *testing.B, n int, portal bool) {
 	if portal {
 		m = worldtest.WithPortals(b, m, world.Portal{ID: "gate", Kind: world.PortalTeleport, From: pos(255, 0), To: pos(253, 2)})
 	}
+	bal, wolf := testBalance(), wolfDef()
+	switch variant {
+	case benchLeash:
+		bal.Combat.MonsterLeashTiles = 6
+	case benchAreas:
+		wolf.Attacks = append(wolf.Attacks, content.MonsterAttack{Type: "spell", Element: "fire", Min: 1, Max: 4,
+			IntervalMs: 2000, Chance: 1, Area: &content.AttackArea{Shape: content.AreaCircle, Radius: 2, Center: content.AreaSelf}})
+	}
 	w, err := session.New(session.Config{
 		Map:       m,
-		Balance:   testBalance(),
+		Balance:   bal,
 		Vocations: testVocations,
-		Monsters:  content.Monsters{"wolf": wolfDef()},
+		Monsters:  content.Monsters{"wolf": wolf},
 		Items:     testItems(),
 		Save:      func(session.Snapshot) bool { return true },
 	})
