@@ -247,6 +247,44 @@
             }
           }
         },
+        "book": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "pages"],
+          "description": "A readable book or scroll (docs/02 \"Libros y cofres\"): using it opens the client's reading window with its title and pages, i18n keys (book.<id>.title, book.<id>.page_<n> of i18n/<lang>/books.yaml). The client shows the texts it already has; the server never sends them. Looking at it still gives its description.",
+          "properties": {
+            "title": { "$ref": "common.schema.json#/$defs/i18nKey" },
+            "pages": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": { "$ref": "common.schema.json#/$defs/i18nKey" }
+            }
+          }
+        },
+        "chest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "rewards"],
+          "description": "A reward chest of the map (docs/02 \"Libros y cofres\"): using it gives every reward once per character (storage chest.<id>), or nothing while they do not all fit (capacity and backpack). The id is unique among the chests; each reward an item that exists, is not retired and is not the forge's protection, in a count from 1 to one stack (1 for an item that does not stack). The item needs pickupable: false.",
+          "properties": {
+            "id": { "$ref": "common.schema.json#/$defs/id" },
+            "rewards": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["item", "count"],
+                "properties": {
+                  "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+                  "count": { "$ref": "common.schema.json#/$defs/positiveInt" }
+                }
+              }
+            }
+          }
+        },
         "requires": {
           "type": "object",
           "additionalProperties": false,

@@ -200,9 +200,9 @@ function bandOf(it: Item): number {
 }
 
 /**
- * Every item some source gives: shops, dialogs, loot, resources, recipes, quest and tutorial
- * rewards, conjuring spells and the starting container (the sources the validator refuses
- * for a retired item, checkRetiredItems), in the data/ under root.
+ * Every item some source gives: shops, dialogs, loot, resources, reward chests, recipes,
+ * quest and tutorial rewards, conjuring spells and the starting container (the sources the
+ * validator refuses for a retired item, checkRetiredItems), in the data/ under root.
  */
 function sources(root = REPO): Map<string, string[]> {
   const out = new Map<string, string[]>();
@@ -226,11 +226,15 @@ function sources(root = REPO): Map<string, string[]> {
     output: { item: string };
   }[];
   for (const r of recipes) add(r.output.item, `recipe ${r.id}`);
-  for (const it of readList<Item & { resource?: { drops?: { item: string }[] } }>(
-    "data/items",
-    root,
-  ))
+  for (const it of readList<
+    Item & {
+      resource?: { drops?: { item: string }[] };
+      chest?: { rewards?: { item: string }[] };
+    }
+  >("data/items", root)) {
     for (const d of it.resource?.drops ?? []) add(d.item, `resource ${it.id}`);
+    for (const r of it.chest?.rewards ?? []) add(r.item, `chest ${it.id}`);
+  }
   const yamlAt = <T>(file: string): T => parse(readFileSync(join(root, "data", file), "utf8")) as T;
   for (const r of yamlAt<{ rewards?: { item?: string }[] }>("tutorial.yaml").rewards ?? [])
     add(r.item, "tutorial reward");
@@ -299,7 +303,7 @@ describe("compact equipment catalog (lote 11)", () => {
     }
   });
 
-  it("finds every kind of source: tutorial rewards, conjuring and the start container too", () => {
+  it("finds every kind of source: tutorial rewards, conjuring, chests and the start container too", () => {
     // Review of lote 11: a band without an island must have no source at all, the ones the
     // validator refuses for a retired item included.
     const root = mkdtempSync(join(tmpdir(), "catalog-"));
@@ -312,8 +316,14 @@ describe("compact equipment catalog (lote 11)", () => {
         tutorial,
         text.replace("  - { gold: 20 }", "  - { gold: 20 }\n  - { item: wyrmfang_blade }"),
       );
+      // A reward chest too (docs/02 "Libros y cofres").
+      writeFileSync(
+        join(root, "data/items/zz_chest.yaml"),
+        "- { id: test_chest, kind: decoration, chest: { id: c, rewards: [{ item: tidesteel_sword, count: 1 }] } }",
+      );
       const src = sources(root);
       expect(src.get("wyrmfang_blade")).toEqual(["tutorial reward"]);
+      expect(src.get("tidesteel_sword")).toEqual(["chest test_chest"]);
       expect(src.get("arrow")).toContain("spell conjure_arrows");
       expect(src.get("backpack")).toContain("start_container");
     } finally {

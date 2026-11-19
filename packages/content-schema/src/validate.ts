@@ -102,6 +102,15 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** The rewards of an item's chest block (docs/02 "Libros y cofres"), with their index. */
+const chestRewards = (item: Obj): { item: string; count: number; index: number }[] => {
+  const chest = item["chest"];
+  const out: { item: string; count: number; index: number }[] = [];
+  for (const [index, r] of (isObj(chest) ? asList(chest["rewards"]) : []).entries())
+    if (isObj(r) && typeof r["item"] === "string")
+      out.push({ item: r["item"], count: typeof r["count"] === "number" ? r["count"] : 1, index });
+  return out;
+};
 const idOf = (v: unknown): string | undefined =>
   isObj(v) && typeof v["id"] === "string" ? v["id"] : undefined;
 
@@ -201,6 +210,7 @@ class Validator {
     this.checkRetiredItems();
     this.checkEquipLevels();
     this.checkForge();
+    this.checkChests();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -1575,10 +1585,73 @@ class Validator {
   }
 
   /**
+   * Reward chests (docs/02 "Libros y cofres", same rules as content.CheckChests in Go): a
+   * chest is a map item nobody picks up, its chest id is unique, and each reward comes in a
+   * count from 1 to one stack of its item (1 if it does not stack) and is never the forge's
+   * protection (the warding amber: only monsters drop it). That a reward exists is the
+   * schema's itemRef; that it is not retired, checkRetiredItems'.
+   */
+  private checkChests(): void {
+    const byId = new Map<string, Obj>();
+    for (const { item } of this.items) {
+      const id = idOf(item);
+      if (id !== undefined) byId.set(id, item);
+    }
+    const forge = isObj(this.balance?.data) ? this.balance.data["forge"] : undefined;
+    const protection =
+      isObj(forge) && forge["enabled"] === true && typeof forge["protection"] === "string"
+        ? forge["protection"]
+        : "";
+    const seen = new Map<string, string>();
+    for (const { item, src, path } of this.items) {
+      const chest = item["chest"];
+      if (!isObj(chest)) continue;
+      const id = String(item["id"]);
+      if (item["pickupable"] !== false)
+        this.error(src, [...path, "chest"], `chest "${id}" needs pickupable: false (a map item)`);
+      const cid = chest["id"];
+      if (typeof cid === "string") {
+        const other = seen.get(cid);
+        if (other !== undefined)
+          this.error(
+            src,
+            [...path, "chest", "id"],
+            `chest id "${cid}" is also the one of "${other}"`,
+          );
+        else seen.set(cid, id);
+      }
+      for (const r of chestRewards(item)) {
+        const at: PathSegment[] = [...path, "chest", "rewards", r.index];
+        if (protection !== "" && r.item === protection)
+          this.error(
+            src,
+            [...at, "item"],
+            `"${protection}" is the forge's rare protection: no chest gives it (only monsters drop it)`,
+          );
+        const def = byId.get(r.item);
+        if (!def) continue;
+        const limit =
+          def["stackable"] === true
+            ? typeof def["max_stack"] === "number"
+              ? def["max_stack"]
+              : 100
+            : 1;
+        if (r.count > limit)
+          this.error(
+            src,
+            [...at, "count"],
+            `${r.count} "${r.item}" do not make one stack (at most ${limit}): a chest gives one stack per reward`,
+          );
+      }
+    }
+  }
+
+  /**
    * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
    * that is not dev_only count (without it, tests, every NPC):
    * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
-   *   a shop, a dialog give_item, a quest or tutorial reward or a conjuring spell);
+   *   a shop, a dialog give_item, a quest or tutorial reward, a conjuring spell or a reward
+   *   chest);
    * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
    *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
    *   quest or dialog that takes it;
@@ -1598,6 +1671,7 @@ class Validator {
       const res = item["resource"];
       for (const d of isObj(res) ? asList(res["drops"]) : [])
         if (isObj(d) && typeof d["item"] === "string") got.add(d["item"]);
+      for (const r of chestRewards(item)) got.add(r.item);
     }
     for (const r of this.recipes ? asList(this.recipes.data).filter(isObj) : []) {
       const out = r["output"];
@@ -1651,7 +1725,7 @@ class Validator {
         this.error(
           at.src,
           at.path,
-          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward or a spell)`,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward, a spell or a chest)`,
         );
     for (const { item, src, path } of this.items) {
       const id = item["id"];
@@ -1712,6 +1786,8 @@ class Validator {
       for (const [i, d] of (isObj(res) ? asList(res["drops"]) : []).entries())
         if (isObj(d))
           refuse(src, [...path, "resource", "drops", i, "item"], d["item"], "no resource drops it");
+      for (const r of chestRewards(item))
+        refuse(src, [...path, "chest", "rewards", r.index, "item"], r.item, "no chest gives it");
     }
     if (this.recipes)
       for (const [i, r] of asList(this.recipes.data).entries()) {
@@ -2003,6 +2079,7 @@ class Validator {
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
     const dataPrefixes = [
       "attribute.",
+      "book.",
       "item.",
       "monster.",
       "npc.",

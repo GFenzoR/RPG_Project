@@ -1261,6 +1261,104 @@ describe("validator diagnostics", () => {
     expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(6);
   });
 
+  /** Appends a map item to data/items/decoration.yaml with its numeric id. */
+  const addItem = (id: string, n: number, block: string, extra = "pickupable: false"): void => {
+    appendFileSync(
+      file("data/items/decoration.yaml"),
+      [
+        "",
+        `- id: ${id}`,
+        "  kind: decoration",
+        "  sprite: decor/cargo_crate",
+        "  name: item.cargo_crate.name",
+        `  ${extra}`,
+        `  ${block}`,
+        "",
+      ].join("\n"),
+    );
+    appendFileSync(file("data/ids.lock.yaml"), `  ${id}: ${n}\n`);
+  };
+
+  it("checks reward chests: fixed, unique ids, one stack, never retired nor the forge's amber", () => {
+    const chest = (id: string, n: number, rewards: string, extra?: string): void =>
+      addItem(
+        id,
+        n,
+        `chest: { id: ${id.replace("test_chest", "cache")}, rewards: [${rewards}] }`,
+        extra,
+      );
+    chest(
+      "test_chest_a",
+      60001,
+      "{ item: silver_coin, count: 100 }, { item: iron_sword, count: 1 }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    addItem(
+      "test_chest_b",
+      60002,
+      "chest: { id: cache_a, rewards: [{ item: warding_amber, count: 1 }] }",
+    );
+    chest(
+      "test_chest_c",
+      60003,
+      "{ item: silver_coin, count: 101 }, { item: iron_sword, count: 2 }",
+    );
+    chest("test_chest_d", 60004, "{ item: driftwood_club, count: 1 }", "blocks_movement: true");
+    chest("test_chest_e", 60005, "{ item: nothing_here, count: 1 }");
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/chest id "cache_a" is also the one of "test_chest_a"/),
+        expect.stringMatching(/"warding_amber" is the forge's rare protection: no chest gives it/),
+        expect.stringMatching(/101 "silver_coin" do not make one stack \(at most 100\)/),
+        expect.stringMatching(/2 "iron_sword" do not make one stack \(at most 1\)/),
+        expect.stringMatching(/chest "test_chest_d" needs pickupable: false/),
+        expect.stringMatching(/"driftwood_club" is retired.*no chest gives it/),
+        expect.stringMatching(/nothing_here/),
+      ]),
+    );
+    expect(errors).toHaveLength(7);
+  });
+
+  it("counts a chest's rewards as a source of what NPCs buy", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    expect(messages(root).filter((m) => m.includes('buys "belaying_pin"'))).toHaveLength(1);
+    addItem(
+      "test_chest",
+      60000,
+      "chest: { id: test_cache, rewards: [{ item: belaying_pin, count: 1 }] }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+  });
+
+  it("checks a book's texts in every language and warns about book texts no item reads", () => {
+    addItem(
+      "test_book",
+      60000,
+      "book: { title: book.test_book.title, pages: [book.test_book.page_1, book.test_book.page_2] }",
+    );
+    for (const lang of ["es", "en"])
+      writeFileSync(
+        file(`i18n/${lang}/test_books.yaml`),
+        [
+          'book.test_book.title: "T"',
+          'book.test_book.page_1: "P"',
+          'book.test_book.unused: "U"',
+          "",
+        ].join("\n"),
+      );
+    const out = messages(root);
+    expect(out.filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(/i18n key "book\.test_book\.page_2" is missing in: es, en/),
+    ]);
+    expect(out).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/warning.*"book\.test_book\.unused" is not used/),
+      ]),
+    );
+  });
+
   it("counts the tutorial's reward as a source of what NPCs buy (review of lote 11)", () => {
     edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
     edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
