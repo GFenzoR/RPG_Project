@@ -93,6 +93,9 @@ type Item struct {
 		Level     int      `yaml:"level"`
 		Vocations []string `yaml:"vocations"`
 	} `yaml:"requires"`
+	// Retired: out of the equipment catalog (lote 11), kept so the characters that own one
+	// keep it; make validate refuses every source of it. No game rule reads it.
+	Retired bool `yaml:"retired"`
 	// Numeric is the stable numeric id from data/ids.lock.yaml.
 	Numeric uint16 `yaml:"-"`
 }

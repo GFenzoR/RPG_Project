@@ -160,6 +160,8 @@ class Validator {
     this.checkQuestItemSources();
     this.checkToolTargets();
     this.checkItemTrade();
+    this.checkRetiredItems();
+    this.checkEquipLevels();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -1175,8 +1177,12 @@ class Validator {
           used.add(value["item"]);
       }
     }
+    const retired = new Set(
+      this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
+    );
     for (const [id, at] of bought)
-      if (this.index.ids.item.has(id) && !got.has(id))
+      // A retired item (lote 11) has no source on purpose: its buyer is for old copies.
+      if (this.index.ids.item.has(id) && !got.has(id) && !retired.has(id))
         this.error(
           at.src,
           at.path,
@@ -1215,6 +1221,90 @@ class Validator {
             `quest item "${drop["item"]}" drops as plain loot: make it each_player (only players whose quest needs it get one), or it keeps dropping as junk after the quest`,
           );
       }
+  }
+
+  /**
+   * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
+   * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
+   * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
+   * no quest rewards it, no spell conjures it and no character starts with it. An NPC may
+   * still buy it (checkItemTrade lets that buyer be).
+   */
+  private checkRetiredItems(): void {
+    const retired = new Set(
+      this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
+    );
+    if (retired.size === 0) return;
+    const refuse = (src: SourceFile, path: PathSegment[], id: unknown, how: string): void => {
+      if (typeof id === "string" && retired.has(id))
+        this.error(src, path, `"${id}" is retired (retired: true): ${how}`);
+    };
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries())
+        if (isObj(drop)) refuse(src, ["loot", i, "item"], drop["item"], "no monster drops it");
+    for (const { item, src, path } of this.items) {
+      const res = item["resource"];
+      for (const [i, d] of (isObj(res) ? asList(res["drops"]) : []).entries())
+        if (isObj(d))
+          refuse(src, [...path, "resource", "drops", i, "item"], d["item"], "no resource drops it");
+    }
+    if (this.recipes)
+      for (const [i, r] of asList(this.recipes.data).entries()) {
+        const out = isObj(r) ? r["output"] : undefined;
+        if (isObj(out))
+          refuse(this.recipes, [i, "output", "item"], out["item"], "no recipe makes it");
+      }
+    if (this.spells)
+      for (const [i, sp] of asList(this.spells.data).entries()) {
+        const effect = isObj(sp) ? sp["effect"] : undefined;
+        const conj = isObj(effect) ? effect["conjure"] : undefined;
+        if (isObj(conj))
+          refuse(
+            this.spells,
+            [i, "effect", "conjure", "item"],
+            conj["item"],
+            "no spell conjures it",
+          );
+      }
+    for (const src of this.quests)
+      for (const [i, r] of (isObj(src.data) ? asList(src.data["rewards"]) : []).entries())
+        if (isObj(r)) refuse(src, ["rewards", i, "item"], r["item"], "no quest rewards it");
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const shop = npc?.["shop"];
+      for (const [i, o] of (isObj(shop) ? asList(shop["sells"]) : []).entries())
+        if (isObj(o)) refuse(src, ["shop", "sells", i, "item"], o["item"], "no shop sells it");
+      for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (key === "give_item") refuse(src, path, value, "no dialog gives it");
+    }
+    const balance = this.balance;
+    const inv = balance && isObj(balance.data) ? balance.data["inventory"] : undefined;
+    if (balance && isObj(inv))
+      refuse(
+        balance,
+        ["inventory", "start_container"],
+        inv["start_container"],
+        "no character starts with it",
+      );
+  }
+
+  /**
+   * Lote 11 (compact catalog, docs/02 "Catálogo de equipo"): every weapon, armor piece and
+   * shield states the level it asks for (requires.level), the band it belongs to; the item
+   * attributes roll by it.
+   */
+  private checkEquipLevels(): void {
+    for (const { item, src, path } of this.items) {
+      const kind = item["kind"];
+      if (kind !== "weapon" && kind !== "armor" && kind !== "shield") continue;
+      const req = item["requires"];
+      if (isObj(req) && typeof req["level"] === "number") continue;
+      this.error(
+        src,
+        [...path, "requires"],
+        `${String(kind)} "${String(item["id"])}" has no requires.level: every weapon, armor and shield states its level (docs/02 "Catálogo de equipo")`,
+      );
+    }
   }
 
   /**

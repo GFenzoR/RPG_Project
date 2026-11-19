@@ -40,6 +40,10 @@
           "type": "boolean",
           "description": "docs/17 UI-6, display only: an item that exists for a quest (what a step's has_item asks for). The client shows its name in the quest colour (--ui-item-quest) with a mark on its card; the server ignores it."
         },
+        "retired": {
+          "type": "boolean",
+          "description": "Lote 11 (docs/06 \"Item\"): an item out of the catalog that stays defined so the characters that own one keep it. make validate refuses every source of it (a shop that sells it, loot, a resource drop, a recipe output, a dialog give_item, a quest reward, a conjuring spell); an NPC may still buy it. The server ignores it."
+        },
         "elevation": {
           "type": "integer",
           "minimum": 1,
