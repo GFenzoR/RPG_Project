@@ -17,7 +17,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatYaml, parseYamlText } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
 import {
   insidePath,
@@ -397,50 +397,90 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     expect(report?.ok).toBe(true);
   });
 
-  it("fails outside the plots unless the base lists the author as maintainer", () => {
-    const { root, git, edit } = sandbox();
-    git("checkout", "-qb", "pr");
-    edit("paint", "puerto", "--floor", "7", "--rect", "3170,6330,2,2", "--ground", "sand");
-    // Adding yourself to the maintainers in the PR does not count: base decides.
-    writeFileSync(join(root, ".github/MAINTAINERS"), "boss\nsomeone\n");
-    git("commit", "-qam", "outside");
-    const out = tmp("pr-out-");
-    const r = prCheck({ root, base: "main", head: "pr", out, author: "someone", pr: 4 });
-    expect(r.ok).toBe(false);
-    expect(r.failures).toEqual(["plots"]);
-    expect(r.maintainer).toBe(false);
-    expect(r.plots.violations).toMatchObject([{ kind: "tiles", tiles: 4 }]);
-    expect(r.other_files).toEqual([".github/MAINTAINERS"]);
-    const boss = prCheck({ root, base: "main", head: "pr", out, author: "boss", pr: 4 });
-    expect(boss).toMatchObject({ ok: true, maintainer: true });
-    expect(boss.plots.violations).toHaveLength(1);
-    // The repository owner is a maintainer even when not listed.
-    const owner = prCheck({
-      root,
-      base: "main",
-      head: "pr",
-      out,
-      author: "o",
-      association: "OWNER",
+  // A PR that paints outside the plots, judged for several authors. Each judgement is a
+  // whole pr-check (worktrees, the validator, the renders: about 6 s alone), so each is a
+  // test of its own on one sandbox: the five of them in one test took over half of its
+  // 60 s alone, and past it with the whole suite running.
+  describe("fails outside the plots unless the base lists the author as maintainer", () => {
+    let root = "";
+    let out = "";
+    const own: string[] = [];
+    beforeAll(() => {
+      const s = sandbox();
+      root = s.root;
+      s.git("checkout", "-qb", "pr");
+      s.edit("paint", "puerto", "--floor", "7", "--rect", "3170,6330,2,2", "--ground", "sand");
+      // Adding yourself to the maintainers in the PR does not count: base decides.
+      writeFileSync(join(root, ".github/MAINTAINERS"), "boss\nsomeone\n");
+      s.git("commit", "-qam", "outside");
+      out = tmp("pr-out-");
+      // The afterEach above removes what tmp made after every test: these serve them all.
+      own.push(...dirs.splice(0));
+    }, 60_000);
+    afterAll(() => {
+      for (const d of own) rmSync(d, { recursive: true, force: true });
     });
-    expect(owner).toMatchObject({ ok: true, maintainer: true });
-    const member = prCheck({
-      root,
-      base: "main",
-      head: "pr",
-      out,
-      author: "m",
-      association: "MEMBER",
+
+    it("fails for an author only the PR lists", () => {
+      const r = prCheck({ root, base: "main", head: "pr", out, author: "someone", pr: 4 });
+      expect(r.ok).toBe(false);
+      expect(r.failures).toEqual(["plots"]);
+      expect(r.maintainer).toBe(false);
+      expect(r.plots.violations).toMatchObject([{ kind: "tiles", tiles: 4 }]);
+      expect(r.other_files).toEqual([".github/MAINTAINERS"]);
     });
-    expect(member.maintainer).toBe(false);
-    // Through the CLI: exit code 1 and a summary.
-    let text = "";
-    const code = run(
-      ["pr-check", "--root", root, "--base", "main", "--head", "pr", "--out", out, "--author", "x"],
-      { out: (t) => (text += t), err: () => {} },
-    );
-    expect(code).toBe(1);
-    expect(JSON.parse(text)).toMatchObject({ ok: false, failures: ["plots"] });
+
+    it("passes for a maintainer the base lists", () => {
+      const boss = prCheck({ root, base: "main", head: "pr", out, author: "boss", pr: 4 });
+      expect(boss).toMatchObject({ ok: true, maintainer: true });
+      expect(boss.plots.violations).toHaveLength(1);
+    });
+
+    it("passes for the repository owner even when not listed", () => {
+      const owner = prCheck({
+        root,
+        base: "main",
+        head: "pr",
+        out,
+        author: "o",
+        association: "OWNER",
+      });
+      expect(owner).toMatchObject({ ok: true, maintainer: true });
+    });
+
+    it("does not trust a member of the organization who is not listed", () => {
+      const member = prCheck({
+        root,
+        base: "main",
+        head: "pr",
+        out,
+        author: "m",
+        association: "MEMBER",
+      });
+      expect(member.maintainer).toBe(false);
+    });
+
+    it("exits 1 through the CLI with a summary", () => {
+      let text = "";
+      const code = run(
+        [
+          "pr-check",
+          "--root",
+          root,
+          "--base",
+          "main",
+          "--head",
+          "pr",
+          "--out",
+          out,
+          "--author",
+          "x",
+        ],
+        { out: (t) => (text += t), err: () => {} },
+      );
+      expect(code).toBe(1);
+      expect(JSON.parse(text)).toMatchObject({ ok: false, failures: ["plots"] });
+    });
   });
 
   it("measures against the merge with the current base and reports conflicts", () => {

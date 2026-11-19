@@ -76,39 +76,42 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('checks reach steps and repeatable quests (docs/06 "Quest")', () => {
-    const reachErrors = (): string[] =>
-      messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
-    // The real world: the reach step of ch3_gate is on the volcano's mine floor.
+  // The real world's islands, zones and portals (and the files in extra) next to the
+  // copied content.
+  const realWorld = (...extra: string[]): void => {
     cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
     for (const island of readdirSync(join(REPO, "world", "islands"))) {
       mkdirSync(file(`world/islands/${island}`), { recursive: true });
-      for (const f of ["island.yaml", "zones.yaml", "portals.yaml"]) {
+      for (const f of ["island.yaml", "zones.yaml", "portals.yaml", ...extra]) {
         const src = join(REPO, "world", "islands", island, f);
         if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
       }
     }
+  };
+  const reachErrors = (): string[] =>
+    messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
+  // The reach step of ch3_gate, on the volcano's mine floor.
+  const gateReach = "complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }";
+  // The reach tests validate the whole content up to six times each: one test with all of
+  // them (nine) ran past its 30 s with the whole suite running.
+
+  it('checks a reach point against the islands and their stairs (docs/06 "Quest")', () => {
+    realWorld();
     expect(reachErrors()).toEqual([]);
-    const reach = "complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }";
     // A floor the island does not list, then outside every island.
-    edit("data/quests/ch3_gate.yaml", reach, reach.replace("z: 8", "z: 9"));
+    edit("data/quests/ch3_gate.yaml", gateReach, gateReach.replace("z: 8", "z: 9"));
     expect(reachErrors()).toEqual([
       expect.stringMatching(/reach point 3692,5826,9 is on no island/),
     ]);
     edit("data/quests/ch3_gate.yaml", "x: 3692, y: 5826, z: 9", "x: 10, y: 10, z: 7");
     expect(reachErrors()).toEqual([expect.stringMatching(/reach point 10,10,7 is on no island/)]);
-    // A zone: a real one, one of the sandbox island only (dev_only) and an unknown one.
-    edit("data/quests/ch3_gate.yaml", "{ x: 10, y: 10, z: 7, radius: 4 }", "{ zone: volcan_town }");
-    expect(reachErrors()).toEqual([]);
-    edit("data/quests/ch3_gate.yaml", "zone: volcan_town", "zone: pruebas_town");
-    expect(reachErrors()).toEqual([
-      expect.stringMatching(
-        /reach zone "pruebas_town" is no zone of an island that is not dev_only/,
-      ),
-    ]);
     // A place whose every tile is the entrance of stairs (the volcano mine's, portals.yaml):
     // a step onto them lands below, nobody stands there. With a tile around, it is fine.
-    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ x: 3692, y: 5796, z: 7 }");
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 10, y: 10, z: 7, radius: 4 }",
+      "{ x: 3692, y: 5796, z: 7 }",
+    );
     expect(reachErrors()).toEqual([
       expect.stringMatching(
         /every tile of reach point 3692,5796,7 radius 0 is the entrance of stairs/,
@@ -116,22 +119,42 @@ describe("validator diagnostics", () => {
     ]);
     edit("data/quests/ch3_gate.yaml", "z: 7 }", "z: 7, radius: 1 }");
     expect(reachErrors()).toEqual([]);
+  });
+
+  it('checks a reach zone: a real one, none of a dev_only island, not all stairs (docs/06 "Quest")', () => {
+    realWorld();
+    // A zone: a real one, one of the sandbox island only (dev_only) and an unknown one.
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 3692, y: 5826, z: 8, radius: 4 }",
+      "{ zone: volcan_town }",
+    );
+    expect(reachErrors()).toEqual([]);
+    edit("data/quests/ch3_gate.yaml", "zone: volcan_town", "zone: pruebas_town");
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(
+        /reach zone "pruebas_town" is no zone of an island that is not dev_only/,
+      ),
+    ]);
+    // A zone whose only tile is the entrance of the volcano mine's stairs.
     edit(
       "world/islands/volcan/zones.yaml",
       "- id: volcan_temple",
       "- id: volcan_stairs\n  type: protection\n  floors: [7]\n  rects:\n    - { x: 3692, y: 5796, w: 1, h: 1 }\n\n- id: volcan_temple",
     );
-    edit(
-      "data/quests/ch3_gate.yaml",
-      "{ x: 3692, y: 5796, z: 7, radius: 1 }",
-      "{ zone: volcan_stairs }",
-    );
+    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_stairs }");
     expect(reachErrors()).toEqual([
       expect.stringMatching(/every tile of reach zone "volcan_stairs" is the entrance of stairs/),
     ]);
-    edit("data/quests/ch3_gate.yaml", "{ zone: volcan_stairs }", "{ zone: pruebas_town }");
-    // Zone and point together, a radius too wide, and a repeatable without a cooldown.
-    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_town, x: 1 }");
+  });
+
+  it('refuses a reach with a zone and a point, a radius too wide, a repeatable without a cooldown and an unknown quest_state (docs/06 "Quest")', () => {
+    realWorld();
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 3692, y: 5826, z: 8, radius: 4 }",
+      "{ zone: volcan_town, x: 1 }",
+    );
     edit(
       "data/quests/ch1_shipwreck.yaml",
       "min_level: 1\n",
@@ -164,14 +187,7 @@ describe("validator diagnostics", () => {
           !m.includes("i18n"),
       );
     // The real world, with where its NPCs stand.
-    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
-    for (const island of readdirSync(join(REPO, "world", "islands"))) {
-      mkdirSync(file(`world/islands/${island}`), { recursive: true });
-      for (const f of ["island.yaml", "zones.yaml", "portals.yaml", "npcs.yaml"]) {
-        const src = join(REPO, "world", "islands", island, f);
-        if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
-      }
-    }
+    realWorld("npcs.yaml");
     expect(errors()).toEqual([]);
     // A task of the volcano keeper whose first step is a reach two tiles from him: taking
     // it completes it. Four tiles away is a walk.
