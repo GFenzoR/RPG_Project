@@ -295,7 +295,8 @@ recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el ja
 ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel; desde
 el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por familia y
 `creature_remains`, objetos de 32x32 dibujados con sus proporciones y agrandados con
-`grow` hasta 24-30 px de largo).
+`grow`, `specs/grow.ts`, hasta 24-30 px de largo) y los íconos de todo el equipo
+(`specs/items/`, clase `icon`; abajo, "Íconos de items").
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su
@@ -315,7 +316,7 @@ Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`),
 | `rig.ts`, `motion.ts` | Poses por keyframe, articulaciones, las cuatro direcciones; helpers (`trot`, `keys`, `mergePoses`) |
 | `gates.ts`, `check.ts` | Las puertas de calidad y las pistas de `assets/sprites.yaml` |
 | `sheet.ts` | Hoja de contacto y lineup para revisar |
-| `specs/` | Los specs del juego; `specs/index.ts` (`ENGINE_SPECS`) los registra |
+| `specs/` | Los specs del juego; `specs/index.ts` (`ENGINE_SPECS`) los registra; `specs/items/` los íconos de equipo; `specs/grow.ts` agranda un spec entero |
 
 **Escribir un spec** (ejemplos: `specs/boar.ts`, `specs/stag.ts`, `specs/forge-echo.ts`;
 objetos: `specs/anvil.ts`, `specs/crate.ts`, `specs/signpost.ts` y `specs/market-board.ts`,
@@ -323,7 +324,8 @@ este con un `loop`). Unidades: píxeles de sprite; x al este, y al norte (lejos 
 cámara), z arriba; el suelo es z = 0.
 - `sprite`: la ruta de `data/` (`creatures/<id>`, `npcs/<id>`, `decor/<id>`).
 - `size`: la clase de ART-2 (`smallCreature`, `mediumAnimal`, `humanoid`, `bigCreature`,
-  `object`): da el lienzo, el ancla, la fila del suelo, la banda de valor y el contorno.
+  `object`, `icon`): da el lienzo, el ancla, la fila del suelo, la banda de valor y el
+  contorno.
   `canvas` elige otro lienzo de la clase; `figure: { height, width }` angosta los rangos
   (de perfil, con el contorno).
 - `parts`: cada parte tiene `name`, `material` (de `PALETTE`), `shapes` y, si cuelga de
@@ -388,12 +390,36 @@ necesita su entrada en `tiles` con los mismos `ms` y `sync` (`decor/market_board
 se borran sus PNG (y su receta, con los imports que dejen de usarse). Después `make
 spritegen ONLY=<sprite>/` (o el prefijo) y `make sprites STRICT=1`.
 
+**Íconos de items** (`specs/items/`, docs/17 "Íconos de items"): cada arma, escudo,
+armadura, joya y munición de `data/items` es un `icon` (32x32, el origen del modelo en el
+centro del lienzo, sin fila de suelo; tipo `item`: contorno oscuro y la banda de valor de
+los objetos; recetas de `kind: item`). `kit.ts` tiene lo que comparten: `icon(sprite,
+parts, { scale })` arma el spec y lo centra (`centred`: mueve las raíces de a píxeles
+enteros hasta que la caja de la figura quede en el medio), `resized` agranda o achica una
+línea entera, `lean` inclina un arma 45° (la cabeza arriba a la derecha), `blade` hace una
+hoja de dos placas (mitad iluminada y mitad en sombra), `plate` una tarjeta de frente
+(`bulge` la redondea), `tube` un tubo de cápsulas por una polilínea (arcos, cordones,
+anillos), `arc`, `ellipse` y `mirrored` perfiles, `moved` corre una figura (la segunda
+bota), `gem` y `rivets`. `weapons.ts`, `armor.ts` y `jewelry.ts` tienen un constructor por
+línea y una llamada por banda; `index.ts` da `ITEM_ICONS` y `ICON_ROWS` (las filas de la
+hoja: una por línea, una columna por banda). Una pieza nueva: su `sprite: <categoría>/<id>`
+en `data/items`, una llamada al constructor de su línea con el material y el acento de su
+banda (la tabla de docs/17), en su fila de `ICON_ROWS`; `make spritegen ONLY=<ruta>`, `make
+sprites STRICT=1` y revisar la hoja. `engine/items.test.ts` exige un ícono propio por pieza
+de equipo, ninguna entrada en `sprites.yaml` y que cada banda de una línea cambie la imagen
+y los materiales. Lo que aprendió la revisión: un arma llena ~26 px en diagonal (más corta
+se lee como una hoja de árbol); un metal claro tapa una runa clara (el acero de marea es
+oscuro y la runa, un cian saturado); y cuidado con la banda de valor en los dos extremos
+(ropa blanca, cuero alquitranado).
+
 **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
 <prefijo>] [--out DIR] [--scale N]` escribe `build/spritegen/<sprite>.sheet.png` (todos los
 frames a Nx, por defecto 4, en una grilla: una fila por acción y dirección) y
 `<sprite>.lineup.png` (a 1x, escalado 3x, como lo pone el cliente sobre su suelo, al lado
-del lobo de Gemini y de una persona de LPC si el atlas está armado). Mirar los dos con
-Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
+del lobo de Gemini y de una persona de LPC si el atlas está armado; un ícono, además, en un
+slot del inventario a 1x y a 2x). Con íconos entre los elegidos escribe también
+`icons.slots.png` (cada uno en el slot a 2x, a 1x y sobre una casilla de pasto, una fila
+por línea del catálogo) e `icons.detail.png` (a 4x). Mirar los dos con Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
 lea mejor. Un prop de una casilla se compara sobre cada suelo donde está, al lado de una
 persona de LPC, a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
 el detalle. Lo que aprendió la revisión del 2026-11-18: pocas piezas y un material cálido
@@ -409,7 +435,8 @@ materiales y nunca `#000`; alfa 0 o 255; menos del 10 % de píxeles en damero; n
 contra el borde del lienzo; contorno en al menos el 85 % de la silueta; una sola figura
 (sueltos solo de hasta 10 px: una chispa); al menos el 20 % de la caja lleno; media de L*
 en la banda de su tipo (ART-6); alto y largo de perfil dentro del rango de ART-2 o de
-`figure`; de frente y de espaldas centrado (±2 px) y al menos el 45 % de ancho de su largo
+`figure`; un ícono centrado en el lienzo (±1,5 px, `iconCentre`) y de 16 px o más por su
+lado más largo (`iconSpan`); de frente y de espaldas centrado (±2 px) y al menos el 45 % de ancho de su largo
 de perfil (`frontWidth`: si no, de frente se lee como una raya a 1x, como el primer
 jabalí); los pies en la fila del suelo (más holgura si flota); caminar que cambia de
 silueta, un ataque y una muerte que se distinguen del parado y sur distinto de oeste; las

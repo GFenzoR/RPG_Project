@@ -1507,7 +1507,11 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   derecha brilla y la izquierda, bajo el puntero, se tiñe de rojo), `inventoryfloat` (el
   inventario flotando, de 420 px), `tooltip` (la espada de la mano derecha) y
   `tooltipcoin` (las monedas de la mochila); en teléfono y tablet abren la pestaña del
-  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`.
+  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`. Desde
+  `feat/item-icons` la base tiene los diez slots llenos (la banda 3 del catálogo y la
+  espada de hierro) y la mochila lleva piezas de las bandas siguientes, y la tienda (`shop`)
+  muestra 24 piezas de equipo antes de 6 de las otras categorías: así esas escenas muestran
+  los íconos del motor de sprites (docs/17 "Íconos de items").
 - **E2E:** el primer test de `e2e/game.spec.ts` encuentra la mochila abierta bajo la figura
   (`[data-container-item="backpack"][data-docked]` dentro de `inventory`, 24 celdas, sin
   `window-container-backpack`), la cierra con su ×, la abre de nuevo con "Abrir" del menú

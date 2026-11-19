@@ -113,6 +113,12 @@ items:
   requires: { level: 5 }  # obligatorio en armas, armaduras y escudos: el de su banda
   value: 150              # precio base que usan los NPCs como referencia
 ```
+- **Sprite del equipo** (lote 11, docs/17 "Íconos de items"): cada arma, escudo,
+  armadura, joya y munición tiene su propio `sprite`, `<categoría>/<id>` (`weapons/`,
+  `shields/`, `armor/`, `jewelry/` para amuletos y anillos, `ammo/`), dibujado por el motor
+  de sprites (`tools/spritegen/src/engine/specs/items/`) y sin entrada en
+  `assets/sprites.yaml`. Dos piezas no comparten sprite: el test de spritegen
+  (`engine/items.test.ts`) falla si una pieza nueva no tiene su ícono.
 - **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
   (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
   su texto del mapa: `brasal_dock_sign` tiene `description: text.volcan.dock_sign`, la

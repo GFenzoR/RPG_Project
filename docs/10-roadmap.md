@@ -453,3 +453,12 @@ secundaria.
   personaje con su pelea. Expulsiones, bans, guardados fallidos y el apagado sacan en el
   acto, como antes. `server/internal/session/linkdead.go`, docs/02 "Bloqueo de logout en
   combate". Lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Íconos de equipo del motor de sprites (docs/17 "Íconos de items"; lote 11, rama
+  `feat/item-icons`).** Pedido del dueño del 2026-11-18: cada pieza del catálogo compacto
+  con su propio sprite del motor. 86 íconos (las 78 piezas, las 6 retiradas y las dos
+  municiones) con la clase `icon` (32x32 centrado, contorno oscuro, puertas de centrado y
+  tamaño), un constructor por línea y una banda que se reconoce por su material y su acento
+  (óxido, hierro, acero, acero de ascua con brasa, hueso y escamas con oro, acero de marea
+  con runas); ninguna pieza de equipo usa ya un ícono de Dungeon Crawl. `spritegen sheet`
+  deja las hojas en el slot del inventario a 1x y 2x. Lo que queda: docs/14, "Pendientes
+  conocidos".

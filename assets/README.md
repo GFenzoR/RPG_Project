@@ -313,8 +313,14 @@ tiempos de ANI-2) están en un solo lugar, `engine/style.ts`.
 - **Hoy:** `creatures/bristleback_boar` y `creatures/bramble_stag` (quieto, caminar,
   atacar y morir: 68 frames cada uno), `npcs/forge_echo` (quieto y caminar: 32 frames),
   `decor/anvil`, `decor/cargo_crate` y `decor/signpost` (una imagen) y
-  `decor/market_board` (animado: 4 frames). El bolardo (`decor/mooring_post`) sigue de
-  `recipes/terrain.ts`: el del motor no se leyó mejor.
+  `decor/market_board` (animado: 4 frames), los restos de los monstruos (`decor/remains_*`
+  y `decor/creature_remains`) y, desde el lote 11, los íconos de todo el equipo
+  (`weapons/`, `shields/`, `armor/`, `jewelry/`, `ammo/`: 86, uno por pieza; docs/17
+  "Íconos de items"). El bolardo (`decor/mooring_post`) sigue de `recipes/terrain.ts`: el
+  del motor no se leyó mejor.
+- **Íconos de items:** la clase `icon` (32x32, la figura centrada en el lienzo, contorno
+  oscuro); se revisan en `build/spritegen/icons.slots.png` (en el slot del inventario a 2x
+  y 1x y sobre el pasto) e `icons.detail.png` (a 4x), que escribe `spritegen sheet`.
 - **Frames:** una criatura tiene `sprites/<sprite>/<acción>_<dir>_<n>.png` en las cuatro
   direcciones, dibujadas desde el modelo (el este no es el oeste espejado: la luz sigue a
   la izquierda), de 64x64 sin sombra pintada. No hay `sprites/<sprite>.png`: el nombre del

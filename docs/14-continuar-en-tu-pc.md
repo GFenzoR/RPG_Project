@@ -98,6 +98,29 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
+  "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
+  tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa
+  ningún ícono de Dungeon Crawl para el equipo. Queda:
+  - **Que el dueño los mire:** las hojas de revisión (`spritegen sheet`:
+    `build/spritegen/icons.slots.png`, en el slot a 2x y 1x y sobre el pasto, e
+    `icons.detail.png` a 4x) y las escenas `inventory`, `inventoryfloat` y `shop` de
+    `make ui-preview`. Esto reabre SRC-4 de docs/17 ("se quedan los íconos de Dungeon
+    Crawl") por su pedido del 2026-11-18 (un sprite propio por pieza). Los que menos
+    convencieron en la revisión: el yelmo de acero de marea (la caracola se lee como un
+    copete), la culata de las ballestas (gruesa) y el arco de tejo (se parece al corto).
+  - **Siguen de Dungeon Crawl** la comida, los materiales, las pociones, los items de
+    quest, el hacha de leñador, el martillo de herrero, la runa y las escaleras: el mismo
+    motor puede dibujarlos (una clase `icon` ya existe), pero no eran parte del pedido.
+  - **El E2E no se corrió en la rama** (lo corre el lote al final): la tienda de la Isla de
+    Pruebas (`95-sandbox-shop-scrolled`, que vende armas, escudos y ropa del catálogo) y la
+    figura del inventario en las capturas del juego (`04-world`, `09a-item-menu`,
+    `09b-item-tooltip`) deberían mostrar los íconos nuevos.
+  - **Un ícono es una sola imagen:** sin brillo animado (una runa que late, la brasa del
+    acero de ascua). Con `loop` del motor se podría, pero el cliente anima los items del
+    mapa, no los del inventario.
+  - **La figura del personaje no muestra el equipo:** el sprite del jugador es el atuendo
+    de LPC; ponerle el arma o el yelmo que lleva es otro pedido (capas de LPC por pieza).
 - **Catálogo compacto de equipo (hecho, rama `feat/item-catalog`, lote 11; docs/02
   "Catálogo de equipo"):** 78 piezas en seis bandas (1, 5, 10/15, 30, 50 y 75), una por
   línea y banda, con la fórmula que comprueba `catalog.test.ts`; amuletos y anillos nuevos;
@@ -105,10 +128,7 @@ el punto 5:
   - **Bandas 5 y 6 sin fuente:** ninguna tienda, botín ni receta las da hasta que llegue su
     isla. Esa isla agrega las fuentes, devuelve las recetas de la cota de escamas y la hoja
     de colmillo de dragoncillo (herrería 20 y 22) y sube `OBTAINABLE_BANDS` en el test.
-  - **Sprites:** las 35 piezas nuevas usan el sprite más parecido (las joyas, el relicario y
-    el cuarzo; las túnicas, la túnica remendada); `feat/item-icons` dibuja uno por pieza.
-    Hasta entonces un amuleto se ve igual que el relicario de la quest del buzo y un anillo
-    igual que un cuarzo de 13 cobres: el nombre de la ficha los distingue.
+  - **Sprites:** resuelto en `feat/item-icons` (abajo): cada pieza tiene su ícono.
   - **Las joyas solo dan armadura** (amuleto 1-2, anillo 0-1): su gracia es el atributo al
     azar de `feat/item-attributes`. Los anillos de las bandas 3 y 4 son botín raro
     (0,5-1 %) y hasta que entre esa rama no hacen nada (armadura 0; la tarjeta ya no

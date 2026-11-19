@@ -799,10 +799,11 @@ armadura).
 | Amuleto | — | — | `antler_amulet` 1 | `cinder_amulet` 1 | `wyrmtooth_amulet` 2 | `blackpearl_amulet` 2 |
 | Anillo | — | — | `briar_ring` 0 | `obsidian_ring` 0 | `emberheart_ring` 1 | `tidestone_ring` 1 |
 
-La munición (`arrow`, 9, y `bolt`, 10) no tiene bandas: se apila y no lleva atributo. Los
-sprites son los de antes; las piezas nuevas usan por ahora el más parecido (las joyas, el
-relicario y el cuarzo) hasta que `feat/item-icons` dibuje uno por pieza con el motor de
-sprites.
+La munición (`arrow`, 9, y `bolt`, 10) no tiene bandas: se apila y no lleva atributo. Cada
+pieza tiene su propio ícono, dibujado con el motor de sprites (`feat/item-icons`, docs/17
+"Íconos de items"): una banda mejor se reconoce de un vistazo por su material y su acento
+(óxido y madera, hierro, acero, acero de ascua con brasa, hueso y escamas de dragoncillo
+con oro, acero de marea con runas) y por una silueta más grande y más trabajada.
 
 **La fórmula** (la comprueba `packages/content-schema/src/catalog.test.ts`: una pieza nueva
 la sigue, o la fórmula, el test y este doc cambian juntos). Valores base por banda *b*:
