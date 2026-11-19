@@ -114,8 +114,9 @@ el punto 5:
     pone su propia recompensa, o empezar con un `dialog_action` de quien la da o un `reach`
     a 3 casillas de él).
   - **El `QuestLog` va entero con cada cambio** (también con cada muerte que cuenta un paso):
-    docs/07 lo midió y alcanza con las quests de hoy. Con muchas tareas de caza conviene
-    mandar solo la entrada que cambió (un delta; cambia el protocolo).
+    docs/07 lo midió con las 20 quests de hoy (1937 B con todas empezadas,
+    `TestQuestLogSize`). Ese test falla pasando 4096 B (unas 42 quests empezadas a la vez):
+    ese día, mandar solo la entrada que cambió (un delta; cambia el protocolo).
   - **Zonas sin reglas:** `reach: { zone }` toma cualquier zona de `zones.yaml`, pero hoy
     todos sus tipos tienen reglas (protección, no-logout, pvp, no_pvp, parcela). Para nombrar
     una cueva o un santuario sin cambiar sus reglas hace falta un tipo `area` (sin flags) en
@@ -127,13 +128,14 @@ el punto 5:
     `reach_gate`: el eco está en la antesala, así que al bajar a hablarle el paso se cumple
     solo y siguen igual. Nadie queda trabado (lo juega `TestReachStepAtLogin` con otra
     quest: estar ya en el lugar al entrar también cuenta).
-  - **El E2E no se corrió en la rama** (lo corre el lote al final). Ningún spec abre todavía
-    "Misiones" ni acepta una quest. El que conviene extender es "T3.6: wake up at the temple
-    of Raigal and talk to the druid" (`client/e2e/game.spec.ts`): ya siembra
-    `quest.ch1_shipwreck = 2` con `psql` y abre el diálogo de la druida, así que basta con
-    aceptar `ch2_roots`, pulsar L y sacar la captura de "Activas" (el paso de matar en 0/N) y
-    la de "Terminadas" (el capítulo 1). `make ui-preview` tiene las escenas `quests` y
-    `questsdone`.
+  - **E2E (verificación final del lote 12):** "sandbox: the quest log, a lectern's book and
+    a reward chest that gives once" (`client/e2e/sandbox.spec.ts`) siembra el capítulo 1 en
+    2/6 lobos y la tarea de práctica recién hecha, y abre "Misiones" desde la botonera
+    (capturas `96-sandbox-quests`, "Activas (1)" con 2/6, y `96b-sandbox-quests-finished`,
+    "Disponible otra vez en 2 min 59 s"). Ningún spec acepta todavía una quest en un diálogo
+    ni ve contar una muerte en el diario: lo natural es extender "T3.6: wake up at the
+    temple of Raigal and talk to the druid" (`client/e2e/game.spec.ts`, ya siembra
+    `quest.ch1_shipwreck = 2`) aceptando `ch2_roots`.
   - **El diario no cuenta las veces** que se hizo una tarea ni guarda cuándo se terminó una
     quest que no es repetible: no hay dónde mostrarlo todavía y serían más filas de
     `quest_state` por personaje.
@@ -148,9 +150,13 @@ el punto 5:
   templos, plazas, depósito, tiendas y las 13 casas del Farol, Raigal y Brasal amueblados;
   una fuente por plaza, braseros, estandartes y ventanas en los templos; antorchas de
   pared cada 7 casillas y braseros en las minas de Puerto, Bosque y Volcán. Queda:
-  - **El E2E no se corrió en la rama** (lo corre el lote al final). Qué mirar: docs/17
-    "Kit de props de pueblo" y las notas del PR (los screenshots del templo del Farol,
-    de Raigal, de Brasal y de la mina).
+  - **E2E (verificación final del lote 12):** el amueblado se ve en las capturas del Farol
+    (`12b`, `13`, `14`, `43`: braseros, estandartes, ventanas, bancos, el atril, el mástil y
+    la plaza), de Raigal (`31` a `33`), de Brasal (`65`, `66`: el archivo con estantes y el
+    atril), de la casa (`56` a `59`: cama, ventanas, jardineras; la mochila sigue cayendo
+    libre) y del piso 8 (`70-forge-gate-open`: la antorcha junto a la puerta de la forja
+    con su luz). Sin captura: la mina del Farol y la cueva del Bosque, y las antorchas de la
+    sala de entrada de la mina del Volcán (y 5787) quedan fuera de `74-volcan-mine-floor-8`.
   - **La luz en el juego:** `mapcli render` muestra el frame 0 sin la capa de luz; que las
     antorchas (radio 3) y los braseros (3,5) se vean en la oscuridad de las minas se mira
     en el E2E o con `make play` bajando la escalera de la mina del Farol (3176,6322).
@@ -173,12 +179,12 @@ el punto 5:
   naufragio, la cueva de los contrabandistas y la mina inundada) y cinco cofres que dan una
   vez por personaje (la mina de Puerto, el bosque de Puerto, el nido de la cueva del
   Bosque, la mina del Volcán pasando los gólems y el templo de la Isla de Pruebas). Queda:
-  - **El E2E no se corrió en la rama** (lo corre el lote al final). Para un spec: en la Isla
-    de Pruebas (`e2e/sandbox.spec.ts`, el guardián que despierta en 2095,2086) caminar a
-    2099,2085, usar el atril (2099,2084) y mirar la ventana `book` (`book-page`,
-    `book-next`, `book-page-number`), el pergamino (2097,2084) y el cofre (2098,2084):
-    `chest.found` la primera vez y `chest.empty` la segunda (`__rpgClient.book()` da el
-    item que se lee).
+  - **E2E (verificación final del lote 12):** el spec nuevo de `e2e/sandbox.spec.ts` camina
+    a 2099,2085, lee el atril con "Leer" (página 1 de 3, pasa a la 2, Escape la cierra,
+    `__rpgClient.book()`) y abre el cofre dos veces: `chest.found` con las cuatro
+    recompensas y después `chest.empty` (capturas `97-sandbox-book` y `98-sandbox-chest`).
+    Sin E2E: el pergamino del suelo y `chest.no_room` (los cubren los tests del servidor y
+    del cliente).
   - **Un cofre se ve siempre cerrado:** verlo abierto solo quien ya lo abrió pide estado
     del mapa por personaje; el servidor lo dice con el mensaje. Si un día se quiere, el
     cliente podría recordar los cofres abiertos de la sesión, pero no sabe de los de antes.
@@ -227,10 +233,18 @@ el punto 5:
     abastece a los contrabandistas: es un gancho para un capítulo o una quest futura.
   - **Música:** ninguna quest secundaria tiene `music`; el cráter la merecería con un tema
     propio (`flame_crater`, docs/06 "Música de una quest importante").
-  - **El E2E no se corrió en la rama** (lo corre el lote al final). Ningún spec habla todavía
-    con Fenn ni con Orso ni abre el tablón: lo natural es extender "T3.6: wake up at the
-    temple of Raigal and talk to the druid" con Fenn (está a 4 casillas del camino que
-    recorre ese spec) y sacar la captura del tablón.
+  - **La recompensa de `flame_crater` puede caer al suelo del cráter** (revisión final del
+    lote 12, sin cambio): la quest termina en su muerte y paga donde está el jugador; si el
+    amuleto no entra, cae en zona hostil y otro jugador puede levantarlo (`holdGround` solo
+    protege durante un transfer sin confirmar). La experiencia va primero y lo atenúa. Si el
+    dueño prefiere cerrarlo, el pago pasa a la vuelta con Madre Oriela (un paso
+    `dialog_action`), y `TestHouseRuneKillsAQuestMonsterFromTheStreet` necesita otra quest
+    que termine en una muerte (vuelve a ser una del test).
+  - **E2E (verificación final del lote 12):** Fenn Zarzal se ve con su sprite de LPC y su
+    nombre no pisa el de la druida (`32-bosque-plaza`, `33-bosque-druid`); el camino de T3.6
+    no choca con él. Ningún spec habla todavía con Fenn ni con Orso ni abre el tablón: lo
+    natural es extender "T3.6: wake up at the temple of Raigal and talk to the druid" con
+    Fenn (está a 4 casillas del camino que recorre ese spec) y sacar la captura del tablón.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
   tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa

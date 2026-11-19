@@ -1789,3 +1789,9 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `toolbar-quests`.
 - Vista previa: escenas `quests` y `questsdone` (la pestaña de terminadas) de
   `make ui-preview`; `allwindows` la abre también.
+- E2E: "sandbox: the quest log, a lectern's book and a reward chest that gives once"
+  (`e2e/sandbox.spec.ts`) siembra el capítulo 1 en 2/6 lobos y la tarea de práctica en
+  espera con `psql`, abre `quests` con `openWindow` (`WindowId` de `e2e/windows.ts` incluye
+  `quests`) y mira las dos pestañas; después lee el atril del templo y abre su cofre dos
+  veces (screenshots `96-sandbox-quests`, `96b-sandbox-quests-finished`, `97-sandbox-book`,
+  `98-sandbox-chest`).
