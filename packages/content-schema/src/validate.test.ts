@@ -12,11 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
 import type { SchemaName } from "./index.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
+
+// Many of these validate the whole content several times (about half a second each on a
+// dev machine, more than twice that on a slow CI runner): over 5 s for the longest ones.
+vi.setConfig({ testTimeout: 30_000 });
 
 function messages(root: string): string[] {
   const out = validateContent(root).diagnostics.map(formatDiagnostic);
