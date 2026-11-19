@@ -1984,6 +1984,23 @@ mínimo**, para que el jugador explore y grindee entre capítulos:
 
 Además: quests secundarias, libros con lore, secretos en el mapa.
 
+**Diario de misiones y tareas.** Cada personaje tiene su diario (ventana "Misiones", tecla L
+o el libro de la botonera; una pestaña del panel en teléfonos), que el servidor le manda
+entero al entrar y cada vez que cambia una quest (`QuestLog`, docs/05). Dos pestañas:
+"Activas" (nombre, capítulo o "Secundaria", el texto del paso actual y, en un paso de
+matar, las muertes contadas, "5/8", con una barra) y "Terminadas". La línea principal va
+primero, por capítulo. Además de matar, juntar, hablar y los flags, un paso puede ser
+**llegar a un lugar** (`reach`: una zona del mapa o unas casillas alrededor de un punto;
+cuenta al caminar, al usar una escalera o un teletransporte, al viajar en barco y al
+despertar en el templo; docs/06 "Quest"). Una quest puede ser una **tarea repetible**
+(`repeatable: { cooldown_hours }`): terminada, se puede tomar otra vez cuando pasa su
+espera, desde el primer paso, y paga su recompensa cada vez. Es la base de las tareas de
+caza del final del juego (pedirle al jugador que vuelva a un coto cada día). El diario
+muestra cuánto falta para volver a tomarla ("Disponible otra vez en 2 h 15 min") y el NPC
+que la da distingue si está disponible o si todavía espera. Hoy la única tarea es la de
+práctica de la Isla de Pruebas (tres minutos de espera, docs/16); las tareas de caza del
+Bosque y del Volcán llegan con las quests secundarias.
+
 **Capítulo 2 "Raíces" (T3.6, Isla del Bosque).** Lo da Velia Musgo, la druida de Raigal,
 a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 (`data/quests/ch2_*.yaml`, `data/npcs/bosque_druid.yaml`):
@@ -2016,10 +2033,11 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
    de la forja antigua. 14 000 XP y 800 monedas.
 2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
-   (botín de los mineros), entregarlo a Casia y bajar hasta la puerta sellada, en lo más
-   hondo de la mina, donde el eco de la forja toma la raíz y le devuelve su forma: la
-   **llave de ascua** (`ember_key`, no comerciable), que abre la puerta (ir a un lugar y
-   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas. Quien terminó
+   (botín de los mineros), entregarlo a Casia, bajar hasta la antesala de la puerta
+   sellada, en lo más hondo de la mina (un paso `reach`: llegar a 4 casillas del eco lo
+   cumple, "Diario de misiones y tareas"), y mostrarle la raíz al eco de la forja, que le
+   devuelve su forma: la **llave de ascua** (`ember_key`, no comerciable), que abre la
+   puerta. Casia da la pista del camino en los dos últimos pasos. 22 000 XP y 1100 monedas. Quien terminó
    `ch3_gate` y no tiene la llave (la perdió, o terminó antes de que existiera) le pide
    otra al eco, una a la vez.
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo

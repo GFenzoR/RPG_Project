@@ -47,7 +47,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events} + FullMapView + Stats + Inventory + Skills + QuestLog
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -63,8 +63,9 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
   antes del token, así un cliente viejo no gasta su token.
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
-  `Inventory` (equipo guardado, T1.8) y `PlayerSkills` (todas las skills de
-  `balance.yaml → skills.base`, con el nivel guardado del personaje).
+  `Inventory` (equipo guardado, T1.8), `PlayerSkills` (todas las skills de
+  `balance.yaml → skills.base`, con el nivel guardado del personaje) y `QuestLog` (el
+  diario de misiones, "Diario de misiones").
   `view_width`/`view_height` (31 y 21) son la ventana de casillas que el servidor le
   mantiene al día, sin el margen (ver "Formato de mapa"): el cliente dibuja como mucho
   eso. Un servidor anterior a la vista ancha no los manda (0): el cliente toma 15x11.
@@ -960,6 +961,24 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
 
+### Diario de misiones (`server/internal/session/questlog.go`)
+- `QuestLog{entries}` es el diario completo del personaje: una `QuestLogEntry` por quest
+  que empezó o terminó, en el orden de su id. Llega **entero** al entrar (en el lote del
+  `Welcome`, después de `PlayerSkills`, vacío también: así el cliente sabe que el servidor
+  lo tiene) y en el lote de cada tick en que cambió alguna quest del personaje (empezó,
+  cumplió un paso, contó una muerte, terminó), uno solo por tick aunque cambie varias
+  veces. Solo lo recibe el propio jugador.
+- Cada entrada: `quest_id`, `name` (clave i18n del nombre), `chapter` (0 para una
+  secundaria o una tarea), `state` (`ACTIVE`, `DONE` o `COOLING`), `repeatable`; en curso,
+  `step_id` y `step_text` (clave i18n del texto del paso actual) y, en un paso `kill`,
+  `kills` y `kills_needed` (`kills_needed` 0: no es un paso de muertes); una tarea
+  terminada trae `available_at`, cuándo se puede tomar otra vez (ms Unix del reloj del
+  servidor): `COOLING` si eso todavía no pasó al mandarla, `DONE` si ya pasó. El
+  servidor no avisa cuando vence una espera: el cliente compara `available_at` con su
+  reloj corregido por `Welcome.server_time`.
+- Es solo para mostrar: el servidor decide todo con lo guardado (`quest_state`).
+  Agregado sin romper nada (campo 45 de `ServerMessage`): un cliente viejo lo ignora.
+
 ### Grupos (T3.3, `server/internal/session/party.go`)
 Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
 - **`PartyCommand{action, creature_id}`**:
@@ -1384,6 +1403,7 @@ dice que el servidor los manda.
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
 | `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
+| `QuestLog` | El diario de misiones entero: al entrar y en cada tick en que cambió una quest ("Diario de misiones") |
 | `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4). En el yunque, `owned` también cuenta las piedras de temple y el ámbar, y `money` es el dinero que se lleva; llega también tras cada `Refine` |
 | `RefineResult` | Cómo terminó un intento de la forja: `outcome` (`SUCCESS`, `BROKEN`, `PROTECTED`), `item` (la instancia después, sin `mods` si se rompió), `level` y `text` (el mismo `LocalizedText` del mensaje del log) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |

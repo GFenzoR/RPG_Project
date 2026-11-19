@@ -462,3 +462,13 @@ secundaria.
   con runas); ninguna pieza de equipo usa ya un ícono de Dungeon Crawl. `spritegen sheet`
   deja las hojas en el slot del inventario a 1x y 2x. Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (lote 12,
+  rama `feat/quest-engine`; auditoría de juego del lote 10).** Lo que pide cada isla nueva:
+  un paso `reach` (una zona del mapa o un punto con radio; cuenta al caminar, al
+  reubicarse y al entrar, sin costo por tick), quests repetibles con espera
+  (`repeatable: { cooldown_hours }`, recompensa cada vez, `quest_state` `available` y
+  `cooling_down`) y el diario de misiones: el mensaje `QuestLog` y la ventana "Misiones"
+  (tecla L; pestaña en teléfonos) con el paso actual, las muertes y la espera de una tarea.
+  `world.bin` v7 guarda las zonas por id. Como prueba: el paso `reach_gate` de `ch3_gate`
+  y la tarea de práctica de la Isla de Pruebas. Lo que queda: docs/14, "Pendientes
+  conocidos" (las tareas de caza son de `feat/side-quests`).

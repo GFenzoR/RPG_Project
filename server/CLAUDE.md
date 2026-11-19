@@ -255,6 +255,20 @@ server/
   pieza ofrecida en un intercambio cuyos `mods` cambian sale sola de la oferta, `checkTrade`); un efecto nuevo necesita su
   `content.Effect*`, su caso en `wornGear` y en el esquema `attributes.schema.json`.
 
+- **Pasos `reach` y diario de misiones (`session/questlog.go`, `quest`, docs/06 "Quest",
+  docs/05 "Diario de misiones"):** `initReach` resuelve al arrancar el lugar de cada paso
+  `reach` (una zona de `world.bin` v7, `Map.Zone`, o un punto en una isla, `Map.IslandAt`;
+  si no, no arranca). Cada jugador guarda los lugares de sus pasos `reach` actuales
+  (`Player.reach`) y un bit por piso (`reachFloors`); `move`, `relocate` y `join` llaman a
+  `checkReach`, que con el piso fuera de la máscara no hace nada. Un camino nuevo que cambie
+  la casilla de un jugador sin pasar por `move` ni `relocate` tiene que llamar a
+  `checkReach`. Todo cambio de una quest pasa por el motor con un `questHost`: su `Notify`
+  marca `questsChanged` (los lugares se releen en el próximo `checkReach` y el `QuestLog`
+  sale en el `flushQuestLog` del tick, uno por tick). Las tareas repetibles guardan
+  `quest.<id>.done_at` con `questHost.Now` (`World.nowUnix`, el reloj del loop); nunca
+  `time.Now()`. Los tests de `session` con el mapa de 64x64 dejan los pasos `reach` de
+  `data/` en una esquina (`parkReachSteps`); los que usan el mapa real piden `realQuests`.
+
 - **Forja (`session/refine.go`, `content/forge.go`, `balance.yaml forge`, docs/02 "Forja"):**
   `Refine` hace todos los chequeos antes de tocar nada (yunque a 1 casilla, la pieza del
   jugador en un slot o un contenedor abierto con todos los `mods` que vio el cliente, no ofrecida en

@@ -496,7 +496,12 @@ Viaje en barco (de `data/npcs/harbor_master.yaml`): el nodo marcado ofrece las r
 ```
 Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 `lacks_item` (tiene menos de `count`, por defecto 1: lo contrario de `has_item`),
-`quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
+`quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`. El `state` de
+`quest_state` es `not_started`, `in_progress` o `completed` (lo guardado), o uno de los dos
+que separan los turnos de una tarea repetible ("Quest"): `available` (`start_quest` la
+empezaría ahora: nunca empezada, o repetible y ya pasó su espera) y `cooling_down`
+(repetible, terminada, esperando). Una tarea se ofrece con `available`, no con
+`quest_not_started` (que después de la primera vez no vuelve a valer).
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
 `teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
@@ -598,7 +603,8 @@ Semántica del motor (T1.10):
 
 Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
 `quest.<id>` (1 en curso, 2 completada), `quest.<id>.step` (índice del paso actual),
-`quest.<id>.kills` (muertes del paso actual), `flag.<key>` (los `set_flag` y
+`quest.<id>.kills` (muertes del paso actual), `quest.<id>.done_at` (una tarea repetible:
+cuándo se terminó, segundos Unix del reloj del loop), `flag.<key>` (los `set_flag` y
 `flag_equals`) y `bless.<id>`. Se guarda con el personaje, en la misma transacción.
 
 El motor de diálogos (`server/internal/dialog`) solo interpreta este YAML: no hay
@@ -651,14 +657,53 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
 - `make validate` exige que todo item de un paso `has_item` se pueda conseguir (loot, tienda,
   `give_item` o recompensa de quest). `server/internal/sim/balance_test.go` comprueba además que la
   fuente más fácil no esté más de 4 niveles por encima del `min_level` de la quest.
+- `reach` se cumple mientras el jugador está en un lugar: `reach: { zone: <id> }` (una
+  zona de `world/islands/*/zones.yaml`, de cualquier tipo: un pueblo, un muelle, una arena)
+  o `reach: { x, y, z, radius }` (las casillas a `radius` o menos, Chebyshev, de ese punto,
+  en el piso `z`; `radius` va de 0, la casilla sola, a 16). Se evalúa cuando el paso pasa a
+  ser el actual (si el jugador ya está ahí, se cumple en el acto), después de cada paso y
+  de cada reubicación (teletransporte, escalera, agujero, soga, barco, el templo al morir,
+  un `teleport` de diálogo) y al entrar al juego. No cuesta nada por tick: el servidor
+  guarda por jugador los lugares de sus pasos `reach` actuales y un bit por piso, y solo
+  mira a quien camina por uno de esos pisos (`session/questlog.go`). `make validate`, el
+  servidor al arrancar y la prueba del mundo real (`TestRealWorldStarts`) exigen que la
+  zona exista o que el punto caiga dentro del rectángulo de una isla (`world.yaml`) en un
+  piso que su `island.yaml` liste, y siempre en una isla que no sea `dev_only` (el
+  servidor de producción no la tiene). Para un lugar sin zona propia (una cueva, un
+  santuario), el punto con radio.
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
 `completed` y su propio `level_at_least`; entregas con `has_item` + `take_item` con
-`count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: "ir a un
-lugar y abrir" es un `dialog_action` con un NPC puesto en ese lugar, el eco de la forja,
-que toma la llave con `take_item`) y las quests secundarias `foreman_ore` y
-`diver_locket`.
+`count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: llegar a la
+antesala de la puerta sellada es el paso `reach_gate`, un `reach` a 4 casillas del eco de
+la forja, y abrirla es un `dialog_action` con el eco, que toma la raíz con `take_item`), las
+quests secundarias `foreman_ore` y `diver_locket` y la tarea repetible `pruebas_rats` de la
+Isla de Pruebas (`repeatable`, docs/16).
+
+### Quests repetibles (tareas)
+```yaml
+id: pruebas_rats
+repeatable: { cooldown_hours: 0.05 }   # tres minutos; acepta fracciones
+steps: [...]
+rewards:
+  - { xp: 200 }
+  - { gold: 50 }
+```
+- Al terminarla se guarda `quest.<id>.done_at` (segundos Unix del reloj del loop, el reloj
+  inyectado; nunca `time.Now()`). `start_quest` la vuelve a empezar cuando pasaron
+  `cooldown_hours` desde entonces: desde el primer paso, sin muertes contadas y sin
+  `done_at` hasta que se termine otra vez. Antes, no hace nada.
+- Las `rewards` (también los `set_flag`) se dan cada vez.
+- Mientras corre otra vez está `in_progress`; terminada, `completed` (con `available` o
+  `cooling_down` según su espera). Una ruta de barco con `requires: { quest }` de una tarea
+  dejaría de valer mientras la tarea corre de nuevo: no la uses así.
+- `cooldown_hours` va de más de 0 a 8784 (un año). Una quest que se volvió repetible
+  después de terminada (sin `done_at`) está disponible en el acto.
+- El diálogo que la ofrece pregunta `quest_state: { quest: <id>, state: available }` y
+  puede tener otra opción con `cooling_down` ("vuelve más tarde").
+- El diario de misiones (docs/02 "Diario de misiones", `QuestLog` de docs/05) muestra una
+  tarea terminada con el tiempo que falta para volver a tomarla.
 
 ## Hechizo
 ```yaml

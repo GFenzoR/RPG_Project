@@ -98,6 +98,38 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
+  `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
+  docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al
+  caminar, al reubicarse y al entrar), `repeatable: { cooldown_hours }` (`done_at` del reloj
+  del loop, recompensa cada vez, `quest_state` `available` y `cooling_down`), el mensaje
+  `QuestLog` y la ventana "Misiones" (L). `world.bin` pasó a la versión 7 (las zonas por
+  id). Como prueba: el paso `reach_gate` de `ch3_gate` y la tarea de práctica de la Isla de
+  Pruebas (3 minutos). Queda:
+  - **Las tareas de caza y las quests secundarias** del Bosque y del Volcán son la rama
+    `feat/side-quests` (sobre esta): escriben contenido con `reach` y `repeatable`.
+  - **Zonas sin reglas:** `reach: { zone }` toma cualquier zona de `zones.yaml`, pero hoy
+    todos sus tipos tienen reglas (protección, no-logout, pvp, no_pvp, parcela). Para nombrar
+    una cueva o un santuario sin cambiar sus reglas hace falta un tipo `area` (sin flags) en
+    `packages/map-format`, `mapcompile` (`zoneFlags`), el editor y `mapcli`; mientras, el
+    punto con radio.
+  - **Un `world.bin` de la versión 6 no carga:** `make mapcompile` (lo corren `make play`,
+    `make dev` y el E2E).
+  - **Personajes guardados en el viejo `open_gate` de `ch3_gate`** (índice 3) quedan en
+    `reach_gate`: el eco está en la antesala, así que al bajar a hablarle el paso se cumple
+    solo y siguen igual. Nadie queda trabado (lo juega `TestReachStepAtLogin` con otra
+    quest: estar ya en el lugar al entrar también cuenta).
+  - **El E2E no se corrió en la rama** (lo corre el lote al final). Ningún spec abre todavía
+    "Misiones": el de los NPCs (capítulo 1) debería abrirla (L) después de aceptar la quest
+    del capitán y sacar su captura; `make ui-preview` tiene las escenas `quests` y
+    `questsdone`.
+  - **El diario no cuenta las veces** que se hizo una tarea ni guarda cuándo se terminó una
+    quest que no es repetible: no hay dónde mostrarlo todavía y serían más filas de
+    `quest_state` por personaje.
+  - **Una tarea que corre de nuevo vuelve a `in_progress`:** una ruta de barco o una
+    condición `completed` sobre ella deja de valer mientras corre (docs/06). Ninguna lo hace.
+  - **La botonera tiene dos filas de seis** (once botones con el diario; una fila de once
+    desde 1600 px): a 960x700 la hotbar muestra un slot menos que antes.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
   tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa
@@ -994,8 +1026,9 @@ el punto 5:
       medir (no hace falta `--fresh` ni subir `ANALYSIS`).
     - **Música de quest por paso:** una quest importante ya puede tener música en un lugar
       (`music` en su YAML, docs/06), pero ninguna la usa (falta un tema propio para
-      pedirle a Gemini) y el cliente no sabe en qué paso va el jugador: una música que
-      dependa del paso necesita que el servidor lo mande (un campo en el protocolo).
+      pedirle a Gemini). El cliente ya sabe en qué paso va el jugador (`QuestLog`, el
+      diario de misiones): una música que dependa del paso solo necesita su campo en
+      `music` y que `questPoolAt` lo mire.
     - **Safari/iOS y el WKWebView de macOS:** la música suena por un `<audio>` conectado a
       Web Audio, que arranca después del primer gesto. Chromium (y el E2E) lo hacen sin
       problema. WebKit pide un gesto por elemento: el motor crea sus cuatro elementos en el

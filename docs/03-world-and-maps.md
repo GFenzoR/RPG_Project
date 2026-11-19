@@ -339,13 +339,13 @@ no de render: el cliente sigue mostrando toda la vista (hasta 31x21) del piso ac
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 6)
+### Formato de `world.bin` (versión 7)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 6
+version      u16 = 7
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -368,6 +368,9 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
   portals    u16 cantidad, luego por portal (en el orden de portals.yaml, v5):
     id u8 largo + bytes, kind u8 (1 stairs, 2 ladder, 3 hole, 4 rope_spot,
     5 teleport, 6 boat), from x u16, y u16, z u8, to x u16, y u16, z u8
+  zones      u16 cantidad, luego por zona (en el orden de zones.yaml, v7):
+    id u8 largo + bytes, floors u8 cantidad + bytes,
+    rects u8 cantidad × (x u16, y u16, w u16, h u16)
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
@@ -378,7 +381,13 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
+- Historial: la versión 7 agregó `zones` por isla: el id, los pisos y los rectángulos de
+  cada zona de `zones.yaml` (de todos los tipos), que antes solo llegaban como flags de
+  casilla. Los usan los pasos `reach: { zone }` de `data/quests` (06-content-data.md,
+  "Quest": `Map.Zone`). `NewMap` rechaza una zona sin id, sin pisos o sin rectángulos, en
+  un piso que su isla no lista o con un rectángulo vacío o fuera de la isla. Un
+  `world.bin` de la versión 6 no carga: vuelve a compilarlo (`make mapcompile`).
+- La versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
   marca cada isla `dev_only` que deja entrar (hoy la Isla de Pruebas) y `Map.DevIslands`
   las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
   él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de

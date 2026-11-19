@@ -122,6 +122,23 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    ratas de la misión) y vuelve con la instructora para cerrarla. Sigue hacia el este solo
    si tu nivel da: el corral 5 mata a un personaje de nivel bajo. Si algo te persigue,
    vuelve a la plaza: en la zona de protección nadie ataca.
+   - **Diario de misiones y tareas** (docs/02 "Diario de misiones y tareas"): abre
+     "Misiones" con la tecla **L** o el libro de la botonera (en el teléfono, la pestaña
+     "Misiones"). Al aceptar "Ratas de práctica" aparece en "Activas" con su paso y "0/3";
+     cada rata suma una ("1/3", "2/3") y la tercera cambia el paso a "Vuelve con Irene
+     Ensayo". Es una **tarea repetible** con tres minutos de espera: entregada, pasa a
+     "Terminadas" con "Disponible otra vez en 2 min 59 s" (cuenta hacia atrás) e Irene
+     solo ofrece "¿Hay más ratas?" (todavía no). Pasados los tres minutos el diario dice
+     "Disponible otra vez" e Irene vuelve a ofrecer el encargo: empieza otra vez en "0/3" y
+     paga otra vez 200 de experiencia y 50 monedas.
+   - **Llegar a un lugar** (un paso `reach`): el único del juego es `reach_gate` de
+     `ch3_gate`, en la mina de la Isla Volcánica. Para verlo sin jugar los capítulos, con el
+     personaje fuera del juego, ponle la quest en ese paso con `psql` sobre la base de
+     `make play` (`INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
+     'quest.ch3_gate', 1), (<id>, 'quest.ch3_gate.step', 3)`), entra, hazte gm (sección 5)
+     y ve a la mina con `/tp 3691 5818 8`: el diario dice "Baja hasta la antesala..."; al
+     entrar a la antesala por el pasillo (4 pasos al sur, a 4 casillas o menos del eco de
+     la forja, 3692,5826,8) pasa a "Muéstrale la raíz de ascua al eco". Un `/tp` directo a la antesala también cuenta.
    - Lo que juegan los tests (sección 8), como referencia: corral 1, un guardián de nivel
      1 con hacha de mano; corral 2, un montaraz de nivel 8 con arco corto y flechas;
      corral 3, una arcanista de nivel 20 con varita de coral; corrales 4 y 5, un druida de
@@ -255,7 +272,7 @@ un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
 
 | Test | Qué juega |
 |---|---|
-| `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación de vida y maná y la misión de las ratas de punta a punta |
+| `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación de vida y maná y la misión de las ratas de punta a punta: entregada, el diario la muestra esperando tres minutos, Irene solo dice que el corral se está llenando, y pasados los tres minutos se toma y se cobra otra vez |
 | `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que en ninguna tienda de `data/` se gane dinero comprando y revendiendo, tampoco pasando por una receta |
 | `TestSandboxPens` | Cada corral con una vocación hasta que deja botín (ver arriba qué hace falta en el 4 y el 5) |
 | `TestSandboxTraining` | El guardián de nivel 21 que muere en el corral 4 con las skills en 10 y sobrevive entrenado por la instructora ("El combate"); el entrenamiento nunca baja una skill |
