@@ -440,7 +440,9 @@ describe("ui icons", () => {
   it("draw every status of the tray (docs/17), each its own 14x14 map outlined to 16x16", () => {
     // The conditions of data/balance.yaml and the statuses of server/internal/session/status.go.
     const balance = readFileSync(resolve(root, "data", "balance.yaml"), "utf8");
-    const conditions = [...balance.matchAll(/^ {2}([a-z_]+):\s*\{\s*kind:/gm)].map((m) => m[1]);
+    const conditions = [...balance.matchAll(/^ {2}([a-z_]+):\s*\{\s*kind:/gm)].map(
+      (m) => m[1] ?? "",
+    );
     expect(conditions.length).toBeGreaterThan(0);
     const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone"];
     expect(Object.keys(STATUS_ART).sort()).toEqual([...ids].sort());
