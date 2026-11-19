@@ -160,6 +160,13 @@ el punto 5:
     una regla del cliente (la distancia de `reach`).
   - **Las páginas se pasan con los botones:** las flechas siguen caminando (la ventana no
     toma el teclado). Un atajo (Re Pág / Av Pág) es fácil de sumar.
+  - **Un libro o pergamino en el suelo se puede tapar:** los que no bloquean su casilla
+    (el libro cerrado del archivo y los pergaminos) quedan debajo de lo que alguien tire
+    encima o de un cadáver, y "Leer" (o el click derecho) de la casilla usa el item de
+    arriba (`tileUse`). Se lee de nuevo cuando eso se levanta o se pudre; el menú de la
+    casilla solo ofrece el de arriba (`menuItem`). Es aceptable; si molesta, la casilla
+    podría preferir el libro aunque tenga algo encima (como la escalera de mano con
+    `climbable`) o los libros podrían bloquear su casilla.
   - **Un item de cofre en dos lugares** comparte su `id` (se abre una vez en total por
     personaje): `make validate` no cuenta cuántas veces está en el mapa. Un cofre por item.
   - **El libro cerrado del archivo está en el suelo:** cuando lleguen las mesas del kit de

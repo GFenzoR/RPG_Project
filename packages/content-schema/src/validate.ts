@@ -1586,7 +1586,8 @@ class Validator {
 
   /**
    * Reward chests (docs/02 "Libros y cofres", same rules as content.CheckChests in Go): a
-   * chest is a map item nobody picks up, its chest id is unique, and each reward comes in a
+   * chest is a map item nobody picks up, its chest id is unique, and each reward can go in a
+   * backpack (not pickupable: false, like a wall, a lectern or another chest), comes in a
    * count from 1 to one stack of its item (1 if it does not stack) and is never the forge's
    * protection (the warding amber: only monsters drop it). That a reward exists is the
    * schema's itemRef; that it is not retired, checkRetiredItems'.
@@ -1630,6 +1631,12 @@ class Validator {
           );
         const def = byId.get(r.item);
         if (!def) continue;
+        if (def["pickupable"] === false)
+          this.error(
+            src,
+            [...at, "item"],
+            `"${r.item}" cannot be picked up (pickupable: false): a chest only gives what goes in a backpack`,
+          );
         const limit =
           def["stackable"] === true
             ? typeof def["max_stack"] === "number"

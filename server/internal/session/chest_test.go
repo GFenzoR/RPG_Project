@@ -273,6 +273,43 @@ func TestChestOutOfReach(t *testing.T) {
 	if evs := cl.take(); hasKey(evs, "chest.found") || p.Storage(chestKey) != 0 {
 		t.Fatalf("stale view opened it: %v", systemKeys(evs))
 	}
+
+	// Another floor: right above the chest (same x and y), a floor up, which sees floor 7.
+	chestOn := func(m *world.Map) *harness {
+		return newHarness(t, m, func(c *session.Config) { c.Items = chestItems(t, testChest) }, withAttributes(t))
+	}
+	up := chestOn(worldtest.Floors(t, 0, 0,
+		worldtest.Layer{Z: 6, Rows: []string{"....", "....", "...."}}, worldtest.Layer{Z: 7, Rows: chestMap}))
+	clUp, pUp := opener(up, world.Pos{X: chestPos.X, Y: chestPos.Y, Z: 6})
+	up.input(clUp, useChest)
+	up.sim.Step()
+	if evs := clUp.take(); hasChestKey(evs) || pUp.Storage(chestKey) != 0 {
+		t.Fatalf("a chest of another floor answered: %v", systemKeys(evs))
+	}
+	checkRewards(t, up, pUp, 0)
+
+	// Out of view: one tile past the view's half width, on the same row.
+	far := chestOn(worldtest.Map(t, 0, 0, 7, "v"+strings.Repeat(".", session.ViewHalfW+1)))
+	clFar, pFar := opener(far, pos(session.ViewHalfW+1, 0))
+	if session.Sees(pFar.Pos(), chestPos) {
+		t.Fatal("the chest is in view")
+	}
+	far.input(clFar, useChest)
+	far.sim.Step()
+	if evs := clFar.take(); hasChestKey(evs) || pFar.Storage(chestKey) != 0 {
+		t.Fatalf("a chest out of view answered: %v", systemKeys(evs))
+	}
+	checkRewards(t, far, pFar, 0)
+}
+
+// hasChestKey reports whether evs carry any chest.* system message.
+func hasChestKey(evs []*pb.ServerMessage) bool {
+	for k := range systemKeys(evs) {
+		if strings.HasPrefix(k, "chest.") {
+			return true
+		}
+	}
+	return false
 }
 
 // The world does not start with a chest that gives the forge's protection, or a bad one.

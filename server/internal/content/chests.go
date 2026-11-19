@@ -31,8 +31,9 @@ type ChestReward struct {
 func ChestKey(id string) string { return "chest." + id }
 
 // CheckChests checks the reward chests of items: each one is a map item nobody picks up,
-// its chest id is unique, it gives something, and every reward is an item that exists, is
-// not retired (lote 11), is not the forge's protection (the warding amber: only monsters
+// its chest id is unique, it gives something, and every reward is an item that exists, can
+// go in a backpack (pickupable: a wall, a lectern or another chest cannot), is not retired
+// (lote 11), is not the forge's protection (the warding amber: only monsters
 // drop it, docs/02 "Forja"; "" skips that rule) and comes in a count from 1 to one stack
 // (a rune or an equipable: 1). make validate checks the same (packages/content-schema,
 // checkChests). Errors name items in id order.
@@ -63,6 +64,8 @@ func CheckChests(items Items, protection string) error {
 			switch {
 			case def == nil:
 				return fmt.Errorf("item %q: chest reward %q is not an item", id, r.Item)
+			case !def.CanPickUp():
+				return fmt.Errorf("item %q: chest reward %q cannot be picked up", id, r.Item)
 			case def.Retired:
 				return fmt.Errorf("item %q: chest reward %q is retired", id, r.Item)
 			case protection != "" && r.Item == protection:

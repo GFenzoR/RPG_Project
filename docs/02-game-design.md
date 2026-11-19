@@ -2148,8 +2148,14 @@ guardado, un logout o una desconexión en el mismo tick nunca guardan uno sin lo
   catálogo de su banda que sirve a cualquier vocación. Un equipable se crea como cualquier
   otro (`giveItem`): tira su atributo al azar (docs/02 "Atributos de items"). Nunca el
   ámbar de resguardo (la protección de la forja solo cae de monstruos), nunca un item
-  retirado, y cada recompensa es una pila como mucho (`make validate` y el arranque del
-  servidor lo revisan).
+  retirado ni uno que no se levanta (`pickupable: false`), y cada recompensa es una pila
+  como mucho (`make validate` y el arranque del servidor lo revisan).
+- **Por personaje, no por cuenta (para que el dueño lo decida):** las recompensas se pueden
+  comerciar y `puerto_grove` está al alcance de un personaje de nivel 1 en la isla de
+  inicio, así que cada personaje nuevo de una cuenta saca otra vez sus 2 piedras de temple
+  menores y un gorro con su atributo al azar, y puede pasárselos al principal. Es lo
+  pedido (como las quests, que también son por personaje) y lo que da es poco; si se
+  quiere cerrar, el cofre podría recordarse en la cuenta o dar sus piezas sin comercio.
 - **Economía:** cada unidad se registra en `economy_log` con la fuente `chest` y el id del
   cofre (docs/01 "Log de economía"); cuenta como ganancia para los atípicos, como el botín.
 - **El cofre se ve siempre cerrado.** Mostrarlo abierto solo a quien ya lo abrió pediría

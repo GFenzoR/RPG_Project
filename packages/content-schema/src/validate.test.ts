@@ -1279,7 +1279,7 @@ describe("validator diagnostics", () => {
     appendFileSync(file("data/ids.lock.yaml"), `  ${id}: ${n}\n`);
   };
 
-  it("checks reward chests: fixed, unique ids, one stack, never retired nor the forge's amber", () => {
+  it("checks reward chests: fixed, unique ids, one stack of what a backpack holds, never retired nor the forge's amber", () => {
     const chest = (id: string, n: number, rewards: string, extra?: string): void =>
       addItem(
         id,
@@ -1305,6 +1305,7 @@ describe("validator diagnostics", () => {
     );
     chest("test_chest_d", 60004, "{ item: driftwood_club, count: 1 }", "blocks_movement: true");
     chest("test_chest_e", 60005, "{ item: nothing_here, count: 1 }");
+    chest("test_chest_f", 60006, "{ item: test_chest_a, count: 1 }");
     const errors = messages(root).filter((m) => m.startsWith("error"));
     expect(errors).toEqual(
       expect.arrayContaining([
@@ -1315,9 +1316,10 @@ describe("validator diagnostics", () => {
         expect.stringMatching(/chest "test_chest_d" needs pickupable: false/),
         expect.stringMatching(/"driftwood_club" is retired.*no chest gives it/),
         expect.stringMatching(/nothing_here/),
+        expect.stringMatching(/"test_chest_a" cannot be picked up \(pickupable: false\)/),
       ]),
     );
-    expect(errors).toHaveLength(7);
+    expect(errors).toHaveLength(8);
   });
 
   it("counts a chest's rewards as a source of what NPCs buy", () => {

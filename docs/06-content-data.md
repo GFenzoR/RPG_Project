@@ -323,8 +323,9 @@ items:
     de 1 a una pila: 1 para lo que no se apila). `make validate` (`checkChests`) y el
     servidor al arrancar (`content.CheckChests`, más la protección de la forja en
     `session.initChests`) rechazan un cofre que se levanta, un id repetido, una recompensa
-    que no existe, retirada (`retired`), de más de una pila o que sea la protección de la
-    forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
+    que no existe, que no se levanta (`pickupable: false`: un muro, un atril u otro cofre
+    no van a la mochila), retirada (`retired`), de más de una pila o que sea la protección
+    de la forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
     fuente de lo que da (lo que compra un NPC necesita una; `catalog.test.ts` también lo
     cuenta). El mismo item de cofre en dos lugares del mapa comparte el `id`: se abre una
     vez en total por personaje; un cofre por item.

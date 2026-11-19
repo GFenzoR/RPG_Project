@@ -33,6 +33,7 @@ func TestCheckChests(t *testing.T) {
 		"also the one": `- {id: c, kind: decoration, pickupable: false, chest: {id: a, rewards: [{item: coin, count: 1}]}}`,
 		"nothing":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c}}`,
 		"not an item":  `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: nope, count: 1}]}}`,
+		"picked up":    `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: chest_b, count: 1}]}}`,
 		"retired":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: old_axe, count: 1}]}}`,
 		"count 0":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 0}]}}`,
 		"count 101":    `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 101}]}}`,

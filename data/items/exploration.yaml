@@ -85,7 +85,7 @@
   book:
     title: book.scroll_dawn_manifest.title
     pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
-  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of the Isla de Pruebas (2098,2084,7)."
+  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of the Isla de Pruebas (2097,2084,7)."
 
 - id: scroll_burnt_oar_log
   kind: decoration
@@ -190,4 +190,4 @@
       - { item: lesser_temper_stone, count: 2 }
       - { item: health_draught, count: 2 }
       - { item: iron_sword, count: 1 } # band 2: it rolls its attribute
-  notes: "Temple of the Isla de Pruebas, north-east corner (2100,2084,7): to try a chest (docs/16)."
+  notes: "Temple of the Isla de Pruebas, north-east corner (2098,2084,7): to try a chest (docs/16)."
