@@ -320,6 +320,26 @@ func TestMonsterPathTimes(t *testing.T) {
 	}
 }
 
+// Every character has 1 to MaxPocketSlots pocket cells (docs/02 "Bolsillos"): data/ has 4,
+// the number the owner chose, and none or more than one row of the client's inventory is
+// refused.
+func TestPocketSlots(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Inventory.PocketSlots != 4 {
+		t.Errorf("inventory.pocket_slots = %d, want 4", b.Inventory.PocketSlots)
+	}
+	inv := b.Inventory
+	for n, ok := range map[int]bool{0: false, 1: true, MaxPocketSlots: true, MaxPocketSlots + 1: false} {
+		inv.PocketSlots = n
+		if (inv.check() == nil) != ok {
+			t.Errorf("inventory.pocket_slots %d: accepted %v, want %v", n, !ok, ok)
+		}
+	}
+}
+
 // inventory.reach and resource.reach stay within the view (MaxReach, 6 tiles): the server
 // answers nothing about a tile out of view, so a longer reach could only ever fail.
 func TestReachWithinTheView(t *testing.T) {

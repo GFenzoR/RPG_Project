@@ -520,7 +520,14 @@ type Inventory struct {
 	// Reach is the Chebyshev distance (same floor) for actions on ground items, 1 to
 	// MaxReach.
 	Reach int `yaml:"reach"`
+	// PocketSlots is how many cells the pockets every character has built in hold
+	// (docs/02 "Bolsillos"), 1 to MaxPocketSlots.
+	PocketSlots int `yaml:"pocket_slots"`
 }
+
+// MaxPocketSlots bounds inventory.pocket_slots: one row of cells under the figure of the
+// client's inventory.
+const MaxPocketSlots = 8
 
 // MaxReach bounds inventory.reach and resource.reach: the half-height of the classic 15x11
 // window with its margin (session.SightHalfH), what a monster notices. The wide view
@@ -538,10 +545,14 @@ const MaxReach = 6
 const MaxRange = 6
 
 // check verifies the inventory numbers: max_open_containers, door_cooldown_ms and reach
-// above 0 (reach at most MaxReach), use_cooldown_ms not negative.
+// above 0 (reach at most MaxReach), use_cooldown_ms not negative, pocket_slots 1 to
+// MaxPocketSlots.
 func (i Inventory) check() error {
 	if i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 || i.Reach > MaxReach {
 		return fmt.Errorf("inventory: max_open_containers, door_cooldown_ms and reach must be > 0 (reach at most %d), use_cooldown_ms >= 0", MaxReach)
+	}
+	if i.PocketSlots < 1 || i.PocketSlots > MaxPocketSlots {
+		return fmt.Errorf("inventory: pocket_slots must be 1 to %d", MaxPocketSlots)
 	}
 	return nil
 }

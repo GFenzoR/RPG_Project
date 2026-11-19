@@ -80,6 +80,7 @@ inventory:
   use_cooldown_ms: 1000       # between two uses of a consumable
   door_cooldown_ms: 500       # between two uses of a map door by one player, refused or not
   reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
+  pocket_slots: 4             # built-in pocket cells of every character (docs/02 "Bolsillos"); never lower it
 
 gathering:                  # fishing and mining (T1.12); spot numbers live in data/items
   use_interval_ms: 1500     # rate limit: one gathering attempt per player at most this often
