@@ -218,8 +218,8 @@ el punto 5:
       translúcida; un jugador que muere a la vista y despierta en un templo a la vista deja
       su cuerpo cayendo donde murió; `TELEPORT` y `LOGOUT` se desvanecen (350 ms). Queda
       de A9: `make bots` contra un servidor real con los eventos (docs/07 "Eventos de
-      ataque"); `DESPAWN` no lo usa ningún camino todavía (solo el hook de test
-      `DespawnForTest`) y sale en el acto, sin desvanecerse.
+      ataque"); `DESPAWN` lo usan desde el lote 10 los invocados que se van con su
+      invocador (docs/02 "Habilidades") y sale en el acto, sin desvanecerse.
     - **Conjurar y disparar (hecho, rama `feat/lpc-actions`):** los humanoides de LPC juegan
       `shoot` (el arco) para un `CreatureAttack{RANGED}` y `cast` (`spellcast`) para un
       `SPELL`. Queda: las hojas no traen el arma (el arco, la varita): es el gesto solo,
@@ -649,14 +649,30 @@ el punto 5:
     creciente). Si el dueño quiere un corral intermedio, es diseño de la isla.
   - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`; el
     lote 5 resolvió el objetivo inalcanzable dentro de la correa y que el que tiene el
-    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"): la
-    persecución sigue yendo y viniendo frente a un muro cuando el paso goloso y el primer
-    paso de A* se alternan (ya pasaba sin correa; `walkHome` sigue el rodeo entero, la
-    persecución no, y como da pasos no cuenta como trabada); nada valida que el centro de
-    un spawn sea caminable (hoy todos lo son); la espera tras una búsqueda fallida (de
-    casa o de la persecución) usa `readyAt`; un arquero que va pisando casillas
-    inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada una (el rechazo
-    vale por casilla); y `make bench-tick` corre sin correa.
+    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"; la rama
+    `feat/monster-abilities` (lote 10) que la persecución fuera y viniera frente a un muro
+    (ahora sigue el rodeo entero, `chaseWay`, `TestChaseFollowsItsWayAroundAWall`) y que
+    `make bench-tick` corriera sin correa (variante `/leash` de `BenchmarkTickMonsters`)):
+    nada valida que el centro de un spawn sea caminable (hoy todos lo son); la espera tras
+    una búsqueda fallida (de casa o de la persecución) usa `readyAt`; y un arquero que va
+    pisando casillas inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada
+    una (el rechazo vale por casilla).
+  - **Habilidades de monstruos (rama `feat/monster-abilities`, lote 10, docs/02
+    "Monstruos", "Habilidades"):** áreas (círculo y rayo), `heal_self`, `summon` y fases de
+    jefe, todo dato; el dragoncillo, el custodio, el gólem, el espinoso y el minero de
+    obsidiana ya las usan. Lo que queda:
+    - **Cliente:** un área se ve como el `Effect` del elemento en cada casilla y el gesto
+      del atacante; no hay un efecto propio de rayo ni de golpe al suelo, ni un aviso antes
+      de que caiga (en otros juegos del género el área se anuncia y se esquiva). El gesto
+      de un rayo diagonal sale hacia donde mira el monstruo, que gira en 4 direcciones.
+      Los invocados que se van (`DESPAWN`) desaparecen en el acto, sin desvanecerse: el
+      cliente podría tratarlos como `TELEPORT`.
+    - **Balance:** los duelos (`server/internal/sim/foe_test.go`) suponen al cazador
+      pegado y solo: un área le pega como un ataque a él y nada mide cuánto castiga a un
+      grupo pegado; los invocados los mata primero. El custodio se probó en el duelo (71,6
+      s, 170 % de la vida a nivel 44), no jugado a mano con las salamandras.
+    - Ningún monstruo usa `heal_self` todavía (solo los tests): queda para el mundo nuevo
+      de los próximos lotes, como las áreas en las islas nuevas.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
   vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el

@@ -579,8 +579,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - Runas: las conjura un hechizo de soporte; cualquiera con su nivel mágico las usa sobre
     una criatura o tile; comparten el cooldown de grupo de su hechizo, no el propio.
   - Monstruos: sus ataques `distance` y `spell` pegan a su objetivo dentro de `range` y con
-    línea de visión, también mientras se acercan (el `radius` de sus hechizos llega más
-    adelante).
+    línea de visión, también mientras se acercan; con `area` pegan a todo un círculo o un
+    rayo ("Monstruos", "Habilidades").
 - **Distancia (T3.1, `server/internal/session/combat.go`):** un arma `weapon.type:
   distance` (arco) dispara a su objetivo dentro de `weapon.range` casillas y con línea de
   visión (los muros la cortan, `03-world-and-maps.md`), una vez por ronda de ataque. Cada
@@ -723,18 +723,76 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (`creature_remains`, que es también el cuerpo de un jugador).
 
 ## Monstruos
-- Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con
-  área), resistencias, loot con probabilidades, experiencia, comportamiento.
+- Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
+  área o no; curarse e invocar), fases de jefe, resistencias, loot con probabilidades,
+  experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
   Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
   radio de su spawn; los agresivos eligen al jugador más cercano a su vista (la ventana
   clásica de 15x11 + 1, no la vista ancha de los jugadores: "La vista") con línea de
   visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
-  la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
+  la cuota de pathfinding del tick, y siguen ese rodeo entero mientras el objetivo no se
+  aleje más de una casilla de donde estaba: antes tomaban de nuevo el paso que más acerca
+  desde la primera casilla del rodeo, que llevaba de vuelta al muro, y frente a un muro en
+  U iban y venían para siempre, `TestChaseFollowsItsWayAroundAWall`; seguir el rodeo
+  guardado no gasta búsquedas) y atacan pegados con los temporizadores de cada
   ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
   responden si los golpean. No entran en zonas de protección ni atacan dentro de ellas.
   Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
   `spell` llegan con la magia (T1.9).
+- **Habilidades** (`server/internal/session/abilities.go`, todo dato en
+  `data/monsters`, formato en `06-content-data.md` "Monstruo"; 2026-11-18):
+  - **Área** (`area` en un ataque `melee`, `distance` o `spell`): un **círculo** de
+    `radius` casillas (`dx² + dy² ≤ r² + r`, como un hechizo de área) alrededor del
+    monstruo (`center: self`, por defecto) o de su objetivo (`center: target`), cada
+    casilla con línea de visión desde el centro (un muro tapa lo de atrás); o un **rayo**
+    de `length` casillas en línea recta desde el monstruo hacia su objetivo, en la de las
+    8 direcciones más cercana (recta si una diferencia es más del doble de la otra,
+    diagonal si no; puede errarle a un objetivo que no está en línea: correrse de la línea
+    lo esquiva), que se corta en la primera casilla que tapa la vista. Alcance (a qué
+    distancia del objetivo lo usa): el radio de un círculo alrededor de sí, el largo de un
+    rayo, y un círculo alrededor del objetivo como el ataque sin área (1 cuerpo a cuerpo,
+    `range` si no), siempre con línea de visión al objetivo. Pega a **cada jugador del
+    área** que el monstruo ve (a un invisible solo si tiene `sees_invisible`), fuera de
+    zonas de protección, cada uno con su tirada, el elemento del ataque (uno físico con
+    armadura y defensa, como un golpe) y su condición. Nunca a monstruos ni NPCs. Los
+    clientes reciben un `CreatureAttack` con el área (el rayo, como el círculo de su largo
+    alrededor del monstruo) y un `Effect` del elemento en cada casilla (docs/05). Un área
+    apuntada a un invisible (el círculo en su casilla, el rayo hacia él) solo la ven los
+    que lo ven: si no, delataría dónde está.
+  - **Bajo cierta vida** (`below_hp_pct` en cualquier ataque): lo usa solo mientras su
+    vida está por debajo de ese porcentaje.
+  - **Curarse** (`type: heal_self`, `min`–`max`): solo peleando (con objetivo, aunque no
+    lo tenga a su alcance) y herido; a vida llena la ronda espera sin gastarse. Efecto de
+    curación, número verde y barra de vida para quien lo ve.
+  - **Invocar** (`type: summon`, `summon: {monster, count, max_alive}`): `count` criaturas
+    en casillas libres junto a él (con el efecto de conjurar), nunca más de `max_alive`
+    vivas a la vez (si ya están todas, la ronda espera y en cuanto muere una llama otra).
+    Pelean contra su objetivo y comparten su spawn (su correa y su casa), pero **no dan
+    experiencia, botín ni restos, no cuentan para quests ni reportes y no reaparecen**: un
+    jefe que invoca no es una granja. Se van (`DESPAWN`) cuando muere o se rinde (correa)
+    el que las llamó. Una criatura invocada no puede invocar (`make validate` y el
+    arranque lo rechazan: no tendría tope).
+  - **Fases** (`phases`, para jefes): cada una está activa mientras la vida está por
+    debajo de su `below_hp_pct`, todas las alcanzadas a la vez. Sus `attacks_add` se suman
+    a los ataques, su `speed_mult` multiplica la velocidad (se avisa con `CreatureSpeed`) y
+    su `attack_interval_mult` cada intervalo de ataque. Entrar en una fase muestra el
+    efecto de condición sobre el monstruo; curado por encima (o al rendirse) la fase
+    termina.
+  - **Contenido** (pedido del dueño, auditoría 2026-11-18): el dragoncillo de ascua escupe
+    fuego en un rayo de 4; el custodio de escoria golpea el suelo (círculo de 1 alrededor,
+    fuego, deja ardiendo), bajo el 60 % llama a dos salamandras de brasa (como mucho dos,
+    una ronda por minuto) y bajo el 30 % se enfurece (×1,3 velocidad, ×0,75 intervalos);
+    el gólem de escoria y el espinoso estallan alrededor (círculo de 1) y la esquirla del
+    minero de obsidiana revienta sobre su objetivo y sus vecinos (círculo de 1 en el
+    objetivo). Un grupo pegado sufre las áreas: conviene abrirse.
+  - **Balance:** los duelos de los tests de balance (`server/internal/sim/foe_test.go`)
+    simulan las habilidades: las fases, `heal_self`, `below_hp_pct` y las invocaciones, que
+    el cazador mata primero (no dan nada) mientras le pegan. En un duelo el cazador está
+    pegado al monstruo, así que un área le pega como un ataque a él: los números de los
+    monstruos comunes no cambian. El custodio pasó a 1800 de vida y 0–60 cuerpo a cuerpo
+    para seguir en 30–90 s y 60–200 % de la vida a nivel 44 (71,6 s y 170 %; antes 71,2 s
+    y 162 %).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
   jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
   aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
@@ -1435,7 +1493,7 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
    al Capítulo 3 (la forja antigua).
 - **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
   pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
-  (16, cuchillos a distancia), espinoso (20, hechizo de tierra, débil al fuego) y reptante
+  (16, cuchillos a distancia), espinoso (20, estallido de espinas alrededor, débil al fuego) y reptante
   hueco (24, cueva, mordida venenosa, ve invisibles). Con el equipo del pueblo un guardián
   pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
 - **Oficios en el Bosque:** el olmo (`elm_tree`) se tala como el abedul y da troncos de
@@ -1479,10 +1537,12 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    (`TestQuestDropForgottenWhenTheWardenGivesUp`).
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
-  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
-  escoria (41, mucha armadura, inmune al fuego) y dragoncillo de ascua (50, cráter,
-  aliento de fuego que deja ardiendo). Jefe: custodio de escoria (44, 2600 de vida, pelea
-  de 30–90 s que pide curarse o ir en grupo). El fuego es la norma: todos resisten fuego y
+  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
+  escoria (41, mucha armadura, inmune al fuego, estalla alrededor) y dragoncillo de ascua (50, cráter,
+  aliento de fuego en un rayo de 4 que deja ardiendo). Jefe: custodio de escoria (44, 1800
+  de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
+  pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
+  es la norma: todos resisten fuego y
   el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,8 h, de
   30 a 40 en ~10,4 h y de 40 a 50 en ~15,2 h (el test pide 0,4–1,2 veces el `pace`).
 - **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale

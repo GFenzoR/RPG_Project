@@ -1247,6 +1247,23 @@ dice que el servidor los manda.
     ventana de su lado, en línea con el atacante (como `Projectile`); en un área, su centro
     (la casilla de quien lo lanza). `radius`: el radio del área; 0 si es a un objetivo.
   - Un hechizo de área es **un** `CreatureAttack`, no uno por criatura alcanzada.
+  - **El área de un monstruo** (`area` de un ataque, docs/02 "Monstruos", "Habilidades";
+    sin cambios en el protocolo) también es uno, sin `target_id`, con el `kind` de su
+    ataque (`MELEE`, `RANGED` o `SPELL`), seguido de un `Effect` de su elemento
+    (`10 + elemento`) en cada casilla del área y del golpe de cada jugador alcanzado. Un
+    círculo va con su centro (el monstruo o su objetivo) y su radio; un **rayo**, como el
+    círculo de su largo alrededor del monstruo (`to` = la casilla del monstruo,
+    `radius` = el largo: el cliente juega el conjuro hacia donde mira, y el monstruo se
+    gira hacia su objetivo antes; las casillas del rayo son sus `Effect`). Un círculo
+    alrededor del objetivo sale con su `Projectile` (si el ataque no es `melee`). Quien
+    conoce al monstruo pero no ve el centro (un objetivo fuera de su ventana) recibe solo
+    el lado, sin `radius`, como un ataque a alguien que no conoce. Un área apuntada a un
+    invisible (el círculo en su casilla, el rayo hacia él) solo le llega, con sus
+    `Effect`, a quien ve al invisible.
+  - Curarse e invocar de un monstruo (`heal_self`, `summon`) no son ataques: `Effect` 3,
+    `FloatingText{HEAL}` y `CreatureHealth` al curarse; `CreatureAppear` de cada invocado y
+    `Effect` 4 (conjurar) en su casilla al invocar. Entrar en una fase muestra el `Effect`
+    7 sobre el monstruo y, si cambia su velocidad, `CreatureSpeed`.
   - No son ataques (no lo mandan): curar, conjurar, un hechizo de condición sobre uno
     mismo (también la invisibilidad), el daño periódico de una condición.
 - **Lo que no se filtra** (el mismo criterio que el resto del AOI):
@@ -1272,7 +1289,7 @@ dice que el servidor los manda.
   |---|---|
   | `OUT_OF_VIEW` | Caminó fuera de la ventana, o quien mira caminó o fue movido lejos (lo que se borra antes de un `FullMapView`) |
   | `DEATH` | Murió ahí: un monstruo (después de su `CreatureHealth` 0) o un jugador, también en una arena (reaparece en su templo con `CreatureAppear`) |
-  | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera. Hoy ningún camino lo hace: queda en el protocolo para monstruos de eventos o invocados |
+  | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera: los invocados de un monstruo que murió o se rindió (docs/02 "Habilidades"). Queda también para monstruos de eventos |
   | `TELEPORT` | Dejó su casilla sin caminar ni morir: un portal (escalera, agujero, teletransporte, escalera de mano, soga), un barco, `/tp`, el teleport de un NPC, la expulsión de una casa. **Volverse invisible también** manda `TELEPORT`: para quien mira se fue, y nada dice que sigue ahí |
   | `LOGOUT` | El jugador salió del juego: `Logout`, la conexión cerrada, una expulsión o un ban, la inactividad, un cliente lento, entrar desde otra conexión, el fin de la pelea de un link-dead (o su muerte: sale del templo) |
   | `UNSPECIFIED` | Un servidor anterior (`attack_events` en `false`) |

@@ -53,6 +53,19 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
   mide y falla por encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
   superficie lleva un piso; una isla con pisos altos pesaría más por paso.
+- Habilidades de monstruos (`session/abilities.go`, lote 10): lo que cambia por fase
+  (intervalos, alcance, velocidad) se calcula una vez por tipo al arrancar; un monstruo
+  sin fases ni curas ni invocaciones paga dos comparaciones por tick. Un área recorre sus
+  casillas (a lo sumo 137 con radio 6) con un buffer reutilizado y manda un `Effect` por
+  casilla, como un hechizo de área. `BenchmarkTickMonsters` suma las variantes `/leash`
+  (correa de 6, la de `data/balance.yaml`: antes `make bench-tick` corría sin correa) y
+  `/areas` (cada lobo con un círculo de radio 2 cada 2 s). Medido (2026-11-19, i7-13650HX,
+  medianas intercaladas contra la base): 1024 monstruos 492 → 468 µs, con portal 508 →
+  481, con correa 483 → 488, `/areas` 608 µs (las casillas, sus `Effect` y más golpes);
+  `BenchmarkCrowdTick` y `BenchmarkFullMapView` iguales. `BenchmarkTickConditions` sube
+  ~9 % (456 → 495 µs con 4000 ticks, +26 asignaciones por tick): no es costo propio, es
+  que la persecución ahora sigue su rodeo y llega a su objetivo (más golpes y más
+  `hitEvents`); con el rodeo guardado apagado mide como la base (~450 µs).
 - Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
   mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
   antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada

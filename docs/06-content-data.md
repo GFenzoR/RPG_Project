@@ -303,6 +303,40 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   se pierde. Todo monstruo de `data/monsters` tiene el
   suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
   `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
+- **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
+  es `monster.schema.json`, `$defs/attack`):
+  ```yaml
+  attacks:
+    # Área: un círculo (radius 1-6, center self por defecto o target) o un rayo (length
+    # 1-6, desde el monstruo hacia su objetivo). Sirve con melee, distance o spell.
+    - { type: spell, element: fire, min: 22, max: 52, interval_ms: 2000, chance: 0.3,
+        area: { shape: beam, length: 4 } }
+    - { type: distance, min: 0, max: 34, interval_ms: 2000, range: 4,
+        area: { shape: circle, radius: 1, center: target } }
+    # below_hp_pct (1-100, cualquier ataque): solo con la vida por debajo de ese %.
+    # heal_self: min-max de vida, solo herido y peleando; sin element, range, area ni condition.
+    - { type: heal_self, min: 60, max: 90, interval_ms: 4000, chance: 0.5, below_hp_pct: 50 }
+    # summon: count (1-8) en casillas libres a su lado, max_alive (1-8, por defecto count)
+    # vivas a la vez; sin min ni max. La invocada no puede invocar.
+    - { type: summon, interval_ms: 60000, below_hp_pct: 60,
+        summon: { monster: cinder_salamander, count: 2, max_alive: 2 } }
+  phases:                      # de jefe; below_hp_pct 1-99, distinto en cada una
+    - below_hp_pct: 30
+      speed_mult: 1.3          # (0, 4], por defecto 1
+      attack_interval_mult: 0.75
+      attacks_add: [ { type: melee, element: fire, min: 10, max: 30, interval_ms: 3000 } ]
+  ```
+  El alcance de un ataque con área (a qué distancia de su objetivo lo usa) es el radio de
+  un círculo alrededor de sí, el largo de un rayo o, en un círculo alrededor del
+  objetivo, el del ataque sin área (`range`, 1 cuerpo a cuerpo). `make validate` y el
+  arranque del servidor (`content.ParseMonster`, `session.checkSummons`) rechazan lo mismo:
+  un tipo, una forma o un centro que no existe, un círculo sin `radius` o un rayo sin
+  `length` (o con `radius`, o centrado en el objetivo), radios y largos de más de 6 (lo
+  que nota un monstruo), un `heal_self` o `summon` con `element`, `range`, `area` o
+  `condition`, un `summon` con `min`/`max` o sin `summon`, uno de un monstruo que no
+  existe o que invoca a su vez, y dos fases con el mismo `below_hp_pct`. Los duelos de
+  balance (`server/internal/sim/foe_test.go`) los simulan: un monstruo nuevo con
+  habilidades no necesita más que su caso en el test de su isla.
 - **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
   contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
   y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o el
