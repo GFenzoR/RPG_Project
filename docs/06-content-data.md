@@ -699,7 +699,11 @@ unos rectángulos de unos pisos): ver "Música de una quest importante", en "Son
 
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
-  cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`.
+  cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`. Se dan en
+  el orden escrito (los `set_flag` al final). La experiencia puede subir el nivel, y con
+  él la capacidad: un item escrito antes cae a los pies de quien no lo podía cargar, uno
+  escrito después ya entra (`flame_crater` pone su amuleto primero). Una quest que termina
+  en un paso `kill` paga donde está el jugador, sin volver al NPC.
 - `quest_state` con `step` se cumple si la quest está `in_progress` y su paso actual es ese.
 - `set_quest_step` lleva una quest `in_progress` a un paso, adelante o atrás: el paso pasa
   a ser el actual como cualquier otro (su conteo de `kill` empieza en 0 y `has_item`,
@@ -756,7 +760,11 @@ Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del C
 `count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: llegar a la
 antesala de la puerta sellada es el paso `reach_gate`, un `reach` a 4 casillas del eco de
 la forja, y abrirla es un `dialog_action` con el eco, que toma la raíz con `take_item`), las
-quests secundarias `foreman_ore` y `diver_locket` y la tarea repetible `pruebas_rats` de la
+quests secundarias `foreman_ore` y `diver_locket`, las del lote 12 (docs/02 "Quests
+secundarias": `ferryman_jetty` y `flame_crater` con un `reach` a un punto con radio,
+`flame_crater` que termina en su paso `kill`, `smith_ring` con un `flag_equals` cuyo flag
+pone la opción de otro NPC, `set_flag` de Madre Oriela), las tareas de caza
+`bounty_*` de Raigal y Brasal (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de la
 Isla de Pruebas (`repeatable`, docs/16).
 
 ### Quests repetibles (tareas)

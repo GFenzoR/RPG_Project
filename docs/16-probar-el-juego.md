@@ -131,8 +131,23 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      solo ofrece "¿Hay más ratas?" (todavía no). Pasados los tres minutos el diario dice
      "Disponible otra vez" e Irene vuelve a ofrecer el encargo: empieza otra vez en "0/3" y
      paga otra vez 200 de experiencia y 50 monedas.
-   - **Llegar a un lugar** (un paso `reach`): el único del juego es `reach_gate` de
-     `ch3_gate`, en la mina de la Isla Volcánica. Para verlo sin jugar los capítulos, con el
+   - **Tareas de caza de verdad** (docs/02 "Tareas"): no están en esta isla. Las dan Fenn
+     Zarzal en Raigal (borde este de la plaza, `/tp 4173 6108 7`; contrabandistas desde el
+     nivel 15, espinosos desde el 18, reptantes desde el 22) y Orso Pedernal en Brasal
+     (borde norte de la plaza, `/tp 3655 5785 7`; sabuesos desde el 26, gólems desde el 39,
+     dragoncillos desde el 48): ve con Remo Vaivén o con `/tp`, sube de nivel con Irene antes
+     de salir y pide "¿Qué paga el tablón?" o "¿Qué presas hay en el libro?". Cobrada, la
+     tarea espera 20 horas; para no esperar, con el personaje fuera del juego, adelanta la
+     entrega con `psql` sobre la base de `make play`: `UPDATE quest_state SET value = value
+     - 72000 WHERE character_id = <id> AND key = 'quest.bounty_crawlers.done_at'` (o la que
+     sea). Las quests secundarias del lote 12 (docs/02 "Quests secundarias") las dan Tavin y
+     Gisla en Raigal y Nerea, Bram y Madre Oriela en Brasal.
+   - **Llegar a un lugar** (un paso `reach`): hay tres, todos fuera de esta isla:
+     `reach_gate` de `ch3_gate` (la antesala de la puerta sellada, en la mina de la Isla
+     Volcánica), `see_jetty` de `ferryman_jetty` (el embarcadero de los contrabandistas,
+     `/tp 4253 6140 7`, dos casillas al oeste de las tablas: un paso al este lo cumple) y
+     `reach_heart` de `flame_crater` (la orilla del lago de lava del cráter, alrededor de
+     3714,5756). El de la mina, paso a paso: para verlo sin jugar los capítulos, con el
      personaje fuera del juego, ponle la quest en ese paso con `psql` sobre la base de
      `make play` (`INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
      'quest.ch3_gate', 1), (<id>, 'quest.ch3_gate.step', 3)`), entra, hazte gm (sección 5)
@@ -141,7 +156,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      la forja, 3692,5826,8) pasa a "Muéstrale la raíz de ascua al eco". Un `/tp` directo a la antesala también cuenta.
    - Lo que juegan los tests (sección 8), como referencia: corral 1, un guardián de nivel
      1 con hacha de mano; corral 2, un montaraz de nivel 8 con arco corto y flechas;
-     corral 3, una arcanista de nivel 20 con varita de coral; corrales 4 y 5, un druida de
+     corral 3, una arcanista de nivel 20 con varita de coral y 20 cataplasmas; corrales 4 y 5, un druida de
      nivel 50 que lanza "glacies hasta" (lanza de escarcha: crece con el nivel), uno por
      corral: el del 4 se trae detrás al otro espinoso, y los dos con el dragoncillo matan a
      un druida. Un guardián de nivel 21 con espada de hierro, escudo y 20 cataplasmas

@@ -106,13 +106,13 @@ el punto 5:
   `QuestLog` y la ventana "Misiones" (L). `world.bin` pasó a la versión 7 (las zonas por
   id). Como prueba: el paso `reach_gate` de `ch3_gate` y la tarea de práctica de la Isla de
   Pruebas (3 minutos). Queda:
-  - **Las tareas de caza y las quests secundarias** del Bosque y del Volcán son la rama
-    `feat/side-quests` (sobre esta): escriben contenido con `reach` y `repeatable`. Tras la
-    revisión de la rama, `make validate` y el servidor rechazan un lugar `reach` sin casilla
-    caminable (y `make validate`, uno que no se alcanza a pie desde el templo) y las tareas
-    que se cumplen solas al tomarlas (docs/06 "Quests repetibles": `has_item` sin entrega
-    que lo quite, `flag_equals` que pone su propia recompensa, o empezar con un
-    `dialog_action` de quien la da o un `reach` a 3 casillas de él).
+  - **Las tareas de caza y las quests secundarias** del Bosque y del Volcán ya están (rama
+    `feat/side-quests`, el punto siguiente). Tras la revisión de esta rama, `make validate`
+    y el servidor rechazan un lugar `reach` sin casilla caminable (y `make validate`, uno
+    que no se alcanza a pie desde el templo) y las tareas que se cumplen solas al tomarlas
+    (docs/06 "Quests repetibles": `has_item` sin entrega que lo quite, `flag_equals` que
+    pone su propia recompensa, o empezar con un `dialog_action` de quien la da o un `reach`
+    a 3 casillas de él).
   - **El `QuestLog` va entero con cada cambio** (también con cada muerte que cuenta un paso):
     docs/07 lo midió y alcanza con las quests de hoy. Con muchas tareas de caza conviene
     mandar solo la entrada que cambió (un delta; cambia el protocolo).
@@ -201,6 +201,36 @@ el punto 5:
   - **El libro cerrado del archivo está sobre una mesa** (hecho en `feat/town-props`: la
     mesa del kit va debajo en la pila y lo sube 8 px; nadie le tira nada encima).
   - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.
+- **Quests secundarias y tareas de caza (hecho, rama `feat/side-quests`, lote 12, sobre
+  `feat/quest-engine`; docs/02 "Quests secundarias" y "Tareas"):** cinco quests
+  secundarias con NPCs que ya estaban (Tavin y Gisla en Raigal, 22–28; Nerea, Bram y Madre
+  Oriela en Brasal, 30–33 y 42–48), con pasos `reach` (el embarcadero de los
+  contrabandistas, el lago de lava del cráter), un `flag_equals` (la brasa de la Llama
+  Quieta) y una que termina en su muerte (`flame_crater`, que ahora usa
+  `TestHouseRuneKillsAQuestMonsterFromTheStreet`); y seis tareas de caza de 20 horas con
+  dos NPCs nuevos, Fenn Zarzal (Raigal, 4173,6106) y Orso Pedernal (Brasal, 3655,5783), con
+  sprites de LPC compuestos de capas que ya estaban (`npcs/hunter_forest`, CC-BY-SA;
+  `npcs/hunter_volcanic`, OGA-BY). Recompensas medidas contra la caza simulada
+  (`sim/balance_tasks_test.go`). Queda:
+  - **Las casillas de los dos NPCs nuevos** son de `feat/town-props`, que amuebla los
+    pueblos en paralelo: Fenn en 4173,6106 (pasto al este de la plaza de Raigal) y Orso en
+    3655,5783 (basalto al norte de la plaza de Brasal). Un NPC nunca deja su casilla, pero
+    hay que dejarla libre y caminable, y alcanzable para hablarle (3 casillas). Si al
+    juntar las ramas un prop cae ahí, se mueve el NPC (`npcs.yaml`) o el prop.
+  - **`TestSandboxPens` es sensible a los ids de criatura:** sumar dos NPCs en el Bosque y el
+    Volcán corre los ids de los monstruos de la Isla de Pruebas, y la arcanista del corral 3
+    se quedaba sin cataplasmas (10) en una tirada peor: ahora lleva 20. Cualquier rama que
+    sume NPCs o spawns puede volver a moverlo; el arreglo de fondo sería que la simulación no
+    dependa del orden de los ids.
+  - **Del 48 en adelante** solo queda la tarea de los dragoncillos: la próxima isla (banda
+    5) trae sus quests. El sello de la aduana de Puerto (`ferryman_jetty`) deja abierto quién
+    abastece a los contrabandistas: es un gancho para un capítulo o una quest futura.
+  - **Música:** ninguna quest secundaria tiene `music`; el cráter la merecería con un tema
+    propio (`flame_crater`, docs/06 "Música de una quest importante").
+  - **El E2E no se corrió en la rama** (lo corre el lote al final). Ningún spec habla todavía
+    con Fenn ni con Orso ni abre el tablón: lo natural es extender "T3.6: wake up at the
+    temple of Raigal and talk to the druid" con Fenn (está a 4 casillas del camino que
+    recorre ese spec) y sacar la captura del tablón.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
   tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa
@@ -1254,9 +1284,11 @@ el punto 5:
   - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
     del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
     muertes cuya recompensa no entra) lo juega `TestHouseRuneKillsAQuestMonsterFromTheStreet`
-    con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
-    ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
-    alguna llega a terminar en una muerte, conviene pasar el test a ella.
+    con la runa, el monstruo, la quest y la recompensa de `data/`: desde el lote 12, la
+    quest secundaria `flame_crater` (rama `feat/side-quests`), que termina en su paso
+    `kill` (antes era una quest del test: ninguna de `data/` terminaba en una muerte). El
+    dragoncillo llega con un punto de vida y el amuleto de la recompensa cae a los pies de
+    Ana.
 - **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:

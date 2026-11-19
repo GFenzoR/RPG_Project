@@ -489,3 +489,11 @@ secundaria.
   ningún mapa en su lugar: fuentes, braseros, estandartes, muros con ventana y una
   antorcha de pared cada 7 casillas en las tres minas. docs/17 "Kit de props de pueblo",
   docs/03 "Muebles y luces"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Quests secundarias y tareas de caza del Bosque y del Volcán (lote 12, rama
+  `feat/side-quests`; auditoría de juego del lote 10).** Cinco quests secundarias para los
+  huecos de nivel (22–28 en el Bosque; 30–33 y 42–48 en el Volcán) con NPCs que ya estaban,
+  pasos `reach`, `flag_equals` y una que termina en su muerte, y seis tareas de caza de 20
+  horas en Raigal y Brasal con dos NPCs nuevos (Fenn Zarzal y Orso Pedernal), todo en
+  datos. Recompensas medidas contra la caza simulada (`sim/balance_tasks_test.go`; docs/02
+  "Quests secundarias", "Tareas" y "Economía"). Lo que queda: docs/14, "Pendientes
+  conocidos".
