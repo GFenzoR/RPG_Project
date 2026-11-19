@@ -268,8 +268,9 @@ func TestLeashWalksHomeAroundWater(t *testing.T) {
 // waterHarness is a leash harness (combat.monster_leash_tiles 6) with a wolf of 1000
 // health that never flees, spawned at 20,20 with radius 0 (leash area x and y 14-26), and
 // a row of water at y 22 from x 0 to 30: its way round, x 31, is out of the leash area, so
-// no way within it reaches the south shore.
-func waterHarness(t *testing.T) (*harness, *session.Monster) {
+// no way within it reaches the south shore. Each change, if any, edits the wolf's
+// definition before the world starts.
+func waterHarness(t *testing.T, change ...func(*content.Monster)) (*harness, *session.Monster) {
 	t.Helper()
 	rows := make([]string, 64)
 	for y := range rows {
@@ -285,6 +286,9 @@ func waterHarness(t *testing.T) (*harness, *session.Monster) {
 	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 60)}
 	def := wolfDef()
 	def.Health, def.Behavior.FleeAtHealthPct = 1000, 0
+	for _, f := range change {
+		f(def)
+	}
 	h := newHarness(t, m, func(c *session.Config) {
 		c.Monsters = content.Monsters{"wolf": def}
 		c.Items = testItems()
@@ -294,6 +298,44 @@ func waterHarness(t *testing.T) (*harness, *session.Monster) {
 	})
 	h.sim.Step()
 	return h, onlyMonster(t, h)
+}
+
+// An attack held back for low health (below_hp_pct) is no reach before (review of the
+// monster abilities): a wolf with a 4-tile spell it casts only below 10 % gives up the
+// ranger across the water as a plain wolf does. Counted at full health, it made the wolf
+// "reach" the ranger: no check of the way, never beyond its leash, so the ranger shot it
+// for 20 s at the full training rate and it never answered. Below 10 % the spell is in
+// use, so is its reach: the wolf holds the ranger and burns it from across the water.
+func TestLeashCountsOnlyTheAttacksInUse(t *testing.T) {
+	spell := func(def *content.Monster) {
+		def.Attacks = append(def.Attacks, content.MonsterAttack{Type: content.AttackSpell, Element: "fire",
+			Min: 5, Max: 5, IntervalMs: 1000, Chance: 1, Range: 4, BelowHealthPct: 10})
+	}
+	t.Run("above its below_hp_pct", func(t *testing.T) {
+		h, wolf := waterHarness(t, spell)
+		cl, p := ranger(t, h, pos(20, 23), 60)
+		h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+		h.input(cl, setTarget(wolf.ID()))
+		n := h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+		t.Logf("the wolf gave the ranger up after %d ticks", n)
+		if hp, maxHP := wolf.Health(); hp != maxHP {
+			t.Errorf("the wolf gave up at %d/%d health, want full", hp, maxHP)
+		}
+		if hp, maxHP := p.Health(); hp != maxHP {
+			t.Errorf("the ranger has %d/%d health: the wolf cast its low-health spell at full health", hp, maxHP)
+		}
+	})
+	t.Run("below it", func(t *testing.T) {
+		h, wolf := waterHarness(t, spell)
+		h.sim.Command(gameFunc(func() { wolf.SetHealth(50) }))
+		_, p := ranger(t, h, pos(20, 23), 0)
+		h.sim.RunUntil(func() bool { return health(p) < 145 }, sim.MaxSeconds(2))
+		h.sim.RunFor(3e9)
+		if wolf.TargetID() != p.ID() || health(p) > 145-15 {
+			t.Errorf("below 10 %%: the wolf targets %d (want the ranger %d), the ranger has %d health (want 3 spells or more)",
+				wolf.TargetID(), p.ID(), health(p))
+		}
+	})
 }
 
 // A leash makes no safe spot inside its own area (review of lote 5): a ranger across the

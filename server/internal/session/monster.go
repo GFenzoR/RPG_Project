@@ -64,11 +64,15 @@ type monsterKind struct {
 	// attacks are the definition's attacks, then each phase's attacks_add, in order.
 	attacks []kindAttack
 	// The rest is by how many of its phases are on (0 to len(def.Phases)): ticks[n][i] is
-	// the interval of attacks[i], reach[n] the longest reach of its targeted attacks in use
-	// (1 = melee only) and speed[n] its speed before conditions.
+	// the interval of attacks[i], reach[n] the longest reach of its targeted attacks in
+	// those phases that have no below_hp_pct (1 = melee only) and speed[n] its speed before
+	// conditions.
 	ticks [][]game.Tick
 	reach []int
 	speed []int
+	// gated are the indexes in attacks of its targeted attacks with a below_hp_pct: each
+	// one's reach counts only while the monster's health is below it (Monster.reach).
+	gated []int
 	// self: some attack is a heal_self or a summon (monsterSelf has work).
 	self bool
 	// corpse is the container its remains are: its own `corpse`, or CorpseItem.
@@ -81,6 +85,8 @@ type kindAttack struct {
 	// phase is 0 for an attack of its own, n for one of phase n's attacks_add (in use
 	// while n or more phases are on).
 	phase int
+	// reach is how far its target may stand (MonsterAttack.Reach), 0 for a heal_self or a
+	// summon (no target).
 	reach int
 }
 
@@ -111,7 +117,8 @@ type Monster struct {
 	target    *Player
 	// readyAt is the first tick at which the next step may start.
 	readyAt game.Tick
-	// nextAttack is the first tick of each attack's next round (kind.def.Attacks order).
+	// nextAttack is the first tick of each attack's next round (kind.attacks order: its
+	// own, then each phase's attacks_add).
 	nextAttack []game.Tick
 	// damage is the damage each player dealt, to share the experience.
 	damage []damageShare
@@ -153,8 +160,20 @@ type Monster struct {
 	summons  []*Monster
 }
 
-// reach is the longest reach of the attacks m uses now (1 = melee only).
-func (m *Monster) reach() int { return m.kind.reach[m.phase] }
+// reach is the longest reach of the targeted attacks m may use now, those monsterAttacks
+// would use (their phase on, its health below their below_hp_pct; 1 = melee only). One
+// held back for low health does not count before: with it, a monster shot from out of
+// its leash area would count as fighting back (beyondLeash, chase's check) and stand
+// there as a training dummy that never answers.
+func (m *Monster) reach() int {
+	r := m.kind.reach[m.phase]
+	for _, i := range m.kind.gated {
+		if a := &m.kind.attacks[i]; a.reach > r && a.phase <= m.phase && m.below(a.def.BelowHealthPct) {
+			r = a.reach
+		}
+	}
+	return r
+}
 
 // below reports whether m's health is below pct percent of its maximum (always for 0).
 func (m *Monster) below(pct int) bool { return pct == 0 || m.health*100 < pct*m.maxHealth }
@@ -316,8 +335,9 @@ func (w *World) initCombat() error {
 }
 
 // prepareAttacks lists k's attacks (its own, then each phase's) and works out, for each
-// number of phases on, their intervals (attack_interval_mult), its reach and its speed
-// (speed_mult): what the loop reads every tick costs no multiplication.
+// number of phases on, their intervals (attack_interval_mult), its reach without the
+// attacks held back for low health (gated) and its speed (speed_mult): what the loop
+// reads every tick costs no multiplication.
 func (k *monsterKind) prepareAttacks() {
 	def := k.def
 	for i := range def.Attacks {
@@ -330,10 +350,14 @@ func (k *monsterKind) prepareAttacks() {
 	}
 	for i := range k.attacks {
 		a := &k.attacks[i]
-		if a.def.Targeted() {
-			a.reach = a.def.Reach()
-		} else {
+		switch {
+		case !a.def.Targeted():
 			k.self = true
+		case a.def.BelowHealthPct > 0:
+			a.reach = a.def.Reach()
+			k.gated = append(k.gated, i)
+		default:
+			a.reach = a.def.Reach()
 		}
 	}
 	mult, speed := 1.0, 1.0
@@ -346,7 +370,7 @@ func (k *monsterKind) prepareAttacks() {
 		reach := 1
 		for i, a := range k.attacks {
 			ticks[i] = ticksFor(int(math.Round(float64(a.def.IntervalMs) * mult)))
-			if a.phase <= n {
+			if a.phase <= n && a.def.BelowHealthPct == 0 {
 				reach = max(reach, a.reach)
 			}
 		}
