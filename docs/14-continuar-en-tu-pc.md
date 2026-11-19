@@ -120,8 +120,11 @@ el punto 5:
     solo y siguen igual. Nadie queda trabado (lo juega `TestReachStepAtLogin` con otra
     quest: estar ya en el lugar al entrar también cuenta).
   - **El E2E no se corrió en la rama** (lo corre el lote al final). Ningún spec abre todavía
-    "Misiones": el de los NPCs (capítulo 1) debería abrirla (L) después de aceptar la quest
-    del capitán y sacar su captura; `make ui-preview` tiene las escenas `quests` y
+    "Misiones" ni acepta una quest. El que conviene extender es "T3.6: wake up at the temple
+    of Raigal and talk to the druid" (`client/e2e/game.spec.ts`): ya siembra
+    `quest.ch1_shipwreck = 2` con `psql` y abre el diálogo de la druida, así que basta con
+    aceptar `ch2_roots`, pulsar L y sacar la captura de "Activas" (el paso de matar en 0/N) y
+    la de "Terminadas" (el capítulo 1). `make ui-preview` tiene las escenas `quests` y
     `questsdone`.
   - **El diario no cuenta las veces** que se hizo una tarea ni guarda cuándo se terminó una
     quest que no es repetible: no hay dónde mostrarlo todavía y serían más filas de

@@ -373,7 +373,12 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 		w.stepView(p, to, d)
 	}
 	w.tutorialEvent(p, content.TriggerWalk, "")
-	w.checkReach(p) // a reach step of its quests (questlog.go)
+	// A reach step of its quests (questlog.go). Through, p never stands on the entrance:
+	// relocate checks the tile it lands on (a reward that did not fit would otherwise drop
+	// on the entrance, where nobody stands).
+	if !through {
+		w.checkReach(p)
+	}
 }
 
 // stepView tells p's own client what its step to `to` in d changed: creatures out of view

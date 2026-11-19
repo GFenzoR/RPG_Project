@@ -105,6 +105,15 @@ const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const idOf = (v: unknown): string | undefined =>
   isObj(v) && typeof v["id"] === "string" ? v["id"] : undefined;
 
+/** A tile of the map: x, y and floor. */
+type Tile = [number, number, number];
+
+/**
+ * The portal kinds a step onto leaves at once, so nobody stands on their entrance
+ * (PortalKind.OnStep on the server, ON_STEP_KINDS of @rpg/map-format).
+ */
+const STEP_PORTALS = ["stairs", "hole", "teleport"];
+
 export function validateContent(root: string, opts: ValidateOptions = {}): ValidationReport {
   const v = new Validator(root);
   v.run(opts);
@@ -845,6 +854,7 @@ class Validator {
             );
           }
         }
+        if (key === "quest_state" && isObj(inner)) this.checkQuestState(src, inner, here);
         if (key === "dialog_action" && isObj(inner) && typeof inner["npc"] === "string") {
           const npc = this.index.ids.npc.get(inner["npc"]);
           const dialog = npc && isObj(npc.src.data) ? npc.src.data["dialog"] : undefined;
@@ -864,14 +874,53 @@ class Validator {
   }
 
   /**
+   * A quest_state condition that means something (docs/06 "NPC", as the server's CheckRefs):
+   * a step only with state in_progress (available and cooling_down would ignore it, the
+   * others never hold), and cooling_down only of a repeatable quest (no other cools down).
+   */
+  private checkQuestState(src: SourceFile, cond: Obj, path: PathSegment[]): void {
+    const state = cond["state"];
+    if (typeof cond["step"] === "string" && typeof state === "string" && state !== "in_progress")
+      this.error(
+        src,
+        [...path, "step"],
+        `quest_state: a step only goes with state in_progress, not ${state}`,
+      );
+    const quest = typeof cond["quest"] === "string" ? cond["quest"] : undefined;
+    const owned = quest === undefined ? undefined : this.index.ids.quest.get(quest);
+    if (
+      state === "cooling_down" &&
+      owned &&
+      isObj(owned.src.data) &&
+      !isObj(owned.src.data["repeatable"])
+    )
+      this.error(
+        src,
+        [...path, "state"],
+        `quest_state: cooling_down of quest "${quest}", which is not repeatable (it never cools down)`,
+      );
+  }
+
+  /**
    * The place of every reach step (docs/06 "Quest") is on the production map, as the server
    * checks when it starts (initReach): a zone of the zones.yaml of an island that is not
    * dev_only, or a point inside such an island's rect (world/world.yaml) on a floor its
-   * island.yaml lists. Not checked without world/ (tests).
+   * island.yaml lists; and either has a tile that is no entrance of stairs, a hole or a
+   * teleport (portals.yaml): a step onto one counts where it lands, nobody stands there.
+   * Not checked without world/ (tests).
    */
   private checkQuestReach(): void {
     const islands = this.productionIslands();
     if (!islands) return;
+    const entrances = new Set(islands.flatMap((is) => [...is.entrances]));
+    // Stops at the first tile that is no entrance: a place of open ground answers at once.
+    const someStandable = (tiles: Iterable<Tile>): boolean => {
+      for (const [x, y, z] of tiles) if (!entrances.has(`${x},${y},${z}`)) return true;
+      return false;
+    };
+    function* square(x: number, y: number, z: number, r: number): Generator<Tile> {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) yield [x + dx, y + dy, z];
+    }
     for (const src of this.quests) {
       const steps = asList(isObj(src.data) ? src.data["steps"] : undefined);
       for (const [i, step] of steps.entries()) {
@@ -881,11 +930,18 @@ class Validator {
         const path = ["steps", i, "complete_when", "reach"];
         const zone = reach["zone"];
         if (typeof zone === "string") {
-          if (!islands.some((is) => is.zones.has(zone)))
+          const tiles = islands.map((is) => is.zones.get(zone)).find((t) => t !== undefined);
+          if (!tiles)
             this.error(
               src,
               [...path, "zone"],
               `reach zone "${zone}" is no zone of an island that is not dev_only (world/islands/*/zones.yaml)`,
+            );
+          else if (!someStandable(tiles))
+            this.error(
+              src,
+              [...path, "zone"],
+              `every tile of reach zone "${zone}" is the entrance of stairs, a hole or a teleport (portals.yaml), where nobody stands`,
             );
           continue;
         }
@@ -895,22 +951,40 @@ class Validator {
           (is) =>
             x >= is.x && y >= is.y && x < is.x + is.w && y < is.y + is.h && is.floors.includes(z),
         );
-        if (!on)
+        if (!on) {
           this.error(
             src,
             path,
             `reach point ${x},${y},${z} is on no island that is not dev_only (its rect in world/world.yaml and its floors in island.yaml)`,
+          );
+          continue;
+        }
+        const r = typeof reach["radius"] === "number" ? reach["radius"] : 0;
+        if (!someStandable(square(x, y, z, r)))
+          this.error(
+            src,
+            path,
+            `every tile of reach point ${x},${y},${z} radius ${r} is the entrance of stairs, a hole or a teleport (portals.yaml), where nobody stands`,
           );
       }
     }
   }
 
   /**
-   * The islands of world/world.yaml that are not dev_only: rect, floors and zone ids;
-   * undefined without world/.
+   * The islands of world/world.yaml that are not dev_only: rect, floors, zones (id → its
+   * tiles, produced as they are read) and the entrances of their stairs, holes and
+   * teleports (portals.yaml, "x,y,z"); undefined without world/.
    */
   private productionIslands():
-    | { x: number; y: number; w: number; h: number; floors: number[]; zones: Set<string> }[]
+    | {
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+        floors: number[];
+        zones: Map<string, Iterable<Tile>>;
+        entrances: Set<string>;
+      }[]
     | undefined {
     const worldFile = join(this.root, "world", "world.yaml");
     if (!existsSync(worldFile)) return undefined;
@@ -934,11 +1008,27 @@ class Validator {
       const floors = asList(isObj(meta) ? meta["floors"] : undefined).filter(
         (f): f is number => typeof f === "number",
       );
-      const zones = new Set(
-        asList(read("zones.yaml"))
-          .map(idOf)
-          .filter((id) => id !== undefined),
-      );
+      const zones = new Map<string, Iterable<Tile>>();
+      for (const zone of asList(read("zones.yaml"))) {
+        const id = idOf(zone);
+        if (id === undefined || !isObj(zone)) continue;
+        const zFloors = asList(zone["floors"]).filter((f): f is number => typeof f === "number");
+        const rects = asList(zone["rects"]).filter(isObj);
+        zones.set(id, {
+          *[Symbol.iterator](): Generator<Tile> {
+            for (const f of zFloors)
+              for (const r of rects)
+                for (let y = num(r["y"]); y < num(r["y"]) + num(r["h"]); y++)
+                  for (let x = num(r["x"]); x < num(r["x"]) + num(r["w"]); x++) yield [x, y, f];
+          },
+        });
+      }
+      const entrances = new Set<string>();
+      for (const p of asList(read("portals.yaml"))) {
+        if (!isObj(p) || !STEP_PORTALS.includes(String(p["kind"]))) continue;
+        const from = p["from"];
+        if (isObj(from)) entrances.add(`${num(from["x"])},${num(from["y"])},${num(from["z"])}`);
+      }
       out.push({
         x: num(rect["x"]),
         y: num(rect["y"]),
@@ -946,6 +1036,7 @@ class Validator {
         h: num(rect["h"]),
         floors,
         zones,
+        entrances,
       });
     }
     return out;

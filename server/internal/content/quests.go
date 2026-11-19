@@ -69,7 +69,8 @@ type Reach struct {
 	Radius int    `yaml:"radius"`
 }
 
-// MaxReachRadius bounds the radius of a reach point (the classic view's width).
+// MaxReachRadius bounds the radius of a reach point: half the width of the player's view
+// with its margin (session.ViewHalfW of the 31-tile view), 33 tiles across at most.
 const MaxReachRadius = 16
 
 // check reports what is wrong with a reach completion, or "".
@@ -206,6 +207,23 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 		}
 		return nil
 	}
+	// questState also refuses what never means anything: a step with a state other than
+	// in_progress (ignored by available and cooling_down, never holding with the others),
+	// and cooling_down of a quest that is not repeatable (it never cools down).
+	questState := func(where string, c *QuestStateCond) error {
+		if err := questStep(where, c.Quest, c.Step); err != nil {
+			return err
+		}
+		switch {
+		case !slices.Contains([]string{QuestNotStarted, QuestInProgress, QuestCompleted, QuestAvailable, QuestCoolingDown}, c.State):
+			return fmt.Errorf("%s: quest_state of %q: unknown state %q", where, c.Quest, c.State)
+		case c.Step != "" && c.State != QuestInProgress:
+			return fmt.Errorf("%s: quest_state of %q: a step only goes with state %s, not %s", where, c.Quest, QuestInProgress, c.State)
+		case c.State == QuestCoolingDown && quests[c.Quest].Repeatable == nil:
+			return fmt.Errorf("%s: quest_state of %q: %s, but the quest is not repeatable", where, c.Quest, QuestCoolingDown)
+		}
+		return nil
+	}
 	hasSkill := func(id string) bool {
 		for _, s := range skills {
 			if s == id {
@@ -227,7 +245,7 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 					case c.LacksItem != nil:
 						err = item(where, c.LacksItem.Item)
 					case c.QuestState != nil:
-						err = questStep(where, c.QuestState.Quest, c.QuestState.Step)
+						err = questState(where, c.QuestState)
 					case c.QuestNotStarted != "":
 						err = questStep(where, c.QuestNotStarted, "")
 					case c.SkillAtLeast != nil && !hasSkill(c.SkillAtLeast.Skill):

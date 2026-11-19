@@ -501,7 +501,10 @@ Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 que separan los turnos de una tarea repetible ("Quest"): `available` (`start_quest` la
 empezaría ahora: nunca empezada, o repetible y ya pasó su espera) y `cooling_down`
 (repetible, terminada, esperando). Una tarea se ofrece con `available`, no con
-`quest_not_started` (que después de la primera vez no vuelve a valer).
+`quest_not_started` (que después de la primera vez no vuelve a valer). `make validate` y el
+servidor al arrancar (`CheckRefs`) rechazan lo que no significa nada: `step` con un `state`
+que no sea `in_progress` (con `available` o `cooling_down` se ignoraría, con los demás nunca
+vale) y `cooling_down` de una quest que no es repetible.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
 `teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
@@ -642,6 +645,10 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
   cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`.
 - `quest_state` con `step` se cumple si la quest está `in_progress` y su paso actual es ese.
+- `set_quest_step` lleva una quest `in_progress` a un paso, adelante o atrás: el paso pasa
+  a ser el actual como cualquier otro (su conteo de `kill` empieza en 0 y `has_item`,
+  `flag_equals` y `reach` se evalúan en el acto), el servidor relee los lugares `reach` del
+  jugador y el diario de misiones sale en ese tick aunque el paso no se cumpla.
 - `dialog_action` se cumple cuando el jugador llega a ese nodo del NPC (las acciones de la
   opción se ejecutan antes de entrar al nodo). Las opciones que llevan a ese nodo deben
   estar condicionadas al paso correcto con `quest_state`.
@@ -663,13 +670,16 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   en el piso `z`; `radius` va de 0, la casilla sola, a 16). Se evalúa cuando el paso pasa a
   ser el actual (si el jugador ya está ahí, se cumple en el acto), después de cada paso y
   de cada reubicación (teletransporte, escalera, agujero, soga, barco, el templo al morir,
-  un `teleport` de diálogo) y al entrar al juego. No cuesta nada por tick: el servidor
+  un `teleport` de diálogo) y al entrar al juego. El paso sobre la entrada de una escalera,
+  un agujero o un teletransporte no cuenta: el jugador nunca se queda ahí, cuenta la casilla
+  donde cae. No cuesta nada por tick: el servidor
   guarda por jugador los lugares de sus pasos `reach` actuales y un bit por piso, y solo
   mira a quien camina por uno de esos pisos (`session/questlog.go`). `make validate`, el
   servidor al arrancar y la prueba del mundo real (`TestRealWorldStarts`) exigen que la
   zona exista o que el punto caiga dentro del rectángulo de una isla (`world.yaml`) en un
   piso que su `island.yaml` liste, y siempre en una isla que no sea `dev_only` (el
-  servidor de producción no la tiene). Para un lugar sin zona propia (una cueva, un
+  servidor de producción no la tiene); y que el lugar tenga al menos una casilla que no sea
+  la entrada de una escalera, un agujero o un teletransporte (`portals.yaml`). Para un lugar sin zona propia (una cueva, un
   santuario), el punto con radio.
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2

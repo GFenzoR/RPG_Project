@@ -807,6 +807,8 @@ func (h *questHost) Inside(r *content.Reach) bool {
 	return pl != nil && pl.contains(h.p.pos)
 }
 
+// Notify marks every change of p's quests (questsChanged) and tells the player what it
+// hears of; a set_quest_step (StepSet) says nothing itself: the dialog that ran it does.
 func (h *questHost) Notify(e quest.Event) {
 	h.p.questsChanged() // the quest log and the reach places (questlog.go)
 	q := &pb.TextParam{Name: "quest", Value: &pb.TextParam_ContentId{ContentId: e.Quest.ID}}

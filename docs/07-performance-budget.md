@@ -544,6 +544,17 @@ asignaciones no):
 - **Pendiente:** `make bots` contra un servidor real con A9 (base y stress), para
   confirmar los números de arriba como en "`make bots` contra un servidor real".
 
+### Diario de misiones (`QuestLog`, 2026-11-19)
+El `QuestLog` (docs/05 "Diario de misiones") sale entero al entrar y en el flush de cada
+tick en que cambió una quest del jugador: también con cada muerte que cuenta un paso
+`kill`, y lleva todas las quests empezadas o terminadas. Una entrada con todos sus campos
+pesa unos 100 B (`proto.Size`, con los ids y las claves de `data/quests`): con las 9 quests
+de hoy, ≤ 0,9 KB por mensaje. Un jugador que caza una criatura cada 3 s suma ≤ 300 B/s,
+lejos de los 4 KB/s. Crece con el catálogo: con 50 quests empezadas serían unos 5 KB por
+muerte (~1,7 KB/s al mismo ritmo). Cuando lleguen las tareas de caza (`feat/side-quests`),
+mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo con
+`TestCrowdBandwidth`.
+
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
 producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos

@@ -83,7 +83,7 @@ describe("validator diagnostics", () => {
     cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
     for (const island of readdirSync(join(REPO, "world", "islands"))) {
       mkdirSync(file(`world/islands/${island}`), { recursive: true });
-      for (const f of ["island.yaml", "zones.yaml"]) {
+      for (const f of ["island.yaml", "zones.yaml", "portals.yaml"]) {
         const src = join(REPO, "world", "islands", island, f);
         if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
       }
@@ -106,6 +106,30 @@ describe("validator diagnostics", () => {
         /reach zone "pruebas_town" is no zone of an island that is not dev_only/,
       ),
     ]);
+    // A place whose every tile is the entrance of stairs (the volcano mine's, portals.yaml):
+    // a step onto them lands below, nobody stands there. With a tile around, it is fine.
+    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ x: 3692, y: 5796, z: 7 }");
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(
+        /every tile of reach point 3692,5796,7 radius 0 is the entrance of stairs/,
+      ),
+    ]);
+    edit("data/quests/ch3_gate.yaml", "z: 7 }", "z: 7, radius: 1 }");
+    expect(reachErrors()).toEqual([]);
+    edit(
+      "world/islands/volcan/zones.yaml",
+      "- id: volcan_temple",
+      "- id: volcan_stairs\n  type: protection\n  floors: [7]\n  rects:\n    - { x: 3692, y: 5796, w: 1, h: 1 }\n\n- id: volcan_temple",
+    );
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 3692, y: 5796, z: 7, radius: 1 }",
+      "{ zone: volcan_stairs }",
+    );
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(/every tile of reach zone "volcan_stairs" is the entrance of stairs/),
+    ]);
+    edit("data/quests/ch3_gate.yaml", "{ zone: volcan_stairs }", "{ zone: pruebas_town }");
     // Zone and point together, a radius too wide, and a repeatable without a cooldown.
     edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_town, x: 1 }");
     edit(
@@ -129,6 +153,31 @@ describe("validator diagnostics", () => {
     expect(
       messages(root).some((m) => m.includes("pruebas_trainer.yaml") && m.includes("state")),
     ).toBe(true);
+  });
+
+  it("refuses a quest_state that means nothing", () => {
+    const stateErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("quest_state:"));
+    expect(stateErrors()).toEqual([]);
+    // A step only goes with in_progress: available would ignore it.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "quest: pruebas_rats, state: available }",
+      "quest: pruebas_rats, state: available, step: hunt_rats }",
+    );
+    expect(stateErrors()).toEqual([
+      expect.stringMatching(/a step only goes with state in_progress, not available/),
+    ]);
+    edit("data/npcs/pruebas_trainer.yaml", ", step: hunt_rats }", " }");
+    // cooling_down of a quest that is not repeatable never holds.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "quest: pruebas_rats, state: cooling_down",
+      "quest: ch1_shipwreck, state: cooling_down",
+    );
+    expect(stateErrors()).toEqual([
+      expect.stringMatching(/cooling_down of quest "ch1_shipwreck", which is not repeatable/),
+    ]);
   });
 
   it("checks a monster's corpse: a known container item that stays on its tile", () => {

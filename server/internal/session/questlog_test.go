@@ -1,7 +1,9 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -26,8 +28,8 @@ rewards:
 `
 
 // reachHarness runs portalMap (arrivals within 1) with errandQuest and the zone yard
-// (11..12 × 4, floor 7).
-func reachHarness(t *testing.T) *harness {
+// (11..12 × 4, floor 7); opts change the config after that.
+func reachHarness(t *testing.T, opts ...option) *harness {
 	t.Helper()
 	m := portalMap(t)
 	m.Islands()[0].Zones = []world.Zone{{ID: "yard", Floors: []uint8{7}, Rects: []world.ZoneRect{{X: 11, Y: 4, W: 2, H: 1}}}}
@@ -35,11 +37,11 @@ func reachHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return newHarness(t, m, func(c *session.Config) {
+	return newHarness(t, m, append([]option{func(c *session.Config) {
 		c.Items = testItems()
 		c.Balance.Travel.ArrivalRadius = 1
 		c.Quests = content.Quests{q.ID: q}
-	})
+	}}, opts...)...)
 }
 
 // questLogs are the QuestLog messages of evs.
@@ -198,5 +200,128 @@ func TestQuestLogFollowsKills(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("quest logs %v, want %v", got, want)
 		}
+	}
+}
+
+// A dialog's set_quest_step onto a reach step the player is away from changes the quest:
+// the QuestLog says so in that tick, and walking into the place later completes the step
+// (the reach places p's moves are checked against were read again).
+func TestSetQuestStepOntoReach(t *testing.T) {
+	guide, err := content.ParseNPC([]byte(`{id: guide, name: npc.guide.name, dialog: {start: greet, nodes: {
+		greet: {text: npc.guide.greet, options: [
+			{text: npc.guide.yard, action: {set_quest_step: {quest: errand, step: yard}}, goto: sent}]},
+		sent: {text: npc.guide.sent, options: [{text: dialog.bye, action: close}]}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := reachHarness(t, func(c *session.Config) {
+		c.NPCs = content.NPCs{guide.ID: guide}
+		is := c.Map.Islands()[0]
+		is.NPCs = append(is.NPCs, world.NPCPlacement{NPC: "guide", Pos: pos(8, 6)})
+	})
+	cl, p := h.join("Errand", at(8, 4))
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "errand") }))
+	h.sim.Step()
+	step := func() string { _, s := h.w.QuestState(p, "errand"); return s }
+	// A step reads the places of the quest's first step (walk_east, at 3,4).
+	if h.step(cl, W); p.Pos() != pos(7, 4) || step() != "walk_east" {
+		t.Fatalf("at %v the step is %q", p.Pos(), step())
+	}
+	h.sim.RunFor(time.Second)
+	cl.take()
+	d := h.lastDialog(h.send(cl, talkMsg(h.npc("guide").ID())))
+	evs := h.pick(cl, d, "npc.guide.yard")
+	if step() != "yard" {
+		t.Fatalf("after the dialog the step is %q", step())
+	}
+	if e := logEntry(t, evs, "errand"); len(questLogs(evs)) != 1 || e.GetStepId() != "yard" || e.GetStepText() != "quest.errand.yard" {
+		t.Fatalf("quest log of the dialog's tick: %v", e)
+	}
+	for _, x := range []int{8, 9, 10} {
+		if evs := h.step(cl, E); p.Pos() != pos(x, 4) || step() != "yard" || len(questLogs(evs)) != 0 {
+			t.Fatalf("at %v the step is %q (%d logs)", p.Pos(), step(), len(questLogs(evs)))
+		}
+	}
+	evs = h.step(cl, E)
+	if p.Pos() != pos(11, 4) || step() != "temple" {
+		t.Fatalf("walked into the yard at %v: the step is %q", p.Pos(), step())
+	}
+	if e := logEntry(t, evs, "errand"); e.GetStepId() != "temple" {
+		t.Fatalf("quest log after the yard: %v", e)
+	}
+}
+
+// A step onto stairs inside a reach place does not count: the player never stands on
+// the entrance, it lands below. Its reward, which does not fit, would drop on the stairs.
+// Walking into the place afterwards does count, and the reward lands on that tile.
+func TestReachSkipsPortalEntrances(t *testing.T) {
+	q, err := content.ParseQuest([]byte(`
+id: landing
+name: quest.landing.name
+steps:
+  - { id: by_stairs, description: quest.landing.step, complete_when: { reach: { x: 6, y: 1, z: 7, radius: 1 } } }
+rewards:
+  - { item: test_sword }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := reachHarness(t, func(c *session.Config) { c.Quests = content.Quests{q.ID: q} })
+	cl, p := h.join("Stairs", at(4, 3)) // no backpack: the sword goes to the floor
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "landing") }))
+	h.sim.Step()
+	state := func() quest.State { s, _ := h.w.QuestState(p, "landing"); return s }
+	if state() != quest.InProgress {
+		t.Fatalf("not started: %v", state())
+	}
+	h.step(cl, NE) // onto the stairs (5,2,7), in the place, and down to floor 8
+	if p.Pos().Z != 8 || state() != quest.InProgress || len(h.w.GroundAt(stairsDown)) != 0 {
+		t.Fatalf("through the stairs at %v: quest %v, %d items on the stairs", p.Pos(), state(), len(h.w.GroundAt(stairsDown)))
+	}
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(5, 3, 7)) }))
+	h.sim.Step()
+	h.step(cl, NE) // (6,2,7): in the place
+	if p.Pos() != at3(6, 2, 7) || state() != quest.Completed || len(h.w.GroundAt(at3(6, 2, 7))) != 1 {
+		t.Fatalf("walked in at %v: quest %v, %d items there", p.Pos(), state(), len(h.w.GroundAt(p.Pos())))
+	}
+}
+
+// The server refuses to start with a reach place it cannot resolve on the map, or whose
+// every tile is the entrance of stairs, a hole or a teleport (nobody stands there).
+func TestReachPlaceChecksAtStart(t *testing.T) {
+	stairsOnly := []world.ZoneRect{{X: stairsDown.X, Y: stairsDown.Y, W: 1, H: 1}}
+	for _, tc := range []struct {
+		name, reach string
+		zone        []world.ZoneRect
+		refused     string
+	}{
+		{"unknown zone", "{ zone: nowhere }", nil, "is no zone of the map"},
+		{"off the island", "{ x: 40, y: 3, z: 7 }", nil, "is on no island"},
+		{"floor not listed", "{ x: 3, y: 3, z: 9 }", nil, "is on no island"},
+		{"the stairs alone", "{ x: 5, y: 2, z: 7 }", nil, "nobody stands"},
+		{"a zone of the stairs alone", "{ zone: spot }", stairsOnly, "nobody stands"},
+		{"the hole alone", "{ x: 8, y: 2, z: 7, radius: 0 }", nil, "nobody stands"},
+		{"the stairs and around", "{ x: 5, y: 2, z: 7, radius: 1 }", nil, ""},
+		{"a zone of the stairs and a tile", "{ zone: spot }", append(stairsOnly, world.ZoneRect{X: 1, Y: 1, W: 1, H: 1}), ""},
+		{"a ladder (taken by use)", "{ x: 2, y: 5, z: 8 }", nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := content.ParseQuest([]byte("{id: spot_quest, name: n, steps: [{id: s, complete_when: {reach: " + tc.reach + "}}]}"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := portalMap(t)
+			if tc.zone != nil {
+				m.Islands()[0].Zones = []world.Zone{{ID: "spot", Floors: []uint8{7}, Rects: tc.zone}}
+			}
+			_, err = session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations, Items: testItems(),
+				Quests: content.Quests{q.ID: q}, Save: func(session.Snapshot) bool { return true }})
+			switch {
+			case tc.refused == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case tc.refused != "" && (err == nil || !strings.Contains(err.Error(), tc.refused)):
+				t.Fatalf("err = %v, want %q", err, tc.refused)
+			}
+		})
 	}
 }

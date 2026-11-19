@@ -258,11 +258,14 @@ server/
 - **Pasos `reach` y diario de misiones (`session/questlog.go`, `quest`, docs/06 "Quest",
   docs/05 "Diario de misiones"):** `initReach` resuelve al arrancar el lugar de cada paso
   `reach` (una zona de `world.bin` v7, `Map.Zone`, o un punto en una isla, `Map.IslandAt`;
-  si no, no arranca). Cada jugador guarda los lugares de sus pasos `reach` actuales
-  (`Player.reach`) y un bit por piso (`reachFloors`); `move`, `relocate` y `join` llaman a
-  `checkReach`, que con el piso fuera de la máscara no hace nada. Un camino nuevo que cambie
+  si no, no arranca; tampoco si todas las casillas del lugar son entradas de escalera,
+  agujero o teletransporte, `standable`). Cada jugador guarda los lugares de sus pasos
+  `reach` actuales (`Player.reach`) y un bit por piso (`reachFloors`); `move`, `relocate` y
+  `join` llaman a `checkReach`, que con el piso fuera de la máscara no hace nada (`move`
+  no lo llama con `through`: el `relocate` que sigue mira donde cae). Un camino nuevo que cambie
   la casilla de un jugador sin pasar por `move` ni `relocate` tiene que llamar a
-  `checkReach`. Todo cambio de una quest pasa por el motor con un `questHost`: su `Notify`
+  `checkReach`. Todo cambio de una quest pasa por el motor con un `questHost` y emite un
+  evento (también `SetStep`, con `StepSet`, aunque el paso no se cumpla): su `Notify`
   marca `questsChanged` (los lugares se releen en el próximo `checkReach` y el `QuestLog`
   sale en el `flushQuestLog` del tick, uno por tick). Las tareas repetibles guardan
   `quest.<id>.done_at` con `questHost.Now` (`World.nowUnix`, el reloj del loop); nunca

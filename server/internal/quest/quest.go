@@ -14,7 +14,9 @@
 //     the first step, and its rewards are given every time.
 //
 // It is pure game logic: the caller (the session, on the game loop goroutine) owns the
-// Log and applies rewards through Host.
+// Log and applies rewards through Host. Every change of a quest's state, step or kill
+// count reaches Host.Notify as an Event (a SetStep too, StepSet, even when the step does
+// not complete): the host refreshes what it derives from the Log there (its quest log).
 package quest
 
 import (
@@ -81,19 +83,21 @@ func (l *Log) Values() map[string]int64 { return maps.Clone(l.v) }
 type EventKind uint8
 
 // Event kinds: a quest started, a step was completed, a kill was counted, the quest
-// was completed.
+// was completed, a quest was moved to a step (set_quest_step).
 const (
 	Started EventKind = iota + 1
 	StepDone
 	KillProgress
 	Done
+	StepSet
 )
 
 // Event is a change the player should hear about.
 type Event struct {
 	Kind  EventKind
 	Quest *content.Quest
-	// Step is the step that just completed (StepDone) or is counting kills.
+	// Step is the step that just completed (StepDone), is counting kills (KillProgress)
+	// or was made current (StepSet).
 	Step *content.QuestStepDef
 	// Kills is the kill count of the step (KillProgress).
 	Kills int
@@ -222,7 +226,9 @@ func (e *Engine) Start(l *Log, id string, h Host) bool {
 	return true
 }
 
-// SetStep moves a quest in progress to step (set_quest_step), forwards or back.
+// SetStep moves a quest in progress to step (set_quest_step), forwards or back. It
+// reports the move (StepSet) before the step is evaluated, so the host hears of it even
+// when the step does not complete right away (a reach step elsewhere, a kill step).
 func (e *Engine) SetStep(l *Log, id, step string, h Host) bool {
 	q := e.quests[id]
 	if q == nil || l.Get(stateKey(id)) != int64(InProgress) {
@@ -232,6 +238,7 @@ func (e *Engine) SetStep(l *Log, id, step string, h Host) bool {
 	if i < 0 {
 		return false
 	}
+	h.Notify(Event{Kind: StepSet, Quest: q, Step: &q.Steps[i]})
 	e.enter(l, q, i, h)
 	return true
 }

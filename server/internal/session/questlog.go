@@ -42,7 +42,9 @@ func (r *reachPlace) contains(p world.Pos) bool {
 }
 
 // initReach resolves the place of every reach step of the quests against the map: a zone
-// must exist, a point must lie on an island, on a floor it lists. Either refuses to start.
+// must exist, a point must lie on an island, on a floor it lists, and either must have a
+// tile that is no entrance of stairs, a hole or a teleport (a step onto one counts where
+// it lands, move). Anything else refuses to start.
 func (w *World) initReach() error {
 	w.reachAt = map[*content.Reach]*reachPlace{}
 	for _, id := range slices.Sorted(maps.Keys(w.cfg.Quests)) {
@@ -69,10 +71,42 @@ func (w *World) initReach() error {
 				}
 				pl.center, pl.radius, pl.floors = c, r.Radius, 1<<c.Z
 			}
+			if !w.standable(pl) {
+				return fmt.Errorf("session: quest %q step %q: every tile of the reach place is the entrance of stairs, a hole or a teleport, where nobody stands", id, s.ID)
+			}
 			w.reachAt[r] = pl
 		}
 	}
 	return nil
+}
+
+// standable reports whether pl has a tile a step onto which does not move the player
+// elsewhere (world.Map.MovesOnStep). It stops at the first one: at most the 33×33 tiles of
+// a point, and a zone of open ground answers at its first tile.
+func (w *World) standable(pl *reachPlace) bool {
+	if z := pl.zone; z != nil {
+		for _, f := range z.Floors {
+			for _, r := range z.Rects {
+				for y := int(r.Y); y < int(r.Y)+int(r.H); y++ {
+					for x := int(r.X); x < int(r.X)+int(r.W); x++ {
+						if !w.m.MovesOnStep(world.Pos{X: uint16(x), Y: uint16(y), Z: f}) {
+							return true
+						}
+					}
+				}
+			}
+		}
+		return false
+	}
+	c := pl.center
+	for y := int(c.Y) - pl.radius; y <= int(c.Y)+pl.radius; y++ {
+		for x := int(c.X) - pl.radius; x <= int(c.X)+pl.radius; x++ {
+			if x >= 0 && y >= 0 && x <= 0xFFFF && y <= 0xFFFF && !w.m.MovesOnStep(world.Pos{X: uint16(x), Y: uint16(y), Z: c.Z}) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // questsChanged marks what a change of p's quests makes stale: the places p's moves are
