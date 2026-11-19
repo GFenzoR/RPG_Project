@@ -122,6 +122,11 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
      sendero, pero no más allá de su correa: si te alejas, te sueltan, recuperan toda la
      vida y vuelven caminando a su corral.
+   - **Salir en plena pelea no salva:** "Salir del juego" a menos de 12 s de un golpe
+     (dado o recibido) dice "Estás en combate" y no sale. Cerrar la pestaña en un corral
+     deja al personaje en el mundo, sin conexión y atacable, hasta 12 s después del último
+     golpe; si un monstruo lo mata, muere como siempre. Volver a entrar en ese tiempo lo
+     retoma donde estaba (docs/02 "Bloqueo de logout en combate").
 4. **Recolección y oficios (oeste).** Con el pico, usa una veta (hierro y piedra); con el
    hacha de leñador, un abedul; con la caña, el agua con peces desde el muelle de pesca
    (alcance 3). Usa la fragua (2 minerales + 1 tronco = lingote), el yunque (con el martillo)

@@ -443,3 +443,12 @@ secundaria.
   pantalla, de la barra y de las otras ventanas, y nunca quedan fuera ni bajo la barra;
   `rpg.windows` v3 (lee las de antes). Ornamentos de pixel art propio
   (`client/src/ui/ornaments.ts`). Lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Bloqueo de logout en combate (auditoría del 2026-11-18; rama
+  `feat/pve-logout-lock`).** El bloqueo de logout del PvP vale para toda pelea: no se sale
+  del juego a menos de `travel.combat_block_ms` (12 s) de un golpe dado o recibido
+  (`combat.logout_locked`), y quien cierra la conexión en ese tiempo queda link-dead
+  (atacable, presa de los monstruos, con sus condiciones) hasta que la pelea termina; una
+  muerte así paga lo de siempre y sale con un solo guardado, y un relogueo retoma al mismo
+  personaje con su pelea. Expulsiones, bans, guardados fallidos y el apagado sacan en el
+  acto, como antes. `server/internal/session/linkdead.go`, docs/02 "Bloqueo de logout en
+  combate". Lo que queda: docs/14, "Pendientes conocidos".

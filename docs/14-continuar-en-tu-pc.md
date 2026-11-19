@@ -139,6 +139,30 @@ el punto 5:
     costado, no un murciélago) y `mire_toad` deja `remains_scales` (un lagarto, no un
     sapo). Son lo más cercano de las ocho familias; uno propio para cada uno es un item y
     un modelo más en `specs/remains.ts`.
+- **Bloqueo de logout en combate (hecho, rama `feat/pve-logout-lock`, lote 10).** Cerrar el
+  juego en medio de una pelea con monstruos ya no evita la muerte (auditoría del
+  2026-11-18): "Salir del juego" a menos de `travel.combat_block_ms` (12 s) de un golpe
+  dado o recibido se rechaza con `combat.logout_locked`, y una conexión cerrada en ese
+  tiempo deja al personaje link-dead (atacable, los monstruos lo siguen, sus condiciones
+  corren) hasta que la pelea termina; si muere así, paga la muerte y sale con un solo
+  guardado; un relogueo lo retoma con su pelea. También cierra el hueco del barco (salir y
+  volver borraba los 12 s). La muerte ahora termina el combate (se puede salir o zarpar
+  apenas se despierta en el templo). Reglas en docs/02 "Bloqueo de logout en combate";
+  código en `server/internal/session/linkdead.go`. Queda:
+  - **Revisar en el E2E:** `07c-logout-locked` (el aviso "Estás en combate" sobre el mapa
+    en plena pelea con el lobo) y que los dos tests que salen después de pelear (el lobo
+    y la arcanista) salgan con `leaveAfterFight` sin pasarse de tiempo.
+  - **Para que lo decida el dueño:** una zona de protección no corta el bloqueo (como el
+    PvP de T5.2; en el género, entrar a una zona de protección suele terminar el combate,
+    pero no el bloqueo PvP). Si se quiere, es una condición más en `inCombat`.
+  - las **zonas sin logout** (`no_logout` de `zones.yaml`, el muelle de cada isla) siguen
+    sin rechazar el `Logout`: solo las miran la inactividad y los chequeos de presencia.
+    Es otra regla (no depende de pelear) y queda para cuando se decida qué pasa al cerrar la
+    conexión sobre una;
+  - `make bots`: al final de la corrida cada bot suelta su objetivo y pide salir cada
+    segundo hasta 45 s (`Bot.Logout` reintenta, `logoutWait` en `tools/bots`); un bot que
+    un monstruo sigue mordiendo sale al morir. No se corrió contra un servidor real en la
+    rama.
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y

@@ -840,6 +840,39 @@ Valores iniciales (balance.yaml):
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").
+- **La muerte termina el combate:** al despertar en el templo ya no hay bloqueo de logout
+  ni de barco (abajo); un bloqueo PvP que tuviera sigue hasta que vence.
+
+### Bloqueo de logout en combate
+La muerte es el riesgo del juego (`00-vision.md`, "Muerte como Tibia"): cerrar el juego en
+medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
+- **En combate** quiere decir: durante `travel.combat_block_ms` (12 s) desde la última vez
+  que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño (también de
+  veneno o fuego, de un monstruo o de otro jugador, también en la arena) o que le pegó a un
+  monstruo o a un jugador; o mientras dura su bloqueo PvP ("PvP", "Castigo"). Es la misma
+  ventana que impide zarpar ("Viajes en barco"), la desconexión por inactividad y los
+  chequeos de presencia.
+- **Salir del juego en combate** se rechaza con `combat.logout_locked` ("Estás en
+  combate: todavía no puedes salir del juego. Espera unos segundos lejos de la pelea.");
+  con el bloqueo PvP, con `pvp.logout_locked`, como antes. La conexión sigue y el jugador puede volver a
+  intentarlo cuando la pelea termine.
+- **Cerrar la conexión en combate** (cerrar la pestaña o el juego, perder la red, un cliente
+  lento que el servidor corta, un reseteo de contraseña) no saca al personaje: queda en el
+  mundo sin conexión ("link-dead"). No actúa (suelta su objetivo, se para, lo que su
+  conexión haya mandado después no se ejecuta y su intercambio se cancela), pero se lo
+  puede atacar, los monstruos lo siguen teniendo de objetivo y sus condiciones siguen
+  corriendo; cada golpe renueva el bloqueo. Cuando el bloqueo vence, se guarda y sale.
+- **Morir link-dead** paga lo mismo que cualquier muerte (experiencia, skills, equipo al
+  cuerpo, bendiciones) y el personaje sale del mundo en ese momento, con un solo guardado
+  (el de la muerte, que es su guardado final). Si todavía lo retiene un bloqueo PvP, espera
+  en el templo a que venza, como antes.
+- **Volver a entrar** mientras está link-dead retoma ese mismo personaje, como un relogueo
+  (posición, vida, condiciones y la pelea: el logout sigue bloqueado hasta que vence); nunca
+  hay dos en el mundo.
+- **Lo que saca en el acto igual:** una expulsión o un ban del staff, un guardado que falló
+  (T5.3) y el apagado del servidor (que guarda a todos, también a los link-dead).
+- Una zona de protección **no** corta el bloqueo (tampoco el PvP): quien se refugia en un
+  templo espera ahí a que venza, a salvo.
 
 ## Economía
 - Monedas de oro, plata, cobre (100:1): `gold_coin` vale 10 000 cobre y `silver_coin` 100
@@ -1152,8 +1185,9 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - **Regla de combate (decidida):** no se zarpa durante `combat_block_ms` (12 s) desde la
   última vez que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño
   (también de veneno o fuego) o que golpeó a un monstruo.
-  La marca no se guarda: hoy salir y volver a entrar la borra, porque todavía no hay
-  bloqueo de logout en combate. Cuando llegue, cierra también este hueco.
+  La marca no se guarda en la base, pero salir no la borra: en combate no se sale del
+  juego, y quien cierra la conexión queda link-dead y al volver la retoma ("Muerte",
+  "Bloqueo de logout en combate"). La muerte la termina.
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
   cercana a ≤ `arrival_radius` (2) casillas, nunca una casilla de casa (como la llegada por
   un portal; un teleport de diálogo tampoco deja a nadie en una casa). Si no hay ninguna,
@@ -1960,7 +1994,10 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
   reseteo de contraseña la cierran igual (el reseteo, por seguridad, siempre), pero el
   personaje queda link-dead hasta que vence el bloqueo; lo que esa conexión haya mandado
   después no se ejecuta. Solo una expulsión o un ban de staff, o un guardado que falló
-  (T5.3), lo sacan en el acto.
+  (T5.3), lo sacan en el acto. Es el mismo mecanismo que el bloqueo de logout de cualquier
+  pelea ("Muerte", "Bloqueo de logout en combate"), con un plazo más largo y su propio
+  mensaje (`pvp.logout_locked`). En la arena no hay bloqueo PvP, pero un golpe sí deja
+  los 12 s de combate de cualquier pelea.
 - **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
   entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
 

@@ -822,7 +822,9 @@ trade:
   E2E usa `client/e2e/fixtures/boat_routes.yaml` (Puerto → testisle).
 - Reglas del viaje (combate, cobro, llegada): `02-game-design.md`, "Viajes en barco";
   números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`). La llegada
-  por un portal (escaleras y demás) usa el mismo `arrival_radius`.
+  por un portal (escaleras y demás) usa el mismo `arrival_radius`. `combat_block_ms`
+  también es el bloqueo de logout de cualquier pelea (`02-game-design.md`, "Bloqueo de
+  logout en combate").
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Tutorial (T4.2)

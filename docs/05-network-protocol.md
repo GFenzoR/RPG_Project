@@ -67,9 +67,22 @@ Detalles (T1.4, `server/internal/net/gateway`):
   ocupada, la casilla libre más cercana (hasta 3 de distancia).
 - **Entrar dos veces:** si el personaje ya está en el mundo, la conexión vieja recibe
   `Disconnect{LOGGED_IN_ELSEWHERE}` y la nueva sigue con el estado en memoria.
-- **Logout:** `Disconnect{LOGGED_OUT}` y cierre; se guarda el personaje. Cerrar el
-  socket sin `Logout` también saca al personaje y lo guarda (las zonas sin logout y el
-  bloqueo por combate llegan con T1.6/T1.11).
+- **Logout:** `Disconnect{LOGGED_OUT}` y cierre; se guarda el personaje. En combate
+  (`travel.combat_block_ms` desde la última pelea con un monstruo o el último daño, o el
+  bloqueo PvP) se rechaza con un mensaje de sistema, `combat.logout_locked` (o
+  `pvp.logout_locked` con el bloqueo PvP), y la conexión sigue. Cerrar el socket sin
+  `Logout` también saca al personaje y lo guarda, salvo en combate: queda en el mundo
+  link-dead hasta que la pelea termina ("Desconexión en combate", abajo). Una casilla sin
+  logout todavía no rechaza el `Logout` (solo la miran la inactividad y los chequeos de
+  presencia).
+- **Desconexión en combate:** si la conexión se cierra en combate (la cierra el cliente,
+  se cae la red o la corta el servidor: cliente lento, reseteo de contraseña), el
+  personaje no sale del mundo: queda sin conexión (no recibe nada; lo que esa conexión
+  haya mandado después no se ejecuta) y atacable hasta que la pelea termina; ahí se guarda
+  y sale (quien lo veía recibe `CreatureDisappear{LOGOUT}`). Si muere así, sale en ese
+  momento, ya en el templo. Un login de ese personaje en ese tiempo lo retoma como un
+  relogueo normal (`Welcome` y vista completa, mismo estado y misma pelea); no hay mensaje
+  nuevo ni rechazo. Reglas en `02-game-design.md`, "Bloqueo de logout en combate".
 - **Apagado:** el servidor guarda a todos y manda `Disconnect{SERVER_SHUTDOWN}`.
 - **Moderación (T2.6):** un GM expulsa con `Disconnect{KICKED}` y banea con
   `Disconnect{BANNED}`. El token de juego de una cuenta baneada no se canjea
@@ -119,9 +132,10 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 - "Revoca todas las sesiones" incluye las conexiones abiertas: el reset borra los tokens
   guardados (cuenta y juego) y después el `app` encola `World.KickAccount`, que desconecta
   a **todos** los personajes conectados de la cuenta con `Disconnect{PASSWORD_CHANGED}`
-  (se guardan como en un logout). Un personaje con el bloqueo PvP activo pierde la conexión
-  igual, pero queda en el mundo link-dead hasta que el bloqueo vence (02-game-design.md,
-  "Bloqueo de combate PvP"). Vale igual para un enlace de `gameserver admin reset-link`.
+  (se guardan como en un logout). Un personaje en combate (el bloqueo PvP o
+  `travel.combat_block_ms` desde su última pelea) pierde la conexión igual, pero queda en
+  el mundo link-dead hasta que la pelea termina (02-game-design.md, "Bloqueo de logout en
+  combate"). Vale igual para un enlace de `gameserver admin reset-link`.
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
@@ -948,7 +962,8 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
   personaje no sale del mundo: queda sin conexión (no recibe nada) y atacable hasta que el
   bloqueo vence; ahí se guarda y sale. Un login de ese personaje en ese tiempo lo retoma
   como un relogueo normal (`Welcome` y vista completa, mismo estado y mismo bloqueo); no hay
-  mensaje nuevo ni rechazo.
+  mensaje nuevo ni rechazo. Es el caso PvP de la "Desconexión en combate" de cualquier
+  pelea (sección "Handshake").
 - **Guerras de gremios** dentro de `GuildCommand` (campo nuevo `war_id`):
   `WAR_DECLARE` (`name` = el gremio enemigo), `WAR_ACCEPT` / `WAR_DECLINE` / `WAR_SURRENDER`
   (`war_id`). Solo el líder. Por chat: `/guild war declare|accept|decline|surrender Gremio`.
@@ -1253,7 +1268,7 @@ dice que el servidor los manda.
   | `DEATH` | Murió ahí: un monstruo (después de su `CreatureHealth` 0) o un jugador, también en una arena (reaparece en su templo con `CreatureAppear`) |
   | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera. Hoy ningún camino lo hace: queda en el protocolo para monstruos de eventos o invocados |
   | `TELEPORT` | Dejó su casilla sin caminar ni morir: un portal (escalera, agujero, teletransporte, escalera de mano, soga), un barco, `/tp`, el teleport de un NPC, la expulsión de una casa. **Volverse invisible también** manda `TELEPORT`: para quien mira se fue, y nada dice que sigue ahí |
-  | `LOGOUT` | El jugador salió del juego: `Logout`, la conexión cerrada, una expulsión o un ban, la inactividad, un cliente lento, entrar desde otra conexión, el fin del bloqueo de un link-dead |
+  | `LOGOUT` | El jugador salió del juego: `Logout`, la conexión cerrada, una expulsión o un ban, la inactividad, un cliente lento, entrar desde otra conexión, el fin de la pelea de un link-dead (o su muerte: sale del templo) |
   | `UNSPECIFIED` | Un servidor anterior (`attack_events` en `false`) |
 - **Cliente:** con `attack_events`, el atacante juega su clip de ataque (o la embestida
   procedural) hacia su objetivo y una criatura cae solo con `DEATH`; sin él, lo deduce
@@ -1368,8 +1383,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 - Cola de salida por sesión acotada (128 batches ≈ 6,4 s de ticks): si un cliente lento
   la llena, el servidor lo saca del mundo, lo guarda y cierra con
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
-  memoria. Con el bloqueo PvP activo cierra igual, pero el personaje queda en el mundo
-  link-dead hasta que el bloqueo vence (lo que esa conexión mandó después no se ejecuta).
+  memoria. En combate cierra igual, pero el personaje queda en el mundo link-dead hasta
+  que la pelea termina (lo que esa conexión mandó después no se ejecuta).
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
   Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
   `://` se compara con `esquema://host`: el cliente de escritorio usa
