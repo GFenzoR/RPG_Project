@@ -379,9 +379,11 @@ func compileIsland(root, id string, worldRect rect, cont *Content) (*world.Islan
 		return a.CX < b.CX
 	})
 
-	if err := applyZones(root, dir, sectors); err != nil {
+	zones, err := applyZones(root, dir, sectors)
+	if err != nil {
 		return nil, nil, err
 	}
+	is.Zones = zones
 	spawns, err := readSpawns(root, dir)
 	if err != nil {
 		return nil, nil, err
@@ -501,20 +503,39 @@ func compileChunk(path, where string, z, cx, cy int, island rect, cont *Content)
 	return s, nil
 }
 
-func applyZones(root, dir string, sectors []*world.Sector) error {
+// applyZones reads zones.yaml (optional), sets the flags of its rule zones on the tiles with
+// ground and returns every zone by id, floors and rects (world.Island.Zones: the reach
+// steps of data/quests name places by zone). world.NewMap checks that each lies on the
+// island, on floors it lists.
+func applyZones(root, dir string, sectors []*world.Sector) ([]world.Zone, error) {
 	path := filepath.Join(dir, "zones.yaml")
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return nil
+		return nil, nil
 	}
 	var zones []zone
 	if err := readYAML(path, &zones); err != nil {
-		return err
+		return nil, err
 	}
+	out := make([]world.Zone, 0, len(zones))
 	for i, z := range zones {
 		flag, ok := zoneFlags[z.Type]
 		if !ok {
-			return fmt.Errorf("%s: zones[%d] (%s): unknown type %q", rel(root, path), i, z.ID, z.Type)
+			return nil, fmt.Errorf("%s: zones[%d] (%s): unknown type %q", rel(root, path), i, z.ID, z.Type)
 		}
+		wz := world.Zone{ID: z.ID}
+		for _, f := range z.Floors {
+			if f < 0 || f > world.MaxFloor {
+				return nil, fmt.Errorf("%s: zones[%d] (%s): floor %d outside 0..%d", rel(root, path), i, z.ID, f, world.MaxFloor)
+			}
+			wz.Floors = append(wz.Floors, uint8(f))
+		}
+		for _, r := range z.Rects {
+			if r.X < 0 || r.Y < 0 || r.W <= 0 || r.H <= 0 || r.X+r.W > 0xFFFF || r.Y+r.H > 0xFFFF {
+				return nil, fmt.Errorf("%s: zones[%d] (%s): rect %+v outside the world", rel(root, path), i, z.ID, r)
+			}
+			wz.Rects = append(wz.Rects, world.ZoneRect{X: uint16(r.X), Y: uint16(r.Y), W: uint16(r.W), H: uint16(r.H)})
+		}
+		out = append(out, wz)
 		if flag == 0 {
 			continue
 		}
@@ -537,7 +558,10 @@ func applyZones(root, dir string, sectors []*world.Sector) error {
 			}
 		}
 	}
-	return nil
+	if len(out) == 0 {
+		return nil, nil // as world.Decode reads no zones
+	}
+	return out, nil
 }
 
 type spawnFile struct {
