@@ -281,7 +281,6 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	balanced := c.Modes["balanced"]
 	stats := h.voc.AtLevel(h.level)
 	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
-	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
 	player := combat.PlayerTarget{Armor: h.armor, Defense: h.shield + h.weapon.Weapon.Defense, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
 	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
@@ -320,15 +319,12 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		return false
 	}
 	totalMs := 0
-	next := make([]int, len(m.Attacks))
+	f := newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
 	ready := map[string]int{}
 	for range careerFights {
-		mhp := m.Health
+		f.start(0)
 		now, nextShot, nextAttackGroup, nextHealGroup, nextUse := 0, 0, 0, 0, 0
 		nextRegen := regen.IntervalMs
-		for i, a := range m.Attacks {
-			next[i] = a.IntervalMs
-		}
 		for k := range ready {
 			ready[k] = 0
 		}
@@ -343,7 +339,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 			nDraught++
 			return true
 		}
-		for mhp > 0 && now < maxFightMs {
+		for f.alive() && now < maxFightMs {
 			// Heal first: the healing group is apart from the attack group.
 			if hp < maxHP*healBelowPct/100 {
 				healed := false
@@ -382,10 +378,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				w := h.weapon.Weapon
 				switch {
 				case w.Type == "wand":
-					mhp -= combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), m.Resistances[w.Element])
+					f.hit(now, combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
 				case h.ammo != nil: // a bow or crossbow and its ammo
 					maxHit := combat.MaxHit(c, h.skill, w.Attack+h.ammo.Ammo.Attack, h.level, balanced.Attack)
-					mhp -= combat.HitMonster(r, maxHit, target)
+					f.hit(now, combat.HitMonster(r, maxHit, f.target()))
 					if stock > 0 {
 						stock--
 					} else {
@@ -393,10 +389,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						nAmmo++
 					}
 				default: // melee: the guardian's reference career
-					mhp -= combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), target)
+					f.hit(now, combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), f.target()))
 				}
 			}
-			if now >= nextAttackGroup && mhp > 0 {
+			if now >= nextAttackGroup && f.alive() {
 				for _, s := range attacks {
 					if now < ready[s.ID] {
 						continue
@@ -418,13 +414,13 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 					mana += float64(s.Mana)
 					casts[s.ID]++
 					d := s.Effect.Damage
-					mhp -= combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), m.Resistances[d.Element])
+					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), f.cur().Resistances[d.Element]))
 					ready[s.ID] = now + s.CooldownMs
 					nextAttackGroup = now + s.GroupCooldownMs
 					break
 				}
 			}
-			if mhp <= 0 {
+			if !f.alive() {
 				break
 			}
 			// The next event: a shot, a spell, a heal, a draught, a monster attack or regen.
@@ -433,27 +429,16 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				step = min(step, nextAttackGroup)
 			}
 			step = min(step, max(nextHealGroup, now+50), max(nextUse, now+50))
-			for _, n := range next {
-				step = min(step, n)
-			}
+			step = min(step, f.nextAt())
 			now = max(step, now+50)
 			for now >= nextRegen {
 				hp = math.Min(maxHP, hp+regenHP)
 				mp = math.Min(maxMP, mp+regenMP)
 				nextRegen += regen.IntervalMs
 			}
-			for i, a := range m.Attacks {
-				if now < next[i] {
-					continue
-				}
-				next[i] += a.IntervalMs
-				if a.Chance > 0 && r.Float64() >= a.Chance {
-					continue
-				}
-				dmg := float64(combat.HitPlayer(r, c, a.Min, a.Max, a.Element == "" || a.Element == "physical", player))
-				hp -= dmg
-				lost += dmg
-			}
+			dmg := float64(f.act(now, player))
+			hp -= dmg
+			lost += dmg
 			if hp <= 0 {
 				deaths++
 				hp, mp = maxHP, maxMP

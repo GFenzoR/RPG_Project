@@ -153,38 +153,23 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 	maxHP := d.guardian.AtLevel(level).Health
 	skill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
 	maxHit := combat.MaxHit(c, skill, weapon.Attack, level, balanced.Attack)
-	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
 	player := combat.PlayerTarget{Armor: armor, Defense: shield + weapon.Defense, ModeDefense: balanced.Defense}
 
 	totalMs, totalDmg := 0, 0
-	next := make([]int, len(m.Attacks))
+	f := newFoe(m, d.monsters, c, r) // its abilities and summons: foe_test.go
 	for range fights {
-		hp, taken, now, nextPlayer := m.Health, 0, 0, 0
-		for i, a := range m.Attacks {
-			next[i] = a.IntervalMs
-		}
-		for hp > 0 && now < maxFightMs {
-			tMonster := math.MaxInt
-			for _, n := range next {
-				tMonster = min(tMonster, n)
-			}
+		taken, now, nextPlayer := 0, 0, 0
+		f.start(0)
+		for f.alive() && now < maxFightMs {
+			tMonster := f.nextAt()
 			if nextPlayer <= tMonster {
 				now = nextPlayer
-				hp -= combat.HitMonster(r, maxHit, target)
+				f.hit(now, combat.HitMonster(r, maxHit, f.target()))
 				nextPlayer += c.AttackIntervalMs
 				continue
 			}
 			now = tMonster
-			for i, a := range m.Attacks {
-				if next[i] != tMonster {
-					continue
-				}
-				next[i] = tMonster + a.IntervalMs
-				if r.Float64() >= a.Chance {
-					continue
-				}
-				taken += combat.HitPlayer(r, c, a.Min, a.Max, a.Element == "physical", player)
-			}
+			taken += f.act(now, player)
 		}
 		totalMs += now
 		totalDmg += taken

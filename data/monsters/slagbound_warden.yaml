@@ -1,7 +1,7 @@
 id: slagbound_warden
 name: monster.slagbound_warden.name
 sprite: creatures/slagbound_warden
-health: 2600
+health: 1800
 experience: 3200
 speed: 140
 armor: 25
@@ -10,9 +10,15 @@ behavior:
   aggressive: true
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 76, interval_ms: 2000 }
-  - { type: spell, element: fire, min: 25, max: 55, interval_ms: 2000, chance: 0.3, range: 4,
+  - { type: melee, min: 0, max: 60, interval_ms: 2000 }
+  # Slag slam: it pounds the floor and burns every tile around it.
+  - { type: melee, element: fire, min: 25, max: 55, interval_ms: 2000, chance: 0.3, area: { shape: circle, radius: 1 },
       condition: { id: burning, chance: 0.5, ticks: 5, damage: 8 } }
+  # Below 60 % it calls two cinder salamanders out of the forge's lava (two at most).
+  - { type: summon, interval_ms: 60000, below_hp_pct: 60, summon: { monster: cinder_salamander, count: 2, max_alive: 2 } }
+phases:
+  # Enraged below 30 %: faster on its feet and with its blows.
+  - { below_hp_pct: 30, speed_mult: 1.3, attack_interval_mult: 0.75 }
 resistances: { physical: 10, fire: 100, earth: 30, ice: -20 }
 loot:
   - { item: forge_seal, chance: 1, each_player: true }
@@ -20,5 +26,5 @@ loot:
   - { item: slag_core, chance: 0.5, count: [1, 2] }
   - { item: wyrm_scale, chance: 0.2 }
 tags: [construct, boss, cave, volcan]
-notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map.
+notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map. Its slam burns whoever stands next to it, below 60 % it calls two cinder salamanders (no experience, no loot; they go when it dies) and below 30 % it is enraged.
 corpse: remains_slag
