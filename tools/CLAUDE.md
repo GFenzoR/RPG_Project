@@ -283,9 +283,9 @@ y, por elemento con orbe, `missiles/<elemento>/<n>` hasta `MAX_ORB_FRAMES` - 1 y
 parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
 `data/` usa). Un test exige además a cada suelo una media de L* entre 20 y 50 (docs/17
 ART-6; la lava no). El
-preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
-los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
-`animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
+preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los jugadores,
+los NPCs que son personas y los monstruos humanoides son el humanoide del motor (abajo,
+"El humanoide"); los personajes de LPC salieron el 2026-11-19. Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
 (`castShadow`, al final de `render`), salvo las de `shadow: false`: las del motor (abajo),
 de 64x64 sobre la sombra de contacto del renderer como los animales de Gemini (docs/17
 ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
@@ -300,7 +300,7 @@ el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por 
 pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres"), y el kit
 de props de pueblo (`specs/town.ts`, docs/17 "Kit de props de pueblo": barril, mesa,
 banco, estante, cama, farol, pozo, sacos, red de pesca, jardinera, puesto de mercado y
-mástil con bandera).
+mástil con bandera), y desde el 2026-11-19 el humanoide (`specs/humanoid/`, abajo).
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su
@@ -394,6 +394,28 @@ necesita su entrada en `tiles` con los mismos `ms` y `sync` (`decor/market_board
 180, sync: tile }`); uno sin `loop`, ninguna con `ms` ni `sync`. Si reemplaza arte viejo,
 se borran sus PNG (y su receta, con los imports que dejen de usarse). Después `make
 spritegen ONLY=<sprite>/` (o el prefijo) y `make sprites STRICT=1`.
+
+**El humanoide** (`specs/humanoid/`, docs/17 "Humanoides del motor"): un esqueleto de
+adulto (`skeleton.ts`: `BONES`, dos cuerpos con las mismas articulaciones, `legsTo` (las
+piernas por cinemática inversa), `walkKeys` (la zancada: un ciclo por casilla) y las keys de
+atacar, disparar, conjurar y morir) y un muñeco de capas (`layers.ts`: pelo, barba, cabeza,
+torso por cuerpo, piernas, pies, escudos y armas; un arma gira su empuñadura por frame,
+`Grip`). `index.ts` da un spec por capa (`HUMANOID_LAYERS`): el cuerpo, y cada capa con
+`layer: { draw, occlude }` (`renderSpec` proyecta las partes de `occlude` sin pintarlas: el
+cuerpo tapa lo que está detrás; el borde de la capa contra él lleva el pliegue), `perTile` y
+`perTileNS` (frames de caminar por casilla, de la zancada) y `trim`. `compose.ts` apila las
+capas teñidas como el cliente (`LAYER_ORDER` de `packages/renderer/src/look.ts`), para las
+hojas y los tests; `previews.ts` arma los quietos de los atuendos y los retratos de los NPCs
+(lee `data/`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
+pasa solo las de imagen (paleta, alfa, tramado salvo en piezas finas, borde), y
+`humanoid.test.ts` juzga la figura compuesta (proporciones, el pie apoyado contra el
+`perTile` del cliente en las cuatro direcciones, el orden por dirección contra el rig, varios
+aspectos de pie sobre la fila del suelo y `data/looks.yaml` igual a las capas). Una forma
+nueva: su constructor en `layers.ts`, su nombre en `data/looks.yaml`, su entrada en
+`assets/sprites.yaml` (las mismas pistas que las demás capas), `make spritegen ONLY=worn/`,
+`make sprites STRICT=1` y `cli.ts sheet --only humans/ [--ref persona.png]`
+(`humanoid.<aspecto>.sheet.png` y `humanoid.lineup.png`, sobre la grilla de casillas al lado
+del jabalí y el ciervo).
 
 **Íconos de items** (`specs/items/`, docs/17 "Íconos de items"): cada arma, escudo,
 armadura, joya y munición de `data/items` es un `icon` (32x32, el origen del modelo en el

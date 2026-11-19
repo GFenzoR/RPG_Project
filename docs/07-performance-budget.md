@@ -426,6 +426,34 @@ siete monstruos que eran un tile de Dungeon Crawl (con sus espejos al este; el c
 96x96) y el jabalí y el ciervo de spritegen, que pasaron de 32x32 a 64x64. A la segunda
 página le quedan 160 px de alto: unos 60 frames de 64x64 más y el atlas pasa a 3 páginas.
 
+**Atlas con los humanoides del motor** (2026-11-19, lote 13, `feat/humanoid-art`; docs/17
+"Humanoides del motor"). Antes, en la base del lote 12: 3 páginas (2048x2016, 2048x2048 y
+2048x1056), 1,75 + 1,79 + 1,03 = 4,57 MB de PNG y 346 + 374 + 375 KB de JSON, más 300 KB de
+`atlas.json` (3110 sprites; ~1730 eran frames de personajes de LPC de 64x64). Después: **2
+páginas** (2048x2032 y 2048x138), 1,99 + 0,37 = 2,36 MB de PNG y 841 + 945 KB de JSON, más
+498 KB de `atlas.json` (5069 sprites): lo que baja el juego pasa de 5,97 a 4,64 MB.
+- El muñeco de capas son 43 capas (2 cuerpos, 6 peinados, 2 barbas, 5 piezas de cabeza, 5 de
+  torso por cuerpo, 2 de piernas, 3 de pies, 4 escudos y 9 armas) de 84 frames cada una
+  (quieto 2, caminar 8, atacar 4, disparar 3 y conjurar 3 en cuatro direcciones, y morir 4 al
+  sur): **3612 frames**. Enteros de 64x64 serían 14,8 Mpx, 3,5 páginas; se empaquetan
+  **recortados** a su caja opaca (`trim: true` en `assets/sprites.yaml`: el frame de la página
+  del atlas lleva `trimmed`, `spriteSourceSize` y `sourceSize` y PixiJS lo ubica como el frame
+  entero): **0,61 Mpx, 0,15 de página**. Un frame vacío (una barba vista de espaldas) es 1x1.
+- Formas y no piezas: cada capa se dibuja una vez en un tono neutro y el cliente la tiñe; las
+  76 piezas del catálogo que se ven son una forma y un tinte (`worn`), sin un píxel propio.
+- Lo que creció es el JSON: 3612 nombres de frame más (las páginas ~1,8 MB, `atlas.json`
+  +200 KB). Pendiente si molesta: nombres más cortos para los frames del muñeco, o un JSON
+  sin espacios.
+- **En el cliente** (`render/creature-body.ts`): una persona es un sprite por capa (hasta 9:
+  cuerpo, piernas, pies, torso, pelo, barba, cabeza, escudo y arma), del mismo atlas, así que
+  se agrupan en el mismo batch. Salen de un pool compartido (`LAYER_POOL`): una criatura que
+  sale de la vista devuelve los suyos (`release`) y la siguiente los reusa; dibujar un frame
+  solo cambia texturas, posiciones y tintes, sin crear objetos ni strings (el orden por
+  dirección está precalculado y se reapila solo al girar). Las texturas de cada capa se
+  indexan una vez por sprite (`render/clips.ts`, el mismo caché de antes).
+- En el repo: 3612 PNG de 64x64 (~1,3 MB), que el test de spritegen compara con el motor
+  (renderizar todas las capas lleva ~3,6 s; el proyecto de tests de spritegen, ~17 s).
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por

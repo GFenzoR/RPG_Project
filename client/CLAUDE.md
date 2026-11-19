@@ -667,6 +667,34 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
 
+## Humanoides del motor (rama `feat/humanoid-art`, lote 13)
+- Jugadores, NPCs que son personas y monstruos humanoides se dibujan como **muñecos de
+  capas** (docs/17 "Humanoides del motor", docs/06 "Looks"): un `CreatureBody` con un sprite
+  por capa (cuerpo, piernas, pies, torso, pelo, barba, cabeza, escudo, arma), cada una con
+  sus clips (`spriteClips` de su ruta `humans/...` o `worn/...`) y su tinte (un multiply),
+  en la misma pose y frame. El orden por dirección es `LAYER_ORDER` de
+  `packages/renderer/src/look.ts` (puro, con tests: `lookSprites`, `lookLayers`,
+  `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Los sprites salen de
+  `LAYER_POOL` y vuelven con `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea
+  objetos. La capa del cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el
+  cuerpo).
+- `render/look.ts` (puro, con tests): `wornFromEquipment` (lo que muestra el equipo propio:
+  cada pieza con `worn` en su lugar, sin importar la mano), `dressPlayer` (la ropa del
+  atuendo por defecto llena lo vacío; un disfraz, `costume`, tapa torso, piernas y pies),
+  `wornKey` (la clave para rearmar al cambiar el equipo), `mulTint` y `figureLayers` (el
+  color de la tienda tiñe la ropa del atuendo).
+- `game-canvas.ts` `personOf`: un jugador usa el `look` de su atuendo (y, el propio, su
+  `Inventory`, guardado por identidad del mapa: `ownEquipment`); un NPC o un monstruo, su
+  `content.npcLooks` / `monsterLooks`. Sin `content.looks` o sin el cuerpo en el atlas, el
+  camino de antes (el sprite del atuendo o del NPC, después el bloque). `drawnLook` del
+  propio suma `wornKey`: equiparse rearma la figura.
+- El ataque de un muñeco elige el clip por el arma que lleva (`attackActionOf` →
+  `attackActionFor`: arco y ballesta `shoot`, varita y vara `cast`, un hechizo `cast`, el
+  resto `attack`). Caminar usa `perTileNS` mirando al norte o al sur (la regla de la
+  zancada, `anim.ts`).
+- Hasta que `feat/character-look` mande el aspecto y el equipo de cada jugador, los demás se
+  ven con su atuendo (cuerpo y ropa), sin equipo.
+
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
   en el atlas: `effects/<nombre>/<n>` (`n` = 0, 1, …), 32x32, arte propio de

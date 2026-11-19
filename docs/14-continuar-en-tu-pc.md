@@ -50,7 +50,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
-| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
@@ -98,6 +98,30 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Humanoides del motor con el equipo a la vista (hecho, rama `feat/humanoid-art`, lote 13;
+  docs/17 "Humanoides del motor", docs/06 "Looks", docs/07 "Atlas con los humanoides del
+  motor"):** jugadores, NPCs y monstruos humanoides dejaron de ser personajes de LPC: son un
+  humanoide del motor de sprites de 36-40 px con proporciones de adulto (dos cuerpos, seis
+  pieles para jugadores, seis peinados, nueve colores de pelo, tres barbas) y un muñeco de
+  capas que muestra lo que llevan (`data/looks.yaml`, `worn` en las 76 piezas que se ven,
+  `look` en los 19 NPCs personas y los 4 monstruos humanoides). El caminar sale de la zancada
+  (un ciclo por casilla, 8 frames; 13,86 al norte y al sur): el pie apoyado no patina. El
+  ataque se juega con el arma (arco y ballesta disparan, varita y vara conjuran). El pack
+  `assets/vendor/ulpc/` salió del repo. Queda:
+  - **Mirarlo en el juego** (la verificación final del lote): el jugador propio con su equipo
+    y cambiándolo, un NPC de cada isla, el saqueador y el contrabandista peleando (el ataque
+    con su arma), un paso largo en las cuatro direcciones sin pies que patinen ni pausas, y
+    la muerte. El E2E no mide píxeles del muñeco.
+  - **Los otros jugadores** se ven con la ropa de su atuendo, sin su equipo ni su aspecto:
+    lo manda la red en `feat/character-look` (que se arma sobre esta rama; el cliente ya
+    tiene `Look` y `wornFromEquipment` para eso).
+  - **La silueta translúcida** (detrás de un muro, o tapado por otra criatura) muestra solo
+    el cuerpo, sin ropa ni arma.
+  - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
+    la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
+  - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
+    madera distinto): una forma nueva en `layers.ts`, su nombre en `data/looks.yaml` y
+    `make spritegen ONLY=worn/`; un color nuevo es solo una línea de `tints`.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al

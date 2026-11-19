@@ -18,7 +18,9 @@ data/
   spells.yaml
   recipes.yaml          oficios
   boat_routes.yaml      rutas de barco (T3.5)
-  outfits.yaml          outfits del personaje (T0.5)
+  outfits.yaml          outfits del personaje (T0.5): cuerpo, ropa y disfraces
+  looks.yaml            aspecto de los humanoides del motor: cuerpos, pieles, pelo, barbas,
+                        formas que se visten y tintes ("Looks")
   effects.yaml          efectos visuales y proyectiles
   cosmetics.yaml        tienda cosmética: moneda premium, paquetes y cosméticos (T5.7)
 i18n/
@@ -504,7 +506,17 @@ Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 ```yaml
 id: puerto_foreman
 name: npc.puerto_foreman.name
-sprite: npcs/miner_old
+sprite: npcs/puerto_foreman     # su retrato quieto (el del diálogo), dibujado de su look
+look:                           # una persona: humanoide del motor ("Looks")
+  body: sturdy
+  skin: fair
+  hair: crop
+  hair_color: grey
+  beard: full
+  worn:
+    torso: { shape: leather, tint: hide }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: dark_leather }
 dialog:
   start: greet
   nodes:
@@ -1201,26 +1213,79 @@ placeholder, en ese orden (un test verifica que los PNG commiteados son los que 
 Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`.
 
 ## Outfits (T0.5)
-`data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.
+`data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador. Desde el
+2026-11-19 es un humanoide del motor ("Looks", abajo; docs/17 "Humanoides del motor").
 ```yaml
 - id: citizen
-  sprite: outfits/citizen   # carpeta de frames
-  frames: 3                 # 0 = parado, 1 y 2 = los dos pasos (máximo 3)
+  sprite: outfits/citizen   # carpeta de las vistas previas quietas: <sprite>/<dir>_0
+  frames: 1
+  look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: none }
+  clothes:                  # torso, piernas y pies del atuendo
+    torso: { shape: tunic, tint: linen }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: shoes, tint: dark_leather }
+- id: sailor
+  costume: true             # un atuendo de la tienda: tapa la armadura
+  # ...
 ```
-- El `sprite` de un outfit es una carpeta: el atlas tiene `<sprite>/<dir>_<frame>`
-  (`outfits/citizen/s_0`), con `dir` en `n`, `e`, `s`, `w`. spritepack cuenta cada frame
-  como un sprite usado por `data/` (un frame sin arte recibe el placeholder automático,
-  como cualquier sprite).
-- **Desde docs/17 (A12) los cuatro atuendos son personajes animados de LPC:** la entrada
-  `animations` de su `sprite` en `assets/sprites.yaml` arma sus frames (quieto, caminar,
-  atacar y caer, de 64x64) y los nombres `<sprite>/<dir>_<frame>` de arriba pasan a ser
-  alias de esos frames (0 = la pose quieta, 1.. = el ciclo de caminar). `frames` sigue en
-  el esquema y en el servidor; con una animación, el cliente usa la animación
-  (`assets/README.md`, "Sprites animados").
-- Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
-  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, "Animación de
-  criaturas").
-- IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
+- `look`: el cuerpo con que se dibuja el jugador hasta que llegue su aspecto propio (rama
+  `feat/character-look`); sin `worn` y sin pieles `creatures_only`.
+- `clothes`: el atuendo por defecto (`citizen`) los muestra solo donde no hay nada equipado
+  (el equipo se ve encima); uno con `costume: true` (los de la tienda) tapa torso, piernas y
+  pies aunque haya armadura, y el casco, el escudo y el arma se siguen viendo. El color de
+  la tienda (`outfit_color`) tiñe esa ropa.
+- El `sprite` es una carpeta: `<sprite>/<dir>_0` (`outfits/citizen/s_0`), un quieto por
+  dirección que dibuja spritegen con las capas y los colores de `looks.yaml`: la vista previa
+  de la tienda y el respaldo del cliente. spritepack cuenta cada frame como un sprite usado.
+- Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro (el servidor
+  sigue leyendo solo `id`, `sprite` y `frames`).
+- IDs únicos; `make validate` revisa `look` y `clothes` contra `looks.yaml`.
+
+## Looks (humanoides del motor)
+Jugadores, NPCs que son personas y monstruos humanoides se dibujan con **un humanoide del
+motor de sprites y un muñeco de capas** (docs/17 "Humanoides del motor"): un cuerpo y, encima,
+pelo, barba y lo que lleva, cada capa en un tono neutro que el cliente tiñe.
+`data/looks.yaml` (esquema `looks`) dice qué hay:
+```yaml
+builds: [sturdy, slender]                      # cuerpos (el mismo esqueleto)
+skins:                                         # tonos de piel
+  fair: { color: "#ecc4a2" }
+  drowned: { color: "#a9b89a", creatures_only: true }   # nunca para un jugador
+hair_styles: [bald, short, crop, long, ponytail, topknot, curly]   # bald no dibuja nada
+beards: [none, short, full]                    # none no dibuja nada
+hair_colors: { black: "#2e2a30", brown: "#7a5232" }   # tiñen pelo y barba (hay nueve)
+shapes:                                        # las formas que dibuja el motor, por lugar
+  head: [cap, hood, open_helm, full_helm, circlet]
+  torso: [tunic, robe, leather, mail, plate]
+  legs: [trousers, greaves]
+  feet: [shoes, boots, sabatons]
+  shield: [buckler, round, kite, tower]
+  weapon: [sword, axe, mace, dagger, spear, bow, crossbow, staff, wand]
+hides: { hood: [hair], full_helm: [hair, beard] }   # lo que tapa una pieza de cabeza
+tints: { iron: "#a8aeb6", linen: "#ece2c8" }         # el material de una pieza (multiply)
+```
+- Las listas son exactamente las capas que dibuja el motor (un test de spritegen las
+  compara); una forma nueva es arte nuevo (`tools/spritegen/src/engine/specs/humanoid/`). Un
+  color nuevo no cuesta atlas: es una línea aquí.
+- **Una pieza del catálogo** dice cómo se ve con `worn` (en `data/items`):
+  ```yaml
+  - id: tidesteel_helm
+    armor: { slot: head, armor: 5 }
+    worn: { shape: full_helm, tint: tidesteel }
+  ```
+  El lugar sale de la pieza: arma → `weapon`, escudo → `shield`, armadura de cabeza, cuerpo,
+  piernas y pies → `head`, `torso`, `legs` y `feet` (en la mano que sea). Una pieza sin
+  `worn` no se dibuja; las joyas no pueden tenerlo. Las 76 piezas del catálogo que se ven lo
+  tienen.
+- **Un NPC que es una persona o un monstruo humanoide** lleva `look` (cuerpo, piel, pelo,
+  color de pelo, barba y `worn` por lugar, con formas y tintes, no ids de items: un NPC
+  puede vestir algo que no se vende). El `look` manda sobre el `sprite`: el de un NPC
+  persona es su retrato quieto (`npcs/<id>`, el del diálogo, que spritegen dibuja de su
+  look), y un monstruo humanoide no necesita ninguno. Uno de los dos es obligatorio.
+- El servidor no lee `looks.yaml`, `look` ni `worn`: son del cliente (que los recibe en
+  `content.looks`, `npcLooks`, `monsterLooks` e `ItemDef.worn`). `make validate` revisa cada
+  `look`, `worn` y `clothes` de `data/` contra `looks.yaml` (la forma del lugar justo, tintes,
+  pieles, pelo y barbas que existen).
 
 ## Animación de criaturas (docs/17 ANI)
 El `sprite` de un monstruo, un NPC o un outfit sigue siendo una ruta lógica: **cómo se
@@ -1240,9 +1305,9 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
   respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
   `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
   y `flying: true` (flota y nunca salta).
-- Un monstruo humanoide o un NPC nuevo: su `sprite:` en `data/` y su entrada en
-  `animations` con las capas de `assets/vendor/ulpc/` (o arte propio), revisada con el
-  preview de `assets/README.md`.
+- Un monstruo humanoide o un NPC que es una persona: su `look` ("Looks"), no un sprite
+  animado. Las capas del humanoide son entradas de `animations` con `trim`, `per_tile` y
+  `per_tile_ns` (`assets/README.md`, "Sprites animados").
 
 ## Tienda cosmética (T5.7)
 `data/cosmetics.yaml` (esquema `cosmetics`; reglas de juego en `02-game-design.md`, "Tienda
@@ -1269,9 +1334,8 @@ cosmetics:
 - `cosmetics[].kind`: `outfit`, `outfit_color` o `name_effect` (los valores del `CHECK` de
   `cosmetics.kind`; `mount` queda reservado). Cada tipo lleva solo su campo: `outfit` (id de
   `data/outfits.yaml`), `tint` (`#rrggbb` en minúsculas) o `style`. `price` es en nácar.
-- Un atuendo nuevo: su entrada en `animations` de `assets/sprites.yaml` (capas de LPC y
-  paletas, como `outfits/citizen`), su entrada en `data/outfits.yaml` y después el
-  cosmético que lo vende.
+- Un atuendo nuevo: su entrada en `data/outfits.yaml` (`look`, `clothes` y `costume: true`;
+  sus vistas previas con `make spritegen ONLY=outfits/`) y después el cosmético que lo vende.
 - Textos en `i18n/<idioma>/cosmetics.yaml`, con claves que salen del id (no se escriben en
   el YAML): `cosmetic.<id>.name` y `cosmetic.<id>.desc`, `cosmetic_pack.<id>.name`, y
   `premium.name` / `premium.amount` (`{count}`) para la moneda. El servidor lee

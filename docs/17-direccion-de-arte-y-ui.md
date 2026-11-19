@@ -160,7 +160,7 @@ parte de arriba transparente.
 | Árbol | 64x64, 64x96 o 96x96 | abajo, tronco centrado (ver abajo) | Copa animada por viento (ART-7) |
 | Criatura chica (rata, murciélago) | 32x32 | abajo, centrada | Figura de 16–28 px |
 | Animal mediano (lobo, jabalí, ciervo, sabueso, araña, sapo) | 64x64 | pies centrados en la casilla | A la escala de la persona de LPC (ver "Animales medianos") |
-| Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
+| Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 36–40 px de los pies a la coronilla, la cabeza un sexto ("Humanoides del motor", §3); antes 40–48 px, como LPC |
 | Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
 
 - **Animales medianos** (decidido el 2026-11-18, con la segunda tanda de Gemini): todos
@@ -487,10 +487,11 @@ de un sprite con `death` juega su clip y se desvanece.
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
-Con humanoides de LPC (SRC-4), un atuendo es una **pila de capas** (cuerpo, ropa, pelo,
-arma) que se compone en spritegen o en una herramienta de importación, y se guarda como
-frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`tintFor`)
-siguen igual.
+Con humanoides de LPC (SRC-4), un atuendo era una **pila de capas** (cuerpo, ropa, pelo,
+arma) compuesta en spritepack y guardada como frames ya armados en el atlas. Desde el
+2026-11-19 la pila se arma en el cliente: el humanoide del motor es un muñeco de capas en un
+tono neutro que el cliente tiñe y apila por dirección, y el equipo puesto se ve ("Humanoides
+del motor", al final de §3). Los tintes de T5.7 (`tintFor`) tiñen la ropa del atuendo.
 
 ### ANI-7 Lo que falta del servidor
 **Hecho (A9, 2026-11-18;** E2E del lote 7 con las capturas `07b-attack-pose` y
@@ -851,6 +852,124 @@ madera oscura, piedra, tela) que se despegan de los suelos de los pueblos.
 una playa abierta con el muelle; una muralla ahí cortaría el paso) y queda para un pueblo
 amurallado de una isla nueva; los props del kit en las islas que vengan; ver la luz de
 las antorchas y los braseros en el juego (el E2E del lote, docs/14).
+
+### Humanoides del motor (hecho, 2026-11-19, rama `feat/humanoid-art`, lote 13)
+Pedido del dueño tras jugar la Isla de Pruebas (2026-11-19): los personajes y los NPCs eran
+*"muy grandes y desproporcionados, tienen la cabeza y el cuerpo gigante"*; *"quiero que sea
+proporcionado y que se vean los items que tiene equipados"*; *"los sprites de ataque tienen
+que ser con el arma que esta utilizando"*; *"el personaje se ve como que esta flotando"*. Las
+criaturas del motor sí le gustaron ("son mas realistas"). Jugadores, NPCs y monstruos
+humanoides eran personajes de LPC (figura de ~46 px con la cabeza enorme) armados por
+spritepack; ahora son **un humanoide del motor** con un muñeco de capas (*paper doll*), en
+`tools/spritegen/src/engine/specs/humanoid/`.
+
+**Proporciones** (`skeleton.ts`; `humanoid.test.ts` las mide): 36-40 px de los pies a la
+coronilla (37-42 con el contorno; la clase `humanoid` de `style.ts`), la cabeza un sexto
+(6-7 px), los hombros de 11 a 13 px, las piernas la mitad del alto y la punta de los dedos a
+media pierna; la misma vista 3/4, la luz y el contorno de las criaturas del motor. Dos
+cuerpos (`sturdy` y `slender`) sobre **el mismo esqueleto**: cambian el torso (pecho,
+cintura, cadera, hombros) y el grosor de los brazos, así una misma capa de casco, arma,
+piernas o botas les sirve a los dos; la ropa del torso se dibuja por cuerpo. Seis tonos de
+piel para jugadores (más dos solo para criaturas: ceniza y ahogado), seis peinados y calvo,
+nueve colores de pelo y tres barbas (ninguna, corta, cerrada): datos de `data/looks.yaml`
+(docs/06 "Looks"). Al lado del jabalí y el ciervo el humanoide queda más chico que la
+persona de LPC: los animales se dibujaron contra esa persona (~25 px por metro) y se dejan
+como están, porque al dueño le gustan.
+
+**Acciones** como el jugador de antes: quieto (2 frames de 500 ms), caminar (8), atacar (4 de
+90 ms: el brazo arriba atrás, el golpe adelante y abajo con medio paso, el seguimiento y la
+vuelta; el brazo izquierdo adelanta el escudo), disparar (3 de 100 ms: el izquierdo sube el
+arco, el derecho tensa hasta la mejilla y suelta), conjurar (3 de 130 ms: los brazos suben y
+empujan) en las cuatro direcciones, y morir (4 de 150 ms: tambalea, se le doblan las
+rodillas, cae de costado) hacia el sur, como antes. Visto de costado se gira 10° a la cámara
+(`views`): se leen la cara, los dos hombros y lo que tiene la mano lejana.
+
+**La regla de la zancada** (lo que hacía flotar al de LPC: abría los pies 18-21 px y el
+preset daba 4 frames por casilla, un paso por casilla de 32 px; el pie apoyado patinaba ~45 %
+de cada paso). Las piernas son de cinemática inversa (`legsTo`): cada frame pone el tobillo
+donde debe estar y deja la cadera tan alta como la pierna apoyada lo permite. Un ciclo por
+casilla: cada pie está apoyado medio ciclo, mientras el cuerpo pasa sobre él media casilla
+(`STRIDE`, 16 px), así el pie se corre hacia atrás exactamente lo que el cuerpo avanza.
+Frames por casilla = frames × 32 / (2 × zancada) = 8 (`walkPerTile`); los frames están medio
+frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2 y −6 px de la
+cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
+unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
+casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
+`AnimActionMeta.perTileNS`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en
+las cuatro direcciones contra el `perTile` del cliente: se queda a 1 px de su punto del suelo.
+La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
+debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. Un paso en diagonal
+(la cara horizontal) sigue con el `perTile` de este y oeste: el pie no patina de lado, sí un
+poco hacia abajo. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
+el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
+`state/world.ts`) y el ciclo sigue sin repetir ni volver (`anim.test.ts`: un frame cada 50 ms
+de un paso de 400 ms da 0..7, 0..3 en dos pasos); solo un hueco real de la red la muestra, con
+el último frame de caminar y no el quieto.
+
+**El muñeco de capas** (`layers.ts`; el orden y el modelo, en `packages/renderer/src/look.ts`):
+cuerpo → piernas → pies → torso → pelo y barba → cabeza → escudo → arma, cada capa en las
+mismas poses del rig, así sigue cada frame. Cada capa es un spec del motor con `layer`: se
+dibujan sus partes y **el cuerpo las tapa** donde están detrás (`renderSpec`: las partes de
+`occlude` se proyectan sin pintar; el borde de una capa contra el cuerpo lleva el pliegue,
+así se ve el ruedo de la túnica sobre las piernas o la línea del pelo en la frente). Por eso
+el orden solo decide lo que cae fuera del cuerpo, por dirección (`LAYER_ORDER`): mirando al
+este el escudo (brazo izquierdo, lejos) va bajo el cuerpo y el arma (mano derecha, cerca)
+sobre todo; al oeste al revés; al norte los dos van adelante del personaje, lejos de la
+cámara (bajo el cuerpo); al sur los dos hacia la cámara. El pelo va bajo el torso mirando al
+sur (lo que cae por la espalda) y la barba bajo todo mirando al norte. Una falda (túnica,
+túnica larga) no deja que la atraviesen las piernas (`occlude` sin piernas).
+`humanoid.test.ts` comprueba que la tabla coincide con el rig (la hoja de la espada y la cara
+del escudo detrás o delante del torso en cada dirección).
+
+**Formas, no piezas** (presupuesto de docs/07): no se dibuja una capa por pieza del catálogo
+sino unas pocas formas por lugar, en un tono neutro (`palette.ts` `look*`, hechos con
+`neutral`, que `tools/gemini/import_art.py` no toma como colores de la paleta) que el cliente
+tiñe (un multiply) con el material de la pieza: cabeza (gorro, capucha, yelmo abierto, yelmo
+cerrado, diadema), torso (túnica, túnica larga, cuero, malla, placas), piernas (pantalón,
+grebas), pies (zapatos, botas, escarpes), escudos (rodela, redondo, de cometa, pavés) y armas
+por clase (espada, hacha, maza, daga, lanza, arco, ballesta, vara, varita). Cada pieza de
+`data/items` dice su `worn: {shape, tint}` (las 76 que se ven: el equipo de las bandas del
+lote 11 y las anteriores; las joyas no); una pieza sin `worn` no se dibuja. La capucha
+esconde el pelo y el yelmo cerrado también la barba (`hides` de `data/looks.yaml`).
+
+**El ataque con el arma en la mano:** el golpe del cuerpo es uno solo y cada clase de arma
+gira su empuñadura por frame (`Grip` de `layers.ts`): la espada sigue el arco del brazo, el
+hacha y la maza cargan más atrás y pegan más abajo, la daga y la lanza quedan horizontales y
+apuntan adelante (una estocada), la vara se levanta derecha y se empuja hacia el objetivo. El
+arco va en la mano izquierda, siempre vertical; la ballesta en la derecha, horizontal al
+disparar. El cliente elige el clip por el arma (`attackActionFor`): arco y ballesta
+disparan, varita y vara conjuran, un hechizo conjura siempre y el resto (o el puño) golpea.
+
+**Atuendos:** el atuendo por defecto (`citizen`) da el cuerpo y la ropa de un jugador hasta
+que llegue su aspecto propio (rama `feat/character-look`), y su ropa se ve solo donde no hay
+nada equipado; los atuendos de la tienda son disfraces (`costume: true`) que tapan torso,
+piernas y pies aunque haya armadura (el casco, el escudo y el arma se siguen viendo). El
+color de la tienda (`outfit_color`) tiñe la ropa del atuendo; el estilo del nombre, igual
+que antes. `outfits/<atuendo>/<dir>_0` es un quieto compuesto (la vista previa de la tienda y
+el respaldo del cliente) y cada NPC que es una persona tiene su retrato quieto `npcs/<npc>`
+(el del diálogo): los arma `previews.ts` de las capas con los colores de `data/looks.yaml`.
+
+**NPCs y monstruos humanoides** tienen su `look` en `data/npcs` y `data/monsters` (cuerpo,
+piel, pelo, barba y lo que llevan): los 19 NPCs que eran de LPC y el saqueador, el
+contrabandista, el minero de obsidiana y el minero ahogado. Las composiciones de LPC, las
+paletas `palettes` de `assets/sprites.yaml` y el pack `assets/vendor/ulpc/` (con sus filas de
+`CREDITS.md` y los textos de `/credits`) salieron: nada los usa. El preset `lpc` de
+spritepack queda (es una capacidad de la herramienta, con sus tests).
+
+**Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet --only humans/
+[--ref persona.png]` escribe `build/spritegen/humanoid.<aspecto>.sheet.png` (cada frame de un
+aspecto compuesto, a 4x) y `humanoid.lineup.png` (los aspectos de `REVIEW_LOOKS` quietos,
+caminando y golpeando, a 1x y a 2x sobre la grilla de casillas, al lado del jabalí, el ciervo
+y la persona de referencia). Lo que se aprendió: una serie completa de un material se lee
+como una estatua (el acero de ascua era marrón y parecía cuero: quedó gris cálido); las armas
+son finas a 1x (la espada mide 13 px, el arco 20).
+
+**Pendiente:** las piezas de un juego de armadura son de un solo tinte (el cinturón de la
+coraza, del mismo color); el arco no se tensa con la mano (la cuerda queda recta); los
+jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo; la
+silueta translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo; mirar en
+el juego el cambio de dirección en medio de un paso (el frame salta entre el `perTile` y el
+`perTileNS`).
 
 ## 4. Sensación de movimiento (MOV)
 
