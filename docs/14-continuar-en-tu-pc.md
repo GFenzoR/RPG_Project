@@ -566,6 +566,34 @@ el punto 5:
     un error, pero es una pista (M1 sumó capacidad al Volcán sin tocar el daño);
   - la pala sigue en `data/items` sin fuente (inventarios guardados): si algún día se cava,
     es darle un destino y volver a venderla.
+- **Progresión de hechizos y brebajes de vida (rama `feat/spells-progression`, auditoría
+  del 2026-11-18, `game.items[0]` y la cura de `game.items[6]`).** Hecho: 9 hechizos nuevos
+  entre el nivel 12 y el 48 (el guardián tiene por fin tres propios; tabla en
+  `02-game-design.md` "Hechizos por vocación"), `skill: weapon` en el escalado de un
+  hechizo (la skill del arma en la mano, puño sin arma o con varita: `session/magic.go`
+  `scalingSkill`), el brebaje de vida (110, Bosque y Brasal) y el concentrado (250, solo
+  Brasal), y la carrera simulada con el guardián, los brebajes de vida y chequeos de maná,
+  nivel mágico y uso de cada hechizo. Queda:
+  - **probarlo a mano** (Isla de Pruebas: el mercader vende los dos brebajes; la
+    instructora da la experiencia y, con "El combate", ahora el nivel mágico del último
+    hechizo de cada vocación: guardián 4, montaraz 9, magos 30): que los golpes del guardián
+    se sientan (radio 1, números de `data/spells.yaml`), que las palabras nuevas se lancen
+    dichas en el chat y que la hotbar por defecto de cada vocación las muestre (todas caben
+    en las 12 teclas);
+  - **para que lo decida el dueño:** el Puerto no vende brebajes de vida (se venden por
+    isla, como el de maná concentrado; un novato no compra una cura del doble de su vida
+    por 60 cobre). Si se quieren ahí, es una línea en `data/npcs/puerto_diver.yaml` o
+    `puerto_provisioner.yaml`;
+  - los hechizos no tienen descripción en el juego (solo nombre y palabras: el esquema de
+    `data/spells.yaml` no tiene `description` y la hotbar muestra el nombre). El selector
+    de la hotbar sigue listando los hechizos de todas las vocaciones (ya era así; ahora son
+    28): filtrarlo por vocación es del cliente;
+  - la simulación es de duelos: las áreas de los magos y del montaraz (`frost_bloom`,
+    `scatter_volley`, `dusk_maelstrom` y las de antes) valen por grupos, y ahí no se miden.
+    Por eso las dos primeras le pegan a cada monstruo un poco menos que el rayo barato de
+    su vocación; si un día la simulación pelea contra grupos, conviene revisarlas;
+  - el lote 11 rehace el catálogo de items (atributos y refinado): los precios de los
+    brebajes de vida (0,5 cobre por punto) y los de maná deberían revisarse juntos ahí.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit

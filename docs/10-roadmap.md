@@ -364,6 +364,13 @@ secundaria.
   la playa del naufragio) y la pala fuera de la tienda, con una regla de `make validate`;
   bendiciones desde el nivel 9; varita inicial del arcanista; hechizos renombrados y textos
   pulidos. Lo que quedó de la auditoría: docs/14, "Pendientes conocidos".
+- [x] **Progresión de hechizos y brebajes de vida (auditoría del 2026-11-18, rama
+  `feat/spells-progression`).** El guardián tiene hechizos propios (una cura y dos golpes de
+  área que escalan con el arma en la mano: `skill: weapon`) y cada vocación aprende hasta
+  el nivel ~50 (9 hechizos nuevos, tabla en docs/02 "Hechizos por vocación"); brebaje de
+  vida (110) y concentrado (250) por isla, sin recompra; la carrera simulada juega también
+  al guardián y exige maná, nivel mágico y uso de cada hechizo. Lo que queda: docs/14,
+  "Pendientes conocidos".
 - [x] **Capacidad del mundo, casas y servicios (auditoría de contenido, rama `feat/world-capacity`).**
   Capacidad para unos 100 jugadores por franja de nivel (respawns más cortos, más monstruos
   y 20 spawns nuevos: de 43 a 109 jugadores efectivos, test `world-capacity.test.ts`,
