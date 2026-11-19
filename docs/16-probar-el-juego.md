@@ -96,8 +96,10 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    el común y el concentrado), runa de arco (pide nivel
    mágico 1: ver más abajo), el equipo de cada vocación (guardián: hacha de mano o espada
    de hierro desde el nivel 5 y escudos; arcanista: varita de chispa, o de coral desde el
-   nivel 6; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
-   nivel 12, que deja usar escudo; druida: vara de retoño), la llave de latón y una mochila
+   nivel 5; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
+   nivel 10, que deja usar escudo; druida: vara de retoño), ropa (la del kit inicial y,
+   desde el nivel 15, la túnica de musgo para todos y el abrigo de cuero de ciervo para
+   guardián y montaraz: el catálogo de docs/02), la llave de latón y una mochila
    de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
    servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
    lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego.

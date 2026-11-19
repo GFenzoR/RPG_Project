@@ -98,6 +98,28 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Catálogo compacto de equipo (hecho, rama `feat/item-catalog`, lote 11; docs/02
+  "Catálogo de equipo"):** 78 piezas en seis bandas (1, 5, 10/15, 30, 50 y 75), una por
+  línea y banda, con la fórmula que comprueba `catalog.test.ts`; amuletos y anillos nuevos;
+  seis items retirados (`retired: true`, docs/06). Queda:
+  - **Bandas 5 y 6 sin fuente:** ninguna tienda, botín ni receta las da hasta que llegue su
+    isla. Esa isla agrega las fuentes, devuelve las recetas de la cota de escamas y la hoja
+    de colmillo de dragoncillo (herrería 20 y 22) y sube `OBTAINABLE_BANDS` en el test.
+  - **Sprites:** las 35 piezas nuevas usan el sprite más parecido (las joyas, el relicario y
+    el cuarzo; las túnicas, la túnica remendada); `feat/item-icons` dibuja uno por pieza.
+  - **Las joyas solo dan armadura** (amuleto 1-2, anillo 0-1): su gracia es el atributo al
+    azar de `feat/item-attributes`. Los anillos de las bandas 3 y 4 son botín raro
+    (0,5-1 %).
+  - **Para el dueño, precios y niveles que cambiaron:** el escudo de tablones pide nivel 5 y
+    vale 110 (antes nivel 1 y 25); la tapa de barril, 25 (antes 10); el sable de abordaje y
+    el hacha barbada, 600 (antes 400); las varas y varitas de la banda 3 bajaron de 1080 a
+    750 en el Bosque. La cota de escamas y la hoja de colmillo de dragoncillo piden nivel 50
+    (antes 45) y son más fuertes: quien ya forjó una la conserva pero no se la pone hasta
+    el 50. El torso pesado pide guardián o montaraz (cambia la regla m6: antes ningún cuero
+    estaba restringido); un mago que ya lo tiene puesto lo conserva puesto.
+  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 10,2 % de la vida (el piso
+    es 10 %); el montaraz de la simulación compra el arco de tejo al nivel 8, no al 5
+    (docs/02, "Balance" del catálogo).
 - **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
   `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
   fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por

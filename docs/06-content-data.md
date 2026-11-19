@@ -51,7 +51,10 @@ i18n/
     hechizo de conjurar); un arma, armadura o escudo comerciable con `value` que se puede
     conseguir tiene un NPC que lo compra, y un material así, un comprador, una receta o
     una quest que lo toma; un item de quest (`tradeable: false`, el `has_item` de un paso)
-    que suelta un monstruo va con `each_player: true`.
+    que suelta un monstruo va con `each_player: true`. Un item retirado (`retired: true`)
+    puede tener comprador sin fuente.
+  - Lote 11: un item retirado no tiene ninguna fuente (ver "Item"), y toda arma, armadura y
+    escudo declara `requires.level`.
   - Aviso si una quest no tiene ningún `start_quest` en `data/npcs/`.
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
@@ -98,16 +101,16 @@ items:
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3300            # en gramos (capacidad en "oz" se muestra derivada)
+  weight: 3150            # en gramos (capacidad en "oz" se muestra derivada)
   stackable: false
   tradeable: true
   weapon:
     type: sword           # sword | axe | club | distance | wand
     attack: 13
-    defense: 9
+    defense: 7
     hands: 1
-  requires: { level: 5 }
-  value: 120              # precio base que usan los NPCs como referencia
+  requires: { level: 5 }  # obligatorio en armas, armaduras y escudos: el de su banda
+  value: 150              # precio base que usan los NPCs como referencia
 ```
 - **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
   (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
@@ -156,8 +159,24 @@ items:
   sube lo que se apila encima de este item del mapa, y la criatura que pisa su casilla
   (mesas y cajones: 8). Las de una pila se suman hasta 24. El servidor la ignora; la leen
   el cliente, el editor y `mapcli render`.
-- **Equipo:** `weapon`, `shield` y `armor` (con `armor.slot`) definen el slot; `requires`
-  (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
+- **Equipo:** `weapon`, `shield` y `armor` (con `armor.slot`: `head`, `body`, `legs`,
+  `feet`, `neck` para los amuletos y `ring` para los anillos) definen el slot; `requires`
+  (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa. Desde el
+  lote 11 toda arma, armadura y escudo declara `requires.level` (`make validate` lo exige):
+  el nivel de su banda del catálogo compacto, y sus números (ataque, defensa, armadura,
+  rango, peso y valor) siguen la fórmula de `02-game-design.md` "Catálogo de equipo", que
+  comprueba `packages/content-schema/src/catalog.test.ts`. El torso pesado lleva
+  `requires.vocations: [guardian, ranger]`; arcos y ballestas, `[ranger]`; varitas,
+  `[arcanist]`, y varas, `[druid]`.
+- **Retirado** (`retired: true`, lote 11): un item que salió del catálogo pero sigue
+  definido para que quien lo tiene lo conserve (con sus números de siempre). `make
+  validate` rechaza cualquier fuente nueva: una tienda que lo venda (también las de
+  desarrollo), botín, el `drops` de un recurso, la salida de una receta, un `give_item`, la
+  recompensa de una quest, un hechizo que lo conjure o el `start_container`. Un NPC sí
+  puede comprarlo (para las copias viejas), aunque nada lo dé. El servidor lo ignora. Hoy:
+  `driftwood_club`, `forged_shortsword`, `thornwood_blade`, `leather_jerkin`, `hide_vest`
+  y `riveted_round_shield`. Nunca se borra un item que pudo quedar en un inventario
+  guardado: se retira.
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera

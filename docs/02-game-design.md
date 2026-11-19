@@ -466,7 +466,7 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
 - **Estaciones:** fragua (`smelting_forge`), yunque (`anvil`) y fogón (`cooking_hearth`) son
   items del mapa. Usarlas (click derecho) a 1 casilla abre la ventana de recetas de esa
   estación, con lo que falta y la chance a tu nivel. Herrería: mineral + tronco → lingote en
-  la fragua; lingotes → hacha de leñador, pico o espada corta forjada en el yunque (con el
+  la fragua; lingotes → hacha de leñador, pico o hacha forjada en el yunque (con el
   martillo de herrero encima). Cocina: pescado crudo, carne de jabalí y algas → pescado a la
   brasa, jabalí asado y guiso del puerto (más `food_ms` que lo crudo; el guiso cura un poco).
 - **Intento:** el servidor comprueba receta, estación en esa casilla, distancia (1 casilla,
@@ -700,17 +700,16 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
   capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
   arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
-  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y el
-  chaleco de piel (para cualquier vocación: ninguna pieza de cuero está restringida, m6);
-  el buzo vende las varitas, las varas y el brebaje de maná. En el Bosque las varas, las
+  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y la
+  ropa del kit inicial (para cualquier vocación: desde el lote 11 solo el torso pesado pide
+  guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
+  brebaje de maná. En el Bosque las varas, las
   varitas y los brebajes los tiene la druida Velia (opción "¿Qué es este lugar?") y el
   resto la curtidora; en Brasal, el herrero y el templo (brebajes, cataplasmas, la varita
-  de obsidiana y la vara de escarcha negra).
-- **Escalones de equipo (auditoría de contenido M3, 2026-11):** cada línea de arma llega a
-  la Isla Volcánica con su fuente (tienda, botín o receta): maza 15 → 23 (Bosque) → 28
-  (Brasal), arco 7 → 12 → 17, ballesta 7 → 13, varita y vara 13 → 21 → 30; y cada slot
-  crece con las islas: cabeza 1 → 2 (capucha de ciervo) → 3, piernas 1 → 2 → 3 (grebas de
-  acero de ascua), pies 1 → 2 (botas de ciervo) → 3 (escarpes).
+  de obsidiana, la vara de escarcha negra, la túnica de ceniza y el amuleto de brasa).
+- **Escalones de equipo:** desde el lote 11 los da el catálogo compacto por bandas, una
+  pieza por línea y banda ("Catálogo de equipo", abajo). Antes (auditoría de contenido M3)
+  cada línea tenía sus propios escalones.
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
   suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
   de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
@@ -721,6 +720,168 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+
+### Catálogo de equipo (lote 11, 2026-11)
+Pedido del dueño (2026-11-18): pocos items, como en los MMORPG de casillas clásicos, para
+que el juego sea simple, y a cambio un atributo al azar por pieza (`feat/item-attributes`)
+y el refinado (`feat/item-forge`). El catálogo se rehízo compacto: **78 piezas** (40
+armas, 7 escudos y 31 armaduras y joyas) más las dos municiones, en **seis bandas** de
+nivel del 1 al 100+, con una pieza por línea y banda. Cada arma, armadura y escudo pide su
+nivel (`requires.level`, regla de `make validate`): el de su banda.
+
+**Bandas.**
+
+| Banda | Niveles | Nivel que piden | Dónde se consiguen |
+|---|---|---|---|
+| 1 | 1–4 | 1 | Puerto: el kit inicial |
+| 2 | 5–9 | 5 | Puerto: armas y escudo (sin armadura) |
+| 3 | 10–29 | armas 10; armadura, escudo y joyas 15 | Puerto (armas) y el Bosque |
+| 4 | 30–49 | 30 | Isla Volcánica (Brasal) |
+| 5 | 50–74 | 50 | todavía sin isla |
+| 6 | 75–100+ | 75 | todavía sin isla |
+
+No son las bandas que se propusieron al pedirlo (1–8, 8–20, 20–35, 35–50, 50–70, 70–85,
+85–100+):
+- **Abajo manda la caza de Puerto y del Bosque**, que la simulación de balance mide
+  monstruo por monstruo (5–15 s y 10–40 % de la vida a su nivel, "Monstruos"). Con un solo
+  escalón entre 1 y 8, o la gaviota muere en menos de 5 s al nivel 1 o el cangrejo y el
+  jabalí tardan más de 15 s a los niveles 5 y 7: hace falta un escalón en el 5. Con uno
+  solo entre 8 y 20, el saqueador (nivel 10) o el contrabandista (16) se salen. El arma de
+  la banda 3 (ataque 22) cubre del 10 al 29, porque la caza del Bosque pide 22 al nivel 20,
+  pero con su armadura al 10 el saqueador ya no lastima (menos del 10 % de la vida): por
+  eso la armadura, el escudo y las joyas de la banda 3 piden nivel 15. Por lo mismo la
+  banda 2 no trae armadura (la del kit inicial alcanza).
+- **Arriba**, con tres bandas (50–70, 70–85, 85–100+) el catálogo pasaba de 90 piezas. Dos
+  bandas anchas, con el refinado haciendo crecer cada pieza dentro de la suya, lo dejan en
+  78. Las islas de esas bandas (las Islas Heladas, 40–80, y la Isla Hundida, 70+, "Mundo e
+  islas") traen sus fuentes; si una isla pide una banda intermedia, se agrega con la
+  fórmula de abajo.
+
+**Líneas, por vocación.**
+- **Guardián:** espada, hacha y maza (una por skill de cuerpo a cuerpo), escudo y el torso
+  pesado.
+- **Montaraz:** arco (dos manos, flechas), ballesta (desde la banda 3: una mano, virotes, y
+  la izquierda para el escudo) y el torso pesado.
+- **Arcanista:** varita. **Druida:** vara (un arma `wand` de una mano). Los dos, la túnica.
+- **Para todos:** escudo, cabeza, piernas, pies, amuleto (cuello) y anillo.
+- **Clases de peso:** solo el torso tiene dos. La **armadura pesada** pide
+  `requires.vocations: [guardian, ranger]` (abrigo de cuero de ciervo, coraza de acero de
+  ascua...); la **túnica** es para cualquiera y es la línea de los magos. Esto cambia la
+  regla m6 de la auditoría de contenido ("ninguna pieza de cuero está restringida"): el
+  abrigo de cuero de ciervo es pesado. La clase media del montaraz se fundió con la pesada
+  para que el catálogo quede chico; cabeza, piernas y pies son de una sola clase.
+- **Joyas** (los slots de cuello y anillo ya existían en el protocolo, sin items): el
+  servidor suma la `armor` de cualquier slot, así que el amuleto da 1–2 de armadura y el
+  anillo 0–1. Sobre todo llevan el atributo al azar de `feat/item-attributes`. Los anillos
+  de las bandas 3 y 4 salen solo como botín raro.
+
+**El catálogo** (id y su número principal: ataque/defensa, ataque y rango, defensa o
+armadura).
+
+| Línea | Banda 1 | Banda 2 | Banda 3 | Banda 4 | Banda 5 | Banda 6 |
+|---|---|---|---|---|---|---|
+| Espada | `rusty_cutlass` 10/5 | `iron_sword` 13/7 | `boarding_saber` 22/11 | `embersteel_sabre` 29/15 | `wyrmfang_blade` 36/18 | `tidesteel_sword` 43/22 |
+| Hacha | `hatchet` 12/3 | `forged_axe` 15/4 | `bearded_axe` 24/7 | `embersteel_axe` 31/9 | `wyrmbone_axe` 38/11 | `tidesteel_axe` 45/13 |
+| Maza | `belaying_pin` 11/4 | `spiked_cudgel` 14/5 | `elmroot_maul` 23/9 | `embersteel_mace` 30/12 | `wyrmbone_maul` 37/14 | `tidesteel_mace` 44/17 |
+| Arco | `short_bow` 2, 5 | `yew_longbow` 7, 6 | `thornwood_longbow` 12, 6 | `embersteel_longbow` 17, 6 | `wyrmsinew_bow` 22, 6 | `drownwood_bow` 27, 6 |
+| Ballesta | — | — | `smuggler_crossbow` 8, 5 | `embersteel_crossbow` 13, 5 | `wyrmsinew_crossbow` 18, 5 | `tidesteel_crossbow` 23, 5 |
+| Varita (arcanista) | `spark_wand` 8 energía | `coral_wand` 13 hielo | `stormglass_wand` 21 energía | `obsidian_wand` 30 energía | `wyrmhorn_wand` 39 energía | `pearlstorm_wand` 48 energía |
+| Vara (druida) | `sapling_staff` 8 tierra | `rimewood_staff` 13 hielo | `hoarfrost_staff` 21 hielo | `blackfrost_staff` 30 hielo | `glacierheart_staff` 39 hielo | `deepfrost_staff` 48 hielo |
+| Escudo | `barrel_lid_shield` 9 | `plank_shield` 12 | `elmwood_shield` 18 | `embersteel_shield` 22 | `wyrmscale_pavise` 26 | `tidesteel_shield` 30 |
+| Torso pesado | — | — | `stagleather_coat` 6 | `embersteel_cuirass` 8 | `wyrmscale_mail` 10 | `tidesteel_plate` 12 |
+| Túnica | `patched_tunic` 2 | — | `mossweave_robe` 3 | `ashweave_robe` 4 | `duskweave_robe` 5 | `pearlweave_robe` 6 |
+| Cabeza | `sailcloth_cap` 1 | — | `stagleather_hood` 2 | `embersteel_helm` 3 | `wyrmcrest_helm` 4 | `tidesteel_helm` 5 |
+| Piernas | `canvas_trousers` 1 | — | `stagleather_leggings` 2 | `embersteel_greaves` 3 | `wyrmhide_greaves` 4 | `tidesteel_greaves` 5 |
+| Pies | `tarred_boots` 1 | — | `stagleather_boots` 2 | `embersteel_sabatons` 3 | `wyrmhide_boots` 4 | `tidesteel_sabatons` 5 |
+| Amuleto | — | — | `antler_amulet` 1 | `cinder_amulet` 1 | `wyrmtooth_amulet` 2 | `blackpearl_amulet` 2 |
+| Anillo | — | — | `briar_ring` 0 | `obsidian_ring` 0 | `emberheart_ring` 1 | `tidestone_ring` 1 |
+
+La munición (`arrow`, 9, y `bolt`, 10) no tiene bandas: se apila y no lleva atributo. Los
+sprites son los de antes; las piezas nuevas usan por ahora el más parecido (las joyas, el
+relicario y el cuarzo) hasta que `feat/item-icons` dibuje uno por pieza con el motor de
+sprites.
+
+**La fórmula** (la comprueba `packages/content-schema/src/catalog.test.ts`: una pieza nueva
+la sigue, o la fórmula, el test y este doc cambian juntos). Valores base por banda *b*:
+
+| b | A (cuerpo a cuerpo) | Arco | Varita y vara | Escudo | Torso pesado | Túnica | Cabeza, piernas, pies | Amuleto | Anillo | V (valor) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 10 | 2 | 8 | 9 | — | 2 | 1 | — | — | 30 |
+| 2 | 13 | 7 | 13 | 12 | — | — | — | — | — | 150 |
+| 3 | 22 | 12 | 21 | 18 | 6 | 3 | 2 | 1 | 0 | 600 |
+| 4 | 29 | 17 | 30 | 22 | 8 | 4 | 3 | 1 | 0 | 2000 |
+| 5 | 36 | 22 | 39 | 26 | 10 | 5 | 4 | 2 | 1 | 5000 |
+| 6 | 43 | 27 | 48 | 30 | 12 | 6 | 5 | 2 | 1 | 12000 |
+
+Desde la banda 3, cada banda nueva suma: A +7, arco +5, varita y vara +9, escudo +4, torso
+pesado +2, túnica, cabeza, piernas y pies +1, cada joya +1 cada dos bandas, y V × 2,5
+(redondeado como abajo).
+- **Cuerpo a cuerpo:** espada, ataque A y defensa 0,5·A; maza, A + 1 y 0,4·A; hacha, A + 2
+  y 0,3·A (redondeo al entero más cercano, ,5 hacia arriba). La espada para más y el hacha
+  pega más.
+- **Distancia:** el arco, dos manos, rango 6 (el corto, 5) y flechas. La ballesta, el
+  ataque del arco − 4, una mano, rango 5 y virotes. Varita y vara: rango 4, una mano; el
+  elemento de la vocación (arcanista energía, druida hielo; las de las bandas 1 y 2
+  conservan el suyo: chispa de energía, coral y madera de escarcha de hielo, retoño de
+  tierra).
+- **Peso** (gramos, *i* = b − 1): espada 3000 + 150·i; hacha 4000 + 300·i; maza 3800 +
+  400·i; arco 2400 + 300·i; ballesta 3200 + 400·(b − 3); varita 1200 + 100·i; vara 1400 +
+  100·i; escudo 3500 + 600·i; torso pesado 8000 + 1000·(b − 3); túnica 2000 + 300·i; cabeza
+  800 + 400·i; piernas 1600 + 500·i; pies 1200 + 400·i; amuleto 300; anillo 100.
+- **Valor:** V de la banda por el factor de la línea (armas 1; ballesta 0,9; escudo 0,75;
+  torso pesado 0,9; túnica 0,6; cabeza, piernas y pies 0,4; amuleto 0,8; anillo 0,6),
+  redondeado a 5 debajo de 100, a 10 debajo de 1000, a 50 debajo de 5000 y a 100 arriba.
+- **Precios de los NPCs** ("Economía"): venden al valor en Puerto y a 1,25 veces el valor
+  en el Bosque y el Volcán; compran a un tercio del valor o menos. Así ningún par de
+  tiendas deja ganar comprando y revendiendo (`make validate`; el test del catálogo lo
+  mira para todo el equipo).
+
+**Dónde se consigue** (bandas 1 a 4).
+- **Puerto:** el armero vende las bandas 1 y 2 y las armas de cuerpo a cuerpo y el arco de
+  la banda 3 (desde el nivel 10, para las últimas cazas de la isla); el buzo, las varitas y
+  varas de las bandas 1 a 3. El hacha forjada también sale del yunque (herrería 6), en
+  lugar de la espada corta forjada.
+- **Bosque:** la curtidora vende las armas, el torso pesado, la capucha, las calzas, las
+  botas y el escudo de olmo (que también se forja) de la banda 3; la druida Velia, las
+  varitas y varas, la túnica de musgo y el amuleto de asta. El anillo de zarza es botín
+  raro de espinosos y reptantes huecos.
+- **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
+  solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
+  escarcha negra, la túnica de ceniza y el amuleto de brasa. El anillo de obsidiana es
+  botín raro de mineros de obsidiana y gólems de escoria.
+- **Botín de antes:** el saqueador suelta el alfanje, la cabilla (en lugar del garrote de
+  deriva) y la gorra; el contrabandista, las calzas de ciervo y su ballesta; el
+  dragoncillo, el sable de ascua; el minero, el yelmo, la varita y la vara.
+- **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta ni diálogo las
+  da (el test del catálogo lo comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
+  isla de la banda). La cota de escamas y la hoja de colmillo de dragoncillo pasaron a la
+  banda 5 (nivel 50, más fuertes): sus recetas (herrería 20 y 22, con escamas de
+  dragoncillo y núcleos de escoria) vuelven con esa isla; las que ya están en un
+  inventario se quedan.
+
+**Retirados** (`retired: true`, `06-content-data.md` "Item"): el garrote de deriva, la
+espada corta forjada, la hoja de espino, el jubón de cuero, el chaleco de piel y la rodela
+remachada repetían otra pieza de su banda. Siguen definidos con sus números de antes (quien
+tiene uno lo conserva) y el armero de Puerto o la curtidora los compran, pero
+`make validate` rechaza cualquier fuente nueva.
+
+**Balance.** Los kits de las simulaciones son los del catálogo (`kitFor` en
+`sim/balance_test.go` para el guardián y los montaraces; túnicas y líneas de cada vocación
+en `balance_vocations_test.go`) y dos tests comprueban que cada pieza se puede llevar a ese
+nivel y con esa vocación. Ningún objetivo documentado cambió:
+- **Guardián:** Puerto, nivel 8 en 1,10 h y 15 en 3,32 h (antes 3,46); Bosque, 15→20 en
+  2,30 h y 20→25 en 3,13 h; Volcán, 25→30 en 3,92 h, 30→40 en 10,13 h y 40→50 en 15,30 h;
+  el custodio, 65 s y 149 % de la vida. El más justo es el minero de obsidiana al nivel 35:
+  10,2 % de la vida (el piso es 10 %).
+- **Carreras del 1 al 50:** el guardián en 34,4 h (antes 34,6) y 39,4 h sin brebajes de
+  maná; magos y montaraces siguen entre 0,5 y 1,5 veces el guardián en cada tramo, con niveles
+  mágicos casi iguales. Los magos llevan ahora la túnica (3 a 4 de armadura menos que el
+  guardián) y su ritmo casi no cambió.
+- **El montaraz compra el arco de tejo al nivel 8**, cuando su caza ya pagó las flechas y
+  los 150 cobres: con él desde el 5 los lobos no lo lastiman lo bastante para usar su cura
+  (nivel 4) y el test "cada hechizo se usa a su nivel" falla.
+- **Amuletos sí, anillos no:** el kit lleva el amuleto (se vende) y no el anillo (botín
+  raro; los de las bandas 3 y 4 no dan armadura).
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
@@ -992,7 +1153,8 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   conseguir tiene un NPC que lo compra, y un material con valor, un comprador, una receta
   o una quest que lo pide; un item de quest (no comerciable) cae solo como botín
   `each_player`, así deja de caer como basura cuando la quest terminó. Por eso los
-  saqueadores sueltan el garrote de deriva, el armero compra la espada corta forjada, la
+  saqueadores sueltan la cabilla (antes el garrote de deriva, que el lote 11 retiró: el
+  armero lo sigue comprando, como todo lo retirado), el armero compra el hacha forjada, la
   piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Brasal la piedra,
   la curtidora la hoja de espino, y la tarja, el cofre sellado y la carta del minero salen
   solo a quien los necesita.
@@ -1534,12 +1696,12 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 - **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
   pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
   (16, cuchillos a distancia), espinoso (20, estallido de espinas alrededor, débil al fuego) y reptante
-  hueco (24, cueva, mordida venenosa, ve invisibles). Con el equipo del pueblo un guardián
-  pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
+  hueco (24, cueva, mordida venenosa, ve invisibles). Con la banda 3 del catálogo un
+  guardián pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
 - **Oficios en el Bosque:** el olmo (`elm_tree`) se tala como el abedul y da troncos de
   olmo (y resina desde woodcutting 4). Recetas: escudo de olmo en el yunque y caldo de
-  hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y la hoja
-  de espino.
+  hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y las
+  armas de la banda 3 (la hoja de espino se retiró en el lote 11; ella la sigue comprando).
 
 **Capítulo 3 "Fuego bajo la piedra" (T5.5, Isla Volcánica).** Lo da Casia Hollín, la
 guardiana de los registros de Brasal, solo a quien tiene el flag `ember_root_found` del
@@ -1583,17 +1745,18 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
   pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
   es la norma: todos resisten fuego y
-  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,8 h, de
-  30 a 40 en ~10,4 h y de 40 a 50 en ~15,2 h (el test pide 0,4–1,2 veces el `pace`).
+  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,9 h, de
+  30 a 40 en ~10,1 h y de 40 a 50 en ~15,3 h (el test pide 0,4–1,2 veces el `pace`; con el
+  catálogo del lote 11, antes 3,8, 10,4 y 15,2).
 - **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale
   desde minería 8) y el botín de mineros y gólems dan mineral de ascua. En la fragua, 3
   minerales + 1 lingote de hierro + 1 tronco de olmo (del Bosque: las islas comercian) dan
-  un lingote de acero de ascua (herrería 10). En el yunque: yelmo (herrería 12, nivel 30),
-  sable (13, nivel 30), hacha (14, nivel 32), coraza (16, nivel 34), escudo (17, nivel 36),
-  cota de escamas de dragoncillo (20, nivel 45) y hoja de colmillo de dragoncillo (22,
-  nivel 45). El ataque sigue el +4 por escalón de Puerto y Bosque (27–31), así que el PvP
-  (escalado a `damage_pct`) no cambia de forma. Bram Tizón vende las primeras piezas de
-  acero de ascua y compra los materiales de la isla a un tercio de su valor.
+  un lingote de acero de ascua (herrería 10). En el yunque, la banda 4 del catálogo (todas
+  nivel 30, "Catálogo de equipo"): yelmo (herrería 12), sable (13), hacha, maza, arco y
+  escarpes (14), ballesta y grebas (15), coraza (16) y escudo (17). La cota de escamas y la
+  hoja de colmillo de dragoncillo (herrería 20 y 22) son de la banda 5 desde el lote 11:
+  sus recetas vuelven con la isla de esa banda. Bram Tizón vende la banda 4 y compra los
+  materiales de la isla a un tercio de su valor.
 - **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Brasal al oeste (templo de la Llama
   Quieta, plaza con fragua, yunque y fogón, el archivo de Casia y una casa), muelle al oeste
   con Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se
