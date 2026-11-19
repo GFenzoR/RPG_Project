@@ -67,7 +67,6 @@ sprites:
   # Creatures
   decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
   decor/stairs_up: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_up.png }
-  decor/creature_remains: { source: vendor/dungeon-crawl/mon/undead/crawling_corpse.png }
 
   # NPCs: Liberated Pixel Cup characters, in `animations` below.
 

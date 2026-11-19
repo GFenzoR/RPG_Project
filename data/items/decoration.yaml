@@ -214,6 +214,74 @@
   pickupable: false
   blocks_movement: false
   container: { slots: 10 }
+
+# The remains of each family of monsters (data/monsters `corpse`): the fallen body the
+# server leaves instead of creature_remains, with the loot inside. Same rules as
+# creature_remains: a container of 10 slots that cannot be picked up and decays after
+# combat.monster_corpse_ms.
+- id: remains_fur
+  kind: container
+  sprite: decor/remains_fur
+  name: item.remains_fur.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_chitin
+  kind: container
+  sprite: decor/remains_chitin
+  name: item.remains_chitin.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_scales
+  kind: container
+  sprite: decor/remains_scales
+  name: item.remains_scales.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_slag
+  kind: container
+  sprite: decor/remains_slag
+  name: item.remains_slag.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_bones
+  kind: container
+  sprite: decor/remains_bones
+  name: item.remains_bones.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_feathers
+  kind: container
+  sprite: decor/remains_feathers
+  name: item.remains_feathers.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_humanoid
+  kind: container
+  sprite: decor/remains_humanoid
+  name: item.remains_humanoid.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
+
+- id: remains_bramble
+  kind: container
+  sprite: decor/remains_bramble
+  name: item.remains_bramble.name
+  pickupable: false
+  blocks_movement: false
+  container: { slots: 10 }
 # ---- Autoborder pieces (data/borders.yaml). Drawn at the bottom of the stack of the
 # tile they border; never block and cannot be picked up.
 

@@ -94,6 +94,14 @@ item.tarnished_locket.desc: "Dentro hay un retrato que el agua borró hace tiemp
 item.bosun_logbook.name: "bitácora del contramaestre"
 item.bosun_logbook.desc: "Un cuaderno hinchado de agua salada. Las últimas páginas están escritas con prisa."
 item.creature_remains.name: "restos de criatura"
+item.remains_fur.name: "restos de bestia"
+item.remains_chitin.name: "caparazón vacío"
+item.remains_scales.name: "restos escamosos"
+item.remains_slag.name: "montón de escoria"
+item.remains_bones.name: "huesos"
+item.remains_feathers.name: "restos emplumados"
+item.remains_humanoid.name: "cuerpo caído"
+item.remains_bramble.name: "zarzas secas"
 
 # Containers (T1.8)
 item.backpack.name: "mochila"
