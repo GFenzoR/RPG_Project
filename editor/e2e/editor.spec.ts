@@ -250,7 +250,8 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   await settled(page);
   await shot(page, "08-rect-autoborder");
 
-  // Fill (G): the sand rect (and only it) becomes dirt; its borders go away.
+  // Fill (G): the sand rect (and only it) becomes dirt; grass goes over dirt too, so the
+  // grass edges stay (docs/06 "Bordes").
   await pick(page, "tierra", "dirt");
   await page.keyboard.press("g");
   await expect(page.getByTestId("tool-fill")).toHaveClass(/active/);
@@ -258,7 +259,7 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   expect((await tile(page, 1045, 1046, 7))?.ground).toBe("dirt");
   expect((await tile(page, 1048, 1048, 7))?.ground).toBe("dirt");
   expect((await tile(page, 1044, 1047, 7))?.ground).toBe("grass");
-  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual([]);
+  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual(["border_grass_n"]);
   // One undo entry for the whole flood; redo brings it back.
   await page.keyboard.press("Control+z");
   expect((await tile(page, 1048, 1048, 7))?.ground).toBe("sand");
