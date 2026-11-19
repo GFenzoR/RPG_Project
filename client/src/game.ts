@@ -8,6 +8,7 @@ import type { ForgeCandidate, RefineState } from "./state/forge.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
+import type { QuestLogView } from "./state/quests.ts";
 import {
   ChatChannel,
   CreatureKind,
@@ -132,6 +133,12 @@ export interface GameUi {
   presence: PresenceState | undefined;
   /** The tutorial step (T4.2), or undefined when there is none. */
   tutorial: TutorialView | undefined;
+  /**
+   * The quest log (docs/02 "Diario de misiones"), undefined before the server sends it,
+   * and the server's clock minus the client's (ms) for a task's countdown.
+   */
+  quests: QuestLogView | undefined;
+  clockOffset: number;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -1621,6 +1628,8 @@ export class Game {
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,
+      quests: w.quests,
+      clockOffset: w.clockOffset,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       guild: w.guild.view(performance.now()),

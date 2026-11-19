@@ -40,6 +40,7 @@ import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import type { GuildTab } from "./Guild.tsx";
 import { AppearancePanel } from "./Appearance.tsx";
+import { QuestsPanel } from "./Quests.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
@@ -159,6 +160,8 @@ export function emptyGameUi(): GameUi {
     house: undefined,
     presence: undefined,
     tutorial: undefined,
+    quests: undefined,
+    clockOffset: 0,
     party: undefined,
     invitations: [],
     guild: undefined,
@@ -530,6 +533,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
+  const quests = <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} />;
   const chat = (
     <ChatPanel
       t={t}
@@ -710,6 +714,8 @@ export function GameView(props: GameViewProps): JSX.Element {
           return inventory;
         case "skills":
           return skills;
+        case "quests":
+          return quests;
         case "party":
           return party;
         case "guild":
@@ -1025,6 +1031,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             <div {...pane("battle", false)}>{fight}</div>
             <div {...pane("inventory", true)}>{inventory}</div>
             <div {...pane("skills", true)}>{skills}</div>
+            <div {...pane("quests", true)}>{quests}</div>
             <div {...pane("appearance", true)}>{appearance}</div>
           </div>
           <div {...pane("chat", true)}>
@@ -1061,6 +1068,7 @@ const WINDOW_SIZE: Record<Exclude<WindowId, "chat">, "narrow" | "normal" | "wide
   battle: "narrow",
   inventory: "narrow",
   skills: "narrow",
+  quests: "normal",
   party: "narrow",
   guild: "wide",
   appearance: "normal",
@@ -1540,6 +1548,7 @@ function HelpBody(props: { t: Translate }): JSX.Element {
   const keys: [string, string][] = [
     ["I", "client.inventory.title"],
     ["K", "client.skills.title"],
+    ["L", "client.quests.title"],
     ["B", "client.battle.title"],
     ["P", "client.party.title"],
     ["G", "client.guild.title"],

@@ -1383,6 +1383,7 @@ body.picking-item .map-hint {
 }
 .shop .tabs [aria-selected="true"],
 .guild-tabs [aria-selected="true"],
+.quest-tabs [aria-selected="true"],
 .chat-tabs [aria-selected="true"],
 .shop-filters [aria-pressed="true"] {
   color: #f6e7bd;
@@ -2313,6 +2314,103 @@ body.picking-item .map-hint {
 /* Each part fades in when its button is pressed. */
 .guild-part {
   animation: npc-text-in var(--ui-dur) var(--ui-ease-out);
+}
+/* The quest log (docs/02 "Diario de misiones"): two tabs, then a card per quest with its
+   name, chapter, current step and kills (a bar that fills with transform, UI-9). */
+.quest-tabs {
+  display: flex;
+  gap: 3px;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgb(74 69 64 / 0.6);
+}
+.quest-tabs button {
+  flex: 1;
+  padding: 0.3rem 0.4rem;
+  font-family: var(--ui-font-title);
+  font-size: 0.75rem;
+}
+.quest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  animation: npc-text-in var(--ui-dur) var(--ui-ease-out);
+}
+.quest {
+  padding: 0.4rem 0.5rem;
+  background: rgb(0 0 0 / 0.28);
+  border: 1px solid var(--ui-iron-900);
+  border-left: 2px solid var(--ui-gold-700);
+  border-radius: var(--ui-radius);
+}
+.quest:not([data-state="active"]) {
+  border-left-color: var(--ui-iron-600);
+}
+.quest-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.quest-name {
+  font-family: var(--ui-font-title);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ui-item-quest);
+}
+.quest:not([data-state="active"]) .quest-name {
+  color: var(--ui-text-muted);
+}
+.quest-kind {
+  font-size: 0.7rem;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+}
+.quest-step {
+  margin: 0.25rem 0 0;
+  font-family: var(--ui-font-book);
+  font-size: 0.85rem;
+  color: var(--ui-text);
+}
+.quest-kills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.quest-bar {
+  flex: 1;
+  height: 5px;
+  overflow: hidden;
+  background: var(--ui-stone-950);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-900);
+}
+.quest-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(var(--ui-life-300), var(--ui-life-500));
+  transform-origin: left;
+  transition: transform var(--ui-dur) var(--ui-ease-out);
+}
+.quest-count {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-gold-300);
+}
+.quest-wait,
+.quest-done {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ui-text-muted);
+}
+.quest-wait {
+  color: var(--ui-warn);
+}
+.quest-done.again {
+  color: var(--ui-ok);
 }
 .guild li {
   position: relative;

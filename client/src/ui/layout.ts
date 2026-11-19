@@ -97,6 +97,7 @@ export const PANEL_TABS = [
   "guild",
   "inventory",
   "skills",
+  "quests",
   "appearance",
   "chat",
 ] as const;
@@ -109,6 +110,7 @@ export const TAB_TITLE: Record<PanelTab, string> = {
   guild: "client.guild.title",
   inventory: "client.inventory.title",
   skills: "client.skills.title",
+  quests: "client.quests.title",
   appearance: "client.appearance.title",
   chat: "client.chat.title",
 };

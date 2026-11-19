@@ -118,6 +118,28 @@ const WINDOWS: Record<string, unknown> = {
       options: { open: true, collapsed: false },
       help: { open: true, collapsed: false },
       skills: { open: true, collapsed: false },
+      quests: { open: true, collapsed: false },
+    },
+  },
+  // The quest log (docs/02 "Diario de misiones", key L) at its factory place, beside the
+  // equipment: the active tab (a kill step 5/8, a side quest), and in questsdone the
+  // finished one (a task cooling down 2 h 14 min, one back already, chapter 1 done).
+  quests: {
+    v: 3,
+    z: ["quests"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      quests: { open: true, collapsed: false },
+    },
+  },
+  questsdone: {
+    v: 3,
+    z: ["quests"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      quests: { open: true, collapsed: false },
     },
   },
   // The tutorial's hint gives way to the help at its factory place (docs/17 UI-5).
@@ -224,6 +246,8 @@ const WINDOWS: Record<string, unknown> = {
 };
 /** Scenes about the inventory: on a phone or a tablet they open its tab. */
 const INVENTORY_TAB = ["inventory", "tooltip", "tooltipcoin"];
+/** Scenes about the quest log: on a phone or a tablet they open its tab. */
+const QUESTS_TAB = ["quests", "questsdone"];
 /** What the mouse is over in a scene's screenshot. */
 const HOVERS: Record<string, string> = {
   tooltip: '[data-testid="slot-right_hand"] [data-tip-item]',
@@ -255,6 +279,8 @@ const SCENES = [
   "tooltip",
   "tooltipcoin",
   "guild",
+  "quests",
+  "questsdone",
   "forge",
   "forgerisk",
   "forgeresult",
@@ -311,6 +337,8 @@ try {
         "tooltipcoin",
         "inventoryfloat",
         "guild",
+        "quests",
+        "questsdone",
         "scale",
       ].includes(scene)
         ? "game"
@@ -324,15 +352,16 @@ try {
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
-      // Phones and tablets: the inventory scenes show the inventory tab.
-      if (INVENTORY_TAB.includes(scene)) {
+      // Phones and tablets: the inventory and quest log scenes show their tab.
+      if (INVENTORY_TAB.includes(scene) || QUESTS_TAB.includes(scene)) {
         // A phone on its side keeps the panel in a drawer: open it first.
         const drawer = page.getByTestId("panel-toggle");
         if (await drawer.isVisible()) {
           await drawer.click();
           await page.waitForTimeout(300);
         }
-        const tab = page.locator('[data-testid="panel-tabs"] [data-tab="inventory"]');
+        const name = QUESTS_TAB.includes(scene) ? "quests" : "inventory";
+        const tab = page.locator(`[data-testid="panel-tabs"] [data-tab="${name}"]`);
         if (await tab.isVisible()) {
           await tab.click();
           await page.waitForTimeout(150);
@@ -345,6 +374,14 @@ try {
         const el = page.locator(hover).first();
         if (await el.isVisible()) {
           await el.hover();
+          await page.waitForTimeout(150);
+        }
+      }
+      if (scene === "questsdone") {
+        // The quest log's finished tab (in the window, or in the panel's tab on phones).
+        const tab = page.locator('[data-quest-tab="finished"]').first();
+        if (await tab.isVisible()) {
+          await tab.click();
           await page.waitForTimeout(150);
         }
       }

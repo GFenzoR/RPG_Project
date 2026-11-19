@@ -71,8 +71,10 @@ const CATALOGS = [
   "npcs.yaml",
   "tutorial.yaml",
   "cosmetics.yaml",
+  // Every key: the quest log (ui/Quests.tsx) shows each step's text, not only names.
+  "quests.yaml",
 ];
-const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "quests.yaml", "world.yaml"];
+const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "world.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 
 export const repoRoot = (): string =>

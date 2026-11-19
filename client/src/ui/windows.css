@@ -411,11 +411,11 @@
 }
 
 /* ---- Toolbar: icon buttons that open the windows (Tibia-like, own pixel icons) -------
-   Two rows of five beside the hotbar; one row with the icons at 2x where it fits. */
+   Two rows of six beside the hotbar; one row with the icons at 2x where it fits. */
 .toolbar {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(5, 30px);
+  grid-template-columns: repeat(6, 30px);
   grid-auto-rows: 26px;
   gap: 3px;
 }
@@ -433,7 +433,7 @@
 }
 @media (min-width: 1600px) {
   .toolbar {
-    grid-template-columns: repeat(10, 40px);
+    grid-template-columns: repeat(11, 40px);
     grid-auto-rows: 40px;
   }
   .tool .icon {
@@ -707,7 +707,7 @@ body.dragging-window * {
 /* ---- Where each window shows before the player moves it (docs/17 UI-5) ---------------
    Percentages are of the area above the bar. The battle list top left with the party
    beside it and the skills under it; the equipment top right with the guild and the
-   appearance beside it and the containers under it; the chat at the bottom left, past the
+   appearance (and the quest log) beside it and the containers under it; the chat at the bottom left, past the
    plaque; the options and the help in the middle; the trade at the top centre; the NPC's
    and the stations' windows at the bottom centre, just over the bar, the shop left of its
    dialog, the two clear of the equipment's column. Moved, a window keeps its own place
@@ -737,6 +737,13 @@ body.dragging-window * {
 .gwin:not([data-placed])[data-window="appearance"] {
   top: 3rem;
   max-height: calc(100% - 3rem);
+}
+/* The quest log beside the equipment too, a step lower than the appearance. */
+.gwin:not([data-placed])[data-window="quests"] {
+  left: auto;
+  right: 16rem;
+  top: 6rem;
+  max-height: calc(100% - 6rem);
 }
 /* Right under the equipment while it sits at its default place (--containers-top, its
    height measured by GameView: about 500 px with the figure and the backpack under it;

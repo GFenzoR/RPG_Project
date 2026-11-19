@@ -15,6 +15,7 @@ import type { GameUi } from "../game.ts";
 import type { CreatureState, ItemView } from "../state/world.ts";
 import { emptyGameUi } from "../ui/GameView.tsx";
 import { itemCard } from "../state/item-card.ts";
+import type { QuestEntryView, QuestLogView } from "../state/quests.ts";
 
 /** Numeric id of an item by its content id (0 when the item is gone from data/). */
 export function itemNumber(content: ClientContent, id: string): number {
@@ -240,7 +241,56 @@ export function baseScene(content: ClientContent, now: number): Scene {
     equipped: { outfit: "", color: "", nameEffect: "" },
   };
   ui.conditions = [{ id: "well_fed", until: now + 60_000, ticks: 0 }];
+  ui.quests = questLog(Date.now());
+  ui.clockOffset = 0;
   return { ui, name: "base" };
+}
+
+/**
+ * The quest log of the preview (docs/02 "Diario de misiones"), at wall clock time `at`:
+ * two quests in progress (a kill step 5/8 of chapter 2 and a side quest's item), chapter
+ * 1 done, the sandbox task cooling down for 2 h 14 min and a finished task back already.
+ */
+export function questLog(at: number): QuestLogView {
+  const entry = (e: Partial<QuestEntryView> & Pick<QuestEntryView, "id">): QuestEntryView => ({
+    name: `quest.${e.id}.name`,
+    chapter: 0,
+    state: "done",
+    stepId: "",
+    stepText: "",
+    kills: 0,
+    killsNeeded: 0,
+    repeatable: false,
+    availableAt: 0,
+    ...e,
+  });
+  return {
+    entries: [
+      entry({ id: "ch1_shipwreck", chapter: 1 }),
+      entry({
+        id: "ch2_roots",
+        chapter: 2,
+        state: "active",
+        stepId: "cull_toads",
+        stepText: "quest.ch2_roots.step_cull_toads",
+        kills: 5,
+        killsNeeded: 8,
+      }),
+      entry({
+        id: "foreman_ore",
+        state: "active",
+        stepId: "gather_ore",
+        stepText: "quest.foreman_ore.step_gather_ore",
+      }),
+      entry({
+        id: "pruebas_rats",
+        state: "cooling",
+        repeatable: true,
+        availableAt: at + (2 * 60 + 14) * 60_000 + 20_000,
+      }),
+      entry({ id: "diver_locket" }),
+    ],
+  };
 }
 
 /** An NPC dialog with its shop open. */

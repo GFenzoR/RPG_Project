@@ -18,6 +18,7 @@ export const WINDOW_IDS = [
   "battle",
   "inventory",
   "skills",
+  "quests",
   "party",
   "guild",
   "appearance",
@@ -111,6 +112,7 @@ export function defaultWindows(): WindowsState {
       battle: place(true),
       inventory: place(true),
       skills: place(false),
+      quests: place(false),
       party: place(false),
       guild: place(false),
       appearance: place(false),
@@ -617,7 +619,7 @@ function alternatives(
       const r = box(w);
       if (r) out.push(at(r.x + r.width, r.y));
     }
-    for (const w of ["appearance", "guild", "inventory"] as const) {
+    for (const w of ["appearance", "guild", "quests", "inventory"] as const) {
       const r = box(w);
       if (r) out.push(at(r.x - usual.width, r.y));
     }
@@ -707,12 +709,13 @@ export function toLookAt(
 }
 
 /**
- * Whether the tutorial's hint gives way (GameView hides it): the help, the guild or the
- * appearance is open at its factory place, which covers the hint's (the guild and the
- * appearance always; the help on screens under ~1600 px), and the windows go over it.
+ * Whether the tutorial's hint gives way (GameView hides it): the help, the guild, the
+ * appearance or the quest log is open at its factory place, which covers the hint's (the
+ * guild, the appearance and the quest log always; the help on screens under ~1600 px), and
+ * the windows go over it.
  */
 export function tutorialCovered(s: WindowsState): boolean {
-  return (["help", "guild", "appearance"] as const).some((id) => {
+  return (["help", "guild", "appearance", "quests"] as const).some((id) => {
     const p = s.win[id];
     return p.open && (p.x === undefined || p.y === undefined);
   });
@@ -808,6 +811,7 @@ export const WINDOW_KEYS: Readonly<Record<string, WindowId>> = {
   KeyB: "battle",
   KeyI: "inventory",
   KeyK: "skills",
+  KeyL: "quests",
   KeyP: "party",
   KeyG: "guild",
   KeyO: "appearance",
@@ -819,6 +823,7 @@ export const WINDOW_KEY_LABEL: Readonly<Record<WindowId, string>> = {
   battle: "B",
   inventory: "I",
   skills: "K",
+  quests: "L",
   party: "P",
   guild: "G",
   appearance: "O",
@@ -832,6 +837,7 @@ export const WINDOW_TITLE: Readonly<Record<WindowId, string>> = {
   battle: "client.battle.title",
   inventory: "client.inventory.title",
   skills: "client.skills.title",
+  quests: "client.quests.title",
   party: "client.party.title",
   guild: "client.guild.title",
   appearance: "client.appearance.title",
