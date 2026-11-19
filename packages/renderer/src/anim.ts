@@ -23,6 +23,12 @@ export interface AnimActionMeta {
   /** Walk: frames per tile walked. */
   perTile?: number;
   /**
+   * Walk facing north or south, when it differs (the engine humanoids, docs/17 "La regla de
+   * la zancada"): the 3/4 view foreshortens the model's depth, not the map's tiles, so the
+   * cycle is longer on screen there for the planted foot to hold.
+   */
+  perTileNS?: number;
+  /**
    * Facings with frames. Facing another way, walk and death use "s" (or the first);
    * idle and attack (OWN_FACINGS) get the procedural motion instead: the standing frame of
    * that facing, and the lunge.
@@ -389,7 +395,8 @@ function walking(
     // ANI-2: by distance, so feet do not slide when the speed changes; between chained
     // steps (t undefined, within IDLE_AFTER_MS) the last frame stays (ANI-3).
     if (t !== undefined) {
-      const per = Math.max(1, walk.perTile ?? walk.frames);
+      const ns = in_.dir === "n" || in_.dir === "s";
+      const per = Math.max(1, (ns ? walk.perTileNS : undefined) ?? walk.perTile ?? walk.frames);
       s.walkFrame = Math.floor((s.steps + t) * per) % walk.frames;
     }
     out.frame = s.walkFrame;

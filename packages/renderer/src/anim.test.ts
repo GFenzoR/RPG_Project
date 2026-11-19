@@ -97,6 +97,32 @@ describe("clips", () => {
     expect(out.action).toBe("walk");
   });
 
+  it("plays an engine humanoid's walk at its stride: a cycle per tile, longer facing north or south", () => {
+    // tools/spritegen specs/humanoid: 8 frames, 8 per tile; 13.86 facing n or s (the 3/4
+    // view foreshortens the model's depth, not the map's tiles).
+    const HUMAN: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS },
+      },
+    };
+    const east: number[] = [];
+    for (let at = 0; at < 600; at += 50) {
+      const { s, in_, out } = setup();
+      east.push(stepAt(s, HUMAN, in_, out, 400, at).frame);
+    }
+    // A frame every 50 ms of a 400 ms step, across two chained steps: never a repeat
+    // or a jump back, never the idle pose.
+    expect(east).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3]);
+    const { s, in_, out } = setup();
+    stepAt(s, HUMAN, in_, out, 400, 0);
+    in_.dir = "s";
+    in_.now = 200;
+    // Half a tile facing south: 13.86 / 2 frames in.
+    expect(animate(s, HUMAN, in_, out).frame).toBe(6);
+  });
+
   it("holds the last walk frame between chained steps, then idles (ANI-3)", () => {
     const { s, in_, out } = setup();
     stepAt(s, LPC, in_, out, 400, 300);

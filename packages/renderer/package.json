@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./camera": "./src/camera.ts",
     "./decorated": "./src/decorated.ts",
+    "./look": "./src/look.ts",
     "./retry": "./src/retry.ts",
     "./tile-art": "./src/tile-art.ts"
   },
