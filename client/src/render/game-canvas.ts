@@ -22,7 +22,7 @@ import {
   TextureStyle,
 } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
+import { AttackKind, CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
@@ -36,6 +36,7 @@ import {
   MapView,
   extrasByChunk,
   animate,
+  attackActionFor,
   attackClip,
   attackClipAction,
   clipMs,
@@ -52,11 +53,25 @@ import {
   tilePixels,
   tileToScreen,
   VANISH_MS,
+  lookSprites,
 } from "@rpg/renderer";
-import type { AnimState, AtlasIcon, Camera, StepKind, TileArt } from "@rpg/renderer";
+import type {
+  AnimState,
+  AtlasIcon,
+  AttackAction,
+  Camera,
+  LayerSlot,
+  Look,
+  StepKind,
+  TileArt,
+  WornSlot,
+} from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
+import type { BodyLayer } from "./creature-body.ts";
+import { dressPlayer, mulTint, wornFromEquipment, wornKey } from "./look.ts";
+import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
@@ -340,8 +355,15 @@ interface CreatureSprite {
    * (T0.5; T5.7: the equipped outfit cosmetic, else citizen). Undefined = the coloured block.
    */
   figure: CreatureBody | undefined;
-  /** lookKey of the cosmetics the sprites were built with (T5.7): a change rebuilds them. */
+  /**
+   * lookKey of the cosmetics the sprites were built with (T5.7), and for the own player what
+   * its equipment shows (render/look.ts wornKey): a change rebuilds them.
+   */
   drawnLook: string;
+  /** An engine humanoid (a paper doll, render/look.ts). */
+  doll: boolean;
+  /** The weapon shape it holds: its attacks play that class's clip. */
+  weapon: string | undefined;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -674,6 +696,77 @@ export async function createGameCanvas(
   const drawableOutfit = (o: OutfitDef | undefined): OutfitDef | undefined =>
     o && outfitReady(o) ? o : citizen && outfitReady(citizen) ? citizen : undefined;
 
+  // Engine humanoids (docs/17 "Humanoides del motor", render/look.ts): a person is a paper
+  // doll, a body and layers over it (packages/renderer look.ts), when the content has its
+  // look and the atlas its body. A player's outfit without a look, or an atlas without the
+  // layers, falls back to the outfit's sprite, then to the coloured block.
+  const tables = content.looks;
+  /** The paper doll of a look dressed so: the body's clips and every layer's. */
+  const dollOf = (
+    look: Look,
+    dressed: Dressed,
+    outfitTint: number,
+  ): { clips: ClipSet<Texture>; layers: BodyLayer[] } | undefined => {
+    if (!tables) return undefined;
+    const layers: BodyLayer[] = [];
+    let body: ClipSet<Texture> | undefined;
+    for (const [slot, s] of Object.entries(lookSprites(look, dressed.worn, tables)) as [
+      LayerSlot,
+      { sprite: string; tint: number },
+    ][]) {
+      const clips = cachedClips(s.sprite, () => spriteClips(s.sprite, atlas.index.anims, lookup));
+      if (!clips?.meta) {
+        if (slot === "body") return undefined;
+        continue;
+      }
+      if (slot === "body") body = clips;
+      const tint = dressed.clothes.has(slot as WornSlot) ? mulTint(s.tint, outfitTint) : s.tint;
+      layers.push({ slot, clips, tint });
+    }
+    return body ? { clips: body, layers } : undefined;
+  };
+  // What the own player's equipment shows, worked out once per Inventory (a new map each).
+  let shownInventory: WorldState["inventory"] | undefined;
+  let ownWorn: Dressed["worn"] = {};
+  let ownWornKey = "";
+  const ownEquipment = (): Dressed["worn"] => {
+    if (world.inventory !== shownInventory) {
+      shownInventory = world.inventory;
+      ownWorn = wornFromEquipment(world.inventory, content.items);
+      ownWornKey = wornKey(ownWorn);
+    }
+    return ownWorn;
+  };
+  const NO_CLOTHES: ReadonlySet<WornSlot> = new Set();
+  /** A person's look, what it wears and the outfit colour, or undefined (not a person). */
+  const personOf = (
+    c: CreatureState,
+    player: { outfit: OutfitDef | undefined; tint: number } | undefined,
+  ): { look: Look; dressed: Dressed; tint: number } | undefined => {
+    if (player) {
+      const outfit = player.outfit;
+      if (!outfit?.look) return undefined;
+      const equipped = c.id === world.selfId ? ownEquipment() : {};
+      return { look: outfit.look, dressed: dressPlayer(outfit, equipped), tint: player.tint };
+    }
+    const person =
+      c.kind === CreatureKind.NPC
+        ? content.npcLooks?.[c.contentId]
+        : c.kind === CreatureKind.MONSTER
+          ? content.monsterLooks?.[c.contentId]
+          : undefined;
+    return person
+      ? { look: person.look, dressed: { worn: person.worn, clothes: NO_CLOTHES }, tint: 0xffffff }
+      : undefined;
+  };
+  /** The clip an attack of `kind` plays: a paper doll's comes from the weapon it holds. */
+  const attackActionOf = (id: number, kind: AttackKind): AttackAction => {
+    const s = sprites.get(id);
+    if (!s?.doll) return attackAction(kind);
+    const k = kind === AttackKind.SPELL ? "spell" : kind === AttackKind.RANGED ? "ranged" : "melee";
+    return attackActionFor(k, s.weapon);
+  };
+
   // Animation (packages/renderer anim.ts): one state per creature, kept while it is in
   // view (a cosmetic change rebuilds the sprites, not the state), and one input and pose
   // reused for every creature, so a frame allocates nothing for it (docs/07).
@@ -742,7 +835,7 @@ export async function createGameCanvas(
         const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
         const [dx, dy] = attackDir(by, target, a.to);
         // Its own clip by kind (the bow, the spell), else the swing (docs/17 ANI-2).
-        startAttack(stateOf(by.id, now), now, dx, dy, attackAction(a.kind));
+        startAttack(stateOf(by.id, now), now, dx, dy, attackActionOf(by.id, a.kind));
       }
     } else newest = Math.max(newest, inferAttacks(now, z));
     for (const f of world.floatingTexts) {
@@ -826,7 +919,9 @@ export async function createGameCanvas(
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
-    const lk = isPlayer ? lookKey(c.cosmetics) : "";
+    const lk = isPlayer
+      ? lookKey(c.cosmetics) + (c.id === world.selfId ? (ownEquipment(), ownWornKey) : "")
+      : "";
     // T5.7: equipped cosmetics changed (CreatureCosmetics): build the sprites again.
     if (s && s.drawnLook !== lk) {
       dropSprite(c.id);
@@ -838,9 +933,15 @@ export async function createGameCanvas(
       const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
-      const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
-      const clips = outfitDef ? outfitClips(outfitDef) : creatureClips(c);
-      const figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
+      const person = personOf(c, look);
+      const doll = person && dollOf(person.look, person.dressed, person.tint);
+      let figure: CreatureBody | undefined;
+      if (doll) figure = new CreatureBody(doll.clips, T, 0xffffff, doll.layers);
+      else {
+        const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
+        const clips = outfitDef ? outfitClips(outfitDef) : creatureClips(c);
+        figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
+      }
       if (figure) body.addChild(figure.root);
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
@@ -882,6 +983,8 @@ export async function createGameCanvas(
         drawnSkull: Skull.UNSPECIFIED,
         figure,
         drawnLook: lk,
+        doll: doll !== undefined,
+        weapon: doll ? person?.dressed.worn.weapon?.shape : undefined,
         bar,
         drawnDir: -1,
         drawnHealth: -1,
@@ -922,6 +1025,7 @@ export async function createGameCanvas(
     const s = sprites.get(id);
     if (!s) return;
     view.removeEntity(s.body);
+    s.figure?.release(); // a paper doll's layers go back to the pool
     s.body.destroy({ children: true });
     dropLabels(s);
     sprites.delete(id);
@@ -949,6 +1053,7 @@ export async function createGameCanvas(
     const g = ghosts[i];
     if (!g) return;
     view.removeEntity(g.body);
+    g.figure.release();
     g.body.destroy({ children: true });
     const last = ghosts.pop();
     if (last && last !== g) ghosts[i] = last;

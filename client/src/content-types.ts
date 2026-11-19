@@ -1,4 +1,5 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
+import type { Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
 
 /** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
 export interface AttributeDef {
@@ -92,6 +93,11 @@ export interface ItemDef {
   book?: BookDef;
   /** A reward chest of the map (`chest` block): using it asks the server, which gives once. */
   chest?: true;
+  /**
+   * How the piece shows on the engine humanoid that wears it (data/items `worn`, docs/06
+   * "Looks"): a shape of data/looks.yaml and a tint. Absent: it is not drawn on the figure.
+   */
+  worn?: WornPiece;
 }
 
 /** The `book` block of an item (data/items): i18n keys of i18n/<lang>/books.yaml. */
@@ -121,13 +127,27 @@ export interface WeaponStats {
  */
 export type DialogTopic = "quests" | "trade" | "travel" | "services" | "talk" | "back" | "bye";
 
-/** A player outfit of data/outfits.yaml (T0.5). */
+/**
+ * A player outfit of data/outfits.yaml (docs/06 "Looks"): the body a player is drawn with
+ * until its own look arrives, its clothes, and whether it is a costume (a shop outfit: its
+ * clothes cover the torso, legs and feet even over armour).
+ */
 export interface OutfitDef {
   id: string;
-  /** Sprite folder: its frames are "<sprite>/<n|e|s|w>_<frame>" in the atlas. */
+  /** Sprite folder of the still previews: "<sprite>/<n|e|s|w>_<frame>" in the atlas. */
   sprite: string;
-  /** Frames per facing: 0 = standing, the rest are the walking steps. */
+  /** Preview frames per facing. */
   frames: number;
+  /** Absent in fixtures and old content: the client draws the outfit's sprite instead. */
+  look?: Look;
+  clothes?: Worn;
+  costume?: boolean;
+}
+
+/** A person (an NPC or a humanoid monster) as an engine humanoid: its body and what it wears. */
+export interface CreatureLook {
+  look: Look;
+  worn: Worn;
 }
 
 /** Kinds of data/cosmetics.yaml (T5.7); "mount" is reserved and not sold yet. */
@@ -325,6 +345,14 @@ export interface ClientContent {
   npcSprites?: Record<string, string>;
   /** data/outfits.yaml in file order (T0.5). Optional so fixtures can leave it out. */
   outfits?: OutfitDef[];
+  /**
+   * data/looks.yaml (docs/06 "Looks"): the skin, hair and material tints and what a head
+   * piece hides. Optional so fixtures can leave it out (then no creature is a paper doll).
+   */
+  looks?: LookTables;
+  /** The NPCs (data/npcs id) and monsters (data/monsters id) that are people: their look. */
+  npcLooks?: Record<string, CreatureLook>;
+  monsterLooks?: Record<string, CreatureLook>;
   /**
    * data/cosmetics.yaml cosmetics in file order (T5.7). Optional so fixtures can leave it
    * out (then every player wears the default look).

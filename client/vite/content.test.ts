@@ -69,9 +69,34 @@ describe("client content (T0.5)", () => {
     }
   });
 
-  it("exposes each NPC's sprite like the monsters'", () => {
-    expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/ferryman");
+  it("exposes each NPC's sprite like the monsters', and a person's look (docs/06 Looks)", () => {
+    expect(content.npcSprites?.["volcan_forge_echo"]).toBe("npcs/forge_echo");
     expect(content.monsterSprites["bilge_rat"]).toMatch(/\//);
+    // A person is an engine humanoid: its look and what it wears; its sprite is the still
+    // portrait the dialog shows (spritegen draws it from the look).
+    expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/bosque_ferryman");
+    expect(content.npcLooks?.["bosque_ferryman"]).toEqual({
+      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "short" },
+      worn: {
+        head: { shape: "cap", tint: "green" },
+        torso: { shape: "tunic", tint: "linen" },
+        legs: { shape: "trousers", tint: "green" },
+        feet: { shape: "boots", tint: "dark_leather" },
+      },
+    });
+    expect(content.monsterLooks?.["wreck_looter"]?.worn.weapon).toEqual({
+      shape: "sword",
+      tint: "rust",
+    });
+    expect(content.monsterSprites["wreck_looter"]).toBeUndefined();
+    // The colours of data/looks.yaml as numbers, and what a head piece hides.
+    expect(content.looks?.skins["fair"]).toBe(0xecc4a2);
+    expect(content.looks?.tints["iron"]).toBe(0xa8aeb6);
+    expect(content.looks?.hides?.["full_helm"]).toEqual(["hair", "beard"]);
+    // A piece of the catalog that shows on the figure says how; jewellery does not.
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("iron_sword")?.worn).toEqual({ shape: "sword", tint: "iron" });
+    expect(byId.get("tidestone_ring")?.worn).toBeUndefined();
   });
 
   it("ships item descriptions: the usual item.<id>.desc and a sign's text (T5.5)", () => {
@@ -230,7 +255,18 @@ describe("client content (T0.5)", () => {
   });
 
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
-    expect(content.outfits).toContainEqual({ id: "citizen", sprite: "outfits/citizen", frames: 3 });
+    expect(content.outfits).toContainEqual({
+      id: "citizen",
+      sprite: "outfits/citizen",
+      frames: 1,
+      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+      clothes: {
+        torso: { shape: "tunic", tint: "linen" },
+        legs: { shape: "trousers", tint: "brown" },
+        feet: { shape: "shoes", tint: "dark_leather" },
+      },
+    });
+    expect(content.outfits?.find((o) => o.id === "sailor")?.costume).toBe(true);
   });
 });
 

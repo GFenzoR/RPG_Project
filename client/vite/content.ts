@@ -27,6 +27,7 @@ import type {
   AttributeDef,
   ClientContent,
   CosmeticDef,
+  CreatureLook,
   DialogTopic,
   ForgeRules,
   NameEffectStyle,
@@ -44,6 +45,10 @@ import type {
   SoundManifest,
   SpellDef,
 } from "../src/content-types.ts";
+import type { LayerSlot, Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
+
+/** The worn slots (packages/renderer look.ts WORN_SLOTS; types only from there at build time). */
+const WORN_SLOTS = ["head", "torso", "legs", "feet", "shield", "weapon"] as const;
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
@@ -183,24 +188,31 @@ export function loadClientContent(root: string): ClientContent {
     i18n[lang] = texts;
   }
   const monsters: Record<string, string> = {};
+  const monsterLooks: Record<string, CreatureLook> = {};
   const mdir = join(root, "data", "monsters");
   for (const file of readdirSync(mdir)
     .filter((f) => f.endsWith(".yaml"))
     .sort()) {
     const m = readYaml(join(mdir, file));
-    if (isObj(m) && typeof m["id"] === "string" && typeof m["sprite"] === "string")
-      monsters[m["id"]] = m["sprite"];
+    if (!isObj(m) || typeof m["id"] !== "string") continue;
+    if (typeof m["sprite"] === "string") monsters[m["id"]] = m["sprite"];
+    const look = creatureLook(m["look"]);
+    if (look) monsterLooks[m["id"]] = look;
   }
   const npcs: Record<string, string> = {};
+  const npcLooks: Record<string, CreatureLook> = {};
   const ndir = join(root, "data", "npcs");
   for (const file of readdirSync(ndir)
     .filter((f) => f.endsWith(".yaml"))
     .sort()) {
     const n = readYaml(join(ndir, file));
-    if (isObj(n) && typeof n["id"] === "string" && typeof n["sprite"] === "string")
-      npcs[n["id"]] = n["sprite"];
+    if (!isObj(n) || typeof n["id"] !== "string") continue;
+    if (typeof n["sprite"] === "string") npcs[n["id"]] = n["sprite"];
+    const look = creatureLook(n["look"]);
+    if (look) npcLooks[n["id"]] = look;
   }
   const outfits = loadOutfits(root);
+  const looks = loadLooks(root);
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
@@ -279,6 +291,9 @@ export function loadClientContent(root: string): ClientContent {
     dialogTopics: dialogTopics(root).topics,
     npcSprites: npcs,
     outfits,
+    ...(looks ? { looks } : {}),
+    npcLooks,
+    monsterLooks,
     cosmetics: loadCosmetics(root),
     vocations,
     spells,
@@ -373,6 +388,8 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
   const n = (v: unknown): number => (typeof v === "number" ? v : 0);
   const s = (v: unknown): string => (typeof v === "string" ? v : "");
   const out: Partial<ItemDef> = {};
+  const worn = wornPiece(raw["worn"]);
+  if (worn) out.worn = worn;
   if (typeof raw["kind"] === "string") out.kind = raw["kind"];
   if (n(raw["weight"]) > 0) out.weight = n(raw["weight"]);
   const w = raw["weapon"];
@@ -577,6 +594,80 @@ export function dialogTopics(root: string): {
 }
 
 /** data/outfits.yaml (T0.5); [] without the file. The site shop previews them (T5.7). */
+/** A data/ worn piece ({shape, tint}), or undefined. */
+export function wornPiece(v: unknown): WornPiece | undefined {
+  return isObj(v) && typeof v["shape"] === "string" && typeof v["tint"] === "string"
+    ? { shape: v["shape"], tint: v["tint"] }
+    : undefined;
+}
+
+/** A data/ worn set (head, torso, legs, feet, shield, weapon -> {shape, tint}). */
+export function wornSet(v: unknown): Worn {
+  const out: Worn = {};
+  if (!isObj(v)) return out;
+  for (const slot of WORN_SLOTS) {
+    const p = wornPiece(v[slot]);
+    if (p) out[slot] = p;
+  }
+  return out;
+}
+
+/** A data/ look (snake_case), or undefined when it is not one. */
+export function lookOf(v: unknown): Look | undefined {
+  if (!isObj(v)) return undefined;
+  const s = (k: string): string | undefined => (typeof v[k] === "string" ? v[k] : undefined);
+  const body = s("body");
+  const skin = s("skin");
+  const hair = s("hair");
+  const hairColor = s("hair_color");
+  const beard = s("beard");
+  if (!body || !skin || !hair || !hairColor || !beard) return undefined;
+  return { body, skin, hair, hairColor, beard };
+}
+
+/** An NPC's or a monster's `look` block: the body and what it wears. */
+export function creatureLook(v: unknown): CreatureLook | undefined {
+  const look = lookOf(v);
+  return look && isObj(v) ? { look, worn: wornSet(v["worn"]) } : undefined;
+}
+
+/** "#rrggbb" to 0xrrggbb (white when it is not a colour). */
+const hexColor = (v: unknown): number =>
+  typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? parseInt(v.slice(1), 16) : 0xffffff;
+
+/** data/looks.yaml (docs/06 "Looks") as the paper doll's tables; undefined without the file. */
+export function loadLooks(root: string): LookTables | undefined {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "looks.yaml"));
+  } catch {
+    return undefined;
+  }
+  if (!isObj(raw)) return undefined;
+  const colors = (v: unknown): Record<string, number> =>
+    Object.fromEntries(
+      Object.entries(isObj(v) ? v : {}).map(([k, c]) => [k, hexColor(isObj(c) ? c["color"] : c)]),
+    );
+  const hides: Record<string, LayerSlot[]> = {};
+  for (const [shape, list] of Object.entries(isObj(raw["hides"]) ? raw["hides"] : {}))
+    if (Array.isArray(list))
+      hides[shape] = list.filter((x): x is LayerSlot => x === "hair" || x === "beard");
+  return {
+    skins: colors(raw["skins"]),
+    hairColors: colors(raw["hair_colors"]),
+    tints: colors(raw["tints"]),
+    hides,
+  };
+}
+
+/** An outfit's look, clothes and costume flag (docs/06 "Looks"), when it has a look. */
+function outfitLook(o: Record<string, unknown>): Partial<OutfitDef> {
+  const look = lookOf(o["look"]);
+  if (!look) return {};
+  const clothes = wornSet(o["clothes"]);
+  return { look, clothes, ...(o["costume"] === true ? { costume: true } : {}) };
+}
+
 export function loadOutfits(root: string): OutfitDef[] {
   let rawOutfits: unknown;
   try {
@@ -592,6 +683,7 @@ export function loadOutfits(root: string): OutfitDef[] {
                 id: o["id"],
                 sprite: o["sprite"],
                 frames: typeof o["frames"] === "number" ? o["frames"] : 1,
+                ...outfitLook(o),
               },
             ]
           : [],
