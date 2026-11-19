@@ -92,7 +92,9 @@ describe("validator diagnostics", () => {
     const reach = "complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }";
     // A floor the island does not list, then outside every island.
     edit("data/quests/ch3_gate.yaml", reach, reach.replace("z: 8", "z: 9"));
-    expect(reachErrors()).toEqual([expect.stringMatching(/reach point 3692,5826,9 is on no island/)]);
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(/reach point 3692,5826,9 is on no island/),
+    ]);
     edit("data/quests/ch3_gate.yaml", "x: 3692, y: 5826, z: 9", "x: 10, y: 10, z: 7");
     expect(reachErrors()).toEqual([expect.stringMatching(/reach point 10,10,7 is on no island/)]);
     // A zone: a real one, one of the sandbox island only (dev_only) and an unknown one.
@@ -100,11 +102,17 @@ describe("validator diagnostics", () => {
     expect(reachErrors()).toEqual([]);
     edit("data/quests/ch3_gate.yaml", "zone: volcan_town", "zone: pruebas_town");
     expect(reachErrors()).toEqual([
-      expect.stringMatching(/reach zone "pruebas_town" is no zone of an island that is not dev_only/),
+      expect.stringMatching(
+        /reach zone "pruebas_town" is no zone of an island that is not dev_only/,
+      ),
     ]);
     // Zone and point together, a radius too wide, and a repeatable without a cooldown.
     edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_town, x: 1 }");
-    edit("data/quests/ch1_shipwreck.yaml", "min_level: 1\n", "min_level: 1\nrepeatable: { cooldown_hours: 0 }\n");
+    edit(
+      "data/quests/ch1_shipwreck.yaml",
+      "min_level: 1\n",
+      "min_level: 1\nrepeatable: { cooldown_hours: 0 }\n",
+    );
     edit(
       "data/quests/pruebas_rats.yaml",
       "complete_when: { kill: { monster: bilge_rat, count: 3 } }",
