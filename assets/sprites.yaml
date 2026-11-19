@@ -482,6 +482,7 @@ tiles:
   decor/fountain: { ms: 150, sync: world }
   decor/wall_banner: { ms: 170, sync: tile }
   decor/market_board: { ms: 180, sync: tile }   # engine loop: a note lifts in the wind
+  decor/teleport: { ms: 100, sync: world }      # the swirl turns, sparks rise (6 frames)
   doors/pruebas_gate: { joins_walls: true }
   doors/pruebas_gate_open: { joins_walls: true }
   doors/forge_gate: { joins_walls: true }
