@@ -58,15 +58,25 @@ type Completion struct {
 
 // Reach completes a step while the player stands in a place (docs/06 "Quest"): a zone of
 // world/islands/*/zones.yaml (Zone), or the tiles within Radius (Chebyshev) of X, Y on
-// floor Z. The session resolves it against the map when it starts (unknown zone, or a point
-// outside every island, refuse to start) and checks it after every move and relocation
-// while the step is current.
+// floor Z. The session resolves it against the map when it starts (unknown zone, a point
+// outside every island, or a place with no walkable tile to stand on refuse to start) and
+// checks it after every move and relocation while the step is current.
 type Reach struct {
-	Zone   string `yaml:"zone"`
-	X      *int   `yaml:"x"`
-	Y      *int   `yaml:"y"`
-	Z      *int   `yaml:"z"`
-	Radius int    `yaml:"radius"`
+	Zone string `yaml:"zone"`
+	X    *int   `yaml:"x"`
+	Y    *int   `yaml:"y"`
+	Z    *int   `yaml:"z"`
+	// Radius is nil when not written: a point is then its tile alone, and a zone takes
+	// none (the schema's oneOf refuses even radius: 0 with a zone).
+	Radius *int `yaml:"radius"`
+}
+
+// R is the radius of a reach point: 0 when not written.
+func (r *Reach) R() int {
+	if r.Radius == nil {
+		return 0
+	}
+	return *r.Radius
 }
 
 // MaxReachRadius bounds the radius of a reach point: half the width of the player's view
@@ -77,7 +87,7 @@ const MaxReachRadius = 16
 func (r *Reach) check() string {
 	point := r.X != nil || r.Y != nil || r.Z != nil
 	switch {
-	case r.Zone != "" && (point || r.Radius != 0):
+	case r.Zone != "" && (point || r.Radius != nil):
 		return "reach takes a zone or x, y, z and radius, not both"
 	case r.Zone != "":
 		return ""
@@ -85,7 +95,7 @@ func (r *Reach) check() string {
 		return "reach needs a zone or x, y and z"
 	case *r.X < 0 || *r.X > 0xFFFF || *r.Y < 0 || *r.Y > 0xFFFF || *r.Z < 0 || *r.Z > 15:
 		return "reach point outside the world"
-	case r.Radius < 0 || r.Radius > MaxReachRadius:
+	case r.R() < 0 || r.R() > MaxReachRadius:
 		return fmt.Sprintf("reach radius outside 0..%d", MaxReachRadius)
 	}
 	return ""
@@ -189,7 +199,8 @@ func ParseQuest(raw []byte) (*Quest, error) {
 }
 
 // CheckRefs checks that what NPCs and quests reference exists: items, quests and
-// their steps, dialog_action nodes, monsters and skills (when given).
+// their steps, dialog_action nodes, monsters and skills (when given); and that no step of a
+// repeatable quest lets a turn be done with no effort (CheckRepeatable, without the map).
 func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills []string) error {
 	item := func(where, id string) error {
 		if items[id] == nil {
@@ -314,7 +325,8 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 			}
 		}
 	}
-	return nil
+	// Without the map: the session checks the reach steps again with it (initReach).
+	return CheckRepeatable(quests, npcs, nil)
 }
 
 // checkShopPrices rejects an item some NPC buys for more than any NPC sells it: buying

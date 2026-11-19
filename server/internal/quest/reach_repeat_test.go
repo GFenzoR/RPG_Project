@@ -165,6 +165,7 @@ func TestParseReachAndRepeatable(t *testing.T) {
 	for _, c := range []struct{ name, src string }{
 		{"zone and point", `{ zone: cove, x: 1, y: 1, z: 7 }`},
 		{"zone and radius", `{ zone: cove, radius: 2 }`},
+		{"zone and radius 0", `{ zone: cove, radius: 0 }`}, // the schema's oneOf refuses it too
 		{"no z", `{ x: 1, y: 1 }`},
 		{"empty", `{}`},
 		{"negative radius", `{ x: 1, y: 1, z: 7, radius: -1 }`},

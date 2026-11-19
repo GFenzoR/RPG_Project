@@ -134,7 +134,7 @@ func TestReachStepsOnMovesAndRelocations(t *testing.T) {
 }
 
 // A player who logs in standing in the place of its current reach step gets it at once;
-// one who is elsewhere does not.
+// one who is elsewhere does not. Either gets one QuestLog in the login tick.
 func TestReachStepAtLogin(t *testing.T) {
 	h := reachHarness(t)
 	c := session.Character{ID: 7101, AccountID: 7101, Name: "Back", Vocation: "guardian", Level: 1, Health: 145, Mana: 20,
@@ -145,8 +145,9 @@ func TestReachStepAtLogin(t *testing.T) {
 	if _, s := h.w.QuestState(p, "errand"); s != "downstairs" || !messageKeys(evs)["dialog.quest_updated"] {
 		t.Fatalf("logged in on the place: step %q", s)
 	}
-	if e := logEntry(t, evs, "errand"); e.GetStepId() != "downstairs" {
-		t.Fatalf("the last log of the login tick: %v", e)
+	// One QuestLog in the login tick (docs/05 "Diario de misiones"), with the step done.
+	if e := logEntry(t, evs, "errand"); len(questLogs(evs)) != 1 || e.GetStepId() != "downstairs" {
+		t.Fatalf("login tick: %d quest logs, the last %v", len(questLogs(evs)), e)
 	}
 	c2 := c
 	c2.ID, c2.AccountID, c2.Name, c2.Pos = 7102, 7102, "Away", pos(8, 6)
@@ -154,8 +155,8 @@ func TestReachStepAtLogin(t *testing.T) {
 	if _, s := h.w.QuestState(p2, "errand"); s != "walk_east" {
 		t.Fatalf("logged in elsewhere: step %q", s)
 	}
-	if e := logEntry(t, cl2.take(), "errand"); e.GetStepId() != "walk_east" {
-		t.Fatalf("login log: %v", e)
+	if evs := cl2.take(); len(questLogs(evs)) != 1 || logEntry(t, evs, "errand").GetStepId() != "walk_east" {
+		t.Fatalf("login logs: %d", len(questLogs(evs)))
 	}
 }
 
@@ -286,10 +287,16 @@ rewards:
 	}
 }
 
-// The server refuses to start with a reach place it cannot resolve on the map, or whose
-// every tile is the entrance of stairs, a hole or a teleport (nobody stands there).
+// The server refuses to start with a reach place it cannot resolve on the map, or with no
+// tile a player can stand on: every tile is the entrance of stairs, a hole or a teleport
+// (nobody stands there), or not walkable (rock, water, a tile of the island with no ground:
+// a mistyped coordinate would leave the step impossible).
 func TestReachPlaceChecksAtStart(t *testing.T) {
 	stairsOnly := []world.ZoneRect{{X: stairsDown.X, Y: stairsDown.Y, W: 1, H: 1}}
+	// portalMap draws 14 × 8 tiles of the island's 32 × 32 (its sector): east of x 13 the
+	// island has no ground.
+	bare := []world.ZoneRect{{X: 20, Y: 2, W: 3, H: 3}}
+	const never = "can stand on"
 	for _, tc := range []struct {
 		name, reach string
 		zone        []world.ZoneRect
@@ -298,9 +305,13 @@ func TestReachPlaceChecksAtStart(t *testing.T) {
 		{"unknown zone", "{ zone: nowhere }", nil, "is no zone of the map"},
 		{"off the island", "{ x: 40, y: 3, z: 7 }", nil, "is on no island"},
 		{"floor not listed", "{ x: 3, y: 3, z: 9 }", nil, "is on no island"},
-		{"the stairs alone", "{ x: 5, y: 2, z: 7 }", nil, "nobody stands"},
-		{"a zone of the stairs alone", "{ zone: spot }", stairsOnly, "nobody stands"},
-		{"the hole alone", "{ x: 8, y: 2, z: 7, radius: 0 }", nil, "nobody stands"},
+		{"the stairs alone", "{ x: 5, y: 2, z: 7 }", nil, never},
+		{"a zone of the stairs alone", "{ zone: spot }", stairsOnly, never},
+		{"the hole alone", "{ x: 8, y: 2, z: 7, radius: 0 }", nil, never},
+		{"no ground", "{ x: 20, y: 3, z: 7, radius: 2 }", nil, never},
+		{"a zone with no ground", "{ zone: spot }", bare, never},
+		{"no ground and the stairs", "{ zone: spot }", append(bare, stairsOnly...), never},
+		{"no ground but a tile in reach", "{ x: 16, y: 3, z: 7, radius: 3 }", nil, ""},
 		{"the stairs and around", "{ x: 5, y: 2, z: 7, radius: 1 }", nil, ""},
 		{"a zone of the stairs and a tile", "{ zone: spot }", append(stairsOnly, world.ZoneRect{X: 1, Y: 1, W: 1, H: 1}), ""},
 		{"a ladder (taken by use)", "{ x: 2, y: 5, z: 8 }", nil, ""},
@@ -316,6 +327,67 @@ func TestReachPlaceChecksAtStart(t *testing.T) {
 			}
 			_, err = session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations, Items: testItems(),
 				Quests: content.Quests{q.ID: q}, Save: func(session.Snapshot) bool { return true }})
+			switch {
+			case tc.refused == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case tc.refused != "" && (err == nil || !strings.Contains(err.Error(), tc.refused)):
+				t.Fatalf("err = %v, want %q", err, tc.refused)
+			}
+		})
+	}
+}
+
+// A repeatable quest cannot start with a reach whose place comes within talk range (3
+// tiles, same floor) of where an NPC that gives it stands: taking it there would complete
+// the turn at once, a reward every cooldown for two clicks (content.CheckRepeatable with
+// the map, docs/06 "Quests repetibles"). Another NPC nearby, another floor, a farther place
+// or a quest that is not repeatable are fine.
+func TestRepeatableReachByTheGiverRefused(t *testing.T) {
+	npc := func(id string) *content.NPC {
+		n, err := content.ParseNPC([]byte("{id: " + id + ", dialog: {start: g, nodes: {g: {text: t, options: [{text: x, action: {start_quest: task}, goto: ok}, {text: b, action: close}]}, ok: {text: t, options: [{text: b, action: close}]}}}}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	other, err := content.ParseNPC([]byte("{id: other, dialog: {start: g, nodes: {g: {text: t, options: [{text: b, action: close}]}}}}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	npcs := content.NPCs{"giver": npc("giver"), "other": other}
+	const refused = "within talk range of npc \"giver\""
+	for _, tc := range []struct {
+		name, reach string
+		zone        []world.ZoneRect
+		once        bool // not repeatable
+		refused     string
+	}{
+		{"three tiles away", "{ x: 6, y: 4, z: 7 }", nil, false, refused},
+		{"four tiles away", "{ x: 7, y: 4, z: 7 }", nil, false, ""},
+		{"a radius that comes within three", "{ x: 8, y: 4, z: 7, radius: 2 }", nil, false, refused},
+		{"below the giver", "{ x: 3, y: 4, z: 8 }", nil, false, ""},
+		{"a zone that comes within three", "{ zone: spot }", []world.ZoneRect{{X: 6, Y: 6, W: 2, H: 1}}, false, refused},
+		{"a zone four tiles away", "{ zone: spot }", []world.ZoneRect{{X: 7, Y: 0, W: 1, H: 1}}, false, ""},
+		{"by another NPC", "{ x: 10, y: 4, z: 7 }", nil, false, ""},
+		{"not repeatable", "{ x: 3, y: 5, z: 7 }", nil, true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "{id: task, name: n, repeatable: {cooldown_hours: 1}, steps: [{id: s, complete_when: {reach: " + tc.reach + "}}]}"
+			if tc.once {
+				src = strings.Replace(src, "repeatable: {cooldown_hours: 1}, ", "", 1)
+			}
+			q, err := content.ParseQuest([]byte(src))
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := portalMap(t)
+			is := m.Islands()[0]
+			is.NPCs = []world.NPCPlacement{{NPC: "giver", Pos: pos(3, 4)}, {NPC: "other", Pos: pos(10, 6)}}
+			if tc.zone != nil {
+				is.Zones = []world.Zone{{ID: "spot", Floors: []uint8{7}, Rects: tc.zone}}
+			}
+			_, err = session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations, Items: testItems(),
+				NPCs: npcs, Quests: content.Quests{q.ID: q}, Save: func(session.Snapshot) bool { return true }})
 			switch {
 			case tc.refused == "" && err != nil:
 				t.Fatalf("refused: %v", err)

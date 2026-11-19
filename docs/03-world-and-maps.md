@@ -133,7 +133,9 @@ lo mismo que el item. Un cartel sin item sigue siendo válido.
   respawn_seconds: 60
 ```
 
-`zones.yaml` (`type`: `protection` | `no_logout` | `pvp` | `no_pvp` | `community_plot`):
+`zones.yaml` (`type`: `protection` | `no_logout` | `pvp` | `no_pvp` | `community_plot`;
+de 1 a 255 `rects` por zona, porque `world.bin` guarda la cantidad en un byte: el esquema,
+`mapcompile` y el servidor rechazan más):
 ```yaml
 - id: puerto_town
   type: protection
@@ -490,7 +492,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   isla (BFS en 8 direcciones por tiles caminables y portales; una **puerta**, item con
   bloque `door`, cuenta como abierta aunque esté cerrada o con llave: en el juego se abre,
   ver `02-game-design.md` "Puertas con llave"). Zonas sin ningún tile
-  alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+  alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir). El lugar de
+  un paso `reach` de `data/quests` (una zona, o un punto con su radio, en esta isla)
+  necesita una casilla alcanzable, caminable y que no sea la entrada de una escalera, un
+  agujero o un teletransporte: si no, el paso no se cumple nunca (docs/06 "Quest").
 - **Puertas** (`02-game-design.md` "Puertas con llave"; el servidor no arranca con lo que
   aquí es error): un solo item de puerta (bloque `door`) por casilla; advertencia si una
   puerta está colocada abierta (vuelve a estar abierta tras cada reinicio). Cada puerta

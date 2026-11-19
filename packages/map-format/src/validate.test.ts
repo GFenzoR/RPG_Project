@@ -18,7 +18,7 @@ import { loadContent, showsPortal } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
 import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
-import type { ContentIndex, ItemInfo } from "./content.ts";
+import type { ContentIndex, ItemInfo, ReachInfo } from "./content.ts";
 import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
 
@@ -1431,6 +1431,78 @@ describe("review fixes", () => {
       expect.stringContaining('world/islands/mini/npcs.yaml:1 [0].npc: unknown NPC "nobody"'),
     );
     expect(m.join("\n")).not.toContain("world/islands/renamed");
+  });
+
+  it("refuses a zone of more than 255 rects (world.bin keeps the count in a byte)", () => {
+    const i = mini();
+    const rects = Array.from({ length: 256 }, (_, k) => ({
+      x: 2 + (k % 16),
+      y: 2 + Math.floor(k / 16),
+      w: 1,
+      h: 1,
+    }));
+    i.zones.push({ id: "mini_many", type: "no_logout", floors: [7], rects });
+    expect(messages(check(i))).toContainEqual(expect.stringMatching(/zones\.yaml.*rects.*255/));
+    i.zones[i.zones.length - 1] = {
+      id: "mini_many",
+      type: "no_logout",
+      floors: [7],
+      rects: rects.slice(0, 255),
+    };
+    expect(messages(check(i))).toEqual([]);
+  });
+
+  it('refuses a reach step whose place has no tile reached on foot from the temple (docs/06 "Quest")', () => {
+    const reachErrors = (island: Island, reaches: ReachInfo[]): string[] => {
+      const root = mkdtempSync(join(tmpdir(), "map-format-"));
+      dirs.push(root);
+      writeWorldMeta(root, worldOf(island));
+      writeIsland(root, shown(island));
+      return messages(validateWorld(root, { content: { ...content, reaches } })).filter((m) =>
+        m.includes("reach step"),
+      );
+    };
+    const file = "data/quests/errand.yaml";
+    const point = (x: number, y: number, z: number, radius = 0): ReachInfo => ({
+      quest: "errand",
+      file,
+      step: 1,
+      at: { x, y, z },
+      radius,
+    });
+    const i = mini();
+    // A dirt tile of the cave floor that nothing leads to.
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    setGround(cave, 20, 20, "dirt");
+    expect(
+      reachErrors(i, [
+        point(12, 12, 8), // the cave, down the stairs
+        point(20, 4, 7, 2), // the grass
+        point(10, 10, 7, 1), // the stairs and the grass around them
+        { quest: "errand", file, step: 0, zone: "mini_temple" },
+        point(3000, 3000, 7), // another island's
+        { quest: "errand", file, step: 0, zone: "elsewhere" },
+      ]),
+    ).toEqual([]);
+    for (const [name, r] of [
+      ["the water ring", point(0, 0, 7, 1)],
+      ["a cave tile nothing leads to", point(20, 20, 8)],
+      ["the stairs alone", point(10, 10, 7)],
+    ] as const) {
+      const found = reachErrors(i, [r]);
+      expect(found, name).toHaveLength(1);
+      expect(found[0], name).toContain(`${file} steps[1].complete_when.reach`);
+      expect(found[0], name).toContain('reach step of quest "errand": no tile of its point');
+    }
+    i.zones.push({
+      id: "mini_pocket",
+      type: "community_plot",
+      floors: [8],
+      rects: [{ x: 19, y: 19, w: 3, h: 3 }],
+    });
+    expect(reachErrors(i, [{ quest: "errand", file, step: 0, zone: "mini_pocket" }])).toEqual([
+      expect.stringContaining('no tile of its zone "mini_pocket" on island "mini"'),
+    ]);
   });
 
   it("clips huge zone rectangles to the island before scanning them", () => {

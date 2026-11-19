@@ -501,7 +501,9 @@ Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 que separan los turnos de una tarea repetible ("Quest"): `available` (`start_quest` la
 empezaría ahora: nunca empezada, o repetible y ya pasó su espera) y `cooling_down`
 (repetible, terminada, esperando). Una tarea se ofrece con `available`, no con
-`quest_not_started` (que después de la primera vez no vuelve a valer). `make validate` y el
+`quest_not_started` (que después de la primera vez no vuelve a valer): `make validate` avisa
+(warning) de un `quest_not_started` o un `quest_state` `not_started` de una quest
+repetible, y el servidor lo registra en el log al arrancar (`content.RefWarnings`). `make validate` y el
 servidor al arrancar (`CheckRefs`) rechazan lo que no significa nada: `step` con un `state`
 que no sea `in_progress` (con `available` o `cooling_down` se ignoraría, con los demás nunca
 vale) y `cooling_down` de una quest que no es repetible.
@@ -674,13 +676,25 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   un agujero o un teletransporte no cuenta: el jugador nunca se queda ahí, cuenta la casilla
   donde cae. No cuesta nada por tick: el servidor
   guarda por jugador los lugares de sus pasos `reach` actuales y un bit por piso, y solo
-  mira a quien camina por uno de esos pisos (`session/questlog.go`). `make validate`, el
-  servidor al arrancar y la prueba del mundo real (`TestRealWorldStarts`) exigen que la
-  zona exista o que el punto caiga dentro del rectángulo de una isla (`world.yaml`) en un
-  piso que su `island.yaml` liste, y siempre en una isla que no sea `dev_only` (el
-  servidor de producción no la tiene); y que el lugar tenga al menos una casilla que no sea
-  la entrada de una escalera, un agujero o un teletransporte (`portals.yaml`). Para un lugar sin zona propia (una cueva, un
-  santuario), el punto con radio.
+  mira a quien camina por uno de esos pisos (`session/questlog.go`). Para que el paso se
+  pueda cumplir siempre (una coordenada mal escrita que cae en roca o en agua dejaría la
+  quest trabada para siempre, sin forma de abandonarla):
+  - `make validate`, el servidor al arrancar y la prueba del mundo real
+    (`TestRealWorldStarts`) exigen que la zona exista o que el punto caiga dentro del
+    rectángulo de una isla (`world.yaml`) en un piso que su `island.yaml` liste, y que el
+    lugar tenga al menos una casilla caminable que no sea la entrada de una escalera, un
+    agujero o un teletransporte (`portals.yaml`);
+  - `make validate` exige además que el lugar esté en una isla que no sea `dev_only` (el
+    servidor de producción no la tiene: su `world.bin` se compila sin islas dev, y un
+    servidor de desarrollo sí acepta zonas de la Isla de Pruebas) y que esa casilla se
+    alcance a pie desde el templo de su isla (`mapcli validate`, el mismo recorrido que
+    las zonas, con escaleras, agujeros y teletransportes contando donde caen).
+
+  Para un lugar sin zona propia (una cueva, un santuario), el punto con radio.
+- Los pasos se guardan por índice (`quest.<id>.step`): agregar, quitar o reordenar pasos de
+  una quest que ya se juega corre a los personajes que van por ella a otro paso. Agrega
+  pasos nuevos al final o, si van en el medio, asegúrate de que nadie quede trabado en el
+  paso que pasa a ocupar su índice (así se insertó `reach_gate` en `ch3_gate`, docs/14).
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
@@ -712,6 +726,21 @@ rewards:
   después de terminada (sin `done_at`) está disponible en el acto.
 - El diálogo que la ofrece pregunta `quest_state: { quest: <id>, state: available }` y
   puede tener otra opción con `cooling_down` ("vuelve más tarde").
+- Ningún turno se puede cumplir sin esfuerzo, que pagaría una recompensa por cada espera
+  con uno o dos clicks. `make validate` (`checkRepeatable`) y el servidor al arrancar
+  (`content.CheckRepeatable`, en `CheckRefs` y otra vez con el mapa en `initReach`)
+  rechazan en una quest repetible:
+  - un paso `has_item` que no va seguido de su entrega: un paso `dialog_action` cuyo nodo
+    se alcanza solo por opciones que quitan con `take_item` al menos esa cantidad del item
+    (si no, los mismos items la cumplen en cada turno);
+  - un paso `flag_equals` de una clave y un valor que ponen sus propias `rewards`
+    (`set_flag`): desde el segundo turno se cumple apenas pasa a ser el actual;
+  - entre los pasos que pueden cumplirse en el momento de tomarla (los primeros, mientras
+    sean `flag_equals`, que puede valer ya), un `dialog_action` con un NPC que la da
+    (seguir hablando ahí mismo la termina) o un `reach` cuyo lugar queda a 3 casillas o
+    menos (`TalkRange`, mismo piso) de donde está parado un NPC que la da (tomarla ahí la
+    termina). Después de un paso que cuesta (matar, juntar items que se entregan, ir a otro
+    lugar), volver al NPC sí vale: así cierra `pruebas_rats`.
 - El diario de misiones (docs/02 "Diario de misiones", `QuestLog` de docs/05) muestra una
   tarea terminada con el tiempo que falta para volver a tomarla.
 

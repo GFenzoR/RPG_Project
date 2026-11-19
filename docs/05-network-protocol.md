@@ -966,8 +966,10 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   que empezó o terminó, en el orden de su id. Llega **entero** al entrar (en el lote del
   `Welcome`, después de `PlayerSkills`, vacío también: así el cliente sabe que el servidor
   lo tiene) y en el lote de cada tick en que cambió alguna quest del personaje (empezó,
-  cumplió un paso, contó una muerte, terminó), uno solo por tick aunque cambie varias
-  veces. Solo lo recibe el propio jugador.
+  cumplió un paso, contó una muerte, terminó). Siempre uno solo por tick aunque cambie
+  varias veces, también en el del login: si al entrar se cumple un paso `reach` (el
+  jugador entra parado en su lugar), ese único `QuestLog` ya lo trae cumplido (el servidor
+  lo arma al final del tick, `flushQuestLog`). Solo lo recibe el propio jugador.
 - Cada entrada: `quest_id`, `name` (clave i18n del nombre), `chapter` (0 para una
   secundaria o una tarea), `state` (`ACTIVE`, `DONE` o `COOLING`), `repeatable`; en curso,
   `step_id` y `step_text` (clave i18n del texto del paso actual) y, en un paso `kill`,

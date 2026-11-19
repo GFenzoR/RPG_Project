@@ -107,7 +107,15 @@ el punto 5:
   id). Como prueba: el paso `reach_gate` de `ch3_gate` y la tarea de práctica de la Isla de
   Pruebas (3 minutos). Queda:
   - **Las tareas de caza y las quests secundarias** del Bosque y del Volcán son la rama
-    `feat/side-quests` (sobre esta): escriben contenido con `reach` y `repeatable`.
+    `feat/side-quests` (sobre esta): escriben contenido con `reach` y `repeatable`. Tras la
+    revisión de la rama, `make validate` y el servidor rechazan un lugar `reach` sin casilla
+    caminable (y `make validate`, uno que no se alcanza a pie desde el templo) y las tareas
+    que se cumplen solas al tomarlas (docs/06 "Quests repetibles": `has_item` sin entrega
+    que lo quite, `flag_equals` que pone su propia recompensa, o empezar con un
+    `dialog_action` de quien la da o un `reach` a 3 casillas de él).
+  - **El `QuestLog` va entero con cada cambio** (también con cada muerte que cuenta un paso):
+    docs/07 lo midió y alcanza con las quests de hoy. Con muchas tareas de caza conviene
+    mandar solo la entrada que cambió (un delta; cambia el protocolo).
   - **Zonas sin reglas:** `reach: { zone }` toma cualquier zona de `zones.yaml`, pero hoy
     todos sus tipos tienen reglas (protección, no-logout, pvp, no_pvp, parcela). Para nombrar
     una cueva o un santuario sin cambiar sus reglas hace falta un tipo `area` (sin flags) en

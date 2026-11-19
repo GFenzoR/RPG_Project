@@ -12,8 +12,10 @@
       "type": { "enum": ["protection", "no_logout", "pvp", "no_pvp", "community_plot"] },
       "floors": { "$ref": "common.schema.json#/$defs/floors" },
       "rects": {
+        "description": "At most 255: world.bin keeps the count of a zone's rects in one byte (mapcompile and the server refuse more).",
         "type": "array",
         "minItems": 1,
+        "maxItems": 255,
         "items": { "$ref": "common.schema.json#/$defs/rect" }
       },
       "notes": { "$ref": "common.schema.json#/$defs/notes" }

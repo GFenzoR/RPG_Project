@@ -549,9 +549,11 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
-	w.sendCosmetics(p)    // T5.7
-	p.emit(w.questLog(p)) // the quest log (questlog.go), empty too
-	w.tellDiedAway(p)     // after its state: the death screen of a death while link-dead
+	w.sendCosmetics(p) // T5.7
+	// The quest log (questlog.go), empty too, goes at the flush of this tick: one QuestLog
+	// even when checkReach below completes a step.
+	p.questLogDirty = true
+	w.tellDiedAway(p) // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)

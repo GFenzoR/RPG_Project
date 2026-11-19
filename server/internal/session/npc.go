@@ -117,6 +117,9 @@ func (w *World) initNPCs() error {
 	if err := content.CheckRefs(w.cfg.NPCs, w.cfg.Quests, w.cfg.Items, w.cfg.Monsters, w.skillIDs); err != nil {
 		return fmt.Errorf("session: %w", err)
 	}
+	for _, msg := range content.RefWarnings(w.cfg.NPCs, w.cfg.Quests) {
+		w.log.Warn("content: dialog condition that likely is a mistake", "detail", msg)
+	}
 	for _, is := range w.m.Islands() {
 		for _, pl := range is.NPCs {
 			def := w.cfg.NPCs[pl.NPC]

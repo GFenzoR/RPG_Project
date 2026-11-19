@@ -11,7 +11,7 @@
     "chapter": { "$ref": "common.schema.json#/$defs/positiveInt" },
     "min_level": { "$ref": "common.schema.json#/$defs/positiveInt" },
     "repeatable": {
-      "description": "A task (docs/06 \"Quest\"): once completed, start_quest takes it again after cooldown_hours (fractions allowed), from the first step, and the rewards are given every time. Dialogs tell its turns apart with quest_state available and cooling_down.",
+      "description": "A task (docs/06 \"Quest\"): once completed, start_quest takes it again after cooldown_hours (fractions allowed), from the first step, and the rewards are given every time. Dialogs tell its turns apart with quest_state available and cooling_down. No turn may be done with no effort (docs/06 \"Quests repetibles\"): a has_item needs its delivery with take_item, a flag_equals cannot be set by its own rewards, and it cannot start with a dialog_action of, or a reach next to, an NPC that gives it.",
       "type": "object",
       "additionalProperties": false,
       "required": ["cooldown_hours"],
@@ -108,7 +108,7 @@
         },
         "flag_equals": { "$ref": "common.schema.json#/$defs/flag" },
         "reach": {
-          "description": "Completes while the player stands in a place: a zone of world/islands/*/zones.yaml, or the tiles within radius (Chebyshev, default 0) of x, y on floor z. Checked after every move and relocation (teleport, portal, temple) while the step is current, and when it becomes current. make validate checks the zone exists, or the point lies on an island on a floor it lists.",
+          "description": "Completes while the player stands in a place: a zone of world/islands/*/zones.yaml, or the tiles within radius (Chebyshev, default 0) of x, y on floor z. Checked after every move and relocation (teleport, portal, temple) while the step is current, and when it becomes current. make validate checks the zone exists, or the point lies on an island that is not dev_only on a floor it lists, and that the place has a walkable tile reached on foot from the temple.",
           "oneOf": [
             {
               "type": "object",

@@ -155,6 +155,88 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  it('refuses a repeatable quest that pays with no effort (docs/06 "Quests repetibles")', () => {
+    const errors = (): string[] =>
+      messages(root).filter(
+        (m) =>
+          m.startsWith("error") &&
+          /repeatable quest|own rewards set|talk range/.test(m) &&
+          !m.includes("i18n"),
+      );
+    // The real world, with where its NPCs stand.
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    for (const island of readdirSync(join(REPO, "world", "islands"))) {
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      for (const f of ["island.yaml", "zones.yaml", "portals.yaml", "npcs.yaml"]) {
+        const src = join(REPO, "world", "islands", island, f);
+        if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
+      }
+    }
+    expect(errors()).toEqual([]);
+    // A task of the volcano keeper whose first step is a reach two tiles from him: taking
+    // it completes it. Four tiles away is a walk.
+    const gate = "data/quests/ch3_gate.yaml";
+    edit(gate, "min_level: 35\n", "min_level: 35\nrepeatable: { cooldown_hours: 1 }\n");
+    edit(
+      gate,
+      "complete_when: { kill: { monster: obsidian_delver, count: 10 } }",
+      "complete_when: { reach: { x: 3664, y: 5798, z: 7 } }",
+    );
+    expect(errors()).toEqual([
+      expect.stringMatching(/reach whose place comes within talk range of npc "volcan_keeper"/),
+    ]);
+    edit(gate, "x: 3664, y: 5798, z: 7", "x: 3666, y: 5798, z: 7");
+    expect(errors()).toEqual([]);
+    const rats = "data/quests/pruebas_rats.yaml";
+    // Tails shown to the instructor, who takes none of them: the same tails every turn.
+    edit(
+      rats,
+      "complete_when: { kill: { monster: bilge_rat, count: 3 } }",
+      "complete_when: { has_item: { item: bilge_rat_tail, count: 3 } }",
+    );
+    expect(errors()).toEqual([
+      expect.stringMatching(/has_item must be followed by its delivery.*take_item of 3/),
+    ]);
+    // After a flag that may hold already, talking on to the instructor ends the turn.
+    edit(
+      rats,
+      "complete_when: { has_item: { item: bilge_rat_tail, count: 3 } }",
+      "complete_when: { flag_equals: { key: rats_cleared, value: 1 } }",
+    );
+    const talk = /cannot start with a dialog_action of npc "pruebas_trainer"/;
+    expect(errors()).toEqual([expect.stringMatching(talk)]);
+    // A flag its own rewards set holds from the second turn on.
+    edit(
+      rats,
+      "  - { gold: 50 }",
+      "  - { gold: 50 }\n  - { set_flag: { key: rats_cleared, value: 1 } }",
+    );
+    const out = errors();
+    expect(out).toHaveLength(2);
+    expect(out).toContainEqual(expect.stringMatching(/flag_equals rats_cleared = 1.*own rewards/));
+    expect(out).toContainEqual(expect.stringMatching(talk));
+  });
+
+  it("warns of quest_not_started of a repeatable quest", () => {
+    const warnings = (): string[] =>
+      messages(root).filter((m) => m.startsWith("warning") && m.includes("not_started of"));
+    expect(warnings()).toEqual([]);
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "if: { quest_state: { quest: pruebas_rats, state: available } }",
+      "if: { quest_not_started: pruebas_rats }",
+    );
+    expect(warnings()).toEqual([
+      expect.stringMatching(/not_started of repeatable quest "pruebas_rats" holds only before/),
+    ]);
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "if: { quest_not_started: pruebas_rats }",
+      "if: { quest_state: { quest: pruebas_rats, state: not_started } }",
+    );
+    expect(warnings()).toHaveLength(1);
+  });
+
   it("refuses a quest_state that means nothing", () => {
     const stateErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("quest_state:"));

@@ -19,8 +19,8 @@ import (
 // a quest of it changed) and a bit per floor they are on, so a move or a relocation costs
 // one test for a player with none on its floor and nothing runs per tick.
 //
-// The QuestLog goes in full at login and at the flush of every tick in which a quest of
-// the player changed (questHost.Notify marks it).
+// The QuestLog goes in full at the flush of the login tick and of every tick in which a
+// quest of the player changed (questHost.Notify marks it): one per tick, the login's too.
 
 // reachPlace is a reach step's place on the map: a zone, or the tiles within radius
 // (Chebyshev) of a point.
@@ -43,8 +43,11 @@ func (r *reachPlace) contains(p world.Pos) bool {
 
 // initReach resolves the place of every reach step of the quests against the map: a zone
 // must exist, a point must lie on an island, on a floor it lists, and either must have a
-// tile that is no entrance of stairs, a hole or a teleport (a step onto one counts where
-// it lands, move). Anything else refuses to start.
+// tile a player can stand on: walkable, and no entrance of stairs, a hole or a teleport (a
+// step onto one counts where it lands, move). Anything else refuses to start, and so does
+// a repeatable quest that would start with a reach where it is taken
+// (content.CheckRepeatable, with near). make validate checks the same, and that such a
+// tile is reached on foot from the temple (packages/map-format, checkReachability).
 func (w *World) initReach() error {
 	w.reachAt = map[*content.Reach]*reachPlace{}
 	for _, id := range slices.Sorted(maps.Keys(w.cfg.Quests)) {
@@ -69,27 +72,31 @@ func (w *World) initReach() error {
 				if !ok || w.m.IslandAt(c) == nil {
 					return fmt.Errorf("session: quest %q step %q: reach point %d,%d,%d is on no island of the map", id, s.ID, *r.X, *r.Y, *r.Z)
 				}
-				pl.center, pl.radius, pl.floors = c, r.Radius, 1<<c.Z
+				pl.center, pl.radius, pl.floors = c, r.R(), 1<<c.Z
 			}
 			if !w.standable(pl) {
-				return fmt.Errorf("session: quest %q step %q: every tile of the reach place is the entrance of stairs, a hole or a teleport, where nobody stands", id, s.ID)
+				return fmt.Errorf("session: quest %q step %q: no tile of the reach place is walkable ground a player can stand on (not the entrance of stairs, a hole or a teleport): the step could never be done", id, s.ID)
 			}
 			w.reachAt[r] = pl
 		}
 	}
+	if err := content.CheckRepeatable(w.cfg.Quests, w.cfg.NPCs, w.reachNear); err != nil {
+		return fmt.Errorf("session: %w", err)
+	}
 	return nil
 }
 
-// standable reports whether pl has a tile a step onto which does not move the player
-// elsewhere (world.Map.MovesOnStep). It stops at the first one: at most the 33×33 tiles of
-// a point, and a zone of open ground answers at its first tile.
+// standable reports whether pl has a tile a player can stand on: walkable, and a step onto
+// it does not move the player elsewhere (world.Map.MovesOnStep). It stops at the first one:
+// at most the 33×33 tiles of a point, and a zone of open ground answers at its first tile.
 func (w *World) standable(pl *reachPlace) bool {
+	ok := func(p world.Pos) bool { return w.m.Walkable(p) && !w.m.MovesOnStep(p) }
 	if z := pl.zone; z != nil {
 		for _, f := range z.Floors {
 			for _, r := range z.Rects {
 				for y := int(r.Y); y < int(r.Y)+int(r.H); y++ {
 					for x := int(r.X); x < int(r.X)+int(r.W); x++ {
-						if !w.m.MovesOnStep(world.Pos{X: uint16(x), Y: uint16(y), Z: f}) {
+						if ok(world.Pos{X: uint16(x), Y: uint16(y), Z: f}) {
 							return true
 						}
 					}
@@ -101,9 +108,38 @@ func (w *World) standable(pl *reachPlace) bool {
 	c := pl.center
 	for y := int(c.Y) - pl.radius; y <= int(c.Y)+pl.radius; y++ {
 		for x := int(c.X) - pl.radius; x <= int(c.X)+pl.radius; x++ {
-			if x >= 0 && y >= 0 && x <= 0xFFFF && y <= 0xFFFF && !w.m.MovesOnStep(world.Pos{X: uint16(x), Y: uint16(y), Z: c.Z}) {
+			if x >= 0 && y >= 0 && x <= 0xFFFF && y <= 0xFFFF && ok(world.Pos{X: uint16(x), Y: uint16(y), Z: c.Z}) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// reachNear reports whether the place of reach step r comes within TalkRange of where an
+// NPC of kind npc stands (same floor): a player who takes a quest there stands in it
+// (content.CheckRepeatable). Only the geometry counts, as in make validate.
+func (w *World) reachNear(r *content.Reach, npc string) bool {
+	pl := w.reachAt[r]
+	if pl == nil {
+		return false
+	}
+	for _, n := range w.npcs {
+		p := n.pos
+		if n.def.ID != npc || pl.floors&(1<<p.Z) == 0 {
+			continue
+		}
+		x0, y0, x1, y1 := int(p.X)-TalkRange, int(p.Y)-TalkRange, int(p.X)+TalkRange, int(p.Y)+TalkRange
+		if z := pl.zone; z != nil {
+			for _, zr := range z.Rects {
+				if int(zr.X) <= x1 && int(zr.X)+int(zr.W)-1 >= x0 && int(zr.Y) <= y1 && int(zr.Y)+int(zr.H)-1 >= y0 {
+					return true
+				}
+			}
+			continue
+		}
+		if chebyshev(pl.center, p) <= pl.radius+TalkRange {
+			return true
 		}
 	}
 	return false

@@ -89,7 +89,7 @@ func realQuests(t testing.TB) content.Quests {
 // placeReach makes r the tiles within radius of at.
 func placeReach(r *content.Reach, at world.Pos, radius int) {
 	x, y, z := int(at.X), int(at.Y), int(at.Z)
-	*r = content.Reach{X: &x, Y: &y, Z: &z, Radius: radius}
+	*r = content.Reach{X: &x, Y: &y, Z: &z, Radius: &radius}
 }
 
 // dropDialogTeleports takes out of the dialogs of data/ the teleports that land on no
