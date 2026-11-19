@@ -136,6 +136,28 @@ el punto 5:
   - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
     madera distinto): una forma nueva en `layers.ts`, su nombre en `data/looks.yaml` y
     `make spritegen ONLY=worn/`; un color nuevo es solo una línea de `tints`.
+- **Bordes de suelo (hecho, rama `feat/terrain-borders`, lote 13; docs/06 "Bordes", docs/17
+  ART-4, docs/03 "Formato"):** el dueño, en la prueba del 2026-11-19: "faltan los sprites de
+  transicion, todo tiene cortes demasiado cuadrados". `data/borders.yaml` pasó de 7 reglas
+  de a pares a una escalera de suelos (un borde por suelo natural sobre todo suelo más bajo
+  que toca; madera y muelles siguen rectos), cada pieza con 4 looks que el renderer elige por
+  casilla (`lookOf`), todos con los mismos puntos de cruce en los lados de la casilla, y la
+  espuma debajo de los bordes en el agua. Las cinco islas, en sus dos pisos, pasaron por
+  `mapcli autoborder` (6297 → 11580 piezas; el diff es solo de piezas de borde). Queda:
+  - **E2E (verificación final del lote 13):** mirar las orillas pasto/tierra y pasto/piedra
+    en `32-bosque-plaza`, `04-world` y las capturas del Farol (`12b`, `13`, `14`), la arena
+    con el agua (la espuma rompe debajo de la orilla) y la Isla de Pruebas. El spec del editor
+    (`editor/e2e/editor.spec.ts`, "hito 2") ahora espera `border_grass_n`/`border_grass_s`.
+  - **Puntas de una casilla:** una casilla sola que entra en otro suelo (fin de un camino,
+    ensenada) termina en punta (dos esquinas de adentro). Una pieza propia serían 4 piezas
+    más por suelo.
+  - **Ids:** las 120 piezas nuevas son los números 336–455; las 84 viejas quedan en
+    `retired` de `data/ids.lock.yaml` (`make gen-ids RETIRE=1`, nuevo). Si otra rama del
+    lote suma items, el que apila vuelve a correr `make gen-ids`.
+  - **Otra rama que pinte suelos** tiene que terminar con `mapcli autoborder` de lo que
+    pintó (con la escalera nueva): las piezas viejas (`border_grass_sand_*`, ...) ya no son
+    items y `make validate` las rechaza en un mapa.
+  - **Nieve y hielo (lote 14):** una línea en `ladder`, 12 items, su nombre y `make borders`.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al
@@ -799,10 +821,8 @@ el punto 5:
     - **Elevación** (ART-8): hecha para el dibujo (`elevation` en `data/items`; el cajón de
       carga, 8 px). No hay mesas ni barriles en `data/items` todavía, y el cajón bloquea el
       paso: por ahora solo sube lo que se tira encima.
-    - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
-      (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
-      recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
-      islas es `mapcli autoborder`: cambia mapas.
+    - **Bordes que faltaban** (tierra con pasto, pasto con piedra y otros quince pares):
+      hechos en el lote 13 con la escalera de suelos (arriba, "Bordes de suelo").
     - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
       polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
       (`client/src/render/particles.ts`); el polvo y las ondas al pisar, después
@@ -1532,8 +1552,9 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms
   (`client/CLAUDE.md`, "Sprites de efectos"); sin arte, la forma Pixi de antes. Los
   proyectiles y los números flotantes siguen siendo formas y texto de Pixi.
-- **Bordes** (`assets/sprites/borders/`): `gen-borders.ts` recorta la textura del suelo de
-  origen.
+- **Bordes** (`assets/sprites/borders/<suelo>/<pieza>`, 4 looks por pieza, y la espuma
+  `borders/surf/` con sus frames): `make borders` (`gen-borders.ts`) recorta la textura del
+  suelo con orillas propias de cada look (docs/06 "Bordes").
 
 Para cambiar un sprite: otro tile del pack en `sprites.yaml`, o una receta nueva en
 `tools/spritegen/src/recipes/` y `make spritegen ONLY=<ruta>` (estilo y reglas en

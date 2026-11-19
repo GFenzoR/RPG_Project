@@ -268,17 +268,55 @@ parte de arriba transparente.
   - los decorativos (matas, piedritas, flores) los esparce el cliente con el mismo hash:
     no se pueden tocar y no pesan en el mapa;
   - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
-- **Bordes** (`gen-borders`): entre todos los pares de suelos que se tocan, con orilla
-  irregular (nunca recta), y en el agua con espuma animada.
+- **Bordes** (`gen-borders`): entre todos los pares de suelos naturales que se tocan, con
+  orilla irregular (nunca recta) que no se repite de casilla en casilla, y en el agua con
+  espuma animada. **Hecho en el lote 13** (abajo).
 
 **Hecho (A10, 2026-11-18):** pasto, tierra, arena y piedra de piso tienen 4 looks y la arena
 mojada 2 (`ground/<suelo>/var_<n>`, recetas en `tools/spritegen/src/recipes/ground.ts`). El
 renderer elige con `tileHash(x, y, z)` y deja el principal en el 70 % (`weight` en
 `tiles`). Los detalles sueltos (flores, matas, piedritas, una raíz, una concha, musgo) van
-en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tiene una
-orilla de tres ondas que se repiten por casilla (nunca recta y sin dientes) y las orillas
-del agua, espuma que rompe en 4 frames (`borders/sand_water_<pieza>/frame_<n>`). Un test de
-spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
+en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tenía una
+orilla de tres ondas que se repetían por casilla (nunca recta y sin dientes; en el lote 13
+se veía regular: ver abajo) y las orillas del agua, espuma que rompe en 4 frames. Un test
+de spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
+
+**Hecho (lote 13, 2026-11-19, `feat/terrain-borders`):** el dueño, jugando la Isla de
+Pruebas: "faltan los sprites de transicion, todo tiene cortes demasiado cuadrados cuando la
+transicion entre pasto y tierra nunca es recta". Había reglas para 7 pares; tierra con
+pasto (1080 lados de casilla), pasto con piedra (399), tierra con arena, pasto con arena
+mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
+- **Una escalera de suelos** (`data/borders.yaml`, docs/06 "Bordes") en vez de reglas de a
+  pares: cada suelo natural tiene un solo juego de piezas (su borde) que va sobre todos los
+  suelos más bajos que toca. De abajo arriba: lava, bajío, agua, arena mojada, arena, lava
+  enfriada, escoria, tierra, basalto, piedra, pasto, ceniza. Los pisos de madera y los
+  muelles siguen rectos (hechos a mano). El bajío usa la misma agua que el agua de al lado
+  (mismo ruido, más los peces), así que no necesita borde. Un suelo nuevo es una línea.
+- **Orillas que nunca se repiten:** cada pieza tiene 4 looks y el renderer elige uno por
+  casilla con `tileHash` (`lookOf` de `packages/renderer` tile-art: parejo entre los cuatro,
+  no 70/30 como los suelos; el mismo para todas las piezas de la casilla). Todos los looks
+  cruzan los lados de la casilla en el mismo punto (10 px de la esquina del lado del suelo
+  alto) y adentro se doblan con su propio perfil: un oleaje suave, dos o tres bultos de 1 a
+  6 px y algún píxel suelto, sin escalones de más de 2 px; las esquinas de adentro son un
+  arco grande, así una costa en escalera se lee como una diagonal ondulada. Lo verifica el
+  test de `gen-borders` (el contrato de los lados para cada pieza y look, y que dos lados
+  opuestos nunca cierren un camino de una casilla).
+- **Cada suelo con su orilla** (`edge`): matas de pasto que se paran sobre la tierra
+  (`tufts`), piedritas grises en la arena (`pebbles`), terrones en la tierra y la escoria
+  (`clods`), la junta oscura de la piedra y el basalto con alguna esquirla (`joint`), el
+  borde mojado de la arena mojada (`wet`), el labio iluminado de la costra de lava
+  (`crust`) y granos sueltos de ceniza (`drift`). Valor y tono: los del suelo mismo (el test
+  exige la banda de ART-6, L\* 20-50, a cada pieza).
+- **El agua:** la espuma (`border_surf_*`) va debajo de los bordes, con la forma de todos
+  ellos juntos: el borde mojado de la tierra (dos tonos de arena mojada), la línea clara de
+  espuma y la cortada que rompe en 4 frames, cada look con sus propios frames
+  (`<pieza>/var_<n>/frame_<m>`). Así, donde dos bordes se pisan, la espuma de uno nunca se ve
+  sobre la tierra del otro.
+- **Mapas:** `mapcli autoborder` de las cinco islas en sus dos pisos (también las cuevas, con
+  tierra y piedra): las piezas pasaron de 6297 a 11580 y el diff es solo de piezas de borde.
+- Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de
+  una casilla) termina en punta (dos esquinas de adentro); se lee como un sendero que se
+  afina. Una pieza propia para ese caso serían 4 piezas más por suelo.
 
 ### ART-5 Contorno, sombra y luz
 - **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
@@ -1683,7 +1721,7 @@ Por impacto en pantalla y por costo:
 | # | Hoy | Qué va | De dónde | Necesita |
 |---|---|---|---|---|
 | 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
-| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
+| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand`; los bordes de todos los suelos naturales, con 4 looks por pieza (lote 13, ART-4) |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar, disparar, conjurar y caer; disparar y conjurar desde `feat/lpc-actions`, ver "Hecho: disparar, conjurar, desvanecerse, pasos y girar") |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |

@@ -10,7 +10,7 @@ data/
                         economía, reportes e inactividad)
   vocations.yaml
   ids.lock.yaml         IDs numéricos estables (generado, se commitea)
-  borders.yaml          reglas de autoborder
+  borders.yaml          la escalera de suelos del autoborder ("Bordes")
   items/                un archivo por categoría (ground.yaml, weapons.yaml, ...)
   monsters/             un archivo por monstruo
   npcs/                 un archivo por NPC (diálogo, tienda)
@@ -62,7 +62,7 @@ i18n/
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, ningún equipable (`weapon`, `armor`, `shield`) apilable
     (cada uno lleva su atributo, "Atributo"), `count` de loot > 1 solo para items apilables,
-    `min <= max` en ataques, bordes solo entre items `ground`.
+    `min <= max` en ataques, la escalera de bordes solo con items `ground` ("Bordes").
   - `balance.yaml` define todas las skills y cada vocación todos sus factores.
   - i18n: mismas claves y en el mismo archivo para `es` y `en`, mismos `{parámetros}`,
     toda clave usada en `data/` existe; aviso si una clave `item.*`, `monster.*`, ... no se usa.
@@ -1194,25 +1194,79 @@ rewards:                         # opcional; al terminar, nunca al saltar
 
 ## Bordes (autoborder)
 ```yaml
-# data/borders.yaml: cuando "from" toca a "to", las piezas se apilan sobre las casillas "to"
-- id: grass_sand
-  from: grass
-  to: sand
-  priority: 10             # mayor prioridad se dibuja encima
-  pieces: { n: border_grass_sand_n, s: ..., e: ..., w: ..., ne: ..., nw: ..., se: ..., sw: ... }
-  # opcionales: inner_ne, inner_nw, inner_se, inner_sw (esquinas cóncavas)
+# data/borders.yaml (esquema borders.schema.json): la escalera de suelos naturales, de abajo
+# arriba. El borde de un suelo (su textura con una orilla irregular) se dibuja sobre cada
+# suelo más bajo de la escalera que toca.
+ladder:
+  - ground: water_shallow           # sin pieces: solo lo cubren
+  - ground: sand
+    pieces: border_sand             # sus 12 items: border_sand_n, ..., border_sand_inner_sw
+    edge: pebbles                   # cómo se dibuja la orilla (gen-borders)
+  - ground: dirt
+    pieces: border_dirt
+    edge: clods
+    over: [sand]                    # opcional: solo sobre estos suelos más bajos
+  - ground: grass
+    pieces: border_grass
+    edge: tufts
+shore:                              # la espuma donde un borde llega al agua
+  water: [water_shallow, water_shoal]
+  pieces: border_surf
 ```
-Cada nombre de pieza dice dónde está el suelo `from` respecto de la casilla `to`:
-`n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa diagonal (ninguno de los
-dos lados vecinos); `inner_*` = en los dos lados vecinos (si falta, se apilan los dos
-lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloquear. Hoy hay
-reglas `grass_sand` y `sand_water`, y las de la Isla Volcánica (T5.5): `ash_sand`,
-`cooled_lava_sand`, `cooled_lava_ash`, `cinder_path_ash` y `cooled_lava_lava` (la costra
-sobre la lava fundida). Su arte lo genera `tools/spritepack/src/gen-borders.ts` en
-`assets/sprites/borders/`: cada pieza recorta el suelo `from` de su arte propio
-(`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
-placeholder, en ese orden (un test verifica que los PNG commiteados son los que produce).
-Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`.
+- **La escalera** (lote 13, `feat/terrain-borders`) reemplaza a las reglas de a pares
+  (`from`/`to`, 12 piezas por par): un juego de piezas por suelo sirve para todos sus pares.
+  El borde de un suelo va sobre cada suelo más bajo de la escalera que lo toca (o solo sobre
+  los de `over`); nunca sobre uno más alto, ni sobre él mismo. Los suelos fuera de la
+  escalera (`wooden_floor`, `dock_planks`: pisos hechos a mano) quedan con el borde recto, de
+  los dos lados. Hoy, de abajo arriba: `lava`, `water_shoal`, `water_shallow` (los tres sin
+  borde propio), `wet_sand`, `sand`, `cooled_lava`, `cinder_path`, `dirt`, `basalt`,
+  `stone_floor`, `grass`, `ash`. Así el pasto entra sobre la tierra, la piedra y la arena; la
+  ceniza, sobre el basalto, la escoria y la lava enfriada; la costra de lava enfriada, sobre
+  la lava fundida.
+- **Las piezas** de un borde son 12 items `<pieces>_<pieza>` (en `data/items/borders.yaml`,
+  `kind: decoration`, `pickupable: false`, sin bloquear; un nombre por suelo,
+  `item.<pieces>.name`). El nombre de la pieza dice dónde está el suelo más alto visto desde
+  la casilla cubierta: `n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa
+  diagonal (esquina de afuera); `inner_*` = en los dos lados vecinos (esquina de adentro, que
+  también cubre su diagonal). Se apilan abajo de todo en la pila de la casilla, primero los
+  bordes de los suelos más bajos. Una casilla con un muro (`kind: wall`) no lleva piezas: el
+  muro la tapa y su pila sigue siendo la del muro.
+- **La orilla del agua** (`shore`): en una casilla de un suelo de `water` con algún borde, el
+  autoborder pone primero (debajo de los bordes) las piezas `border_surf_<pieza>` con la forma
+  de todos esos bordes juntos: el borde mojado de la tierra, una línea de espuma y otra
+  cortada que rompe en 4 frames. Los suelos de agua no tienen borde entre sí (el bajío es la
+  misma agua con peces). Un suelo de `water` no puede tener `pieces`.
+- **Qué revisa `make validate`:** cada suelo es un item `ground` y está una sola vez; cada
+  suelo de `over` está en la escalera y más abajo; `edge` y `over` solo con `pieces`; cada
+  borde y la espuma tienen sus 12 items, decoraciones que no bloquean ni se levantan, y
+  ningún juego de piezas es de dos suelos.
+- **El arte** lo dibuja `make borders` (`tools/spritepack/src/gen-borders.ts`) en
+  `assets/sprites/borders/<suelo>/<pieza>.png`: cada pieza en 4 looks (`<pieza>/var_<n>`)
+  que el renderer elige por casilla con `tileHash` (como los looks de suelo, docs/17 ART-4:
+  el mapa no cambia), el mismo número para todas las piezas de una casilla; la espuma, con
+  sus 4 frames en cada look (`<pieza>/frame_<n>` y `<pieza>/var_<n>/frame_<m>`). La forma de
+  un look de una pieza es la misma en todos los suelos (por eso la espuma sigue la orilla) y
+  **cruza cada lado de la casilla en el mismo punto** (`CROSS` = 10 px desde la esquina del
+  lado del suelo alto), así que cualquier look empalma con cualquier look del vecino; adentro
+  la orilla se dobla con bultos de 1 a 6 px, y dos lados opuestos dejan siempre 10 px libres
+  (un camino de una casilla nunca se cierra). La esquina de adentro es un arco grande (radio
+  22 px desde la esquina de enfrente): una escalera de casillas se lee como una diagonal
+  ondulada. `edge` decide la orilla: `tufts` (matas de pasto sobre el suelo de abajo),
+  `pebbles` (piedritas), `clods` (terrones), `joint` (la junta oscura de una piedra
+  cortada, con alguna esquirla), `wet` (borde mojado), `crust` (el labio iluminado de una
+  costra), `drift` (granos sueltos) o `plain` (solo un poco más oscuro). Las marcas quedan a
+  2 px o más de los lados de la casilla. Cada pieza recorta el suelo de su arte propio
+  (`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
+  placeholder, en ese orden. Un test verifica que los PNG commiteados son los que produce,
+  que no sobra ninguno, el contrato de los lados para cada pieza y look, y la banda de valor
+  de ART-6.
+- **Un suelo nuevo** (nieve, hielo: lote 14) es una línea en `ladder` en su lugar, sus 12
+  items (copiar un bloque de `data/items/borders.yaml`), su nombre en `i18n/*/items.yaml`,
+  `make gen-ids`, `make borders` y `mapcli autoborder` de la isla. Si cambia la receta de un
+  suelo: `make spritegen` y después `make borders`.
+- **Retirados:** las 84 piezas de las reglas de a pares viejas (`border_grass_sand_*`,
+  `border_sand_water_*`, ...) ya no existen; sus números quedan en `retired` de
+  `data/ids.lock.yaml`.
 
 ## Outfits (T0.5)
 `data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador. Desde el

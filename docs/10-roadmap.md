@@ -497,3 +497,11 @@ secundaria.
   datos. Recompensas medidas contra la caza simulada (`sim/balance_tasks_test.go`; docs/02
   "Quests secundarias", "Tareas" y "Economía"). Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **Bordes de suelo que nunca se ven cuadrados (prueba del dueño del 2026-11-19; lote 13,
+  rama `feat/terrain-borders`).** "Todo tiene cortes demasiado cuadrados": `data/borders.yaml`
+  pasó de 7 reglas de a pares a una escalera de suelos (un borde por suelo natural, sobre
+  todo suelo más bajo que toca; madera y muelles rectos), cada pieza con 4 looks de orilla
+  irregular que el renderer elige por casilla con los mismos puntos de cruce en los lados, la
+  orilla propia de cada suelo (matas de pasto, piedritas, terrones, juntas, granos) y la
+  espuma debajo de los bordes en el agua; las cinco islas pasaron por `mapcli autoborder`.
+  docs/06 "Bordes", docs/17 ART-4; lo que queda: docs/14, "Pendientes conocidos".

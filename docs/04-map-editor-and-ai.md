@@ -32,7 +32,7 @@ dependencias de Node para que el editor la use en el navegador).
   `spawns`/`zones`/`portals`/`npcs`/`texts`/`houses`). `saveApplied(root, world, result)` escribe solo esos
   archivos (temporal + rename) y borra los que quedaron vacíos.
 - `OpOptions` inyecta lo que vive en disco, para que el módulo siga sin Node: `itemKind`,
-  `monsterKnown`, `npcKnown`, `borders` (reglas de `data/borders.yaml`, las necesita
+  `monsterKnown`, `npcKnown`, `borders` (la escalera de `data/borders.yaml`, la necesita
   `autoborder`) y `prefab` (lookup de `world/prefabs/`, lo necesita `stamp`).
 
 | op | Campos | Efecto |
@@ -58,8 +58,11 @@ Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas
 - `fill`: inundación en 4 direcciones dentro del rectángulo de la isla de `pos`; también
   rellena casillas vacías.
 - `autoborder`: en cada casilla del rect quita las piezas de borde que tenga (cualquier
-  pieza de `data/borders.yaml`) y apila abajo las que tocan, en orden de `priority`; lo
-  demás de la pila queda encima. Repetirlo no cambia nada. Nombres de pieza en `06`.
+  pieza de `data/borders.yaml`) y apila abajo las que tocan: en el agua primero la espuma,
+  después el borde de cada suelo más alto que la toca, de abajo arriba por la escalera; lo
+  demás de la pila queda encima; una casilla con un muro no lleva piezas. Repetirlo no
+  cambia nada. Escalera y nombres de pieza en `06`, "Bordes". El look de cada pieza no va en
+  el mapa: lo elige el renderer.
 - `scatter`: PRNG mulberry32 con `seed`; dos números por casilla en orden de filas, pase lo
   que pase, así una casilla no desplaza el patrón del resto. Solo decora casillas con pila
   vacía y suelo en `on_ground` (cualquiera si se omite).
@@ -898,7 +901,7 @@ Implementación (T2.2, editor v2). Las herramientas solo arman ops de map-format
 - **Autoborder automático** (casilla "Autoborde" en la barra, activa por defecto): tras
   cada cambio de suelo (pincel, relleno, rectángulo, borrador, pegar) el editor agrega
   una op `autoborder` sobre el rectángulo de las casillas cuyo suelo cambió (las lista
-  la inversa) más un borde de 1, recortado a las islas, con las reglas de
+  la inversa) más un borde de 1, recortado a las islas, con la escalera de
   `data/borders.yaml` que manda el bootstrap. Va en la misma entrada de historial;
   deshacer usa la inversa primitiva y rehacer vuelve a correr la op con las reglas.
 - **Paneles de entidades** (derecha): pestañas spawns / NPCs / zonas / portales de la

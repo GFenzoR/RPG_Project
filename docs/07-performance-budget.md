@@ -454,6 +454,20 @@ páginas** (2048x2032 y 2048x138), 1,99 + 0,37 = 2,36 MB de PNG y 841 + 945 KB d
 - En el repo: 3612 PNG de 64x64 (~1,3 MB), que el test de spritegen compara con el motor
   (renderizar todas las capas lleva ~3,6 s; el proyecto de tests de spritegen, ~17 s).
 
+**Bordes de suelo** (2026-11-19, lote 13, `feat/terrain-borders`, docs/06 "Bordes"): la
+escalera de suelos cambió las 120 piezas de borde (84 + 36 frames de espuma) por 624: 9
+bordes x 12 piezas x 4 looks y la espuma, 12 piezas x 4 looks x 4 frames, todas de 32x32. El
+atlas ya tenía 3 páginas en la base (2048x2016, 2048x2048 y 2048x1056); la tercera pasa a
+2048x1312: 4,59 MB de PNG en total (+239 KB) y 635 KB de JSON (+88 KB), más 220 KB de
+`atlas.json` (+31 KB). El look de cada pieza se elige al armar el chunk (`lookOf`), como los
+de suelo: ni cuentas ni objetos por frame; la espuma va en la lista plana de tiles animados
+(una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 11580 (cada orilla
+natural tiene las suyas; una casilla con muro no lleva ninguna). Medido contra la base en
+la misma máquina: `FullMapView` en el Farol pasó de 1146 a 1330 bytes (más pilas distintas
+en la paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
+`TestCrowdBandwidth`, de 586 a 596 B/s por jugador en base y de 1515 a 1519 en stress,
+lejos de los 4096.
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
