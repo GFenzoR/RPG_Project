@@ -1743,8 +1743,11 @@ quedaba de A3, A4 y A5".
   Escape si es la flotante de arriba) y se acopla bajo el equipo, como en Tibia, o flota
   donde el jugador la deje. La grilla toma las columnas que entran (de 4 a 6 en el dock).
   El lugar se recuerda **por item** en el dispositivo (`container-backpack`; un segundo del
-  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. En
-  tablets y teléfonos siguen debajo del equipo, como antes.
+  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. Los
+  restos son la excepción (rama `feat/combat-visuals`): los de todas las familias y el
+  cuerpo de un jugador comparten un lugar, `container-remains`, y el cadáver de un cangrejo
+  se abre donde quedó el del lobo. En tablets y teléfonos siguen debajo del equipo, como
+  antes.
 - **Las ventanas del servidor son `GameWindow`.** Diálogo, tienda, crafteo, mercado, casa e
   intercambio tienen la barra de las demás (ícono, título, mover, plegar, cerrar), se
   acoplan, flotan, se apilan y recuerdan su lugar. El servidor las sigue abriendo y
@@ -2050,10 +2053,16 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   antes.
 - **Pixelify Sans en el canvas** (UI-3). Nombres, gremios y números flotantes estaban en
   la `sans-serif` del sistema, suavizada y distinta en cada sistema operativo. Ahora usan
-  Pixelify Sans (OFL, de google/fonts con el mismo commit que las otras), a 11 px: su
-  grilla es de 1/11 de em (mayúsculas de 7 celdas, minúsculas de 5), así que a 11 px una
-  celda es un píxel de pantalla. Con el contorno negro de 3 px de antes. El canvas espera la
-  fuente junto con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
+  Pixelify Sans (OFL, de google/fonts con el mismo commit que las otras), a 11 px: sus
+  contornos van sobre una grilla de 1/11 de em (mayúsculas de 7 celdas, minúsculas de 5),
+  así que a 11 px una celda es un píxel de pantalla de alto y los trazos miden un píxel.
+  **No es píxel perfecto a lo ancho:** cada letra empieza 0,66 px adentro de su lugar y
+  los avances no son celdas enteras (la H avanza 586/1000 em, 6,45 px), así que las
+  columnas caen entre píxeles y el canvas las suaviza un poco (`vite/canvas-font.test.ts`
+  lo mide). Hay que mirarlo en una captura a 1x; si molesta, un `letterSpacing` de ~0,55
+  px dejaría los avances casi enteros (cada letra pasa una celda entera por ~0,44 px), sin
+  probar todavía. Con el contorno negro de 3 px de antes. El canvas espera la fuente junto
+  con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
   los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
   ~125 con la negrita de 12 px).
 

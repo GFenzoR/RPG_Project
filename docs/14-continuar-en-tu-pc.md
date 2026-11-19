@@ -119,9 +119,26 @@ el punto 5:
   - **El cuerpo de un jugador** sigue siendo `creature_remains` (huesos sobre un cuero);
     usar `remains_humanoid` es cambiar el item en `session/death.go` si el dueño lo
     prefiere.
-  - **E2E del lote:** mirar un montaraz disparando (la flecha, `07b-attack-pose`), un orbe
-    de hechizo, los restos frescos de cada familia que se mate en los tests y los nombres
-    y números en Pixelify Sans (`07-combat`, `47-guild-name-on-map`).
+  - **Sin verificación visual todavía (revisión del lote 10):** ninguna captura del E2E
+    muestra un proyectil en vuelo. `07b-attack-pose` es el golpe de puños del jugador (o
+    el mordisco del lobo), no una flecha (`e2e/game.spec.ts`, `shotPose(page,
+    "07b-attack-pose", "attack", …)`); `11-spell` se saca después de que `magic(300)` vio
+    el rayo de energía, sin retener el frame, y el orbe vive 250 ms: puede no estar. De
+    los restos solo salen los `remains_fur` de los lobos (`07-combat`, `11b-death`). Así,
+    la flecha, los orbes y siete de las ocho familias de restos solo tienen tests
+    unitarios y las hojas de `spritegen sheet`. Lo que falta en el E2E: un montaraz
+    sembrado con `psql` (arco y flechas, como el de "T3.1") que le dispare a un lobo, con
+    la captura retenida como en `shotPose` (`requestAnimationFrame`) mientras vuela la
+    flecha, con un hook `__rpgClient` nuevo que diga qué proyectil dibuja el canvas; lo
+    mismo con un orbe de hechizo; y los restos frescos de cada familia, matando uno de cada
+    en los corrales de la Isla de Pruebas (`/tp`, como `sandbox.spec.ts`). Lo que sí se
+    ve hoy: los nombres y números en Pixelify Sans (`07-combat`, `47-guild-name-on-map`),
+    que hay que mirar a 1x (ver "Pixelify Sans en el canvas" en docs/17: no es píxel
+    perfecto a lo ancho).
+  - **Para el dueño, restos dudosos:** `gloom_bat` deja `remains_fur` (un cuadrúpedo de
+    costado, no un murciélago) y `mire_toad` deja `remains_scales` (un lagarto, no un
+    sapo). Son lo más cercano de las ocho familias; uno propio para cada uno es un item y
+    un modelo más en `specs/remains.ts`.
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y

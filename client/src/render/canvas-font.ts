@@ -2,8 +2,12 @@
 // floating numbers are Pixelify Sans (OFL, assets/vendor/font-pixelifysans/), served like
 // the UI fonts by vite/fonts.ts and declared in ui/fonts.css.
 //
-// Its letters sit on a grid of 1/11 em (cap height 7 cells, x-height 5): at 11 px a cell is
-// a screen pixel, so the strokes land on whole pixels with the black 3 px stroke of before.
+// Its outlines are drawn on a grid of 1/11 em (capitals 7 cells tall, lower case 5): at
+// 11 px a cell is a screen pixel, so the strokes are one pixel thick and the rows of a
+// letter are whole pixels tall. It is not pixel perfect across: every letter starts 0.66 px
+// into its place and the advances are not whole cells (H moves on 586/1000 em, 6.45 px), so
+// the columns fall between pixels and the canvas smooths them a little
+// (vite/canvas-font.test.ts measures it). The black 3 px stroke of before goes round them.
 //
 // Pixi measures and rasterises a Text once; one drawn before the font arrived keeps the
 // system fallback (and CanvasTextMetrics caches the fallback's ascent per font string). So
