@@ -19,12 +19,25 @@ export {
 export type { HouseInput, HouseIssue, HouseIssueCode, HouseIssueOptions } from "../houses.ts";
 export {
   BORDER_CORNERS,
+  BORDER_PIECES,
   BORDER_SIDES,
+  EDGE_STYLES,
+  NO_BORDERS,
   borderItems,
   borderPieces,
-  orderedRules,
+  covers,
+  hasBorders,
+  pieceItem,
 } from "./borders.ts";
-export type { BorderCorner, BorderPieceName, BorderRule, BorderSide } from "./borders.ts";
+export type {
+  BorderCorner,
+  BorderPieceName,
+  BorderSet,
+  BorderShore,
+  BorderSide,
+  EdgeStyle,
+  LadderStep,
+} from "./borders.ts";
 export { prefabSize } from "./prefab.ts";
 export type { Prefab, PrefabLegendEntry } from "./prefab.ts";
 export { seededRandom } from "./rng.ts";

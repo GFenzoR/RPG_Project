@@ -340,7 +340,7 @@ describe("mapcli edit commands", () => {
       ok: true,
       validation: { errors: 0 },
     });
-    expect(read(root, Z7)).toContain("border_grass_sand_");
+    expect(read(root, Z7)).toContain("border_grass_");
     writeFileSync(ops, "{");
     expect(mapcli("ops", "apply", ops, "--root", root).code).toBe(2);
   });
@@ -376,7 +376,7 @@ describe("mapcli edit commands", () => {
     );
     expect(r.code).toBe(0);
     expect(r.json().ok).toBe(true);
-    expect(read(root, Z7)).toContain("border_sand_water_");
+    expect(read(root, Z7)).toContain("border_surf_");
     expect(
       mapcli(
         "generate",

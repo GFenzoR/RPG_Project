@@ -1,135 +1,47 @@
-# Autoborder rules (docs/06-content-data.md "Bordes"). When ground `from` touches ground `to`,
-# the pieces are stacked at the bottom of the `to` tile (the `autoborder` op, mapcli, MCP).
-# Piece names say where the `from` ground is: n/s/e/w = that side; ne/nw/se/sw = only that
-# diagonal; inner_* = both adjacent sides (concave corner).
+# Ground transitions (autoborder; docs/06-content-data.md "Bordes", docs/17 ART-4).
+# The ladder lists the natural grounds bottom to top. A ground with `pieces` has a fringe:
+# its own texture cut with an irregular edge (tools/spritepack gen-borders), stacked at the
+# bottom of every lower ground of the ladder it touches (or only of those in `over`), lower
+# fringes first. Its twelve piece items are <pieces>_<piece> (n, e, s, w, the outer corners
+# nw, ne, se, sw and the inner ones inner_nw...), in data/items/borders.yaml. `edge` says how
+# gen-borders draws the edge (plain, tufts, pebbles, clods, joint, wet, crust, drift).
+# Grounds off the ladder (wooden_floor, dock_planks: man-made floors) keep a straight edge.
+# A new ground (snow, ice) is one line here, its twelve items and `make borders`.
+ladder:
+  - ground: lava            # molten: only ever covered (by the crust of cooled lava)
+  - ground: water_shoal     # the same water as water_shallow, with fish: no edge between them
+  - ground: water_shallow
+  - ground: wet_sand
+    pieces: border_wet_sand
+    edge: wet
+  - ground: sand
+    pieces: border_sand
+    edge: pebbles
+  - ground: cooled_lava
+    pieces: border_cooled_lava
+    edge: crust
+  - ground: cinder_path
+    pieces: border_cinder_path
+    edge: clods
+  - ground: dirt
+    pieces: border_dirt
+    edge: clods
+  - ground: basalt
+    pieces: border_basalt
+    edge: joint
+  - ground: stone_floor
+    pieces: border_stone_floor
+    edge: joint
+  - ground: grass
+    pieces: border_grass
+    edge: tufts
+  - ground: ash
+    pieces: border_ash
+    edge: drift
 
-- id: grass_sand
-  from: grass
-  to: sand
-  priority: 10
-  pieces:
-    n: border_grass_sand_n
-    s: border_grass_sand_s
-    e: border_grass_sand_e
-    w: border_grass_sand_w
-    ne: border_grass_sand_ne
-    nw: border_grass_sand_nw
-    se: border_grass_sand_se
-    sw: border_grass_sand_sw
-    inner_ne: border_grass_sand_inner_ne
-    inner_nw: border_grass_sand_inner_nw
-    inner_se: border_grass_sand_inner_se
-    inner_sw: border_grass_sand_inner_sw
-
-- id: sand_water
-  from: sand
-  to: water_shallow
-  priority: 5
-  pieces:
-    n: border_sand_water_n
-    s: border_sand_water_s
-    e: border_sand_water_e
-    w: border_sand_water_w
-    ne: border_sand_water_ne
-    nw: border_sand_water_nw
-    se: border_sand_water_se
-    sw: border_sand_water_sw
-    inner_ne: border_sand_water_inner_ne
-    inner_nw: border_sand_water_inner_nw
-    inner_se: border_sand_water_inner_se
-    inner_sw: border_sand_water_inner_sw
-
-# Isla Volcánica (T5.5): ash drifts over the beach sand.
-- id: ash_sand
-  from: ash
-  to: sand
-  priority: 10
-  pieces:
-    n: border_ash_sand_n
-    s: border_ash_sand_s
-    e: border_ash_sand_e
-    w: border_ash_sand_w
-    ne: border_ash_sand_ne
-    nw: border_ash_sand_nw
-    se: border_ash_sand_se
-    sw: border_ash_sand_sw
-    inner_ne: border_ash_sand_inner_ne
-    inner_nw: border_ash_sand_inner_nw
-    inner_se: border_ash_sand_inner_se
-    inner_sw: border_ash_sand_inner_sw
-
-# Isla Volcánica (T5.5): the edge of a lava flow over the beach.
-- id: cooled_lava_sand
-  from: cooled_lava
-  to: sand
-  priority: 12
-  pieces:
-    n: border_cooled_lava_sand_n
-    s: border_cooled_lava_sand_s
-    e: border_cooled_lava_sand_e
-    w: border_cooled_lava_sand_w
-    ne: border_cooled_lava_sand_ne
-    nw: border_cooled_lava_sand_nw
-    se: border_cooled_lava_sand_se
-    sw: border_cooled_lava_sand_sw
-    inner_ne: border_cooled_lava_sand_inner_ne
-    inner_nw: border_cooled_lava_sand_inner_nw
-    inner_se: border_cooled_lava_sand_inner_se
-    inner_sw: border_cooled_lava_sand_inner_sw
-
-# Isla Volcánica (T5.5): the edge of a lava flow over the ash.
-- id: cooled_lava_ash
-  from: cooled_lava
-  to: ash
-  priority: 14
-  pieces:
-    n: border_cooled_lava_ash_n
-    s: border_cooled_lava_ash_s
-    e: border_cooled_lava_ash_e
-    w: border_cooled_lava_ash_w
-    ne: border_cooled_lava_ash_ne
-    nw: border_cooled_lava_ash_nw
-    se: border_cooled_lava_ash_se
-    sw: border_cooled_lava_ash_sw
-    inner_ne: border_cooled_lava_ash_inner_ne
-    inner_nw: border_cooled_lava_ash_inner_nw
-    inner_se: border_cooled_lava_ash_inner_se
-    inner_sw: border_cooled_lava_ash_inner_sw
-
-# Isla Volcánica (T5.5): cinder gravel spills over the ash.
-- id: cinder_path_ash
-  from: cinder_path
-  to: ash
-  priority: 16
-  pieces:
-    n: border_cinder_path_ash_n
-    s: border_cinder_path_ash_s
-    e: border_cinder_path_ash_e
-    w: border_cinder_path_ash_w
-    ne: border_cinder_path_ash_ne
-    nw: border_cinder_path_ash_nw
-    se: border_cinder_path_ash_se
-    sw: border_cinder_path_ash_sw
-    inner_ne: border_cinder_path_ash_inner_ne
-    inner_nw: border_cinder_path_ash_inner_nw
-    inner_se: border_cinder_path_ash_inner_se
-    inner_sw: border_cinder_path_ash_inner_sw
-
-# Isla Volcánica (T5.5): a crust rim over molten lava (the lava tile stays unwalkable).
-- id: cooled_lava_lava
-  from: cooled_lava
-  to: lava
-  priority: 20
-  pieces:
-    n: border_cooled_lava_lava_n
-    s: border_cooled_lava_lava_s
-    e: border_cooled_lava_lava_e
-    w: border_cooled_lava_lava_w
-    ne: border_cooled_lava_lava_ne
-    nw: border_cooled_lava_lava_nw
-    se: border_cooled_lava_lava_se
-    sw: border_cooled_lava_lava_sw
-    inner_ne: border_cooled_lava_lava_inner_ne
-    inner_nw: border_cooled_lava_lava_inner_nw
-    inner_se: border_cooled_lava_lava_inner_se
-    inner_sw: border_cooled_lava_lava_inner_sw
+# Where fringes reach water, the surf goes under them, shaped like all of them together: the
+# wet, darker edge of the land, a bright line of foam and a broken line that rolls in over 4
+# frames. Water grounds never border each other.
+shore:
+  water: [water_shallow, water_shoal]
+  pieces: border_surf

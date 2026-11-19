@@ -402,6 +402,58 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
   });
 
+  it('checks the border ladder: grounds, lower grounds, pieces and the surf (docs/06 "Bordes")', () => {
+    writeFileSync(
+      file("data/borders.yaml"),
+      [
+        "ladder:",
+        "  - { ground: water_shallow }",
+        "  - { ground: water_shoal, pieces: border_sand }",
+        "  - { ground: sand, pieces: border_sand, over: [grass, lava] }",
+        "  - { ground: dirt, edge: clods }",
+        "  - { ground: grass, pieces: border_nothing, edge: tufts }",
+        "  - { ground: sand }",
+        "  - { ground: ash, pieces: border_ash, edge: zigzag }",
+        "shore:",
+        "  water: [water_shallow, water_shoal, dirt]",
+        "  pieces: border_surf",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.includes("borders.yaml"));
+    const has = (text: string): boolean => out.some((m) => m.includes(text));
+    expect(has('pieces "border_sand" are already the ones of the fringe of "water_shoal"')).toBe(
+      true,
+    );
+    expect(has('"grass" is not below "sand"')).toBe(true);
+    expect(has('"lava" is not on the ladder')).toBe(true);
+    expect(has("edge needs pieces")).toBe(true);
+    expect(has("none of the 12 pieces border_nothing_n ... border_nothing_inner_sw")).toBe(true);
+    expect(out.filter((m) => m.includes("border_nothing"))).toHaveLength(1);
+    expect(has('"sand" is already on the ladder')).toBe(true);
+    expect(has("ladder[6].edge: must be one of")).toBe(true); // zigzag is no edge style
+    expect(has('water "water_shoal" cannot have a fringe')).toBe(true);
+    expect(has('"dirt" is not on the ladder')).toBe(false); // it is, as a plain rung
+    // A piece that blocks, and one that can be picked up.
+    edit(
+      "data/items/borders.yaml",
+      "  sprite: borders/ash/n\n",
+      "  sprite: borders/ash/n\n  blocks_movement: true\n",
+    );
+    edit(
+      "data/items/borders.yaml",
+      "  sprite: borders/ash/e\n  name: item.border_ash.name\n  pickupable: false\n",
+      "  sprite: borders/ash/e\n  name: item.border_ash.name\n",
+    );
+    writeFileSync(
+      file("data/borders.yaml"),
+      "ladder:\n  - { ground: sand }\n  - { ground: ash, pieces: border_ash }\n",
+    );
+    const again = messages(root).filter((m) => m.includes("borders.yaml"));
+    expect(again.filter((m) => m.includes('"border_ash_n" must be a decoration'))).toHaveLength(1);
+    expect(again.filter((m) => m.includes('"border_ash_e" must have pickupable'))).toHaveLength(1);
+    expect(again).toHaveLength(2);
+  });
+
   it("checks outfits: ids, sprite folder and frame count (T0.5)", () => {
     writeFileSync(
       file("data/outfits.yaml"),
@@ -901,7 +953,7 @@ describe("validator diagnostics", () => {
     );
     writeFileSync(
       file("data/borders.yaml"),
-      "- id: grass_sand\n  from: grass\n  to: rope\n  pieces: { n: grass, s: grass, e: grass, w: grass, ne: grass, nw: grass, se: grass, sw: grass }\n",
+      "ladder:\n  - { ground: rope }\n  - { ground: grass, pieces: border_grass }\n",
     );
     const out = messages(root);
     expect(out.some((m) => m.includes('quest "lost_net" has no step "find_nett"'))).toBe(true);

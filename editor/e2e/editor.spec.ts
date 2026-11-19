@@ -244,8 +244,8 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   ] as const)
     expect((await tile(page, x, y, 7))?.ground).toBe("sand");
   expect((await tile(page, 1049, 1048, 7))?.ground).toBe("grass");
-  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual(["border_grass_sand_n"]);
-  expect((await tile(page, 1046, 1048, 7))?.stack).toEqual(["border_grass_sand_s"]);
+  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual(["border_grass_n"]);
+  expect((await tile(page, 1046, 1048, 7))?.stack).toEqual(["border_grass_s"]);
   expect((await tile(page, 1046, 1047, 7))?.stack).toEqual([]);
   await settled(page);
   await shot(page, "08-rect-autoborder");

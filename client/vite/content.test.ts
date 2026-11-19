@@ -133,7 +133,7 @@ describe("client content (T0.5)", () => {
     for (const lang of ["es", "en"]) {
       const texts = content.i18n[lang] ?? {};
       expect(texts["item.brasal_dock_sign.name"]).toBe(texts["item.signpost.name"]);
-      expect(texts["item.border_ash_sand_n.name"]).toBe(texts["item.border_ash_sand.name"]);
+      expect(texts["item.border_ash_n.name"]).toBe(texts["item.border_ash.name"]);
       expect(texts["item.brasal_dock_sign.name"]).toBeTruthy();
     }
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");

@@ -1,0 +1,735 @@
+# Border pieces (data/borders.yaml, docs/06 "Bordes"): the fringes of the grounds of the
+# ladder and the surf where they meet water. Stacked at the bottom of the tile they cover;
+# they never block and cannot be picked up. Each sprite has 4 looks (var_<n>), picked per tile
+# by the renderer; the surf rolls in over 4 frames (frame_<n>). Art: tools/spritepack
+# gen-borders (`make borders`), cut from each ground's own art.
+
+# Wet sand.
+- id: border_wet_sand_n
+  kind: decoration
+  sprite: borders/wet_sand/n
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_e
+  kind: decoration
+  sprite: borders/wet_sand/e
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_s
+  kind: decoration
+  sprite: borders/wet_sand/s
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_w
+  kind: decoration
+  sprite: borders/wet_sand/w
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_nw
+  kind: decoration
+  sprite: borders/wet_sand/nw
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_ne
+  kind: decoration
+  sprite: borders/wet_sand/ne
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_se
+  kind: decoration
+  sprite: borders/wet_sand/se
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_sw
+  kind: decoration
+  sprite: borders/wet_sand/sw
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_inner_nw
+  kind: decoration
+  sprite: borders/wet_sand/inner_nw
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_inner_ne
+  kind: decoration
+  sprite: borders/wet_sand/inner_ne
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_inner_se
+  kind: decoration
+  sprite: borders/wet_sand/inner_se
+  name: item.border_wet_sand.name
+  pickupable: false
+
+- id: border_wet_sand_inner_sw
+  kind: decoration
+  sprite: borders/wet_sand/inner_sw
+  name: item.border_wet_sand.name
+  pickupable: false
+
+# Sand.
+- id: border_sand_n
+  kind: decoration
+  sprite: borders/sand/n
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_e
+  kind: decoration
+  sprite: borders/sand/e
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_s
+  kind: decoration
+  sprite: borders/sand/s
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_w
+  kind: decoration
+  sprite: borders/sand/w
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_nw
+  kind: decoration
+  sprite: borders/sand/nw
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_ne
+  kind: decoration
+  sprite: borders/sand/ne
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_se
+  kind: decoration
+  sprite: borders/sand/se
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_sw
+  kind: decoration
+  sprite: borders/sand/sw
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_inner_nw
+  kind: decoration
+  sprite: borders/sand/inner_nw
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_inner_ne
+  kind: decoration
+  sprite: borders/sand/inner_ne
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_inner_se
+  kind: decoration
+  sprite: borders/sand/inner_se
+  name: item.border_sand.name
+  pickupable: false
+
+- id: border_sand_inner_sw
+  kind: decoration
+  sprite: borders/sand/inner_sw
+  name: item.border_sand.name
+  pickupable: false
+
+# Cooled lava.
+- id: border_cooled_lava_n
+  kind: decoration
+  sprite: borders/cooled_lava/n
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_e
+  kind: decoration
+  sprite: borders/cooled_lava/e
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_s
+  kind: decoration
+  sprite: borders/cooled_lava/s
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_w
+  kind: decoration
+  sprite: borders/cooled_lava/w
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_nw
+  kind: decoration
+  sprite: borders/cooled_lava/nw
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_ne
+  kind: decoration
+  sprite: borders/cooled_lava/ne
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_se
+  kind: decoration
+  sprite: borders/cooled_lava/se
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_sw
+  kind: decoration
+  sprite: borders/cooled_lava/sw
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_inner_nw
+  kind: decoration
+  sprite: borders/cooled_lava/inner_nw
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_inner_ne
+  kind: decoration
+  sprite: borders/cooled_lava/inner_ne
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_inner_se
+  kind: decoration
+  sprite: borders/cooled_lava/inner_se
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_inner_sw
+  kind: decoration
+  sprite: borders/cooled_lava/inner_sw
+  name: item.border_cooled_lava.name
+  pickupable: false
+
+# Cinder.
+- id: border_cinder_path_n
+  kind: decoration
+  sprite: borders/cinder_path/n
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_e
+  kind: decoration
+  sprite: borders/cinder_path/e
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_s
+  kind: decoration
+  sprite: borders/cinder_path/s
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_w
+  kind: decoration
+  sprite: borders/cinder_path/w
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_nw
+  kind: decoration
+  sprite: borders/cinder_path/nw
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_ne
+  kind: decoration
+  sprite: borders/cinder_path/ne
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_se
+  kind: decoration
+  sprite: borders/cinder_path/se
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_sw
+  kind: decoration
+  sprite: borders/cinder_path/sw
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_inner_nw
+  kind: decoration
+  sprite: borders/cinder_path/inner_nw
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_inner_ne
+  kind: decoration
+  sprite: borders/cinder_path/inner_ne
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_inner_se
+  kind: decoration
+  sprite: borders/cinder_path/inner_se
+  name: item.border_cinder_path.name
+  pickupable: false
+
+- id: border_cinder_path_inner_sw
+  kind: decoration
+  sprite: borders/cinder_path/inner_sw
+  name: item.border_cinder_path.name
+  pickupable: false
+
+# Dirt.
+- id: border_dirt_n
+  kind: decoration
+  sprite: borders/dirt/n
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_e
+  kind: decoration
+  sprite: borders/dirt/e
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_s
+  kind: decoration
+  sprite: borders/dirt/s
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_w
+  kind: decoration
+  sprite: borders/dirt/w
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_nw
+  kind: decoration
+  sprite: borders/dirt/nw
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_ne
+  kind: decoration
+  sprite: borders/dirt/ne
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_se
+  kind: decoration
+  sprite: borders/dirt/se
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_sw
+  kind: decoration
+  sprite: borders/dirt/sw
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_inner_nw
+  kind: decoration
+  sprite: borders/dirt/inner_nw
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_inner_ne
+  kind: decoration
+  sprite: borders/dirt/inner_ne
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_inner_se
+  kind: decoration
+  sprite: borders/dirt/inner_se
+  name: item.border_dirt.name
+  pickupable: false
+
+- id: border_dirt_inner_sw
+  kind: decoration
+  sprite: borders/dirt/inner_sw
+  name: item.border_dirt.name
+  pickupable: false
+
+# Basalt.
+- id: border_basalt_n
+  kind: decoration
+  sprite: borders/basalt/n
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_e
+  kind: decoration
+  sprite: borders/basalt/e
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_s
+  kind: decoration
+  sprite: borders/basalt/s
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_w
+  kind: decoration
+  sprite: borders/basalt/w
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_nw
+  kind: decoration
+  sprite: borders/basalt/nw
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_ne
+  kind: decoration
+  sprite: borders/basalt/ne
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_se
+  kind: decoration
+  sprite: borders/basalt/se
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_sw
+  kind: decoration
+  sprite: borders/basalt/sw
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_inner_nw
+  kind: decoration
+  sprite: borders/basalt/inner_nw
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_inner_ne
+  kind: decoration
+  sprite: borders/basalt/inner_ne
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_inner_se
+  kind: decoration
+  sprite: borders/basalt/inner_se
+  name: item.border_basalt.name
+  pickupable: false
+
+- id: border_basalt_inner_sw
+  kind: decoration
+  sprite: borders/basalt/inner_sw
+  name: item.border_basalt.name
+  pickupable: false
+
+# Stone floor.
+- id: border_stone_floor_n
+  kind: decoration
+  sprite: borders/stone_floor/n
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_e
+  kind: decoration
+  sprite: borders/stone_floor/e
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_s
+  kind: decoration
+  sprite: borders/stone_floor/s
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_w
+  kind: decoration
+  sprite: borders/stone_floor/w
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_nw
+  kind: decoration
+  sprite: borders/stone_floor/nw
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_ne
+  kind: decoration
+  sprite: borders/stone_floor/ne
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_se
+  kind: decoration
+  sprite: borders/stone_floor/se
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_sw
+  kind: decoration
+  sprite: borders/stone_floor/sw
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_inner_nw
+  kind: decoration
+  sprite: borders/stone_floor/inner_nw
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_inner_ne
+  kind: decoration
+  sprite: borders/stone_floor/inner_ne
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_inner_se
+  kind: decoration
+  sprite: borders/stone_floor/inner_se
+  name: item.border_stone_floor.name
+  pickupable: false
+
+- id: border_stone_floor_inner_sw
+  kind: decoration
+  sprite: borders/stone_floor/inner_sw
+  name: item.border_stone_floor.name
+  pickupable: false
+
+# Grass.
+- id: border_grass_n
+  kind: decoration
+  sprite: borders/grass/n
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_e
+  kind: decoration
+  sprite: borders/grass/e
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_s
+  kind: decoration
+  sprite: borders/grass/s
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_w
+  kind: decoration
+  sprite: borders/grass/w
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_nw
+  kind: decoration
+  sprite: borders/grass/nw
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_ne
+  kind: decoration
+  sprite: borders/grass/ne
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_se
+  kind: decoration
+  sprite: borders/grass/se
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_sw
+  kind: decoration
+  sprite: borders/grass/sw
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_inner_nw
+  kind: decoration
+  sprite: borders/grass/inner_nw
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_inner_ne
+  kind: decoration
+  sprite: borders/grass/inner_ne
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_inner_se
+  kind: decoration
+  sprite: borders/grass/inner_se
+  name: item.border_grass.name
+  pickupable: false
+
+- id: border_grass_inner_sw
+  kind: decoration
+  sprite: borders/grass/inner_sw
+  name: item.border_grass.name
+  pickupable: false
+
+# Ash.
+- id: border_ash_n
+  kind: decoration
+  sprite: borders/ash/n
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_e
+  kind: decoration
+  sprite: borders/ash/e
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_s
+  kind: decoration
+  sprite: borders/ash/s
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_w
+  kind: decoration
+  sprite: borders/ash/w
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_nw
+  kind: decoration
+  sprite: borders/ash/nw
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_ne
+  kind: decoration
+  sprite: borders/ash/ne
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_se
+  kind: decoration
+  sprite: borders/ash/se
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_sw
+  kind: decoration
+  sprite: borders/ash/sw
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_inner_nw
+  kind: decoration
+  sprite: borders/ash/inner_nw
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_inner_ne
+  kind: decoration
+  sprite: borders/ash/inner_ne
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_inner_se
+  kind: decoration
+  sprite: borders/ash/inner_se
+  name: item.border_ash.name
+  pickupable: false
+
+- id: border_ash_inner_sw
+  kind: decoration
+  sprite: borders/ash/inner_sw
+  name: item.border_ash.name
+  pickupable: false
+
+# Surf over the fringes on water.
+- id: border_surf_n
+  kind: decoration
+  sprite: borders/surf/n
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_e
+  kind: decoration
+  sprite: borders/surf/e
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_s
+  kind: decoration
+  sprite: borders/surf/s
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_w
+  kind: decoration
+  sprite: borders/surf/w
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_nw
+  kind: decoration
+  sprite: borders/surf/nw
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_ne
+  kind: decoration
+  sprite: borders/surf/ne
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_se
+  kind: decoration
+  sprite: borders/surf/se
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_sw
+  kind: decoration
+  sprite: borders/surf/sw
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_inner_nw
+  kind: decoration
+  sprite: borders/surf/inner_nw
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_inner_ne
+  kind: decoration
+  sprite: borders/surf/inner_ne
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_inner_se
+  kind: decoration
+  sprite: borders/surf/inner_se
+  name: item.border_surf.name
+  pickupable: false
+
+- id: border_surf_inner_sw
+  kind: decoration
+  sprite: borders/surf/inner_sw
+  name: item.border_surf.name
+  pickupable: false

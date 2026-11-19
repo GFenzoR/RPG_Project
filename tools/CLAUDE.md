@@ -482,11 +482,12 @@ El test del motor es `src/engine/engine.test.ts`.
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
-Los PNG de bordes de `assets/sprites/borders/` salen de
-`node --experimental-strip-types tools/spritepack/src/gen-borders.ts` (regenéralos si
-cambia `data/borders.yaml` o el sprite de un suelo: cada pieza recorta la textura del suelo
-de origen, o su color si es placeholder; las orillas del agua salen con 3 frames más de
-espuma, `<pieza>/frame_<n>`). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+Los PNG de bordes de `assets/sprites/borders/` salen de `make borders`
+(`tools/spritepack/src/gen-borders.ts`; regenéralos si cambia `data/borders.yaml` o el
+sprite de un suelo; borra solo los que ya no van): cada suelo de la escalera con borde tiene sus
+12 piezas en 4 looks (`<pieza>/var_<n>`) con la forma compartida por todos los suelos y la
+orilla de su `edge`, y la espuma (`borders/surf/`) sus 4 frames en cada look
+(`<pieza>/var_<n>/frame_<m>`); docs/06 "Bordes". Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
 terceros: `assets/README.md`. También arma las animaciones de criaturas (`src/anims.ts`,
 docs/17 ANI): compone capas de un pack con paletas (`palettes`, `animations`), corta los

@@ -1,7 +1,7 @@
 // Terrain ops built on the tile primitives: fill, autoborder, scatter, stamp. Each returns
 // its inverse as primitive ops (paint_ground / erase / place_item / remove_item), so undo
 // never needs the rules, the seed or the prefab again.
-import { borderItems, borderPieces, orderedRules } from "./borders.ts";
+import { borderItems, borderPieces } from "./borders.ts";
 import type { Draft } from "./draft.ts";
 import { InvalidOp, cellsOf, checkItem, checkPos, checkRect, paintCells, push } from "./draft.ts";
 import { prefabSize } from "./prefab.ts";
@@ -41,19 +41,23 @@ export function fill(d: Draft, op: FillOp, opts: OpOptions): MapOp[] {
   return paintCells(d, z, cells, op.item);
 }
 
-/** Recomputes the border pieces of every tile in the rect. */
+/**
+ * Recomputes the border pieces of every tile in the rect. A tile that holds a wall gets none:
+ * the wall covers it, and its stack stays the wall's (docs/06 "Bordes").
+ */
 export function autoborder(d: Draft, op: AutoborderOp, opts: OpOptions): MapOp[] {
   if (!opts.borders) throw new InvalidOp("autoborder needs the rules of data/borders.yaml");
   checkRect(op.rect);
-  const rules = orderedRules(opts.borders);
-  const pieces = borderItems(rules);
+  const set = opts.borders;
+  const pieces = borderItems(set);
   const inverse: MapOp[] = [];
   const groundAt = (x: number, y: number): string | null => d.groundAt(x, y, op.floor);
   for (const c of cellsOf(op)) {
     const pos = { x: c.x, y: c.y, z: op.floor };
     const prev = d.stackAt(c.x, c.y, op.floor);
     const kept = prev.filter((id) => !pieces.has(id));
-    const next = [...borderPieces(c.x, c.y, groundAt, rules), ...kept];
+    const walled = kept.some((id) => opts.itemKind?.(id) === "wall");
+    const next = walled ? kept : [...borderPieces(c.x, c.y, groundAt, set), ...kept];
     inverse.push(...d.setStack(pos, next));
   }
   return inverse;

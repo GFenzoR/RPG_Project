@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 33, "cy": 33, "z": 8 },
-  "palette": ["stone_floor", "dirt", "stairs_up"],
+  "palette": ["stone_floor", "dirt", "border_stone_floor_w", "stairs_up", "border_stone_floor_e", "border_stone_floor_inner_sw", "border_stone_floor_sw", "border_stone_floor_se", "border_stone_floor_inner_se", "border_stone_floor_s"],
   "ground": [
     [-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1],
     [-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1],
@@ -37,6 +37,21 @@
     [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
   ],
   "items": [
-    { "x": 12, "y": 0, "stack": [2] }
+    { "x": 11, "y": 0, "stack": [2] },
+    { "x": 12, "y": 0, "stack": [3] },
+    { "x": 19, "y": 0, "stack": [4] },
+    { "x": 11, "y": 1, "stack": [5] },
+    { "x": 12, "y": 1, "stack": [6] },
+    { "x": 18, "y": 1, "stack": [7] },
+    { "x": 19, "y": 1, "stack": [8] },
+    { "x": 12, "y": 2, "stack": [5] },
+    { "x": 13, "y": 2, "stack": [9] },
+    { "x": 14, "y": 2, "stack": [6] },
+    { "x": 16, "y": 2, "stack": [7] },
+    { "x": 17, "y": 2, "stack": [9] },
+    { "x": 18, "y": 2, "stack": [8] },
+    { "x": 14, "y": 3, "stack": [5] },
+    { "x": 15, "y": 3, "stack": [9] },
+    { "x": 16, "y": 3, "stack": [8] }
   ]
 }

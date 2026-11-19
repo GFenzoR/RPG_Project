@@ -3,7 +3,7 @@
 import { chunkKey } from "@rpg/map-format/ops";
 import type {
   AuxList,
-  BorderRule,
+  BorderSet,
   Chunk,
   EntityList,
   House,
@@ -78,8 +78,8 @@ export interface Bootstrap {
    * (see hashText); the base saves are checked against.
    */
   base: Record<string, string>;
-  /** Rules of data/borders.yaml, for the automatic autoborder. */
-  borders: BorderRule[];
+  /** The ladder of data/borders.yaml, for the automatic autoborder. */
+  borders: BorderSet;
   /** Monster and NPC IDs of data/monsters and data/npcs, for the entity panels. */
   monsters: string[];
   npcs: string[];

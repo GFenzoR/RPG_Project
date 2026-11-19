@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 133, "cy": 191, "z": 7 },
-  "palette": ["water_shallow", "dock_planks", "border_sand_water_sw", "border_sand_water_w", "border_sand_water_nw", "cargo_crate"],
+  "palette": ["water_shallow", "dock_planks", "border_surf_sw", "border_sand_sw", "border_surf_w", "border_sand_w", "border_surf_nw", "border_sand_nw", "cargo_crate"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -37,10 +37,10 @@
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
   ],
   "items": [
-    { "x": 0, "y": 15, "stack": [2] },
-    { "x": 0, "y": 16, "stack": [3] },
-    { "x": 0, "y": 17, "stack": [3] },
-    { "x": 0, "y": 18, "stack": [4] },
-    { "x": 1, "y": 25, "stack": [5] }
+    { "x": 0, "y": 15, "stack": [2, 3] },
+    { "x": 0, "y": 16, "stack": [4, 5] },
+    { "x": 0, "y": 17, "stack": [4, 5] },
+    { "x": 0, "y": 18, "stack": [6, 7] },
+    { "x": 1, "y": 25, "stack": [8] }
   ]
 }

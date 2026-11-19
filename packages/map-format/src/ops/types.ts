@@ -1,7 +1,7 @@
 // Edit operations (docs/04-map-editor-and-ai.md, "Operaciones"). Plain JSON, so the editor,
 // mapcli and the MCP server can exchange, store and replay them.
 import type { HouseRect, PortalKind, Position, Rect, SpawnMonster, ZoneType } from "../types.ts";
-import type { BorderRule } from "./borders.ts";
+import type { BorderSet } from "./borders.ts";
 import type { Prefab } from "./prefab.ts";
 
 /** A tile of one floor, in global coordinates. */
@@ -271,8 +271,8 @@ export interface OpOptions {
   monsterKnown?: (id: string) => boolean;
   /** When given, place_npc rejects NPCs it does not know. */
   npcKnown?: (id: string) => boolean;
-  /** Rules of data/borders.yaml; autoborder needs them. */
-  borders?: readonly BorderRule[];
+  /** The ladder of data/borders.yaml; autoborder needs it. */
+  borders?: BorderSet;
   /** Prefab lookup (world/prefabs/); stamp needs it. */
   prefab?: (id: string) => Prefab | undefined;
 }

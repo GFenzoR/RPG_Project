@@ -4,7 +4,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { LANGUAGES } from "@rpg/content-schema";
 import { parse } from "yaml";
-import type { BorderRule } from "./ops/borders.ts";
+import { EDGE_STYLES } from "./ops/borders.ts";
+import type { BorderSet, EdgeStyle, LadderStep } from "./ops/borders.ts";
 
 export interface ItemInfo {
   id: string;
@@ -83,8 +84,8 @@ export interface ContentIndex {
   npcs: Set<string>;
   /** Configured language (LANGUAGES of @rpg/content-schema) → keys in i18n/<lang>/*.yaml. */
   i18n: Map<string, Set<string>>;
-  /** Autoborder rules of data/borders.yaml (well-formed entries only; content-schema checks the rest). */
-  borders: BorderRule[];
+  /** The ladder of data/borders.yaml (well-formed entries only; content-schema checks the rest). */
+  borders: BorderSet;
   /** Boat routes of data/boat_routes.yaml (T3.5): well-formed entries, with their index in the file. */
   routes: BoatRouteInfo[];
   /**
@@ -233,25 +234,7 @@ export function loadContent(root: string): ContentIndex {
     }
     i18n.set(lang, keys);
   }
-  const borders: BorderRule[] = [];
-  const rules = readYaml(join(root, "data", "borders.yaml"));
-  if (Array.isArray(rules))
-    for (const r of rules) {
-      if (!isObj(r) || !isObj(r["pieces"])) continue;
-      const { id, from, to, priority, pieces } = r;
-      if (typeof id !== "string" || typeof from !== "string" || typeof to !== "string") continue;
-      const p = pieces as Record<string, unknown>;
-      const required = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
-      if (!Object.values(p).every((v) => typeof v === "string")) continue;
-      if (!required.every((k) => typeof p[k] === "string")) continue;
-      borders.push({
-        id,
-        from,
-        to,
-        ...(typeof priority === "number" ? { priority } : {}),
-        pieces: p as BorderRule["pieces"],
-      });
-    }
+  const borders = readBorders(readYaml(join(root, "data", "borders.yaml")));
   const routes: BoatRouteInfo[] = [];
   const rawRoutes = readYaml(join(root, routesFile));
   if (Array.isArray(rawRoutes))
@@ -333,4 +316,28 @@ function loadTeleports(root: string): TeleportInfo[] {
     }
   }
   return out;
+}
+
+const isStrings = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((s) => typeof s === "string");
+
+/** data/borders.yaml, keeping only well-formed entries (content-schema reports the rest). */
+export function readBorders(raw: unknown): BorderSet {
+  const set: BorderSet = { ladder: [] };
+  if (!isObj(raw)) return set;
+  const ladder = raw["ladder"];
+  if (Array.isArray(ladder))
+    for (const r of ladder) {
+      if (!isObj(r) || typeof r["ground"] !== "string") continue;
+      const step: LadderStep = { ground: r["ground"] };
+      if (typeof r["pieces"] === "string") step.pieces = r["pieces"];
+      const edge = EDGE_STYLES.find((e) => e === r["edge"]);
+      if (edge) step.edge = edge as EdgeStyle;
+      if (isStrings(r["over"])) step.over = r["over"];
+      set.ladder.push(step);
+    }
+  const shore = raw["shore"];
+  if (isObj(shore) && isStrings(shore["water"]) && typeof shore["pieces"] === "string")
+    set.shore = { water: shore["water"], pieces: shore["pieces"] };
+  return set;
 }

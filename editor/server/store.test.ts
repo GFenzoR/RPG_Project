@@ -656,7 +656,7 @@ describe("bootstrap", () => {
       ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
       ...lists.map((f) => `world/islands/volcan/${f}.yaml`),
     ]);
-    expect(b.borders.map((r) => r.id)).toContain("grass_sand");
+    expect(b.borders.ladder.map((s) => s.ground)).toContain("grass");
     expect(b.monsters).toContain("wolf");
   });
 });
