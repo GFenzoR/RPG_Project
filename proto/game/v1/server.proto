@@ -587,6 +587,9 @@ message MarketOffer {
   uint64 expires_at = 6;
   string owner_name = 7;
   bool own = 8;
+  // A sell offer of an equipable is one instance: its attribute (each such offer is a row
+  // of its own). Unset on a buy offer, which any instance fills.
+  ItemMods mods = 9;
 }
 
 // MarketMailItem is an item waiting in the mailbox.
@@ -646,6 +649,10 @@ message MarketUpdate {
   // switch to read-only goes out at once). A client whose window is already closed
   // ignores it (it must not open the window again).
   bool refresh = 21;
+  // For an equipable browsed item: the mods of each instance counted in owned (one entry
+  // per instance), so the player picks which one to sell (MarketCreate.mods,
+  // MarketAccept.mods).
+  repeated ItemMods owned_mods = 22;
 }
 
 // HouseUpdate opens or refreshes the house window (T5.4); open = false closes it (the

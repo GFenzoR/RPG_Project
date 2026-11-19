@@ -229,13 +229,16 @@ message MarketBrowse {
 
 // MarketCreate posts an offer: SELL takes the units from the backpack, BUY takes amount
 // × price in coins; both pay the posting fee. duration_index points into
-// MarketUpdate.durations_hours.
+// MarketUpdate.durations_hours. A SELL of an item that rolls attributes (an equipable,
+// docs/02 "Atributos de items") is one instance: amount 1 and mods, the instance's
+// ItemMods as MarketUpdate.owned_mods lists them (unset: one without mods).
 message MarketCreate {
   MarketSide side = 1;
   uint32 item_id = 2;
   uint32 amount = 3;
   uint64 price = 4;
   uint32 duration_index = 5;
+  ItemMods mods = 6;
 }
 
 // MarketCancel takes an own offer down; its deposit goes to the mailbox.
@@ -243,10 +246,13 @@ message MarketCancel {
   uint64 offer_id = 1;
 }
 
-// MarketAccept buys from a sell offer or sells to a buy offer, amount units.
+// MarketAccept buys from a sell offer or sells to a buy offer, amount units. Selling an
+// equipable to a buy offer gives one instance the seller picks: amount 1 and its mods
+// (as in MarketCreate).
 message MarketAccept {
   uint64 offer_id = 1;
   uint32 amount = 2;
+  ItemMods mods = 3;
 }
 
 // MarketWithdraw moves the mailbox into the inventory: the items in order while they fit,

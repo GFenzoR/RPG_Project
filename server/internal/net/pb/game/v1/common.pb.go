@@ -513,10 +513,12 @@ func (*ActionTarget_CreatureId) isActionTarget_Target() {}
 
 // ItemStack is one item instance as the client sees it. item_id is the stable id from
 // data/ids.lock.yaml; count is the stack size (or charges) and is 0 when not stackable.
+// mods is the instance's own data (docs/02 "Atributos de items"); unset on a plain item.
 type ItemStack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Mods          *ItemMods              `protobuf:"bytes,3,opt,name=mods,proto3" json:"mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -565,6 +567,78 @@ func (x *ItemStack) GetCount() uint32 {
 	return 0
 }
 
+func (x *ItemStack) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
+}
+
+// ItemMods is what makes one item instance different from another of its item_id: the
+// one attribute every equipable rolls when it is created (attribute = an id of
+// data/attributes.yaml, value its amount; the client shows the attribute's text with
+// {value}) and the refine level of the forge (0 = not refined). An item with mods never
+// stacks. A client that does not know the attribute shows nothing for it.
+type ItemMods struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attribute     string                 `protobuf:"bytes,1,opt,name=attribute,proto3" json:"attribute,omitempty"`
+	Value         int32                  `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
+	Refine        uint32                 `protobuf:"varint,3,opt,name=refine,proto3" json:"refine,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ItemMods) Reset() {
+	*x = ItemMods{}
+	mi := &file_game_v1_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ItemMods) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ItemMods) ProtoMessage() {}
+
+func (x *ItemMods) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ItemMods.ProtoReflect.Descriptor instead.
+func (*ItemMods) Descriptor() ([]byte, []int) {
+	return file_game_v1_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ItemMods) GetAttribute() string {
+	if x != nil {
+		return x.Attribute
+	}
+	return ""
+}
+
+func (x *ItemMods) GetValue() int32 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
+func (x *ItemMods) GetRefine() uint32 {
+	if x != nil {
+		return x.Refine
+	}
+	return 0
+}
+
 // LocalizedText is player-visible text sent as an i18n key plus parameters
 // (never as final text). The client translates it with its own locale.
 type LocalizedText struct {
@@ -577,7 +651,7 @@ type LocalizedText struct {
 
 func (x *LocalizedText) Reset() {
 	*x = LocalizedText{}
-	mi := &file_game_v1_common_proto_msgTypes[5]
+	mi := &file_game_v1_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +663,7 @@ func (x *LocalizedText) String() string {
 func (*LocalizedText) ProtoMessage() {}
 
 func (x *LocalizedText) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_common_proto_msgTypes[5]
+	mi := &file_game_v1_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +676,7 @@ func (x *LocalizedText) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LocalizedText.ProtoReflect.Descriptor instead.
 func (*LocalizedText) Descriptor() ([]byte, []int) {
-	return file_game_v1_common_proto_rawDescGZIP(), []int{5}
+	return file_game_v1_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LocalizedText) GetKey() string {
@@ -639,7 +713,7 @@ type TextParam struct {
 
 func (x *TextParam) Reset() {
 	*x = TextParam{}
-	mi := &file_game_v1_common_proto_msgTypes[6]
+	mi := &file_game_v1_common_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -651,7 +725,7 @@ func (x *TextParam) String() string {
 func (*TextParam) ProtoMessage() {}
 
 func (x *TextParam) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_common_proto_msgTypes[6]
+	mi := &file_game_v1_common_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -664,7 +738,7 @@ func (x *TextParam) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TextParam.ProtoReflect.Descriptor instead.
 func (*TextParam) Descriptor() ([]byte, []int) {
-	return file_game_v1_common_proto_rawDescGZIP(), []int{6}
+	return file_game_v1_common_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TextParam) GetName() string {
@@ -770,10 +844,15 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionH\x00R\x03pos\x12!\n" +
 	"\vcreature_id\x18\x02 \x01(\rH\x00R\n" +
 	"creatureIdB\b\n" +
-	"\x06target\":\n" +
+	"\x06target\"a\n" +
 	"\tItemStack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\rR\x05count\"M\n" +
+	"\x05count\x18\x02 \x01(\rR\x05count\x12%\n" +
+	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"V\n" +
+	"\bItemMods\x12\x1c\n" +
+	"\tattribute\x18\x01 \x01(\tR\tattribute\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value\x12\x16\n" +
+	"\x06refine\x18\x03 \x01(\rR\x06refine\"M\n" +
 	"\rLocalizedText\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
 	"\x06params\x18\x02 \x03(\v2\x12.game.v1.TextParamR\x06params\"\xa3\x01\n" +
@@ -827,7 +906,7 @@ func file_game_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_game_v1_common_proto_goTypes = []any{
 	(Direction)(0),        // 0: game.v1.Direction
 	(EquipmentSlot)(0),    // 1: game.v1.EquipmentSlot
@@ -837,21 +916,23 @@ var file_game_v1_common_proto_goTypes = []any{
 	(*ItemLocation)(nil),  // 5: game.v1.ItemLocation
 	(*ActionTarget)(nil),  // 6: game.v1.ActionTarget
 	(*ItemStack)(nil),     // 7: game.v1.ItemStack
-	(*LocalizedText)(nil), // 8: game.v1.LocalizedText
-	(*TextParam)(nil),     // 9: game.v1.TextParam
+	(*ItemMods)(nil),      // 8: game.v1.ItemMods
+	(*LocalizedText)(nil), // 9: game.v1.LocalizedText
+	(*TextParam)(nil),     // 10: game.v1.TextParam
 }
 var file_game_v1_common_proto_depIdxs = []int32{
-	3, // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
-	1, // 1: game.v1.ItemLocation.slot:type_name -> game.v1.EquipmentSlot
-	4, // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
-	3, // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
-	9, // 4: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
-	7, // 5: game.v1.TextParam.item:type_name -> game.v1.ItemStack
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	3,  // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
+	1,  // 1: game.v1.ItemLocation.slot:type_name -> game.v1.EquipmentSlot
+	4,  // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
+	3,  // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
+	8,  // 4: game.v1.ItemStack.mods:type_name -> game.v1.ItemMods
+	10, // 5: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
+	7,  // 6: game.v1.TextParam.item:type_name -> game.v1.ItemStack
+	7,  // [7:7] is the sub-list for method output_type
+	7,  // [7:7] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_common_proto_init() }
@@ -868,7 +949,7 @@ func file_game_v1_common_proto_init() {
 		(*ActionTarget_Pos)(nil),
 		(*ActionTarget_CreatureId)(nil),
 	}
-	file_game_v1_common_proto_msgTypes[6].OneofWrappers = []any{
+	file_game_v1_common_proto_msgTypes[7].OneofWrappers = []any{
 		(*TextParam_Text)(nil),
 		(*TextParam_Number)(nil),
 		(*TextParam_ContentId)(nil),
@@ -880,7 +961,7 @@ func file_game_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_common_proto_rawDesc), len(file_game_v1_common_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

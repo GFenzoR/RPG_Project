@@ -68,9 +68,22 @@ message ActionTarget {
 
 // ItemStack is one item instance as the client sees it. item_id is the stable id from
 // data/ids.lock.yaml; count is the stack size (or charges) and is 0 when not stackable.
+// mods is the instance's own data (docs/02 "Atributos de items"); unset on a plain item.
 message ItemStack {
   uint32 item_id = 1;
   uint32 count = 2;
+  ItemMods mods = 3;
+}
+
+// ItemMods is what makes one item instance different from another of its item_id: the
+// one attribute every equipable rolls when it is created (attribute = an id of
+// data/attributes.yaml, value its amount; the client shows the attribute's text with
+// {value}) and the refine level of the forge (0 = not refined). An item with mods never
+// stacks. A client that does not know the attribute shows nothing for it.
+message ItemMods {
+  string attribute = 1;
+  int32 value = 2;
+  uint32 refine = 3;
 }
 
 // LocalizedText is player-visible text sent as an i18n key plus parameters

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/common.proto.
  */
 export const file_game_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKRAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCIrCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDSJACg1Mb2NhbGl6ZWRUZXh0EgsKA2tleRgBIAEoCRIiCgZwYXJhbXMYAiADKAsyEi5nYW1lLnYxLlRleHRQYXJhbSJ+CglUZXh0UGFyYW0SDAoEbmFtZRgBIAEoCRIOCgR0ZXh0GAIgASgJSAASEAoGbnVtYmVyGAMgASgDSAASFAoKY29udGVudF9pZBgEIAEoCUgAEiIKBGl0ZW0YBSABKAsyEi5nYW1lLnYxLkl0ZW1TdGFja0gAQgcKBXZhbHVlKuABCglEaXJlY3Rpb24SGQoVRElSRUNUSU9OX1VOU1BFQ0lGSUVEEAASEwoPRElSRUNUSU9OX05PUlRIEAESGAoURElSRUNUSU9OX05PUlRIX0VBU1QQAhISCg5ESVJFQ1RJT05fRUFTVBADEhgKFERJUkVDVElPTl9TT1VUSF9FQVNUEAQSEwoPRElSRUNUSU9OX1NPVVRIEAUSGAoURElSRUNUSU9OX1NPVVRIX1dFU1QQBhISCg5ESVJFQ1RJT05fV0VTVBAHEhgKFERJUkVDVElPTl9OT1JUSF9XRVNUEAgquQIKDUVxdWlwbWVudFNsb3QSHgoaRVFVSVBNRU5UX1NMT1RfVU5TUEVDSUZJRUQQABIXChNFUVVJUE1FTlRfU0xPVF9IRUFEEAESFwoTRVFVSVBNRU5UX1NMT1RfTkVDSxACEhsKF0VRVUlQTUVOVF9TTE9UX0JBQ0tQQUNLEAMSGAoURVFVSVBNRU5UX1NMT1RfQVJNT1IQBBIdChlFUVVJUE1FTlRfU0xPVF9SSUdIVF9IQU5EEAUSHAoYRVFVSVBNRU5UX1NMT1RfTEVGVF9IQU5EEAYSFwoTRVFVSVBNRU5UX1NMT1RfTEVHUxAHEhcKE0VRVUlQTUVOVF9TTE9UX0ZFRVQQCBIXChNFUVVJUE1FTlRfU0xPVF9SSU5HEAkSFwoTRVFVSVBNRU5UX1NMT1RfQU1NTxAKKlQKCk1hcmtldFNpZGUSGwoXTUFSS0VUX1NJREVfVU5TUEVDSUZJRUQQABIUChBNQVJLRVRfU0lERV9TRUxMEAESEwoPTUFSS0VUX1NJREVfQlVZEAJCRlpEZ2l0aHViLmNvbS9HRmVuem9SL1JQR19Qcm9qZWN0L3NlcnZlci9pbnRlcm5hbC9uZXQvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
+  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKRAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCJMCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDRIfCgRtb2RzGAMgASgLMhEuZ2FtZS52MS5JdGVtTW9kcyI8CghJdGVtTW9kcxIRCglhdHRyaWJ1dGUYASABKAkSDQoFdmFsdWUYAiABKAUSDgoGcmVmaW5lGAMgASgNIkAKDUxvY2FsaXplZFRleHQSCwoDa2V5GAEgASgJEiIKBnBhcmFtcxgCIAMoCzISLmdhbWUudjEuVGV4dFBhcmFtIn4KCVRleHRQYXJhbRIMCgRuYW1lGAEgASgJEg4KBHRleHQYAiABKAlIABIQCgZudW1iZXIYAyABKANIABIUCgpjb250ZW50X2lkGAQgASgJSAASIgoEaXRlbRgFIAEoCzISLmdhbWUudjEuSXRlbVN0YWNrSABCBwoFdmFsdWUq4AEKCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABITCg9ESVJFQ1RJT05fTk9SVEgQARIYChRESVJFQ1RJT05fTk9SVEhfRUFTVBACEhIKDkRJUkVDVElPTl9FQVNUEAMSGAoURElSRUNUSU9OX1NPVVRIX0VBU1QQBBITCg9ESVJFQ1RJT05fU09VVEgQBRIYChRESVJFQ1RJT05fU09VVEhfV0VTVBAGEhIKDkRJUkVDVElPTl9XRVNUEAcSGAoURElSRUNUSU9OX05PUlRIX1dFU1QQCCq5AgoNRXF1aXBtZW50U2xvdBIeChpFUVVJUE1FTlRfU0xPVF9VTlNQRUNJRklFRBAAEhcKE0VRVUlQTUVOVF9TTE9UX0hFQUQQARIXChNFUVVJUE1FTlRfU0xPVF9ORUNLEAISGwoXRVFVSVBNRU5UX1NMT1RfQkFDS1BBQ0sQAxIYChRFUVVJUE1FTlRfU0xPVF9BUk1PUhAEEh0KGUVRVUlQTUVOVF9TTE9UX1JJR0hUX0hBTkQQBRIcChhFUVVJUE1FTlRfU0xPVF9MRUZUX0hBTkQQBhIXChNFUVVJUE1FTlRfU0xPVF9MRUdTEAcSFwoTRVFVSVBNRU5UX1NMT1RfRkVFVBAIEhcKE0VRVUlQTUVOVF9TTE9UX1JJTkcQCRIXChNFUVVJUE1FTlRfU0xPVF9BTU1PEAoqVAoKTWFya2V0U2lkZRIbChdNQVJLRVRfU0lERV9VTlNQRUNJRklFRBAAEhQKEE1BUktFVF9TSURFX1NFTEwQARITCg9NQVJLRVRfU0lERV9CVVkQAkJGWkRnaXRodWIuY29tL0dGZW56b1IvUlBHX1Byb2plY3Qvc2VydmVyL2ludGVybmFsL25ldC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
 
 /**
  * Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
@@ -139,6 +139,7 @@ export const ActionTargetSchema: GenMessage<ActionTarget> = /*@__PURE__*/
 /**
  * ItemStack is one item instance as the client sees it. item_id is the stable id from
  * data/ids.lock.yaml; count is the stack size (or charges) and is 0 when not stackable.
+ * mods is the instance's own data (docs/02 "Atributos de items"); unset on a plain item.
  *
  * @generated from message game.v1.ItemStack
  */
@@ -152,6 +153,11 @@ export type ItemStack = Message<"game.v1.ItemStack"> & {
    * @generated from field: uint32 count = 2;
    */
   count: number;
+
+  /**
+   * @generated from field: game.v1.ItemMods mods = 3;
+   */
+  mods?: ItemMods | undefined;
 };
 
 /**
@@ -160,6 +166,39 @@ export type ItemStack = Message<"game.v1.ItemStack"> & {
  */
 export const ItemStackSchema: GenMessage<ItemStack> = /*@__PURE__*/
   messageDesc(file_game_v1_common, 4);
+
+/**
+ * ItemMods is what makes one item instance different from another of its item_id: the
+ * one attribute every equipable rolls when it is created (attribute = an id of
+ * data/attributes.yaml, value its amount; the client shows the attribute's text with
+ * {value}) and the refine level of the forge (0 = not refined). An item with mods never
+ * stacks. A client that does not know the attribute shows nothing for it.
+ *
+ * @generated from message game.v1.ItemMods
+ */
+export type ItemMods = Message<"game.v1.ItemMods"> & {
+  /**
+   * @generated from field: string attribute = 1;
+   */
+  attribute: string;
+
+  /**
+   * @generated from field: int32 value = 2;
+   */
+  value: number;
+
+  /**
+   * @generated from field: uint32 refine = 3;
+   */
+  refine: number;
+};
+
+/**
+ * Describes the message game.v1.ItemMods.
+ * Use `create(ItemModsSchema)` to create a new message.
+ */
+export const ItemModsSchema: GenMessage<ItemMods> = /*@__PURE__*/
+  messageDesc(file_game_v1_common, 5);
 
 /**
  * LocalizedText is player-visible text sent as an i18n key plus parameters
@@ -184,7 +223,7 @@ export type LocalizedText = Message<"game.v1.LocalizedText"> & {
  * Use `create(LocalizedTextSchema)` to create a new message.
  */
 export const LocalizedTextSchema: GenMessage<LocalizedText> = /*@__PURE__*/
-  messageDesc(file_game_v1_common, 5);
+  messageDesc(file_game_v1_common, 6);
 
 /**
  * TextParam is one named parameter of a LocalizedText. A list (not a map) keeps the
@@ -241,7 +280,7 @@ export type TextParam = Message<"game.v1.TextParam"> & {
  * Use `create(TextParamSchema)` to create a new message.
  */
 export const TextParamSchema: GenMessage<TextParam> = /*@__PURE__*/
-  messageDesc(file_game_v1_common, 6);
+  messageDesc(file_game_v1_common, 7);
 
 /**
  * @generated from enum game.v1.Direction

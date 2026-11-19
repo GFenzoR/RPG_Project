@@ -2228,7 +2228,9 @@ func (x *MarketBrowse) GetItemId() uint32 {
 
 // MarketCreate posts an offer: SELL takes the units from the backpack, BUY takes amount
 // × price in coins; both pay the posting fee. duration_index points into
-// MarketUpdate.durations_hours.
+// MarketUpdate.durations_hours. A SELL of an item that rolls attributes (an equipable,
+// docs/02 "Atributos de items") is one instance: amount 1 and mods, the instance's
+// ItemMods as MarketUpdate.owned_mods lists them (unset: one without mods).
 type MarketCreate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Side          MarketSide             `protobuf:"varint,1,opt,name=side,proto3,enum=game.v1.MarketSide" json:"side,omitempty"`
@@ -2236,6 +2238,7 @@ type MarketCreate struct {
 	Amount        uint32                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	Price         uint64                 `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
 	DurationIndex uint32                 `protobuf:"varint,5,opt,name=duration_index,json=durationIndex,proto3" json:"duration_index,omitempty"`
+	Mods          *ItemMods              `protobuf:"bytes,6,opt,name=mods,proto3" json:"mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2305,6 +2308,13 @@ func (x *MarketCreate) GetDurationIndex() uint32 {
 	return 0
 }
 
+func (x *MarketCreate) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
+}
+
 // MarketCancel takes an own offer down; its deposit goes to the mailbox.
 type MarketCancel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2350,11 +2360,14 @@ func (x *MarketCancel) GetOfferId() uint64 {
 	return 0
 }
 
-// MarketAccept buys from a sell offer or sells to a buy offer, amount units.
+// MarketAccept buys from a sell offer or sells to a buy offer, amount units. Selling an
+// equipable to a buy offer gives one instance the seller picks: amount 1 and its mods
+// (as in MarketCreate).
 type MarketAccept struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OfferId       uint64                 `protobuf:"varint,1,opt,name=offer_id,json=offerId,proto3" json:"offer_id,omitempty"`
 	Amount        uint32                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	Mods          *ItemMods              `protobuf:"bytes,3,opt,name=mods,proto3" json:"mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2401,6 +2414,13 @@ func (x *MarketAccept) GetAmount() uint32 {
 		return x.Amount
 	}
 	return 0
+}
+
+func (x *MarketAccept) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
 }
 
 // MarketWithdraw moves the mailbox into the inventory: the items in order while they fit,
@@ -4089,18 +4109,20 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x05close\x18\x06 \x01(\v2\x14.game.v1.MarketCloseH\x00R\x05closeB\b\n" +
 	"\x06action\"'\n" +
 	"\fMarketBrowse\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\rR\x06itemId\"\xa5\x01\n" +
+	"\aitem_id\x18\x01 \x01(\rR\x06itemId\"\xcc\x01\n" +
 	"\fMarketCreate\x12'\n" +
 	"\x04side\x18\x01 \x01(\x0e2\x13.game.v1.MarketSideR\x04side\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12%\n" +
-	"\x0eduration_index\x18\x05 \x01(\rR\rdurationIndex\")\n" +
+	"\x0eduration_index\x18\x05 \x01(\rR\rdurationIndex\x12%\n" +
+	"\x04mods\x18\x06 \x01(\v2\x11.game.v1.ItemModsR\x04mods\")\n" +
 	"\fMarketCancel\x12\x19\n" +
-	"\boffer_id\x18\x01 \x01(\x04R\aofferId\"A\n" +
+	"\boffer_id\x18\x01 \x01(\x04R\aofferId\"h\n" +
 	"\fMarketAccept\x12\x19\n" +
 	"\boffer_id\x18\x01 \x01(\x04R\aofferId\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\rR\x06amount\"\x10\n" +
+	"\x06amount\x18\x02 \x01(\rR\x06amount\x12%\n" +
+	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"\x10\n" +
 	"\x0eMarketWithdraw\"\r\n" +
 	"\vMarketClose\"\xb2\x05\n" +
 	"\fHouseCommand\x12(\n" +
@@ -4303,7 +4325,8 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*ActionTarget)(nil),        // 59: game.v1.ActionTarget
 	(*ItemLocation)(nil),        // 60: game.v1.ItemLocation
 	(MarketSide)(0),             // 61: game.v1.MarketSide
-	(*Position)(nil),            // 62: game.v1.Position
+	(*ItemMods)(nil),            // 62: game.v1.ItemMods
+	(*Position)(nil),            // 63: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4362,26 +4385,28 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	29, // 53: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
 	30, // 54: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
 	61, // 55: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
-	32, // 56: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 57: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 58: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 59: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 60: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 61: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 62: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 63: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 64: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 65: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 66: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 67: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 68: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 69: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	62, // 70: game.v1.Craft.station:type_name -> game.v1.Position
-	71, // [71:71] is the sub-list for method output_type
-	71, // [71:71] is the sub-list for method input_type
-	71, // [71:71] is the sub-list for extension type_name
-	71, // [71:71] is the sub-list for extension extendee
-	0,  // [0:71] is the sub-list for field type_name
+	62, // 56: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
+	62, // 57: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
+	32, // 58: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	33, // 59: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	34, // 60: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	35, // 61: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	36, // 62: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	37, // 63: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	38, // 64: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	39, // 65: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	40, // 66: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	43, // 67: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 68: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 69: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 70: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 71: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	63, // 72: game.v1.Craft.station:type_name -> game.v1.Position
+	73, // [73:73] is the sub-list for method output_type
+	73, // [73:73] is the sub-list for method input_type
+	73, // [73:73] is the sub-list for extension type_name
+	73, // [73:73] is the sub-list for extension extendee
+	0,  // [0:73] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }

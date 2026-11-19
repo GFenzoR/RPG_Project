@@ -4522,15 +4522,18 @@ func (x *TradeUpdate) GetMaxItems() uint32 {
 // MarketOffer is one offer of the global market (T5.3). price is per unit, in the
 // smallest coin; expires_at is Unix milliseconds.
 type MarketOffer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OfferId       uint64                 `protobuf:"varint,1,opt,name=offer_id,json=offerId,proto3" json:"offer_id,omitempty"`
-	Side          MarketSide             `protobuf:"varint,2,opt,name=side,proto3,enum=game.v1.MarketSide" json:"side,omitempty"`
-	ItemId        uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Amount        uint32                 `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
-	Price         uint64                 `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"`
-	ExpiresAt     uint64                 `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	OwnerName     string                 `protobuf:"bytes,7,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
-	Own           bool                   `protobuf:"varint,8,opt,name=own,proto3" json:"own,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	OfferId   uint64                 `protobuf:"varint,1,opt,name=offer_id,json=offerId,proto3" json:"offer_id,omitempty"`
+	Side      MarketSide             `protobuf:"varint,2,opt,name=side,proto3,enum=game.v1.MarketSide" json:"side,omitempty"`
+	ItemId    uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Amount    uint32                 `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	Price     uint64                 `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"`
+	ExpiresAt uint64                 `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	OwnerName string                 `protobuf:"bytes,7,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
+	Own       bool                   `protobuf:"varint,8,opt,name=own,proto3" json:"own,omitempty"`
+	// A sell offer of an equipable is one instance: its attribute (each such offer is a row
+	// of its own). Unset on a buy offer, which any instance fills.
+	Mods          *ItemMods `protobuf:"bytes,9,opt,name=mods,proto3" json:"mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4619,6 +4622,13 @@ func (x *MarketOffer) GetOwn() bool {
 		return x.Own
 	}
 	return false
+}
+
+func (x *MarketOffer) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
 }
 
 // MarketMailItem is an item waiting in the mailbox.
@@ -4793,7 +4803,11 @@ type MarketUpdate struct {
 	// At most one per window every market.push_every_ms of data/balance.yaml (500 ms; the
 	// switch to read-only goes out at once). A client whose window is already closed
 	// ignores it (it must not open the window again).
-	Refresh       bool `protobuf:"varint,21,opt,name=refresh,proto3" json:"refresh,omitempty"`
+	Refresh bool `protobuf:"varint,21,opt,name=refresh,proto3" json:"refresh,omitempty"`
+	// For an equipable browsed item: the mods of each instance counted in owned (one entry
+	// per instance), so the player picks which one to sell (MarketCreate.mods,
+	// MarketAccept.mods).
+	OwnedMods     []*ItemMods `protobuf:"bytes,22,rep,name=owned_mods,json=ownedMods,proto3" json:"owned_mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4973,6 +4987,13 @@ func (x *MarketUpdate) GetRefresh() bool {
 		return x.Refresh
 	}
 	return false
+}
+
+func (x *MarketUpdate) GetOwnedMods() []*ItemMods {
+	if x != nil {
+		return x.OwnedMods
+	}
+	return nil
 }
 
 // HouseUpdate opens or refreshes the house window (T5.4); open = false closes it (the
@@ -6433,7 +6454,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\ainvited\x18\b \x01(\bR\ainvited\x12\x16\n" +
 	"\x06reason\x18\t \x01(\tR\x06reason\x12\x1b\n" +
 	"\tmax_items\x18\n" +
-	" \x01(\rR\bmaxItems\"\xe8\x01\n" +
+	" \x01(\rR\bmaxItems\"\x8f\x02\n" +
 	"\vMarketOffer\x12\x19\n" +
 	"\boffer_id\x18\x01 \x01(\x04R\aofferId\x12'\n" +
 	"\x04side\x18\x02 \x01(\x0e2\x13.game.v1.MarketSideR\x04side\x12\x17\n" +
@@ -6444,7 +6465,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"expires_at\x18\x06 \x01(\x04R\texpiresAt\x12\x1d\n" +
 	"\n" +
 	"owner_name\x18\a \x01(\tR\townerName\x12\x10\n" +
-	"\x03own\x18\b \x01(\bR\x03own\"H\n" +
+	"\x03own\x18\b \x01(\bR\x03own\x12%\n" +
+	"\x04mods\x18\t \x01(\v2\x11.game.v1.ItemModsR\x04mods\"H\n" +
 	"\x0eMarketMailItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12&\n" +
 	"\x04item\x18\x02 \x01(\v2\x12.game.v1.ItemStackR\x04item\"\x94\x01\n" +
@@ -6453,7 +6475,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12\x0e\n" +
-	"\x02at\x18\x05 \x01(\x04R\x02at\"\xd9\x05\n" +
+	"\x02at\x18\x05 \x01(\x04R\x02at\"\x8b\x06\n" +
 	"\fMarketUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x14\n" +
 	"\x05money\x18\x02 \x01(\x04R\x05money\x12\x17\n" +
@@ -6478,7 +6500,9 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0fdurations_hours\x18\x12 \x03(\rR\x0edurationsHours\x12\x14\n" +
 	"\x05owned\x18\x13 \x01(\rR\x05owned\x12\x1b\n" +
 	"\tread_only\x18\x14 \x01(\bR\breadOnly\x12\x18\n" +
-	"\arefresh\x18\x15 \x01(\bR\arefresh\"\x9f\x05\n" +
+	"\arefresh\x18\x15 \x01(\bR\arefresh\x120\n" +
+	"\n" +
+	"owned_mods\x18\x16 \x03(\v2\x11.game.v1.ItemModsR\townedMods\"\x9f\x05\n" +
 	"\vHouseUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x19\n" +
 	"\bhouse_id\x18\x02 \x01(\tR\ahouseId\x12\x12\n" +
@@ -6768,6 +6792,7 @@ var file_game_v1_server_proto_goTypes = []any{
 	(Direction)(0),             // 79: game.v1.Direction
 	(EquipmentSlot)(0),         // 80: game.v1.EquipmentSlot
 	(MarketSide)(0),            // 81: game.v1.MarketSide
+	(*ItemMods)(nil),           // 82: game.v1.ItemMods
 }
 var file_game_v1_server_proto_depIdxs = []int32{
 	13,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
@@ -6866,33 +6891,35 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	77,  // 93: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
 	77,  // 94: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
 	81,  // 95: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
-	77,  // 96: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
-	81,  // 97: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
-	58,  // 98: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
-	58,  // 99: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
-	58,  // 100: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
-	59,  // 101: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
-	60,  // 102: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
-	78,  // 103: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	79,  // 104: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
-	8,   // 105: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	76,  // 106: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
-	9,   // 107: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
-	67,  // 108: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
-	10,  // 109: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
-	71,  // 110: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
-	72,  // 111: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
-	73,  // 112: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
-	70,  // 113: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
-	11,  // 114: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
-	10,  // 115: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
-	78,  // 116: game.v1.StationOpen.pos:type_name -> game.v1.Position
-	77,  // 117: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
-	118, // [118:118] is the sub-list for method output_type
-	118, // [118:118] is the sub-list for method input_type
-	118, // [118:118] is the sub-list for extension type_name
-	118, // [118:118] is the sub-list for extension extendee
-	0,   // [0:118] is the sub-list for field type_name
+	82,  // 96: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
+	77,  // 97: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
+	81,  // 98: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
+	58,  // 99: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
+	58,  // 100: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
+	58,  // 101: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
+	59,  // 102: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
+	60,  // 103: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
+	82,  // 104: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
+	78,  // 105: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	79,  // 106: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	8,   // 107: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
+	76,  // 108: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	9,   // 109: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
+	67,  // 110: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	10,  // 111: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
+	71,  // 112: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
+	72,  // 113: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
+	73,  // 114: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
+	70,  // 115: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
+	11,  // 116: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
+	10,  // 117: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
+	78,  // 118: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	77,  // 119: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	120, // [120:120] is the sub-list for method output_type
+	120, // [120:120] is the sub-list for method input_type
+	120, // [120:120] is the sub-list for extension type_name
+	120, // [120:120] is the sub-list for extension extendee
+	0,   // [0:120] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
