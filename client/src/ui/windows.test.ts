@@ -12,9 +12,11 @@ import {
   closeWindow,
   collapseWindow,
   containerKeys,
+  containersTop,
   defaultWindows,
   focusWindow,
   isClosable,
+  keptHeight,
   loadWindows,
   moveWindow,
   openWindow,
@@ -26,6 +28,7 @@ import {
   resizeWindow,
   saveWindows,
   serverWindows,
+  shownKey,
   snapPlace,
   syncWindows,
   toggleWindow,
@@ -490,5 +493,75 @@ describe("which server windows show", () => {
       "house",
       "container-bag",
     ]);
+  });
+});
+
+describe("keeping a placed window inside after the area changed (keptHeight)", () => {
+  const never = (): number => {
+    throw new Error("measured although it showed enough");
+  };
+
+  it("leaves where it is a window that still shows MIN_SIZE.height, its body scrolling", () => {
+    // A battle list grown past the bar, squashed to 150 by its max-height: it stays.
+    expect(keptHeight(150, never)).toBe(150);
+    expect(keptHeight(MIN_SIZE.height, never)).toBe(MIN_SIZE.height);
+  });
+
+  it("takes the whole height of one squashed under MIN_SIZE.height", () => {
+    // Its top below the new area: the max-height left it a 4 px box (the review's chat
+    // against the bar). Measured so, clampPlace left it at area - 4, its title bar over
+    // the bar; with its own 300 px it moves up until it shows whole.
+    expect(keptHeight(4, () => 300)).toBe(300);
+    const area = { width: 1000, height: 500 };
+    expect(clampPlace(20, 640, { width: 384, height: keptHeight(4, () => 300) }, area)).toEqual({
+      x: 20,
+      y: 200,
+    });
+    // Unfolded against the bar: its max-height still that of its title bar.
+    expect(keptHeight(28, () => 260)).toBe(260);
+  });
+
+  it("keeps a short window short: a folded one is its title bar", () => {
+    // A folded chat snapped to the bar (28 px, not squashed) does not move up.
+    expect(keptHeight(28, () => 28)).toBe(28);
+    const area = { width: 1000, height: 500 };
+    expect(clampPlace(20, 472, { width: 384, height: keptHeight(28, () => 28) }, area)).toEqual({
+      x: 20,
+      y: 472,
+    });
+  });
+});
+
+describe("the windows shown (shownKey)", () => {
+  it("changes when a window opens, closes, folds or unfolds, not when one is raised", () => {
+    const s = defaultWindows();
+    const key = shownKey(s);
+    expect(key).toBe("battle chat inventory");
+    expect(shownKey(focusWindow(s, "battle"))).toBe(key);
+    expect(shownKey(moveWindow(s, "battle", 10, 10))).toBe(key);
+    expect(shownKey(openWindow(s, "skills"))).not.toBe(key);
+    expect(shownKey(closeWindow(s, "battle"))).not.toBe(key);
+    const folded = collapseWindow(s, "chat", true);
+    expect(shownKey(folded)).toBe("battle chat:folded inventory");
+    expect(shownKey(collapseWindow(folded, "chat", false))).toBe(key);
+    // A container the server opens counts too.
+    expect(shownKey(syncWindows(s, ["container-bag"]))).toBe("battle chat container-bag inventory");
+  });
+});
+
+describe("the containers' default column (containersTop)", () => {
+  const open = { open: true, collapsed: false };
+
+  it("starts right under the equipment at its default place, however tall it is", () => {
+    // The equipment of feat/equipment-d2 (the figure and the backpack under it) is about
+    // 500 px tall: the old 15rem (240 px) opened every container over its backpack.
+    expect(containersTop(open, 497.6)).toBe(498);
+    expect(containersTop({ ...open, collapsed: true }, 27)).toBe(27);
+  });
+
+  it("starts at the top while the equipment is closed, moved or not measured yet", () => {
+    expect(containersTop({ ...open, open: false }, 498)).toBe(0);
+    expect(containersTop({ ...open, x: 300, y: 24 }, 498)).toBe(0);
+    expect(containersTop(open, undefined)).toBe(0);
   });
 });

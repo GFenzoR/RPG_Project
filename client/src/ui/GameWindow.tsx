@@ -49,6 +49,8 @@ export interface GameWindowProps {
   hideTitle?: boolean | undefined;
   /** A default place of its kind (windows.css): the n-th container steps down from the last. */
   nth?: number | undefined;
+  /** Gets the window's element (the equipment's is measured: GameView containersTop). */
+  boxRef?: ((el: HTMLElement | null) => void) | undefined;
   onClose(): void;
   onCollapse(collapsed: boolean): void;
   onFocus(): void;
@@ -76,6 +78,7 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
   const sized = place.w !== undefined || place.h !== undefined;
   return (
     <section
+      ref={props.boxRef ?? null}
       class="gwin"
       data-window={id}
       data-testid={props.testid}

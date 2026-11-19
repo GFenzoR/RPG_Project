@@ -157,7 +157,8 @@ const WINDOWS: Record<string, unknown> = {
       help: { open: true, collapsed: false, x: 300, y: 24 },
     },
   },
-  // docs/17 UI-5: the corpse's container where the player left it, resized.
+  // docs/17 UI-5: the corpse's container where the player left it, resized; a second one
+  // (container-creature_remains-2) at its default place, right under the equipment.
   server: {
     v: 3,
     z: [],

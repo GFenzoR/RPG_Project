@@ -732,12 +732,17 @@ body.dragging-window * {
   top: 3rem;
   max-height: calc(100% - 3rem);
 }
-/* Under the equipment (about 15rem tall today), the n-th one a step down and left of the
-   first (--nth, set by GameWindow), but never lower than its title bar can show: on a
-   short screen with a large interface scale and text the 4th one already fell under the
-   bar (the ResizeObserver of GameView only moves the windows the player placed). */
+/* Right under the equipment while it sits at its default place (--containers-top, its
+   height measured by GameView: about 500 px with the figure and the backpack under it;
+   0 when it is closed or moved, and the column is free), the n-th one a step down and
+   left of the first (--nth, set by GameWindow), but never lower than its title bar can
+   show: on a short screen with a large interface scale and text the 4th one already fell
+   under the bar (GameView only moves the windows the player placed). */
 .gwin:not([data-placed])[data-window^="container-"] {
-  --container-top: min(calc(15rem + var(--nth, 0) * 1.75rem), calc(100% - 2rem));
+  --container-top: min(
+    calc(var(--containers-top, 0px) + var(--nth, 0) * 1.75rem),
+    calc(100% - 2rem)
+  );
   top: var(--container-top);
   right: calc(var(--nth, 0) * 1rem);
   max-height: calc(100% - var(--container-top));
@@ -1031,8 +1036,15 @@ body.dragging-window * {
 .game[data-ui="windows"] .notices.raised {
   bottom: calc(var(--bar-px) + 10rem);
 }
+/* The invitations: over the windows (the chat at its default place reaches under them at
+   1280 and 960 px wide, and one hidden there runs out unseen), the guild's above the
+   party's as elsewhere (client.css). */
 .game[data-ui="windows"] .invitations {
   bottom: calc(var(--bar-px) + 1rem);
+  z-index: 21;
+}
+.game[data-ui="windows"] .guild-invitations {
+  bottom: calc(var(--bar-px) + 4.5rem);
 }
 /* Over every window (.win-layer is at 20): a presence check hidden under one would run
    out and count as failed (docs/02, anti-bot), and the death screen asks for a click. */

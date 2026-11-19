@@ -49,16 +49,16 @@ import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 import { ornamentStyle } from "./ornaments.ts";
-import { dragWindow, resizeDrag, watchedRef } from "./window-dom.ts";
+import { dragWindow, outsiders, resizeDrag, transformScale, watchedRef } from "./window-dom.ts";
 import type { DragEnv, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
   WINDOW_TITLE,
-  clampPlace,
   closeWindow,
   collapseWindow,
   containerKeys,
+  containersTop,
   focusWindow,
   isClosable,
   isToolWindow,
@@ -74,6 +74,7 @@ import {
   resizeWindow,
   saveWindows,
   serverWindows,
+  shownKey,
   syncWindows,
   toggleWindow,
   windowForHighlight,
@@ -793,6 +794,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           barExtra={w.barExtra}
           hideTitle={w.hideTitle}
           nth={w.nth}
+          boxRef={id === "inventory" ? win.equipment.set : undefined}
           badge={id === "guild" && ui.guildInvitations.length > 0}
           onClose={() => win.close(id)}
           onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
@@ -851,8 +853,14 @@ export function GameView(props: GameViewProps): JSX.Element {
               />
             }
           />
-          {/* The windows' area: the screen above the bar (windows never go under it). */}
-          <div class="win-layer" key="windows" ref={win.layer.set}>
+          {/* The windows' area: the screen above the bar (windows never go under it). The
+              containers' default column starts under the equipment (windows.css). */}
+          <div
+            class="win-layer"
+            key="windows"
+            ref={win.layer.set}
+            style={{ "--containers-top": `${win.containersTop}px` }}
+          >
             {shown.map((id) => frame(id, stack.indexOf(id)))}
           </div>
         </div>
@@ -1024,6 +1032,10 @@ interface WindowsApi {
    * page: only the desktop layout has one, and each switch back to it mounts a new one.
    */
   layer: WatchedRef<HTMLDivElement>;
+  /** The equipment's window, measured for the containers' default place (containersTop). */
+  equipment: WatchedRef<HTMLElement>;
+  /** Where the containers' default column starts, the windows' own px (containersTop). */
+  containersTop: number;
 }
 
 /** A box on screen in px from the top left of `area`. */
@@ -1034,23 +1046,22 @@ const rectIn = (r: DOMRect, area: DOMRect): Rect => ({
   height: r.height,
 });
 
+/** The scale of an element's computed transform (a window opening grows from 0.96). */
+const scaleOnScreen = (el: Element): number => transformScale(getComputedStyle(el).transform);
+
 /**
- * The windows the player placed that are (partly) out of the area now, and where they go
- * back inside (their stacking stays).
+ * Brings back inside the area (`layer`) the windows the player placed that are (partly)
+ * out of it now (outsiders of ui/window-dom.ts), their stacking unchanged.
  */
-function outsiders(layer: HTMLElement, s: WindowsState): [WinKey, number, number][] {
-  const area = layer.getBoundingClientRect();
-  const moves: [WinKey, number, number][] = [];
-  for (const el of layer.children) {
-    if (!(el instanceof HTMLElement) || !el.hasAttribute("data-placed")) continue;
-    const id = el.dataset["window"] as WinKey | undefined;
-    if (!id) continue;
-    const p = placeOf(s, id);
-    if (p.x === undefined || p.y === undefined) continue;
-    const at = clampPlace(p.x, p.y, el.getBoundingClientRect(), area);
-    if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
-  }
-  return moves;
+function pullInside(
+  layer: HTMLElement,
+  s: WindowsState,
+  set: (f: (s: WindowsState) => WindowsState) => void,
+): void {
+  const windows = [...layer.children].filter((w): w is HTMLElement => w instanceof HTMLElement);
+  const moves = outsiders(layer.getBoundingClientRect(), windows, s, scaleOnScreen);
+  if (moves.length > 0)
+    set((st) => moves.reduce((acc, [id, x, y]) => placeWindow(acc, id, x, y), st));
 }
 
 /** The boxes of the other windows in the area, for the magnet (not those fading out). */
@@ -1096,13 +1107,36 @@ function useWindows(
   const [layer] = useState(() =>
     watchedRef<HTMLDivElement>((el) => {
       if (typeof ResizeObserver === "undefined") return () => {};
-      const observer = new ResizeObserver(() => {
-        const moves = outsiders(el, stateRef.current);
-        if (moves.length > 0)
-          setState((s) => moves.reduce((acc, [id, x, y]) => placeWindow(acc, id, x, y), s));
-      });
+      const observer = new ResizeObserver(() => pullInside(el, stateRef.current, setState));
       observer.observe(el);
       return () => observer.disconnect();
+    }),
+  );
+  // The observer only sees the area change: a window closed meanwhile kept its place, so
+  // each time one opens or unfolds (shownKey) the same check runs, before it is painted. A
+  // window opened at x 1600 on a smaller screen, or unfolded against the bar, comes in.
+  const shown = shownKey(state);
+  useLayoutEffect(() => {
+    const el = layer.current;
+    if (el) pullInside(el, stateRef.current, setState);
+  }, [shown, zoom, layer]);
+  // The equipment's height in its own px, for the containers' default place right under
+  // it (containersTop, windows.css --containers-top): it changes with the backpack under
+  // the figure, its fold and the text scale. Watched while its window is in the page.
+  const [equipmentHeight, setEquipmentHeight] = useState<number | undefined>(undefined);
+  const [equipment] = useState(() =>
+    watchedRef<HTMLElement>((el) => {
+      if (typeof ResizeObserver === "undefined") return () => {};
+      const observer = new ResizeObserver(() =>
+        setEquipmentHeight(
+          el.getBoundingClientRect().height / (zoomRef.current * scaleOnScreen(el)),
+        ),
+      );
+      observer.observe(el);
+      return () => {
+        observer.disconnect();
+        setEquipmentHeight(undefined);
+      };
     }),
   );
   const dragEnv: DragEnv = {
@@ -1243,6 +1277,8 @@ function useWindows(
     resize,
     moveKey,
     layer,
+    equipment,
+    containersTop: containersTop(state.win.inventory, equipmentHeight),
   };
 }
 

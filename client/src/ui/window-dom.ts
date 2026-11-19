@@ -3,8 +3,8 @@
 // window follows the pointer, then its state takes over), and watching the windows' area
 // while it is in the page. Apart from GameView.tsx so the tests drive them without a DOM:
 // all they touch is a few properties of an element, a listener target and a class list.
-import { clampSize, snapPlace } from "./windows.ts";
-import type { Box, Rect, WindowPlace } from "./windows.ts";
+import { clampPlace, clampSize, keptHeight, placeOf, snapPlace } from "./windows.ts";
+import type { Box, Rect, WinKey, WindowPlace, WindowsState } from "./windows.ts";
 
 /** The inline lengths a window's place sets (GameWindow's `style`). */
 export type PlaceStyle = Partial<Record<"left" | "top" | "maxHeight" | "width" | "height", string>>;
@@ -216,6 +216,71 @@ export function resizeDrag(
       done(at.x, at.y, width, height);
     },
   );
+}
+
+/**
+ * The scale of a computed `transform` (getComputedStyle: `none`, `matrix(…)` or
+ * `matrix3d(…)`): a window that opens grows from 0.96 (client.css gwin-in), and its box on
+ * screen with it, so it is measured divided by this.
+ */
+export function transformScale(transform: string): number {
+  const m = /^matrix(?:3d)?\(([^)]*)\)$/.exec(transform.trim());
+  if (!m) return 1;
+  const [a, b] = (m[1] ?? "").split(",").map(Number);
+  const k = Math.hypot(a ?? Number.NaN, b ?? 0);
+  return Number.isFinite(k) && k > 0 ? k : 1;
+}
+
+/** What bringing the windows back inside reads of a window's element. */
+export interface AreaWindow {
+  getBoundingClientRect(): PageBox;
+  style: Pick<InlineStyle, "maxHeight">;
+  dataset: DOMStringMap;
+  hasAttribute(name: string): boolean;
+}
+
+/**
+ * A window's height without the max-height that keeps it above the bar: its own (the size
+ * the player gave it, or its content's). The max-height is lifted for this one measure
+ * and put back as it was, before anything is painted.
+ */
+export function naturalHeight(el: Pick<AreaWindow, "getBoundingClientRect" | "style">): number {
+  const kept = el.style.maxHeight;
+  el.style.maxHeight = "none";
+  const height = el.getBoundingClientRect().height;
+  el.style.maxHeight = kept;
+  return height;
+}
+
+/**
+ * The windows the player placed that are (partly) out of the area now (`area`, on the
+ * page), and where they go back inside, their stacking unchanged. GameView asks after the
+ * area changed size (a smaller window, a larger interface scale) and whenever the windows
+ * shown change (shownKey), so a window that opens or unfolds where a larger screen or the
+ * bar left it comes back too. Each counts as tall as keptHeight says (its own height when
+ * squashed under MIN_SIZE.height) and without the opening animation's scale (`scaleOf`,
+ * transformScale); one fading out is left alone.
+ */
+export function outsiders<T extends AreaWindow>(
+  area: PageBox,
+  windows: Iterable<T>,
+  s: WindowsState,
+  scaleOf: (el: T) => number,
+): [WinKey, number, number][] {
+  const moves: [WinKey, number, number][] = [];
+  for (const el of windows) {
+    if (!el.hasAttribute("data-placed") || el.hasAttribute("data-closing")) continue;
+    const id = el.dataset["window"] as WinKey | undefined;
+    if (!id) continue;
+    const p = placeOf(s, id);
+    if (p.x === undefined || p.y === undefined) continue;
+    const k = scale(scaleOf(el));
+    const r = el.getBoundingClientRect();
+    const height = keptHeight(r.height / k, () => naturalHeight(el) / k);
+    const at = clampPlace(p.x, p.y, { width: r.width / k, height }, area);
+    if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
+  }
+  return moves;
 }
 
 /**

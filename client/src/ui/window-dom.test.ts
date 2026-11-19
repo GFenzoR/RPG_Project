@@ -7,12 +7,16 @@ import { GameWindow } from "./GameWindow.tsx";
 import {
   DRAG_START_PX,
   dragWindow,
+  naturalHeight,
+  outsiders,
   placeStyle,
   resizeDrag,
   settleStyle,
+  transformScale,
   watchedRef,
 } from "./window-dom.ts";
 import type {
+  AreaWindow,
   DragElement,
   DragEnv,
   InlineStyle,
@@ -21,6 +25,7 @@ import type {
   PointerTarget,
 } from "./window-dom.ts";
 import {
+  collapseWindow,
   defaultWindows,
   moveWindow,
   openWindow,
@@ -28,7 +33,7 @@ import {
   placeWindow,
   resizeWindow,
 } from "./windows.ts";
-import type { WindowPlace, WindowsState } from "./windows.ts";
+import type { WinKey, WindowPlace, WindowsState } from "./windows.ts";
 
 const STYLE_PROPS = ["left", "top", "right", "bottom", "width", "height", "maxHeight"] as const;
 type StyleProp = (typeof STYLE_PROPS)[number];
@@ -388,5 +393,144 @@ describe("watchedRef", () => {
     ref.set("second");
     expect(ref.current).toBe("second");
     expect(log).toEqual(["watch first", "stop first", "watch second"]);
+  });
+});
+
+/**
+ * A window in the windows' area as the browser lays it out: placed at its state's x and y
+ * (GameWindow's left and top), its own height `natural` cut by the max-height GameWindow
+ * gives it (`calc(100% - top)`, against the area's height now) unless that is lifted, and
+ * drawn at `scale` (the opening animation) around its centre. `writes` counts what is
+ * written to its max-height.
+ */
+function areaWindow(
+  s: WindowsState,
+  id: WinKey,
+  size: { width: number; natural: number },
+  area: () => PageBox,
+  attrs: { closing?: boolean; scale?: number } = {},
+): AreaWindow & { writes: string[] } {
+  const place = placeOf(s, id);
+  const styled = placeStyle(place, 1);
+  const writes: string[] = [];
+  let maxHeight = styled.maxHeight ?? "";
+  const k = attrs.scale ?? 1;
+  return {
+    writes,
+    dataset: { window: id },
+    hasAttribute: (name) =>
+      (name === "data-placed" && place.x !== undefined && place.y !== undefined) ||
+      (name === "data-closing" && attrs.closing === true),
+    style: {
+      get maxHeight() {
+        return maxHeight;
+      },
+      set maxHeight(v: string) {
+        writes.push(v);
+        maxHeight = v;
+      },
+    },
+    getBoundingClientRect() {
+      const a = area();
+      const x = place.x ?? 0;
+      const y = place.y ?? 0;
+      const cut = /^calc\(100% - ([\d.]+)px\)$/.exec(maxHeight);
+      const height =
+        maxHeight === "none" || !cut
+          ? size.natural
+          : Math.min(size.natural, Math.max(0, a.height - Number(cut[1])));
+      const w = size.width * k;
+      const h = height * k;
+      return {
+        left: a.left + x + (size.width - w) / 2,
+        top: a.top + y + (height - h) / 2,
+        width: w,
+        height: h,
+      };
+    },
+  };
+}
+
+describe("bringing the windows back inside (outsiders)", () => {
+  const noScale = (): number => 1;
+
+  it("moves up whole a window whose top the area left behind, not to a 0 px sliver", () => {
+    // The chat against the bar of a 900 px area (y 600, 300 tall); the browser window
+    // shrinks and the area is 500 tall: its max-height leaves it nothing. Measured so, it
+    // went to y 500, its title bar over the bar and no room to type.
+    let area: PageBox = { left: 0, top: 0, width: 1280, height: 900 };
+    const s = moveWindow(defaultWindows(), "chat", 144, 600);
+    const chat = areaWindow(s, "chat", { width: 384, natural: 300 }, () => area);
+    expect(outsiders(area, [chat], s, noScale)).toEqual([]);
+    area = { ...area, height: 500 };
+    expect(outsiders(area, [chat], s, noScale)).toEqual([["chat", 144, 200]]);
+    // Its max-height was lifted for the measure and is back as GameWindow wrote it.
+    expect(chat.writes).toEqual(["none", "calc(100% - 600px)"]);
+    expect(chat.style.maxHeight).toBe("calc(100% - 600px)");
+  });
+
+  it("brings an unfolded window against the bar up until it shows whole", () => {
+    // Folded against the bar (y 472 of 500, its 28 px title bar), then unfolded: its
+    // max-height still leaves 28 px.
+    const area: PageBox = { left: 0, top: 0, width: 1000, height: 500 };
+    const s = moveWindow(defaultWindows(), "skills", 0, 472);
+    const skills = areaWindow(s, "skills", { width: 256, natural: 320 }, () => area);
+    expect(outsiders(area, [skills], s, noScale)).toEqual([["skills", 0, 180]]);
+    // Folded it stays where it was.
+    const folded = collapseWindow(s, "skills", true);
+    const bar = areaWindow(folded, "skills", { width: 256, natural: 28 }, () => area);
+    expect(outsiders(area, [bar], folded, noScale)).toEqual([]);
+  });
+
+  it("leaves a window squashed but usable where the player left it, without measuring", () => {
+    // A battle list that grew past the bar: 300 px of its 520 show, its body scrolls.
+    const area: PageBox = { left: 0, top: 0, width: 1000, height: 600 };
+    const s = moveWindow(defaultWindows(), "battle", 0, 300);
+    const battle = areaWindow(s, "battle", { width: 256, natural: 520 }, () => area);
+    expect(outsiders(area, [battle], s, noScale)).toEqual([]);
+    expect(battle.writes).toEqual([]);
+  });
+
+  it("brings in a window opened where a larger screen left it, at its size on screen", () => {
+    // The skills left at x 1600 on a 1920 px screen, opened on a 1280 px one; opening, it
+    // is drawn at 96 % (gwin-in): measured so, 10 px of it stayed off the right edge.
+    const area: PageBox = { left: 0, top: 0, width: 1280, height: 712 };
+    const s = moveWindow(defaultWindows(), "skills", 1600, 40);
+    const skills = areaWindow(s, "skills", { width: 256, natural: 300 }, () => area, {
+      scale: 0.96,
+    });
+    expect(outsiders(area, [skills], s, () => 0.96)).toEqual([["skills", 1024, 40]]);
+  });
+
+  it("leaves alone the windows at their default place and those fading out", () => {
+    const area: PageBox = { left: 0, top: 0, width: 600, height: 400 };
+    let s = moveWindow(defaultWindows(), "skills", 900, 900);
+    s = { ...s, win: { ...s.win, battle: { open: true, collapsed: false } } };
+    const closing = areaWindow(s, "skills", { width: 256, natural: 300 }, () => area, {
+      closing: true,
+    });
+    const unplaced = areaWindow(s, "battle", { width: 256, natural: 900 }, () => area);
+    expect(outsiders(area, [closing, unplaced], s, noScale)).toEqual([]);
+  });
+});
+
+describe("naturalHeight and transformScale", () => {
+  it("measures a window without its max-height and puts it back", () => {
+    const area: PageBox = { left: 0, top: 0, width: 1000, height: 500 };
+    const s = moveWindow(defaultWindows(), "chat", 0, 400);
+    const chat = areaWindow(s, "chat", { width: 384, natural: 300 }, () => area);
+    expect(chat.getBoundingClientRect().height).toBe(100);
+    expect(naturalHeight(chat)).toBe(300);
+    expect(chat.style.maxHeight).toBe("calc(100% - 400px)");
+  });
+
+  it("reads the scale of a computed transform", () => {
+    expect(transformScale("none")).toBe(1);
+    expect(transformScale("matrix(0.96, 0, 0, 0.96, 0, 0)")).toBeCloseTo(0.96);
+    expect(transformScale("matrix3d(0.5, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)")).toBe(
+      0.5,
+    );
+    expect(transformScale("matrix(0, 0, 0, 0, 0, 0)")).toBe(1);
+    expect(transformScale("")).toBe(1);
   });
 });

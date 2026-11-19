@@ -368,8 +368,9 @@ export function withItemMenu(
 }
 
 /**
- * docs/17 UI-5: the server's windows as GameWindows (a crafting station and a trade) and a
- * second container (a corpse opened on the map, floating), with the Shift+drag split prompt and the card of an
+ * docs/17 UI-5: the server's windows as GameWindows (a crafting station and a trade) and two
+ * corpses opened on the map (the first where the player left it, the second at its default
+ * place, right under the equipment), with the Shift+drag split prompt and the card of an
  * item lying on the map under a resting mouse (docs/17 UI-6).
  */
 export function withServerWindows(
@@ -405,6 +406,13 @@ export function withServerWindows(
         capacity: 8,
         hasParent: true,
         items: [{ itemId: id("ship_biscuit"), count: 4 }],
+      },
+      {
+        id: 3,
+        itemId: id("creature_remains"),
+        capacity: 8,
+        hasParent: true,
+        items: [{ itemId: id("copper_coin"), count: 7 }],
       },
     ],
     split: { x: at.x, y: at.y, itemId: id("raw_fish"), count: 12 },

@@ -460,6 +460,44 @@ export function resizeWindow(
   return withPlace(s, id, { w: Math.round(width), h: Math.round(height) });
 }
 
+/**
+ * How tall a window the player placed counts for clampPlace when the area changes or the
+ * windows shown do (GameView): what it shows now (`now`, short of its own height when the
+ * area's bottom came up under it: its max-height keeps it above the bar) while that is
+ * MIN_SIZE.height at least, so it stays where the player left it, its body scrolling;
+ * less, its own height (`natural`, measured only then: its content's or the size the player
+ * gave it, a folded one's title bar), so it moves up until it shows whole, or as tall as
+ * the area. Measured squashed, a window whose top the area left behind counted a few px
+ * and stayed there, its title bar over the bar and no room for its body.
+ */
+export function keptHeight(now: number, natural: () => number): number {
+  return now >= MIN_SIZE.height ? now : Math.max(now, natural());
+}
+
+/**
+ * What the windows shown are, as a key that changes when one opens, closes, folds or
+ * unfolds (not when one is only raised): GameView then brings back inside one that a
+ * larger screen left outside, before it is painted.
+ */
+export function shownKey(s: WindowsState): string {
+  return knownWindows(s)
+    .filter((id) => placeOf(s, id).open)
+    .map((id) => (placeOf(s, id).collapsed ? `${id}:folded` : id))
+    .sort()
+    .join(" ");
+}
+
+/**
+ * Where the containers' default column starts (windows.css --containers-top), in the
+ * windows' own px: right under the equipment while it is open at its default place (top
+ * right) and measured (`height`, its own px); else the top of the area, which it leaves
+ * free. The equipment's height changes with its backpack, its fold and the text scale.
+ */
+export function containersTop(equipment: WindowPlace, height: number | undefined): number {
+  const placed = equipment.x !== undefined && equipment.y !== undefined;
+  return equipment.open && !placed && height !== undefined && height > 0 ? Math.round(height) : 0;
+}
+
 /** How far one arrow press moves or resizes a window, CSS px. */
 export const KEY_STEP = 16;
 
