@@ -1,0 +1,23 @@
+id: captain_fenders
+name: quest.captain_fenders.name
+min_level: 30
+notes: >-
+  Side quest from volcan_ferryman, Nerea Vado (lote 12, levels 30-33). The porters who
+  carry the slope's scales and ore down to the dock walk past the salamanders' pools, and
+  the black stones of the dock scorch her hulls: thin the cinder salamanders (10, levels
+  29-33) and bring 5 ash-hound pelts (ash hounds, level 27, 22 %), which do not burn, for
+  fenders. Rewards: ~12 % of the experience from 30 to 33 and about 7 minutes of a
+  salamander hunt's loot.
+steps:
+  - id: thin_salamanders
+    description: quest.captain_fenders.step_thin_salamanders
+    complete_when: { kill: { monster: cinder_salamander, count: 10 } }
+  - id: gather_pelts
+    description: quest.captain_fenders.step_gather_pelts
+    complete_when: { has_item: { item: ash_pelt, count: 5 } }
+  - id: deliver_pelts
+    description: quest.captain_fenders.step_deliver_pelts
+    complete_when: { dialog_action: { npc: volcan_ferryman, node: fenders_delivered } }
+rewards:
+  - { xp: 13000 }
+  - { gold: 900 }

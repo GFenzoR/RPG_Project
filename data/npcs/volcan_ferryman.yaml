@@ -3,19 +3,54 @@ name: npc.volcan_ferryman.name
 sprite: npcs/ferryman_volcanic
 notes: >-
   Captain of the Brasal dock (data/boat_routes.yaml: volcan_to_bosque and
-  volcan_to_puerto).
+  volcan_to_puerto). Since lote 12 she gives the side quest captain_fenders (level 30):
+  thin the salamanders by the porters' path and bring ash-hound pelts for fenders.
 dialog:
   start: greet
   nodes:
     greet:
       text: npc.volcan_ferryman.greet
       options:
+        - text: npc.volcan_ferryman.opt_fenders
+          if: [{ quest_not_started: captain_fenders }, { level_at_least: 30 }]
+          goto: fenders_offer
+        - text: npc.volcan_ferryman.opt_fenders_give
+          if:
+            - { quest_state: { quest: captain_fenders, state: in_progress, step: deliver_pelts } }
+            - { has_item: { item: ash_pelt, count: 5 } }
+          action: { take_item: { item: ash_pelt, count: 5 } }
+          goto: fenders_delivered
+        - text: npc.volcan_ferryman.opt_fenders_help
+          if: { quest_state: { quest: captain_fenders, state: in_progress } }
+          goto: fenders_help
         - text: dialog.ask_travel
           goto: travel
         - text: npc.volcan_ferryman.opt_island
           goto: island
         - text: dialog.bye
           action: close
+    fenders_offer:
+      text: npc.volcan_ferryman.fenders_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: captain_fenders }
+          goto: fenders_accepted
+        - text: dialog.decline
+          goto: greet
+    fenders_accepted:
+      text: npc.volcan_ferryman.fenders_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    fenders_help:
+      text: npc.volcan_ferryman.fenders_help
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    fenders_delivered:
+      text: npc.volcan_ferryman.fenders_delivered
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     island:
       text: npc.volcan_ferryman.island
       options:

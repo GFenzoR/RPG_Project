@@ -4,7 +4,8 @@ sprite: npcs/ferryman
 notes: >-
   Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
   bosque_to_volcan). Chapter 2 part 1
-  ends with him: he saw where the unflagged boat landed.
+  ends with him: he saw where the unflagged boat landed. Since lote 12 he gives the side
+  quest ferryman_jetty (level 22): the smugglers' jetty on the east shore.
 dialog:
   start: greet
   nodes:
@@ -14,6 +15,21 @@ dialog:
         - text: npc.bosque_ferryman.opt_ch2_boat
           if: { quest_state: { quest: ch2_roots, state: in_progress, step: ask_ferryman } }
           goto: ch2_boat
+        - text: npc.bosque_ferryman.opt_jetty
+          if: [{ quest_not_started: ferryman_jetty }, { level_at_least: 22 }]
+          goto: jetty_offer
+        - text: npc.bosque_ferryman.opt_jetty_help
+          if: { quest_state: { quest: ferryman_jetty, state: in_progress, step: see_jetty } }
+          goto: jetty_where
+        - text: npc.bosque_ferryman.opt_jetty_help
+          if: { quest_state: { quest: ferryman_jetty, state: in_progress, step: clear_crawlers } }
+          goto: jetty_crawlers
+        - text: npc.bosque_ferryman.opt_jetty_report
+          if: { quest_state: { quest: ferryman_jetty, state: in_progress, step: report } }
+          goto: jetty_report
+        - text: npc.bosque_ferryman.opt_jetty_after
+          if: { quest_state: { quest: ferryman_jetty, state: completed } }
+          goto: jetty_after
         - text: dialog.ask_travel
           goto: travel
         - text: npc.bosque_ferryman.opt_island
@@ -22,6 +38,38 @@ dialog:
           action: close
     ch2_boat:
       text: npc.bosque_ferryman.ch2_boat
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    jetty_offer:
+      text: npc.bosque_ferryman.jetty_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ferryman_jetty }
+          goto: jetty_accepted
+        - text: dialog.decline
+          goto: greet
+    jetty_accepted:
+      text: npc.bosque_ferryman.jetty_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    jetty_where:
+      text: npc.bosque_ferryman.jetty_where
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    jetty_crawlers:
+      text: npc.bosque_ferryman.jetty_crawlers
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    jetty_report:
+      text: npc.bosque_ferryman.jetty_report
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    jetty_after:
+      text: npc.bosque_ferryman.jetty_after
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

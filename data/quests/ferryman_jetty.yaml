@@ -1,0 +1,24 @@
+id: ferryman_jetty
+name: quest.ferryman_jetty.name
+min_level: 22
+notes: >-
+  Side quest from bosque_ferryman (lote 12, levels 22-25). Since the unflagged boat of
+  Chapter 2, other boats land at night on the east shore, at a jetty the smugglers built.
+  See it (a reach step on its planks, 4256,6139 within 2), go down into the crawlers' cave
+  next to it, where the crates end up, and clear 12 hollow crawlers (levels 22-26); back at
+  the dock Tavin hears what the crates carried, a hint for whoever paid the smugglers (no
+  answer yet). Rewards: ~12 % of the experience from 22 to 25 and about 6 minutes of a
+  crawler hunt's loot (docs/02 "Quests secundarias").
+steps:
+  - id: see_jetty
+    description: quest.ferryman_jetty.step_see_jetty
+    complete_when: { reach: { x: 4256, y: 6139, z: 7, radius: 2 } }
+  - id: clear_crawlers
+    description: quest.ferryman_jetty.step_clear_crawlers
+    complete_when: { kill: { monster: hollow_crawler, count: 12 } }
+  - id: report
+    description: quest.ferryman_jetty.step_report
+    complete_when: { dialog_action: { npc: bosque_ferryman, node: jetty_report } }
+rewards:
+  - { xp: 7000 }
+  - { gold: 700 }
