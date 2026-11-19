@@ -124,11 +124,11 @@ describe("mapcli", () => {
     expect(r.code).toBe(0);
     expect(r.out).toBe(
       [
-        "legend: ? text  @ temple  N npc  _ stone_floor  s stone_wall",
+        "legend: ? text  @ temple  B brazier  N npc  _ stone_floor  b bench  s stone_wall",
         "y\\x  3153      3163",
         "6382 _________s___",
-        "6383 _________s___",
-        "6384 ___N_____s?__",
+        "6383 bb_______s___",
+        "6384 ___N____Bs?__",
         "6385 _____________",
         "6386 _____@_____N_",
         "6387 _____________",
