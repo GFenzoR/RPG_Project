@@ -1,0 +1,18 @@
+id: bounty_hounds
+name: quest.bounty_hounds.name
+min_level: 26
+notes: >-
+  Bounty task of Brasal (volcan_hunter, lote 12): 30 ash hounds (levels 26-30), every 20
+  hours. The reward is about a fifth of what an hour of that hunt gives (xp and loot,
+  sim/balance_tasks_test.go; docs/02 "Tareas"); no items.
+repeatable: { cooldown_hours: 20 }
+steps:
+  - id: hunt
+    description: quest.bounty_hounds.step_hunt
+    complete_when: { kill: { monster: ash_hound, count: 30 } }
+  - id: report
+    description: quest.bounty_hounds.step_report
+    complete_when: { dialog_action: { npc: volcan_hunter, node: hounds_paid } }
+rewards:
+  - { xp: 6700 }
+  - { gold: 1150 }

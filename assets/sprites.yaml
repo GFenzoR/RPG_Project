@@ -370,6 +370,29 @@ animations:
       - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
       - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
       - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_ember } }
+  # The bounty hunters of Raigal and Brasal (lote 12, docs/02 "Tareas").
+  npcs/hunter_forest:
+    preset: lpc
+    actions: [idle, walk]
+    layers:
+      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
+      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
+      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
+      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
+      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
+      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
+      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
+  npcs/hunter_volcanic:
+    preset: lpc
+    actions: [idle, walk]
+    layers:
+      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
+      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
+      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
+      - vendor/ulpc/spritesheets/torso/armour/plate/male/<sheet>.png
+      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
+      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
+      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
 
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.

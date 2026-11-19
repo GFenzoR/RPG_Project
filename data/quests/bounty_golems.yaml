@@ -1,0 +1,19 @@
+id: bounty_golems
+name: quest.bounty_golems.name
+min_level: 39
+notes: >-
+  Bounty task of Brasal (volcan_hunter, lote 12): 20 slag golems (levels 39-44, the mine's
+  east gallery and the lava field), every 20 hours. The reward is about a fifth of what an
+  hour of that hunt gives (xp and loot, sim/balance_tasks_test.go; docs/02 "Tareas"); no
+  items.
+repeatable: { cooldown_hours: 20 }
+steps:
+  - id: hunt
+    description: quest.bounty_golems.step_hunt
+    complete_when: { kill: { monster: slag_golem, count: 20 } }
+  - id: report
+    description: quest.bounty_golems.step_report
+    complete_when: { dialog_action: { npc: volcan_hunter, node: golems_paid } }
+rewards:
+  - { xp: 9100 }
+  - { gold: 2650 }

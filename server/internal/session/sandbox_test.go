@@ -951,7 +951,7 @@ func TestSandboxPens(t *testing.T) {
 
 	// Pen 3, boars and a spider: a level 20 arcanist with a coral wand.
 	cl, p = s.hero(5103, "Maga", "arcanist", 2, 0, 1, gear{"coral_wand", 1, slotRight},
-		gear{"mossweave_robe", 1, slotArmor}, gear{"seaweed_poultice", 10, 0})
+		gear{"mossweave_robe", 1, slotArmor}, gear{"seaweed_poultice", 20, 0})
 	report("pen 3 (arcanist 20)", s.huntForLoot("bristleback_boar", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 	report("pen 3 (arcanist 20)", s.huntForLoot("moss_spider", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 
