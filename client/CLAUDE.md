@@ -1361,7 +1361,10 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
 - **La figura** (`state/equipment.ts`, puro y con tests; `ui/Inventory.tsx`): `DOLL` da el
   lugar (columna y fila desde 1) y el tamaño en celdas de cada slot en una grilla de
   `DOLL_COLS` x `DOLL_ROWS` (8x9). `InventoryPanel` mide el ancho que tiene (`.doll-box`,
-  `ResizeObserver`, en un `useLayoutEffect`: el primer cuadro ya sale a su tamaño) y
+  `ResizeObserver`, en un `useLayoutEffect`: el primer cuadro ya sale a su tamaño; lo que el
+  observador ve después se aplica en el cuadro siguiente, `deferredMeasure` de
+  `ui/next-frame.ts`: dentro de su entrega, la figura agrandada alargaba la caja y WebKit le
+  daba a la página un error "ResizeObserver loop" al mostrar la pestaña en un teléfono) y
   `dollCell` elige la celda: el mayor número par de px enteros que entra, entre
   `DOLL_MIN_CELL` (24) y `DOLL_MAX_CELL` (44), con `DOLL_GAP` (2) entre celdas; la grilla
   se centra con un margen entero. Con celda y separación pares, todo ícono cae en píxeles
@@ -1573,4 +1576,10 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
 - **E2E:** los screenshots de `.side` (`16-chat`, `18-gm-announce`, `25-party-panel`,
   `37-report-form`, `51-pvp-battle-list`) son ahora de su ventana; `mobile.spec.ts` comprueba
   a 1280x800 que el canvas va de (0, 0) al techo de la barra y que el chat queda sobre ella
-  (`mobile-desktop-1280-full-screen`).
+  (`mobile-desktop-1280-full-screen`). A 1280x800 el inventario flota sobre la 6.ª columna al
+  este del jugador y el chat sobre la 2.ª a la 7.ª al oeste y la 3.ª a la 5.ª al sur: los
+  caminos por clicks de `game.spec.ts` saltan 5 columnas como mucho, `mapPoint` da el punto
+  de una casilla solo si lo que hay ahí es el canvas, y `clickTile` de `sandbox.spec.ts`
+  falla si una ventana tapa la casilla. Que el cuerpo de la tienda no se desplace se mide
+  en `.gwin-body` (el marco no es un contenedor de scroll y sus esquinas góticas sobresalen
+  5 px).
