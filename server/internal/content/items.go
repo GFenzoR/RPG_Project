@@ -167,13 +167,16 @@ func (is Items) ByNumeric() map[uint16]*Item {
 }
 
 // check verifies what the server needs of an item beyond its schema: a weapon's range
-// within MaxRange (0 = melee), a book's title and pages.
+// within MaxRange (0 = melee), a book's title and its 1 to MaxBookPages pages.
 func (it *Item) check() error {
 	if wp := it.Weapon; wp != nil && (wp.Range < 0 || wp.Range > MaxRange) {
 		return fmt.Errorf("weapon range must be 0 to %d", MaxRange)
 	}
 	if b := it.Book; b != nil && (b.Title == "" || len(b.Pages) == 0 || slices.Contains(b.Pages, "")) {
 		return errors.New("a book needs a title and at least one page")
+	}
+	if b := it.Book; b != nil && len(b.Pages) > MaxBookPages {
+		return fmt.Errorf("a book has at most %d pages, not %d", MaxBookPages, len(b.Pages))
 	}
 	return nil
 }

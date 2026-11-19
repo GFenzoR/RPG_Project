@@ -548,12 +548,17 @@ asignaciones no):
 El `QuestLog` (docs/05 "Diario de misiones") sale entero al entrar y en el flush de cada
 tick en que cambió una quest del jugador: también con cada muerte que cuenta un paso
 `kill`, y lleva todas las quests empezadas o terminadas. Una entrada con todos sus campos
-pesa unos 100 B (`proto.Size`, con los ids y las claves de `data/quests`): con las 9 quests
-de hoy, ≤ 0,9 KB por mensaje. Un jugador que caza una criatura cada 3 s suma ≤ 300 B/s,
-lejos de los 4 KB/s. Crece con el catálogo: con 50 quests empezadas serían unos 5 KB por
-muerte (~1,7 KB/s al mismo ritmo). Cuando lleguen las tareas de caza (`feat/side-quests`),
-mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo con
-`TestCrowdBandwidth`.
+pesa unos 100 B (`proto.Size`, con los ids y las claves de `data/quests`). Medido el
+2026-11-19 con las 20 quests de hoy (capítulos, quests secundarias y tareas de caza), un
+personaje con todas empezadas, cada una en su paso más largo y un paso `kill` a una muerte
+de cumplirse, recibe un `QuestLog` de **1937 B** (96 B por entrada,
+`TestQuestLogSize` en `session/questlog_size_test.go`). Un jugador que caza una criatura
+cada 3 s suma ≤ 0,65 KB/s, lejos de los 4 KB/s (la base de `TestCrowdBandwidth` gasta
+~0,5 KB/s). Crece con el catálogo: unos 100 B por quest más.
+- **Disparador:** `TestQuestLogSize` falla si ese diario pasa de **4096 B** (unas 42 quests
+  empezadas a la vez; a una muerte cada 3 s, un tercio del presupuesto por jugador). Ese
+  día, mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo
+  con `TestCrowdBandwidth` con tareas activas.
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

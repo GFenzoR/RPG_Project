@@ -1,6 +1,7 @@
 package content
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,14 @@ func TestCheckChests(t *testing.T) {
 		"count 0":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 0}]}}`,
 		"count 101":    `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 101}]}}`,
 		"count 2":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: sword, count: 2}]}}`,
+		"at most 8": `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [` +
+			strings.Repeat(`{item: coin, count: 1}, `, MaxChestRewards) + `{item: amber, count: 1}]}}`,
+	}
+	// Eight rewards, the most a chest gives, are fine.
+	full := doorItems(t, goodChests+`- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [`+
+		strings.TrimSuffix(strings.Repeat(`{item: coin, count: 1}, `, MaxChestRewards), ", ")+`]}}`)
+	if err := CheckChests(full, ""); err != nil {
+		t.Errorf("a chest of %d rewards: %v", MaxChestRewards, err)
 	}
 	// A rune that does not stack is one unit, whatever its charges: the error says 1.
 	runeChest := doorItems(t, goodChests+`- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: arc_rune, count: 3}]}}`)
@@ -62,16 +71,28 @@ func TestCheckChests(t *testing.T) {
 	}
 }
 
-// A book needs a title and pages.
+// pages lists n page keys of book b, for a YAML flow sequence.
+func pages(n int) string {
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("book.b.page_%d", i+1)
+	}
+	return strings.Join(keys, ", ")
+}
+
+// A book needs a title and 1 to MaxBookPages pages.
 func TestBookCheck(t *testing.T) {
-	ok := doorItems(t, `- {id: b, kind: decoration, book: {title: book.b.title, pages: [book.b.page_1]}}`)
-	if err := ok["b"].check(); err != nil {
-		t.Fatal(err)
+	for _, n := range []int{1, MaxBookPages} {
+		ok := doorItems(t, `- {id: b, kind: decoration, book: {title: book.b.title, pages: [`+pages(n)+`]}}`)
+		if err := ok["b"].check(); err != nil {
+			t.Fatalf("%d pages: %v", n, err)
+		}
 	}
 	for _, src := range []string{
 		`- {id: b, kind: decoration, book: {pages: [book.b.page_1]}}`,
 		`- {id: b, kind: decoration, book: {title: book.b.title}}`,
 		`- {id: b, kind: decoration, book: {title: book.b.title, pages: [""]}}`,
+		`- {id: b, kind: decoration, book: {title: book.b.title, pages: [` + pages(MaxBookPages+1) + `]}}`,
 	} {
 		if err := doorItems(t, src)["b"].check(); err == nil {
 			t.Errorf("accepted %s", src)

@@ -30,8 +30,16 @@ type ChestReward struct {
 // ChestKey is the storage key of a chest the character opened.
 func ChestKey(id string) string { return "chest." + id }
 
+// MaxChestRewards and MaxBookPages are the most rewards a chest gives and the most pages a
+// book has: the same bounds as the item schema (docs/06 "Items"), so the server never
+// starts with content make validate would reject.
+const (
+	MaxChestRewards = 8
+	MaxBookPages    = 12
+)
+
 // CheckChests checks the reward chests of items: each one is a map item nobody picks up,
-// its chest id is unique, it gives something, and every reward is an item that exists, can
+// its chest id is unique, it gives 1 to MaxChestRewards rewards, and every reward is an item that exists, can
 // go in a backpack (pickupable: a wall, a lectern or another chest cannot), is not retired
 // (lote 11), is not the forge's protection (the warding amber: only monsters
 // drop it, docs/02 "Forja"; "" skips that rule) and comes in a count from 1 to one stack
@@ -57,6 +65,9 @@ func CheckChests(items Items, protection string) error {
 			return fmt.Errorf("item %q: chest id %q is also the one of %q", id, c.ID, seen[c.ID])
 		case len(c.Rewards) == 0:
 			return fmt.Errorf("item %q: chest %q gives nothing", id, c.ID)
+		case len(c.Rewards) > MaxChestRewards:
+			return fmt.Errorf("item %q: chest %q gives %d rewards, at most %d", id, c.ID, len(c.Rewards),
+				MaxChestRewards)
 		}
 		seen[c.ID] = id
 		for _, r := range c.Rewards {
