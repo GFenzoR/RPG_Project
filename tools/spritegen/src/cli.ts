@@ -6,15 +6,18 @@
 //   node tools/spritegen/src/cli.ts sheet [--only PREFIX] [--out DIR] [--scale N]
 //        contact sheet (every frame at N x, default 4) and 1x lineup of each engine sprite;
 //        with item icons among them, also icons.slots.png (each in an inventory slot at 2x
-//        and 1x and on grass, a row per line of the catalog) and icons.detail.png (at 4x)
+//        and 1x and on grass, a row per line of the catalog) and icons.detail.png (at 4x);
+//        with town props among them, also town.floors.png (each on every floor of the towns,
+//        beside an LPC person, at 1x shown 2x)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { encodePng, scaleImage } from "@rpg/spritepack";
 import { engineProblems } from "./engine/check.ts";
-import { contactSheet, iconBoard, reviewLineup } from "./engine/sheet.ts";
+import { contactSheet, floorBoard, iconBoard, reviewLineup } from "./engine/sheet.ts";
 import { ENGINE_SPECS } from "./engine/specs/index.ts";
 import { ICON_ROWS } from "./engine/specs/items/index.ts";
+import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
 import { buildSprites, checkPaths, previewPng, recipePaths } from "./index.ts";
 
 const { positionals, values } = parseArgs({
@@ -74,6 +77,13 @@ if (command === "build") {
     writeFileSync(join(out, "icons.slots.png"), encodePng(iconBoard(root, rows)));
     writeFileSync(join(out, "icons.detail.png"), encodePng(iconBoard(root, rows, true)));
     console.log(`spritegen: ${join(out, "icons.slots.png")} and icons.detail.png`);
+  }
+  // Town props: every selected one on each floor of the towns, beside an LPC person.
+  const town = TOWN_PROPS.filter((s) => chosen.has(s.sprite));
+  if (town.length > 0) {
+    const file = join(out, "town.floors.png");
+    writeFileSync(file, encodePng(scaleImage(floorBoard(root, town, TOWN_FLOORS), 2)));
+    console.log(`spritegen: ${file}`);
   }
 }
 const problems = [...checkPaths(root), ...engineProblems(root)];

@@ -11,6 +11,7 @@ import { MARKET_BOARD } from "./market-board.ts";
 import { REMAINS } from "./remains.ts";
 import { SIGNPOST } from "./signpost.ts";
 import { STAG } from "./stag.ts";
+import { TOWN_PROPS } from "./town.ts";
 
 export const ENGINE_SPECS: readonly SpriteSpec[] = [
   BOAR,
@@ -27,4 +28,5 @@ export const ENGINE_SPECS: readonly SpriteSpec[] = [
   LECTERN_BOOK,
   SCROLL,
   REWARD_CHEST,
+  ...TOWN_PROPS,
 ];

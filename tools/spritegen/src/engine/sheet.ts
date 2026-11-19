@@ -319,3 +319,51 @@ export function iconBoard(
 
 /** The canvas of a spec (re-exported for the CLI). */
 export { canvasOf };
+
+/**
+ * Props on the floors of the towns (docs/17 "Kit de props de pueblo"): one row per ground,
+ * each starting with an LPC person (when the atlas is built) and then the frame 0 of every
+ * prop, at 1x as the client places them. A one-tile prop is judged by how it stands off each
+ * floor it is put on, next to a person, so every floor of the towns gets its row.
+ */
+export function floorBoard(
+  root: string,
+  specs: readonly SpriteSpec[],
+  grounds: readonly string[],
+): Image {
+  const person = atlasFrame(root, "outfits/citizen/walk_s_0");
+  const refs = person
+    ? [{ image: person, anchor: "bc" as const, foot: footOf([person]), shadow: true }]
+    : [];
+  const props = specs.flatMap((spec) => {
+    const image = engineFrames(spec)[0]?.image;
+    return image ? [{ image, anchor: canvasOf(spec).size.anchor, foot: 0, shadow: false }] : [];
+  });
+  const rows = grounds
+    .filter((g) => existsSync(join(root, "assets", "sprites", `${g}.png`)))
+    .map((g) => ({
+      label: g,
+      image: lineup(root, [...refs, ...props], `assets/sprites/${g}.png`),
+    }));
+  const labelW = 120;
+  const w = labelW + Math.max(0, ...rows.map((r) => r.image.width));
+  const out = createImage(
+    w,
+    rows.reduce((h, r) => h + r.image.height + 2, 0),
+  );
+  fillRect(out, 0, 0, out.width, out.height, PAPER);
+  let y = 0;
+  for (const r of rows) {
+    drawText(
+      out,
+      boardLabel(r.label.replace(/^ground\//, "")),
+      4,
+      y + Math.floor(r.image.height / 2),
+      1,
+      LABEL,
+    );
+    over(out, r.image, labelW, y);
+    y += r.image.height + 2;
+  }
+  return out;
+}
