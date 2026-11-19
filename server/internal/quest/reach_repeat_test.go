@@ -186,4 +186,10 @@ func TestParseReachAndRepeatable(t *testing.T) {
 	if q.Repeatable.CooldownSeconds() != 180 {
 		t.Fatalf("0.05 h = %d s, want 180", q.Repeatable.CooldownSeconds())
 	}
+	// Whole seconds, whatever float64 makes of the product (1.1 × 3600 is 3960.0000000000005).
+	for h, want := range map[float64]int64{0.07: 252, 1.1: 3960, 0.3: 1080, 20: 72000, 0.0001: 1} {
+		if got := (&content.Repeatable{CooldownHours: h}).CooldownSeconds(); got != want {
+			t.Errorf("%v h = %d s, want %d", h, got, want)
+		}
+	}
 }

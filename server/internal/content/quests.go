@@ -34,9 +34,10 @@ type Repeatable struct {
 // MaxCooldownHours bounds a repeatable quest's cooldown (a year).
 const MaxCooldownHours = 24 * 366
 
-// CooldownSeconds is the cooldown in whole seconds (at least one).
+// CooldownSeconds is the cooldown rounded to whole seconds (at least one): 1.1 h is 3960 s,
+// whatever float64 makes of 1.1 × 3600 (3960.0000000000005).
 func (r *Repeatable) CooldownSeconds() int64 {
-	return max(int64(math.Ceil(r.CooldownHours*3600)), 1)
+	return max(int64(math.Round(r.CooldownHours*3600)), 1)
 }
 
 // QuestStepDef is one step and the event that completes it.
