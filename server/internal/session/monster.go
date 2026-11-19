@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"time"
 
@@ -14,7 +15,8 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// CorpseItem is the item (data/items) left where a monster dies, with its loot.
+// CorpseItem is the item (data/items) left where a monster without its own `corpse` dies,
+// with its loot, and where a player dies.
 const CorpseItem = "creature_remains"
 
 // AIState is the state of a monster's behaviour (docs/02-game-design.md, monsters section):
@@ -56,11 +58,35 @@ const (
 
 // monsterKind is a monster definition prepared for the loop.
 type monsterKind struct {
-	def         *content.Monster
-	target      combat.MonsterTarget
-	loot        []lootItem
-	attackTicks []game.Tick
-	// reach is the longest range of its attacks (1 = melee only).
+	def    *content.Monster
+	target combat.MonsterTarget
+	loot   []lootItem
+	// attacks are the definition's attacks, then each phase's attacks_add, in order.
+	attacks []kindAttack
+	// The rest is by how many of its phases are on (0 to len(def.Phases)): ticks[n][i] is
+	// the interval of attacks[i], reach[n] the longest reach of its targeted attacks in
+	// those phases that have no below_hp_pct (1 = melee only; Monster.reach) and speed[n]
+	// its speed before conditions.
+	ticks [][]game.Tick
+	reach []int
+	speed []int
+	// gated are the indexes in attacks of its targeted attacks with a below_hp_pct: each
+	// one's reach counts only while the monster's health is below it (Monster.reach).
+	gated []int
+	// self: some attack is a heal_self or a summon (monsterSelf has work).
+	self bool
+	// corpse is the container its remains are: its own `corpse`, or CorpseItem.
+	corpse *content.Item
+}
+
+// kindAttack is one attack of a monster kind.
+type kindAttack struct {
+	def *content.MonsterAttack
+	// phase is 0 for an attack of its own, n for one of phase n's attacks_add (in use
+	// while n or more phases are on).
+	phase int
+	// reach is how far its target may stand (MonsterAttack.Reach), 0 for a heal_self or a
+	// summon (no target).
 	reach int
 }
 
@@ -91,7 +117,8 @@ type Monster struct {
 	target    *Player
 	// readyAt is the first tick at which the next step may start.
 	readyAt game.Tick
-	// nextAttack is the first tick of each attack's next round (kind.def.Attacks order).
+	// nextAttack is the first tick of each attack's next round (kind.attacks order: its
+	// own, then each phase's attacks_add).
 	nextAttack []game.Tick
 	// damage is the damage each player dealt, to share the experience.
 	damage []damageShare
@@ -116,7 +143,45 @@ type Monster struct {
 	// tile where it stood: until its tick, on that tile and out of m's reach, that player
 	// is beyond its leash.
 	shunned []shun
+	// chaseWay is the rest of the A* way to its target (last step first) that chase
+	// follows from chaseAt while its target stands within one tile of chaseGoal, where it
+	// stood when the way was found: as on the way home (homeWay), the greedy step from the
+	// first tile of a detour would lead straight back to the wall. Its array is reused.
+	chaseWay  []world.Direction
+	chaseAt   world.Pos
+	chaseGoal world.Pos
+	// phase is how many of its kind's phases are on (updatePhase).
+	phase int
+	// master is the monster that summoned m (nil for a monster of a spawn) and summonOf
+	// the index of that attack in its kind (-1 for none); summons are the monsters m
+	// summoned that are still in the world.
+	master   *Monster
+	summonOf int
+	summons  []*Monster
 }
+
+// reach is the longest reach (Chebyshev) of the targeted attacks m may use now, those
+// monsterAttacks would use (their phase on, its health below their below_hp_pct; 1 =
+// melee only): whether m shoots while it closes in (think). Whether they hit a given
+// tile is strikes, which also counts the shape of an area.
+func (m *Monster) reach() int {
+	r := m.kind.reach[m.phase]
+	for _, i := range m.kind.gated {
+		if a := &m.kind.attacks[i]; a.reach > r && a.phase <= m.phase && m.below(a.def.BelowHealthPct) {
+			r = a.reach
+		}
+	}
+	return r
+}
+
+// below reports whether m's health is below pct percent of its maximum (always for 0).
+func (m *Monster) below(pct int) bool { return pct == 0 || m.health*100 < pct*m.maxHealth }
+
+// Master returns the monster that summoned m, or nil.
+func (m *Monster) Master() *Monster { return m.master }
+
+// Phase returns how many of m's phases are on.
+func (m *Monster) Phase() int { return m.phase }
 
 // shun is a player a monster gave up on a tile no way led to, until a tick.
 type shun struct {
@@ -129,6 +194,7 @@ type shun struct {
 // found about the way to its old target does not hold for the new one.
 func (m *Monster) setTarget(p *Player) {
 	m.target, m.stuckOn, m.checkAt = p, 0, 0
+	m.chaseWay = m.chaseWay[:0]
 }
 
 // Speed returns the monster's effective speed.
@@ -222,13 +288,16 @@ func (w *World) initCombat() error {
 		k := &monsterKind{def: def, target: combat.MonsterTarget{
 			Armor: def.Armor, Defense: def.Defense, PhysicalResistance: def.Resistances["physical"],
 		}}
-		k.reach = 1
-		for _, a := range def.Attacks {
-			k.attackTicks = append(k.attackTicks, ticksFor(a.IntervalMs))
-			if a.Type != attackMelee {
-				k.reach = max(k.reach, a.Range)
+		k.corpse = corpse
+		if def.Corpse != "" {
+			it := w.cfg.Items[def.Corpse]
+			// The rule of the content validator (packages/content-schema validate.ts).
+			if it == nil || it.Kind != "container" || it.Container == nil || it.CanPickUp() {
+				return fmt.Errorf("session: monster %q: corpse %q must be an item of kind container with pickupable: false", id, def.Corpse)
 			}
+			k.corpse = it
 		}
+		k.prepareAttacks()
 		for _, l := range def.Loot {
 			it := w.cfg.Items[l.Item]
 			if it == nil {
@@ -244,6 +313,9 @@ func (w *World) initCombat() error {
 		}
 		w.kinds[id] = k
 	}
+	if err := w.checkSummons(); err != nil {
+		return err
+	}
 	for _, is := range w.m.Islands() {
 		for i := range is.Spawns {
 			sp := &is.Spawns[i]
@@ -255,6 +327,78 @@ func (w *World) initCombat() error {
 				for range sm.Count {
 					w.slots = append(w.slots, &spawnSlot{spawn: sp, kind: k})
 				}
+			}
+		}
+	}
+	return nil
+}
+
+// prepareAttacks lists k's attacks (its own, then each phase's) and works out, for each
+// number of phases on, their intervals (attack_interval_mult), its reach without the
+// attacks held back for low health (gated) and its speed (speed_mult): what the loop
+// reads every tick costs no multiplication.
+func (k *monsterKind) prepareAttacks() {
+	def := k.def
+	for i := range def.Attacks {
+		k.attacks = append(k.attacks, kindAttack{def: &def.Attacks[i]})
+	}
+	for p := range def.Phases {
+		for i := range def.Phases[p].AttacksAdd {
+			k.attacks = append(k.attacks, kindAttack{def: &def.Phases[p].AttacksAdd[i], phase: p + 1})
+		}
+	}
+	for i := range k.attacks {
+		a := &k.attacks[i]
+		switch {
+		case !a.def.Targeted():
+			k.self = true
+		case a.def.BelowHealthPct > 0:
+			a.reach = a.def.Reach()
+			k.gated = append(k.gated, i)
+		default:
+			a.reach = a.def.Reach()
+		}
+	}
+	mult, speed := 1.0, 1.0
+	for n := 0; n <= len(def.Phases); n++ {
+		if n > 0 {
+			mult *= def.Phases[n-1].AttackIntervalMult
+			speed *= def.Phases[n-1].SpeedMult
+		}
+		ticks := make([]game.Tick, len(k.attacks))
+		reach := 1
+		for i, a := range k.attacks {
+			ticks[i] = ticksFor(int(math.Round(float64(a.def.IntervalMs) * mult)))
+			if a.phase <= n && a.def.BelowHealthPct == 0 {
+				reach = max(reach, a.reach)
+			}
+		}
+		k.ticks = append(k.ticks, ticks)
+		k.reach = append(k.reach, reach)
+		k.speed = append(k.speed, max(int(math.Round(float64(def.Speed)*speed)), 1))
+	}
+}
+
+// checkSummons checks what the monsters summon: each summon attack says what (summon,
+// with count and max_alive at least 1: ParseMonster fills max_alive, a config built in Go
+// may not, and monsterSelf reads both), a known monster that summons nothing itself (a
+// chain of summoners would have no bound).
+func (w *World) checkSummons() error {
+	for _, id := range w.cfg.Monsters.IDs() {
+		for _, a := range w.kinds[id].attacks {
+			s := a.def.Summon
+			if a.def.Type == attackSummon && (s == nil || s.Count < 1 || s.MaxAlive < 1) {
+				return fmt.Errorf("session: monster %q: a summon attack needs summon with count and max_alive of 1 or more", id)
+			}
+			if s == nil {
+				continue
+			}
+			k := w.kinds[s.Monster]
+			if k == nil {
+				return fmt.Errorf("session: monster %q summons unknown monster %q", id, s.Monster)
+			}
+			if k.def.Summons() {
+				return fmt.Errorf("session: monster %q summons %q, which summons too", id, s.Monster)
 			}
 		}
 	}
@@ -381,18 +525,26 @@ func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial boo
 	if !ok || (!initial && w.watched(pos)) {
 		return false
 	}
-	def := slot.kind.def
+	w.placeMonster(slot.kind, slot, pos)
+	return true
+}
+
+// placeMonster puts a new monster of kind k, of slot, on pos (the caller checked the tile)
+// and tells who sees it.
+func (w *World) placeMonster(k *monsterKind, slot *spawnSlot, pos world.Pos) *Monster {
+	def := k.def
 	w.nextID++
 	m := &Monster{
 		id:         w.nextID,
-		kind:       slot.kind,
+		kind:       k,
 		slot:       slot,
 		pos:        pos,
 		dir:        world.South,
 		health:     def.Health,
 		maxHealth:  def.Health,
-		speed:      def.Speed,
-		nextAttack: make([]game.Tick, len(def.Attacks)),
+		speed:      k.speed[0],
+		nextAttack: make([]game.Tick, len(k.attacks)),
+		summonOf:   -1,
 	}
 	w.monsters = append(w.monsters, m) // ids grow: the slice stays ordered
 	w.monByID[m.id] = m
@@ -407,7 +559,7 @@ func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial boo
 			o.emit(msg)
 		}
 	})
-	return true
+	return m
 }
 
 func (w *World) scheduleRespawn(ctx *game.TickContext, slot *spawnSlot, delay game.Tick) {
@@ -501,10 +653,52 @@ func (w *World) pickTarget(tick game.Tick, m *Monster, skip *Player, inReach boo
 }
 
 // hits reports whether one of m's attacks reaches p from where m stands: next to it, or
-// within its reach and line of sight (distance attacks and spells, monsterAttacks).
+// covering it (strikes) in line of sight (distance attacks, spells and areas,
+// monsterAttacks).
 func (w *World) hits(m *Monster, p *Player) bool {
-	d := chebyshev(m.pos, p.pos)
-	return d <= 1 || d <= m.kind.reach && w.m.LineOfSight(m.pos, p.pos)
+	return chebyshev(m.pos, p.pos) <= 1 || w.strikes(m, p.pos) && w.m.LineOfSight(m.pos, p.pos)
+}
+
+// strikes reports whether a target on p could be hit by m from where it stands: p is next
+// to m, or one of the targeted attacks m may use now (monsterAttacks: its phase on, m's
+// health below its below_hp_pct) covers p (covers). Line of sight aside (hits): it is what
+// keeps m on a target beyond its leash area (beyondLeash) and spares its chase the check
+// of the way (chase). Not the longest reach alone (Monster.reach): a beam of 4 misses a
+// target 4 tiles east and 2 south, and a monster that counted it as reached would hold
+// that target, never hit it and still answer it (review of the monster abilities: a
+// ranger across the water trained on an ember wyrmling at the full rate, unhurt).
+func (w *World) strikes(m *Monster, p world.Pos) bool {
+	if chebyshev(m.pos, p) <= 1 {
+		return true
+	}
+	for i := range m.kind.attacks {
+		// A reach of 1 covers only what is next to m: counted above.
+		if ka := &m.kind.attacks[i]; ka.reach > 1 && ka.phase <= m.phase && m.below(ka.def.BelowHealthPct) && w.covers(m, ka, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// covers reports whether m's targeted attack ka, used now from where m stands, would hit
+// a target on p, line of sight aside: p within its reach (Chebyshev) and, with an area, in
+// it. A beam goes along one of the 8 directions (beamDir turns any other line into one
+// that misses p), up to the first tile that blocks sight (beamTiles); a circle around m
+// covers its round area (inArea: not the corners of the square of its radius); a circle
+// around the target always has the target in it.
+func (w *World) covers(m *Monster, ka *kindAttack, p world.Pos) bool {
+	dx, dy := int(p.X)-int(m.pos.X), int(p.Y)-int(m.pos.Y)
+	if max(abs(dx), abs(dy)) > ka.reach {
+		return false
+	}
+	switch ar := ka.def.Area; {
+	case ar == nil || ar.Center == content.AreaTarget:
+		return true
+	case ar.Shape == content.AreaBeam:
+		return (dx == 0 || dy == 0 || abs(dx) == abs(dy)) && w.beamReaches(m.pos, p)
+	default:
+		return inArea(dx, dy, ar.Radius)
+	}
 }
 
 // think runs one tick of monster m's state machine.
@@ -516,7 +710,16 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 	if len(m.shunned) > 0 {
 		m.shunned = slices.DeleteFunc(m.shunned, func(s shun) bool { return ctx.Tick >= s.until })
 	}
+	if len(m.kind.def.Phases) > 0 {
+		w.updatePhase(m)
+	}
 	if m.target == nil {
+		if len(m.summons) > 0 {
+			// Its fight is over without a give-up (its target died, left, hid in a protection
+			// zone or went out of sight): what it called goes too, as when it gives up, rather
+			// than wait in its lair for the next one to come in.
+			w.despawnSummons(ctx, m)
+		}
 		// Looking around is the expensive part of idling: once every targetScanTicks,
 		// staggered by id so monsters spread the work over ticks.
 		if b.Aggressive && (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {
@@ -545,8 +748,11 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		}
 		return
 	}
-	if d <= m.kind.reach {
+	if w.strikes(m, t.pos) {
 		m.stuckOn = 0
+	}
+	if m.kind.self {
+		w.monsterSelf(ctx, m) // a heal or a summon needs a fight, not a target in reach
 	}
 	leash := w.leash(m)
 	roam := w.roam(m, leash)
@@ -565,7 +771,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		// Cornered next to its target: it fights back.
 	case d > b.TargetDistance:
 		m.state = StateChase
-		switch w.chase(ctx, m, t, roam, leash >= 0 && d > m.kind.reach) {
+		switch w.chase(ctx, m, t, roam, leash >= 0 && !w.strikes(m, t.pos)) {
 		case chaseBlocked:
 			// Only creatures stand in its way, and have for a while (an NPC, a monster or a
 			// player in the mouth of a nook may never move): it turns to a player its attacks
@@ -585,15 +791,14 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 			}
 			return
 		}
-		if m.kind.reach <= 1 {
+		if m.reach() <= 1 {
 			return
 		}
 		// A monster with distance attacks shoots while it closes in.
-		d = chebyshev(m.pos, t.pos)
 	default:
 		m.state = StateAttack
 	}
-	if d <= m.kind.reach {
+	if w.strikes(m, t.pos) {
 		w.face(m, t.pos)
 		w.monsterAttacks(ctx, m)
 	}
@@ -740,6 +945,7 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 	m.state = StateIdle
 	m.damage = m.damage[:0]
 	w.clearConditions(ctx, holder{m: m}, false)
+	w.despawnSummons(ctx, m) // the fight is over: what it called goes with it
 	if m.health >= m.maxHealth {
 		return
 	}
@@ -757,14 +963,15 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 }
 
 // beyondLeash reports whether player p fights m from where m may not go and cannot hit
-// back: out of its attacks' reach, and out of its leash area or on a tile where m shunned
+// back: out of its attacks' reach (strikes: a beam or a circle that misses p's tile does
+// not hold it), and out of its leash area or on a tile where m shunned
 // it (no way within its leash area led there, chase). Hits from there train like hits on
 // a target that does not fight back (skills.afk.factor): a monster held by its leash is
 // no training dummy. On another tile a shunned player is a target like any other: an
 // unreachable one costs stuckFor again.
 func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
 	l := w.leash(m)
-	if l < 0 || chebyshev(m.pos, p.pos) <= m.kind.reach {
+	if l < 0 || w.strikes(m, p.pos) {
 		return false
 	}
 	if chebyshev(p.pos, m.slot.spawn.Center) > l {
@@ -881,10 +1088,12 @@ const (
 	chaseBlocked
 )
 
-// chase takes m one step towards its target t within roam when it may (readyAt): the step
-// that most closes in (stepToward) or, with none, the first step of a way around
-// creatures (A*, within the tick's quota); with no way it waits pathRetry before stepping
-// or searching again, as walkHome does.
+// chase takes m one step towards its target t within roam when it may (readyAt): the next
+// step of the way it found (chaseWay, while it stands where that way left it and t within
+// one tile of where t stood then), else the step that most closes in (stepToward) or, with
+// none, the first step of a way around creatures (A*, within the tick's quota), whose rest
+// it keeps; with no way it waits pathRetry before stepping or searching again, as walkHome
+// does.
 //
 // With check (a leash, t out of its reach) it also checks, every pathRetry and whether it
 // steps or not, that a way within roam leads to t around creatures. Only finding one (or
@@ -917,6 +1126,16 @@ func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSqu
 	if ctx.Tick < m.readyAt {
 		return chaseOn
 	}
+	if n := len(m.chaseWay); n > 0 && m.pos == m.chaseAt && chebyshev(t.pos, m.chaseGoal) <= 1 {
+		d := m.chaseWay[n-1]
+		m.chaseWay = m.chaseWay[:n-1]
+		if to, ok := m.pos.Step(d); ok && roam.has(to) && w.monsterCanEnter(to) {
+			w.stepMonster(ctx, m, d)
+			m.chaseAt = m.pos
+			return chaseOn
+		}
+	}
+	m.chaseWay = m.chaseWay[:0] // none, stale (t moved on, or m fought) or blocked: plan again
 	if d, ok := w.stepToward(m.pos, t.pos, false, roam); ok {
 		w.stepMonster(ctx, m, d)
 		return chaseOn
@@ -935,7 +1154,14 @@ func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSqu
 		}
 	}
 	if len(way) >= 2 {
+		// It follows the whole way but its last step (onto t) while t stays near where it
+		// stood: from the first tile of a detour the greedy step would lead back to the wall.
+		for i := len(way) - 2; i >= 1; i-- {
+			m.chaseWay = append(m.chaseWay, way[i])
+		}
+		m.chaseGoal = t.pos
 		w.stepMonster(ctx, m, way[0])
+		m.chaseAt = m.pos
 		return chaseOn
 	}
 	m.readyAt = ctx.Tick + w.pathRetry
@@ -987,6 +1213,9 @@ func (w *World) removeMonster(m *Monster, why pb.DisappearReason) {
 	})
 	w.munindex(m)
 	delete(w.monByID, m.id)
+	if b := m.master; b != nil {
+		b.summons = slices.DeleteFunc(b.summons, func(s *Monster) bool { return s == m })
+	}
 	for i, q := range w.monsters {
 		if q == m {
 			w.monsters = append(w.monsters[:i], w.monsters[i+1:]...)

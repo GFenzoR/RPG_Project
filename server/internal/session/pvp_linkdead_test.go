@@ -16,15 +16,15 @@ import (
 
 // cutSlow makes cl's queue full and steps until the server drops it as a slow client (a
 // ping's pong is the first batch that does not fit).
-func (g *pvpWorld) cutSlow(cl *fakeClient) {
-	g.t.Helper()
+func (h *harness) cutSlow(cl *fakeClient) {
+	h.t.Helper()
 	cl.full = true
-	g.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 1}}})
+	h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 1}}})
 	for i := 0; i < 100 && !cl.closed; i++ {
-		g.sim.Step()
+		h.sim.Step()
 	}
 	if !cl.closed || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT {
-		g.t.Fatalf("not dropped as a slow client: closed %v, reason %v", cl.closed, cl.reason)
+		h.t.Fatalf("not dropped as a slow client: closed %v, reason %v", cl.closed, cl.reason)
 	}
 }
 

@@ -98,6 +98,90 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
+  `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
+  fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por
+  elemento en vez del punto de color; `corpse:` en `data/monsters` con ocho restos por
+  familia del motor de sprites (y `creature_remains` redibujado); nombres, gremios y
+  números en Pixelify Sans a 11 px. Queda:
+  - **Flecha, virote, cuchillo, botella y esquirla:** todos vuelan como la flecha. El
+    servidor manda `Projectile` con `projectile_id` = 1 + elemento (docs/05), sin saber qué
+    se tiró; distinguirlos necesita un campo nuevo en `Projectile` (el sprite de la
+    munición o del ataque: `data/items` `ammo`, `data/monsters` `attacks[].visual`), que es
+    protocolo y riesgo alto: tarea aparte, con su arte (virote, cuchillo, botella).
+  - **Tamaño de los restos:** son de 32x32 y ocupan su casilla, como los cadáveres de
+    Tibia; la última pose de muerte de las criaturas de 64x64 mide 34-61 px (el custodio,
+    84), así que al terminar la caída el cuerpo "se achica" un poco. Una versión de 64x64
+    anclada abajo a la derecha (pisa la casilla del oeste, como los cadáveres grandes de
+    Tibia) es decisión del dueño; mirar en el E2E cómo se ve el cambio.
+  - **Un solo color por familia:** el lobo gris y el ciervo pardo dejan el mismo
+    `remains_fur`. Un tinte por monstruo pediría un campo más (o un item por monstruo).
+  - **El cuerpo de un jugador** sigue siendo `creature_remains` (huesos sobre un cuero);
+    usar `remains_humanoid` es cambiar el item en `session/death.go` si el dueño lo
+    prefiere.
+  - **Sin verificación visual todavía (revisión del lote 10):** ninguna captura del E2E
+    muestra un proyectil en vuelo. `07b-attack-pose` es el golpe de puños del jugador (o
+    el mordisco del lobo), no una flecha (`e2e/game.spec.ts`, `shotPose(page,
+    "07b-attack-pose", "attack", …)`); `11-spell` se saca después de que `magic(300)` vio
+    el rayo de energía, sin retener el frame, y el orbe vive 250 ms: puede no estar. De
+    los restos solo salen los `remains_fur` de los lobos (`07-combat`, `11b-death`). Así,
+    la flecha, los orbes y siete de las ocho familias de restos solo tienen tests
+    unitarios y las hojas de `spritegen sheet`. Lo que falta en el E2E: un montaraz
+    sembrado con `psql` (arco y flechas, como el de "T3.1") que le dispare a un lobo, con
+    la captura retenida como en `shotPose` (`requestAnimationFrame`) mientras vuela la
+    flecha, con un hook `__rpgClient` nuevo que diga qué proyectil dibuja el canvas; lo
+    mismo con un orbe de hechizo; y los restos frescos de cada familia, matando uno de cada
+    en los corrales de la Isla de Pruebas (`/tp`, como `sandbox.spec.ts`). Lo que sí se
+    ve hoy: los nombres y números en Pixelify Sans (`07-combat`, `47-guild-name-on-map`),
+    que hay que mirar a 1x (ver "Pixelify Sans en el canvas" en docs/17: no es píxel
+    perfecto a lo ancho).
+  - **Para el dueño, restos dudosos:** `gloom_bat` deja `remains_fur` (un cuadrúpedo de
+    costado, no un murciélago) y `mire_toad` deja `remains_scales` (un lagarto, no un
+    sapo). Son lo más cercano de las ocho familias; uno propio para cada uno es un item y
+    un modelo más en `specs/remains.ts`.
+- **Bloqueo de logout en combate (hecho, rama `feat/pve-logout-lock`, lote 10).** Cerrar el
+  juego en medio de una pelea con monstruos ya no evita la muerte (auditoría del
+  2026-11-18): "Salir del juego" a menos de `travel.combat_block_ms` (12 s) de un golpe
+  dado o recibido se rechaza con `combat.logout_locked`, y una conexión cerrada en ese
+  tiempo deja al personaje link-dead (atacable, los monstruos lo siguen, sus condiciones
+  corren) hasta que la pelea termina; si muere así, paga la muerte y sale con un solo
+  guardado; un relogueo lo retoma con su pelea. También cierra el hueco del barco (salir y
+  volver borraba los 12 s). La muerte ahora termina el combate (se puede salir o zarpar
+  apenas se despierta en el templo); quien murió link-dead ve la pantalla de muerte al
+  volver a entrar (el mismo `death.died`, guardado en memoria hasta su próximo login).
+  Reglas en docs/02 "Bloqueo de logout en combate"; código en
+  `server/internal/session/linkdead.go`. Queda:
+  - **Revisar en el E2E:** `07c-logout-locked` (el aviso "Estás en combate" sobre el mapa
+    en plena pelea con el lobo) y que los dos tests que salen después de pelear (el lobo
+    y la arcanista) salgan con `leaveAfterFight` sin pasarse de tiempo. Todo test que
+    salga justo después de pasar por una zona de caza ahora se rechaza si un monstruo lo
+    atacó en los últimos 12 s: el más cercano es el de las puertas con llave
+    (`client/e2e/game.spec.ts`, la forja junto al spawn del guardián en (3692,5845,z8));
+    por la distancia parece fuera de alcance, pero hay que confirmarlo en la corrida.
+  - **Para que lo decida el dueño:** una zona de protección no corta el bloqueo (como el
+    PvP de T5.2; en el género, entrar a una zona de protección suele terminar el combate,
+    pero no el bloqueo PvP). Si se quiere, es una condición más en `inCombat`.
+  - **Link-dead sin fin (revisión final del lote 10, hecho en `lote10/verify`):** un
+    monstruo que falla siempre o no llega a hacer daño (armadura) renovaba la pelea en cada
+    ronda (`markFight` corre antes de la tirada) y dejaba al link-dead en el mundo sin
+    límite, entrenando escudo y sumando a la experiencia compartida del grupo sin el
+    cliente abierto. Ahora hay un tope, `travel.link_dead_max_ms` (2 min; el bloqueo PvP
+    sigue sin tope), y un link-dead no entrena skills ni cuenta como activo para el grupo.
+    **Para el dueño:** el valor del tope es una decisión de balance (con 2 min, una pelea
+    que no lo mata en 2 min sin curarse no lo mata; `0` lo quita). La tercera opción de
+    la revisión (que los monstruos no tomen de objetivo nuevo a un link-dead) no se hizo:
+    cerrar el juego sacaría de encima a los que todavía no lo atacaban.
+  - las **zonas sin logout** (`no_logout` de `zones.yaml`, el muelle de cada isla) siguen
+    sin rechazar el `Logout`: solo las miran la inactividad y los chequeos de presencia.
+    Es otra regla (no depende de pelear) y queda para cuando se decida qué pasa al cerrar la
+    conexión sobre una;
+  - `make bots`: al final de la corrida cada bot suelta su objetivo y pide salir cada
+    segundo hasta 45 s (`Bot.Logout` reintenta, `logoutWait` en `tools/bots`); un bot que
+    un monstruo sigue mordiendo sale al morir. Uno que a los 45 s sigue en combate (el
+    servidor todavía le rechaza el logout: `bot.ErrLogoutLocked`) cierra la conexión y
+    queda link-dead, como un jugador que cierra el juego en medio de la pelea: cuenta en
+    `left_link_dead` del reporte y no es un error de la corrida. No se corrió contra un
+    servidor real en la rama.
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
@@ -134,8 +218,8 @@ el punto 5:
       translúcida; un jugador que muere a la vista y despierta en un templo a la vista deja
       su cuerpo cayendo donde murió; `TELEPORT` y `LOGOUT` se desvanecen (350 ms). Queda
       de A9: `make bots` contra un servidor real con los eventos (docs/07 "Eventos de
-      ataque"); `DESPAWN` no lo usa ningún camino todavía (solo el hook de test
-      `DespawnForTest`) y sale en el acto, sin desvanecerse.
+      ataque"); `DESPAWN` lo usan desde el lote 10 los invocados que se van con su
+      invocador (docs/02 "Habilidades") y sale en el acto, sin desvanecerse.
     - **Conjurar y disparar (hecho, rama `feat/lpc-actions`):** los humanoides de LPC juegan
       `shoot` (el arco) para un `CreatureAttack{RANGED}` y `cast` (`spellcast`) para un
       `SPELL`. Queda: las hojas no traen el arma (el arco, la varita): es el gesto solo,
@@ -236,16 +320,17 @@ el punto 5:
       corre en el navegador, donde Opciones sigue mostrando el enlace.
   - **Lo que A3, A4 y A5 dejaron (hecho, rama `feat/ui-windows-2`, docs/17 §7 "Hecho: lo que
     quedaba de A3, A4 y A5"):** cada contenedor es su ventana; diálogo, tienda, crafteo,
-    mercado, casa e intercambio son `GameWindow` acoplables; las ventanas se mueven y
+    mercado, casa e intercambio son `GameWindow` (flotantes desde A14); las ventanas se mueven y
     cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥); escala de la
     interfaz y tamaño del texto (Opciones → Interfaz); íconos de slot vacío (spritegen
     `ui/slots/*`); sacudida de cámara con los golpes fuertes y destello de la hotbar (los
     dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
     letra por letra (click o Espacio lo completa) y retrato que respira; items de misión con
     su color (`quest: true` en `data/items`); ficha sobre el canvas para lo que está en el
-    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
-    canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
-    cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: el marco de hierro
+    como PNG 9-slice (`ui/frame/iron`); el intercambio con cantidad (`TradeOffer` no la
+    lleva); enfocar una ventana del servidor cuando se abre. (Pixelify Sans en el canvas
+    llegó con la rama `feat/combat-visuals`, abajo.)
   - **El equipo y el tooltip al estilo Diablo II (hecho, rama `feat/equipment-d2`,
     docs/17 §7 "Hecho: el equipo y el tooltip al estilo Diablo II"):** los dos pedidos del
     dueño del 2026-11-18. El equipo es una figura sobre una grilla de 8x9 celdas con slots
@@ -268,10 +353,11 @@ el punto 5:
       2x de fábrica, el inventario tiene que nacer más ancho, y eso mueve la columna, los
       contenedores, el tutorial y la pareja tienda + diálogo.
     - **Mirar en el playtest:** si la mochila que se abre sola molesta a alguien que la
-      tenía cerrada (queda cerrada mientras el inventario siga abierto); si la ventana
-      acoplada, ahora más alta, empuja demasiado la columna a 1280x800 (se puede plegar,
-      cambiar de alto o, con `feat/hud-fullscreen`, flotar); si el rojo bajo el puntero se
-      lee bien; si el tooltip instantáneo molesta al pasar el mouse por el mapa.
+      tenía cerrada (queda cerrada mientras el inventario siga abierto); si el inventario
+      flotante, ahora más alto (unos 500 px con la figura y la mochila), tapa demasiado el
+      mapa a 1280x800 (se puede plegar, mover o achicar; desde A14 no hay dock ni columna);
+      si el rojo bajo el puntero se lee bien; si el tooltip instantáneo molesta al pasar el
+      mouse por el mapa.
     - **Para hacerlo exacto:** el servidor no dice dónde está un contenedor abierto
       (`ContainerOpen`), así que la mochila equipada es la ventana que contesta un uso del
       slot de la espalda; una mochila igual abierta del suelo en ese mismo momento podría
@@ -287,17 +373,17 @@ el punto 5:
       pide).
   - **Revisar en el E2E final de `feat/ui-windows-2`** (no se corrió en la rama; se miró
     con `make ui-preview`, escenas `game`, `server`, `groundtip`, `scale`, `dialog` y
-    `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su ventana acoplada
-    (`window-container-backpack`, ya no dentro de Inventario: `09-inventory` la deja
-    afuera; desde `feat/equipment-d2` la mochila equipada vuelve a estar dentro, abajo de
-    la figura, y solo una que no se lleva puesta tiene ventana propia); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
+    `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su propia ventana
+    (`window-container-backpack`; desde `feat/equipment-d2` la mochila equipada va dentro
+    del inventario, abajo de la figura, y solo una que no se lleva puesta tiene ventana
+    propia, flotante desde A14); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
     lado a lado;
     `16-crafting-window`, `52-trade-window`, `53-market-offer-posted`, `56-house-free` y
     `57-house-rented` con la barra nueva (sus test ids y los nombres de los botones de
     cerrar no cambiaron); que el texto del NPC aparezca letra por letra sin romper ninguna
     espera; los slots vacíos con su silueta y que Mayús+click siga mirando en el mapa y en
-    el inventario (ahora mira al soltar). A 1280x800 la mochila acoplada queda bajo la
-    batalla y el inventario: la columna se desplaza.
+    el inventario (ahora mira al soltar). El dock de entonces ya no existe (A14): no hay
+    columna que se desplace; cada ventana flota sobre el mapa.
   - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
     (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
     `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
@@ -327,10 +413,11 @@ el punto 5:
       `97-view-1920x1080` y `mobile-desktop-1280-*`. **Queda para el dueño:** los pináculos
       de los hombros de los dos orbes quedan cortados 7 px por el borde de la pantalla
       (siempre fue así; para verlos enteros, una columna de orbe más ancha o los pináculos
-      más adentro); el intercambio, arriba al centro, tapa a un compañero que está justo
-      arriba del jugador; a 960x700 el diálogo de la pareja tienda + diálogo pisa unos 10 px
-      el pie del inventario; con el mouse quieto donde se abre la tienda, su ficha sale al
-      instante sobre los filtros (`14-shop`, `43-tutorial-shop-960`).
+      más adentro). Lo demás que dejó ese E2E se resolvió en el lote 10 (rama
+      `feat/ui-polish`, abajo "Lugares de fábrica que miran las ventanas abiertas"): el
+      intercambio ya no tapa las casillas al norte del jugador, el diálogo de la pareja
+      tienda + diálogo a 960x700 se acorta hasta el pie del inventario y la ficha de la
+      tienda no sale hasta que el mouse se mueve.
     - Antes del E2E: ahora la batalla (arriba a la izquierda), el inventario
       (arriba a la derecha), los contenedores (debajo del inventario) y el chat (abajo a la
       izquierda) flotan sobre el mapa: un click en una casilla lejos del jugador hacia esas
@@ -340,10 +427,26 @@ el punto 5:
       `23-conditions-hud` es la placa sobre el orbe; `mobile-desktop-1280-side-end` pasó a
       `mobile-desktop-1280-full-screen`. A 1280x720 la vista ajustada muestra 20x9,9 casillas
       sobre la barra (cubrir la pantalla manda sobre las 11 filas clásicas).
-    - El chat no tiene pestañas por canal ni opacidad configurable (docs/17 UI-10).
-    - Si se abren todas las ventanas a la vez, algunas se pisan en su lugar de fábrica
-      (habilidades y chat a 1280x800): un lugar de fábrica que mire las abiertas sería otro
-      paso.
+    - **Pestañas del chat y su opacidad (hecho, lote 10, docs/17 UI-10):** Todo, Local,
+      Grupo, Gremio, Global y Registro en la barra del chat, cada una con su punto de no
+      leído; la pestaña elegida fija el canal del selector; Opciones → Interfaz tiene la
+      opacidad del chat (30–100 %). Mirar en el playtest si las seis pestañas se leen bien
+      con la letra de 0,62rem (con el texto al 130 % se desplazan de lado) y si un mensaje
+      propio debería marcar algo (hoy no marca).
+    - **Lugares de fábrica que miran las ventanas abiertas (hecho, lote 10, docs/17
+      "Hecho: lugares de fábrica, pestañas del chat y sonidos que reintentan"):** al
+      abrirse en su lugar de siempre, una ventana que tapa a otra (o, el intercambio, las 3
+      casillas al norte del jugador) prueba otros lugares (`defaultPlace` de
+      `client/src/ui/windows.ts`): el intercambio se corre por la fila de arriba; diálogo,
+      crafteo, mercado y casa se acortan hasta el pie de lo que baja hasta ellos; las
+      habilidades van bajo la batalla solo si entran sobre el chat (si no, al lado de la
+      batalla o del grupo, o acortadas). El panel del tutorial se oculta mientras la Ayuda,
+      el gremio o la apariencia están en su lugar de fábrica. **Queda:** con todas las
+      ventanas abiertas a 960x700 no hay lugar libre y las habilidades siguen sobre el chat
+      (la que menos tapa); opciones y ayuda se siguen pisando entre ellas (las dos al
+      centro); el panel del tutorial se oculta con la Ayuda abierta aunque a 1920 px no la
+      tape (la regla no mide); a 960x700 con la mochila abierta bajo la figura el inventario
+      llega a ~520 px y el diálogo no se acorta (quedarían menos de `GIVE_WAY_MIN_PX`, 120).
     - Los contenedores salen justo debajo del inventario, que `GameView` mide (con la
       figura y la mochila de `feat/equipment-d2`, unos 500 px): en una pantalla baja
       (1280x720, 960x700) queda poco lugar debajo y salen cortos, con su cuerpo
@@ -493,9 +596,11 @@ el punto 5:
     que no se pisa: el anillo rojo de "sin camino" sale justo antes de que el doble click
     use o ataque. Decidir en el playtest si un click sobre algo que se usa o se ataca
     debería no marcar nada, o caminar hasta la casilla de al lado.
-  - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
-    tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
-    mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.
+  - **Frames de caminar de los monstruos y NPCs (hecho):** todos caminan con frames
+    (personajes de LPC, criaturas de Gemini y modelos del motor de sprites; "Criaturas
+    animadas", arriba) salvo la gaviota, que sigue con un frame de spritegen y la
+    animación procedural de ANI-5 (el saltito por casilla de `packages/renderer/src/anim.ts`;
+    el viejo `walkBob` ya no existe).
   - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
     lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
     tocó.
@@ -537,18 +642,43 @@ el punto 5:
   - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
   - **401 en consola** al cargar `/play/` y `/shop` sin sesión: es el sondeo de sesión; se
     puede pedir a una ruta que conteste 204 sin sesión.
-  - **Dificultad del corral 2:** tres lobos (0–16 cada 2 s) matan a un nivel 3 que sale
-    del corral 1. Queda para el lote de balance, con la comida (m4).
+  - **Dificultad del corral 2 (revisado en el lote 10):** la comida (m4) ya está (`well_fed`,
+    docs/02) y `TestSandboxPens` limpia el corral 2 con un montaraz de nivel 8 (verde el
+    2026-11-19), la referencia que da docs/16. Tres lobos siguen pudiendo con un nivel 3
+    recién salido del corral 1: es el escalón que la isla quiere (corrales de dificultad
+    creciente). Si el dueño quiere un corral intermedio, es diseño de la isla.
   - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`; el
     lote 5 resolvió el objetivo inalcanzable dentro de la correa y que el que tiene el
-    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"): la
-    persecución sigue yendo y viniendo frente a un muro cuando el paso goloso y el primer
-    paso de A* se alternan (ya pasaba sin correa; `walkHome` sigue el rodeo entero, la
-    persecución no, y como da pasos no cuenta como trabada); nada valida que el centro de
-    un spawn sea caminable (hoy todos lo son); la espera tras una búsqueda fallida (de
-    casa o de la persecución) usa `readyAt`; un arquero que va pisando casillas
-    inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada una (el rechazo
-    vale por casilla); y `make bench-tick` corre sin correa.
+    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"; la rama
+    `feat/monster-abilities` (lote 10) que la persecución fuera y viniera frente a un muro
+    (ahora sigue el rodeo entero, `chaseWay`, `TestChaseFollowsItsWayAroundAWall`) y que
+    `make bench-tick` corriera sin correa (variante `/leash` de `BenchmarkTickMonsters`)):
+    nada valida que el centro de un spawn sea caminable (hoy todos lo son); la espera tras
+    una búsqueda fallida (de casa o de la persecución) usa `readyAt`; y un arquero que va
+    pisando casillas inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada
+    una (el rechazo vale por casilla).
+  - **Habilidades de monstruos (rama `feat/monster-abilities`, lote 10, docs/02
+    "Monstruos", "Habilidades"):** áreas (círculo y rayo), `heal_self`, `summon` y fases de
+    jefe, todo dato; el dragoncillo, el custodio, el gólem, el espinoso y el minero de
+    obsidiana ya las usan. Lo que queda:
+    - **Cliente:** un área se ve como el `Effect` del elemento en cada casilla y el gesto
+      del atacante; no hay un efecto propio de rayo ni de golpe al suelo, ni un aviso antes
+      de que caiga (en otros juegos del género el área se anuncia y se esquiva). El gesto
+      de un rayo diagonal sale hacia donde mira el monstruo, que gira en 4 direcciones.
+      Los invocados que se van (`DESPAWN`) desaparecen en el acto, sin desvanecerse: el
+      cliente podría tratarlos como `TELEPORT`.
+    - **Balance:** los duelos (`server/internal/sim/foe_test.go`) suponen al cazador
+      pegado y solo: un área le pega como un ataque a él y nada mide cuánto castiga a un
+      grupo pegado; los invocados los mata primero. El custodio se probó en el duelo (71,6
+      s, 170 % de la vida a nivel 44), no jugado a mano con las salamandras.
+    - **Para decidir (el dueño):** el gólem de escoria y el espinoso cambiaron su hechizo a
+      distancia (`range: 3`) por el estallido alrededor (círculo de 1): ya no castigan a un
+      montaraz o un mago que les pega desde lejos. Si se quiere que sigan haciéndolo, se
+      suma el hechizo como otro ataque y se revisa su balance (docs/02 "Habilidades",
+      "Contenido"). La revisión de la rama lo marcó también: al gólem (velocidad 120) se le
+      pega sin riesgo yendo y viniendo, y los duelos no lo miden.
+    - Ningún monstruo usa `heal_self` todavía (solo los tests): queda para el mundo nuevo
+      de los próximos lotes, como las áreas en las islas nuevas.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
   vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el
@@ -566,6 +696,62 @@ el punto 5:
     un error, pero es una pista (M1 sumó capacidad al Volcán sin tocar el daño);
   - la pala sigue en `data/items` sin fuente (inventarios guardados): si algún día se cava,
     es darle un destino y volver a venderla.
+  - **el flag `forest_route_unlocked`** (recompensa del Capítulo 1,
+    `data/quests/ch1_shipwreck.yaml`) no lo leía nada: la ruta al Bosque pide la quest
+    (`data/boat_routes.yaml`). Desde el lote 10 lo lee el capitán del puerto: la línea
+    sobre el bote que atracó en el Bosque (`opt_ch1_after` del nodo `travel` de
+    `data/npcs/harbor_master.yaml`) sale con el flag (`TestHarborMasterForestLineReadsTheFlag`).
+    El flag `lost_expedition_lead` del Capítulo 3 sigue sin lector a propósito: prepara el
+    Capítulo 4.
+- **Progresión de hechizos y brebajes de vida (rama `feat/spells-progression`, auditoría
+  del 2026-11-18, `game.items[0]` y la cura de `game.items[6]`).** Hecho: 9 hechizos nuevos
+  entre el nivel 12 y el 48 (el guardián tiene por fin tres propios; tabla en
+  `02-game-design.md` "Hechizos por vocación"), `skill: weapon` en el escalado de un
+  hechizo (la skill del arma en la mano, puño sin arma o con varita: `session/magic.go`
+  `scalingSkill`), el brebaje de vida (110, Bosque y Brasal) y el concentrado (250, solo
+  Brasal), y la carrera simulada con el guardián, los brebajes de vida y chequeos de maná,
+  nivel mágico y uso de cada hechizo. Tras la revisión de la rama: los roles se miden en
+  cada franja del 12 al 49 (la cura del guardián y `steel_whirl` bajaron: el druida cura
+  más y el arcanista pega más en área en cada nivel), los golpes del guardián piden nivel
+  mágico 1 y 2 (lo que alcanza sin comprar brebajes de maná; la carrera simulada juega
+  también a ese guardián) y el test de los brebajes de vida mira que alguien los compre
+  de verdad (`02-game-design.md` "Vocaciones" y "Economía"). Queda:
+  - **probarlo a mano** (Isla de Pruebas: el mercader vende los dos brebajes; la
+    instructora da la experiencia y, con "El combate", ahora el nivel mágico del último
+    hechizo de cada vocación: guardián 2, montaraz 9, magos 30): que los golpes del guardián
+    se sientan (radio 1, números de `data/spells.yaml`), que las palabras nuevas se lancen
+    dichas en el chat y que la hotbar por defecto de cada vocación las muestre (todas caben
+    en las 12 teclas). **Ojo con la hotbar guardada:** quien ya guardó la suya (en el
+    navegador, `localStorage` `rpg.hotkeys.<vocación>`, `client/src/state/hotkeys.ts`) no
+    ve los hechizos nuevos: solo la hotbar por defecto los trae. Pesa sobre todo en el
+    guardián, que antes tenía dos. Para probar, borrar esa clave (herramientas del
+    navegador) o arrastrar los hechizos desde el selector; si se quiere que lleguen solos,
+    es del cliente (sumar a los huecos vacíos los hechizos que la barra nunca vio);
+  - **para que lo decida el dueño (economía del guardián):** desde que tiene hechizos, el
+    guardián que caza con brebajes de maná gasta en ellos ~60 % de su botín, como los
+    magos, y sube a su ritmo (~35 h del 1 al 50; del 30 al 50 un poco más rápido que el
+    arcanista). Antes subía más lento que los magos y juntaba más oro. Sin brebajes de maná
+    tarda ~39 h y llega igual a todos sus hechizos. Se dejó así: comprar es una elección,
+    no un peaje. Si se quiere que el guardián vuelva a ser el que junta oro, el camino es
+    que sus golpes rindan menos por maná (más caros o más débiles), no subirles el nivel
+    mágico (eso sí sería un peaje: ~560 brebajes para el nivel mágico 4);
+  - los brebajes de vida cuestan más por punto (~0,55 cobre) que curarse con un hechizo
+    alimentado con brebajes de maná (~0,37 con la cura del guardián al 20): en la carrera
+    simulada solo los compra quien no compra maná. Revisarlo con los precios del lote 11;
+  - **para que lo decida el dueño:** el Puerto no vende brebajes de vida (se venden por
+    isla, como el de maná concentrado; un novato no compra una cura del doble de su vida
+    por 60 cobre). Si se quieren ahí, es una línea en `data/npcs/puerto_diver.yaml` o
+    `puerto_provisioner.yaml`;
+  - los hechizos no tienen descripción en el juego (solo nombre y palabras: el esquema de
+    `data/spells.yaml` no tiene `description` y la hotbar muestra el nombre). El selector
+    de la hotbar sigue listando los hechizos de todas las vocaciones (ya era así; ahora son
+    28): filtrarlo por vocación es del cliente;
+  - la simulación es de duelos: las áreas de los magos y del montaraz (`frost_bloom`,
+    `scatter_volley`, `dusk_maelstrom` y las de antes) valen por grupos, y ahí no se miden.
+    Por eso las dos primeras le pegan a cada monstruo un poco menos que el rayo barato de
+    su vocación; si un día la simulación pelea contra grupos, conviene revisarlas;
+  - el lote 11 rehace el catálogo de items (atributos y refinado): los precios de los
+    brebajes de vida (0,5 cobre por punto) y los de maná deberían revisarse juntos ahí.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
@@ -703,21 +889,20 @@ el punto 5:
     cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
     la herramienta).
 
-- **Tutorial y ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
-  panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
-  ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
-  Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
-  abierta, como hace con el diálogo y la tienda. Con la pantalla completa (A14) cambian
-  los dos lugares y se pisan al revés: las ventanas (`.win-layer`, z 20) van sobre el
-  tutorial (z 5), así que a 960x700 la Ayuda (25rem, centrada al 8 % del alto), el gremio
-  y la apariencia (a la izquierda de la columna del inventario, `right: 16rem`) tapan el
-  panel del tutorial y su "Saltar tutorial". Se cierran con H, G, O o Escape, o se mueven;
-  si molesta, el panel podría correrse debajo de las que salen ahí. Mirarlo en el
-  `44-controls-help-960` del E2E final.
-- **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
-  `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
-  (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
-  falta, los sonidos podrían usar la misma política.
+- **Tutorial y ayuda a 960x700 (resuelto en el lote 10):** con la pantalla completa las
+  ventanas (`.win-layer`, z 20) van sobre el tutorial (z 5), y la Ayuda, el gremio y la
+  apariencia en su lugar de fábrica tapaban el panel y su "Saltar tutorial". Ahora el
+  panel se oculta mientras una de esas tres está abierta en su lugar de fábrica
+  (`tutorialCovered` de `client/src/ui/windows.ts`) y vuelve al cerrarla o moverla, como
+  con el diálogo y la tienda. Mirarlo en el `44-controls-help-960` del E2E final (ya no
+  sale el panel en esa captura).
+- **Sonidos que no bajan (resuelto en el lote 10):** un efecto o un ambiente que no se
+  pudo bajar quedaba mudo toda la sesión. Ahora `AudioEngine.load` reintenta con la
+  política del atlas (`ASSET_RETRY`: 4 intentos con esperas de 0,5, 1 y 2 s) y, si se
+  agotan, lo olvida y lo vuelve a pedir en una reproducción después de `STREAM_RETRY_MS`
+  (5 s, doblando hasta 60 s), como la música; el ambiente que se quiere vuelve solo
+  (client/CLAUDE.md "Notas de T3.7"). Uno que llega pero no se decodifica no se vuelve a
+  pedir en la sesión.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
@@ -742,13 +927,17 @@ el punto 5:
   - portales (`02-game-design.md` "Cambiar de piso"): el servidor mueve por escaleras,
     escaleras de mano, agujeros, sogas y teletransportes, y todos tienen su item con arte
     propio (`ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`; las escaleras son
-    del pack), pero el mundo solo usa escaleras: poner los otros es diseño de mapa
-    (`build-map-area`; `make validate` y `mapcompile` exigen el item en cada entrada). Sin
-    una escalera de mano en el mundo, Ctrl+click derecho sobre una (usa el item de arriba
+    del pack). El mundo real usa escaleras y, en Puerto, un agujero en la playa del
+    naufragio y su soga en la mina (`world/islands/puerto/portals.yaml`); faltan escaleras
+    de mano y teletransportes (solo los tiene la Isla de Pruebas, de desarrollo): ponerlos
+    es diseño de mapa (`build-map-area`; `make validate` y `mapcompile` exigen el item en
+    cada entrada). Sin una escalera de mano en el mundo real, Ctrl+click derecho sobre una (usa el item de arriba
     en vez de trepar) y su toque largo (sin "Usar" ni "Mover" para su propio item) solo
     tienen tests unitarios (`state/portals.ts` `useMode`, `input/mouse.ts` `mapPress`,
-    `state/items.ts` `menuItem`), no E2E. El teletransporte es estático: el atlas y el
-    renderer no animan items (haría falta una tira de frames por item, como los efectos).
+    `state/items.ts` `menuItem`), no E2E. El teletransporte gira (lote 10): el renderer
+    anima items por `frame_<n>` y `tiles` de `assets/sprites.yaml` desde A10 (docs/17
+    ART-7), y el portal tiene 6 frames de 100 ms en `world`
+    (`tools/spritegen/src/recipes/portals.ts`); solo falta ponerlo en un mapa real.
     Un portal sin su item lo rechazan `make validate` y `mapcompile`; el servidor solo
     **avisa** en el log (`initPortals`) si el `world.bin` es de antes de cambiar
     `data/items` (`world.NewMap` no conoce los items y los mapas de los tests de `session`
@@ -837,8 +1026,9 @@ el punto 5:
     (`TestSandboxTraining`), la arcanista usa la runa en el acto (`TestSandboxArcRune`) y
     un druida de nivel 8 lanza `mend_other` (`TestSandboxTrainingByVocation`);
   - **resuelto:** "Cúrame" llena también el maná (acción de desarrollo `restore_mana`; la
-    `heal` de los sacerdotes no cambió). Pociones de maná sigue sin haber en el juego real:
-    las vocaciones mágicas esperan la regeneración (el sacerdote solo cura la vida);
+    `heal` de los sacerdotes no cambió). **Resuelto también:** el juego real ya tiene
+    brebajes de maná (`mana_draught` y `concentrated_mana_draught`, `data/items/misc.yaml`)
+    que venden el buzo de Puerto, la druida de Raigal y el sacerdote de Brasal;
   - **resuelto:** el yunque no tenía receta al alcance de un personaje nuevo (la más baja
     pide herrería 2). "Entréname" → "Los oficios" deja los oficios en 25 y la pesca en 40,
     y el mismo personaje hace un hacha de leñador en el yunque (`TestSandboxTrades`). No se
@@ -852,10 +1042,11 @@ el punto 5:
     falso; `make run-server`, `make dev`, `make play`, `make bots` y el E2E corren con
     `RPG_ENV=development`. Un `world.bin` viejo (versión 5) no carga: `make mapcompile`;
   - la **pala** no sirve para nada en todo el juego (`tool.use: shovel` no tiene mecánica:
-    usarla dice `gather.nothing`). Se sacó de la tienda de la isla
-    (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12); y su
-    proveedor todavía promete que "abre agujeros donde la arena suena hueca"
-    (`npc.puerto_provisioner.tools`, es y en): o se le da la mecánica o se cambia el texto;
+    usarla dice `gather.nothing`). Desde la auditoría de contenido (m1) nadie la vende ni
+    la compra (ni la isla, `TestSandboxToolsHaveAUse`, ni Puerto) y el texto del
+    proveedor ya no promete cavar (`npc.puerto_provisioner.tools` habla de la soga y del
+    socavón). El item queda en `data/items/tools.yaml` sin fuente en el mundo: si un día
+    hay algo que cavar, se le da la mecánica y vuelve a una tienda;
   - no es un error, pero sorprende probando: un monstruo no reaparece donde un jugador lo
     ve, así que quien vacía un corral y se queda mirando no ve volver a nadie (docs/16
     lo dice ahora), y los monstruos salen de los corrales por la abertura y siguen al

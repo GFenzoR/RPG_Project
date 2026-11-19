@@ -112,10 +112,11 @@ func (w *World) train(p *Player, id string, afk bool) {
 	w.trainBy(p, id, factor)
 }
 
-// trainBy adds factor (0-1) of a try of skill id to p; fractions accumulate.
+// trainBy adds factor (0-1) of a try of skill id to p; fractions accumulate. A link-dead
+// p learns nothing: nobody plays it (a monster biting it would train its shield offline).
 func (w *World) trainBy(p *Player, id string, factor float64) {
 	i, ok := w.skillIdx[id]
-	if !ok {
+	if !ok || p.linkDead {
 		return
 	}
 	s := &p.skills[i]

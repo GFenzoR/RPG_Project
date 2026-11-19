@@ -48,6 +48,8 @@ interface Scaling {
 interface Spell {
   id: string;
   vocations: string[];
+  level: number;
+  magic_level?: number;
   effect: {
     heal?: Scaling & { range?: number };
     damage?: Scaling & { range?: number; radius?: number };
@@ -159,49 +161,80 @@ describe("skill pace bands", () => {
 });
 
 describe("spell roles", () => {
-  // A mid-game character of each vocation: level 30 with the magic level and weapon skill
-  // its vocation reaches there. The magic levels are what the career simulation of
-  // server/internal/sim/balance_vocations_test.go gets from the mana a hunter really
-  // spends (regeneration, food and mana draughts): ~20 for the casters and ~8 for the
-  // ranger at level 30 (content audit M2; 40 was out of reach).
-  const profile: Record<string, { magic: number; skill: number }> = {
-    guardian: { magic: 2, skill: 53 },
-    arcanist: { magic: 20, skill: 15 },
-    ranger: { magic: 8, skill: 53 },
-    druid: { magic: 20, skill: 15 },
+  // The magic level each vocation has on reaching these levels in the career simulation
+  // of server/internal/sim/balance_vocations_test.go (DEBUG_BALANCE=1 prints it level by
+  // level): what a hunter really spends (regeneration, food and mana draughts). The roles
+  // must hold along the whole career, not at one level: a spell counts from its level and
+  // magic level on (review of the spell progression, 2026-11: at level 30 alone, a level 48
+  // area evaluated at magic level 20 hid a guardian strike stronger than the arcanist's
+  // areas from 35 to 47, and the guardian's heal outgrew the druid's from 12 to 29).
+  // From 12, when the guardian's heal comes; retune this table with the careers.
+  const careerMagic: Record<number, Record<string, number>> = {
+    12: { guardian: 0, arcanist: 5, druid: 5, ranger: 3 },
+    20: { guardian: 2, arcanist: 12, druid: 12, ranger: 5 },
+    25: { guardian: 3, arcanist: 17, druid: 17, ranger: 6 },
+    30: { guardian: 4, arcanist: 21, druid: 21, ranger: 8 },
+    35: { guardian: 4, arcanist: 25, druid: 25, ranger: 9 },
+    40: { guardian: 5, arcanist: 28, druid: 28, ranger: 10 },
+    45: { guardian: 5, arcanist: 32, druid: 31, ranger: 12 },
+    49: { guardian: 6, arcanist: 35, druid: 34, ranger: 13 },
   };
+  const LEVELS = Object.keys(careerMagic).map(Number);
+  // Weapon skill: the guardian sims' rule (skillStart + skillPerLevel × (level − 1)). The
+  // guardian's strikes scale with the skill of the weapon it holds (`skill: weapon`), the
+  // ranger's spells with distance; the casters' spells with no skill.
+  const weaponSkill = (level: number) => 10 + Math.floor(1.5 * (level - 1));
   const castBy = (v: string): Spell[] => spells.filter((s) => s.vocations.includes(v));
-  const best = (v: string, pick: (s: Spell) => Scaling | undefined): number => {
-    const p = profile[v];
-    if (!p) throw new Error(`no profile for ${v}`);
-    const amounts = castBy(v).flatMap((s) => {
-      const sc = pick(s);
-      return sc ? [amount(sc, 30, p.magic, p.skill)] : [];
-    });
+  /** The most of pick among the spells v can cast at level (its level and magic level). */
+  const best = (v: string, level: number, pick: (s: Spell) => Scaling | undefined): number => {
+    const magic = careerMagic[level]?.[v];
+    if (magic === undefined) throw new Error(`no career magic level for ${v} at ${level}`);
+    const amounts = castBy(v)
+      .filter((s) => s.level <= level && (s.magic_level ?? 0) <= magic)
+      .flatMap((s) => {
+        const sc = pick(s);
+        return sc ? [amount(sc, level, magic, weaponSkill(level))] : [];
+      });
     return Math.max(0, ...amounts);
   };
 
-  it("every vocation but the guardian has 3-6 spells of its own", () => {
+  it("every vocation has 3-8 spells of its own and all of them fit the hotbar", () => {
     // Own = only it casts them; the support spells every vocation shares (haste and the
     // poison cure, T3.2) do not count. Six since the content audit (M5): each caster has
-    // a second area spell of another element for the island that resists the first.
+    // a second area spell of another element for the island that resists the first; eight
+    // since the spell progression (2026-11), when the guardian got spells of its own too.
+    // The default hotbar (client/src/state/hotkeys.ts) puts a vocation's spells on its 12
+    // keys by level: they all fit.
     const own = (v: string) => castBy(v).filter((s) => s.vocations.length === 1);
-    for (const v of ["arcanist", "ranger", "druid"]) {
+    for (const v of ["guardian", "arcanist", "ranger", "druid"]) {
       expect(own(v).length, v).toBeGreaterThanOrEqual(3);
-      expect(own(v).length, v).toBeLessThanOrEqual(6);
+      expect(own(v).length, v).toBeLessThanOrEqual(8);
+      expect(castBy(v).length, v).toBeLessThanOrEqual(12);
     }
   });
 
-  it("the druid is the best healer and the only one that heals others", () => {
-    const heal = (s: Spell) => s.effect.heal;
-    for (const v of ["arcanist", "ranger"]) {
-      expect(best("druid", heal), v).toBeGreaterThan(1.25 * best(v, heal));
+  it("the guardian's strikes scale with the weapon it holds", () => {
+    const strikes = castBy("guardian").filter((s) => s.vocations.length === 1 && s.effect.damage);
+    expect(strikes.length).toBeGreaterThanOrEqual(2);
+    for (const s of strikes) {
+      expect(s.effect.damage?.skill, s.id).toBe("weapon");
+      expect(s.effect.damage?.radius, s.id).toBe(1); // around itself: melee
     }
-    const healers = spells
-      .filter((s) => (s.effect.heal?.range ?? 0) > 0)
-      .flatMap((s) => s.vocations);
-    expect(new Set(healers)).toEqual(new Set(["druid"]));
   });
+
+  it.each(LEVELS)(
+    "the druid is the best healer at level %i and the only one that heals others",
+    (level) => {
+      const heal = (s: Spell) => s.effect.heal;
+      for (const v of ["guardian", "arcanist", "ranger"]) {
+        expect(best("druid", level, heal), v).toBeGreaterThan(1.25 * best(v, level, heal));
+      }
+      const healers = spells
+        .filter((s) => (s.effect.heal?.range ?? 0) > 0)
+        .flatMap((s) => s.vocations);
+      expect(new Set(healers)).toEqual(new Set(["druid"]));
+    },
+  );
 
   it("the ranger's spells scale with distance and it has the longest single-target reach", () => {
     const rangerDamage = castBy("ranger").filter((s) => s.effect.damage);
@@ -211,11 +244,18 @@ describe("spell roles", () => {
     for (const v of ["arcanist", "druid"]) expect(reach("ranger"), v).toBeGreaterThan(reach(v));
   });
 
-  it("the arcanist keeps the strongest area damage", () => {
+  it.each(LEVELS)("the arcanist keeps the strongest area damage at level %i", (level) => {
     const area = (s: Spell) => (s.effect.damage?.radius ? s.effect.damage : undefined);
+    for (const v of ["guardian", "ranger", "druid"]) {
+      expect(best("arcanist", level, area), v).toBeGreaterThan(best(v, level, area));
+    }
+  });
+
+  it("the arcanist has the widest area", () => {
     const radius = (v: string) =>
       Math.max(0, ...castBy(v).map((s) => s.effect.damage?.radius ?? 0));
-    expect(best("arcanist", area)).toBeGreaterThan(best("druid", area));
-    expect(radius("arcanist")).toBeGreaterThan(radius("druid"));
+    for (const v of ["guardian", "ranger", "druid"]) {
+      expect(radius("arcanist"), v).toBeGreaterThan(radius(v));
+    }
   });
 });

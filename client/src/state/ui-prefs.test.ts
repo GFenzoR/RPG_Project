@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_OPACITY,
   TEXT_SCALES,
   UI_SCALES,
+  applyChatOpacity,
   applyScales,
+  clampChatOpacity,
+  loadChatOpacity,
+  saveChatOpacity,
   loadCameraShake,
   loadReducedMotion,
   loadTextScale,
@@ -99,6 +104,55 @@ describe("interface scale, text size and camera shake (docs/17 UI-3, UI-9)", () 
     applyScales(root, 1.25, 1.15);
     expect(Object.fromEntries(props)).toEqual({ "--ui-zoom": "1.25", "--ui-text-scale": "1.15" });
     applyScales(root, 1, 1);
+    expect(props.size).toBe(0);
+  });
+});
+
+describe("the chat's opacity (docs/17 UI-10)", () => {
+  it("is 30 to 100 %, 50 % until the player picks one", () => {
+    const s = memory();
+    expect(CHAT_OPACITY.min).toBe(30);
+    expect(CHAT_OPACITY.max).toBe(100);
+    expect(loadChatOpacity(s)).toBe(50);
+    saveChatOpacity(75, s);
+    expect(s.getItem("rpg.chat-opacity")).toBe("75");
+    expect(loadChatOpacity(s)).toBe(75);
+    s.setItem("rpg.chat-opacity", "5");
+    expect(loadChatOpacity(s)).toBe(30);
+    s.setItem("rpg.chat-opacity", "nonsense");
+    expect(loadChatOpacity(s)).toBe(50);
+    expect(clampChatOpacity(83)).toBe(85);
+    expect(clampChatOpacity(140)).toBe(100);
+  });
+
+  it("survives a storage that throws (private mode, blocked site data)", () => {
+    const broken = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    };
+    expect(loadChatOpacity(broken)).toBe(50);
+    expect(() => saveChatOpacity(80, broken)).not.toThrow();
+    expect(loadChatOpacity(undefined)).toBe(50);
+  });
+
+  it("puts it on the page as a fraction, and takes it off at the initial 50 %", () => {
+    const props = new Map<string, string>();
+    const root = {
+      style: {
+        setProperty: (k: string, v: string | null) => void props.set(k, v ?? ""),
+        removeProperty: (k: string) => {
+          props.delete(k);
+          return "";
+        },
+      },
+    };
+    applyChatOpacity(root, 80);
+    expect(Object.fromEntries(props)).toEqual({ "--chat-opacity": "0.8" });
+    applyChatOpacity(root, 50);
     expect(props.size).toBe(0);
   });
 });

@@ -128,14 +128,35 @@ server/
   (`awayTicks` + `condition.elapse`; termina si esa hora no se puede ubicar en el reloj de
   este servidor; el recuerdo del ataque vuelve igual); una sin autor sigue congelada. Un
   hechizo de condición a distancia sobre un jugador pasa por `conditionPlayer`
-  (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
-  (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo
-  retoma con `pvpCarry`. Un corte de la conexión que decide el servidor (cliente lento,
-  `KickAccount`) pasa por `disconnect`, que con bloqueo cierra la conexión una vez
+  (`canAttack` + `aggress`, como un golpe). El bloqueo PvP es un caso del bloqueo de
+  logout en combate (abajo). `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra
+  una muerte sigue en el mundo.
+
+- **Bloqueo de logout en combate y link-dead (`session/linkdead.go`, docs/02 "Bloqueo de
+  logout en combate"):** "en combate" es `inCombat` (`travel.combat_block_ms` desde
+  `Player.fightAt`, que pone `markFight` al pegar, recibir daño o ser atacado por un
+  monstruo, o el bloqueo PvP); un camino nuevo de daño o de ataque llama a `markFight`.
+  `Logout` en combate se rechaza (`logoutBlock`: `pvp.logout_locked` o
+  `combat.logout_locked`). `Leave` en combate deja al jugador link-dead
+  (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkLinkDead` (cada tick, solo sobre
+  `World.linkDead`) lo saca: cuando `holdsLinkDead` deja de valer (la pelea terminó o pasó
+  `travel.link_dead_max_ms` desde `Player.linkDeadAt`; el bloqueo PvP no tiene tope). Un
+  link-dead no entrena (`trainBy`) ni aporta al grupo (`contribute`): un camino nuevo que
+  entrene o cuente aporte tiene que pasar por ellos. Un login nuevo lo retoma con `carryFight` (`fightAt` y
+  `pvpCarry`). Un corte de la conexión que decide el servidor (cliente lento,
+  `KickAccount`) pasa por `disconnect`, que en combate cierra la conexión una vez
   (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
   usarlo salvo que sea una sanción de staff o un guardado que falló. `Input` ignora a un
-  link-dead y un `Leave` de un link-dead no cambia nada.
-  `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
+  link-dead y un `Leave` de un link-dead no cambia nada. La muerte termina la pelea
+  (`wakeAtTemple` pone `fightAt` en 0) y guarda con `deathSave`: un link-dead sin bloqueo
+  PvP no se guarda ahí, sino que sale al final del tick (`Player.diedLinkDead`,
+  `checkLinkDead`) y ese es su único guardado. Nunca saques a un jugador del mundo
+  (`remove`) desde un camino de daño: el sistema de combate puede estar recorriendo
+  `World.players`. Un camino nuevo que guarde una muerte usa `deathSave`, no `save`. El
+  `death.died` de una muerte link-dead (o el `pvp.arena_defeat` de una derrota en la arena,
+  que nunca reemplaza al de una muerte) queda en `World.diedAway` (`diedLinkDeadNotice`) y
+  lo recibe el próximo login (`tellDiedAway` en `join`); una entrada por personaje hasta
+  que vuelva o se reinicie el servidor (aceptado así: acotado por los personajes).
 
 - **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +
   `store/market.go` + `app/market.go` (`balance.yaml trade` / `market`; sin bloque, o sin

@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"regexp"
 	"testing"
+
+	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
 )
 
 func TestValidateCount(t *testing.T) {
@@ -87,5 +92,20 @@ func TestIsLoopback(t *testing.T) {
 		if got := isLoopback(u); got != want {
 			t.Errorf("isLoopback(%q) = %v, want %v", u, got, want)
 		}
+	}
+}
+
+// A bot the server still kept in a fight when logoutWait ran out (a monster that keeps
+// biting it without killing it) leaves link-dead: counted apart, not an error that fails
+// the run. Any other failed logout still is one.
+func TestLoggedOutInAFightIsNoFailure(t *testing.T) {
+	f := &fleet{rep: &Report{}}
+	f.loggedOut(0, nil)
+	f.loggedOut(1, fmt.Errorf("logout: %w (%w)", bot.ErrLogoutLocked, context.DeadlineExceeded))
+	f.loggedOut(2, errors.New(`logout: disconnected with "KICKED"`))
+	f.loggedOut(3, fmt.Errorf("logout: %w", context.DeadlineExceeded))
+	if f.rep.LeftLinkDead != 1 || f.rep.OtherErrors != 2 || f.rep.Disconnects != 0 || len(f.rep.Errors) != 2 {
+		t.Fatalf("left link-dead %d, other errors %d, disconnects %d, errors %v",
+			f.rep.LeftLinkDead, f.rep.OtherErrors, f.rep.Disconnects, f.rep.Errors)
 	}
 }

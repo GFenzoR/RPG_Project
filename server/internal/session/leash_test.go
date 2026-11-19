@@ -268,8 +268,9 @@ func TestLeashWalksHomeAroundWater(t *testing.T) {
 // waterHarness is a leash harness (combat.monster_leash_tiles 6) with a wolf of 1000
 // health that never flees, spawned at 20,20 with radius 0 (leash area x and y 14-26), and
 // a row of water at y 22 from x 0 to 30: its way round, x 31, is out of the leash area, so
-// no way within it reaches the south shore.
-func waterHarness(t *testing.T) (*harness, *session.Monster) {
+// no way within it reaches the south shore. Each change, if any, edits the wolf's
+// definition before the world starts.
+func waterHarness(t *testing.T, change ...func(*content.Monster)) (*harness, *session.Monster) {
 	t.Helper()
 	rows := make([]string, 64)
 	for y := range rows {
@@ -285,6 +286,9 @@ func waterHarness(t *testing.T) (*harness, *session.Monster) {
 	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 60)}
 	def := wolfDef()
 	def.Health, def.Behavior.FleeAtHealthPct = 1000, 0
+	for _, f := range change {
+		f(def)
+	}
 	h := newHarness(t, m, func(c *session.Config) {
 		c.Monsters = content.Monsters{"wolf": def}
 		c.Items = testItems()
@@ -294,6 +298,107 @@ func waterHarness(t *testing.T) (*harness, *session.Monster) {
 	})
 	h.sim.Step()
 	return h, onlyMonster(t, h)
+}
+
+// An attack held back for low health (below_hp_pct) is no reach before (review of the
+// monster abilities): a wolf with a 4-tile spell it casts only below 10 % gives up the
+// ranger across the water as a plain wolf does. Counted at full health, it made the wolf
+// "reach" the ranger: no check of the way, never beyond its leash, so the ranger shot it
+// for 20 s at the full training rate and it never answered. Below 10 % the spell is in
+// use, so is its reach: the wolf holds the ranger and burns it from across the water.
+func TestLeashCountsOnlyTheAttacksInUse(t *testing.T) {
+	spell := func(def *content.Monster) {
+		def.Attacks = append(def.Attacks, content.MonsterAttack{Type: content.AttackSpell, Element: "fire",
+			Min: 5, Max: 5, IntervalMs: 1000, Chance: 1, Range: 4, BelowHealthPct: 10})
+	}
+	t.Run("above its below_hp_pct", func(t *testing.T) {
+		h, wolf := waterHarness(t, spell)
+		cl, p := ranger(t, h, pos(20, 23), 60)
+		h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+		h.input(cl, setTarget(wolf.ID()))
+		n := h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+		t.Logf("the wolf gave the ranger up after %d ticks", n)
+		if hp, maxHP := wolf.Health(); hp != maxHP {
+			t.Errorf("the wolf gave up at %d/%d health, want full", hp, maxHP)
+		}
+		if hp, maxHP := p.Health(); hp != maxHP {
+			t.Errorf("the ranger has %d/%d health: the wolf cast its low-health spell at full health", hp, maxHP)
+		}
+	})
+	t.Run("below it", func(t *testing.T) {
+		h, wolf := waterHarness(t, spell)
+		h.sim.Command(gameFunc(func() { wolf.SetHealth(50) }))
+		_, p := ranger(t, h, pos(20, 23), 0)
+		h.sim.RunUntil(func() bool { return health(p) < 145 }, sim.MaxSeconds(2))
+		h.sim.RunFor(3e9)
+		if wolf.TargetID() != p.ID() || health(p) > 145-15 {
+			t.Errorf("below 10 %%: the wolf targets %d (want the ranger %d), the ranger has %d health (want 3 spells or more)",
+				wolf.TargetID(), p.ID(), health(p))
+		}
+	})
+}
+
+// An area that misses its target's tile holds no target beyond the leash (review of the
+// monster abilities): a wolf with a beam of 4, or a circle of 2 around itself, follows the
+// ranger along its shore to the corner of its leash area (26,21) and burns it from there
+// (the ranger hops along the far shore, inside the leash area).
+// Then the ranger shoots it from across the water 4 tiles east and 2 south (2 and 2 for
+// the circle): a beam goes along one of 8 lines and a circle is round, so neither reaches
+// that tile. Counted by their longest reach alone, the ranger was "in reach": the wolf
+// held it, its area never hit it and each round counted as fighting back, so the ranger
+// trained at the full rate, unhurt, for as long as it liked. Now the wolf gives it up as a
+// plain wolf does (full health) and the arrows from there train as against a target that
+// does not fight back (skills.afk.factor 0.25: the first one, no whole try).
+func TestLeashAreaThatMissesHoldsNoTarget(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		area content.AttackArea
+		from world.Pos // where the ranger shoots from
+	}{
+		{"beam", content.AttackArea{Shape: content.AreaBeam, Length: 4, Center: content.AreaSelf}, pos(30, 23)},
+		{"circle", content.AttackArea{Shape: content.AreaCircle, Radius: 2, Center: content.AreaSelf}, pos(28, 23)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h, wolf := waterHarness(t, func(def *content.Monster) {
+				def.Attacks = append(def.Attacks, content.MonsterAttack{Type: content.AttackSpell, Element: "fire",
+					Min: 5, Max: 5, IntervalMs: 1000, Chance: 1, Area: &c.area})
+			})
+			// The ranger hops along the far shore, 2 tiles at a time (a circle of 2 misses
+			// a ranger 2 tiles east and 2 south: the wolf would give it up on the way).
+			corner := pos(26, 21)
+			cl, p := ranger(t, h, pos(22, 23), 60)
+			h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+			for x := 22; x <= 26; x += 2 {
+				h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(x, 23)) }))
+				h.sim.RunUntil(func() bool { return wolf.Pos() == pos(x, 21) || wolf.TargetID() != p.ID() }, sim.MaxSeconds(5))
+			}
+			h.sim.RunUntil(func() bool { return health(p) < 145 || wolf.TargetID() != p.ID() }, sim.MaxSeconds(3))
+			if wolf.Pos() != corner || wolf.TargetID() != p.ID() || health(p) >= 145 {
+				t.Fatalf("the wolf stands on %v targeting %d with the ranger %d at %d health: want it on %v burning the ranger",
+					wolf.Pos(), wolf.TargetID(), p.ID(), health(p), corner)
+			}
+			h.sim.Command(gameFunc(func() { h.w.Teleport(p, c.from); h.w.RestoreForTest(p) }))
+			h.input(cl, setTarget(wolf.ID()))
+			arrows, tries := h.w.CountItem(p, "test_arrow"), h.w.Skill(p, "distance").Tries
+			h.sim.RunUntil(func() bool { return h.w.CountItem(p, "test_arrow") < arrows }, sim.MaxSeconds(4))
+			h.sim.RunTicks(2)
+			if h.w.CountItem(p, "test_arrow") != arrows-1 {
+				t.Fatalf("the ranger shot %d arrows from %v, want 1", arrows-h.w.CountItem(p, "test_arrow"), c.from)
+			}
+			if got := h.w.Skill(p, "distance").Tries - tries; got != 0 {
+				t.Errorf("an arrow from %v trained %d tries, want none (a quarter): the %s never reaches the ranger there", c.from, got, c.name)
+			}
+			if wolf.TargetID() == p.ID() {
+				t.Errorf("the wolf on %v holds the ranger on %v, which its %s never hits", wolf.Pos(), c.from, c.name)
+			}
+			if hp, maxHP := wolf.Health(); hp != maxHP {
+				t.Errorf("the wolf has %d/%d health: it should have given the ranger up (full health)", hp, maxHP)
+			}
+			if health(p) != 145 {
+				t.Errorf("the ranger has %d health on %v, which the %s cannot reach", health(p), c.from, c.name)
+			}
+		})
+	}
 }
 
 // A leash makes no safe spot inside its own area (review of lote 5): a ranger across the

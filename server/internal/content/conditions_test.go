@@ -6,7 +6,7 @@ import (
 )
 
 // data/balance.yaml has the six conditions of T3.2 (and keen_eye), and every condition a
-// spell or a monster applies is one of them.
+// spell or a monster applies is one of them (a boss's phases' attacks_add too).
 func TestConditionsFromData(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "data")
 	b, err := LoadBalance(dir)
@@ -31,7 +31,7 @@ func TestConditionsFromData(t *testing.T) {
 	}
 	poisoners := 0
 	for _, m := range monsters {
-		for _, a := range m.Attacks {
+		for _, a := range m.AllAttacks() {
 			if err := a.Condition.Check(b.Conditions); err != nil {
 				t.Errorf("%s: %v", m.ID, err)
 			}

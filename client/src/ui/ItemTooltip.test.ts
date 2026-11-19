@@ -1,6 +1,13 @@
 // The tooltip's placement (docs/17 UI-6, the Diablo II idea): pure, no DOM.
 import { describe, expect, it } from "vitest";
-import { TIP_GAP, TIP_MARGIN, groundAnchor, placeKey, tipPlacement } from "./ItemTooltip.tsx";
+import {
+  TIP_GAP,
+  TIP_MARGIN,
+  TipGate,
+  groundAnchor,
+  placeKey,
+  tipPlacement,
+} from "./ItemTooltip.tsx";
 import type { Rect } from "./ItemTooltip.tsx";
 
 const view = { width: 1280, height: 800 };
@@ -92,5 +99,38 @@ describe("placeKey (the card is measured again only when it or its place changes
     expect(placeKey({ ...tip, anchor: { ...cell, top: 401 } }, "8:knight:")).not.toBe(base);
     expect(placeKey(tip, "9:knight:")).not.toBe(base);
     expect(placeKey(undefined, "8:knight:")).toBe("");
+  });
+});
+
+describe("TipGate (no card until the mouse moves after a window opened)", () => {
+  it("stays shut while the mouse stays where it was when a window opened", () => {
+    const gate = new TipGate();
+    expect(gate.open).toBe(true);
+    gate.moved(500, 400); // the mouse comes to "Quiero comerciar"
+    gate.pressed(500, 400); // and clicks it
+    gate.opened(); // the shop opens, its grid under the mouse (the browser's pointerover)
+    expect(gate.open).toBe(false);
+    // A pointermove at the same point is not the player moving.
+    expect(gate.moved(500, 400)).toBe(false);
+    expect(gate.open).toBe(false);
+    // The mouse moves (its pointerover comes first and does not count): the gate opens, once.
+    expect(gate.moved(503, 401)).toBe(true);
+    expect(gate.open).toBe(true);
+    expect(gate.moved(510, 401)).toBe(false);
+  });
+
+  it("opens on the first move when it never saw the mouse", () => {
+    const gate = new TipGate();
+    gate.opened();
+    expect(gate.open).toBe(false);
+    expect(gate.moved(10, 10)).toBe(true);
+  });
+
+  it("opens for the keyboard whatever the mouse did", () => {
+    const gate = new TipGate();
+    gate.pressed(1, 1);
+    gate.opened();
+    gate.release();
+    expect(gate.open).toBe(true);
   });
 });

@@ -184,14 +184,20 @@ type Player struct {
 	hitBy      []pvpHit
 	lockUntil  game.Tick
 	fightUntil game.Tick
-	// linkDead: its connection closed during the lock; it stays until the lock ends.
-	linkDead bool
+	// linkDead: its connection closed in a fight (inCombat); it stays until the fight is
+	// over or travel.link_dead_max_ms passed since linkDeadAt (linkdead.go holdsLinkDead).
+	linkDead   bool
+	linkDeadAt game.Tick
 	// dropped: the loop closed its connection (Client.Close) while it stayed link-dead (a
 	// slow client, a password reset); nothing is sent or closed when it leaves.
 	dropped bool
+	// diedLinkDead: it died while link-dead and leaves at the end of the tick, saved then
+	// (deathSave, checkLinkDead).
+	diedLinkDead bool
 
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
-	// never), which blocks sailing for balance travel.combat_block_ms.
+	// never, or not since its death), which blocks sailing and logging out for balance
+	// travel.combat_block_ms (inCombat).
 	fightAt game.Tick
 
 	// Economy (T4.1): what p carried at login, what the log says it gained and lost
@@ -368,9 +374,9 @@ func (w *World) Join(c Character, client Client) game.Command {
 }
 
 // Leave returns the command that removes client's player (connection closed). It is
-// idempotent: a client that already left is ignored. Under its PvP lock the player stays
-// link-dead instead (linkDeadOnLeave), also when the loop closed the connection itself
-// (disconnect): the gateway's Leave that follows changes nothing.
+// idempotent: a client that already left is ignored. In combat the player stays link-dead
+// instead (linkDeadOnLeave), also when the loop closed the connection itself (disconnect):
+// the gateway's Leave that follows changes nothing.
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
@@ -442,7 +448,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 		return
 	}
-	var carry *Player // T5.2: the player this login replaces, for its PvP locks
+	var carry *Player // the player this login replaces, for its fight and PvP locks
 	if old := w.byChar[c.ID]; old != nil {
 		carry = old
 		// Logged in again while online: continue from the in-memory state.
@@ -495,7 +501,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.storage = quest.NewLog(c.Storage)
 	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
 	if carry != nil {
-		w.pvpCarry(carry, p) // a link-dead character taken over keeps its lock
+		w.carryFight(carry, p) // a link-dead character taken over keeps its fight and locks
 	}
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
@@ -526,6 +532,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.sendCosmetics(p) // T5.7
+	w.tellDiedAway(p)  // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)
@@ -599,6 +606,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	ctx.Sched.Cancel(p.autosave)
 	ctx.Sched.Cancel(p.regen)
 	w.forgetContainers(p)
+	w.forgetLinkDead(p)
 	w.pvpLeftWorld(p)
 	for _, m := range w.monsters {
 		if m.target == p {

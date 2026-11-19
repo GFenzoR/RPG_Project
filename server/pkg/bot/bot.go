@@ -136,6 +136,7 @@ type Bot struct {
 	pings      map[uint64]time.Time
 	latencies  []time.Duration
 	shop       Shop
+	refusals   int // the logout blocks (logoutLocked) received
 }
 
 // New returns a bot for the server at baseURL (e.g. "http://localhost:8080").
@@ -381,6 +382,9 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 		b.stats.Disappear++
 	case *pb.ServerMessage_ChatMessage:
 		b.stats.Chat++
+		if m.ChatMessage.GetKind() == pb.MessageKind_MESSAGE_KIND_SYSTEM && logoutLocked[m.ChatMessage.GetLocalized().GetKey()] {
+			b.refusals++
+		}
 	case *pb.ServerMessage_DialogOpen:
 		d := &Dialog{ID: m.DialogOpen.GetDialogId(), NPC: m.DialogOpen.GetNpcCreatureId()}
 		for _, o := range m.DialogOpen.GetOptions() {
@@ -611,16 +615,60 @@ func (b *Bot) WalkPath(ctx context.Context, steps []Direction) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_WalkPath{WalkPath: &pb.WalkPath{Steps: ds}}})
 }
 
-// Logout asks to leave and waits until the server closes the connection.
+// LogoutRetry is how often Logout asks again while the server refuses it: in a fight
+// (travel.combat_block_ms since the bot fought, or a PvP lock) the server answers a
+// system message and the connection stays (docs/02 "Bloqueo de logout en combate").
+const LogoutRetry = time.Second
+
+// logoutLocked are the system messages of a refused Logout: the bot is in a fight.
+var logoutLocked = map[string]bool{"combat.logout_locked": true, "pvp.logout_locked": true}
+
+// ErrLogoutLocked is the error of a Logout whose ctx ended while the server still refused
+// it because the bot was in a fight (a monster that keeps attacking it without killing
+// it, a PvP lock). Closing the connection then leaves the character in the world
+// link-dead until the fight is over, as for a player who closes the game mid-fight.
+var ErrLogoutLocked = errors.New("refused: in combat")
+
+// Logout asks to leave and waits until the server closes the connection, asking again
+// every LogoutRetry while it refuses (the bot fought a moment ago). A bot still under
+// attack never gets out: stop fighting and walk away first, or bound ctx; when ctx ends
+// after a refusal, the error wraps ErrLogoutLocked.
 func (b *Bot) Logout(ctx context.Context) error {
-	if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}); err != nil {
-		return err
+	b.mu.Lock()
+	refused := b.refusals
+	b.mu.Unlock()
+	for {
+		select {
+		case <-b.done:
+			return b.loggedOut()
+		default:
+		}
+		if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}); err != nil {
+			select {
+			case <-b.done: // closed while asking: the answer is in the Disconnect
+				return b.loggedOut()
+			default:
+				return err
+			}
+		}
+		select {
+		case <-b.done:
+			return b.loggedOut()
+		case <-ctx.Done():
+			b.mu.Lock()
+			locked := b.refusals > refused
+			b.mu.Unlock()
+			if locked {
+				return fmt.Errorf("logout: %w (%w)", ErrLogoutLocked, ctx.Err())
+			}
+			return fmt.Errorf("logout: %w", ctx.Err())
+		case <-b.clock.After(LogoutRetry):
+		}
 	}
-	select {
-	case <-b.done:
-	case <-ctx.Done():
-		return fmt.Errorf("logout: %w", ctx.Err())
-	}
+}
+
+// loggedOut reports whether the closed connection ended with LOGGED_OUT.
+func (b *Bot) loggedOut() error {
 	if r := b.Disconnected(); r != "LOGGED_OUT" {
 		return fmt.Errorf("logout: disconnected with %q", r)
 	}

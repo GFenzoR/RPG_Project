@@ -74,10 +74,11 @@ dialog:
           goto: xp_given
         - { text: dialog.back, goto: greet }
     # Training raises skills to these levels and never lowers one. Combat: the skills of
-    # the vocation's weapons, its shield and its magic level, about what a character that
-    # got to pens 4 and 5 by playing has (a level 21 guardian holds pen 4 with them;
-    # TestSandboxTraining). Trades: past every recipe of data/recipes.yaml (the highest
-    # asks for smithing 22).
+    # the vocation's weapons and its shield, about what a character that got to pens 4 and
+    # 5 by playing has (a level 21 guardian holds pen 4 with them; TestSandboxTraining),
+    # and the magic level of its vocation's last spell (spell progression, 2026-11: with
+    # the free experience every spell can be tried). Trades: past every recipe of
+    # data/recipes.yaml (the highest asks for smithing 22).
     train:
       text: npc.pruebas_trainer.train
       options:
@@ -98,12 +99,12 @@ dialog:
             - { train_skill: { skill: axe, level: 30 } }
             - { train_skill: { skill: club, level: 30 } }
             - { train_skill: { skill: shield, level: 35 } }
-            - { train_skill: { skill: magic, level: 5 } }
+            - { train_skill: { skill: magic, level: 9 } }
           goto: trained
         - text: npc.pruebas_trainer.opt_train_combat
           if: { vocation_in: [arcanist, druid] }
           action:
-            - { train_skill: { skill: magic, level: 25 } }
+            - { train_skill: { skill: magic, level: 30 } }
             - { train_skill: { skill: shield, level: 20 } }
           goto: trained
         - text: npc.pruebas_trainer.opt_train_trades

@@ -1,9 +1,9 @@
-// Options → Interface (docs/17 UI-3, UI-9): the interface scale (the bottom bar and the windows),
-// the text size and the camera shake on heavy hits. Without hooks: the choices
-// live in main.tsx, kept per device in localStorage (state/ui-prefs.ts).
+// Options → Interface (docs/17 UI-3, UI-9, UI-10): the interface scale (the bottom bar and the
+// windows), the text size, the camera shake on heavy hits and the chat's opacity. Without
+// hooks: the choices live in main.tsx, kept per device in localStorage (state/ui-prefs.ts).
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
-import { TEXT_SCALES, UI_SCALES } from "../state/ui-prefs.ts";
+import { CHAT_OPACITY, TEXT_SCALES, UI_SCALES } from "../state/ui-prefs.ts";
 
 /** "125 %" in the player's language. */
 export const percent = (t: Translate, v: number): string =>
@@ -14,9 +14,12 @@ export function InterfaceOptions(props: {
   uiScale: number;
   textScale: number;
   shake: boolean;
+  /** The chat background's opacity, percent (CHAT_OPACITY). */
+  chatOpacity: number;
   onUiScale(v: number): void;
   onTextScale(v: number): void;
   onShake(on: boolean): void;
+  onChatOpacity(v: number): void;
 }): JSX.Element {
   const { t } = props;
   const select = (
@@ -59,6 +62,20 @@ export function InterfaceOptions(props: {
           onChange={(e) => props.onShake(e.currentTarget.checked)}
         />
         {t("client.options.camera_shake")}
+      </label>
+      <label class="scale chat-opacity" title={t("client.options.chat_opacity_hint")}>
+        <span>{t("client.options.chat_opacity")}</span>
+        <input
+          type="range"
+          data-testid="chat-opacity"
+          min={CHAT_OPACITY.min}
+          max={CHAT_OPACITY.max}
+          step={CHAT_OPACITY.step}
+          value={props.chatOpacity}
+          aria-valuetext={t("client.options.percent", { percent: props.chatOpacity })}
+          onInput={(e) => props.onChatOpacity(Number(e.currentTarget.value))}
+        />
+        <output>{t("client.options.percent", { percent: props.chatOpacity })}</output>
       </label>
     </div>
   );

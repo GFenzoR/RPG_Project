@@ -6,7 +6,8 @@
 // - the toolbar's windows (WINDOW_IDS): the toolbar and its keys open and close them, and
 //   the chat, which is always open (FIXED_WINDOWS: no ×, Escape skips it);
 // - the server's windows (SERVER_WINDOWS: dialog, shop, crafting, market, house, trade);
-// - one window per open container ("container-<item>", containerKeys).
+// - one window per open container ("container-<item>", or "container-remains" for any
+//   remains on the ground, containerKeys).
 // The server opens and closes the last two (syncWindows follows it); the player still
 // moves, resizes and folds them. GameView.tsx only renders what this state says.
 // Remembered per device in localStorage (`rpg.windows`, a convenience: if it is lost or
@@ -93,7 +94,7 @@ const isKey = (v: unknown): v is WinKey =>
   isToolWindow(v) || isServerWindow(v) || isContainerKey(v);
 
 /** A server or container window seen for the first time: closed, at its default place. */
-export function defaultPlace(): WindowPlace {
+export function unseenPlace(): WindowPlace {
   return { open: false, collapsed: false };
 }
 
@@ -123,7 +124,7 @@ export function defaultWindows(): WindowsState {
 
 /** The place of any window (a server or container window never seen: its default). */
 export function placeOf(s: WindowsState, id: WinKey): WindowPlace {
-  return isToolWindow(id) ? s.win[id] : (s.others[id] ?? defaultPlace());
+  return isToolWindow(id) ? s.win[id] : (s.others[id] ?? unseenPlace());
 }
 
 const finite = (v: unknown): number | undefined =>
@@ -184,7 +185,7 @@ export function loadWindows(raw: string | null | undefined): WindowsState {
     const places: [string, WindowPlace][] = [];
     for (const [id, p] of Object.entries(d.others as Record<string, unknown>)) {
       if (!isServerWindow(id) && !isContainerKey(id)) continue;
-      const place = read(p, defaultPlace());
+      const place = read(p, unseenPlace());
       if (place) places.push([id, { ...place, open: false }]);
     }
     for (const [id, place] of lastContainers(places)) others[id] = place;
@@ -498,6 +499,225 @@ export function containersTop(equipment: WindowPlace, height: number | undefined
   return equipment.open && !placed && height !== undefined && height > 0 ? Math.round(height) : 0;
 }
 
+// ---- A factory place that sees the open windows (docs/17 UI-5) -------------------------
+// windows.css gives each window its usual place. When a window opens there and that place
+// covers another open window (or, the trade, the tiles north of the player, where the
+// partner stands), defaultPlace looks through a short list of other places for it, nearest
+// first, and takes the first that covers nothing; else the one that covers least, if it
+// covers less than the usual place. GameView measures the boxes and keeps the answer while
+// the window stays open (it is not the player's: nothing is saved).
+
+/** An open window and its box (CSS px from the top left of the windows' area). */
+export interface OpenBox {
+  id: WinKey;
+  rect: Rect;
+}
+
+/** Where defaultPlace puts a window: its box; `short` when it was shortened to fit. */
+export interface AutoPlace extends Rect {
+  /** Shorter than at its usual place: `height` is its most and its body scrolls. */
+  short?: boolean | undefined;
+}
+
+/** Tiles north of the player that the trade never covers: the partner stands there. */
+export const TRADE_CLEAR_TILES = 3;
+/** The shortest a window gets when it gives way to another (its title bar and three lines
+ * or so; its body scrolls), CSS px. */
+export const GIVE_WAY_MIN_PX = 120;
+/** Room a window leaves between it and the window it gives way to, CSS px. */
+export const PLACE_GAP = 4;
+
+/** Over the middle of the bar (windows.css): the NPC's and the stations' windows. */
+const BOTTOM_WINDOWS: readonly WinKey[] = ["dialog", "crafting", "market", "house"];
+
+/** How much of `a` covers `b`, px² (edges that touch, or slivers under 1 px, do not count). */
+export function overlapArea(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return w >= 1 && h >= 1 ? w * h : 0;
+}
+
+/** The player's tile and the TRADE_CLEAR_TILES north of it (`tile`: the player's tile). */
+export function northOfPlayer(tile: Rect): Rect {
+  return {
+    x: tile.x,
+    y: tile.y - TRADE_CLEAR_TILES * tile.height,
+    width: tile.width,
+    height: (TRADE_CLEAR_TILES + 1) * tile.height,
+  };
+}
+
+/**
+ * `usual` shortened to give way to the windows that reach into it from one side: from
+ * above (its bottom stays: the windows over the bar) or from below (its top stays); none
+ * when nothing does or it would end shorter than GIVE_WAY_MIN_PX.
+ */
+function givingWay(usual: Rect, others: readonly OpenBox[], from: "above" | "below"): AutoPlace[] {
+  let top = usual.y;
+  let bottom = usual.y + usual.height;
+  let gives = false;
+  for (const o of others) {
+    if (overlapArea(usual, o.rect) === 0) continue;
+    if (from === "above" && o.rect.y < usual.y) {
+      top = Math.max(top, o.rect.y + o.rect.height + PLACE_GAP);
+      gives = true;
+    }
+    if (from === "below" && o.rect.y > usual.y) {
+      bottom = Math.min(bottom, o.rect.y - PLACE_GAP);
+      gives = true;
+    }
+  }
+  const y = Math.ceil(top);
+  const height = Math.floor(bottom) - y;
+  if (!gives || height < GIVE_WAY_MIN_PX) return [];
+  return [{ x: usual.x, y, width: usual.width, height, short: true }];
+}
+
+/** The other places of a window, the preferred first (an empty list: only the usual). */
+function alternatives(
+  id: WinKey,
+  usual: Rect,
+  others: readonly OpenBox[],
+  area: Box,
+  zone: Rect | undefined,
+): AutoPlace[] {
+  const at = (x: number, y: number): AutoPlace => ({
+    ...clampPlace(x, y, usual, area),
+    width: usual.width,
+    height: usual.height,
+  });
+  const box = (w: WinKey): Rect | undefined => others.find((o) => o.id === w)?.rect;
+  if (id === "trade") {
+    // Along its row (the top of the screen), the nearest first: against the area's edges,
+    // beside the column over the player, or beside another window, PLACE_GAP away; then
+    // the same places flush against them (edges that touch cover nothing). At 1280x800
+    // the room between the battle list and the player's column is the trade's width
+    // exactly: with the gap, each side covered 4 px of a window.
+    const beside = (gap: number): number[] => {
+      const xs: number[] = [];
+      if (zone) xs.push(zone.x - gap - usual.width, zone.x + zone.width + gap);
+      for (const o of others) xs.push(o.rect.x - gap - usual.width, o.rect.x + o.rect.width + gap);
+      return xs;
+    };
+    const nearest = (xs: readonly number[]): AutoPlace[] =>
+      xs
+        .map((x) => at(x, usual.y))
+        .sort((a, b) => Math.abs(a.x - usual.x) - Math.abs(b.x - usual.x));
+    return [...nearest([0, area.width - usual.width, ...beside(PLACE_GAP)]), ...nearest(beside(0))];
+  }
+  // Over the bar: shorter, under what comes down to it (at 960x700 the equipment's
+  // column reaches the dialog of the shop and dialog pair).
+  if (BOTTOM_WINDOWS.includes(id)) return givingWay(usual, others, "above");
+  if (id === "skills") {
+    // Under the battle list only while it fits above the chat; else beside the battle
+    // list or the party, or left of the equipment's column; last, under the battle list
+    // still, shortened to end above the chat.
+    const out: AutoPlace[] = [];
+    for (const w of ["battle", "party"] as const) {
+      const r = box(w);
+      if (r) out.push(at(r.x + r.width, r.y));
+    }
+    for (const w of ["appearance", "guild", "inventory"] as const) {
+      const r = box(w);
+      if (r) out.push(at(r.x - usual.width, r.y));
+    }
+    return [...out, ...givingWay(usual, others, "below")];
+  }
+  return [];
+}
+
+/** Whether a window has other places than its usual one (GameView measures only these). */
+export const movesAside = (id: WinKey): boolean =>
+  id === "trade" || id === "skills" || BOTTOM_WINDOWS.includes(id);
+
+/**
+ * Where a window that opens at its factory place goes, seeing the open windows: `usual` is
+ * its box at the place windows.css gives it, `open` the other open windows' boxes, `area`
+ * the windows' area and `player` the player's tile (all CSS px of that area). Undefined:
+ * the usual place is fine, or no other place covers less. Never over the tiles north of the
+ * player for the trade (a usual place there moves even onto another window).
+ */
+export function defaultPlace(
+  id: WinKey,
+  usual: Rect,
+  open: readonly OpenBox[],
+  area: Box,
+  player?: Rect | undefined,
+): AutoPlace | undefined {
+  const others = open.filter((o) => o.id !== id);
+  const zone = id === "trade" && player ? northOfPlayer(player) : undefined;
+  const cost = (r: Rect): number =>
+    zone && overlapArea(r, zone) > 0
+      ? Number.POSITIVE_INFINITY
+      : others.reduce((n, o) => n + overlapArea(r, o.rect), 0);
+  let least = cost(usual);
+  if (least === 0) return undefined;
+  let best: AutoPlace | undefined;
+  for (const c of alternatives(id, usual, others, area, zone)) {
+    const k = cost(c);
+    if (k >= least) continue;
+    best = c;
+    least = k;
+    if (k === 0) break;
+  }
+  return best;
+}
+
+/** What moves the usual place of each window while it stays open (placeContext). */
+export type PlaceContext = Readonly<Partial<Record<WinKey, string>>>;
+
+/**
+ * What moves a window's usual place while it stays open, so GameView looks at it again
+ * when this changes (toLookAt): the dialog sits beside the shop while the shop's window is
+ * open (windows.css, the pair: narrower and further right), and it takes another height
+ * with another NPC's dialog (`dialogId`). Read from the windows' state, not from the
+ * server's: the shop is measured once its window is in the page.
+ */
+export function placeContext(s: WindowsState, dialogId: number | undefined): PlaceContext {
+  return { dialog: `${dialogId ?? ""}|${placeOf(s, "shop").open ? "shop" : ""}` };
+}
+
+/** What GameView saw the last time it looked at the windows' places (toLookAt). */
+export interface LastLook {
+  open: ReadonlySet<WinKey>;
+  context: PlaceContext;
+}
+
+/**
+ * The windows to measure for a place that sees the others (defaultPlace) now that the
+ * windows are `s`: the unplaced ones with other places (movesAside) that opened since the
+ * last look `last`, all the open ones after the area changed size (`fresh`), and those
+ * whose usual place moved while they stayed open (their `context` changed: the dialog
+ * the shop came beside, another NPC's dialog). Each is measured at its usual place: the
+ * place an earlier look gave it is forgotten.
+ */
+export function toLookAt(
+  s: WindowsState,
+  last: LastLook,
+  context: PlaceContext,
+  fresh: boolean,
+): Set<WinKey> {
+  return new Set(
+    knownWindows(s).filter((id) => {
+      const p = placeOf(s, id);
+      if (!p.open || p.x !== undefined || !movesAside(id)) return false;
+      return fresh || !last.open.has(id) || last.context[id] !== context[id];
+    }),
+  );
+}
+
+/**
+ * Whether the tutorial's hint gives way (GameView hides it): the help, the guild or the
+ * appearance is open at its factory place, which covers the hint's (the guild and the
+ * appearance always; the help on screens under ~1600 px), and the windows go over it.
+ */
+export function tutorialCovered(s: WindowsState): boolean {
+  return (["help", "guild", "appearance"] as const).some((id) => {
+    const p = s.win[id];
+    return p.open && (p.x === undefined || p.y === undefined);
+  });
+}
+
 /** How far one arrow press moves or resizes a window, CSS px. */
 export const KEY_STEP = 16;
 
@@ -550,13 +770,21 @@ export function windowNudge(
 }
 
 /**
+ * The name in the window key of every container that stays on the ground (`fixed`: the
+ * remains of a monster of any family, or of a player): they all open in one place, the one
+ * the player left the last of them in, instead of one per kind of remains.
+ */
+export const REMAINS_PLACE = "remains";
+
+/**
  * The window key of each open container (`container-<item>`, `-2`, `-3`... for more of the
- * same item): a container keeps its key while it stays open, so a second backpack does not
- * take the first one's place when that one closes. `open` is the server's order.
+ * same item; `container-remains` for the remains, REMAINS_PLACE): a container keeps its key
+ * while it stays open, so a second backpack does not take the first one's place when that
+ * one closes. `open` is the server's order; `fixed` is the item's `pickupable: false`.
  */
 export function containerKeys(
   prev: ReadonlyMap<number, ContainerKey>,
-  open: readonly { id: number; item: string }[],
+  open: readonly { id: number; item: string; fixed?: boolean }[],
 ): Map<number, ContainerKey> {
   const next = new Map<number, ContainerKey>();
   for (const c of open) {
@@ -566,7 +794,7 @@ export function containerKeys(
   const used = new Set(next.values());
   for (const c of open) {
     if (next.has(c.id)) continue;
-    const item = c.item.replace(/[^a-z0-9_]/g, "_") || "item";
+    const item = c.fixed ? REMAINS_PLACE : c.item.replace(/[^a-z0-9_]/g, "_") || "item";
     let k: ContainerKey = `container-${item}`;
     for (let n = 2; used.has(k) && n < 100; n++) k = `container-${item}-${n}`;
     next.set(c.id, k);

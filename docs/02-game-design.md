@@ -185,8 +185,11 @@ Tibia:
   `stairs_up` (escaleras, del pack Dungeon Crawl), `ladder_up` (la escalera de mano vista
   desde abajo) / `ladder_down` (la trampilla abierta de arriba), `hole` (agujero),
   `rope_spot` (la luz que entra por un hueco del techo) y `teleport` (un anillo de piedras
-  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`, estático: el
-  atlas no anima items. `make validate` y `mapcompile` exigen el item en la entrada de
+  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`; el
+  teletransporte está animado (6 frames de 100 ms, `sync: world` en `assets/sprites.yaml`
+  `tiles`: el remolino gira, suben chispas y laten las runas; el renderer anima los
+  `frame_<n>` de cualquier item desde A10, docs/17 ART-7). Los demás son estáticos.
+  `make validate` y `mapcompile` exigen el item en la entrada de
   cada portal (salvo un `boat`), y el servidor avisa en el log al arrancar si falta
   (`03-world-and-maps.md`, "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
 - **Items que caen:** lo que se tira (`MoveItem`) sobre una escalera, un agujero o un
@@ -294,11 +297,89 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     `rime_burst`) le peguen más que las de antes a los monstruos de su isla.
     `base_tries` de magia (1450) y la regeneración por vocación no cambiaron: el maná que
     faltaba lo ponen la comida y los brebajes.
+  - **Progresión de hechizos (2026-11, rama `feat/spells-progression`):** antes el guardián
+    no tenía hechizos propios y los demás dejaban de aprender entre el nivel 12 y el 28.
+    Ahora cada vocación suma hechizos hasta el ~50 (tabla de abajo): el guardián, una cura
+    propia (12) y dos golpes de área alrededor suyo que crecen con el arma que tiene en la
+    mano (20 y 35, `skill: weapon`, `06-content-data.md` "Hechizo"); el druida, una cura
+    fuerte (30) y un área de radio 2 (40); el montaraz, un área de flechas (25) y un tiro
+    pesado (40); el arcanista, un golpe fuerte a un objetivo (40) y el área más ancha del
+    juego (radio 3, 48). La carrera simulada ahora también juega al guardián con sus
+    hechizos, y exige además que cada hechizo de daño o cura cueste como mucho la mitad del
+    maná de su nivel, que su nivel mágico esté a lo sumo 4 niveles después de su nivel (el
+    guardián que compra brebajes de maná llega a ~4 al 30 y ~6 al 49) y que las cazas de sus
+    primeros niveles lo lancen: cada cura propia, cada ataque a un objetivo y, para quien no
+    tiene ataques a un objetivo (el guardián), sus áreas. Las áreas de los magos y del
+    montaraz quedan para grupos: en un duelo un área le pega a un solo monstruo y un rayo
+    barato hace lo mismo por menos maná, así que la simulación no las necesita y tampoco las
+    exige. Por eso `frost_bloom` y `scatter_volley` le pegan a cada monstruo un poco menos que
+    `frost_lance` y `sure_shot`: anchas y livianas.
+  - **Revisión de la progresión (2026-11):** los roles se miden ahora en cada franja de la
+    carrera (niveles 12 a 49, con el nivel mágico que la simulación alcanza en cada uno y
+    contando solo los hechizos que ya se pueden lanzar), no solo en el 30. Medido así, el
+    primer reparto invertía dos roles: la cura del guardián curaba más por lanzamiento que
+    `verdant_mend` del druida del nivel 12 al 29, y `steel_whirl` le pegaba más a cada
+    monstruo que `tempest_ring` del arcanista del 35 al 47. Ahora `iron_resolve` cura ~7-9 %
+    de la vida del guardián (menos de 0,8 veces la mejor cura del druida en cada nivel) y
+    `steel_whirl` escala 1,1 por punto de skill (era 1,4). Además, el nivel mágico de los
+    golpes del guardián (1 y 2; eran 2 y 4) es el que alcanza **sin comprar un solo brebaje
+    de maná**, solo con su regeneración, la comida y su cura: con factor de magia 2,7, el
+    nivel 4 pedía ~44 500 de maná, unos 560 brebajes, y un guardián que no los compra no
+    pasa de nivel mágico 3 en toda la carrera. La carrera simulada juega también a ese
+    guardián (hábito `dry`) y exige que llegue a cada hechizo a tiempo. Ritmo: las
+    vocaciones siguen en 0,5-1,5 veces el tiempo del guardián por franja. El guardián que
+    compra brebajes de maná para sus golpes va de 1 a 50 en ~35 h (antes de sus hechizos,
+    ~40 h), a la par de los magos (arcanista ~34 h, druida ~32 h) y del montaraz (~35 h);
+    sin brebajes de maná tarda ~39 h (el oro de cada uno: "Economía", brebajes de maná).
+
+#### Hechizos por vocación
+Nivel / nivel mágico / maná. Las palabras son propias (nunca las de Tibia); los nombres van
+en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
+
+| Vocación | Hechizo | Palabras | Nivel / NM / maná | Qué hace |
+|---|---|---|---|---|
+| Todas | `swift_stride` | pede celeri | 8 / 0 / 30 | haste 25 s |
+| Todas | `purge_venom` | venenum pelle | 9 / 0 / 25 | cura el veneno |
+| Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~7-9 % de su vida (sobre todo por nivel) |
+| Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 1 / 35 | físico, radio 1, escala con la skill del arma en la mano |
+| Guardián | **`steel_whirl`** | turbo chalybis | 35 / 2 / 60 | el anterior más fuerte, cooldown 6 s |
+| Arcanista | `arc_bolt` | fulgur iacio | 1 / 0 / 10 | energía a 4 casillas, a veces electriza |
+| Arcanista | `conjure_arc_rune` | runa fulguris | 5 / 1 / 60 | conjura una runa de arco |
+| Arcanista | `light_heal` | vita lumen | 6 / 0 / 25 | cura |
+| Arcanista | `ember_ring` | ignis corona | 10 / 3 / 45 | fuego, radio 2, a veces quema |
+| Arcanista | `shroud` | umbra tegit | 14 / 4 / 110 | invisibilidad 40 s |
+| Arcanista | `tempest_ring` | tonitrus corona | 28 / 14 / 80 | energía, radio 2, a veces electriza |
+| Arcanista | **`storm_spear`** | fulmen telum | 40 / 26 / 90 | energía a 4 casillas, su golpe más fuerte |
+| Arcanista | **`dusk_maelstrom`** | vortex noctis | 48 / 30 / 160 | muerte, radio 3: el área más ancha |
+| Druida | `frost_lance` | glacies hasta | 1 / 0 / 10 | hielo a 4 casillas |
+| Druida | `verdant_mend` | viridis cura | 1 / 0 / 20 | cura |
+| Druida | `mend_other` | sana amicum | 8 / 2 / 40 | cura a otro jugador a 5 casillas |
+| Druida | `entangle` | radix vincit | 10 / 3 / 40 | `slowed` a 4 casillas |
+| Druida | `bramble_burst` | rubus orbis | 12 / 4 / 50 | tierra, radio 1 |
+| Druida | `rime_burst` | pruina orbis | 16 / 6 / 55 | hielo, radio 1 |
+| Druida | **`sap_surge`** | sucus vitae | 30 / 18 / 45 | cura fuerte (~2 veces `verdant_mend`) |
+| Druida | **`frost_bloom`** | hiemis flos | 40 / 25 / 60 | hielo, radio 2: llega a lo que está a 2 casillas |
+| Montaraz | `sure_shot` | sagitta certa | 2 / 0 / 15 | físico a 5 casillas, escala con distancia |
+| Montaraz | `conjure_arrows` | fabrica sagittas | 3 / 0 / 35 | conjura 25 flechas |
+| Montaraz | `ranger_mend` | cura silvae | 4 / 0 / 20 | cura |
+| Montaraz | `keen_eye` | oculus acer | 10 / 0 / 50 | +7 de distancia en combate |
+| Montaraz | `briar_arrow` | spina volans | 12 / 1 / 35 | tierra a 5 casillas, escala con distancia |
+| Montaraz | **`scatter_volley`** | imber sagittarum | 25 / 5 / 40 | físico, radio 2, escala con distancia |
+| Montaraz | **`heartwood_shot`** | sagitta gravis | 40 / 9 / 70 | físico a 5 casillas, su golpe más fuerte, cooldown 6 s |
+
+Los números exactos (base, por nivel, por nivel mágico, por skill, cooldowns) están en
+`data/spells.yaml`; los límites de rol (el druida cura mejor y el arcanista tiene el área
+más fuerte en cada franja de la carrera del 12 al 49, con lo que cada vocación ya puede
+lanzar ahí; el arcanista tiene el área más ancha, el montaraz el alcance más largo, los
+golpes del guardián escalan con su arma, todo cabe en las 12 teclas de la hotbar) los fija
+`packages/content-schema/src/vocations-balance.test.ts`.
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
-  "Grupos"), por quests y por
-  algunos oficios (poca).
+  "Grupos") y por quests. Los oficios y la recolección no dan experiencia de nivel: solo
+  suben su propia skill con el uso ("Oficios"; `session/crafting.go` y
+  `session/gathering.go`). Darles un poco sería una tarea de balance aparte, si el dueño
+  la pide.
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
   (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
@@ -498,8 +579,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - Runas: las conjura un hechizo de soporte; cualquiera con su nivel mágico las usa sobre
     una criatura o tile; comparten el cooldown de grupo de su hechizo, no el propio.
   - Monstruos: sus ataques `distance` y `spell` pegan a su objetivo dentro de `range` y con
-    línea de visión, también mientras se acercan (el `radius` de sus hechizos llega más
-    adelante).
+    línea de visión, también mientras se acercan; con `area` pegan a todo un círculo o un
+    rayo ("Monstruos", "Habilidades").
 - **Distancia (T3.1, `server/internal/session/combat.go`):** un arma `weapon.type:
   distance` (arco) dispara a su objetivo dentro de `weapon.range` casillas y con línea de
   visión (los muros la cortan, `03-world-and-maps.md`), una vez por ronda de ataque. Cada
@@ -636,21 +717,110 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (salvo los restos). Guardado por item y decay de items soltados quedan para el trade y
   la muerte (T1.11) o un hito posterior.
 - **Restos:** el botín de un monstruo queda dentro de sus restos (contenedor que no se
-  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`.
+  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`. Cada familia
+  deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
+  panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
+  (`creature_remains`, que es también el cuerpo de un jugador).
 
 ## Monstruos
-- Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con
-  área), resistencias, loot con probabilidades, experiencia, comportamiento.
+- Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
+  área o no; curarse e invocar), fases de jefe, resistencias, loot con probabilidades,
+  experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
   Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
   radio de su spawn; los agresivos eligen al jugador más cercano a su vista (la ventana
   clásica de 15x11 + 1, no la vista ancha de los jugadores: "La vista") con línea de
   visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
-  la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
+  la cuota de pathfinding del tick, y siguen ese rodeo entero mientras el objetivo no se
+  aleje más de una casilla de donde estaba: antes tomaban de nuevo el paso que más acerca
+  desde la primera casilla del rodeo, que llevaba de vuelta al muro, y frente a un muro en
+  U iban y venían para siempre, `TestChaseFollowsItsWayAroundAWall`; seguir el rodeo
+  guardado no gasta búsquedas) y atacan pegados con los temporizadores de cada
   ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
   responden si los golpean. No entran en zonas de protección ni atacan dentro de ellas.
   Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
   `spell` llegan con la magia (T1.9).
+- **Habilidades** (`server/internal/session/abilities.go`, todo dato en
+  `data/monsters`, formato en `06-content-data.md` "Monstruo"; 2026-11-18):
+  - **Área** (`area` en un ataque `melee`, `distance` o `spell`): un **círculo** de
+    `radius` casillas (`dx² + dy² ≤ r² + r`, como un hechizo de área) alrededor del
+    monstruo (`center: self`, por defecto) o de su objetivo (`center: target`), cada
+    casilla con línea de visión desde el centro (un muro tapa lo de atrás); o un **rayo**
+    de `length` casillas en línea recta desde el monstruo hacia su objetivo, en la de las
+    8 direcciones más cercana (recta si una diferencia es más del doble de la otra,
+    diagonal si no; puede errarle a un objetivo que no está en línea: correrse de la línea
+    lo esquiva), que se corta en la primera casilla que tapa la vista. Alcance (a qué
+    distancia del objetivo lo usa): el radio de un círculo alrededor de sí, el largo de un
+    rayo, y un círculo alrededor del objetivo como el ataque sin área (1 cuerpo a cuerpo,
+    `range` si no), siempre con línea de visión al objetivo. Ese alcance, y en un círculo
+    alrededor del objetivo ese alcance más el radio, no pasa de 6 (lo que nota un
+    monstruo: más lejos dañaría a un jugador que ni lo conoce; `make validate` y el
+    arranque lo rechazan). Un rayo o un círculo alrededor de sí no llevan `range` (su largo
+    o su radio es su alcance; `make validate` y el arranque lo rechazan). Cuenta además la
+    **forma**: un rayo solo alcanza a un objetivo en una de sus 8 líneas y sin una casilla
+    que tape la vista antes, y un círculo alrededor de sí solo dentro de su área redonda
+    (a radio 2, no la casilla a 2 y 2). Un área que no tendría a su objetivo adentro
+    espera: no gasta su ronda ni cuenta como responderle (`TestMonsterAreaWaitsForItsTarget`).
+    Y para la correa y la persecución no lo "alcanza" (`session.strikes`): antes, un
+    dragoncillo en la esquina de su correa retenía a un montaraz a 4 al este y 2 al sur del
+    otro lado de la lava, el rayo nunca le pegaba y cada ronda contaba como responderle, así
+    que lo entrenaba a ritmo completo sin recibir daño; ahora lo suelta como cualquier
+    monstruo y esos golpes entrenan como contra uno que no responde
+    (`TestLeashAreaThatMissesHoldsNoTarget`). Pega a **cada jugador del
+    área** que el monstruo ve (a un invisible solo si tiene `sees_invisible`), fuera de
+    zonas de protección, cada uno con su tirada, el elemento del ataque (uno físico con
+    armadura y defensa, como un golpe) y su condición. Nunca a monstruos ni NPCs. Los
+    clientes reciben un `CreatureAttack` con el área (el rayo, como el círculo de su largo
+    alrededor del monstruo) y un `Effect` del elemento en cada casilla (docs/05). Un área
+    apuntada a un invisible (el círculo en su casilla, el rayo hacia él) solo la ven los
+    que lo ven: si no, delataría dónde está.
+  - **Bajo cierta vida** (`below_hp_pct` en cualquier ataque): lo usa solo mientras su
+    vida está por debajo de ese porcentaje, y solo entonces cuenta su alcance (para la
+    correa, "decide si te alcanza"): un lobo con un hechizo de 4 casillas para cuando le
+    queda poca vida no "alcanza" antes a un montaraz al otro lado del agua, lo abandona
+    como cualquier lobo en vez de quedarse 20 s de muñeco de entrenamiento
+    (`TestLeashCountsOnlyTheAttacksInUse`).
+  - **Curarse** (`type: heal_self`, `min`–`max`): solo peleando (con objetivo, aunque no
+    lo tenga a su alcance) y herido; a vida llena la ronda espera sin gastarse. Efecto de
+    curación, número verde y barra de vida para quien lo ve (una curación que sale 0, con
+    `min: 0`, muestra el efecto sin número, como la de un jugador).
+  - **Invocar** (`type: summon`, `summon: {monster, count, max_alive}`): `count` criaturas
+    en casillas libres junto a él (con el efecto de conjurar), nunca más de `max_alive`
+    vivas a la vez (si ya están todas, la ronda espera sin gastarse: cuando muere una,
+    llama otra en cuanto pasó su `interval_ms` desde el último llamado; al custodio, una
+    ronda por minuto, una salamandra muerta se le repone hasta 60 s después).
+    Pelean contra su objetivo y comparten su spawn (su correa y su casa), pero **no dan
+    experiencia, botín ni restos, no cuentan para quests ni reportes y no reaparecen**: un
+    jefe que invoca no es una granja. Se van (`DESPAWN`) cuando muere o se rinde (correa)
+    el que las llamó, y también cuando se queda sin objetivo sin rendirse (su objetivo
+    murió, salió del juego, se metió en una zona de protección o salió de su vista): no
+    esperan en la guarida al próximo que entre; él conserva sus heridas. Una criatura invocada no puede invocar (`make validate` y el
+    arranque lo rechazan: no tendría tope).
+  - **Fases** (`phases`, para jefes): cada una está activa mientras la vida está por
+    debajo de su `below_hp_pct`, todas las alcanzadas a la vez. Sus `attacks_add` se suman
+    a los ataques, su `speed_mult` multiplica la velocidad (se avisa con `CreatureSpeed`) y
+    su `attack_interval_mult` cada intervalo de ataque. Entrar en una fase muestra el
+    efecto de condición sobre el monstruo; curado por encima (o al rendirse) la fase
+    termina.
+  - **Contenido** (pedido del dueño, auditoría 2026-11-18): el dragoncillo de ascua escupe
+    fuego en un rayo de 4; el custodio de escoria golpea el suelo (círculo de 1 alrededor,
+    fuego, deja ardiendo), bajo el 60 % llama a dos salamandras de brasa (como mucho dos,
+    una ronda por minuto) y bajo el 30 % se enfurece (×1,3 velocidad, ×0,75 intervalos);
+    el gólem de escoria y el espinoso estallan alrededor (círculo de 1) y la esquirla del
+    minero de obsidiana revienta sobre su objetivo y sus vecinos (círculo de 1 en el
+    objetivo). Un grupo pegado sufre las áreas: conviene abrirse. **Ojo (para el dueño):**
+    el estallido del gólem y del espinoso reemplazó su hechizo a distancia (`range: 3`):
+    ahora su alcance es 1, así que un montaraz o un mago que les pega desde lejos ya no
+    recibe ese hechizo (solo los alcanza quien está pegado). Si se quiere que sigan
+    castigando a distancia, se vuelve a sumar el hechizo como otro ataque (y se revisa su
+    balance: los duelos de `foe_test.go` ponen al cazador pegado y no lo miden).
+  - **Balance:** los duelos de los tests de balance (`server/internal/sim/foe_test.go`)
+    simulan las habilidades: las fases, `heal_self`, `below_hp_pct` y las invocaciones, que
+    el cazador mata primero (no dan nada) mientras le pegan. En un duelo el cazador está
+    pegado al monstruo, así que un área le pega como un ataque a él: los números de los
+    monstruos comunes no cambian. El custodio pasó a 1800 de vida y 0–60 cuerpo a cuerpo
+    para seguir en 30–90 s y 60–200 % de la vida a nivel 44 (71,6 s y 170 %; antes 71,2 s
+    y 162 %).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
   jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
   aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
@@ -756,6 +926,52 @@ Valores iniciales (balance.yaml):
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").
+- **La muerte termina el combate:** al despertar en el templo ya no hay bloqueo de logout
+  ni de barco (abajo); un bloqueo PvP que tuviera sigue hasta que vence.
+
+### Bloqueo de logout en combate
+La muerte es el riesgo del juego (`00-vision.md`, "Muerte como Tibia"): cerrar el juego en
+medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
+- **En combate** quiere decir: durante `travel.combat_block_ms` (12 s) desde la última vez
+  que un monstruo atacó al jugador (aunque falle; también su área, "Habilidades", aunque
+  el jugador no sea su objetivo), que el jugador recibió daño (también de
+  veneno o fuego, de un monstruo o de otro jugador, también en la arena) o que le pegó a un
+  monstruo o a un jugador; o mientras dura su bloqueo PvP ("PvP", "Castigo"). Es la misma
+  ventana que impide zarpar ("Viajes en barco"), la desconexión por inactividad y los
+  chequeos de presencia.
+- **Salir del juego en combate** se rechaza con `combat.logout_locked` ("Estás en
+  combate: todavía no puedes salir del juego. Espera unos segundos lejos de la pelea.");
+  con el bloqueo PvP, con `pvp.logout_locked`, como antes. La conexión sigue y el jugador puede volver a
+  intentarlo cuando la pelea termine.
+- **Cerrar la conexión en combate** (cerrar la pestaña o el juego, perder la red, un cliente
+  lento que el servidor corta, un reseteo de contraseña) no saca al personaje: queda en el
+  mundo sin conexión ("link-dead"). No actúa (suelta su objetivo, se para, lo que su
+  conexión haya mandado después no se ejecuta y su intercambio se cancela), pero se lo
+  puede atacar, los monstruos lo siguen teniendo de objetivo y sus condiciones siguen
+  corriendo; cada golpe renueva el bloqueo. Cuando el bloqueo vence, se guarda y sale.
+- **Tope de link-dead:** aunque los monstruos sigan peleando con él, sale a los
+  `travel.link_dead_max_ms` (2 min) de quedar link-dead, con su guardado final (si no, un
+  spawn débil que no le hace daño a un personaje fuerte lo tendría en el mundo para
+  siempre). El bloqueo PvP no tiene tope: lo retiene hasta que vence, como antes. `0` en
+  el balance quita el tope.
+- **Nadie lo juega:** link-dead no sube skills (los golpes que recibe no entrenan escudo)
+  ni cuenta como activo para la experiencia compartida del grupo (recibir golpes no es
+  ayudar: pasados `party.contribution_ms` de su último aporte con conexión, no cobra parte
+  de las muertes de su grupo). Regenera vida y maná como cualquiera.
+- **Morir link-dead** paga lo mismo que cualquier muerte (experiencia, skills, equipo al
+  cuerpo, bendiciones) y el personaje sale del mundo en ese momento, con un solo guardado
+  (el de la muerte, que es su guardado final). Si todavía lo retiene un bloqueo PvP, espera
+  en el templo a que venza, como antes. Al volver a entrar, el jugador ve la pantalla de
+  muerte con lo que perdió (salvo que el servidor se haya reiniciado entretanto). Una
+  derrota en la arena estando link-dead (no cuesta nada) se avisa igual al volver a entrar
+  con `pvp.arena_defeat`, sin tapar el aviso de una muerte.
+- **Volver a entrar** mientras está link-dead retoma ese mismo personaje, como un relogueo
+  (posición, vida, condiciones y la pelea: el logout sigue bloqueado hasta que vence); nunca
+  hay dos en el mundo.
+- **Lo que saca en el acto igual:** una expulsión o un ban del staff, un guardado que falló
+  (T5.3) y el apagado del servidor (que guarda a todos, también a los link-dead).
+- Una zona de protección **no** corta el bloqueo (tampoco el PvP): quien se refugia en un
+  templo espera ahí a que venza, a salvo.
 
 ## Economía
 - Monedas de oro, plata, cobre (100:1): `gold_coin` vale 10 000 cobre y `silver_coin` 100
@@ -784,7 +1000,30 @@ Valores iniciales (balance.yaml):
   El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
   templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
   vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
-  (`sim/balance_vocations_test.go`): sube más rápido que el guardián y junta menos oro.
+  (`sim/balance_vocations_test.go`). Antes de la progresión de hechizos (2026-11) eso lo
+  hacía subir más rápido que el guardián, que juntaba más oro. Ahora el guardián también
+  puede comprarlos para sus golpes y su cura: con ellos gasta lo mismo (~60 % del botín
+  desde el nivel 20) y sube a la par de los magos (~35 h del 1 al 50, contra ~34 h del
+  arcanista y ~32 h del druida; del 30 al 50 hasta un poco más rápido que el arcanista, que
+  en un duelo no luce sus áreas). Sin brebajes de maná tarda ~13 % más (~39 h, lo que
+  tardaba antes de tener hechizos) y llega igual al nivel mágico de todos sus hechizos
+  ("Vocaciones"). La diferencia de oro ya no es de vocación sino de cuánto gasta cada uno en
+  brebajes: comprarlos es una elección, no un peaje.
+- **Brebajes de vida** (progresión de hechizos, 2026-11): la cataplasma de algas (40 de
+  vida, 25 cobre, ~0,6 por punto) servía del nivel 1 al 60. El brebaje de vida (110, 60
+  cobre) lo venden la druida y el mercader del Bosque y el templo de Brasal; el concentrado
+  (250, 125 cobre) solo Brasal: ~0,5 cobre por punto, entre la cataplasma y el maná. Como
+  los de maná, se venden por isla (el Puerto se queda con la cataplasma: un novato no
+  compra una cura del doble de su vida) y nadie los compra de vuelta. En la carrera
+  simulada, quien baja de un tercio de su vida toma el más grande que no se desperdicia.
+  Las carreras que compran brebajes de maná casi nunca llegan ahí: sus curas, alimentadas
+  con brebajes de maná, las mantienen arriba y por menos cobre por punto de vida (la cura
+  del guardián al nivel 20: ~36 de vida por 30 de maná, ~13 cobre en brebajes, ~0,37 por
+  punto). Los brebajes de vida son de quien se cura sin maná: el guardián que no compra
+  brebajes de maná toma el de vida del 12 al 29 y el concentrado desde el 30, y su caza los
+  paga (como mucho 75 % del botín; entre ellos y la comida gasta del 17 al 59 % según la
+  franja). Donde más sirven es en grupos y contra golpes fuertes, cuando una cura por
+  segundo no alcanza, y eso la simulación de duelos no lo mide.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.
@@ -1042,11 +1281,14 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - Al elegir una ruta, el servidor revisa, en este orden, y si algo falla no cambia nada y
   dice por qué: **combate** (`travel.in_combat`), **nivel** mínimo, **quest**
   completada, **item** requerido (o pasaje), **oro** y **llegada libre**.
-- **Regla de combate (decidida):** no se zarpa durante `combat_block_ms` (12 s) desde la
+- **Regla de combate (decidida):** no se zarpa **en combate**, la misma ventana que bloquea
+  el logout ("Bloqueo de logout en combate"): durante `combat_block_ms` (12 s) desde la
   última vez que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño
-  (también de veneno o fuego) o que golpeó a un monstruo.
-  La marca no se guarda: hoy salir y volver a entrar la borra, porque todavía no hay
-  bloqueo de logout en combate. Cuando llegue, cierra también este hueco.
+  (también de veneno o fuego, de un monstruo o de otro jugador) o que le pegó a un monstruo
+  o a un jugador; o mientras dura su bloqueo PvP.
+  La marca no se guarda en la base, pero salir no la borra: en combate no se sale del
+  juego, y quien cierra la conexión queda link-dead y al volver la retoma ("Muerte",
+  "Bloqueo de logout en combate"). La muerte la termina.
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
   cercana a ≤ `arrival_radius` (2) casillas, nunca una casilla de casa (como la llegada por
   un portal; un teleport de diálogo tampoco deja a nadie en una casa). Si no hay ninguna,
@@ -1291,7 +1533,7 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
    al Capítulo 3 (la forja antigua).
 - **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
   pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
-  (16, cuchillos a distancia), espinoso (20, hechizo de tierra, débil al fuego) y reptante
+  (16, cuchillos a distancia), espinoso (20, estallido de espinas alrededor, débil al fuego) y reptante
   hueco (24, cueva, mordida venenosa, ve invisibles). Con el equipo del pueblo un guardián
   pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
 - **Oficios en el Bosque:** el olmo (`elm_tree`) se tala como el abedul y da troncos de
@@ -1335,10 +1577,12 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    (`TestQuestDropForgottenWhenTheWardenGivesUp`).
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
-  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
-  escoria (41, mucha armadura, inmune al fuego) y dragoncillo de ascua (50, cráter,
-  aliento de fuego que deja ardiendo). Jefe: custodio de escoria (44, 2600 de vida, pelea
-  de 30–90 s que pide curarse o ir en grupo). El fuego es la norma: todos resisten fuego y
+  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
+  escoria (41, mucha armadura, inmune al fuego, estalla alrededor) y dragoncillo de ascua (50, cráter,
+  aliento de fuego en un rayo de 4 que deja ardiendo). Jefe: custodio de escoria (44, 1800
+  de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
+  pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
+  es la norma: todos resisten fuego y
   el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,8 h, de
   30 a 40 en ~10,4 h y de 40 a 50 en ~15,2 h (el test pide 0,4–1,2 veces el `pace`).
 - **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale
@@ -1853,7 +2097,10 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
   reseteo de contraseña la cierran igual (el reseteo, por seguridad, siempre), pero el
   personaje queda link-dead hasta que vence el bloqueo; lo que esa conexión haya mandado
   después no se ejecuta. Solo una expulsión o un ban de staff, o un guardado que falló
-  (T5.3), lo sacan en el acto.
+  (T5.3), lo sacan en el acto. Es el mismo mecanismo que el bloqueo de logout de cualquier
+  pelea ("Muerte", "Bloqueo de logout en combate"), con un plazo más largo y su propio
+  mensaje (`pvp.logout_locked`). En la arena no hay bloqueo PvP, pero un golpe sí deja
+  los 12 s de combate de cualquier pelea.
 - **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
   entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
 

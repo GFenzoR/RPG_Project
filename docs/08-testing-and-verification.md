@@ -55,7 +55,13 @@ lugar del canvas: las 33x23 casillas de la ventana del servidor con su margen, a
 la escala que tendría el canvas en la vista ajustada (la misma cuenta de
 `render/zoom.ts`). `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
 desde el build (no levanta servidores) y guarda en
-`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `magnet` (ventanas
+`client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `allwindows` (todas las
+ventanas de la botonera abiertas a la vez: las que tienen otro lugar de fábrica lo toman,
+docs/17 UI-5), `trade` (el intercambio, fuera de las casillas al norte del jugador),
+`chattabs` (la pestaña Local del chat y líneas de otros canales que llegan después, con
+sus puntos de no leído), `tutorialhelp` (el panel del tutorial se oculta con la Ayuda) y
+`tutorialshop` (la tienda de un personaje del tutorial: el diálogo se acorta hasta el pie
+del inventario a 960x700), `windows`, `magnet` (ventanas
 borde con borde, como las deja el imán), `migrated` (un `rpg.windows` guardado con el dock de
 antes: las ventanas acopladas flotan en su lugar de fábrica), `chat` (el chat bajo el mouse,
 ya no translúcido), `server` (el

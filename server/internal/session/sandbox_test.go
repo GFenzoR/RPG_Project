@@ -33,6 +33,7 @@ type sandbox struct {
 	pf        *world.Pathfinder
 	items     content.Items
 	vocations content.Vocations
+	spells    content.Spells
 	transfers []session.Transfer
 	// healers say how each player heals itself in huntPen (nil: it does not).
 	healers map[*session.Player]func()
@@ -98,7 +99,7 @@ func newSandbox(t *testing.T) *sandbox {
 	s.harness = dataHarnessWith(t, func(cfg *session.Config) {
 		cfg.Map, cfg.StartTown = m, "pruebas"
 		cfg.NPCs, cfg.BoatRoutes, cfg.Spells, cfg.Recipes, cfg.Tutorial = npcs, routes, spells, recipes, tutorial
-		s.items, s.vocations = cfg.Items, cfg.Vocations
+		s.items, s.vocations, s.spells = cfg.Items, cfg.Vocations, spells
 		save := cfg.Save
 		cfg.Save = func(sn session.Snapshot) bool {
 			save(sn)
@@ -1595,7 +1596,7 @@ func (s *sandbox) beside(at world.Pos) world.Pos {
 
 // TestSandboxArcRune: the provisioner's arc rune asks for magic level 1, and every
 // character starts at magic level 0, whatever level the instructor gives. A newcomer
-// arcanist cannot use it; trained by the instructor (magic level 25, without a single
+// arcanist cannot use it; trained by the instructor (magic level 30, without a single
 // level of experience) the same arcanist kills a bilge rat with it at once.
 func TestSandboxArcRune(t *testing.T) {
 	s := newSandbox(t)
@@ -1630,18 +1631,18 @@ func TestSandboxArcRune(t *testing.T) {
 		t.Fatalf("the arc rune at magic level 0: %d charges left, %v", charges(), systemKeys(evs))
 	}
 	evs := s.train(cl, p, "combat")
-	if !hasKey(evs, "progress.skill_up") || s.w.Skill(p, "magic").Level != 25 || s.w.Level(p) != 1 {
+	if !hasKey(evs, "progress.skill_up") || s.w.Skill(p, "magic").Level != 30 || s.w.Level(p) != 1 {
 		t.Fatalf("trained: level %d, magic level %d, %v", s.w.Level(p), s.w.Skill(p, "magic").Level, systemKeys(evs))
 	}
 	s.sim.RunFor(2 * time.Second) // the rune's spell group cooldown
 	rat, evs := rune()
 	if hasKey(evs, "magic.magic_level_required") || charges() != 3 {
-		t.Fatalf("the arc rune at magic level 25: %d charges left, %v", charges(), systemKeys(evs))
+		t.Fatalf("the arc rune at magic level 30: %d charges left, %v", charges(), systemKeys(evs))
 	}
 	for _, m := range s.w.Monsters() {
 		if m == rat {
 			hp, _ := rat.Health()
-			t.Fatalf("the arc rune at magic level 25 left the rat at %d health: %v", hp, systemKeys(evs))
+			t.Fatalf("the arc rune at magic level 30 left the rat at %d health: %v", hp, systemKeys(evs))
 		}
 	}
 }
@@ -1839,16 +1840,19 @@ func TestSandboxTraining(t *testing.T) {
 }
 
 // TestSandboxTrainingByVocation: each vocation trains its own combat skills and magic
-// level, and a druid trained at level 8 casts mend_other (magic level 2) on a wounded
-// guardian, which it could not do before.
+// level, the one of its last spell (so every spell can be tried with the free
+// experience), and a druid trained at level 8 casts mend_other (magic level 2) on a
+// wounded guardian, which it could not do before.
 func TestSandboxTrainingByVocation(t *testing.T) {
 	s := newSandbox(t)
 	for i, c := range []struct {
 		vocation string
 		want     map[string]int
 	}{
-		{"ranger", map[string]int{"distance": 45, "sword": 30, "axe": 30, "club": 30, "shield": 35, "magic": 5}},
-		{"arcanist", map[string]int{"magic": 25, "shield": 20, "sword": 10, "distance": 10}},
+		{"guardian", map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 2}},
+		{"ranger", map[string]int{"distance": 45, "sword": 30, "axe": 30, "club": 30, "shield": 35, "magic": 9}},
+		{"arcanist", map[string]int{"magic": 30, "shield": 20, "sword": 10, "distance": 10}},
+		{"druid", map[string]int{"magic": 30, "shield": 20, "sword": 10, "distance": 10}},
 	} {
 		cl, p := s.newcomer(int64(5960+i), fmt.Sprintf("Voc%d", i), c.vocation)
 		s.train(cl, p, "combat")
@@ -1858,6 +1862,11 @@ func TestSandboxTrainingByVocation(t *testing.T) {
 		}
 		if got := s.skillLevels(p, ids...); !maps.Equal(got, c.want) {
 			t.Errorf("%s trained: %v, want %v", c.vocation, got, c.want)
+		}
+		for _, id := range s.spells.IDs() {
+			if sp := s.spells[id]; sp.CastBy(c.vocation) && sp.MagicLevel > c.want["magic"] {
+				t.Errorf("%s trained to magic level %d cannot try %s (magic level %d)", c.vocation, c.want["magic"], id, sp.MagicLevel)
+			}
 		}
 	}
 
@@ -1877,13 +1886,13 @@ func TestSandboxTrainingByVocation(t *testing.T) {
 		t.Fatalf("mend_other at magic level 0: %v", systemKeys(evs))
 	}
 	s.train(dcl, d, "combat")
-	if s.w.Skill(d, "magic").Level != 25 {
+	if s.w.Skill(d, "magic").Level != 30 {
 		t.Fatalf("druid trained to magic level %d", s.w.Skill(d, "magic").Level)
 	}
 	s.walkTo(gcl, g, s.beside(d.Pos()))
 	s.sim.RunFor(2 * time.Second) // the healing group cooldown
 	if evs := mend(); hasKey(evs, "magic.magic_level_required") {
-		t.Fatalf("mend_other at magic level 25: %v", systemKeys(evs))
+		t.Fatalf("mend_other at magic level 30: %v", systemKeys(evs))
 	}
 	if hp, _ := g.Health(); hp <= 20 {
 		t.Fatalf("mend_other left the guardian at %d health", hp)

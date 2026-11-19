@@ -80,9 +80,11 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      mágico: para eso, **"Entréname"**. Nada baja: si ya tienes más, te quedas con lo tuyo,
      y se puede pedir de nuevo después de subir de nivel.
      - **"El combate"** deja las skills de tu vocación como las de quien llegó jugando a
-       los corrales 4 y 5. Guardián: espada, hacha y maza 45, escudo 40 y nivel mágico 2.
-       Montaraz: distancia 45, espada, hacha y maza 30, escudo 35 y nivel mágico 5.
-       Arcanista y druida: nivel mágico 25 y escudo 20.
+       los corrales 4 y 5, y el nivel mágico del último hechizo de tu vocación (con la
+       experiencia gratis se prueban todos, `02-game-design.md` "Hechizos por vocación").
+       Guardián: espada, hacha y maza 45, escudo 40 y nivel mágico 2. Montaraz: distancia
+       45, espada, hacha y maza 30, escudo 35 y nivel mágico 9. Arcanista y druida: nivel
+       mágico 30 y escudo 20.
      - **"Los oficios"**: minería, tala, herrería, cocina y alquimia 25 y pesca 40. Así
        todas las recetas del juego (la más alta pide herrería 22) quedan al alcance.
    - Lo que conviene antes de cada sector: para la caza, experiencia (dos veces "Mucha" para
@@ -90,7 +92,8 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      (nivel mágico 2, druida de nivel 8), "El combate" basta; para el yunque, "Los oficios".
 2. **Tienda (plaza).** Con Tobías Muestra, "Quiero comerciar": herramientas (pico, hacha de
    leñador, caña, martillo, cuerda), galleta, cataplasma de algas, brebajes de maná (el
-   común y el concentrado; "Cúrame" también llena el maná), runa de arco (pide nivel
+   común y el concentrado; "Cúrame" también llena el maná), brebajes de vida (110 y 250,
+   el común y el concentrado), runa de arco (pide nivel
    mágico 1: ver más abajo), el equipo de cada vocación (guardián: hacha de mano o espada
    de hierro desde el nivel 5 y escudos; arcanista: varita de chispa, o de coral desde el
    nivel 6; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
@@ -114,11 +117,23 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      un druida. Un guardián de nivel 21 con espada de hierro, escudo y 20 cataplasmas
      **muere** en el corral 4 con las skills en 10; **entrenado** por la instructora
      (espada 45, escudo 40) mata a un espinoso y sale vivo (`TestSandboxTraining`).
+   - Áreas de monstruos (lote 10, docs/02 "Habilidades"): el espinoso (corral 4) estalla
+     en espinas sobre las 8 casillas que lo rodean, y el dragoncillo (corral 5) escupe
+     fuego en una línea de 4 casillas hacia su objetivo, la más cercana de las 8
+     direcciones: mientras se acerca, a un salto de caballo (2 y 1) el fuego pasa al lado;
+     pegado a él te da siempre. Con dos personajes, el que está en la línea o al lado del
+     otro (el espinoso) también se quema. Las
+     invocaciones y la furia del custodio están en la forja de la Isla Volcánica.
    - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
      (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
    - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
      sendero, pero no más allá de su correa: si te alejas, te sueltan, recuperan toda la
      vida y vuelven caminando a su corral.
+   - **Salir en plena pelea no salva:** "Salir del juego" a menos de 12 s de un golpe
+     (dado o recibido) dice "Estás en combate" y no sale. Cerrar la pestaña en un corral
+     deja al personaje en el mundo, sin conexión y atacable, hasta 12 s después del último
+     golpe; si un monstruo lo mata, muere como siempre. Volver a entrar en ese tiempo lo
+     retoma donde estaba (docs/02 "Bloqueo de logout en combate").
 4. **Recolección y oficios (oeste).** Con el pico, usa una veta (hierro y piedra); con el
    hacha de leñador, un abedul; con la caña, el agua con peces desde el muelle de pesca
    (alcance 3). Usa la fragua (2 minerales + 1 tronco = lingote), el yunque (con el martillo)
@@ -206,7 +221,7 @@ un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
 | `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que en ninguna tienda de `data/` se gane dinero comprando y revendiendo, tampoco pasando por una receta |
 | `TestSandboxPens` | Cada corral con una vocación hasta que deja botín (ver arriba qué hace falta en el 4 y el 5) |
 | `TestSandboxTraining` | El guardián de nivel 21 que muere en el corral 4 con las skills en 10 y sobrevive entrenado por la instructora ("El combate"); el entrenamiento nunca baja una skill |
-| `TestSandboxTrainingByVocation` | Lo que entrena cada vocación; un druida de nivel 8 entrenado lanza "mend_other" (nivel mágico 2), que antes no podía |
+| `TestSandboxTrainingByVocation` | Lo que entrena cada vocación (y que su nivel mágico alcance para todos sus hechizos); un druida de nivel 8 entrenado lanza "mend_other" (nivel mágico 2), que antes no podía |
 | `TestSandboxTradesTraining` | "Los oficios" dejan todas las recetas de `data/recipes.yaml` al alcance |
 | `TestSandboxDevOnlyOffTheSandbox` | Si la instructora no estuviera en una isla de desarrollo, el servidor no le dejaría entrenar ni llenar el maná (`dialog.dev_only`), y la opción no haría nada |
 | `TestSandboxTrades` | Picar, talar y pescar con las herramientas de la tienda; fragua y fogón; ninguna receta del yunque al alcance de un personaje nuevo, y el mismo entrenado en los oficios hace un hacha de leñador en el yunque; vender lo hecho |
@@ -216,7 +231,7 @@ un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
 | `TestSandboxFerry` | Los tres viajes del barquero (y sin pasaje no zarpa); morir afuera devuelve a este templo |
 | `TestSandboxMarket` | Una oferta de venta en el tablero, la compra de otro personaje y el retiro del buzón |
 | `TestSandboxArena` | Dos personajes de nivel 20: fuera de la arena nadie ataca en modo seguro; adentro, el que pierde despierta en el templo sin perder nada y el ganador queda sin marca |
-| `TestSandboxArcRune` | La runa de arco pide nivel mágico 1: una arcanista nueva no la puede usar, y recién entrenada (nivel mágico 25, sin subir de nivel) mata una rata con ella |
+| `TestSandboxArcRune` | La runa de arco pide nivel mágico 1: una arcanista nueva no la puede usar, y recién entrenada (nivel mágico 30, sin subir de nivel) mata una rata con ella |
 | `TestSandboxDialogs` | Toda ventana de los tres NPCs se alcanza y toda opción lleva a algo |
 | `TestSandboxToolsHaveAUse` | Toda herramienta que vende el proveedor tiene en qué usarse en la isla |
 | `TestSandboxEverythingReachable` | Toda casilla caminable se alcanza desde el templo, y todo NPC, veta, árbol, agua con peces, estación y tablero se puede usar desde ahí |

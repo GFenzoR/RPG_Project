@@ -67,7 +67,6 @@ sprites:
   # Creatures
   decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
   decor/stairs_up: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_up.png }
-  decor/creature_remains: { source: vendor/dungeon-crawl/mon/undead/crawling_corpse.png }
 
   # NPCs: Liberated Pixel Cup characters, in `animations` below.
 
@@ -109,6 +108,8 @@ sprites:
   armor/embersteel_sabatons: { source: vendor/dungeon-crawl/UNUSED/armour/boots_iron2.png }
   potions/mana_draught: { source: vendor/dungeon-crawl/item/potion/sky_blue.png }
   potions/concentrated_mana_draught: { source: vendor/dungeon-crawl/item/potion/brilliant_blue.png }
+  potions/health_draught: { source: vendor/dungeon-crawl/item/potion/ruby.png }
+  potions/concentrated_health_draught: { source: vendor/dungeon-crawl/item/potion/puce.png }
 
 # Palettes for `recolor` in animation layers: colours light to dark. A layer's recolor maps a
 # source palette onto a target palette of the same length, colour by colour. The ulpc_* ones
@@ -481,6 +482,7 @@ tiles:
   decor/fountain: { ms: 150, sync: world }
   decor/wall_banner: { ms: 170, sync: tile }
   decor/market_board: { ms: 180, sync: tile }   # engine loop: a note lifts in the wind
+  decor/teleport: { ms: 100, sync: world }      # the swirl turns, sparks rise (6 frames)
   doors/pruebas_gate: { joins_walls: true }
   doors/pruebas_gate_open: { joins_walls: true }
   doors/forge_gate: { joins_walls: true }

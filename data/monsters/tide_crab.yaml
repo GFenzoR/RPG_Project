@@ -17,3 +17,4 @@ loot:
   - { item: crab_claw, chance: 0.2 }
   - { item: copper_coin, chance: 0.5, count: [1, 8] }
 tags: [shore, puerto]
+corpse: remains_chitin

@@ -30,7 +30,8 @@ func (w *World) Blessings(p *Player) int {
 // die is a player's death (docs/02-game-design.md, "Muerte"): items fall into its
 // corpse, it loses experience and skills by the blessings it held (which it loses),
 // and wakes up at its residence temple with full health and mana. The new state is
-// saved at once so a crash cannot undo the death.
+// saved at once so a crash cannot undo the death (deathSave: a link-dead player leaves
+// the world with it).
 func (w *World) die(ctx *game.TickContext, p *Player) { w.dieBy(ctx, p, nil) }
 
 // dieBy is die with the player whose hit killed p (nil for a monster or the world).
@@ -112,10 +113,12 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
-	p.emit(systemMsg(msgDied,
+	died := systemMsg(msgDied,
 		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
-		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}}))
-	w.save(w.snapshot(p, false))
+		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}})
+	p.emit(died)
+	w.diedLinkDeadNotice(p, died)
+	w.deathSave(ctx, p)
 }
 
 // newBackpack puts an empty inventory.start_container in p's backpack slot after a death
@@ -133,11 +136,12 @@ func (w *World) newBackpack(p *Player) {
 	w.equipmentChanged(p)
 }
 
-// wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, and p
-// at its residence temple.
+// wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, its
+// fight over (no logout or sailing block; a PvP lock stays) and p at its residence temple.
 func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player, arena bool) {
 	p.health, p.mana = p.maxHealth, p.maxMana
 	p.target = nil
+	p.fightAt = 0
 	for _, m := range w.monsters {
 		if m.target == p {
 			m.setTarget(nil)
@@ -170,8 +174,12 @@ func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
 	w.refreshSpeed(holder{p: p})
 	w.wakeAtTemple(ctx, p, true)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	p.emit(systemMsg(msgPvPArenaDefeat))
-	w.save(w.snapshot(p, false))
+	defeat := systemMsg(msgPvPArenaDefeat)
+	p.emit(defeat)
+	if _, died := w.diedAway[p.charID]; !died { // a death's notice says more: it stays
+		w.diedLinkDeadNotice(p, defeat)
+	}
+	w.deathSave(ctx, p)
 }
 
 // reserved reports whether it lies in another player's corpse that is still reserved

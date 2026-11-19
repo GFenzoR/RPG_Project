@@ -9,14 +9,17 @@ import {
   dragWindow,
   naturalHeight,
   outsiders,
+  placeOpened,
   placeStyle,
   resizeDrag,
   settleStyle,
   transformScale,
+  unscaledIn,
   watchedRef,
 } from "./window-dom.ts";
 import type {
   AreaWindow,
+  LayerWindow,
   DragElement,
   DragEnv,
   InlineStyle,
@@ -33,19 +36,24 @@ import {
   placeWindow,
   resizeWindow,
 } from "./windows.ts";
-import type { WinKey, WindowPlace, WindowsState } from "./windows.ts";
+import type { AutoPlace, WinKey, WindowPlace, WindowsState } from "./windows.ts";
 
 const STYLE_PROPS = ["left", "top", "right", "bottom", "width", "height", "maxHeight"] as const;
 type StyleProp = (typeof STYLE_PROPS)[number];
 
-/** The style GameWindow renders for the inventory at `place`. */
-function rendered(place: WindowPlace, zoom = 1): Partial<Record<StyleProp, string>> {
+/** The style GameWindow renders for the inventory at `place` (or `auto`, unplaced). */
+function rendered(
+  place: WindowPlace,
+  zoom = 1,
+  auto?: AutoPlace,
+): Partial<Record<StyleProp, string>> {
   const tree = GameWindow({
     t: (key) => key,
     id: "inventory",
     icon: "inventory",
     title: "Inventario",
     place,
+    auto,
     stack: 0,
     zoom,
     onClose: () => {},
@@ -532,5 +540,167 @@ describe("naturalHeight and transformScale", () => {
     );
     expect(transformScale("matrix(0, 0, 0, 0, 0, 0)")).toBe(1);
     expect(transformScale("")).toBe(1);
+  });
+});
+
+describe("a window at the place defaultPlace gave it (auto)", () => {
+  const unplaced: WindowPlace = { open: true, collapsed: false };
+
+  it("is placed by its left and top, not by the right or bottom of its usual place", () => {
+    const moved: AutoPlace = { x: 252, y: 0, width: 352, height: 300 };
+    expect(rendered(unplaced, 1.25, moved)).toEqual({
+      left: "201.6px",
+      top: "0px",
+      right: "auto",
+      bottom: "auto",
+      maxHeight: "calc(100% - 0px)",
+    });
+    // Shortened: no taller than its box, its body scrolls.
+    const short: AutoPlace = { x: 592, y: 320, width: 352, height: 286, short: true };
+    expect(rendered(unplaced, 1, short)).toMatchObject({ top: "320px", maxHeight: "286px" });
+    // Once the player moves it, its own place wins.
+    const placed = { ...unplaced, x: 10, y: 20 };
+    expect(rendered(placed, 1, moved)).toEqual(rendered(placed));
+  });
+
+  it("dropped where the player drags it, nothing of the auto place stays on the element", () => {
+    const moved: AutoPlace = { x: 252, y: 0, width: 352, height: 300 };
+    const dom: InlineStyle = {
+      left: "",
+      top: "",
+      right: "",
+      bottom: "",
+      width: "",
+      height: "",
+      maxHeight: "",
+    };
+    const first = rendered(unplaced, 1, moved);
+    preactRender(dom, {}, first);
+    // The drag ends: settleStyle, then GameWindow renders the player's place.
+    const placed = { ...unplaced, x: 400, y: 50 };
+    settleStyle(dom, placed, 1);
+    preactRender(dom, first, rendered(placed));
+    expect(dom).toMatchObject({ left: "400px", top: "50px", right: "", bottom: "" });
+  });
+});
+
+describe("placing the windows that just opened (placeOpened)", () => {
+  const area: PageBox = { left: 0, top: 0, width: 1280, height: 712 };
+  const el = (
+    id: WinKey,
+    r: { x: number; y: number; width: number; height: number },
+    attrs: { placed?: boolean; closing?: boolean; scale?: number } = {},
+  ): LayerWindow & { scale: number } => ({
+    scale: attrs.scale ?? 1,
+    dataset: { window: id },
+    hasAttribute: (name) =>
+      (name === "data-placed" && attrs.placed === true) ||
+      (name === "data-closing" && attrs.closing === true),
+    style: { left: "", top: "", right: "", bottom: "", maxHeight: "" },
+    getBoundingClientRect() {
+      const k = attrs.scale ?? 1;
+      return {
+        left: area.left + r.x + (r.width * (1 - k)) / 2,
+        top: area.top + r.y + (r.height * (1 - k)) / 2,
+        width: r.width * k,
+        height: r.height * k,
+      };
+    },
+  });
+  const scaleOf = (w: { scale: number }): number => w.scale;
+  const battle = el("battle", { x: 0, y: 0, width: 256, height: 352 });
+  const inventory = el("inventory", { x: 1024, y: 0, width: 256, height: 500 });
+  // The player's tile on the page: the map's centre at 2x (Game.selfTile), 640 - 32.
+  const player: PageBox = { left: 608, top: 324, width: 64, height: 64 };
+
+  it("moves the trade that opened over the tiles north of the player, measured unscaled", () => {
+    // Opening, it is drawn at 96 % around its centre (gwin-in).
+    const trade = el("trade", { x: 464, y: 0, width: 352, height: 300 }, { scale: 0.96 });
+    const at = placeOpened(area, [battle, inventory, trade], new Set(["trade"]), player, scaleOf);
+    // Flush between the battle list and the player's column, covering neither.
+    expect(at.get("trade")).toEqual({ x: 608 - 352, y: 0, width: 352, height: 300 });
+  });
+
+  it("leaves alone a window the player placed, and does not count one fading out", () => {
+    const trade = el("trade", { x: 464, y: 0, width: 352, height: 300 }, { placed: true });
+    expect(placeOpened(area, [trade], new Set(["trade"]), player, scaleOf).size).toBe(0);
+    // The help fading out at the top centre is no obstacle: the trade stays at its place.
+    const help = el("help", { x: 440, y: 0, width: 400, height: 200 }, { closing: true });
+    const free = el("trade", { x: 464, y: 0, width: 352, height: 300 });
+    expect(placeOpened(area, [help, free], new Set(["trade"]), undefined, scaleOf).size).toBe(0);
+  });
+
+  it("lets a window decided first count at its new place for the next", () => {
+    // The trade moves left of the player's column; the skills, opened with it under the
+    // battle list over the chat, then do not go beside the battle list where it went.
+    const trade = el("trade", { x: 464, y: 0, width: 352, height: 300 });
+    const chat = el("chat", { x: 144, y: 512, width: 384, height: 200 });
+    const skills = el("skills", { x: 0, y: 356, width: 256, height: 330 });
+    const at = placeOpened(
+      area,
+      [battle, inventory, chat, trade, skills],
+      new Set(["trade", "skills"]),
+      player,
+      scaleOf,
+    );
+    const trade2 = at.get("trade");
+    const skills2 = at.get("skills");
+    if (!trade2 || !skills2) throw new Error("both move");
+    expect(trade2.x).toBe(256);
+    expect(skills2.x === 256 && skills2.y === 0).toBe(false);
+  });
+
+  it("looks at the dialog again at the pair's place when the shop comes beside it", () => {
+    // 960x700: the windows' area is 960x612, the equipment's column on the right.
+    const app: PageBox = { left: 0, top: 0, width: 960, height: 612 };
+    const column = el("inventory", { x: 704, y: 0, width: 256, height: 316 });
+    // The dialog's usual place (windows.css): alone, 760 px wide at the bottom centre;
+    // beside the shop (.game-body[data-shop]), 352 px right of it. Its width is the
+    // stylesheet's; an inline left and top (auto) and max-height beat the place's.
+    let usual = { x: 100, y: 306, width: 760, height: 300 };
+    const style = { left: "", top: "", right: "", bottom: "", maxHeight: "" };
+    const dialog: LayerWindow & { scale: number } = {
+      scale: 1,
+      dataset: { window: "dialog" },
+      hasAttribute: () => false,
+      style,
+      getBoundingClientRect() {
+        const x = style.left === "" ? usual.x : parseFloat(style.left);
+        const y = style.top === "" ? usual.y : parseFloat(style.top);
+        const most = /^([\d.]+)px$/.exec(style.maxHeight);
+        const height = most ? Math.min(usual.height, Number(most[1])) : usual.height;
+        return { left: x, top: y, width: usual.width, height };
+      },
+    };
+    // Alone, it reaches the column's foot: shortened under it.
+    const alone = placeOpened(app, [column, dialog], new Set(["dialog"]), undefined, scaleOf);
+    const first = alone.get("dialog");
+    expect(first).toEqual({ x: 100, y: 320, width: 760, height: 286, short: true });
+    if (!first) throw new Error("it moves");
+    Object.assign(style, placeStyle({ open: true, collapsed: false }, 1, first));
+    // "I want to trade": the shop opens left of it and the stylesheet moves its usual
+    // place to the pair's. Looked at again (toLookAt), it is measured there, not at the
+    // left its place alone left on it, and shortened under the column there.
+    usual = { x: 592, y: 306, width: 352, height: 300 };
+    const shop = el("shop", { x: 8, y: 166, width: 576, height: 440 });
+    const pair = placeOpened(app, [column, shop, dialog], new Set(["dialog"]), undefined, scaleOf);
+    expect(pair.get("dialog")).toEqual({ x: 592, y: 320, width: 352, height: 286, short: true });
+    // The lengths of its old place are back on it until the next render writes the new.
+    expect(style).toEqual({
+      left: "100px",
+      top: "320px",
+      right: "auto",
+      bottom: "auto",
+      maxHeight: "286px",
+    });
+  });
+
+  it("unscales a box around its centre", () => {
+    expect(unscaledIn({ left: 10, top: 20, width: 96, height: 48 }, 0.96, area)).toEqual({
+      x: 8,
+      y: 19,
+      width: 100,
+      height: 50,
+    });
   });
 });

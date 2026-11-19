@@ -176,8 +176,10 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   item, no qué son: `NewMap` no puede comprobarlo, y lo hace `session` con el contenido
   cargado; avisa en vez de no arrancar porque un portal sin su item funciona igual, solo
   se ve como suelo, y los mapas de los tests de `session` ponen portales en casillas sin
-  nada). `add_portal` no coloca el item: va aparte, con `place`/`place_item`. El atlas no
-  anima items: el teletransporte es estático.
+  nada). `add_portal` no coloca el item: va aparte, con `place`/`place_item`. El
+  teletransporte está animado como cualquier item con frames (6 de 100 ms, `sync: world`,
+  `decor/teleport` en `assets/sprites.yaml` `tiles`; docs/17 ART-7): el mapa solo guarda
+  el item, el atlas y el renderer hacen el resto.
 - Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí,
   ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío) y ni el
   templo ni la salida de una casa (el último recurso de despertar y de salir de una casa

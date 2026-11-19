@@ -19,3 +19,4 @@ loot:
   - { item: copper_coin, chance: 0.6, count: [2, 12] }
 tags: [vermin, forest, puerto]
 notes: Spits sap (earth) at range; the sap often poisons (T3.2).
+corpse: remains_chitin

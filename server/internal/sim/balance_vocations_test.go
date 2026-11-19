@@ -3,7 +3,8 @@ package sim_test
 // Balance check for the arcanist, the druid and the ranger (content audit M2-M5): the
 // guardian sims (balance_test.go, balance_bosque_test.go, balance_volcan_test.go) duel
 // with melee only; these play a whole career, level 1 to 50, with each vocation's own
-// weapons, spells and a real mana budget.
+// weapons, spells and a real mana budget. The guardian plays one too, with its melee kit
+// and, since the spell progression (2026-11), its own heal and strikes: the yardstick.
 //
 // Each hunt is a Monte Carlo series of duels with the real formulas against one monster
 // of the islands' bestiary (the target levels of the guardian sims), with the kit the
@@ -11,8 +12,10 @@ package sim_test
 //   - shoots its weapon every attack round: a wand or staff (combat.WandHit) or a bow or
 //     crossbow with its ammo (melee formula with the distance skill);
 //   - casts its best attack spell whenever the attack group is ready and the mana allows;
-//   - casts its best self-heal under half health (the healing group is apart), and drinks
-//     a seaweed poultice under a third when it cannot;
+//   - casts its best self-heal under half health (the healing group is apart), and under a
+//     third, when it cannot, drinks the biggest health potion the shops of its level sell
+//     that the wound takes whole (the seaweed poultice; the health draught from the Bosque,
+//     level 12; the concentrated one from Brasal, level 30);
 //   - regenerates as its vocation, with the server's integer formula and the bonus of
 //     balance.yaml well_fed (content.Regen.Tick): every hunter eats ship's biscuit, and
 //     pays for it, the whole hunt; and drinks mana draughts with the consumable cooldown.
@@ -23,14 +26,18 @@ package sim_test
 //   - budget: draughts for attack spells too, while they cost at most budgetShare of what
 //     the hunt has earned so far;
 //   - full: draughts keep the attack spells going.
-// What the food, draughts, poultices and ammo cost must stay well under what the hunt
+// A fourth one, dry (no mana draught at all), plays a second guardian career: the one
+// that buys none must still reach its spells' magic levels, and it is the one that
+// drinks the health draughts (the others' heal spells, fed by draughts, cost less).
+// What the food, draughts, potions and ammo cost must stay well under what the hunt
 // earns (coins plus a third of the items' value, what NPCs pay).
 //
 // The career picks, at each level, the monster and habit with the most XP per hour that
 // a hunter can afford and survive, and adds the mana it spent to its magic level
 // (skills.base.magic: tries = mana spent). So the magic level of each level comes from
 // what the hunting really spends, not from a guess. Weapon skills follow the guardian
-// sims' rule (skillStart + skillPerLevel × (level − 1)).
+// sims' rule (skillStart + skillPerLevel × (level − 1)); a `skill: weapon` spell (the
+// guardian's strikes) scales with that skill, the one of the weapon the hunter holds.
 //
 // DEBUG_BALANCE=1 prints each career, level by level.
 
@@ -52,9 +59,9 @@ const (
 	careerFights   = 400   // duels per hunt
 	careerTo       = 50    // the career ends at this level
 	maxDeaths      = 0.003 // a hunt that kills the hunter more often is skipped
-	maxSpendShare  = 0.75  // draughts, poultices and ammo: at most this share of the loot
+	maxSpendShare  = 0.75  // draughts, potions and ammo: at most this share of the loot
 	healBelowPct   = 50    // a self-heal under this % of health...
-	potionBelowPct = 33    // ...and a poultice under this one
+	potionBelowPct = 33    // ...and a health potion under this one
 	npcBuyShare    = 1.0 / 3
 )
 
@@ -138,9 +145,16 @@ const (
 	frugal habit = iota
 	budget
 	full
+	// dry: no mana draught at all, not even for a heal (frugal drinks for one), only
+	// regeneration and food: the guardian that buys none, whose magic level must still
+	// reach its spells (review of the spell progression, 2026-11).
+	dry
 )
 
-func (h habit) String() string { return [...]string{"frugal", "budget", "full"}[h] }
+// draughtHabits are the habits a career picks from by default.
+var draughtHabits = []habit{frugal, budget, full}
+
+func (h habit) String() string { return [...]string{"frugal", "budget", "full", "dry"}[h] }
 
 // budgetShare is what a hunter of the budget habit spends on draughts, at most, out of
 // what the hunt has earned so far.
@@ -157,8 +171,8 @@ type hunter struct {
 	conjure             *content.Spell // conjures the ammo (the ranger's arrows)
 	regenPct            int            // extra regeneration while fed (balance.yaml well_fed)
 	draught             *content.Item
-	poultice            *content.Item
-	food                *content.Item // eaten all along: what keeps well_fed going
+	potions             []*content.Item // health potions the shops of its level sell, biggest first
+	food                *content.Item   // eaten all along: what keeps well_fed going
 }
 
 func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunterKit) *hunter {
@@ -196,9 +210,28 @@ func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunte
 	if level >= 30 { // Brasal sells the concentrated one: a hunter there carries it
 		h.draught = d.item(t, "concentrated_mana_draught")
 	}
-	h.poultice = d.item(t, "seaweed_poultice")
+	// Health potions by island, like the mana draughts: the Bosque sells the health
+	// draught (its hunts start at level 11-12), Brasal also the concentrated one.
+	if level >= 30 {
+		h.potions = append(h.potions, d.item(t, "concentrated_health_draught"))
+	}
+	if level >= 12 {
+		h.potions = append(h.potions, d.item(t, "health_draught"))
+	}
+	h.potions = append(h.potions, d.item(t, "seaweed_poultice"))
 	h.food = d.item(t, "ship_biscuit") // the cheapest food per minute, sold in Puerto
 	return h
+}
+
+// potion is the health potion h drinks with missing health: the biggest that heals no
+// more than that (nothing wasted, as a player would pick), or the smallest.
+func (h *hunter) potion(missing float64) *content.Item {
+	for _, p := range h.potions {
+		if float64(p.Consumable.HealHP) <= missing {
+			return p
+		}
+	}
+	return h.potions[len(h.potions)-1]
 }
 
 // fedCondition is the condition food gives (content audit m2).
@@ -227,12 +260,14 @@ type hunt struct {
 	damagePct     float64 // health lost per fight, % of max
 	deaths        float64 // per fight
 	manaPerKill   float64 // spent on spells (magic level tries)
-	spendPerKill  float64 // copper: draughts, poultices and ammo
+	spendPerKill  float64 // copper: draughts, potions and ammo
 	lootPerKill   float64 // copper: coins plus a third of the items' value
-	draughts      float64 // per kill: mana draughts, poultices and ammo bought
-	poultices     float64
+	draughts      float64 // per kill: mana draughts, health potions and ammo bought
+	potions       float64
 	ammoBought    float64
 	xpPerHour     float64
+	casts         map[string]float64 // per kill, by spell id
+	potionsBy     map[string]float64 // health potions drunk per kill, by item id
 }
 
 func (u hunt) affordable() bool {
@@ -246,7 +281,6 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	balanced := c.Modes["balanced"]
 	stats := h.voc.AtLevel(h.level)
 	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
-	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
 	player := combat.PlayerTarget{Armor: h.armor, Defense: h.shield + h.weapon.Weapon.Defense, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
 	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
@@ -271,7 +305,8 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	hp, mp := maxHP, maxMP
 	var mana, spend, loot, damage, deaths float64
 	stock := 0 // conjured ammo left
-	var nDraught, nPoultice, nAmmo float64
+	var nDraught, nPotion, nAmmo float64
+	casts, potionsBy := map[string]float64{}, map[string]float64{}
 	perKill := h.d.huntLoot(m)
 	// mayDrink: a draught for an attack spell (or to refill between fights) fits the habit.
 	mayDrink := func() bool {
@@ -284,21 +319,18 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		return false
 	}
 	totalMs := 0
-	next := make([]int, len(m.Attacks))
+	f := newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
 	ready := map[string]int{}
 	for range careerFights {
-		mhp := m.Health
+		f.start(0)
 		now, nextShot, nextAttackGroup, nextHealGroup, nextUse := 0, 0, 0, 0, 0
 		nextRegen := regen.IntervalMs
-		for i, a := range m.Attacks {
-			next[i] = a.IntervalMs
-		}
 		for k := range ready {
 			ready[k] = 0
 		}
 		lost := 0.0
-		drink := func() bool { // a mana draught, if the consumable cooldown allows
-			if now < nextUse || mp >= maxMP {
+		drink := func() bool { // a mana draught, if the habit and the consumable cooldown allow
+			if hb == dry || now < nextUse || mp >= maxMP {
 				return false
 			}
 			nextUse = now + useMs
@@ -307,7 +339,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 			nDraught++
 			return true
 		}
-		for mhp > 0 && now < maxFightMs {
+		for f.alive() && now < maxFightMs {
 			// Heal first: the healing group is apart from the attack group.
 			if hp < maxHP*healBelowPct/100 {
 				healed := false
@@ -324,6 +356,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						}
 						mp -= float64(s.Mana)
 						mana += float64(s.Mana)
+						casts[s.ID]++
 						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, h.magic, h.skill)))
 						ready[s.ID] = now + s.CooldownMs
 						nextHealGroup = now + s.GroupCooldownMs
@@ -332,10 +365,12 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 					}
 				}
 				if !healed && hp < maxHP*potionBelowPct/100 && now >= nextUse {
+					p := h.potion(maxHP - hp)
 					nextUse = now + useMs
-					hp = math.Min(maxHP, hp+float64(h.poultice.Consumable.HealHP))
-					spend += float64(h.poultice.Value)
-					nPoultice++
+					hp = math.Min(maxHP, hp+float64(p.Consumable.HealHP))
+					spend += float64(p.Value)
+					nPotion++
+					potionsBy[p.ID]++
 				}
 			}
 			if now >= nextShot {
@@ -343,10 +378,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				w := h.weapon.Weapon
 				switch {
 				case w.Type == "wand":
-					mhp -= combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), m.Resistances[w.Element])
+					f.hit(now, combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
 				case h.ammo != nil: // a bow or crossbow and its ammo
 					maxHit := combat.MaxHit(c, h.skill, w.Attack+h.ammo.Ammo.Attack, h.level, balanced.Attack)
-					mhp -= combat.HitMonster(r, maxHit, target)
+					f.hit(now, combat.HitMonster(r, maxHit, f.target()))
 					if stock > 0 {
 						stock--
 					} else {
@@ -354,10 +389,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						nAmmo++
 					}
 				default: // melee: the guardian's reference career
-					mhp -= combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), target)
+					f.hit(now, combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), f.target()))
 				}
 			}
-			if now >= nextAttackGroup && mhp > 0 {
+			if now >= nextAttackGroup && f.alive() {
 				for _, s := range attacks {
 					if now < ready[s.ID] {
 						continue
@@ -377,14 +412,15 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 					}
 					mp -= float64(s.Mana)
 					mana += float64(s.Mana)
+					casts[s.ID]++
 					d := s.Effect.Damage
-					mhp -= combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), m.Resistances[d.Element])
+					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), f.cur().Resistances[d.Element]))
 					ready[s.ID] = now + s.CooldownMs
 					nextAttackGroup = now + s.GroupCooldownMs
 					break
 				}
 			}
-			if mhp <= 0 {
+			if !f.alive() {
 				break
 			}
 			// The next event: a shot, a spell, a heal, a draught, a monster attack or regen.
@@ -393,27 +429,16 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				step = min(step, nextAttackGroup)
 			}
 			step = min(step, max(nextHealGroup, now+50), max(nextUse, now+50))
-			for _, n := range next {
-				step = min(step, n)
-			}
+			step = min(step, f.nextAt())
 			now = max(step, now+50)
 			for now >= nextRegen {
 				hp = math.Min(maxHP, hp+regenHP)
 				mp = math.Min(maxMP, mp+regenMP)
 				nextRegen += regen.IntervalMs
 			}
-			for i, a := range m.Attacks {
-				if now < next[i] {
-					continue
-				}
-				next[i] += a.IntervalMs
-				if a.Chance > 0 && r.Float64() >= a.Chance {
-					continue
-				}
-				dmg := float64(combat.HitPlayer(r, c, a.Min, a.Max, a.Element == "" || a.Element == "physical", player))
-				hp -= dmg
-				lost += dmg
-			}
+			dmg := float64(f.act(now, player))
+			hp -= dmg
+			lost += dmg
 			if hp <= 0 {
 				deaths++
 				hp, mp = maxHP, maxMP
@@ -448,6 +473,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		for hp < maxHP*0.7 && len(heals) > 0 && mp >= float64(heals[0].Mana) { // patch up
 			mp -= float64(heals[0].Mana)
 			mana += float64(heals[0].Mana)
+			casts[heals[0].ID]++
 			hp = math.Min(maxHP, hp+h.amount(heals[0].Effect.Heal.Scaling))
 		}
 	}
@@ -461,8 +487,16 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		spendPerKill:  spend / n,
 		lootPerKill:   loot / n,
 		draughts:      nDraught / n,
-		poultices:     nPoultice / n,
+		potions:       nPotion / n,
 		ammoBought:    nAmmo / n,
+		casts:         casts,
+		potionsBy:     potionsBy,
+	}
+	for id := range u.casts {
+		u.casts[id] /= n
+	}
+	for id := range u.potionsBy {
+		u.potionsBy[id] /= n
 	}
 	u.xpPerHour = float64(m.Experience) * 3600 / u.secondsPerKil
 	return u
@@ -547,13 +581,26 @@ func (c career) String() string {
 			c.voc, l.level, l.magic, l.best.monster, l.best.habit, l.best.secondsPerKil, l.best.damagePct,
 			l.best.xpPerHour, l.best.manaPerKill, l.best.spendPerKill, l.best.lootPerKill, l.hours,
 			map[bool]string{true: "", false: "  (unaffordable)"}[l.affordable])
+		ids := make([]string, 0, len(l.best.casts))
+		for id := range l.best.casts {
+			ids = append(ids, id)
+		}
+		slices.Sort(ids)
+		for _, id := range ids {
+			fmt.Fprintf(&b, "    %s %.2f/kill", id, l.best.casts[id])
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
 }
 
-// runCareer plays voc from level 1 to careerTo with the kit of kitAt.
-func (d *balanceData) runCareer(t *testing.T, voc string, kitAt func(int) hunterKit) career {
+// runCareer plays voc from level 1 to careerTo with the kit of kitAt, picking at each
+// level among the habits given (draughtHabits when none is).
+func (d *balanceData) runCareer(t *testing.T, voc string, kitAt func(int) hunterKit, habits ...habit) career {
 	t.Helper()
+	if len(habits) == 0 {
+		habits = draughtHabits
+	}
 	cv := d.balance.Experience
 	magic := d.balance.Skills.Base["magic"]
 	factor := d.vocations[voc].SkillFactor("magic")
@@ -572,7 +619,7 @@ func (d *balanceData) runCareer(t *testing.T, voc string, kitAt func(int) hunter
 			if targets[id] > level || targets[id] < level-15 {
 				continue
 			}
-			for _, hb := range []habit{frugal, budget, full} {
+			for _, hb := range habits {
 				u := h.hunt(d.monsters[id], hb, uint64(len(id)))
 				if u.affordable() && u.xpPerHour > best.xpPerHour {
 					best = u
@@ -603,10 +650,14 @@ func (d *balanceData) runCareer(t *testing.T, voc string, kitAt func(int) hunter
 func TestVocationCareers(t *testing.T) {
 	d := loadData(t)
 	// The guardian's career is the yardstick: the same harness with its melee kit.
-	guardian := d.runCareer(t, "guardian", func(level int) hunterKit {
+	guardianKit := func(level int) hunterKit {
 		k := volcanKit(level)
 		return hunterKit{weapon: k.weapon, armor: k.armor, shield: k.shield}
-	})
+	}
+	guardian := d.runCareer(t, "guardian", guardianKit)
+	// The same guardian buying no mana draught, not even for a heal: the magic level of its
+	// spells must not be a toll in gold (review of the spell progression, 2026-11).
+	dryGuardian := d.runCareer(t, "guardian", guardianKit, dry)
 	careers := map[string]career{
 		"arcanist": d.runCareer(t, "arcanist", func(l int) hunterKit { return casterKit("arcanist", l) }),
 		"druid":    d.runCareer(t, "druid", func(l int) hunterKit { return casterKit("druid", l) }),
@@ -614,6 +665,8 @@ func TestVocationCareers(t *testing.T) {
 	}
 	bowRanger := d.runCareer(t, "ranger", bowKit)
 	vocs := []string{"arcanist", "druid", "ranger"}
+	all := append([]string{"guardian"}, vocs...) // the checks of every career, the yardstick's too
+	careers["guardian"] = guardian
 	bands := [][2]int{{1, 8}, {8, 15}, {15, 20}, {20, 25}, {25, 30}, {30, 40}, {40, 50}}
 	if os.Getenv("DEBUG_BALANCE") != "" {
 		for _, b := range bands {
@@ -623,10 +676,23 @@ func TestVocationCareers(t *testing.T) {
 			}
 			t.Log(line + fmt.Sprintf("  bow ranger %6.2f h", bowRanger.hoursTo(b[0], b[1])))
 		}
-		for _, v := range vocs {
-			t.Logf("%s magic level: 8 -> %d, 20 -> %d, 30 -> %d, 40 -> %d, 49 -> %d", v,
-				careers[v].magicAt(8), careers[v].magicAt(20), careers[v].magicAt(30), careers[v].magicAt(40), careers[v].magicAt(49))
+		line := "guardian spend:"
+		dryLine := "guardian without mana draughts:"
+		for _, b := range bands {
+			line += fmt.Sprintf("  %d-%d %3.0f%%", b[0], b[1], 100*guardian.spendShare(b[0], b[1]))
+			dryLine += fmt.Sprintf("  %d-%d %5.2f h (%3.0f%%)", b[0], b[1], dryGuardian.hoursTo(b[0], b[1]), 100*dryGuardian.spendShare(b[0], b[1]))
 		}
+		t.Log(line)
+		t.Log(dryLine)
+		magicLine := func(name string, c career) {
+			t.Logf("%s magic level: 8 -> %d, 20 -> %d, 30 -> %d, 40 -> %d, 49 -> %d", name,
+				c.magicAt(8), c.magicAt(20), c.magicAt(30), c.magicAt(40), c.magicAt(49))
+		}
+		for _, v := range all {
+			magicLine(v, careers[v])
+		}
+		magicLine("guardian without mana draughts", dryGuardian)
+		t.Logf("whole career: guardian %.1f h, without mana draughts %.1f h", guardian.hoursTo(1, careerTo), dryGuardian.hoursTo(1, careerTo))
 	}
 
 	t.Run("pace near the guardian's", func(t *testing.T) {
@@ -643,7 +709,7 @@ func TestVocationCareers(t *testing.T) {
 	})
 
 	t.Run("hunting pays for its draughts and ammo", func(t *testing.T) {
-		for _, v := range vocs {
+		for _, v := range all {
 			for _, l := range careers[v].levels {
 				// Levels 1-2: a ranger buys its first arrows (conjure_arrows is level 3).
 				if !l.affordable && l.level >= 3 {
@@ -661,11 +727,12 @@ func TestVocationCareers(t *testing.T) {
 
 	t.Run("magic level from the mana really spent", func(t *testing.T) {
 		want := map[string][4]int{ // magic level at 30 and at 49: [min30, max30, min49, max49]
+			"guardian": {2, 7, 3, 9},
 			"arcanist": {17, 26, 28, 42},
 			"druid":    {17, 26, 28, 42},
 			"ranger":   {4, 14, 7, 20},
 		}
-		for _, v := range vocs {
+		for _, v := range all {
 			w, c := want[v], careers[v]
 			if m := c.magicAt(30); m < w[0] || m > w[1] {
 				t.Errorf("%s: magic level %d at level 30 (want %d-%d)", v, m, w[0], w[1])
@@ -673,16 +740,132 @@ func TestVocationCareers(t *testing.T) {
 			if m := c.magicAt(49); m < w[2] || m > w[3] {
 				t.Errorf("%s: magic level %d at level 49 (want %d-%d)", v, m, w[2], w[3])
 			}
-			// Every spell's magic level is there within a few levels of its level.
+			// Every spell's magic level is there within a few levels of its level (by the
+			// career's last level for the spells of its last levels).
 			for _, id := range d.spells.IDs() {
 				s := d.spells[id]
-				if !s.CastBy(v) || s.MagicLevel == 0 || s.Level+4 >= careerTo {
+				if !s.CastBy(v) || s.MagicLevel == 0 {
 					continue
 				}
-				if m := c.magicAt(s.Level + 4); m < s.MagicLevel {
+				at := min(s.Level+4, careerTo-1)
+				if m := c.magicAt(at); m < s.MagicLevel {
 					t.Errorf("%s: %s needs magic level %d at level %d, the career has %d at level %d",
-						v, id, s.MagicLevel, s.Level, m, s.Level+4)
+						v, id, s.MagicLevel, s.Level, m, at)
 				}
+			}
+		}
+	})
+
+	t.Run("the guardian reaches its spells without mana draughts", func(t *testing.T) {
+		// Review of the spell progression (2026-11): the guardian regenerates ~1 mana per
+		// 7 s and trains magic slowly, so a magic level its regeneration never reaches made
+		// its strikes a toll of hundreds of draughts. With regeneration and food alone it
+		// has each spell's magic level within a few levels of the spell's level.
+		for _, id := range d.spells.IDs() {
+			s := d.spells[id]
+			if !s.CastBy("guardian") || s.MagicLevel == 0 {
+				continue
+			}
+			at := min(s.Level+4, careerTo-1)
+			if m := dryGuardian.magicAt(at); m < s.MagicLevel {
+				t.Errorf("%s needs magic level %d at level %d; without mana draughts the guardian has %d at level %d",
+					id, s.MagicLevel, s.Level, m, at)
+			}
+		}
+	})
+
+	t.Run("every spell is affordable at its level and cast", func(t *testing.T) {
+		// Spell progression (2026-11): the vocations keep learning up to level ~50.
+		for _, v := range all {
+			voc := d.vocations[v]
+			single := false // v has a single-target attack spell
+			for _, s := range d.spells {
+				single = single || s.CastBy(v) && s.Effect.Damage != nil && s.Effect.Damage.Range > 0
+			}
+			for _, id := range d.spells.IDs() {
+				s := d.spells[id]
+				e := s.Effect
+				if !s.CastBy(v) || e.Damage == nil && e.Heal == nil {
+					continue
+				}
+				if s.Level >= careerTo {
+					t.Errorf("%s: %s is level %d, past the career (%d): nothing checks it", v, id, s.Level, careerTo)
+					continue
+				}
+				// A full pool at its level pays for two casts.
+				if pool := voc.AtLevel(s.Level).Mana; 2*s.Mana > pool {
+					t.Errorf("%s: %s costs %d mana, more than half of the %d of level %d", v, id, s.Mana, pool, s.Level)
+				}
+				// The hunts of its first levels cast it: every self-heal (under half health),
+				// every single-target attack and, for a vocation without those (the guardian),
+				// its areas. The casters' areas may wait for packs: in a duel an area hits
+				// one monster and a cheaper bolt does as much.
+				if e.Heal != nil && e.Heal.Range > 0 || e.Damage != nil && e.Damage.Radius > 0 && single {
+					continue
+				}
+				casts := 0.0
+				for _, l := range careers[v].levels {
+					if l.level >= s.Level && l.level <= s.Level+4 {
+						casts += l.best.casts[id]
+					}
+				}
+				if casts == 0 {
+					t.Errorf("%s: no hunt of levels %d-%d casts %s", v, s.Level, min(s.Level+4, careerTo-1), id)
+				}
+			}
+		}
+	})
+
+	t.Run("the health draughts serve past the poultice", func(t *testing.T) {
+		// Spell progression (2026-11): a guardian of level 45 has ~760 health and the 40 of
+		// the poultice no longer keeps up. From the Bosque on, a hunter under a third of its
+		// health drinks a health draught...
+		for _, v := range all {
+			for _, level := range []int{20, 40} {
+				h := d.hunter(t, v, level, careers[v].magicAt(level), hunterKit{weapon: "iron_sword"})
+				hp := float64(h.voc.AtLevel(level).Health)
+				if p := h.potion(hp * (100 - potionBelowPct) / 100); p.ID == "seaweed_poultice" {
+					t.Errorf("%s level %d (%.0f health): drinks a %s", v, level, hp, p.ID)
+				}
+			}
+		}
+		// ...but the careers with mana draughts never get there in their duels: their heal
+		// spells, fed by draughts, keep them over a third, and for less per point of health.
+		// The draughts serve whoever heals without mana: the guardian that buys none drinks
+		// each one where it is sold (potionsBy counts them by item), and its hunts pay for it.
+		for _, p := range []struct {
+			id   string
+			from int // the level from which its shops are the hunter's
+		}{{"health_draught", 12}, {"concentrated_health_draught", 30}} {
+			drunk := 0.0
+			for _, l := range dryGuardian.levels {
+				if l.level >= p.from {
+					drunk += l.best.potionsBy[p.id]
+				}
+			}
+			if drunk == 0 {
+				t.Errorf("the guardian without mana draughts drinks no %s from level %d", p.id, p.from)
+			}
+		}
+		for _, l := range dryGuardian.levels {
+			if !l.affordable && l.level >= 12 { // where it drinks them (level 1: food over a rat's loot)
+				t.Errorf("the guardian without mana draughts, level %d: no hunt pays for itself (best %s: spend %.1f, loot %.1f per kill)",
+					l.level, l.best.monster, l.best.spendPerKill, l.best.lootPerKill)
+			}
+		}
+		for _, b := range bands[2:] {
+			if s := dryGuardian.spendShare(b[0], b[1]); s > maxSpendShare {
+				t.Errorf("the guardian without mana draughts, levels %d-%d: spends %.0f %% of the loot (want <= %.0f %%)",
+					b[0], b[1], 100*s, 100*maxSpendShare)
+			}
+		}
+		// About 0.5 copper per point: under the poultice's, over the mana draughts' 0.4.
+		poultice := d.item(t, "seaweed_poultice")
+		limit := float64(poultice.Value) / float64(poultice.Consumable.HealHP)
+		for _, id := range []string{"health_draught", "concentrated_health_draught"} {
+			it := d.item(t, id)
+			if per := float64(it.Value) / float64(it.Consumable.HealHP); per >= limit || per < 0.4 {
+				t.Errorf("%s: %.2f copper per point of health (want 0.40 to %.2f, the poultice's)", id, per, limit)
 			}
 		}
 	})

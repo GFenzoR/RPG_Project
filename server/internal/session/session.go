@@ -32,9 +32,10 @@ type Client interface {
 	Send(b *pb.ServerBatch) bool
 	// Close ends the connection after the batches already sent, followed by a
 	// Disconnect with reason (none if reason is UNSPECIFIED). It is called at most once
-	// per player: after the player left the world or, for a player under its PvP lock that
-	// stays in the world link-dead (T5.2: a slow client, a password reset), when the loop
-	// ends its connection. Commands from that connection are ignored from then on.
+	// per player: after the player left the world or, for a player in combat (inCombat: a
+	// fight with a monster or a player, or its PvP lock) that stays in the world link-dead
+	// (linkdead.go: a slow client, a password reset), when the loop ends its connection.
+	// Commands from that connection are ignored from then on.
 	Close(reason pb.DisconnectReason)
 }
 
@@ -225,6 +226,9 @@ type World struct {
 	publishedRetry atomic.Int32
 	// slow collects players whose Send failed during flush.
 	slow []*Player
+	// diedAway: the death.died message of a character that died link-dead, by character,
+	// for its next login (linkdead.go diedLinkDeadNotice; until a restart).
+	diedAway map[int64]*pb.ServerMessage
 
 	pf         *world.Pathfinder
 	pathBudget int
@@ -247,6 +251,10 @@ type World struct {
 	active     map[uint64]struct{}
 	activeKeys []uint64
 	thinkBuf   []*Monster
+	// areaTiles and areaHit hold the tiles and the players of a monster's area attack
+	// while it lands (monsterArea).
+	areaTiles []world.Pos
+	areaHit   []*Player
 	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
 	tileBuf    []int32
@@ -357,7 +365,7 @@ type World struct {
 	aggrDur      time.Duration
 	unjustKeep   time.Duration
 	skulled      []*Player
-	linkDead     []*Player
+	linkDead     []*Player // in the world without a connection, in a fight (linkdead.go)
 	pvpNext      game.Tick
 	pvpBuf       []*Player
 	wars         map[int64]*guildWar
@@ -455,6 +463,7 @@ type World struct {
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
 	fightFor      game.Tick
+	linkDeadFor   game.Tick // travel.link_dead_max_ms; 0: no cap (linkdead.go holdsLinkDead)
 	arrivalRadius int
 
 	// Economy log (T4.1): this tick's entries, entries the queue did not take yet, how
@@ -553,6 +562,7 @@ func New(cfg Config) (*World, error) {
 		jobs:        map[uint64]pendingJob{},
 		banned:      map[int64]time.Time{},
 		locked:      map[int64]bool{},
+		diedAway:    map[int64]*pb.ServerMessage{},
 		inFlight:    map[int64]uint64{},
 		heldGround:  map[*Item]groundHold{},
 		shopPending: map[int64]pendingShop{},

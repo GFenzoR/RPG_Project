@@ -19,6 +19,10 @@ func (w *World) Level(p *Player) int { return p.level }
 // Mana returns p's mana (tests only).
 func (w *World) Mana(p *Player) int { return p.mana }
 
+// KillForTest kills m as if a hit had taken its last health point: its loot goes into its
+// remains, which decay on their own (tests only, loop goroutine).
+func (w *World) KillForTest(ctx *game.TickContext, m *Monster) { w.killMonster(ctx, m) }
+
 // MonsterHealth returns m's health (tests only).
 func (w *World) MonsterHealth(m *Monster) int { return m.health }
 
@@ -59,6 +63,9 @@ func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
 
 // RestoreForTest refills p's health (tests only, loop goroutine).
 func (w *World) RestoreForTest(p *Player) { p.health = p.maxHealth }
+
+// SetPlayerHealthForTest sets p's health (tests only, loop goroutine).
+func (w *World) SetPlayerHealthForTest(p *Player, hp int) { p.health = hp }
 
 // DieForTest kills p now (as if a monster had taken its last hit point).
 func (w *World) DieForTest(ctx *game.TickContext, p *Player) { w.die(ctx, p) }
@@ -464,6 +471,25 @@ func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
 // loop goroutine).
 func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }
 
-// DespawnForTest takes m out of the world without a death: no game path does it yet,
-// but the protocol already has the reason (DISAPPEAR_REASON_DESPAWN).
+// DespawnForTest takes m out of the world without a death (DISAPPEAR_REASON_DESPAWN), as
+// the summons of a monster that died or gave up go (despawnSummons).
 func (w *World) DespawnForTest(m *Monster) { w.removeMonster(m, goneDespawn) }
+
+// StrayLinkDeadForTest lists p as link-dead although it is not in the world (tests only,
+// loop goroutine): the broken invariant checkLinkDead must survive without hanging.
+func (w *World) StrayLinkDeadForTest(p *Player) {
+	p.linkDead = true
+	w.linkDead = append(w.linkDead, p)
+}
+
+// ChaseWayForTest returns the tiles of the rest of the way m follows to its target
+// (chaseWay), the next one first (tests only, loop goroutine).
+func (m *Monster) ChaseWayForTest() []world.Pos {
+	var out []world.Pos
+	at := m.chaseAt
+	for i := len(m.chaseWay) - 1; i >= 0; i-- {
+		at, _ = at.Step(m.chaseWay[i])
+		out = append(out, at)
+	}
+	return out
+}

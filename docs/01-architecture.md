@@ -125,14 +125,20 @@ del snapshot sin guardar. Las guerras siguen el camino de los gremios: se cargan
 inyectable (`ctx.Now`); los bloqueos, en ticks. Costo en el tick: cada chequeo lee unas
 pocas banderas de casilla y como mucho 8 atacantes recientes por víctima; un barrido por
 segundo recorre solo a los jugadores con marca y las guerras abiertas (como mucho
-`max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión con
-el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
-que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final. Vale igual si
-la conexión la corta el servidor (cliente lento, `KickAccount` de un reseteo de
-contraseña): `World.disconnect` llama a `Client.Close` una sola vez y deja al jugador
-link-dead; los comandos que todavía lleguen de esa conexión y el `Leave` del gateway se
-ignoran, y `remove` ya no le manda ni cierra nada. Los kicks y bans de staff, el logout y
-un transfer que no se guardó sacan al jugador en el acto con `remove`. Una condición de
+`max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión en
+combate (el bloqueo PvP o `travel.combat_block_ms` desde su última pelea, `inCombat`;
+`session/linkdead.go`, docs/02 "Bloqueo de logout en combate") sigue en el mundo
+(link-dead: su lote se descarta en el flush) hasta que la pelea termina o pasa
+`travel.link_dead_max_ms` (`holdsLinkDead`; el bloqueo PvP no tiene tope); `checkLinkDead`,
+que en cada tick recorre solo `World.linkDead` (casi siempre vacía), lo saca y guarda su
+snapshot final, y una muerte lo saca al final de ese tick (`deathSave` lo marca y
+`checkLinkDead` lo saca: el guardado de la muerte es el final; nunca en medio de un
+sistema que recorre a los jugadores). Vale igual si la conexión la corta el servidor
+(cliente lento, `KickAccount` de un reseteo de contraseña): `World.disconnect` llama a
+`Client.Close` una sola vez y deja al jugador link-dead; los comandos que todavía lleguen
+de esa conexión y el `Leave` del gateway se ignoran, y `remove` ya no le manda ni cierra
+nada. Los kicks y bans de staff, el logout y un transfer que no se guardó sacan al
+jugador en el acto con `remove`. Una condición de
 otro jugador se guarda con la hora del tick del snapshot (`Scheduler.Time`, el
 `TickContext.Now` del tick en curso, para código del loop sin contexto) y al entrar se
 descuenta el tiempo que la víctima estuvo fuera.

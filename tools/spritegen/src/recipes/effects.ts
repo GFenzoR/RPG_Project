@@ -841,6 +841,237 @@ const death: DrawFrame = (img, f, t, seed) => {
   }
 };
 
+// ---- missiles ------------------------------------------------------------------------------
+//
+// What a Projectile looks like in flight (client/src/render/effects.ts missileArt maps each
+// projectile id to these): 32x32 sprites with the drawing inside the middle 16x16, centred
+// on the corner shared by pixels (15, 15) and (16, 16), so a quarter turn about the sprite's
+// centre lands every pixel on a pixel.
+// - missiles/arrow/e and missiles/arrow/se: the arrow of a physical projectile, flying east
+//   and south-east; the client turns them by quarter turns for the other six directions.
+// - missiles/<element>/0..2: the orb of an elemental projectile, a 3-frame loop;
+//   missiles/<element>/trail: the mote the client drops behind it (2-3 of them).
+
+/** Frames of an orb's loop: the client plays as many as there are, up to MAX_ORB_FRAMES. */
+export const MISSILE_FRAMES = 3;
+
+/** The longest orb loop the client looks for (client/src/render/effects.ts MAX_ORB_FRAMES). */
+export const MAX_ORB_FRAMES = 8;
+
+/** The elements with an orb: every element of the protocol but physical (an arrow). */
+export const ORB_ELEMENTS = ["fire", "ice", "energy", "earth", "holy", "death"] as const;
+
+const FLETCH = material("#e06a5c", "#b8463c", "#86302a", "#561d19");
+const { wood: SHAFT, iron: HEAD } = PALETTE;
+const ARROW_OUTLINE = hex("#2a2018");
+
+/**
+ * The arrow along its own axis: u from the nock (-6.6) to the tip (+6.6), v across it (+ is
+ * the side away from the light). Its colour at (u, v), or undefined. The shaft is two pixels
+ * thick, the head a barbed point and the fletching two vanes swept back from the nock.
+ */
+function arrowAt(u: number, v: number): Rgba | undefined {
+  const av = Math.abs(v);
+  // 14 px from nock to tip: with its dark line it fills the middle 16x16 of the sprite.
+  if (u > 6.6 || u < -6.6) return undefined;
+  // Head: barbs three pixels out from the axis at its back, narrowing to the tip.
+  if (u >= 2.4) {
+    if (av > 3 - (u - 2.4) * 0.6) return undefined;
+    return v < -0.2 ? HEAD.light : v > 1 ? HEAD.shadow : HEAD.base;
+  }
+  // Fletching: two vanes that widen toward the nock.
+  if (u <= -3.6 && av > 0.9 && av <= 1 + 1.6 * ((-u - 3.2) / 3.4))
+    return v < 0 ? FLETCH.light : FLETCH.base;
+  if (av <= 1) return v < 0 ? SHAFT.light : SHAFT.base;
+  return undefined;
+}
+
+/** Draws the arrow flying along the unit vector (dx, dy), with a dark line round it. */
+function arrow(img: Image, dx: number, dy: number): void {
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      const ox = x + 0.5 - C;
+      const oy = y + 0.5 - C;
+      const c = arrowAt(ox * dx + oy * dy, -ox * dy + oy * dx);
+      if (c) px(img, x, y, c);
+    }
+  }
+  // Outside the drawing, not over it: the shaft is only two pixels thick.
+  const ring: [number, number][] = [];
+  for (let y = 0; y < 32; y++)
+    for (let x = 0; x < 32; x++)
+      if (
+        !opaque(img, x, y) &&
+        (opaque(img, x - 1, y) ||
+          opaque(img, x + 1, y) ||
+          opaque(img, x, y - 1) ||
+          opaque(img, x, y + 1))
+      )
+        ring.push([x, y]);
+  for (const [x, y] of ring) px(img, x, y, ARROW_OUTLINE);
+}
+
+/** An orb's frame f of MISSILE_FRAMES; t in [0, 1) is its phase in the loop. */
+type DrawOrb = (img: Image, f: number, t: number, seed: number) => void;
+
+/** A glowing ball of material m with a bright core, outlined in its deep shade. */
+function orbBall(img: Image, r: number, m: Material, core: Rgba = WHITE): void {
+  const layer = canvas(32, 32);
+  ball(layer, C, C, r, r, m);
+  outline(layer, { color: m.deep });
+  composite(img, layer);
+  disc(img, C - 0.6, C - 0.6, r * 0.38, r * 0.38, core);
+}
+
+/** Fire: a ball of flame whose tongues lick round it. */
+const fireOrb: DrawOrb = (img, _f, t, seed) => {
+  fieldFill(
+    img,
+    (x, y) => {
+      const dx = x + 0.5 - C;
+      const dy = y + 0.5 - C;
+      const d = Math.hypot(dx, dy);
+      if (d > 7) return 0;
+      const lick = 0.5 + 0.5 * Math.sin(Math.atan2(dy, dx) * 3 + t * Math.PI * 2);
+      const n = tileNoise(x + Math.round(t * 12), y, 4, 4, seed);
+      return 1 - d / (4.2 + 1.8 * lick) + (n - 0.5) * 0.35;
+    },
+    FLAME,
+  );
+};
+
+/** Ice: four frost shards round a pale core, turning, with a glint. */
+const iceOrb: DrawOrb = (img, f, t) => {
+  const layer = canvas(32, 32);
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4 + t * (Math.PI / 2);
+    const tip: Point = [C + Math.cos(a) * 5.5, C + Math.sin(a) * 5.5];
+    const l: Point = [C + Math.cos(a + 1.1) * 2.4, C + Math.sin(a + 1.1) * 2.4];
+    const r: Point = [C + Math.cos(a - 1.1) * 2.4, C + Math.sin(a - 1.1) * 2.4];
+    eachInPolygon([tip, l, r], (x, y) => px(layer, x, y, i % 2 === 0 ? ICE.base : ICE.shadow));
+  }
+  ball(layer, C, C, 3, 3, ICE);
+  outline(layer, { color: ICE.deep });
+  composite(img, layer);
+  disc(img, C - 0.6, C - 0.6, 1.1, 1.1, WHITE);
+  const glints: readonly Point[] = [
+    [C - 4, C - 3],
+    [C + 3, C - 4],
+    [C + 2, C + 3],
+  ];
+  const glint = glints[f] ?? [C - 4, C - 3];
+  twinkle(img, glint[0], glint[1], 1, ICE.light, WHITE);
+};
+
+/** Energy: a violet ball that throws two crackles a frame (re-rolled: flicker). */
+const energyOrb: DrawOrb = (img, f, _t, seed) => {
+  const rand = rng(seed + f * 7919);
+  for (let i = 0; i < 2; i++) {
+    const a = (i + rand() * 0.8) * Math.PI;
+    const pts = boltPoints(rand, C + Math.cos(a) * 1.5, C + Math.sin(a) * 1.5, a, 4);
+    drawBolt(img, pts, VOLT.shadow, VOLT.light);
+  }
+  orbBall(img, 3.4, VOLT);
+};
+
+/** Earth (poison): a toxic glob with a bubble that moves round it. */
+const earthOrb: DrawOrb = (img, f) => {
+  const [bx, by] = (
+    [
+      [3, -2],
+      [-3, 2],
+      [2, 3],
+    ] as const
+  )[f] ?? [3, -2];
+  const layer = canvas(32, 32);
+  ball(layer, C, C, 3.8, 3.4, TOXIC);
+  ball(layer, C + bx, C + by, 1.6, 1.6, TOXIC);
+  outline(layer, { color: TOXIC.deep });
+  composite(img, layer);
+  px(img, C - 2, C - 2, TOXIC.light);
+  px(img, C - 1, C - 2, WHITE);
+  px(img, C + bx - 1, C + by - 1, TOXIC.light);
+};
+
+/** Holy: a golden ball with eight rays that turn and pulse. */
+const holyOrb: DrawOrb = (img, f, t) => {
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4 + t * (Math.PI / 4);
+    const len = i % 2 === f % 2 ? 7 : 5;
+    line(
+      img,
+      Math.round(C - 0.5 + Math.cos(a) * 3),
+      Math.round(C - 0.5 + Math.sin(a) * 3),
+      Math.round(C - 0.5 + Math.cos(a) * len),
+      Math.round(C - 0.5 + Math.sin(a) * len),
+      i % 2 === 0 ? HOLY.base : HOLY.shadow,
+    );
+  }
+  orbBall(img, 3.2, HOLY);
+};
+
+/** Death: a dark ball with three wisps coiling round it and a pale glint. */
+const deathOrb: DrawOrb = (img, _f, t) => {
+  const layer = canvas(32, 32);
+  for (let i = 0; i < 3; i++) {
+    const a = (i * Math.PI * 2) / 3 + t * ((Math.PI * 2) / 3);
+    for (const [back, size] of [
+      [0.9, 0.9],
+      [0.45, 1.3],
+      [0, 1.7],
+    ] as const)
+      ball(layer, C + Math.cos(a - back) * 4.6, C + Math.sin(a - back) * 4.6, size, size, DEATH);
+  }
+  ball(layer, C, C, 3.3, 3.3, DEATH);
+  outline(layer, { color: DEATH.deep });
+  composite(img, layer);
+  px(img, C - 2, C - 2, DEATH_GLINT);
+  px(img, C - 1, C - 2, DEATH.light);
+};
+
+/** The mote an orb leaves behind: a small round spark of its colour with a bright core. */
+function trailMote(img: Image, m: Material, core: Rgba): void {
+  const layer = canvas(32, 32);
+  ball(layer, C, C, 2.6, 2.6, m);
+  outline(layer, { color: m.deep });
+  composite(img, layer);
+  px(img, C - 1, C - 1, core);
+}
+
+const ORBS: Record<(typeof ORB_ELEMENTS)[number], { draw: DrawOrb; mote: Material; core: Rgba }> = {
+  fire: { draw: fireOrb, mote: PALETTE.ember, core: hex("#fff4c2") },
+  ice: { draw: iceOrb, mote: ICE, core: WHITE },
+  energy: { draw: energyOrb, mote: VOLT, core: WHITE },
+  earth: { draw: earthOrb, mote: TOXIC, core: TOXIC.light },
+  holy: { draw: holyOrb, mote: HOLY, core: WHITE },
+  death: { draw: deathOrb, mote: DEATH, core: DEATH_GLINT },
+};
+
+/** Every missile sprite, by path. */
+export const MISSILES: RecipeBook = (() => {
+  const out: RecipeBook = {
+    "missiles/arrow/e": { kind: "effect", draw: (img) => arrow(img, 1, 0) },
+    "missiles/arrow/se": {
+      kind: "effect",
+      draw: (img) => arrow(img, Math.SQRT1_2, Math.SQRT1_2),
+    },
+  };
+  for (const el of ORB_ELEMENTS) {
+    const orb = ORBS[el];
+    const seed = seedOf(`missiles/${el}`);
+    for (let f = 0; f < MISSILE_FRAMES; f++)
+      out[`missiles/${el}/${f}`] = {
+        kind: "effect",
+        draw: (img) => orb.draw(img, f, f / MISSILE_FRAMES, seed),
+      };
+    out[`missiles/${el}/trail`] = {
+      kind: "effect",
+      draw: (img) => trailMote(img, orb.mote, orb.core),
+    };
+  }
+  return out;
+})();
+
 /** Every effect strip, by folder name (client/src/render/effects.ts maps ids to these). */
 export const EFFECTS: RecipeBook = {
   ...strip("hit", hit),

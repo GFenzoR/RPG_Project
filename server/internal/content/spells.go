@@ -20,9 +20,14 @@ const (
 	SpellGroupSupport = "support"
 )
 
+// SkillWeapon is the Skill of a scaling that follows the weapon the caster holds: the
+// skill of its melee or distance weapon, or fist with none (or a wand), so a guardian's
+// strike grows with the sword, axe or club it trains.
+const SkillWeapon = "weapon"
+
 // Scaling is a damage or heal amount (docs/02-game-design.md, "Combate"):
 // base + level × per_level + magic level × per_magic_level (+ the level of Skill ×
-// per_skill, T3.1), rolled within ±spread.
+// per_skill, T3.1; SkillWeapon: the held weapon's skill), rolled within ±spread.
 type Scaling struct {
 	Base          float64 `yaml:"base"`
 	PerLevel      float64 `yaml:"per_level"`

@@ -305,6 +305,11 @@ func (f *fleet) snapshot() []*bot.Bot {
 	return append([]*bot.Bot(nil), f.bots...)
 }
 
+// logoutWait bounds a bot's logout at the end of the run: the 12 s logout block of a
+// fight (balance travel.combat_block_ms) plus the time a monster still biting it takes to
+// kill it.
+const logoutWait = 45 * time.Second
+
 // runBot enters bot i at time `at` and plays until ctx ends.
 func runBot(ctx context.Context, c config, f *fleet, nav *bot.Nav, token string, i int, at time.Time) {
 	b := bot.New(c.url)
@@ -347,9 +352,29 @@ func runBot(ctx context.Context, c config, f *fleet, nav *bot.Nav, token string,
 		f.fail(i, err, true)
 		return
 	}
-	lctx, lcancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Leave like a player: stop fighting and wait out the logout block of the last fight
+	// (travel.combat_block_ms, docs/02 "Bloqueo de logout en combate"); Logout asks again
+	// every second meanwhile. A bot a monster keeps biting gets out when it dies, or stays
+	// link-dead when the wait runs out (loggedOut).
+	lctx, lcancel := context.WithTimeout(context.Background(), logoutWait)
 	defer lcancel()
-	if err := b.Logout(lctx); err != nil {
+	_ = b.SetTarget(lctx, 0) // best effort: on a closed connection the Logout below says why
+	f.loggedOut(i, b.Logout(lctx))
+}
+
+// loggedOut records how bot i's Logout ended (err from Bot.Logout). A bot the server still
+// kept in a fight when logoutWait ran out (bot.ErrLogoutLocked: a monster that keeps
+// biting it without killing it) is no failure: it leaves as a player who closes the game
+// mid-fight (runBot's deferred Close), link-dead until the fight is over, and only
+// counts in left_link_dead.
+func (f *fleet) loggedOut(i int, err error) {
+	switch {
+	case err == nil:
+	case errors.Is(err, bot.ErrLogoutLocked):
+		f.mu.Lock()
+		f.rep.LeftLinkDead++
+		f.mu.Unlock()
+	default:
 		f.fail(i, fmt.Errorf("logout: %w", err), true)
 	}
 }

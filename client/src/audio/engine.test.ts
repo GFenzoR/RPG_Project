@@ -8,6 +8,7 @@ import {
   MAX_PAN,
   MAX_VOICES,
   MUSIC_DECKS,
+  STREAM_RETRY_MAX_MS,
   STREAM_RETRY_MS,
   directorConfig,
   spatial,
@@ -89,6 +90,8 @@ class FakeContext implements ContextLike {
   readonly gains: FakeGain[] = [];
   readonly panners: FakePanner[] = [];
   decoded = 0;
+  /** A browser that cannot decode the files (a WebKit without Ogg). */
+  undecodable = false;
   async resume(): Promise<void> {
     await Promise.resolve(); // a real context reports "running" only later, too
     this.state = "running";
@@ -109,6 +112,7 @@ class FakeContext implements ContextLike {
     return s;
   }
   async decodeAudioData(data: ArrayBuffer): Promise<BufferLike> {
+    if (this.undecodable) throw new Error("EncodingError: unable to decode audio data");
     this.decoded++;
     return { duration: data.byteLength }; // 1 byte = 1 s, so tests pick the duration
   }
@@ -237,6 +241,8 @@ function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
   let hold = false;
   let now = 0;
   let rand = 0;
+  /** The waits between a sound file's attempts, on the fake clock (`now`). */
+  const sleeping: { until: number; wake: () => void }[] = [];
   const ports: AudioPorts = {
     createContext: () => ctx,
     fetch: async (url) => {
@@ -244,6 +250,7 @@ function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
       if (failing.has(url)) throw new Error(`${url}: offline`);
       return new ArrayBuffer(url.includes("waves") || url.includes("wind") ? 60 : 1);
     },
+    sleep: (ms) => new Promise<void>((wake) => sleeping.push({ until: now + ms, wake })),
     now: () => now,
     random: () => rand,
     createStream: () => {
@@ -280,6 +287,13 @@ function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
     failing,
     holdFiles: (on: boolean) => (hold = on),
     setNow: (ms: number) => (now = ms),
+    /** The fake clock moves to `ms`: the waits due by then end, and what follows runs. */
+    advance: async (ms: number) => {
+      now = ms;
+      for (const s of sleeping.splice(0).filter((w) => w.until > now || (w.wake(), false)))
+        sleeping.push(s);
+      await flush();
+    },
     setRandom: (r: number) => (rand = r),
     /** The audio clock moves to `s` seconds and the engine's timer fires. */
     at: async (s: number) => {
@@ -291,7 +305,8 @@ function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
 }
 
 const flush = async (): Promise<void> => {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
+  // A fetch goes through withRetry (@rpg/renderer/retry): a few more turns than a bare promise.
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
 /** A gesture: the fake context, like a real one, starts running a microtask later. */
@@ -429,6 +444,119 @@ describe("AudioEngine", () => {
     expect(engine.play(["effect.hit"])).toBeUndefined();
     ctx.state = "running";
     expect(engine.play(["effect.hit"])).toBe("hit");
+  });
+
+  it("asks again for a sound file that failed to come: a later attempt brings it", async () => {
+    const { ctx, engine, fetched, failing, advance } = setup();
+    await unlockNow(engine);
+    failing.add("audio/hit.ogg");
+    engine.play(["effect.hit"]);
+    await flush();
+    expect(fetched).toEqual(["audio/hit.ogg"]);
+    // The network is back for the second attempt (0.5 s later, ASSET_RETRY).
+    failing.clear();
+    await advance(499);
+    expect(fetched).toHaveLength(1);
+    await advance(500);
+    expect(fetched).toHaveLength(2);
+    expect(engine.isCached("hit")).toBe(true);
+    // That play came too late to sound; the next one plays at once from the cache.
+    expect(ctx.sources).toHaveLength(0);
+    engine.play(["effect.hit"]);
+    expect(ctx.sources).toHaveLength(1);
+  });
+
+  it("does not ask on every play for a file that keeps failing, only after the wait", async () => {
+    const { ctx, engine, fetched, failing, advance } = setup();
+    await unlockNow(engine);
+    failing.add("audio/hit.ogg");
+    engine.play(["effect.hit"]);
+    await flush();
+    // ASSET_RETRY: 4 attempts, 0.5, 1 and 2 s apart; then it gives up.
+    for (const t of [500, 1500, 3500]) await advance(t);
+    expect(fetched).toHaveLength(4);
+    expect(engine.isCached("hit")).toBe(false);
+    // Plays meanwhile are silent and fetch nothing.
+    for (const t of [3600, 5000, 8499]) {
+      await advance(t);
+      engine.play(["effect.hit"]);
+      await flush();
+    }
+    expect(fetched).toHaveLength(4);
+    // Due again after STREAM_RETRY_MS: asked once more (and the network is back).
+    failing.clear();
+    await advance(3500 + STREAM_RETRY_MS);
+    engine.play(["effect.hit"]);
+    await flush();
+    expect(fetched).toHaveLength(5);
+    expect(engine.isCached("hit")).toBe(true);
+    // That play sounds (its file came at once), and the next one from the cache.
+    expect(ctx.sources).toHaveLength(1);
+    engine.play(["effect.hit"]);
+    expect(ctx.sources).toHaveLength(2);
+  });
+
+  it("waits twice as long after a second failure", async () => {
+    const { engine, fetched, failing, advance } = setup();
+    await unlockNow(engine);
+    failing.add("audio/hit.ogg");
+    engine.play(["effect.hit"]);
+    await flush();
+    for (const t of [500, 1500, 3500]) await advance(t);
+    const due = 3500 + STREAM_RETRY_MS;
+    await advance(due);
+    engine.play(["effect.hit"]);
+    await flush();
+    for (const t of [500, 1500, 3500]) await advance(due + t);
+    expect(fetched).toHaveLength(8);
+    await advance(due + 3500 + STREAM_RETRY_MS);
+    engine.play(["effect.hit"]);
+    await flush();
+    expect(fetched).toHaveLength(8); // not yet: the wait doubled
+    await advance(due + 3500 + 2 * STREAM_RETRY_MS);
+    engine.play(["effect.hit"]);
+    await flush();
+    expect(fetched).toHaveLength(9);
+  });
+
+  it("never asks again for a file that came but does not decode", async () => {
+    const { ctx, engine, fetched, advance, at } = setup();
+    ctx.undecodable = true;
+    engine.setAmbient("waves");
+    await unlockNow(engine);
+    engine.play(["effect.hit"]);
+    await flush();
+    // One fetch each: a decoding error is not the network's, no attempt follows.
+    expect(fetched.filter((u) => u === "audio/hit.ogg")).toHaveLength(1);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(1);
+    // Long after any wait, a play and the engine's timer ask for nothing.
+    await advance(10 * STREAM_RETRY_MAX_MS);
+    engine.play(["effect.hit"]);
+    await at(1);
+    await flush();
+    expect(fetched.filter((u) => u === "audio/hit.ogg")).toHaveLength(1);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(1);
+    expect(ctx.sources).toHaveLength(0);
+    expect(engine.playingLoops().ambient).toBeUndefined();
+  });
+
+  it("starts the ambient loop by itself once its file comes back after the wait", async () => {
+    const { engine, fetched, failing, advance, at } = setup();
+    failing.add("audio/waves.ogg");
+    engine.setAmbient("waves");
+    await unlockNow(engine);
+    for (const t of [500, 1500, 3500]) await advance(t);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(4);
+    expect(engine.playingLoops().ambient).toBeUndefined();
+    failing.clear();
+    // The engine's timer, before and after the wait: nothing else asks for the loop.
+    await advance(4000);
+    await at(1);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(4);
+    await advance(3500 + STREAM_RETRY_MS);
+    await at(2);
+    await flush();
+    expect(engine.playingLoops().ambient).toBe("waves");
   });
 
   it("drops a sound whose file arrives too late", async () => {

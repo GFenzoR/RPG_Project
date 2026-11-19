@@ -14,7 +14,7 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[client]
 		if p == nil || p.linkDead {
-			return // gone, or link-dead: a command its closed connection sent before (T5.2)
+			return // gone, or link-dead: a command its closed connection sent before
 		}
 		w.playerCommand(p, func() { w.input(ctx, p, msg) })
 	})
@@ -124,11 +124,12 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 	case *pb.ClientMessage_UnequipCosmetic:
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
 	case *pb.ClientMessage_Logout:
-		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
-		// one). Closing the connection leaves the character link-dead until the lock ends
-		// (docs/02 "PvP").
-		if w.pvpLocked(ctx.Tick, p) {
-			p.emit(systemMsg(msgPvPLogoutLocked))
+		// No logout in the middle of a fight (linkdead.go): the PvP lock (T5.2) or
+		// travel.combat_block_ms since p fought a monster or took damage. Closing the
+		// connection leaves the character link-dead until the fight is over (docs/02
+		// "Bloqueo de logout en combate").
+		if key := w.logoutBlock(ctx.Tick, p); key != "" {
+			p.emit(systemMsg(key))
 			return
 		}
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -462,7 +463,8 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
-	w.checkPvP(ctx) // T5.2: before the guilds, so an ended war is in this tick's update
+	w.checkLinkDead(ctx) // the link-dead players whose fight is over leave
+	w.checkPvP(ctx)      // T5.2: before the guilds, so an ended war is in this tick's update
 	w.checkTrades(ctx)
 	w.checkMarketExpiry(ctx)
 	w.checkHouses(ctx) // T5.4: also flushes this tick's house item changes
@@ -488,7 +490,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushHouses()
 	for _, p := range w.slow {
 		w.log.Warn("session: slow client dropped", "character", p.charID, "creature", p.id)
-		// T5.2: under its PvP lock it stays link-dead (a full queue is no way out of a fight).
+		// In combat it stays link-dead (a full queue is no way out of a fight, linkdead.go).
 		w.disconnect(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT, true)
 	}
 	// T5.3: what the server gave away for players outside their commands this tick (a
@@ -504,7 +506,7 @@ func (w *World) flushPlayer(tick game.Tick, p *Player) bool {
 	}
 	if p.linkDead {
 		clear(p.out)
-		p.out = p.out[:0] // no connection: nobody to tell (T5.2)
+		p.out = p.out[:0] // no connection: nobody to tell (linkdead.go)
 		return true
 	}
 	b := &pb.ServerBatch{Tick: uint64(tick), Events: p.out}

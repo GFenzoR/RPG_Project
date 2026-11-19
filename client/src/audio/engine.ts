@@ -20,6 +20,12 @@
 // with no `seconds`) is decoded and loops on a buffer source instead: a media element's
 // `loop` leaves a gap at every turn.
 //
+// A sound effect or an ambient loop whose file does not come is asked again with the
+// atlas's policy (@rpg/renderer/retry ASSET_RETRY: 4 attempts, waits of 0.5, 1 and 2 s);
+// then it is forgotten and asked again on a play after STREAM_RETRY_MS (doubling up to
+// STREAM_RETRY_MAX_MS), as the music: before, a short cut of the network left a hit, a
+// spell or an island's ambience silent until the page was loaded again.
+//
 // The AudioContext is only created on unlock(), after the first user gesture, because
 // browsers (and the desktop webviews) refuse to start audio before one. Until then play()
 // is silent and the wanted ambient loop and music are only remembered. The music's
@@ -46,6 +52,7 @@ import type {
   Scene,
   Voice,
 } from "./director.ts";
+import { ASSET_RETRY, sleep, withRetry } from "@rpg/renderer/retry";
 import { ALL_CHANNELS } from "./prefs.ts";
 import type { AudioPrefs, VolumeChannel } from "./prefs.ts";
 
@@ -126,6 +133,8 @@ export interface AudioPorts {
   createContext(): ContextLike | undefined;
   /** Bytes of a sound file. */
   fetch(url: string): Promise<ArrayBuffer>;
+  /** Resolves after `ms` (the waits between the attempts of a sound file's fetch). */
+  sleep(ms: number): Promise<void>;
   /** Milliseconds, monotonic (performance.now). */
   now(): number;
   /** Uniform in [0, 1): picks among a sound's variants, and the music director's picks. */
@@ -236,6 +245,7 @@ export function browserPorts(): AudioPorts {
       if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
       return res.arrayBuffer();
     },
+    sleep,
     now: () => performance.now(),
     random: Math.random,
     createStream: browserStream,
@@ -400,6 +410,13 @@ export class AudioEngine {
   private master: GainLike | undefined;
   private readonly channels = new Map<SoundChannel, GainLike>();
   private readonly buffers = new Map<string, Promise<BufferLike | undefined>>();
+  /**
+   * Sound files (effects, ambient loops) whose attempts ran out → when a play may fetch
+   * them again (ports.now, ms; Infinity for one that does not decode, never again this
+   * session); `soundFailures` counts the times, the wait doubling.
+   */
+  private readonly soundFailed = new Map<string, number>();
+  private readonly soundFailures = new Map<string, number>();
   private readonly decoded = new Map<string, BufferLike>();
   private voices: OneShot[] = [];
   private readonly ambient: LoopSlot = { want: undefined, playing: undefined };
@@ -616,31 +633,65 @@ export class AudioEngine {
     return this.voices.length;
   }
 
-  /** Loads and decodes a sound once; failures are cached as undefined (and logged once). */
+  /**
+   * Loads and decodes a sound once, its fetch retried with ASSET_RETRY. When the attempts
+   * run out it resolves undefined, is logged and forgotten: a play asks for it again once
+   * STREAM_RETRY_MS have passed (doubling at each failure), not on every play meanwhile.
+   * A file that came but does not decode (a browser without Ogg) is not asked for again
+   * this session (giveUp).
+   */
   private load(id: string): Promise<BufferLike | undefined> {
-    let p = this.buffers.get(id);
-    if (!p) {
-      const def = this.manifest.sounds[id];
-      const ctx = this.ctx;
-      const loading: Promise<BufferLike | undefined> =
-        def && ctx
-          ? this.ports
-              .fetch(def.url)
-              .then((data) => ctx.decodeAudioData(data))
-              .then((b) => {
-                // A loop forgotten while it loaded is not cached again.
-                if (this.buffers.get(id) === loading) this.decoded.set(id, b);
-                return b;
-              })
-              .catch((err: unknown) => {
-                console.warn(`audio: cannot load ${id}`, err);
-                return undefined;
-              })
-          : Promise.resolve(undefined);
-      p = loading;
-      this.buffers.set(id, p);
+    const p = this.buffers.get(id);
+    if (p) return p;
+    const def = this.manifest.sounds[id];
+    const ctx = this.ctx;
+    if (!def || !ctx) return Promise.resolve(undefined);
+    const due = this.soundFailed.get(id);
+    if (due !== undefined && this.ports.now() < due) return Promise.resolve(undefined);
+    this.soundFailed.delete(id);
+    const loading: Promise<BufferLike | undefined> = withRetry(() => this.ports.fetch(def.url), {
+      policy: ASSET_RETRY,
+      sleep: (ms) => this.ports.sleep(ms),
+    }).then(
+      (data) =>
+        ctx.decodeAudioData(data).then(
+          (b) => {
+            this.soundFailures.delete(id);
+            // A loop forgotten while it loaded is not cached again.
+            if (this.buffers.get(id) === loading) this.decoded.set(id, b);
+            return b;
+          },
+          (err: unknown) => this.giveUp(id, loading, err, true),
+        ),
+      (err: unknown) => this.giveUp(id, loading, err, false),
+    );
+    this.buffers.set(id, loading);
+    return loading;
+  }
+
+  /**
+   * A sound file that did not load (`loading`): logged and forgotten. One whose attempts
+   * ran out is due again after the wait (soundFailed); one that came but does not decode
+   * (`undecodable`) never is this session: it would fail the same way on every try, like
+   * the music the browser cannot play (canStream, `unsupported`).
+   */
+  private giveUp(
+    id: string,
+    loading: Promise<BufferLike | undefined>,
+    err: unknown,
+    undecodable: boolean,
+  ): undefined {
+    console.warn(`audio: cannot ${undecodable ? "decode" : "load"} ${id}`, err);
+    if (this.buffers.get(id) === loading) this.buffers.delete(id);
+    if (undecodable) {
+      this.soundFailed.set(id, Number.POSITIVE_INFINITY);
+      return undefined;
     }
-    return p;
+    const n = (this.soundFailures.get(id) ?? 0) + 1;
+    this.soundFailures.set(id, n);
+    const wait = Math.min(STREAM_RETRY_MAX_MS, STREAM_RETRY_MS * 2 ** (n - 1));
+    this.soundFailed.set(id, this.ports.now() + wait);
+    return undefined;
   }
 
   /** Whether a sound's decoded buffer is cached (tests: what a loop change forgets). */
@@ -763,6 +814,18 @@ export class AudioEngine {
     this.director.update(now, this.scene, ready);
     if (audible) for (const s of this.director.wanted()) this.fetchMusic(s);
     this.syncDecks(ctx, now, audible);
+    this.retryAmbient();
+  }
+
+  /**
+   * The ambient loop wanted gave up loading (its attempts ran out): once it is due for
+   * another try, start it again (nothing else asks for it while the player stays put).
+   */
+  private retryAmbient(): void {
+    const id = this.ambient.want;
+    if (id === undefined || this.ambient.playing || this.buffers.has(id)) return;
+    const due = this.soundFailed.get(id);
+    if (due !== undefined && this.ports.now() >= due) this.startAmbient();
   }
 
   /** Whether a music file is fetched (a loop file: decoded) and can play right away. */

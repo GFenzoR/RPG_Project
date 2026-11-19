@@ -166,6 +166,7 @@ shop:
     - { item: hoarfrost_staff, price: 1080 }
     - { item: stormglass_wand, price: 1080 }
     - { item: mana_draught, price: 22 }
+    - { item: health_draught, price: 60 }
   buys:
     - { item: sapling_staff, price: 12 }
     - { item: rimewood_staff, price: 100 }

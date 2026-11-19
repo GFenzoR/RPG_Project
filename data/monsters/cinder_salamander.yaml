@@ -19,3 +19,4 @@ loot:
   - { item: copper_coin, chance: 0.85, count: [15, 65] }
 tags: [reptile, lava, volcan]
 notes: Lava pools on the slopes, levels 29-33. Spits burning slag at range (T3.2 burning); immune to fire, weak to ice.
+corpse: remains_scales

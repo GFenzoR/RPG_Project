@@ -69,6 +69,26 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+  it("checks a monster's corpse: a known container item that stays on its tile", () => {
+    const monster = (id: string, corpse: string): void =>
+      edit(
+        `data/monsters/${id}.yaml`,
+        /^corpse: .*$/m.exec(readFileSync(file(`data/monsters/${id}.yaml`), "utf8"))?.[0] ??
+          "corpse:",
+        `corpse: ${corpse}`,
+      );
+    monster("wolf", "copper_coin");
+    monster("bilge_rat", "backpack");
+    monster("tide_crab", "no_such_remains");
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(
+      has("wolf.yaml") && has('item "copper_coin" must be a container with pickupable: false'),
+    ).toBe(true);
+    expect(has('item "backpack" must be a container with pickupable: false')).toBe(true);
+    expect(has('unknown item "no_such_remains"')).toBe(true);
+  });
+
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
     writeFileSync(
       file("data/boat_routes.yaml"),
@@ -801,6 +821,62 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ element: earth, radius: 1,", "{ element: earth, radius: 7,");
     expect(
       messages(root).some((m) => m.startsWith("error data/spells.yaml:160:") && m.includes("<= 6")),
+    ).toBe(true);
+  });
+
+  // Monster abilities (docs/06 "Monstruo"): areas, heal_self, summon and phases.
+  it("checks monster areas, heals, summons and phases", () => {
+    writeFileSync(
+      file("data/monsters/wolf.yaml"),
+      [
+        "id: wolf",
+        "name: monster.wolf.name",
+        "sprite: creatures/wolf",
+        "health: 25",
+        "experience: 28",
+        "speed: 190",
+        "attacks:",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: beam, length: 4, radius: 1 } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, center: target } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 7 } }",
+        "  - { type: heal_self, min: 5, max: 9, interval_ms: 2000, area: { shape: circle, radius: 1 } }",
+        "  - { type: summon, min: 1, max: 1, interval_ms: 2000, summon: { monster: slagbound_warden, count: 1 } }",
+        "  - { type: summon, interval_ms: 2000, summon: { monster: no_such_beast, count: 9 } }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 7 }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: { shape: circle, radius: 2, center: target } }",
+        "  - { type: melee, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 5, center: target } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, range: 4, area: { shape: beam, length: 3 } }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 3, area: { shape: circle, radius: 1 } }",
+        "phases:",
+        "  - { below_hp_pct: 50, attacks_add: [ { type: melee, min: 4, max: 2, interval_ms: 2000 } ] }",
+        "  - { below_hp_pct: 50, speed_mult: 0 }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.startsWith("error data/monsters/"));
+    const at = (path: string, text: string): boolean =>
+      out.some((m) => m.includes(` ${path}: `) && m.includes(text));
+    expect(at("attacks[0].area.radius", "not allowed here")).toBe(true);
+    expect(at("attacks[1].area", 'missing required field "radius"')).toBe(true);
+    expect(at("attacks[2].area.radius", "<= 6")).toBe(true);
+    expect(at("attacks[3].area", "not allowed here")).toBe(true);
+    expect(at("attacks[4].min", "not allowed here")).toBe(true);
+    expect(at("attacks[5].summon.count", "<= 8")).toBe(true);
+    expect(at("attacks[5].summon.monster", 'unknown monster "no_such_beast"')).toBe(true);
+    // What a monster notices (MaxRange 6): its range, and range + radius around the target.
+    expect(at("attacks[6].range", "<= 6")).toBe(true);
+    expect(at("attacks[7].area.radius", "reach 5 + radius 2")).toBe(true);
+    expect(out.some((m) => m.includes(" attacks[8]."))).toBe(false);
+    // A beam or a circle around the monster reaches its length or radius: no range.
+    expect(at("attacks[9].range", "not allowed here")).toBe(true);
+    expect(at("attacks[10].range", "not allowed here")).toBe(true);
+    expect(at("phases[0].attacks_add[0].min", "min (4) is greater than max (2)")).toBe(true);
+    expect(at("phases[1].below_hp_pct", "another phase is already below 50 %")).toBe(true);
+    expect(at("phases[1].speed_mult", "> 0")).toBe(true);
+    // The warden summons: nothing may summon it.
+    expect(
+      out.some((m) =>
+        m.includes('attacks[4].summon.monster: "slagbound_warden" summons monsters itself'),
+      ),
     ).toBe(true);
   });
 

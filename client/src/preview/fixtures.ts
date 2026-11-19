@@ -194,7 +194,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
       {
         id: 21,
         name: "Tomás Rial",
-        vocation: "mage",
+        vocation: "arcanist",
         level: 16,
         inView: false,
         health: 0,
@@ -418,6 +418,89 @@ export function withServerWindows(
     split: { x: at.x, y: at.y, itemId: id("raw_fish"), count: 12 },
   };
   return { ui, name: "server" };
+}
+
+/**
+ * A new character in Puerto's tutorial (T4.2), at the step that opens the backpack: the
+ * backpack is not open under the figure (it does not open by itself during the tutorial),
+ * so the equipment's window is short, as in the e2e's 43-tutorial-shop-960 and
+ * 44-controls-help-960 (docs/17 UI-5: the dialog gives way down to its foot; the hint
+ * gives way to the help).
+ */
+export function withTutorial(s: Scene): Scene {
+  const ui: GameUi = {
+    ...s.ui,
+    backpack: undefined,
+    tutorial: {
+      stepId: "open_backpack",
+      step: 3,
+      total: 6,
+      text: "tutorial.step.open_backpack",
+      highlight: "inventory",
+      progress: 0,
+      count: 1,
+    },
+  };
+  return { ui, name: "tutorial" };
+}
+
+/**
+ * docs/17 UI-5: a trade with the party member who stands just north of the player: the
+ * trade opens clear of the tiles north of the player (ui/windows.ts defaultPlace).
+ */
+export function withTrade(content: ClientContent, s: Scene): Scene {
+  const id = (name: string): number => itemNumber(content, name);
+  const ui: GameUi = {
+    ...s.ui,
+    trade: {
+      partnerId: 13,
+      partnerName: "Brisa Molina",
+      invited: false,
+      negotiating: true,
+      own: [{ itemId: id("raw_fish"), count: 5 }],
+      partner: [{ itemId: id("copper_coin"), count: 20 }],
+      ownAccepted: false,
+      partnerAccepted: true,
+      maxItems: 8,
+    },
+  };
+  return { ui, name: "trade" };
+}
+
+/**
+ * docs/17 UI-10: lines that arrive while the chat shows another tab (a party line, a
+ * global one, a local one and a system message): the other tabs get a dot.
+ */
+export function withLaterChat(s: Scene, now: number): Scene {
+  const line = (kind: MessageKind, speakerName: string, text: string) => ({
+    kind,
+    speakerName,
+    speakerContentId: "",
+    text,
+    localized: undefined,
+    at: now,
+  });
+  const ui: GameUi = {
+    ...s.ui,
+    chat: [
+      ...s.ui.chat,
+      line(MessageKind.PARTY, "Brisa Molina", "Llegué a la puerta norte."),
+      line(MessageKind.GLOBAL, "Lía Puerto", "Vendo cuerda y galletas en el muelle."),
+      line(MessageKind.SAY, "Corvo", "¿Alguien vio al herrero?"),
+    ],
+    log: [
+      ...s.ui.log,
+      {
+        key: "progress.skill_up",
+        params: [
+          param("skill", { case: "contentId", value: "shield" }),
+          param("level", { case: "number", value: 22n }),
+        ],
+        at: now,
+      },
+    ],
+  };
+  return { ui, name: "chattabs" };
 }
 
 /** The card of an item lying on the map, under a resting mouse (docs/17 UI-6). */

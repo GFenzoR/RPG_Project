@@ -175,6 +175,8 @@ function describe(e: ErrorObject): string {
       return "does not match any of the accepted forms (see docs/06-content-data.md)";
     case "propertyNames":
       return `invalid key ${JSON.stringify(p["propertyName"])}`;
+    case "false schema":
+      return "not allowed here (see docs/06-content-data.md)";
     default:
       return e.message ?? e.keyword;
   }

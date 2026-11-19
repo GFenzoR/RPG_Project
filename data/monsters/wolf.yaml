@@ -17,3 +17,4 @@ loot:
   - { item: wolf_pelt, chance: 0.25 }
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
+corpse: remains_fur

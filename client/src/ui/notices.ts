@@ -12,9 +12,10 @@ export const MAX_NOTICES = 3;
 /**
  * Message keys (prefixes) that answer something the player just did and stay readable in
  * the log next to the map on desktop: looking at things and loot lines. Everything else
- * (PvP refusals, the logout block, market, house, trade, party and guild notices, failed
- * crafts...) is important and floats. With the log out of view (tabs or drawer), every
- * message floats.
+ * (PvP refusals, the logout block of a fight or of PvP, market, house, trade, party and
+ * guild notices, failed crafts...) is important and floats ("combat.logout_locked" does
+ * not start with "combat.loot"). With the log out of view (tabs or drawer), every message
+ * floats.
  */
 export const ROUTINE_PREFIXES: readonly string[] = ["look.", "combat.loot"];
 

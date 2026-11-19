@@ -94,6 +94,15 @@ export const FONTS: readonly FontFile[] = [
     weight: "400 900",
     style: "italic",
   },
+  // The canvas labels (names, guilds, damage numbers: client/src/render/canvas-font.ts).
+  {
+    family: "Pixelify Sans",
+    pack: "font-pixelifysans",
+    source: "PixelifySans[wght].ttf",
+    out: "pixelify-sans.woff2",
+    weight: "400 700",
+    style: "normal",
+  },
 ];
 
 /** Where the fonts are served and emitted: /fonts/<out>. */

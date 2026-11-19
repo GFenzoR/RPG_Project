@@ -18,3 +18,4 @@ loot:
   - { item: copper_coin, chance: 0.7, count: [5, 20] }
 tags: [insect, cave, puerto]
 notes: Mine, levels 11-14. High armor rewards high-attack weapons and wands.
+corpse: remains_chitin

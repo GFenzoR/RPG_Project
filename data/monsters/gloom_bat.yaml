@@ -18,3 +18,4 @@ loot:
   - { item: copper_coin, chance: 0.5, count: [1, 6] }
 tags: [bat, cave, puerto]
 notes: Mine entrance, levels 3-6. Fast, so it is hard to outrun but fragile.
+corpse: remains_fur

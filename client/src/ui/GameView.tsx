@@ -12,6 +12,17 @@ import { CreatureKind, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
+import {
+  CHAT_TABS,
+  CHAT_TAB_LABEL,
+  markSeen,
+  nextTab,
+  unreadTabs,
+  viewedTab,
+  wheelAlong,
+} from "../state/chat.ts";
+import type { ChatTab } from "../state/chat.ts";
+import type { ChatLine } from "../state/world.ts";
 import { skullId } from "../state/pvp.ts";
 import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -49,8 +60,15 @@ import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 import { ornamentStyle } from "./ornaments.ts";
-import { dragWindow, outsiders, resizeDrag, transformScale, watchedRef } from "./window-dom.ts";
-import type { DragEnv, WatchedRef } from "./window-dom.ts";
+import {
+  dragWindow,
+  outsiders,
+  placeOpened,
+  resizeDrag,
+  transformScale,
+  watchedRef,
+} from "./window-dom.ts";
+import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
@@ -68,6 +86,7 @@ import {
   openWindow,
   openWindows,
   pageOrder,
+  placeContext,
   placeOf,
   placeWindow,
   resetWindows,
@@ -76,12 +95,22 @@ import {
   serverWindows,
   shownKey,
   syncWindows,
+  toLookAt,
   toggleWindow,
+  tutorialCovered,
   windowForHighlight,
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { ContainerKey, Rect, WinKey, WindowId, WindowsState } from "./windows.ts";
+import type {
+  AutoPlace,
+  ContainerKey,
+  LastLook,
+  Rect,
+  WinKey,
+  WindowId,
+  WindowsState,
+} from "./windows.ts";
 
 /** The pieces of the desktop Options window (main.tsx builds them: they outlive a game). */
 export interface GameSettings {
@@ -189,13 +218,19 @@ export function GameView(props: GameViewProps): JSX.Element {
   const zoom = props.settings?.uiScale ?? 1;
   // The server's windows close through it (docs/17 UI-5): the dialog, the station...
   const serverClose = useRef<(id: WinKey) => void>(() => {});
-  const win = useWindows(props.storage, serverClose, zoom);
+  // The player's tile on the page: the trade opens clear of the tiles north of it.
+  const playerTile = useRef<() => PageBox | undefined>(() => undefined);
+  playerTile.current = () => game?.selfTile();
+  const win = useWindows(props.storage, serverClose, zoom, playerTile, ui.dialog?.id);
   // One window per open container, with a key that stays while it is open (its place).
   const containerKeysRef = useRef(new Map<number, ContainerKey>());
   const ckeys = windowed
     ? containerKeys(
         containerKeysRef.current,
-        ui.containers.map((c) => ({ id: c.id, item: props.content.items[c.itemId]?.id ?? "item" })),
+        ui.containers.map((c) => {
+          const def = props.content.items[c.itemId];
+          return { id: c.id, item: def?.id ?? "item", fixed: def?.fixed === true };
+        }),
       )
     : new Map<number, ContainerKey>();
   containerKeysRef.current = ckeys;
@@ -232,16 +267,31 @@ export function GameView(props: GameViewProps): JSX.Element {
         }
   };
   const [guildTab, setGuildTab] = useState<GuildTab>("summary");
-  const [chatTab, setChatTab] = useState<"chat" | "log">("chat");
+  // The chat window's tabs (docs/17 UI-10, state/chat.ts): the lines shown on the open tab
+  // count as seen (marked as they render, so a dot never blinks on for a line in view)
+  // while the window shows them: folded to its title bar, nothing does (viewedTab); a tab
+  // with lines not seen yet gets a dot, the log one when its newest message is.
+  const [chatTab, setChatTab] = useState<ChatTab>("chat");
+  const chatPlace = placeOf(win.state, "chat");
+  const viewed = viewedTab(chatTab, !windowed || (chatPlace.open && !chatPlace.collapsed));
   const [logSeen, setLogSeen] = useState(0);
   const lastLog = ui.log[ui.log.length - 1]?.at ?? 0;
   useEffect(() => {
-    if (chatTab === "log") setLogSeen(lastLog);
-  }, [chatTab, lastLog]);
-  // With the log out of view (tabs, drawer, or the chat tab of the desktop's chat window)
-  // every message floats over the map, not only the important ones.
+    if (viewed === "log") setLogSeen(lastLog);
+  }, [viewed, lastLog]);
+  const chatSeen = useRef(new WeakSet<ChatLine>());
+  markSeen(ui.chat, viewed, chatSeen.current);
+  const chatUnread = unreadTabs(
+    ui.chat,
+    (l) => chatSeen.current.has(l),
+    viewed,
+    props.characterName,
+  );
+  if (viewed !== "log" && lastLog > logSeen) chatUnread.add("log");
+  // With the log out of view (tabs, drawer, the chat tab of the desktop's chat window, or
+  // that window folded) every message floats over the map, not only the important ones.
   const notices = activeNotices(ui.log, performance.now(), {
-    all: tabbed || chatTab !== "log",
+    all: tabbed || viewed !== "log",
   });
   const noticesExpire = nextExpiry(notices);
   // Re-render when the oldest notice is due to go (nothing else may update the UI).
@@ -479,7 +529,15 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
-  const chat = <ChatPanel t={t} content={props.content} game={game} ui={ui} />;
+  const chat = (
+    <ChatPanel
+      t={t}
+      content={props.content}
+      game={game}
+      ui={ui}
+      tab={windowed && chatTab !== "log" ? chatTab : undefined}
+    />
+  );
   const guild = (tabs: boolean): JSX.Element => (
     <GuildPanel
       t={t}
@@ -592,7 +650,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
-      {props.entered && <TutorialPanel t={t} game={game} ui={ui} />}
+      {props.entered && (
+        <TutorialPanel t={t} game={game} ui={ui} covered={windowed && tutorialCovered(win.state)} />
+      )}
     </>
   );
   const menu = props.entered && (
@@ -621,6 +681,13 @@ export function GameView(props: GameViewProps): JSX.Element {
         game={game}
         ui={ui}
         blocked={ui.menu !== undefined || ui.picked !== undefined || ui.split !== undefined}
+        windows={
+          windowed
+            ? shownKey(win.state)
+            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade]
+                .map((w) => (w ? "1" : "0"))
+                .join("")
+        }
       />
     </>
   );
@@ -668,15 +735,8 @@ export function GameView(props: GameViewProps): JSX.Element {
           title: t(WINDOW_TITLE.chat),
           icon: windowIcon("chat"),
           body: toolBody("chat"),
-          // The tabs (chat and log) take the title's place in the bar (RO-like).
-          barExtra: (
-            <ChatTabs
-              t={t}
-              tab={chatTab}
-              onTab={setChatTab}
-              unread={chatTab !== "log" && lastLog > logSeen}
-            />
-          ),
+          // The tabs (the channels and the log) take the title's place in the bar (RO-like).
+          barExtra: <ChatTabs t={t} tab={chatTab} onTab={setChatTab} unread={chatUnread} />,
           hideTitle: true,
         };
       if (isToolWindow(id))
@@ -783,6 +843,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           icon={w.icon}
           title={w.title}
           place={placeOf(win.state, id)}
+          auto={win.auto.get(id)}
           stack={stack}
           zoom={zoom}
           closing={win.closing.has(id)}
@@ -1036,6 +1097,8 @@ interface WindowsApi {
   equipment: WatchedRef<HTMLElement>;
   /** Where the containers' default column starts, the windows' own px (containersTop). */
   containersTop: number;
+  /** Windows that sit elsewhere than their usual place (defaultPlace), screen px. */
+  auto: ReadonlyMap<WinKey, AutoPlace>;
 }
 
 /** A box on screen in px from the top left of `area`. */
@@ -1090,6 +1153,8 @@ function useWindows(
   storage: Storage | undefined,
   serverClose: { current: (id: WinKey) => void },
   zoom: number,
+  playerTile: { current: () => PageBox | undefined },
+  dialogId: number | undefined,
 ): WindowsApi {
   const [state, setState] = useState<WindowsState>(() =>
     loadWindows(readStorage(storage, WINDOWS_STORAGE_KEY)),
@@ -1100,6 +1165,15 @@ function useWindows(
   stateRef.current = state;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom > 0 ? zoom : 1;
+  // docs/17 UI-5: a window that opens at its factory place sees the open windows
+  // (defaultPlace): measured where windows.css puts it, before it is painted, it moves (or
+  // shortens) when that place covers another window or, the trade, the tiles north of the
+  // player. The place lasts while it stays open and unmoved, and while its usual place
+  // stays where it was (placeContext: the dialog the shop comes beside, another NPC's
+  // dialog, is looked at again); nothing of it is saved. When the area changes size they
+  // all go back to their usual places and are looked at again (`resized`).
+  const [auto, setAuto] = useState<ReadonlyMap<WinKey, AutoPlace>>(() => new Map());
+  const [resized, setResized] = useState(0);
   // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
   // window, a larger interface scale) or a remembered place came from a larger screen, the
   // windows the player placed move back inside, all of them. Watched through the ref, not
@@ -1107,7 +1181,17 @@ function useWindows(
   const [layer] = useState(() =>
     watchedRef<HTMLDivElement>((el) => {
       if (typeof ResizeObserver === "undefined") return () => {};
-      const observer = new ResizeObserver(() => pullInside(el, stateRef.current, setState));
+      let size = "";
+      const observer = new ResizeObserver(() => {
+        pullInside(el, stateRef.current, setState);
+        const r = el.getBoundingClientRect();
+        const now = `${Math.round(r.width)}x${Math.round(r.height)}`;
+        if (size !== "" && now !== size) {
+          setAuto(new Map());
+          setResized((n) => n + 1);
+        }
+        size = now;
+      });
       observer.observe(el);
       return () => observer.disconnect();
     }),
@@ -1120,6 +1204,37 @@ function useWindows(
     const el = layer.current;
     if (el) pullInside(el, stateRef.current, setState);
   }, [shown, zoom, layer]);
+  // The windows that opened since the last look (all of them after a resize) or whose
+  // usual place moved while open (toLookAt), and may sit elsewhere; a window closed or
+  // moved by the player forgets its place, one looked at again its old one.
+  const context = placeContext(state, dialogId);
+  const contextKey = JSON.stringify(context);
+  const lastLook = useRef<LastLook>({ open: new Set(), context: {} });
+  const lookedAt = useRef(0);
+  useLayoutEffect(() => {
+    const open = new Set(knownWindows(state).filter((id) => placeOf(state, id).open));
+    const fresh = lookedAt.current !== resized;
+    lookedAt.current = resized;
+    const opened = toLookAt(state, lastLook.current, context, fresh);
+    lastLook.current = { open, context };
+    const next = new Map(
+      [...auto].filter(
+        ([id]) => open.has(id) && placeOf(state, id).x === undefined && !opened.has(id),
+      ),
+    );
+    const el = layer.current;
+    if (el && opened.size > 0) {
+      const found = placeOpened(
+        el.getBoundingClientRect(),
+        [...el.children].filter((w): w is HTMLElement => w instanceof HTMLElement),
+        opened,
+        playerTile.current(),
+        scaleOnScreen,
+      );
+      for (const [id, at] of found) next.set(id, at);
+    }
+    if (next.size !== auto.size || [...next].some(([id, at]) => auto.get(id) !== at)) setAuto(next);
+  }, [state, resized, layer, contextKey]);
   // The equipment's height in its own px, for the containers' default place right under
   // it (containersTop, windows.css --containers-top): it changes with the backpack under
   // the figure, its fold and the text scale. Watched while its window is in the page.
@@ -1279,6 +1394,7 @@ function useWindows(
     layer,
     equipment,
     containersTop: containersTop(state.win.inventory, equipmentHeight),
+    auto,
   };
 }
 
@@ -1291,55 +1407,63 @@ function readStorage(storage: Storage | undefined, key: string): string | null {
 }
 
 /**
- * The tabs of the chat window, in its title bar: the chat, and the system log as a second
- * tab (its notices float over the map meanwhile; a dot says there is something new).
+ * The tabs of the chat window, in its title bar (docs/17 UI-10): All, Local, Party, Guild
+ * and Global filter the chat lines (state/chat.ts), and the system log is the last one
+ * (its notices float over the map meanwhile). A dot says a tab has something new.
  */
 function ChatTabs(props: {
   t: Translate;
-  tab: "chat" | "log";
-  onTab(tab: "chat" | "log"): void;
-  unread: boolean;
+  tab: ChatTab;
+  onTab(tab: ChatTab): void;
+  unread: ReadonlySet<ChatTab>;
 }): JSX.Element {
   const { t } = props;
-  const tabButton = (id: "chat" | "log", label: string): JSX.Element => (
-    <button
-      type="button"
-      role="tab"
-      id={`chat-tab-${id}`}
-      data-chat-tab={id}
-      aria-selected={props.tab === id}
-      aria-controls={`chat-pane-${id}`}
-      tabIndex={props.tab === id ? 0 : -1}
-      onClick={() => props.onTab(id)}
-    >
-      {label}
-      {id === "log" && props.unread && <span class="tab-dot" aria-hidden="true" />}
-    </button>
-  );
   return (
     <div
       class="chat-tabs"
       role="tablist"
       aria-label={t("client.chat.tabs")}
+      onWheel={(e) => {
+        // Too wide for the bar (a large text size): the wheel moves them sideways.
+        const to = wheelAlong(e.currentTarget, e);
+        if (to === undefined) return;
+        e.preventDefault();
+        e.currentTarget.scrollLeft = to;
+      }}
       onKeyDown={(e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
         e.preventDefault();
         // The tab's arrows, not the character's.
         e.stopPropagation();
-        const next = props.tab === "chat" ? "log" : "chat";
+        const next = nextTab(props.tab, e.key === "ArrowRight" ? 1 : -1);
         props.onTab(next);
         document.getElementById(`chat-tab-${next}`)?.focus();
       }}
     >
-      {tabButton("chat", t("client.chat.title"))}
-      {tabButton("log", t("client.chat.log"))}
+      {CHAT_TABS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          id={`chat-tab-${id}`}
+          data-chat-tab={id}
+          data-unread={props.unread.has(id) ? "" : undefined}
+          aria-selected={props.tab === id}
+          aria-controls={id === "log" ? "chat-pane-log" : "chat-pane-chat"}
+          tabIndex={props.tab === id ? 0 : -1}
+          onClick={() => props.onTab(id)}
+        >
+          {t(CHAT_TAB_LABEL[id])}
+          {props.unread.has(id) && <span class="tab-dot" aria-hidden="true" />}
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The two panes of the chat window: the chat and the system log. */
+/** The two panes of the chat window: the chat (its tab filters it) and the system log. */
 function ChatPanes(props: {
-  tab: "chat" | "log";
+  tab: ChatTab;
   log: JSX.Element;
   children: ComponentChildren;
 }): JSX.Element {
@@ -1349,8 +1473,8 @@ function ChatPanes(props: {
         class="chat-pane"
         id="chat-pane-chat"
         role="tabpanel"
-        aria-labelledby="chat-tab-chat"
-        hidden={props.tab !== "chat"}
+        aria-labelledby={`chat-tab-${props.tab === "log" ? "chat" : props.tab}`}
+        hidden={props.tab === "log"}
       >
         {props.children}
       </div>

@@ -48,6 +48,7 @@ shop:
     - { item: stagleather_hood, price: 230 }
     - { item: stagleather_boots, price: 220 }
     - { item: mana_draught, price: 22 }
+    - { item: health_draught, price: 60 }
   buys:
     - { item: stagleather_coat, price: 170 }
     - { item: stagleather_leggings, price: 45 }

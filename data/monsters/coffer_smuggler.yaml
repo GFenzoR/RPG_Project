@@ -22,3 +22,4 @@ loot:
   - { item: bolt, chance: 0.25, count: [2, 6] }
 tags: [human, camp, bosque]
 notes: The crew of the unflagged boat (Chapter 2), camped on the east shore, levels 15-18. Throws knives (physical) at range.
+corpse: remains_humanoid

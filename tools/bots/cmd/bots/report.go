@@ -212,7 +212,8 @@ type Report struct {
 	FailedToEnter    int            `json:"failed_to_enter"`
 	Disconnects      int            `json:"disconnects"`
 	DisconnectReason map[string]int `json:"disconnect_reasons,omitempty"`
-	OtherErrors      int            `json:"other_errors"` // e.g. a failed logout
+	OtherErrors      int            `json:"other_errors"`   // e.g. a failed logout
+	LeftLinkDead     int            `json:"left_link_dead"` // no error: fleet.loggedOut
 	Errors           []string       `json:"errors,omitempty"`
 	StartedAt        time.Time      `json:"started_at"`
 	RampSeconds      float64        `json:"ramp_s"`
@@ -325,8 +326,8 @@ func (r *Report) checks() {
 // summary is the human-readable report (Markdown, to paste in a PR).
 func (r *Report) summary(w io.Writer) {
 	fmt.Fprintf(w, "## Load test: %s, %d bots\n\n", r.Scenario, r.Bots)
-	fmt.Fprintf(w, "Entered %d/%d, disconnects %d, other errors %d; ramp %.0f s, steady window %.0f s.\n",
-		r.Entered, r.Bots, r.Disconnects, r.OtherErrors, r.RampSeconds, r.SteadySeconds)
+	fmt.Fprintf(w, "Entered %d/%d, disconnects %d, other errors %d, left link-dead in a fight %d; ramp %.0f s, steady window %.0f s.\n",
+		r.Entered, r.Bots, r.Disconnects, r.OtherErrors, r.LeftLinkDead, r.RampSeconds, r.SteadySeconds)
 	if r.MetricsURL != "" {
 		fmt.Fprintf(w, "Server metrics: %s.\n", r.MetricsURL)
 	}

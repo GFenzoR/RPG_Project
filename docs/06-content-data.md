@@ -140,7 +140,10 @@ items:
     ammo: { type: arrow, attack: 9 }
   ```
 - **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
-  `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
+  `creature_remains` (los restos por defecto de un monstruo, y el cuerpo de un jugador) es
+  un contenedor con `pickupable: false`, como los restos de cada familia de monstruos
+  (`remains_fur`, `remains_chitin`, `remains_scales`, `remains_slag`, `remains_bones`,
+  `remains_feathers`, `remains_humanoid`, `remains_bramble`; ver `corpse` en "Monstruo").
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
 - **Item de misión** (`quest: true`, docs/17 UI-6, solo de dibujo): un item que existe
   para una quest (lo que pide el `has_item` de un paso o de un diálogo: `bosun_logbook`,
@@ -285,7 +288,62 @@ loot:
   - { item: wolf_pelt, chance: 0.25 }
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
+corpse: remains_fur        # opcional: los restos que deja (por defecto, creature_remains)
 ```
+- **Restos** (`corpse`, opcional): el item que el servidor deja donde muere, con el botín
+  adentro. Es el cuerpo caído de su familia: `remains_fur` (bestias con pelo: lobo, sabueso,
+  rata, ciervo, jabalí, murciélago), `remains_chitin` (cangrejo, araña, escarabajo,
+  reptante), `remains_scales` (salamandra, dragoncillo, sapo), `remains_slag` (los gólems de
+  escoria), `remains_bones` (el minero ahogado), `remains_feathers` (la gaviota),
+  `remains_humanoid` (saqueadores, contrabandistas, mineros de obsidiana) y
+  `remains_bramble` (el espinoso). Tiene que ser un item de `kind: container` con
+  `pickupable: false` (`make validate` y el arranque del servidor exigen lo mismo); sin
+  `corpse`, el monstruo deja `creature_remains`. Los restos duran
+  `combat.monster_corpse_ms` como siempre y el botín que no entra en sus `container.slots`
+  se pierde. Todo monstruo de `data/monsters` tiene el
+  suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
+  `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
+- **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
+  es `monster.schema.json`, `$defs/attack`):
+  ```yaml
+  attacks:
+    # Área: un círculo (radius 1-6, center self por defecto o target) o un rayo (length
+    # 1-6, desde el monstruo hacia su objetivo). Sirve con melee, distance o spell.
+    - { type: spell, element: fire, min: 22, max: 52, interval_ms: 2000, chance: 0.3,
+        area: { shape: beam, length: 4 } }
+    - { type: distance, min: 0, max: 34, interval_ms: 2000, range: 4,
+        area: { shape: circle, radius: 1, center: target } }
+    # below_hp_pct (1-100, cualquier ataque): solo con la vida por debajo de ese %.
+    # heal_self: min-max de vida, solo herido y peleando; sin element, range, area ni condition.
+    - { type: heal_self, min: 60, max: 90, interval_ms: 4000, chance: 0.5, below_hp_pct: 50 }
+    # summon: count (1-8) en casillas libres a su lado, max_alive (1-8, por defecto count)
+    # vivas a la vez; sin min ni max. La invocada no puede invocar.
+    - { type: summon, interval_ms: 60000, below_hp_pct: 60,
+        summon: { monster: cinder_salamander, count: 2, max_alive: 2 } }
+  phases:                      # de jefe; below_hp_pct 1-99, distinto en cada una
+    - below_hp_pct: 30
+      speed_mult: 1.3          # (0, 4], por defecto 1
+      attack_interval_mult: 0.75
+      attacks_add: [ { type: melee, element: fire, min: 10, max: 30, interval_ms: 3000 } ]
+  ```
+  El alcance de un ataque con área (a qué distancia de su objetivo lo usa) es el radio de
+  un círculo alrededor de sí, el largo de un rayo o, en un círculo alrededor del
+  objetivo, el del ataque sin área (`range`, 1 cuerpo a cuerpo); un rayo solo lo usa con
+  su objetivo en una de sus 8 líneas y un círculo alrededor de sí con él dentro de su área
+  redonda (docs/02 "Habilidades"). `make validate` y el
+  arranque del servidor (`content.ParseMonster`, `session.checkSummons`) rechazan lo mismo:
+  un tipo, una forma o un centro que no existe, un círculo sin `radius` o un rayo sin
+  `length` (o con `radius`, o centrado en el objetivo), un `range` en un rayo o en un
+  círculo alrededor de sí (no cuenta: su alcance es su largo o su radio), radios y
+  largos de más de 6 (lo
+  que nota un monstruo), un `range` de más de 6, un círculo alrededor del objetivo que
+  llega más lejos que eso (`range` + `radius`, 1 + `radius` cuerpo a cuerpo: dañaría a
+  un jugador que ni conoce al monstruo), un `heal_self` o `summon` con `element`, `range`, `area` o
+  `condition`, un `summon` con `min`/`max` o sin `summon` (el arranque también uno armado
+  en Go sin `summon` o con `max_alive` 0), uno de un monstruo que no
+  existe o que invoca a su vez, y dos fases con el mismo `below_hp_pct`. Los duelos de
+  balance (`server/internal/sim/foe_test.go`) los simulan: un monstruo nuevo con
+  habilidades no necesita más que su caso en el test de su isla.
 - **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
   contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
   y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o el
@@ -550,10 +608,16 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   con línea de visión, nunca al que lanza) o `conjure: { item, count }` (crea ese item en la
   mochila: una runa con todas sus cargas o, con `count`, esa cantidad de un item apilable,
   juntada con las pilas que ya hay; si no entra entera, el hechizo falla sin gastar maná).
-- T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance` o
-  `shield`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la skill ×
-  per_skill`. Los hechizos del montaraz escalan así con la distancia. `light` está en el
-  esquema para un hito futuro y el servidor lo rechaza todavía.
+- T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance`,
+  `shield` o `weapon`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la
+  skill × per_skill` (en combate: con las condiciones de skill, como `keen_eye`). Los
+  hechizos del montaraz escalan así con la distancia. **`skill: weapon`** (progresión de
+  hechizos, 2026-11) es la skill del arma que el que lanza tiene en la mano: la de su tipo
+  (`sword`, `axe`, `club`; `distance` con un arco o una ballesta) y `fist` sin arma o con
+  una varita, que no entrena skill (`session/magic.go` `scalingSkill`, la misma regla que
+  el golpe cuerpo a cuerpo). Así los golpes de área del guardián crecen con la espada, el
+  hacha o la maza que entrena. `light` está en el esquema para un hito futuro y el
+  servidor lo rechaza todavía.
 - T3.2: dos efectos más. `condition: { id, duration_ms | ticks + damage, chance, range }`
   pone una condición al que lanza o, con `range`, a un monstruo o, con PvP (T5.2), a un
   jugador, a esa distancia con línea de visión (los chequeos de un hechizo de un objetivo;
@@ -563,8 +627,8 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
-- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal` y
-  de una `condition` va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
+- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal`,
+  de una `condition` y del ataque de un monstruo va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
   esquema y `content.MaxRange`): el medio alto de la ventana clásica de 15x11 + 1, lo que
   nota un monstruo. Así un monstruo golpeado desde tan lejos como apunta un jugador, o
   por un área, siempre lo nota y devuelve el golpe; la vista ancha de 31x21 no lo estiró
@@ -799,7 +863,12 @@ trade:
   E2E usa `client/e2e/fixtures/boat_routes.yaml` (Puerto → testisle).
 - Reglas del viaje (combate, cobro, llegada): `02-game-design.md`, "Viajes en barco";
   números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`). La llegada
-  por un portal (escaleras y demás) usa el mismo `arrival_radius`.
+  por un portal (escaleras y demás) usa el mismo `arrival_radius`. `combat_block_ms`
+  también es el bloqueo de logout de cualquier pelea (`02-game-design.md`, "Bloqueo de
+  logout en combate"), y `link_dead_max_ms` (obligatorio; `0` = sin tope, si no al menos
+  `combat_block_ms` y hasta 1 h, lo revisa el servidor) es lo más que un personaje que
+  perdió la conexión en una pelea con monstruos queda en el mundo aunque la pelea siga (el
+  bloqueo PvP no tiene tope).
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Tutorial (T4.2)

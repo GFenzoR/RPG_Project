@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -22,9 +23,11 @@ import (
 
 // Monster attack types (data/monsters attacks[].type).
 const (
-	attackMelee    = "melee"
-	attackDistance = "distance"
-	attackSpell    = "spell"
+	attackMelee    = content.AttackMelee
+	attackDistance = content.AttackDistance
+	attackSpell    = content.AttackSpell
+	attackHealSelf = content.AttackHealSelf
+	attackSummon   = content.AttackSummon
 )
 
 // monsterAttackKind is the AttackKind of a monster attack of type typ.
@@ -90,6 +93,36 @@ func (w *World) playerAttack(ctx *game.TickContext, p *Player, kind pb.AttackKin
 func (w *World) areaAttack(ctx *game.TickContext, p *Player, r int) {
 	w.reveal(ctx, p)
 	w.attackEvent(p.id, p.pos, pb.AttackKind_ATTACK_KIND_SPELL, 0, p.pos, false, r)
+}
+
+// monsterAreaEvent is attackEvent for monster m attacking the area of radius r around
+// centre (a beam goes as the circle of its length around m: the clients play the cast
+// where m faces and push whoever it hurt away from m). A client that knows m but does
+// not see the centre (a circle around a target beyond its window) gets only the side of
+// it, without the area, as for a target it does not know. An area aimed at a hidden
+// target (an invisible player m sees, at the centre of the circle or where the beam
+// points) reaches only the clients that see that player: the area would give its tile
+// away.
+func (w *World) monsterAreaEvent(m *Monster, kind pb.AttackKind, centre world.Pos, r int, hidden *Player) {
+	var full *pb.ServerMessage // built once, for every client that sees the centre
+	send := func(o *Player) {
+		if !o.Knows(m.id) {
+			return
+		}
+		if !Sees(o.pos, centre) {
+			o.emit(attackMsg(m.id, kind, 0, edgePoint(o.pos, centre, m.pos), 0))
+			return
+		}
+		if full == nil {
+			full = attackMsg(m.id, kind, 0, centre, r)
+		}
+		o.emit(full)
+	}
+	if hidden != nil {
+		w.eachWatcher(hidden, send)
+		return
+	}
+	w.eachObserver(nil, m.pos, send)
 }
 
 // Disappear reasons, shorter.

@@ -11,7 +11,8 @@ behavior:
   target_distance: 1
 attacks:
   - { type: melee, min: 0, max: 74, interval_ms: 2000 }
-  - { type: spell, element: fire, min: 22, max: 52, interval_ms: 2000, chance: 0.3, range: 4,
+  # Fire breath: a beam of 4 tiles towards its target; whoever stands in line burns too.
+  - { type: spell, element: fire, min: 22, max: 52, interval_ms: 2000, chance: 0.3, area: { shape: beam, length: 4 },
       condition: { id: burning, chance: 0.3, ticks: 5, damage: 7 } }
 resistances: { fire: 100, earth: 20, physical: 5, ice: -25 }
 loot:
@@ -19,4 +20,5 @@ loot:
   - { item: copper_coin, chance: 0.9, count: [30, 110] }
   - { item: embersteel_sabre, chance: 0.02 }
 tags: [dragon, crater, volcan]
-notes: Young drakes nesting on the crater rim, levels 48-58. The top of the island; its breath can leave you burning.
+notes: Young drakes nesting on the crater rim, levels 48-58. The top of the island; its breath is a 4-tile line of fire that can leave you burning, so step off its line.
+corpse: remains_scales

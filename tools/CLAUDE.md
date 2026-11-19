@@ -65,7 +65,9 @@ la ciudad). Reporte JSON (`-report`) y
 resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
 (Ping→Pong), bytes por jugador y desconexiones, comparados con `docs/07`. `make bots N=100`
 levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale
-con código 1 si algún bot no entra o se desconecta. `-profile human|mechanical` (T4.1) les da
+con código 1 si algún bot no entra o se desconecta. Al final cada bot sale como un jugador:
+espera el bloqueo de logout de su última pelea (`logoutWait`); uno que a los 45 s sigue en
+combate cierra la conexión y queda link-dead (`left_link_dead` del reporte, no es error). `-profile human|mechanical` (T4.1) les da
 el ritmo de los perfiles de `server/pkg/bot` (los mismos del test de la detección de bots):
 el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico no.
 
@@ -273,7 +275,10 @@ Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el re
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
 exige que cada receta sea una ruta usada en `data/` (o un frame de animación
 `<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como los del jabalí, o de
-efecto `effects/<nombre>/<n>`, sin huecos en la tira, o un icono de interfaz
+efecto `effects/<nombre>/<n>`, sin huecos en la tira, o arte de proyectil de `kind: effect`
+que el cliente busca por ruta (`MISSILE_ART`, nada más: la flecha `missiles/arrow/{e,se}`
+y, por elemento con orbe, `missiles/<elemento>/<n>` hasta `MAX_ORB_FRAMES` - 1 y
+`missiles/<elemento>/trail`), o un icono de interfaz
 `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta, o una
 parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
 `data/` usa). Un test exige además a cada suelo una media de L* entre 20 y 50 (docs/17
@@ -287,7 +292,10 @@ ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)". Desde el 2026-11-18 una parte de las
 recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el jabalí, el
-ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel.
+ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel; desde
+el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por familia y
+`creature_remains`, objetos de 32x32 dibujados con sus proporciones y agrandados con
+`grow` hasta 24-30 px de largo).
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su

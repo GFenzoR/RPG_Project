@@ -118,3 +118,40 @@ export function applyScales(
   if (textScale === 1) root.style.removeProperty("--ui-text-scale");
   else root.style.setProperty("--ui-text-scale", String(textScale));
 }
+
+// ---- The chat's opacity (docs/17 UI-10) ------------------------------------------------
+
+const CHAT_OPACITY_KEY = "rpg.chat-opacity";
+
+/** The chat background's opacity Options offers, percent: 30 to 100 in steps of 5. */
+export const CHAT_OPACITY = { min: 30, max: 100, step: 5, initial: 50 } as const;
+
+/** A chat opacity inside the offered range, on its steps (the initial one when not a number). */
+export function clampChatOpacity(v: number): number {
+  if (!Number.isFinite(v)) return CHAT_OPACITY.initial;
+  const stepped = Math.round(v / CHAT_OPACITY.step) * CHAT_OPACITY.step;
+  return Math.min(CHAT_OPACITY.max, Math.max(CHAT_OPACITY.min, stepped));
+}
+
+/** The remembered chat opacity, percent (50 when unset or unreadable). */
+export function loadChatOpacity(storage: Pick<Storage, "getItem"> | undefined): number {
+  try {
+    const raw = storage?.getItem(CHAT_OPACITY_KEY);
+    return raw == null ? CHAT_OPACITY.initial : clampChatOpacity(Number(raw));
+  } catch {
+    return CHAT_OPACITY.initial;
+  }
+}
+
+export const saveChatOpacity = (v: number, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, CHAT_OPACITY_KEY, String(clampChatOpacity(v)));
+
+/** Sets the chat background's opacity on the page (windows.css --chat-opacity). */
+export function applyChatOpacity(
+  root: { style: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty"> },
+  percent: number,
+): void {
+  const v = clampChatOpacity(percent);
+  if (v === CHAT_OPACITY.initial) root.style.removeProperty("--chat-opacity");
+  else root.style.setProperty("--chat-opacity", String(v / 100));
+}

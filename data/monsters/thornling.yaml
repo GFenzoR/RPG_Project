@@ -11,7 +11,8 @@ behavior:
   target_distance: 1
 attacks:
   - { type: melee, min: 0, max: 38, interval_ms: 2000 }
-  - { type: spell, element: earth, min: 12, max: 30, interval_ms: 2000, chance: 0.2, range: 3 }
+  # Thorn burst: a ring of thorns hits every tile around it.
+  - { type: spell, element: earth, min: 12, max: 30, interval_ms: 2000, chance: 0.2, area: { shape: circle, radius: 1 } }
 resistances: { physical: 10, earth: 80, fire: -25, ice: 10 }
 loot:
   - { item: thorn_heartwood, chance: 0.2 }
@@ -19,4 +20,5 @@ loot:
   - { item: elm_log, chance: 0.3 }
   - { item: copper_coin, chance: 0.8, count: [10, 50] }
 tags: [plant, forest, bosque]
-notes: Deep forest north of the grove, levels 18-22. Hits hard and resists earth; fire is its weakness.
+notes: Deep forest north of the grove, levels 18-22. Hits hard and resists earth; fire is its weakness. Its thorn burst hits everyone next to it.
+corpse: remains_bramble

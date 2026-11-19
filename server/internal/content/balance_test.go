@@ -2,8 +2,11 @@ package content
 
 import (
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +70,27 @@ func TestParseBalanceErrors(t *testing.T) {
 	}
 }
 
+// travel.link_dead_max_ms is 0 (no cap) or at least combat_block_ms: a cap below the block
+// would cut every fight short of it.
+func TestLinkDeadMaxMs(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "data", "balance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const repo = "link_dead_max_ms: 120000"
+	if !strings.Contains(string(raw), repo) {
+		t.Fatalf("data/balance.yaml has no %q", repo)
+	}
+	for v, ok := range map[string]bool{"0": true, "12000": true, "3600000": true, "11999": false, "3600001": false, "-1": false} {
+		b, err := ParseBalance([]byte(strings.Replace(string(raw), repo, "link_dead_max_ms: "+v, 1)))
+		if (err == nil) != ok {
+			t.Errorf("link_dead_max_ms %s: error %v", v, err)
+		} else if ok && strconv.Itoa(b.Travel.LinkDeadMaxMs) != v {
+			t.Errorf("link_dead_max_ms %s read as %d", v, b.Travel.LinkDeadMaxMs)
+		}
+	}
+}
+
 func TestLoadMonstersAndItemsRepoData(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "data")
 	ms, err := LoadMonsters(dir)
@@ -107,10 +131,79 @@ func TestParseMonsterErrors(t *testing.T) {
 		"bad attack": "id: x\nhealth: 5\nspeed: 100\nattacks: [{type: melee, min: 5, max: 1, interval_ms: 2000}]",
 		"bad loot":   "id: x\nhealth: 5\nspeed: 100\nloot: [{item: a, chance: 2}]",
 		"ranged":     "id: x\nhealth: 5\nspeed: 100\nbehavior: {target_distance: 3}",
+		// Abilities (areas, heal_self, summon, phases).
+		"unknown type":       atk("{type: kick, min: 1, max: 2, interval_ms: 2000}"),
+		"unknown shape":      atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: cone, radius: 2}}"),
+		"circle no radius":   atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: circle}}"),
+		"circle too wide":    atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 7}}"),
+		"circle elsewhere":   atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 1, center: north}}"),
+		"beam no length":     atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: beam}}"),
+		"beam on the target": atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: beam, length: 3, center: target}}"),
+		"beam with radius":   atk("{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: beam, length: 3, radius: 1}}"),
+		// A beam or a circle around the monster reaches its length or radius: a range
+		// would be ignored, and whoever writes it may think it counts.
+		"beam with range":   atk("{type: spell, min: 1, max: 2, interval_ms: 2000, range: 4, area: {shape: beam, length: 3}}"),
+		"circle with range": atk("{type: distance, min: 1, max: 2, interval_ms: 2000, range: 4, area: {shape: circle, radius: 1}}"),
+		"self with range":   atk("{type: spell, min: 1, max: 2, interval_ms: 2000, range: 2, area: {shape: circle, radius: 2, center: self}}"),
+		"heal nothing":      atk("{type: heal_self, min: 0, max: 0, interval_ms: 2000}"),
+		"heal an area":      atk("{type: heal_self, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 1}}"),
+		"heal fire":         atk("{type: heal_self, element: fire, min: 1, max: 2, interval_ms: 2000}"),
+		"below 101":         atk("{type: melee, min: 1, max: 2, interval_ms: 2000, below_hp_pct: 101}"),
+		"summon nothing":    atk("{type: summon, interval_ms: 2000}"),
+		"summon nobody":     atk("{type: summon, interval_ms: 2000, summon: {count: 1}}"),
+		"summon nine":       atk("{type: summon, interval_ms: 2000, summon: {monster: imp, count: 9}}"),
+		"summon damage":     atk("{type: summon, min: 1, max: 2, interval_ms: 2000, summon: {monster: imp, count: 1}}"),
+		"summon on a melee": atk("{type: melee, min: 1, max: 2, interval_ms: 2000, summon: {monster: imp, count: 1}}"),
+		"phase at 100":      "id: x\nhealth: 5\nspeed: 100\nphases: [{below_hp_pct: 100}]",
+		"two phases at 50":  "id: x\nhealth: 5\nspeed: 100\nphases: [{below_hp_pct: 50}, {below_hp_pct: 50}]",
+		"phase too fast":    "id: x\nhealth: 5\nspeed: 100\nphases: [{below_hp_pct: 50, speed_mult: 5}]",
+		"phase bad attack":  "id: x\nhealth: 5\nspeed: 100\nphases: [{below_hp_pct: 50, attacks_add: [{type: melee, min: 3, max: 1, interval_ms: 9}]}]",
 	} {
 		if _, err := ParseMonster([]byte(src)); err == nil {
 			t.Errorf("%s: expected error", name)
 		}
+	}
+}
+
+// atk is a monster with the one attack src.
+func atk(src string) string { return "id: x\nhealth: 5\nspeed: 100\nattacks: [" + src + "]" }
+
+// ParseMonster fills an ability's defaults and sorts the phases from the highest
+// below_hp_pct, so the phases a monster is in are always the first ones.
+func TestParseMonsterAbilities(t *testing.T) {
+	m, err := ParseMonster([]byte(`id: boss
+health: 100
+speed: 100
+attacks:
+  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 2 } }
+  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: beam, length: 4 } }
+  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: { shape: circle, radius: 1, center: target } }
+  - { type: summon, interval_ms: 9000, summon: { monster: imp, count: 2 } }
+  - { type: heal_self, min: 5, max: 9, interval_ms: 3000, below_hp_pct: 40 }
+phases:
+  - { below_hp_pct: 20, attacks_add: [ { type: melee, min: 1, max: 3, interval_ms: 1000 } ] }
+  - { below_hp_pct: 60, speed_mult: 1.5 }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := m.Attacks
+	if a[0].Area.Center != AreaSelf || a[1].Area.Center != AreaSelf || a[0].Element != "physical" || a[0].Chance != 1 {
+		t.Errorf("area defaults: %+v %+v", a[0], a[1].Area)
+	}
+	if a[3].Summon.MaxAlive != 2 || a[3].Element != "" || a[3].Targeted() || a[4].Targeted() || !a[0].Targeted() {
+		t.Errorf("summon: %+v %+v", a[3], a[3].Summon)
+	}
+	for i, want := range []int{2, 4, 5} {
+		if got := a[i].Reach(); got != want {
+			t.Errorf("attacks[%d].Reach() = %d, want %d", i, got, want)
+		}
+	}
+	if p := m.Phases; p[0].BelowHealthPct != 60 || p[1].BelowHealthPct != 20 || p[0].AttackIntervalMult != 1 || p[1].SpeedMult != 1 {
+		t.Errorf("phases %+v", p)
+	}
+	if all := m.AllAttacks(); len(all) != 6 || all[5].Max != 3 || !m.Summons() {
+		t.Errorf("AllAttacks = %d, Summons = %v", len(all), m.Summons())
 	}
 }
 

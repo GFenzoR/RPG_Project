@@ -5,6 +5,7 @@ import { BOAR } from "./boar.ts";
 import { CRATE } from "./crate.ts";
 import { FORGE_ECHO } from "./forge-echo.ts";
 import { MARKET_BOARD } from "./market-board.ts";
+import { REMAINS } from "./remains.ts";
 import { SIGNPOST } from "./signpost.ts";
 import { STAG } from "./stag.ts";
 
@@ -16,4 +17,5 @@ export const ENGINE_SPECS: readonly SpriteSpec[] = [
   MARKET_BOARD,
   SIGNPOST,
   CRATE,
+  ...REMAINS,
 ];

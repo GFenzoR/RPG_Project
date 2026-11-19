@@ -261,3 +261,13 @@ items:
   rampart_wall: 258
   stone_wall_window: 259
   wooden_wall_window: 260
+  health_draught: 261
+  concentrated_health_draught: 262
+  remains_fur: 263
+  remains_chitin: 264
+  remains_scales: 265
+  remains_slag: 266
+  remains_bones: 267
+  remains_feathers: 268
+  remains_humanoid: 269
+  remains_bramble: 270

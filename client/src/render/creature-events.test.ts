@@ -116,6 +116,17 @@ describe("what the server says", () => {
     expect(inArea(at(4, 4), 2, { x: 5, y: 4, z: 6 })).toBe(false);
   });
 
+  it("finds the monster behind a hit at the diagonal tip of its beam", () => {
+    // A beam of 4 arrives as the circle of 4 around the monster: (4, 4) is beyond it.
+    const breath = attack(7, 0, at(2, 2), 100, 4);
+    const tip = fighter(10, CreatureKind.PLAYER, 6, 6);
+    expect(inArea(at(2, 2), 4, tip.pos)).toBe(false);
+    expect(attackerOf(tip, [breath], 100)).toBe(breath);
+    // Off every line and out of the circle: not that attack's.
+    expect(attackerOf(fighter(11, CreatureKind.PLAYER, 6, 5), [breath], 100)).toBeUndefined();
+    expect(attackerOf(fighter(12, CreatureKind.PLAYER, 7, 7), [breath], 100)).toBeUndefined();
+  });
+
   it("plays the bow for a ranged attack, the spell for a spell, the swing for a blow", () => {
     expect(attackAction(AttackKind.RANGED)).toBe("shoot");
     expect(attackAction(AttackKind.SPELL)).toBe("cast");

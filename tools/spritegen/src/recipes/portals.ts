@@ -1,7 +1,10 @@
 // The look of the portals of portals.yaml (docs/02 "Cambiar de piso"): map objects drawn
 // over the ground in 3/4 view, lit from the top-left, like the rest of the decoration. The
 // stairs come from the Dungeon Crawl pack; ladders, holes, rope spots and teleports are
-// ours. None of them moves anyone: the item only shows where the portal is.
+// ours. None of them moves anyone: the item only shows where the portal is. The teleport
+// is animated (docs/17 ART-7: 6 frames of 100 ms, in step all over the world): its sprite
+// is frame 0 and decor/teleport/frame_<n> the others (timing in assets/sprites.yaml
+// `tiles`).
 import type { Image, Rgba } from "@rpg/spritepack";
 import {
   canvas,
@@ -267,8 +270,8 @@ function ropeSpot(img: Image, _rand: Rng, seed: number): void {
 
 // ---- teleport --------------------------------------------------------------------------
 
-/** A short carved standing stone with a glowing rune, its base at (x, y). */
-function runeStone(img: Image, x: number, y: number, seed: number): void {
+/** A short carved standing stone with a glowing rune, its base at (x, y); `lit` brightens it. */
+function runeStone(img: Image, x: number, y: number, seed: number, lit: boolean): void {
   const s = canvas(32, 32);
   eachInRect(x - 1, y - 5, 3, 6, (qx, qy) => {
     const u = (qx + 0.5 - x - 0.5) / 1.5;
@@ -276,18 +279,26 @@ function runeStone(img: Image, x: number, y: number, seed: number): void {
     px(s, qx, qy, shadeOf(darkStone, level));
   });
   px(s, x, y - 6, darkStone.light); // rounded top
-  px(s, x, y - 3, ARCANE.light); // the rune
-  px(s, x, y - 2, ARCANE.shadow);
+  px(s, x, y - 3, lit ? ARCANE.light : ARCANE.base); // the rune
+  px(s, x, y - 2, lit ? ARCANE.base : ARCANE.shadow);
   outline(s, { amount: 0.5 });
   composite(img, s);
 }
 
+/** Frames of the teleport's loop (docs/17 ART-7: 6–8 of 100 ms, `sync: world`). */
+export const TELEPORT_FRAMES = 6;
+/** One seed for every frame (each frame's path would give its own): only the motion changes. */
+const TELEPORT_SEED = 0x7e1e;
+
 /**
  * A ring of carved stones around a swirl of light: a violet whirl with teal arms that
- * turn toward a white heart. Stepped into (portals.yaml `teleport`). Static: the atlas has
- * no item animation (docs/03).
+ * turn toward a white heart. Stepped into (portals.yaml `teleport`). Frame `f` of
+ * TELEPORT_FRAMES: the arms turn half a turn over the loop (two arms: it closes), the
+ * sparks rise and the heart and the runes pulse.
  */
-function teleport(img: Image, _rand: Rng, seed: number): void {
+function teleport(img: Image, f: number): void {
+  const seed = TELEPORT_SEED;
+  const phase = (f / TELEPORT_FRAMES) * Math.PI * 2;
   const cx = 16;
   const cy = 19;
   const rx = 10;
@@ -301,21 +312,25 @@ function teleport(img: Image, _rand: Rng, seed: number): void {
   eachInEllipse(cx, cy, rx, ry, (x, y, nx, ny) => {
     const r = Math.hypot(nx, ny);
     const a = Math.atan2(ny, nx);
-    const arm = Math.cos(2 * a - r * 7 + 0.6); // two arms, turning inward
-    if (r < 0.18) px(img, x, y, ARCANE.light);
+    const arm = Math.cos(2 * a - r * 7 + 0.6 - phase); // two arms, turning inward
+    const heart = 0.18 + 0.05 * Math.cos(phase * 2);
+    if (r < heart) px(img, x, y, ARCANE.light);
     else if (arm > 0.55 - r * 0.2) px(img, x, y, shadeOf(ARCANE, 0.9 - r * 0.9));
     else px(img, x, y, shadeOf(VOID, 0.75 - r * 0.6 + (hash2(x, y, seed) - 0.5) * 0.15));
   });
-  // Sparks rising from the whirl.
+  // Sparks rising from the whirl: 2 px a frame, back down after 12 (the loop's length).
   for (const [x, y] of [
     [13, 11],
     [19, 9],
     [17, 13],
     [11, 15],
     [22, 14],
-  ] as const)
-    px(img, x, y, ARCANE.base);
-  px(img, 16, 7, ARCANE.light);
+    [16, 7],
+  ] as const) {
+    const up = y - ((f * 2 + (x % 3) * 4) % 12) + 4;
+    if (up < 2) continue;
+    px(img, x, up, up < 9 ? ARCANE.light : ARCANE.base);
+  }
   // The stones: around the ellipse, the far ones first so the near ones cover them.
   const stones: [number, number][] = [];
   for (let i = 0; i < 6; i++) {
@@ -323,7 +338,19 @@ function teleport(img: Image, _rand: Rng, seed: number): void {
     stones.push([Math.round(cx + Math.cos(a) * (rx + 2)), Math.round(cy + Math.sin(a) * (ry + 2))]);
   }
   stones.sort((a, b) => a[1] - b[1]);
-  for (const [x, y] of stones) runeStone(img, x, y, seed);
+  // The runes light one after the other around the ring.
+  stones.forEach(([x, y], i) => runeStone(img, x, y, seed, i % 3 === f % 3));
+}
+
+/** The teleport and its frames (decor/teleport is frame 0). */
+function teleportFrames(): RecipeBook {
+  const book: RecipeBook = {};
+  for (let f = 0; f < TELEPORT_FRAMES; f++)
+    book[f === 0 ? "decor/teleport" : `decor/teleport/frame_${f}`] = {
+      kind: "object",
+      draw: (img) => teleport(img, f),
+    };
+  return book;
 }
 
 export const PORTALS: RecipeBook = {
@@ -331,5 +358,5 @@ export const PORTALS: RecipeBook = {
   "decor/ladder_down": { kind: "object", draw: ladderDown },
   "decor/hole": { kind: "object", draw: hole },
   "decor/rope_spot": { kind: "object", draw: ropeSpot },
-  "decor/teleport": { kind: "object", draw: teleport },
+  ...teleportFrames(),
 };

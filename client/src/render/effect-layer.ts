@@ -1,17 +1,21 @@
 // The effects of the game canvas, drawn above the map and its creatures: tile effects (the
 // atlas frame strip of their id, played frame by frame; a procedural shape for an id with
-// no art), projectiles, and the floating numbers in their own layer above names and bars.
+// no art), projectiles (the arrow turned toward its target, or an element's orb with motes
+// behind it; render/effects.ts; the procedural dot without art), and the floating numbers
+// in their own layer above names and bars.
 //
 // Budget (docs/07): every display object comes from a pool and is reused, the procedural
-// shapes share one GraphicsContext per id, and a frame allocates nothing: effects and
-// projectiles take pool slots in list order; a floating number keeps its Text while the
-// world keeps the number (its text is set once).
+// shapes share one GraphicsContext per id, a projectile id's textures are looked up once,
+// and a frame allocates nothing: effects, projectiles and trail motes take pool slots in
+// list order; a floating number keeps its Text while the world keeps the number (its text
+// is set once).
 import { Container, Graphics, GraphicsContext, Sprite, Text } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { FloatingTextKind } from "@rpg/protocol";
 import { tilePixels } from "@rpg/renderer";
 import type { Atlas, Camera } from "@rpg/renderer";
-import { effectFrame, effectFrames } from "./effects.ts";
+import { CANVAS_FONT, CANVAS_FONT_SIZE, CANVAS_TEXT_STROKE } from "./canvas-font.ts";
+import { arrowPose, effectFrame, effectFrames, missileArt, orbFrame } from "./effects.ts";
 import {
   EFFECT_BUFF,
   EFFECT_CONJURE,
@@ -83,7 +87,25 @@ function effectShape(id: number): GraphicsContext {
   return g;
 }
 
-/** A projectile, centred on 0,0. */
+/** A projectile id's textures: the arrow's two drawings, an orb's loop and mote, or none. */
+type MissileTextures =
+  | { kind: "arrow"; straight: Texture; diagonal: Texture }
+  | { kind: "orb"; frames: readonly Texture[]; trail: Texture | undefined }
+  | { kind: "none" };
+
+const NO_MISSILE: MissileTextures = { kind: "none" };
+
+/**
+ * The motes behind an orb, nearest first: how far back along its path (tiles) and how
+ * opaque. A mote that would sit behind the shooter's tile is not drawn.
+ */
+export const TRAIL: readonly { back: number; alpha: number }[] = [
+  { back: 0.3, alpha: 0.85 },
+  { back: 0.6, alpha: 0.55 },
+  { back: 0.9, alpha: 0.3 },
+];
+
+/** A projectile without art (the dot of before), centred on 0,0. */
 function projectileShape(id: number): GraphicsContext {
   const c = elementColor(id - PROJECTILE_ELEMENT);
   return new GraphicsContext()
@@ -133,11 +155,14 @@ export class EffectLayer {
   private readonly sprites: Sprite[] = [];
   private readonly shapeObjs: Graphics[] = [];
   private readonly shotObjs: Graphics[] = [];
+  private readonly missiles = new Map<number, MissileTextures>();
+  private readonly missileSprites: Sprite[] = [];
   private readonly numbers = new Map<FloatingTextState, FloatingNumber>();
   private readonly spareTexts: Text[] = [];
   private readonly spriteGroup = new Container({ label: "effect sprites" });
   private readonly shapeGroup = new Container({ label: "effect shapes" });
   private readonly shotGroup = new Container({ label: "projectiles" });
+  private readonly missileGroup = new Container({ label: "missiles" });
   private readonly world: WorldState;
   private readonly atlas: Atlas;
   private readonly tileSize: number;
@@ -149,7 +174,7 @@ export class EffectLayer {
     this.atlas = opts.atlas;
     this.tileSize = opts.atlas.tileSize;
     this.texts = opts.texts;
-    opts.effects.addChild(this.spriteGroup, this.shapeGroup, this.shotGroup);
+    opts.effects.addChild(this.spriteGroup, this.shapeGroup, this.shotGroup, this.missileGroup);
   }
 
   /** Real art only: an automatic or manifest placeholder would look worse than the shape. */
@@ -183,6 +208,38 @@ export class EffectLayer {
       this.shotShapes.set(id, ctx);
     }
     return ctx;
+  }
+
+  private missileOf(id: number): MissileTextures {
+    let m = this.missiles.get(id);
+    if (!m) {
+      const art = missileArt(id, this.hasArt);
+      m = NO_MISSILE;
+      if (art?.kind === "arrow") {
+        const straight = this.atlas.texture(art.straight);
+        const diagonal = this.atlas.texture(art.diagonal);
+        if (straight && diagonal) m = { kind: "arrow", straight, diagonal };
+      } else if (art?.kind === "orb") {
+        const frames = art.frames.flatMap((f) => this.atlas.texture(f) ?? []);
+        const trail = art.trail === undefined ? undefined : this.atlas.texture(art.trail);
+        if (frames.length === art.frames.length) m = { kind: "orb", frames, trail };
+      }
+      this.missiles.set(id, m);
+    }
+    return m;
+  }
+
+  /** A missile sprite: centred on its point, turned and mirrored by the caller. */
+  private missileSprite(i: number): Sprite {
+    let s = this.missileSprites[i];
+    if (!s) {
+      s = new Sprite();
+      s.anchor.set(0.5, 0.5);
+      this.missileGroup.addChild(s);
+      this.missileSprites.push(s);
+    }
+    s.visible = true;
+    return s;
   }
 
   private sprite(i: number): Sprite {
@@ -224,11 +281,10 @@ export class EffectLayer {
     const o = new Text({
       text,
       style: {
-        fontFamily: "sans-serif",
-        fontSize: 13,
-        fontWeight: "bold",
+        fontFamily: CANVAS_FONT,
+        fontSize: CANVAS_FONT_SIZE,
         fill,
-        stroke: { color: 0x000000, width: 3 },
+        stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
       },
       anchor: { x: 0.5, y: 1 },
       roundPixels: true,
@@ -277,20 +333,59 @@ export class EffectLayer {
     hideFrom(this.shapeObjs, shapes);
 
     let shots = 0;
+    let missiles = 0;
     const projectiles = this.world.projectiles;
     for (let i = 0; i < projectiles.length; i++) {
       const pr = projectiles[i];
       if (!pr || pr.from.z !== floor) continue;
-      const ctx = this.shotShapeOf(pr.projectileId);
-      const g = this.shape(shots++, this.shotObjs, this.shotGroup, ctx);
-      const k = Math.min(1, (now - pr.start) / PROJECTILE_MS);
-      g.position.set(
-        Math.round((pr.from.x + 0.5 + (pr.to.x - pr.from.x) * k - cam.x) * p),
-        Math.round((pr.from.y + 0.5 + (pr.to.y - pr.from.y) * k - cam.y) * p),
-      );
-      g.scale.set(scale);
+      const elapsed = now - pr.start;
+      const k = Math.max(0, Math.min(1, elapsed / PROJECTILE_MS));
+      const dx = pr.to.x - pr.from.x;
+      const dy = pr.to.y - pr.from.y;
+      const x0 = pr.from.x + 0.5 - cam.x;
+      const y0 = pr.from.y + 0.5 - cam.y;
+      const art = this.missileOf(pr.projectileId);
+      if (art.kind === "none") {
+        const ctx = this.shotShapeOf(pr.projectileId);
+        const g = this.shape(shots++, this.shotObjs, this.shotGroup, ctx);
+        g.position.set(Math.round((x0 + dx * k) * p), Math.round((y0 + dy * k) * p));
+        g.scale.set(scale);
+        continue;
+      }
+      if (art.kind === "arrow") {
+        const pose = arrowPose(dx, dy);
+        const s = this.missileSprite(missiles++);
+        s.texture = pose.diagonal ? art.diagonal : art.straight;
+        s.rotation = pose.rotation;
+        s.scale.set(pose.scaleX * scale, pose.scaleY * scale);
+        s.alpha = 1;
+        s.position.set(Math.round((x0 + dx * k) * p), Math.round((y0 + dy * k) * p));
+        continue;
+      }
+      // An orb: its motes first (under it), then the orb, a frame of its loop.
+      const len = Math.hypot(dx, dy);
+      if (art.trail && len > 0) {
+        for (let t = 0; t < TRAIL.length; t++) {
+          const mote = TRAIL[t];
+          const kt = mote ? k - mote.back / len : 0;
+          if (!mote || kt <= 0) break;
+          const s = this.missileSprite(missiles++);
+          s.texture = art.trail;
+          s.rotation = 0;
+          s.scale.set(scale);
+          s.alpha = mote.alpha;
+          s.position.set(Math.round((x0 + dx * kt) * p), Math.round((y0 + dy * kt) * p));
+        }
+      }
+      const s = this.missileSprite(missiles++);
+      s.texture = art.frames[orbFrame(elapsed, art.frames.length)] ?? s.texture;
+      s.rotation = 0;
+      s.scale.set(scale);
+      s.alpha = 1;
+      s.position.set(Math.round((x0 + dx * k) * p), Math.round((y0 + dy * k) * p));
     }
     hideFrom(this.shotObjs, shots);
+    hideFrom(this.missileSprites, missiles);
 
     const texts = this.world.floatingTexts;
     for (let i = 0; i < texts.length; i++) {
@@ -312,12 +407,14 @@ export class EffectLayer {
   }
 
   destroy(): void {
-    for (const o of [...this.sprites, ...this.shapeObjs, ...this.shotObjs]) o.destroy();
+    for (const o of [...this.sprites, ...this.shapeObjs, ...this.shotObjs, ...this.missileSprites])
+      o.destroy();
     for (const n of this.numbers.values()) n.obj.destroy();
     for (const o of this.spareTexts) o.destroy();
     for (const ctx of [...this.shapes.values(), ...this.shotShapes.values()]) ctx.destroy();
     this.spriteGroup.destroy();
     this.shapeGroup.destroy();
     this.shotGroup.destroy();
+    this.missileGroup.destroy();
   }
 }

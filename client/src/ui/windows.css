@@ -812,7 +812,9 @@ body.dragging-window * {
 }
 
 /* ---- The chat: translucent over the map, RO-like; clearer under the pointer and while
-   typing. Its tabs (chat and log) sit in the title bar. -------------------------------- */
+   typing. Its tabs (All, Local, Party, Guild, Global and the log) sit in the title bar;
+   how much its stone covers the map is the player's (Options, --chat-opacity on <html>,
+   state/ui-prefs.ts: 30 to 100 %, 50 % unless chosen). --------------------------------- */
 .gwin[data-window="chat"] {
   --gwin-w: 24rem;
   background: none;
@@ -830,7 +832,7 @@ body.dragging-window * {
   inset: 0;
   z-index: -1;
   background: var(--ui-grain), var(--ui-stone-950);
-  opacity: 0.5;
+  opacity: var(--chat-opacity, 0.5);
   transition: opacity var(--ui-dur) ease;
 }
 .gwin[data-window="chat"]::after {
@@ -838,14 +840,19 @@ body.dragging-window * {
   transition: opacity var(--ui-dur) ease;
 }
 .gwin[data-window="chat"]:is(:hover, :focus-within)::before {
-  opacity: 0.94;
+  opacity: max(var(--chat-opacity, 0.5), 0.94);
 }
 .gwin[data-window="chat"]:is(:hover, :focus-within)::after {
   opacity: 1;
 }
 .gwin[data-window="chat"] .gwin-bar {
+  padding-left: 10px;
   background: rgb(0 0 0 / 0.28);
   border-bottom-color: rgb(110 84 34 / 0.5);
+}
+/* The six tabs take the icon's room (the title is only for screen readers). */
+.gwin[data-window="chat"] .gwin-icon {
+  display: none;
 }
 .gwin[data-window="chat"] .gwin-body {
   display: flex;
@@ -863,18 +870,32 @@ body.dragging-window * {
 .chat-pane[hidden] {
   display: none;
 }
+/* Six tabs in the bar: tight, and when a large text size makes them wider than the bar,
+   they scroll sideways (no scrollbar: the arrow keys and the wheel move them; ChatTabs
+   turns a vertical turn of the wheel into a sideways one, state/chat.ts wheelAlong). */
 .chat-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
-  gap: 3px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-tabs::-webkit-scrollbar {
+  display: none;
 }
 .chat-tabs [role="tab"] {
-  padding: 0.1rem 0.6rem;
+  flex: none;
+  padding: 0.1rem 0.24rem;
   font-family: var(--ui-font-title);
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
+  font-size: 0.62rem;
+  letter-spacing: 0;
   color: var(--ui-text-muted);
+}
+.chat-tabs [role="tab"] .tab-dot {
+  width: 5px;
+  height: 5px;
+  margin-left: 0.15rem;
 }
 .chat-pane .chat-lines,
 .chat-pane .log {

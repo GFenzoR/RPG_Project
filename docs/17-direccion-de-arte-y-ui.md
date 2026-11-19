@@ -480,7 +480,7 @@ de un sprite con `death` juega su clip y se desvanece.
 | Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
 | Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
 | Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
-| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor | 400 ms |
+| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor (los restos de su familia: "Hecho: proyectiles, restos por familia y la fuente del canvas") | 400 ms |
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
@@ -730,7 +730,8 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
     los 4 pasos predichos;
   - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
     paso de su cola vuelve a fijar la dirección;
-  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
+  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`; después
+    lo reemplazó el salto procedural de ANI-5, `packages/renderer/src/anim.ts`).
 - **Quedaba** (hecho en la segunda parte, abajo): MOV-3, MOV-4, MOV-7, el E2E de MOV-9 con
   latencia y una flecha durante un camino por click, que casi nunca entraba.
 - MOV-8 es una decisión del dueño: no se tocó.
@@ -1290,7 +1291,11 @@ con el mouse encima o mientras se escribe. Es una ventana más (se mueve, se pli
 de tamaño, con imán), pero nunca se cierra. El log sigue como segunda pestaña
 ("Registro"), ahora en la barra de título. Mientras el log no se ve, todos los mensajes del
 servidor flotan sobre el mapa (no solo los importantes). Antes (A3) iba abajo del dock.
-Las pestañas por canal y la opacidad configurable siguen pendientes.
+**Desde el lote 10** tiene pestañas por canal y opacidad configurable ("Hecho: lugares de
+fábrica, pestañas del chat y sonidos que reintentan", §7): Todo, Local, Grupo, Gremio,
+Global y Registro, con un punto de no leído; la elegida fija el canal del selector; la
+opacidad va del 30 al 100 % en Opciones → Interfaz. No hay pestaña de Comercio (no hay
+canal de comercio en el protocolo) y plegado sigue mostrando solo su barra.
 - Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
   Comercio, Sistema).
 - Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
@@ -1376,7 +1381,7 @@ Por impacto en pantalla y por costo:
 | 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
 | 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
-| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
+| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar, disparar, conjurar y caer; disparar y conjurar desde `feat/lpc-actions`, ver "Hecho: disparar, conjurar, desvanecerse, pasos y girar") |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |
 | 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen (desde el 2026-11-18, del motor de sprites con quieto, caminar, atacar y morir en cuatro direcciones). Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
@@ -1606,7 +1611,8 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
 - **Fuentes (UI-3):** Cinzel, Grenze Gotisch, Alegreya Sans y Alegreya, de google/fonts con
   commit fijo, en `assets/vendor/font-*/` con su `OFL.txt` y fila en `CREDITS.md`. El
   plugin `client/vite/fonts.ts` las recorta a latín y las sirve como woff2 en `/fonts/`.
-  Pixelify Sans (canvas) no se agregó todavía: el canvas sigue con su fuente.
+  Pixelify Sans (canvas) llegó después: "Hecho: proyectiles, restos por familia y la
+  fuente del canvas".
 - **Tokens y marco (UI-2):** los de la tabla, con los nombres viejos como alias. El marco
   de hierro es CSS (sin el PNG 9-slice de spritegen), la piedra es una veta SVG en línea.
   Los íconos de la botonera son pixel art propio de 16x16 escrito como texto en
@@ -1742,8 +1748,11 @@ quedaba de A3, A4 y A5".
   Escape si es la flotante de arriba) y se acopla bajo el equipo, como en Tibia, o flota
   donde el jugador la deje. La grilla toma las columnas que entran (de 4 a 6 en el dock).
   El lugar se recuerda **por item** en el dispositivo (`container-backpack`; un segundo del
-  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. En
-  tablets y teléfonos siguen debajo del equipo, como antes.
+  mismo item es `container-backpack-2`), así la mochila vuelve a abrirse donde estaba. Los
+  restos son la excepción (rama `feat/combat-visuals`): los de todas las familias y el
+  cuerpo de un jugador comparten un lugar, `container-remains`, y el cadáver de un cangrejo
+  se abre donde quedó el del lobo. En tablets y teléfonos siguen debajo del equipo, como
+  antes.
 - **Las ventanas del servidor son `GameWindow`.** Diálogo, tienda, crafteo, mercado, casa e
   intercambio tienen la barra de las demás (ícono, título, mover, plegar, cerrar), se
   acoplan, flotan, se apilan y recuerdan su lugar. El servidor las sigue abriendo y
@@ -1796,8 +1805,8 @@ quedaba de A3, A4 y A5".
   contenedor, un slot o el mapa) pregunta, donde se suelta, cuántas unidades mover (la
   mitad para empezar, de 1 a la pila menos una, como "Mover parte…"); Enter mueve, Escape
   cancela. Mayús+click sigue mirando: en el mapa, ahora mira al soltar.
-- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); Pixelify Sans en
-  el canvas; el marco de hierro como PNG 9-slice; enfocar una ventana del servidor al
+- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); el marco de
+  hierro como PNG 9-slice; enfocar una ventana del servidor al
   abrirse. (Si el jugador camina con el mouse quieto, la ficha de la casilla anterior se va
   y la espera empieza de nuevo en la que queda bajo el cursor.)
 
@@ -2004,18 +2013,107 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   fuentes: las de UI-3 siguen). No se usó Gemini: con el CSS y estas piezas alcanzó, y el
   navegador del dueño queda libre para los otros lotes. Las reglas de movimiento reducido
   siguen (la ola de los orbes y el latido se detienen).
-- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); un lugar de
-  fábrica que se acomode a las ventanas ya abiertas (hoy, si se abren todas a la vez,
-  algunas se pisan; los contenedores ya salen bajo el inventario de `feat/equipment-d2`,
-  midiéndolo). El E2E del lote 9 (verde) encontró los clicks del mapa que caían en una
-  ventana (los specs saltan 5 columnas a 1280x800) y la página 7 px más ancha por los
-  pináculos del orbe de maná (el cuerpo del juego recorta); lo que queda para el dueño está
-  en docs/14 (íconos a 1x en el inventario de 16 rem, pináculos cortados en los bordes, el
-  intercambio sobre un compañero).
+- **Queda:** las pestañas del chat, su opacidad y el lugar de fábrica que mira las
+  ventanas abiertas se hicieron en el lote 10 (abajo). El E2E del lote 9 (verde) encontró
+  los clicks del mapa que caían en una ventana (los specs saltan 5 columnas a 1280x800) y
+  la página 7 px más ancha por los pináculos del orbe de maná (el cuerpo del juego
+  recorta); lo que queda para el dueño está en docs/14 (íconos a 1x en el inventario de 16
+  rem, pináculos cortados en los bordes).
+
+### Hecho: lugares de fábrica, pestañas del chat y sonidos que reintentan (2026-11-19, lote 10, rama `feat/ui-polish`)
+Lo que el E2E del lote 9 y la auditoría del 2026-11-18 dejaron de la UI (UI-5, UI-10) y del
+sonido. Solo cliente, más una línea de diálogo y el arte del teletransporte.
+- **Un lugar de fábrica que mira las ventanas abiertas** (`defaultPlace` de
+  `client/src/ui/windows.ts`, puro y con tests; `placeOpened` de `ui/window-dom.ts`): una
+  ventana que se abre en su lugar de siempre (windows.css) se mide ahí antes de pintarse;
+  si tapa a otra ventana abierta, o (el intercambio) las 3 casillas al norte del jugador
+  (`Game.selfTile`, donde suele estar el compañero), prueba una lista corta de lugares y
+  toma el primero que no tapa nada, o el que menos tapa:
+  - el **intercambio** se corre por la fila de arriba (contra los bordes, la columna del
+    jugador u otra ventana, el más cercano primero, a 4 px; si así no entra en ningún
+    lado, pegado a ellas: a 1280x800 entre la batalla y la columna del jugador hay justo
+    su ancho) y nunca queda sobre esas casillas;
+  - el **diálogo** (y crafteo, mercado y casa, sobre la barra) se acorta hasta el pie de lo
+    que baja hasta él, con su fondo donde estaba, si le quedan al menos `GIVE_WAY_MIN_PX`
+    (120): a 960x700 la pareja tienda + diálogo ya no pisa el pie del inventario. El
+    diálogo se vuelve a medir cuando su lugar de siempre cambia estando abierto
+    (`placeContext` y `toLookAt` de `windows.ts`): la tienda que llega después (el flujo
+    real, "Quiero comerciar") lo pone al lado, más angosto, y se mide ahí (`usualBox` de
+    `window-dom.ts` levanta el lugar que le dio la mirada anterior), y el diálogo de otro
+    NPC, de otro alto, también;
+  - las **habilidades** van bajo la batalla solo si entran sobre el chat; si no, al lado de
+    la batalla o del grupo, a la izquierda de la columna del inventario, o acortadas sobre
+    el chat.
+  El lugar dura mientras la ventana sigue abierta y sin mover (no se guarda en
+  `rpg.windows`); si cambia el área, todas vuelven a su lugar de siempre y se miran de
+  nuevo. El panel del tutorial se oculta mientras la Ayuda, el gremio o la apariencia
+  están en su lugar de fábrica (`tutorialCovered`).
+- **La ficha espera al mouse** (`TipGate` de `ui/ItemTooltip.tsx`): después de que se abre,
+  cierra o pliega una ventana no sale ninguna ficha hasta el primer `pointermove` que
+  mueve el mouse (la tienda se abre bajo un mouse quieto y su ficha tapaba los filtros);
+  el teclado la muestra igual.
+- **Pestañas del chat** (UI-10, `client/src/state/chat.ts`, puro y con tests): ver UI-10.
+  Una línea propia no marca nada; un anuncio del staff sale en todas. Con el chat plegado
+  nada cuenta como visto (también la pestaña abierta se marca); con el texto al 130 % la
+  rueda corre las pestañas de lado (`wheelAlong`).
+- **Sonidos que reintentan:** `AudioEngine.load` usa `ASSET_RETRY` de
+  `@rpg/renderer/retry` (por `AudioPorts.sleep`); agotado, el sonido se vuelve a pedir
+  recién después de `STREAM_RETRY_MS`, como la música, y el ambiente vuelve solo. Un
+  archivo que llega pero no se decodifica (un navegador sin Ogg) no se vuelve a pedir en
+  la sesión: fallaría igual cada vez.
+- **El teletransporte gira** (ART-7): 6 frames de 100 ms en `world`
+  (`recipes/portals.ts`, `tiles` de `assets/sprites.yaml`).
+- **Vista previa:** escenas `allwindows`, `trade`, `chattabs`, `tutorialhelp` y
+  `tutorialshop` en `make ui-preview`.
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
+
+### Hecho: proyectiles, restos por familia y la fuente del canvas (2026-11-19, rama `feat/combat-visuals`)
+Del pedido del dueño de un pulido como el de Tibia y "todo animado" (auditoría del
+2026-11-18, `art.items[1]`, `[2]` y `[4]`). Detalle técnico en `client/CLAUDE.md` ("Sprites
+de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
+- **Proyectiles con sprite.** Antes cada proyectil era un punto del color de su elemento.
+  Ahora `tools/spritegen` (`recipes/effects.ts`, sección "missiles") dibuja la flecha
+  (`missiles/arrow/e` y `missiles/arrow/se`: 14 px de punta a culatín, dentro de los 16x16
+  del medio de un sprite de 32x32) y un orbe por elemento con 3 frames y su chispa de
+  estela (`missiles/<elemento>/{0,1,2,trail}`: fuego, hielo, energía, tierra, sagrado y
+  muerte). El cliente vuela un proyectil físico como la flecha apuntada al objetivo de a
+  45°: el dibujo recto o el diagonal, girado y espejado solo de a cuartos de vuelta (cada
+  píxel cae en un píxel) y con el lado iluminado arriba o a la izquierda; uno elemental es
+  su orbe (un frame cada 80 ms) con hasta tres chispas detrás, del mismo pool de sprites
+  (ninguna detrás de quien dispara). Sin arte, el punto de antes. Flechas, virotes,
+  cuchillos, botellas y esquirlas de obsidiana vuelan todos como la flecha: distinguirlos
+  necesita un campo nuevo en `Projectile` (docs/14, "Pendientes conocidos").
+- **Restos por familia** (ART-2 y ANI-7). Antes todo monstruo dejaba el mismo cuerpo
+  (`creature_remains`, el "crawling corpse" de Dungeon Crawl). Ahora `data/monsters` tiene
+  `corpse:` (docs/06) y cada familia deja el suyo, dibujado con el motor de sprites
+  (`engine/specs/remains.ts`) mirando la pose final de la muerte de esa familia: la bestia
+  de costado con las patas hacia la cámara (`remains_fur`), el artrópodo panza arriba con
+  las patas encogidas (`remains_chitin`), el reptil con la cola enroscada
+  (`remains_scales`), el montón de escoria con dos grietas de brasa (`remains_slag`), el
+  esqueleto en un charco (`remains_bones`), el ave con un ala abierta (`remains_feathers`),
+  la persona boca abajo con un brazo tirado (`remains_humanoid`) y las zarzas secas
+  (`remains_bramble`); `creature_remains` quedó como un montón neutro de huesos sobre un
+  cuero (lo usan los monstruos sin `corpse` y los jugadores). Todos en 32x32, de 24 a 30
+  px de largo: ocupan su casilla como los cadáveres de Tibia, así que son más chicos que la
+  última pose de las criaturas de 64x64 (el lobo cae de 41 px). Duran y se abren como
+  antes.
+- **Pixelify Sans en el canvas** (UI-3). Nombres, gremios y números flotantes estaban en
+  la `sans-serif` del sistema, suavizada y distinta en cada sistema operativo. Ahora usan
+  Pixelify Sans (OFL, de google/fonts con el mismo commit que las otras), a 11 px: sus
+  contornos van sobre una grilla de 1/11 de em (mayúsculas de 7 celdas, minúsculas de 5),
+  así que a 11 px una celda es un píxel de pantalla de alto y los trazos miden un píxel.
+  **No es píxel perfecto a lo ancho:** cada letra empieza 0,66 px adentro de su lugar y
+  los avances no son celdas enteras (la H avanza 586/1000 em, 6,45 px), así que las
+  columnas caen entre píxeles y el canvas las suaviza un poco (`vite/canvas-font.test.ts`
+  lo mide). Hay que mirarlo en una captura a 1x; si molesta, un `letterSpacing` de ~0,55
+  px dejaría los avances casi enteros (cada letra pasa una celda entera por ~0,44 px), sin
+  probar todavía. Con el contorno negro de 3 px de antes. El canvas espera la fuente junto
+  con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
+  los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
+  ~125 con la negrita de 12 px).
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
