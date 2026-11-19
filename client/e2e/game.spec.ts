@@ -1141,7 +1141,13 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   ).toBe(201);
   await apiCtx.dispose();
   // One hit point left, so the first wolf bite is deadly (the name is letters and a space).
-  psql([databaseUrl, "-c", `UPDATE characters SET health = 1 WHERE name = '${name}'`]);
+  // Level 10, past the novice levels (novice_max_level 8): the backpack falls into the corpse
+  // (docs/02 "Muerte", "Bolsillos").
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET health = 1, level = 10, experience = 9720 WHERE name = '${name}'`,
+  ]);
 
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -1210,6 +1216,17 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   await expect(page.getByTestId("health")).not.toContainText("Vida 1/");
   await screen.getByRole("button", { name: "Aceptar" }).click();
   await expect(screen).toBeHidden();
+  // docs/02 "Bolsillos": no death gives a backpack any more. The character wakes up with an
+  // empty backpack slot and its four pockets, empty too (what they held fell with the
+  // backpack), under the figure of the inventory.
+  const inventory = page.getByTestId("inventory");
+  await expect(inventory.getByTestId("slot-backpack").locator("[data-item]")).toHaveCount(0);
+  await expect(inventory.getByTestId("pockets").locator('[data-drop="pocket"]')).toHaveCount(4);
+  await expect(inventory.getByTestId("pockets").locator("[data-item]")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__rpgClient?.pockets())).toEqual({
+    capacity: 4,
+    items: [],
+  });
   await page.waitForTimeout(300);
   await shot(page, "14-respawn");
   expect(errors).toEqual([]);
