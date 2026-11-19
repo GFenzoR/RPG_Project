@@ -730,7 +730,8 @@ Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico 
     los 4 pasos predichos;
   - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
     paso de su cola vuelve a fijar la dirección;
-  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
+  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`; después
+    lo reemplazó el salto procedural de ANI-5, `packages/renderer/src/anim.ts`).
 - **Quedaba** (hecho en la segunda parte, abajo): MOV-3, MOV-4, MOV-7, el E2E de MOV-9 con
   latencia y una flecha durante un camino por click, que casi nunca entraba.
 - MOV-8 es una decisión del dueño: no se tocó.
@@ -2029,10 +2030,17 @@ sonido. Solo cliente, más una línea de diálogo y el arte del teletransporte.
   (`Game.selfTile`, donde suele estar el compañero), prueba una lista corta de lugares y
   toma el primero que no tapa nada, o el que menos tapa:
   - el **intercambio** se corre por la fila de arriba (contra los bordes, la columna del
-    jugador u otra ventana, el más cercano primero) y nunca queda sobre esas casillas;
+    jugador u otra ventana, el más cercano primero, a 4 px; si así no entra en ningún
+    lado, pegado a ellas: a 1280x800 entre la batalla y la columna del jugador hay justo
+    su ancho) y nunca queda sobre esas casillas;
   - el **diálogo** (y crafteo, mercado y casa, sobre la barra) se acorta hasta el pie de lo
     que baja hasta él, con su fondo donde estaba, si le quedan al menos `GIVE_WAY_MIN_PX`
-    (120): a 960x700 la pareja tienda + diálogo ya no pisa el pie del inventario;
+    (120): a 960x700 la pareja tienda + diálogo ya no pisa el pie del inventario. El
+    diálogo se vuelve a medir cuando su lugar de siempre cambia estando abierto
+    (`placeContext` y `toLookAt` de `windows.ts`): la tienda que llega después (el flujo
+    real, "Quiero comerciar") lo pone al lado, más angosto, y se mide ahí (`usualBox` de
+    `window-dom.ts` levanta el lugar que le dio la mirada anterior), y el diálogo de otro
+    NPC, de otro alto, también;
   - las **habilidades** van bajo la batalla solo si entran sobre el chat; si no, al lado de
     la batalla o del grupo, a la izquierda de la columna del inventario, o acortadas sobre
     el chat.
@@ -2045,10 +2053,14 @@ sonido. Solo cliente, más una línea de diálogo y el arte del teletransporte.
   mueve el mouse (la tienda se abre bajo un mouse quieto y su ficha tapaba los filtros);
   el teclado la muestra igual.
 - **Pestañas del chat** (UI-10, `client/src/state/chat.ts`, puro y con tests): ver UI-10.
-  Una línea propia no marca nada; un anuncio del staff sale en todas.
+  Una línea propia no marca nada; un anuncio del staff sale en todas. Con el chat plegado
+  nada cuenta como visto (también la pestaña abierta se marca); con el texto al 130 % la
+  rueda corre las pestañas de lado (`wheelAlong`).
 - **Sonidos que reintentan:** `AudioEngine.load` usa `ASSET_RETRY` de
   `@rpg/renderer/retry` (por `AudioPorts.sleep`); agotado, el sonido se vuelve a pedir
-  recién después de `STREAM_RETRY_MS`, como la música, y el ambiente vuelve solo.
+  recién después de `STREAM_RETRY_MS`, como la música, y el ambiente vuelve solo. Un
+  archivo que llega pero no se decodifica (un navegador sin Ogg) no se vuelve a pedir en
+  la sesión: fallaría igual cada vez.
 - **El teletransporte gira** (ART-7): 6 frames de 100 ms en `world`
   (`recipes/portals.ts`, `tiles` de `assets/sprites.yaml`).
 - **Vista previa:** escenas `allwindows`, `trade`, `chattabs`, `tutorialhelp` y

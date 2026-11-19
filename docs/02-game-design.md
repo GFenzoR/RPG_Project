@@ -185,8 +185,11 @@ Tibia:
   `stairs_up` (escaleras, del pack Dungeon Crawl), `ladder_up` (la escalera de mano vista
   desde abajo) / `ladder_down` (la trampilla abierta de arriba), `hole` (agujero),
   `rope_spot` (la luz que entra por un hueco del techo) y `teleport` (un anillo de piedras
-  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`, estático: el
-  atlas no anima items. `make validate` y `mapcompile` exigen el item en la entrada de
+  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`; el
+  teletransporte está animado (6 frames de 100 ms, `sync: world` en `assets/sprites.yaml`
+  `tiles`: el remolino gira, suben chispas y laten las runas; el renderer anima los
+  `frame_<n>` de cualquier item desde A10, docs/17 ART-7). Los demás son estáticos.
+  `make validate` y `mapcompile` exigen el item en la entrada de
   cada portal (salvo un `boat`), y el servidor avisa en el log al arrancar si falta
   (`03-world-and-maps.md`, "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
 - **Items que caen:** lo que se tira (`MoveItem`) sobre una escalera, un agujero o un

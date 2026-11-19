@@ -322,7 +322,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   una reproducción antes de esa hora no pide nada; después, lo pide de nuevo. La espera es
   `STREAM_RETRY_MS` (5 s), doblando hasta `STREAM_RETRY_MAX_MS` (60 s), como la música.
   El ambiente que se quiere vuelve solo: la bomba (`retryAmbient`) lo arranca cuando vence
-  la espera. Antes el fallo quedaba guardado (`undefined`) toda la sesión.
+  la espera. Antes el fallo quedaba guardado (`undefined`) toda la sesión. Un archivo que
+  llega pero `decodeAudioData` rechaza (un navegador sin Ogg) no se reintenta: `giveUp`
+  lo anota con `Infinity`, como la música que el elemento no sabe tocar.
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que
@@ -978,8 +980,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   cámara (`followCamera`) y las criaturas (`devicePixels`) se fijan a píxeles de
   pantalla, no de sprite: el mapa se mueve de a 1 px y la criatura seguida queda quieta
   en pantalla; los sprites siguen enteros (escala entera, desplazamientos enteros). Una
-  criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
-  (`walkBob`).
+  criatura sin frames de caminar da el salto procedural de ANI-5 por casilla (`animate`
+  de `packages/renderer/src/anim.ts`, ver "Animación de criaturas"; el viejo `walkBob` ya
+  no existe).
 - **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
   con `combine`), también un toque perpendicular con otra tecla mantenida.
 - **Girar sin caminar** (docs/17 MOV-2, `input/keyboard.ts` `TurnTap`, puro y con tests):
@@ -1624,8 +1627,12 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     y el log no lo cambian). Punto de no leído (`data-unread`, `unreadTabs`): una pestaña
     con líneas que no se vieron en ninguna (las de la pestaña abierta se marcan vistas al
     dibujarse, un `WeakSet` de `ChatLine`: el `Game` publica los mismos objetos) y que no
-    dijo el propio jugador; el del log, como antes, por la hora de su último mensaje. Las
-    flechas recorren las pestañas (`nextTab`). Opacidad: `rpg.chat-opacity` (30–100,
+    dijo el propio jugador; el del log, como antes, por la hora de su último mensaje. Con
+    el chat plegado no se ve ninguna pestaña (`viewedTab` da `undefined`): nada se marca
+    visto (`markSeen`), la abierta también lleva su punto y todos los avisos flotan. Las
+    flechas recorren las pestañas (`nextTab`); con el texto al 130 % no entran en la barra
+    y la rueda las corre de lado (`wheelAlong`: un giro vertical, en px o en líneas de
+    `WHEEL_LINE_PX`). Opacidad: `rpg.chat-opacity` (30–100,
     pasos de 5, `CHAT_OPACITY`; `loadChatOpacity`/`saveChatOpacity` con try/catch,
     `applyChatOpacity` pone `--chat-opacity` en `<html>`), deslizador `chat-opacity` en
     `InterfaceOptions`.
@@ -1662,7 +1669,9 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   primero que no tapa nada; si no hay, el que menos tapa (área en px², `overlapArea`), si
   tapa menos que el de siempre. Solo tres clases tienen otros lugares (`movesAside`):
   - `trade`: por la fila de arriba, contra los bordes, la columna del jugador u otra
-    ventana (`PLACE_GAP`, 4 px), el más cercano primero; nunca sobre esas casillas;
+    ventana (`PLACE_GAP`, 4 px), el más cercano primero, y después los mismos lugares
+    pegados (bordes que se tocan no tapan: a 1280x800 entre la batalla y la columna del
+    jugador hay justo sus 352 px); nunca sobre esas casillas;
   - `dialog`, `crafting`, `market`, `house`: más bajas, con su fondo donde estaba, hasta el
     pie de lo que baja hasta ellas (`givingWay`), si les quedan al menos
     `GIVE_WAY_MIN_PX` (120): `short`, su `max-height` es su alto y el cuerpo se desplaza;
@@ -1671,9 +1680,16 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
 - **El DOM** (`placeOpened` de `ui/window-dom.ts`, con tests sobre elementos falsos): mide
   las ventanas de la capa sin la escala de su animación de entrada (`unscaledIn`), deja
   afuera las que se cierran, y las que deciden primero cuentan en su lugar nuevo para las
-  siguientes. `useWindows` (`GameView`) lo corre en un `useLayoutEffect` cada vez que cambia
-  el estado: para las que se abrieron desde la última vez (todas al montar), antes de
-  pintarlas; `Game.selfTile` da la casilla del jugador en la página (`tileToClient`).
+  siguientes. Las que mira, en su lugar de siempre: `usualBox` levanta por esa medida los
+  largos en línea de un lugar anterior (`left`, `top`, `right`, `bottom`, `max-height`) y
+  los vuelve a poner. `useWindows` (`GameView`) lo corre en un `useLayoutEffect` cada vez
+  que cambia el estado o el contexto, antes de pintar; `toLookAt` de `ui/windows.ts` (puro)
+  elige cuáles: las que se abrieron desde la última vez (todas al montar o tras un cambio
+  del área) y las que siguen abiertas pero cuyo lugar de siempre se movió (`placeContext`:
+  para el diálogo, su id y si la ventana de la tienda está abierta; la tienda llega un
+  render después del diálogo y la regla de la pareja de `windows.css` lo corre y angosta);
+  esas pierden su lugar anterior. `Game.selfTile` da la casilla del jugador en la página
+  (`tileToClient`).
 - **Dónde vive:** `WindowsApi.auto` (un `Map` de `AutoPlace`, px de pantalla), no en
   `rpg.windows`: no es un lugar del jugador. Se olvida al cerrar o mover la ventana; si el
   área cambia de tamaño (el `ResizeObserver` de la capa ve otro tamaño), se vacía y todas

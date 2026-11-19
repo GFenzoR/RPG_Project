@@ -836,7 +836,8 @@ el punto 5:
   política del atlas (`ASSET_RETRY`: 4 intentos con esperas de 0,5, 1 y 2 s) y, si se
   agotan, lo olvida y lo vuelve a pedir en una reproducción después de `STREAM_RETRY_MS`
   (5 s, doblando hasta 60 s), como la música; el ambiente que se quiere vuelve solo
-  (client/CLAUDE.md "Notas de T3.7").
+  (client/CLAUDE.md "Notas de T3.7"). Uno que llega pero no se decodifica no se vuelve a
+  pedir en la sesión.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
