@@ -1072,6 +1072,93 @@ export const MISSILES: RecipeBook = (() => {
   return out;
 })();
 
+// ---- the forge (docs/02 "Forja"): sparks on a success, a shatter on a break ----------------
+
+/** The anvil's face (decor/anvil): where the hammer strikes, in the upper half of the tile. */
+const STRIKE: Point = [C, 11];
+
+/** The colours of a spark as it cools, hottest first. */
+const SPARK_HEAT: readonly Rgba[] = FLAME.map((x) => x.c);
+
+/**
+ * A success: a white flash where the hammer lands, then hot sparks thrown up and out in
+ * arcs that fall back under their weight and cool from yellow-white to a red ember.
+ */
+const refine: DrawFrame = (img, f, t, seed) => {
+  const [sx, sy] = STRIKE;
+  const heatAt = (u: number): Rgba =>
+    SPARK_HEAT[Math.min(SPARK_HEAT.length - 1, Math.floor(u * 0.85 * SPARK_HEAT.length))] as Rgba;
+  if (f <= 1) {
+    twinkle(img, sx, sy, f === 0 ? 4 : 6, SPARK_HEAT[1] as Rgba, WHITE);
+    twinkle(img, sx, sy, f === 0 ? 2 : 3, SPARK_HEAT[0] as Rgba, WHITE);
+    ring(img, sx, sy, f === 0 ? 3 : 5.5, 1, SPARK_HEAT[2] as Rgba, (a) => Math.sin(a) < 0.2);
+  }
+  // A few sparks land back on the face and glow there as they cool.
+  if (f >= 3) {
+    const r = rng(seed + 5);
+    for (let i = 0; i < 7; i++) {
+      const x = sx - 8 + Math.round(r() * 16);
+      const c = SPARK_HEAT[Math.min(SPARK_HEAT.length - 1, f - 1 + (i % 2))] as Rgba;
+      px(img, x, sy - 1, c);
+      px(img, x + 1, sy - 1, c);
+    }
+  }
+  for (const m of motes(seed, 26, [9, 19], [0, 1])) {
+    // Upward and to the sides only: the anvil is below.
+    const a = -Math.PI / 2 + (m.a - Math.PI) * 0.5;
+    const life = 0.75 + m.p * 0.35;
+    const u = Math.min(t / life, 1);
+    if (f === 0 || t > life) continue;
+    const at = (k: number): [number, number] => [
+      sx + Math.cos(a) * m.v * k,
+      sy + Math.sin(a) * m.v * k + 12 * k * k,
+    ];
+    const [x, y] = at(u);
+    px(img, x, y, heatAt(u));
+    // The bigger ones cool into embers of two pixels.
+    if (u >= 0.5) px(img, x + 1, y, heatAt(Math.min(u + 0.15, 1)));
+    if (m.s > 0.45 && u < 0.75) {
+      // A short streak behind the brightest ones.
+      const [bx, by] = at(Math.max(u - 0.14, 0));
+      px(img, bx, by, heatAt(Math.min(u + 0.25, 1)));
+    }
+  }
+};
+
+/**
+ * A break: a white crack across the strike, then steel shards flung out in every direction
+ * that tumble down and fade, with a few red embers; the dust of the metal at the end.
+ */
+const shatter: DrawFrame = (img, f, t, seed) => {
+  const [sx, sy] = STRIKE;
+  if (f === 0) {
+    line(img, sx - 6, sy - 3, sx + 5, sy + 3, WHITE);
+    line(img, sx - 1, sy - 6, sx + 2, sy + 5, STEEL.light);
+    twinkle(img, sx, sy, 2, STEEL.light, WHITE);
+    return;
+  }
+  for (const m of motes(seed, 9, [9, 15], [0, 1])) {
+    const u = t;
+    const x = sx + Math.cos(m.a) * m.v * u;
+    const y = sy + Math.sin(m.a) * m.v * u * 0.7 + 12 * u * u;
+    // A shard: a two or three pixel sliver whose tilt turns as it tumbles.
+    const spin = m.p * 4 + f;
+    const dx = Math.round(Math.cos(spin));
+    const dy = Math.round(Math.sin(spin));
+    px(img, x, y, STEEL.light);
+    px(img, x + dx, y + dy, STEEL.base);
+    if (m.s > 0.4) px(img, x - dx, y - dy, STEEL.shadow);
+  }
+  for (const m of motes(seed + 7, 5, [5, 10], [0, 1])) {
+    if (f > 3) continue;
+    const x = sx + Math.cos(m.a) * m.v * t;
+    const y = sy + Math.sin(m.a) * m.v * t * 0.6 - 4 * t;
+    px(img, x, y, SPARK_HEAT[Math.min(SPARK_HEAT.length - 1, f + 1)] as Rgba);
+  }
+  if (f >= 3) puff(img, sx, sy + 3, 2 + f, SMOKE, seed + 3, [1, 1, 1, 0.6, 0.4, 0.25][f] ?? 0.25);
+  if (f >= 4) dissolve(img, f === 4 ? 0.75 : 0.5, seed + 9);
+};
+
 /** Every effect strip, by folder name (client/src/render/effects.ts maps ids to these). */
 export const EFFECTS: RecipeBook = {
   ...strip("hit", hit),
@@ -1081,6 +1168,8 @@ export const EFFECTS: RecipeBook = {
   ...strip("gather", gather),
   ...strip("gather_miss", gatherMiss),
   ...strip("buff", buff),
+  ...strip("refine", refine),
+  ...strip("shatter", shatter),
   ...strip("physical", physical),
   ...strip("fire", fire),
   ...strip("ice", ice),

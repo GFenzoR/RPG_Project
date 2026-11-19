@@ -161,6 +161,11 @@ export const PALETTE = {
   pearlCloth: material("#d9e1ec", "#a8b5c8", "#7a87a0", "#4e5972"),
   /** The emberheart ring's stone, a red that beats (a `glow` part). */
   heartstone: material("#ffd2c4", "#ff6a52", "#d8332d", "#8e1822"),
+  // The forge's materials (engine/specs/forge-materials.ts, docs/02 "Forja"): the greater
+  // temper stone's blue-grey whetstone, the radiant one's pale stone, and the warding amber.
+  temperBlue: material("#a3b6c8", "#768a9e", "#566678", "#3a4653"),
+  paleStone: material("#c8c3b3", "#a19c8d", "#7b776c", "#56534b"),
+  amber: material("#ffd27a", "#e8a03a", "#b4661c", "#723c10"),
 } as const satisfies Record<string, Material>;
 
 export type MaterialName = keyof typeof PALETTE;
