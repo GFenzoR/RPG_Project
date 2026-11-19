@@ -19,12 +19,12 @@
         "interval_ms": { "type": "integer", "minimum": 50 },
         "chance": { "$ref": "common.schema.json#/$defs/chance" },
         "range": {
-          "description": "Chebyshev tiles to the target (distance and spell). With a circle around the target, range + radius is at most 6 (make validate checks it): what a monster notices.",
+          "description": "Chebyshev tiles to the target (distance and spell). With a circle around the target, range + radius is at most 6 (make validate checks it): what a monster notices. Not with a beam nor a circle around the monster: their length or radius is how far they reach.",
           "$ref": "common.schema.json#/$defs/aimRange"
         },
         "below_hp_pct": { "type": "integer", "minimum": 1, "maximum": 100 },
         "area": {
-          "description": "circle: radius tiles (dx² + dy² ≤ r² + r) around the monster (center self, the default) or its target, every tile in line of sight from the centre; beam: length tiles in a straight line from the monster towards its target (the nearest of 8 directions), stopped by the first tile that blocks sight. Reach: a circle around the monster, its radius; a beam, its length; a circle around the target, as the attack without it (1 for melee, range otherwise).",
+          "description": "circle: radius tiles (dx² + dy² ≤ r² + r) around the monster (center self, the default) or its target, every tile in line of sight from the centre; beam: length tiles in a straight line from the monster towards its target (the nearest of 8 directions), stopped by the first tile that blocks sight. Reach: a circle around the monster, its radius; a beam, its length (neither takes a range); a circle around the target, as the attack without it (1 for melee, range otherwise). A beam is used only with its target on one of its 8 lines, a circle around the monster only with its target in its round area.",
           "type": "object",
           "additionalProperties": false,
           "required": ["shape"],
@@ -66,6 +66,15 @@
         "visual": { "$ref": "common.schema.json#/$defs/id" }
       },
       "allOf": [
+        {
+          "if": {
+            "required": ["area"],
+            "properties": {
+              "area": { "type": "object", "properties": { "center": { "const": "self" } } }
+            }
+          },
+          "then": { "properties": { "range": false } }
+        },
         {
           "if": { "properties": { "type": { "const": "summon" } } },
           "then": {

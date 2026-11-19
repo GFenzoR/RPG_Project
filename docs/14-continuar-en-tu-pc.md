@@ -675,7 +675,8 @@ el punto 5:
       distancia (`range: 3`) por el estallido alrededor (círculo de 1): ya no castigan a un
       montaraz o un mago que les pega desde lejos. Si se quiere que sigan haciéndolo, se
       suma el hechizo como otro ataque y se revisa su balance (docs/02 "Habilidades",
-      "Contenido").
+      "Contenido"). La revisión de la rama lo marcó también: al gólem (velocidad 120) se le
+      pega sin riesgo yendo y viniendo, y los duelos no lo miden.
     - Ningún monstruo usa `heal_self` todavía (solo los tests): queda para el mundo nuevo
       de los próximos lotes, como las áreas en las islas nuevas.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de

@@ -471,8 +471,8 @@ func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
 // loop goroutine).
 func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }
 
-// DespawnForTest takes m out of the world without a death: no game path does it yet,
-// but the protocol already has the reason (DISAPPEAR_REASON_DESPAWN).
+// DespawnForTest takes m out of the world without a death (DISAPPEAR_REASON_DESPAWN), as
+// the summons of a monster that died or gave up go (despawnSummons).
 func (w *World) DespawnForTest(m *Monster) { w.removeMonster(m, goneDespawn) }
 
 // StrayLinkDeadForTest lists p as link-dead although it is not in the world (tests only,

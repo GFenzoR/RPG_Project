@@ -845,6 +845,8 @@ describe("validator diagnostics", () => {
         "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 7 }",
         "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: { shape: circle, radius: 2, center: target } }",
         "  - { type: melee, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 5, center: target } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, range: 4, area: { shape: beam, length: 3 } }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 3, area: { shape: circle, radius: 1 } }",
         "phases:",
         "  - { below_hp_pct: 50, attacks_add: [ { type: melee, min: 4, max: 2, interval_ms: 2000 } ] }",
         "  - { below_hp_pct: 50, speed_mult: 0 }",
@@ -864,6 +866,9 @@ describe("validator diagnostics", () => {
     expect(at("attacks[6].range", "<= 6")).toBe(true);
     expect(at("attacks[7].area.radius", "reach 5 + radius 2")).toBe(true);
     expect(out.some((m) => m.includes(" attacks[8]."))).toBe(false);
+    // A beam or a circle around the monster reaches its length or radius: no range.
+    expect(at("attacks[9].range", "not allowed here")).toBe(true);
+    expect(at("attacks[10].range", "not allowed here")).toBe(true);
     expect(at("phases[0].attacks_add[0].min", "min (4) is greater than max (2)")).toBe(true);
     expect(at("phases[1].below_hp_pct", "another phase is already below 50 %")).toBe(true);
     expect(at("phases[1].speed_mult", "> 0")).toBe(true);

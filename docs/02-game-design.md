@@ -755,7 +755,18 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     `range` si no), siempre con línea de visión al objetivo. Ese alcance, y en un círculo
     alrededor del objetivo ese alcance más el radio, no pasa de 6 (lo que nota un
     monstruo: más lejos dañaría a un jugador que ni lo conoce; `make validate` y el
-    arranque lo rechazan). Pega a **cada jugador del
+    arranque lo rechazan). Un rayo o un círculo alrededor de sí no llevan `range` (su largo
+    o su radio es su alcance; `make validate` y el arranque lo rechazan). Cuenta además la
+    **forma**: un rayo solo alcanza a un objetivo en una de sus 8 líneas y sin una casilla
+    que tape la vista antes, y un círculo alrededor de sí solo dentro de su área redonda
+    (a radio 2, no la casilla a 2 y 2). Un área que no tendría a su objetivo adentro
+    espera: no gasta su ronda ni cuenta como responderle (`TestMonsterAreaWaitsForItsTarget`).
+    Y para la correa y la persecución no lo "alcanza" (`session.strikes`): antes, un
+    dragoncillo en la esquina de su correa retenía a un montaraz a 4 al este y 2 al sur del
+    otro lado de la lava, el rayo nunca le pegaba y cada ronda contaba como responderle, así
+    que lo entrenaba a ritmo completo sin recibir daño; ahora lo suelta como cualquier
+    monstruo y esos golpes entrenan como contra uno que no responde
+    (`TestLeashAreaThatMissesHoldsNoTarget`). Pega a **cada jugador del
     área** que el monstruo ve (a un invisible solo si tiene `sees_invisible`), fuera de
     zonas de protección, cada uno con su tirada, el elemento del ataque (uno físico con
     armadura y defensa, como un golpe) y su condición. Nunca a monstruos ni NPCs. Los
@@ -771,7 +782,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     (`TestLeashCountsOnlyTheAttacksInUse`).
   - **Curarse** (`type: heal_self`, `min`–`max`): solo peleando (con objetivo, aunque no
     lo tenga a su alcance) y herido; a vida llena la ronda espera sin gastarse. Efecto de
-    curación, número verde y barra de vida para quien lo ve.
+    curación, número verde y barra de vida para quien lo ve (una curación que sale 0, con
+    `min: 0`, muestra el efecto sin número, como la de un jugador).
   - **Invocar** (`type: summon`, `summon: {monster, count, max_alive}`): `count` criaturas
     en casillas libres junto a él (con el efecto de conjurar), nunca más de `max_alive`
     vivas a la vez (si ya están todas, la ronda espera sin gastarse: cuando muere una,

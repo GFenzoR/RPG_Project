@@ -280,6 +280,57 @@ attacks:
 	}
 }
 
+// An area that would miss its target waits (review of the monster abilities): a breather
+// held on its tile by water, with a stone throw of 4 and a beam of 4, keeps throwing at a
+// target 4 tiles east and 2 south, out of every line of its beam, but never breathes at
+// it: the beam's round is not spent on a line that misses. The tick the target stands in
+// line (4 east), it breathes at once and burns it.
+func TestMonsterAreaWaitsForItsTarget(t *testing.T) {
+	breath := parsedMonster(t, `id: breather
+health: 500
+speed: 100
+behavior: {aggressive: true}
+attacks:
+  - { type: distance, element: earth, min: 1, max: 1, interval_ms: 1000, range: 4 }
+  - { type: spell, element: fire, min: 10, max: 10, interval_ms: 2000, area: { shape: beam, length: 4 } }
+`)
+	rows := []string{
+		"............",
+		"............",
+		"............",
+		"............",
+		"....~~~.....",
+		"....~.~.....",
+		"....~~~.....",
+		"............",
+		"............",
+	}
+	h := abilityHarness(t, worldtest.Map(t, 0, 0, 7, rows...), []*content.Monster{breath}, spawnAt("breather", 5, 5, 0, 60))
+	cls, ps := h.joinAll([]world.Pos{pos(9, 7)}, nil)
+	cl, p := cls[0], ps[0]
+	mo := onlyMonster(t, h)
+	h.sim.RunFor(5e9)
+	evs := cl.take()
+	beams, throws := 0, 0
+	for _, a := range attacksOf(evs, mo.ID()) {
+		if a.GetRadius() == 4 {
+			beams++
+		} else {
+			throws++
+		}
+	}
+	if beams != 0 || len(effectTiles(evs, fireEffect)) != 0 || throws < 4 || mo.TargetID() != p.ID() {
+		t.Fatalf("in 5 s at 4 east and 2 south: %d beams, %d fire effects and %d throws, target %d: want no beam, a throw a second at %d",
+			beams, len(effectTiles(evs, fireEffect)), throws, mo.TargetID(), p.ID())
+	}
+	before := health(p)
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(9, 5)) }))
+	h.sim.RunTicks(2)
+	if health(p) > before-10 {
+		t.Errorf("in line at 4 east the target has %d health (was %d): want the beam (10) at once, its round unspent", health(p), before)
+	}
+}
+
 // A circle around the target goes with a projectile at it and hits its neighbours too,
 // from range.
 func TestMonsterCircleAroundTarget(t *testing.T) {
@@ -424,6 +475,42 @@ attacks:
 	h.sim.RunTicks(40) // at 60 % again: no more heals
 	if cur, _ := mo.Health(); cur != 60 {
 		t.Errorf("health %d: it healed above 50 %%", cur)
+	}
+}
+
+// A heal of min 0 that rolls 0 shows its effect but no green 0 (review of the monster
+// abilities), as a player's heal: of 20 rounds of 0-1, some heal 1 and some nothing.
+func TestMonsterHealOfNothingShowsNoNumber(t *testing.T) {
+	def := parsedMonster(t, `id: mender
+health: 100
+speed: 100
+behavior: {aggressive: true}
+attacks:
+  - { type: melee, min: 0, max: 0, interval_ms: 2000 }
+  - { type: heal_self, min: 0, max: 1, interval_ms: 1000 }
+`)
+	h := abilityHarness(t, worldtest.Open(t, 0, 0, 32, 32), []*content.Monster{def}, spawnAt("mender", 10, 10, 0, 60))
+	cl, _ := h.join("Hunter", at(10, 11))
+	h.sim.Step()
+	mo := onlyMonster(t, h)
+	h.sim.Command(gameFunc(func() { mo.SetHealth(50) }))
+	h.sim.RunFor(20e9)
+	evs := cl.take()
+	cur, _ := mo.Health()
+	numbers, zeros := 0, 0
+	for _, f := range find(evs, (*pb.ServerMessage).GetFloatingText) {
+		if f.GetKind() != pb.FloatingTextKind_FLOATING_TEXT_KIND_HEAL {
+			continue
+		}
+		numbers++
+		if f.GetAmount() == 0 {
+			zeros++
+		}
+	}
+	rounds := len(effectTiles(evs, session.EffectHeal))
+	if zeros != 0 || numbers != cur-50 || rounds < 19 || numbers == rounds {
+		t.Errorf("%d heal rounds healed %d (%d numbers, %d of them 0): want a number for each point healed only, and some rounds of 0",
+			rounds, cur-50, numbers, zeros)
 	}
 }
 
@@ -659,7 +746,9 @@ phases:
 }
 
 // The server refuses a summon of a monster it does not know, or of one that summons too
-// (a chain without a bound).
+// (a chain without a bound); and, from a config built in Go (ParseMonster refuses it in a
+// file), a summon attack without its summon, which monsterSelf would read as a nil
+// pointer, or with max_alive 0, which would never summon.
 func TestStartupRefusesBadSummons(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -671,6 +760,8 @@ func TestStartupRefusesBadSummons(t *testing.T) {
 			ms[1].Attacks = append(ms[1].Attacks, content.MonsterAttack{Type: content.AttackSummon, IntervalMs: 1000, Chance: 1,
 				Summon: &content.MonsterSummon{Monster: "imp", Count: 1, MaxAlive: 1}})
 		}, `summons "imp", which summons too`},
+		{"no summon", func(ms []*content.Monster) { ms[0].Attacks[1].Summon = nil }, `needs summon with count and max_alive`},
+		{"max_alive 0", func(ms []*content.Monster) { ms[0].Attacks[1].Summon.MaxAlive = 0 }, `needs summon with count and max_alive`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			defs := summonerDefs(t)

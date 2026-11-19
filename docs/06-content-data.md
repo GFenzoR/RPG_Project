@@ -328,14 +328,19 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   ```
   El alcance de un ataque con área (a qué distancia de su objetivo lo usa) es el radio de
   un círculo alrededor de sí, el largo de un rayo o, en un círculo alrededor del
-  objetivo, el del ataque sin área (`range`, 1 cuerpo a cuerpo). `make validate` y el
+  objetivo, el del ataque sin área (`range`, 1 cuerpo a cuerpo); un rayo solo lo usa con
+  su objetivo en una de sus 8 líneas y un círculo alrededor de sí con él dentro de su área
+  redonda (docs/02 "Habilidades"). `make validate` y el
   arranque del servidor (`content.ParseMonster`, `session.checkSummons`) rechazan lo mismo:
   un tipo, una forma o un centro que no existe, un círculo sin `radius` o un rayo sin
-  `length` (o con `radius`, o centrado en el objetivo), radios y largos de más de 6 (lo
+  `length` (o con `radius`, o centrado en el objetivo), un `range` en un rayo o en un
+  círculo alrededor de sí (no cuenta: su alcance es su largo o su radio), radios y
+  largos de más de 6 (lo
   que nota un monstruo), un `range` de más de 6, un círculo alrededor del objetivo que
   llega más lejos que eso (`range` + `radius`, 1 + `radius` cuerpo a cuerpo: dañaría a
   un jugador que ni conoce al monstruo), un `heal_self` o `summon` con `element`, `range`, `area` o
-  `condition`, un `summon` con `min`/`max` o sin `summon`, uno de un monstruo que no
+  `condition`, un `summon` con `min`/`max` o sin `summon` (el arranque también uno armado
+  en Go sin `summon` o con `max_alive` 0), uno de un monstruo que no
   existe o que invoca a su vez, y dos fases con el mismo `below_hp_pct`. Los duelos de
   balance (`server/internal/sim/foe_test.go`) los simulan: un monstruo nuevo con
   habilidades no necesita más que su caso en el test de su isla.

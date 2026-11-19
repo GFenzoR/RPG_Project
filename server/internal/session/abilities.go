@@ -124,6 +124,20 @@ func (w *World) beamTiles(from world.Pos, d world.Direction, n int, dst []world.
 	return dst
 }
 
+// beamReaches reports whether a beam from `from` gets to `to`, on one of the 8 lines from
+// it (the caller checked): no tile on the way, `to` included, blocks sight (beamTiles).
+func (w *World) beamReaches(from, to world.Pos) bool {
+	sx, sy := sign(int(to.X)-int(from.X)), sign(int(to.Y)-int(from.Y))
+	at := from
+	for at != to {
+		at = world.Pos{X: uint16(int(at.X) + sx), Y: uint16(int(at.Y) + sy), Z: from.Z}
+		if _, f, ok := w.m.Tile(at); !ok || f&world.FlagBlocksSight != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // beamDir is the direction of the 8 nearest to the line from m to p: straight when one
 // difference is more than twice the other, diagonal otherwise (where m faces, if p is on
 // its tile).
@@ -188,22 +202,29 @@ func (w *World) monsterSelf(ctx *game.TickContext, m *Monster) {
 	}
 }
 
-// healMonster gives m up to amount health, with the heal's effect, its floating text and
-// the new health bar for who sees it.
+// healMonster gives m up to amount health, with the heal's effect for who sees it and,
+// if it healed any (a heal of min 0 may roll 0), its floating text and the new health bar
+// (as a player's heal: no green 0).
 func (w *World) healMonster(m *Monster, amount int) {
-	hp := min(amount, m.maxHealth-m.health)
+	hp := min(max(amount, 0), m.maxHealth-m.health)
 	m.health += hp
 	at := posMsg(m.pos)
 	shown := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: at, EffectId: EffectHeal}}}
-	text := &pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
-		Pos: at, Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_HEAL, Amount: uint64(hp),
-	}}}
-	bar := &pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{
-		Id: m.id, HealthPercent: healthPercent(m.health, m.maxHealth),
-	}}}
+	var text, bar *pb.ServerMessage
+	if hp > 0 {
+		text = &pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
+			Pos: at, Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_HEAL, Amount: uint64(hp),
+		}}}
+		bar = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{
+			Id: m.id, HealthPercent: healthPercent(m.health, m.maxHealth),
+		}}}
+	}
 	w.eachObserver(nil, m.pos, func(o *Player) {
-		if o.Knows(m.id) {
-			o.emit(shown)
+		if !o.Knows(m.id) {
+			return
+		}
+		o.emit(shown)
+		if hp > 0 {
 			o.emit(text)
 			o.emit(bar)
 		}

@@ -65,8 +65,8 @@ type monsterKind struct {
 	attacks []kindAttack
 	// The rest is by how many of its phases are on (0 to len(def.Phases)): ticks[n][i] is
 	// the interval of attacks[i], reach[n] the longest reach of its targeted attacks in
-	// those phases that have no below_hp_pct (1 = melee only) and speed[n] its speed before
-	// conditions.
+	// those phases that have no below_hp_pct (1 = melee only; Monster.reach) and speed[n]
+	// its speed before conditions.
 	ticks [][]game.Tick
 	reach []int
 	speed []int
@@ -160,11 +160,10 @@ type Monster struct {
 	summons  []*Monster
 }
 
-// reach is the longest reach of the targeted attacks m may use now, those monsterAttacks
-// would use (their phase on, its health below their below_hp_pct; 1 = melee only). One
-// held back for low health does not count before: with it, a monster shot from out of
-// its leash area would count as fighting back (beyondLeash, chase's check) and stand
-// there as a training dummy that never answers.
+// reach is the longest reach (Chebyshev) of the targeted attacks m may use now, those
+// monsterAttacks would use (their phase on, its health below their below_hp_pct; 1 =
+// melee only): whether m shoots while it closes in (think). Whether they hit a given
+// tile is strikes, which also counts the shape of an area.
 func (m *Monster) reach() int {
 	r := m.kind.reach[m.phase]
 	for _, i := range m.kind.gated {
@@ -380,12 +379,17 @@ func (k *monsterKind) prepareAttacks() {
 	}
 }
 
-// checkSummons checks what the monsters summon: a known monster that summons nothing
-// itself (a chain of summoners would have no bound).
+// checkSummons checks what the monsters summon: each summon attack says what (summon,
+// with count and max_alive at least 1: ParseMonster fills max_alive, a config built in Go
+// may not, and monsterSelf reads both), a known monster that summons nothing itself (a
+// chain of summoners would have no bound).
 func (w *World) checkSummons() error {
 	for _, id := range w.cfg.Monsters.IDs() {
 		for _, a := range w.kinds[id].attacks {
 			s := a.def.Summon
+			if a.def.Type == attackSummon && (s == nil || s.Count < 1 || s.MaxAlive < 1) {
+				return fmt.Errorf("session: monster %q: a summon attack needs summon with count and max_alive of 1 or more", id)
+			}
 			if s == nil {
 				continue
 			}
@@ -649,10 +653,52 @@ func (w *World) pickTarget(tick game.Tick, m *Monster, skip *Player, inReach boo
 }
 
 // hits reports whether one of m's attacks reaches p from where m stands: next to it, or
-// within its reach and line of sight (distance attacks and spells, monsterAttacks).
+// covering it (strikes) in line of sight (distance attacks, spells and areas,
+// monsterAttacks).
 func (w *World) hits(m *Monster, p *Player) bool {
-	d := chebyshev(m.pos, p.pos)
-	return d <= 1 || d <= m.reach() && w.m.LineOfSight(m.pos, p.pos)
+	return chebyshev(m.pos, p.pos) <= 1 || w.strikes(m, p.pos) && w.m.LineOfSight(m.pos, p.pos)
+}
+
+// strikes reports whether a target on p could be hit by m from where it stands: p is next
+// to m, or one of the targeted attacks m may use now (monsterAttacks: its phase on, m's
+// health below its below_hp_pct) covers p (covers). Line of sight aside (hits): it is what
+// keeps m on a target beyond its leash area (beyondLeash) and spares its chase the check
+// of the way (chase). Not the longest reach alone (Monster.reach): a beam of 4 misses a
+// target 4 tiles east and 2 south, and a monster that counted it as reached would hold
+// that target, never hit it and still answer it (review of the monster abilities: a
+// ranger across the water trained on an ember wyrmling at the full rate, unhurt).
+func (w *World) strikes(m *Monster, p world.Pos) bool {
+	if chebyshev(m.pos, p) <= 1 {
+		return true
+	}
+	for i := range m.kind.attacks {
+		// A reach of 1 covers only what is next to m: counted above.
+		if ka := &m.kind.attacks[i]; ka.reach > 1 && ka.phase <= m.phase && m.below(ka.def.BelowHealthPct) && w.covers(m, ka, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// covers reports whether m's targeted attack ka, used now from where m stands, would hit
+// a target on p, line of sight aside: p within its reach (Chebyshev) and, with an area, in
+// it. A beam goes along one of the 8 directions (beamDir turns any other line into one
+// that misses p), up to the first tile that blocks sight (beamTiles); a circle around m
+// covers its round area (inArea: not the corners of the square of its radius); a circle
+// around the target always has the target in it.
+func (w *World) covers(m *Monster, ka *kindAttack, p world.Pos) bool {
+	dx, dy := int(p.X)-int(m.pos.X), int(p.Y)-int(m.pos.Y)
+	if max(abs(dx), abs(dy)) > ka.reach {
+		return false
+	}
+	switch ar := ka.def.Area; {
+	case ar == nil || ar.Center == content.AreaTarget:
+		return true
+	case ar.Shape == content.AreaBeam:
+		return (dx == 0 || dy == 0 || abs(dx) == abs(dy)) && w.beamReaches(m.pos, p)
+	default:
+		return inArea(dx, dy, ar.Radius)
+	}
 }
 
 // think runs one tick of monster m's state machine.
@@ -696,7 +742,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		}
 		return
 	}
-	if d <= m.reach() {
+	if w.strikes(m, t.pos) {
 		m.stuckOn = 0
 	}
 	if m.kind.self {
@@ -719,7 +765,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		// Cornered next to its target: it fights back.
 	case d > b.TargetDistance:
 		m.state = StateChase
-		switch w.chase(ctx, m, t, roam, leash >= 0 && d > m.reach()) {
+		switch w.chase(ctx, m, t, roam, leash >= 0 && !w.strikes(m, t.pos)) {
 		case chaseBlocked:
 			// Only creatures stand in its way, and have for a while (an NPC, a monster or a
 			// player in the mouth of a nook may never move): it turns to a player its attacks
@@ -743,11 +789,10 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 			return
 		}
 		// A monster with distance attacks shoots while it closes in.
-		d = chebyshev(m.pos, t.pos)
 	default:
 		m.state = StateAttack
 	}
-	if d <= m.reach() {
+	if w.strikes(m, t.pos) {
 		w.face(m, t.pos)
 		w.monsterAttacks(ctx, m)
 	}
@@ -912,14 +957,15 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 }
 
 // beyondLeash reports whether player p fights m from where m may not go and cannot hit
-// back: out of its attacks' reach, and out of its leash area or on a tile where m shunned
+// back: out of its attacks' reach (strikes: a beam or a circle that misses p's tile does
+// not hold it), and out of its leash area or on a tile where m shunned
 // it (no way within its leash area led there, chase). Hits from there train like hits on
 // a target that does not fight back (skills.afk.factor): a monster held by its leash is
 // no training dummy. On another tile a shunned player is a target like any other: an
 // unreachable one costs stuckFor again.
 func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
 	l := w.leash(m)
-	if l < 0 || chebyshev(m.pos, p.pos) <= m.reach() {
+	if l < 0 || w.strikes(m, p.pos) {
 		return false
 	}
 	if chebyshev(p.pos, m.slot.spawn.Center) > l {

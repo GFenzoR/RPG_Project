@@ -74,7 +74,7 @@ func TestMonsterReachStopsAtMaxRange(t *testing.T) {
 		"{type: spell, min: 1, max: 2, interval_ms: 2000, range: 6, area: {shape: circle, radius: 6, center: target}}":                   false,
 		"{type: melee, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 5, center: target}}":                             true,
 		"{type: melee, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 6, center: target}}":                             false,
-		"{type: spell, min: 1, max: 2, interval_ms: 2000, range: 6, area: {shape: circle, radius: 6}}":                                   true,
+		"{type: spell, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 6}}":                                             true,
 		"{type: spell, min: 1, max: 2, interval_ms: 2000, below_hp_pct: 50, area: {shape: circle, radius: 3, center: target}, range: 4}": false,
 	} {
 		if _, err := ParseMonster([]byte(atk(src))); (err == nil) != ok {

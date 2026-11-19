@@ -66,6 +66,13 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   ~9 % (456 → 495 µs con 4000 ticks, +26 asignaciones por tick): no es costo propio, es
   que la persecución ahora sigue su rodeo y llega a su objetivo (más golpes y más
   `hitEvents`); con el rodeo guardado apagado mide como la base (~450 µs).
+  La revisión de la rama hizo que un área solo cuente si tendría a su objetivo adentro
+  (`session.strikes`/`covers`: un recorrido por los ataques en uso y, para un rayo en
+  línea, sus casillas): con correa 510 → 509 µs y sin áreas igual; `/areas` sube de ~630 a
+  ~710 µs y de 149 a 205 KB por tick, y no por el chequeo: con el círculo sin daño mide
+  igual que antes (545 → 548 µs). Es el juego: el círculo ya no gasta su ronda en un
+  jugador en la esquina de su radio, espera y le pega, así hay más golpes, más muertes y
+  más vueltas al templo en el benchmark.
 - Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
   mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
   antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada

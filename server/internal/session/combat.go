@@ -272,7 +272,10 @@ func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element
 // monsterAttacks runs m's targeted attacks that are due against its target and in use
 // (their phase is on, its health below their below_hp_pct): melee ones when it is
 // adjacent, distance attacks and spells (T1.9) within their range and line of sight, with
-// a projectile, and area attacks within their reach (monsterArea).
+// a projectile, and area attacks whose area would have the target in it (covers: a beam
+// in line with it, a circle around m reaching its tile) and in line of sight
+// (monsterArea). One that would miss waits: its round is not spent and the target is not
+// answered (fought), or a beam aimed past a ranger would count as fighting back.
 func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 	t := m.target
 	d := chebyshev(m.pos, t.pos)
@@ -282,7 +285,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z || ka.reach == 0 || ka.phase > m.phase || !m.below(a.BelowHealthPct) {
 			continue // ka.reach 0: a heal or a summon (monsterSelf)
 		}
-		if d > ka.reach || d > 1 && !w.m.LineOfSight(m.pos, t.pos) {
+		if !w.covers(m, ka, t.pos) || d > 1 && !w.m.LineOfSight(m.pos, t.pos) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]

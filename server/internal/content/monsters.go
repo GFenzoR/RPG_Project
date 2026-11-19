@@ -120,8 +120,10 @@ func (a *MonsterAttack) Targeted() bool {
 
 // Reach is how far (Chebyshev) the target may stand for the monster to use the targeted
 // attack a: 1 for melee, range for distance and spell (at least 1), the radius of a
-// circle around the monster itself, the length of a beam; a circle around the target
-// reaches as the attack would without it.
+// circle around the monster itself, the length of a beam (neither has a range:
+// ParseMonster refuses one); a circle around the target reaches as the attack would
+// without it. An area's shape narrows it (session covers: a beam only along 8 lines, a
+// circle only its round area).
 func (a *MonsterAttack) Reach() int {
 	switch {
 	case a.Area != nil && a.Area.Shape == AreaBeam:
@@ -288,6 +290,10 @@ func checkAttack(a *MonsterAttack) error {
 	}
 	if err := checkArea(a.Area); err != nil {
 		return err
+	}
+	if ar := a.Area; ar != nil && ar.Center != AreaTarget && a.Range != 0 {
+		// Its reach is its length or radius (Reach): a range would be ignored.
+		return errors.New("a beam or a circle around the monster has no range: its length or radius is how far it reaches")
 	}
 	// How far it hits stops at MaxRange, what a monster notices: its reach and, for a
 	// circle around its target, that reach plus the radius. Past it an area would hurt a
