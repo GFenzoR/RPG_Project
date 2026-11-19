@@ -204,11 +204,11 @@ func TestShopAndDialogItemsRoll(t *testing.T) {
 	if !slices.Equal(logged, []session.Mods{bought[0].Mods(), bought[1].Mods()}) {
 		t.Fatalf("logged %v", logged)
 	}
-	// Selling one back pays its base price (data: 8 for the cutlass), whatever it rolled.
+	// Selling one back pays its base price (data: 10 for the cutlass), whatever it rolled.
 	money := h.w.Money(p)
 	cutlass := uint32(items["rusty_cutlass"].Numeric)
 	h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: shop.DialogId, ItemId: cutlass, Count: 1}}})
-	if h.w.Money(p) != money+8 || len(h.w.ItemsForTest(p, "rusty_cutlass")) != 0 {
+	if h.w.Money(p) != money+10 || len(h.w.ItemsForTest(p, "rusty_cutlass")) != 0 {
 		t.Fatalf("sold for %d", h.w.Money(p)-money)
 	}
 	sold := false

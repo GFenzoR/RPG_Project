@@ -10,7 +10,7 @@ behavior:
   aggressive: true
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 52, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 60, interval_ms: 2000 }
   # The obsidian shard shatters where it lands: its target and whoever stands next to it.
   - { type: distance, min: 0, max: 34, interval_ms: 2000, chance: 0.3, range: 4, area: { shape: circle, radius: 1, center: target } }
 resistances: { physical: 5, fire: 30, ice: -10 }

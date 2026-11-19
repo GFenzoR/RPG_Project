@@ -151,8 +151,8 @@ el punto 5:
   - **Ids al mergear con `feat/item-forge`:** las 35 piezas nuevas tomaron los números
     271-305. Si esa rama agrega items, toma los mismos: al mergear, corre `make gen-ids`
     (el chequeo de `ids.ts` ataja los números repetidos).
-  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 10,2 % de la vida (el piso
-    es 10 %). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
+  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 11,0 % de la vida (el piso
+    es 10 %; con los atributos del kit su golpe cuerpo a cuerpo subió de 52 a 60). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
     la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
     hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
     "Balance" del catálogo).
