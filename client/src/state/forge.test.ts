@@ -3,6 +3,7 @@ import { EquipmentSlot, RefineOutcome } from "@rpg/protocol";
 import type { ClientContent, ForgeRules, ItemDef } from "../content-types.ts";
 import {
   attemptStep,
+  chosenPiece,
   forgeBand,
   forgeCandidates,
   forgeChance,
@@ -12,28 +13,30 @@ import {
   refineOutcome,
   refinedName,
   sameLoc,
+  sameMods,
   smithingBonus,
 } from "./forge.ts";
+import type { ForgeCandidate, RefineState } from "./forge.ts";
 import type { StationState } from "./recipes.ts";
 
-// data/balance.yaml forge, with numeric ids: stones 271-273, the amber 274.
+// data/balance.yaml forge, with numeric ids: stones 306-308, the amber 309.
 const RULES: ForgeRules = {
   station: 95,
   safeLevel: 4,
-  protection: 274,
-  smithingBonus: { perLevels: 6, max: 5 },
+  protection: 309,
+  smithingBonus: { skill: "smithing", perLevels: 6, max: 5 },
   jewelryPct: 10,
   levels: [100, 100, 100, 100, 70, 55, 40, 25, 15, 8].map((chance, i) => ({
     chance,
     stones: i < 4 ? 1 : i < 7 ? 2 : 3,
   })),
   bands: [
-    { level: 1, stone: 271, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
-    { level: 5, stone: 271, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
-    { level: 10, stone: 272, gold: 40, attack: 1, armor: 0.3, defense: 0.6 },
-    { level: 30, stone: 272, gold: 120, attack: 1.4, armor: 0.3, defense: 0.8 },
-    { level: 50, stone: 273, gold: 300, attack: 1.8, armor: 0.4, defense: 1 },
-    { level: 75, stone: 273, gold: 700, attack: 2.2, armor: 0.5, defense: 1.2 },
+    { level: 1, stone: 306, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
+    { level: 5, stone: 306, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
+    { level: 10, stone: 307, gold: 40, attack: 1, armor: 0.3, defense: 0.6 },
+    { level: 30, stone: 307, gold: 120, attack: 1.4, armor: 0.3, defense: 0.8 },
+    { level: 50, stone: 308, gold: 300, attack: 1.8, armor: 0.4, defense: 1 },
+    { level: 75, stone: 308, gold: 700, attack: 2.2, armor: 0.5, defense: 1.2 },
   ],
 };
 
@@ -89,8 +92,8 @@ describe("the forge's rules on the client (server/internal/content/forge.go)", (
   });
 
   it("picks the band by requires.level and adds the smithing bonus only where it can fail", () => {
-    expect(forgeBand(RULES, 0).stone).toBe(271);
-    expect(forgeBand(RULES, 15).stone).toBe(272);
+    expect(forgeBand(RULES, 0).stone).toBe(306);
+    expect(forgeBand(RULES, 15).stone).toBe(307);
     expect(forgeBand(RULES, 80).gold).toBe(700);
     expect(smithingBonus(RULES, 11)).toBe(1);
     expect(smithingBonus(RULES, 99)).toBe(5);
@@ -120,8 +123,8 @@ describe("forgeView", () => {
       content,
       station(
         [
-          [272, 5],
-          [274, 1],
+          [307, 5],
+          [309, 1],
         ],
         5000,
       ),
@@ -138,8 +141,8 @@ describe("forgeView", () => {
       bonus: 2,
       gold: 840,
       money: 5000,
-      stone: { itemId: 272, need: 2, have: 5 },
-      protection: { itemId: 274, have: 1 },
+      stone: { itemId: 307, need: 2, have: 5 },
+      protection: { itemId: 309, have: 1 },
       gain: { kind: "attack", now: 8, next: 9 },
       blocks: [],
     });
@@ -148,14 +151,14 @@ describe("forgeView", () => {
 
   it("a safe level goes at once and has no bonus", () => {
     const cap = { itemId: 2, mods: { attribute: "armor", value: 1, refine: 2 } };
-    const v = forgeView(RULES, content, station([[271, 1]], 9), cap, 30, true);
+    const v = forgeView(RULES, content, station([[306, 1]], 9), cap, 30, true);
     expect(v).toMatchObject({ next: 3, risky: false, chance: 100, bonus: 0, gold: 9, blocks: [] });
     expect(v && attemptStep(v)).toBe("send");
   });
 
-  it("says what is missing: stones, the protection asked for, money; a +10 goes no further", () => {
-    const v = forgeView(RULES, content, station([[272, 1]], 100), sabre, 0, true);
-    expect(v?.blocks).toEqual(["stones", "protection", "money"]);
+  it("says what is missing: stones, money; a +10 goes no further", () => {
+    const v = forgeView(RULES, content, station([[307, 1]], 100), sabre, 0, false);
+    expect(v?.blocks).toEqual(["stones", "money"]);
     const top = forgeView(
       RULES,
       content,
@@ -167,6 +170,85 @@ describe("forgeView", () => {
     expect(top?.blocks).toEqual(["top"]);
     expect(top?.chance).toBe(0);
     expect(forgeView(RULES, content, station([], 0), { itemId: 5 }, 0, false)).toBeUndefined();
+  });
+});
+
+describe("the protection toggle", () => {
+  const sabre = { itemId: 1, mods: { attribute: "attack", value: 3, refine: 6 } };
+  const rich = (ambers: number): StationState =>
+    station(
+      [
+        [307, 5],
+        [309, ambers],
+      ],
+      5000,
+    );
+
+  it("goes in the attempt when asked for where it counts and carried", () => {
+    expect(forgeView(RULES, content, rich(1), sabre, 0, true)).toMatchObject({
+      protect: true,
+      blocks: [],
+    });
+    expect(forgeView(RULES, content, rich(1), sabre, 0, false)?.protect).toBe(false);
+    // A safe level: nothing to protect, nothing spent.
+    const safe = { itemId: 1, mods: { attribute: "attack", value: 3, refine: 1 } };
+    expect(forgeView(RULES, content, rich(1), safe, 0, true)?.protect).toBe(false);
+  });
+
+  it("left on after the last amber was spent: off, never a block (the toggle hides)", () => {
+    // The StationOpen after an attempt says 0 ambers while the toggle's state is still on:
+    // the window must not lock its button nor promise the amber's safety.
+    const v = forgeView(RULES, content, rich(0), sabre, 0, true);
+    expect(v).toMatchObject({ protect: false, blocks: [], protection: { have: 0 } });
+  });
+});
+
+describe("the chosen piece", () => {
+  const mods = (refine: number, value = 3) => ({ attribute: "attack", value, refine });
+  const at = (index: number, m = mods(6)): ForgeCandidate => ({
+    loc: { kind: "container", id: 4, index },
+    itemId: 1,
+    mods: m,
+  });
+  const result = (outcome: RefineState["outcome"], refine: number, t: number): RefineState => ({
+    outcome,
+    level: refine,
+    itemId: 1,
+    mods: outcome === "broken" ? undefined : mods(refine),
+    from: 6,
+    at: t,
+  });
+
+  it("is the piece at its place with the same item and mods", () => {
+    const pick = at(1);
+    expect(chosenPiece([at(0, mods(2)), at(1)], pick, undefined, 0)).toEqual(at(1));
+    expect(chosenPiece([], pick, undefined, 0)).toBeUndefined();
+    expect(chosenPiece([at(1)], undefined, undefined, 0)).toBeUndefined();
+    expect(sameMods(undefined, { attribute: "", value: 0, refine: 0 })).toBe(true);
+  });
+
+  it("lets a broken piece go: the next one moving up into its place is not it", () => {
+    const pick = at(1);
+    // After the break, the bag's third sword (same item, same level, another roll) is at
+    // index 1: even before the result it is not the chosen one.
+    const shifted = [at(0, mods(2)), at(1, mods(6, 5))];
+    expect(chosenPiece(shifted, pick, undefined, 0)).toBeUndefined();
+    // Same item, level and roll in its place: only the result tells them apart.
+    const twin = [at(0, mods(2)), at(1)];
+    expect(chosenPiece(twin, pick, result("broken", 0, 20), 10)).toBeUndefined();
+  });
+
+  it("follows the level a success or a protected failure left it at", () => {
+    const pick = at(1);
+    expect(chosenPiece([at(1, mods(7))], pick, result("success", 7, 20), 10)).toEqual(
+      at(1, mods(7)),
+    );
+    expect(chosenPiece([at(1, mods(5))], pick, result("protected", 5, 20), 10)).toEqual(
+      at(1, mods(5)),
+    );
+    // A result from before the first attempt on this choice (another piece's) does not count.
+    expect(chosenPiece([at(1)], pick, result("broken", 0, 5), 10)).toEqual(at(1));
+    expect(chosenPiece([at(1)], pick, result("broken", 0, 5), 0)).toEqual(at(1));
   });
 });
 

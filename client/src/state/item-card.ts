@@ -155,12 +155,14 @@ export function itemCard(
     else if (attributes) card.attribute = { retired: true }; // no pool given: no line
   } else if (rollsAttribute(def)) card.attribute = anyInstance ? { any: true } : { random: true };
   const refined = refineKind(def);
-  if (refined && mods && mods.refine > 0)
-    card.refine = {
-      level: mods.refine,
-      kind: refined,
-      gain: forge ? refineGain(forge, def, mods.refine, mods.value) : 0,
-    };
+  if (refined && mods && mods.refine > 0) {
+    let gain = forge ? refineGain(forge, def, mods.refine, mods.value) : 0;
+    // A jewel's share goes to its attribute, which never passes its cap (the server's
+    // wornGear): the card does not promise more than the piece can give.
+    const cap = refined === "jewel" ? attributes?.[mods.attribute]?.cap : undefined;
+    if (cap !== undefined && cap > 0) gain = Math.min(gain, Math.max(cap - mods.value, 0));
+    card.refine = { level: mods.refine, kind: refined, gain };
+  }
   if (def.rune) {
     card.stats.push({ id: "charges", value: def.rune.charges });
     card.effects.push({ id: "rune", spell: def.rune.spell });

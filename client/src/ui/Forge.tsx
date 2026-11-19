@@ -12,6 +12,7 @@ import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import {
   attemptStep,
+  chosenPiece,
   forgeCandidates,
   forgeView,
   refinedName,
@@ -33,6 +34,7 @@ interface BodyProps {
   candidates: readonly ForgeCandidate[];
   selected: ForgeCandidate | undefined;
   view: ForgeView | undefined;
+  /** The toggle's state (what the attempt does is view.protect). */
   protect: boolean;
   confirming: boolean;
   /** The last attempt, when it is still fresh. */
@@ -161,14 +163,17 @@ export function ForgeBody(p: BodyProps): JSX.Element {
             </label>
           )}
           {view.risky && (
-            <p class={p.protect ? "forge-risk protected" : "forge-risk"} data-testid="forge-risk">
-              {p.protect ? t("client.forge.risk_protected") : t("client.forge.risk")}
+            <p
+              class={view.protect ? "forge-risk protected" : "forge-risk"}
+              data-testid="forge-risk"
+            >
+              {view.protect ? t("client.forge.risk_protected") : t("client.forge.risk")}
             </p>
           )}
           {p.confirming ? (
             <div class="forge-confirm" role="alertdialog" data-testid="forge-confirm">
               <p class="danger">
-                {p.protect
+                {view.protect
                   ? t("client.forge.confirm_protected", {
                       item: itemName(t, content, view.itemId, view.level),
                       chance: view.chance,
@@ -263,13 +268,14 @@ export function ForgePanel(props: {
   const [protect, setProtect] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [sentAt, setSentAt] = useState(0);
+  // When the first attempt on this choice went (0: none yet): the results since then move
+  // the chosen piece's level, or let it go when it broke.
+  const [since, setSince] = useState(0);
   const containers = ui.backpack ? [ui.backpack, ...ui.containers] : ui.containers;
   const candidates = forgeCandidates(content, ui.inventory, containers);
-  // The chosen place, as it is now (a moved or broken item leaves it empty).
-  const selected = pick
-    ? candidates.find((c) => sameLoc(c.loc, pick.loc) && c.itemId === pick.itemId)
-    : undefined;
-  const smithing = ui.skills.find((s) => s.id === "smithing")?.level ?? 0;
+  // The chosen piece, as it is now (moved, broken or replaced in its place: none).
+  const selected = chosenPiece(candidates, pick, ui.refine, since);
+  const smithing = ui.skills.find((s) => s.id === rules.smithingBonus.skill)?.level ?? 0;
   const view = selected
     ? forgeView(rules, content, station, selected, smithing, protect)
     : undefined;
@@ -280,7 +286,8 @@ export function ForgePanel(props: {
     if (!selected || !view || view.blocks.length > 0) return;
     setConfirming(false);
     setSentAt(now);
-    game?.refine(selected, protect && view.risky);
+    if (since === 0) setSince(now);
+    game?.refine(selected, view.protect);
   };
   return (
     <ForgeBody
@@ -295,6 +302,7 @@ export function ForgePanel(props: {
       result={result}
       onPick={(c) => {
         setPick(c);
+        setSince(0);
         setConfirming(false);
       }}
       onProtect={setProtect}

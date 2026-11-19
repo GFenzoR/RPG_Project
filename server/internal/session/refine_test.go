@@ -3,6 +3,7 @@ package session_test
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -39,7 +40,7 @@ var refineItemDefs = map[uint16]string{
 // (requires level 20) is of the second.
 func testForge() content.Forge {
 	return content.Forge{Enabled: true, Station: "test_forge", TimeMs: 1000, SafeLevel: 4, Protection: "test_amber",
-		SmithingBonus: content.SmithingBonus{PerLevels: 6, Max: 5}, JewelryPct: 10,
+		SmithingBonus: content.SmithingBonus{Skill: "smithing", PerLevels: 6, Max: 5}, JewelryPct: 10,
 		Levels: []content.ForgeLevel{{Chance: 100, Stones: 1}, {Chance: 100, Stones: 1}, {Chance: 100, Stones: 1},
 			{Chance: 100, Stones: 1}, {Chance: 70, Stones: 2}, {Chance: 55, Stones: 2}, {Chance: 40, Stones: 2},
 			{Chance: 25, Stones: 3}, {Chance: 15, Stones: 3}, {Chance: 8, Stones: 3}},
@@ -184,7 +185,8 @@ func (h *harness) forgeLog() (gold int64, stones, ambers int32, swords []session
 
 // Up to +4 every attempt succeeds, whatever the roll, and spends one stone and gold × the
 // level: four attempts take a plain sword to +4 with sparks on the anvil, and its attack
-// grows with each level at once (it is worn).
+// grows with each level at once (it is worn). A safe level is not saved at once (going back
+// to before it gives nothing): the next save, here the logout's, has it.
 func TestRefineSafeLevelsNeverFail(t *testing.T) {
 	h := refineHarness(t, func(c *session.Config) {
 		for i := range 4 {
@@ -193,7 +195,7 @@ func TestRefineSafeLevelsNeverFail(t *testing.T) {
 	})
 	cl, p := forger(h, 0)
 	_, _, atk0, _, _ := h.w.GearForTest(p, "sword")
-	before := h.carried(p)
+	before, saves := h.carried(p), len(h.saves)
 	for level := range 4 {
 		evs := h.refineSword(cl, level, true) // the protection is ignored where nothing can fail
 		r := refineResult(t, evs)
@@ -226,6 +228,11 @@ func TestRefineSafeLevelsNeverFail(t *testing.T) {
 			t.Fatalf("entry %d: %+v, want %+v", i, e, want)
 		}
 	}
+	if len(h.saves) != saves {
+		t.Fatalf("%d saves after the safe attempts", len(h.saves)-saves)
+	}
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
 	inv := h.saves[len(h.saves)-1].Inventory
 	if i := slices.IndexFunc(inv, func(s session.ItemState) bool { return s.ItemID == swordID }); i < 0 ||
 		inv[i].Mods != refinedMods("attack", 2, 4) {
@@ -368,6 +375,73 @@ func TestRefineSmithingBonus(t *testing.T) {
 	}
 }
 
+// The skill of the bonus is data (forge.smithing_bonus.skill): named mining, mining's level
+// gives it and smithing's does not. +1 point per level up to 30: at mining 30 the 70 % of
+// +5 is sure, at mining 1 (smithing 30) it is 71 %.
+func TestRefineBonusSkillIsData(t *testing.T) {
+	h := refineHarness(t, func(c *session.Config) {
+		c.Balance.Forge.SmithingBonus = content.SmithingBonus{Skill: "mining", PerLevels: 1, Max: 30}
+		c.Balance.Skills.Base["mining"] = content.SkillBase{StartLevel: 1, BaseTries: 20}
+	})
+	cl, p := forger(h, 4, session.SkillState{ID: "mining", Level: 30}, session.SkillState{ID: "smithing", Level: 1})
+	sword := p.Equipped(slotRight)
+	for i := range 20 {
+		if r := refineResult(t, h.refineSword(cl, 4, false)); r.GetOutcome() != pb.RefineOutcome_REFINE_OUTCOME_SUCCESS {
+			t.Fatalf("attempt %d at mining 30: %v", i, r)
+		}
+		h.sim.Command(gameFunc(func() {
+			sword.SetModsForTest(refinedMods("attack", 2, 4))
+			h.w.GiveForTest(p, "test_stone", 2)
+			h.w.GiveForTest(p, "copper_coin", 5)
+		}))
+		h.sim.Step()
+	}
+	// A skill the balance does not know stops the server.
+	cfg := session.Config{Map: worldtest.Map(t, 0, 0, 7, forgeMap...), Balance: testBalance(), Vocations: testVocations,
+		Items: refineItems(t), Save: func(session.Snapshot) bool { return true }}
+	withForge(&cfg)
+	cfg.Balance.Forge.SmithingBonus.Skill = "juggling"
+	if _, err := session.New(cfg); err == nil || !strings.Contains(err.Error(), "juggling") {
+		t.Fatalf("an unknown bonus skill: %v", err)
+	}
+}
+
+// Looking at a refined piece names its level ("+7 sword": the stack goes with its mods)
+// and says its numbers with what the level adds; a plain one says the item's own.
+func TestLookSaysTheRefineLevel(t *testing.T) {
+	h := refineHarness(t)
+	look := func(cl *fakeClient, from *pb.ItemLocation, id uint32) (*pb.ItemStack, map[string]int64) {
+		t.Helper()
+		h.input(cl, lookAt(from, id, 0))
+		h.sim.Step()
+		msgs := find(cl.take(), (*pb.ServerMessage).GetChatMessage)
+		if len(msgs) != 1 {
+			t.Fatalf("look: %v", msgs)
+		}
+		nums := map[string]int64{}
+		var item *pb.ItemStack
+		for _, prm := range msgs[0].GetLocalized().GetParams() {
+			if prm.GetItem() != nil {
+				item = prm.GetItem()
+			} else {
+				nums[prm.GetName()] = prm.GetNumber()
+			}
+		}
+		return item, nums
+	}
+	plainCl, _ := forger(h, 0)
+	plain, base := look(plainCl, inSlot(slotRight), swordID)
+	if itemMods(plain) != refinedMods("attack", 2, 0) {
+		t.Fatalf("plain sword %v", plain)
+	}
+	cl, _ := forger(h, 7)
+	item, nums := look(cl, inSlot(slotRight), swordID)
+	// Band 1 adds 1 attack a level: +7 is 7 more; the defense stays.
+	if itemMods(item) != refinedMods("attack", 2, 7) || nums["attack"] != base["attack"]+7 || nums["defense"] != base["defense"] {
+		t.Fatalf("+7 sword %v %v, plain %v", item, nums, base)
+	}
+}
+
 // A +10 cannot go further; nothing is spent.
 func TestRefineTopLevel(t *testing.T) {
 	h := refineHarness(t)
@@ -469,7 +543,9 @@ func TestRefineRefusals(t *testing.T) {
 	}
 }
 
-// An item on the floor is not the player's to refine.
+// An item on the floor (Refine has no stack index: a tile names its ground) or in a
+// container lying there (a corpse, a chest) is not the player's to refine; for the
+// container the answer says only what it carries is refined.
 func TestRefineNotFromTheGround(t *testing.T) {
 	h := refineHarness(t)
 	cl, p := forger(h, 0)
@@ -483,6 +559,24 @@ func TestRefineNotFromTheGround(t *testing.T) {
 	}
 	if g := h.w.GroundAt(pos(1, 1)); len(g) != 1 || g[0].Mods().Refine != 0 {
 		t.Fatalf("ground %v", g)
+	}
+
+	// A bag on the floor, opened, with the sword in it.
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 1)) }))
+	h.sim.Step()
+	opens := find(h.send(cl, useItem(onTile(pos(2, 1)), bagID, 1)), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 {
+		t.Fatal("the bag did not open")
+	}
+	bag := opens[0].GetContainerId()
+	h.send(cl, moveItem(onTile(pos(1, 1)), swordID, 1, inContainer(bag, 0), 1))
+	if g := h.w.GroundAt(pos(1, 1)); len(g) != 0 {
+		t.Fatalf("the sword stayed on the floor: %v", g)
+	}
+	h.input(cl, refineMsg(inContainer(bag, 0), swordID, 0, false))
+	h.sim.Step()
+	if evs := cl.take(); !hasKey(evs, "refine.not_carried") || h.carried(p) != before {
+		t.Fatalf("a bag on the floor: %v", systemKeys(evs))
 	}
 }
 

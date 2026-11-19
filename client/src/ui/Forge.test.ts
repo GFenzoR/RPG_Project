@@ -64,17 +64,17 @@ const content = {
       weapon,
       requires: { level: 30, vocations: [] },
     } as ItemDef,
-    272: { ...base, id: "greater_temper_stone", stackable: true } as ItemDef,
-    274: { ...base, id: "warding_amber", stackable: true } as ItemDef,
+    307: { ...base, id: "greater_temper_stone", stackable: true } as ItemDef,
+    309: { ...base, id: "warding_amber", stackable: true } as ItemDef,
   },
   forge: {
     station: 95,
     safeLevel: 4,
-    protection: 274,
-    smithingBonus: { perLevels: 6, max: 5 },
+    protection: 309,
+    smithingBonus: { skill: "smithing", perLevels: 6, max: 5 },
     jewelryPct: 10,
     levels: [100, 100, 100, 100, 70, 55, 40, 25, 15, 8].map((chance) => ({ chance, stones: 2 })),
-    bands: [{ level: 1, stone: 272, gold: 120, attack: 1.4, armor: 0.3, defense: 0.8 }],
+    bands: [{ level: 1, stone: 307, gold: 120, attack: 1.4, armor: 0.3, defense: 0.8 }],
   },
 } as unknown as ClientContent;
 
@@ -82,8 +82,8 @@ const station = (ambers: number): StationState => ({
   pos: { x: 0, y: 0, z: 7 },
   itemId: 95,
   owned: new Map([
-    [272, 6],
-    [274, ambers],
+    [307, 6],
+    [309, ambers],
   ]),
   tools: new Set(),
   money: 9000,
@@ -186,6 +186,26 @@ describe("the forge window", () => {
     });
     expect(byTestId(safe.tree, "forge-risk")?.props["class"]).toBe("forge-risk protected");
     expect(text(byTestId(safe.tree, "forge-confirm"))).toContain("client.forge.confirm_protected");
+  });
+
+  it("the toggle left on after the last amber was spent: the plain risk, the button free", () => {
+    // The amber was marked and the attempt spent the last one: the new StationOpen has none,
+    // the toggle hides, its state is still on.
+    const { tree, calls } = render({ selected: sabre(6), view: view(6, 0, true), protect: true });
+    expect(byTestId(tree, "forge-protect")).toBeUndefined();
+    expect(byTestId(tree, "forge-risk")?.props["class"]).toBe("forge-risk");
+    expect(text(byTestId(tree, "forge-risk"))).toBe("client.forge.risk");
+    const attempt = byTestId(tree, "forge-attempt");
+    expect(attempt?.props["disabled"]).toBe(false);
+    (attempt?.props["onClick"] as () => void)();
+    expect(calls).toEqual(["attempt"]);
+    const confirm = render({
+      selected: sabre(6),
+      view: view(6, 0, true),
+      protect: true,
+      confirming: true,
+    });
+    expect(text(byTestId(confirm.tree, "forge-confirm"))).toContain("client.forge.confirm{");
   });
 
   it("cannot attempt what it lacks, and says +10 is the top", () => {

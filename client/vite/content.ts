@@ -410,8 +410,9 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
 
 /**
  * data/attributes.yaml by id (docs/02 "Atributos de items"): the text key of each
- * attribute's card line. No file: no attributes; a file that does not parse fails the
- * build (a card without its lines would go unnoticed).
+ * attribute's card line and its cap (what a refined jewel's card may add). No file: no
+ * attributes; a file that does not parse fails the build (a card without its lines would
+ * go unnoticed).
  */
 export function loadAttributes(root: string): Record<string, AttributeDef> {
   const file = join(root, "data", "attributes.yaml");
@@ -420,7 +421,10 @@ export function loadAttributes(root: string): Record<string, AttributeDef> {
   const out: Record<string, AttributeDef> = {};
   for (const a of Array.isArray(raw) ? raw : []) {
     if (isObj(a) && typeof a["id"] === "string" && typeof a["text"] === "string")
-      out[a["id"]] = { text: a["text"] };
+      out[a["id"]] =
+        typeof a["cap"] === "number" && a["cap"] > 0
+          ? { text: a["text"], cap: a["cap"] }
+          : { text: a["text"] };
   }
   return out;
 }
@@ -467,7 +471,11 @@ export function loadForge(balance: unknown, ids: Record<string, unknown>): Forge
     station,
     safeLevel: n(f["safe_level"]),
     protection,
-    smithingBonus: { perLevels: n(bonus["per_levels"]), max: n(bonus["max"]) },
+    smithingBonus: {
+      skill: typeof bonus["skill"] === "string" ? bonus["skill"] : "",
+      perLevels: n(bonus["per_levels"]),
+      max: n(bonus["max"]),
+    },
     jewelryPct: n(f["jewelry_pct"]),
     levels,
     bands,

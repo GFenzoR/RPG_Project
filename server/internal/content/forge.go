@@ -37,7 +37,8 @@ type Forge struct {
 	// Protection is the item id of the rare material that turns a break into one level
 	// lost, spent in every attempt it is used in.
 	Protection string `yaml:"protection"`
-	// SmithingBonus adds chance points by smithing level to the attempts that can fail.
+	// SmithingBonus adds chance points by the level of a craft (smithing) to the attempts
+	// that can fail.
 	SmithingBonus SmithingBonus `yaml:"smithing_bonus"`
 	// JewelryPct is what a level of refine adds to a neck or ring piece: this percentage of
 	// its attribute's value (rounded down).
@@ -49,10 +50,13 @@ type Forge struct {
 	Bands []ForgeBand `yaml:"bands"`
 }
 
-// SmithingBonus is +1 chance point every PerLevels smithing levels, at most Max points.
+// SmithingBonus is +1 chance point every PerLevels levels of Skill, at most Max points.
 type SmithingBonus struct {
-	PerLevels int `yaml:"per_levels"`
-	Max       int `yaml:"max"`
+	// Skill is the skill id (balance.yaml skills.base) whose level gives the bonus: the
+	// smithing craft.
+	Skill     string `yaml:"skill"`
+	PerLevels int    `yaml:"per_levels"`
+	Max       int    `yaml:"max"`
 }
 
 // ForgeLevel is the attempt to reach one level.
@@ -183,6 +187,8 @@ func (f *Forge) check() error {
 		return errors.New("forge: safe_level must be in 0..len(levels)-1 (some level must be able to fail)")
 	case f.SmithingBonus.PerLevels < 0 || f.SmithingBonus.Max < 0 || f.SmithingBonus.Max > 100:
 		return errors.New("forge: smithing_bonus per_levels >= 0, max in 0..100")
+	case f.SmithingBonus.PerLevels > 0 && f.SmithingBonus.Skill == "":
+		return errors.New("forge: smithing_bonus.skill is required (the skill whose level gives the bonus)")
 	case f.JewelryPct < 0 || f.JewelryPct > 100:
 		return errors.New("forge: jewelry_pct must be in 0..100")
 	case len(f.Bands) == 0 || f.Bands[0].Level != 1:

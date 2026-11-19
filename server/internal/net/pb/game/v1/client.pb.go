@@ -3750,12 +3750,16 @@ func (x *Craft) GetStation() *Position {
 }
 
 // Refine is one attempt of the forge (docs/02 "Forja") on the item at item (an equipment
-// slot or an open container: never the ground) at the anvil on the tile station. item_id
-// and level are the item and the refine level the client saw: a stale view (another item,
-// another level) is refused, so a repeated click never refines twice. protect spends one
-// protection material in this attempt (only from the first level that can fail; ignored
-// below it). The server checks everything (the station within reach, an equipable that
-// rolls attributes below the top level, not offered in the trade window, the temper
+// slot or an open container the player carries: never the ground) at the anvil on the
+// tile station. item_id and level are the item and the refine level the client saw: a
+// stale view (another item, another level) is refused, so a click repeated after a
+// success does nothing. The server does not tell apart two instances of one item at one
+// level: after a break, a container's items move up and another one may take that place,
+// so the client lets go of a piece that broke (and of a place whose piece changed); the
+// pace of crafting stops a second click before the result. protect spends one protection
+// material in this attempt (only from the first level that can fail; ignored below it).
+// The server checks everything (the station within reach, an equipable that rolls
+// attributes below the top level, carried, not offered in the trade window, the temper
 // stones, the protection and the gold carried, the pace of crafting) and answers with
 // RefineResult, or a system Message (refine.*) when the attempt did not happen.
 type Refine struct {

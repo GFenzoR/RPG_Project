@@ -269,13 +269,13 @@ describe('a refined instance (the forge, docs/02 "Forja")', () => {
   const forge = {
     station: 95,
     safeLevel: 4,
-    protection: 274,
-    smithingBonus: { perLevels: 6, max: 5 },
+    protection: 309,
+    smithingBonus: { skill: "smithing", perLevels: 6, max: 5 },
     jewelryPct: 10,
     levels: [{ chance: 100, stones: 1 }],
     bands: [
-      { level: 1, stone: 271, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
-      { level: 5, stone: 271, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
+      { level: 1, stone: 306, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
+      { level: 5, stone: 306, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
     ],
   };
 
@@ -304,5 +304,21 @@ describe('a refined instance (the forge, docs/02 "Forja")', () => {
         forge,
       ).refine,
     ).toEqual({ level: 5, kind: "jewel", gain: 10 });
+  });
+
+  it("a jewel's share stops at its attribute's cap", () => {
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    const attributes = {
+      fire_protection: { text: "attribute.fire_protection", cap: 12 },
+      max_health: { text: "attribute.max_health" },
+    };
+    const card = (attribute: string, value: number, refine: number) =>
+      itemCard(ring, 21, 1, {}, { attribute, value, refine }, attributes, false, forge).refine;
+    // 10 at +5 adds 5, but the cap of 12 leaves room for 2.
+    expect(card("fire_protection", 10, 5)).toEqual({ level: 5, kind: "jewel", gain: 2 });
+    expect(card("fire_protection", 12, 5)).toEqual({ level: 5, kind: "jewel", gain: 0 });
+    expect(card("fire_protection", 4, 5)).toEqual({ level: 5, kind: "jewel", gain: 2 });
+    // No cap: the whole share.
+    expect(card("max_health", 20, 5)).toEqual({ level: 5, kind: "jewel", gain: 10 });
   });
 });

@@ -927,9 +927,13 @@
         "smithing_bonus": {
           "type": "object",
           "additionalProperties": false,
-          "description": "+1 chance point per per_levels smithing levels, at most max, on the attempts that can fail.",
-          "required": ["per_levels", "max"],
+          "description": "+1 chance point per per_levels levels of skill (smithing), at most max, on the attempts that can fail.",
+          "required": ["skill", "per_levels", "max"],
           "properties": {
+            "skill": {
+              "description": "The skill whose level gives the bonus (the smithing craft).",
+              "$ref": "common.schema.json#/$defs/skill"
+            },
             "per_levels": { "type": "integer", "minimum": 0 },
             "max": { "type": "integer", "minimum": 0, "maximum": 100 }
           }

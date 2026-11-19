@@ -3,6 +3,8 @@
 /** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
 export interface AttributeDef {
   text: string;
+  /** What all worn items add up to, at most (0 or absent: no cap). */
+  cap?: number;
 }
 
 /**
@@ -177,7 +179,8 @@ export interface ForgeRules {
   safeLevel: number;
   /** Numeric id of the protection material. */
   protection: number;
-  smithingBonus: { perLevels: number; max: number };
+  /** +1 chance point every perLevels levels of skill (smithing), at most max. */
+  smithingBonus: { skill: string; perLevels: number; max: number };
   /** % of a jewel's attribute value each level adds. */
   jewelryPct: number;
   /** The attempt to reach +1, +2...: success % and stones; its length is the top level. */

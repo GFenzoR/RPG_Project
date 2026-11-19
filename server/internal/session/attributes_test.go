@@ -458,10 +458,10 @@ func TestTradeKeepsTheAttribute(t *testing.T) {
 // A sell offer of an equipable is the one instance the seller picked: listed with its
 // attribute, bought as it is; cancelled, it waits in the mailbox as it is.
 func TestMarketSellOfferIsTheInstance(t *testing.T) {
-	// The second sword is refined (the forge): the offer, the listing and the buyer keep
-	// its level too.
+	// Both swords are refined (the forge): the offer, the listing, the buyer and the
+	// mailbox keep the level too.
 	h := newMarketHarness(t, withAttributes(t))
-	cs, s := h.atBoard("Sela", pos(1, 0), rolled(swordID, 0, "attack", 1), rolledAt(swordID, 1, "attack", 2, 4),
+	cs, s := h.atBoard("Sela", pos(1, 0), rolledAt(swordID, 0, "attack", 1, 3), rolledAt(swordID, 1, "attack", 2, 4),
 		stack(coinID, 50, 2))
 	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
 	browse := marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: swordID}}})
@@ -485,7 +485,7 @@ func TestMarketSellOfferIsTheInstance(t *testing.T) {
 	}
 	left := h.w.ItemsForTest(s, "test_sword")
 	ids := h.w.MarketOffers(s.CharacterID())
-	if len(left) != 1 || left[0].Mods() != mods("attack", 1) || h.w.MarketOfferModsForTest(ids[0]) != refinedMods("attack", 2, 4) {
+	if len(left) != 1 || left[0].Mods() != refinedMods("attack", 1, 3) || h.w.MarketOfferModsForTest(ids[0]) != refinedMods("attack", 2, 4) {
 		t.Fatalf("left %v, offer %+v", left, h.w.MarketOfferModsForTest(ids[0]))
 	}
 	if tr := h.transfers[len(h.transfers)-1]; tr.Market[0].Offer.Mods != refinedMods("attack", 2, 4) {
@@ -499,19 +499,19 @@ func TestMarketSellOfferIsTheInstance(t *testing.T) {
 	if got := h.w.ItemsForTest(b, "test_sword"); len(got) != 1 || got[0].Mods() != refinedMods("attack", 2, 4) {
 		t.Fatalf("Bruno bought %v", got)
 	}
-	// The other one: posted, cancelled, back through the mailbox as it was.
-	h.send(cs, sellOf(1, mods("attack", 1)))
+	// The other one: posted, cancelled, back through the mailbox as it was (its +3 too).
+	h.send(cs, sellOf(1, refinedMods("attack", 1, 3)))
 	id := h.w.MarketOffers(s.CharacterID())[0]
 	h.send(cs, cancelOffer(id))
-	if _, mail := h.w.Mailbox(s.CharacterID()); len(mail) != 1 || mail[0].Mods != mods("attack", 1) {
+	if _, mail := h.w.Mailbox(s.CharacterID()); len(mail) != 1 || mail[0].Mods != refinedMods("attack", 1, 3) {
 		t.Fatalf("mailbox %+v", mail)
 	}
 	u = lastMarket(h.send(cs, browse))
-	if len(u.GetMailboxItems()) != 1 || itemMods(u.GetMailboxItems()[0].GetItem()) != mods("attack", 1) {
+	if len(u.GetMailboxItems()) != 1 || itemMods(u.GetMailboxItems()[0].GetItem()) != refinedMods("attack", 1, 3) {
 		t.Fatalf("mailbox shown %v", u.GetMailboxItems())
 	}
 	h.send(cs, withdraw)
-	if got := h.w.ItemsForTest(s, "test_sword"); len(got) != 1 || got[0].Mods() != mods("attack", 1) {
+	if got := h.w.ItemsForTest(s, "test_sword"); len(got) != 1 || got[0].Mods() != refinedMods("attack", 1, 3) {
 		t.Fatalf("withdrawn %v", got)
 	}
 	h.sim.Step()

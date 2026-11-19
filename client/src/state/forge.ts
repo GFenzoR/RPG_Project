@@ -97,6 +97,41 @@ export function forgeCandidates(
   return out;
 }
 
+/** Whether two instances' mods are the same (none and all zero alike). */
+export function sameMods(a: ItemMods | undefined, b: ItemMods | undefined): boolean {
+  return (
+    (a?.attribute ?? "") === (b?.attribute ?? "") &&
+    (a?.value ?? 0) === (b?.value ?? 0) &&
+    (a?.refine ?? 0) === (b?.refine ?? 0)
+  );
+}
+
+/**
+ * The chosen piece as it is now among candidates: the one at its place with the same item
+ * and the same mods. A piece moved away or broken is no longer there, and another one that
+ * took its place (a container's items move up after a break) is not the choice: the server
+ * only checks the item and the level, so the window must not send for it. last is the
+ * latest forge result; it counts only for attempts on this choice (since: when the first
+ * one was sent, 0 for none): a break lets the piece go, a success or a protected failure
+ * moves the mods it has now.
+ */
+export function chosenPiece(
+  candidates: readonly ForgeCandidate[],
+  pick: ForgeCandidate | undefined,
+  last: RefineState | undefined,
+  since: number,
+): ForgeCandidate | undefined {
+  if (!pick) return undefined;
+  let want = pick;
+  if (last && since > 0 && last.at >= since) {
+    if (last.outcome === "broken") return undefined;
+    want = { ...pick, mods: last.mods };
+  }
+  return candidates.find(
+    (c) => sameLoc(c.loc, want.loc) && c.itemId === want.itemId && sameMods(c.mods, want.mods),
+  );
+}
+
 /** Whether two locations are the same place. */
 export function sameLoc(a: ItemLoc, b: ItemLoc): boolean {
   if (a.kind === "slot" && b.kind === "slot") return a.slot === b.slot;
@@ -107,8 +142,9 @@ export function sameLoc(a: ItemLoc, b: ItemLoc): boolean {
 }
 
 /** Why an attempt cannot be made, as far as the client can tell (the server may still
- * refuse: the pace, the room for the change). */
-export type ForgeBlock = "top" | "stones" | "protection" | "money";
+ * refuse: the pace, the room for the change). The protection never blocks: without one
+ * the attempt simply goes without it (ForgeView.protect). */
+export type ForgeBlock = "top" | "stones" | "money";
 
 /** The forge window for one item. */
 export interface ForgeView {
@@ -128,6 +164,10 @@ export interface ForgeView {
   stone: { itemId: number; need: number; have: number };
   /** The protection: carried units (the toggle only shows with one where it counts). */
   protection: { itemId: number; have: number };
+  /** The protection goes in this attempt: asked for, where it counts and carried. A choice
+   * left on after the last one was spent (the toggle hides) does not count: the attempt
+   * and its warnings are the unprotected ones. */
+  protect: boolean;
   /** What the item gives from its refine now and at the next level, and the stat. */
   gain: { kind: RefineKind; now: number; next: number };
   blocks: ForgeBlock[];
@@ -166,7 +206,6 @@ export function forgeView(
   if (level >= top) blocks.push("top");
   else {
     if (stone.have < stone.need) blocks.push("stones");
-    if (protect && risky && protection.have < 1) blocks.push("protection");
     if (money < gold) blocks.push("money");
   }
   return {
@@ -181,6 +220,7 @@ export function forgeView(
     money,
     stone,
     protection,
+    protect: protect && risky && protection.have > 0,
     gain: {
       kind,
       now: refineGain(rules, def, level, value),

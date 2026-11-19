@@ -1041,9 +1041,12 @@ func (w *World) useUp(p *Player, it *Item) {
 // lookAt answers a LookAt with a system message: the item (the client adds its
 // translated name and description), its weight in grams and its combat numbers. Any
 // visible item can be looked at, including the ground and the map's own items; the
-// ground and fixed items (pickupable: false, not containers) say only their name.
+// ground and fixed items (pickupable: false, not containers) say only their name. An
+// instance goes with its mods (a refined one is named "+7 sword") and its numbers with
+// what its refine level adds (the forge, refine.go refinedStat).
 func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	var def *content.Item
+	var inst *Item
 	weight, count := 0, 0
 	if pos, ok := posFromMsg(m.GetFrom().GetPos()); ok {
 		if pos.Z != p.pos.Z || !Sees(p.pos, pos) {
@@ -1078,11 +1081,16 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 			p.emit(systemMsg(msgTooFar))
 			return
 		}
-		def, weight, count = it.def, it.weight(), it.count
+		def, weight, count, inst = it.def, it.weight(), it.count, it
 	}
 	stack := &pb.ItemStack{ItemId: uint32(def.Numeric)}
 	if def.Stackable || def.Rune != nil {
 		stack.Count = uint32(count)
+	}
+	refined := 0
+	if inst != nil {
+		stack.Mods = inst.mods.msg()
+		refined = w.refinedStat(inst)
 	}
 	num := func(name string, v int) *pb.TextParam {
 		return &pb.TextParam{Name: name, Value: &pb.TextParam_Number{Number: int64(v)}}
@@ -1097,13 +1105,13 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 		return
 	case def.Weapon != nil:
 		key = msgLookWeapon
-		params = append(params, num("attack", def.Weapon.Attack), num("defense", def.Weapon.Defense))
+		params = append(params, num("attack", def.Weapon.Attack+refined), num("defense", def.Weapon.Defense))
 	case def.Armor != nil:
 		key = msgLookArmor
-		params = append(params, num("armor", def.Armor.Armor))
+		params = append(params, num("armor", def.Armor.Armor+refined))
 	case def.Shield != nil:
 		key = msgLookShield
-		params = append(params, num("defense", def.Shield.Defense))
+		params = append(params, num("defense", def.Shield.Defense+refined))
 	case def.Container != nil:
 		key = msgLookContainer
 		params = append(params, num("slots", def.Slots()))

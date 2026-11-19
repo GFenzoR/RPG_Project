@@ -42,8 +42,11 @@ func TestForgeRepoData(t *testing.T) {
 			t.Errorf("chance of +%d: %d, want %d", level, c, want[level-1])
 		}
 	}
-	// The smithing bonus: at most +5 points, at the top recipes' smithing (30), never on a
-	// sure attempt.
+	// The smithing bonus: the smithing craft's level (data, not Go), at most +5 points, at
+	// the top recipes' smithing (30), never on a sure attempt.
+	if f.SmithingBonus.Skill != "smithing" {
+		t.Errorf("bonus skill %q", f.SmithingBonus.Skill)
+	}
 	if f.Chance(5, 30) != 75 || f.Chance(5, 100) != 75 || f.Chance(5, 11) != 71 || f.Chance(3, 30) != 100 {
 		t.Errorf("bonus: %d %d %d %d", f.Chance(5, 30), f.Chance(5, 100), f.Chance(5, 11), f.Chance(3, 30))
 	}
@@ -55,6 +58,27 @@ func TestForgeRepoData(t *testing.T) {
 				t.Errorf("band %d gives or costs less than band %d", b.Level, p.Level)
 			}
 		}
+	}
+	// The catalog's jewels (neck and ring, lote 11) take the jewel path: a share of their
+	// attribute, never armor; its armor pieces have a requires.level, so they spread over
+	// the bands instead of all refining as band 1.
+	jewels, banded := 0, map[int]bool{}
+	for id, def := range items {
+		if def.Armor == nil || def.Retired {
+			continue
+		}
+		switch slot, kind := def.Armor.Slot, RefineKind(def); {
+		case slot == "neck" || slot == "ring":
+			jewels++
+			if kind != RefineJewel || f.Gain(def, 10) != 0 {
+				t.Errorf("%s: refine kind %q, gain %d", id, kind, f.Gain(def, 10))
+			}
+		case kind == RefineArmor:
+			banded[f.Band(def.Requires.Level).Level] = true
+		}
+	}
+	if jewels == 0 || len(banded) < 4 {
+		t.Errorf("catalog: %d jewels, armor in the bands %v", jewels, banded)
 	}
 	// The protection is the rare one: worth more than any stone.
 	for _, b := range f.Bands {
@@ -132,6 +156,7 @@ func TestForgeCheck(t *testing.T) {
 		"band without stone": func(f *Forge) { f.Bands[1].Stone = "" },
 		"negative gain":      func(f *Forge) { f.Bands[1].Attack = -1 },
 		"jewelry over 100":   func(f *Forge) { f.JewelryPct = 101 },
+		"bonus of no skill":  func(f *Forge) { f.SmithingBonus.Skill = "" },
 	}
 	for name, change := range cases {
 		f := good()

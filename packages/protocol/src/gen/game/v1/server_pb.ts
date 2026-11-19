@@ -2750,8 +2750,9 @@ export const StationOpenSchema: GenMessage<StationOpen> = /*@__PURE__*/
 
 /**
  * RefineResult answers a Refine that happened: what was spent is gone whatever the
- * outcome. item is the instance after it (item_id and mods, the new refine level; unset
- * when it broke) and level its refine level now (0 when it broke). text is the message to
+ * outcome. item is the instance after it (item_id and mods, the new refine level; only
+ * item_id when it broke: text names the piece as it was) and level its refine level now (0
+ * when it broke). text is the message to
  * show (refine.success, refine.broken, refine.protected), also in the log. Everyone who sees
  * the anvil gets an Effect on it: 8 sparks on a success, 9 a shatter otherwise.
  *

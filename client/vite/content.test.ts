@@ -22,6 +22,9 @@ describe("client content (T0.5)", () => {
   it("ships the item attributes and their card lines in both languages (docs/02)", () => {
     const attrs = content.attributes ?? {};
     expect(attrs["max_health"]?.text).toBe("attribute.max_health");
+    // The caps go along (a refined jewel's card stops at its attribute's).
+    expect(attrs["max_health"]?.cap).toBeUndefined();
+    expect(attrs["life_leech"]?.cap).toBe(15);
     expect(Object.keys(attrs).length).toBeGreaterThan(10);
     for (const lang of ["es", "en"])
       for (const a of Object.values(attrs))
@@ -37,6 +40,8 @@ describe("client content (T0.5)", () => {
     expect(f?.protection).toBe(ids["warding_amber"]);
     expect(f?.levels.map((l) => l.chance)).toEqual([100, 100, 100, 100, 70, 55, 40, 25, 15, 8]);
     expect(f?.safeLevel).toBe(4);
+    // The bonus's skill is data (balance.yaml forge.smithing_bonus.skill), not code.
+    expect(f?.smithingBonus).toEqual({ skill: "smithing", perLevels: 6, max: 5 });
     expect(f?.bands[0]).toMatchObject({ level: 1, stone: ids["lesser_temper_stone"] });
     expect(f?.bands.at(-1)).toMatchObject({ level: 75, stone: ids["radiant_temper_stone"] });
     for (const lang of ["es", "en"]) {

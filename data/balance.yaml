@@ -176,6 +176,7 @@ forge:                      # refine +1..+10 at an anvil (docs/02-game-design.md
   safe_level: 4             # up to +4 an attempt never fails
   protection: warding_amber # rare drop, never sold by NPCs: a failure loses one level, not the item
   smithing_bonus:           # + chance points of the attempts that can fail
+    skill: smithing         # the craft whose level gives them
     per_levels: 6           # +1 every 6 smithing levels...
     max: 5                  # ...at most +5 (smithing 30, the top recipes)
   jewelry_pct: 10           # neck and ring: each level adds 10 % of the attribute's value

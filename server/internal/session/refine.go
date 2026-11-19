@@ -17,7 +17,8 @@ import (
 // chance drops at every level and a failure destroys the item, or, with the protection
 // spent in that attempt, costs it one level. The roll comes from the loop's seeded source
 // (TickContext.Rand); the whole attempt happens in one command, so a disconnect sees it
-// either done or not started, and the character is saved right after it.
+// either done or not started, and the character is saved right after an attempt that could
+// fail.
 
 // Effects of a forge attempt on the station's tile (docs/05).
 const (
@@ -29,6 +30,7 @@ const (
 const (
 	msgRefineOff        = "refine.unavailable"
 	msgRefineNotItem    = "refine.not_refinable"
+	msgRefineNotCarried = "refine.not_carried"
 	msgRefineTop        = "refine.top_level"
 	msgRefineInTrade    = "refine.in_trade"
 	msgRefineStones     = "refine.no_stones"
@@ -50,6 +52,11 @@ func (w *World) initForge() error {
 	}
 	if err := f.CheckItems(w.cfg.Items); err != nil {
 		return fmt.Errorf("session: %w", err)
+	}
+	if s := f.SmithingBonus.Skill; f.SmithingBonus.PerLevels > 0 {
+		if _, ok := w.cfg.Balance.Skills.Base[s]; !ok {
+			return fmt.Errorf("session: forge: smithing_bonus.skill %q is not in skills.base", s)
+		}
 	}
 	w.forge = f
 	station := w.cfg.Items[f.Station]
@@ -112,11 +119,16 @@ func (w *World) refine(ctx *game.TickContext, p *Player, m *pb.Refine) {
 		p.emit(systemMsg(msgTooFar))
 		return
 	}
-	// The item: the player's own, equipped or in an open container (never the ground), as
-	// the client saw it (same item and level: a stale or repeated click does nothing).
+	// The item: the player's own, equipped or in an open container it carries (never the
+	// ground, a corpse or a chest), as the client saw it (same item and level: a click
+	// repeated after a success names the old level and does nothing).
 	it, pl := w.itemAt(p, m.GetItem(), m.GetItemId(), 0)
-	if it == nil || pl.kind == locGround || it.carriedBy() != p || it.mods.Refine != int(m.GetLevel()) {
+	if it == nil || it.mods.Refine != int(m.GetLevel()) {
 		p.emit(systemMsg(msgNotPossible))
+		return
+	}
+	if pl.kind == locGround || it.carriedBy() != p {
+		p.emit(systemMsg(msgRefineNotCarried))
 		return
 	}
 	if content.RefineKind(it.def) == "" {
@@ -163,7 +175,7 @@ func (w *World) refine(ctx *game.TickContext, p *Player, m *pb.Refine) {
 	p.nextGather = ctx.Tick + max(w.gatherFor, ticksFor(f.TimeMs))
 
 	ref := it.def.ID
-	chance := f.Chance(target, w.skillLevel(p, "smithing")) // with the level before this attempt
+	chance := f.Chance(target, w.skillLevel(p, f.SmithingBonus.Skill)) // the level before this attempt
 	if gold > 0 {
 		w.pay(p, gold)
 		w.econGold(p, EconForge, ref, -gold)
@@ -219,9 +231,13 @@ func (w *World) refine(ctx *game.TickContext, p *Player, m *pb.Refine) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.queueMarket(p) // an open market window shows its money and items
 	w.sendStation(p, pos, w.forgeStation)
-	// A refine is worth keeping at once (like a death or a guild's cost): a crash right
-	// after it cannot bring a broken item back or lose a level reached.
-	w.save(w.snapshot(p, false))
+	// An attempt that could fail is worth keeping at once (like a death or a guild's cost):
+	// a crash right after it cannot bring a broken item back or lose a level reached. A
+	// safe level waits for the next periodic save: going back to before it gives nothing
+	// (the level and its stones and money come back together).
+	if target > f.SafeLevel {
+		w.save(w.snapshot(p, false))
+	}
 }
 
 // setRefine sets it's refine level to level in place: the log names the instance out with
@@ -239,6 +255,16 @@ func (w *World) setRefine(p *Player, it *Item, level int) {
 		p.gearFrom = [equipSlots]*Item{}
 		w.equipmentChanged(p)
 	}
+}
+
+// refinedStat is what it's refine level adds to its own number (the look text): a weapon's
+// attack, an armor piece's armor or a shield's defense; 0 for a jewel (its share goes to
+// its attribute), a plain item or with the forge off.
+func (w *World) refinedStat(it *Item) int {
+	if w.forge == nil || it.mods.Refine <= 0 || content.RefineKind(it.def) == content.RefineJewel {
+		return 0
+	}
+	return w.forge.Gain(it.def, it.mods.Refine)
 }
 
 // refineGain is what the refine level of it, worn in slot, adds to p's gear (attributes.go
