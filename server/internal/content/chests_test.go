@@ -1,0 +1,72 @@
+package content
+
+import (
+	"strings"
+	"testing"
+)
+
+const goodChests = `
+- {id: coin, kind: currency, stackable: true, max_stack: 100, currency: {worth: 1}}
+- {id: sword, kind: weapon, weapon: {type: sword, attack: 10}, requires: {level: 1}}
+- {id: amber, kind: material, stackable: true, max_stack: 100}
+- {id: old_axe, kind: weapon, weapon: {type: axe, attack: 9}, requires: {level: 1}, retired: true}
+- {id: chest_a, kind: decoration, pickupable: false, blocks_movement: true, chest: {id: a, rewards: [{item: coin, count: 100}, {item: sword, count: 1}]}}
+- {id: chest_b, kind: decoration, pickupable: false, chest: {id: b, rewards: [{item: amber, count: 3}]}}
+`
+
+// A chest is a fixed map item with a unique id that gives existing, current items in
+// counts of one stack at most, never the forge's protection.
+func TestCheckChests(t *testing.T) {
+	if err := CheckChests(doorItems(t, goodChests), "other"); err != nil {
+		t.Fatalf("good chests: %v", err)
+	}
+	if err := CheckChests(doorItems(t, goodChests), ""); err != nil {
+		t.Fatalf("good chests, no forge: %v", err)
+	}
+	if err := CheckChests(doorItems(t, goodChests), "amber"); err == nil || !strings.Contains(err.Error(), "protection") {
+		t.Fatalf("a chest that gives the forge's protection: %v", err)
+	}
+	bad := map[string]string{
+		"pickupable":   `- {id: c, kind: decoration, chest: {id: a, rewards: [{item: coin, count: 1}]}}`,
+		"needs an id":  `- {id: c, kind: decoration, pickupable: false, chest: {rewards: [{item: coin, count: 1}]}}`,
+		"also the one": `- {id: c, kind: decoration, pickupable: false, chest: {id: a, rewards: [{item: coin, count: 1}]}}`,
+		"nothing":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c}}`,
+		"not an item":  `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: nope, count: 1}]}}`,
+		"retired":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: old_axe, count: 1}]}}`,
+		"count 0":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 0}]}}`,
+		"count 101":    `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 101}]}}`,
+		"count 2":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: sword, count: 2}]}}`,
+	}
+	for name, src := range bad {
+		items := doorItems(t, goodChests+src)
+		err := CheckChests(items, "")
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+			continue
+		}
+		want := name
+		if strings.HasPrefix(name, "count") {
+			want = "count"
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// A book needs a title and pages.
+func TestBookCheck(t *testing.T) {
+	ok := doorItems(t, `- {id: b, kind: decoration, book: {title: book.b.title, pages: [book.b.page_1]}}`)
+	if err := ok["b"].check(); err != nil {
+		t.Fatal(err)
+	}
+	for _, src := range []string{
+		`- {id: b, kind: decoration, book: {pages: [book.b.page_1]}}`,
+		`- {id: b, kind: decoration, book: {title: book.b.title}}`,
+		`- {id: b, kind: decoration, book: {title: book.b.title, pages: [""]}}`,
+	} {
+		if err := doorItems(t, src)["b"].check(); err == nil {
+			t.Errorf("accepted %s", src)
+		}
+	}
+}

@@ -33,6 +33,7 @@ const (
 	EconGather   = "gather"   // fishing, mining, woodcutting
 	EconCraft    = "craft"    // crafting inputs out, output in
 	EconForge    = "forge"    // the forge (refine.go): stones, protection and money out; a broken item; each level change of an instance (out with its old mods, in with the new)
+	EconChest    = "chest"    // a reward chest of the map (chest.go): ref the chest id
 	EconDeath    = "death"    // lost into the remains at death
 	EconGM       = "gm"       // created by a staff command (/item)
 	EconConsume  = "consume"  // eaten, drunk, a rune's last charge, ammo shot

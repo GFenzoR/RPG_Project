@@ -641,6 +641,9 @@ func New(cfg Config) (*World, error) {
 	if err := w.initForge(); err != nil {
 		return nil, err
 	}
+	if err := w.initChests(); err != nil {
+		return nil, err
+	}
 	if err := w.initTutorial(); err != nil {
 		return nil, err
 	}
