@@ -18,6 +18,7 @@ import {
 import type { Image } from "@rpg/spritepack";
 import { castShadow, composite, rng, seedOf } from "./draw.ts";
 import type { Recipe } from "./recipe.ts";
+import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES } from "./recipes/index.ts";
 
 export { RECIPES } from "./recipes/index.ts";
@@ -77,11 +78,17 @@ export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 
 /**
- * Missile art, which no data/ file names: missiles/<name>/<frame or part>, such as the orb
- * frames missiles/fire/0 or the arrow missiles/arrow/se. The client maps each projectile
- * id to them (client/src/render/effects.ts).
+ * Missile art, which no data/ file names: exactly the paths the client looks for
+ * (client/src/render/effects.ts missileArt): the arrow missiles/arrow/e and /se, and per
+ * element with an orb its frames missiles/<element>/0 .. MAX_ORB_FRAMES - 1 and its trail
+ * missiles/<element>/trail. An orb's path gives its element (group 1) and frame (group 2).
  */
-export const MISSILE_ART = /^missiles\/([a-z0-9_]+)\/([a-z0-9_]+)$/;
+export const MISSILE_ART = new RegExp(
+  `^missiles/(?:arrow/(?:e|se)|(${ORB_ELEMENTS.join("|")})/(${Array.from(
+    { length: MAX_ORB_FRAMES },
+    (_, f) => f,
+  ).join("|")}|trail))$`,
+);
 
 /**
  * Animation frames of a creature sprite (docs/17 ANI-4): <sprite>/<action>_<dir>_<n>, such as
@@ -134,7 +141,7 @@ export function checkPaths(root: string): string[] {
   for (const p of recipePaths()) {
     const m = EFFECT_FRAME.exec(p);
     const missile = MISSILE_ART.exec(p);
-    const folder = m ? `effects/${m[1] ?? ""}` : missile ? `missiles/${missile[1] ?? ""}` : "";
+    const folder = m ? `effects/${m[1] ?? ""}` : missile?.[1] ? `missiles/${missile[1]}` : "";
     const frame = m ? m[2] : missile?.[2];
     if (!folder || frame === undefined || !/^[0-9]+$/.test(frame)) continue;
     if (RECIPES[p]?.kind !== "effect") problems.push(`${p}: must be of kind "effect"`);

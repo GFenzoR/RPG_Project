@@ -33,7 +33,7 @@ import {
   UI_SLOT_BOX,
   uiIconBox,
 } from "./index.ts";
-import { EFFECT_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
+import { EFFECT_FRAMES, MAX_ORB_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { SLOT_MASKS } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
 
@@ -248,8 +248,22 @@ describe("missiles", () => {
       expect(RECIPES[p]?.kind, p).toBe("effect");
       expect(MISSILE_ART.test(p), p).toBe(true);
     }
-    expect(MISSILE_ART.test("missiles/arrow")).toBe(false);
-    expect(MISSILE_ART.test("effects/fire/0")).toBe(false);
+    expect(MISSILE_FRAMES).toBeLessThanOrEqual(MAX_ORB_FRAMES);
+    // Only the paths the client looks for (render/effects.ts missileArt): a stray recipe
+    // under missiles/ is art nobody draws, and `check` (checkPaths) must say so.
+    for (const p of [
+      "missiles/arrow",
+      "effects/fire/0",
+      "missiles/physical/0", // physical flies as the arrow
+      "missiles/arrow/0",
+      "missiles/arrow/trail",
+      "missiles/arrow/n", // the arrow is turned from e and se
+      "missiles/fire/e",
+      "missiles/fire/8", // past MAX_ORB_FRAMES
+      "missiles/fire/01",
+      "missiles/wind/0", // no such element
+    ])
+      expect(MISSILE_ART.test(p), p).toBe(false);
   });
 
   it("draw inside the middle 16x16, so a quarter turn keeps them in the sprite", () => {

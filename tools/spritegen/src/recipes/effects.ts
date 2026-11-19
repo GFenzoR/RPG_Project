@@ -843,7 +843,7 @@ const death: DrawFrame = (img, f, t, seed) => {
 
 // ---- missiles ------------------------------------------------------------------------------
 //
-// What a Projectile looks like in flight (client/src/render/effect-layer.ts maps each
+// What a Projectile looks like in flight (client/src/render/effects.ts missileArt maps each
 // projectile id to these): 32x32 sprites with the drawing inside the middle 16x16, centred
 // on the corner shared by pixels (15, 15) and (16, 16), so a quarter turn about the sprite's
 // centre lands every pixel on a pixel.
@@ -852,8 +852,11 @@ const death: DrawFrame = (img, f, t, seed) => {
 // - missiles/<element>/0..2: the orb of an elemental projectile, a 3-frame loop;
 //   missiles/<element>/trail: the mote the client drops behind it (2-3 of them).
 
-/** Frames of an orb's loop (client: render/effects.ts ORB_FRAMES). */
+/** Frames of an orb's loop: the client plays as many as there are, up to MAX_ORB_FRAMES. */
 export const MISSILE_FRAMES = 3;
+
+/** The longest orb loop the client looks for (client/src/render/effects.ts MAX_ORB_FRAMES). */
+export const MAX_ORB_FRAMES = 8;
 
 /** The elements with an orb: every element of the protocol but physical (an arrow). */
 export const ORB_ELEMENTS = ["fire", "ice", "energy", "earth", "holy", "death"] as const;
