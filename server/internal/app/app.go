@@ -519,7 +519,7 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 	var out []store.InventoryItem
 	for _, it := range in {
 		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot,
-			Mods: storeMods(it.Mods), Items: storeItems(it.Items)})
+			Mods: storeMods(it.Mods), Items: storeItems(it.Items), Pocket: it.Pocket})
 	}
 	return out
 }

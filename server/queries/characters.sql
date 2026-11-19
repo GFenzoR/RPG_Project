@@ -72,20 +72,21 @@ ON CONFLICT (character_id, skill)
 DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries;
 
 -- name: GetCharacterInventory :many
--- Every item of a character; the server rebuilds the tree from container_id.
-SELECT id, container_id, slot, item_id, count, attributes
+-- Every item of a character; the server rebuilds the tree from container_id. Top-level
+-- rows are the equipment and then the pockets' cells (pocket, migration 00020).
+SELECT id, container_id, slot, item_id, count, attributes, pocket
 FROM inventory_items
 WHERE character_id = sqlc.arg(character_id)
-ORDER BY container_id NULLS FIRST, slot;
+ORDER BY container_id NULLS FIRST, pocket, slot;
 
 -- name: DeleteCharacterInventory :exec
 -- A snapshot replaces the whole inventory in the same transaction as the character row.
 DELETE FROM inventory_items WHERE character_id = sqlc.arg(character_id);
 
 -- name: InsertInventoryItem :one
-INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes)
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes, pocket)
 VALUES (sqlc.arg(character_id), sqlc.narg(container_id), sqlc.arg(slot), sqlc.arg(item_id), sqlc.arg(count),
-        sqlc.arg(attributes))
+        sqlc.arg(attributes), sqlc.arg(pocket))
 RETURNING id;
 
 -- name: GetCharacterQuestState :many

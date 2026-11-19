@@ -188,10 +188,10 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 }
 
 const getCharacterInventory = `-- name: GetCharacterInventory :many
-SELECT id, container_id, slot, item_id, count, attributes
+SELECT id, container_id, slot, item_id, count, attributes, pocket
 FROM inventory_items
 WHERE character_id = $1
-ORDER BY container_id NULLS FIRST, slot
+ORDER BY container_id NULLS FIRST, pocket, slot
 `
 
 type GetCharacterInventoryRow struct {
@@ -201,9 +201,11 @@ type GetCharacterInventoryRow struct {
 	ItemID      int32
 	Count       int32
 	Attributes  []byte
+	Pocket      bool
 }
 
-// Every item of a character; the server rebuilds the tree from container_id.
+// Every item of a character; the server rebuilds the tree from container_id. Top-level
+// rows are the equipment and then the pockets' cells (pocket, migration 00020).
 func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error) {
 	rows, err := q.db.Query(ctx, getCharacterInventory, characterID)
 	if err != nil {
@@ -220,6 +222,7 @@ func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) 
 			&i.ItemID,
 			&i.Count,
 			&i.Attributes,
+			&i.Pocket,
 		); err != nil {
 			return nil, err
 		}
@@ -331,9 +334,9 @@ func (q *Queries) GetCharacterUnjustKills(ctx context.Context, arg GetCharacterU
 }
 
 const insertInventoryItem = `-- name: InsertInventoryItem :one
-INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes)
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes, pocket)
 VALUES ($1, $2, $3, $4, $5,
-        $6)
+        $6, $7)
 RETURNING id
 `
 
@@ -344,6 +347,7 @@ type InsertInventoryItemParams struct {
 	ItemID      int32
 	Count       int32
 	Attributes  []byte
+	Pocket      bool
 }
 
 func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error) {
@@ -354,6 +358,7 @@ func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryIt
 		arg.ItemID,
 		arg.Count,
 		arg.Attributes,
+		arg.Pocket,
 	)
 	var id int64
 	err := row.Scan(&id)

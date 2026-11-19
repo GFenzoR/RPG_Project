@@ -209,6 +209,7 @@ type InventoryItem struct {
 	ItemID      int32
 	Count       int32
 	Attributes  []byte
+	Pocket      bool
 }
 
 type MapSubmission struct {
