@@ -141,6 +141,30 @@ el punto 5:
     condición `completed` sobre ella deja de valer mientras corre (docs/06). Ninguna lo hace.
   - **La botonera tiene dos filas de seis** (once botones con el diario; una fila de once
     desde 1600 px): a 960x700 la hotbar muestra un slot menos que antes.
+- **Libros y cofres (hecho, rama `feat/chests-books`, lote 12; docs/02 "Libros y cofres"):**
+  nueve libros y pergaminos con lore (templos, el archivo de Casia, el atril de Velia, el
+  naufragio, la cueva de los contrabandistas y la mina inundada) y cinco cofres que dan una
+  vez por personaje (la mina de Puerto, el bosque de Puerto, el nido de la cueva del
+  Bosque, la mina del Volcán pasando los gólems y el templo de la Isla de Pruebas). Queda:
+  - **El E2E no se corrió en la rama** (lo corre el lote al final). Para un spec: en la Isla
+    de Pruebas (`e2e/sandbox.spec.ts`, el guardián que despierta en 2095,2086) caminar a
+    2099,2085, usar el atril (2099,2084) y mirar la ventana `book` (`book-page`,
+    `book-next`, `book-page-number`), el pergamino (2097,2084) y el cofre (2098,2084):
+    `chest.found` la primera vez y `chest.empty` la segunda (`__rpgClient.book()` da el
+    item que se lee).
+  - **Un cofre se ve siempre cerrado:** verlo abierto solo quien ya lo abrió pide estado
+    del mapa por personaje; el servidor lo dice con el mensaje. Si un día se quiere, el
+    cliente podría recordar los cofres abiertos de la sesión, pero no sabe de los de antes.
+  - **Un libro se lee desde cualquier casilla a la vista**, como un cartel: la ventana es
+    del cliente y el texto no tiene secretos. Si el dueño prefiere tener que acercarse, es
+    una regla del cliente (la distancia de `reach`).
+  - **Las páginas se pasan con los botones:** las flechas siguen caminando (la ventana no
+    toma el teclado). Un atajo (Re Pág / Av Pág) es fácil de sumar.
+  - **Un item de cofre en dos lugares** comparte su `id` (se abre una vez en total por
+    personaje): `make validate` no cuenta cuántas veces está en el mapa. Un cofre por item.
+  - **El libro cerrado del archivo está en el suelo:** cuando lleguen las mesas del kit de
+    props (`feat/town-props`), ponerlo sobre una (la elevación lo sube).
+  - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
   tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa

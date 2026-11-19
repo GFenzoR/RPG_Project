@@ -726,6 +726,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
   `12b-puerto-temple-sign`).
 
+## Notas de libros y cofres (docs/02 "Libros y cofres", rama `feat/chests-books`)
+- `ItemDef.book` (`BookDef`: claves de título y páginas) y `ItemDef.chest` salen de
+  `cardFields` (`vite/content.ts`); el plugin empaqueta `books.yaml` entero (`CATALOGS`).
+- **Ventana de lectura, sin servidor** (`state/book.ts`, `ui/Book.tsx`): `Game.useItem` de
+  un item con `book` no manda `UseItem`: `openBook` publica `GameUi.book` (`BookState`:
+  item y hora) y `closeBook` lo borra (×, Escape del `Game`). En escritorio es la ventana
+  `book` de `SERVER_WINDOWS` (`serverWindows` con `book`, `serverClose` → `closeBook`),
+  centrada (`windows.css`) y con el ícono `book`; en tablets y teléfonos, una hoja sobre el
+  mapa como las del servidor (`client.css`). `BookWindow` lleva `key` por la hora de
+  apertura: cada uso empieza en la página 1. `BookBody` no usa hooks (`ui/Book.test.ts`).
+  Test ids: `book` (el marco), `book-page`, `book-prev`, `book-next`,
+  `book-page-number`. Hook E2E `__rpgClient.book()`.
+- **Cofres:** un `UseItem` común; el servidor contesta `chest.found`, `chest.empty` o
+  `chest.no_room`. `ItemFacts.chest` da "Abrir" y `ItemFacts.book` "Leer"
+  (`input/actions.ts`, `client.touch.action.read`, `client.action.read`); los dos cuentan
+  como `usable` (el texto del cursor). Vista previa: escenas `book` y `scroll`.
+
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
   listeners de puntero del canvas y de los items del DOM separan por `pointerType`

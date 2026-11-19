@@ -290,6 +290,44 @@ items:
   puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
   diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo sin llaves
   ni herramientas; nadie entra a una sala sin su llave).
+- **Libros y cofres** (`02-game-design.md` "Libros y cofres"; los del juego están en
+  `data/items/exploration.yaml`): dos bloques para items del mapa (`pickupable: false`).
+  ```yaml
+  - id: scroll_dawn_manifest
+    kind: decoration
+    sprite: decor/scroll          # decor/book_closed, decor/lectern_book (bloquea) o decor/scroll
+    name: item.scroll.name        # nombre compartido: item.<id>.name lo recibe en el cliente
+    description: item.scroll_dawn_manifest.desc   # lo que dice Mirar: una línea
+    pickupable: false
+    book:
+      title: book.scroll_dawn_manifest.title
+      pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
+  - id: chest_puerto_mine
+    kind: decoration
+    sprite: decor/reward_chest
+    name: item.reward_chest.name
+    description: item.reward_chest.desc
+    pickupable: false
+    blocks_movement: true
+    chest:
+      id: puerto_mine             # storage chest.puerto_mine: único entre los cofres
+      rewards:                    # todas juntas o nada
+        - { item: silver_coin, count: 3 }
+        - { item: plank_shield, count: 1 }
+  ```
+  - `book`: `title` y `pages` (1 a 12) son claves i18n de `i18n/<idioma>/books.yaml`
+    (`book.<id>.title`, `book.<id>.page_<n>`, en los dos idiomas: el validador lo exige y
+    avisa de un texto `book.*` que ningún item lee). El plugin del cliente empaqueta
+    `books.yaml` entero: la ventana de lectura no le pide nada al servidor.
+  - `chest`: `id` (único entre los cofres) y `rewards` (1 a 8 `{ item, count }`, `count`
+    de 1 a una pila: 1 para lo que no se apila). `make validate` (`checkChests`) y el
+    servidor al arrancar (`content.CheckChests`, más la protección de la forja en
+    `session.initChests`) rechazan un cofre que se levanta, un id repetido, una recompensa
+    que no existe, retirada (`retired`), de más de una pila o que sea la protección de la
+    forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
+    fuente de lo que da (lo que compra un NPC necesita una; `catalog.test.ts` también lo
+    cuenta). El mismo item de cofre en dos lugares del mapa comparte el `id`: se abre una
+    vez en total por personaje; un cofre por item.
 
 ## Atributo
 `data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,

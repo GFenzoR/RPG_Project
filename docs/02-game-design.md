@@ -1982,7 +1982,8 @@ mínimo**, para que el jugador explore y grindee entre capítulos:
 | 4. Silencio blanco | 50 | Heladas | Una expedición desaparecida |
 | 5. Lo que se hundió | 75 | Hundida | La verdad del imperio |
 
-Además: quests secundarias, libros con lore, secretos en el mapa.
+Además: quests secundarias, libros con lore y cofres escondidos en el mapa (ver "Libros y
+cofres").
 
 **Diario de misiones y tareas.** Cada personaje tiene su diario (ventana "Misiones", tecla L
 o el libro de la botonera; una pestaña del panel en teléfonos), que el servidor le manda
@@ -2100,6 +2101,70 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   caminos de escoria (110) son más rápidos que la ceniza que cruzan.
 - **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
   oro (ver "Economía"), así que caben en una mochila normal.
+
+## Libros y cofres (lote 12, 2026-11)
+Explorar tiene que pagar (auditoría del 2026-11-19): la historia del imperio hundido ya no
+sale solo de tres NPCs, y salirse del camino puede dar algo. Las dos cosas son items del
+mapa con un bloque propio en `data/items/exploration.yaml` (docs/06 "Item").
+
+**Libros y pergaminos.** Un atril con un libro abierto, un libro cerrado o un pergamino
+(arte del motor de sprites, docs/17). Usarlo (click derecho, o "Leer" del menú) abre la
+**ventana de lectura**: el título y una página a la vez, con el número de página y botones
+para pasarlas; Escape o × la cierran. Mirarlo (Mayús+click) sigue dando una línea: qué es y
+cómo se llama. **Decisión: la ventana es del cliente, sin el servidor.** El texto es
+contenido estático (`i18n/<idioma>/books.yaml`, que el cliente ya trae, como los textos de
+los NPCs), igual para todos y sin nada que esconder, como el de un cartel que se lee con
+Mirar desde cualquier casilla a la vista: el cliente no manda nada al leer, así que no hay
+mensaje nuevo ni regla de distancia (un libro se lee desde donde se ve, como un cartel). Un
+libro no se lleva (`pickupable: false`) ni tiene estado: el mismo item puede estar en dos
+lugares (el atril del Farol está también en la Isla de Pruebas).
+
+Los textos son propios y siguen lo que cuentan los NPCs y los capítulos 1 a 3:
+
+| Libro | Dónde | De qué habla |
+|---|---|---|
+| «Los remeros del Farol» (atril) | Templo del Farol, Puerto (3152,6381,7) | Cómo los sobrevivientes del imperio llegaron remando a una luz que nadie encendió |
+| «Lo que sostiene la raíz» (atril) | Templo de la Raíz, Raigal (4148,6101,7) | El árbol antes que el bosque; los druidas que escuchan la tierra |
+| «La Llama Quieta» (atril) | Templo de la Llama Quieta, Brasal (3640,5785,7) | Por qué la llama del altar no tiembla; los fuegos que fueron de otros |
+| «Registro de la forja, tomo tercero» (atril) | Archivo de Casia, Brasal (3660,5796,7) | Brasal nació para la forja; las llaves de piedra templada; «no se apagó, se fue» |
+| «Apuntes de una herrera de Brasal» (libro) | Archivo de Casia (3664,5800,7) | El acero de ascua, la marca de la forja (la llama en el aro) y hasta dónde aguanta el temple |
+| «Cuaderno de rastros» (atril) | El atril de Velia bajo los olmos de Raigal (4180,6112,7) | El farol de rastreo y lo tibio que llegó del mar |
+| «Manifiesto del Alba Tardía» (pergamino) | Entre los cajones del naufragio, Puerto (3119,6328,7) | La carga y el cofre pagado al triple; la luz falsa de las rocas |
+| «Bitácora del remo quemado» (pergamino) | Cueva de los contrabandistas, Bosque (4219,6136,8) | El cofre bajado a la cueva y el que paga en monedas viejas, para la montaña |
+| «Lo que vimos detrás de la pared» (pergamino) | Galería inundada de la mina, Puerto (3194,6287,8) | La pared tallada, la puerta cerrada desde adentro y el agua |
+
+**Cofres de recompensa.** Un cofre de tablones con bandas de hierro (bloque `chest`: un `id`
+y sus recompensas). Usarlo junto a él (a 1 casilla) le da a **cada personaje** sus
+recompensas **una sola vez**: el personaje lo recuerda en su storage (`chest.<id>`, la
+misma tabla que las quests), y el storage y los items van en el mismo snapshot, así un
+guardado, un logout o una desconexión en el mismo tick nunca guardan uno sin lo otro. Reglas:
+- **Todo o nada:** si todas las recompensas no entran (capacidad y lugar en la mochila,
+  contando las pilas que se suman a las que ya lleva, como el `give_item` de un diálogo)
+  no da nada, no lo marca y lo dice (`chest.no_room`); el jugador libera lugar y lo abre de
+  nuevo. Nada cae al suelo.
+- **Otra vez:** "El cofre está vacío" (`chest.empty`); dos usos en el mismo tick dan una
+  sola vez.
+- **Lo que da:** dinero, las piedras de temple de su banda, pociones y una pieza del
+  catálogo de su banda que sirve a cualquier vocación. Un equipable se crea como cualquier
+  otro (`giveItem`): tira su atributo al azar (docs/02 "Atributos de items"). Nunca el
+  ámbar de resguardo (la protección de la forja solo cae de monstruos), nunca un item
+  retirado, y cada recompensa es una pila como mucho (`make validate` y el arranque del
+  servidor lo revisan).
+- **Economía:** cada unidad se registra en `economy_log` con la fuente `chest` y el id del
+  cofre (docs/01 "Log de economía"); cuenta como ganancia para los atípicos, como el botín.
+- **El cofre se ve siempre cerrado.** Mostrarlo abierto solo a quien ya lo abrió pediría
+  estado del mapa por personaje (los items del mapa son los mismos para todos): no vale lo
+  que cuesta. El mensaje del servidor dice si ya estaba vacío.
+
+| Cofre | Dónde | Banda | Recompensas |
+|---|---|---|---|
+| `puerto_mine` | Fondo de la mina de Puerto, en el nicho de la galería inundada, pasando los mineros ahogados (3193,6286,8) | 2 | 3 de plata, 3 piedras de temple menores, 5 cataplasmas de algas, escudo de tablones |
+| `puerto_grove` | Bajo los robles de la esquina noroeste del bosque de Puerto, lejos de los caminos (3107,6353,7) | 1 | 1 de plata, 2 piedras de temple menores, 3 cataplasmas de algas, gorro de lona |
+| `bosque_cave` | Nido de los reptantes de la cueva de los contrabandistas, Bosque (4252,6170,8) | 3 | 6 de plata, 2 piedras de temple mayores, 3 brebajes de vida, capucha de cuero de ciervo |
+| `volcan_mine` | Mina del Volcán, pasando los gólems: esquina noreste de su galería (3734,5782,8) | 4 | 15 de plata, 4 piedras de temple mayores, 3 brebajes de vida concentrados, amuleto de brasa |
+| `pruebas` | Templo de la Isla de Pruebas (2098,2084,7), para probarlo (docs/16) | — | 5 de plata, 2 piedras de temple menores, 2 brebajes de vida, espada de hierro |
+
+Cada isla nueva trae los suyos al final de sus mazmorras, con las recompensas de su banda.
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).

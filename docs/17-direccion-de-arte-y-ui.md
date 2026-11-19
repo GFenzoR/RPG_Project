@@ -628,6 +628,16 @@ persona de LPC). Se miran con Read.
   una silueta de costado de figura con el martillo en alto; se compararon las tres
   versiones lado a lado sobre su suelo y quedó la nueva.
 - **Íconos de items** (2026-11-19): las 86 piezas de equipo; ver "Íconos de items", abajo.
+- **Libros y cofres** (2026-11-19, lote 12, docs/02 "Libros y cofres";
+  `specs/lore.ts`): un libro cerrado forrado en tela roja con su broche de latón y el borde
+  de las páginas a la vista (`decor/book_closed`), un atril de madera con el escritorio
+  inclinado hacia quien lee y un libro abierto con sus renglones y la cinta que marca la
+  página (`decor/lectern_book`), un pergamino enrollado con sus perillas de madera, la cinta
+  y el sello de cera (`decor/scroll`) y un cofre de tablones con la tapa redonda, dos bandas
+  de hierro, las esquinas de hierro y la cerradura de latón (`decor/reward_chest`; siempre
+  cerrado: el mapa es el mismo para todos). Revisión: los renglones del primer atril,
+  apretados, se juntaban a 1x en dos manchas que se leían como una cara; quedaron tres por
+  página, separados. El primer pergamino tenía la hoja suelta y se leía como un hueso.
 - **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
   cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
 - **Props de una casilla** (2026-11-18, pedido del dueño: *"si bien las gráficas no están

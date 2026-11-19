@@ -472,3 +472,11 @@ secundaria.
   `world.bin` v7 guarda las zonas por id. Como prueba: el paso `reach_gate` de `ch3_gate`
   y la tarea de práctica de la Isla de Pruebas. Lo que queda: docs/14, "Pendientes
   conocidos" (las tareas de caza son de `feat/side-quests`).
+- [x] **Libros y cofres (auditoría del 2026-11-19, game.items[12]; lote 12, rama
+  `feat/chests-books`).** Explorar paga: nueve libros y pergaminos con lore propio (el
+  imperio hundido, las islas, los capítulos 1 a 3) en los templos, el archivo de Casia, el
+  atril de Velia, el naufragio, la cueva de los contrabandistas y la mina inundada, que se
+  leen en una ventana del cliente sin pedirle nada al servidor; y cinco cofres de
+  recompensa (bloque `chest`) que dan una vez por personaje, todo o nada, con lo de su
+  banda, registrados en `economy_log` con la fuente `chest`. Arte del motor de sprites.
+  docs/02 "Libros y cofres"; lo que queda: docs/14, "Pendientes conocidos".

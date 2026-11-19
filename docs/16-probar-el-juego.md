@@ -59,7 +59,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 
 | Sector | Dónde | Qué hay |
 |---|---|---|
-| Templo | 2091–2099 × 2084–2090 (puerta al sur) | Donde despiertas (2095,2086). **Irene Ensayo**, instructora (2093,2085): experiencia, entrenamiento, dinero, curación y una misión. Zona de protección con la plaza |
+| Templo | 2091–2099 × 2084–2090 (puerta al sur) | Donde despiertas (2095,2086). **Irene Ensayo**, instructora (2093,2085): experiencia, entrenamiento, dinero, curación y una misión. En la esquina noreste, un atril con un libro (2099,2084), un cofre de recompensa (2098,2084) y un pergamino en el suelo (2097,2084). Zona de protección con la plaza |
 | Plaza | 2083–2107 × 2092–2103 | **Tobías Muestra**, proveedor, en el puesto del oeste (2086,2100). Tablero del mercado (2091,2103). Cartel del templo (2093,2092) |
 | Caza (norte) | Corrales 2076–2119 × 2073–2079, sendero en y 2080–2081 | De oeste a este y de débil a fuerte: 1 ratas de sentina, 2 lobos, 3 jabalíes y una araña, 4 espinosos, 5 un dragoncillo de ascua. Cartel en 2084,2082 |
 | Recolección y oficios (oeste) | Camino en y 2097–2098 | Cantera con vetas de hierro (2064–2071 × 2087–2094), abedules (2074–2080 × 2086–2094), taller con fragua (2070,2102), yunque (2073,2102) y fogón (2076,2102), muelle de pesca (2052–2055 × 2097–2098) con agua con peces alrededor. Cartel en 2080,2096 |
@@ -195,6 +195,18 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    más. Una pieza ofrecida en el intercambio no se puede refinar hasta sacarla; lo que está
    publicado en el mercado no está en la mochila. Para probar muchos intentos seguidos sin
    gastar tanto, compra piezas de nivel 1 (las más baratas de refinar).
+4c. **Libros y cofres (la esquina noreste del templo; docs/02 "Libros y cofres").** Párate
+   en 2099,2085, junto al atril y al cofre. Usa el atril (click derecho, o "Leer" del menú):
+   se abre la ventana de lectura con «Los remeros del Farol»; pasa las páginas con ‹ ›
+   (abajo dice "Página 2 de 3") y ciérrala con Escape o ×. Lo mismo el pergamino del suelo
+   (2097,2084, «Manifiesto del Alba Tardía», dos páginas). Mayús+click sobre ellos da su
+   descripción de una línea. Usa el cofre: "Abres el cofre y encuentras: …" con lo
+   que trae (5 monedas de plata, 2 piedras de temple menores, 2 brebajes de vida y una
+   espada de hierro, con su atributo al azar: pasa el mouse por ella); úsalo otra vez: "El cofre está vacío".
+   Cada personaje lo abre una vez: para repetirlo, crea otro. Para probar que no da nada
+   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías)
+   y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera lugar y vuelve a
+   usarlo. Los libros y cofres de las islas de verdad están en la tabla de docs/02.
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
    vender (un selector por atributo) y la oferta sale con su atributo en el listado; una

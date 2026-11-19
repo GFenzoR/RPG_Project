@@ -295,8 +295,9 @@ recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el ja
 ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel; desde
 el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por familia y
 `creature_remains`, objetos de 32x32 dibujados con sus proporciones y agrandados con
-`grow`, `specs/grow.ts`, hasta 24-30 px de largo) y los íconos de todo el equipo
-(`specs/items/`, clase `icon`; abajo, "Íconos de items").
+`grow`, `specs/grow.ts`, hasta 24-30 px de largo), los íconos de todo el equipo
+(`specs/items/`, clase `icon`; abajo, "Íconos de items") y el libro, el atril, el
+pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres").
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su

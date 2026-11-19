@@ -677,6 +677,15 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   item. Gasta una unidad. La comida (`food_ms`, auditoría de contenido m2) además suma
   tiempo a la condición `well_fed` (`PlayerConditions` al jugador); si es solo comida y
   pasaría del tope, el servidor contesta `inventory.full_stomach` y no gasta nada.
+- **Cofres de recompensa** (docs/02 "Libros y cofres", sin mensajes nuevos): `UseItem` sobre
+  un cofre del mapa (item con bloque `chest`) a `inventory.reach` da sus recompensas una vez
+  por personaje, todas juntas: las de siempre de un item que llega a la mochila
+  (`ContainerUpdate`, `PlayerStats`) y `chest.found` con un parámetro `item` por recompensa
+  (`{items}`, como el botín). Si ya lo abrió, `chest.empty`; si no le entra todo,
+  `chest.no_room` y no recibe nada; lejos, `inventory.too_far`.
+- **Libros y pergaminos:** no hay mensaje. El cliente abre su ventana de lectura con los
+  textos de `books.yaml` que ya tiene (docs/02 "Libros y cofres"); `LookAt` sobre uno
+  contesta como sobre cualquier item fijo del mapa (`look.ground` más su descripción).
 - **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
   (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
   `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con

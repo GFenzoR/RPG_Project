@@ -813,7 +813,9 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   (`economy_log.kind`): `loot` (al llenarse los restos de un monstruo, a nombre de quien se
   lleva el botín), `npc_buy` y `npc_sell` (tienda), `npc` (lo que da o quita un diálogo:
   items de quest, bendiciones), `quest` (recompensas), `tutorial` (premio del tutorial, T4.2), `travel` (pasaje y ticket), `guild` (costo de fundar un gremio, T5.1),
-  `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `death` (lo que cae
+  `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `chest` (lo que da un
+  cofre de recompensa del mapa, con el id del cofre como ref; docs/02 "Libros y cofres"),
+  `death` (lo que cae
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
   de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`
   (hechizos que crean items) y `decay` (lo que quedaba en unos restos al pudrirse, a nombre

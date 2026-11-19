@@ -295,6 +295,14 @@ server/
   `Forge.CheckItems` al arrancar y por `checkForge` de `make validate`); el yunque cuenta
   esos materiales en su `StationOpen` y manda `money`.
 
+- **Cofres de recompensa** (`session/chest.go`, `content/chests.go`, docs/02 "Libros y
+  cofres"): `useChest` va en la cadena de `useItem` antes de `useStation` (como el tablero
+  del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila contando las pilas
+  que se suman) y lo marca en el storage (`content.ChestKey`) en el mismo comando que los
+  items, así cualquier snapshot tiene los dos o ninguno. Lo que da pasa por `giveItem` (un
+  equipable tira su atributo) y `econMade` con `EconChest`. `content.CheckChests` corre al
+  cargar los items y otra vez en `initChests` con la protección de la forja: un cofre
+  nunca da el ámbar. El bloque `book` de un item es solo del cliente.
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +
