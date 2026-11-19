@@ -131,8 +131,22 @@ export function inArea(centre: Pos, radius: number, p: Pos): boolean {
 }
 
 /**
+ * Whether an area attack of `radius` around `centre` may have hit `p`: its round area
+ * (inArea) or one of the 8 lines of that length from the centre. A monster's beam arrives
+ * as the circle of its length around the monster (docs/05), and the tip of a diagonal
+ * one lies beyond that circle: (4, 4) for a beam of 4.
+ */
+export function areaCovers(centre: Pos, radius: number, p: Pos): boolean {
+  const dx = Math.abs(p.x - centre.x);
+  const dy = Math.abs(p.y - centre.y);
+  const inLine = dx === 0 || dy === 0 || dx === dy;
+  return inArea(centre, radius, p) || (p.z === centre.z && inLine && Math.max(dx, dy) <= radius);
+}
+
+/**
  * The attack behind a hit on `victim` that arrived at `start`: an attack of that batch
- * aimed at it, else an area of that batch that covers its tile.
+ * aimed at it, else an area of that batch that covers its tile (areaCovers: a beam's
+ * diagonal tip too).
  */
 export function attackerOf(
   victim: Fighter,
@@ -143,7 +157,8 @@ export function attackerOf(
   for (const a of attacks) {
     if (a.start !== start) continue;
     if (a.targetId === victim.id) return a;
-    if (!area && a.radius > 0 && a.id !== victim.id && inArea(a.to, a.radius, victim.pos)) area = a;
+    if (!area && a.radius > 0 && a.id !== victim.id && areaCovers(a.to, a.radius, victim.pos))
+      area = a;
   }
   return area;
 }

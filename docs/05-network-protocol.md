@@ -1254,7 +1254,10 @@ dice que el servidor los manda.
     círculo va con su centro (el monstruo o su objetivo) y su radio; un **rayo**, como el
     círculo de su largo alrededor del monstruo (`to` = la casilla del monstruo,
     `radius` = el largo: el cliente juega el conjuro hacia donde mira, y el monstruo se
-    gira hacia su objetivo antes; las casillas del rayo son sus `Effect`). Un círculo
+    gira hacia su objetivo antes; las casillas del rayo son sus `Effect`). La punta de un
+    rayo en diagonal queda fuera de ese círculo (a largo 4, la casilla a 4 y 4): el
+    cliente busca quién causó un golpe en el círculo o en las 8 líneas de ese largo desde
+    el centro (`areaCovers` en `client/src/render/creature-events.ts`). Un círculo
     alrededor del objetivo sale con su `Projectile` (si el ataque no es `melee`). Quien
     conoce al monstruo pero no ve el centro (un objetivo fuera de su ventana) recibe solo
     el lado, sin `radius`, como un ataque a alguien que no conoce. Un área apuntada a un
