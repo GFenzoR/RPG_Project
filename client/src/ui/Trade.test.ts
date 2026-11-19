@@ -346,6 +346,24 @@ describe("MarketWindow with an equipable", () => {
     expect(sent).toEqual(["create sell 60 1 40 0 armor:1", "create buy 60 2 40 0"]);
   });
 
+  it("hides the instance picker while the form posts a buy offer", () => {
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: sword } as GameUi });
+    const create = byAttr(tree, "data-testid", "market-create")[0];
+    const side = nodes(create).find((n) => n.props["name"] === "side");
+    const picker = { hidden: false };
+    const change = (value: string): void =>
+      (side?.props["onChange"] as ((e: unknown) => void) | undefined)?.({
+        currentTarget: {
+          value,
+          form: { elements: { namedItem: (n: string) => (n === "instance" ? picker : null) } },
+        },
+      });
+    change("buy");
+    expect(picker.hidden).toBe(true);
+    change("sell");
+    expect(picker.hidden).toBe(false);
+  });
+
   it("sells into a buy offer the instance the picker names", () => {
     const { game, sent } = recorder();
     const tree = MarketWindow({ t, content, game, ui: { market: sword } as GameUi });

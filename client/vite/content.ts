@@ -407,15 +407,13 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
 
 /**
  * data/attributes.yaml by id (docs/02 "Atributos de items"): the text key of each
- * attribute's card line. No file: no attributes.
+ * attribute's card line. No file: no attributes; a file that does not parse fails the
+ * build (a card without its lines would go unnoticed).
  */
 export function loadAttributes(root: string): Record<string, AttributeDef> {
-  let raw: unknown;
-  try {
-    raw = readYaml(join(root, "data", "attributes.yaml"));
-  } catch {
-    return {};
-  }
+  const file = join(root, "data", "attributes.yaml");
+  if (!existsSync(file)) return {};
+  const raw = readYaml(file);
   const out: Record<string, AttributeDef> = {};
   for (const a of Array.isArray(raw) ? raw : []) {
     if (isObj(a) && typeof a["id"] === "string" && typeof a["text"] === "string")

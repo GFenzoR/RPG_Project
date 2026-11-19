@@ -7,6 +7,7 @@ import { loadContent } from "@rpg/map-format";
 import {
   GAME_SITE_KEYS,
   dialogTopics,
+  loadAttributes,
   loadClientContent,
   loadPortals,
   loadSiteContent,
@@ -24,6 +25,23 @@ describe("client content (T0.5)", () => {
     for (const lang of ["es", "en"])
       for (const a of Object.values(attrs))
         expect(content.i18n[lang]?.[a.text]).toContain("{value}");
+  });
+
+  it("reads no attributes without the file and fails on a broken one", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-attributes-"));
+    try {
+      expect(loadAttributes(root)).toEqual({});
+      mkdirSync(join(root, "data"));
+      writeFileSync(
+        join(root, "data", "attributes.yaml"),
+        "- { id: armor, text: attribute.armor }\n",
+      );
+      expect(loadAttributes(root)).toEqual({ armor: { text: "attribute.armor" } });
+      writeFileSync(join(root, "data", "attributes.yaml"), "- { id: armor, text: [\n");
+      expect(() => loadAttributes(root)).toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("exposes each NPC's sprite like the monsters'", () => {

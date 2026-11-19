@@ -64,6 +64,19 @@ function InstancePicker(props: Props & { owned: ItemMods[] }): JSX.Element {
   );
 }
 
+/**
+ * The create form's side changed: its instance picker only counts when selling, so it
+ * hides for a buy offer (the form is uncontrolled: the element itself is changed).
+ */
+function showPicker(side: {
+  value: string;
+  form: { elements: { namedItem(name: string): unknown } } | null;
+}): void {
+  const picker = side.form?.elements.namedItem("instance");
+  if (picker && typeof picker === "object" && "hidden" in picker)
+    picker.hidden = side.value === "buy";
+}
+
 /** The instance a form's picker chose (undefined: none to choose from). */
 function pickedInstance(form: HTMLFormElement, owned: ItemMods[]): ItemMods | undefined {
   return owned[Math.floor(Number(field(form, "instance")))];
@@ -259,7 +272,11 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
             }}
           >
             <h4>{t("client.market.create")}</h4>
-            <select name="side" aria-label={t("client.market.side")}>
+            <select
+              name="side"
+              aria-label={t("client.market.side")}
+              onChange={(e) => showPicker(e.currentTarget)}
+            >
               <option value="sell">{t("client.market.side_sell", { owned: m.owned })}</option>
               <option value="buy">{t("client.market.side_buy")}</option>
             </select>
