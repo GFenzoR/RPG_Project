@@ -296,10 +296,11 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   reptante), `remains_scales` (salamandra, dragoncillo, sapo), `remains_slag` (los gólems de
   escoria), `remains_bones` (el minero ahogado), `remains_feathers` (la gaviota),
   `remains_humanoid` (saqueadores, contrabandistas, mineros de obsidiana) y
-  `remains_bramble` (el espinoso). Tiene que ser un contenedor con `pickupable: false`
-  (`make validate` y el arranque del servidor lo exigen); sin `corpse`, el monstruo deja
-  `creature_remains`. Los restos duran `combat.monster_corpse_ms` como siempre y el botín
-  que no entra en sus `container.slots` se pierde. Todo monstruo de `data/monsters` tiene el
+  `remains_bramble` (el espinoso). Tiene que ser un item de `kind: container` con
+  `pickupable: false` (`make validate` y el arranque del servidor exigen lo mismo); sin
+  `corpse`, el monstruo deja `creature_remains`. Los restos duran
+  `combat.monster_corpse_ms` como siempre y el botín que no entra en sus `container.slots`
+  se pierde. Todo monstruo de `data/monsters` tiene el
   suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
   `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
 - **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de

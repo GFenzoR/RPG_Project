@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,19 +12,28 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
-// furID is remains_fur, the fallen body of a furred beast (data/items), in these tests.
-const furID = 91
+const (
+	// furID is remains_fur, the fallen body of a furred beast (data/items), in these tests.
+	furID = 91
+	// chitinID is remains_chitin with a single slot here (10 in data/items): fewer than the
+	// default remains, so the loot that fits is the family's remains' to decide.
+	chitinID = 93
+)
 
-// corpseTestItems are testItems plus remains_fur and a pickupable bag of the wrong kind.
+// corpseTestItems are testItems plus remains_fur, a one-slot remains_chitin and the wrong
+// kinds of remains: a pickupable bag and a fixed decoration with a container block.
 func corpseTestItems() content.Items {
 	items := testItems()
 	for n, src := range map[uint16]string{
-		furID: "{id: remains_fur, kind: container, pickupable: false, blocks_movement: false, container: {slots: 10}}",
-		92:    "{id: loose_sack, kind: container, weight: 300, container: {slots: 4}}",
+		furID:    "{id: remains_fur, kind: container, pickupable: false, blocks_movement: false, container: {slots: 10}}",
+		92:       "{id: loose_sack, kind: container, weight: 300, container: {slots: 4}}",
+		chitinID: "{id: remains_chitin, kind: container, pickupable: false, blocks_movement: false, container: {slots: 1}}",
+		94:       "{id: odd_chest, kind: decoration, pickupable: false, container: {slots: 4}}",
 	} {
 		var it content.Item
 		_ = yaml.Unmarshal([]byte(src), &it)
@@ -42,10 +52,20 @@ func ratDef() *content.Monster {
 	}
 }
 
-// killAll kills every monster of h in the same tick, in creature id order.
+// crabDef leaves remains_chitin (one slot in these tests) and drops two stacks of coins.
+func crabDef() *content.Monster {
+	crab := ratDef()
+	crab.ID = "crab"
+	crab.Corpse = "remains_chitin"
+	crab.Loot = []content.LootEntry{{Item: "copper_coin", Chance: 1, Count: []int{150, 150}}}
+	return crab
+}
+
+// killAll kills every monster of h in the same tick, in creature id order. Each kill takes
+// the monster out of h.w.Monsters(), so it walks a copy of the list.
 func killAll(h *harness) {
 	h.sim.Command(ctxFunc(func(ctx *game.TickContext) {
-		for _, m := range h.w.Monsters() {
+		for _, m := range slices.Clone(h.w.Monsters()) {
 			h.w.KillForTest(ctx, m)
 		}
 	}))
@@ -53,17 +73,19 @@ func killAll(h *harness) {
 }
 
 // The remains a monster leaves are its family's (data/monsters `corpse`), or the default
-// remains without one; the loot lands inside them, and both decay after
-// combat.monster_corpse_ms exactly as before.
+// remains without one; the loot lands inside them, as much as their own slots hold, and
+// they decay after combat.monster_corpse_ms exactly as before.
 func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 	wolf := wolfDef()
 	wolf.Behavior.Aggressive = false
 	wolf.Loot = []content.LootEntry{{Item: "copper_coin", Chance: 1, Count: []int{3, 3}}}
 	wolf.Corpse = "remains_fur"
 	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 64), func(c *session.Config) {
-		c.Monsters = content.Monsters{"wolf": wolf, "rat": ratDef()}
+		c.Monsters = content.Monsters{"wolf": wolf, "rat": ratDef(), "crab": crabDef()}
 		c.Items = corpseTestItems()
-		c.Map.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 600), spawnAt("rat", 26, 20, 0, 600)}
+		c.Map.Islands()[0].Spawns = []world.Spawn{
+			spawnAt("wolf", 20, 20, 0, 600), spawnAt("rat", 26, 20, 0, 600), spawnAt("crab", 23, 28, 0, 600),
+		}
 	})
 	cl, _ := h.join("Witness", at(23, 24))
 	h.sim.Step()
@@ -71,12 +93,11 @@ func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 	for _, m := range h.w.Monsters() {
 		where[m.Kind()] = m.Pos()
 	}
-	if len(where) != 2 {
+	if len(where) != 3 {
 		t.Fatalf("monsters: %v", where)
 	}
 	cl.take()
 	killAll(h)
-	died := h.sim.Tick()
 
 	top := map[world.Pos]uint32{}
 	for _, tu := range find(cl.take(), (*pb.ServerMessage).GetTileUpdate) {
@@ -87,7 +108,13 @@ func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 	for kind, want := range map[string]struct {
 		item    string
 		numeric uint32
-	}{"wolf": {"remains_fur", furID}, "rat": {session.CorpseItem, corpseID}} {
+		coins   []uint32 // the stacks inside, in order
+	}{
+		"wolf": {"remains_fur", furID, []uint32{3}},
+		"rat":  {session.CorpseItem, corpseID, []uint32{2}},
+		// 150 coins are two stacks; its one-slot remains keep the first.
+		"crab": {"remains_chitin", chitinID, []uint32{100}},
+	} {
 		cs := h.w.CorpsesAt(where[kind])
 		if len(cs) != 1 || cs[0].Monster != kind {
 			t.Fatalf("%s: remains %+v at %v", kind, cs, where[kind])
@@ -98,34 +125,46 @@ func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 		if got := top[where[kind]]; got != want.numeric {
 			t.Errorf("%s: the clients saw item %d on its tile, want %d", kind, got, want.numeric)
 		}
-		loot := cs[0].Loot()
-		if len(loot) != 1 || loot[0].GetItemId() != coinID {
-			t.Errorf("%s: loot %v, want its coins inside its remains", kind, loot)
+		var coins []uint32
+		for _, it := range cs[0].Loot() {
+			if it.GetItemId() != coinID {
+				t.Errorf("%s: item %d in its remains, want only coins", kind, it.GetItemId())
+			}
+			coins = append(coins, it.GetCount())
+		}
+		if !slices.Equal(coins, want.coins) {
+			t.Errorf("%s: coin stacks %v in its remains, want %v", kind, coins, want.coins)
 		}
 	}
 
-	// Both decay after monster_corpse_ms (60 s in the tests), not a tick sooner.
-	h.sim.RunFor(60*time.Second - 2*game.TickDuration)
-	for kind, p := range where {
-		if len(h.w.CorpsesAt(p)) != 1 {
-			t.Fatalf("%s: remains gone %v after death, before monster_corpse_ms", kind,
-				time.Duration(h.sim.Tick()-died)*game.TickDuration)
+	// They decay on the tick monster_corpse_ms (60 s in the tests) after the death, not a
+	// tick sooner nor later, all three on the same tick.
+	anyGone := func() bool {
+		for _, p := range where {
+			if len(h.w.CorpsesAt(p)) == 0 {
+				return true
+			}
 		}
+		return false
 	}
-	h.sim.RunFor(2 * time.Second)
+	if n, want := h.sim.RunUntil(anyGone, sim.MaxSeconds(70)), int(game.TicksFor(60*time.Second)); n != want {
+		t.Errorf("remains decayed %d ticks after the death, want %d (monster_corpse_ms)", n, want)
+	}
 	for kind, p := range where {
 		if n := len(h.w.CorpsesAt(p)); n != 0 {
-			t.Errorf("%s: %d remains still there after monster_corpse_ms", kind, n)
+			t.Errorf("%s: %d remains still there on the tick the others decayed", kind, n)
 		}
 	}
 }
 
-// A `corpse` must be a container that cannot be picked up: the world refuses anything else.
+// A `corpse` must be a container item that cannot be picked up: the world refuses anything
+// else (as the content validator does, packages/content-schema).
 func TestMonsterCorpseMustBeFixedContainer(t *testing.T) {
 	for corpse, want := range map[string]string{
 		"no_such_item": "no_such_item",
 		"copper_coin":  "copper_coin", // not a container
 		"loose_sack":   "loose_sack",  // a container that can be picked up
+		"odd_chest":    "odd_chest",   // a container block, but not of kind container
 	} {
 		wolf := wolfDef()
 		wolf.Corpse = corpse

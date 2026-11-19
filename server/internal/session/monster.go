@@ -229,8 +229,9 @@ func (w *World) initCombat() error {
 		k.corpse = corpse
 		if def.Corpse != "" {
 			it := w.cfg.Items[def.Corpse]
-			if it == nil || it.Container == nil || it.CanPickUp() {
-				return fmt.Errorf("session: monster %q: corpse %q must be a container item with pickupable: false", id, def.Corpse)
+			// The rule of the content validator (packages/content-schema validate.ts).
+			if it == nil || it.Kind != "container" || it.Container == nil || it.CanPickUp() {
+				return fmt.Errorf("session: monster %q: corpse %q must be an item of kind container with pickupable: false", id, def.Corpse)
 			}
 			k.corpse = it
 		}
