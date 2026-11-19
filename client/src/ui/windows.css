@@ -871,7 +871,8 @@ body.dragging-window * {
   display: none;
 }
 /* Six tabs in the bar: tight, and when a large text size makes them wider than the bar,
-   they scroll sideways (no scrollbar: the arrows and the wheel move them). */
+   they scroll sideways (no scrollbar: the arrow keys and the wheel move them; ChatTabs
+   turns a vertical turn of the wheel into a sideways one, state/chat.ts wheelAlong). */
 .chat-tabs {
   flex: 1;
   min-width: 0;

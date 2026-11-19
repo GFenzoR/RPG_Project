@@ -589,14 +589,21 @@ function alternatives(
   const box = (w: WinKey): Rect | undefined => others.find((o) => o.id === w)?.rect;
   if (id === "trade") {
     // Along its row (the top of the screen), the nearest first: against the area's edges,
-    // beside the column over the player, or beside another window.
-    const xs = [0, area.width - usual.width];
-    if (zone) xs.push(zone.x - PLACE_GAP - usual.width, zone.x + zone.width + PLACE_GAP);
-    for (const o of others)
-      xs.push(o.rect.x - PLACE_GAP - usual.width, o.rect.x + o.rect.width + PLACE_GAP);
-    return xs
-      .map((x) => at(x, usual.y))
-      .sort((a, b) => Math.abs(a.x - usual.x) - Math.abs(b.x - usual.x));
+    // beside the column over the player, or beside another window, PLACE_GAP away; then
+    // the same places flush against them (edges that touch cover nothing). At 1280x800
+    // the room between the battle list and the player's column is the trade's width
+    // exactly: with the gap, each side covered 4 px of a window.
+    const beside = (gap: number): number[] => {
+      const xs: number[] = [];
+      if (zone) xs.push(zone.x - gap - usual.width, zone.x + zone.width + gap);
+      for (const o of others) xs.push(o.rect.x - gap - usual.width, o.rect.x + o.rect.width + gap);
+      return xs;
+    };
+    const nearest = (xs: readonly number[]): AutoPlace[] =>
+      xs
+        .map((x) => at(x, usual.y))
+        .sort((a, b) => Math.abs(a.x - usual.x) - Math.abs(b.x - usual.x));
+    return [...nearest([0, area.width - usual.width, ...beside(PLACE_GAP)]), ...nearest(beside(0))];
   }
   // Over the bar: shorter, under what comes down to it (at 960x700 the equipment's
   // column reaches the dialog of the shop and dialog pair).
@@ -654,6 +661,49 @@ export function defaultPlace(
     if (k === 0) break;
   }
   return best;
+}
+
+/** What moves the usual place of each window while it stays open (placeContext). */
+export type PlaceContext = Readonly<Partial<Record<WinKey, string>>>;
+
+/**
+ * What moves a window's usual place while it stays open, so GameView looks at it again
+ * when this changes (toLookAt): the dialog sits beside the shop while the shop's window is
+ * open (windows.css, the pair: narrower and further right), and it takes another height
+ * with another NPC's dialog (`dialogId`). Read from the windows' state, not from the
+ * server's: the shop is measured once its window is in the page.
+ */
+export function placeContext(s: WindowsState, dialogId: number | undefined): PlaceContext {
+  return { dialog: `${dialogId ?? ""}|${placeOf(s, "shop").open ? "shop" : ""}` };
+}
+
+/** What GameView saw the last time it looked at the windows' places (toLookAt). */
+export interface LastLook {
+  open: ReadonlySet<WinKey>;
+  context: PlaceContext;
+}
+
+/**
+ * The windows to measure for a place that sees the others (defaultPlace) now that the
+ * windows are `s`: the unplaced ones with other places (movesAside) that opened since the
+ * last look `last`, all the open ones after the area changed size (`fresh`), and those
+ * whose usual place moved while they stayed open (their `context` changed: the dialog
+ * the shop came beside, another NPC's dialog). Each is measured at its usual place: the
+ * place an earlier look gave it is forgotten.
+ */
+export function toLookAt(
+  s: WindowsState,
+  last: LastLook,
+  context: PlaceContext,
+  fresh: boolean,
+): Set<WinKey> {
+  return new Set(
+    knownWindows(s).filter((id) => {
+      const p = placeOf(s, id);
+      if (!p.open || p.x !== undefined || !movesAside(id)) return false;
+      return fresh || !last.open.has(id) || last.context[id] !== context[id];
+    }),
+  );
 }
 
 /**

@@ -24,11 +24,13 @@ import {
   focusWindow,
   isClosable,
   keptHeight,
+  knownWindows,
   loadWindows,
   moveWindow,
   openWindow,
   openWindows,
   pageOrder,
+  placeContext,
   placeOf,
   placeWindow,
   resetWindows,
@@ -38,13 +40,14 @@ import {
   shownKey,
   snapPlace,
   syncWindows,
+  toLookAt,
   toggleWindow,
   topWindow,
   windowForHighlight,
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { NudgeContext, Rect, WinKey } from "./windows.ts";
+import type { NudgeContext, Rect, WinKey, WindowsState } from "./windows.ts";
 
 describe("default windows", () => {
   it("opens the battle list, the equipment and the chat, all floating", () => {
@@ -615,34 +618,49 @@ describe("a factory place that sees the open windows (defaultPlace)", () => {
     expect(defaultPlace("skills", skills, [battle, inventory, chat], wide)).toBeUndefined();
     const trade = { x: 464, y: 0, width: 352, height: 300 };
     // The player low enough: the tiles north of it are under the trade's usual place.
-    const low = { x: 640, y: 600, width: 64, height: 64 };
+    const low = { x: 608, y: 600, width: 64, height: 64 };
     expect(defaultPlace("trade", trade, [battle, inventory], wide, low)).toBeUndefined();
   });
 
+  // The player's tile at 1280x800: the centre of the map at 2x (Game.selfTile, and the
+  // preview's), 640 - 32 by 356 - 32.
+  const centre = { x: 608, y: 324, width: 64, height: 64 };
+
   it("never puts the trade over the 3 tiles north of the player: it slides along the top", () => {
     const trade = { x: 464, y: 0, width: 352, height: 300 };
-    const player = { x: 640, y: 324, width: 64, height: 64 };
-    const zone = northOfPlayer(player);
-    expect(zone).toEqual({ x: 640, y: 132, width: 64, height: 256 });
+    const zone = northOfPlayer(centre);
+    expect(zone).toEqual({ x: 608, y: 132, width: 64, height: 256 });
     expect(covers(trade, zone)).toBe(true);
-    const at = defaultPlace("trade", trade, [battle, inventory, chat], wide, player);
-    // The nearest place clear of the column and of the battle list: left of the column.
-    expect(at).toEqual({ x: 640 - PLACE_GAP - 352, y: 0, width: 352, height: 300 });
+    const at = defaultPlace("trade", trade, [battle, inventory, chat], wide, centre);
+    // Between the battle list (to x 256) and the column (from x 608) there are exactly
+    // the trade's 352 px: with the gap it covered 4 px of the battle list; flush against
+    // both it covers nothing.
+    expect(at).toEqual({ x: 608 - 352, y: 0, width: 352, height: 300 });
     if (!at) throw new Error("no place");
     expect(covers(at, battle.rect)).toBe(false);
+    expect(covers(at, zone)).toBe(false);
+  });
+
+  it("keeps the gap beside a window when there is room for it", () => {
+    // A narrower battle list: the place left of the column, PLACE_GAP away, is clear.
+    const narrow = box("battle", 0, 0, 200, 352);
+    const trade = { x: 464, y: 0, width: 352, height: 300 };
+    const at = defaultPlace("trade", trade, [narrow, inventory], wide, centre);
+    expect(at?.x).toBe(608 - PLACE_GAP - 352);
   });
 
   it("takes the place that covers least when every place covers something, never the column", () => {
     const trade = { x: 464, y: 0, width: 352, height: 300 };
-    const player = { x: 640, y: 324, width: 64, height: 64 };
     const party = box("party", 256, 0, 256, 300);
     const guild = box("guild", 720, 0, 304, 120);
-    const at = defaultPlace("trade", trade, [battle, party, guild, inventory], wide, player);
+    const at = defaultPlace("trade", trade, [battle, party, guild, inventory], wide, centre);
     if (!at) throw new Error("no place");
-    expect(covers(at, northOfPlayer(player))).toBe(false);
-    // Right of the column it covers the short guild window, left of it the tall party.
-    expect(at.x).toBe(640 + 64 + PLACE_GAP);
+    expect(covers(at, northOfPlayer(centre))).toBe(false);
+    // Right of the column it covers the short guild window, left of it the tall party;
+    // flush against the column it leaves the inventory alone.
+    expect(at.x).toBe(608 + 64);
     expect(covers(at, guild.rect)).toBe(true);
+    expect(covers(at, inventory.rect)).toBe(false);
   });
 
   it("moves the trade off another window even with the player far away", () => {
@@ -716,6 +734,54 @@ describe("a factory place that sees the open windows (defaultPlace)", () => {
     expect(
       overlapArea({ x: 0, y: 0, width: 10, height: 10 }, { x: 8, y: 2, width: 5, height: 5 }),
     ).toBe(10);
+  });
+});
+
+describe("which windows are looked at for a place that sees the others (toLookAt)", () => {
+  const open = (s: WindowsState) => new Set(knownWindows(s).filter((id) => placeOf(s, id).open));
+  const look = (s: WindowsState, dialogId?: number) => ({
+    open: open(s),
+    context: placeContext(s, dialogId),
+  });
+
+  it("looks at the dialog again when the shop comes beside it, and when it goes", () => {
+    // The NPC's dialog opens alone (a right click on the NPC): looked at.
+    const alone = syncWindows(defaultWindows(), ["dialog"]);
+    const first = toLookAt(alone, look(defaultWindows()), placeContext(alone, 7), false);
+    expect([...first]).toEqual(["dialog"]);
+    // Nothing changed since: not again (its place, if it got one, stays).
+    expect(toLookAt(alone, look(alone, 7), placeContext(alone, 7), false).size).toBe(0);
+    // "I want to trade": the shop's window opens beside it, the dialog's usual place moves
+    // (windows.css, the pair): the dialog is looked at again, not only the shop.
+    const pair = syncWindows(alone, ["dialog", "shop"]);
+    expect(placeContext(pair, 7)).not.toEqual(placeContext(alone, 7));
+    expect([...toLookAt(pair, look(alone, 7), placeContext(pair, 7), false)]).toEqual(["dialog"]);
+    // The shop closes and the dialog stays: back to its place alone, looked at again.
+    expect([...toLookAt(alone, look(pair, 7), placeContext(alone, 7), false)]).toEqual(["dialog"]);
+  });
+
+  it("looks at the dialog again with another NPC's dialog in the same window", () => {
+    const s = syncWindows(defaultWindows(), ["dialog"]);
+    expect([...toLookAt(s, look(s, 7), placeContext(s, 8), false)]).toEqual(["dialog"]);
+  });
+
+  it("leaves alone a window the player placed, and those without other places", () => {
+    const s = moveWindow(syncWindows(defaultWindows(), ["dialog"]), "dialog", 10, 20);
+    expect(toLookAt(s, look(defaultWindows()), placeContext(s, 7), false).size).toBe(0);
+    const pair = syncWindows(defaultWindows(), ["dialog", "shop"]);
+    // The shop has no other places (movesAside): only the dialog of the pair.
+    expect([...toLookAt(pair, look(defaultWindows()), placeContext(pair, 7), false)]).toEqual([
+      "dialog",
+    ]);
+  });
+
+  it("looks at every open one after the area changed size", () => {
+    const s = syncWindows(openWindow(defaultWindows(), "skills"), ["trade"]);
+    expect(toLookAt(s, look(s), placeContext(s, undefined), false).size).toBe(0);
+    expect([...toLookAt(s, look(s), placeContext(s, undefined), true)].sort()).toEqual([
+      "skills",
+      "trade",
+    ]);
   });
 });
 

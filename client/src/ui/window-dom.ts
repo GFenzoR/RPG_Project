@@ -242,6 +242,10 @@ export function transformScale(transform: string): number {
   return Number.isFinite(k) && k > 0 ? k : 1;
 }
 
+/** The inline lengths a place from defaultPlace (`auto`) writes on an unplaced window. */
+const AUTO_PROPS = ["left", "top", "right", "bottom", "maxHeight"] as const;
+type AutoProp = (typeof AUTO_PROPS)[number];
+
 /** What bringing the windows back inside reads of a window's element. */
 export interface AreaWindow {
   getBoundingClientRect(): PageBox;
@@ -312,14 +316,35 @@ export function unscaledIn(r: PageBox, k: number, area: PageBox): Rect {
   };
 }
 
+/** What placing the windows reads of a window's element: also the lengths of `auto`. */
+export interface LayerWindow extends Omit<AreaWindow, "style"> {
+  style: Pick<InlineStyle, AutoProp>;
+}
+
 /**
- * The windows that just opened at their factory place (`opened`, unplaced) and sit better
- * elsewhere seeing the other open windows (defaultPlace of ui/windows.ts): their place, px
- * of the area. Each is measured where windows.css put it; the ones decided first count at
- * their new place for the next. `player` is the player's tile on the page (the trade keeps
- * clear of the tiles north of it); a window fading out is not counted.
+ * An unplaced window's box at its usual place (windows.css), as if no earlier look had
+ * moved it: the inline lengths of `auto` (placeStyle) are lifted for this one measure and
+ * put back as they were, before anything is painted. The dialog the shop came beside
+ * still had the left of its place alone, which beat the pair's rule: measured as it was,
+ * it was looked at where it no longer belonged.
  */
-export function placeOpened<T extends AreaWindow>(
+export function usualBox(el: Pick<LayerWindow, "getBoundingClientRect" | "style">): PageBox {
+  const kept = AUTO_PROPS.map((prop) => el.style[prop]);
+  for (const prop of AUTO_PROPS) el.style[prop] = "";
+  const box = el.getBoundingClientRect();
+  AUTO_PROPS.forEach((prop, i) => (el.style[prop] = kept[i] ?? ""));
+  return box;
+}
+
+/**
+ * The windows to look at (`opened`, unplaced: toLookAt of ui/windows.ts) that sit better
+ * elsewhere than their usual place seeing the other open windows (defaultPlace): their
+ * place, px of the area. Each is measured at its usual place (usualBox), the others where
+ * they are; the ones decided first count at their new place for the next. `player` is the
+ * player's tile on the page (the trade keeps clear of the tiles north of it); a window
+ * fading out is not counted.
+ */
+export function placeOpened<T extends LayerWindow>(
   area: PageBox,
   windows: Iterable<T>,
   opened: ReadonlySet<WinKey>,
@@ -330,7 +355,9 @@ export function placeOpened<T extends AreaWindow>(
   for (const el of windows) {
     const id = el.dataset["window"] as WinKey | undefined;
     if (!id || el.hasAttribute("data-closing")) continue;
-    boxes.push({ id, el, rect: unscaledIn(el.getBoundingClientRect(), scaleOf(el), area) });
+    const looked = opened.has(id) && !el.hasAttribute("data-placed");
+    const box = looked ? usualBox(el) : el.getBoundingClientRect();
+    boxes.push({ id, el, rect: unscaledIn(box, scaleOf(el), area) });
   }
   const tile = player && {
     x: player.left - area.left,

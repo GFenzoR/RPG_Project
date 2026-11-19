@@ -8,6 +8,7 @@ import {
   MAX_PAN,
   MAX_VOICES,
   MUSIC_DECKS,
+  STREAM_RETRY_MAX_MS,
   STREAM_RETRY_MS,
   directorConfig,
   spatial,
@@ -89,6 +90,8 @@ class FakeContext implements ContextLike {
   readonly gains: FakeGain[] = [];
   readonly panners: FakePanner[] = [];
   decoded = 0;
+  /** A browser that cannot decode the files (a WebKit without Ogg). */
+  undecodable = false;
   async resume(): Promise<void> {
     await Promise.resolve(); // a real context reports "running" only later, too
     this.state = "running";
@@ -109,6 +112,7 @@ class FakeContext implements ContextLike {
     return s;
   }
   async decodeAudioData(data: ArrayBuffer): Promise<BufferLike> {
+    if (this.undecodable) throw new Error("EncodingError: unable to decode audio data");
     this.decoded++;
     return { duration: data.byteLength }; // 1 byte = 1 s, so tests pick the duration
   }
@@ -513,6 +517,27 @@ describe("AudioEngine", () => {
     engine.play(["effect.hit"]);
     await flush();
     expect(fetched).toHaveLength(9);
+  });
+
+  it("never asks again for a file that came but does not decode", async () => {
+    const { ctx, engine, fetched, advance, at } = setup();
+    ctx.undecodable = true;
+    engine.setAmbient("waves");
+    await unlockNow(engine);
+    engine.play(["effect.hit"]);
+    await flush();
+    // One fetch each: a decoding error is not the network's, no attempt follows.
+    expect(fetched.filter((u) => u === "audio/hit.ogg")).toHaveLength(1);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(1);
+    // Long after any wait, a play and the engine's timer ask for nothing.
+    await advance(10 * STREAM_RETRY_MAX_MS);
+    engine.play(["effect.hit"]);
+    await at(1);
+    await flush();
+    expect(fetched.filter((u) => u === "audio/hit.ogg")).toHaveLength(1);
+    expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(1);
+    expect(ctx.sources).toHaveLength(0);
+    expect(engine.playingLoops().ambient).toBeUndefined();
   });
 
   it("starts the ambient loop by itself once its file comes back after the wait", async () => {

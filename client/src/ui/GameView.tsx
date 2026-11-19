@@ -12,7 +12,15 @@ import { CreatureKind, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
-import { CHAT_TABS, CHAT_TAB_LABEL, chatFilter, nextTab, unreadTabs } from "../state/chat.ts";
+import {
+  CHAT_TABS,
+  CHAT_TAB_LABEL,
+  markSeen,
+  nextTab,
+  unreadTabs,
+  viewedTab,
+  wheelAlong,
+} from "../state/chat.ts";
 import type { ChatTab } from "../state/chat.ts";
 import type { ChatLine } from "../state/world.ts";
 import { skullId } from "../state/pvp.ts";
@@ -75,10 +83,10 @@ import {
   knownWindows,
   loadWindows,
   moveWindow,
-  movesAside,
   openWindow,
   openWindows,
   pageOrder,
+  placeContext,
   placeOf,
   placeWindow,
   resetWindows,
@@ -87,13 +95,22 @@ import {
   serverWindows,
   shownKey,
   syncWindows,
+  toLookAt,
   toggleWindow,
   tutorialCovered,
   windowForHighlight,
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { AutoPlace, ContainerKey, Rect, WinKey, WindowId, WindowsState } from "./windows.ts";
+import type {
+  AutoPlace,
+  ContainerKey,
+  LastLook,
+  Rect,
+  WinKey,
+  WindowId,
+  WindowsState,
+} from "./windows.ts";
 
 /** The pieces of the desktop Options window (main.tsx builds them: they outlive a game). */
 export interface GameSettings {
@@ -204,7 +221,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   // The player's tile on the page: the trade opens clear of the tiles north of it.
   const playerTile = useRef<() => PageBox | undefined>(() => undefined);
   playerTile.current = () => game?.selfTile();
-  const win = useWindows(props.storage, serverClose, zoom, playerTile);
+  const win = useWindows(props.storage, serverClose, zoom, playerTile, ui.dialog?.id);
   // One window per open container, with a key that stays while it is open (its place).
   const containerKeysRef = useRef(new Map<number, ContainerKey>());
   const ckeys = windowed
@@ -251,27 +268,30 @@ export function GameView(props: GameViewProps): JSX.Element {
   };
   const [guildTab, setGuildTab] = useState<GuildTab>("summary");
   // The chat window's tabs (docs/17 UI-10, state/chat.ts): the lines shown on the open tab
-  // count as seen (marked as they render, so a dot never blinks on for a line in view);
-  // a tab with lines not seen yet gets a dot, the log one when its newest message is.
+  // count as seen (marked as they render, so a dot never blinks on for a line in view)
+  // while the window shows them: folded to its title bar, nothing does (viewedTab); a tab
+  // with lines not seen yet gets a dot, the log one when its newest message is.
   const [chatTab, setChatTab] = useState<ChatTab>("chat");
+  const chatPlace = placeOf(win.state, "chat");
+  const viewed = viewedTab(chatTab, !windowed || (chatPlace.open && !chatPlace.collapsed));
   const [logSeen, setLogSeen] = useState(0);
   const lastLog = ui.log[ui.log.length - 1]?.at ?? 0;
   useEffect(() => {
-    if (chatTab === "log") setLogSeen(lastLog);
-  }, [chatTab, lastLog]);
+    if (viewed === "log") setLogSeen(lastLog);
+  }, [viewed, lastLog]);
   const chatSeen = useRef(new WeakSet<ChatLine>());
-  if (chatTab !== "log") for (const l of chatFilter(ui.chat, chatTab)) chatSeen.current.add(l);
+  markSeen(ui.chat, viewed, chatSeen.current);
   const chatUnread = unreadTabs(
     ui.chat,
     (l) => chatSeen.current.has(l),
-    chatTab,
+    viewed,
     props.characterName,
   );
-  if (chatTab !== "log" && lastLog > logSeen) chatUnread.add("log");
-  // With the log out of view (tabs, drawer, or the chat tab of the desktop's chat window)
-  // every message floats over the map, not only the important ones.
+  if (viewed !== "log" && lastLog > logSeen) chatUnread.add("log");
+  // With the log out of view (tabs, drawer, the chat tab of the desktop's chat window, or
+  // that window folded) every message floats over the map, not only the important ones.
   const notices = activeNotices(ui.log, performance.now(), {
-    all: tabbed || chatTab !== "log",
+    all: tabbed || viewed !== "log",
   });
   const noticesExpire = nextExpiry(notices);
   // Re-render when the oldest notice is due to go (nothing else may update the UI).
@@ -1134,6 +1154,7 @@ function useWindows(
   serverClose: { current: (id: WinKey) => void },
   zoom: number,
   playerTile: { current: () => PageBox | undefined },
+  dialogId: number | undefined,
 ): WindowsApi {
   const [state, setState] = useState<WindowsState>(() =>
     loadWindows(readStorage(storage, WINDOWS_STORAGE_KEY)),
@@ -1147,9 +1168,10 @@ function useWindows(
   // docs/17 UI-5: a window that opens at its factory place sees the open windows
   // (defaultPlace): measured where windows.css puts it, before it is painted, it moves (or
   // shortens) when that place covers another window or, the trade, the tiles north of the
-  // player. The place lasts while it stays open and unmoved; nothing of it is saved. When
-  // the area changes size they all go back to their usual places and are looked at again
-  // (`resized`).
+  // player. The place lasts while it stays open and unmoved, and while its usual place
+  // stays where it was (placeContext: the dialog the shop comes beside, another NPC's
+  // dialog, is looked at again); nothing of it is saved. When the area changes size they
+  // all go back to their usual places and are looked at again (`resized`).
   const [auto, setAuto] = useState<ReadonlyMap<WinKey, AutoPlace>>(() => new Map());
   const [resized, setResized] = useState(0);
   // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
@@ -1182,25 +1204,23 @@ function useWindows(
     const el = layer.current;
     if (el) pullInside(el, stateRef.current, setState);
   }, [shown, zoom, layer]);
-  // The windows that opened since the last look (all of them after a resize) and may sit
-  // elsewhere; a window closed or moved by the player forgets its place.
-  const wasOpen = useRef<ReadonlySet<WinKey>>(new Set());
+  // The windows that opened since the last look (all of them after a resize) or whose
+  // usual place moved while open (toLookAt), and may sit elsewhere; a window closed or
+  // moved by the player forgets its place, one looked at again its old one.
+  const context = placeContext(state, dialogId);
+  const contextKey = JSON.stringify(context);
+  const lastLook = useRef<LastLook>({ open: new Set(), context: {} });
   const lookedAt = useRef(0);
   useLayoutEffect(() => {
     const open = new Set(knownWindows(state).filter((id) => placeOf(state, id).open));
     const fresh = lookedAt.current !== resized;
     lookedAt.current = resized;
-    const opened = new Set(
-      [...open].filter(
-        (id) =>
-          movesAside(id) &&
-          (fresh || !wasOpen.current.has(id)) &&
-          placeOf(state, id).x === undefined,
-      ),
-    );
-    wasOpen.current = open;
+    const opened = toLookAt(state, lastLook.current, context, fresh);
+    lastLook.current = { open, context };
     const next = new Map(
-      [...auto].filter(([id]) => open.has(id) && placeOf(state, id).x === undefined),
+      [...auto].filter(
+        ([id]) => open.has(id) && placeOf(state, id).x === undefined && !opened.has(id),
+      ),
     );
     const el = layer.current;
     if (el && opened.size > 0) {
@@ -1214,7 +1234,7 @@ function useWindows(
       for (const [id, at] of found) next.set(id, at);
     }
     if (next.size !== auto.size || [...next].some(([id, at]) => auto.get(id) !== at)) setAuto(next);
-  }, [state, resized, layer]);
+  }, [state, resized, layer, contextKey]);
   // The equipment's height in its own px, for the containers' default place right under
   // it (containersTop, windows.css --containers-top): it changes with the backpack under
   // the figure, its fold and the text scale. Watched while its window is in the page.
@@ -1403,6 +1423,13 @@ function ChatTabs(props: {
       class="chat-tabs"
       role="tablist"
       aria-label={t("client.chat.tabs")}
+      onWheel={(e) => {
+        // Too wide for the bar (a large text size): the wheel moves them sideways.
+        const to = wheelAlong(e.currentTarget, e);
+        if (to === undefined) return;
+        e.preventDefault();
+        e.currentTarget.scrollLeft = to;
+      }}
       onKeyDown={(e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
         e.preventDefault();

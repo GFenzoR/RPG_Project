@@ -6,7 +6,17 @@ import type { ClientContent } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { formatChat } from "./messages.ts";
 import { CHAT_SIZE, WorldState } from "./world.ts";
-import { CHAT_TABS, chatFilter, nextTab, tabChannel, unreadTabs } from "./chat.ts";
+import {
+  CHAT_TABS,
+  WHEEL_LINE_PX,
+  chatFilter,
+  markSeen,
+  nextTab,
+  tabChannel,
+  unreadTabs,
+  viewedTab,
+  wheelAlong,
+} from "./chat.ts";
 import type { ChatTab } from "./chat.ts";
 
 type Msg = ServerMessage["message"];
@@ -141,6 +151,43 @@ describe("the chat window's tabs (docs/17 UI-10)", () => {
     // A broadcast not seen marks every tab but the open one.
     const all = unreadTabs([line(MessageKind.BROADCAST, "Staff")], () => false, "chat", "");
     expect([...all].sort()).toEqual(["global", "guild", "local", "party"]);
+  });
+
+  it("does not count as seen the lines that come while the chat is folded", () => {
+    const seen = new Set<object>();
+    const unread = (all: readonly ReturnType<typeof line>[], viewed: ChatTab | undefined) =>
+      [...unreadTabs(all, (l) => seen.has(l), viewed, "Aldric")].sort();
+    // Folded on the Local tab: only its title bar (and the tabs) show.
+    const say = line(MessageKind.SAY);
+    const folded = viewedTab("local", false);
+    expect(folded).toBeUndefined();
+    markSeen([say], folded, seen);
+    expect(seen.has(say)).toBe(false);
+    // Its dot stays, on the open tab too: nothing of it was seen.
+    expect(unread([say], folded)).toEqual(["chat", "local"]);
+    // Unfolded, the open tab's lines are seen as they render; the other tabs' are not.
+    const party = line(MessageKind.PARTY);
+    const shown = viewedTab("local", true);
+    markSeen([say, party], shown, seen);
+    expect(seen.has(say) && !seen.has(party)).toBe(true);
+    expect(unread([say, party], shown)).toEqual(["chat", "party"]);
+    // The log's tab never marks a chat line.
+    markSeen([party], viewedTab("log", true), seen);
+    expect(seen.has(party)).toBe(false);
+  });
+
+  it("moves tabs too wide for the bar sideways with the wheel", () => {
+    const row = { scrollLeft: 0, scrollWidth: 420, clientWidth: 360 };
+    const down = { deltaX: 0, deltaY: 40, deltaMode: 0 };
+    expect(wheelAlong(row, down)).toBe(40);
+    // A line-based wheel (Firefox), to the end and no further.
+    expect(wheelAlong(row, { deltaX: 0, deltaY: 3, deltaMode: 1 })).toBe(3 * WHEEL_LINE_PX);
+    expect(wheelAlong({ ...row, scrollLeft: 50 }, down)).toBe(60);
+    expect(wheelAlong({ ...row, scrollLeft: 60 }, down)).toBeUndefined();
+    expect(wheelAlong({ ...row, scrollLeft: 20 }, { ...down, deltaY: -40 })).toBe(0);
+    // Tabs that fit, or a sideways turn (the browser scrolls it), are left alone.
+    expect(wheelAlong({ ...row, scrollWidth: 360 }, down)).toBeUndefined();
+    expect(wheelAlong(row, { deltaX: 30, deltaY: 4, deltaMode: 0 })).toBeUndefined();
   });
 
   it("moves along the tabs with the arrows, wrapping around", () => {
