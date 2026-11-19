@@ -22,6 +22,10 @@ type Monster struct {
 	Attacks     []MonsterAttack `yaml:"attacks"`
 	Resistances map[string]int  `yaml:"resistances"`
 	Loot        []LootEntry     `yaml:"loot"`
+	// Corpse is the container item (data/items) left where it dies, with its loot: the
+	// fallen body of its family (remains_fur, remains_chitin...). Empty: the server's
+	// default remains (session.CorpseItem).
+	Corpse string `yaml:"corpse"`
 }
 
 // MonsterBehavior drives the monster's state machine.

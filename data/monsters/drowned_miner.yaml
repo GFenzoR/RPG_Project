@@ -20,3 +20,4 @@ loot:
   - { item: pickaxe, chance: 0.03 }
 tags: [undead, cave, puerto]
 notes: Flooded lower mine, levels 13-15. Hardest common monster of the island.
+corpse: remains_bones

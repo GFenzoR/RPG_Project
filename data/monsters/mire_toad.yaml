@@ -20,3 +20,4 @@ loot:
   - { item: copper_coin, chance: 0.7, count: [5, 25] }
 tags: [amphibian, swamp, bosque]
 notes: The marsh south of the town, levels 12-15. Slow, but spits venom (T3.2) at range.
+corpse: remains_scales

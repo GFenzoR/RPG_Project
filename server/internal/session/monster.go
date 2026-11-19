@@ -14,7 +14,8 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// CorpseItem is the item (data/items) left where a monster dies, with its loot.
+// CorpseItem is the item (data/items) left where a monster without its own `corpse` dies,
+// with its loot, and where a player dies.
 const CorpseItem = "creature_remains"
 
 // AIState is the state of a monster's behaviour (docs/02-game-design.md, monsters section):
@@ -62,6 +63,8 @@ type monsterKind struct {
 	attackTicks []game.Tick
 	// reach is the longest range of its attacks (1 = melee only).
 	reach int
+	// corpse is the container its remains are: its own `corpse`, or CorpseItem.
+	corpse *content.Item
 }
 
 type lootItem struct {
@@ -223,6 +226,14 @@ func (w *World) initCombat() error {
 			Armor: def.Armor, Defense: def.Defense, PhysicalResistance: def.Resistances["physical"],
 		}}
 		k.reach = 1
+		k.corpse = corpse
+		if def.Corpse != "" {
+			it := w.cfg.Items[def.Corpse]
+			if it == nil || it.Container == nil || it.CanPickUp() {
+				return fmt.Errorf("session: monster %q: corpse %q must be a container item with pickupable: false", id, def.Corpse)
+			}
+			k.corpse = it
+		}
 		for _, a := range def.Attacks {
 			k.attackTicks = append(k.attackTicks, ticksFor(a.IntervalMs))
 			if a.Type != attackMelee {

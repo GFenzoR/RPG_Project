@@ -712,7 +712,10 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (salvo los restos). Guardado por item y decay de items soltados quedan para el trade y
   la muerte (T1.11) o un hito posterior.
 - **Restos:** el botín de un monstruo queda dentro de sus restos (contenedor que no se
-  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`.
+  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`. Cada familia
+  deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
+  panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
+  (`creature_remains`, que es también el cuerpo de un jugador).
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con

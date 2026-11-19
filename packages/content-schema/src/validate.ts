@@ -538,6 +538,19 @@ class Validator {
         );
       }
     }
+    // The remains it leaves: a container that stays on its tile, like creature_remains
+    // (an unknown id is checkRefs' to report).
+    if (typeof m["corpse"] === "string") {
+      const owned = this.index.ids.item.get(m["corpse"]);
+      const def = owned ? this.itemDef(owned) : undefined;
+      if (def && (def["kind"] !== "container" || def["pickupable"] !== false)) {
+        this.error(
+          src,
+          ["corpse"],
+          `item "${m["corpse"]}" must be a container with pickupable: false (the remains stay on the tile)`,
+        );
+      }
+    }
     for (const [i, drop] of asList(m["loot"]).entries()) {
       if (!isObj(drop) || !Array.isArray(drop["count"])) continue;
       const [lo, hi] = drop["count"] as number[];

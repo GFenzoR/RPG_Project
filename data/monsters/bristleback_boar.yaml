@@ -18,3 +18,4 @@ loot:
   - { item: boar_tusk, chance: 0.15 }
   - { item: copper_coin, chance: 0.6, count: [2, 10] }
 tags: [beast, forest, puerto]
+corpse: remains_fur

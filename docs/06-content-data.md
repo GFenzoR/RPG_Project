@@ -140,7 +140,10 @@ items:
     ammo: { type: arrow, attack: 9 }
   ```
 - **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
-  `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
+  `creature_remains` (los restos por defecto de un monstruo, y el cuerpo de un jugador) es
+  un contenedor con `pickupable: false`, como los restos de cada familia de monstruos
+  (`remains_fur`, `remains_chitin`, `remains_scales`, `remains_slag`, `remains_bones`,
+  `remains_feathers`, `remains_humanoid`, `remains_bramble`; ver `corpse` en "Monstruo").
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
 - **Item de misión** (`quest: true`, docs/17 UI-6, solo de dibujo): un item que existe
   para una quest (lo que pide el `has_item` de un paso o de un diálogo: `bosun_logbook`,
@@ -285,7 +288,20 @@ loot:
   - { item: wolf_pelt, chance: 0.25 }
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
+corpse: remains_fur        # opcional: los restos que deja (por defecto, creature_remains)
 ```
+- **Restos** (`corpse`, opcional): el item que el servidor deja donde muere, con el botín
+  adentro. Es el cuerpo caído de su familia: `remains_fur` (bestias con pelo: lobo, sabueso,
+  rata, ciervo, jabalí, murciélago), `remains_chitin` (cangrejo, araña, escarabajo,
+  reptante), `remains_scales` (salamandra, dragoncillo, sapo), `remains_slag` (los gólems de
+  escoria), `remains_bones` (el minero ahogado), `remains_feathers` (la gaviota),
+  `remains_humanoid` (saqueadores, contrabandistas, mineros de obsidiana) y
+  `remains_bramble` (el espinoso). Tiene que ser un contenedor con `pickupable: false`
+  (`make validate` y el arranque del servidor lo exigen); sin `corpse`, el monstruo deja
+  `creature_remains`. Los restos duran `combat.monster_corpse_ms` como siempre y el botín
+  que no entra en sus `container.slots` se pierde. Todo monstruo de `data/monsters` tiene el
+  suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
+  `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
 - **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
   contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
   y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o el

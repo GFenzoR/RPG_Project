@@ -20,3 +20,4 @@ loot:
   - { item: copper_coin, chance: 0.8, count: [10, 50] }
 tags: [plant, forest, bosque]
 notes: Deep forest north of the grove, levels 18-22. Hits hard and resists earth; fire is its weakness.
+corpse: remains_bramble

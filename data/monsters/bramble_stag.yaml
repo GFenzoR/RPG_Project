@@ -18,3 +18,4 @@ loot:
   - { item: copper_coin, chance: 0.7, count: [5, 25] }
 tags: [beast, forest, bosque]
 notes: Forest edge near the town, levels 11-13. Passive until hit, flees when hurt; its antlers feed the stag-leather trade.
+corpse: remains_fur

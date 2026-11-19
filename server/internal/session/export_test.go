@@ -19,6 +19,10 @@ func (w *World) Level(p *Player) int { return p.level }
 // Mana returns p's mana (tests only).
 func (w *World) Mana(p *Player) int { return p.mana }
 
+// KillForTest kills m as if a hit had taken its last health point: its loot goes into its
+// remains, which decay on their own (tests only, loop goroutine).
+func (w *World) KillForTest(ctx *game.TickContext, m *Monster) { w.killMonster(ctx, m) }
+
 // MonsterHealth returns m's health (tests only).
 func (w *World) MonsterHealth(m *Monster) int { return m.health }
 

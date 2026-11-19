@@ -20,3 +20,4 @@ loot:
   - { item: embersteel_sabre, chance: 0.02 }
 tags: [dragon, crater, volcan]
 notes: Young drakes nesting on the crater rim, levels 48-58. The top of the island; its breath can leave you burning.
+corpse: remains_scales

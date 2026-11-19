@@ -19,3 +19,4 @@ loot:
   - { item: copper_coin, chance: 0.8, count: [25, 90] }
 tags: [elemental, cave, volcan]
 notes: Cooled slag the old forge woke up, deep mine, levels 39-44. Slow and heavily armoured; immune to fire, ice cracks it.
+corpse: remains_slag

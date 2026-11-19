@@ -69,6 +69,26 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+  it("checks a monster's corpse: a known container item that stays on its tile", () => {
+    const monster = (id: string, corpse: string): void =>
+      edit(
+        `data/monsters/${id}.yaml`,
+        /^corpse: .*$/m.exec(readFileSync(file(`data/monsters/${id}.yaml`), "utf8"))?.[0] ??
+          "corpse:",
+        `corpse: ${corpse}`,
+      );
+    monster("wolf", "copper_coin");
+    monster("bilge_rat", "backpack");
+    monster("tide_crab", "no_such_remains");
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(
+      has("wolf.yaml") && has('item "copper_coin" must be a container with pickupable: false'),
+    ).toBe(true);
+    expect(has('item "backpack" must be a container with pickupable: false')).toBe(true);
+    expect(has('unknown item "no_such_remains"')).toBe(true);
+  });
+
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
     writeFileSync(
       file("data/boat_routes.yaml"),

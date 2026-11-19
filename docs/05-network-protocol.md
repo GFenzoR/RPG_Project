@@ -579,8 +579,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `PlayerStats`. Los `effect_id` son constantes del protocolo hasta que exista
   `data/effects.yaml`.
 - Muerte de un monstruo: `CreatureDisappear{reason: DEATH}` (después de su
-  `CreatureHealth` 0), `TileUpdate` con `creature_remains` encima
-  de la pila (dura `combat.monster_corpse_ms`; es un contenedor con el botín, T1.8),
+  `CreatureHealth` 0), `TileUpdate` con sus restos encima de la pila (el item de su
+  `corpse` en `data/monsters`, o `creature_remains`; dura `combat.monster_corpse_ms`;
+  es un contenedor con el botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
   se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
   `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un

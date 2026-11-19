@@ -82,6 +82,10 @@
         }
       }
     },
+    "corpse": {
+      "description": "The container item left where it dies, with its loot: the fallen body of its family (remains_fur, remains_chitin...). It must be a container with pickupable: false. Without it, the default remains (creature_remains).",
+      "$ref": "common.schema.json#/$defs/itemRef"
+    },
     "tags": {
       "type": "array",
       "items": { "$ref": "common.schema.json#/$defs/id" },
