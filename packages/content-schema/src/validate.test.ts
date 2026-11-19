@@ -824,6 +824,50 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  // Monster abilities (docs/06 "Monstruo"): areas, heal_self, summon and phases.
+  it("checks monster areas, heals, summons and phases", () => {
+    writeFileSync(
+      file("data/monsters/wolf.yaml"),
+      [
+        "id: wolf",
+        "name: monster.wolf.name",
+        "sprite: creatures/wolf",
+        "health: 25",
+        "experience: 28",
+        "speed: 190",
+        "attacks:",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: beam, length: 4, radius: 1 } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, center: target } }",
+        "  - { type: spell, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 7 } }",
+        "  - { type: heal_self, min: 5, max: 9, interval_ms: 2000, area: { shape: circle, radius: 1 } }",
+        "  - { type: summon, min: 1, max: 1, interval_ms: 2000, summon: { monster: slagbound_warden, count: 1 } }",
+        "  - { type: summon, interval_ms: 2000, summon: { monster: no_such_beast, count: 9 } }",
+        "phases:",
+        "  - { below_hp_pct: 50, attacks_add: [ { type: melee, min: 4, max: 2, interval_ms: 2000 } ] }",
+        "  - { below_hp_pct: 50, speed_mult: 0 }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.startsWith("error data/monsters/"));
+    const at = (path: string, text: string): boolean =>
+      out.some((m) => m.includes(` ${path}: `) && m.includes(text));
+    expect(at("attacks[0].area.radius", "not allowed here")).toBe(true);
+    expect(at("attacks[1].area", 'missing required field "radius"')).toBe(true);
+    expect(at("attacks[2].area.radius", "<= 6")).toBe(true);
+    expect(at("attacks[3].area", "not allowed here")).toBe(true);
+    expect(at("attacks[4].min", "not allowed here")).toBe(true);
+    expect(at("attacks[5].summon.count", "<= 8")).toBe(true);
+    expect(at("attacks[5].summon.monster", 'unknown monster "no_such_beast"')).toBe(true);
+    expect(at("phases[0].attacks_add[0].min", "min (4) is greater than max (2)")).toBe(true);
+    expect(at("phases[1].below_hp_pct", "another phase is already below 50 %")).toBe(true);
+    expect(at("phases[1].speed_mult", "> 0")).toBe(true);
+    // The warden summons: nothing may summon it.
+    expect(
+      out.some((m) =>
+        m.includes('attacks[4].summon.monster: "slagbound_warden" summons monsters itself'),
+      ),
+    ).toBe(true);
+  });
+
   it("limits the number of different blessings to balance.yaml max_blessings", () => {
     edit("data/balance.yaml", "max_blessings: 5", "max_blessings: 4");
     expect(

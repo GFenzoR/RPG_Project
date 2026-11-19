@@ -154,6 +154,7 @@ class Validator {
     this.checkToolTargets();
     this.checkItemTrade();
     this.checkQuestDrops();
+    this.checkSummons();
     this.checkI18n();
     this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
@@ -524,16 +525,15 @@ class Validator {
   private checkMonster(src: SourceFile): void {
     const m = src.data;
     if (!isObj(m)) return;
-    for (const [i, atk] of asList(m["attacks"]).entries()) {
+    for (const { atk, path } of monsterAttacks(m)) {
       if (
-        isObj(atk) &&
         typeof atk["min"] === "number" &&
         typeof atk["max"] === "number" &&
         atk["min"] > atk["max"]
       ) {
         this.error(
           src,
-          ["attacks", i, "min"],
+          [...path, "min"],
           `min (${atk["min"]}) is greater than max (${atk["max"]})`,
         );
       }
@@ -551,6 +551,20 @@ class Validator {
         );
       }
     }
+    // The server sorts the phases by below_hp_pct: two at the same one would be one phase.
+    const seen = new Set<unknown>();
+    for (const [i, phase] of asList(m["phases"]).entries()) {
+      const pct = isObj(phase) ? phase["below_hp_pct"] : undefined;
+      if (pct === undefined) continue;
+      if (seen.has(pct)) {
+        this.error(
+          src,
+          ["phases", i, "below_hp_pct"],
+          `another phase is already below ${String(pct)} %`,
+        );
+      }
+      seen.add(pct);
+    }
     for (const [i, drop] of asList(m["loot"]).entries()) {
       if (!isObj(drop) || !Array.isArray(drop["count"])) continue;
       const [lo, hi] = drop["count"] as number[];
@@ -565,6 +579,36 @@ class Validator {
           ["loot", i, "count"],
           `item "${String(drop["item"])}" is not stackable, so count must be at most 1`,
         );
+      }
+    }
+  }
+
+  /**
+   * A monster summons one that summons nothing itself: a chain of summoners would have no
+   * bound (the server refuses it too, session checkSummons). Unknown monsters are
+   * checkRefs' (x-ref).
+   */
+  private checkSummons(): void {
+    const summoners = new Set<string>();
+    for (const src of this.monsters) {
+      if (!isObj(src.data)) continue;
+      for (const { atk } of monsterAttacks(src.data)) {
+        if (atk["type"] === "summon") summoners.add(String(src.data["id"]));
+      }
+    }
+    for (const src of this.monsters) {
+      if (!isObj(src.data)) continue;
+      for (const { atk, path } of monsterAttacks(src.data)) {
+        const summon = atk["summon"];
+        if (!isObj(summon)) continue;
+        const id = String(summon["monster"]);
+        if (summoners.has(id)) {
+          this.error(
+            src,
+            [...path, "summon", "monster"],
+            `"${id}" summons monsters itself: a summoned monster cannot summon (no bound)`,
+          );
+        }
       }
     }
   }
@@ -1681,6 +1725,21 @@ function actionsOf(
         for (const [key, inner] of Object.entries(a))
           out.push({ key, value: inner, path: [...here, key] });
       }
+    }
+  }
+  return out;
+}
+
+/** Every attack of a monster: its own, then each phase's attacks_add, with its path. */
+function monsterAttacks(m: Obj): { atk: Obj; path: PathSegment[] }[] {
+  const out: { atk: Obj; path: PathSegment[] }[] = [];
+  for (const [i, atk] of asList(m["attacks"]).entries()) {
+    if (isObj(atk)) out.push({ atk, path: ["attacks", i] });
+  }
+  for (const [p, phase] of asList(m["phases"]).entries()) {
+    const list = isObj(phase) ? asList(phase["attacks_add"]) : [];
+    for (const [i, atk] of list.entries()) {
+      if (isObj(atk)) out.push({ atk, path: ["phases", p, "attacks_add", i] });
     }
   }
   return out;

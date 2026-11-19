@@ -5,6 +5,94 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name", "sprite", "health", "experience", "speed", "attacks"],
+  "$defs": {
+    "attack": {
+      "description": "One attack of a monster. melee, distance and spell hurt the target (or, with area, every player of the area the monster sees, out of protection zones); heal_self heals the monster (not at full health) and summon calls monsters next to it: those two need a fight, not a target in reach. With below_hp_pct the attack is used only while the monster's health is below that percent.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "interval_ms"],
+      "properties": {
+        "type": { "enum": ["melee", "distance", "spell", "heal_self", "summon"] },
+        "element": { "$ref": "common.schema.json#/$defs/element" },
+        "min": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "max": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "interval_ms": { "type": "integer", "minimum": 50 },
+        "chance": { "$ref": "common.schema.json#/$defs/chance" },
+        "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "below_hp_pct": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "area": {
+          "description": "circle: radius tiles (dx² + dy² ≤ r² + r) around the monster (center self, the default) or its target, every tile in line of sight from the centre; beam: length tiles in a straight line from the monster towards its target (the nearest of 8 directions), stopped by the first tile that blocks sight. Reach: a circle around the monster, its radius; a beam, its length; a circle around the target, as the attack without it (1 for melee, range otherwise).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["shape"],
+          "properties": {
+            "shape": { "enum": ["circle", "beam"] },
+            "radius": { "$ref": "common.schema.json#/$defs/aimRange" },
+            "length": { "$ref": "common.schema.json#/$defs/aimRange" },
+            "center": { "enum": ["self", "target"] }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "shape": { "const": "circle" } } },
+              "then": { "required": ["radius"], "properties": { "length": false } }
+            },
+            {
+              "if": { "properties": { "shape": { "const": "beam" } } },
+              "then": {
+                "required": ["length"],
+                "properties": { "radius": false, "center": { "const": "self" } }
+              }
+            }
+          ]
+        },
+        "summon": {
+          "description": "summon only: count monsters (each on a free tile next to the caster), never more than max_alive (default count) alive at once. They fight the caster's target, give no experience nor loot, never respawn and go when the caster dies or gives up. The summoned monster cannot summon itself.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["monster", "count"],
+          "properties": {
+            "monster": { "$ref": "common.schema.json#/$defs/monsterRef" },
+            "count": { "type": "integer", "minimum": 1, "maximum": 8 },
+            "max_alive": { "type": "integer", "minimum": 1, "maximum": 8 }
+          }
+        },
+        "condition": {
+          "description": "T3.2: applied to every player the attack hurt.",
+          "$ref": "common.schema.json#/$defs/conditionApply"
+        },
+        "visual": { "$ref": "common.schema.json#/$defs/id" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "summon" } } },
+          "then": {
+            "required": ["summon"],
+            "properties": {
+              "min": false,
+              "max": false,
+              "element": false,
+              "range": false,
+              "area": false,
+              "condition": false
+            }
+          },
+          "else": { "required": ["min", "max"], "properties": { "summon": false } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "heal_self" } } },
+          "then": {
+            "properties": {
+              "max": { "type": "integer", "minimum": 1 },
+              "element": false,
+              "range": false,
+              "area": false,
+              "condition": false
+            }
+          }
+        }
+      ]
+    }
+  },
   "properties": {
     "id": { "$ref": "common.schema.json#/$defs/id" },
     "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
@@ -27,27 +115,19 @@
         }
       }
     },
-    "attacks": {
+    "attacks": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/attack" } },
+    "phases": {
+      "description": "A boss's phases: each is on while the monster's health is below its below_hp_pct (every phase it has reached at once): its attacks_add join the attacks, its speed is multiplied by speed_mult and every attack interval by attack_interval_mult. Healed above it, the phase ends.",
       "type": "array",
-      "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "min", "max", "interval_ms"],
+        "required": ["below_hp_pct"],
         "properties": {
-          "type": { "enum": ["melee", "distance", "spell"] },
-          "element": { "$ref": "common.schema.json#/$defs/element" },
-          "min": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-          "max": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-          "interval_ms": { "type": "integer", "minimum": 50 },
-          "chance": { "$ref": "common.schema.json#/$defs/chance" },
-          "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
-          "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-          "condition": {
-            "description": "T3.2: applied to the target when the attack deals damage.",
-            "$ref": "common.schema.json#/$defs/conditionApply"
-          },
-          "visual": { "$ref": "common.schema.json#/$defs/id" }
+          "below_hp_pct": { "type": "integer", "minimum": 1, "maximum": 99 },
+          "attacks_add": { "type": "array", "items": { "$ref": "#/$defs/attack" } },
+          "speed_mult": { "type": "number", "exclusiveMinimum": 0, "maximum": 4 },
+          "attack_interval_mult": { "type": "number", "exclusiveMinimum": 0, "maximum": 4 }
         }
       }
     },
