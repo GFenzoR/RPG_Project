@@ -251,6 +251,40 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   el formato canónico. Para construir una casa: `stamp` de los prefabs `house_wood_small` /
   `house_wood_medium` y luego su entrada en `houses.yaml`.
 
+### Muebles y luces (lote 12, rama `feat/town-props`)
+Los pueblos se amueblan con el kit de props de `data/items/decoration.yaml` (docs/17 "Kit
+de props de pueblo") y con lo que ya había (brasero, fuente, antorcha y estandarte de
+pared, muros con ventana). Son items comunes del mapa: se ponen con `mapcli place` o con
+una lista de ops (`place_item`), y el servidor no los ve distinto de un cajón. Reglas de
+quien arma un mapa (las vigila `packages/map-format/src/town-props.test.ts`):
+- **Lo que cuelga de un muro** (`wall_torch`, `wall_banner`) va en la casilla del muro,
+  arriba de él en la pila, y solo en un muro con su cara a la vista: con una casilla abierta
+  al sur (un muro este-oeste, o la punta de roca que asoma en una cueva). En un tramo
+  norte-sur no se ve.
+- **Una ventana** es otro muro (`stone_wall_window`, `wooden_wall_window`): se cambia la
+  pieza (`remove_item` del muro y `place_item` de la ventana con `index: 0`) en un tramo
+  este-oeste, con muro a los dos lados (la ventana se dibuja solo en las piezas con cara
+  de lado a lado, docs/17 ART-3).
+- **En una casa que se alquila, nada fijo bloquea:** solo la cama, el banco y la jardinera
+  (que no bloquean) y las ventanas y lo que cuelga de sus muros, que no son casillas de la
+  casa. Lo que el inquilino deja va al suelo de una casilla caminable (`moveItem`) y se
+  guarda aparte de lo fijo del mapa (`house_items`, solo los items dinámicos de
+  `w.ground`), así que un mueble que no bloquea no le quita lugar ni cuenta para su límite
+  de items.
+- **Nada que bloquee** (un mueble del kit, un brasero, una fuente) en la casilla de un NPC
+  ni al lado, en el centro de un spawn, en un extremo de portal, en una puerta o la salida
+  de una casa, en un cartel o libro de `texts.yaml`, en el templo, ni en las casillas que
+  camina o usa el E2E (la lista `E2E_TILES` del test: si el E2E cambia de camino, se cambia
+  ahí también). Lo demás (que todo se siga alcanzando a pie) lo revisa la validación.
+- **Una cueva lleva una antorcha de pared cada 6 a 8 casillas** en las caras de su roca:
+  ninguna cara a más de 6 casillas (Chebyshev) de una antorcha y ninguna antorcha a menos
+  de 6 de otra; las salas hondas, que las antorchas del muro norte no alcanzan, llevan
+  braseros contra el muro sur. La luz (radio 3 la antorcha, 3,5 el brasero y la fragua)
+  solo se dibuja en pisos subterráneos (docs/17 ART-7).
+- **Un libro sobre una mesa:** la mesa va abajo en la pila (`place_item` con `index: 0`) y
+  levanta al libro 8 px (`elevation`, docs/17 ART-8); "Leer" usa el de arriba, y como la
+  mesa bloquea, nadie le tira nada encima.
+
 ## Prefabs (`world/prefabs/<id>.yaml`)
 Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior
 izquierda en `pos`, sobre un solo piso. `rows` es un dibujo, un carácter por casilla, que
@@ -584,6 +618,13 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (escalera en 3176,6322): murciélagos al oeste, galería de vetas de hierro con escarabajos
   al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
   aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
+  Muebles y luces (lote 12, "Muebles y luces" arriba): el templo con braseros a los lados
+  de la puerta este, estandartes, ventanas, bancos y un altar entre jardineras; el depósito
+  con estantes, barriles, sacos, cajones y una mesa; la plaza con la fuente (3170,6387),
+  dos puestos de mercado contra el depósito, faroles, bancos y un mástil con bandera
+  (3163,6380); la armería con estantes y una mesa; cada casa con una cama y ventanas (y
+  jardineras afuera); redes de pesca en la playa del muelle. La mina tiene 28 antorchas de
+  pared y 7 braseros.
   Oficios (T3.4): fragua, yunque y fogón al norte del templo (3166–3172, 6366) y una
   arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377), más dos
   arboledas de 4 (auditoría de contenido M1) en el prado norte (≈3161–3166, 6326–6330) y al
@@ -629,6 +670,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
+  Muebles y luces (lote 12): braseros a los lados de las dos puertas del templo,
+  estandartes, ventanas y bancos; en la plaza la fuente (4159,6111), dos puestos, faroles y
+  un mástil; la curtiduría con estantes, barriles y una mesa; cada casa con una cama y
+  ventanas; un pozo en la arena de las cabañas (4164,6095). La cueva tiene 8 antorchas y 3
+  braseros.
 
 - `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
   `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
@@ -655,6 +701,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `volcan_house_flint` (`house_wood_small` en 3669,5788, al este de la plaza y fuera de su
   zona: su salida da al PvP abierto, como las de Raigal). Tablero del mercado en la plaza,
   3660,5790 (m7).
+  Muebles y luces (lote 12): braseros a los lados de la puerta del templo (adentro) y en
+  las esquinas de su frente, estandartes, ventanas y bancos; en la plaza la fuente
+  (3656,5791), una fila de puestos al noreste, faroles, un pozo y un mástil junto al
+  muelle; el archivo de Casia con estantes y mesas (el libro de la herrera, sobre una);
+  cada casa con una cama y ventanas. La mina tiene 19 antorchas y 7 braseros.
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la

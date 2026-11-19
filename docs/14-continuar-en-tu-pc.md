@@ -141,6 +141,33 @@ el punto 5:
     condición `completed` sobre ella deja de valer mientras corre (docs/06). Ninguna lo hace.
   - **La botonera tiene dos filas de seis** (once botones con el diario; una fila de once
     desde 1600 px): a 960x700 la hotbar muestra un slot menos que antes.
+- **Pueblos amueblados y minas con luz (hecho, rama `feat/town-props`, lote 12; docs/17
+  "Kit de props de pueblo", docs/03 "Muebles y luces"):** un kit de doce props del motor
+  de sprites (barril, mesa, banco, estante, cama, farol, pozo, sacos, red de pesca,
+  jardinera, puesto de mercado con toldo que flamea y mástil con bandera que ondea);
+  templos, plazas, depósito, tiendas y las 13 casas del Farol, Raigal y Brasal amueblados;
+  una fuente por plaza, braseros, estandartes y ventanas en los templos; antorchas de
+  pared cada 7 casillas y braseros en las minas de Puerto, Bosque y Volcán. Queda:
+  - **El E2E no se corrió en la rama** (lo corre el lote al final). Qué mirar: docs/17
+    "Kit de props de pueblo" y las notas del PR (los screenshots del templo del Farol,
+    de Raigal, de Brasal y de la mina).
+  - **La luz en el juego:** `mapcli render` muestra el frame 0 sin la capa de luz; que las
+    antorchas (radio 3) y los braseros (3,5) se vean en la oscuridad de las minas se mira
+    en el E2E o con `make play` bajando la escalera de la mina del Farol (3176,6322).
+  - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar del Farol es playa
+    abierta con el muelle; queda para un pueblo amurallado de una isla nueva.
+  - **El farol no alumbra en la superficie** (la capa de luz solo dibuja en z ≥ 8 y no hay
+    noche): si llega un ciclo de día y noche, ya tiene su `light`.
+  - **Una casa no se puede amueblar con más fijo que bloquee:** cama, banco y jardinera
+    son lo único que va adentro (docs/03); una mesa o un estante fijo le quitaría casillas
+    al inquilino. Muebles que el jugador compre y ponga son otra tarea (decoración de casas,
+    fuera de alcance de T5.4).
+  - **Los ids del kit son 324–335** en `data/ids.lock.yaml`: si otra rama del lote suma
+    items, el que apile las ramas vuelve a correr `make gen-ids` sobre la suma (el archivo
+    es append-only; nunca se reusa un número).
+  - **Si el E2E cambia de camino** en un pueblo, `E2E_TILES` de
+    `packages/map-format/src/town-props.test.ts` se cambia también, y ninguna pieza que
+    bloquee puede quedar en esas casillas.
 - **Libros y cofres (hecho, rama `feat/chests-books`, lote 12; docs/02 "Libros y cofres"):**
   nueve libros y pergaminos con lore (templos, el archivo de Casia, el atril de Velia, el
   naufragio, la cueva de los contrabandistas y la mina inundada) y cinco cofres que dan una
@@ -161,7 +188,7 @@ el punto 5:
   - **Las páginas se pasan con los botones:** las flechas siguen caminando (la ventana no
     toma el teclado). Un atajo (Re Pág / Av Pág) es fácil de sumar.
   - **Un libro o pergamino en el suelo se puede tapar:** los que no bloquean su casilla
-    (el libro cerrado del archivo y los pergaminos) quedan debajo de lo que alguien tire
+    (los pergaminos; el libro cerrado del archivo ya está sobre una mesa, que bloquea) quedan debajo de lo que alguien tire
     encima o de un cadáver, y "Leer" (o el click derecho) de la casilla usa el item de
     arriba (`tileUse`). Se lee de nuevo cuando eso se levanta o se pudre; el menú de la
     casilla solo ofrece el de arriba (`menuItem`). Es aceptable; si molesta, la casilla
@@ -171,8 +198,8 @@ el punto 5:
     del storage de quien lo abrió, así que `make validate` rechaza renombrarlo o
     reutilizarlo, y `mapcli validate` que un cofre esté dos veces en el mundo o sin una
     casilla alcanzable al lado (docs/06 "Libros y cofres").
-  - **El libro cerrado del archivo está en el suelo:** cuando lleguen las mesas del kit de
-    props (`feat/town-props`), ponerlo sobre una (la elevación lo sube).
+  - **El libro cerrado del archivo está sobre una mesa** (hecho en `feat/town-props`: la
+    mesa del kit va debajo en la pila y lo sube 8 px; nadie le tira nada encima).
   - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones

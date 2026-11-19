@@ -297,7 +297,10 @@ el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por 
 `creature_remains`, objetos de 32x32 dibujados con sus proporciones y agrandados con
 `grow`, `specs/grow.ts`, hasta 24-30 px de largo), los íconos de todo el equipo
 (`specs/items/`, clase `icon`; abajo, "Íconos de items") y el libro, el atril, el
-pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres").
+pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres"), y el kit
+de props de pueblo (`specs/town.ts`, docs/17 "Kit de props de pueblo": barril, mesa,
+banco, estante, cama, farol, pozo, sacos, red de pesca, jardinera, puesto de mercado y
+mástil con bandera).
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su
@@ -321,7 +324,8 @@ Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`),
 
 **Escribir un spec** (ejemplos: `specs/boar.ts`, `specs/stag.ts`, `specs/forge-echo.ts`;
 objetos: `specs/anvil.ts`, `specs/crate.ts`, `specs/signpost.ts` y `specs/market-board.ts`,
-este con un `loop`). Unidades: píxeles de sprite; x al este, y al norte (lejos de la
+este con un `loop`; `specs/town.ts` tiene una bandera de tarjetas encadenadas que giran
+en cadena y un fleco de partes que una ráfaga levanta una tras otra). Unidades: píxeles de sprite; x al este, y al norte (lejos de la
 cámara), z arriba; el suelo es z = 0.
 - `sprite`: la ruta de `data/` (`creatures/<id>`, `npcs/<id>`, `decor/<id>`).
 - `size`: la clase de ART-2 (`smallCreature`, `mediumAnimal`, `humanoid`, `bigCreature`,
@@ -420,7 +424,9 @@ frames a Nx, por defecto 4, en una grilla: una fila por acción y dirección) y
 del lobo de Gemini y de una persona de LPC si el atlas está armado; un ícono, además, en un
 slot del inventario a 1x y a 2x). Con íconos entre los elegidos escribe también
 `icons.slots.png` (cada uno en el slot a 2x, a 1x y sobre una casilla de pasto, una fila
-por línea del catálogo) e `icons.detail.png` (a 4x). Mirar los dos con Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
+por línea del catálogo) e `icons.detail.png` (a 4x); con props del kit de pueblo,
+`town.floors.png` (cada uno sobre cada suelo de los pueblos, `TOWN_FLOORS`, al lado de una
+persona de LPC, a 1x mostrado a 2x). Mirar los dos con Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
 lea mejor. Un prop de una casilla se compara sobre cada suelo donde está, al lado de una
 persona de LPC, a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
 el detalle. Lo que aprendió la revisión del 2026-11-18: pocas piezas y un material cálido

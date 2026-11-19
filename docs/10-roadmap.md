@@ -480,3 +480,12 @@ secundaria.
   recompensa (bloque `chest`) que dan una vez por personaje, todo o nada, con lo de su
   banda, registrados en `economy_log` con la fuente `chest`. Arte del motor de sprites.
   docs/02 "Libros y cofres"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Pueblos amueblados y minas con luz (auditoría del 2026-11-19, art.items[0] y [3];
+  lote 12, rama `feat/town-props`).** Un kit de doce props de una casilla del motor de
+  sprites (barril y mesa con elevación, banco, estante, cama, farol con luz, pozo, sacos,
+  red de pesca, jardinera, puesto de mercado y mástil con bandera; el toldo, la bandera y
+  la llama del farol animados con `sync: tile`), los templos, plazas, depósito, tiendas y
+  casas del Farol, Raigal y Brasal amueblados con `mapcli`, y el arte que no estaba en
+  ningún mapa en su lugar: fuentes, braseros, estandartes, muros con ventana y una
+  antorcha de pared cada 7 casillas en las tres minas. docs/17 "Kit de props de pueblo",
+  docs/03 "Muebles y luces"; lo que queda: docs/14, "Pendientes conocidos".
