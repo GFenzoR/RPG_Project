@@ -6,7 +6,8 @@ import type { Translate } from "../i18n/i18n.ts";
 /**
  * The tutorial's hint panel (T4.2), over the map: the current step's text, its progress
  * and a button to skip the tutorial. It never blocks the game (no key, no overlay) and
- * hides while an NPC dialog, shop or station window is open. The step's UI element (its
+ * hides while an NPC dialog, shop or station window is open, and on the desktop while the
+ * help, the guild or the appearance sits over it. The step's UI element (its
  * `data-tutorial` attribute) gets `data-tutorial-active`, which client.css highlights.
  * T5.6: on a small screen it covers part of the map, so "×" folds it into a small button
  * until the next step (the highlight stays).
@@ -15,6 +16,12 @@ export function TutorialPanel(props: {
   t: Translate;
   game: Game | undefined;
   ui: GameUi;
+  /**
+   * The help, the guild or the appearance is open at its factory place, over the hint's
+   * (docs/17 UI-5, ui/windows.ts tutorialCovered): it hides until that window closes or
+   * moves.
+   */
+  covered?: boolean | undefined;
 }): JSX.Element | null {
   const { t } = props;
   const s = props.ui.tutorial;
@@ -33,6 +40,7 @@ export function TutorialPanel(props: {
   // screen they reach the top right corner.
   if (
     !s ||
+    props.covered ||
     props.ui.dialog ||
     props.ui.shop ||
     props.ui.station ||

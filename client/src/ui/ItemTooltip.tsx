@@ -7,6 +7,7 @@
 // above that tile. It never takes the pointer (pointer-events: none) and goes away when the
 // mouse leaves, on any press, a scroll or Escape. Fingers never get it: a long press opens
 // the menu with the full card. Only the idea comes from that game: the look is our own.
+// After a window opens, nothing shows until the mouse moves (TipGate).
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
@@ -86,6 +87,47 @@ export function groundAnchor(tile: Rect, cursorY: number): Rect {
   return { left: tile.left, top: tile.top, width: tile.width, height: bottom - tile.top };
 }
 
+/**
+ * No card until the mouse moves after a window opened (docs/17 UI-5). A window that opens
+ * under a still mouse brings a pointerover from the browser, not from the player: the shop
+ * opens left of its dialog, its grid where the dialog's button was clicked, and the card of
+ * the item there covered the shop's filters. `opened` shuts the gate; a pointermove away
+ * from where the mouse was then (or the first one, if that is unknown) opens it again.
+ */
+export class TipGate {
+  private at: { x: number; y: number } | undefined;
+  private shut = false;
+
+  /** Whether a card may show. */
+  get open(): boolean {
+    return !this.shut;
+  }
+
+  /** A window opened (or closed, or folded): wait for the mouse to move. */
+  opened(): void {
+    this.shut = true;
+  }
+
+  /** The keyboard focused an item: its card shows whatever the mouse did. */
+  release(): void {
+    this.shut = false;
+  }
+
+  /** Where the mouse is, from any pointer event: a still mouse over the new window. */
+  seen(x: number, y: number): void {
+    this.at = { x, y };
+  }
+
+  /** A pointermove at x, y: true when it opened the gate. */
+  moved(x: number, y: number): boolean {
+    const away = !this.at || this.at.x !== x || this.at.y !== y;
+    this.at = { x, y };
+    if (!this.shut || !away) return false;
+    this.shut = false;
+    return true;
+  }
+}
+
 interface Shown {
   itemId: number;
   count: number;
@@ -130,11 +172,27 @@ export function ItemTooltip(props: {
   ui: GameUi;
   /** Nothing shows while true (a menu is open, an item is picked). */
   blocked: boolean;
+  /**
+   * Changes when a window opens, closes or folds (ui/windows.ts shownKey): no card until
+   * the mouse moves (TipGate).
+   */
+  windows?: string | undefined;
 }): JSX.Element | null {
   const [shown, setShown] = useState<Shown | undefined>(undefined);
   const box = useRef<HTMLDivElement>(null);
   const blocked = useRef(props.blocked);
   blocked.current = props.blocked || props.ui.dragging !== undefined;
+  const gate = useRef(new TipGate());
+  const [quiet, setQuiet] = useState(false);
+  const windows = useRef(props.windows);
+  // Before the paint, so the browser's pointerover of the new window finds the gate shut.
+  useLayoutEffect(() => {
+    if (windows.current === props.windows) return;
+    windows.current = props.windows;
+    gate.current.opened();
+    setQuiet(true);
+    setShown(undefined);
+  }, [props.windows]);
   useEffect(() => {
     let grace: ReturnType<typeof setTimeout> | undefined;
     let over: Element | undefined;
@@ -155,14 +213,22 @@ export function ItemTooltip(props: {
     };
     const onOver = (e: PointerEvent): void => {
       if (e.pointerType !== "mouse") return;
+      gate.current.seen(e.clientX, e.clientY);
+      if (!gate.current.open) return; // a window opened under a still mouse
       const host = (e.target as Element | null)?.closest?.("[data-tip-item]") ?? undefined;
       if (host === over) return;
       over = host;
       if (host) show(host); // a gap between cells: onOut's grace decides
     };
-    // After a press (it hid the card) the mouse still over an item brings it back as it moves.
+    // After a press (it hid the card), or a window that opened, the mouse still over an item
+    // brings it back as it moves.
     const onMove = (e: PointerEvent): void => {
-      if (over !== undefined || e.buttons !== 0 || e.pointerType !== "mouse") return;
+      if (e.pointerType !== "mouse") return;
+      if (gate.current.moved(e.clientX, e.clientY)) {
+        over = undefined;
+        setQuiet(false);
+      }
+      if (!gate.current.open || over !== undefined || e.buttons !== 0) return;
       const host = (e.target as Element | null)?.closest?.("[data-tip-item]") ?? undefined;
       if (!host) return;
       over = host;
@@ -178,7 +244,10 @@ export function ItemTooltip(props: {
     const onFocus = (e: FocusEvent): void => {
       const el = e.target as Element | null;
       if (!el?.matches?.(":focus-visible")) return; // a click focuses too: only the keyboard
-      if (tipOf(el)) show(el);
+      if (!tipOf(el)) return;
+      gate.current.release();
+      setQuiet(false);
+      show(el);
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") hide();
@@ -213,7 +282,7 @@ export function ItemTooltip(props: {
   const g = shown ? undefined : ui.groundTip;
   const tip: Shown | undefined =
     shown ?? (g && { itemId: g.itemId, count: g.count, anchor: groundAnchor(g.tile, g.y) });
-  const hidden = !tip || blocked.current;
+  const hidden = !tip || blocked.current || quiet;
   const magic = ui.skills.find((s) => s.id === "magic");
   // What the card shows besides the item (a requirement met or not changes its lines).
   const reader = `${ui.stats?.level ?? ""}:${ui.vocation ?? ""}:${magic?.level ?? ""}`;

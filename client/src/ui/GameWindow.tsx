@@ -11,7 +11,7 @@ import type { ComponentChildren, JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
-import type { WinKey, WindowPlace } from "./windows.ts";
+import type { AutoPlace, WinKey, WindowPlace } from "./windows.ts";
 import { placeStyle } from "./window-dom.ts";
 
 export interface GameWindowProps {
@@ -20,6 +20,11 @@ export interface GameWindowProps {
   icon: IconName;
   title: string;
   place: WindowPlace;
+  /**
+   * Where it sits instead of its usual place while the player has not moved it: a factory
+   * place that sees the windows open when it opened (ui/windows.ts defaultPlace).
+   */
+  auto?: AutoPlace | undefined;
   /** Stacking order among the windows (0 = bottom). */
   stack: number;
   /**
@@ -72,7 +77,7 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
   // (ui/window-dom.ts: a drag that ends writes the same lengths).
   const style: JSX.CSSProperties = {
     zIndex: 20 + props.stack,
-    ...placeStyle(place, props.zoom ?? 1),
+    ...placeStyle(place, props.zoom ?? 1, props.auto),
   };
   if (props.nth !== undefined && props.nth > 0) style["--nth"] = String(props.nth);
   const sized = place.w !== undefined || place.h !== undefined;
@@ -83,6 +88,7 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
       data-window={id}
       data-testid={props.testid}
       data-placed={placed ? "" : undefined}
+      data-auto={!placed && props.auto ? "" : undefined}
       data-sized={sized ? "" : undefined}
       data-collapsed={place.collapsed ? "" : undefined}
       data-closing={props.closing ? "" : undefined}

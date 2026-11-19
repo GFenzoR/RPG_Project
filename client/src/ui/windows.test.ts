@@ -13,7 +13,14 @@ import {
   collapseWindow,
   containerKeys,
   containersTop,
+  GIVE_WAY_MIN_PX,
+  PLACE_GAP,
+  defaultPlace,
   defaultWindows,
+  movesAside,
+  northOfPlayer,
+  overlapArea,
+  tutorialCovered,
   focusWindow,
   isClosable,
   keptHeight,
@@ -587,5 +594,140 @@ describe("the containers' default column (containersTop)", () => {
     expect(containersTop({ ...open, open: false }, 498)).toBe(0);
     expect(containersTop({ ...open, x: 300, y: 24 }, 498)).toBe(0);
     expect(containersTop(open, undefined)).toBe(0);
+  });
+});
+
+describe("a factory place that sees the open windows (defaultPlace)", () => {
+  // The windows' area at 1280x800 (the bar takes 88 px) and at 960x700 (the desktop app).
+  const wide = { width: 1280, height: 712 };
+  const app = { width: 960, height: 612 };
+  const box = (id: WinKey, x: number, y: number, width: number, height: number) => ({
+    id,
+    rect: { x, y, width, height },
+  });
+  const battle = box("battle", 0, 0, 256, 352);
+  const inventory = box("inventory", 1024, 0, 256, 500);
+  const chat = box("chat", 144, 512, 384, 200);
+  const covers = (a: Rect, b: Rect) => overlapArea(a, b) > 0;
+
+  it("keeps the usual place when it covers nothing", () => {
+    const skills = { x: 0, y: 356, width: 256, height: 150 };
+    expect(defaultPlace("skills", skills, [battle, inventory, chat], wide)).toBeUndefined();
+    const trade = { x: 464, y: 0, width: 352, height: 300 };
+    // The player low enough: the tiles north of it are under the trade's usual place.
+    const low = { x: 640, y: 600, width: 64, height: 64 };
+    expect(defaultPlace("trade", trade, [battle, inventory], wide, low)).toBeUndefined();
+  });
+
+  it("never puts the trade over the 3 tiles north of the player: it slides along the top", () => {
+    const trade = { x: 464, y: 0, width: 352, height: 300 };
+    const player = { x: 640, y: 324, width: 64, height: 64 };
+    const zone = northOfPlayer(player);
+    expect(zone).toEqual({ x: 640, y: 132, width: 64, height: 256 });
+    expect(covers(trade, zone)).toBe(true);
+    const at = defaultPlace("trade", trade, [battle, inventory, chat], wide, player);
+    // The nearest place clear of the column and of the battle list: left of the column.
+    expect(at).toEqual({ x: 640 - PLACE_GAP - 352, y: 0, width: 352, height: 300 });
+    if (!at) throw new Error("no place");
+    expect(covers(at, battle.rect)).toBe(false);
+  });
+
+  it("takes the place that covers least when every place covers something, never the column", () => {
+    const trade = { x: 464, y: 0, width: 352, height: 300 };
+    const player = { x: 640, y: 324, width: 64, height: 64 };
+    const party = box("party", 256, 0, 256, 300);
+    const guild = box("guild", 720, 0, 304, 120);
+    const at = defaultPlace("trade", trade, [battle, party, guild, inventory], wide, player);
+    if (!at) throw new Error("no place");
+    expect(covers(at, northOfPlayer(player))).toBe(false);
+    // Right of the column it covers the short guild window, left of it the tall party.
+    expect(at.x).toBe(640 + 64 + PLACE_GAP);
+    expect(covers(at, guild.rect)).toBe(true);
+  });
+
+  it("moves the trade off another window even with the player far away", () => {
+    // 1920x1080: the help moved to the top centre, where the trade opens.
+    const full = { width: 1920, height: 992 };
+    const trade = { x: 784, y: 0, width: 352, height: 300 };
+    const help = box("help", 760, 0, 400, 200);
+    const right = box("inventory", 1664, 0, 256, 500);
+    const at = defaultPlace("trade", trade, [battle, help, right], full);
+    // The nearest place clear of all three, against the help's left side.
+    expect(at).toEqual({ x: 760 - PLACE_GAP - 352, y: 0, width: 352, height: 300 });
+  });
+
+  it("shortens the dialog at 960x700 to the equipment's foot, its bottom where it was", () => {
+    // The shop and dialog pair: the dialog reaches the equipment's column by 10 px.
+    const dialog = { x: 592, y: 306, width: 352, height: 300 };
+    const equipment = box("inventory", 704, 0, 256, 316);
+    const shop = box("shop", 8, 166, 576, 440);
+    const at = defaultPlace("dialog", dialog, [equipment, shop, battle], app);
+    expect(at).toEqual({ x: 592, y: 320, width: 352, height: 286, short: true });
+    // A station or the market at the bottom centre give way the same way.
+    expect(defaultPlace("crafting", dialog, [equipment], app)?.y).toBe(320);
+  });
+
+  it("keeps a window over the bar where it is when giving way would leave it too short", () => {
+    const dialog = { x: 592, y: 306, width: 352, height: 300 };
+    const tall = box("inventory", 704, 0, 256, 520);
+    expect(606 - (520 + PLACE_GAP)).toBeLessThan(GIVE_WAY_MIN_PX);
+    expect(defaultPlace("dialog", dialog, [tall], app)).toBeUndefined();
+  });
+
+  it("puts the skills under the battle list only while they fit above the chat", () => {
+    const skills = { x: 0, y: 356, width: 256, height: 330 };
+    expect(covers(skills, chat.rect)).toBe(true);
+    // Beside the battle list.
+    expect(defaultPlace("skills", skills, [battle, inventory, chat], wide)).toEqual({
+      x: 256,
+      y: 0,
+      width: 256,
+      height: 330,
+    });
+    // The party is there: beside the party.
+    const party = box("party", 256, 0, 256, 300);
+    expect(defaultPlace("skills", skills, [battle, party, inventory, chat], wide)?.x).toBe(512);
+  });
+
+  it("shortens the skills above the chat when every other place is taken", () => {
+    const skills = { x: 0, y: 356, width: 256, height: 330 };
+    const party = box("party", 256, 0, 256, 400);
+    const guild = box("guild", 624, 0, 400, 500);
+    const low = box("chat", 144, 560, 384, 152);
+    const at = defaultPlace("skills", skills, [battle, party, guild, inventory, low], wide);
+    expect(at).toEqual({ x: 0, y: 356, width: 256, height: 560 - PLACE_GAP - 356, short: true });
+  });
+
+  it("leaves the windows without other places where windows.css puts them", () => {
+    const options = { x: 480, y: 57, width: 320, height: 400 };
+    const help = box("help", 440, 57, 400, 500);
+    expect(movesAside("options")).toBe(false);
+    expect(defaultPlace("options", options, [help], wide)).toBeUndefined();
+    expect(movesAside("trade") && movesAside("dialog") && movesAside("skills")).toBe(true);
+  });
+
+  it("does not count edges that only touch", () => {
+    expect(
+      overlapArea({ x: 0, y: 0, width: 10, height: 10 }, { x: 10, y: 0, width: 5, height: 5 }),
+    ).toBe(0);
+    expect(
+      overlapArea({ x: 0, y: 0, width: 10, height: 10 }, { x: 9.5, y: 0, width: 5, height: 5 }),
+    ).toBe(0);
+    expect(
+      overlapArea({ x: 0, y: 0, width: 10, height: 10 }, { x: 8, y: 2, width: 5, height: 5 }),
+    ).toBe(10);
+  });
+});
+
+describe("the tutorial's hint gives way (tutorialCovered)", () => {
+  it("while the help, the guild or the appearance sits at its factory place", () => {
+    const s = defaultWindows();
+    expect(tutorialCovered(s)).toBe(false);
+    expect(tutorialCovered(openWindow(s, "help"))).toBe(true);
+    expect(tutorialCovered(openWindow(s, "guild"))).toBe(true);
+    expect(tutorialCovered(openWindow(s, "appearance"))).toBe(true);
+    // Moved elsewhere, or another window: the hint stays.
+    expect(tutorialCovered(moveWindow(openWindow(s, "help"), "help", 300, 400))).toBe(false);
+    expect(tutorialCovered(openWindow(s, "options"))).toBe(false);
   });
 });

@@ -49,8 +49,15 @@ import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 import { ornamentStyle } from "./ornaments.ts";
-import { dragWindow, outsiders, resizeDrag, transformScale, watchedRef } from "./window-dom.ts";
-import type { DragEnv, WatchedRef } from "./window-dom.ts";
+import {
+  dragWindow,
+  outsiders,
+  placeOpened,
+  resizeDrag,
+  transformScale,
+  watchedRef,
+} from "./window-dom.ts";
+import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
@@ -65,6 +72,7 @@ import {
   knownWindows,
   loadWindows,
   moveWindow,
+  movesAside,
   openWindow,
   openWindows,
   pageOrder,
@@ -77,11 +85,12 @@ import {
   shownKey,
   syncWindows,
   toggleWindow,
+  tutorialCovered,
   windowForHighlight,
   windowKey,
   windowNudge,
 } from "./windows.ts";
-import type { ContainerKey, Rect, WinKey, WindowId, WindowsState } from "./windows.ts";
+import type { AutoPlace, ContainerKey, Rect, WinKey, WindowId, WindowsState } from "./windows.ts";
 
 /** The pieces of the desktop Options window (main.tsx builds them: they outlive a game). */
 export interface GameSettings {
@@ -189,7 +198,10 @@ export function GameView(props: GameViewProps): JSX.Element {
   const zoom = props.settings?.uiScale ?? 1;
   // The server's windows close through it (docs/17 UI-5): the dialog, the station...
   const serverClose = useRef<(id: WinKey) => void>(() => {});
-  const win = useWindows(props.storage, serverClose, zoom);
+  // The player's tile on the page: the trade opens clear of the tiles north of it.
+  const playerTile = useRef<() => PageBox | undefined>(() => undefined);
+  playerTile.current = () => game?.selfTile();
+  const win = useWindows(props.storage, serverClose, zoom, playerTile);
   // One window per open container, with a key that stays while it is open (its place).
   const containerKeysRef = useRef(new Map<number, ContainerKey>());
   const ckeys = windowed
@@ -595,7 +607,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
-      {props.entered && <TutorialPanel t={t} game={game} ui={ui} />}
+      {props.entered && (
+        <TutorialPanel t={t} game={game} ui={ui} covered={windowed && tutorialCovered(win.state)} />
+      )}
     </>
   );
   const menu = props.entered && (
@@ -624,6 +638,13 @@ export function GameView(props: GameViewProps): JSX.Element {
         game={game}
         ui={ui}
         blocked={ui.menu !== undefined || ui.picked !== undefined || ui.split !== undefined}
+        windows={
+          windowed
+            ? shownKey(win.state)
+            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade]
+                .map((w) => (w ? "1" : "0"))
+                .join("")
+        }
       />
     </>
   );
@@ -786,6 +807,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           icon={w.icon}
           title={w.title}
           place={placeOf(win.state, id)}
+          auto={win.auto.get(id)}
           stack={stack}
           zoom={zoom}
           closing={win.closing.has(id)}
@@ -1039,6 +1061,8 @@ interface WindowsApi {
   equipment: WatchedRef<HTMLElement>;
   /** Where the containers' default column starts, the windows' own px (containersTop). */
   containersTop: number;
+  /** Windows that sit elsewhere than their usual place (defaultPlace), screen px. */
+  auto: ReadonlyMap<WinKey, AutoPlace>;
 }
 
 /** A box on screen in px from the top left of `area`. */
@@ -1093,6 +1117,7 @@ function useWindows(
   storage: Storage | undefined,
   serverClose: { current: (id: WinKey) => void },
   zoom: number,
+  playerTile: { current: () => PageBox | undefined },
 ): WindowsApi {
   const [state, setState] = useState<WindowsState>(() =>
     loadWindows(readStorage(storage, WINDOWS_STORAGE_KEY)),
@@ -1103,6 +1128,14 @@ function useWindows(
   stateRef.current = state;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom > 0 ? zoom : 1;
+  // docs/17 UI-5: a window that opens at its factory place sees the open windows
+  // (defaultPlace): measured where windows.css puts it, before it is painted, it moves (or
+  // shortens) when that place covers another window or, the trade, the tiles north of the
+  // player. The place lasts while it stays open and unmoved; nothing of it is saved. When
+  // the area changes size they all go back to their usual places and are looked at again
+  // (`resized`).
+  const [auto, setAuto] = useState<ReadonlyMap<WinKey, AutoPlace>>(() => new Map());
+  const [resized, setResized] = useState(0);
   // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
   // window, a larger interface scale) or a remembered place came from a larger screen, the
   // windows the player placed move back inside, all of them. Watched through the ref, not
@@ -1110,7 +1143,17 @@ function useWindows(
   const [layer] = useState(() =>
     watchedRef<HTMLDivElement>((el) => {
       if (typeof ResizeObserver === "undefined") return () => {};
-      const observer = new ResizeObserver(() => pullInside(el, stateRef.current, setState));
+      let size = "";
+      const observer = new ResizeObserver(() => {
+        pullInside(el, stateRef.current, setState);
+        const r = el.getBoundingClientRect();
+        const now = `${Math.round(r.width)}x${Math.round(r.height)}`;
+        if (size !== "" && now !== size) {
+          setAuto(new Map());
+          setResized((n) => n + 1);
+        }
+        size = now;
+      });
       observer.observe(el);
       return () => observer.disconnect();
     }),
@@ -1123,6 +1166,39 @@ function useWindows(
     const el = layer.current;
     if (el) pullInside(el, stateRef.current, setState);
   }, [shown, zoom, layer]);
+  // The windows that opened since the last look (all of them after a resize) and may sit
+  // elsewhere; a window closed or moved by the player forgets its place.
+  const wasOpen = useRef<ReadonlySet<WinKey>>(new Set());
+  const lookedAt = useRef(0);
+  useLayoutEffect(() => {
+    const open = new Set(knownWindows(state).filter((id) => placeOf(state, id).open));
+    const fresh = lookedAt.current !== resized;
+    lookedAt.current = resized;
+    const opened = new Set(
+      [...open].filter(
+        (id) =>
+          movesAside(id) &&
+          (fresh || !wasOpen.current.has(id)) &&
+          placeOf(state, id).x === undefined,
+      ),
+    );
+    wasOpen.current = open;
+    const next = new Map(
+      [...auto].filter(([id]) => open.has(id) && placeOf(state, id).x === undefined),
+    );
+    const el = layer.current;
+    if (el && opened.size > 0) {
+      const found = placeOpened(
+        el.getBoundingClientRect(),
+        [...el.children].filter((w): w is HTMLElement => w instanceof HTMLElement),
+        opened,
+        playerTile.current(),
+        scaleOnScreen,
+      );
+      for (const [id, at] of found) next.set(id, at);
+    }
+    if (next.size !== auto.size || [...next].some(([id, at]) => auto.get(id) !== at)) setAuto(next);
+  }, [state, resized, layer]);
   // The equipment's height in its own px, for the containers' default place right under
   // it (containersTop, windows.css --containers-top): it changes with the backpack under
   // the figure, its fold and the text scale. Watched while its window is in the page.
@@ -1282,6 +1358,7 @@ function useWindows(
     layer,
     equipment,
     containersTop: containersTop(state.win.inventory, equipmentHeight),
+    auto,
   };
 }
 

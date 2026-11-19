@@ -1007,6 +1007,21 @@ export class Game {
   }
 
   /**
+   * The player's tile on the page, CSS px (undefined before the canvas is up): a window
+   * that opens keeps clear of what is around the player (docs/17 UI-5: the trade never
+   * covers the tiles north of it, where the partner stands).
+   */
+  selfTile(): { left: number; top: number; width: number; height: number } | undefined {
+    const s = this.world.self;
+    if (!s || !this.canvas) return undefined;
+    const c = this.canvas.tileToClient(s.pos.x, s.pos.y);
+    const n = this.canvas.tileToClient(s.pos.x + 1, s.pos.y + 1);
+    const width = n.x - c.x;
+    const height = n.y - c.y;
+    return { left: c.x - width / 2, top: c.y - height / 2, width, height };
+  }
+
+  /**
    * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
    * pointer travels a few pixels, and the item moves where it is released. With Shift a
    * click looks at the item and a drag moves part of a stack (docs/17 UI-6: it asks how

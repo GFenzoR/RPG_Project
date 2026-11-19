@@ -3,11 +3,13 @@
 // window follows the pointer, then its state takes over), and watching the windows' area
 // while it is in the page. Apart from GameView.tsx so the tests drive them without a DOM:
 // all they touch is a few properties of an element, a listener target and a class list.
-import { clampPlace, clampSize, keptHeight, placeOf, snapPlace } from "./windows.ts";
-import type { Box, Rect, WinKey, WindowPlace, WindowsState } from "./windows.ts";
+import { clampPlace, clampSize, defaultPlace, keptHeight, placeOf, snapPlace } from "./windows.ts";
+import type { AutoPlace, Box, Rect, WinKey, WindowPlace, WindowsState } from "./windows.ts";
 
 /** The inline lengths a window's place sets (GameWindow's `style`). */
-export type PlaceStyle = Partial<Record<"left" | "top" | "maxHeight" | "width" | "height", string>>;
+export type PlaceStyle = Partial<
+  Record<"left" | "top" | "right" | "bottom" | "maxHeight" | "width" | "height", string>
+>;
 
 /** A length in the window's own px: the state keeps screen px, the window has the zoom. */
 const ownPx = (v: number, zoom: number): string => `${Math.round((v / zoom) * 100) / 100}px`;
@@ -17,9 +19,11 @@ const scale = (zoom: number): number => (zoom > 0 ? zoom : 1);
 /**
  * The inline lengths of a window at `place` with the interface scale `zoom`: left, top and
  * a max-height that never reaches under the bar once the player placed it (without x and
- * y it sits at its default place, windows.css); the size the player gave it.
+ * y it sits at its default place, windows.css, or where defaultPlace moved it, `auto`:
+ * then only left and top place it, and a shortened one is no taller than its box); the
+ * size the player gave it.
  */
-export function placeStyle(place: WindowPlace, zoom: number): PlaceStyle {
+export function placeStyle(place: WindowPlace, zoom: number, auto?: AutoPlace): PlaceStyle {
   const k = scale(zoom);
   const out: PlaceStyle = {};
   if (place.x !== undefined && place.y !== undefined) {
@@ -27,6 +31,13 @@ export function placeStyle(place: WindowPlace, zoom: number): PlaceStyle {
     out.top = ownPx(place.y, k);
     // As tall as the room under its top at most (100 % is the windows' area).
     out.maxHeight = `calc(100% - ${out.top})`;
+  } else if (auto) {
+    out.left = ownPx(auto.x, k);
+    out.top = ownPx(auto.y, k);
+    // Its usual place may hang from the right or the bottom (windows.css).
+    out.right = "auto";
+    out.bottom = "auto";
+    out.maxHeight = auto.short ? ownPx(auto.height, k) : `calc(100% - ${out.top})`;
   }
   if (place.w !== undefined) out.width = ownPx(place.w, k);
   if (place.h !== undefined && !place.collapsed) out.height = ownPx(place.h, k);
@@ -281,6 +292,61 @@ export function outsiders<T extends AreaWindow>(
     if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
   }
   return moves;
+}
+
+/**
+ * A box on screen without the scale of a window's opening animation (`k`, transformScale:
+ * gwin-in grows it from its centre), in px of the area at `area`.
+ */
+export function unscaledIn(r: PageBox, k: number, area: PageBox): Rect {
+  const s = scale(k);
+  const width = r.width / s;
+  const height = r.height / s;
+  // To the hundredth of a px: 0.96 does not divide back exactly.
+  const round = (v: number): number => Math.round(v * 100) / 100;
+  return {
+    x: round(r.left + r.width / 2 - width / 2 - area.left),
+    y: round(r.top + r.height / 2 - height / 2 - area.top),
+    width: round(width),
+    height: round(height),
+  };
+}
+
+/**
+ * The windows that just opened at their factory place (`opened`, unplaced) and sit better
+ * elsewhere seeing the other open windows (defaultPlace of ui/windows.ts): their place, px
+ * of the area. Each is measured where windows.css put it; the ones decided first count at
+ * their new place for the next. `player` is the player's tile on the page (the trade keeps
+ * clear of the tiles north of it); a window fading out is not counted.
+ */
+export function placeOpened<T extends AreaWindow>(
+  area: PageBox,
+  windows: Iterable<T>,
+  opened: ReadonlySet<WinKey>,
+  player: PageBox | undefined,
+  scaleOf: (el: T) => number,
+): Map<WinKey, AutoPlace> {
+  const boxes: { id: WinKey; el: T; rect: Rect }[] = [];
+  for (const el of windows) {
+    const id = el.dataset["window"] as WinKey | undefined;
+    if (!id || el.hasAttribute("data-closing")) continue;
+    boxes.push({ id, el, rect: unscaledIn(el.getBoundingClientRect(), scaleOf(el), area) });
+  }
+  const tile = player && {
+    x: player.left - area.left,
+    y: player.top - area.top,
+    width: player.width,
+    height: player.height,
+  };
+  const out = new Map<WinKey, AutoPlace>();
+  for (const b of boxes) {
+    if (!opened.has(b.id) || b.el.hasAttribute("data-placed")) continue;
+    const at = defaultPlace(b.id, b.rect, boxes, area, tile);
+    if (!at) continue;
+    out.set(b.id, at);
+    b.rect = at;
+  }
+  return out;
 }
 
 /**
