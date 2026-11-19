@@ -117,6 +117,13 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      un druida. Un guardián de nivel 21 con espada de hierro, escudo y 20 cataplasmas
      **muere** en el corral 4 con las skills en 10; **entrenado** por la instructora
      (espada 45, escudo 40) mata a un espinoso y sale vivo (`TestSandboxTraining`).
+   - Áreas de monstruos (lote 10, docs/02 "Habilidades"): el espinoso (corral 4) estalla
+     en espinas sobre las 8 casillas que lo rodean, y el dragoncillo (corral 5) escupe
+     fuego en una línea de 4 casillas hacia su objetivo, la más cercana de las 8
+     direcciones: mientras se acerca, a un salto de caballo (2 y 1) el fuego pasa al lado;
+     pegado a él te da siempre. Con dos personajes, el que está en la línea o al lado del
+     otro (el espinoso) también se quema. Las
+     invocaciones y la furia del custodio están en la forja de la Isla Volcánica.
    - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
      (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
    - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
