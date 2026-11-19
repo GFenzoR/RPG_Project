@@ -11,6 +11,7 @@ import type { Texture } from "pixi.js";
 import { FloatingTextKind } from "@rpg/protocol";
 import { tilePixels } from "@rpg/renderer";
 import type { Atlas, Camera } from "@rpg/renderer";
+import { CANVAS_FONT, CANVAS_FONT_SIZE, CANVAS_TEXT_STROKE } from "./canvas-font.ts";
 import { effectFrame, effectFrames } from "./effects.ts";
 import {
   EFFECT_BUFF,
@@ -224,11 +225,10 @@ export class EffectLayer {
     const o = new Text({
       text,
       style: {
-        fontFamily: "sans-serif",
-        fontSize: 13,
-        fontWeight: "bold",
+        fontFamily: CANVAS_FONT,
+        fontSize: CANVAS_FONT_SIZE,
         fill,
-        stroke: { color: 0x000000, width: 3 },
+        stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
       },
       anchor: { x: 0.5, y: 1 },
       roundPixels: true,

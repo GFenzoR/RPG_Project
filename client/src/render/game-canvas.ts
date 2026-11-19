@@ -12,7 +12,15 @@
 // creature mostly hidden by a taller one in front is drawn again see-through; what stands on
 // a table or a crate is raised (ART-8); ambient particles drift over the map (ART-7, A13,
 // render/particles.ts).
-import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
+import {
+  Application,
+  CanvasTextMetrics,
+  Container,
+  Graphics,
+  Sprite,
+  Text,
+  TextureStyle,
+} from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
 import {
@@ -76,6 +84,12 @@ import {
   zoomScale,
 } from "./zoom.ts";
 import type { ZoomRange, ZoomView } from "./zoom.ts";
+import {
+  CANVAS_FONT,
+  CANVAS_FONT_SIZE,
+  CANVAS_TEXT_STROKE,
+  loadCanvasFont,
+} from "./canvas-font.ts";
 import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
@@ -340,8 +354,15 @@ export async function createGameCanvas(
 ): Promise<GameCanvas> {
   const { world, content, t } = opts;
   TextureStyle.defaultOptions.scaleMode = "nearest";
+  // The pixel font of the names and numbers (render/canvas-font.ts) loads with the atlas:
+  // a Text drawn before it would keep the fallback. If it comes after the wait, the labels
+  // are measured and drawn again (redrawLabels, set once the sprites exist).
+  let redrawLabels = (): void => {};
   // From the site root: the game page lives in /play/ (T4.3).
-  const atlas = await Atlas.load(new URL("/atlas/", document.baseURI).href);
+  const [atlas] = await Promise.all([
+    Atlas.load(new URL("/atlas/", document.baseURI).href),
+    loadCanvasFont(document.fonts, { onLate: () => redrawLabels() }),
+  ]);
   const T = atlas.tileSize;
   const app = new Application();
   await app.init({
@@ -827,11 +848,10 @@ export async function createGameCanvas(
       const label = new Text({
         text: nameOf(c),
         style: {
-          fontFamily: "sans-serif",
-          fontSize: 12,
-          fontWeight: "bold",
+          fontFamily: CANVAS_FONT,
+          fontSize: CANVAS_FONT_SIZE,
           fill: colorOf(c),
-          stroke: { color: 0x000000, width: 3 },
+          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
           ...look?.name,
         },
         anchor: { x: 0.5, y: 1 },
@@ -841,10 +861,10 @@ export async function createGameCanvas(
       const guild = new Text({
         text: c.guild,
         style: {
-          fontFamily: "sans-serif",
-          fontSize: 10,
+          fontFamily: CANVAS_FONT,
+          fontSize: CANVAS_FONT_SIZE,
           fill: COLORS.guild,
-          stroke: { color: 0x000000, width: 3 },
+          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
@@ -882,6 +902,14 @@ export async function createGameCanvas(
     const targeted = world.target === c.id;
     if (s.drawnTarget !== targeted) drawFrame(s, targeted);
     return s;
+  };
+
+  redrawLabels = (): void => {
+    CanvasTextMetrics.clearMetrics();
+    for (const s of sprites.values()) {
+      s.label.style.update();
+      s.guild.style.update();
+    }
   };
 
   const dropLabels = (s: CreatureSprite): void => {
@@ -1564,6 +1592,7 @@ export async function createGameCanvas(
       };
     },
     destroy() {
+      redrawLabels = () => {};
       clearTimeout(longPressTimer);
       hint.remove();
       gestures.reset();
