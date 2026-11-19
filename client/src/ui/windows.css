@@ -18,8 +18,14 @@
   --shop-cell: 4.5rem;
   --shop-w: calc(6 * var(--shop-cell) + 5 * 0.3rem + 1rem + 4px);
 }
+/* Nothing in it scrolls the page: the pinnacles on the mana orb's socket stick out 7 px
+   past the right edge (and a window's gothic corners 5 px), which made the page 7 px
+   wider than the screen and let a scrollIntoView shift the whole game sideways. clip, not
+   hidden: no script or focused field can scroll it either (hidden for older engines). */
 .game[data-ui="windows"] .game-body {
   position: relative;
+  overflow: hidden;
+  overflow: clip;
 }
 /* The map: the whole screen above the bar (its bottom padding), no frame around it, and
    always covered at a whole scale (--map-cover, read by render/game-canvas.ts). */

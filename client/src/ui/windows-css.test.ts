@@ -52,6 +52,13 @@ describe("windows.css", () => {
     expect(body).not.toContain("15rem");
   });
 
+  it("never lets the bar's ornaments widen the page (the screen does not scroll)", () => {
+    // The pinnacles on the mana orb's socket stick out 7 px past the right edge: clipped by
+    // the body of the game, or the page grew 7 px wider than the screen.
+    const body = rule(windowsCss, '.game[data-ui="windows"] .game-body');
+    expect(body).toMatch(/overflow:\s*clip/);
+  });
+
   it("keeps the guild's invitations above the party's, and both over the windows", () => {
     // Without its own rule on the desktop, the guild's took the party's place (the
     // windowed rule is more specific than .guild-invitations) and covered its buttons.
@@ -68,5 +75,17 @@ describe("windows.css", () => {
     expect(zIndex(windowsCss, '.game[data-ui="windows"] .invitations')).toBeGreaterThan(
       zIndex(windowsCss, ".win-layer"),
     );
+  });
+});
+
+describe("client.css", () => {
+  it("tints a slot that refuses the held item red only under a pointer that hovers", () => {
+    // A touch screen keeps :hover where the last finger was: a slot tapped earlier stayed
+    // red while the picked item waited for its place (seen on the iPad Mini of the E2E).
+    const hover = '.inventory .doll[data-holding] .slot[data-accepts="no"]:hover {';
+    const at = clientCss.indexOf(hover);
+    expect(at).toBeGreaterThan(0);
+    const media = clientCss.lastIndexOf("@media", at);
+    expect(clientCss.slice(media, at)).toMatch(/^@media \(hover: hover\) \{\s*$/);
   });
 });

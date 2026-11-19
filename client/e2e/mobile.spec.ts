@@ -1074,6 +1074,14 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   expect(canvasBox.y).toBeCloseTo(0, 0);
   expect(canvasBox.width).toBeCloseTo(1280, 0);
   expect(canvasBox.y + canvasBox.height).toBeCloseTo(hud.y, 0);
+  // Nothing sticks out past the screen: the page never scrolls (the pinnacles of the mana
+  // orb's socket stuck out 7 px on the right, and a scrollIntoView shifted the game left).
+  expect(
+    await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.scrollHeight,
+    ]),
+  ).toEqual([1280, 800]);
   const uncovered = (testid: string): Promise<boolean> =>
     page.getByTestId(testid).evaluate((el) => {
       el.scrollIntoView({ block: "end" });
