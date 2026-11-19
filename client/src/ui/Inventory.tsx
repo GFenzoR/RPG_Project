@@ -19,6 +19,7 @@ import { EquipmentSlot } from "@rpg/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
+import { tipMods } from "../state/mods.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { sameRef } from "../input/actions.ts";
@@ -161,6 +162,7 @@ export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX
                     itemId: it.itemId,
                     stackIndex: 0,
                     count: it.count,
+                    mods: it.mods,
                   })}
                 />
               </div>
@@ -249,6 +251,7 @@ export function ContainerView(props: {
                 itemId: it.itemId,
                 stackIndex: i,
                 count: it.count,
+                mods: it.mods,
               })}
             />
           </div>
@@ -319,6 +322,7 @@ function ItemCell(props: {
       // docs/17 UI-6: the card on hover and on keyboard focus (ui/ItemTooltip.tsx).
       data-tip-item={item.itemId}
       data-tip-count={item.count}
+      data-tip-mods={tipMods(item.mods)}
       tabIndex={0}
       onPointerDown={(e) => {
         if (e.button !== 0) return;

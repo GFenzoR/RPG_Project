@@ -36,7 +36,7 @@ import { HeldDirection } from "./input/dpad.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
-import type { ClientContent } from "./content-types.ts";
+import type { ClientContent, ItemMods } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import {
   MovementKeys,
@@ -166,6 +166,7 @@ export interface GameUi {
     | {
         itemId: number;
         count: number;
+        mods?: ItemMods | undefined;
         x: number;
         y: number;
         tile: { left: number; top: number; width: number; height: number };
@@ -568,12 +569,14 @@ export class Game {
     });
   }
 
+  /** mods: the instance of an equipable to sell (MarketUpdate.owned_mods). */
   marketCreate(
     sell: boolean,
     itemId: number,
     amount: number,
     price: number,
     durationIndex: number,
+    mods?: ItemMods | undefined,
   ): void {
     const side = sell ? MarketSide.SELL : MarketSide.BUY;
     this.conn.send({
@@ -581,16 +584,24 @@ export class Game {
       value: {
         action: {
           case: "create",
-          value: { side, itemId, amount, price: BigInt(price), durationIndex },
+          value: {
+            side,
+            itemId,
+            amount,
+            price: BigInt(price),
+            durationIndex,
+            ...(mods ? { mods } : {}),
+          },
         },
       },
     });
   }
 
-  marketAccept(offerId: bigint, amount: number): void {
+  /** mods: selling an equipable to a buy offer, the instance the player picked. */
+  marketAccept(offerId: bigint, amount: number, mods?: ItemMods | undefined): void {
     this.conn.send({
       case: "marketCommand",
-      value: { action: { case: "accept", value: { offerId, amount } } },
+      value: { action: { case: "accept", value: { offerId, amount, ...(mods ? { mods } : {}) } } },
     });
   }
 
@@ -1334,9 +1345,17 @@ export class Game {
     };
   }
 
-  /** The card of an item (docs/17 UI-6) for the player. */
-  card(ref: { itemId: number; count: number }): ItemCardView {
-    return itemCard(this.opts.content.items[ref.itemId], ref.itemId, ref.count, this.viewer());
+  /** The card of an item (docs/17 UI-6) for the player, with the instance's attribute. */
+  card(ref: { itemId: number; count: number; mods?: ItemMods | undefined }): ItemCardView {
+    const c = this.opts.content;
+    return itemCard(
+      c.items[ref.itemId],
+      ref.itemId,
+      ref.count,
+      this.viewer(),
+      ref.mods,
+      c.attributes,
+    );
   }
 
   /** The controls mode now (Options → Controls). */
@@ -1984,6 +2003,7 @@ export class Game {
         tip = {
           itemId: ref.itemId,
           count: Math.max(1, ref.count),
+          mods: ref.mods,
           x: at.cx,
           y: at.cy,
           tile: { left: c.x - width / 2, top: c.y - height / 2, width, height },

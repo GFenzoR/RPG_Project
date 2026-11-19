@@ -1,5 +1,20 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
 
+/** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
+export interface AttributeDef {
+  text: string;
+}
+
+/**
+ * An item instance's own data (ItemStack.mods, docs/05): the one attribute an equipable
+ * rolled, with its value, and its refine level (the forge; 0 = none).
+ */
+export interface ItemMods {
+  attribute: string;
+  value: number;
+  refine: number;
+}
+
 export interface ItemDef {
   /** Content ID in data/items ("grass"). */
   id: string;
@@ -244,6 +259,12 @@ export interface IslandRect {
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
+  /**
+   * The item attributes of data/attributes.yaml by id (docs/02 "Atributos de items"): what
+   * an instance's ItemMods.attribute names. Optional so fixtures can leave it out (then an
+   * attribute shows no line).
+   */
+  attributes?: Record<string, AttributeDef>;
   /** Atlas sprite path of each monster (data/monsters id → "creatures/wolf"). */
   monsterSprites: Record<string, string>;
   /**

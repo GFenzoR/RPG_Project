@@ -57,6 +57,11 @@ export interface Scene {
 export function baseScene(content: ClientContent, now: number): Scene {
   const ui = emptyGameUi();
   const item = (id: string, count = 1): ItemView => ({ itemId: itemNumber(content, id), count });
+  // An equipable carries its rolled attribute (docs/02 "Atributos de items").
+  const rolled = (id: string, attribute: string, value: number): ItemView => ({
+    ...item(id),
+    mods: { attribute, value, refine: 0 },
+  });
   ui.stats = {
     health: 312,
     maxHealth: 420,
@@ -88,14 +93,14 @@ export function baseScene(content: ClientContent, now: number): Scene {
   // Every slot filled with the engine's item icons (docs/17 "Íconos de items"): the level 15
   // pieces of the catalog's band 3 and the iron sword of band 2.
   ui.inventory = new Map([
-    [EquipmentSlot.HEAD, item("stagleather_hood")],
+    [EquipmentSlot.HEAD, rolled("stagleather_hood", "max_health", 14)],
     [EquipmentSlot.NECK, item("antler_amulet")],
     [EquipmentSlot.BACKPACK, item("backpack")],
     [EquipmentSlot.ARMOR, item("stagleather_coat")],
-    [EquipmentSlot.LEFT_HAND, item("elmwood_shield")],
-    [EquipmentSlot.RIGHT_HAND, item("iron_sword")],
+    [EquipmentSlot.LEFT_HAND, rolled("elmwood_shield", "defense", 2)],
+    [EquipmentSlot.RIGHT_HAND, rolled("iron_sword", "attack", 2)],
     [EquipmentSlot.LEGS, item("stagleather_leggings")],
-    [EquipmentSlot.FEET, item("stagleather_boots")],
+    [EquipmentSlot.FEET, rolled("stagleather_boots", "speed", 4)],
     [EquipmentSlot.RING, item("briar_ring")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
@@ -368,7 +373,14 @@ export function withItemMenu(
   at: { x: number; y: number },
 ): Scene {
   const id = itemNumber(content, "boarding_saber");
-  const card = itemCard(content.items[id], id, 1, { level: 9, vocation: "guardian" });
+  const card = itemCard(
+    content.items[id],
+    id,
+    1,
+    { level: 9, vocation: "guardian" },
+    { attribute: "sword_skill", value: 2, refine: 0 },
+    content.attributes,
+  );
   const ui: GameUi = {
     ...s.ui,
     menu: {

@@ -5,9 +5,10 @@
 // MarketUpdate. No hooks: the forms are uncontrolled and read their fields on submit, so
 // the tests walk the element tree (Market.test.ts).
 import type { JSX } from "preact";
-import type { ClientContent, ItemDef } from "../content-types.ts";
+import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { rollsAttribute } from "../state/item-card.ts";
 import { createProblem, marketCost, searchItems } from "../state/market.ts";
 import type { MarketView, OfferView } from "../state/market.ts";
 import { ItemLabel } from "./Trade.tsx";
@@ -33,6 +34,41 @@ function report(form: HTMLFormElement, text: string): void {
   if (out) out.textContent = text;
 }
 
+/**
+ * An instance's attribute as a market line writes it ("+3 attack"; docs/02 "Atributos de
+ * items"), or the "no attribute" text for an instance without one.
+ */
+export function attributeLine(
+  t: Translate,
+  content: ClientContent,
+  mods: ItemMods | undefined,
+): string {
+  const a = mods && content.attributes?.[mods.attribute];
+  return a && mods ? t(a.text, { value: mods.value }) : t("client.market.no_attribute");
+}
+
+/**
+ * The instance picker of an equipable (MarketUpdate.owned_mods): one option per instance
+ * the player could sell, by its attribute. Its value is the index into ownedMods.
+ */
+function InstancePicker(props: Props & { owned: ItemMods[] }): JSX.Element {
+  const { t } = props;
+  return (
+    <select name="instance" aria-label={t("client.market.instance")} data-testid="market-instance">
+      {props.owned.map((m, i) => (
+        <option key={i} value={String(i)}>
+          {attributeLine(t, props.content, m)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** The instance a form's picker chose (undefined: none to choose from). */
+function pickedInstance(form: HTMLFormElement, owned: ItemMods[]): ItemMods | undefined {
+  return owned[Math.floor(Number(field(form, "instance")))];
+}
+
 function expiresIn(t: Translate, at: number, now: number): string {
   const hours = Math.max(Math.ceil((at - now) / 3_600_000), 0);
   return t("client.market.hours_left", { hours });
@@ -42,6 +78,9 @@ function OfferTable(
   props: Props & { m: MarketView; offers: OfferView[]; sell: boolean; now: number },
 ): JSX.Element {
   const { t, game, offers, sell } = props;
+  // Selling an equipable into a buy offer: one instance, the one the picker names.
+  const equipable = rollsAttribute(props.content.items[props.m.itemId]);
+  const pick = !sell && equipable;
   if (offers.length === 0) {
     return (
       <p class="empty" data-testid={sell ? "market-sells" : "market-buys"}>
@@ -54,6 +93,16 @@ function OfferTable(
       {offers.map((o) => (
         <li key={String(o.id)} data-offer={String(o.id)}>
           <span class="owner">{o.own ? t("client.market.own_mark") : o.owner}</span>
+          {o.mods && (
+            <span
+              class="attribute card-attribute"
+              data-tip-item={o.itemId}
+              data-tip-count={o.amount}
+              data-tip-mods={`${o.mods.attribute}:${o.mods.value}:${o.mods.refine}`}
+            >
+              {attributeLine(t, props.content, o.mods)}
+            </span>
+          )}
           <span class="amount">{t("client.market.units", { count: o.amount })}</span>
           <span class="price">{t("client.market.each", { price: o.price })}</span>
           <span class="expires">{expiresIn(t, o.expiresAt, props.now)}</span>
@@ -61,19 +110,32 @@ function OfferTable(
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (pick) {
+                  const mods = pickedInstance(e.currentTarget, props.m.ownedMods);
+                  if (mods) game?.marketAccept(o.id, 1, mods);
+                  return;
+                }
                 const n = Math.floor(Number(field(e.currentTarget, "amount")));
                 if (n >= 1 && n <= o.amount) game?.marketAccept(o.id, n);
               }}
             >
-              <input
-                name="amount"
-                type="number"
-                min={1}
-                max={o.amount}
-                defaultValue="1"
-                aria-label={t("client.market.amount")}
-              />
-              <button type="submit" data-market-accept={String(o.id)}>
+              {pick ? (
+                <InstancePicker {...props} owned={props.m.ownedMods} />
+              ) : (
+                <input
+                  name="amount"
+                  type="number"
+                  min={1}
+                  max={o.amount}
+                  defaultValue="1"
+                  aria-label={t("client.market.amount")}
+                />
+              )}
+              <button
+                type="submit"
+                data-market-accept={String(o.id)}
+                disabled={pick && props.m.ownedMods.length === 0}
+              >
                 {sell ? t("client.market.buy") : t("client.market.sell")}
               </button>
             </form>
@@ -94,6 +156,7 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
   if (!m) return null;
   const now = props.now ?? Date.now();
   const def = m.itemId ? content.items[m.itemId] : undefined;
+  const equipable = rollsAttribute(def);
   const r = m.rules;
   const marketable = Object.entries(content.items).filter(([, d]) => d.marketable);
   return (
@@ -184,13 +247,15 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               const sell = field(f, "side") !== "buy";
               const amount = Math.floor(Number(field(f, "amount")));
               const price = Math.floor(Number(field(f, "price")));
-              const problem = createProblem(m, sell, amount, price);
+              const problem = createProblem(m, sell, amount, price, equipable);
               if (problem) {
                 report(f, t(problem, { cost: marketCost(r, sell, amount, price) }));
                 return;
               }
+              // An equipable is sold one instance at a time: the one the picker names.
+              const mods = sell && equipable ? pickedInstance(f, m.ownedMods) : undefined;
               report(f, "");
-              game?.marketCreate(sell, m.itemId, amount, price, Number(field(f, "duration")));
+              game?.marketCreate(sell, m.itemId, amount, price, Number(field(f, "duration")), mods);
             }}
           >
             <h4>{t("client.market.create")}</h4>
@@ -198,6 +263,9 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               <option value="sell">{t("client.market.side_sell", { owned: m.owned })}</option>
               <option value="buy">{t("client.market.side_buy")}</option>
             </select>
+            {equipable && m.ownedMods.length > 0 && (
+              <InstancePicker {...props} owned={m.ownedMods} />
+            )}
             <input
               name="amount"
               type="number"
@@ -244,7 +312,17 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               <span class="mside">
                 {o.sell ? t("client.market.selling") : t("client.market.buying")}
               </span>
-              <ItemLabel t={t} content={content} game={game} itemId={o.itemId} count={o.amount} />
+              <ItemLabel
+                t={t}
+                content={content}
+                game={game}
+                itemId={o.itemId}
+                count={o.amount}
+                mods={o.mods}
+              />
+              {o.mods && (
+                <span class="attribute card-attribute">{attributeLine(t, content, o.mods)}</span>
+              )}
               <span class="price">{t("client.market.each", { price: o.price })}</span>
               <span class="expires">{expiresIn(t, o.expiresAt, now)}</span>
               <button
@@ -268,7 +346,17 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
           <ul>
             {m.mailbox.map((x) => (
               <li key={String(x.id)}>
-                <ItemLabel t={t} content={content} game={game} itemId={x.itemId} count={x.count} />
+                <ItemLabel
+                  t={t}
+                  content={content}
+                  game={game}
+                  itemId={x.itemId}
+                  count={x.count}
+                  mods={x.mods}
+                />
+                {x.mods && (
+                  <span class="attribute card-attribute">{attributeLine(t, content, x.mods)}</span>
+                )}
               </li>
             ))}
           </ul>

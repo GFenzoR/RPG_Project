@@ -10,10 +10,11 @@
 // After a window opens, nothing shows until the mouse moves (TipGate).
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import type { ClientContent } from "../content-types.ts";
+import type { ClientContent, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { itemCard } from "../state/item-card.ts";
+import { parseTipMods, tipMods } from "../state/mods.ts";
 import { ItemCard } from "./ItemCard.tsx";
 
 /**
@@ -133,19 +134,22 @@ export class TipGate {
 interface Shown {
   itemId: number;
   count: number;
+  mods?: ItemMods | undefined;
   anchor: Rect;
 }
 
-/** The item a data-tip-item element shows: its number and count, or undefined. */
+/** The item a data-tip-item element shows: its number, count and mods, or undefined. */
 export function tipOf(
   el: Element | null | undefined,
-): { itemId: number; count: number } | undefined {
+): { itemId: number; count: number; mods?: ItemMods | undefined } | undefined {
   const host = el?.closest<HTMLElement>("[data-tip-item]");
   if (!host) return undefined;
   const itemId = Number(host.dataset["tipItem"]);
   if (!Number.isFinite(itemId) || itemId <= 0) return undefined;
   const count = Number(host.dataset["tipCount"] ?? "1");
-  return { itemId, count: Number.isFinite(count) && count > 0 ? count : 1 };
+  const mods = parseTipMods(host.dataset["tipMods"]);
+  const tip = { itemId, count: Number.isFinite(count) && count > 0 ? count : 1 };
+  return mods ? { ...tip, mods } : tip;
 }
 
 /**
@@ -154,12 +158,13 @@ export function tipOf(
  * only when this changes, not on every publish (a layout each time).
  */
 export function placeKey(
-  tip: { itemId: number; count: number; anchor: Rect } | undefined,
+  tip: { itemId: number; count: number; mods?: ItemMods | undefined; anchor: Rect } | undefined,
   card: string,
 ): string {
   if (!tip) return "";
   const a = tip.anchor;
-  return `${tip.itemId}:${tip.count}:${a.left}:${a.top}:${a.width}:${a.height}:${card}`;
+  const mods = tipMods(tip.mods) ?? "";
+  return `${tip.itemId}:${tip.count}:${mods}:${a.left}:${a.top}:${a.width}:${a.height}:${card}`;
 }
 
 function rectOf(el: Element): Rect {
@@ -283,7 +288,8 @@ export function ItemTooltip(props: {
   // (Game.restTile), above that tile.
   const g = shown ? undefined : ui.groundTip;
   const tip: Shown | undefined =
-    shown ?? (g && { itemId: g.itemId, count: g.count, anchor: groundAnchor(g.tile, g.y) });
+    shown ??
+    (g && { itemId: g.itemId, count: g.count, mods: g.mods, anchor: groundAnchor(g.tile, g.y) });
   const hidden = !tip || blocked.current || quiet;
   const magic = ui.skills.find((s) => s.id === "magic");
   // What the card shows besides the item (a requirement met or not changes its lines).
@@ -306,11 +312,14 @@ export function ItemTooltip(props: {
     el.style.visibility = "visible";
   }, [key]);
   if (!tip || hidden) return null;
-  const card = itemCard(props.content.items[tip.itemId], tip.itemId, tip.count, {
-    level: ui.stats?.level,
-    vocation: ui.vocation,
-    magicLevel: magic?.level,
-  });
+  const card = itemCard(
+    props.content.items[tip.itemId],
+    tip.itemId,
+    tip.count,
+    { level: ui.stats?.level, vocation: ui.vocation, magicLevel: magic?.level },
+    tip.mods,
+    props.content.attributes,
+  );
   return (
     <div
       ref={box}

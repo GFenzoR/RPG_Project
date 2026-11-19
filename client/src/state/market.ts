@@ -3,12 +3,14 @@
 // action; these helpers only shape the views and the create form.
 import { MarketSide, TradeState } from "@rpg/protocol";
 import type { MarketOffer, MarketUpdate, TradeUpdate } from "@rpg/protocol";
-import type { ItemDef } from "../content-types.ts";
+import type { ItemDef, ItemMods } from "../content-types.ts";
+import { modsOf } from "./mods.ts";
 
-/** One item of a trade offer. */
+/** One item of a trade offer, with its mods (an equipable's attribute). */
 export interface TradeItemView {
   itemId: number;
   count: number;
+  mods?: ItemMods | undefined;
 }
 
 /** The trade window: an invitation (sent or received) or a negotiation. */
@@ -33,8 +35,15 @@ export function tradeFrom(u: TradeUpdate): {
   if (u.state === TradeState.COMPLETED || u.state === TradeState.CANCELLED) {
     return { view: undefined, closedReason: u.reason || undefined };
   }
-  const items = (l: { itemId: number; count: number }[]): TradeItemView[] =>
-    l.map((s) => ({ itemId: s.itemId, count: s.count }));
+  const items = (
+    l: { itemId: number; count: number; mods?: ItemMods | undefined }[],
+  ): TradeItemView[] =>
+    l.map((s) => {
+      const mods = modsOf(s);
+      return mods
+        ? { itemId: s.itemId, count: s.count, mods }
+        : { itemId: s.itemId, count: s.count };
+    });
   return {
     view: {
       partnerId: u.partnerCreatureId,
@@ -50,7 +59,10 @@ export function tradeFrom(u: TradeUpdate): {
   };
 }
 
-/** One offer line of the market window. */
+/**
+ * One offer line of the market window. A sell offer of an equipable is one instance: mods
+ * is its attribute (docs/02 "Atributos de items"), each such offer a row of its own.
+ */
 export interface OfferView {
   id: bigint;
   sell: boolean;
@@ -60,6 +72,7 @@ export interface OfferView {
   expiresAt: number;
   owner: string;
   own: boolean;
+  mods?: ItemMods | undefined;
 }
 
 /** The market window. Money values are in the smallest coin. */
@@ -71,11 +84,16 @@ export interface MarketView {
   referencePrice: number;
   own: OfferView[];
   mailboxGold: number;
-  mailbox: { id: bigint; itemId: number; count: number }[];
+  mailbox: { id: bigint; itemId: number; count: number; mods?: ItemMods | undefined }[];
   mailboxMore: number;
   history: { sold: boolean; itemId: number; amount: number; price: number; at: number }[];
   rules: MarketRules;
   owned: number;
+  /**
+   * For an equipable browsed item: the mods of each instance the player could sell (one
+   * entry each), so the forms pick which one (MarketCreate.mods, MarketAccept.mods).
+   */
+  ownedMods: ItemMods[];
   /** Read-only until the server restarts (a change could not be saved): browse only. */
   readOnly: boolean;
   /**
@@ -98,7 +116,7 @@ export interface MarketRules {
 }
 
 function offerFrom(o: MarketOffer): OfferView {
-  return {
+  const v: OfferView = {
     id: o.offerId,
     sell: o.side === MarketSide.SELL,
     itemId: o.itemId,
@@ -108,6 +126,9 @@ function offerFrom(o: MarketOffer): OfferView {
     owner: o.ownerName,
     own: o.own,
   };
+  const mods = modsOf(o);
+  if (mods) v.mods = mods;
+  return v;
 }
 
 /** The market window of a MarketUpdate, or undefined when it closes (open = false). */
@@ -121,11 +142,11 @@ export function marketFrom(u: MarketUpdate): MarketView | undefined {
     referencePrice: Number(u.referencePrice),
     own: u.own.map(offerFrom),
     mailboxGold: Number(u.mailboxGold),
-    mailbox: u.mailboxItems.map((m) => ({
-      id: m.id,
-      itemId: m.item?.itemId ?? 0,
-      count: m.item?.count ?? 0,
-    })),
+    mailbox: u.mailboxItems.map((m) => {
+      const mods = modsOf(m.item);
+      const x = { id: m.id, itemId: m.item?.itemId ?? 0, count: m.item?.count ?? 0 };
+      return mods ? { ...x, mods } : x;
+    }),
     mailboxMore: u.mailboxMore,
     history: u.history.map((h) => ({
       sold: h.side === MarketSide.SELL,
@@ -144,6 +165,11 @@ export function marketFrom(u: MarketUpdate): MarketView | undefined {
       durationsHours: [...u.durationsHours],
     },
     owned: u.owned,
+    ownedMods: u.ownedMods.map((m) => ({
+      attribute: m.attribute,
+      value: m.value,
+      refine: m.refine,
+    })),
     readOnly: u.readOnly,
     priceDefault: Math.max(Number(u.referencePrice), 1),
   };
@@ -181,16 +207,21 @@ export function marketCost(
   return marketFee(rules, amount, price) + (sell ? 0 : amount * price);
 }
 
-/** Why the create form cannot be sent (an i18n key), or undefined when it can. */
+/**
+ * Why the create form cannot be sent (an i18n key), or undefined when it can. equipable: a
+ * sell is one instance (amount 1) the player has (docs/02 "Atributos de items").
+ */
 export function createProblem(
   m: MarketView,
   sell: boolean,
   amount: number,
   price: number,
+  equipable = false,
 ): string | undefined {
   const r = m.rules;
   if (!Number.isInteger(amount) || amount < 1 || amount > r.maxAmount)
     return "client.market.bad_amount";
+  if (sell && equipable && amount !== 1) return "client.market.one_instance";
   if (!Number.isInteger(price) || price < 1 || price > r.maxPrice) return "client.market.bad_price";
   if (m.own.length >= r.maxOffers) return "client.market.too_many";
   if (sell && amount > m.owned) return "client.market.not_enough_items";

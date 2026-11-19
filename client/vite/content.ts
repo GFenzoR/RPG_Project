@@ -24,6 +24,7 @@ import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
+  AttributeDef,
   ClientContent,
   CosmeticDef,
   DialogTopic,
@@ -141,6 +142,9 @@ export function loadClientContent(root: string): ClientContent {
       };
     }
   }
+  const attributes = loadAttributes(root);
+  // The attributes' card lines live in items.yaml (attribute.*): the client takes them too.
+  for (const a of Object.values(attributes)) descKeys.add(a.text);
   const balance = readYaml(join(root, "data", "balance.yaml"));
   const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
@@ -262,6 +266,7 @@ export function loadClientContent(root: string): ClientContent {
     : [];
   return {
     items,
+    attributes,
     monsterSprites: monsters,
     // A topic conflict is the content test's to report (vite/content.test.ts): the build
     // keeps the first topic.
@@ -397,6 +402,25 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
   if (raw["pickupable"] === false) out.fixed = true;
   if (raw["market_board"] === true) out.board = true;
   if (raw["quest"] === true) out.quest = true;
+  return out;
+}
+
+/**
+ * data/attributes.yaml by id (docs/02 "Atributos de items"): the text key of each
+ * attribute's card line. No file: no attributes.
+ */
+export function loadAttributes(root: string): Record<string, AttributeDef> {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "attributes.yaml"));
+  } catch {
+    return {};
+  }
+  const out: Record<string, AttributeDef> = {};
+  for (const a of Array.isArray(raw) ? raw : []) {
+    if (isObj(a) && typeof a["id"] === "string" && typeof a["text"] === "string")
+      out[a["id"]] = { text: a["text"] };
+  }
   return out;
 }
 

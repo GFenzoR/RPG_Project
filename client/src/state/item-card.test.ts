@@ -184,9 +184,44 @@ describe("itemCard", () => {
 
   it("counts the lines it takes (the menu and the tooltip place it before drawing)", () => {
     const card = itemCard(sword, 7, 1, { level: 3 });
-    // name, type, 3 stats in 2 rows, 1 requirement, 3 lines of description.
-    expect(cardLines(card, true)).toBe(1 + 1 + 2 + 1 + 3);
-    expect(cardLines(card, false)).toBe(7);
+    // name, type, 3 stats in 2 rows, the attribute it rolls, 1 requirement, 3 lines of
+    // description.
+    expect(cardLines(card, true)).toBe(1 + 1 + 2 + 1 + 1 + 3);
+    expect(cardLines(card, false)).toBe(8);
+  });
+});
+
+// docs/02 "Atributos de items": an instance's attribute is a line of its own.
+describe("itemCard's attribute", () => {
+  const attributes = { attack: { text: "attribute.attack" }, armor: { text: "attribute.armor" } };
+  it("an instance with an attribute: its text and value", () => {
+    const card = itemCard(
+      sword,
+      7,
+      1,
+      {},
+      { attribute: "attack", value: 3, refine: 0 },
+      attributes,
+    );
+    expect(card.attribute).toEqual({ text: "attribute.attack", value: 3 });
+  });
+  it("an equipable without one (a shop's) says it rolls one; an unknown one shows nothing", () => {
+    expect(itemCard(sword, 7, 1).attribute).toEqual({ random: true });
+    const tunic: ItemDef = { ...base, kind: "armor", armor: { slot: "body", armor: 2 } };
+    expect(itemCard(tunic, 8, 1, {}, undefined, attributes).attribute).toEqual({ random: true });
+    const odd = itemCard(sword, 7, 1, {}, { attribute: "gone", value: 2, refine: 0 }, attributes);
+    expect(odd.attribute).toBeUndefined();
+  });
+  it("never on a stack, ammo, a container or a consumable", () => {
+    const stack: ItemDef = { ...base, kind: "material", stackable: true };
+    const arrows: ItemDef = {
+      ...base,
+      kind: "ammo",
+      stackable: true,
+      ammo: { type: "arrow", attack: 9 },
+    };
+    const bag: ItemDef = { ...base, kind: "container", slots: 8 };
+    for (const d of [stack, arrows, bag]) expect(itemCard(d, 9, 3).attribute).toBeUndefined();
   });
 });
 

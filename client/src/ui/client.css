@@ -42,6 +42,8 @@
   --ui-item-coin: #f0bf3c;
   --ui-item-stat: #f4f0e8;
   --ui-item-effect: #8ea6ff;
+  /* An equipable's attribute (docs/02 "Atributos de items"): its own colour, one for all. */
+  --ui-item-attribute: #7fd8b0;
   --ui-chat-party: #7fb2ff;
   --ui-chat-guild: #7fd07a;
   --ui-chat-private: #d48cff;
@@ -3192,6 +3194,15 @@ button.credits-link {
 .card-effects li {
   color: var(--ui-mana-300);
 }
+/* The attribute's line, under the stats; the one a new equipable will roll, dimmer. */
+.card-attribute {
+  margin: 2px 0;
+  color: var(--ui-item-attribute);
+}
+.card-attribute.random {
+  color: var(--ui-text-muted);
+  font-style: italic;
+}
 .card-desc {
   margin-top: 3px;
   font-family: var(--ui-font-book);
@@ -3311,6 +3322,13 @@ button.credits-link {
 }
 .item-card.tip .card-effects li {
   color: var(--ui-item-effect);
+}
+.item-card.tip .card-attribute {
+  margin: 1px 0;
+  color: var(--ui-item-attribute);
+}
+.item-card.tip .card-attribute.random {
+  color: var(--ui-text-muted);
 }
 .item-card.tip .card-desc {
   margin-top: 2px;

@@ -134,3 +134,18 @@ describe("TipGate (no card until the mouse moves after a window opened)", () => 
     expect(gate.open).toBe(true);
   });
 });
+
+describe("placeKey and an instance's attribute (docs/02)", () => {
+  it("places the card again when the item under it is another instance", () => {
+    const a = {
+      itemId: 60,
+      count: 1,
+      anchor: cell,
+      mods: { attribute: "attack", value: 2, refine: 0 },
+    };
+    const b = { ...a, mods: { attribute: "attack", value: 3, refine: 0 } };
+    expect(placeKey(a, "")).not.toBe(placeKey(b, ""));
+    expect(placeKey(a, "")).toBe(placeKey({ ...a }, ""));
+    expect(placeKey({ itemId: 60, count: 1, anchor: cell }, "")).not.toBe(placeKey(a, ""));
+  });
+});

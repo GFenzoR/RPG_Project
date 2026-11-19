@@ -17,6 +17,15 @@ const REPO = fileURLToPath(new URL("../../", import.meta.url));
 describe("client content (T0.5)", () => {
   const content = loadClientContent(REPO);
 
+  it("ships the item attributes and their card lines in both languages (docs/02)", () => {
+    const attrs = content.attributes ?? {};
+    expect(attrs["max_health"]?.text).toBe("attribute.max_health");
+    expect(Object.keys(attrs).length).toBeGreaterThan(10);
+    for (const lang of ["es", "en"])
+      for (const a of Object.values(attrs))
+        expect(content.i18n[lang]?.[a.text]).toContain("{value}");
+  });
+
   it("exposes each NPC's sprite like the monsters'", () => {
     expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/ferryman");
     expect(content.monsterSprites["bilge_rat"]).toMatch(/\//);

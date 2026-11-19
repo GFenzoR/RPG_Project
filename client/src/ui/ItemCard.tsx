@@ -115,6 +115,30 @@ export function nameClass(card: ItemCardView): string {
   return card.quest ? "card-name quest" : card.currency ? "card-name coin" : "card-name";
 }
 
+/**
+ * The attribute's line (docs/02 "Atributos de items"): "+12 maximum health", or that an
+ * equipable without one rolls one when it is made.
+ */
+export function attributeText(t: Translate, card: ItemCardView): string {
+  const a = card.attribute;
+  if (!a) return "";
+  return "random" in a ? t("client.card.attribute_random") : t(a.text, { value: a.value });
+}
+
+/** The attribute's line in its own colour, under the stats (both forms of the card). */
+function AttributeLine(props: { t: Translate; card: ItemCardView }): JSX.Element | null {
+  const a = props.card.attribute;
+  if (!a) return null;
+  return (
+    <p
+      class={"random" in a ? "card-attribute random" : "card-attribute"}
+      data-testid="card-attribute"
+    >
+      {attributeText(props.t, props.card)}
+    </p>
+  );
+}
+
 /** A stat's value as the card writes it ("13", "33.00 oz", "33.00 oz (330.00 oz in total)"). */
 function statValue(t: Translate, s: CardStat): string {
   if (s.id !== "weight") return String(s.value);
@@ -159,6 +183,7 @@ export function ItemCard(props: {
           ))}
         </dl>
       )}
+      {AttributeLine({ t, card })}
       {card.requires.length > 0 && (
         <ul class="card-requires">
           {card.requires.map((r) => (
@@ -216,6 +241,7 @@ export function TipCard(props: { t: Translate; card: ItemCardView }): JSX.Elemen
           ))}
         </ul>
       )}
+      {AttributeLine({ t, card })}
       {card.requires.length > 0 && (
         <ul class="card-requires">
           {card.requires.map((r) => (

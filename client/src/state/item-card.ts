@@ -4,7 +4,7 @@
 // The server's "look" text is still the one that knows live data (a house's owner,
 // charges): "Look" in the menu keeps sending LookAt.
 import { EquipmentSlot } from "@rpg/protocol";
-import type { ItemDef } from "../content-types.ts";
+import type { AttributeDef, ItemDef, ItemMods } from "../content-types.ts";
 import { formatOz } from "./items.ts";
 
 /** What the card needs to know of the player looking. Unknown fields skip the check. */
@@ -59,6 +59,20 @@ export interface ItemCardView {
   quest?: boolean | undefined;
   /** Money (`kind: currency`): its name is gold in the tooltip (docs/17 UI-6). */
   currency?: boolean | undefined;
+  /**
+   * The instance's attribute (docs/02 "Atributos de items"), drawn in its own colour under
+   * the stats: its line's i18n key with {value}. `random` on an equipable seen without one
+   * (a shop's, a recipe's output): it rolls one when it is made.
+   */
+  attribute?: { text: string; value: number } | { random: true } | undefined;
+}
+
+/**
+ * Whether def is an equipable that rolls an attribute (the server's content.Rolls: a
+ * weapon, a shield or an armor piece, never a stack).
+ */
+export function rollsAttribute(def: ItemDef | undefined): boolean {
+  return !!def && !def.stackable && (!!def.weapon || !!def.shield || !!def.armor);
 }
 
 /** Kinds of items people carry (the rest are the map: ground, walls, decoration). */
@@ -75,12 +89,18 @@ const CARRIED = new Set([
   "ammo",
 ]);
 
-/** The card of an item (an unknown item gets an empty card with its number). */
+/**
+ * The card of an item (an unknown item gets an empty card with its number). mods are the
+ * instance's (its attribute, named in attributes: content.attributes); without them an
+ * equipable's card says it rolls one.
+ */
 export function itemCard(
   def: ItemDef | undefined,
   itemId: number,
   count: number,
   who: Viewer = {},
+  mods?: ItemMods | undefined,
+  attributes?: Record<string, AttributeDef> | undefined,
 ): ItemCardView {
   const card: ItemCardView = {
     itemId,
@@ -110,6 +130,10 @@ export function itemCard(
   if (def.armor && def.armor.armor > 0) card.stats.push({ id: "armor", value: def.armor.armor });
   if (def.shield) card.stats.push({ id: "defense", value: def.shield.defense });
   if (def.slots > 0) card.stats.push({ id: "slots", value: def.slots });
+  if (mods && mods.attribute !== "") {
+    const a = attributes?.[mods.attribute];
+    if (a) card.attribute = { text: a.text, value: mods.value }; // unknown: no line
+  } else if (rollsAttribute(def)) card.attribute = { random: true };
   if (def.rune) {
     card.stats.push({ id: "charges", value: def.rune.charges });
     card.effects.push({ id: "rune", spell: def.rune.spell });
@@ -233,6 +257,7 @@ export function cardLines(card: ItemCardView, withName: boolean): number {
     (card.type.length > 0 ? 1 : 0) +
     Math.ceil(card.stats.length / 2) +
     card.requires.length +
+    (card.attribute ? 1 : 0) +
     card.effects.length +
     desc +
     card.marks.length

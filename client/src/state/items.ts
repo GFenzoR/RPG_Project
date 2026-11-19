@@ -2,6 +2,7 @@
 // (docs/05, "ItemLocation"), and helpers to point at the top item of a tile.
 import type { EquipmentSlot } from "@rpg/protocol";
 import type { Pos } from "./geometry.ts";
+import type { ItemMods } from "../content-types.ts";
 import type { WorldState } from "./world.ts";
 
 /** Grams per displayed "oz" (docs/06: weights in grams, shown in oz). */
@@ -23,6 +24,8 @@ export interface ItemRef {
   stackIndex: number;
   /** Units to move (the whole stack; 1 for items that do not stack). */
   count: number;
+  /** The instance's mods (an equipable's attribute), for its card. */
+  mods?: ItemMods | undefined;
 }
 
 /** The ItemLocation init of the protocol for loc. */
@@ -95,7 +98,14 @@ export function topItem(
   const i = t.length - 1;
   if (i === 0 && !withGround) return undefined;
   const count = world.tileCounts(x, y, z)?.[i] ?? 0;
-  return { loc: { kind: "pos", pos: { x, y, z } }, itemId: t[i] ?? 0, stackIndex: i, count };
+  const mods = world.tileMods(x, y, z)?.[i];
+  const ref: ItemRef = {
+    loc: { kind: "pos", pos: { x, y, z } },
+    itemId: t[i] ?? 0,
+    stackIndex: i,
+    count,
+  };
+  return mods ? { ...ref, mods } : ref;
 }
 
 /** Whether a stack of `count` units can be split (a Shift+drag, docs/17 UI-6). */
