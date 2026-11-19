@@ -105,9 +105,9 @@ func (w *World) initConditions() error {
 		return fmt.Errorf("session: %w", err)
 	}
 	for _, id := range w.cfg.Monsters.IDs() {
-		for i, a := range w.cfg.Monsters[id].Attacks {
+		for i, a := range w.cfg.Monsters[id].AllAttacks() {
 			if err := a.Condition.Check(cs); err != nil {
-				return fmt.Errorf("session: monster %q: attacks[%d]: %w", id, i, err)
+				return fmt.Errorf("session: monster %q: attack %d (its own, then its phases'): %w", id, i, err)
 			}
 		}
 	}
@@ -469,7 +469,7 @@ func (w *World) refreshSpeed(h holder) {
 		return
 	}
 	m := h.m
-	speed = withPct(m.kind.def.Speed, speedPct(m.conds))
+	speed = withPct(m.kind.speed[m.phase], speedPct(m.conds)) // with its phases' speed_mult
 	if speed == m.speed {
 		return
 	}

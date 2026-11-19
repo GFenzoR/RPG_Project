@@ -269,60 +269,83 @@ func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element
 
 // ---- monster attacks -------------------------------------------------------------
 
-// monsterAttacks runs m's attacks that are due against its target: melee ones when it
-// is adjacent, distance attacks and spells (T1.9) within their range and line of sight,
-// with a projectile. A monster spell hits only its target (no area yet).
+// monsterAttacks runs m's targeted attacks that are due against its target and in use
+// (their phase is on, its health below their below_hp_pct): melee ones when it is
+// adjacent, distance attacks and spells (T1.9) within their range and line of sight, with
+// a projectile, and area attacks within their reach (monsterArea).
 func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 	t := m.target
 	d := chebyshev(m.pos, t.pos)
-	for i, a := range m.kind.def.Attacks {
-		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z {
+	for i := range m.kind.attacks {
+		ka := &m.kind.attacks[i]
+		a := ka.def
+		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z || ka.reach == 0 || ka.phase > m.phase || !m.below(a.BelowHealthPct) {
+			continue // ka.reach 0: a heal or a summon (monsterSelf)
+		}
+		if d > ka.reach || d > 1 && !w.m.LineOfSight(m.pos, t.pos) {
 			continue
 		}
-		ranged := a.Type != attackMelee
-		if !ranged && d > 1 || ranged && (d > max(a.Range, 1) || !w.m.LineOfSight(m.pos, t.pos)) {
-			continue
-		}
-		m.nextAttack[i] = ctx.Tick + m.kind.attackTicks[i]
-		w.contribute(ctx, t) // T3.3: tanking counts for shared experience
-		w.markFight(ctx, t)  // T3.5: no sailing right after
-		if t.afkTarget == m {
-			t.answeredAt = max(ctx.Tick, 1) // the player's target fights back: not AFK training
-		}
+		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]
+		w.fought(ctx, m, t)
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
 		}
-		w.attackEvent(m.id, m.pos, monsterAttackKind(a.Type), t.id, t.pos, t.invisible, 0)
-		if ranged {
-			w.projectileAt(m.pos, t, a.Element)
+		if a.Area != nil {
+			w.monsterArea(ctx, m, a)
+		} else {
+			w.attackEvent(m.id, m.pos, monsterAttackKind(a.Type), t.id, t.pos, t.invisible, 0)
+			if a.Type != attackMelee {
+				w.projectileAt(m.pos, t, a.Element)
+			}
+			w.monsterHit(ctx, m, a, t)
 		}
-		physical := a.Element == ElementPhysical
-		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
-		if physical {
-			pt.Armor, pt.Defense = t.armor, handsDefense(t)
-		}
-		if physical && t.shield != nil && t.shield.Shield != nil {
-			w.trainShield(ctx, t)
-		}
-		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)
-		w.damagePlayer(ctx, t, dmg, a.Element)
 		if m.target != t { // t was defeated and left
 			return
-		}
-		if a.Condition != nil && dmg > 0 {
-			w.applyCondition(ctx, holder{p: t}, a.Condition, m.id) // T3.2: a poisoning bite
 		}
 	}
 }
 
-func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element string) {
-	w.damagePlayerBy(ctx, p, dmg, element, nil)
+// fought is what one of m's attacks on player p does whether it lands or not: p takes
+// part in the fight (T3.3: tanking counts for shared experience; T3.5: no sailing right
+// after) and, if p fights m, m answers (not AFK training).
+func (w *World) fought(ctx *game.TickContext, m *Monster, p *Player) {
+	w.contribute(ctx, p)
+	w.markFight(ctx, p)
+	if p.afkTarget == m {
+		p.answeredAt = max(ctx.Tick, 1)
+	}
+}
+
+// monsterHit lands one hit of m's attack a on player p: a physical one against p's armor
+// and the hands' defense (training p's shield), any other one whole; then the attack's
+// condition if it hurt p and p is still standing (T3.2: a poisoning bite).
+func (w *World) monsterHit(ctx *game.TickContext, m *Monster, a *content.MonsterAttack, p *Player) {
+	physical := a.Element == ElementPhysical
+	pt := combat.PlayerTarget{ModeDefense: w.mode(p).Defense}
+	if physical {
+		pt.Armor, pt.Defense = p.armor, handsDefense(p)
+	}
+	if physical && p.shield != nil && p.shield.Shield != nil {
+		w.trainShield(ctx, p)
+	}
+	dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)
+	if w.damagePlayer(ctx, p, dmg, a.Element) {
+		return // defeated: it woke at a temple
+	}
+	if a.Condition != nil && dmg > 0 {
+		w.applyCondition(ctx, holder{p: p}, a.Condition, m.id)
+	}
+}
+
+// damagePlayer is damagePlayerBy a monster or the world; it reports whether p died.
+func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element string) bool {
+	return w.damagePlayerBy(ctx, p, dmg, element, nil)
 }
 
 // damagePlayerBy is damagePlayer by attacker (a player, T5.2) or by a monster or the
 // world (nil). A player's hit does not feed the bot detection's reaction to damage: in
-// PvP everyone heals fast.
-func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, element string, attacker *Player) {
+// PvP everyone heals fast. It reports whether p died.
+func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, element string, attacker *Player) bool {
 	w.markFight(ctx, p)
 	dmg = min(dmg, p.health)
 	p.health -= dmg
@@ -335,13 +358,22 @@ func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, elemen
 	}
 	if p.health <= 0 {
 		w.dieBy(ctx, p, attacker)
+		return true
 	}
+	return false
 }
 
 // ---- death, loot and experience ----------------------------------------------------
 
 func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	def := m.kind.def
+	if m.master != nil {
+		// A summon: no experience, no remains nor loot, no quest kill and no respawn (a
+		// boss that calls more would be a free farm).
+		w.clearConditions(ctx, holder{m: m}, true)
+		w.removeMonster(m, goneDeath)
+		return
+	}
 	// Experience, by the damage each online player dealt; a party with shared
 	// experience pools its members' shares (T3.3). The loot still goes to who dealt the
 	// most damage.
@@ -398,6 +430,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	pos := m.pos
 	w.clearConditions(ctx, holder{m: m}, true)
 	w.removeMonster(m, goneDeath)
+	w.despawnSummons(ctx, m)
 	w.addCorpse(ctx, pos, corpse, w.corpseFor)
 	if owner != nil {
 		owner.emit(lootMsg(corpse))

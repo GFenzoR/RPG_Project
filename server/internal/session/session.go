@@ -251,6 +251,10 @@ type World struct {
 	active     map[uint64]struct{}
 	activeKeys []uint64
 	thinkBuf   []*Monster
+	// areaTiles and areaHit hold the tiles and the players of a monster's area attack
+	// while it lands (monsterArea).
+	areaTiles []world.Pos
+	areaHit   []*Player
 	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
 	tileBuf    []int32
