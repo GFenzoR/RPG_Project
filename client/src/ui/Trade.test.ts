@@ -141,6 +141,25 @@ describe("TradeWindow", () => {
     expect(byAttr(accepted, "data-testid", "trade-accept")[0]?.props["disabled"]).toBe(true);
     expect(byAttr(accepted, "data-trade-add")[0]?.props["disabled"]).toBe(true); // max_items reached
   });
+
+  it("offers the items of the backpack open under the figure too (docs/17 UI-5)", () => {
+    const { game, sent } = recorder();
+    const ui = {
+      trade: trade({}),
+      containers: [],
+      backpack: {
+        id: 9,
+        itemId: 66,
+        capacity: 4,
+        hasParent: false,
+        items: [{ itemId: 68, count: 2 }],
+      },
+    } as unknown as GameUi;
+    const add = byAttr(TradeWindow({ t, content, game, ui }), "data-trade-add");
+    expect(add.map((b) => b.props["data-trade-add"])).toEqual(["salve"]);
+    click(add[0]);
+    expect(sent).toEqual([`offer {"kind":"container","id":9,"index":0} 68`]);
+  });
 });
 
 const market = (over: Partial<MarketView>): MarketView => ({

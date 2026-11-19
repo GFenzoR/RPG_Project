@@ -404,3 +404,35 @@ secundaria.
   queda con un solo frame de Dungeon Crawl. Escala revisada (ART-2, "Animales medianos"): el
   jabalí y el ciervo de spritegen pasan a 64x64 más grandes, con los pies en la casilla y la
   sombra de contacto. La gaviota sigue de spritegen (decisión del dueño).
+- [x] **Motor de sprites (docs/17 "Motor de sprites"; rama `feat/sprite-engine`).** Pedido
+  del dueño del 2026-11-18: `tools/spritegen/src/engine/` dibuja sprites desde un modelo
+  con volumen (elipsoides, cajas, cilindros, cápsulas, extrusiones) y un rig de acciones
+  con keyframes, con las reglas de docs/17 como datos en un solo lugar y puertas de calidad
+  (paleta, alfa, tramado, contorno, tamaño y ancla de ART-2, siluetas, pistas de
+  `sprites.yaml`) en `make test` y `spritegen check`; `spritegen sheet` deja la hoja de
+  contacto y el lineup de cada sprite. El jabalí y el ciervo pasan a quieto, caminar,
+  atacar y morir en cuatro direcciones; el eco de la forja (era Dungeon Crawl) y el yunque
+  también salen del motor. Tras revisar las hojas, el jabalí ganó ancho de frente y de
+  espaldas (puerta `frontWidth`) y el eco se rehízo como espíritu de fuego con forma de
+  herrero y el martillo en alto. Después pasaron al motor el tablero del mercado (con una
+  nota que se levanta con el viento: el `loop` de ART-7, `frame_<n>`), el cartel y el
+  cajón; el bolardo no le ganó al dibujado a mano. Lo que queda: docs/14, "Pendientes
+  conocidos".
+- [x] **El equipo y el tooltip al estilo Diablo II (docs/17 UI-5 y UI-6, "Hecho: el equipo
+  y el tooltip al estilo Diablo II"; rama `feat/equipment-d2`).** Los dos pedidos del dueño
+  del 2026-11-18, solo cliente: el equipo es una figura sobre una grilla de 8x9 celdas con
+  slots grandes (íconos a 2x cuando la ventana tiene lugar), los slots que aceptan lo que se
+  arrastra brillan y el que no se tiñe de rojo, la mochila equipada se abre sola abajo de
+  la figura (no durante el tutorial) y la capacidad es una barra; el tooltip sale al
+  instante, compacto y centrado arriba del item o de la casilla del mapa. Lo que queda:
+  docs/14, "Pendientes conocidos" (un campo en `ContainerOpen` que diga dónde está un
+  contenedor haría exacta la mochila equipada).
+- [x] **Pantalla completa, ventanas flotantes y la barra gótica (docs/17 A14; rama
+  `feat/hud-fullscreen`).** Lo que pidió el dueño el 2026-11-18: en escritorio el mapa
+  ocupa toda la pantalla (sin dock ni marco) y siempre la cubre a escala entera; abajo, la
+  barra gótica con el orbe de vida y el de maná en engastes de hierro, la experiencia, la
+  hotbar y la botonera; todas las ventanas (también el chat, translúcido, los contenedores y
+  las del servidor) flotan donde el jugador las suelte, con imán a los bordes de la
+  pantalla, de la barra y de las otras ventanas, y nunca quedan fuera ni bajo la barra;
+  `rpg.windows` v3 (lee las de antes). Ornamentos de pixel art propio
+  (`client/src/ui/ornaments.ts`). Lo que queda: docs/14, "Pendientes conocidos".

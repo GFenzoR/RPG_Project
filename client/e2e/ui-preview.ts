@@ -101,65 +101,114 @@ const SIZES: Size[] = [
   touch("tablet-768x1024", 768, 1024),
 ];
 
-/** rpg.windows of each scene (ui/windows.ts format); absent = the defaults. */
+/** rpg.windows of each scene (ui/windows.ts format, version 3); absent = the defaults. */
 const WINDOWS: Record<string, unknown> = {
   windows: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["guild"],
     win: {
-      battle: { open: true, dock: true, collapsed: false },
-      inventory: { open: true, dock: true, collapsed: true },
-      skills: { open: true, dock: true, collapsed: false },
-      party: { open: true, dock: true, collapsed: false },
-      guild: { open: true, dock: false, collapsed: false },
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: true },
+      skills: { open: true, collapsed: false },
+      party: { open: true, collapsed: false },
+      guild: { open: true, collapsed: false },
     },
   },
   guild: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["guild"],
     win: {
-      battle: { open: true, dock: true, collapsed: false },
-      inventory: { open: true, dock: true, collapsed: false },
-      guild: { open: true, dock: false, collapsed: false, x: 40, y: 40 },
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      guild: { open: true, collapsed: false, x: 300, y: 40 },
     },
   },
   tooltip: {
-    v: 1,
-    order: ["inventory", "battle", "skills", "party"],
+    v: 3,
     z: [],
     win: {
-      inventory: { open: true, dock: true, collapsed: false },
-      battle: { open: true, dock: true, collapsed: true },
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
+    },
+  },
+  // docs/17 UI-5: the inventory open, an item held over it.
+  inventory: {
+    v: 3,
+    z: [],
+    win: {
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
+    },
+  },
+  // The inventory floating over the map, wider (hud-fullscreen floats every window).
+  inventoryfloat: {
+    v: 3,
+    z: ["inventory"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false, x: 300, y: 24, w: 420 },
     },
   },
   options: {
-    v: 1,
-    order: ["battle", "inventory", "skills", "party"],
+    v: 3,
     z: ["help", "options"],
     win: {
-      options: { open: true, dock: false, collapsed: false },
-      help: { open: true, dock: false, collapsed: false, x: 24, y: 24 },
+      options: { open: true, collapsed: false },
+      help: { open: true, collapsed: false, x: 300, y: 24 },
     },
   },
-  // docs/17 UI-5: the corpse's container floats where the player left it, resized.
+  // docs/17 UI-5: the corpse's container where the player left it, resized; a second one
+  // (container-creature_remains-2) at its default place, right under the equipment.
   server: {
-    v: 2,
+    v: 3,
+    z: [],
+    win: {
+      battle: { open: true, collapsed: true },
+      inventory: { open: true, collapsed: false },
+    },
+    others: {
+      "container-creature_remains": { collapsed: false, x: 24, y: 300, w: 240 },
+    },
+  },
+  // The magnet (docs/17 UI-5): windows dropped edge to edge, as the magnet leaves them —
+  // the skills under the battle list, the party beside it.
+  magnet: {
+    v: 3,
+    z: ["party", "skills"],
+    win: {
+      battle: { open: true, collapsed: false, x: 0, y: 0, h: 300 },
+      skills: { open: true, collapsed: false, x: 0, y: 300 },
+      party: { open: true, collapsed: false, x: 256, y: 0 },
+      inventory: { open: true, collapsed: false },
+    },
+  },
+  // An old save (version 1, the dock): the docked windows float at their default places.
+  migrated: {
+    v: 1,
     order: ["battle", "inventory", "skills", "party"],
     z: [],
     win: {
-      battle: { open: true, dock: true, collapsed: true },
+      battle: { open: true, dock: true, collapsed: false, h: 400 },
       inventory: { open: true, dock: true, collapsed: false },
-    },
-    others: {
-      "container-creature_remains": { dock: false, collapsed: false, x: 24, y: 300, w: 240 },
+      skills: { open: true, dock: true, collapsed: false },
     },
   },
+};
+/** Scenes about the inventory: on a phone or a tablet they open its tab. */
+const INVENTORY_TAB = ["inventory", "tooltip", "tooltipcoin"];
+/** What the mouse is over in a scene's screenshot. */
+const HOVERS: Record<string, string> = {
+  tooltip: '[data-testid="slot-right_hand"] [data-tip-item]',
+  tooltipcoin: '[data-container][data-docked] [data-item="copper_coin"]',
+  // docs/17 UI-5: a slot that does not take the held sword tints red under the pointer.
+  inventory: '[data-testid="slot-left_hand"]',
 };
 const SCENES = [
   "game",
   "windows",
+  "magnet",
+  "migrated",
+  "chat",
   "server",
   "groundtip",
   "scale",
@@ -168,7 +217,10 @@ const SCENES = [
   "shop",
   "dialog18",
   "itemmenu",
+  "inventory",
+  "inventoryfloat",
   "tooltip",
+  "tooltipcoin",
   "guild",
   "danger",
   "death",
@@ -212,7 +264,18 @@ try {
         localStorage.clear();
         if (w) localStorage.setItem("rpg.windows", JSON.stringify(w));
       }, windows ?? null);
-      const sceneParam = ["windows", "options", "tooltip", "guild", "scale"].includes(scene)
+      const sceneParam = [
+        "windows",
+        "magnet",
+        "migrated",
+        "chat",
+        "options",
+        "tooltip",
+        "tooltipcoin",
+        "inventoryfloat",
+        "guild",
+        "scale",
+      ].includes(scene)
         ? "game"
         : scene;
       // docs/17 UI-3: the interface at 125 % with the text at 115 %.
@@ -224,12 +287,36 @@ try {
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
-      if (scene === "tooltip") {
-        // docs/17 UI-6: the card of an item of the backpack, under a resting mouse.
-        const cell = page.locator("[data-tip-item]").nth(3);
-        if (await cell.isVisible()) {
-          await cell.hover();
-          await page.waitForTimeout(600);
+      // Phones and tablets: the inventory scenes show the inventory tab.
+      if (INVENTORY_TAB.includes(scene)) {
+        // A phone on its side keeps the panel in a drawer: open it first.
+        const drawer = page.getByTestId("panel-toggle");
+        if (await drawer.isVisible()) {
+          await drawer.click();
+          await page.waitForTimeout(300);
+        }
+        const tab = page.locator('[data-testid="panel-tabs"] [data-tab="inventory"]');
+        if (await tab.isVisible()) {
+          await tab.click();
+          await page.waitForTimeout(150);
+        }
+      }
+      // docs/17 UI-6: the card of an item under the mouse, at once (the Diablo II idea):
+      // the sword in the right hand (stats, a requirement), the coins in the backpack (gold).
+      const hover = HOVERS[scene];
+      if (hover) {
+        const el = page.locator(hover).first();
+        if (await el.isVisible()) {
+          await el.hover();
+          await page.waitForTimeout(150);
+        }
+      }
+      if (scene === "chat") {
+        // docs/17 UI-10: the chat floats translucent; under the pointer it turns clear.
+        const chat = page.locator('.gwin[data-window="chat"]');
+        if (await chat.isVisible()) {
+          await chat.hover();
+          await page.waitForTimeout(300);
         }
       }
       await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });

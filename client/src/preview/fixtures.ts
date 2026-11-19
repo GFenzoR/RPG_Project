@@ -93,24 +93,25 @@ export function baseScene(content: ClientContent, now: number): Scene {
     [EquipmentSlot.FEET, item("tarred_boots")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
-  ui.containers = [
-    {
-      id: 1,
-      itemId: itemNumber(content, "backpack"),
-      capacity: 20,
-      hasParent: false,
-      items: [
-        item("rope"),
-        item("pickaxe"),
-        item("ship_biscuit", 7),
-        item("raw_fish", 12),
-        item("copper_coin", 86),
-        item("felling_axe"),
-        // A quest item: the gold ring of its colour (docs/17 UI-6).
-        item("smuggler_tally", 3),
-      ],
-    },
-  ];
+  // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
+  ui.backpack = {
+    id: 1,
+    itemId: itemNumber(content, "backpack"),
+    capacity: 20,
+    hasParent: false,
+    items: [
+      item("rope"),
+      item("pickaxe"),
+      item("ship_biscuit", 7),
+      item("raw_fish", 12),
+      item("copper_coin", 86),
+      item("felling_axe"),
+      // A quest item: the gold ring of its colour (docs/17 UI-6).
+      item("smuggler_tally", 3),
+      item("boarding_saber"),
+    ],
+  };
+  ui.containers = [];
   ui.battle = [
     creature(11, CreatureKind.MONSTER, "", "wolf", 64),
     creature(12, CreatureKind.MONSTER, "", "wolf", 100),
@@ -367,8 +368,9 @@ export function withItemMenu(
 }
 
 /**
- * docs/17 UI-5: the server's windows as GameWindows (a crafting station and a trade) and a
- * second container (a corpse opened on the map, floating), with the Shift+drag split prompt and the card of an
+ * docs/17 UI-5: the server's windows as GameWindows (a crafting station and a trade) and two
+ * corpses opened on the map (the first where the player left it, the second at its default
+ * place, right under the equipment), with the Shift+drag split prompt and the card of an
  * item lying on the map under a resting mouse (docs/17 UI-6).
  */
 export function withServerWindows(
@@ -405,6 +407,13 @@ export function withServerWindows(
         hasParent: true,
         items: [{ itemId: id("ship_biscuit"), count: 4 }],
       },
+      {
+        id: 3,
+        itemId: id("creature_remains"),
+        capacity: 8,
+        hasParent: true,
+        items: [{ itemId: id("copper_coin"), count: 7 }],
+      },
     ],
     split: { x: at.x, y: at.y, itemId: id("raw_fish"), count: 12 },
   };
@@ -419,7 +428,33 @@ export function withGroundTip(
 ): Scene {
   const ui: GameUi = {
     ...s.ui,
-    groundTip: { itemId: itemNumber(content, "iron_sword"), count: 1, x: at.x, y: at.y },
+    groundTip: {
+      itemId: itemNumber(content, "iron_sword"),
+      count: 1,
+      x: at.x,
+      y: at.y,
+      // The tile under the cursor at the fitted zoom (2x: 64 CSS px).
+      tile: { left: at.x - 32, top: at.y - 32, width: 64, height: 64 },
+    },
   };
   return { ui, name: "groundtip" };
+}
+
+/**
+ * docs/17 UI-5: a sword of the backpack dragged over the equipment: the right hand glows (it
+ * takes it), the other slots do not (the screenshot script hovers one: it tints red).
+ */
+export function withHeld(content: ClientContent, s: Scene): Scene {
+  const id = itemNumber(content, "boarding_saber");
+  const index = s.ui.backpack?.items.findIndex((it) => it.itemId === id) ?? -1;
+  const ui: GameUi = {
+    ...s.ui,
+    dragging: {
+      loc: { kind: "container", id: s.ui.backpack?.id ?? 1, index },
+      itemId: id,
+      stackIndex: index,
+      count: 1,
+    },
+  };
+  return { ui, name: "inventory" };
 }

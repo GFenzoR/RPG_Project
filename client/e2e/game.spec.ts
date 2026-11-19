@@ -182,6 +182,29 @@ async function keysToGame(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Page coordinates of the centre of map tile (x, y) when the canvas is what is there, or
+ * undefined: since the full-screen desktop (docs/17 A14) the battle list (top left), the
+ * inventory (top right) and the chat (bottom left) float over the map, and a click on a
+ * tile under one of them goes to the window.
+ */
+async function mapPoint(
+  page: Page,
+  x: number,
+  y: number,
+): Promise<{ x: number; y: number } | undefined> {
+  return page.evaluate(
+    ({ a, b }) => {
+      const p = window.__rpgClient?.tileToClient(a, b);
+      const el = p && document.elementFromPoint(p.x, p.y);
+      return p && el instanceof HTMLCanvasElement && el.dataset["testid"] === "game-canvas"
+        ? p
+        : undefined;
+    },
+    { a: x, b: y },
+  );
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -312,12 +335,20 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   expect({ x: x - start.x, y: y - start.y }).toEqual({ x: 4, y: 1 });
   await shot(page, "06-walked-click");
 
-  // Inventory (T1.8): a new character starts with an equipped backpack. A right click
-  // opens its menu with its card (docs/17 UI-6) and "Abrir" (the default action, in bold)
-  // opens it; shift+click looks at it, and it can be dragged onto the map and back.
+  // Inventory (T1.8), in the Diablo II style (docs/17 UI-5): a new character starts with an
+  // equipped backpack, and the inventory opens it by itself, its grid under the figure (not
+  // a window of its own). Its × closes it; a right click on it opens its menu with its card
+  // (docs/17 UI-6) and "Abrir" (the default action, in bold) opens it again, under the
+  // figure; shift+click looks at it, and it can be dragged onto the map and back.
   const inventory = page.getByTestId("inventory");
   const backpackSlot = inventory.getByTestId("slot-backpack");
   await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
+  const docked = inventory.locator('[data-container-item="backpack"][data-docked]');
+  await expect(docked).toBeVisible();
+  await expect(docked.locator(".slot")).toHaveCount(24);
+  await expect(page.getByTestId("window-container-backpack")).toHaveCount(0);
+  await docked.getByRole("button", { name: "Cerrar" }).click();
+  await expect(docked).toHaveCount(0);
   await backpackSlot.locator("[data-item]").click({ button: "right" });
   const itemMenu = page.getByTestId("action-menu");
   await expect(itemMenu).toBeVisible();
@@ -327,23 +358,27 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "09a-item-menu");
   await itemMenu.locator('[data-action="open"]').click();
   await expect(itemMenu).toBeHidden();
-  // The same card shows under a resting mouse (350 ms), and goes when it leaves.
+  await expect(docked).toBeVisible(); // opened from the slot: under the figure again
+  await expect(page.getByTestId("window-container-backpack")).toHaveCount(0);
+  // The same card, compact, shows the moment the mouse is over the item (the Diablo II
+  // idea, docs/17 UI-6), beside it and never over it, and goes when the mouse leaves.
   await page.mouse.move(1, 1);
-  await backpackSlot.locator("[data-item]").hover();
+  const backpackItem = backpackSlot.locator("[data-item]");
+  await backpackItem.hover();
   const tooltip = page.getByTestId("item-tooltip");
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toContainText("mochila");
+  await expect(tooltip.getByTestId("item-card")).toHaveClass(/tip/);
+  const tipBox = await tooltip.boundingBox();
+  const itemBox = await backpackItem.boundingBox();
+  if (!tipBox || !itemBox) throw new Error("no tooltip or item box");
+  const apart =
+    tipBox.y + tipBox.height <= itemBox.y + 0.5 || tipBox.y >= itemBox.y + itemBox.height - 0.5;
+  expect(apart).toBe(true);
   await shot(page, "09b-item-tooltip");
   await page.mouse.move(1, 1);
   await expect(tooltip).toBeHidden();
-  // docs/17 UI-5: on a desktop the backpack opens in a window of its own (docked under the
-  // equipment, with its own title bar), not inside the inventory window.
-  const backpackWindow = page.locator('[data-container-item="backpack"]');
-  await expect(backpackWindow).toBeVisible();
-  await expect(page.getByTestId("window-container-backpack")).toBeVisible();
-  await expect(inventory.locator('[data-container-item="backpack"]')).toHaveCount(0);
-  await expect(backpackWindow.locator(".slot")).toHaveCount(24);
-  await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
+  await backpackItem.click({ modifiers: ["Shift"] });
   await expect(page.getByTestId("game-log")).toContainText("Ves: mochila (24 lugares)");
   await expect(inventory.getByTestId("capacity")).toContainText("Capacidad libre");
   await inventory.screenshot({ path: join(shots, "09-inventory.png") });
@@ -362,6 +397,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
     a: x,
     b: y,
   });
+  await backpackSlot.scrollIntoViewIfNeeded();
   const slotBox = await backpackSlot.boundingBox();
   if (!ownTile || !slotBox || backpackId === undefined) throw new Error("no drag points");
   const slotCenter = { x: slotBox.x + slotBox.width / 2, y: slotBox.y + slotBox.height / 2 };
@@ -377,11 +413,30 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
       }),
     )
     .toBe(backpackId);
-  await expect(backpackWindow).toBeVisible(); // still within reach: the window stays open
+  // Still within reach, it stays open: no longer worn, in a window of its own.
+  const backpackWindow = page.getByTestId("window-container-backpack");
+  await expect(backpackWindow).toBeVisible();
+  await expect(backpackWindow.locator('[data-container-item="backpack"]')).toBeVisible();
+  await expect(docked).toHaveCount(0);
   await shot(page, "10-backpack-on-map");
-  // Map → slot: equipped again.
-  await drag(ownTile, slotCenter);
+  // Map → slot: equipped again. The client cannot tell this backpack from another of its
+  // kind (ContainerOpen does not say where it lies), so its window stays a window of its
+  // own: never under the figure by itself (the final review of lote 9). A use of the slot
+  // closes that window (it is the worn one: the server toggles), the next one opens it
+  // under the figure.
+  await backpackSlot.scrollIntoViewIfNeeded();
+  const emptyBox = await backpackSlot.boundingBox();
+  if (!emptyBox) throw new Error("no slot");
+  await drag(ownTile, { x: emptyBox.x + emptyBox.width / 2, y: emptyBox.y + emptyBox.height / 2 });
   await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
+  await expect(backpackWindow).toBeVisible();
+  await expect(docked).toHaveCount(0);
+  await backpackSlot.locator("[data-item]").dblclick();
+  await expect(backpackWindow).toHaveCount(0);
+  await expect(docked).toHaveCount(0);
+  await backpackSlot.locator("[data-item]").dblclick();
+  await expect(docked).toBeVisible();
+  await expect(backpackWindow).toHaveCount(0);
 
   // Leave the game: back to the character list with the server's reason.
   await page.getByRole("button", { name: "Salir del juego" }).click();
@@ -989,8 +1044,11 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(shop.locator('[data-item="rope"]')).toContainText("45");
   await page.waitForTimeout(300); // let the icons load before the screenshot
   await shot(page, "14-shop");
-  // No scroll bar: the grid pages instead (docs/17 UI-8).
-  expect(await shop.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  // No scroll bar: the grid pages instead (docs/17 UI-8). The window's body is what would
+  // scroll: the frame is not a scroller, and its gothic corners stick out 5 px past it.
+  expect(
+    await shop.locator(".gwin-body").evaluate((el) => el.scrollHeight - el.clientHeight),
+  ).toBeLessThanOrEqual(1);
   await shop.getByRole("tab", { name: "Vender" }).click();
   await shop.getByTestId("shop-search").fill("piel de lobo");
   await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("×0");
@@ -1206,7 +1264,8 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
         const s = await self(page);
         if (!s || s.pending || s.walking) return "moving";
         if (s.x === goal.x && s.y === goal.y) return "there";
-        const hx = s.x + Math.max(-6, Math.min(6, goal.x - s.x));
+        // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
+        const hx = s.x + Math.max(-5, Math.min(5, goal.x - s.x));
         const hy = s.y + Math.max(-4, Math.min(4, goal.y - s.y));
         const near = hx === goal.x && hy === goal.y;
         const tries = near
@@ -1221,11 +1280,11 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
               [-2, 0],
             ];
         for (const [dx = 0, dy = 0] of tries) {
-          if (await free(hx + dx, hy + dy)) {
-            const p = await toClient(hx + dx, hy + dy);
-            await page.mouse.click(p.x, p.y);
-            break;
-          }
+          if (!(await free(hx + dx, hy + dy))) continue;
+          const p = await mapPoint(page, hx + dx, hy + dy);
+          if (!p) continue; // under a window
+          await page.mouse.click(p.x, p.y);
+          break;
         }
         return `${s.x},${s.y}`;
       },
@@ -1329,7 +1388,8 @@ test("chat on the local and global channels, then switch the language", async ({
   await expect(page.getByTestId("game-log")).toContainText(
     "para volver a escribir en el canal global.",
   );
-  await page.locator(".side").screenshot({ path: join(shots, "16-chat.png") });
+  // The chat floats over the map (docs/17 UI-10): its window.
+  await page.locator('.gwin[data-window="chat"]').screenshot({ path: join(shots, "16-chat.png") });
 
   // Switching the language (the Options window of the toolbar) translates every screen at
   // once, the running game included.
@@ -1425,7 +1485,9 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   const line = `[Anuncio] ${gm.name}: Reinicio en 5 minutos`;
   await expect(plPage.getByTestId("chat-log")).toContainText(line);
   await expect(gmPage.getByTestId("chat-log")).toContainText(line);
-  await plPage.locator(".side").screenshot({ path: join(shots, "18-gm-announce.png") });
+  await plPage
+    .locator('.gwin[data-window="chat"]')
+    .screenshot({ path: join(shots, "18-gm-announce.png") });
 
   // T4.1: a GM asks the player a presence check; any answer gets the same reply. It is
   // only asked to someone playing: the player says something first.
@@ -1589,7 +1651,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const matePage = await enter(mate.email);
 
   // Both wake up at the temple: the mate is in the leader's battle list, with "+". The
-  // party window (toolbar, P) docks under the battle list.
+  // party window (toolbar, P) floats beside the battle list.
   for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
@@ -1633,7 +1695,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await expect(leadPage.getByTestId("chat-log")).toContainText(
     `[Grupo] ${mate.name}: vamos a cazar`,
   );
-  await leadPage.locator(".side").screenshot({ path: join(shots, "25-party-panel.png") });
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "25-party-panel.png") });
 
   // T4.1: the mate reports the leader from the battle list; the server answers.
   await matePage
@@ -1649,7 +1713,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.keyboard.type("prueba de reporte E2E");
   await expect(report.getByRole("textbox")).toHaveValue("prueba de reporte E2E");
   expect(await self(matePage)).toEqual(before);
-  await matePage.locator(".side").screenshot({ path: join(shots, "37-report-form.png") });
+  await matePage
+    .locator('.gwin[data-window="battle"]')
+    .screenshot({ path: join(shots, "37-report-form.png") });
   await report.getByRole("button", { name: "Enviar reporte" }).click();
   await expect(report).toHaveCount(0);
   await expect(matePage.getByTestId("game-log")).toContainText(
@@ -1774,6 +1840,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   await openWindow(page, "skills");
   await expect(page.getByTestId("skills-panel")).toContainText("Cocina");
   await shot(page, "17-crafting-done");
+  // Escape closes the station first (the Game's own key), whatever window is on top.
   await page.keyboard.press("Escape");
   await expect(win).toBeHidden();
   expect(errors).toEqual([]);
@@ -1965,12 +2032,14 @@ test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
   await enterGame(page, email, password);
   await arrived(page, 4150, 6105);
   await shot(page, "31-bosque-temple");
-  // Out of the temple door and east across the plaza to the druid's grove, by clicks.
+  // Out of the temple door and east across the plaza to the druid's grove, by clicks: 5
+  // columns at most, since at 1280x800 the inventory floats over the 6th to the east.
   for (const [x, y] of [
     [4150, 6109],
-    [4156, 6109],
-    [4162, 6109],
-    [4169, 6110],
+    [4155, 6109],
+    [4160, 6109],
+    [4165, 6109],
+    [4170, 6110],
     [4175, 6110],
   ] as const) {
     const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
@@ -2545,7 +2614,9 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   );
   await expect(hunterP.getByTestId("battle-list")).toBeVisible();
   await shot(preyP, "50-pvp-aggressor-skull");
-  await preyP.locator(".side").screenshot({ path: join(shots, "51-pvp-battle-list.png") });
+  await preyP
+    .locator('.gwin[data-window="battle"]')
+    .screenshot({ path: join(shots, "51-pvp-battle-list.png") });
 
   expect(errors).toEqual([]);
   await hunterP.close();
@@ -2588,10 +2659,23 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   const b = await enter(buyer.email);
   await arrived(a, 3167, 6382);
   await arrived(b, 3167, 6383);
+  // docs/17 UI-5: the inventory opens the equipped backpack by itself, under the figure,
+  // but not during the tutorial, whose step teaches it (a new character of Puerto follows
+  // it). So it stays closed, and a double click on the slot opens it under the figure (on
+  // an open one it would close it). The trade offers what lies in it.
   for (const page of [a, b]) {
-    const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
-    await slot.locator("[data-item]").dblclick();
-    await expect(page.locator('[data-container-item="backpack"]')).toBeVisible();
+    const docked = page
+      .getByTestId("inventory")
+      .locator('[data-container-item="backpack"][data-docked]');
+    await expect(page.getByTestId("tutorial-panel")).toBeVisible();
+    await expect(docked).toHaveCount(0);
+    await page
+      .getByTestId("inventory")
+      .getByTestId("slot-backpack")
+      .locator("[data-item]")
+      .dblclick();
+    await expect(docked).toBeVisible();
+    await expect(page.getByTestId("window-container-backpack")).toHaveCount(0);
   }
 
   // Trade: the seller invites from the battle list, the buyer joins; fish for 50 coins.
@@ -2966,9 +3050,11 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
     "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
   );
   await shot(page, "65b-volcan-temple-sign");
+  // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
   for (const [x, y] of [
-    [3648, 5794],
-    [3655, 5794],
+    [3647, 5794],
+    [3652, 5794],
+    [3657, 5794],
     [3662, 5794],
     [3662, 5796],
   ] as const) {

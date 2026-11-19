@@ -12,7 +12,8 @@ A12, el 2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama
 `feat/world-art`, el 2026-11-18; y el resto de A1, A10, A11 y A13, rama
 `feat/world-art-2`, el 2026-11-18: "Hecho: el resto de A1, A10, A11 y A13"; y los restos
 de ANI y MOV, rama `feat/lpc-actions`, el 2026-11-18: "Hecho: disparar, conjurar,
-desvanecerse, pasos y girar").
+desvanecerse, pasos y girar"; y el motor de sprites, rama `feat/sprite-engine`, el
+2026-11-18: "Motor de sprites", al final de §3).
 
 ## Lo que pidió el dueño
 Textual, de la prueba del 2026-11-17:
@@ -34,6 +35,16 @@ Decisiones del dueño del mismo día (ya están en `00-vision.md`, `CLAUDE.md` y
 - La vista llega **hasta 31x21 casillas**.
 - Se puede usar arte y música **generados con su cuenta de Gemini**, registrados en
   `assets/CREDITS.md` con su prompt y sin nombrar otros juegos, artistas ni obras (SRC-5).
+- **Pantalla completa y menús flotantes** (2026-11-18, textual): "me gusta la de diablo con
+  esas gráficas góticas, y me gusta también la de tibia pero no quiero que se vea como que
+  estas viendo el mapa a traves de una ventana o un cuadro, quiero que el juego se vea full
+  screen, como Diablo 2 o como Ragnarok Online, en donde los menús 'flotan' y puedes
+  moverlos donde te acomoden". Y dos respuestas suyas del mismo día: el HUD es una **barra
+  gótica abajo** (el orbe de vida abajo a la izquierda, el de maná abajo a la derecha y en el
+  medio la barra de experiencia, la hotbar F1–F12 y los botones de menú), la única pieza
+  fija; y las ventanas son **libres con imán**: cada una se suelta donde sea y recuerda su
+  lugar, y cerca de un borde de la pantalla, del techo de la barra o del borde de otra
+  ventana se pega para alinearse. Hecho en A14 (§7).
 - **La regla legal no cambia.** De Tibia copiamos mecánicas, y de Tibia y Diablo
   aprendemos estilo. Nunca copiamos sus sprites, nombres, mapas, textos ni fuentes. Nada de
   este doc se dibujó mirando un sprite concreto de esos juegos, y ninguna tarea que salga
@@ -160,9 +171,11 @@ parte de arriba transparente.
   Volcán (`slagbound_warden`) ~77 de alto en 96x96. Rata, cangrejo y escarabajo quedan en
   32x32 (son chicos de verdad). El jabalí y el ciervo de spritegen eran de 32x32 con el
   ancla de siempre y la sombra pintada: al lado del lobo de Gemini el ciervo parecía una
-  cría y los dos pisaban 4 px más abajo que el resto. Ahora son su mismo diseño dibujado
-  1,2 y 1,4 veces más grande en 64x64 (`scaleOnto` en `recipes/creatures.ts`), con
-  `anchor: bc` y la sombra de contacto (`shadow: false` en la receta, `shadow: ellipse` en
+  cría y los dos pisaban 4 px más abajo que el resto. Pasaron a ser su mismo diseño
+  dibujado 1,2 y 1,4 veces más grande en 64x64, y desde el 2026-11-18 son modelos del motor
+  de sprites ("Motor de sprites", al final de §3): ~38 px de largo el jabalí (22 de ancho
+  visto de frente) y ~46 de alto el ciervo con las astas, con `anchor: bc` y la sombra de
+  contacto (`shadow: ellipse` en
   `assets/sprites.yaml`), como todo animal animado. La gaviota sigue de 32x32 con su
   sombra pintada mientras el dueño no decida su arte.
 
@@ -393,7 +406,9 @@ mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
 falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
 un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
 spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
-animados"); lo usan las criaturas de Gemini.
+animados"); lo usan las criaturas de Gemini. El motor de sprites dibuja las cuatro desde su
+modelo, así el este conserva la luz desde la izquierda ("Motor de sprites", al final de
+§3).
 
 ### ANI-2 Acciones, frames y tiempos
 
@@ -444,8 +459,8 @@ animados"); lo usan las criaturas de Gemini.
   LPC y esos nombres son alias de sus frames (`assets/README.md`, "Sprites animados").
 - Un monstruo con `sprite: creatures/wolf` usa sus frames si el atlas los tiene, y si no,
   la imagen única con el procedural (ANI-5). Los frames salen de capas de un pack
-  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (el trote
-  de spritegen del jabalí y del ciervo).
+  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (los del
+  motor de sprites: el jabalí, el ciervo y el eco de la forja; o las hojas de Gemini).
 
 ### ANI-5 Animación procedural para sprites de un solo frame
 Es para los monstruos y NPCs de Dungeon Crawl de hoy, y para cualquier sprite futuro sin
@@ -516,6 +531,158 @@ Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Muerte o salida de la vista.** Si `CreatureDisappear` no lo distingue, se suma un
   motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
   en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
+
+### Motor de sprites (hecho, 2026-11-18, rama `feat/sprite-engine`)
+Pedido del dueño (2026-11-18): *"podrías poner un agente que arme el motor de generar
+sprites, basándose en las referencias que habíamos hablado"*. El motor está en
+`tools/spritegen/src/engine/` y convierte las referencias de §1 y las reglas ART y ANI en
+maquinaria: un sprite nuevo se **describe** (partes con volumen, materiales de
+`palette.ts` y, si es una criatura, un rig con acciones) y sale coherente con el resto, sin
+poner píxeles a mano y sin Gemini. Cómo escribir un spec y un rig: `tools/CLAUDE.md`,
+"spritegen: el motor".
+
+**Cómo dibuja.** Cada sprite es un modelo chico en píxeles de sprite (x al este, y al
+norte, z arriba) hecho de primitivas con volumen: elipsoides, cajas, cilindros, cápsulas
+que se afinan (patas, cuellos, colas, cuernos, llamas), extrusiones de un perfil (el
+cuerpo del yunque) y tarjetas finas. Un trazador de rayos ortográfico (un rayo por centro
+de píxel y un buffer de profundidad) resuelve qué se ve; después vienen las pasadas de
+pixel art: sombreado por umbrales, limpieza de píxeles sueltos, pliegues (la línea oscura
+donde una parte tapa a otra), marcas de un píxel (ojos, fosas, bayas), el borde iluminado
+y el contorno selectivo. Es determinista: el ruido de textura sale de la ruta del sprite y
+vive en el marco de cada parte, así acompaña a la parte y no hierve entre frames.
+
+**Cada regla, de dónde sale y dónde está** (todo en `engine/style.ts`, un solo lugar que
+leen el renderer, las puertas y las hojas de revisión):
+
+| Regla | Referencia (§1) | En el motor |
+|---|---|---|
+| ART-1 3/4 frontal | LPC: ortográfica, cámara a unos 60° | `PROJECTION`: la altura sube recta (1:1) y la profundidad se ve a tan 30° ≈ 0,58: se ven la cara de arriba y la sur |
+| ART-5 luz | LPC: desde arriba y apenas desde la izquierda | `LIGHT`: arriba, izquierda y un poco del lado de la cámara (el flanco que mira a la cámara queda en el tono base), con la misma curva que `domeLight` de las recetas; `depthCue` oscurece lo lejano (la pata de atrás, la grupa vista de frente) |
+| ART-5 3-4 tonos y un brillo | Realm of the Mad God y Stardew: pocos colores bien puestos | `SHADES`: umbrales que eligen el tono claro, base, sombra u hondo del material; `glint` en lo brillante (ojos, metal); `GLOW` para el fuego (lo que mira a la cámara, más claro) |
+| ART-5 contorno selectivo | LPC: fuerte en personajes, suave en objetos; RotMG: contorno oscuro que separa del fondo | `OUTLINE`: en criaturas, casi negro abajo y a la derecha (`outline`, nunca `#000`) y un tono más claro arriba y a la izquierda (`deep`); en objetos, más suave; `GLOW_OUTLINE`: el fuego lleva el suyo en cualquier sprite, su tono hondo (el rojo del borde de una llama) arriba y a la izquierda y su contorno (una brasa oscura) del otro lado, y su pliegue en el tono de sombra (una llama más oscura, nunca una línea negra); `CREASE_DEPTH`: el contorno interno donde una parte tapa a otra; `RIM_LIGHT`: el borde iluminado, un tono más claro |
+| ART-6 paleta, valores, tramado | LPC Revised: paleta limitada; tramado casi nunca | solo las rampas de `palette.ts` (los materiales de las criaturas del motor se sumaron ahí); `VALUE_BAND` por tipo; umbrales duros y `DITHER_MAX_SHARE` (10 %); alfa 0 o 255 |
+| ART-2 tamaños y anclas | Tibia: lo grande crece hacia arriba; LPC: frames de 64x64 | `SIZES`: lienzo, ancla (`bc` o `br`), fila del suelo y alto y largo de la figura por clase; cada spec puede pedir un rango más angosto (las notas de "Animales medianos") |
+| ANI-1 direcciones | Diablo II: cada dirección sale del mismo modelo | el modelo mira al oeste y se gira para cada dirección (`FACING_YAW`): las cuatro se dibujan, el este **no** es el oeste espejado y la luz sigue viniendo de la izquierda; `mirror` no hace falta |
+| ANI-2 acciones y tiempos | Diablo II: muchos modos por monstruo; RotMG: ciclos cortos que se leen | `ACTIONS`: quieto 2-4 frames de 400-600 ms, caminar 2-4 (2 por casilla, por distancia), atacar 3-4 en 300-400 ms, disparar 3, conjurar 3-4, morir 4-6 en 500-700 ms; el validador los exige |
+| ANI-3 continuidad | — | el ciclo de caminar empieza en un frame de contacto y el quieto respira desde la pose parada |
+| ANI-4 nombres | — | `frameName`: `<sprite>/<acción>_<dir>_<n>`; spritepack arma los clips de esos archivos y el `CreatureBody` del cliente los juega sin cambios |
+| ART-7 tiles e items animados | Stardew: el mundo se mueve en lo chico | `LOOP`: un objeto con `loop` sale como el sprite y `<sprite>/frame_<n>` (2 a 8 frames de 80 a 900 ms, `sync` world, tile o random), los nombres que spritepack ya arma como tile animado; el renderer lo juega con el `ms` y el `sync` de su entrada de `tiles` |
+| "Un mundo que respira" | Stardew | quieto con respiración, orejas, colas y llamas que se mueven; chispas que suben |
+
+De ningún juego se tomó un sprite, una forma ni una paleta: solo estas reglas de estilo.
+Los modelos son diseños propios (el jabalí, el ciervo y el yunque son los de spritegen
+llevados a volumen; el eco de la forja es nuevo).
+
+**Puertas de calidad** (`engine/gates.ts` y `engine/check.ts`; corren en `make test` y en
+`spritegen check`, que también corre al final de `make spritegen`): colores solo de sus
+materiales y nunca `#000`, alfa 0 o 255, tramado bajo el 10 %, nada recortado contra el
+borde del lienzo, contorno en al menos el 85 % de la silueta, una sola figura (aparte,
+solo chispas de hasta 10 px), al menos el 20 % de su caja lleno, media de L* en la banda
+de su tipo, alto y largo de perfil en el rango de ART-2, centrado de frente y de
+espaldas, de frente y de espaldas al menos el 45 % de ancho de lo que mide de perfil
+(`frontWidth`: un perfil girado hacia la cámara se lee como una raya a 1x; lo agregó la
+revisión del jabalí), pies en la fila del suelo, un caminar que cambia de silueta, un
+ataque y una muerte que se distinguen del parado, sur y oeste distinguibles, y las pistas de
+`assets/sprites.yaml` iguales al rig (`anchor`, `shadow: ellipse`, `flying`, los `ms`; sin
+`facing` ni `mirror`; sin entrada en `sprites`; un objeto con `loop`, su entrada de `tiles`
+con el mismo `ms` y `sync`). Un `loop` se mueve (algún frame cambia al menos 4 px respecto
+del 0) sin irse de su lugar (la caja de cada frame a 3 px o menos de la del 0). Más el
+determinismo (mismo spec, mismos píxeles).
+
+**Revisión:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
+<prefijo>]` escribe en `build/spritegen/` la hoja de contacto de cada sprite del motor
+(todos los frames a 4x en una grilla, una fila por acción y dirección) y su lineup a 1x
+(como lo pone el cliente, con la sombra de contacto, al lado del lobo de Gemini y de una
+persona de LPC). Se miran con Read.
+
+**Hechos con el motor:**
+- **Jabalí espinudo y ciervo de zarza:** quieto, caminar, atacar (embestida con los
+  colmillos; carga con las astas) y morir (tambalea, se le doblan las patas y cae de lado)
+  en las cuatro direcciones: 68 frames cada uno. Antes: un trote de 4 frames mirando al
+  oeste (el este espejado; al norte y al sur, el mismo perfil), sin ataque ni muerte
+  propios. El jabalí mide ~38 px de largo, 29 de alto y 22 de ancho visto de frente; el
+  ciervo, ~35 de largo y 46 de alto con las astas (una persona de LPC).
+  Revisión del 2026-11-18: de costado el jabalí del motor ya era mejor que el de antes,
+  pero de frente y de espaldas se leía como una raya de 16 px a 1x. Se le ensancharon el
+  cuerpo, los hombros, la cabeza y el hocico, las orejas y los colmillos salen hacia los
+  lados y las patas se abren un poco (`SPLAY`): de frente es una cabeza ancha con el hocico
+  y los colmillos delante del lomo con su cresta, y de espaldas la grupa con las patas
+  abiertas. La puerta `frontWidth` lo cuida desde entonces.
+- **Eco de la forja** (`npcs/forge_echo`, "lo que queda del último herrero de la
+  forja"): un espíritu de fuego con forma de herrero que flota. El pecho, la cabeza y la
+  mandíbula son un núcleo al rojo blanco (`fireCore` de `palette.ts`), con dos ojos de
+  carbón; los brazos, la barba, el pelo que sube y se va hacia atrás, las lenguas de los
+  hombros y la cola son llama (`flame`: amarillo, naranja y un borde rojo); en vez de
+  piernas, el cuerpo se afina en una llama que se enrosca; con la mano derecha alza el
+  martillo de herrero (mango de madera, cabeza de hierro con su brillo) delante de la
+  cara, y la izquierda cuelga con el puño cerrado. De costado se ve girado 20° hacia la
+  cámara (`views: { w: 20, e: -20 }`), para que se vean la cara, el pecho y el martillo.
+  Quieto (las llamas lamen hacia arriba, suben chispas y el martillo se mece) y caminar
+  (se desliza con la cola y el pelo hacia atrás) en las cuatro direcciones; se revisa
+  sobre el suelo donde está, la tierra de la mina del Volcán (`seenOn: ground/dirt`).
+  Antes: el elemental de fuego de Dungeon Crawl, un solo frame. Revisión del 2026-11-18:
+  la primera versión del motor (un herrero de brasas con delantal de cuero) se leía peor
+  que ese elemental: sobre la roca era una mancha naranja sobre dos palitos oscuros (el
+  delantal y el martillo colgando) y de costado, un tronco ardiendo. Se rehízo sin nada
+  oscuro abajo, con el núcleo claro, la cabeza, los brazos y el martillo alzado legibles y
+  una silueta de costado de figura con el martillo en alto; se compararon las tres
+  versiones lado a lado sobre su suelo y quedó la nueva.
+- **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
+  cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
+- **Props de una casilla** (2026-11-18, pedido del dueño: *"si bien las gráficas no están
+  mal siento que necesitamos mejorarlas ... todo debiese tener animaciones"*). Cada uno se
+  comparó con el dibujado a mano sobre cada suelo donde está en el mapa, a 1x, al lado de
+  una persona de LPC, y quedó el del motor solo donde se leía claramente mejor:
+  - **Tablero del mercado** (`decor/market_board`, 32x64): postes cuadrados con volumen,
+    tablero de tablas en su marco, techito a dos aguas con hileras de tejas y cinco notas
+    con sus renglones y su chinche (rojo o de hierro). Sobre la tierra del Bosque las patas
+    finas del viejo desaparecían. Es el primer prop animado del motor: con el viento se
+    levanta el pie de la nota de abajo a la derecha (`loop`: 4 frames de 180 ms, `sync:
+    tile`), así el tablero donde se abre el mercado llama la vista.
+  - **Cartel** (`decor/signpost`, los carteles de Brasal y de la puerta de la mina): dos
+    tablas con renglones tallados y clavos, en un poste que sube por encima de ellas, en
+    madera clara. El viejo, de madera oscura, se perdía sobre la tierra de la mina y el
+    basalto.
+  - **Cajón** (`decor/cargo_crate`, 29 en muelles, playas y depósitos de las cuatro
+    islas): madera cálida, la tapa iluminada con dos juntas, listones más oscuros en el
+    borde del frente, la riostra en diagonal y un clavo en cada esquina. El primer intento
+    del motor (marco gris alrededor de la tapa, juntas en el frente) se leía peor que el
+    viejo: la tapa perdía el borde y el marco se fundía con las tablas del muelle; el que
+    quedó usa un solo material cálido y la tapa lisa. Gana sobre el muelle, la arena, la
+    tierra y la piedra; sobre el piso de madera de los depósitos contrasta menos que el
+    viejo de marco gris, pero se lee por la tapa clara y el contorno.
+  - **Bolardo** (`decor/mooring_post`): se probó tres veces (tapa en hongo con faja de
+    hierro y cabo suelto; poste claro; poste oscuro con dos vueltas de cabo) y ninguna le
+    ganó al dibujado a mano, que tiene la tapa más nítida y el cabo suelto: sigue en
+    `recipes/terrain.ts`.
+
+**Decisiones:**
+- **Un modelo con volumen y no recetas 2D:** las cuatro direcciones, la luz, el contorno y
+  los pliegues salen solos y siempre iguales; con recetas 2D cada dirección se dibuja a
+  mano.
+- **Specs como datos en TypeScript** (objetos planos, sin funciones): tipados y validados
+  (`validateSpec`); pueden salir de un helper (`motion.ts`: el trote en pares diagonales)
+  o, más adelante, de un JSON o un YAML.
+- **Sin acción de recibir golpe:** el cliente no la tiene (`AnimAction`) y el golpe
+  procedural de ANI-5 (destello y retroceso) ya se ve; sumarla es un cambio del cliente y
+  de spritepack.
+- **El eco no tiene ataque ni muerte:** es un NPC (los NPCs solo están quietos y caminan).
+- **La gaviota sigue a mano** hasta que el dueño elija su arte.
+- **Un prop del motor reemplaza al dibujado solo si se lee claramente mejor** en su suelo,
+  a 1x, junto a una persona de LPC; si empata, queda el de antes (el bolardo). Para
+  objetos chicos rinden pocas piezas, un material cálido que contraste con el suelo y
+  textura baja; el detalle (juntas, marcos de otro color) a 1x se vuelve ruido.
+- **Props animados con `loop` y no con `actions`:** un objeto no tiene direcciones ni
+  acciones; sus frames llevan los nombres de ART-7 (`frame_<n>`) y la temporización vive
+  en `tiles` de `sprites.yaml`, como la de los props de `recipes/props.ts`: ni spritepack
+  ni el cliente cambian.
+
+**Pendiente:** otros props animados con `loop` (una bandera o un farol colgado si llegan
+al mapa; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
+dueño quiere, sumar primitivas si hacen falta (un toro para anillos, cajas redondeadas) y
+mirar en el juego el jabalí, el ciervo, el eco de la forja, el yunque y los cajones: el E2E
+del lote 9 (verde) solo los muestra de pasada (los carteles de Brasal se leen claros) y
+ningún screenshot los tiene (docs/14).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -840,25 +1007,37 @@ recortar y pasar a woff2 con su nombre.
   de la interfaz aparte ("Hecho: lo que quedaba de A3, A4 y A5").
 
 ### UI-4 Layout de escritorio y "ver más pantalla"
-**Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
-de abajo: los orbes, la botonera y el chat van en la columna derecha (el dock) y no hay
-HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080 con
-15x11. Con la vista ancha (A7, "Hecho: A7" en §7) la escala por defecto cambió: 1920x1080
-va a 2x con 24x16 casillas.
+**Hoy (A14, pantalla completa, "Hecho: A14" en §7):** lo que pidió el dueño el 2026-11-18
+("Lo que pidió el dueño", arriba): el mapa ocupa toda la pantalla, sin marco ni columna;
+abajo, la barra gótica, lo único fijo; todas las ventanas flotan y se acomodan donde el
+jugador quiera, con imán. Antes (A3, "Hecho: A2 y A3") los orbes, la botonera, las
+ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock).
 ```
-┌──────────────────────────────────────────────────────────┬──────────────┐
-│ [avisos: arriba al centro, sin tomar clicks]              │ Columna      │
-│                                                          │ (230 px,     │
-│                 MAPA: de 15x11 a 31x21 casillas          │  se oculta)  │
-│                                                          │ · Batalla    │
-│ [chat flotante abajo a la izquierda: semitransparente,   │ · Grupo      │
-│  de 1 a 8 líneas, pestañas de canal, se pliega]          │ · ventanas   │
-│                                                          │   acopladas  │
-├─────┬──────────────────────────────────────────────┬─────┴──────────────┤
-│Vida │ [condiciones]  ═════ barra de XP ═════        │ Maná               │
-│orbe │ F1 … F12              [I][K][P][G][M][A][⚙]   │ orbe               │
-└─────┴──────────────────────────────────────────────┴────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│[Batalla]  [Grupo]          [avisos, intercambio]          [Gremio] [Inventario]│
+│                                                                    [Contene-] │
+│[Habilidades]          MAPA a pantalla completa                     [ dores  ] │
+│                    (el jugador al centro, sobre la barra)                    │
+│ ┌placa┐ [Chat translúcido]   [Diálogo / tienda / estación abajo al centro]    │
+│ │nombre│                                                                      │
+│ ╭─────╮════ barra de experiencia ═══════════════════════════════════ ╭─────╮ │
+│ │ Vida│ F1 … F12 (hotbar)                       [I][K][B][P][G][O]  │Maná │ │
+│ ╰─────╯                                         [⚙][?][M][Salir]    ╰─────╯ │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+- **La barra** (88 px a la escala 100 %, `client/src/ui/HudBar.tsx`): piedra en sillares
+  bajo una banda de hierro con remaches y filo dorado; los orbes en engastes de hierro que
+  salen de la barra, con dos pináculos cada uno; pilares de hierro a los lados del medio y
+  una cresta de pináculos al centro. Sobre el orbe de vida, una placa con nombre, nivel,
+  experiencia y condiciones. La escala de la interfaz la agranda como a las ventanas; a
+  960 px de ancho entra igual (la hotbar pagina sus slots con flechas).
+- **El mapa** es la pantalla sobre la barra: el jugador queda al centro de esa área y nada
+  del mapa se esconde bajo la barra. La vista ajustada siempre la cubre a escala entera
+  (tabla de abajo).
+- **Las ventanas** flotan sobre el mapa y nunca bajan de la barra ni salen de la pantalla
+  (UI-5).
+
+**El plan de antes (UI-4 original, A3),** que A3 cambió por el dock y A14 retomó a su modo:
 - **Se va el encabezado de hoy:**
   - nombre, nivel y experiencia pasan al HUD (sobre la barra de XP, o al pasar el mouse por
     los orbes);
@@ -881,8 +1060,8 @@ va a 2x con 24x16 casillas.
     parejos con un desenfoque mínimo. Es una opción de Opciones → Gráficos, apagada por
     defecto.
 
-  Ejemplos con la columna visible (230 px) y el HUD (88 px), en CSS px con el escalado del
-  sistema al 100 %:
+  Ejemplos del plan, con la columna visible (230 px) y el HUD (88 px), en CSS px con el
+  escalado del sistema al 100 % (los de hoy, a pantalla completa, en "Hecho: A14"):
 
   | Ventana | Por defecto | Alejando | Con la opción 1,5x |
   |---|---|---|---|
@@ -922,6 +1101,9 @@ va a 2x con 24x16 casillas.
   (z-index).
   - Escape cierra la ventana de arriba.
   - Se acopla a la columna (estilo Tibia: se pliega a su título) o flota sobre el mapa.
+    **Desde A14 no se acopla:** flota siempre, se suelta en cualquier lugar y un imán la
+    alinea con los bordes de la pantalla, el techo de la barra y los bordes de las otras
+    ventanas (a menos de 10 px). Se pliega a su título como antes.
   - Recuerda posición, tamaño y si estaba plegada en `localStorage` `rpg.windows`
     (comodidad de cada jugador: si se pierde, vuelve al valor por defecto).
   - Tiene un tamaño mínimo y nunca queda fuera de la pantalla.
@@ -932,6 +1114,26 @@ va a 2x con 24x16 casillas.
   - barra de capacidad;
   - cada contenedor abierto es **su propia ventana** (como hoy, una por contenedor), con
     una grilla de 4 o 5 columnas de `--ui-slot`.
+  - **Cambio del dueño (2026-11-18): al estilo Diablo II.** "Por ahora el menú de items
+    equipados lo hiciste como en tibia, pero creo que sería más cómodo estilo Diablo II".
+    De Diablo II se toma solo la idea del panel (nunca su arte, sus nombres ni sus textos):
+    - una grilla de 8x9 celdas cuadradas con cada slot en su lugar y de su tamaño: cabeza
+      2x2 arriba al centro con el cuello 1x1 al lado; las manos 2x4 a los costados (la
+      izquierda a la izquierda, como antes); el torso 2x3; el anillo 1x1 a la altura de la
+      cadera; las piernas 2x2; la mochila y la munición (un carcaj con su cantidad) 2x2 a
+      los lados de las piernas; los pies 2x2 abajo. La silueta propia de siempre detrás;
+    - slots grandes: el ícono al mayor múltiplo entero que entra (2x en los de 2x2 o más
+      desde que la ventana mide unos 286 px), y los slots vacíos con su silueta a esa
+      escala;
+    - mientras se arrastra o se elige (toque) un item, los slots que lo aceptan brillan y
+      el que no lo acepta se tiñe de rojo bajo el puntero;
+    - la grilla de la **mochila equipada abajo de la figura**, en la misma ventana (como la
+      grilla del inventario de Diablo II), abierta sola al abrir el inventario; los
+      contenedores de adentro y los del suelo siguen siendo ventanas propias;
+    - la capacidad como una barra fina con su texto, abajo.
+
+    Hecho en la rama `feat/equipment-d2` (§7, "Hecho: el equipo y el tooltip al estilo
+    Diablo II").
 - **Las ventanas que ya existen** pasan a `GameWindow` con el mismo marco: diálogo,
   tienda, crafteo, casa, intercambio, presencia, tutorial, reporte y muerte. Los
   `data-testid` y los `data-tutorial` se mantienen.
@@ -960,6 +1162,17 @@ Mayús+click derecho), y en el menú las acciones van arriba y la ficha debajo.
   derecho abre el menú.
 - **Tooltip** en los dos modos: después de 350 ms de mouse sobre un item del DOM sale la
   ficha. También con el foco del teclado. Se va al salir o con Escape.
+  - **Cambio del dueño (2026-11-18): como en Diablo II.** "Al poner el mouse sobre un item
+    muestra su descripción como en diablo, también sería bueno agregarlo". Desde la rama
+    `feat/equipment-d2` sale **al instante**, centrado **arriba** del item (abajo si no hay
+    lugar, nunca bajo el cursor), en una caja compacta casi negra con borde fino, cada línea
+    centrada y sin ícono (el item está ahí abajo): el nombre claro, el de un item de misión
+    en su color y el del dinero dorado; los stats en blanco ("Ataque: 13"); los efectos en
+    azul; los requisitos que no se cumplen en rojo; la descripción apagada y al final. Igual
+    en el equipo, la mochila, los contenedores, la tienda, el intercambio y lo que está en
+    el suelo (arriba de su casilla). El menú del click derecho sigue con la ficha entera.
+    Idea para después, solo si el dueño la pide: mantener Alt para ver los nombres de los
+    items del suelo.
 - **La ficha** (estilo Diablo 2, de 260–320 px de ancho, ubicada con `menuPlacement` para
   no salirse):
   1. Nombre en Cinzel: `--ui-text`, o `--ui-item-quest` si es de misión. Cantidad si es
@@ -1071,9 +1284,13 @@ Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones 
 | Golpe fuerte al jugador | sacudida de cámara de 2 px | 120 ms | **apagada**, y es opción aparte como en D2R |
 
 ### UI-10 Chat
-**Hoy (A3):** el chat quedó abajo del dock, con el log como segunda pestaña ("Registro"),
-y no flota sobre el mapa. Mientras el log no se ve, todos los mensajes del servidor flotan
-sobre el mapa (no solo los importantes).
+**Hoy (A14):** flota sobre el mapa abajo a la izquierda, sobre la barra y a la derecha de la
+placa del personaje, como en Ragnarok Online: translúcido (la piedra al 50 %) y casi opaco
+con el mouse encima o mientras se escribe. Es una ventana más (se mueve, se pliega, cambia
+de tamaño, con imán), pero nunca se cierra. El log sigue como segunda pestaña
+("Registro"), ahora en la barra de título. Mientras el log no se ve, todos los mensajes del
+servidor flotan sobre el mapa (no solo los importantes). Antes (A3) iba abajo del dock.
+Las pestañas por canal y la opacidad configurable siguen pendientes.
 - Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
   Comercio, Sistema).
 - Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
@@ -1160,8 +1377,8 @@ Por impacto en pantalla y por costo:
 | 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
-| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
-| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
+| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen (desde el 2026-11-18, del motor de sprites con quieto, caminar, atacar y morir en cuatro direcciones). Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
 | 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
 | 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
@@ -1240,6 +1457,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
 | A13 ✅ | Luz en cuevas y partículas de ambiente — **hecho** (2026-11-18): la luz y las partículas de brasas, polen, rocío y polvo; los efectos al pisar después ("Hecho: disparar, conjurar, desvanecerse, pasos y girar"); falta la niebla (ART-7) | cliente | A10 |
+| A14 ✅ | Pantalla completa (pedido del dueño del 2026-11-18): el mapa en toda la pantalla, la barra gótica de abajo con los orbes, la experiencia, la hotbar y la botonera, y todas las ventanas flotantes con imán ("Hecho: A14") | cliente | A3, A7 |
 
 ### Hecho: disparar, conjurar, desvanecerse, pasos y girar (2026-11-18, rama `feat/lpc-actions`)
 Lo que quedaba de ANI (A9) y de MOV (A6). Solo cliente y herramientas: el servidor y el
@@ -1584,6 +1802,46 @@ quedaba de A3, A4 y A5".
   y la espera empieza de nuevo en la que queda bajo el cursor.)
 
 
+### Hecho: el equipo y el tooltip al estilo Diablo II (2026-11-18, rama `feat/equipment-d2`)
+Los dos pedidos del dueño del 2026-11-18 (UI-5 y UI-6, arriba). Solo cliente: el servidor y
+el protocolo no cambian. El detalle técnico está en `client/CLAUDE.md`, "Notas del equipo y
+el tooltip al estilo Diablo II". Solo la idea del panel y del tooltip: el arte, las fuentes,
+los nombres y los textos son nuestros.
+- **La figura.** Diez slots sobre una grilla de 8x9 celdas cuadradas (tabla de UI-5) que
+  toma el ancho que tiene la ventana: acoplada en el dock (a 1280 y 1920 px de ancho los
+  íconos de los slots grandes van a 2x; a 960 px, a 1x), flotando (crece al agrandarla) o
+  en la pestaña del teléfono (de lado a lado, hasta 44 px por celda). Las celdas miden un
+  número par de píxeles enteros, así cada ícono cae en píxeles enteros. Un ícono de 32 px
+  en el anillo o el cuello, que a veces miden menos, sobresale un poco de su borde, píxel
+  por píxel, en vez de achicarse.
+- **Brillo y rojo.** Mientras se arrastra un item (desde el inventario, un contenedor o el
+  mapa) o hay uno elegido con un toque o con "Mover", los slots que lo aceptan brillan en
+  dorado; el que no lo acepta se tiñe de rojo bajo el puntero. La regla es la del servidor
+  (un arma en la mano derecha, un escudo en la izquierda, cada armadura en su slot, la
+  munición en el carcaj, un contenedor en la espalda); nivel, vocación y manos libres los
+  sigue diciendo el servidor al soltar.
+- **La mochila abajo de la figura.** La mochila equipada se abre sola cuando el inventario
+  se muestra (una vez: si el jugador la cierra con su ×, queda cerrada hasta que el
+  inventario se vuelva a abrir o se equipe otra) y su grilla va abajo de la figura, en la
+  misma ventana. Si se la saca de la espalda y sigue al alcance, pasa a una ventana propia;
+  al volver a equiparla sigue en su ventana (el cliente no sabe si es la misma u otra del
+  mismo tipo, y con otra el botín arrastrado abajo iría a la del suelo: revisión final del
+  lote 9), y un doble click en el slot la cierra y otro la abre abajo. **No se abre sola durante el tutorial**:
+  su paso "abre tu mochila" enseña a hacerlo. Como `ContainerOpen` no dice dónde está el
+  contenedor, el cliente toma como mochila equipada la ventana que contesta un uso del
+  slot de la espalda (si alguna vez molesta, un campo en `ContainerOpen` lo haría exacto).
+- **Capacidad.** Una barra fina de lo que se carga (dorada; ámbar desde el 85 %, roja sin
+  lugar) y el texto de siempre abajo.
+- **El tooltip.** Sin espera (antes 350 ms) y arriba del item, como dice UI-6. Al barrer una
+  grilla con el mouse pasa de celda en celda sin parpadear (espera 80 ms al salir de un
+  item por si entra en otro). Sobre el mapa, la ficha del item de la casilla bajo el mouse
+  sale al instante arriba de esa casilla (abajo, si no hay lugar, pasando el texto del
+  cursor). No sale mientras se arrastra algo.
+- **Lo que no se hizo:** los items de dos manos no ocupan las dos manos a la vez en la
+  figura (el servidor tiene un solo slot por mano); no hay guantes, cinturón ni segundo
+  anillo (no existen esos slots); mantener Alt para ver los nombres de los items del suelo
+  queda como idea.
+
 ### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
 Siete monstruos que eran un sprite de Dungeon Crawl con la animación de ANI-5 ahora tienen
 frames hechos con el Gemini del dueño (SRC-5): de la Isla del Puerto `wolf`, `bilge_rat`,
@@ -1672,6 +1930,88 @@ Cambios respecto de UI-4:
   ancha se elige un objetivo a 15 casillas, pero no se le pega desde donde no lo nota.
 - **Sin hacer:** la escala 1,5x "sharp-bilinear" y repetir `make bots` contra un servidor
   real (la medición fue en proceso, `TestCrowdBandwidth`). Están en docs/14.
+
+### Hecho: A14, pantalla completa, ventanas flotantes y la barra gótica (2026-11-18, rama `feat/hud-fullscreen`)
+Lo pidió el dueño el 2026-11-18 ("Lo que pidió el dueño", arriba: la cita y sus dos
+respuestas). Solo cliente y solo escritorio: tablets y teléfonos siguen con las pestañas y
+el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico está en
+`client/CLAUDE.md`, "Notas de la pantalla completa" y "Zoom del mapa".
+- **Pantalla completa (UI-4).** Se fueron el dock (la columna derecha) y el marco del
+  mapa. El mapa es toda la pantalla sobre la barra de abajo: el jugador queda al centro de
+  esa área y la vista ajustada siempre la cubre a escala entera, sin franjas vacías. En
+  teléfonos sigue la regla de antes (nunca menos de 15x11); en escritorio cubrir manda.
+  En CSS px al 100 %:
+
+  | Ventana | Caja del mapa | Por defecto | Alejando hasta |
+  |---|---|---|---|
+  | 1920x1080 | 1920x992 | 2x: 30x15,5 | 1x: 31x21 |
+  | 2560x1440 | 2560x1352 | 3x: 26,7x14,1 | 2x: 31x21 |
+  | 1280x800 (la del E2E) | 1280x712 | 2x: 20x11,1 | 1x: 31x21 |
+  | 1280x720 | 1280x632 | 2x: 20x9,9 | 1x: 31x19,75 |
+  | 960x700 (la app) | 960x612 | 1x: 30x19,1 | — |
+  | 2560x1080 (ultra ancha) | 2560x992 | 3x: 26,7x10,3 | 1x: 31x21 |
+  | 3440x1440 (ultra ancha) | 3440x1352 | 4x: 26,9x10,6 | 2x: 31x21 |
+
+  A 1280x720 la vista ajustada muestra menos filas que las 11 clásicas: la otra opción
+  era 1x con franjas oscuras a los lados, que es justo lo que el dueño no quiere. Alejando
+  se ve casi toda la ventana. Lo mismo en las pantallas ultra anchas (21:9): cubrir el
+  ancho pide una escala que deja unas 10 filas; alejando un paso se ve la ventana entera.
+- **La barra gótica (UI-4, respuesta del dueño).** Orbe de vida abajo a la izquierda, de
+  maná abajo a la derecha, cada uno en un engaste de hierro con remaches y dos pináculos que
+  sale por encima de la barra; en el medio la barra de experiencia y, en un pozo tallado,
+  la hotbar F1–F12 y la botonera (I K B P G O, opciones, ayuda, mercado y salir: dos filas
+  de cinco, o una fila con los íconos a 2x desde 1600 px). Sobre el orbe de vida, una placa
+  con nombre, nivel, experiencia y condiciones. Es lo único fijo. Los orbes conservan el
+  llenado, el fantasma y el latido con poca vida (UI-9); los test ids (`health`, `mana`,
+  `level`, `experience`, `conditions`, `toolbar-<id>`, `options-button`, `logout`) y las
+  teclas no cambian. Crece con la escala de la interfaz y entra a 960 px (la hotbar pagina:
+  6 slots a la vista).
+- **Ventanas libres con imán (UI-5, respuesta del dueño).** Batalla, inventario,
+  habilidades, grupo, gremio, apariencia, opciones, ayuda, el chat, los contenedores y las
+  del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio) flotan. Cada una se
+  suelta donde sea y recuerda su lugar; a menos de 10 px de un borde de la pantalla, del
+  techo de la barra o de un borde de otra ventana (de lado o alineada con él) se pega. Nunca
+  queda fuera de la pantalla ni debajo de la barra, tampoco después de achicar la ventana
+  del navegador o subir la escala, ni al abrirla de nuevo si se cerró antes de achicarla:
+  una que queda aplastada a menos de su alto mínimo (72 px; desplegada contra la barra, o
+  con su techo por debajo del área nueva) sube hasta verse entera, y una que todavía
+  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Las flechas
+  del ✥ también sienten el imán. Lugares de fábrica: batalla arriba a la izquierda con el
+  grupo a su lado y las habilidades debajo; inventario arriba a la derecha con gremio y
+  apariencia a su lado y los contenedores justo debajo de él (de lo que mida: con la
+  figura y la mochila, unos 500 px; con el inventario cerrado o movido, desde arriba); el
+  chat abajo a la izquierda; opciones y ayuda al medio; el intercambio arriba al
+  centro; diálogo, tienda, crafteo, mercado y casa abajo al centro, sobre la barra (la
+  tienda a la izquierda del diálogo, los dos sin pisar la columna del inventario).
+  "Restablecer ventanas" las devuelve ahí. Un `rpg.windows` guardado con el dock se sigue
+  leyendo: lo acoplado vuelve a su lugar de fábrica, lo que flotaba conserva el suyo.
+  Escape cierra la de arriba (la última abierta o tocada); en una pantalla recién abierta
+  sigue abriendo Opciones. Ninguna ventana tapa el chequeo de presencia (un chequeo
+  escondido vencería y contaría como fallado, docs/02) ni la pantalla de muerte: las dos
+  van por encima de todas, y también las invitaciones de grupo y de gremio (vencen, y el
+  chat en su lugar de fábrica llega debajo de ellas a 1280 y 960 px), las del gremio más
+  arriba que las del grupo; el tutorial, que se pliega y no vence, va por debajo (las
+  ventanas que salen a su lado, como la ayuda, el gremio y la apariencia, lo tapan).
+- **El chat (UI-10)** flota translúcido, como en Ragnarok Online, y se aclara con el mouse
+  encima o al escribir; nunca se cierra (se pliega), y sus pestañas Chat y Registro van en
+  su barra de título.
+- **Arte gótico (UI-2), propio.** Marcos más ricos: hierro oscuro con un filo dorado por
+  dentro, barra de título tallada y una escuadra de oro con un granate en cada esquina; la
+  barra en piedra de sillares con su banda de hierro y remaches. Las piezas (esquina,
+  pináculo, remache) son pixel art propio escrito como texto en
+  `client/src/ui/ornaments.ts`, como los íconos, en el espíritu de piedra, hierro y oro
+  viejo de §1, sin calcar nada de Diablo ni de Tibia (ni sus marcos, ni sus orbes, ni sus
+  fuentes: las de UI-3 siguen). No se usó Gemini: con el CSS y estas piezas alcanzó, y el
+  navegador del dueño queda libre para los otros lotes. Las reglas de movimiento reducido
+  siguen (la ola de los orbes y el latido se detienen).
+- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); un lugar de
+  fábrica que se acomode a las ventanas ya abiertas (hoy, si se abren todas a la vez,
+  algunas se pisan; los contenedores ya salen bajo el inventario de `feat/equipment-d2`,
+  midiéndolo). El E2E del lote 9 (verde) encontró los clicks del mapa que caían en una
+  ventana (los specs saltan 5 columnas a 1280x800) y la página 7 px más ancha por los
+  pináculos del orbe de maná (el cuerpo del juego recorta); lo que queda para el dueño está
+  en docs/14 (íconos a 1x en el inventario de 16 rem, pináculos cortados en los bordes, el
+  intercambio sobre un compañero).
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.

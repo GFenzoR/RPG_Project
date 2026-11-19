@@ -1,16 +1,18 @@
-// One window of the desktop game screen (docs/17 UI-5): an iron frame with a title bar
-// (icon, title, move handle, fold and close), docked in the column right of the map or
-// floating over it. Where it is, how big and whether it is open is ui/windows.ts; this only
-// draws it and reports what the player does with it. Dragging, resizing and the keys of the
-// move handle are GameView.tsx's (it knows the dock and the map).
+// One window of the desktop game screen (docs/17 UI-5): an iron frame with gothic corners
+// and a title bar (icon, title, move handle, fold and close), floating over the full-screen
+// map. Where it is, how big and whether it is open is ui/windows.ts; this only draws it and
+// reports what the player does with it. Dragging (with the magnet), resizing and the keys
+// of the move handle are GameView.tsx's (it knows the screen and the other windows), with
+// ui/window-dom.ts.
 //
-// The toolbar's windows, the server's (dialog, shop, crafting, market, house, trade) and
-// each open container use this same frame.
+// The toolbar's windows, the chat, the server's (dialog, shop, crafting, market, house,
+// trade) and each open container use this same frame.
 import type { ComponentChildren, JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
 import type { WinKey, WindowPlace } from "./windows.ts";
+import { placeStyle } from "./window-dom.ts";
 
 export interface GameWindowProps {
   t: Translate;
@@ -18,7 +20,7 @@ export interface GameWindowProps {
   icon: IconName;
   title: string;
   place: WindowPlace;
-  /** Stacking order among the floating windows (0 = bottom). */
+  /** Stacking order among the windows (0 = bottom). */
   stack: number;
   /**
    * The interface scale (Options, CSS `zoom` of the windows): the state keeps screen
@@ -31,22 +33,32 @@ export interface GameWindowProps {
   testid?: string | undefined;
   /** data-testid of its title (the house window's "house-name"). */
   titleTestid?: string | undefined;
-  /** Width class of a floating window (client.css .gwin[data-size=…]). */
+  /** Width class (windows.css .gwin[data-size=…]). */
   size?: "narrow" | "normal" | "wide" | undefined;
   /** A dot on the title: something there waits for the player. */
   badge?: boolean | undefined;
-  /** No close button (the shop closes with its dialog). */
+  /** No close button (the shop closes with its dialog; the chat never closes). */
   closable?: boolean | undefined;
   /** The close button's name, when not "Close <title>" (the server's windows keep theirs). */
   closeLabel?: string | undefined;
+  /**
+   * More in the title bar, after the title (the chat's tabs); with `hideTitle` the title
+   * is only read by screen readers and this takes its room.
+   */
+  barExtra?: ComponentChildren;
+  hideTitle?: boolean | undefined;
+  /** A default place of its kind (windows.css): the n-th container steps down from the last. */
+  nth?: number | undefined;
+  /** Gets the window's element (the equipment's is measured: GameView containersTop). */
+  boxRef?: ((el: HTMLElement | null) => void) | undefined;
   onClose(): void;
   onCollapse(collapsed: boolean): void;
   onFocus(): void;
   /** The title bar was pressed: GameView follows the pointer from here. */
   onGrab(e: PointerEvent, el: HTMLElement): void;
-  /** The resize grip was pressed (bottom right; the bottom edge of a docked window). */
+  /** The resize grip was pressed (bottom right). */
   onResize(e: PointerEvent, el: HTMLElement): void;
-  /** A key on the move handle: true when it moved, resized, docked or floated the window. */
+  /** A key on the move handle: true when it moved or resized the window. */
   onMoveKey(e: KeyboardEvent, el: HTMLElement): boolean;
   children: ComponentChildren;
 }
@@ -55,37 +67,27 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
   const { t, id, place } = props;
   const titleId = `gwin-${id}-title`;
   const hintId = `gwin-${id}-move-hint`;
-  const float = !place.dock;
-  const placed = float && place.x !== undefined && place.y !== undefined;
-  const zoom = props.zoom && props.zoom > 0 ? props.zoom : 1;
-  const px = (v: number): string => `${Math.round((v / zoom) * 100) / 100}px`;
-  const style: JSX.CSSProperties = {};
-  if (float) {
-    style.zIndex = 20 + props.stack;
-    if (placed) {
-      style.left = px(place.x ?? 0);
-      style.top = px(place.y ?? 0);
-    }
-    if (place.w !== undefined) style.width = px(place.w);
-  }
-  if (place.h !== undefined && !place.collapsed) {
-    style.height = px(place.h);
-    style.maxHeight = "none";
-  }
+  const placed = place.x !== undefined && place.y !== undefined;
+  // Left, top and a max-height that never reaches under the bar, and the player's size
+  // (ui/window-dom.ts: a drag that ends writes the same lengths).
+  const style: JSX.CSSProperties = {
+    zIndex: 20 + props.stack,
+    ...placeStyle(place, props.zoom ?? 1),
+  };
+  if (props.nth !== undefined && props.nth > 0) style["--nth"] = String(props.nth);
   const sized = place.w !== undefined || place.h !== undefined;
   return (
     <section
+      ref={props.boxRef ?? null}
       class="gwin"
       data-window={id}
       data-testid={props.testid}
-      data-dock={place.dock ? "" : undefined}
-      data-float={float ? "" : undefined}
       data-placed={placed ? "" : undefined}
       data-sized={sized ? "" : undefined}
       data-collapsed={place.collapsed ? "" : undefined}
       data-closing={props.closing ? "" : undefined}
       data-size={props.size}
-      role={float ? "dialog" : "region"}
+      role="dialog"
       aria-labelledby={titleId}
       tabIndex={-1}
       style={style}
@@ -107,9 +109,14 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
         }}
       >
         <Icon name={props.icon} class="gwin-icon" />
-        <h2 id={titleId} class="gwin-title" data-testid={props.titleTestid}>
+        <h2
+          id={titleId}
+          class={props.hideTitle ? "gwin-title visually-hidden" : "gwin-title"}
+          data-testid={props.titleTestid}
+        >
           {props.title}
         </h2>
+        {props.barExtra}
         {props.badge && <span class="gwin-badge" aria-hidden="true" />}
         <button
           type="button"
@@ -117,9 +124,7 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
           data-testid={`window-move-${id}`}
           aria-label={t("client.window.move", { title: props.title })}
           aria-describedby={hintId}
-          title={`${t("client.window.move", { title: props.title })} · ${t(
-            float ? "client.window.move_hint_float" : "client.window.move_hint_dock",
-          )}`}
+          title={`${t("client.window.move", { title: props.title })} · ${t("client.window.move_hint")}`}
           onKeyDown={(e) => {
             const el = e.currentTarget.closest<HTMLElement>(".gwin");
             if (!el || !props.onMoveKey(e, el)) return;
@@ -132,7 +137,7 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
           <Icon name="move" />
         </button>
         <span id={hintId} class="visually-hidden">
-          {t(float ? "client.window.move_hint_float" : "client.window.move_hint_dock")}
+          {t("client.window.move_hint")}
         </span>
         <button
           type="button"

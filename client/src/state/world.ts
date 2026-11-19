@@ -19,14 +19,13 @@ export interface PresenceState {
   options: { id: number; key: string }[];
   until: number;
 }
-import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
+import { CreatureKind, Direction, EquipmentSlot, MessageKind } from "@rpg/protocol";
 import type {
   AttackKind,
   Cosmetics,
   DisappearReason,
   Creature,
   Skull,
-  EquipmentSlot,
   ItemStack,
   MapArea,
   ServerMessage,
@@ -37,6 +36,7 @@ import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
+import { EquippedBackpack } from "./backpack.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
   PLAYOUT_CATCH_UP,
@@ -479,6 +479,8 @@ export class WorldState implements TileSource {
   inventory = new Map<EquipmentSlot, ItemView>();
   /** Open container windows, oldest first. */
   containers: ContainerState[] = [];
+  /** Which of them is the equipped backpack, shown under the figure (docs/17 UI-5). */
+  readonly backpack = new EquippedBackpack();
   /** The party and pending invitations (T3.3). */
   readonly party = new PartyState();
   /** The guild and the invitations to one (T5.1). */
@@ -927,6 +929,7 @@ export class WorldState implements TileSource {
         this.inventory = new Map(
           msg.value.slots.flatMap((s) => (s.item ? [[s.slot, itemView(s.item)] as const] : [])),
         );
+        this.backpack.equipped(this.inventory.get(EquipmentSlot.BACKPACK)?.itemId, this.containers);
         break;
       case "containerOpen": {
         const v = msg.value;
@@ -938,6 +941,7 @@ export class WorldState implements TileSource {
           hasParent: v.hasParent,
         };
         this.containers = [...this.containers.filter((o) => o.id !== c.id), c];
+        this.backpack.opened(c, now);
         break;
       }
       case "containerUpdate": {
@@ -947,9 +951,13 @@ export class WorldState implements TileSource {
         );
         break;
       }
-      case "containerClose":
-        this.containers = this.containers.filter((c) => c.id !== msg.value.containerId);
+      case "containerClose": {
+        const id = msg.value.containerId;
+        const gone = this.containers.find((c) => c.id === id);
+        this.containers = this.containers.filter((c) => c.id !== id);
+        this.backpack.closed(id, gone);
         break;
+      }
       default:
         break; // chat, dialogs… arrive with their roadmap tasks
     }

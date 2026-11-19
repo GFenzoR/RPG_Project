@@ -2,7 +2,8 @@
 /* The interface's text size (Options → Interface, docs/17 UI-3: 90 % to 130 %, in rem) is
    the root font size, set by state/ui-prefs.ts as --ui-text-scale. */
 @import "./fonts.css";
-/* The desktop game screen: dock, orbs, toolbar and windows (docs/17 UI-4, UI-5). */
+/* The desktop game screen: full-screen map, the bottom bar and the windows (docs/17 UI-4,
+   UI-5). */
 @import "./windows.css";
 
 :root {
@@ -35,6 +36,12 @@
   --ui-warn: #d29a2e;
   --ui-danger: #e5574a;
   --ui-item-quest: #e2c47a;
+  /* The tooltip's lines (docs/17 UI-6, the Diablo II idea): a plain item's name, money,
+     the stats and the effects. */
+  --ui-item-plain: #ece5d6;
+  --ui-item-coin: #f0bf3c;
+  --ui-item-stat: #f4f0e8;
+  --ui-item-effect: #8ea6ff;
   --ui-chat-party: #7fb2ff;
   --ui-chat-guild: #7fd07a;
   --ui-chat-private: #d48cff;
@@ -404,7 +411,8 @@ kbd {
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
 /* The header of tablets and phones is always one line (T5.6): a wrapped header pushed the
-   map down a zoom step. The desktop has no header (docs/17 UI-4: the dock has it all). */
+   map down a zoom step. The desktop has no header (docs/17 UI-4: the bottom bar has it
+   all). */
 .hud {
   display: flex;
   align-items: center;
@@ -619,7 +627,7 @@ kbd {
   min-height: 0;
   /* overflow: clip (below) is not a scroll container, so without this the flex item would
      keep the canvas's width as its minimum: made narrower, the window kept the map as wide
-     as before and pushed the dock off the screen. */
+     as before and pushed the side panel off the screen. */
   min-width: 0;
   display: flex;
   align-items: center;
@@ -762,15 +770,10 @@ kbd {
 }
 
 /* Inventory (T1.8): 32 px sprites from the atlas, pixel-perfect like the canvas. */
-.inventory .equipment,
 .inventory .cells {
   display: grid;
-  grid-template-columns: repeat(3, 36px);
-  gap: 3px;
-  justify-content: center;
-}
-.inventory .cells {
   grid-template-columns: repeat(5, 36px);
+  gap: 3px;
   justify-content: start;
 }
 /* A slot is a well cut in the stone: dark, sunk, an iron rim (docs/17 UI-2). */
@@ -788,33 +791,77 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: box-shadow var(--ui-dur-fast) ease;
+  transition:
+    box-shadow var(--ui-dur-fast) ease,
+    background-color var(--ui-dur-fast) ease;
 }
 .inventory .slot:hover {
   box-shadow:
     inset 0 0 0 1px var(--ui-gold-700),
     inset 1px 2px 4px rgb(0 0 0 / 0.8);
 }
-.inventory .slot.gap {
-  border: none;
-  background: none;
+/* The equipment in the Diablo II style (docs/17 UI-5, the owner on 2026-11-18): the slots
+   over a figure on a grid of square cells (state/equipment.ts DOLL), sized by
+   Inventory.tsx to the width it has (--doll-cell, whole and even px). An own silhouette
+   (SVG) behind the slots. */
+.inventory .doll-box {
+  min-width: 0;
 }
-/* An empty equipment slot shows what it takes (docs/17 UI-5): its silhouette, faded
-   (ui/slots/<slot> of the atlas, set as --slot-icon by Inventory.tsx emptySlotStyle). */
-.inventory .equipment .slot {
+.inventory .doll {
+  display: grid;
+  grid-template-columns: repeat(8, var(--doll-cell, 30px));
+  grid-template-rows: repeat(9, var(--doll-cell, 30px));
+  gap: 2px;
+  padding: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 100'%3E%3Cpath fill='%23e2c47a' fill-opacity='0.07' d='M30 4c7 0 11 5 11 11s-4 11-11 11-11-5-11-11 4-11 11-11zM14 30h32l8 6 4 26-6 2-4-20v18l4 34h-10l-3-30h-2l-3 30H24l4-34V44l-4 20-6-2 4-26z'/%3E%3C/svg%3E")
+    center / auto 100% no-repeat;
+}
+/* A 32 px icon in a ring or neck slot smaller than it spills over the rim, pixel for pixel. */
+.inventory .doll .slot {
   position: relative;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
 }
-.inventory .equipment .slot::before {
+/* An empty equipment slot shows what it takes (docs/17 UI-5): its silhouette, faded, at the
+   scale an item's icon takes there (ui/slots/<slot> of the atlas, set as --slot-icon and
+   --slot-scale by Inventory.tsx emptySlotStyle). */
+.inventory .doll .slot::before {
   content: "";
   position: absolute;
-  inset: 1px;
+  inset: 0;
   margin: auto;
   width: 32px;
   height: 32px;
   background: var(--slot-icon) var(--slot-icon-pos, 0 0) no-repeat;
   image-rendering: pixelated;
+  transform: scale(var(--slot-scale, 1));
   opacity: 0.3;
   pointer-events: none;
+}
+/* An item dragged or picked (docs/17 UI-5): the slots that take it glow; one that does not
+   tints red under the pointer (state/equipment.ts slotAccepts; the server still decides).
+   Only with a pointer that hovers: a touch screen keeps :hover where the last finger was,
+   and a slot tapped earlier stayed red while the picked item waited for its place. */
+.inventory .doll[data-holding] .slot[data-accepts="yes"] {
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-300),
+    inset 0 0 12px rgb(226 196 122 / 0.3),
+    0 0 6px rgb(226 196 122 / 0.45);
+}
+@media (hover: hover) {
+  .inventory .doll[data-holding] .slot[data-accepts="no"]:hover {
+    background-color: rgb(110 22 18 / 0.4);
+    box-shadow:
+      inset 0 0 0 1px var(--ui-danger),
+      inset 0 0 12px rgb(229 87 74 / 0.35);
+  }
+}
+.inventory .doll[data-holding] .slot[data-accepts="no"] {
+  background-image: none;
+  background-color: rgb(9 8 7 / 0.9);
 }
 /* A quest item (data/items quest: true): a thin ring of the quest colour around it. */
 .item[data-quest]::after {
@@ -826,15 +873,25 @@ kbd {
     inset 0 0 6px rgb(226 196 122 / 0.35);
   pointer-events: none;
 }
+/* An item: a box of its icon's size at its scale (Inventory.tsx), the sprite inside drawn
+   pixel for pixel and scaled by whole steps from its top left corner. */
 .inventory .item {
   position: relative;
   display: block;
+  flex: none;
   width: 32px;
   height: 32px;
-  image-rendering: pixelated;
-  background-repeat: no-repeat;
   cursor: grab;
   touch-action: none;
+}
+.inventory .item > .sprite {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform-origin: 0 0;
+  pointer-events: none;
 }
 .inventory .item.missing {
   background: #5a4a3a;
@@ -855,19 +912,43 @@ kbd {
     0 0 2px #000,
     0 0 2px #000;
 }
+.inventory .item[data-scale] .count {
+  font-size: 0.8rem;
+  padding: 2px 3px;
+}
+/* The load (docs/17 UI-5): a thin bar of what is carried, gold, amber from 85 %, red full;
+   the text under it. */
 .inventory .capacity {
-  margin: 0.4rem 0 0;
+  margin: 0.45rem 0 0;
+}
+.inventory .cap-bar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  background: var(--ui-stone-950);
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 1px 2px rgb(0 0 0 / 0.8);
+}
+.inventory .cap-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(var(--ui-gold-300), var(--ui-gold-700));
+  transform-origin: 0 50%;
+  transition: transform var(--ui-dur) var(--ui-ease-out);
+}
+.inventory .capacity[data-load="heavy"] .cap-bar > span {
+  background: linear-gradient(#f0c060, var(--ui-warn));
+}
+.inventory .capacity[data-load="full"] .cap-bar > span {
+  background: linear-gradient(var(--ui-life-300), var(--ui-life-500));
+}
+.inventory .capacity p {
+  margin: 0.25rem 0 0;
   color: var(--ui-text-muted);
   font-size: 0.8rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-/* The equipment over a figure of the character (a paperdoll, docs/17 UI-5): an own
-   silhouette drawn as an SVG behind the slots. */
-.inventory .equipment {
-  padding: 0.35rem 0;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 100'%3E%3Cpath fill='%23e2c47a' fill-opacity='0.07' d='M30 4c7 0 11 5 11 11s-4 11-11 11-11-5-11-11 4-11 11-11zM14 30h32l8 6 4 26-6 2-4-20v18l4 34h-10l-3-30h-2l-3 30H24l4-34V44l-4 20-6-2 4-26z'/%3E%3C/svg%3E")
-    center / auto 100% no-repeat;
 }
 .inventory .container {
   margin-top: 0.5rem;
@@ -897,6 +978,16 @@ kbd {
 .inventory .container header button {
   padding: 0 0.4rem;
   line-height: 1.2;
+}
+/* The equipped backpack under the figure (docs/17 UI-5): its grid fills the inventory's
+   width, as the inventory grid of Diablo II under its paperdoll. */
+.inventory .container.docked {
+  margin-top: 0.45rem;
+  animation: none;
+}
+.inventory .container.docked .cells {
+  grid-template-columns: repeat(auto-fill, var(--ui-slot));
+  justify-content: center;
 }
 body.dragging-item,
 body.dragging-item * {
@@ -1057,25 +1148,7 @@ body.picking-item .map-hint {
   width: 1.8rem;
   padding: 0;
 }
-/* Desktop: a slimmer bar closer to the edge, and the canvas keeps the strip it takes clear
-   when the window has room, or moves up as far as it can (--map-reserve-bottom, read by
-   render/game-canvas.ts; px, the belt's height plus its bottom gap). At 1280x800 the bar
-   covered most of the last row of tiles, and a click to walk there cast F1 or F2. */
-.game[data-layout="desktop"]:not([data-pad]) .viewport {
-  --map-reserve-bottom: 48px;
-}
-.game[data-layout="desktop"]:not([data-pad]) .hotbar {
-  bottom: 0.2rem;
-}
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li button,
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li select {
-  height: 2.3rem;
-}
-/* The key and two lines of the name fit the slimmer slot whole. */
-.game[data-layout="desktop"]:not([data-pad]) .hotbar li button {
-  padding-block: 1px 0;
-  line-height: 1.02;
-}
+/* On the desktop the hotbar is in the bottom bar (windows.css), not over the map. */
 
 /* ---- NPC dialog and shop (T1.10; docs/17 UI-8: no scrolling) ---------------------- */
 /* The box spans the map down to the hotbar and lets clicks through; only its windows take
@@ -2847,13 +2920,11 @@ body.picking-item .map-hint {
     display: flex;
     align-items: center;
   }
-  .inventory .equipment {
-    grid-template-columns: repeat(3, 44px);
-  }
-  .inventory .cells {
+  .inventory .cells,
+  .inventory .container.docked .cells {
     grid-template-columns: repeat(auto-fill, 44px);
   }
-  .inventory .slot {
+  .inventory .cells .slot {
     width: 44px;
     height: 44px;
   }
@@ -3076,6 +3147,9 @@ button.credits-link {
 .touch-menu-name.quest {
   color: var(--ui-item-quest);
 }
+.card-name.coin {
+  color: var(--ui-item-coin);
+}
 .card-name::first-letter {
   text-transform: uppercase;
 }
@@ -3143,7 +3217,6 @@ button.credits-link {
   transform-origin: 0 0;
   image-rendering: pixelated;
 }
-/* The card as a tooltip: never takes the pointer. */
 /* Shift+drag of a stack (docs/17 UI-6): how many go where it was dropped. */
 .split-prompt {
   position: fixed;
@@ -3183,26 +3256,65 @@ button.credits-link {
   justify-content: flex-end;
   gap: 0.35rem;
 }
+/* The hover tooltip in the Diablo II style (docs/17 UI-6; the owner on 2026-11-18): a
+   compact near-black box with a thin rim, every line centred, no icon, at once and with no
+   animation. ItemTooltip.tsx places it above the item (below without room) after measuring
+   it: hidden until then. It never takes the pointer. */
 .item-tooltip {
   position: fixed;
   z-index: 60;
-  width: 288px;
+  left: 0;
+  top: 0;
+  visibility: hidden;
   box-sizing: border-box;
-  padding: 8px 10px;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 12px));
+  padding: 5px 10px 6px;
   overflow: hidden;
   pointer-events: none;
-  background-color: rgb(15 13 11 / 0.96);
-  background-image: var(--ui-grain);
-  border: 2px solid var(--ui-iron-600);
-  border-radius: var(--ui-radius);
-  box-shadow: var(--ui-frame-shadow);
-  animation: tip-in var(--ui-dur-fast) var(--ui-ease-out);
+  background: rgb(6 5 4 / 0.9);
+  border: 1px solid var(--ui-iron-600);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.85),
+    0 4px 14px rgb(0 0 0 / 0.55);
 }
-@keyframes tip-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
+.item-card.tip {
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ui-item-stat);
+}
+.item-card.tip .card-name {
+  display: block;
+  font-size: 14px;
+  color: var(--ui-item-plain);
+}
+.item-card.tip .card-name.quest {
+  color: var(--ui-item-quest);
+}
+.item-card.tip .card-name.coin {
+  color: var(--ui-item-coin);
+}
+.item-card.tip .card-type {
+  color: var(--ui-text-muted);
+}
+.item-card.tip .tip-stats li {
+  color: var(--ui-item-stat);
+  font-variant-numeric: tabular-nums;
+}
+.item-card.tip .card-requires li,
+.item-card.tip .card-requires li.met {
+  color: var(--ui-item-stat);
+}
+.item-card.tip .card-requires li.unmet {
+  color: var(--ui-danger);
+}
+.item-card.tip .card-effects li {
+  color: var(--ui-item-effect);
+}
+.item-card.tip .card-desc {
+  margin-top: 2px;
+  color: var(--ui-text-muted);
 }
 /* Items in the DOM take the keyboard focus (their card shows, Enter uses them). */
 .item[tabindex]:focus-visible {

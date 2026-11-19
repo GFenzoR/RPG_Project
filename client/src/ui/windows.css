@@ -1,95 +1,208 @@
-/* Desktop game screen (docs/17 UI-4, UI-5): the map takes everything but the dock, a stone
-   column on its right with the vitals (orbs), the toolbar, the docked windows and the chat.
-   The toolbar's windows dock there or float over the map (GameView.tsx, ui/windows.ts).
+/* Desktop game screen (docs/17 UI-4, UI-5), full screen as the owner asked (2026-11-18):
+   the map fills the screen above the gothic bottom bar (HudBar.tsx: the orbs, the
+   experience, the hotbar and the toolbar), the only fixed piece; every window floats over
+   the map wherever the player drops it (GameView.tsx, ui/windows.ts: a magnet aligns it).
    Everything here hangs from .game[data-ui="windows"]; tablets and phones keep the tabs
-   and the drawer of client.css. */
+   and the drawer of client.css. The ornaments (--orn-*) are own pixel art from
+   ui/ornaments.ts, set on .game. */
 
 .game[data-ui="windows"] {
-  /* The dock is as narrow as it can be while the map gets its next whole scale for the
-     classic 15x11 tiles: 1280 px leaves 960 for 2x, 1920 px 1536 for 3x. With the 31x21
-     window the fitted view there is 2x with 24x16 tiles (render/zoom.ts). */
-  --dock-w: clamp(272px, 100vw - 960px, 384px);
+  /* The bar's height in its own px; the interface scale (--ui-zoom, docs/17 UI-3) zooms
+     it like the windows: --bar-px is what it takes on screen. */
+  --bar-h: 88px;
+  --bar-px: calc(var(--bar-h) * var(--ui-zoom, 1));
+  /* The column of each orb, and the plaque over the life orb (the chat starts right of
+     it). */
+  --orb-col: 112px;
+  --plaque-w: 132px;
+  --shop-cell: 4.5rem;
+  --shop-w: calc(6 * var(--shop-cell) + 5 * 0.3rem + 1rem + 4px);
 }
-/* The interface scale (docs/17 UI-3, Options → Interface; state/ui-prefs.ts sets --ui-zoom
-   on <html>): the dock and the windows grow or shrink, the map keeps its pixels and takes
-   what is left. The dock is in px, not rem: the text size option makes the text larger
-   without taking a zoom step from the map. GameView divides the windows' remembered
-   places and sizes (screen px) by it. The hotbar is left out: it measures its slots to
-   page them (Hotbar.tsx), and its text follows the text size anyway. */
-.game[data-ui="windows"] :is(.dock, .game-body > .gwin) {
-  zoom: var(--ui-zoom, 1);
-}
+/* Nothing in it scrolls the page: the pinnacles on the mana orb's socket stick out 7 px
+   past the right edge (and a window's gothic corners 5 px), which made the page 7 px
+   wider than the screen and let a scrollIntoView shift the whole game sideways. clip, not
+   hidden: no script or focused field can scroll it either (hidden for older engines). */
 .game[data-ui="windows"] .game-body {
   position: relative;
-}
-/* The map sits in a thin iron frame, sunk in the dark around it. */
-.game[data-ui="windows"] .viewport canvas {
-  box-shadow:
-    0 0 0 1px #000,
-    0 0 0 2px var(--ui-iron-600),
-    0 0 28px 6px rgb(0 0 0 / 0.85);
-}
-.game[data-ui="windows"] .dock {
-  box-sizing: border-box;
-  width: var(--dock-w);
-  flex: none;
-  gap: 0;
-  padding: 0;
   overflow: hidden;
-  box-shadow:
-    inset 4px 0 8px rgb(0 0 0 / 0.55),
-    -1px 0 0 var(--ui-iron-900);
+  overflow: clip;
+}
+/* The map: the whole screen above the bar (its bottom padding), no frame around it, and
+   always covered at a whole scale (--map-cover, read by render/game-canvas.ts). */
+.game[data-ui="windows"] .viewport {
+  --map-cover: 1;
+  box-sizing: border-box;
+  padding-bottom: var(--bar-px);
+  background: var(--ui-void);
 }
 
-/* ---- Vitals: life and mana orbs with the name, level and experience between ---------- */
-.vitals {
+/* ---- The bottom bar: carved stone under an iron band with studs --------------------- */
+.hud-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  zoom: var(--ui-zoom, 1);
+  box-sizing: border-box;
+  height: var(--bar-h);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "life mid mana"
-    "cond cond cond";
-  align-items: center;
-  gap: 0.25rem 0.5rem;
-  padding: 0.8rem 0.7rem 0.5rem;
+  grid-template-columns: var(--orb-col) minmax(0, 1fr) var(--orb-col);
+  /* One row as tall as the bar: the orbs' sockets rise out of it, over the map. */
+  grid-template-rows: minmax(0, 1fr);
+  /* Ashlar blocks: dark mortar lines with a lit edge under each, over the stone. */
   background:
-    radial-gradient(ellipse at 50% 0%, rgb(184 146 63 / 0.12), transparent 70%),
-    linear-gradient(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.35));
-  border-bottom: 2px solid var(--ui-iron-600);
-  box-shadow: 0 1px 0 var(--ui-iron-900);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='38' viewBox='0 0 96 38' shape-rendering='crispEdges'%3E%3Cg fill='%23080605' fill-opacity='0.8'%3E%3Crect y='18' width='96' height='1'/%3E%3Crect y='37' width='96' height='1'/%3E%3Crect x='0' width='1' height='18'/%3E%3Crect x='48' y='19' width='1' height='18'/%3E%3C/g%3E%3Cg fill='%23ffeccc' fill-opacity='0.09'%3E%3Crect y='19' width='96' height='1'/%3E%3Crect y='0' width='96' height='1'/%3E%3Crect x='1' width='1' height='18'/%3E%3Crect x='49' y='19' width='1' height='18'/%3E%3C/g%3E%3C/svg%3E")
+      0 14px / 96px 38px,
+    linear-gradient(rgb(255 236 200 / 0.05), transparent 40%, rgb(0 0 0 / 0.35)),
+    var(--ui-grain),
+    var(--ui-stone-800);
+  box-shadow: 0 -8px 18px rgb(0 0 0 / 0.55);
 }
-.vitals .conditions {
-  grid-area: cond;
-  flex-wrap: wrap;
-  justify-content: center;
+/* The iron band along its top: studs on dark iron, black above, a gold line under it. */
+.hud-bar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 12px;
+  background:
+    var(--orn-studs) 12px 1px / 48px 10px repeat-x,
+    linear-gradient(#5d5750, #3a3530 45%, #1f1c19);
+  box-shadow:
+    0 -1px 0 #000,
+    0 1px 0 var(--ui-gold-700),
+    0 2px 0 #000;
+  pointer-events: none;
 }
-.orb-box {
+/* A gothic crest over the middle of the band: a pinnacle between two smaller ones. */
+.hud-bar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -22px;
+  width: 54px;
+  height: 34px;
+  transform: translateX(-50%);
+  background:
+    var(--orn-spire) 50% 0 / 18px 28px no-repeat,
+    var(--orn-spire) 0 12px / 14px 22px no-repeat,
+    var(--orn-spire) 100% 12px / 14px 22px no-repeat;
+  pointer-events: none;
+}
+.bar-centre {
+  grid-column: 2;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  padding: 16px 8px 4px;
+  /* Two iron pillars with a gold edge between the sockets and the middle. */
+  background:
+    linear-gradient(
+      90deg,
+      #0d0a07 0 1px,
+      var(--ui-gold-700) 1px 2px,
+      #3a3530 2px 5px,
+      #1c1916 5px 7px,
+      #0d0a07 7px 8px,
+      transparent 8px
+    ),
+    linear-gradient(
+      270deg,
+      #0d0a07 0 1px,
+      var(--ui-gold-700) 1px 2px,
+      #3a3530 2px 5px,
+      #1c1916 5px 7px,
+      #0d0a07 7px 8px,
+      transparent 8px
+    );
+}
+/* The hotbar and the toolbar sit in a well cut in the stone. */
+.bar-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 8px;
+  padding: 0 4px;
+  background: rgb(0 0 0 / 0.32);
+  border-radius: var(--ui-radius);
+  box-shadow:
+    inset 0 2px 6px rgb(0 0 0 / 0.8),
+    0 0 0 1px var(--ui-iron-900),
+    0 1px 0 1px rgb(255 240 210 / 0.05);
+}
+.bar-hotbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* ---- The orbs, each in an iron socket rising over the bar's top --------------------- */
+.orb-box {
+  position: relative;
+  grid-row: 1;
+  align-self: end;
+  justify-self: center;
+  margin-bottom: 4px;
 }
 .orb-life {
-  grid-area: life;
+  grid-column: 1;
 }
 .orb-mana {
-  grid-area: mana;
+  grid-column: 3;
+}
+.orb-socket {
+  position: relative;
+  box-sizing: border-box;
+  width: 106px;
+  height: 106px;
+  padding: 7px;
+  border-radius: 50%;
+  /* Dark iron with a lit upper rim, a gold trim inside and studs at the four points. */
+  background:
+    var(--orn-stud) 50% 0 / 10px 10px no-repeat,
+    var(--orn-stud) 50% 100% / 10px 10px no-repeat,
+    var(--orn-stud) 0 50% / 10px 10px no-repeat,
+    var(--orn-stud) 100% 50% / 10px 10px no-repeat,
+    radial-gradient(circle at 50% 30%, #6a635b, #3a3530 55%, #171513 100%);
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 2px var(--ui-gold-700),
+    0 0 0 3px #000,
+    0 4px 12px rgb(0 0 0 / 0.7),
+    inset 0 0 0 1px rgb(0 0 0 / 0.8),
+    inset 0 2px 0 1px rgb(169 160 148 / 0.25);
+}
+/* Two pinnacles on the socket's shoulders. */
+.orb-socket::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: -8px;
+  height: 28px;
+  background:
+    var(--orn-spire) 0 0 / 18px 28px no-repeat,
+    var(--orn-spire) 100% 0 / 18px 28px no-repeat;
+  pointer-events: none;
 }
 .orb {
   position: relative;
-  width: 68px;
-  height: 68px;
+  width: 92px;
+  height: 92px;
   border-radius: 50%;
   overflow: hidden;
   isolation: isolate;
   background: radial-gradient(circle at 50% 45%, #1d1411, #060404 72%);
-  /* An iron ring with rivets of light, sunk in the stone. */
   box-shadow:
-    0 0 0 2px #0b0907,
-    0 0 0 4px var(--ui-iron-600),
-    0 0 0 5px #0b0907,
-    0 0 0 6px rgb(122 114 104 / 0.45),
-    0 4px 10px 6px rgb(0 0 0 / 0.55),
-    inset 0 0 12px #000;
+    0 0 0 1px #000,
+    0 0 0 2px var(--ui-gold-700),
+    0 0 0 3px #000,
+    inset 0 0 14px #000;
 }
 .orb-liquid,
 .orb-ghost {
@@ -151,7 +264,7 @@
   border-radius: 50%;
   background:
     radial-gradient(ellipse 34% 22% at 34% 22%, rgb(255 255 255 / 0.42), transparent 70%),
-    radial-gradient(circle at 50% 50%, transparent 58%, rgb(0 0 0 / 0.5) 100%);
+    radial-gradient(circle at 50% 50%, transparent 58%, rgb(0 0 0 / 0.55) 100%);
 }
 /* Low health: the life orb beats. */
 .orb[data-low] {
@@ -162,35 +275,67 @@
     transform: scale(1.05);
   }
 }
+/* The value, written across the lower part of the orb. */
 .orb-text {
+  position: absolute;
+  left: 50%;
+  top: 64%;
+  transform: translate(-50%, -50%);
   font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--ui-text);
+  font-weight: 700;
+  color: #fff4e0;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 #000;
+  pointer-events: none;
+  text-shadow:
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 -1px 0 #000,
+    0 0 4px #000;
 }
-.orb-life .orb-text {
-  color: #f3a08f;
-}
-.orb-mana .orb-text {
-  color: #a8c0f5;
-}
-.vitals-mid {
-  grid-area: mid;
-  min-width: 0;
+
+/* ---- The plaque over the life orb: conditions, name, level and experience ------------ */
+.vitals {
+  position: absolute;
+  left: 6px;
+  bottom: calc(100% + 30px);
+  box-sizing: border-box;
+  width: var(--plaque-w);
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  text-align: center;
-  gap: 0.1rem;
+  gap: 1px;
+  padding: 4px 7px 5px;
+  background: linear-gradient(rgb(23 20 16 / 0.86), rgb(9 8 7 / 0.86));
+  border: 1px solid var(--ui-iron-600);
+  border-top-color: var(--ui-gold-700);
+  border-radius: var(--ui-radius);
+  box-shadow:
+    0 0 0 1px #000,
+    0 3px 8px rgb(0 0 0 / 0.6);
+}
+/* Small gold corners, like the windows'. */
+.vitals::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  pointer-events: none;
+  background:
+    var(--orn-corner-tl) 0 0 / 12px 12px no-repeat,
+    var(--orn-corner-tr) 100% 0 / 12px 12px no-repeat,
+    var(--orn-corner-bl) 0 100% / 12px 12px no-repeat,
+    var(--orn-corner-br) 100% 100% / 12px 12px no-repeat;
+}
+.vitals .conditions {
+  flex-wrap: wrap;
+  margin-bottom: 2px;
 }
 .vname {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--ui-font-title);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--ui-gold-300);
@@ -198,7 +343,7 @@
 }
 .vlevel,
 .vxp {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--ui-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -208,16 +353,18 @@
 .vlevel {
   color: var(--ui-text);
 }
-/* Experience: a gold bar that fills with transform; a level up flashes it. */
+/* Experience: a gold bar along the bar's top, filled with transform; a level up flashes. */
 .xpbar {
   position: relative;
   display: block;
-  height: 7px;
-  margin: 0.25rem 0 0.1rem;
+  flex: none;
+  height: 8px;
   overflow: hidden;
   background: var(--ui-stone-950);
   border: 1px solid #0b0907;
-  box-shadow: 0 0 0 1px var(--ui-iron-600);
+  box-shadow:
+    0 0 0 1px var(--ui-iron-600),
+    inset 0 1px 3px #000;
 }
 .xpfill {
   position: absolute;
@@ -242,32 +389,52 @@
   }
 }
 
-/* ---- Toolbar: icon buttons that open the windows (Tibia-like, own pixel icons) ------- */
+/* ---- The hotbar in the bar: slots cut in the stone ---------------------------------- */
+.game[data-ui="windows"] .hud-bar .hotbar {
+  position: static;
+  transform: none;
+  max-width: 100%;
+  min-width: 0;
+}
+.hud-bar .hotbar li button,
+.hud-bar .hotbar li select {
+  width: 64px;
+  height: 52px;
+}
+.hud-bar .hotbar li button {
+  padding: 2px 4px;
+  line-height: 1.05;
+}
+.hud-bar .hotbar .page,
+.hud-bar .hotbar .edit {
+  height: 52px;
+}
+
+/* ---- Toolbar: icon buttons that open the windows (Tibia-like, own pixel icons) -------
+   Two rows of five beside the hotbar; one row with the icons at 2x where it fits. */
 .toolbar {
+  flex: none;
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(5, 30px);
+  grid-auto-rows: 26px;
   gap: 3px;
-  padding: 0.4rem 0.45rem;
-  background: rgb(0 0 0 / 0.25);
-  border-bottom: 2px solid var(--ui-iron-600);
-  box-shadow: 0 1px 0 var(--ui-iron-900);
 }
 .tool {
   position: relative;
   display: grid;
   place-items: center;
-  height: 30px;
   padding: 0;
 }
-/* Pixel art at whole scales only: 1x in the narrow dock, 2x once it is 24rem wide. */
+/* Pixel art at whole scales only: 1x, or 2x in the one-row toolbar. */
 .tool .icon {
   width: 16px;
   height: 16px;
   transition: transform var(--ui-dur-fast) ease;
 }
-@media (min-width: 1344px) {
-  .tool {
-    height: 38px;
+@media (min-width: 1600px) {
+  .toolbar {
+    grid-template-columns: repeat(10, 40px);
+    grid-auto-rows: 40px;
   }
   .tool .icon {
     width: 32px;
@@ -304,8 +471,8 @@
 }
 .tool-badge {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 2px;
+  right: 2px;
 }
 .tab-dot {
   display: inline-block;
@@ -318,29 +485,80 @@
   }
 }
 
-/* ---- Windows ------------------------------------------------------------------------- */
-.gwin {
-  position: relative;
+/* ---- Windows: the area above the bar, and the frame -------------------------------- */
+/* Its own stacking context: the windows' z-index (20 + their place in the stack,
+   GameWindow) orders them inside it, and the whole layer sits at 20, where the lowest
+   window was: over the bar and the map's own pieces (the notices, the tutorial, the level
+   up), under the presence check and the death screen (below), which no window may hide. */
+.win-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: var(--bar-px);
+  z-index: 20;
+  pointer-events: none;
+}
+/* (.win-layer > .gwin: over the frame of client.css, which lists every window.) */
+.win-layer > .gwin {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  width: var(--gwin-w, 17rem);
   min-width: 0;
-  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
   font-size: 0.85rem;
+  pointer-events: auto;
+  zoom: var(--ui-zoom, 1);
+  /* Dark iron with a gold hairline inside, lit top left, shaded bottom right. */
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 1px rgb(110 84 34 / 0.75),
+    inset 2px 2px 0 rgb(122 114 104 / 0.35),
+    inset -2px -2px 0 rgb(0 0 0 / 0.5),
+    var(--ui-shadow);
   animation: gwin-in var(--ui-dur) var(--ui-ease-out);
+}
+/* Gothic corners: a gold bracket with a garnet on each (ui/ornaments.ts). */
+.gwin::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    var(--orn-corner-tl) 0 0 / 24px 24px no-repeat,
+    var(--orn-corner-tr) 100% 0 / 24px 24px no-repeat,
+    var(--orn-corner-bl) 0 100% / 24px 24px no-repeat,
+    var(--orn-corner-br) 100% 100% / 24px 24px no-repeat;
 }
 .gwin[data-closing] {
   animation: gwin-out 100ms var(--ui-ease-in) forwards;
   pointer-events: none;
+}
+.gwin[data-dragging] {
+  box-shadow:
+    0 0 0 1px var(--ui-gold-700),
+    inset 0 0 0 1px rgb(110 84 34 / 0.75),
+    0 10px 26px rgb(0 0 0 / 0.75);
 }
 .gwin-bar {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   min-height: 26px;
-  padding: 0 3px 0 6px;
-  background: linear-gradient(#2d261d, #19150f);
+  padding: 0 4px 0 16px;
+  background:
+    linear-gradient(rgb(255 236 200 / 0.07), transparent 50%, rgb(0 0 0 / 0.3)),
+    linear-gradient(#352c22, #1b1612);
   border-bottom: 1px solid var(--ui-gold-700);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 0.6),
+    inset 0 1px 0 rgb(255 236 200 / 0.08);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -364,7 +582,9 @@
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-shadow: 0 1px 0 #000;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 6px rgb(184 146 63 / 0.25);
 }
 .gwin-btn {
   flex: none;
@@ -378,7 +598,7 @@
 }
 .gwin-body {
   min-height: 0;
-  padding: 0.45rem 0.5rem 0.5rem;
+  padding: 0.45rem 0.55rem 0.55rem;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -400,12 +620,12 @@
   width: 12px;
   height: 12px;
 }
-/* The resize grip: the bottom right corner of a floating window, the bottom edge of a
-   docked one (the dock sets its width). */
+/* The resize grip: the bottom right corner, over its ornament. */
 .gwin-resize {
   position: absolute;
   right: 0;
   bottom: 0;
+  z-index: 4;
   width: 14px;
   height: 14px;
   cursor: nwse-resize;
@@ -423,19 +643,14 @@
 .gwin-resize:hover {
   opacity: 1;
 }
-.gwin[data-dock] > .gwin-resize {
-  left: 0;
-  width: auto;
-  height: 5px;
-  cursor: ns-resize;
-  background: none;
-}
-.gwin[data-dock] > .gwin-resize:hover {
-  background: linear-gradient(transparent 2px, var(--ui-gold-700) 2px);
-}
 body.resizing-window,
 body.resizing-window * {
   cursor: nwse-resize !important;
+  user-select: none !important;
+}
+body.dragging-window,
+body.dragging-window * {
+  cursor: grabbing !important;
   user-select: none !important;
 }
 /* The title bar names the window: the panel's own heading would say it twice. */
@@ -465,7 +680,7 @@ body.resizing-window * {
   margin-left: auto;
   white-space: nowrap;
 }
-/* A container's window: its cells fill the width it has (4 to 6 columns in the dock). */
+/* A container's window: its cells fill the width it has. */
 .container-window > .container.framed {
   margin: 0;
   padding: 0;
@@ -479,50 +694,6 @@ body.resizing-window * {
   grid-template-columns: repeat(auto-fill, var(--ui-slot));
   gap: 3px;
 }
-/* Docked: a window of the column, as wide as it, as tall as its content. */
-.gwin[data-dock] {
-  flex: none;
-}
-/* A window dragged over the dock shows where it will go: a gold line. */
-.gwin[data-drop-before]::before,
-.dock-stack[data-drop-end]::after {
-  content: "";
-  display: block;
-  height: 3px;
-  background: var(--ui-gold-300);
-  box-shadow: 0 0 6px var(--ui-gold-500);
-}
-.gwin[data-drop-before]::before {
-  position: absolute;
-  top: -6px;
-  left: 0;
-  right: 0;
-}
-.dock-stack[data-drop-end]::after {
-  flex: none;
-}
-.gwin-ghost {
-  position: absolute;
-  z-index: 60;
-  box-sizing: border-box;
-  border: 2px dashed var(--ui-gold-300);
-  background: rgb(23 20 16 / 0.55);
-  pointer-events: none;
-}
-body.dragging-window,
-body.dragging-window * {
-  cursor: grabbing !important;
-  user-select: none !important;
-}
-/* Floating: over the map, as wide as its size says, never taller than the screen. */
-.gwin[data-float] {
-  position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
-  width: var(--gwin-w, 17rem);
-  max-width: calc(100% - 1rem);
-  max-height: calc(100% - 1rem);
-}
 .gwin[data-size="narrow"] {
   --gwin-w: 16rem;
 }
@@ -532,39 +703,80 @@ body.dragging-window * {
 .gwin[data-size="wide"] {
   --gwin-w: 25rem;
 }
-/* The server's windows before the player moves them: where they were over the map. The
-   dialog at the bottom centre over the hotbar; with the shop, the two side by side, the
-   shop on the left; crafting, market and house top left; the trade top right. */
+
+/* ---- Where each window shows before the player moves it (docs/17 UI-5) ---------------
+   Percentages are of the area above the bar. The battle list top left with the party
+   beside it and the skills under it; the equipment top right with the guild and the
+   appearance beside it and the containers under it; the chat at the bottom left, past the
+   plaque; the options and the help in the middle; the trade at the top centre; the NPC's
+   and the stations' windows at the bottom centre, just over the bar, the shop left of its
+   dialog, the two clear of the equipment's column. Moved, a window keeps its own place
+   (GameWindow sets left and top). */
+.gwin:not([data-placed])[data-window="battle"] {
+  max-height: calc(50% - 4px);
+}
+.gwin:not([data-placed])[data-window="party"] {
+  left: 16rem;
+}
+.gwin:not([data-placed])[data-window="skills"] {
+  top: 50%;
+  max-height: 50%;
+}
+.gwin:not([data-placed]):is(
+    [data-window="inventory"],
+    [data-window="guild"],
+    [data-window="appearance"],
+    [data-window^="container-"]
+  ) {
+  left: auto;
+  right: 0;
+}
+.gwin:not([data-placed]):is([data-window="guild"], [data-window="appearance"]) {
+  right: 16rem;
+}
+.gwin:not([data-placed])[data-window="appearance"] {
+  top: 3rem;
+  max-height: calc(100% - 3rem);
+}
+/* Right under the equipment while it sits at its default place (--containers-top, its
+   height measured by GameView: about 500 px with the figure and the backpack under it;
+   0 when it is closed or moved, and the column is free), the n-th one a step down and
+   left of the first (--nth, set by GameWindow), but never lower than its title bar can
+   show: on a short screen with a large interface scale and text the 4th one already fell
+   under the bar (GameView only moves the windows the player placed). */
+.gwin:not([data-placed])[data-window^="container-"] {
+  --container-top: min(
+    calc(var(--containers-top, 0px) + var(--nth, 0) * 1.75rem),
+    calc(100% - 2rem)
+  );
+  top: var(--container-top);
+  right: calc(var(--nth, 0) * 1rem);
+  max-height: calc(100% - var(--container-top));
+}
+.gwin:not([data-placed]):is([data-window="options"], [data-window="help"]) {
+  left: calc((100% - var(--gwin-w)) / 2);
+  top: 8%;
+  max-height: 92%;
+}
 .game[data-ui="windows"] {
-  --shop-cell: 4.5rem;
-  --shop-w: calc(6 * var(--shop-cell) + 5 * 0.3rem + 1rem + 4px);
-}
-.gwin[data-window="dialog"] {
-  --gwin-w: min(47.5rem, calc(100% - var(--dock-w) - 1rem));
-}
-.game-body[data-shop] > .gwin[data-window="dialog"] {
-  --gwin-w: min(22rem, calc(40% - var(--dock-w) * 0.4));
-}
-.gwin[data-window="shop"] {
-  --gwin-w: min(var(--shop-w), calc(100% - var(--dock-w) - 24rem));
-}
-.gwin[data-float]:not([data-placed])[data-window="dialog"] {
-  top: auto;
-  bottom: 5rem;
-  left: calc((100% - var(--dock-w) - var(--gwin-w)) / 2);
-  max-height: calc(100% - 5.5rem);
-}
-.game-body[data-shop] > .gwin[data-float]:not([data-placed])[data-window="dialog"] {
-  left: calc(
-    (100% - var(--dock-w) + min(var(--shop-w), calc(100% - var(--dock-w) - 24rem))) / 2 - 11rem +
-      0.25rem
+  /* The shop and its dialog side by side: their widths, and where the pair starts:
+     centred, but never over the equipment's column (16rem on the right). */
+  --shop-pw: min(var(--shop-w), calc(100% - 24rem));
+  --dialog-pw: min(22rem, 40%);
+  --pair-w: calc(var(--shop-pw) + 0.5rem + var(--dialog-pw));
+  --pair-left: max(
+    0.5rem,
+    min(calc((100% - var(--pair-w)) / 2), calc(100% - 16.5rem - var(--pair-w)))
   );
 }
-.gwin[data-float]:not([data-placed])[data-window="shop"] {
-  top: auto;
-  bottom: 5rem;
-  left: max(0.5rem, calc((100% - var(--dock-w) - var(--gwin-w) - 22.5rem) / 2));
-  max-height: calc(100% - 5.5rem);
+.gwin[data-window="dialog"] {
+  --gwin-w: min(47.5rem, calc(100% - 1rem));
+}
+.game-body[data-shop] .gwin[data-window="dialog"] {
+  --gwin-w: var(--dialog-pw);
+}
+.gwin[data-window="shop"] {
+  --gwin-w: var(--shop-pw);
 }
 .gwin[data-window="crafting"] {
   --gwin-w: 24rem;
@@ -576,68 +788,89 @@ body.dragging-window * {
 .gwin[data-window="trade"] {
   --gwin-w: 22rem;
 }
-.gwin[data-float]:not([data-placed]):is(
+.gwin:not([data-placed]):is(
+    [data-window="dialog"],
+    [data-window="shop"],
     [data-window="crafting"],
     [data-window="market"],
     [data-window="house"]
   ) {
-  top: 0.5rem;
-  left: 0.5rem;
-  max-height: calc(100% - 5rem);
+  top: auto;
+  bottom: 6px;
+  left: calc((100% - var(--gwin-w)) / 2);
+  max-height: calc(100% - 12px);
 }
-.gwin[data-float]:not([data-placed])[data-window="trade"] {
-  top: 0.5rem;
-  left: calc(100% - var(--dock-w) - var(--gwin-w) - 0.5rem);
-  max-height: calc(100% - 5rem);
+.game-body[data-shop] .gwin:not([data-placed])[data-window="shop"] {
+  left: var(--pair-left);
 }
-/* A container out of the dock, before it is moved: a step down and right of the last. */
-.gwin[data-float]:not([data-placed])[data-window^="container-"] {
-  top: 3rem;
-  left: calc(100% - var(--dock-w) - var(--gwin-w) - 1rem);
+.game-body[data-shop] .gwin:not([data-placed])[data-window="dialog"] {
+  left: calc(var(--pair-left) + var(--shop-pw) + 0.5rem);
 }
-
-/* Where each floating window shows before the player moves it: over the map, clear of
-   the NPC windows on its top left. */
-.gwin[data-float]:not([data-placed])[data-window="guild"] {
-  left: calc(100% - var(--dock-w) - var(--gwin-w) - 1.5rem);
-  top: 1.5rem;
-}
-.gwin[data-float]:not([data-placed])[data-window="appearance"] {
-  left: calc(100% - var(--dock-w) - var(--gwin-w) - 2.5rem);
-  top: 3rem;
-}
-.gwin[data-float]:not([data-placed]):is([data-window="options"], [data-window="help"]) {
-  left: calc((100% - var(--dock-w) - var(--gwin-w)) / 2);
-  top: 8%;
+.gwin:not([data-placed])[data-window="trade"] {
+  left: calc((100% - var(--gwin-w)) / 2);
+  max-height: 100%;
 }
 
-/* ---- The dock's column of windows and its chat --------------------------------------- */
-.dock-stack {
+/* ---- The chat: translucent over the map, RO-like; clearer under the pointer and while
+   typing. Its tabs (chat and log) sit in the title bar. -------------------------------- */
+.gwin[data-window="chat"] {
+  --gwin-w: 24rem;
+  background: none;
+  border-color: rgb(74 69 64 / 0.55);
+  box-shadow: 0 0 0 1px rgb(13 10 7 / 0.45);
+}
+.gwin:not([data-placed])[data-window="chat"] {
+  top: auto;
+  bottom: 0;
+  left: calc(var(--plaque-w) + 12px);
+}
+.gwin[data-window="chat"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ui-grain), var(--ui-stone-950);
+  opacity: 0.5;
+  transition: opacity var(--ui-dur) ease;
+}
+.gwin[data-window="chat"]::after {
+  opacity: 0.45;
+  transition: opacity var(--ui-dur) ease;
+}
+.gwin[data-window="chat"]:is(:hover, :focus-within)::before {
+  opacity: 0.94;
+}
+.gwin[data-window="chat"]:is(:hover, :focus-within)::after {
+  opacity: 1;
+}
+.gwin[data-window="chat"] .gwin-bar {
+  background: rgb(0 0 0 / 0.28);
+  border-bottom-color: rgb(110 84 34 / 0.5);
+}
+.gwin[data-window="chat"] .gwin-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 0.4rem 0.4rem;
+}
+.chat-box,
+.chat-pane:not([hidden]),
+.chat-pane > .chat {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
-.chat-box {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.35rem 0.45rem 0.45rem;
-  background: rgb(0 0 0 / 0.3);
-  border-top: 2px solid var(--ui-iron-600);
-  box-shadow: 0 -1px 0 var(--ui-iron-900);
+.chat-pane[hidden] {
+  display: none;
 }
 .chat-tabs {
+  flex: 1;
+  min-width: 0;
   display: flex;
   gap: 3px;
 }
 .chat-tabs [role="tab"] {
-  padding: 0.15rem 0.7rem;
+  padding: 0.1rem 0.6rem;
   font-family: var(--ui-font-title);
   font-size: 0.7rem;
   letter-spacing: 0.06em;
@@ -645,7 +878,21 @@ body.dragging-window * {
 }
 .chat-pane .chat-lines,
 .chat-pane .log {
-  height: clamp(5rem, 14vh, 12rem);
+  flex: 1 1 auto;
+  height: 7.5rem;
+  min-height: 2.5rem;
+}
+.gwin[data-window="chat"] .chat-lines,
+.chat-pane .log {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+.gwin[data-window="chat"] .chat-lines li,
+.chat-pane .log li {
+  text-shadow:
+    0 1px 1px #000,
+    0 0 3px #000;
 }
 .chat-pane .log {
   margin: 0;
@@ -654,12 +901,9 @@ body.dragging-window * {
   font-size: 0.8rem;
   line-height: 1.3;
   color: var(--ui-chat-system);
-  background: rgb(9 8 7 / 0.7);
-  border: 1px solid var(--ui-iron-900);
-  box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.7);
 }
-.chat-pane[hidden] {
-  display: none;
+.gwin[data-window="chat"] .say :is(input, select) {
+  background: rgb(15 13 11 / 0.7);
 }
 
 /* ---- Battle window: the fight mode in one line on top, the list under it ------------ */
@@ -791,16 +1035,51 @@ body.dragging-window * {
   margin: 0;
 }
 
-/* ---- The hotbar: a belt of slots in an iron strap along the bottom of the map --------
-   (desktop only: the phones count every pixel of the bar for their four slots). */
-.game[data-ui="windows"] .hotbar {
-  padding: 3px;
-  background: rgb(15 13 11 / 0.82);
-  border: 1px solid var(--ui-iron-900);
-  border-radius: var(--ui-radius);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-iron-600),
-    0 3px 10px rgb(0 0 0 / 0.6);
+/* ---- Over the map, above the bar: notices, invitations, the tutorial, touch extras --- */
+.game[data-ui="windows"] .notices {
+  bottom: calc(var(--bar-px) + 2.5rem);
+}
+.game[data-ui="windows"] .notices.raised {
+  bottom: calc(var(--bar-px) + 10rem);
+}
+/* The invitations: over the windows (the chat at its default place reaches under them at
+   1280 and 960 px wide, and one hidden there runs out unseen), the guild's above the
+   party's as elsewhere (client.css). */
+.game[data-ui="windows"] .invitations {
+  bottom: calc(var(--bar-px) + 1rem);
+  z-index: 21;
+}
+.game[data-ui="windows"] .guild-invitations {
+  bottom: calc(var(--bar-px) + 4.5rem);
+}
+/* Over every window (.win-layer is at 20): a presence check hidden under one would run
+   out and count as failed (docs/02, anti-bot), and the death screen asks for a click. */
+.game[data-ui="windows"] .presence {
+  z-index: 21;
+}
+.game[data-ui="windows"] .death {
+  z-index: 22;
+}
+/* The tutorial's hint: left of the equipment's column (top right), under the windows (it
+   folds, and nothing runs out while it waits); the guild and the appearance open there. */
+.game[data-ui="windows"] .tutorial,
+.game[data-ui="windows"] .tutorial-show {
+  right: calc(16rem * var(--ui-zoom, 1) + 0.75rem);
+}
+/* A touch screen with the pad (Options): the pad and the zoom buttons over the map at the
+   bottom right, above the bar; the banner of a picked item at the top centre. */
+.game[data-ui="windows"] .touch-pad-dock {
+  left: auto;
+  right: calc((var(--orb-col) + 8px) * var(--ui-zoom, 1));
+  bottom: calc(var(--bar-px) + 8px);
+}
+.game[data-ui="windows"] .zoom-buttons {
+  right: 8px;
+  bottom: calc(var(--bar-px) + 40px);
+}
+.game[data-ui="windows"] .viewport > .pick-banner {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* ---- Low health: the map's edge turns red and beats with the orb --------------------- */
@@ -812,6 +1091,9 @@ body.dragging-window * {
   pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 55%, rgb(150 18 12 / 0.5) 100%);
   animation: low-beat 1.2s ease-in-out infinite;
+}
+.game[data-ui="windows"] .viewport[data-low]::after {
+  bottom: var(--bar-px);
 }
 @keyframes low-beat {
   50% {

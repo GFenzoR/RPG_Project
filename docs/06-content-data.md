@@ -891,8 +891,8 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
 `data/monsters` y `data/npcs` no cambia.
 - **Con frames:** una entrada con `layers` compone hojas de un pack (personajes de LPC) en
   frames `<sprite>/<acción>_<dir>_<n>` (`idle`, `walk`, `attack`, `death`). Arte propio:
-  archivos con esos nombres en `assets/sprites/` (un ciclo de spritegen, como
-  `creatures/bristleback_boar/walk_w_0..3`, o las hojas de Gemini de
+  archivos con esos nombres en `assets/sprites/` (los del motor de sprites de spritegen,
+  como `creatures/bristleback_boar/walk_s_0..3`, o las hojas de Gemini de
   `creatures/wolf/`). Una entrada sin `layers` les da `mirror: true` (el este es el oeste
   espejado), `anchor: bc` (los pies sobre la casilla) y `ms` por acción
   (`{ attack: 110, death: 200 }`). Quieto y atacar se dibujan solo hacia las direcciones

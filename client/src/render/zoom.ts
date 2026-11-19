@@ -1,14 +1,15 @@
 // Map zoom (pure, unit-tested): pinch, the +/- buttons on touch screens and Ctrl+wheel on
 // a PC. Only whole device pixels per sprite pixel (pixel-perfect). The fitted view is the
 // largest view the map's box shows at a whole scale with none of it empty: the smallest
-// scale at which the server's window (31x21) fills the box (fillScale), but never one
-// that shows less than the classic 15x11 (render/viewport.ts pixelScale, the zoom from
-// before the wide view: small screens keep it). The canvas fills the box with as much of
-// the window as fits (docs/17 UI-4). The player zooms out down to the largest scale that
-// shows the whole window (at least 1) and in up to the largest one that still shows
-// MIN_VIEW tiles around the player. The canvas is cut to the map's box, centred on the
-// player. The choice is remembered per device (localStorage) as a scale; none = fit the
-// view, so it follows the window again.
+// scale at which the server's window (31x21) fills the box (fillScale). On phones and
+// tablets it never shows less than the classic 15x11 (render/viewport.ts pixelScale, the
+// zoom from before the wide view: small screens keep it); the full-screen desktop map
+// (`cover`, docs/17 UI-4: the owner wants no frame and no empty part) always covers its
+// box. The canvas fills the box with as much of the window as fits. The player zooms out
+// down to the largest scale that shows the whole window (at least 1) and in up to the
+// largest one that still shows MIN_VIEW tiles around the player. The canvas is cut to the
+// map's box, centred on the player. The choice is remembered per device (localStorage) as
+// a scale; none = fit the view, so it follows the window again.
 import { pixelScale, wholeScale } from "./viewport.ts";
 import { CLASSIC_VIEW } from "../state/view.ts";
 import type { ViewTiles } from "../state/view.ts";
@@ -53,9 +54,11 @@ export function fillScale(
 /**
  * The scales of a map box of cssWidth x cssHeight CSS px for the server's window `view`:
  * `fit` is the largest view with no empty part (fillScale), never less than the classic
- * 15x11 (pixelScale); `min` shows the whole window (or 1: the most of it the box holds)
- * and `max` still MIN_VIEW. From a server with the classic window, `fit` is pixelScale
- * and `min` is `fit`: nothing to zoom out to.
+ * 15x11 (pixelScale) unless the map must `cover` its box (the full-screen desktop map:
+ * 1280x720 shows 20x9.9 tiles above the bar at 2x rather than leave dark sides at 1x);
+ * `min` shows the whole window (or 1: the most of it the box holds) and `max` still
+ * MIN_VIEW. From a server with the classic window, `fit` is pixelScale and `min` is
+ * `fit`: nothing to zoom out to.
  */
 export function zoomRange(
   cssWidth: number,
@@ -63,11 +66,11 @@ export function zoomRange(
   dpr: number,
   tileSize: number,
   view: ViewTiles = CLASSIC_VIEW,
+  cover = false,
 ): ZoomRange {
-  const fit = Math.min(
-    pixelScale(cssWidth, cssHeight, dpr, tileSize),
-    fillScale(cssWidth, cssHeight, dpr, tileSize, view),
-  );
+  const fill = fillScale(cssWidth, cssHeight, dpr, tileSize, view);
+  const wide = view.width > CLASSIC_VIEW.width || view.height > CLASSIC_VIEW.height;
+  const fit = cover && wide ? fill : Math.min(pixelScale(cssWidth, cssHeight, dpr, tileSize), fill);
   const min = Math.min(fit, Math.max(1, wholeScale(cssWidth, cssHeight, dpr, tileSize, view)));
   const max = wholeScale(cssWidth, cssHeight, dpr, tileSize, MIN_VIEW);
   return { min, fit, max: Math.max(fit, max) };
@@ -102,10 +105,9 @@ export function pinchZoom(start: number, ratio: number, range: ZoomRange): numbe
 /**
  * Canvas size in device pixels at `scale` in a box of devWidth x devHeight device pixels:
  * the server's whole window `view` where it fits, else the box cut to whole sprite pixels
- * (the camera keeps the player in the middle). Cut, it also leaves a strip of `reserve`
- * device px at the bottom of the box free (the desktop hotbar: a click on the last row of
- * tiles cast F1), but never cuts into the classic 11 rows for it, and the whole window
- * never shrinks for it (render/viewport.ts mapLift moves the canvas up instead).
+ * (the camera keeps the player in the middle). On the desktop the box is the screen above
+ * the bottom bar (the bar is the viewport's bottom padding, windows.css), so nothing of
+ * the map hides under it and the player is centred above it.
  */
 export function viewPixels(
   devWidth: number,
@@ -113,19 +115,10 @@ export function viewPixels(
   scale: number,
   tileSize: number,
   view: ViewTiles = CLASSIC_VIEW,
-  reserve = 0,
 ): { width: number; height: number } {
   const cut = (box: number, tiles: number): number =>
     Math.max(scale, Math.min(tiles * tileSize * scale, Math.floor(box / scale) * scale));
-  const whole = view.height * tileSize * scale;
-  const height =
-    whole <= devHeight
-      ? whole
-      : Math.max(
-          cut(devHeight - Math.max(0, reserve), view.height),
-          cut(devHeight, Math.min(view.height, CLASSIC_VIEW.height)),
-        );
-  return { width: cut(devWidth, view.width), height };
+  return { width: cut(devWidth, view.width), height: cut(devHeight, view.height) };
 }
 
 /** The tiles a canvas of width x height device pixels shows at `scale` (fractional when cut). */

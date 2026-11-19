@@ -272,7 +272,7 @@ Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el re
 `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out shot.png --scale 4
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
 exige que cada receta sea una ruta usada en `data/` (o un frame de animación
-`<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como el trote del jabalí, o de
+`<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como los del jabalí, o de
 efecto `effects/<nombre>/<n>`, sin huecos en la tira, o un icono de interfaz
 `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta, o una
 parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
@@ -281,11 +281,135 @@ ART-6; la lava no). El
 preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
 los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
 `animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
-(`castShadow`, al final de `render`), salvo las de `shadow: false`: el jabalí y el ciervo,
+(`castShadow`, al final de `render`), salvo las de `shadow: false`: las del motor (abajo),
 de 64x64 sobre la sombra de contacto del renderer como los animales de Gemini (docs/17
 ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
-`assets/README.md`, "Arte propio (spritegen)".
+`assets/README.md`, "Arte propio (spritegen)". Desde el 2026-11-18 una parte de las
+recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el jabalí, el
+ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel.
+
+## spritegen: el motor
+`tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su
+referencia) dibuja sprites a partir de un **spec**: un modelo chico hecho de primitivas con
+volumen, en los materiales de `palette.ts`, y para una criatura un **rig** de acciones con
+keyframes. Las reglas de estilo (cámara, luz, tonos, contorno, tamaños y anclas de ART-2,
+frames y tiempos de ANI-2) están como datos en `engine/style.ts`; ningún spec las repite.
+Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`), así que
+`make spritegen`, `ONLY=<prefijo>`, `check` y el test de los PNG commiteados valen igual.
+
+| Archivo | Qué hace |
+|---|---|
+| `style.ts` | ART-1 a ART-8 y ANI-1 a ANI-4 como datos: `PROJECTION`, `LIGHT`, `SHADES`, `GLOW`, `OUTLINE`, `CREASE_DEPTH`, `RIM_LIGHT`, `VALUE_BAND`, `SIZES`, `ACTIONS`, `FACING_YAW`, `frameName`; `GLOW_OUTLINE`, el contorno del fuego |
+| `spec.ts` | Los tipos del spec y `validateSpec` |
+| `shapes.ts` | Las primitivas: dónde las corta un rayo y su normal |
+| `render.ts` | `renderSpec`: rayos con buffer de profundidad, sombreado, limpieza, pliegues, borde iluminado, marcas y contorno |
+| `rig.ts`, `motion.ts` | Poses por keyframe, articulaciones, las cuatro direcciones; helpers (`trot`, `keys`, `mergePoses`) |
+| `gates.ts`, `check.ts` | Las puertas de calidad y las pistas de `assets/sprites.yaml` |
+| `sheet.ts` | Hoja de contacto y lineup para revisar |
+| `specs/` | Los specs del juego; `specs/index.ts` (`ENGINE_SPECS`) los registra |
+
+**Escribir un spec** (ejemplos: `specs/boar.ts`, `specs/stag.ts`, `specs/forge-echo.ts`;
+objetos: `specs/anvil.ts`, `specs/crate.ts`, `specs/signpost.ts` y `specs/market-board.ts`,
+este con un `loop`). Unidades: píxeles de sprite; x al este, y al norte (lejos de la
+cámara), z arriba; el suelo es z = 0.
+- `sprite`: la ruta de `data/` (`creatures/<id>`, `npcs/<id>`, `decor/<id>`).
+- `size`: la clase de ART-2 (`smallCreature`, `mediumAnimal`, `humanoid`, `bigCreature`,
+  `object`): da el lienzo, el ancla, la fila del suelo, la banda de valor y el contorno.
+  `canvas` elige otro lienzo de la clase; `figure: { height, width }` angosta los rangos
+  (de perfil, con el contorno).
+- `parts`: cada parte tiene `name`, `material` (de `PALETTE`), `shapes` y, si cuelga de
+  otra, `parent` (declarada antes) y `at` (su articulación en el marco del padre; para una
+  raíz, en el del modelo). `rot` es su giro de reposo en grados (x, después y, después z).
+  Opcionales: `bias` (más claro u oscuro), `texture: { amount, cell }` (ruido en el marco
+  de la parte: celdas largas en un eje hacen pelo o vetas), `shiny` (brillo especular),
+  `glow` (fuego: brilla de frente, sin sombra, con su propio contorno, `GLOW_OUTLINE`: el
+  tono `deep` arriba y a la izquierda, `outline` del otro lado y un pliegue en `shadow`
+  donde otra parte encendida lo tapa; un fuego que se lea pide un material con el núcleo
+  casi blanco y el `deep` rojo, como `fireCore` y `flame`) y `marks` (píxeles sueltos:
+  ojos, fosas, bayas; se ven solo si nada los tapa).
+- `shapes` (en el marco de la parte; cada una puede cambiar `material` y `bias`):
+  `ellipsoid { center, radii }`, `box { min, max }`, `cylinder { a, b, radius }`,
+  `capsule { a, b, radius, radius2 }` (se afina de `radius` a `radius2`: patas, cuellos,
+  colas, cuernos, llamas), `extrusion { points, axis, from, to, bulge }` (un perfil
+  barrido: con `axis: "y"` los puntos son `[x, z]` vistos de frente; `"x"`, `[y, z]` de
+  costado; `"z"`, `[x, y]` desde arriba) y `polygon { points, axis, at, thickness, bulge }`
+  (una tarjeta fina; `bulge` la sombrea como si fuera curva).
+- Una **criatura** se arma mirando al oeste (el hocico hacia -x), con el origen en el
+  centro de sus patas sobre el suelo: el motor la gira para cada dirección y dibuja las
+  cuatro (no hace falta `mirror`). Un **objeto** se arma como se ve, con el origen en el
+  suelo, en el centro de su casilla.
+- `flying: true` si flota (el cliente lo mece); `seenOn: "ground/dirt"` es el suelo de su
+  lineup de revisión (el de donde está en el mapa); `views: { w: 20, e: -20 }` gira un poco
+  una dirección hacia la cámara (+ en el oeste, - en el este): una figura de costado muestra
+  la cara y lo que lleva en la mano del lado lejano (el eco de la forja).
+- `loop` (solo objetos, ART-7): `{ frames, ms, sync, keys }` hace de un objeto un prop
+  animado. El sprite es el frame 0 y `<sprite>/frame_<n>` los demás: los nombres que
+  spritepack ya arma como tile animado (como la fragua o el estandarte de
+  `recipes/props.ts`), así que el cliente lo juega sin cambios. Las keys son las de una
+  acción en bucle (el frame f en f/frames, de la última key vuelve a la primera);
+  `frames` de 2 a 8 y `ms` de 80 a 900 (`LOOP` de `style.ts`, la tabla de ART-7); `sync`:
+  `world` (todos en fase), `tile` (cada casilla con su fase) o `random`. Ejemplo: la nota
+  del tablero del mercado que se levanta con el viento (una parte colgada de su chinche:
+  `at` en el chinche, y un giro en x le levanta el pie hacia la cámara).
+
+**Escribir un rig:** `actions` con `idle` y `walk` como mínimo, y `attack`, `shoot`,
+`cast` o `death` si los usa (un NPC: solo quieto y caminar). Cada acción tiene `frames`
+(rango de ANI-2), `ms` por frame (menos `walk`, que va por distancia: 2 frames por
+casilla), `keys` y, opcional, `dirs`. Una key es `{ at, pose }`: `at` de 0 a 1 y `pose`
+por parte `{ rot, move }`, relativo al reposo; `"*"` mueve el modelo entero alrededor de su
+origen (un salto, una embestida, la caída). Un bucle (`idle`, `walk`) toma el frame f en
+f/n y vuelve de la última key a la primera; una acción de una vez (atacar, morir) va de la
+primera key (frame 0) a la última (frame n-1). Lo que no está en una key queda en reposo.
+- Convenciones: con la criatura mirando al oeste, `rot: [0, +θ, 0]` lleva hacia adelante
+  lo que cuelga (una pata) y hacia atrás lo que sube (un cuello); `rot: [θ, 0, 0]` la
+  rueda sobre su largo (morir de costado: `"*": { rot: [-90, 0, 0] }` y un `move` que la
+  vuelva a centrar y la apoye en el suelo).
+- `trot({ legs, swing, lift, bob, extra })` arma un trote de 4 frames en pares diagonales;
+  `keys([at, pose], ...)` y `mergePoses` ahorran texto.
+- Errores comunes que atrapan las puertas: bajar `"*"` hunde las patas bajo el suelo y
+  recorta el frame (mejor doblar las patas); una caída gira lo alto hacia la cámara en
+  alguna dirección (recentrar con `move`, recoger la cabeza).
+
+**Registrar y generar:** el spec va en `specs/index.ts`. Una criatura necesita su entrada
+en `animations` de `assets/sprites.yaml`: `{ anchor: bc, shadow: ellipse, ms: { idle: N,
+attack: N, death: N } }` con los `ms` del rig (y `flying: true` si flota), sin `facing` ni
+`mirror`, y ninguna entrada en `sprites` (los píxeles son archivos). Un objeto con `loop`
+necesita su entrada en `tiles` con los mismos `ms` y `sync` (`decor/market_board: { ms:
+180, sync: tile }`); uno sin `loop`, ninguna con `ms` ni `sync`. Si reemplaza arte viejo,
+se borran sus PNG (y su receta, con los imports que dejen de usarse). Después `make
+spritegen ONLY=<sprite>/` (o el prefijo) y `make sprites STRICT=1`.
+
+**Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet [--only
+<prefijo>] [--out DIR] [--scale N]` escribe `build/spritegen/<sprite>.sheet.png` (todos los
+frames a Nx, por defecto 4, en una grilla: una fila por acción y dirección) y
+`<sprite>.lineup.png` (a 1x, escalado 3x, como lo pone el cliente sobre su suelo, al lado
+del lobo de Gemini y de una persona de LPC si el atlas está armado). Mirar los dos con
+Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
+lea mejor. Un prop de una casilla se compara sobre cada suelo donde está, al lado de una
+persona de LPC, a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
+el detalle. Lo que aprendió la revisión del 2026-11-18: pocas piezas y un material cálido
+(el primer cajón del motor, con un marco gris y vetas en el frente, se perdía sobre las
+tablas del muelle; el que quedó es de madera clara con la tapa lisa); textura baja
+(`amount` 0,06-0,16: más hierve a 1x); y un objeto alto puede pararse adelante en su casilla
+(`at: [0, -3, 0]`, el poste del cartel) para no tocar el borde del lienzo de 32x32. El bolardo se
+probó tres veces y ninguna le ganó al dibujado a mano: sigue en `recipes/terrain.ts`.
+
+**Puertas de calidad** (`gates.ts`, umbrales en `GATES`; las corren `make test` y
+`spritegen check`, que también va al final de `make spritegen`): colores solo de sus
+materiales y nunca `#000`; alfa 0 o 255; menos del 10 % de píxeles en damero; nada
+contra el borde del lienzo; contorno en al menos el 85 % de la silueta; una sola figura
+(sueltos solo de hasta 10 px: una chispa); al menos el 20 % de la caja lleno; media de L*
+en la banda de su tipo (ART-6); alto y largo de perfil dentro del rango de ART-2 o de
+`figure`; de frente y de espaldas centrado (±2 px) y al menos el 45 % de ancho de su largo
+de perfil (`frontWidth`: si no, de frente se lee como una raya a 1x, como el primer
+jabalí); los pies en la fila del suelo (más holgura si flota); caminar que cambia de
+silueta, un ataque y una muerte que se distinguen del parado y sur distinto de oeste; las
+pistas de `sprites.yaml` iguales al rig (y el `tiles` de un `loop`); un `loop` que se mueve
+(algún frame cambia al menos 4 px respecto del 0, `loopMoves`) sin irse de su lugar (la caja
+de cada frame a 3 px o menos de la del 0, `loopDrift`); y el determinismo (mismo spec,
+mismos píxeles).
+El test del motor es `src/engine/engine.test.ts`.
 
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera

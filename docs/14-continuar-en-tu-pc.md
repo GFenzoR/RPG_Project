@@ -100,7 +100,7 @@ el punto 5:
 ## Pendientes conocidos (no bloquean)
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
-  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
+  botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
   A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
   del click derecho con la ficha del item, tooltip, doble click, opción de controles,
   diálogo por temas y tienda sin scroll, y la ventana del gremio con botones (y lo que
@@ -119,7 +119,8 @@ el punto 5:
     (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
     sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
     cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
-    `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
+    `animations` de `assets/sprites.yaml`); jabalí, ciervo y el eco de la forja son modelos
+    del motor de sprites de spritegen (abajo, "Motor de sprites").
     Lo que quedó pendiente de eso:
     - **A9 (hecho, rama `feat/attack-events`, E2E del lote 7):** el servidor manda quién
       ataca a quién (`CreatureAttack`) y por qué sale una criatura
@@ -142,6 +143,48 @@ el punto 5:
       sus filas de `CREDITS.csv` como estas). Con un servidor sin `attack_events` todo
       sigue jugando `attack`. Mirar en el E2E y en el playtest si el gesto de tensar sin
       arco se lee como un tiro (los monstruos tiran botellas, cuchillos y esquirlas).
+    - **Motor de sprites (hecho, rama `feat/sprite-engine`, docs/17 "Motor de sprites"):**
+      `tools/spritegen/src/engine/` dibuja sprites desde un modelo con volumen y un rig de
+      acciones, con las reglas de docs/17 como datos (`engine/style.ts`) y puertas de
+      calidad en `make test` y `spritegen check`. Lo usan el jabalí y el ciervo (quieto,
+      caminar, atacar y morir en cuatro direcciones; antes un trote de perfil), el eco de la
+      forja (era el elemental de fuego de Dungeon Crawl) y el yunque. Tras la revisión de
+      las hojas (2026-11-18) el jabalí ganó ancho de frente y de espaldas (era una raya de
+      16 px a 1x; ahora 22, y la puerta `frontWidth` lo cuida) y el eco se rehízo: la primera
+      versión se leía peor que el elemental (una mancha naranja sobre dos palitos oscuros, de
+      costado un tronco ardiendo); la nueva es un espíritu de fuego con forma de herrero,
+      núcleo al rojo blanco, llamas que suben y el martillo en alto. Cómo escribir uno:
+      `tools/CLAUDE.md`, "spritegen: el motor". Después (2026-11-18, *"todo debiese tener
+      animaciones"*) pasaron al motor el tablero del mercado, el cartel y el cajón, cada
+      uno tras compararlo con el viejo sobre sus suelos a 1x junto a una persona de LPC; el
+      bolardo se probó tres veces, no le ganó al dibujado a mano y sigue como estaba. El
+      motor ahora hace props animados (`loop` de un spec: el sprite y `frame_<n>`, ART-7,
+      con su `tiles` en `sprites.yaml`, sin cambios en spritepack ni en el cliente): una
+      nota del tablero del mercado se levanta con el viento (4 frames de 180 ms). Queda: la
+      gaviota si el dueño quiere, la acción de recibir golpe (no existe en el cliente: sigue
+      el destello procedural) y más props animados con `loop` (una bandera, un farol
+      colgado) si llegan al mapa. **Revisar en el E2E** (no se corrió en la rama; se revisó con
+      las hojas y lineups de `spritegen sheet` y `mapcli render`): el jabalí y el ciervo en
+      el Bosque y el Puerto, en las cuatro direcciones, atacando y muriendo (la caída de
+      costado; de frente y de espaldas, ancho y no una raya), su tamaño al lado del lobo y
+      de los personajes; el eco de la forja en la mina del Volcán (z 8, 3692,5826, sobre la
+      tierra), que flote sobre la sombra y se lea al instante como un espíritu de fuego con
+      forma de herrero y el martillo en alto, también de costado; el yunque en las
+      herrerías (Isla de Pruebas 2073,2102). La barra y el nombre del ciervo van más arriba
+      que antes: `top` sale de su caminar al norte (las astas lejos, ~54 px); los del eco,
+      sobre el martillo alzado. Los props: el tablero del mercado (Isla de Pruebas
+      2091,2103; Puerto 3168,6382; Volcán 3660,5790; Bosque 4164,6106), que la nota de abajo
+      a la derecha se levante y caiga sin que el tablero salte, y que el mercado se siga
+      abriendo al usarlo; el cartel en Brasal (3641,5793 sobre basalto, 3635,5793 y
+      3691,5794 sobre ceniza) y en la puerta de la forja (z 8, 3693,5830); los cajones en
+      los muelles (Puerto 3201,6430, Volcán 3630,5796, Pruebas 2095,2134) y en los
+      depósitos de piso de madera (Puerto 3182,6420; Pruebas 2084,2100), y lo que se apoya
+      encima de un cajón (`elevation: 8`) sobre la tapa.
+      El E2E del lote 9 (verde) los muestra poco: los carteles sobre basalto y ceniza de
+      Brasal se leen claros (`65b-volcan-temple-sign`) y el del templo del Farol también
+      (`12b-puerto-temple-sign`); el tablero de Puerto queda bajo la ventana del mercado
+      (`53`–`55`). Ningún screenshot muestra el jabalí, el ciervo, el eco de la forja, el
+      yunque ni los cajones: mirarlos a mano con las coordenadas de arriba (`make play`).
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
       cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
@@ -173,9 +216,10 @@ el punto 5:
       (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
       martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
     - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
-      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo de spritegen
-      pasaron a 64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con
-      los pies en la casilla y la sombra de contacto como el resto. La gaviota queda de
+      contra la persona de LPC, no contra la casilla. El jabalí y el ciervo pasaron a
+      64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con los pies en
+      la casilla y la sombra de contacto como el resto; desde el motor de sprites son
+      modelos a esa escala. La gaviota queda de
       32x32 con su sombra pintada hasta que el dueño elija su arte.
     - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
       (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
@@ -202,11 +246,51 @@ el punto 5:
     suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
     canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
     cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+  - **El equipo y el tooltip al estilo Diablo II (hecho, rama `feat/equipment-d2`,
+    docs/17 §7 "Hecho: el equipo y el tooltip al estilo Diablo II"):** los dos pedidos del
+    dueño del 2026-11-18. El equipo es una figura sobre una grilla de 8x9 celdas con slots
+    grandes (íconos a 2x desde ~286 px de ancho), brillo y rojo al arrastrar, la mochila
+    equipada abierta sola abajo de la figura (no durante el tutorial) y la capacidad como
+    barra; el tooltip sale al instante, arriba del item (o de la casilla del mapa), compacto
+    y centrado. Solo cliente. Queda:
+    - **Revisado en el E2E del lote 9** (verde, 2026-11-18): `09-inventory` (la figura y
+      la mochila abajo, 24 celdas), `09a-item-menu`, `09b-item-tooltip` (la ficha compacta
+      arriba de la mochila, sin taparla), `10-backpack-on-map` (la mochila tirada, en su
+      ventana justo debajo del inventario), `22-ranger-inventory` (el carcaj con 30),
+      `52-trade-window` (las monedas de la mochila abierta). Lo que dejó: un personaje nuevo
+      de Puerto sigue el tutorial y la mochila no se abre sola (a propósito): T5.3 lo
+      comprueba y la abre con doble click. En los teléfonos, el `ResizeObserver` de la figura
+      daba un error "ResizeObserver loop" al mostrar la pestaña del inventario (WebKit se lo
+      pasa a la página): ahora mide en el cuadro siguiente. El rojo de un slot que no acepta
+      lo arrastrado quedaba pegado en una pantalla táctil (`:hover` del último dedo): solo
+      con un puntero que flota. **Queda para el dueño:** el inventario flotante nace de 16
+      rem y los íconos de los slots grandes salen a 1x (a 2x desde ~19 rem): si los quiere a
+      2x de fábrica, el inventario tiene que nacer más ancho, y eso mueve la columna, los
+      contenedores, el tutorial y la pareja tienda + diálogo.
+    - **Mirar en el playtest:** si la mochila que se abre sola molesta a alguien que la
+      tenía cerrada (queda cerrada mientras el inventario siga abierto); si la ventana
+      acoplada, ahora más alta, empuja demasiado la columna a 1280x800 (se puede plegar,
+      cambiar de alto o, con `feat/hud-fullscreen`, flotar); si el rojo bajo el puntero se
+      lee bien; si el tooltip instantáneo molesta al pasar el mouse por el mapa.
+    - **Para hacerlo exacto:** el servidor no dice dónde está un contenedor abierto
+      (`ContainerOpen`), así que la mochila equipada es la ventana que contesta un uso del
+      slot de la espalda; una mochila igual abierta del suelo en ese mismo momento podría
+      confundirlo. Por lo mismo, desde la revisión final del lote 9 una mochila que se
+      saca de la espalda y se vuelve a equipar sigue en su propia ventana (el cliente no
+      sabe si es la misma u otra del mismo tipo: con otra, el botín arrastrado abajo iba a
+      la del suelo); un doble click en el slot la cierra y otro la abre abajo. Un campo en
+      `ContainerOpen` (por ejemplo, el slot) resolvería las dos cosas: es cambio de proto,
+      para una tarea propia.
+    - **Ideas que no se hicieron:** un arma de dos manos no ocupa las dos manos en la
+      figura (el servidor tiene un slot por mano); no hay guantes, cinturón ni segundo
+      anillo; mantener Alt para ver los nombres de los items del suelo (si el dueño lo
+      pide).
   - **Revisar en el E2E final de `feat/ui-windows-2`** (no se corrió en la rama; se miró
     con `make ui-preview`, escenas `game`, `server`, `groundtip`, `scale`, `dialog` y
     `options` a 1920x1080, 1280x800, 960x700 y teléfono): la mochila en su ventana acoplada
     (`window-container-backpack`, ya no dentro de Inventario: `09-inventory` la deja
-    afuera); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
+    afuera; desde `feat/equipment-d2` la mochila equipada vuelve a estar dentro, abajo de
+    la figura, y solo una que no se lleva puesta tiene ventana propia); `13-dialog`, `14-shop` y `14b-shop-sell` con diálogo y tienda como dos ventanas
     lado a lado;
     `16-crafting-window`, `52-trade-window`, `53-market-offer-posted`, `56-house-free` y
     `57-house-rented` con la barra nueva (sus test ids y los nombres de los botones de
@@ -222,6 +306,50 @@ el punto 5:
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
     después haga click en una casilla tiene que cerrarla o moverla.
+  - **A14, pantalla completa (hecho, rama `feat/hud-fullscreen`, docs/17 "Hecho: A14"):** el
+    mapa en toda la pantalla, la barra gótica de abajo (orbes, experiencia, hotbar y
+    botonera) y todas las ventanas flotantes con imán, como pidió el dueño el 2026-11-18.
+    Se miró con `make ui-preview` (escenas nuevas `magnet`, `migrated` y `chat`); el E2E
+    no se corrió en la rama. Queda:
+    - **Revisado en el E2E del lote 9** (verde, 2026-11-18): a 1280x800 el inventario
+      flota sobre la 6.ª columna al este del jugador y el chat sobre la 2.ª a la 7.ª al
+      oeste y la 3.ª a la 5.ª al sur; cuatro specs hacían click ahí y no caminaban (minar,
+      Raigal, Brasal y el de la Isla de Pruebas): ahora saltan 5 columnas como mucho
+      (`mapPoint` de `e2e/game.spec.ts`, `clickTile` de `sandbox.spec.ts` falla si una
+      ventana tapa la casilla). La página medía 1287 px a 1280 (los pináculos del orbe de
+      maná sobresalían 7 px): el cuerpo del juego recorta (`overflow: clip`) y `mobile.spec`
+      lo comprueba. Las esquinas góticas de una ventana sobresalen 5 px de su marco: lo que
+      no se desplaza se mide en `.gwin-body`. Capturas revisadas: `04-world`, `07-combat`,
+      `09-inventory`, `13-dialog`, `14-shop`, `16-chat`, `18-gm-announce`,
+      `21-druid-hotbar`, `23-conditions-hud`, `25-party-panel`, `37-report-form`,
+      `41-tutorial-highlight`, `43-tutorial-shop-960`, `44-controls-help-960` (la Ayuda tapa
+      al tutorial, su barra entera), `51-pvp-battle-list`, `52-trade-window`,
+      `97-view-1920x1080` y `mobile-desktop-1280-*`. **Queda para el dueño:** los pináculos
+      de los hombros de los dos orbes quedan cortados 7 px por el borde de la pantalla
+      (siempre fue así; para verlos enteros, una columna de orbe más ancha o los pináculos
+      más adentro); el intercambio, arriba al centro, tapa a un compañero que está justo
+      arriba del jugador; a 960x700 el diálogo de la pareja tienda + diálogo pisa unos 10 px
+      el pie del inventario; con el mouse quieto donde se abre la tienda, su ficha sale al
+      instante sobre los filtros (`14-shop`, `43-tutorial-shop-960`).
+    - Antes del E2E: ahora la batalla (arriba a la izquierda), el inventario
+      (arriba a la derecha), los contenedores (debajo del inventario) y el chat (abajo a la
+      izquierda) flotan sobre el mapa: un click en una casilla lejos del jugador hacia esas
+      esquinas puede caer en una ventana (a 1280x800 el mapa ahora tiene 20 columnas, antes
+      15). Los screenshots que eran de `.side` ahora son de su ventana (`16-chat`,
+      `18-gm-announce`, `25-party-panel`, `37-report-form`, `51-pvp-battle-list`);
+      `23-conditions-hud` es la placa sobre el orbe; `mobile-desktop-1280-side-end` pasó a
+      `mobile-desktop-1280-full-screen`. A 1280x720 la vista ajustada muestra 20x9,9 casillas
+      sobre la barra (cubrir la pantalla manda sobre las 11 filas clásicas).
+    - El chat no tiene pestañas por canal ni opacidad configurable (docs/17 UI-10).
+    - Si se abren todas las ventanas a la vez, algunas se pisan en su lugar de fábrica
+      (habilidades y chat a 1280x800): un lugar de fábrica que mire las abiertas sería otro
+      paso.
+    - Los contenedores salen justo debajo del inventario, que `GameView` mide (con la
+      figura y la mochila de `feat/equipment-d2`, unos 500 px): en una pantalla baja
+      (1280x720, 960x700) queda poco lugar debajo y salen cortos, con su cuerpo
+      desplazable. En el E2E (`10-backpack-on-map`, 1280x800) la mochila tirada salió entera
+      justo debajo; si en una pantalla baja molesta, que salgan a la izquierda de la
+      columna del inventario cuando abajo no entran (a 960 px taparían al jugador).
   - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
   - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
     piezas por material que el renderer elige por sus vecinos (también en el editor y en
@@ -276,7 +404,8 @@ el punto 5:
   se la dice al cliente; los monstruos
   siguen notando y persiguiendo solo la ventana clásica de 15x11 (+1); el cliente llena la
   caja del mapa con la vista más grande que la cubre a escala entera, sin bajar de 15x11
-  (24x16 a 2x en 1920x1080 con el dock), y deja alejar hasta la ventana entera; medido en
+  (24x16 a 2x en 1920x1080 con el dock; con la pantalla completa de A14, 30x15,5), y deja
+  alejar hasta la ventana entera; medido en
   proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
   Tras la revisión, los rangos con que apunta un jugador (armas, hechizos, condiciones)
   quedaron topados en 6 (`content.MaxRange`, esquema y carga): un monstruo golpeado desde
@@ -301,7 +430,8 @@ el punto 5:
     con filtro lineal, como opción de Gráficos apagada por defecto.
   - **La escala por defecto, para que la pruebe el dueño:** es la vista más grande que
     llena la caja a escala entera sin bajar de 15x11 (docs/17 "Hecho: A7": a 1920x1080, 2x
-    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Si prefiere ver las 31x21
+    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Con la pantalla completa
+    (A14) el escritorio siempre cubre la pantalla: 1920x1080 a 2x con 30x15,5. Si prefiere ver las 31x21
     enteras de entrada (1x a 1920x1080, con caja oscura alrededor), basta con que
     `zoomRange` (`client/src/render/zoom.ts`) devuelva su `min` como `fit`; cada jugador
     ya puede alejar hasta ahí y queda recordado.
@@ -573,11 +703,17 @@ el punto 5:
     cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
     la herramienta).
 
-- **Tutorial sobre la ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
+- **Tutorial y ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
   panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
   ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
   Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
-  abierta, como hace con el diálogo y la tienda.
+  abierta, como hace con el diálogo y la tienda. Con la pantalla completa (A14) cambian
+  los dos lugares y se pisan al revés: las ventanas (`.win-layer`, z 20) van sobre el
+  tutorial (z 5), así que a 960x700 la Ayuda (25rem, centrada al 8 % del alto), el gremio
+  y la apariencia (a la izquierda de la columna del inventario, `right: 16rem`) tapan el
+  panel del tutorial y su "Saltar tutorial". Se cierran con H, G, O o Escape, o se mueven;
+  si molesta, el panel podría correrse debajo de las que salen ahí. Mirarlo en el
+  `44-controls-help-960` del E2E final.
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
@@ -866,6 +1002,11 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
   propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
   de las criaturas"), salvo el jabalí y el ciervo, de 64x64 sobre la sombra de contacto.
+- **Motor de sprites** (arte propio, `tools/spritegen/src/engine/`, CC0): el jabalí, el
+  ciervo, el eco de la forja y el yunque salen de modelos con volumen y un rig de acciones
+  (`engine/specs/`), en cuatro direcciones (`tools/CLAUDE.md`, "spritegen: el motor");
+  también el cajón, el cartel y el tablero del mercado, este animado (una nota que se
+  levanta con el viento, `frame_<n>` de ART-7).
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

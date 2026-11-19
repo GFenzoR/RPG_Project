@@ -37,8 +37,8 @@ client/
   (ver "Zoom del mapa").
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
-  ni columna fija: el mapa, el dock a su derecha y ventanas separadas (ver "Notas de la UI
-  oscura").
+  ni columna fija: el mapa a pantalla completa, la barra gótica de abajo y ventanas que
+  flotan sobre el mapa (ver "Notas de la pantalla completa").
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
@@ -131,7 +131,9 @@ client/
   `ItemLocation` del protocolo y el item de arriba de un tile.
 - Panel `ui/Inventory.tsx`: slots de equipo, capacidad (oz = gramos / 100) y una ventana
   por contenedor abierto. Los iconos son el sprite del atlas como fondo CSS
-  (`Atlas.icon`).
+  (`Atlas.icon`). Desde `feat/equipment-d2` el equipo es una figura al estilo Diablo II,
+  con la mochila equipada abajo y la capacidad como barra: ver "Notas del equipo y el
+  tooltip al estilo Diablo II".
 - Arrastrar y soltar con eventos de puntero propios (no HTML5 DnD, para cruzar canvas y
   DOM): `Game.pressItem` / `startDrag` y `dropTarget` (un `[data-drop]` o un tile del
   canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
@@ -211,8 +213,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.2
 - `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones (`ConditionBar` en `ui/GameView.tsx`, bajo los orbes en escritorio y en el
-  encabezado de los teléfonos; nombres `condition.<id>.name`).
+  condiciones (`ConditionBar` en `ui/GameView.tsx`; en escritorio va en la placa sobre el
+  orbe de vida, arriba del nombre, y en los teléfonos en el encabezado; nombres
+  `condition.<id>.name`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -328,7 +331,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 ## Notas de T4.2
 - `WorldState.tutorial` (de `TutorialStep`, `state/tutorial.ts`, puro y con tests) es el paso
   que dice el servidor; `undefined` cuando terminó. `ui/Tutorial.tsx` dibuja el panel de
-  pistas arriba a la derecha del mapa (no toma teclas) con "Saltar tutorial"
+  pistas arriba a la derecha del mapa (en escritorio, a la izquierda de la columna del
+  inventario y bajo las ventanas; no toma teclas) con "Saltar tutorial"
   (`Game.skipTutorial` → `TutorialSkip`; el panel se cierra cuando el servidor confirma).
   Se oculta mientras hay `dialog`, `shop` o `station` abiertos: en pantallas angostas
   (la app de escritorio a 960 px) la tienda llega a esa esquina.
@@ -765,24 +769,32 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `state/view.ts`; 0 = un servidor viejo: 15x11). El zoom es solo de dibujo.
 - `render/zoom.ts` (puro, con tests) decide la escala (`ZoomRange {min, fit, max}`):
   - `fit`, la vista ajustada (sin elección guardada): la vista más grande sin parte vacía,
-    es decir la escala más chica a la que la ventana cubre la caja (`fillScale`), pero
-    nunca una que muestre menos que las 15x11 clásicas (`pixelScale`, la de antes de la
-    vista ancha): `min(pixelScale, fillScale)`. Con el dock: 1920x1080 (caja de
-    1536x1080) 2x, no 3x; 2560x1440 3x, no 4x; 1280x800 (960x800) y 1280x720 2x; la app
-    a 960x700 1x, como antes. En un teléfono `pixelScale` suele ser la menor: no cambia.
-    Con un servidor de 15x11, `fit` es `pixelScale`.
+    es decir la escala más chica a la que la ventana cubre la caja (`fillScale`). En
+    teléfonos y tablets nunca una que muestre menos que las 15x11 clásicas (`pixelScale`,
+    la de antes de la vista ancha): `min(pixelScale, fillScale)`; ahí `pixelScale` suele
+    ser la menor y no cambia nada. **El escritorio es pantalla completa** (docs/17 UI-4,
+    rama `feat/hud-fullscreen`): la caja es la pantalla entera sobre la barra de abajo
+    (`--bar-px` = 88 px por la escala de la interfaz: el `padding-bottom` de `.viewport`)
+    y `windows.css` pone `--map-cover: 1`, que `game-canvas.ts` lee: con `cover`, `fit` es
+    `fillScale` a secas, para que el mapa siempre cubra la pantalla. En CSS px al 100 %:
+    1920x1080 (caja de 1920x992) 2x con 30x15,5 casillas; 2560x1440 (2560x1352) 3x con
+    26,7x14,1; 1280x800 (1280x712) 2x con 20x11,1; 1280x720 (1280x632) 2x con 20x9,9 (la
+    regla de los teléfonos daba 1x, con franjas oscuras a los lados: cubrir manda); la app
+    a 960x700 (960x612) 1x con 30x19,1. Con un servidor de 15x11, `fit` es `pixelScale`.
   - `min`: la mayor que muestra la ventana entera (`wholeScale`), al menos 1 y como mucho
-    `fit`. A 1280x800 y 1920x1080, 1x (31x21, o 30x21 en los 960 px de 1280x800); a
-    2560x1440, 2x.
-  - `max`: la mayor que todavía muestra 7x5 (`MIN_VIEW`).
+    `fit`. A 1920x1080, 1280x800, 1280x720 y 960x700, 1x (a 1280x720, 31x19,75: lo que
+    entra de las 21 filas); a 2560x1440, 2x.
+  - `max`: la mayor que todavía muestra 7x5 (`MIN_VIEW`): 6 a 1920x1080, 8 a 2560x1440, 4 a
+    1280x800, 3 a 1280x720 y 960x700.
   Siempre escalas enteras. El canvas muestra la ventana entera si entra y si no se corta
-  a la caja del mapa en píxeles de sprite enteros (`viewPixels`): a 2x en 1920x1080 son
-  24x16 casillas. Cortado, deja libre la franja de la hotbar de escritorio
-  (`--map-reserve-bottom`) salvo que eso le quite filas a las 11 clásicas; la ventana
-  entera nunca se achica por ella (`mapLift` la sube). `followCamera` centra en el
-  jugador una vista de casillas fraccionarias (`shownTiles`), con la cámara en píxeles de
-  pantalla enteros (ver "Movimiento fluido"). Si llegara otra ventana, el canvas se
-  reajusta en el siguiente frame.
+  a la caja del mapa en píxeles de sprite enteros (`viewPixels`), centrado en ella: como en
+  el escritorio la caja termina donde empieza la barra, el jugador queda al centro del área
+  sobre la barra y nada del mapa se esconde debajo (ya no hay franja de la hotbar ni
+  `mapLift`: la hotbar está en la barra). `followCamera` centra en el jugador una vista de
+  casillas fraccionarias (`shownTiles`), con la cámara en píxeles de pantalla enteros (ver
+  "Movimiento fluido"). Si llegara otra ventana, el canvas se reajusta en el siguiente
+  frame. Si la escala de la interfaz cambia el alto de la barra, cambia la caja de contenido
+  de `.viewport` y el `ResizeObserver` del canvas lo ve.
 - La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
   `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
   `ready`, `tileToClient` y los clicks ya apuntan al mapa. Antes solo la fijaba el primer
@@ -1099,8 +1111,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   desplazan adentro; `.viewport` usa `overflow: clip` (Tab no corre el mapa) y los avisos
   van debajo de las ventanas (`z-index: 1`).
 - Hotbar de escritorio más baja y el canvas sube sobre ella cuando hay lugar
-  (`--map-reserve-bottom` en `client.css`, `mapLift` de `render/viewport.ts`, puro y con
-  tests): a 1280x800 tapaba la última fila del mapa.
+  (`--map-reserve-bottom` en `client.css`, `mapLift` de `render/viewport.ts`): a 1280x800
+  tapaba la última fila del mapa. Ya no existen: desde la pantalla completa la hotbar va
+  en la barra de abajo y el mapa termina en su techo ("Notas de la pantalla completa").
 - Click derecho sobre una puerta (item `door` o puerta de casa) con otro jugador encima usa
   la puerta (`mapPress` con `playerInDoor`); la lista de batalla sigue apuntándole.
 - `translator` agrupa los números con `Intl.NumberFormat` del idioma (no `x`, `y`, `z`,
@@ -1121,31 +1134,35 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   todas las ventanas: la lista de selectores de "Frames" en `client.css`. Una ventana nueva
   se suma ahí. No uses colores sueltos: usa un token.
 - **Escritorio** (`layout.panel === "sidebar"`, `.game[data-ui="windows"]`, `windows.css`):
-  sin encabezado. `ui/GameView.tsx` dibuja el mapa y a su derecha el dock (`aside.side`,
-  `#side-panel`, ancho `--dock-w`: el más angosto que deja a las 15x11 clásicas su
-  próxima escala entera, 2x a 1280 px y 3x a 1920x1080; con la ventana de 31x21 la vista
-  ajustada a 1920x1080 es 2x con 24x16, ver "Zoom del mapa") con:
-  - `ui/Vitals.tsx`: orbes de vida y maná (se llenan con `transform`, el "fantasma" marca
-    lo perdido, laten bajo el 25 %; `orbFill`/`lowHealth` puros), nombre, nivel, barra de
-    experiencia y condiciones. Los test ids `health`, `mana`, `level`, `experience` y
+  sin encabezado y **a pantalla completa** desde la rama `feat/hud-fullscreen` (antes era
+  el mapa con el dock a su derecha; ver "Notas de la pantalla completa"). `ui/GameView.tsx`
+  dibuja el mapa en toda la pantalla (`.viewport`, con la barra como `padding-bottom`), la
+  barra gótica de abajo (`ui/HudBar.tsx`, la única pieza fija) y la capa de ventanas
+  (`.win-layer`, la pantalla sobre la barra). En la barra:
+  - `ui/Vitals.tsx`: orbes de vida y maná en sus engastes de hierro (se llenan con
+    `transform`, el "fantasma" marca lo perdido, el de vida late bajo el 25 %;
+    `orbFill`/`lowHealth` puros), la barra de experiencia (`ExperienceBar`) y, sobre el
+    orbe de vida, una placa con nombre, nivel, experiencia y condiciones (`Vitals`,
+    `data-tutorial="stats"`). Los test ids `health`, `mana`, `level`, `experience` y
     `conditions` siguen ahí con los mismos textos;
-  - `ui/Toolbar.tsx`: botones con íconos propios (`ui/icons.tsx`, pixel art de 16x16 como
-    texto, 1x en el dock angosto y 2x desde 1344 px) que abren y cierran las ventanas, el
-    mercado (solo lo cierra: se abre desde un tablero) y "Salir del juego";
-  - las ventanas acopladas (`.dock-stack`, se desplaza si no entran) y el chat con el log
-    como segunda pestaña (`ChatBox`; mientras el log no se ve, todos los avisos flotan sobre
-    el mapa, no solo los importantes).
+  - la hotbar (`ui/Hotbar.tsx`, ya no sobre el mapa) y `ui/Toolbar.tsx`: botones con íconos
+    propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de cinco a 1x, o una
+    fila a 2x desde 1600 px) que abren y cierran las ventanas, el mercado (solo lo cierra:
+    se abre desde un tablero) y "Salir del juego";
+  - el chat ya no está en una columna: es una ventana más, flotante y translúcida, con el log
+    como segunda pestaña en su barra de título (`ChatTabs`; mientras el log no se ve, todos
+    los avisos flotan sobre el mapa, no solo los importantes).
 - **Ventanas** (UI-5): `ui/windows.ts` (puro, con tests) guarda cuáles están abiertas,
-  acopladas o flotando, dónde, plegadas y en qué orden; se recuerda por dispositivo en
-  `localStorage` `rpg.windows` (si no se puede leer, vuelven las de fábrica: batalla e
-  inventario acopladas). `ui/GameWindow.tsx` es el marco (barra con ícono, título, plegar
-  y cerrar; `role="dialog"` flotando, `region` acoplada). Se arrastran por la barra: una
-  flotante sigue al puntero, una acoplada deja un fantasma; soltada sobre el dock se acopla
-  antes de la ventana bajo el puntero. Doble click en la barra la pliega. Cierran con un
+  dónde, plegadas y en qué orden; se recuerda por dispositivo en `localStorage`
+  `rpg.windows` (si no se puede leer, vuelven las de fábrica: batalla, inventario y chat
+  abiertos). `ui/GameWindow.tsx` es el marco (barra con ícono, título, mover, plegar y
+  cerrar; `role="dialog"`). Desde `feat/hud-fullscreen` ninguna se acopla: todas flotan y se
+  arrastran por la barra, con el imán (`snapPlace`). Doble click en la barra la pliega. Cierran con un
   fundido de 100 ms (`CLOSE_MS`, `[data-closing]`). Teclas (`WINDOW_KEYS`, solo fuera de
   un campo de texto y después del listener del `Game`): I inventario, K habilidades,
   B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
-  la flotante de arriba o, si no hay, abre Opciones. Un resaltado del tutorial abre su
+  la de arriba de la pila (la última abierta o tocada; el chat nunca) o, si no hay, abre
+  Opciones. Un resaltado del tutorial abre su
   ventana (`windowForHighlight`). Desde `feat/ui-windows-2` las ventanas del servidor
   (diálogo, tienda, crafteo, mercado, casa, intercambio) y cada contenedor son
   `GameWindow` también, y todas se mueven y cambian de tamaño con el mouse y el teclado:
@@ -1167,21 +1184,22 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   construye `preview/index.html` (`src/preview/`, solo con `RPG_UI_PREVIEW=1`: nunca va
   al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas
   (las 33x23 casillas de la ventana con su margen, del tamaño del canvas en la vista
-  ajustada: `zoomRange`, `viewPixels` y `mapLift`, como `render/game-canvas.ts`) y
+  ajustada: `zoomRange` con `cover` y `viewPixels`, como `render/game-canvas.ts`) y
   saca screenshots de cada escena (game, windows, options, dialog, danger, death, login,
   characters) a 1920x1080, 1280x800, 1280x720, 960x700, teléfono vertical y horizontal y
   tablet, en `e2e/screenshots/actual/ui-preview/`. Playwright contesta cada pedido desde el
   build: no levanta servidores. Los estados están en `src/preview/fixtures.ts`.
 - **E2E**: `e2e/windows.ts` (`openWindow`, `closeWindow`) abre las ventanas desde la
   botonera. Test ids nuevos: `toolbar`, `toolbar-<id>` (`options-button` para Opciones,
-  `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones),
-  `window-close-<id>`, `window-fold-<id>`, `[data-window-button]`, `[data-chat-tab]`,
-  `[data-guild-tab]`, `reduced-motion`, `windows-reset`; la ayuda es `controls-help`.
-  El mapa empieza en la esquina de arriba a la izquierda de la página: un click en (1, 1)
-  camina hacia esa casilla. Para que las teclas vayan al juego, `keysToGame`
-  (`e2e/game.spec.ts`) le quita el foco al campo de texto, sin clicks. El dock angosto
-  dice "Perseguir"; la casilla conserva su nombre entero (`aria-label`, "Perseguir al
-  objetivo"). `.viewport` lleva `min-width: 0`: con `overflow: clip` (que no es un
+  `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones; el chat es
+  `window-chat`), `window-close-<id>`, `window-fold-<id>`, `window-move-<id>`,
+  `[data-window-button]`, `[data-chat-tab]`, `[data-guild-tab]`, `reduced-motion`,
+  `windows-reset`, `hud-bar`; la ayuda es `controls-help`. El mapa empieza en la esquina
+  de arriba a la izquierda de la página, pero ahí flota la ventana de batalla: un click en
+  (1, 1) cae en ella. Para que las teclas vayan al juego, `keysToGame`
+  (`e2e/game.spec.ts`) le quita el foco al campo de texto, sin clicks. La ventana de
+  batalla, angosta, dice "Perseguir"; la casilla conserva su nombre entero (`aria-label`,
+  "Perseguir al objetivo"). `.viewport` lleva `min-width: 0`: con `overflow: clip` (que no es un
   contenedor de scroll) el canvas fijaba su ancho mínimo y, al achicar la ventana, el mapa
   empujaba el dock fuera de la pantalla.
 
@@ -1217,7 +1235,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **Tooltip** (`ui/ItemTooltip.tsx`, montado en `GameView` junto al menú): delegación en
   `document` sobre `[data-tip-item]` (+ `data-tip-count`), 350 ms de mouse, o foco del
   teclado con `:focus-visible`. Los items del inventario tienen `tabIndex=0`: Enter =
-  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`.
+  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`. Desde
+  `feat/equipment-d2` sale sin espera, arriba del item y con la ficha compacta
+  (`TipCard`): ver "Notas del equipo y el tooltip al estilo Diablo II".
 - **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
   (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
   búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
@@ -1263,10 +1283,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   final de `others` el contenedor que cambia, y `saveWindows` y `loadWindows` se quedan
   con los últimos. "Restablecer ventanas" (`resetWindows`) deja abiertas
   las del servidor que lo estaban, en su lugar de fábrica.
-- **Dónde salen la primera vez** (`windows.css`): los contenedores acoplados bajo lo que
-  haya (como en Tibia); el diálogo abajo al centro sobre la hotbar; con la tienda, los dos
-  lado a lado centrados (`.game-body[data-shop]`, `--shop-w`); crafteo, mercado y casa
-  arriba a la izquierda; el intercambio arriba a la derecha. Movidas, guardan su lugar.
+- **Dónde salen la primera vez** (`windows.css`): desde la pantalla completa, los lugares de
+  "Notas de la pantalla completa" (los contenedores bajo el inventario, arriba a la
+  derecha; diálogo, crafteo, mercado y casa abajo al centro sobre la barra, con la tienda a
+  la izquierda del diálogo, `.game-body[data-shop]`, `--shop-w`; el intercambio arriba al
+  centro). Movidas, guardan su lugar.
 - **Componentes `framed`:** `DialogView`/`ShopView`, `CraftingWindow`, `MarketWindow`,
   `HouseWindow`, `TradeWindow` y `ContainerView` (`ui/Inventory.tsx`) toman `framed`: sin
   su encabezado (la barra del `GameWindow` lo nombra y lo cierra) y **sin su `data-testid`,
@@ -1278,24 +1299,23 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (envuelto en `.inventory.container-window` para heredar los slots). En tablets y
   teléfonos todo sigue como antes: hojas sobre el mapa y los contenedores bajo el equipo
   (`InventoryPanel` con `containers`).
-- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView`): la barra
-  arrastra como antes; la esquina de abajo a la derecha (`.gwin-resize`; en una acoplada,
-  el borde de abajo y solo el alto) cambia el tamaño (`resizeWindow`, `clampSize` con
-  `MIN_SIZE`); el botón ✥ de la barra (`.gwin-move`, `window-move-<id>`) toma el teclado
-  (`windowNudge`): flechas mueven 16 px, Mayús+flechas cambian el tamaño, en una acoplada
-  arriba y abajo la cambian de lugar (`moveInDock`), Enter o Espacio la acoplan o la sueltan
-  junto al dock. El botón para la tecla (`preventDefault` + `stopPropagation`) para que la
-  flecha no camine; Alt no se toma (Alt+← es "atrás" del navegador). Después de acoplar o
-  soltar, el foco vuelve al ✥ de la ventana. La ayuda (H) lo explica (`client.help.windows`).
+- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView` y
+  `ui/window-dom.ts`; desde la pantalla completa nada se acopla y hay imán): la barra
+  arrastra (`dragWindow`); la esquina de abajo a la derecha (`.gwin-resize`, `resizeDrag`)
+  cambia el tamaño (`resizeWindow`, `clampSize` con `MIN_SIZE`); el botón ✥ de la barra
+  (`.gwin-move`, `window-move-<id>`) toma el teclado (`windowNudge`): flechas mueven 16 px
+  y Mayús+flechas cambian el tamaño. El botón para la tecla (`preventDefault` +
+  `stopPropagation`) para que la flecha no camine; Alt no se toma (Alt+← es "atrás" del
+  navegador). La ayuda (H) lo explica (`client.help.windows`).
 - **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
   `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
-  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock` y las ventanas flotantes (`--ui-zoom`
-  en `<html>`; la hotbar no: mide sus slots para paginarlos, y su texto sigue al tamaño
-  del texto); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
-  tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en `rem` crece. El
-  ancho del dock (`--dock-w`) pasó a px para que el texto grande no le quite un paso de zoom
-  al mapa; la escala sí (el dock crece y el mapa toma lo que queda). Los lugares y tamaños
-  de `rpg.windows` son px de pantalla: `GameWindow` los divide por la escala (`zoom`).
+  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de la barra de abajo (con la hotbar
+  adentro, que mide sus slots en sus propios px: `cssZoom` de `ui/Hotbar.tsx`) y de las
+  ventanas flotantes (`--ui-zoom` en `<html>`); `rpg.text-scale` (`TEXT_SCALES`, 90 % a
+  130 %) es el tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en
+  `rem` crece. La escala agranda la barra (`--bar-px`) y el mapa se mide sobre ella. Los
+  lugares y tamaños de `rpg.windows` son px de pantalla: `GameWindow` los divide por la
+  escala (`zoom`, `placeStyle` de `ui/window-dom.ts`).
 - **Sacudida de cámara y destello de la hotbar** (UI-9): `WorldState.heavyHitAt` se marca
   cuando un `PlayerStats` baja la vida un 10 % del máximo o más (`render/shake.ts`
   `heavyHit`); `game-canvas.ts` corre la cámara `shakeOffset` (2 px, 120 ms, un patrón fijo
@@ -1314,12 +1334,14 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   dorado en la celda (`.item[data-quest]`). Los demás nombres pasaron a `--ui-text` (UI-6).
 - **Slots vacíos:** `emptySlotStyle` (`ui/Inventory.tsx`) pone el sprite `ui/slots/<slot>`
   del atlas (spritegen, `kind: ui`, `UI_SLOT_BOX`) como `--slot-icon` del slot; el CSS lo
-  dibuja al 30 % detrás (`.equipment .slot::before`). Sin atlas, no hay nada.
+  dibuja al 30 % detrás (`.doll .slot::before`; desde `feat/equipment-d2`, a la escala de
+  su slot, `--slot-scale`). Sin atlas, no hay nada.
 - **Ficha sobre el mapa:** `game-canvas.ts` avisa `restTile` cuando el mouse queda 350 ms
   quieto en una casilla (y `undefined` al salir, apretar o usar la rueda); `Game.restTile`
   elige `menuItem` si es algo que se lleva (`groundCard` de `state/item-card.ts`: ni
   suelos, ni muros, ni decoración, ni estaciones) y publica `GameUi.groundTip`;
-  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`).
+  `ItemTooltip` lo muestra debajo del texto del cursor (`data-ground`). Desde
+  `feat/equipment-d2`, sin espera y arriba de la casilla (ver abajo).
 - **Mayús+arrastrar** (`Game.pressItem`, y en el canvas un Mayús+click es una "pulsación de
   mirar" que mira al soltar y arrastra si se mueve): con una pila (`splittable`) suelta
   `GameUi.split` y `ui/SplitPrompt.tsx` pregunta cuántas (la mitad para empezar,
@@ -1327,6 +1349,241 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   menos una). Enter o "Mover" manda `MoveItem` con esa cantidad; Escape o "Cancelar" no
   mueve nada. Mayús+click sigue mirando.
 - **Vista previa:** escenas `server`, `groundtip` y `scale` (`?ui=1.25&text=1.15`) en
-  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos.
+  `make ui-preview`; la base tiene un item de misión en la mochila y slots vacíos (desde
+  `feat/equipment-d2` la mochila es `ui.backpack`, abajo de la figura).
 - **E2E:** `e2e/game.spec.ts` busca la mochila fuera de la ventana del inventario
   (`page.locator('[data-container-item="backpack"]')`, `window-container-backpack`).
+  Desde `feat/equipment-d2` la mochila equipada va dentro del inventario (abajo).
+
+## Notas del equipo y el tooltip al estilo Diablo II (rama `feat/equipment-d2`)
+Los dos pedidos del dueño del 2026-11-18 (docs/17 UI-5 y UI-6, "Hecho: el equipo y el
+tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y textos propios.
+- **La figura** (`state/equipment.ts`, puro y con tests; `ui/Inventory.tsx`): `DOLL` da el
+  lugar (columna y fila desde 1) y el tamaño en celdas de cada slot en una grilla de
+  `DOLL_COLS` x `DOLL_ROWS` (8x9). `InventoryPanel` mide el ancho que tiene (`.doll-box`,
+  `ResizeObserver`, en un `useLayoutEffect`: el primer cuadro ya sale a su tamaño; lo que el
+  observador ve después se aplica en el cuadro siguiente, `deferredMeasure` de
+  `ui/next-frame.ts`: dentro de su entrega, la figura agrandada alargaba la caja y WebKit le
+  daba a la página un error "ResizeObserver loop" al mostrar la pestaña en un teléfono) y
+  `dollCell` elige la celda: el mayor número par de px enteros que entra, entre
+  `DOLL_MIN_CELL` (24) y `DOLL_MAX_CELL` (44), con `DOLL_GAP` (2) entre celdas; la grilla
+  se centra con un margen entero. Con celda y separación pares, todo ícono cae en píxeles
+  enteros. `slotBox` da la caja de un slot e `iconScale` la escala entera de su ícono (la
+  mayor que entra dejando `SLOT_PAD`, nunca menos de 1x): `ItemCell` dibuja el item como
+  una caja de ese tamaño con el sprite adentro (`.item > .sprite`, `transform: scale(n)`
+  desde la esquina, `data-scale`). Las celdas de contenedor no pasan caja: 1x. Una pestaña
+  oculta mide 0: la celda mínima, hasta que se muestra. Un ícono de 32 px en un anillo o
+  cuello más chico sobresale de su borde (`overflow: visible`), píxel por píxel.
+- **Brillo y rojo:** `GameUi.dragging` (el item que se arrastra: `Game.startDrag` lo
+  publica y lo borra al soltar, o con un `pointercancel`, sin mover nada) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
+  `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
+  `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
+  `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
+  captura el puntero, así que el `:hover` sigue al mouse), solo con `@media (hover: hover)`:
+  una pantalla táctil deja el `:hover` donde estuvo el último dedo. Nivel, vocación y manos libres
+  los sigue diciendo el servidor al soltar.
+- **La mochila equipada** (`state/backpack.ts`, puro y con tests): `WorldState.backpack`
+  (`EquippedBackpack`) sabe qué contenedor abierto es el de la espalda: un uso de algo en
+  el slot `BACKPACK` (`Game.sendUse`, de `useItem` y de `openBackpack`) llama `used`, y el
+  `ContainerOpen` de ese item, sin padre y dentro de `BACKPACK_ANSWER_MS` (3 s), es la
+  mochila (`opened`). El servidor alterna esa misma mochila: si su ventana ya estaba
+  abierta, el uso la cierra, y el `ContainerClose` de una ventana de ese item sin padre
+  (`closed`, con la ventana como era) termina la espera. `equipped` (cada `Inventory`): si
+  la mochila deja el slot, su ventana pasa a ser una más y **no vuelve sola** abajo de la
+  figura cuando se equipa una mochila del mismo tipo: el cliente no sabe si es la misma
+  (revisión final del lote 9: con otra igual, el botín arrastrado abajo iba a la del
+  suelo). Con la misma, un uso del slot cierra su ventana y el siguiente la abre abajo; con
+  otra, el primer uso ya la abre abajo. El servidor nunca cambia un slot ocupado, así que
+  otra mochila llega siempre después de un `Inventory` con el slot vacío. `Game.publish` separa
+  (`split`): `GameUi.containers` son solo los que tienen ventana propia (así `GameView`
+  no le da una a la mochila) y `GameUi.backpack` es la de la espalda, que `InventoryPanel`
+  dibuja bajo la figura con `ContainerView docked` (`data-docked`, el mismo
+  `data-testid="container"` y `data-container-item`, con su encabezado y su ×). El
+  intercambio ofrece también lo de `ui.backpack`. `__rpgClient.containers()` (E2E) sigue
+  dando todos.
+- **Se abre sola** (`autoOpen`, puro y con tests; un `useEffect` de `InventoryPanel`): con
+  un contenedor en el slot, sin mochila abajo, sin tutorial y sin otra ventana de ese item
+  abierta, llama `Game.openBackpack` (un `UseItem` del slot, como el doble click, pero sin
+  pasar por `useItem`: no descarta la runa o la herramienta que el jugador apuntaba). Una vez
+  por mochila mientras el inventario está montado (`done`): cerrarla con su × la deja
+  cerrada hasta que el inventario se vuelva a abrir o se equipe otra. Mientras un uso del
+  slot espera su respuesta (`EquippedBackpack.waiting`, `Game.backpackWaiting`) no manda
+  otro: I dos veces antes del `ContainerOpen` mandaba dos usos y el servidor, que alterna,
+  la dejaba cerrada. Durante el tutorial
+  no (su paso `open_backpack` lo enseña; el `TutorialStep` llega en el mismo batch que el
+  `Inventory` al entrar). En teléfonos el panel está montado aunque su pestaña no se vea:
+  se abre al entrar.
+- **Capacidad:** `Capacity` (`data-testid="capacity"` en el bloque) con `.cap-bar`
+  (`capacityLoad`: la fracción cargada; `heavy` desde `HEAVY_LOAD`, 85 %, `full` sin lugar)
+  y el texto de siempre.
+- **El tooltip** (`ui/ItemTooltip.tsx`): sin espera (`pointerover` muestra en el acto),
+  `TOOLTIP_GRACE_MS` (80) al salir de un item antes de irse, así el siguiente lo toma sin
+  parpadeo; tras una presión vuelve con el siguiente `pointermove` sin botones; nada
+  mientras `GameUi.dragging` o `body.dragging-item`. Se dibuja oculto, un
+  `useLayoutEffect` mide su tamaño real (solo cuando cambia `placeKey`: el item, su
+  cantidad, su caja y quién mira; no en cada publish del `Game`) y `tipPlacement` (puro y con tests) lo pone
+  centrado arriba del item (`TIP_GAP` 6, `TIP_MARGIN` 6), abajo si no entra, y si no entra
+  en ninguno, del lado con más lugar cortado a ese lugar (`maxHeight`): nunca sobre el
+  item, así nunca bajo el cursor. `data-side` dice dónde quedó. Sin animación de entrada.
+- **La ficha compacta** (`TipCard` de `ui/ItemCard.tsx`, sin hooks; `ItemCard` con `tip`):
+  `.item-card.tip`, cada línea centrada y sin ícono; `nameClass` (`card-name`, `quest` o
+  `coin`: `ItemCardView.currency` para `kind: currency`); stats con
+  `client.card.stat_line` ("{stat}: {value}"); requisitos, efectos, marcas y la
+  descripción al final. Colores: tokens `--ui-item-plain`, `--ui-item-coin`,
+  `--ui-item-stat` y `--ui-item-effect`; los requisitos sin cumplir en `--ui-danger`. El
+  menú y la tienda siguen con la ficha entera.
+- **Sobre el mapa:** `game-canvas.ts` llama `restTile` en el acto cada vez que cambia la
+  casilla bajo el mouse (ya no espera 350 ms quieto); `Game.restTile` suma `tile`, la
+  casilla en coordenadas de página (`tileToClient` de ella y de la siguiente), y no publica
+  nada mientras se arrastra. Un cambio solo de la ficha no arma de nuevo el `GameUi`
+  (`publishTip`: el último publicado, `shown`, con el `groundTip` nuevo; sin la lista de
+  batalla ni copias del log y el chat por cada casilla que cruza el mouse). `ItemTooltip` usa `groundAnchor`: la casilla, estirada hacia
+  abajo hasta pasar el texto del cursor (`GROUND_HINT_PX`), así colocada abajo no lo tapa.
+- **Para las ventanas flotantes** (rama `feat/hud-fullscreen`): nada del interior depende
+  del dock. La figura toma el ancho de la ventana: 2x en los slots grandes desde unos 286
+  px de cuerpo (una ventana de unos 19 rem); a 16 rem los íconos van a 1x.
+- **Vista previa:** escenas `inventory` (una espada arrastrada sobre el equipo: la mano
+  derecha brilla y la izquierda, bajo el puntero, se tiñe de rojo), `inventoryfloat` (el
+  inventario flotando, de 420 px), `tooltip` (la espada de la mano derecha) y
+  `tooltipcoin` (las monedas de la mochila); en teléfono y tablet abren la pestaña del
+  inventario. `withHeld` y `ui.backpack` en `src/preview/fixtures.ts`.
+- **E2E:** el primer test de `e2e/game.spec.ts` encuentra la mochila abierta bajo la figura
+  (`[data-container-item="backpack"][data-docked]` dentro de `inventory`, 24 celdas, sin
+  `window-container-backpack`), la cierra con su ×, la abre de nuevo con "Abrir" del menú
+  (otra vez bajo la figura), pasa el mouse por ella (la ficha compacta, sin taparla) y,
+  tirada al suelo, la encuentra en `window-container-backpack`; vuelta al slot, sigue en
+  su ventana; un doble click en el slot la cierra y otro la abre abajo. El del intercambio ya no le hace doble click (la cerraría): espera que esté
+  abierta. Un spec nuevo que abra la mochila equipada con un doble click o "Abrir" la
+  cierra si ya estaba abierta.
+
+## Notas de la pantalla completa (docs/17 UI-4 y UI-5, rama `feat/hud-fullscreen`)
+El dueño (2026-11-18): el juego a pantalla completa, como Diablo 2 o Ragnarok Online, con
+los menús flotando donde el jugador los acomode; abajo una barra gótica (orbes de vida y
+maná en las esquinas; en el medio la experiencia, la hotbar y la botonera), lo único fijo; y
+ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pestañas y cajón.
+- **El mapa** (`.viewport`) ocupa `.game-body` entero; su `padding-bottom` es la barra
+  (`--bar-px` = `--bar-h` de 88 px por `--ui-zoom`), así el canvas se mide sobre la barra
+  (la caja de contenido, como el pad de T5.6) y `--map-cover: 1` le dice a
+  `render/game-canvas.ts` (y a la vista previa) que cubra esa caja (`zoomRange` con
+  `cover`, "Zoom del mapa"). Sin marco ni viñeta alrededor del canvas. Se fueron
+  `--dock-w`, `aside.side` en escritorio, `--map-reserve-bottom` y `mapLift`.
+  `.game-body` recorta (`overflow: clip`): los pináculos de los hombros del orbe de maná
+  sobresalen 7 px del borde derecho y la página medía 1287 px a 1280 (un `scrollIntoView`
+  corría el juego de lado; `mobile.spec` exige que la página mida justo la pantalla).
+- **La barra** (`ui/HudBar.tsx`, `section.hud-bar`, test id `hud-bar`, `aria-label`
+  `client.hud.bar`): `position: absolute` abajo, `zoom: var(--ui-zoom)` (la escala de la
+  interfaz la agranda como a las ventanas), grilla de tres columnas: orbe de vida
+  (`--orb-col`, 112 px), el medio (`.bar-centre`: la experiencia arriba y debajo `.bar-row`,
+  un pozo con la hotbar y la botonera) y orbe de maná. Los engastes (`.orb-socket`, 106 px)
+  salen 18 px por encima de la barra; la placa (`.vitals`, `--plaque-w` 132 px) va sobre el
+  orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
+  remaches arriba, pilares de hierro con filo dorado a los lados del medio y una cresta de
+  pináculos al centro. La hotbar mide sus slots en sus propios px aunque la barra tenga
+  `zoom` (`cssZoom` de `ui/Hotbar.tsx`: `getBoundingClientRect` da px de pantalla y
+  `clientWidth` y los estilos computados los propios); en la barra no deja margen
+  (`margin={0}`) y pagina con sus flechas cuando no entran los 12 (a 960x700, 6).
+- **Ornamentos** (`ui/ornaments.ts`, puro y con tests): pixel art propio escrito como texto,
+  como los íconos (esquina, pináculo, remache), pasado a SVG `data:` y puesto como
+  variables `--orn-*` en el `style` de `.game` (CSSOM: la CSP de escritorio no deja
+  `<style>` en línea, sí imágenes `data:`). Las esquinas doradas con un granate van en
+  `.gwin::after`; los remaches en la banda de la barra y en los engastes; los pináculos en
+  los hombros de cada engaste y en la cresta.
+- **Ventanas** (`ui/windows.ts`, versión 3 de `rpg.windows`): sin `dock` ni `order`; todas
+  flotan en `.win-layer` (la pantalla sobre la barra: `%` de su CSS es de esa área).
+  `placeOf` da `x`/`y` en px de pantalla desde su esquina; sin `x`/`y` la ventana está en
+  su lugar de fábrica (`windows.css`, `:not([data-placed])`): batalla arriba a la izquierda
+  (hasta el 50 % del alto), grupo a su derecha, habilidades debajo (desde el 50 %);
+  inventario arriba a la derecha, gremio y apariencia a su izquierda, los contenedores debajo
+  del inventario (`top: var(--containers-top)`: el alto del inventario en sus propios px,
+  que `GameView` mide con un `ResizeObserver` sobre su ventana, `boxRef` de `GameWindow`,
+  y pone en `.win-layer`; `containersTop` de `ui/windows.ts` da 0 con el inventario
+  cerrado o movido, y la columna empieza arriba. Con la figura y la mochila de
+  `feat/equipment-d2` mide unos 500 px: el `15rem` de antes abría cada contenedor sobre la
+  mochila. El n-ésimo va un paso más abajo y a la izquierda: `--nth`, que pone
+  `GameWindow`; nunca más abajo que `100% - 2rem`, así su barra de título se ve aunque haya
+  muchos abiertos en una pantalla baja); el chat abajo a la izquierda pasando la placa; opciones y ayuda al
+  medio; el intercambio arriba al centro; diálogo, crafteo, mercado y casa abajo al centro
+  sobre la barra, y la tienda a la izquierda del diálogo, los dos sin pisar la columna del
+  inventario (`--pair-left`). Movida, `GameWindow` pone `left`/`top` y un `max-height` de
+  `calc(100% - top)`: nunca baja de la barra (`placeStyle` de `ui/window-dom.ts`).
+  - **Arrastrar y cambiar el tamaño** (`dragWindow`, `resizeDrag` de `ui/window-dom.ts`,
+    con tests sin DOM): mientras dura, el elemento sigue al puntero con estilos en línea;
+    al soltar, `settleStyle` le escribe los largos de su lugar nuevo (los mismos de
+    `placeStyle`) en vez de borrarlos: Preact solo escribe las propiedades de `style` que
+    cambiaron desde su render anterior, y una que el arrastre pisó y el estado conservó (la
+    `x` de una ventana deslizada por un borde, todo menos el tamaño en un resize, o soltarla
+    donde estaba) quedaba vacía y la ventana saltaba a la esquina de arriba a la izquierda.
+    Los tests aplican la regla de Preact (`preact/src/diff/props.js`) a lo que dibuja
+    `GameWindow`.
+  - **Pila y orden en la página:** la pila (`openWindows`) es solo el `z-index` de cada una
+    (20 + su lugar); en la página van siempre en el mismo orden (`pageOrder`: las de la
+    botonera, las del servidor y los contenedores por clave), así traer una al frente no
+    mueve su nodo (movido, repetía su animación de entrada y perdía el foco y el scroll de
+    adentro). Tab las recorre en ese orden fijo.
+  - **Qué tapa a qué:** `.win-layer` tiene `z-index: 20` (su propio contexto de
+    apilamiento): sobre la barra (15), los avisos, el tutorial y la subida de nivel; bajo
+    el chequeo de presencia (21) y la pantalla de muerte (22), que ninguna ventana puede
+    tapar (un chequeo escondido vence y cuenta como fallado). Las invitaciones de grupo y
+    de gremio (`.invitations`, que también vencen) van a 21: el chat en su lugar de
+    fábrica (x 144–528) llega debajo de ellas, centradas, a 1280 y 960 px; las del gremio
+    con su propia regla de escritorio, 3,5rem más arriba (la de `.invitations` les ganaba
+    por especificidad a `.guild-invitations` y las dos quedaban en el mismo lugar).
+    `ui/windows-css.test.ts` lo comprueba leyendo `windows.css`.
+  - **Imán** (`snapPlace`, puro): al arrastrar (y con las flechas del ✥), cada eje va al
+    borde más cercano a menos de `SNAP_PX` (10): los de la pantalla, el techo de la barra y
+    los de las otras ventanas, de lado (la izquierda de una con la derecha de la otra) o
+    alineados (izquierda con izquierda), solo si las dos están cerca en el otro eje. Después
+    `clampPlace` la deja entera dentro del área (antes bastaba que se viera la barra).
+  - **Al achicar la pantalla** (o subir la escala), un `ResizeObserver` sobre `.win-layer`
+    mete adentro las ventanas movidas que quedaron afuera (`pullInside` de `GameView` con
+    `outsiders` de `ui/window-dom.ts`, con tests sobre elementos falsos; `placeWindow`, sin
+    cambiar la pila); lo mismo al cargar un lugar guardado en una pantalla más grande. Se
+    engancha por el ref (`watchedRef` de `ui/window-dom.ts`, `ref={win.layer.set}`), no en
+    un efecto del primer render: la capa solo existe en el layout de escritorio, así que un
+    juego que arranca angosto la monta tarde y cada vuelta de tablet a escritorio monta una
+    nueva. El observador solo ve cambiar el área: una ventana cerrada entonces conservaba
+    su `x` (las habilidades dejadas en x 1600 a 1920 px se abrían invisibles a 1280), así
+    que la misma revisión corre en un `useLayoutEffect` cada vez que cambian las ventanas
+    que se ven (`shownKey` de `ui/windows.ts`: abrir, cerrar, plegar o desplegar; traer al
+    frente no), antes de pintarla. Cada ventana cuenta con el alto de `keptHeight`: el que
+    muestra ahora si es al menos `MIN_SIZE.height` (72; aplastada por su `max-height` se
+    queda donde está, con el cuerpo desplazable, como una lista de batalla que creció) y si
+    no, su alto propio (`naturalHeight`: se levanta el `max-height` para medir y se vuelve
+    a poner), así sube hasta verse entera: medida aplastada, una ventana con el techo por
+    debajo del área nueva medía unos px y se quedaba con la barra de título sobre la barra
+    gótica. Se mide sin la escala de la animación de entrada (`gwin-in` arranca en 0,96:
+    `transformScale` del `transform` computado).
+  - **Migración:** una `rpg.windows` v1 o v2 se sigue leyendo; lo que estaba acoplado vuelve a
+    su lugar de fábrica (pierde `x`, `y`, `w` y `h`, que eran del dock); lo que flotaba
+    conserva todo. Se guarda como v3, con los últimos `MAX_CONTAINER_PLACES` (24)
+    contenedores que cambiaron, como en el lote 8 (`lastContainers`).
+  - **El chat** es `chat` en `WINDOW_IDS` (sin botón ni tecla), en `FIXED_WINDOWS`: no se
+    cierra (sin ×; `closeWindow` no hace nada) y Escape lo salta; se pliega y se mueve como
+    las demás. Sus pestañas van en la barra de título (`GameWindow` `barExtra`, con el título
+    solo para lectores de pantalla: `hideTitle`). Translúcido (`::before` con la piedra al
+    50 %) y casi opaco con el mouse encima o escribiendo (`:hover`, `:focus-within`; solo
+    cambia `opacity`, UI-9).
+  - **Escape** cierra la de arriba de `z` (la última abierta, movida o tocada) que se pueda
+    cerrar; la batalla y el inventario del principio no están en `z` hasta que se tocan,
+    así Escape en una pantalla recién abierta sigue abriendo Opciones. El `Game` cierra
+    antes, con su propio Escape, el diálogo y la estación.
+  - **Abiertas juntas** (`syncWindows`): los contenedores primero, así un diálogo o una
+    estación que abre con ellos queda encima.
+  - Teclado del ✥: flechas mueven 16 px (con imán), Mayús+flechas cambian el tamaño (hasta
+    el techo de la barra). Enter y Espacio ya no acoplan nada.
+- **Sobre el mapa**, encima de la barra: los avisos (`.notices`), las invitaciones (sobre
+  las ventanas, las del gremio más arriba), el pad y los botones de zoom de una pantalla
+  táctil; el tutorial se corre a la izquierda de la
+  columna del inventario y la viñeta roja de poca vida termina en la barra.
+- **Vista previa:** escenas `magnet` (ventanas borde con borde), `migrated` (un
+  `rpg.windows` v1 con el dock) y `chat` (el chat bajo el mouse) en `make ui-preview`.
+- **E2E:** los screenshots de `.side` (`16-chat`, `18-gm-announce`, `25-party-panel`,
+  `37-report-form`, `51-pvp-battle-list`) son ahora de su ventana; `mobile.spec.ts` comprueba
+  a 1280x800 que el canvas va de (0, 0) al techo de la barra y que el chat queda sobre ella
+  (`mobile-desktop-1280-full-screen`). A 1280x800 el inventario flota sobre la 6.ª columna al
+  este del jugador y el chat sobre la 2.ª a la 7.ª al oeste y la 3.ª a la 5.ª al sur: los
+  caminos por clicks de `game.spec.ts` saltan 5 columnas como mucho, `mapPoint` da el punto
+  de una casilla solo si lo que hay ahí es el canvas, y `clickTile` de `sandbox.spec.ts`
+  falla si una ventana tapa la casilla. Que el cuerpo de la tienda no se desplace se mide
+  en `.gwin-body` (el marco no es un contenedor de scroll y sus esquinas góticas sobresalen
+  5 px).

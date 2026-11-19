@@ -2,18 +2,14 @@
 // drawn on transparency in 3/4 view (top and south face visible), lit from the top-left.
 import type { Image, Rgba } from "@rpg/spritepack";
 import {
-  box,
   cylinderLight,
   domeLight,
   eachInEllipse,
   eachInRect,
   hash2,
-  line,
   opaque,
   outline,
-  polygon,
   px,
-  rect,
   shadeOf,
   tileNoise,
   tint,
@@ -23,7 +19,7 @@ import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, weatheredWood, iron, darkIron, rope, paper, redCloth, moss } = PALETTE;
+const { darkWood, weatheredWood, darkIron, rope, moss } = PALETTE;
 
 // ---- ground ------------------------------------------------------------------------------
 
@@ -266,125 +262,6 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
 
 // ---- objects -----------------------------------------------------------------------------
 
-/** Iron anvil with a horn to the left, on its foot. */
-function anvil(img: Image): void {
-  const top = iron;
-  const side = darkIron;
-  // Horn: top face and its shadowed underside.
-  polygon(
-    img,
-    [
-      [10, 10],
-      [2, 12],
-      [10, 14],
-    ],
-    top.base,
-  );
-  line(img, 3, 12, 9, 11, top.light);
-  polygon(
-    img,
-    [
-      [10, 14],
-      [2, 12],
-      [4, 14],
-      [10, 17],
-    ],
-    side.shadow,
-  );
-  // Face (top) and its front.
-  rect(img, 9, 10, 19, 4, top.base);
-  rect(img, 9, 10, 19, 1, top.light);
-  rect(img, 9, 10, 1, 4, top.light);
-  rect(img, 26, 11, 1, 2, top.shadow); // hardy hole
-  rect(img, 9, 14, 19, 4, side.base);
-  rect(img, 9, 14, 19, 1, side.light);
-  rect(img, 27, 14, 1, 4, side.deep);
-  // Waist.
-  eachInRect(13, 18, 11, 5, (x, y) => {
-    const u = (x + 0.5 - 18.5) / 5.5;
-    px(img, x, y, shadeOf(side, cylinderLight(u) - 0.1));
-  });
-  // Foot: a low box.
-  box(img, 9, 22, 19, 2, 5, side);
-  rect(img, 9, 22, 19, 1, top.shadow);
-  outline(img, { amount: 0.5 });
-}
-
-/** Wooden cargo crate with a darker frame, a diagonal brace and nails. */
-function cargoCrate(img: Image): void {
-  const m = weatheredWood;
-  box(img, 5, 6, 22, 7, 18, wood);
-  // Top face planks.
-  for (const x of [12, 19]) line(img, x, 7, x, 12, wood.shadow);
-  // Front planks and frame.
-  for (const y of [18, 23]) line(img, 8, y, 23, y, darken(wood.shadow, 0.2));
-  rect(img, 5, 13, 3, 18, m.base);
-  rect(img, 24, 13, 3, 18, m.shadow);
-  rect(img, 5, 13, 22, 2, m.base);
-  rect(img, 5, 29, 22, 2, m.shadow);
-  rect(img, 5, 13, 1, 18, m.light);
-  rect(img, 5, 13, 22, 1, m.light);
-  // Diagonal brace from bottom-left to top-right.
-  for (let i = 0; i <= 15; i++) {
-    const x = 8 + i;
-    const y = 28 - Math.round((i * 12) / 15);
-    px(img, x, y, m.base);
-    px(img, x, y - 1, m.light);
-    px(img, x, y + 1, m.shadow);
-  }
-  for (const [x, y] of [
-    [6, 14],
-    [25, 14],
-    [6, 29],
-    [25, 29],
-  ] as const)
-    px(img, x, y, darkIron.base);
-  outline(img, { amount: 0.5 });
-}
-
-/** 32x64 notice board on two posts, with a little roof and pinned notes. */
-function marketBoard(img: Image, rand: Rng): void {
-  // Posts.
-  for (const x0 of [5, 24]) {
-    eachInRect(x0, 18, 3, 44, (x, y) => {
-      px(img, x, y, shadeOf(darkWood, [0.8, 0.5, 0.25][x - x0] ?? 0));
-    });
-  }
-  // Board: horizontal planks inside a dark frame.
-  eachInRect(2, 19, 28, 25, (x, y) => {
-    const yy = (y - 19) % 6;
-    const level = yy === 5 ? 0.15 : yy === 0 ? 0.62 : 0.5 + (hash2(x >> 2, y, 7) - 0.5) * 0.25;
-    px(img, x, y, shadeOf(wood, level));
-  });
-  rect(img, 2, 19, 28, 1, darkWood.base);
-  rect(img, 2, 43, 28, 2, darkWood.shadow);
-  rect(img, 2, 19, 1, 26, darkWood.base);
-  rect(img, 29, 19, 1, 26, darkWood.deep);
-  // Roof: a short plank lid seen from above and its front edge.
-  box(img, 0, 12, 32, 4, 3, darkWood);
-  for (const x of [8, 16, 24]) line(img, x, 13, x, 15, darkWood.shadow);
-  // Notes.
-  const notes: [number, number, number, number][] = [
-    [5, 22, 8, 9],
-    [15, 21, 7, 7],
-    [23, 23, 5, 8],
-    [7, 33, 9, 8],
-    [18, 31, 8, 10],
-  ];
-  notes.forEach(([x, y, w, h], i) => {
-    rect(img, x, y, w, h, paper.base);
-    rect(img, x, y, w, 1, paper.light);
-    rect(img, x + w - 1, y + 1, 1, h - 1, paper.shadow);
-    rect(img, x, y + h - 1, w, 1, paper.shadow);
-    for (let ty = y + 2; ty < y + h - 2; ty += 2) {
-      const len = 2 + Math.floor(rand() * (w - 3));
-      line(img, x + 1, ty, x + len, ty, paper.deep);
-    }
-    px(img, x + (w >> 1), y, i % 2 === 0 ? redCloth.base : iron.light); // pin
-  });
-  outline(img, { amount: 0.5 });
-}
-
 /** A wooden bollard with a mushroom cap and a coil of rope, for tying boats. */
 function mooringPost(img: Image, _rand: Rng, seed: number): void {
   const cx = 16;
@@ -480,49 +357,6 @@ function boulder(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.5 });
 }
 
-/** A wooden signpost: a plank board with carved lines, nailed to a charred post. */
-function signpost(img: Image, _rand: Rng, seed: number): void {
-  // Post, lit on the left.
-  eachInRect(14, 13, 5, 16, (x, y) => {
-    const u = (x + 0.5 - 16.5) / 2.5;
-    px(img, x, y, shadeOf(darkWood, cylinderLight(u) + (hash2(x, y >> 2, seed) - 0.5) * 0.15));
-  });
-  rect(img, 13, 28, 7, 1, darkWood.deep); // where it goes into the ground
-  // Board: the lit top edge, two planks on the front, a darker frame.
-  eachInRect(4, 7, 25, 12, (x, y) => {
-    const yy = y - 7;
-    const grain = tileNoise(x, y * 3, 8, 1, seed) - 0.5;
-    let level = 0.5 + grain * 0.35;
-    if (yy === 0) level = 0.85;
-    else if (yy === 6)
-      level = 0.1; // the seam between the planks
-    else if (yy === 11) level = 0.15;
-    px(img, x, y, shadeOf(wood, level));
-  });
-  rect(img, 4, 7, 1, 12, wood.light);
-  rect(img, 28, 7, 1, 12, wood.deep);
-  // Carved letters: short gouges in two lines.
-  for (const [row, from, to] of [
-    [10, 7, 25],
-    [15, 8, 22],
-  ] as const) {
-    for (let x = from; x <= to; x++) {
-      if (hash2(x, row, seed + 1) < 0.22) continue; // gaps between the words
-      px(img, x, row, wood.deep);
-      if (hash2(x, row, seed + 2) < 0.4) px(img, x, row + 1, wood.shadow);
-    }
-  }
-  // Nails.
-  for (const [x, y] of [
-    [6, 9],
-    [26, 9],
-    [6, 16],
-    [26, 16],
-  ] as const)
-    px(img, x, y, darkIron.base);
-  outline(img, { amount: 0.5 });
-}
-
 export const TERRAIN: RecipeBook = {
   "ground/wooden_floor": { kind: "ground", draw: woodenFloor },
   "ground/dock_planks": { kind: "ground", draw: dockPlanks },
@@ -530,10 +364,6 @@ export const TERRAIN: RecipeBook = {
   "ground/basalt": { kind: "ground", draw: basaltPaving },
   "ground/cinder_path": { kind: "ground", draw: cinderPath },
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
-  "decor/signpost": { kind: "object", draw: signpost },
-  "decor/anvil": { kind: "object", draw: anvil },
-  "decor/cargo_crate": { kind: "object", draw: cargoCrate },
-  "decor/market_board": { kind: "object", height: 64, draw: marketBoard },
   "decor/mooring_post": { kind: "object", draw: mooringPost },
   "decor/boulder": { kind: "object", draw: boulder },
 };

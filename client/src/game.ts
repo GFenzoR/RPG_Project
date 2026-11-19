@@ -10,11 +10,12 @@ import {
   ChatChannel,
   CreatureKind,
   DisappearReason,
+  EquipmentSlot,
   GuildAction,
   MarketSide,
   PartyAction,
 } from "@rpg/protocol";
-import type { Direction, DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
+import type { Direction, DisconnectReason, FightStance, Skull } from "@rpg/protocol";
 import {
   ItemPicker,
   defaultAction,
@@ -104,7 +105,13 @@ export interface GameUi {
   log: LogMessage[];
   chat: ChatLine[];
   inventory: Map<EquipmentSlot, ItemView>;
+  /**
+   * The open containers that have a window of their own: every one but the equipped
+   * backpack, which the inventory shows under the figure (`backpack`, docs/17 UI-5).
+   */
   containers: ContainerState[];
+  /** The equipped backpack's open container, shown under the figure (docs/17 UI-5). */
+  backpack?: ContainerState | undefined;
   /** Spell ID of each hotkey F1..F12 (undefined = empty). */
   hotkeys: (string | undefined)[];
   /** The open NPC dialog and its shop (T1.10). */
@@ -134,6 +141,8 @@ export interface GameUi {
   selfId: number;
   /** T5.6: the item picked by a tap, waiting for a tap on its destination. */
   picked?: ItemRef | undefined;
+  /** The item dragged with the pointer right now (docs/17 UI-5: the slots that take it glow). */
+  dragging?: ItemRef | undefined;
   /** T5.6: the contextual menu of a long press (or a right click, docs/17 UI-6). */
   menu?: ActionMenuView | undefined;
   /** The character's vocation (an item card's requirements). */
@@ -150,10 +159,18 @@ export interface GameUi {
   /** The last spell used from the hotbar and when (docs/17 UI-9: its slot flashes). */
   cast?: { spellId: string; at: number } | undefined;
   /**
-   * The item lying on the map tile the mouse rests on, at page (x, y): its card shows
-   * there (docs/17 UI-6, ui/ItemTooltip.tsx).
+   * The item lying on the map tile under the mouse, at page (x, y): its card shows above the
+   * tile, `tile` in page coordinates (docs/17 UI-6, ui/ItemTooltip.tsx).
    */
-  groundTip?: { itemId: number; count: number; x: number; y: number } | undefined;
+  groundTip?:
+    | {
+        itemId: number;
+        count: number;
+        x: number;
+        y: number;
+        tile: { left: number; top: number; width: number; height: number };
+      }
+    | undefined;
 }
 
 /** A Shift+drag of a stack waiting for how many units move. */
@@ -384,8 +401,15 @@ export class Game {
   private cast: { spellId: string; at: number } | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
   private groundTip: GameUi["groundTip"];
+  /**
+   * The last state given to the UI: a change of the ground card alone (the mouse sweeping
+   * the map) reuses it instead of building it again (publishTip).
+   */
+  private shown: GameUi | undefined;
   /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
   private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
+  /** The item dragged with the pointer right now (docs/17 UI-5). */
+  private dragging: ItemRef | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
   private zoomView: ZoomView | undefined;
@@ -812,7 +836,14 @@ export class Game {
     const useWith = this.opts.content.items[ref.itemId]?.useWith ?? false;
     this.setPending(afterUse(ref, useWith));
     this.toolAt = undefined;
-    if (useWith) return;
+    if (!useWith) this.sendUse(ref);
+  }
+
+  /** The UseItem of ref, and nothing else (what the player aimed at stays aimed). */
+  private sendUse(ref: ItemRef): void {
+    // docs/17 UI-5: the window this opens is the equipped backpack's, under the figure.
+    if (ref.loc.kind === "slot" && ref.loc.slot === EquipmentSlot.BACKPACK)
+      this.world.backpack.used(ref.itemId, performance.now());
     this.conn.send({
       case: "useItem",
       value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
@@ -952,6 +983,30 @@ export class Game {
   }
 
   /**
+   * Opens the backpack worn on the back (docs/17 UI-5: the inventory opens it by itself
+   * when it shows, state/backpack.ts autoOpen). A use of the slot, as a double click, that
+   * leaves alone a rune or a tool the player is aiming (useItem would drop it).
+   */
+  openBackpack(): void {
+    const it = this.world.inventory.get(EquipmentSlot.BACKPACK);
+    if (!it || (this.opts.content.items[it.itemId]?.slots ?? 0) <= 0) return;
+    this.sendUse({
+      loc: { kind: "slot", slot: EquipmentSlot.BACKPACK },
+      itemId: it.itemId,
+      stackIndex: 0,
+      count: it.count,
+    });
+  }
+
+  /**
+   * A use of the backpack slot still waits for its answer: the inventory shown again
+   * meanwhile does not open the backpack once more (the server would toggle it shut).
+   */
+  backpackWaiting(): boolean {
+    return this.world.backpack.waiting(performance.now());
+  }
+
+  /**
    * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
    * pointer travels a few pixels, and the item moves where it is released. With Shift a
    * click looks at the item and a drag moves part of a stack (docs/17 UI-6: it asks how
@@ -977,9 +1032,11 @@ export class Game {
     const stop = (): void => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", stop);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", stop);
   }
 
   /**
@@ -989,9 +1046,22 @@ export class Game {
   private startDrag(ref: ItemRef, split = false): void {
     this.closeSplit();
     document.body.classList.add("dragging-item");
-    const up = (ev: PointerEvent): void => {
+    // docs/17 UI-5: the equipment slots that take it glow while it is dragged.
+    this.dragging = ref;
+    this.groundTip = undefined;
+    this.publish();
+    const end = (): void => {
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
       document.body.classList.remove("dragging-item");
+      this.dragging = undefined;
+      this.publish();
+    };
+    // The browser took the pointer (a touch turned into a scroll, the window lost it):
+    // nothing moves, and the slots stop glowing.
+    const cancel = (): void => end();
+    const up = (ev: PointerEvent): void => {
+      end();
       const to = this.dropTarget(ev.clientX, ev.clientY);
       if (!to) return;
       if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
@@ -1000,6 +1070,7 @@ export class Game {
       } else this.moveItem(ref, to);
     };
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   }
 
   /** How many units of a Shift+dragged stack go where it was dropped (the prompt's OK). */
@@ -1464,11 +1535,17 @@ export class Game {
     }
   }
 
+  /** The open containers as the UI shows them: the equipped backpack apart (docs/17 UI-5). */
+  private containersUi(): Pick<GameUi, "containers" | "backpack"> {
+    const { backpack, others } = this.world.backpack.split(this.world.containers);
+    return { containers: others, backpack };
+  }
+
   private publish(): void {
     const w = this.world;
     const self = w.self;
     if (w.station && self && !nearStation(w.station, self.pos)) w.station = undefined;
-    this.opts.update({
+    const ui: GameUi = {
       battle: w.battleList(),
       target: w.target,
       stats: w.stats,
@@ -1480,7 +1557,8 @@ export class Game {
       log: [...w.log],
       chat: [...w.chat],
       inventory: w.inventory,
-      containers: w.containers,
+      // docs/17 UI-5: the equipped backpack goes under the figure, not in a window.
+      ...this.containersUi(),
       hotkeys: this.hotkeys,
       dialog: w.dialog,
       shop: w.shop,
@@ -1499,6 +1577,7 @@ export class Game {
       selfName: w.self?.name ?? "",
       selfId: w.selfId,
       picked: this.picker.picked,
+      dragging: this.dragging,
       menu: this.menu?.view,
       vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
@@ -1511,8 +1590,24 @@ export class Game {
         itemId: this.split.ref.itemId,
         count: this.split.ref.count,
       },
-    });
+    };
+    this.shown = ui;
+    this.opts.update(ui);
     this.armPresenceTimer();
+  }
+
+  /**
+   * Only the ground card changed (docs/17 UI-6: it follows the mouse from tile to tile at
+   * once): the last state with the new card, without building the battle list or copying
+   * the log and the chat again on every tile the mouse crosses.
+   */
+  private publishTip(): void {
+    if (!this.shown) {
+      this.publish();
+      return;
+    }
+    this.shown = { ...this.shown, groundTip: this.groundTip };
+    this.opts.update(this.shown);
   }
 
   // ---- sound (T3.7): what each event sounds like is assets/sounds.yaml --------------------
@@ -1863,14 +1958,26 @@ export class Game {
     at: { x: number; y: number; z: number; cx: number; cy: number } | undefined,
   ): void {
     let tip: GameUi["groundTip"];
-    if (at && !this.menu && !this.pending && !this.picker.picked) {
+    if (at && this.canvas && !this.menu && !this.pending && !this.picker.picked && !this.dragging) {
       const ref = menuItem(this.world, at.x, at.y, at.z);
-      if (ref && groundCard(this.opts.content.items[ref.itemId]))
-        tip = { itemId: ref.itemId, count: Math.max(1, ref.count), x: at.cx, y: at.cy };
+      if (ref && groundCard(this.opts.content.items[ref.itemId])) {
+        // The tile in page coordinates (docs/17 UI-6: the card goes above it).
+        const c = this.canvas.tileToClient(at.x, at.y);
+        const n = this.canvas.tileToClient(at.x + 1, at.y + 1);
+        const width = n.x - c.x;
+        const height = n.y - c.y;
+        tip = {
+          itemId: ref.itemId,
+          count: Math.max(1, ref.count),
+          x: at.cx,
+          y: at.cy,
+          tile: { left: c.x - width / 2, top: c.y - height / 2, width, height },
+        };
+      }
     }
     if (tip === undefined && this.groundTip === undefined) return;
     this.groundTip = tip;
-    this.publish();
+    this.publishTip();
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

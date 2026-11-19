@@ -146,6 +146,9 @@ describe("itemCard", () => {
     ]);
     // Money is not sold on the market and needs no mark; a station is not carried.
     expect(itemCard({ ...base, kind: "currency", marketable: false }, 1, 1).marks).toEqual([]);
+    // docs/17 UI-6: money's name is gold in the tooltip.
+    expect(itemCard({ ...base, kind: "currency" }, 1, 1).currency).toBe(true);
+    expect(itemCard(sword, 7, 1).currency).toBeUndefined();
     const forge: ItemDef = { ...base, kind: "decoration", weight: 90000, tradeable: false };
     expect(itemCard(forge, 1, 1).marks).toEqual([]);
     expect(itemCard(forge, 1, 1).stats).toEqual([]);

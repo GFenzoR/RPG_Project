@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { devicePixels, followCamera, mapLift, pixelScale, wholeScale } from "./viewport.ts";
+import { devicePixels, followCamera, pixelScale, wholeScale } from "./viewport.ts";
 
 describe("viewport", () => {
   it("scales by whole device pixels per sprite pixel", () => {
@@ -48,22 +48,5 @@ describe("viewport", () => {
     expect(c).toEqual({ x: 100.5 - 11.25 / 2, y: 50.5 - 8.25 / 2, zoom: 3 });
     const odd = followCamera(100, 50, 3, 32, { width: 361 / 32, height: 8 });
     expect(odd.x * 96).toBeCloseTo(Math.round(odd.x * 96), 9);
-  });
-
-  it("lifts the canvas above the hotbar strip as far as the box allows (playtest m2)", () => {
-    // 1280x800: a box of 732 px for a view of 704: 28 px to spare, the strip is 40: the
-    // canvas goes to the top (the strip covers 12 px of the last row, not 40).
-    expect(mapLift(732, 704, 40)).toBe(28);
-    // 1920x1080: room to spare: the gap under the canvas is exactly the strip.
-    const lift = mapLift(1012, 704, 40);
-    expect((1012 - 704 + lift) / 2).toBe(308 / 2); // centred already clears 40 px
-    expect(lift).toBe(0);
-    // Room for the strip, but not when centred: the gap under it becomes the strip.
-    const m = mapLift(800, 704, 60);
-    expect((800 - 704 + m) / 2).toBe(60);
-    // No strip, no room, a zoomed-in view that fills the box: nothing moves.
-    expect(mapLift(732, 704, 0)).toBe(0);
-    expect(mapLift(704, 704, 40)).toBe(0);
-    expect(mapLift(700, 704, 40)).toBe(0);
   });
 });

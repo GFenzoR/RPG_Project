@@ -143,8 +143,8 @@ export function checkPaths(root: string): string[] {
 const GRASS = "assets/vendor/dungeon-crawl/dngn/floor/grass/grass0.png";
 const LABEL = [230, 230, 220, 255] as const;
 const BACKDROP = [24, 24, 28, 255] as const;
-/** What effect frames are previewed over. */
-const PREVIEW_CREATURE = "creatures/bristleback_boar";
+/** What effect frames are previewed over (an engine frame: the boar standing, facing south). */
+const PREVIEW_CREATURE = "creatures/bristleback_boar/idle_s_0";
 
 /** A frame path (…/<name>/<n>) belongs to the strip …/<name>; other paths stand alone. */
 const stripOf = (path: string): string | undefined => /^(.*)\/[0-9]+$/.exec(path)?.[1];
