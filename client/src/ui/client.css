@@ -1725,6 +1725,7 @@ body.picking-item .map-hint {
 }
 .forge-protect {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.78rem;

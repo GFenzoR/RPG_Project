@@ -569,3 +569,61 @@ export function withHeld(content: ClientContent, s: Scene): Scene {
   };
   return { ui, name: "inventory" };
 }
+
+/**
+ * The forge (docs/02 "Forja"): the anvil's window open with its stones, the amber and the
+ * money, smithing 18 (+3 points), a +2 iron sword in hand and a +6 helmet; the screenshot
+ * script opens the Forge tab and picks the item (e2e/ui-preview.ts). "result": the last
+ * attempt broke a +7 boarding saber (it is gone from the backpack).
+ */
+export function withForge(
+  content: ClientContent,
+  s: Scene,
+  variant: "pick" | "result",
+  now: number,
+): Scene {
+  const id = (name: string): number => itemNumber(content, name);
+  const inventory = new Map(s.ui.inventory);
+  const refined = (slot: EquipmentSlot, refine: number): void => {
+    const it = inventory.get(slot);
+    if (it?.mods) inventory.set(slot, { ...it, mods: { ...it.mods, refine } });
+  };
+  refined(EquipmentSlot.RIGHT_HAND, 2);
+  refined(EquipmentSlot.HEAD, 6);
+  const backpack = s.ui.backpack && {
+    ...s.ui.backpack,
+    items: s.ui.backpack.items.filter(
+      (it) => variant !== "result" || it.itemId !== id("boarding_saber"),
+    ),
+  };
+  const ui: GameUi = {
+    ...s.ui,
+    inventory,
+    backpack,
+    skills: [...s.ui.skills, { id: "smithing", level: 18, percent: 40 }] as GameUi["skills"],
+    station: {
+      pos: { x: 3160, y: 6380, z: 7 },
+      itemId: id("anvil"),
+      owned: new Map([
+        [id("lesser_temper_stone"), 12],
+        [id("greater_temper_stone"), 9],
+        [id("warding_amber"), 2],
+        [id("iron_ingot"), 4],
+      ]),
+      tools: new Set(["smithing"]),
+      money: 4860,
+    },
+    refine:
+      variant === "result"
+        ? {
+            outcome: "broken",
+            level: 0,
+            itemId: id("boarding_saber"),
+            mods: undefined,
+            from: 7,
+            at: now,
+          }
+        : undefined,
+  };
+  return { ui, name: `forge-${variant}` };
+}
