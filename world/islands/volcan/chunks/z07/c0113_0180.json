@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 113, "cy": 180, "z": 7 },
-  "palette": ["sand", "water_shallow", "ash", "basalt", "stone_floor", "border_sand_water_w", "border_sand_water_se", "border_sand_water_inner_se", "border_ash_sand_e", "border_sand_water_s", "border_sand_water_inner_nw", "border_sand_water_nw", "border_sand_water_e", "border_ash_sand_se", "border_ash_sand_inner_se", "border_sand_water_inner_sw", "border_sand_water_sw", "border_sand_water_n", "border_sand_water_inner_ne", "border_ash_sand_s", "border_sand_water_ne", "bush", "stone_wall"],
+  "palette": ["sand", "water_shallow", "ash", "basalt", "stone_floor", "border_sand_water_w", "border_sand_water_se", "border_sand_water_inner_se", "border_ash_sand_e", "border_sand_water_s", "border_sand_water_inner_nw", "border_sand_water_nw", "border_sand_water_e", "border_ash_sand_se", "border_ash_sand_inner_se", "border_sand_water_inner_sw", "border_sand_water_sw", "border_sand_water_n", "border_sand_water_inner_ne", "border_ash_sand_s", "border_sand_water_ne", "bush", "stone_wall", "book_still_flame"],
   "ground": [
     [0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2],
     [0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2],
@@ -160,6 +160,7 @@
     { "x": 30, "y": 24, "stack": [22] },
     { "x": 18, "y": 25, "stack": [8] },
     { "x": 22, "y": 25, "stack": [22] },
+    { "x": 24, "y": 25, "stack": [23] },
     { "x": 30, "y": 25, "stack": [22] },
     { "x": 18, "y": 26, "stack": [8] },
     { "x": 22, "y": 26, "stack": [22] },

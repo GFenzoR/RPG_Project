@@ -1,0 +1,193 @@
+# What pays for exploring (docs/02 "Libros y cofres"): readable books and scrolls, and the
+# reward chests. All of them are map items nobody picks up; where each one stands is in its
+# notes. Sprites drawn with the sprite engine (tools/spritegen/src/engine/specs/lore.ts).
+
+# ---- Books and scrolls: using one opens the client's reading window (its title and pages,
+# i18n/<lang>/books.yaml); looking at it gives its description. A lectern blocks its tile; a
+# book or a scroll on the floor does not.
+- id: book_lantern_rowers
+  kind: decoration
+  sprite: decor/lectern_book
+  name: item.lectern_book.name
+  description: item.book_lantern_rowers.desc
+  pickupable: false
+  blocks_movement: true
+  book:
+    title: book.book_lantern_rowers.title
+    pages: [book.book_lantern_rowers.page_1, book.book_lantern_rowers.page_2, book.book_lantern_rowers.page_3]
+  notes: "Temple of the Lantern, Puerto (3152,6381,7), north-west corner; and the temple of the Isla de Pruebas (2099,2084,7)."
+
+- id: book_root_below
+  kind: decoration
+  sprite: decor/lectern_book
+  name: item.lectern_book.name
+  description: item.book_root_below.desc
+  pickupable: false
+  blocks_movement: true
+  book:
+    title: book.book_root_below.title
+    pages: [book.book_root_below.page_1, book.book_root_below.page_2, book.book_root_below.page_3]
+  notes: "Temple of the Root, Raigal (4148,6101,7), north-west corner."
+
+- id: book_still_flame
+  kind: decoration
+  sprite: decor/lectern_book
+  name: item.lectern_book.name
+  description: item.book_still_flame.desc
+  pickupable: false
+  blocks_movement: true
+  book:
+    title: book.book_still_flame.title
+    pages: [book.book_still_flame.page_1, book.book_still_flame.page_2, book.book_still_flame.page_3]
+  notes: "Temple of the Still Flame, Brasal (3640,5785,7), north-west corner."
+
+- id: book_forge_register
+  kind: decoration
+  sprite: decor/lectern_book
+  name: item.lectern_book.name
+  description: item.book_forge_register.desc
+  pickupable: false
+  blocks_movement: true
+  book:
+    title: book.book_forge_register.title
+    pages: [book.book_forge_register.page_1, book.book_forge_register.page_2, book.book_forge_register.page_3]
+  notes: "The keeper's archive of Brasal (3660,5796,7), west of the door and of Casia."
+
+- id: book_smith_notes
+  kind: decoration
+  sprite: decor/book_closed
+  name: item.book_closed.name
+  description: item.book_smith_notes.desc
+  pickupable: false
+  book:
+    title: book.book_smith_notes.title
+    pages: [book.book_smith_notes.page_1, book.book_smith_notes.page_2, book.book_smith_notes.page_3]
+  notes: "On the floor of the keeper's archive of Brasal (3664,5800,7), south-east corner."
+
+- id: book_trail_notebook
+  kind: decoration
+  sprite: decor/lectern_book
+  name: item.lectern_book.name
+  description: item.book_trail_notebook.desc
+  pickupable: false
+  blocks_movement: true
+  book:
+    title: book.book_trail_notebook.title
+    pages: [book.book_trail_notebook.page_1, book.book_trail_notebook.page_2, book.book_trail_notebook.page_3]
+  notes: "Velia's reading stand under the elms of Raigal (4180,6112,7), two tiles east of her."
+
+- id: scroll_dawn_manifest
+  kind: decoration
+  sprite: decor/scroll
+  name: item.scroll.name
+  description: item.scroll_dawn_manifest.desc
+  pickupable: false
+  book:
+    title: book.scroll_dawn_manifest.title
+    pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
+  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of the Isla de Pruebas (2098,2084,7)."
+
+- id: scroll_burnt_oar_log
+  kind: decoration
+  sprite: decor/scroll
+  name: item.scroll.name
+  description: item.scroll_burnt_oar_log.desc
+  pickupable: false
+  book:
+    title: book.scroll_burnt_oar_log.title
+    pages: [book.scroll_burnt_oar_log.page_1, book.scroll_burnt_oar_log.page_2, book.scroll_burnt_oar_log.page_3]
+  notes: "The smugglers' cave under the east coast of the Bosque, west chamber (4219,6136,8)."
+
+- id: scroll_drowned_wall
+  kind: decoration
+  sprite: decor/scroll
+  name: item.scroll.name
+  description: item.scroll_drowned_wall.desc
+  pickupable: false
+  book:
+    title: book.scroll_drowned_wall.title
+    pages: [book.scroll_drowned_wall.page_1, book.scroll_drowned_wall.page_2, book.scroll_drowned_wall.page_3]
+  notes: "The flooded gallery at the far end of the Puerto mine (3194,6287,8), by its chest."
+
+# ---- Reward chests: using one gives its rewards once per character (storage chest.<id>),
+# or nothing while they do not all fit. Rewards sized to the area's band (docs/02 "Catálogo
+# de equipo"): money, the band's temper stones and potions, and one catalog piece for anyone.
+- id: chest_puerto_mine
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: puerto_mine
+    rewards:
+      - { item: silver_coin, count: 3 }
+      - { item: lesser_temper_stone, count: 3 }
+      - { item: seaweed_poultice, count: 5 }
+      - { item: plank_shield, count: 1 } # band 2
+  notes: "Far end of the Puerto mine, in the alcove of the flooded gallery past the drowned miners (3193,6286,8)."
+
+- id: chest_puerto_grove
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: puerto_grove
+    rewards:
+      - { item: silver_coin, count: 1 }
+      - { item: lesser_temper_stone, count: 2 }
+      - { item: seaweed_poultice, count: 3 }
+      - { item: sailcloth_cap, count: 1 } # band 1
+  notes: "Under the oaks of the north-west corner of the Puerto forest, off every road (3107,6353,7)."
+
+- id: chest_bosque_cave
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: bosque_cave
+    rewards:
+      - { item: silver_coin, count: 6 }
+      - { item: greater_temper_stone, count: 2 }
+      - { item: health_draught, count: 3 }
+      - { item: stagleather_hood, count: 1 } # band 3
+  notes: "The crawlers' nest of the smugglers' cave, Bosque, south-east corner (4252,6170,8)."
+
+- id: chest_volcan_mine
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: volcan_mine
+    rewards:
+      - { item: silver_coin, count: 15 }
+      - { item: greater_temper_stone, count: 4 }
+      - { item: concentrated_health_draught, count: 3 }
+      - { item: cinder_amulet, count: 1 } # band 4
+  notes: "The Volcan mine past the golems: north-east corner of their gallery (3734,5782,8)."
+
+- id: chest_pruebas
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: pruebas
+    rewards:
+      - { item: silver_coin, count: 5 }
+      - { item: lesser_temper_stone, count: 2 }
+      - { item: health_draught, count: 2 }
+      - { item: iron_sword, count: 1 } # band 2: it rolls its attribute
+  notes: "Temple of the Isla de Pruebas, north-east corner (2100,2084,7): to try a chest (docs/16)."

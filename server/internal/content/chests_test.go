@@ -1,6 +1,7 @@
 package content
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,34 @@ func TestBookCheck(t *testing.T) {
 		if err := doorItems(t, src)["b"].check(); err == nil {
 			t.Errorf("accepted %s", src)
 		}
+	}
+}
+
+// The chests and books of data/ (docs/02 "Libros y cofres"): 4 to 6 chests on the real
+// islands plus the sandbox's, none giving the forge's protection, and every book with pages.
+func TestDataChestsAndBooks(t *testing.T) {
+	data := filepath.Join("..", "..", "..", "data")
+	items, err := LoadItems(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := LoadBalance(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckChests(items, b.Forge.Protection); err != nil {
+		t.Fatal(err)
+	}
+	chests, books := 0, 0
+	for _, it := range items {
+		if it.Chest != nil {
+			chests++
+		}
+		if it.Book != nil {
+			books++
+		}
+	}
+	if chests < 5 || chests > 7 || books < 6 || books > 10 {
+		t.Fatalf("%d chests (4-6 and the sandbox's), %d books (6-10)", chests, books)
 	}
 }

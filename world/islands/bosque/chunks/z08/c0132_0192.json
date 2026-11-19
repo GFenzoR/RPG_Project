@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 132, "cy": 192, "z": 8 },
-  "palette": ["dirt", "stone_floor", "boulder", "rock_wall", "stairs_up"],
+  "palette": ["dirt", "stone_floor", "boulder", "rock_wall", "stairs_up", "chest_bosque_cave"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,-1,-1],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,-1,-1],
@@ -147,6 +147,7 @@
     { "x": 29, "y": 25, "stack": [3] },
     { "x": 7, "y": 26, "stack": [3] },
     { "x": 9, "y": 26, "stack": [2] },
+    { "x": 28, "y": 26, "stack": [5] },
     { "x": 29, "y": 26, "stack": [3] },
     { "x": 7, "y": 27, "stack": [3] },
     { "x": 29, "y": 27, "stack": [3] },
