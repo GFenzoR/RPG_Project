@@ -3,7 +3,8 @@
 // band from level 1 to 100+, every piece with its level. These checks keep it that way
 // when the island lotes add bands: a new piece follows the band formula below (the same as
 // docs/02), or the formula and docs/02 change together.
-import { readFileSync, readdirSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -175,12 +176,12 @@ function actual(it: Item): Record<string, number | undefined> {
   };
 }
 
-function readList<T>(dir: string): T[] {
+function readList<T>(dir: string, root = REPO): T[] {
   const out: T[] = [];
-  for (const f of readdirSync(join(REPO, dir))
+  for (const f of readdirSync(join(root, dir))
     .filter((n) => n.endsWith(".yaml"))
     .sort()) {
-    const data: unknown = parse(readFileSync(join(REPO, dir, f), "utf8"));
+    const data: unknown = parse(readFileSync(join(root, dir, f), "utf8"));
     if (Array.isArray(data)) out.push(...(data as T[]));
     else if (data && typeof data === "object") out.push(data as T);
   }
@@ -198,33 +199,45 @@ function bandOf(it: Item): number {
   return i + 1;
 }
 
-/** Every item some source gives: shops, dialogs, loot, resources, recipes, rewards, spells. */
-function sources(): Map<string, string[]> {
+/**
+ * Every item some source gives: shops, dialogs, loot, resources, recipes, quest and tutorial
+ * rewards, conjuring spells and the starting container (the sources the validator refuses
+ * for a retired item, checkRetiredItems), in the data/ under root.
+ */
+function sources(root = REPO): Map<string, string[]> {
   const out = new Map<string, string[]>();
   const add = (id: unknown, where: string): void => {
     if (typeof id !== "string") return;
     out.set(id, [...(out.get(id) ?? []), where]);
   };
-  const npcs = readList<Record<string, unknown>>("data/npcs");
+  const npcs = readList<Record<string, unknown>>("data/npcs", root);
   for (const npc of npcs) {
     const shop = npc["shop"] as { sells?: { item: string }[] } | undefined;
     for (const o of shop?.sells ?? []) add(o.item, `shop of ${String(npc["id"])}`);
     for (const m of JSON.stringify(npc["dialog"] ?? {}).matchAll(/"give_item":"([a-z0-9_]+)"/g))
       add(m[1], `dialog of ${String(npc["id"])}`);
   }
-  for (const m of readList<{ id: string; loot?: { item: string }[] }>("data/monsters"))
+  for (const m of readList<{ id: string; loot?: { item: string }[] }>("data/monsters", root))
     for (const l of m.loot ?? []) add(l.item, `loot of ${m.id}`);
-  for (const q of readList<{ id: string; rewards?: { item?: string }[] }>("data/quests"))
+  for (const q of readList<{ id: string; rewards?: { item?: string }[] }>("data/quests", root))
     for (const r of q.rewards ?? []) add(r.item, `reward of ${q.id}`);
-  const recipes = parse(readFileSync(join(REPO, "data/recipes.yaml"), "utf8")) as {
+  const recipes = parse(readFileSync(join(root, "data/recipes.yaml"), "utf8")) as {
     id: string;
     output: { item: string };
   }[];
   for (const r of recipes) add(r.output.item, `recipe ${r.id}`);
-  for (const it of items) {
-    const res = (it as { resource?: { drops?: { item: string }[] } }).resource;
-    for (const d of res?.drops ?? []) add(d.item, `resource ${it.id}`);
-  }
+  for (const it of readList<Item & { resource?: { drops?: { item: string }[] } }>(
+    "data/items",
+    root,
+  ))
+    for (const d of it.resource?.drops ?? []) add(d.item, `resource ${it.id}`);
+  const yamlAt = <T>(file: string): T => parse(readFileSync(join(root, "data", file), "utf8")) as T;
+  for (const r of yamlAt<{ rewards?: { item?: string }[] }>("tutorial.yaml").rewards ?? [])
+    add(r.item, "tutorial reward");
+  for (const sp of yamlAt<{ id: string; effect?: { conjure?: { item: string } } }[]>("spells.yaml"))
+    add(sp.effect?.conjure?.item, `spell ${sp.id}`);
+  const balance = yamlAt<{ inventory?: { start_container?: string } }>("balance.yaml");
+  add(balance.inventory?.start_container, "start_container");
   return out;
 }
 
@@ -283,6 +296,28 @@ describe("compact equipment catalog (lote 11)", () => {
       const b = bandOf(it);
       if (b <= OBTAINABLE_BANDS) expect(src.get(it.id), `${it.id} (band ${b})`).toBeDefined();
       else expect(src.get(it.id), `${it.id} (band ${b})`).toBeUndefined();
+    }
+  });
+
+  it("finds every kind of source: tutorial rewards, conjuring and the start container too", () => {
+    // Review of lote 11: a band without an island must have no source at all, the ones the
+    // validator refuses for a retired item included.
+    const root = mkdtempSync(join(tmpdir(), "catalog-"));
+    try {
+      cpSync(join(REPO, "data"), join(root, "data"), { recursive: true });
+      const tutorial = join(root, "data/tutorial.yaml");
+      const text = readFileSync(tutorial, "utf8");
+      expect(text).toContain("  - { gold: 20 }");
+      writeFileSync(
+        tutorial,
+        text.replace("  - { gold: 20 }", "  - { gold: 20 }\n  - { item: wyrmfang_blade }"),
+      );
+      const src = sources(root);
+      expect(src.get("wyrmfang_blade")).toEqual(["tutorial reward"]);
+      expect(src.get("arrow")).toContain("spell conjure_arrows");
+      expect(src.get("backpack")).toContain("start_container");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

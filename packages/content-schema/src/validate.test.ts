@@ -957,6 +957,12 @@ describe("validator diagnostics", () => {
       "- { give_item: thornwood_blade }",
     );
     edit("data/quests/foreman_ore.yaml", "  - { item: pickaxe }", "  - { item: leather_jerkin }");
+    // The tutorial's reward is a source too (review of lote 11).
+    edit(
+      "data/tutorial.yaml",
+      "  - { gold: 20 }",
+      "  - { gold: 20 }\n  - { item: riveted_round_shield }",
+    );
     const errors = messages(root).filter((m) => m.startsWith("error"));
     expect(errors).toEqual(
       expect.arrayContaining([
@@ -971,9 +977,20 @@ describe("validator diagnostics", () => {
         expect.stringMatching(
           /foreman_ore\.yaml:.*"leather_jerkin" is retired.*no quest rewards it/,
         ),
+        expect.stringMatching(
+          /tutorial\.yaml:.*"riveted_round_shield" is retired.*no tutorial rewards it/,
+        ),
       ]),
     );
-    expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(5);
+    expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(6);
+  });
+
+  it("counts the tutorial's reward as a source of what NPCs buy (review of lote 11)", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    expect(messages(root).filter((m) => m.includes('buys "belaying_pin"'))).toHaveLength(1);
+    edit("data/tutorial.yaml", "  - { gold: 20 }", "  - { gold: 20 }\n  - { item: belaying_pin }");
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
   });
 
   it("wants a level on every weapon, armor and shield (lote 11)", () => {

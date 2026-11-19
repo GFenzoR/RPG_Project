@@ -47,8 +47,9 @@ i18n/
     `death.max_blessings` de `balance.yaml`.
   - Items que no llevan a ningún lado (auditoría de contenido m4; con `world/`, cuentan
     solo los NPCs colocados en islas que no son `dev_only`): lo que un NPC compra tiene
-    una fuente (botín, drop de un recurso, receta, tienda, `give_item`, recompensa o
-    hechizo de conjurar); un arma, armadura o escudo comerciable con `value` que se puede
+    una fuente (botín, drop de un recurso, receta, tienda, `give_item`, recompensa de quest
+    o del tutorial, o hechizo de conjurar); un arma, armadura o escudo comerciable con
+    `value` que se puede
     conseguir tiene un NPC que lo compra, y un material así, un comprador, una receta o
     una quest que lo toma; un item de quest (`tradeable: false`, el `has_item` de un paso)
     que suelta un monstruo va con `each_player: true`. Un item retirado (`retired: true`)
@@ -172,8 +173,9 @@ items:
   definido para que quien lo tiene lo conserve (con sus números de siempre). `make
   validate` rechaza cualquier fuente nueva: una tienda que lo venda (también las de
   desarrollo), botín, el `drops` de un recurso, la salida de una receta, un `give_item`, la
-  recompensa de una quest, un hechizo que lo conjure o el `start_container`. Un NPC sí
-  puede comprarlo (para las copias viejas), aunque nada lo dé. El servidor lo ignora. Hoy:
+  recompensa de una quest o del tutorial, un hechizo que lo conjure o el
+  `start_container`. Un NPC sí puede comprarlo (para las copias viejas), aunque nada lo
+  dé. El servidor lo ignora. Hoy:
   `driftwood_club`, `forged_shortsword`, `thornwood_blade`, `leather_jerkin`, `hide_vest`
   y `riveted_round_shield`. Nunca se borra un item que pudo quedar en un inventario
   guardado: se retira.

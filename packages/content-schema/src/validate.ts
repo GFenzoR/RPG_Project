@@ -136,6 +136,7 @@ class Validator {
   private balance: SourceFile | undefined;
   private recipes: SourceFile | undefined;
   private spells: SourceFile | undefined;
+  private tutorial: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -277,6 +278,7 @@ class Validator {
     if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
     const tutorial = single("tutorial.yaml", "tutorial", false);
+    this.tutorial = tutorial;
     if (tutorial) this.checkTutorial(tutorial, dataDir);
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
@@ -1116,7 +1118,7 @@ class Validator {
    * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
    * that is not dev_only count (without it, tests, every NPC):
    * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
-   *   a shop, a dialog give_item, a quest reward or a conjuring spell);
+   *   a shop, a dialog give_item, a quest or tutorial reward or a conjuring spell);
    * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
    *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
    *   quest or dialog that takes it;
@@ -1148,6 +1150,7 @@ class Validator {
       const conj = isObj(effect) ? effect["conjure"] : undefined;
       if (isObj(conj) && typeof conj["item"] === "string") got.add(conj["item"]);
     }
+    for (const r of this.tutorialRewards()) got.add(r.item);
     const questItems = new Set<string>();
     for (const src of this.quests) {
       const q = isObj(src.data) ? src.data : undefined;
@@ -1186,7 +1189,7 @@ class Validator {
         this.error(
           at.src,
           at.path,
-          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest reward or a spell)`,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward or a spell)`,
         );
     for (const { item, src, path } of this.items) {
       const id = item["id"];
@@ -1227,8 +1230,8 @@ class Validator {
    * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
    * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
    * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
-   * no quest rewards it, no spell conjures it and no character starts with it. An NPC may
-   * still buy it (checkItemTrade lets that buyer be).
+   * no quest or tutorial rewards it, no spell conjures it and no character starts with it.
+   * An NPC may still buy it (checkItemTrade lets that buyer be).
    */
   private checkRetiredItems(): void {
     const retired = new Set(
@@ -1269,6 +1272,9 @@ class Validator {
     for (const src of this.quests)
       for (const [i, r] of (isObj(src.data) ? asList(src.data["rewards"]) : []).entries())
         if (isObj(r)) refuse(src, ["rewards", i, "item"], r["item"], "no quest rewards it");
+    if (this.tutorial)
+      for (const r of this.tutorialRewards())
+        refuse(this.tutorial, ["rewards", r.index, "item"], r.item, "no tutorial rewards it");
     for (const src of this.npcs) {
       const npc = isObj(src.data) ? src.data : undefined;
       const shop = npc?.["shop"];
@@ -1286,6 +1292,15 @@ class Validator {
         inv["start_container"],
         "no character starts with it",
       );
+  }
+
+  /** The items data/tutorial.yaml gives when its last step completes (rewards: { item }). */
+  private tutorialRewards(): { item: string; index: number }[] {
+    const t = this.tutorial && isObj(this.tutorial.data) ? this.tutorial.data : undefined;
+    const out: { item: string; index: number }[] = [];
+    for (const [index, r] of asList(t?.["rewards"]).entries())
+      if (isObj(r) && typeof r["item"] === "string") out.push({ item: r["item"], index });
+    return out;
   }
 
   /**

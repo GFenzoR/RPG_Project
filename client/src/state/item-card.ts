@@ -107,7 +107,7 @@ export function itemCard(
     card.stats.push({ id: "attack", value: def.ammo.attack });
     card.effects.push({ id: "ammo", ammo: def.ammo.type });
   }
-  if (def.armor) card.stats.push({ id: "armor", value: def.armor.armor });
+  if (def.armor && def.armor.armor > 0) card.stats.push({ id: "armor", value: def.armor.armor });
   if (def.shield) card.stats.push({ id: "defense", value: def.shield.defense });
   if (def.slots > 0) card.stats.push({ id: "slots", value: def.slots });
   if (def.rune) {

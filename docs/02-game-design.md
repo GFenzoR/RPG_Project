@@ -309,7 +309,10 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     maná de su nivel, que su nivel mágico esté a lo sumo 4 niveles después de su nivel (el
     guardián que compra brebajes de maná llega a ~4 al 30 y ~6 al 49) y que las cazas de sus
     primeros niveles lo lancen: cada cura propia, cada ataque a un objetivo y, para quien no
-    tiene ataques a un objetivo (el guardián), sus áreas. Las áreas de los magos y del
+    tiene ataques a un objetivo (el guardián), sus áreas. Una cura propia que esas cazas
+    nunca necesitan (ninguna deja al cazador bajo la mitad de su vida) la tiene que lanzar
+    la primera caza que sí la necesita (lote 11: el montaraz con el arco de tejo, "Catálogo
+    de equipo"). Las áreas de los magos y del
     montaraz quedan para grupos: en un duelo un área le pega a un solo monstruo y un rayo
     barato hace lo mismo por menos maná, así que la simulación no las necesita y tampoco las
     exige. Por eso `frost_bloom` y `scatter_volley` le pegan a cada monstruo un poco menos que
@@ -725,7 +728,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
 Pedido del dueño (2026-11-18): pocos items, como en los MMORPG de casillas clásicos, para
 que el juego sea simple, y a cambio un atributo al azar por pieza (`feat/item-attributes`)
 y el refinado (`feat/item-forge`). El catálogo se rehízo compacto: **78 piezas** (40
-armas, 7 escudos y 31 armaduras y joyas) más las dos municiones, en **seis bandas** de
+armas, 6 escudos y 32 armaduras y joyas) más las dos municiones, en **seis bandas** de
 nivel del 1 al 100+, con una pieza por línea y banda. Cada arma, armadura y escudo pide su
 nivel (`requires.level`, regla de `make validate`): el de su banda.
 
@@ -814,8 +817,11 @@ la sigue, o la fórmula, el test y este doc cambian juntos). Valores base por ba
 | 6 | 43 | 27 | 48 | 30 | 12 | 6 | 5 | 2 | 1 | 12000 |
 
 Desde la banda 3, cada banda nueva suma: A +7, arco +5, varita y vara +9, escudo +4, torso
-pesado +2, túnica, cabeza, piernas y pies +1, cada joya +1 cada dos bandas, y V × 2,5
-(redondeado como abajo).
+pesado +2, túnica, cabeza, piernas y pies +1 y cada joya +1 cada dos bandas. V no sigue una
+razón fija: es el de la tabla (de una banda a la siguiente, × 4; × 3,3; × 2,5 y × 2,4: el
+salto se achica arriba). Una banda intermedia que pida una isla toma, en cada columna, un
+número entre los de sus vecinas (para V, la media geométrica, redondeada como abajo), y la
+tabla, `catalog.test.ts` y este doc cambian juntos.
 - **Cuerpo a cuerpo:** espada, ataque A y defensa 0,5·A; maza, A + 1 y 0,4·A; hacha, A + 2
   y 0,3·A (redondeo al entero más cercano, ,5 hacia arriba). La espada para más y el hacha
   pega más.
@@ -855,12 +861,18 @@ pesado +2, túnica, cabeza, piernas y pies +1, cada joya +1 cada dos bandas, y V
 - **Recompensas:** el capitán del puerto sigue dando el kit inicial de cada vocación y, al
   cerrar el capítulo 1, la espada de hierro al guardián; los demás reciben su valor, 150
   monedas (antes 120, lo que valía la espada). Las demás quests dan oro y experiencia.
-- **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta ni diálogo las
-  da (el test del catálogo lo comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
+- **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta, diálogo,
+  recompensa (de quest o del tutorial) ni hechizo las da (el test del catálogo lo
+  comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
   isla de la banda). La cota de escamas y la hoja de colmillo de dragoncillo pasaron a la
   banda 5 (nivel 50, más fuertes): sus recetas (herrería 20 y 22, con escamas de
   dragoncillo y núcleos de escoria) vuelven con esa isla; las que ya están en un
-  inventario se quedan.
+  inventario se quedan. Los requisitos se miran al equipar, no al entrar: quien ya tenía
+  puesta una pieza que ahora pide más nivel u otra vocación (la cota o la hoja antes del
+  50, el torso pesado en un mago, el escudo de tablones antes del 5) la sigue usando hasta
+  que se la saca. Ningún NPC compra la cota ni la hoja hasta que llegue su isla (`make
+  validate` no deja un comprador sin fuente salvo para un retirado): se pueden intercambiar
+  entre jugadores.
 
 **Retirados** (`retired: true`, `06-content-data.md` "Item"): el garrote de deriva, la
 espada corta forjada, la hoja de espino, el jubón de cuero, el chaleco de piel y la rodela
@@ -871,7 +883,8 @@ tiene uno lo conserva) y el armero de Puerto o la curtidora los compran, pero
 **Balance.** Los kits de las simulaciones son los del catálogo (`kitFor` en
 `sim/balance_test.go` para el guardián y los montaraces; túnicas y líneas de cada vocación
 en `balance_vocations_test.go`) y dos tests comprueban que cada pieza se puede llevar a ese
-nivel y con esa vocación. Ningún objetivo documentado cambió:
+nivel y con esa vocación; un tercero, que cada arma entra al kit en el nivel que pide, no
+después. Ningún objetivo documentado cambió:
 - **Guardián:** Puerto, nivel 8 en 1,10 h y 15 en 3,32 h (antes 3,46); Bosque, 15→20 en
   2,30 h y 20→25 en 3,13 h; Volcán, 25→30 en 3,92 h, 30→40 en 10,13 h y 40→50 en 15,30 h;
   el custodio, 65 s y 149 % de la vida. El más justo es el minero de obsidiana al nivel 35:
@@ -880,9 +893,19 @@ nivel y con esa vocación. Ningún objetivo documentado cambió:
   maná; magos y montaraces siguen entre 0,5 y 1,5 veces el guardián en cada tramo, con niveles
   mágicos casi iguales. Los magos llevan ahora la túnica (3 a 4 de armadura menos que el
   guardián) y su ritmo casi no cambió.
-- **El montaraz compra el arco de tejo al nivel 8**, cuando su caza ya pagó las flechas y
-  los 150 cobres: con él desde el 5 los lobos no lo lastiman lo bastante para usar su cura
-  (nivel 4) y el test "cada hechizo se usa a su nivel" falla.
+- **Cada arma entra al kit en el nivel que pide** (`TestKitWeaponsFromTheirLevel`): las
+  simulaciones no modelan la compra, así que el arco de tejo, la espada de hierro y las
+  varitas y varas de la banda 2 llegan al nivel 5, aunque en el juego las paga el capítulo
+  1 (150 monedas de la quest y, a quien no recibe la espada, 150 más del capitán, hacia el
+  nivel 6-7). Con el arco de tejo desde el 5, ningún duelo de Puerto deja al montaraz bajo
+  la mitad de su vida (tira de lejos: 0-2 % de la vida por lobo) y su cura (nivel 4) no se
+  lanza hasta las arañas del musgo del Bosque (nivel 10). El chequeo "cada hechizo se usa a
+  su nivel" lo acepta a propósito: una cura propia que las cazas de sus primeros niveles
+  nunca necesitan la tiene que lanzar la primera caza que sí la necesita (una caza que deja
+  al cazador bajo la mitad y no la lanza falla igual). En Puerto la cura sirve contra
+  varios lobos a la vez y en los errores, que un duelo no modela. Antes la simulación
+  compraba el arco al nivel 8 para que el chequeo viejo pasara, y eso escondía lo que hace
+  el arco a su nivel. El montaraz va del 1 al 8 en 1,18 h (el guardián, 1,40 h).
 - **Amuletos sí, anillos no:** el kit lleva el amuleto (se vende) y no el anillo (botín
   raro; los de las bandas 3 y 4 no dan armadura).
 

@@ -131,6 +131,11 @@ describe("itemCard", () => {
     const helm: ItemDef = { ...base, kind: "armor", armor: { slot: "head", armor: 2 } };
     expect(itemCard(helm, 1, 1).type).toEqual(["client.card.kind.armor", "client.card.slot.head"]);
     expect(itemCard(helm, 1, 1).stats).toEqual([{ id: "armor", value: 2 }]);
+    // A ring of bands 3 and 4 (lote 11) has armor 0: no "Armor 0" line, like a weapon's
+    // defense 0; its type line still says where it goes.
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    expect(itemCard(ring, 1, 1).stats).toEqual([]);
+    expect(itemCard(ring, 1, 1).type).toEqual(["client.card.kind.armor", "client.card.slot.ring"]);
     const shield: ItemDef = { ...base, kind: "shield", shield: { defense: 12 } };
     expect(itemCard(shield, 1, 1).stats).toEqual([{ id: "defense", value: 12 }]);
     const bag: ItemDef = { ...base, kind: "container", slots: 20, weight: 1800 };

@@ -107,20 +107,35 @@ el punto 5:
     de colmillo de dragoncillo (herrería 20 y 22) y sube `OBTAINABLE_BANDS` en el test.
   - **Sprites:** las 35 piezas nuevas usan el sprite más parecido (las joyas, el relicario y
     el cuarzo; las túnicas, la túnica remendada); `feat/item-icons` dibuja uno por pieza.
+    Hasta entonces un amuleto se ve igual que el relicario de la quest del buzo y un anillo
+    igual que un cuarzo de 13 cobres: el nombre de la ficha los distingue.
   - **Las joyas solo dan armadura** (amuleto 1-2, anillo 0-1): su gracia es el atributo al
     azar de `feat/item-attributes`. Los anillos de las bandas 3 y 4 son botín raro
-    (0,5-1 %).
+    (0,5-1 %) y hasta que entre esa rama no hacen nada (armadura 0; la tarjeta ya no
+    muestra una armadura 0): conviene mergearla antes que esta o junto con ella.
   - **Para el dueño, precios y niveles que cambiaron:** el escudo de tablones pide nivel 5 y
     vale 110 (antes nivel 1 y 25); la tapa de barril, 25 (antes 10); el sable de abordaje y
     el hacha barbada, 600 (antes 400); las varas y varitas de la banda 3 bajaron de 1080 a
     750 en el Bosque; el capítulo 1 da 150 monedas a quien no recibe la espada (antes
     120). La cota de escamas y la hoja de colmillo de dragoncillo piden nivel 50
-    (antes 45) y son más fuertes: quien ya forjó una la conserva pero no se la pone hasta
-    el 50. El torso pesado pide guardián o montaraz (cambia la regla m6: antes ningún cuero
-    estaba restringido); un mago que ya lo tiene puesto lo conserva puesto.
+    (antes 45) y son más fuertes, y el herrero ya no las compra (antes pagaba 1200 y 1300)
+    hasta que llegue su isla. El torso pesado pide guardián o montaraz (cambia la regla m6:
+    antes ningún cuero estaba restringido; la clase media del montaraz se fundió con la
+    pesada). Los requisitos se miran al equipar, no al entrar: quien ya tenía puesta una
+    pieza que ahora pide más (un mago con el torso pesado, la cota o la hoja antes del 50,
+    el escudo de tablones antes del 5, el cuero de ciervo antes del 15) la sigue usando
+    hasta que se la saca.
+  - **Pesos:** varias piezas pesan más que antes (el hacha de mano 4000 g, la cabilla 3800,
+    el cuero de ciervo): un personaje cargado puede quedar sobre su capacidad. No lo deja
+    atascado; solo no puede levantar más hasta soltar algo.
+  - **Ids al mergear con `feat/item-forge`:** las 35 piezas nuevas tomaron los números
+    271-305. Si esa rama agrega items, toma los mismos: al mergear, corre `make gen-ids`
+    (el chequeo de `ids.ts` ataja los números repetidos).
   - **Balance justo:** el minero de obsidiana al nivel 35 queda en 10,2 % de la vida (el piso
-    es 10 %); el montaraz de la simulación compra el arco de tejo al nivel 8, no al 5
-    (docs/02, "Balance" del catálogo).
+    es 10 %). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
+    la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
+    hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
+    "Balance" del catálogo).
 - **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
   `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
   fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por
