@@ -103,6 +103,33 @@ const SIZES: Size[] = [
 
 /** rpg.windows of each scene (ui/windows.ts format, version 3); absent = the defaults. */
 const WINDOWS: Record<string, unknown> = {
+  // docs/17 UI-5: every window of the toolbar open at once, none moved: the skills, the
+  // trade and the windows over the bar take a factory place that sees the others
+  // (ui/windows.ts defaultPlace), and the tutorial's hint gives way to the help.
+  allwindows: {
+    v: 3,
+    z: [],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      party: { open: true, collapsed: false },
+      guild: { open: true, collapsed: false },
+      appearance: { open: true, collapsed: false },
+      options: { open: true, collapsed: false },
+      help: { open: true, collapsed: false },
+      skills: { open: true, collapsed: false },
+    },
+  },
+  // The tutorial's hint gives way to the help at its factory place (docs/17 UI-5).
+  tutorialhelp: {
+    v: 3,
+    z: ["help"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      help: { open: true, collapsed: false },
+    },
+  },
   windows: {
     v: 3,
     z: ["guild"],
@@ -206,6 +233,11 @@ const HOVERS: Record<string, string> = {
 };
 const SCENES = [
   "game",
+  "allwindows",
+  "trade",
+  "chattabs",
+  "tutorialhelp",
+  "tutorialshop",
   "windows",
   "magnet",
   "migrated",
@@ -266,6 +298,7 @@ try {
         if (w) localStorage.setItem("rpg.windows", JSON.stringify(w));
       }, windows ?? null);
       const sceneParam = [
+        "allwindows",
         "windows",
         "magnet",
         "migrated",
@@ -311,6 +344,15 @@ try {
           await el.hover();
           await page.waitForTimeout(150);
         }
+      }
+      if (scene === "chattabs") {
+        // docs/17 UI-10: the Local tab picked (the line to speak goes to "Decir"); lines of
+        // other channels arrive after it (src/preview/main.tsx LATER_CHAT_MS): their dots.
+        const local = page.locator('[data-chat-tab="local"]');
+        if (await local.isVisible()) await local.click();
+        await page.waitForTimeout(1200);
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(300);
       }
       if (scene === "chat") {
         // docs/17 UI-10: the chat floats translucent; under the pointer it turns clear.
