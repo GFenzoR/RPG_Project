@@ -160,11 +160,8 @@ el punto 5:
   items"):** cada equipable tira un atributo de `data/attributes.yaml` al crearse y todos
   los caminos lo conservan (mover, intercambio, muerte, casa, mercado, buzón, log de
   economía); los atributos puestos entran en las fórmulas. Queda:
-  - **Forja y catálogo:** el refinado (`ItemMods.refine`, hoy siempre 0) es la rama
-    `feat/item-forge`; el catálogo compacto con `requires.level` en toda armadura es
+  - **Catálogo:** el catálogo compacto con `requires.level` en toda armadura es
     `feat/item-catalog` (hasta entonces casi toda armadura tira en la banda de nivel 1).
-    Refinar una pieza puesta cambia sus `mods` sin moverla: la forja tiene que limpiar
-    `Player.gearFrom` y llamar a `equipmentChanged` (server/CLAUDE.md, "Atributos").
     Al juntarlas, correr de nuevo `go test ./internal/sim` y `content/attributes_test.go`:
     las bandas y pesos de `data/attributes.yaml` se afinaron con el catálogo de hoy.
   - **Balance:** para que las metas de docs/02 sigan con los atributos, el bestiario de
@@ -181,6 +178,35 @@ el punto 5:
   - **Escudo:** no hay atributo de skill de escudo porque la skill todavía no entra en
     ninguna fórmula.
   - **El mensaje de "Mirar"** (`look.*`) sigue sin el atributo: lo muestra la ficha.
+- **Forja (hecho, rama `feat/item-forge`, lote 11; docs/02 "Forja"):** refinar +1..+10 en
+  el yunque (pestaña Forja), seguro hasta +4, después rompe la pieza o, con el ámbar de
+  resguardo, la baja un nivel; piedras de temple y oro por intento; el nivel suma ataque,
+  armadura, defensa o una parte del atributo de una joya y viaja con la instancia por todos
+  los caminos. Queda:
+  - **Al apilar el lote:** `feat/item-catalog` y esta rama agregan ids desde el 271 en
+    `data/ids.lock.yaml` (las piedras y el ámbar son 271–274 aquí): al juntarlas, el que
+    entra segundo vuelve a correr `make gen-ids` sobre el lock del otro (los ids nuevos
+    todavía no se guardaron en ninguna base). Los dos tocan también los monstruos que
+    sueltan piedras o ámbar (`hollow_crawler`, `obsidian_delver`, `slag_golem`,
+    `wreck_looter`), `pruebas_merchant` y `volcan_smith`: conflictos de una línea.
+    `feat/item-icons` dibuja el catálogo con la clase de ícono del motor; los materiales de
+    la forja se dibujaron con la clase `object` (32x32, abajo a la derecha): pasarlos a la
+    clase de ícono cuando se junten. Con el catálogo, revisar que el
+    `TestForgeExpectedCosts` siga dentro de sus metas (usa los valores de referencia de cada
+    banda, no los items).
+  - **La pieza se elige de una lista** (las puestas y las de los contenedores abiertos), no
+    arrastrándola a la ventana, y el inventario no muestra "+N" sobre el ícono (lo dicen la
+    ficha, el tooltip y la lista de la forja).
+  - **Los primeros niveles de una pieza de banda baja pueden no sumar** (0,2 de armadura por
+    nivel: +4 da 0): es la tabla de `balance.yaml`; si el dueño lo prefiere, subir esos
+    valores o mostrar el próximo nivel que sí suma.
+  - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Brasal y la
+    suelta el custodio; las islas nuevas (lotes siguientes) traen sus fuentes.
+  - **+10 es una leyenda a propósito** (unos 1 900 ámbares de promedio con ámbar en cada
+    intento arriesgado): si el dueño lo quiere más alcanzable, subir las chances altas o
+    `smithing_bonus` en `balance.yaml` y ajustar las metas de `TestForgeExpectedCosts`.
+  - **E2E sin correr en la rama** (lo corre el final del lote): ningún spec usa la forja
+    todavía; la vista previa (`make ui-preview ONLY=forge|forgerisk|forgeresult`) la muestra.
 - **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
   `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
   fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por

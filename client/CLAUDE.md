@@ -242,6 +242,31 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   servidor (`owned`, `tools`), porque el cliente no ve las mochilas cerradas. Se cierra con
   ×, Escape o al alejarse más de 1 casilla; "Hacer" manda `Craft`.
 
+## Notas de la forja (docs/02 "Forja", rama `feat/item-forge`)
+- `content.forge` (`ForgeRules`, de `balance.yaml → forge` con ids numéricos:
+  `vite/content.ts` `loadForge`; ausente si está apagada). El yunque (`forge.station`) abre la
+  ventana de la estación con dos pestañas (`data-station-tab`: `recipes`, `forge`;
+  `ui/Crafting.tsx`); la de la forja es `ui/Forge.tsx`: `ForgePanel` guarda la pieza elegida,
+  el interruptor del ámbar y el paso de confirmación; `ForgeBody` dibuja sin hooks
+  (`ui/Forge.test.ts`). Las reglas y la vista son puras en `state/forge.ts` (`refineKind`,
+  `forgeBand`, `forgeChance`, `refineGain`, `forgeCandidates`, `forgeView`, con tests): las
+  mismas fórmulas que `server/internal/content/forge.go`. Lo que se lleva lo dice el
+  `StationOpen` (`owned` con piedras y ámbar, `StationState.money`).
+- `Game.refine(candidato, protect)` manda `Refine` con el nivel que se ve;
+  `WorldState.refine` (`RefineState`) es el último `RefineResult`, que la ventana muestra
+  `RESULT_MS` (8 s) arriba.
+- El nombre de una pieza refinada pasa siempre por `refinedName` (`client.item.refined`):
+  la ficha (`cardTitle`, con la línea `card-refine` de `ItemCardView.refine`), el
+  intercambio y el mercado (`ItemLabel`) y los parámetros `item` de los mensajes
+  (`state/messages.ts`). Color `--ui-item-refine`.
+- Efectos 8 (`effects/refine`) y 9 (`effects/shatter`) en `render/effects.ts`, con su sonido
+  (`effect.refine`, `effect.shatter` en `assets/sounds.yaml`).
+- Test ids: `forge`, `forge-slot`, `forge-levels`, `forge-gain`, `forge-chance`,
+  `forge-cost` (`[data-cost=stone|gold]`), `forge-protect`, `forge-risk`, `forge-attempt`,
+  `forge-confirm`, `forge-go`, `forge-cancel`, `forge-result` (`data-outcome`),
+  `.forge-item[data-forge-item]`, `card-refine`. Vista previa: escenas `forge`, `forgerisk` y
+  `forgeresult` de `make ui-preview`.
+
 ## Notas de T3.5
 - `WorldState.voyage` (del mensaje `travel.sailed`, parámetro `island`) dispara el fundido
   `.voyage` de `ui/App.tsx` (`VOYAGE_MS`, misma duración que la animación CSS) con

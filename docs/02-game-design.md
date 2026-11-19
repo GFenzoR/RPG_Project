@@ -468,7 +468,8 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   decoración no se talan.
 - **Estaciones:** fragua (`smelting_forge`), yunque (`anvil`) y fogón (`cooking_hearth`) son
   items del mapa. Usarlas (click derecho) a 1 casilla abre la ventana de recetas de esa
-  estación, con lo que falta y la chance a tu nivel. Herrería: mineral + tronco → lingote en
+  estación, con lo que falta y la chance a tu nivel (el yunque, además, la pestaña de la
+  forja: "Forja"). Herrería: mineral + tronco → lingote en
   la fragua; lingotes → hacha de leñador, pico o hacha forjada en el yunque (con el
   martillo de herrero encima). Cocina: pescado crudo, carne de jabalí y algas → pescado a la
   brasa, jabalí asado y guiso del puerto (más `food_ms` que lo crudo; el guiso cura un poco).
@@ -914,8 +915,8 @@ El dueño reabrió el diseño de items: pocos items, como en Tibia, para que el 
 simple, pero cada uno con **un atributo al azar** (la idea viene de los juegos de botín, con
 nombres y números propios). Hecho en el lote 11, rama `feat/item-attributes`
 (`server/internal/session/attributes.go`, `content/attributes.go`, `data/attributes.yaml`).
-La forja (refinar +1..+10) y el catálogo compacto son otras ramas del lote: el refinado ya
-tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
+La forja (refinar +1..+10, rama `feat/item-forge`: "Forja", abajo) y el catálogo compacto
+son otras ramas del lote: el refinado vive en los datos de cada instancia (`refine`).
 - **Un atributo, siempre uno.** Todo equipable (arma, escudo o pieza de armadura; nunca
   munición, contenedores, consumibles, herramientas ni materiales) lleva exactamente un
   atributo con un valor. No hay rarezas ni colores por calidad: el atributo es una línea más
@@ -1012,8 +1013,130 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   elige quien vende. Un atributo retirado del pool se muestra como retirado (no suma nada),
   en la ficha y en el mercado. Equipo, contenedores, suelo, intercambio y mercado usan la
   misma ficha.
-- **Pendiente:** el refinado (rama `feat/item-forge`); un atributo del collar o del anillo
-  (no hay ninguno en el catálogo todavía); la skill de escudo en las fórmulas.
+- **Pendiente:** un atributo del collar o del anillo (no hay ninguno en el catálogo
+  todavía); la skill de escudo en las fórmulas.
+
+## Forja (decisión del dueño, 2026-11-18)
+Pedido del dueño: *"me gustaría agregar el sistema de forja de ragnarok, para que el item
+vaya pegando más pero forjar es difícil"*. De ese juego se toma solo la mecánica (refinar por
+niveles, seguro hasta un punto, después cada intento arriesga la pieza); nombres, materiales,
+números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
+(`server/internal/session/refine.go`, `content/forge.go`, `balance.yaml → forge`,
+`data/items/forge.yaml`, ventana `client/src/ui/Forge.tsx`).
+- **Qué se refina:** todo equipable que tira un atributo ("Atributos de items": arma, escudo,
+  pieza de armadura o joya; nunca munición, contenedores ni nada que se apila), de **+1 a
+  +10** (`forge.levels`: su largo es el tope). Un +10 no se refina más.
+- **Dónde:** en un **yunque** del mapa (`forge.station: anvil`, la estación de herrería de
+  `data/recipes.yaml`), a 1 casilla y en el mismo piso, como las recetas. Usar el yunque abre
+  su ventana con dos pestañas: **Recetas** y **Forja**. Hay uno en cada pueblo (Puerto, Raigal
+  en el Bosque y Brasal en la Isla Volcánica, más el de la mina) y en la Isla de Pruebas: no
+  hizo falta agregar ninguno con mapcli. Se eligió el yunque y no un NPC herrero: la estación
+  ya es "el lugar del oficio", funciona igual en todos los pueblos y no ata la forja a un
+  diálogo; los herreros venden las piedras.
+- **Cada intento** gasta, de una vez y pase lo que pase: las **piedras de temple** de la banda
+  del item (`forge.levels[n].stones`: 1 hasta +4, 2 de +5 a +7, 3 de +8 a +10), el **oro**
+  (`forge.bands[].gold` × el nivel al que apunta: el intento a +7 de una pieza de nivel 30
+  cuesta 120 × 7 = 840 cobre) y, si el jugador lo pide, **un ámbar de resguardo**. La pieza
+  tiene que ser suya y estar a mano: puesta o en un contenedor abierto que lleva (nunca en el
+  suelo, ni ofrecida en el intercambio; lo publicado en el mercado ya no está en su mochila).
+  Piedras y ámbar se toman de los contenedores (como los ingredientes de una receta); el oro,
+  de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido
+  (el pedido dice el nivel que ve el cliente: un click repetido no refina dos veces), al
+  ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar).
+- **La chance** (`forge.levels[n].chance`, en %): hasta **+4 nunca falla** (`safe_level`);
+  desde +5 baja en cada nivel: **+5 70 %, +6 55 %, +7 40 %, +8 25 %, +9 15 %, +10 8 %**. La
+  tira la fuente sembrada del loop (`TickContext.Rand`, `IntN(100) < chance`).
+  - **Herrería:** suma 1 punto cada 6 niveles del oficio, como mucho **+5** (herrería 30, la
+    de las recetas más altas: `smithing_bonus`), y solo en los intentos que pueden fallar. La
+    forja no entrena herrería: el oficio se sube fabricando.
+- **El resultado:**
+  - **éxito:** la pieza sube un nivel (chispas sobre el yunque, efecto 8);
+  - **fallo desde +5, sin ámbar:** la pieza **se rompe y desaparece** (efecto 9, una pieza que
+    se parte; el log de economía la registra con sus `mods`);
+  - **fallo con ámbar:** el ámbar se quiebra en su lugar y la pieza **baja un nivel** (+7 → +6;
+    efecto 9). El ámbar se gasta en **cada** intento en que se usa, salga bien o mal: es un
+    seguro que se paga; marcarlo en un nivel seguro no lo gasta.
+
+  No hay "fallo que no cuesta nada": desde +5 todo fallo rompe la pieza o la baja un nivel.
+- **Qué da cada nivel** (`forge.bands`, por el `requires.level` del item, las bandas del
+  catálogo compacto; el bono del nivel *n* es `floor(n × valor)`):
+
+  | Banda (nivel del item) | Piedra | Oro por nivel | Ataque (armas) | Armadura (cabeza, torso, piernas, pies) | Defensa (escudos) |
+  |---|---|---|---|---|---|
+  | 1–4 | menor | 3 | 0,5 | 0,2 | 0,3 |
+  | 5–9 | menor | 12 | 0,7 | 0,2 | 0,4 |
+  | 10–29 | mayor | 40 | 1 | 0,3 | 0,6 |
+  | 30–49 | mayor | 120 | 1,4 | 0,3 | 0,8 |
+  | 50–74 | radiante | 300 | 1,8 | 0,4 | 1 |
+  | 75+ | radiante | 700 | 2,2 | 0,5 | 1,2 |
+
+  Un +10 suma así al arma entre 5 (banda 1) y 22 de ataque (banda 6: la espada de 43 llega a
+  65), a una pieza de armadura entre 2 y 5 y a un escudo entre 3 y 12: más en las bandas
+  altas, como pidió el dueño ("vaya pegando más"). Los primeros niveles de una pieza de banda
+  baja pueden no sumar todavía (0,2 × 4 = 0,8 → 0): la ventana muestra el bono de ahora y el
+  del nivel siguiente. Las **joyas** (cuello y anillo) no suman armadura: cada nivel agrega el
+  **10 %** del valor de su atributo (`jewelry_pct`, redondeado hacia abajo; un anillo de +20
+  de vida a +5 da 30), y ese total sigue con el tope del atributo. El ataque cuenta solo para
+  el arma de la mano derecha y la defensa para el escudo de la izquierda; la armadura, en
+  cualquier slot de armadura. Lo de la mochila no suma.
+- **En las fórmulas** (`attributes.go` `wornGear`, que llama a `refineGain` de `refine.go`): el
+  ataque se suma al del arma como el atributo `attack` (cuerpo a cuerpo, disparo y varita),
+  la armadura a la del equipo y la defensa a la de las manos (también en PvP). Refinar una
+  pieza puesta recalcula el equipo en el acto (`setRefine` limpia `Player.gearFrom`).
+- **Los materiales** (`data/items/forge.yaml`, nombres propios; sprites del motor de sprites):
+  - **piedra de temple menor** (items de nivel 1–9; 10 cobre), **mayor** (10–49; 150) y
+    **radiante** (50+; 600): las venden los herreros (el armero de Puerto y la curtidora de
+    Raigal la menor y la mayor; el herrero de Brasal las tres) y caen de algunos monstruos (la
+    menor, de saqueadores, mineros ahogados y escarabajos de mena; la mayor, de reptantes
+    huecos, contrabandistas, excavadores de obsidiana y gólems de escoria; la radiante, del
+    custodio de la forja, 30 %, mientras no haya islas de esas bandas). Ningún NPC las compra:
+    no hay vuelta de compra y venta.
+  - **ámbar de resguardo** (3000 de valor de referencia): **ningún NPC lo vende ni lo da**
+    (regla de `make validate`, salvo el mercader de la Isla de Pruebas, que es solo de
+    desarrollo); cae del custodio de la forja (25 %) y, raro, de los monstruos más fuertes de
+    la Isla Volcánica (cría de wyrm 0,5 %; excavador, gólem y salamandra 0,3 %). Se comercia
+    entre jugadores.
+- **Costo esperado** (lo comprueba `content/forge_test.go` `TestForgeExpectedCosts`, a ±5 %),
+  en cobre, con el valor de referencia V de cada banda del catálogo compacto y cada pieza rota
+  reemplazada por una nueva de valor V:
+
+  | Banda (V) | Hasta +4 | Hasta +7 sin ámbar | Hasta +7 con ámbar desde +5 | Ámbares hasta +7 |
+  |---|---|---|---|---|
+  | 1 (30) | 70 | 1 100 | 530 | 11 |
+  | 2 (150) | 160 | 3 100 | 1 300 | 11 |
+  | 3 (600) | 1 000 | 17 000 | 7 500 | 11 |
+  | 4 (2 000) | 1 800 | 36 000 | 14 000 | 11 |
+  | 5 (5 000) | 5 400 | 102 000 | 41 000 | 11 |
+  | 6 (12 000) | 9 400 | 197 000 | 74 000 | 11 |
+
+  Las metas: **+4 cuesta más o menos lo que la pieza** (entre 0,5 y 3 V: seguro y
+  accesible); **+7 es un proyecto** (entre 10 y 40 V sin ámbar; con la caza de la banda 4,
+  36 000 cobre son unas 14 h de botín neto de la simulación de balance; menos con ámbar);
+  **+10 es una leyenda** (sin ámbar, miles de veces el valor de la pieza; con ámbar en cada
+  intento arriesgado, unos 1 900 ámbares en promedio). Es lo que pidió el dueño: "forjar es
+  difícil".
+- **Persistencia y seguridad:** el intento entero pasa en un comando del loop (todos los
+  chequeos primero, después se gasta todo junto y se tira la chance), así una desconexión lo
+  ve hecho o sin empezar, nunca a medias ni dos veces; el personaje se guarda en el acto
+  después de cada intento (como una muerte), así una caída del servidor no devuelve una pieza
+  rota ni quita un nivel ganado. El nivel viaja con la instancia por todos los caminos que
+  mueven un item ("Atributos de items": mover, intercambio, muerte, casa, mercado, buzón,
+  guardado). El log de economía (fuente `forge`) registra el oro, las piedras y el ámbar
+  gastados, la pieza rota y cada cambio de nivel (la instancia sale con su nivel viejo y entra
+  con el nuevo); no cuenta como ganancia para el detector de anomalías.
+- **Nombre y ficha:** una pieza refinada se llama "+7 espada…" en todo el cliente (ficha,
+  tooltip, intercambio, mercado y los mensajes del servidor: la clave `client.item.refined`
+  con `{level}` y `{name}`, nunca texto armado en el código), y la ficha agrega la línea
+  "Refinado +7: +3 de ataque" en el color del metal caliente.
+- **La ventana** (pestaña Forja del yunque, estilo oscuro de docs/17): la pieza elegida (de
+  las puestas y las de los contenedores abiertos), su nivel y el siguiente con el bono de
+  cada uno, la **chance en grande** (verde si es segura, ámbar si arriesga), las piedras y el
+  oro con lo que se lleva, el interruptor del ámbar cuando se lleva uno y el intento puede
+  fallar, y un **paso de confirmación** desde +5 que avisa en rojo que la pieza se puede romper.
+  El resultado del último intento queda arriba unos segundos.
+- **Pendiente:** elegir la pieza arrastrándola a la ventana (hoy se elige de la lista); una
+  marca "+N" sobre los íconos del inventario (hoy la dicen la ficha y la lista de la forja);
+  islas de las bandas 5 y 6 con fuentes propias de la piedra radiante.
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos, con
@@ -1319,7 +1442,9 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   franja). Donde más sirven es en grupos y contra golpes fuertes, cuando una cura por
   segundo no alcanza, y eso la simulación de duelos no lo mide.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
-  fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
+  fundación de un gremio, la comisión del mercado, el alquiler de las casas (T5.4) y la
+  forja (cada intento cuesta oro y piedras de temple, y un fallo puede destruir la pieza:
+  "Forja").
 - Log de economía para detectar duplicación y bots.
 
 Mecánicas de comercio entre jugadores conocidas del género; reglas, números y textos

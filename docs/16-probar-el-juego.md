@@ -102,7 +102,9 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    guardián y montaraz: el catálogo de docs/02), la llave de latón y una mochila
    de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
    servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
-   lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego.
+   lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego. Vende
+   también lo de la forja: las tres piedras de temple y el **ámbar de resguardo** (3000;
+   en el juego real ningún NPC lo vende: aquí está para probar la forja, punto 4b).
    - **Atributos (docs/02 "Atributos de items"):** cada arma, escudo o pieza de armadura
      que compras trae un atributo al azar. Pasa el mouse por encima (en la mochila, en el
      equipo o en el suelo) y la ficha lo muestra en verde jade bajo las stats ("+12 de vida
@@ -154,6 +156,28 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    (herrería 25) el yunque hace todo: por ejemplo, un hacha de leñador con 2 lingotes y 1
    tronco (4 minerales y 3 troncos en total, con la fragua). Las recetas no cambiaron: la
    herrería sigue empezando en 1 en el juego real.
+4b. **Forja (el yunque del taller, 2073,2102; docs/02 "Forja").** Usa el yunque y elige la
+   pestaña **Forja**. Abajo están tus piezas (las puestas y las de las mochilas abiertas):
+   elige una (una espada de hierro de Tobías, por ejemplo) y la ventana dice su nivel, el
+   siguiente, lo que suma, la chance en grande y lo que cuesta. Lo necesario, con Tobías y la
+   instructora:
+   - **piedras de temple:** la menor para piezas de nivel 1 a 9 (la espada, los escudos, la
+     ropa del kit), la mayor de 10 a 49 (la ballesta) y la radiante de 50 en adelante; 1 por
+     intento hasta +4, 2 de +5 a +7 y 3 de +8 a +10;
+   - **oro:** "Necesito dinero" con la instructora (cada intento cuesta el oro por nivel de
+     la banda por el nivel al que apunta: 3 × 5 = 15 cobre el +5 de una pieza de nivel 1);
+   - **herrería** (opcional): con "Entréname" → "Los oficios" (herrería 25) la chance de los
+     intentos arriesgados sube 4 puntos.
+
+   Prueba en orden: de +0 a +4 nunca falla (chispas sobre el yunque, sin confirmación); desde
+   +5 la chance baja (70, 55, 40, 25, 15 y 8 %) y el botón pide **confirmar** con el aviso en
+   rojo de que la pieza se puede romper. Sin ámbar, un fallo la **rompe** (se parte sobre el
+   yunque y desaparece); con el interruptor del ámbar marcado, un fallo la **baja un nivel** y
+   el ámbar se gasta (se gasta también si sale bien). Pasa el mouse por la pieza: se llama
+   "+5 espada de hierro" y la ficha dice "Refinado +5: +3 de ataque". Un +10 no se refina
+   más. Una pieza ofrecida en el intercambio no se puede refinar hasta sacarla; lo que está
+   publicado en el mercado no está en la mochila. Para probar muchos intentos seguidos sin
+   gastar tanto, compra piezas de nivel 1 (las más baratas de refinar).
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
    vender (un selector por atributo) y la oferta sale con su atributo en el listado; una

@@ -506,6 +506,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 | `CloseContainer` | `container_id` (T1.8) |
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
+| `Refine` | `station` (el yunque), `item` (slot o contenedor), `item_id`, `level` (el nivel de refinado que ve el cliente), `protect` (gastar un ámbar) (la forja) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
 | `PresenceAnswer` | `check_id`, `option_id` (respuesta a un `PresenceCheck`, T4.1) |
 | `TutorialSkip` | — (termina el tutorial sin premio, T4.2) |
@@ -742,9 +743,38 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   `gather.got{item}`. Lo obtenido va a la mochila como una compra (lo que no entra cae al
   suelo con `inventory.item_on_floor`).
 - **Efectos**: 5 = cosecha lograda, 6 = intento sin resultado, en la casilla del recurso,
-  para todos los que la ven.
+  para todos los que la ven. 8 y 9 son de la forja ("Forja", abajo).
 - El cliente entra en modo "usar con" al usar una herramienta (click derecho) y el
   siguiente click en el mapa manda el `UseItemOn`; Escape o click derecho lo cancelan.
+
+### Forja (`server/internal/session/refine.go`)
+Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (docs/06).
+- **`Refine{station, item, item_id, level, protect}`**: un intento sobre la pieza de `item`
+  (un slot de equipo o un contenedor abierto que el jugador lleva; nunca una posición del
+  suelo) en el yunque de `station`. `item_id` y `level` son lo que el cliente ve: otra pieza
+  u otro nivel (una vista vieja, o el mismo click mandado dos veces) se rechaza con
+  `inventory.not_possible` sin gastar nada. `protect` gasta un ámbar de resguardo, solo si el
+  intento puede fallar (por encima de `forge.safe_level`; abajo se ignora).
+- **Rechazos** (`Message` de sistema; nada se gasta): `refine.unavailable` (forja apagada),
+  `inventory.not_possible` (otro piso o fuera de la vista, item que no está ahí o de otro
+  nivel, una pieza del suelo), `craft.no_station{item}` (no hay yunque en esa casilla),
+  `inventory.too_far` (a más de 1 casilla), `refine.not_refinable` (no tira atributos:
+  munición, contenedores, materiales...), `refine.top_level{level}` (ya está en el tope),
+  `refine.in_trade` (ofrecida en el intercambio), `refine.no_stones{item}` (las que faltan
+  de la piedra de su banda), `refine.no_protection{item}`, `refine.no_money{price}`,
+  `refine.no_change_room` (el vuelto de una moneda partida no entra) y `refine.not_ready`
+  (antes de `forge.time_ms` desde el último intento de un oficio).
+- **Respuesta:** `RefineResult` con `outcome`, la instancia después (`item` con sus `mods`; al
+  romperse, solo `item_id`), su `level` (0 rota) y `text`: `refine.success{item, level}`,
+  `refine.broken{item}` o `refine.protected{item, level}`, donde `item` es la pieza como era
+  (con sus `mods`: el cliente la nombra "+6 …") y `level` el nivel de ahora (también va
+  `from`, el de antes). El mismo texto llega como `Message` de sistema (el log). Después
+  llegan el `Inventory` o `ContainerUpdate` de la pieza (sus `mods` nuevos, o sin ella), los
+  de las piedras y monedas, `PlayerStats` y el `StationOpen` del yunque con lo que queda.
+- **Efectos** en la casilla del yunque, para todos los que la ven: **8** chispas (éxito),
+  **9** una pieza que se parte (rota, o el ámbar que se quiebra en su lugar).
+- La pieza refinada lleva su nivel en `ItemMods.refine` en todo mensaje que la nombra
+  (inventario, contenedores, suelo, intercambio, mercado, parámetros `item`).
 
 ### Chat (T1.13, `server/internal/session/chat.go`)
 Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.
@@ -1335,7 +1365,8 @@ dice que el servidor los manda.
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
 | `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
-| `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4) |
+| `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4). En el yunque, `owned` también cuenta las piedras de temple y el ámbar, y `money` es el dinero que se lleva; llega también tras cada `Refine` |
+| `RefineResult` | Cómo terminó un intento de la forja: `outcome` (`SUCCESS`, `BROKEN`, `PROTECTED`), `item` (la instancia después, sin `mods` si se rompió), `level` y `text` (el mismo `LocalizedText` del mensaje del log) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |

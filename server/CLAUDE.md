@@ -250,6 +250,22 @@ server/
   pieza ofrecida en un intercambio cuyos `mods` cambian sale sola de la oferta, `checkTrade`); un efecto nuevo necesita su
   `content.Effect*`, su caso en `wornGear` y en el esquema `attributes.schema.json`.
 
+- **Forja (`session/refine.go`, `content/forge.go`, `balance.yaml forge`, docs/02 "Forja"):**
+  `Refine` hace todos los chequeos antes de tocar nada (yunque a 1 casilla, la pieza del
+  jugador en un slot o un contenedor abierto con el nivel que vio el cliente, no ofrecida en
+  el intercambio, piedras, ámbar, oro y su vuelto, el ritmo de los oficios `nextGather`),
+  después gasta todo junto, tira con `ctx.Rand` y sube, baja o rompe la pieza en el mismo
+  comando, y guarda el personaje (`w.save`). Un cambio de nivel en el lugar pasa por
+  `setRefine` (registra la instancia que sale con sus `mods` viejos y la que entra con los
+  nuevos, avisa al lugar que la tiene y, si está puesta, limpia `gearFrom` y llama a
+  `equipmentChanged`); una pieza rota, por `econInstance(-1)` + `removeItem`. Lo que suma un
+  nivel lo calcula `refineGain` dentro de `wornGear` (ataque solo en la mano derecha, defensa
+  en la izquierda, armadura en cualquier slot de armadura, una joya una parte de su
+  atributo antes del tope). La fuente del log es `EconForge` (no cuenta como ganancia en
+  `earns`). Un material nuevo de la forja va en `balance.yaml forge` (validado por
+  `Forge.CheckItems` al arrancar y por `checkForge` de `make validate`); el yunque cuenta
+  esos materiales en su `StationOpen` y manda `money`.
+
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +

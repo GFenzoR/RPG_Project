@@ -896,9 +896,51 @@ trade:
 ```
 - Cada ingrediente aparece una vez; cada intento gasta todos, salga o no. El servidor (y
   `make validate`) rechazan estaciones, ingredientes o resultados desconocidos.
-- Una estación es un item cualquiera del mapa que alguna receta nombra: no lleva campo
-  propio. Usarla manda `StationOpen` (`05-network-protocol.md`).
+- Una estación es un item cualquiera del mapa que alguna receta nombra (o
+  `balance.yaml → forge.station`): no lleva campo propio. Usarla manda `StationOpen`
+  (`05-network-protocol.md`).
 - Textos: `craft.*` (mensajes del servidor) y `client.craft.*` en `i18n/*/client.yaml`.
+
+## Forja (`balance.yaml → forge`)
+El refinado +1..+10 de un equipable en un yunque (`02-game-design.md` "Forja"). Esquema en
+`balance.schema.json`; el servidor (`content/forge.go`) revisa además las reglas de abajo. Sin
+bloque, o con `enabled: false`, la forja está apagada (el yunque solo fabrica).
+```yaml
+forge:
+  enabled: true
+  station: anvil             # el item del mapa que refina (a 1 casilla, como las recetas)
+  time_ms: 2000              # sin otro intento (ni de un oficio) hasta entonces
+  safe_level: 4              # hasta +4 un intento nunca falla
+  protection: warding_amber  # el material raro: un fallo baja un nivel en vez de romper
+  smithing_bonus: { per_levels: 6, max: 5 }   # +1 punto de chance cada 6 de herrería, tope 5
+  jewelry_pct: 10            # collar y anillo: cada nivel suma el 10 % del valor del atributo
+  levels:                    # el intento a +1, +2...: chance (%) y piedras que gasta
+    - { chance: 100, stones: 1 }
+    # ...
+    - { chance: 8, stones: 3 }      # +10: el largo de la lista es el tope
+  bands:                     # por requires.level del item, desde 1
+    - { level: 1, stone: lesser_temper_stone, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 }
+    # ...
+```
+- `levels`: entre 1 y 20 entradas; las de hasta `safe_level` con `chance: 100`, la siguiente
+  por debajo de 100 y, desde ahí, ninguna más alta que la anterior; `chance` de 1 a 100 y
+  `stones` ≥ 1. `safe_level` menor que el largo (algún nivel tiene que poder fallar).
+- `bands`: la primera con `level: 1` y niveles que crecen. `gold` es el cobre por nivel al
+  que apunta el intento (+n cuesta `gold × n`); `attack`, `armor` y `defense` lo que suma
+  cada nivel a un arma, una pieza de armadura (cabeza, torso, piernas, pies) y un escudo
+  (`floor(n × valor)`).
+- `station`, `protection` y cada `stone` tienen que ser items (`make validate` y el
+  arranque del servidor); el yunque, `pickupable: false`; piedras y ámbar, materiales
+  apilables (se gastan por unidades). Cada piedra y el ámbar tienen que conseguirse en
+  producción (un NPC que los vende o un monstruo que los suelta), y **ningún NPC de una isla
+  que no es `dev_only` vende ni da el ámbar** (con `world/`; el mercader de la Isla de Pruebas
+  puede). La regla m4 ("Nada lleva a ningún lado") cuenta los materiales de la forja como
+  usados: no necesitan comprador.
+- Los materiales son items comunes de `data/items/forge.yaml` (`kind: material`, apilables,
+  `tradeable`), con sus textos `item.<id>.name`/`.desc`.
+- Textos: `refine.*` (mensajes del servidor) y `client.forge.*`, `client.craft.tab.*`,
+  `client.card.refine.*` y `client.item.refined` (`+{level} {name}`, el nombre de una pieza
+  refinada) en `i18n/*/client.yaml`.
 
 ## Rutas de barco (T3.5)
 ```yaml
