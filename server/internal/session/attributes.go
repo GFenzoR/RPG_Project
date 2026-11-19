@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -63,6 +64,50 @@ func (w *World) instance(def *content.Item, count int, mods Mods) *Item {
 
 // created is a new instance of count units of def: an equipable rolls its attribute.
 func (w *World) created(def *content.Item, count int) *Item { return w.instance(def, count, Mods{}) }
+
+// spareFirst orders the instances of an equipable that a path takes without the player
+// picking one (an NPC buying it, a dialog's take_item, a recipe's ingredient): the ones
+// in containers before the worn ones, then the lowest refine, then the weakest roll (no
+// attribute, or one retired from the pool, first; then the value's place in the band of
+// its attribute); ties keep the order eachCarried walks them. Anything else keeps that
+// order.
+func (w *World) spareFirst(items []*Item) {
+	if len(items) < 2 || !content.Rolls(items[0].def) {
+		return
+	}
+	slices.SortStableFunc(items, func(a, b *Item) int {
+		return cmp.Or(
+			cmp.Compare(worn(a), worn(b)),
+			cmp.Compare(a.mods.Refine, b.mods.Refine),
+			cmp.Compare(w.rollShare(a), w.rollShare(b)))
+	})
+}
+
+// worn is 1 for an item in an equipment slot, 0 for one inside a container.
+func worn(it *Item) int {
+	if it.owner != nil && it.parent == nil {
+		return 1
+	}
+	return 0
+}
+
+// rollShare is where its attribute value lies in the band it was rolled from: 0 at the
+// band's minimum, 1 at its maximum (a band of one value is 1); -1 without an attribute
+// and 0 for one retired from the pool (it does nothing).
+func (w *World) rollShare(it *Item) float64 {
+	if it.mods.Attr == "" {
+		return -1
+	}
+	a := w.cfg.Attributes.ByID(it.mods.Attr)
+	if a == nil || len(a.Bands) == 0 {
+		return 0
+	}
+	b := a.Band(it.def.Requires.Level)
+	if b.Max <= b.Min {
+		return 1
+	}
+	return float64(it.mods.Value-b.Min) / float64(b.Max-b.Min)
+}
 
 // needsRoll reports whether loading s rolls an attribute (an equipable saved without one,
 // at any depth): what was loaded that way must be saved again.

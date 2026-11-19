@@ -174,8 +174,9 @@ el punto 5:
   - **Integración con Postgres sin correr en la rama:** `store/itemmods_integration_test.go`
     (inventario anidado, oferta, buzón, casa y log con `mods`) corre en el `make
     test-integration` del final del lote, con la migración 00019.
-  - **Vender a un NPC un equipable en particular:** el NPC se lleva las unidades en orden de
-    mochila (paga igual cualquier atributo). Elegir cuál necesitaría un campo en `ShopSell`.
+  - **Vender a un NPC un equipable en particular:** el NPC se lleva la tirada más floja de
+    los contenedores (`spareFirst`, docs/02) y paga igual cualquier atributo. Elegir cuál
+    necesitaría un campo `mods` en `ShopSell` y un selector en la tienda, como el mercado.
   - **Collares y anillos:** el catálogo compacto ya los trae; el pool tiene sus atributos (`neck`, `ring`).
   - **Escudo:** no hay atributo de skill de escudo porque la skill todavía no entra en
     ninguna fórmula.

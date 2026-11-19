@@ -240,7 +240,9 @@ server/
   count, mods)` o `giveMods` (conserva los `mods`; uno sin atributo tira el suyo). Un camino
   que **mueve** una instancia la mueve entera (nunca la copia) y, si la registra en la
   economía, con `econInstance` / `econMade` / `econTaken` (una fila por instancia con sus
-  `mods`). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
+  `mods`). Uno que se **lleva** un equipable sin que el jugador elija cuál (NPC, `take_item`,
+  receta) pasa por `takeItem`, que ordena con `spareFirst` (la tirada más floja de los
+  contenedores primero, lo puesto al final). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
   guarda (`store.ItemMods`). Una fórmula nueva que deba sumar un atributo puesto lee
   `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`, solo si cambiaron las
   instancias puestas con atributo, `Player.gearFrom`: un camino que cambie los `mods` de una

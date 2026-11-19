@@ -29,8 +29,8 @@
   que tiró un equipable (`attribute` = id de `data/attributes.yaml`, `value` su cantidad;
   el cliente muestra el `text` del atributo con `{value}`) y su nivel de refinado de la
   forja (`refine`, 0 = sin refinar). Viaja en todo `ItemStack` de una instancia: equipo
-  (`Inventory`), contenedores (`ContainerOpen`/`ContainerUpdate`), el suelo (`Tile`), el
-  intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
+  (`Inventory`), contenedores (`ContainerOpen`/`ContainerUpdate`), el suelo (`Tile`, en
+  `TileUpdate` y en la `palette` de un `MapArea`), el intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
   cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
   viejo lo ignora.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
@@ -1357,7 +1357,8 @@ jugadores, `speaker_content_id` para NPCs y monstruos).
 
 ### Formato de mapa en `FullMapView` / `MapSlice`
 Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}`:
-- `palette`: pilas de tile (`Tile {items[]}`, suelo primero) distintas del área.
+- `palette`: pilas de tile (`Tile {items[]}`, suelo primero) distintas del área (los
+  `mods` cuentan: dos espadas con distinto atributo son dos pilas).
 - `floors[]`: `MapFloor {z, tiles[]}` con `width × height` índices a `palette`, fila
   por fila (y, luego x). `-1` = sin tile.
 - `creatures`: criaturas paradas dentro del área.

@@ -197,18 +197,22 @@ func (f *foe) target() combat.MonsterTarget {
 	return combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
 }
 
-// hit lands dmg of the hunter's on cur at time now.
-func (f *foe) hit(now, dmg int) {
+// hit lands dmg of the hunter's on cur at time now and returns what it dealt: never more
+// than the health cur had left (the server's damageMonster, which leech reads).
+func (f *foe) hit(now, dmg int) int {
 	if len(f.summons) > 0 {
 		s := f.summons[0]
+		dealt := max(min(dmg, s.hp), 0)
 		if s.hp -= dmg; s.hp <= 0 {
 			f.summons = slices.Delete(f.summons, 0, 1)
 			f.wake(now)
 		}
-		return
+		return dealt
 	}
+	dealt := max(min(dmg, f.hp), 0)
 	f.hp -= dmg
 	f.wake(now)
+	return dealt
 }
 
 // The duel's foe follows the server's rules for the abilities: a summon waits for its
@@ -249,9 +253,8 @@ phases:
 		t.Fatalf("after the round: %d summons, hitting %s, hp %d, next summon %d", len(f.summons), f.cur().ID, f.hp, f.attacks[1].next)
 	}
 	f.hit(600, 30)
-	f.hit(700, 30)
-	if len(f.summons) != 0 || f.cur() != boss {
-		t.Fatalf("%d summons left after two killing hits", len(f.summons))
+	if dealt := f.hit(700, 45); dealt != 30 || len(f.summons) != 0 || f.cur() != boss {
+		t.Fatalf("%d summons left after two killing hits, the last dealt %d (the imp had 30)", len(f.summons), dealt)
 	}
 	f.hit(800, 300) // 21 %: enraged
 	if f.phase() != 1 || f.interval(0) != 1000 || f.attacks[3].next != 800 {
@@ -259,5 +262,9 @@ phases:
 	}
 	if dmg := f.act(800, combat.PlayerTarget{}); dmg != 5 {
 		t.Errorf("the phase's spell hit for %d, want 5", dmg)
+	}
+	left := f.hp
+	if dealt := f.hit(900, 1000); dealt != left || f.alive() {
+		t.Errorf("the killing blow dealt %d, the boss had %d left", dealt, left)
 	}
 }

@@ -264,7 +264,9 @@ type World struct {
 	areaHit   []*Player
 	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
-	tileBuf    []int32
+	tileBuf []int32
+	// stackBuf holds one tile's stack while mapArea builds it (reused between areas).
+	stackBuf   []tileEntry
 	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
 	corpses    map[world.Pos][]*Corpse
 	corpseItem *content.Item

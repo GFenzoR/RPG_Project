@@ -933,7 +933,8 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   suyo una vez al cargarse y se guarda con él: el personaje en su próximo guardado, el
   suelo de una casa en la escritura de la casa que la carga provoca al arrancar, y lo que
   espera en el buzón del mercado al retirarlo (una oferta de venta vieja se compra sin
-  atributo y lo tira en el inventario del comprador).
+  atributo y lo tira en el inventario del comprador; si tenía varias unidades, se compran
+  todas las que se pidan y cada una tira el suyo).
 - **Nada lo cambia ni lo pierde:** mover (equipo, contenedores, suelo, portales), el
   intercambio (las dos ofertas), el suelo de una casa (y el buzón al liberarla), el cadáver
   y lo que suelta la muerte, el buzón y las ofertas del mercado, el guardado y el log de
@@ -941,8 +942,13 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   instancia tal cual. Persistencia: `inventory_items.attributes`, la columna nueva
   `market_offers.attributes` (migración 00019) y `mods` dentro del JSON de
   `market_mail_items.item` y `house_items.item` (docs/05 `ItemMods`).
-- **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Se lleva las
-  unidades en el orden de la mochila (lo que vende un jugador sigue siendo "N de este item").
+- **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Lo que vende un
+  jugador sigue siendo "N de este item", sin elegir cuál: el NPC (y un `take_item` de
+  diálogo o el ingrediente de una receta) se lleva primero lo que está en los contenedores
+  y lo puesto al final (un NPC nunca compra lo puesto), primero el refinado más bajo y,
+  entre esas, la tirada más floja: sin atributo, después la que cae más abajo en la banda
+  de su atributo (de 0 en el mínimo a 1 en el máximo); a igual, en el orden de la mochila
+  (`spareFirst`). Para guardar una pieza buena, el jugador la lleva puesta.
 - **Mercado:** una oferta de **venta** de un equipable es **una instancia** (cantidad 1) que
   elige quien vende entre las suyas (`MarketUpdate.owned_mods`); cada una es una fila propia
   del listado con su atributo, y el comprador recibe exactamente esa. Una oferta de
@@ -977,7 +983,8 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   manos (`handsDefense`, también en PvP); las skills a `combatSkill` (lo que usan ataques y
   hechizos, como `keen_eye`: no lo que se entrena ni el panel) y el nivel mágico a lo que
   escalan los hechizos (no a sus requisitos); la velocidad a la base antes de las condiciones
-  (`refreshSpeed`); la regeneración a cada tic de la vocación; la protección baja todo daño
+  (`refreshSpeed`); la regeneración a cada tic de la vocación (también si la vocación
+  sola no regenera nada); la protección baja todo daño
   de su elemento que recibe un jugador (monstruos, condiciones, PvP: `damagePlayerBy`; la
   armadura sigue sin frenar la magia); el robo devuelve su parte del daño que hizo un golpe
   del arma (cuerpo a cuerpo, disparo o varita, a monstruos o en PvP; los hechizos y las

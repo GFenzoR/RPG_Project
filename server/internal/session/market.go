@@ -1021,7 +1021,12 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 		w.pay(p, total)
 		var made []*Item
 		if content.Rolls(o.def) {
-			made = w.giveMods(p, o.def, o.Mods) // the offer's instance (Amount 1)
+			// Each unit is its own instance: a new offer is one (Amount 1, with its mods);
+			// one posted before attributes existed may hold several without mods, and each
+			// unit rolls its own as it is created.
+			for range units {
+				made = append(made, w.giveMods(p, o.def, o.Mods)...)
+			}
 		} else {
 			made = w.giveItem(p, o.def, units)
 		}

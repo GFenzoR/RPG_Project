@@ -9,6 +9,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -325,6 +326,102 @@ func TestMovesKeepTheAttribute(t *testing.T) {
 	}
 }
 
+// The whole view (FullMapView, and MapSlice, both mapArea) carries each floor item's
+// attribute: two swords with different attributes are two different tiles of the
+// palette, two alike share one.
+func TestFullMapViewKeepsTheGroundAttribute(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) { c.Items = testItems() },
+		withAttributes(t))
+	sword := testItems()["test_sword"]
+	h.sim.Command(gameFunc(func() {
+		h.w.DropInstanceForTest(sword, mods("attack", 2), pos(6, 5))
+		h.w.DropInstanceForTest(sword, mods("life_leech", 1), pos(7, 5))
+		h.w.DropInstanceForTest(sword, mods("attack", 2), pos(8, 5))
+	}))
+	h.sim.Step()
+	nextChar++
+	cl, _ := h.joinChar(withPack(nextChar, pos(5, 5)))
+	views := find(cl.take(), (*pb.ServerMessage).GetFullMapView)
+	if len(views) == 0 {
+		t.Fatal("no full view")
+	}
+	area := views[0].GetArea()
+	var floor *pb.MapFloor
+	for _, f := range area.GetFloors() {
+		if f.GetZ() == 7 {
+			floor = f
+		}
+	}
+	tile := func(x, y int) (int32, session.Mods) {
+		i := floor.GetTiles()[(y-int(area.GetY()))*int(area.GetWidth())+x-int(area.GetX())]
+		items := area.GetPalette()[i].GetItems()
+		return i, itemMods(items[len(items)-1])
+	}
+	a, am := tile(6, 5)
+	b, bm := tile(7, 5)
+	c, cm := tile(8, 5)
+	if am != mods("attack", 2) || bm != mods("life_leech", 1) || cm != am {
+		t.Fatalf("tiles show %v, %v, %v", am, bm, cm)
+	}
+	if a == b || a != c {
+		t.Fatalf("palette indices %d %d %d", a, b, c)
+	}
+}
+
+// What takes an equipable without the player picking which (an NPC buying it, a
+// dialog's take_item, a recipe) takes the weakest instance in the containers first and the
+// worn one last.
+func TestTakingAnEquipableSparesTheBestAndTheWorn(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) { c.Items = testItems() },
+		withAttributes(t))
+	nextChar++
+	c := session.Character{ID: nextChar, AccountID: nextChar, Name: "Spare", Vocation: "guardian", Level: 1,
+		Health: 145, Mana: 20, Pos: pos(5, 5), HasPos: true, InventoryLoaded: true,
+		Inventory: []session.ItemState{rolled(swordID, int(slotRight), "life_leech", 1),
+			{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{
+				rolled(swordID, 0, "attack", 2), rolled(swordID, 1, "attack", 1), rolled(swordID, 2, "sword_skill", 1)}}}}
+	_, p := h.joinChar(c)
+	left := func() []session.Mods { // the backpack's, then the hand's
+		var out []session.Mods
+		for _, it := range h.w.ItemsForTest(p, "test_sword") {
+			out = append(out, it.Mods())
+		}
+		return out
+	}
+	take := func(n int) {
+		h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, "test_sword", n) }))
+		h.sim.Step()
+	}
+	take(1) // attack 1 is the bottom of its band: the weakest
+	if got := left(); !slices.Equal(got, []session.Mods{mods("attack", 2), mods("sword_skill", 1), mods("life_leech", 1)}) {
+		t.Fatalf("after one: %v", got)
+	}
+	take(2) // both at the top of their bands: in backpack order
+	if got := left(); !slices.Equal(got, []session.Mods{mods("life_leech", 1)}) || p.Equipped(slotRight) == nil {
+		t.Fatalf("after three: %v", got)
+	}
+}
+
+// A vocation that regenerates nothing itself still ticks: the worn regeneration
+// attributes give their part every interval.
+func TestGearRegenerationWithoutTheVocations(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) {
+		c.Items = testItems()
+		withBoots(c)
+		g := testVocations["guardian"]
+		g.Regen = content.Regen{IntervalMs: 1000}
+		c.Vocations = content.Vocations{"guardian": g}
+	}, withAttributes(t))
+	nextChar++
+	_, p := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Still", Vocation: "guardian",
+		Level: 1, Health: 100, Mana: 20, Pos: pos(5, 5), HasPos: true, InventoryLoaded: true,
+		Inventory: []session.ItemState{rolled(bootsID, int(pb.EquipmentSlot_EQUIPMENT_SLOT_FEET), "health_regen", 1)}})
+	h.sim.RunTicks(2 * 1000 / 50)
+	if hp, _ := p.Health(); hp != 102 {
+		t.Fatalf("health %d after two intervals, want 102", hp)
+	}
+}
+
 // A trade hands over the very instances: the attribute arrives, both logs name it.
 func TestTradeKeepsTheAttribute(t *testing.T) {
 	h := newMarketHarness(t, withAttributes(t))
@@ -435,6 +532,40 @@ func TestMarketBuyOfferTakesThePickedInstance(t *testing.T) {
 	h.send(cb, withdraw)
 	if got := h.w.ItemsForTest(b, "test_sword"); len(got) != 1 || got[0].Mods() != mods("defense", 2) {
 		t.Fatalf("Bruno withdrew %v", got)
+	}
+	h.sim.Step()
+}
+
+// A sell offer of an equipable posted before attributes existed may hold several units
+// without mods: buying them all gives every unit, each rolling its own attribute, and the
+// buyer pays for what it gets.
+func TestMarketOldSellOfferGivesEveryUnit(t *testing.T) {
+	h := newMarketHarness(t, withAttributes(t), func(c *session.Config) {
+		c.Market = &session.MarketData{OfferHigh: 3, Offers: []session.MarketOffer{
+			{ID: 3, CharacterID: 77, AccountID: 77, Name: "Vieja", Sell: true, ItemID: swordID, Amount: 3, Price: 10,
+				Created: clock.Epoch, Expires: clock.Epoch.Add(time.Hour)},
+		}}
+	})
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	if !hasKey(h.send(cb, acceptOffer(3, 3)), "market.bought") {
+		t.Fatal("not bought")
+	}
+	got := h.w.ItemsForTest(b, "test_sword")
+	if len(got) != 3 || h.w.Money(b) != 70 || h.w.MarketOfferAmount(3) != -1 {
+		t.Fatalf("Bruno got %d swords for %d coins, offer %d", len(got), 100-h.w.Money(b), h.w.MarketOfferAmount(3))
+	}
+	pool, def := attrPool(t), h.w.ItemForTest("test_sword")
+	logged := 0
+	for _, it := range got {
+		checkRolled(t, pool, def, it.Mods())
+	}
+	for _, e := range h.economy {
+		if e.Kind == session.EconMarket && e.ItemID == swordID && e.Count == 1 && !e.Mods.Zero() {
+			logged++
+		}
+	}
+	if logged != 3 {
+		t.Fatalf("%d instances logged", logged)
 	}
 	h.sim.Step()
 }

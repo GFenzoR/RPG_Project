@@ -291,7 +291,8 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 	}
 	area := &pb.MapArea{X: uint32(x0), Y: uint32(y0), Width: uint32(wd), Height: uint32(ht)}
 	var floors [SeaLevel + 1]uint8
-	var stack []tileEntry
+	stack := w.stackBuf[:0]
+	defer func() { w.stackBuf = stack[:0] }()
 	for _, z := range viewFloors(p.pos.Z, floors[:0]) {
 		if cap(w.tileBuf) < wd*ht {
 			w.tileBuf = make([]int32, wd*ht)
@@ -309,8 +310,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 						stack = append(stack, tileEntry{id: uint32(id)})
 					}
 					for _, it := range w.ground[pos] {
-						s := it.stack()
-						stack = append(stack, tileEntry{id: s.ItemId, count: s.Count})
+						stack = append(stack, tileEntry{id: uint32(it.def.Numeric), count: it.wireCount(), mods: it.mods})
 					}
 					idx = paletteIndex(area, stack)
 					any = true
@@ -346,8 +346,13 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 // paletteIndex returns the index of stack in area's palette, adding it if new. A linear
 // search: a view has at most 759 tiles per floor but few distinct stacks (a few dozen on
 // the real map, BenchmarkFullMapView in docs/07).
-// tileEntry is one item of a tile stack while building an area (no allocation).
-type tileEntry struct{ id, count uint32 }
+// tileEntry is one item of a tile stack while building an area (no allocation): what
+// Item.stack sends, its mods included (two swords with different attributes are two
+// different tiles).
+type tileEntry struct {
+	id, count uint32
+	mods      Mods
+}
 
 func paletteIndex(area *pb.MapArea, stack []tileEntry) int32 {
 	for i, t := range area.Palette {
@@ -356,7 +361,7 @@ func paletteIndex(area *pb.MapArea, stack []tileEntry) int32 {
 		}
 		same := true
 		for j, it := range t.Items {
-			if it.ItemId != stack[j].id || it.Count != stack[j].count {
+			if it.ItemId != stack[j].id || it.Count != stack[j].count || modsOf(it.Mods) != stack[j].mods {
 				same = false
 				break
 			}
@@ -367,7 +372,7 @@ func paletteIndex(area *pb.MapArea, stack []tileEntry) int32 {
 	}
 	t := &pb.Tile{Items: make([]*pb.ItemStack, len(stack))}
 	for j, e := range stack {
-		t.Items[j] = &pb.ItemStack{ItemId: e.id, Count: e.count}
+		t.Items[j] = &pb.ItemStack{ItemId: e.id, Count: e.count, Mods: e.mods.msg()}
 	}
 	area.Palette = append(area.Palette, t)
 	return int32(len(area.Palette) - 1)

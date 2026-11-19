@@ -149,11 +149,16 @@ func (it *Item) contains(c *Item) bool {
 }
 
 func (it *Item) stack() *pb.ItemStack {
-	s := &pb.ItemStack{ItemId: uint32(it.def.Numeric), Mods: it.mods.msg()}
+	return &pb.ItemStack{ItemId: uint32(it.def.Numeric), Count: it.wireCount(), Mods: it.mods.msg()}
+}
+
+// wireCount is the count an ItemStack of it carries: a stack's size, a rune's charges, 0
+// for anything else.
+func (it *Item) wireCount() uint32 {
 	if it.def.Stackable || it.def.Rune != nil {
-		s.Count = uint32(it.count) // a rune's count is its charges
+		return uint32(it.count) // a rune's count is its charges
 	}
-	return s
+	return 0
 }
 
 func (it *Item) stacks() []*pb.ItemStack {

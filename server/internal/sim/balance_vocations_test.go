@@ -380,12 +380,12 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		skill, magic, attack = h.skill+int(g.skill[h.weapon.Weapon.Type]), h.magic+int(g.skill["magic"]), int(g.attack)
 		hp, mp = math.Min(hp, maxHP), math.Min(mp, maxMP)
 	}
-	// shot lands a weapon hit of dmg on the foe and gives the leech attributes' share back
-	// (the server's integer leech).
+	// shot lands a weapon hit of dmg on the foe and gives the leech attributes' share of
+	// what it dealt back (the server's integer leech, up to the maximums).
 	shot := func(now, dmg int) {
-		f.hit(now, dmg)
-		hp = math.Min(maxHP, hp+float64(dmg*int(g.lifeLeech)/100))
-		mp = math.Min(maxMP, mp+float64(dmg*int(g.manaLeech)/100))
+		dealt := f.hit(now, dmg)
+		hp = math.Min(maxHP, hp+float64(dealt*int(g.lifeLeech)/100))
+		mp = math.Min(maxMP, mp+float64(dealt*int(g.manaLeech)/100))
 	}
 	wear()
 	useMs := h.d.balance.Inventory.UseCooldownMs

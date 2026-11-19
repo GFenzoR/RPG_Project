@@ -32,6 +32,13 @@ func (w *World) DropForTest(def *content.Item, count int, pos world.Pos) {
 	w.tileChanged(pos)
 }
 
+// DropInstanceForTest puts one instance of def with mods on the ground at pos (tests
+// only, loop goroutine).
+func (w *World) DropInstanceForTest(def *content.Item, mods Mods, pos world.Pos) {
+	w.drop(w.instance(def, def.StackLimit(), mods), pos)
+	w.tileChanged(pos)
+}
+
 // Viewers returns how many players have container it open (tests only).
 func (it *Item) Viewers() int { return len(it.viewers) }
 

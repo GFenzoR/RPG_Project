@@ -413,7 +413,7 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 		return
 	}
 	// The NPC pays the base value: an equipable's attribute never changes the price
-	// (docs/02 "Atributos de items"); it takes the units in backpack order.
+	// (docs/02 "Atributos de items"); it takes the weakest instances first (spareFirst).
 	amount := l.sell * int64(n)
 	taken := w.takeItem(p, l.def, n, false)
 	w.giveMoney(p, amount)
@@ -493,7 +493,8 @@ func takeable(it *Item, def *content.Item) bool {
 }
 
 // takeItem removes n units of def from p (the caller checked p has them), in the order
-// eachCarried walks them, and returns the instances it removed whole (for econTaken).
+// eachCarried walks them (an equipable's instances spareFirst), and returns the instances
+// it removed whole (for econTaken).
 func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) []*Item {
 	var found, taken []*Item
 	p.eachCarried(equipped, func(it *Item) {
@@ -501,6 +502,7 @@ func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) []*
 			found = append(found, it)
 		}
 	})
+	w.spareFirst(found)
 	for _, it := range found {
 		if n <= 0 {
 			break

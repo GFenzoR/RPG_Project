@@ -261,10 +261,12 @@ func (w *World) healthBar(p *Player, before uint32) {
 
 // ---- regeneration ----------------------------------------------------------------------
 
-// scheduleRegen schedules p's next regeneration after the vocation's interval.
+// scheduleRegen schedules p's next regeneration after the vocation's interval: also for a
+// vocation that regenerates nothing itself, since the worn regeneration attributes tick
+// with it.
 func (w *World) scheduleRegen(ctx *game.TickContext, p *Player) {
 	r := p.vocation.Regen
-	if r.IntervalMs <= 0 || (r.Health <= 0 && r.Mana <= 0) {
+	if r.IntervalMs <= 0 {
 		return
 	}
 	p.regen = ctx.Sched.After(ticksFor(r.IntervalMs), func(ctx *game.TickContext) {
@@ -281,12 +283,16 @@ func (w *World) regenerate(p *Player) {
 	if p.health >= p.maxHealth && p.mana >= p.maxMana {
 		return
 	}
-	pct := healthPercent(p.health, p.maxHealth)
 	// Fed (content audit m2): the regen conditions make every tick regen_pct % stronger.
-	hp, mp := r.Tick(regenPct(p.conds))
 	// The worn regeneration attributes add to every tick (attributes.go).
-	p.health = min(p.health+hp+p.gear.healthRegen, p.maxHealth)
-	p.mana = min(p.mana+mp+p.gear.manaRegen, p.maxMana)
+	hp, mp := r.Tick(regenPct(p.conds))
+	hp, mp = hp+p.gear.healthRegen, mp+p.gear.manaRegen
+	if hp <= 0 && mp <= 0 {
+		return // nothing to give: nothing to tell
+	}
+	pct := healthPercent(p.health, p.maxHealth)
+	p.health = min(p.health+hp, p.maxHealth)
+	p.mana = min(p.mana+mp, p.maxMana)
 	w.healthBar(p, pct)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }

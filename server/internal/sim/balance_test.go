@@ -215,24 +215,26 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 		player := combat.PlayerTarget{Armor: armor + int(g.armor), Defense: shield + int(g.defense) + weapon.Defense,
 			ModeDefense: balanced.Defense}
 		f.protect = g.protect
-		taken, leeched, now, nextPlayer := 0, 0, 0, 0
+		// lost is the health missing: what the foe took, less what leech gave back.
+		lost, now, nextPlayer := 0, 0, 0
 		f.start(0)
 		for f.alive() && now < maxFightMs {
 			tMonster := f.nextAt()
 			if nextPlayer <= tMonster {
 				now = nextPlayer
-				dmg := combat.HitMonster(r, maxHit, f.target())
-				f.hit(now, dmg)
-				leeched += dmg * int(g.lifeLeech) / 100 // the server's integer leech
+				dealt := f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+				// The server's integer leech (session.leech): a share of what the hit dealt,
+				// never more than the health missing at that moment.
+				lost -= min(dealt*int(g.lifeLeech)/100, lost)
 				nextPlayer += c.AttackIntervalMs
 				continue
 			}
 			now = tMonster
-			taken += f.act(now, player)
+			lost += f.act(now, player)
 		}
 		totalMs += now
-		// Health lost, as a share of this kit's maximum; leech gives back at most that.
-		totalDmg += float64(max(taken-leeched, 0)) / (baseHP + g.health)
+		// Health lost, as a share of this kit's maximum.
+		totalDmg += float64(lost) / (baseHP + g.health)
 	}
 	return fightStats{
 		seconds:   float64(totalMs) / fights / 1000,
