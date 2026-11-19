@@ -2370,7 +2370,18 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     // No header on desktop (docs/17 UI-4): the controls help is the toolbar's "?" window,
     // which floats over the map without moving it.
     await expect(page.locator("header.hud")).toHaveCount(0);
-    const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
+    // The canvas follows the new size from its ResizeObserver, at the page's next rendering
+    // (after setViewportSize returns): until then it keeps the 1280x800 size, centred on the
+    // smaller box, 50 px above the page (the e2e of lote 10 measured it then). Measure the
+    // map once it fits the page.
+    let mapTop = -1;
+    await expect
+      .poll(async () => {
+        const box = await page.getByTestId("game-canvas").boundingBox();
+        mapTop = box?.y ?? -1;
+        return box !== null && box.y >= 0 && box.y + box.height <= 700 && box.width <= 960;
+      })
+      .toBe(true);
     await openWindow(page, "help");
     const help = page.getByTestId("controls-help");
     await expect(help.locator("p.controls-text")).toContainText("Camina con las flechas");

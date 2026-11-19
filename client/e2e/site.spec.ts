@@ -244,8 +244,12 @@ test.describe.serial("public website", () => {
     await expect(derived).toContainText("outfits/citizen");
     await expect(derived).toContainText("npcs/sailor_old");
     const fonts = page.getByTestId("credits-fonts");
-    await expect(fonts.locator("[data-font]")).toHaveCount(4);
+    // Cinzel, Grenze Gotisch, Alegreya Sans, Alegreya and the canvas font (lote 10).
+    await expect(fonts.locator("[data-font]")).toHaveCount(5);
     await expect(fonts.locator('[data-font="Cinzel"]')).toContainText("The Cinzel Project Authors");
+    await expect(fonts.locator('[data-font="Pixelify Sans"]')).toContainText(
+      "The Pixelify Sans Project Authors",
+    );
     await expect(fonts.locator('a[data-licence="OFL 1.1"]').first()).toBeVisible();
     await fitsWidth(page);
     await shot(page, "site-09-credits-es", false);
