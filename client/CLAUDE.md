@@ -254,7 +254,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `StationOpen` (`owned` con piedras y ámbar, `StationState.money`).
 - `Game.refine(candidato, protect)` manda `Refine` con el nivel que se ve;
   `WorldState.refine` (`RefineState`) es el último `RefineResult`, que la ventana muestra
-  `RESULT_MS` (8 s) arriba.
+  `RESULT_MS` (8 s) arriba. La pieza elegida es `chosenPiece`: la de su lugar con el mismo
+  item y los mismos `mods`, que siguen al resultado de los intentos sobre ella (una rota se
+  suelta: la que sube a su índice del contenedor no es ella). El ámbar va solo si
+  `ForgeView.protect` (pedido, donde cuenta y llevado): un interruptor que quedó prendido
+  tras gastar el último no traba el botón. La skill del bono es
+  `forge.smithingBonus.skill`, no un string del código.
 - El nombre de una pieza refinada pasa siempre por `refinedName` (`client.item.refined`):
   la ficha (`cardTitle`, con la línea `card-refine` de `ItemCardView.refine`), el
   intercambio y el mercado (`ItemLabel`) y los parámetros `item` de los mensajes
@@ -659,11 +664,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
 
 ## Sprites de efectos
-- Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
+- Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
   en el atlas: `effects/<nombre>/<n>` (`n` = 0, 1, …), 32x32, arte propio de
   `tools/spritegen` (`recipes/effects.ts`, 6 frames por tira). Nombres: `hit`, `block`,
-  `heal`, `conjure`, `gather`, `gather_miss`, `buff` y los 7 elementos de `ELEMENTS`
-  (`physical` … `death`, ids 10 + índice).
+  `heal`, `conjure`, `gather`, `gather_miss`, `buff`, `refine` y `shatter` (8 y 9, la
+  forja) y los 7 elementos de `ELEMENTS` (`physical` … `death`, ids 10 + índice).
 - `render/effects.ts` (puro, con tests): `effectFolder(id)` da la carpeta de un id;
   `effectFrames(id, hasArt)` lista los frames con arte real hasta el primero que falte
   (máximo `MAX_EFFECT_FRAMES`); `effectFrame(elapsed, frames)` reparte los frames en

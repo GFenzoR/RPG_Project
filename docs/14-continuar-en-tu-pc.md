@@ -148,9 +148,8 @@ el punto 5:
   - **Pesos:** varias piezas pesan más que antes (el hacha de mano 4000 g, la cabilla 3800,
     el cuero de ciervo): un personaje cargado puede quedar sobre su capacidad. No lo deja
     atascado; solo no puede levantar más hasta soltar algo.
-  - **Ids al mergear con `feat/item-forge`:** las 35 piezas nuevas tomaron los números
-    271-305. Si esa rama agrega items, toma los mismos: al mergear, corre `make gen-ids`
-    (el chequeo de `ids.ts` ataja los números repetidos).
+  - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
+    forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.
   - **Balance justo:** el minero de obsidiana al nivel 35 queda en 11,0 % de la vida (el piso
     es 10 %; con los atributos del kit su golpe cuerpo a cuerpo subió de 52 a 60). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
     la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
@@ -183,20 +182,32 @@ el punto 5:
   resguardo, la baja un nivel; piedras de temple y oro por intento; el nivel suma ataque,
   armadura, defensa o una parte del atributo de una joya y viaja con la instancia por todos
   los caminos. Queda:
-  - **Al apilar el lote:** `feat/item-catalog` y esta rama agregan ids desde el 271 en
-    `data/ids.lock.yaml` (las piedras y el ámbar son 271–274 aquí): al juntarlas, el que
-    entra segundo vuelve a correr `make gen-ids` sobre el lock del otro (los ids nuevos
-    todavía no se guardaron en ninguna base). Los dos tocan también los monstruos que
-    sueltan piedras o ámbar (`hollow_crawler`, `obsidian_delver`, `slag_golem`,
-    `wreck_looter`), `pruebas_merchant` y `volcan_smith`: conflictos de una línea.
-    `feat/item-icons` dibuja el catálogo con la clase de ícono del motor; los materiales de
-    la forja se dibujaron con la clase `object` (32x32, abajo a la derecha): pasarlos a la
-    clase de ícono cuando se junten. Con el catálogo, revisar que el
-    `TestForgeExpectedCosts` siga dentro de sus metas (usa los valores de referencia de cada
-    banda, no los items).
+  - **Rebasada sobre `feat/item-attributes`** (con el catálogo compacto y los íconos, después
+    de la revisión): `make gen-ids` dio a las piedras y al ámbar los ids 306–309 (eran
+    271–274, los del catálogo); los conflictos de loot (`hollow_crawler`,
+    `obsidian_delver`, `slag_golem`) y de tiendas (`puerto_armorer`, `volcan_smith`)
+    suman las dos líneas. `go test ./internal/sim`, `TestForgeExpectedCosts` y
+    `content/attributes_test.go` siguen verdes; con el catálogo hay collares y anillos de
+    verdad, así que el camino de las joyas (`JewelGain`, con el tope del atributo) ya se
+    usa, y las armaduras con `requires.level` caen en su banda de la forja.
+    `TestBrasalNPCs` saca cada compra del herrero (la banda 4 y las tres piedras son más
+    líneas que una mochila).
+  - **Los materiales de la forja** se dibujaron con la clase `object` (32x32, abajo a la
+    derecha); `feat/item-icons` dibuja el catálogo con la clase de ícono del motor:
+    pasarlos a esa clase.
   - **La pieza se elige de una lista** (las puestas y las de los contenedores abiertos), no
     arrastrándola a la ventana, y el inventario no muestra "+N" sobre el ícono (lo dicen la
-    ficha, el tooltip y la lista de la forja).
+    ficha, el tooltip, "Mirar" y la lista de la forja). La lista también muestra lo de un
+    contenedor abierto del suelo (un cadáver, un cofre de casa): el cliente no sabe qué
+    ventana lleva el jugador, y el servidor lo rechaza con `refine.not_carried`. Separarlo
+    pide que `ContainerOpen`/`ContainerUpdate` digan si el contenedor va encima.
+  - **Lo que se lleva se cuenta al usar el yunque y tras cada intento** (`StationOpen`, como
+    las recetas): piedras o monedas juntadas con la ventana abierta no se ven hasta volver
+    a usarlo. Arreglarlo pide que el servidor recuerde la estación abierta y la reenvíe al
+    cambiar el inventario (para la forja y las recetas).
+  - **Confirmar con el dueño:** el ámbar se gasta en cada intento en que se usa, también
+    cuando sale bien (un seguro que se paga; docs/02 y los textos de la ventana lo dicen).
+    Su pedido admite la otra lectura (gastarlo solo al fallar).
   - **Los primeros niveles de una pieza de banda baja pueden no sumar** (0,2 de armadura por
     nivel: +4 da 0): es la tabla de `balance.yaml`; si el dueño lo prefiere, subir esos
     valores o mostrar el próximo nivel que sí suma.

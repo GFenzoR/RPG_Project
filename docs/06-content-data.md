@@ -912,7 +912,7 @@ forge:
   time_ms: 2000              # sin otro intento (ni de un oficio) hasta entonces
   safe_level: 4              # hasta +4 un intento nunca falla
   protection: warding_amber  # el material raro: un fallo baja un nivel en vez de romper
-  smithing_bonus: { per_levels: 6, max: 5 }   # +1 punto de chance cada 6 de herrería, tope 5
+  smithing_bonus: { skill: smithing, per_levels: 6, max: 5 }   # +1 punto cada 6 de herrería, tope 5
   jewelry_pct: 10            # collar y anillo: cada nivel suma el 10 % del valor del atributo
   levels:                    # el intento a +1, +2...: chance (%) y piedras que gasta
     - { chance: 100, stones: 1 }
@@ -925,6 +925,9 @@ forge:
 - `levels`: entre 1 y 20 entradas; las de hasta `safe_level` con `chance: 100`, la siguiente
   por debajo de 100 y, desde ahí, ninguna más alta que la anterior; `chance` de 1 a 100 y
   `stones` ≥ 1. `safe_level` menor que el largo (algún nivel tiene que poder fallar).
+- `smithing_bonus.skill`: el oficio cuyo nivel da el bono (una skill de `skills.base`; el
+  servidor no arranca con otra), obligatorio si `per_levels` > 0. Es dato: el código no
+  nombra la herrería.
 - `bands`: la primera con `level: 1` y niveles que crecen. `gold` es el cobre por nivel al
   que apunta el intento (+n cuesta `gold × n`); `attack`, `armor` y `defense` lo que suma
   cada nivel a un arma, una pieza de armadura (cabeza, torso, piernas, pies) y un escudo

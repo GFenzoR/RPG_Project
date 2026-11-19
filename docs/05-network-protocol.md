@@ -752,12 +752,19 @@ Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (doc
 - **`Refine{station, item, item_id, level, protect}`**: un intento sobre la pieza de `item`
   (un slot de equipo o un contenedor abierto que el jugador lleva; nunca una posición del
   suelo) en el yunque de `station`. `item_id` y `level` son lo que el cliente ve: otra pieza
-  u otro nivel (una vista vieja, o el mismo click mandado dos veces) se rechaza con
-  `inventory.not_possible` sin gastar nada. `protect` gasta un ámbar de resguardo, solo si el
-  intento puede fallar (por encima de `forge.safe_level`; abajo se ignora).
+  u otro nivel (una vista vieja, o el mismo click mandado de nuevo después de un éxito) se
+  rechaza con `inventory.not_possible` sin gastar nada. Dos instancias del mismo item y nivel
+  en ese lugar son iguales para el servidor: después de una rotura las piezas de ese
+  contenedor suben un lugar, así que el cliente suelta la pieza rota (y una de otra tirada
+  que quedó en su lugar) y no manda por la que ocupó su índice; el ritmo de los oficios frena
+  un segundo click antes de la respuesta. `protect` gasta un ámbar de resguardo, solo si el
+  intento puede fallar (por encima de `forge.safe_level`; abajo se ignora); el cliente no lo
+  pide sin uno.
 - **Rechazos** (`Message` de sistema; nada se gasta): `refine.unavailable` (forja apagada),
   `inventory.not_possible` (otro piso o fuera de la vista, item que no está ahí o de otro
-  nivel, una pieza del suelo), `craft.no_station{item}` (no hay yunque en esa casilla),
+  nivel, una posición del suelo), `refine.not_carried` (en un contenedor abierto que no
+  lleva: un cadáver, un cofre del suelo), `craft.no_station{item}` (no hay yunque en esa
+  casilla),
   `inventory.too_far` (a más de 1 casilla), `refine.not_refinable` (no tira atributos:
   munición, contenedores, materiales...), `refine.top_level{level}` (ya está en el tope),
   `refine.in_trade` (ofrecida en el intercambio), `refine.no_stones{item}` (las que faltan
@@ -774,7 +781,8 @@ Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (doc
 - **Efectos** en la casilla del yunque, para todos los que la ven: **8** chispas (éxito),
   **9** una pieza que se parte (rota, o el ámbar que se quiebra en su lugar).
 - La pieza refinada lleva su nivel en `ItemMods.refine` en todo mensaje que la nombra
-  (inventario, contenedores, suelo, intercambio, mercado, parámetros `item`).
+  (inventario, contenedores, suelo, intercambio, mercado, parámetros `item`, también el de
+  `look.*`, cuyo `attack`, `armor` o `defense` incluye lo que suma el nivel).
 
 ### Chat (T1.13, `server/internal/session/chat.go`)
 Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.

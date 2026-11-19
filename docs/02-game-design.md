@@ -1038,17 +1038,24 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   (`forge.bands[].gold` × el nivel al que apunta: el intento a +7 de una pieza de nivel 30
   cuesta 120 × 7 = 840 cobre) y, si el jugador lo pide, **un ámbar de resguardo**. La pieza
   tiene que ser suya y estar a mano: puesta o en un contenedor abierto que lleva (nunca en el
-  suelo, ni ofrecida en el intercambio; lo publicado en el mercado ya no está en su mochila).
+  suelo ni en un contenedor que no lleva, un cadáver o un cofre: "solo puedes refinar lo que
+  llevas"; ni ofrecida en el intercambio; lo publicado en el mercado ya no está en su
+  mochila).
   Piedras y ámbar se toman de los contenedores (como los ingredientes de una receta); el oro,
-  de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido
-  (el pedido dice el nivel que ve el cliente: un click repetido no refina dos veces), al
-  ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar).
+  de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido,
+  al ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar). El
+  pedido dice la pieza y el nivel que ve el cliente: un click repetido después de un éxito
+  ya no coincide y no hace nada, y uno antes de la respuesta lo frena el ritmo. El servidor
+  no distingue dos piezas iguales del mismo nivel en el mismo lugar: después de una rotura,
+  las de ese contenedor suben un lugar, así que la ventana suelta la pieza rota (y la que
+  cambió de tirada en su lugar) en vez de apuntar a la que quedó ahí.
 - **La chance** (`forge.levels[n].chance`, en %): hasta **+4 nunca falla** (`safe_level`);
   desde +5 baja en cada nivel: **+5 70 %, +6 55 %, +7 40 %, +8 25 %, +9 15 %, +10 8 %**. La
   tira la fuente sembrada del loop (`TickContext.Rand`, `IntN(100) < chance`).
   - **Herrería:** suma 1 punto cada 6 niveles del oficio, como mucho **+5** (herrería 30, la
-    de las recetas más altas: `smithing_bonus`), y solo en los intentos que pueden fallar. La
-    forja no entrena herrería: el oficio se sube fabricando.
+    de las recetas más altas: `smithing_bonus`, cuya `skill` nombra el oficio), y solo en
+    los intentos que pueden fallar. La forja no entrena herrería: el oficio se sube
+    fabricando.
 - **El resultado:**
   - **éxito:** la pieza sube un nivel (chispas sobre el yunque, efecto 8);
   - **fallo desde +5, sin ámbar:** la pieza **se rompe y desaparece** (efecto 9, una pieza que
@@ -1118,8 +1125,11 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
 - **Persistencia y seguridad:** el intento entero pasa en un comando del loop (todos los
   chequeos primero, después se gasta todo junto y se tira la chance), así una desconexión lo
   ve hecho o sin empezar, nunca a medias ni dos veces; el personaje se guarda en el acto
-  después de cada intento (como una muerte), así una caída del servidor no devuelve una pieza
-  rota ni quita un nivel ganado. El nivel viaja con la instancia por todos los caminos que
+  después de cada intento que puede fallar (desde +5, como una muerte), así una caída del
+  servidor no devuelve una pieza rota ni quita un nivel ganado. Un nivel seguro (hasta +4)
+  espera el guardado de siempre: volver a antes de él devuelve juntos el nivel, las piedras y
+  el oro, sin nada que ganar, y no se escribe en la base cada 2 s por cada jugador que
+  refina. El nivel viaja con la instancia por todos los caminos que
   mueven un item ("Atributos de items": mover, intercambio, muerte, casa, mercado, buzón,
   guardado). El log de economía (fuente `forge`) registra el oro, las piedras y el ámbar
   gastados, la pieza rota y cada cambio de nivel (la instancia sale con su nivel viejo y entra
@@ -1127,13 +1137,19 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
 - **Nombre y ficha:** una pieza refinada se llama "+7 espada…" en todo el cliente (ficha,
   tooltip, intercambio, mercado y los mensajes del servidor: la clave `client.item.refined`
   con `{level}` y `{name}`, nunca texto armado en el código), y la ficha agrega la línea
-  "Refinado +7: +3 de ataque" en el color del metal caliente.
+  "Refinado +7: +3 de ataque" en el color del metal caliente (la de una joya no pasa del
+  tope de su atributo). "Mirar" (`look.*`) nombra la pieza con su nivel y da su ataque,
+  armadura o defensa con lo que suma el refinado.
 - **La ventana** (pestaña Forja del yunque, estilo oscuro de docs/17): la pieza elegida (de
   las puestas y las de los contenedores abiertos), su nivel y el siguiente con el bono de
   cada uno, la **chance en grande** (verde si es segura, ámbar si arriesga), las piedras y el
   oro con lo que se lleva, el interruptor del ámbar cuando se lleva uno y el intento puede
-  fallar, y un **paso de confirmación** desde +5 que avisa en rojo que la pieza se puede romper.
-  El resultado del último intento queda arriba unos segundos.
+  fallar (avisa que se gasta salga bien o mal), y un **paso de confirmación** desde +5 que
+  avisa en rojo que la pieza se puede romper. Si un intento gastó el último ámbar, el
+  interruptor desaparece y el próximo intento va sin él, con su aviso de rotura. Lo que se
+  lleva (piedras, ámbar, oro) se cuenta al usar el yunque y después de cada intento, como
+  en las recetas: lo que se junta con la ventana abierta se ve al volver a usarlo. El
+  resultado del último intento queda arriba unos segundos.
 - **Pendiente:** elegir la pieza arrastrándola a la ventana (hoy se elige de la lista); una
   marca "+N" sobre los íconos del inventario (hoy la dicen la ficha y la lista de la forja);
   islas de las bandas 5 y 6 con fuentes propias de la piedra radiante.

@@ -255,7 +255,10 @@ server/
   jugador en un slot o un contenedor abierto con el nivel que vio el cliente, no ofrecida en
   el intercambio, piedras, ámbar, oro y su vuelto, el ritmo de los oficios `nextGather`),
   después gasta todo junto, tira con `ctx.Rand` y sube, baja o rompe la pieza en el mismo
-  comando, y guarda el personaje (`w.save`). Un cambio de nivel en el lugar pasa por
+  comando, y guarda el personaje (`w.save`) si el intento podía fallar (los niveles seguros
+  esperan el guardado periódico). Una pieza en un contenedor que no lleva se rechaza con
+  `refine.not_carried`. La skill del bono es dato (`forge.smithing_bonus.skill`, revisada
+  contra `skills.base` en `initForge`). "Mirar" suma lo del nivel con `refinedStat`. Un cambio de nivel en el lugar pasa por
   `setRefine` (registra la instancia que sale con sus `mods` viejos y la que entra con los
   nuevos, avisa al lugar que la tiene y, si está puesta, limpia `gearFrom` y llama a
   `equipmentChanged`); una pieza rota, por `econInstance(-1)` + `removeItem`. Lo que suma un
