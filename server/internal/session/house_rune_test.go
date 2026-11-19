@@ -20,12 +20,12 @@ import (
 // reserveGiven, docs/01 "Guardado antes del transfer"), played for real with the content
 // of data/: Ana's arc rune (arc_bolt) lies on the floor of her porch; from the street she
 // uses it on an ember wyrmling (worn down to its last hit point), the last kill of
-// flame_crater, the side quest that ends on its kill step (lote 12): its first reward, a
-// cinder amulet, does not fit (the experience after it raises the level, and with it the
-// capacity, so the gold does), so it falls at her feet on the street. One command spends a
-// charge of the rune (it changes the house) and gives the amulet away: it writes the
-// house with Ana's snapshot after both, no snapshot apart, logs nothing, and keeps the
-// amulet from Caio until that house write is confirmed.
+// flame_crater, the side quest that ends on its kill step (lote 12): its cinder amulet
+// and its coins do not fit (she has no capacity left, and at level 60 the quest's
+// experience, which comes first, raises no level and so no capacity), so they fall at her
+// feet on the street. One command spends a charge of the rune (it changes the house) and
+// gives the amulet away: it writes the house with Ana's snapshot after both, no snapshot
+// apart, logs nothing, and keeps the amulet from Caio until that house write is confirmed.
 func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 	const ana = 9801
 	porch, street, nest := pos(31, 31), pos(31, 32), pos(34, 34)
@@ -75,6 +75,7 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 		a.SetStorageForTest("quest.flame_crater.step", int64(crater.StepIndex("thin_nest")))
 		a.SetStorageForTest("quest.flame_crater.kills", int64(thin.Count-1))
 		ms[0].SetHealth(1)
+		h.w.SetLevelForTest(a, 60)   // 28 000 experience raise no level from 60
 		h.w.SetCapacityForTest(a, 0) // the amulet does not fit
 	}))
 	h.sim.Step()
@@ -91,8 +92,14 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 	if st, _ := h.w.QuestState(a, "flame_crater"); st != quest.Completed || h.w.CountItem(a, "cinder_amulet") != 0 {
 		t.Fatalf("quest %v, %d amulets carried", st, h.w.CountItem(a, "cinder_amulet"))
 	}
-	if g := h.w.GroundAt(street); len(g) != 1 || g[0].Def().Numeric != amulet {
-		t.Fatalf("the amulet did not fall at Ana's feet: %d items on %v", len(g), street)
+	at := -1 // the amulet's index among the items on the street (the coins fall too)
+	for i, it := range h.w.GroundAt(street) {
+		if it.Def().Numeric == amulet {
+			at = i
+		}
+	}
+	if at < 0 || h.w.Level(a) != 60 {
+		t.Fatalf("the amulet did not fall at Ana's feet (level %d): %d items on %v", h.w.Level(a), len(h.w.GroundAt(street)), street)
 	}
 	if g := h.w.GroundAt(porch); len(g) != 1 || g[0].Count() != 3 {
 		t.Fatalf("the rune on the porch did not spend a charge: %d items", len(g))
@@ -103,7 +110,7 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 	}
 	house := jobs0Snapshot(t, jobs[0], ana)
 	if house.Storage["quest.flame_crater"] != int64(quest.Completed) {
-		t.Fatalf("Ana's snapshot in the house write has the quest at %d", house.Storage["quest.rat_cull"])
+		t.Fatalf("Ana's snapshot in the house write has the quest at %d", house.Storage["quest.flame_crater"])
 	}
 	if strings.Contains(logged.String(), giftAndHouse) {
 		t.Fatalf("a gift reserved with the house write was logged: %q", logged.String())
@@ -111,7 +118,7 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 
 	// The amulet stays Ana's until the house write's ack, whatever older ack comes first.
 	cp := openBackpack(t, h, cc, backpack, uint32(items["backpack"].Container.Slots))
-	take := moveItem(onTile(street), uint32(amulet), 1, inContainer(cp, 0), 1)
+	take := moveItem(onTile(street), uint32(amulet), uint32(1+at), inContainer(cp, 0), 1) // 1: the street's floor
 	h.sim.Command(h.w.Saved(ana, house.Seq-1))
 	h.sim.Step()
 	if !hasKey(h.send(cc, take), "inventory.not_yours") {

@@ -20,5 +20,5 @@ steps:
     complete_when: { dialog_action: { npc: bosque_merchant, node: chitin_delivered } }
 rewards:
   - { xp: 9000 }
-  - { gold: 750 }
   - { item: antler_amulet }
+  - { gold: 750 }

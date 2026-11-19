@@ -1287,8 +1287,9 @@ el punto 5:
     con la runa, el monstruo, la quest y la recompensa de `data/`: desde el lote 12, la
     quest secundaria `flame_crater` (rama `feat/side-quests`), que termina en su paso
     `kill` (antes era una quest del test: ninguna de `data/` terminaba en una muerte). El
-    dragoncillo llega con un punto de vida y el amuleto de la recompensa cae a los pies de
-    Ana.
+    dragoncillo llega con un punto de vida y el amuleto y las monedas de la recompensa caen
+    a los pies de Ana (nivel 60 y sin capacidad: la experiencia, que va primero, no le
+    sube el nivel ni, con él, la capacidad).
 - **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:

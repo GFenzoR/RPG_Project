@@ -5,7 +5,8 @@ notes: >-
   Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
   bosque_to_volcan). Chapter 2 part 1
   ends with him: he saw where the unflagged boat landed. Since lote 12 he gives the side
-  quest ferryman_jetty (level 22): the smugglers' jetty on the east shore.
+  quest ferryman_jetty (level 22, once ch2_roots is completed: it follows that boat): the
+  smugglers' jetty on the east shore.
 dialog:
   start: greet
   nodes:
@@ -16,7 +17,11 @@ dialog:
           if: { quest_state: { quest: ch2_roots, state: in_progress, step: ask_ferryman } }
           goto: ch2_boat
         - text: npc.bosque_ferryman.opt_jetty
-          if: [{ quest_not_started: ferryman_jetty }, { level_at_least: 22 }]
+          # It follows "that unflagged boat" of Chapter 2: only for who saw it (ch2_roots).
+          if:
+            - { quest_not_started: ferryman_jetty }
+            - { level_at_least: 22 }
+            - { quest_state: { quest: ch2_roots, state: completed } }
           goto: jetty_offer
         - text: npc.bosque_ferryman.opt_jetty_help
           if: { quest_state: { quest: ferryman_jetty, state: in_progress, step: see_jetty } }

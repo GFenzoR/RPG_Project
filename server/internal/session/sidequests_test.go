@@ -108,7 +108,25 @@ func (s *sideQuester) give(id string, n int) {
 	s.cl.take()
 }
 
+// take takes n units of item id from the player (as selling them to a shop would).
+func (s *sideQuester) take(id string, n int) {
+	s.h.sim.Command(gameFunc(func() { s.h.w.TakeForTest(s.p, id, n) }))
+	s.h.sim.Step()
+	s.cl.take()
+}
+
 func (s *sideQuester) step(id string) (quest.State, string) { return s.h.w.QuestState(s.p, id) }
+
+// handInWaits fails unless quest id stays at step and npc's greeting hides the hand-in
+// option give and shows help instead: a step done does not go back when the player sells
+// what it asked for (docs/06 "Quest"), so the hand-in repeats its has_item.
+func (s *sideQuester) handInWaits(npc, id, step, give, help string) {
+	s.h.t.Helper()
+	d := s.talk(npc)
+	if st, at := s.step(id); st != quest.InProgress || at != step || hasOption(d, give) || !hasOption(d, help) {
+		s.h.t.Fatalf("%s without what it asks: %v at %q, hand-in shown %v, help shown %v", id, st, at, hasOption(d, give), hasOption(d, help))
+	}
+}
 
 // accept takes quest id from npc's offer option at the player's level.
 func (s *sideQuester) accept(npc, offer, id, first string) {
@@ -170,15 +188,25 @@ func (s *sideQuester) rewarded(id string, xp, money, wantXP, wantGold int64) {
 	}
 }
 
-// Tavin's jetty (ferryman_jetty, level 22): see the smugglers' jetty (a reach step: one
-// tile short of it does not count), clear the crawlers of the cave, report to Tavin.
+// Tavin's jetty (ferryman_jetty, level 22, after Chapter 2's ch2_roots: it follows "that
+// unflagged boat"): see the smugglers' jetty (a reach step: one tile short of it does not
+// count), clear the crawlers of the cave, report to Tavin.
 func TestFerrymanJettySideQuest(t *testing.T) {
 	h := sideQuestHarness(t)
 	s := newSideQuester(t, h, 941, 21)
+	h.sim.Command(gameFunc(func() { s.p.SetStorageForTest("quest.ch2_roots", int64(quest.Completed)) }))
+	h.sim.Step()
 	if s.offers("bosque_ferryman", "npc.bosque_ferryman.opt_jetty") {
 		t.Fatal("offered at level 21")
 	}
 	s.setLevel(22)
+	h.sim.Command(gameFunc(func() { s.p.SetStorageForTest("quest.ch2_roots", int64(quest.InProgress)) }))
+	h.sim.Step()
+	if s.offers("bosque_ferryman", "npc.bosque_ferryman.opt_jetty") {
+		t.Fatal("offered before ch2_roots is completed (who never saw the unflagged boat)")
+	}
+	h.sim.Command(gameFunc(func() { s.p.SetStorageForTest("quest.ch2_roots", int64(quest.Completed)) }))
+	h.sim.Step()
 	s.accept("bosque_ferryman", "npc.bosque_ferryman.opt_jetty", "ferryman_jetty", "see_jetty")
 	if d, _ := s.say(s.talk("bosque_ferryman"), "npc.bosque_ferryman.opt_jetty_help"); d.Text.Key != "npc.bosque_ferryman.jetty_where" {
 		t.Fatalf("where is the jetty: %s", d.Text.Key)
@@ -249,6 +277,13 @@ func TestTannerChitinSideQuest(t *testing.T) {
 	if _, step := s.step("tanner_chitin"); step != "deliver" {
 		t.Fatalf("with everything the step is %q", step)
 	}
+	// Two chitin sold after the step, then one heartwood: no hand-in until all are back.
+	s.take("crawler_chitin", 2)
+	s.handInWaits("bosque_merchant", "tanner_chitin", "deliver", "npc.bosque_merchant.opt_chitin_give", "npc.bosque_merchant.opt_chitin_help")
+	s.give("crawler_chitin", 2)
+	s.take("thorn_heartwood", 1)
+	s.handInWaits("bosque_merchant", "tanner_chitin", "deliver", "npc.bosque_merchant.opt_chitin_give", "npc.bosque_merchant.opt_chitin_help")
+	s.give("thorn_heartwood", 1)
 	xp, money := s.p.Experience(), h.w.Money(s.p)
 	d, evs := s.say(s.talk("bosque_merchant"), "npc.bosque_merchant.opt_chitin_give")
 	if d.Text.Key != "npc.bosque_merchant.chitin_delivered" || !messageKeys(evs)["dialog.quest_completed"] {
@@ -287,6 +322,10 @@ func TestCaptainFendersSideQuest(t *testing.T) {
 	if _, step := s.step("captain_fenders"); step != "deliver_pelts" {
 		t.Fatalf("after ten salamanders, pelts in the pack, the step is %q", step)
 	}
+	// A pelt sold after the step: no hand-in until the five are back.
+	s.take("ash_pelt", 1)
+	s.handInWaits("volcan_ferryman", "captain_fenders", "deliver_pelts", "npc.volcan_ferryman.opt_fenders_give", "npc.volcan_ferryman.opt_fenders_help")
+	s.give("ash_pelt", 1)
 	xp, money := s.p.Experience(), h.w.Money(s.p)
 	d, evs := s.say(s.talk("volcan_ferryman"), "npc.volcan_ferryman.opt_fenders_give")
 	if d.Text.Key != "npc.volcan_ferryman.fenders_delivered" || !messageKeys(evs)["dialog.quest_completed"] || h.w.CountItem(s.p, "ash_pelt") != 0 {
@@ -361,16 +400,30 @@ func TestFlameCraterSideQuest(t *testing.T) {
 	if st, step := s.step("flame_crater"); st != quest.InProgress || step != "thin_nest" {
 		t.Fatalf("after five wyrmlings: %v at %q", st, step)
 	}
+	// The rewards come in their written order, the experience first: a player a thousand
+	// points short of level 46, with no capacity left, levels up with the quest's
+	// experience (the wyrmling's own is not enough), and the amulet and the coins fit the
+	// capacity of the new level instead of falling to the floor of the crater.
+	bal, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.sim.Command(gameFunc(func() {
+		h.w.GainExperienceForTest(s.p, bal.Experience.TotalFor(46)-1000-s.p.Experience())
+		h.w.SetCapacityForTest(s.p, 0)
+	}))
+	h.sim.Step()
+	s.cl.take()
 	xp, money := s.p.Experience(), h.w.Money(s.p)
 	s.hunt("ember_wyrmling", 1, "embersteel_sabre", "embersteel_shield", s.p.Pos())
 	// The last kill's own experience comes with the reward (420 for a wyrmling alone).
 	if st, _ := s.step("flame_crater"); st != quest.Completed || h.w.Money(s.p)-money != 1800 ||
-		s.p.Experience()-xp < 28000 || s.p.Experience()-xp > 28000+420 {
-		t.Fatalf("the last kill: %v, +%d coins, +%d xp", st, h.w.Money(s.p)-money, s.p.Experience()-xp)
+		s.p.Experience()-xp < 28000 || s.p.Experience()-xp > 28000+420 || h.w.Level(s.p) != 46 {
+		t.Fatalf("the last kill: %v, +%d coins, +%d xp, level %d", st, h.w.Money(s.p)-money, s.p.Experience()-xp, h.w.Level(s.p))
 	}
 	amulets := h.w.ItemsForTest(s.p, "cinder_amulet")
-	if len(amulets) != 1 {
-		t.Fatalf("%d cinder amulets", len(amulets))
+	if len(amulets) != 1 || len(h.w.GroundAt(s.p.Pos())) != 0 {
+		t.Fatalf("%d cinder amulets carried, %d items at the feet", len(amulets), len(h.w.GroundAt(s.p.Pos())))
 	}
 	checkRolled(t, attrPool(t), s.items["cinder_amulet"], amulets[0].Mods())
 	d := s.talk("volcan_priest")

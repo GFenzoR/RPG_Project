@@ -702,8 +702,10 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`. Se dan en
   el orden escrito (los `set_flag` al final). La experiencia puede subir el nivel, y con
   él la capacidad: un item escrito antes cae a los pies de quien no lo podía cargar, uno
-  escrito después ya entra (`flame_crater` pone su amuleto primero). Una quest que termina
-  en un paso `kill` paga donde está el jugador, sin volver al NPC.
+  escrito después ya entra. Por eso la experiencia va primero, después el item y al final
+  el oro (`sim/balance_tasks_test.go`, `TestQuestRewardOrder`, lo exige a toda quest de
+  `data/`). Una quest que termina en un paso `kill` paga donde está el jugador, sin volver
+  al NPC.
 - `quest_state` con `step` se cumple si la quest está `in_progress` y su paso actual es ese.
 - `set_quest_step` lleva una quest `in_progress` a un paso, adelante o atrás: el paso pasa
   a ser el actual como cualquier otro (su conteo de `kill` empieza en 0 y `has_item`,

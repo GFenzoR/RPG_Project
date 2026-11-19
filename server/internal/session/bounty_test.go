@@ -103,9 +103,10 @@ func TestBountyTaskCooldown(t *testing.T) {
 	}
 }
 
-// Every task of both boards, against data/: hidden below its level and offered from it,
-// paid exactly its rewards (xp and gold, never an item), every 20 hours, and the board of
-// one hunter never shows the other's.
+// Every task of both boards, against data/: hidden below its level and offered from it by
+// its hunter, paid exactly its rewards (xp and gold, never an item), every 20 hours. That
+// no other NPC gives it (the other hunter's board included) is TestTaskRewards' (sim):
+// one NPC alone starts each task.
 func TestBountyBoards(t *testing.T) {
 	h := bountyHarness(t)
 	quests := realQuests(t)
@@ -129,12 +130,8 @@ func TestBountyBoards(t *testing.T) {
 			}
 			xp, gold = xp+r.XP, gold+r.Gold
 		}
-		other := "volcan_hunter"
-		if tk.hunter == other {
-			other = "bosque_hunter"
-		}
-		if hasOption(s.board(tk.hunter), opt) || hasOption(s.board(other), fmt.Sprintf("npc.%s.opt_%s", other, tk.prey)) {
-			t.Fatalf("%s offered below level %d, or by the other hunter", id, q.MinLevel)
+		if hasOption(s.board(tk.hunter), opt) {
+			t.Fatalf("%s offered below level %d", id, q.MinLevel)
 		}
 		s.setLevel(q.MinLevel)
 		d, _ := s.say(s.board(tk.hunter), opt)

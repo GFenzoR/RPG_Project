@@ -2192,17 +2192,18 @@ juego del lote 10: entre `ch2_coffer` (20) y `ch3_embers` (30), y después del c
 (40), solo se cazaba. Cinco quests secundarias llenan esos huecos con NPCs que ya estaban
 en los pueblos y que no daban encargos. Todo en datos (`data/quests/*.yaml`, los diálogos
 de `data/npcs/`); las ofrece la opción del NPC desde su nivel (`level_at_least`) y sin la
-quest empezada.
+quest empezada. `ferryman_jetty` pide además `ch2_roots` completada (`quest_state`): sigue
+al "bote sin bandera" del Capítulo 2, y quien no lo vio no entendería el encargo.
 
 | Isla | Niveles | Quest | La da | Pasos | Recompensa |
 |---|---|---|---|---|---|
 | Puerto | 8 | `diver_locket` "Lo que el mar se llevó" | Corvo, el buzo | un relicario de los saqueadores, entregarlo | 900 XP, 200 monedas |
 | Puerto | 10 | `foreman_ore` "Hierro de las vetas viejas" | Doran Pike, el capataz | 5 minerales de hierro, entregarlos | 1200 XP, un pico |
-| Bosque | 22–25 | `ferryman_jetty` "Luces en la costa este" | Tavin Rema, el barquero | llegar al embarcadero de los contrabandistas (`reach`), matar 12 reptantes huecos en la cueva de al lado, contárselo | 7000 XP, 700 monedas |
-| Bosque | 25–28 | `tanner_chitin` "Cuero de quitina" | Gisla, la curtidora | 8 quitinas de reptante, 4 corazones de espino, entregarlos juntos | 9000 XP, 750 monedas, un amuleto de asta |
+| Bosque | 22–25 | `ferryman_jetty` "Luces en la costa este" (con `ch2_roots` completada) | Tavin Rema, el barquero | llegar al embarcadero de los contrabandistas (`reach`), matar 12 reptantes huecos en la cueva de al lado, contárselo | 7000 XP, 700 monedas |
+| Bosque | 25–28 | `tanner_chitin` "Cuero de quitina" | Gisla, la curtidora | 8 quitinas de reptante, 4 corazones de espino, entregarlos juntos | 9000 XP, un amuleto de asta, 750 monedas |
 | Volcán | 30–33 | `captain_fenders` "Defensas que no arden" | Nerea Vado, la capitana | matar 10 salamandras de brasa, 5 pieles de sabueso de ceniza, entregarlas | 13 000 XP, 900 monedas |
-| Volcán | 42–45 | `smith_ring` "El anillo de obsidiana" | Bram Tizón, el herrero | 5 núcleos de escoria, entregarlos, pedirle a Madre Oriela una brasa de la Llama Quieta (`flag_equals`: su opción pone el flag), volver por el anillo | 25 000 XP, 1500 monedas, un anillo de obsidiana |
-| Volcán | 45–48 | `flame_crater` "La llama del cráter" | Madre Oriela, la sacerdotisa | llegar a la orilla del lago de lava del cráter (`reach`), matar 6 dragoncillos de ascua: **termina en esa muerte** | 28 000 XP, 1800 monedas, un amuleto de brasa |
+| Volcán | 42–45 | `smith_ring` "El anillo de obsidiana" | Bram Tizón, el herrero | 5 núcleos de escoria, entregarlos, pedirle a Madre Oriela una brasa de la Llama Quieta (`flag_equals`: su opción pone el flag), volver por el anillo | 25 000 XP, un anillo de obsidiana, 1500 monedas |
+| Volcán | 45–48 | `flame_crater` "La llama del cráter" | Madre Oriela, la sacerdotisa | llegar a la orilla del lago de lava del cráter (`reach`), matar 6 dragoncillos de ascua: **termina en esa muerte** | 28 000 XP, un amuleto de brasa, 1800 monedas |
 
 Con la línea principal, la secuencia queda: 15 `ch2_roots`, 20 `ch2_coffer`, 22 y 25 las
 del Bosque, 30 `ch3_embers` y `captain_fenders`, 35 `ch3_gate`, 40 `ch3_warden`, 42 y 45
@@ -2222,10 +2223,12 @@ de la banda siguiente.
 - **Equipo:** a lo sumo un equipable por quest, de una banda que ya se consigue y que se
   puede llevar a su nivel; tira su atributo como cualquier pieza creada ("Atributos de
   items"). El anillo de obsidiana era solo botín raro: es la primera fuente segura. Va
-  primero en la lista de recompensas, que se dan en orden: la experiencia puede subir el
-  nivel, y con él la capacidad, y así el item cae a los pies de quien no lo podía cargar
-  antes de cobrar (lo juega `TestHouseRuneKillsAQuestMonsterFromTheStreet` con
-  `flame_crater`).
+  después de la experiencia y antes del oro en la lista de recompensas, que se dan en
+  orden: la experiencia puede subir el nivel, y con él la capacidad, así que quien no
+  podía cargar el item antes de cobrar lo recibe en la mochila y no en el suelo (que en
+  `flame_crater` es el cráter, entre dragoncillos). Lo juega `TestFlameCraterSideQuest`, y
+  `sim/balance_tasks_test.go` (`TestQuestRewardOrder`) exige a toda quest de `data/` la
+  experiencia, el item y el oro en ese orden.
 - **Lo que piden:** todo `has_item` tiene una fuente a 4 niveles o menos de la quest
   (`TestPuertoBalance`, "quest items near the quest level"): quitina (reptante, 24), corazón de espino
   (espinoso, 20), piel de sabueso (27), núcleo de escoria (gólem, 41). Ninguna pide un item
@@ -2246,7 +2249,10 @@ de la banda siguiente.
 - **Música:** ninguna tiene música propia (`music` de la quest): el cráter es el lugar que
   la merecería si hay un tema para él.
 - **Tests:** un test de sesión por quest (`session/sidequests_test.go`: oferta por nivel,
-  cada paso, entrega, recompensas y la tirada de los equipables) y el de las recompensas.
+  cada paso, entrega, recompensas y la tirada de los equipables; en `tanner_chitin` y
+  `captain_fenders`, que la entrega se esconde y no completa nada si el jugador vendió lo
+  que pedía después de cumplir el paso, y en `flame_crater`, que la subida de nivel de la
+  recompensa hace entrar el amuleto) y el de las recompensas.
 
 ### Tareas (lote 12)
 Tareas de caza repetibles (`repeatable`, "Diario de misiones y tareas"): una razón para
@@ -2270,8 +2276,10 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
   `quest_state` `available` y su nivel), se cumple con las muertes (el diario las cuenta)
   y se cobra con el mismo NPC. Cobrada, la opción lleva a "ya la cobraste" hasta **20
   horas** después de la entrega (el reloj del servidor; `cooling_down`) y después vuelve a
-  ofrecerse, desde cero. En curso no aparece en el tablón: está en el diario. Se pueden
-  tener las tres de un NPC a la vez.
+  ofrecerse, desde cero. La espera es de cada jugador y empieza al cobrar (no hay un
+  tablón que se renueva para todos a una hora), y así lo dicen el tablón y el libro. En
+  curso no aparece en el tablón: está en el diario. Se pueden tener las tres de un NPC a
+  la vez.
 - **Cuánto pagan, y por qué:** una tarea suma como mucho alrededor de un cuarto de lo que
   ya da una hora de cazar ahí, en experiencia y en oro; hoy, un quinto. La hora es la de
   la simulación de balance, al nivel objetivo de la presa (`TestVolcanBalance` y
@@ -2289,11 +2297,13 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
 - **Por qué esas presas:** cada isla tiene una tarea al principio, al medio y al final de
   sus niveles (el Bosque del 15 al 26, el Volcán del 26 al 58). Los contrabandistas siguen
   volviendo a la costa este después del Capítulo 2, y el libro de Brasal paga por lo que
-  baja de la montaña desde que la forja despertó.
+  baja de la montaña desde que la forja vieja despertó (el comienzo del Capítulo 3: el
+  texto lo cuenta, así se entiende sin haberlo jugado).
 - **Tests:** `session/bounty_test.go` juega la de los reptantes con muertes reales y el
   reloj del loop (oferta desde el 22, la muerte 30, el pago, el diario con "disponible otra
   vez", la espera de 20 horas al minuto y el segundo turno desde cero) y recorre las seis
-  contra `data/` (nivel, pago exacto, sin items, la espera).
+  contra `data/` (nivel, pago exacto, sin items, la espera); `TestTaskRewards` exige que
+  un solo NPC dé cada tarea (el tablón de un cazador nunca muestra las del otro).
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).

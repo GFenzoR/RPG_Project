@@ -7,8 +7,8 @@ package sim_test
 //
 //   - A task (a repeatable quest of a real island) adds at most a quarter, and at least a
 //     tenth, to the experience and the loot an hour of its hunt gives, once every 20 hours
-//     or more, and pays no item an NPC buys for more than its gold (it would pay more than
-//     it says).
+//     or more, pays no item an NPC buys for more than its gold (it would pay more than it
+//     says), and one NPC alone gives it.
 //   - A side quest of lote 12 pays 10-15 % of the experience of its band (its level and
 //     the three after it), gold worth 4-10 minutes of its reference hunt's loot, and at
 //     most one equipable, of an obtainable band and wearable at its level.
@@ -110,8 +110,8 @@ func TestTaskRewards(t *testing.T) {
 			continue
 		}
 		tasks++
-		if len(by[id]) == 0 {
-			t.Errorf("%s: no NPC gives it", id)
+		if len(by[id]) != 1 { // one board per task: two would show the same task twice
+			t.Errorf("%s: %d NPCs give it (want one)", id, len(by[id]))
 		}
 		if q.Repeatable.CooldownHours < 20 {
 			t.Errorf("%s: a %.2f-hour cooldown (the quarter of an hour is per day: 20 hours or more)", id, q.Repeatable.CooldownHours)
@@ -149,6 +149,34 @@ func TestTaskRewards(t *testing.T) {
 	}
 	if tasks < 4 {
 		t.Errorf("only %d hunting tasks", tasks)
+	}
+}
+
+// TestQuestRewardOrder: a quest's rewards are given in their written order, and its
+// experience can raise the level, and with it the capacity (docs/06 "Quest"). In every
+// quest of data/ the experience comes first, then the item, then the gold: an item written
+// before the experience falls at the feet of a player who could carry it after the
+// level-up (TestFlameCraterSideQuest plays it), maybe in the middle of a hunt, and coins
+// written before it would take the room the one piece needs.
+func TestQuestRewardOrder(t *testing.T) {
+	quests, err := content.LoadQuests(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range slices.Sorted(maps.Keys(quests)) {
+		item, gold := "", false
+		for _, r := range quests[id].Rewards {
+			switch {
+			case r.Item != "" && gold:
+				t.Errorf("%s gives its gold before %s (the item goes first)", id, r.Item)
+			case r.Item != "" && item == "":
+				item = r.Item
+			case r.Gold > 0:
+				gold = true
+			case r.XP > 0 && item != "":
+				t.Errorf("%s gives %s before its experience (the experience goes first)", id, item)
+			}
+		}
 	}
 }
 

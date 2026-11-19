@@ -141,11 +141,15 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      entrega con `psql` sobre la base de `make play`: `UPDATE quest_state SET value = value
      - 72000 WHERE character_id = <id> AND key = 'quest.bounty_crawlers.done_at'` (o la que
      sea). Las quests secundarias del lote 12 (docs/02 "Quests secundarias") las dan Tavin y
-     Gisla en Raigal y Nerea, Bram y Madre Oriela en Brasal.
+     Gisla en Raigal y Nerea, Bram y Madre Oriela en Brasal. La de Tavin (`ferryman_jetty`)
+     pide además `ch2_roots` (Capítulo 2) completada; sin jugarlo, con el personaje
+     fuera del juego: `INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
+     'quest.ch2_roots', 2)`.
    - **Llegar a un lugar** (un paso `reach`): hay tres, todos fuera de esta isla:
      `reach_gate` de `ch3_gate` (la antesala de la puerta sellada, en la mina de la Isla
      Volcánica), `see_jetty` de `ferryman_jetty` (el embarcadero de los contrabandistas,
-     `/tp 4253 6140 7`, dos casillas al oeste de las tablas: un paso al este lo cumple) y
+     `/tp 4253 6140 7`, justo al oeste de las tablas, que en esa fila empiezan en 4254: un
+     paso al este lo cumple) y
      `reach_heart` de `flame_crater` (la orilla del lago de lava del cráter, alrededor de
      3714,5756). El de la mina, paso a paso: para verlo sin jugar los capítulos, con el
      personaje fuera del juego, ponle la quest en ese paso con `psql` sobre la base de
