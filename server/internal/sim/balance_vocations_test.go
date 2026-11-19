@@ -72,60 +72,98 @@ type hunterKit struct {
 	shield       string // "" with a two-handed weapon
 }
 
-// armorAt is the armor and shield the islands' shops sell at level (the guardian's kit:
-// no armor piece is limited to a vocation, content audit m6).
+// armorAt is the armor and shield of the guardian's kit at level (kitFor): the ranger's
+// too, the other vocation the heavy torso pieces of the compact catalog are for (lote 11).
 func armorAt(level int) ([]string, string) {
-	k := volcanKit(level)
+	k := kitFor(level)
 	return k.armor, k.shield
 }
 
-// casterKit: the wand or staff line of each caster (content audit M3, m5).
-func casterKit(voc string, level int) hunterKit {
-	type tier struct {
-		from   int
-		weapon string
+// robesAt is a caster's armor at level: the guardian's kit with the light torso line of
+// the catalog (the robes) in place of the heavy one, and the same shield.
+func robesAt(level int) ([]string, string) {
+	switch {
+	case level >= 30:
+		return []string{"embersteel_helm", "ashweave_robe", "embersteel_greaves", "embersteel_sabatons", "cinder_amulet"},
+			"embersteel_shield"
+	case level >= 15:
+		return []string{"stagleather_hood", "mossweave_robe", "stagleather_leggings", "stagleather_boots", "antler_amulet"},
+			"elmwood_shield"
 	}
-	lines := map[string][]tier{
-		"arcanist": {{1, "spark_wand"}, {6, "coral_wand"}, {16, "stormglass_wand"}, {32, "obsidian_wand"}},
-		"druid":    {{1, "sapling_staff"}, {6, "rimewood_staff"}, {16, "hoarfrost_staff"}, {32, "blackfrost_staff"}},
-	}
-	k := hunterKit{}
-	for _, t := range lines[voc] {
+	return armorAt(level) // bands 1 and 2: the same clothes for everyone
+}
+
+// tier is a weapon of a line from its band's level.
+type tier struct {
+	from   int
+	weapon string
+}
+
+// weaponAt is the weapon of line at level.
+func weaponAt(line []tier, level int) string {
+	w := ""
+	for _, t := range line {
 		if level >= t.from {
-			k.weapon = t.weapon
+			w = t.weapon
 		}
 	}
-	k.armor, k.shield = armorAt(level)
+	return w
+}
+
+// casterLines: the wand and staff lines of the casters, one per band (lote 11).
+var casterLines = map[string][]tier{
+	"arcanist": {{1, "spark_wand"}, {5, "coral_wand"}, {10, "stormglass_wand"}, {30, "obsidian_wand"}},
+	"druid":    {{1, "sapling_staff"}, {5, "rimewood_staff"}, {10, "hoarfrost_staff"}, {30, "blackfrost_staff"}},
+}
+
+// casterKit: the wand or staff line of each caster (content audit M3, m5) and the robes.
+func casterKit(voc string, level int) hunterKit {
+	k := hunterKit{weapon: weaponAt(casterLines[voc], level)}
+	k.armor, k.shield = robesAt(level)
 	return k
 }
 
+// bowLine and crossbowLine: the ranger's bows (two hands, no shield) and crossbows. The
+// band 2 longbow asks for level 5, but a young ranger pays arrows out of a gull's loot: the
+// hunts of these careers pay its 150 coins by level 8, so it buys it there (with it at 5 the
+// wolves never wound it enough for ranger_mend, a spell of level 4).
+var (
+	bowLine      = []tier{{1, "short_bow"}, {8, "yew_longbow"}, {10, "thornwood_longbow"}, {30, "embersteel_longbow"}}
+	crossbowLine = []tier{{10, "smuggler_crossbow"}, {30, "embersteel_crossbow"}}
+)
+
 // bowKit: the ranger's two-handed bows (no shield).
 func bowKit(level int) hunterKit {
-	k := hunterKit{weapon: "short_bow", ammo: "arrow"}
-	switch {
-	case level >= 32:
-		k.weapon = "embersteel_longbow"
-	case level >= 16:
-		k.weapon = "thornwood_longbow"
-	case level >= 8:
-		k.weapon = "yew_longbow"
-	}
+	k := hunterKit{weapon: weaponAt(bowLine, level), ammo: "arrow"}
 	k.armor, _ = armorAt(level)
 	return k
 }
 
 // crossbowKit: the ranger's one-handed crossbows and a shield (content audit M4); before
-// the first crossbow (level 12) it is the bow kit.
+// the first crossbow (band 3, level 10) it is the bow kit.
 func crossbowKit(level int) hunterKit {
-	if level < 12 {
+	if level < crossbowLine[0].from {
 		return bowKit(level)
 	}
-	k := hunterKit{weapon: "smuggler_crossbow", ammo: "bolt"}
-	if level >= 34 {
-		k.weapon = "embersteel_crossbow"
-	}
+	k := hunterKit{weapon: weaponAt(crossbowLine, level), ammo: "bolt"}
 	k.armor, k.shield = armorAt(level)
 	return k
+}
+
+// TestVocationKitsAreTheCatalogs: every kit of the careers is wearable at its level by
+// its vocation (TestGuardianKitIsTheCatalogs does the guardian's).
+func TestVocationKitsAreTheCatalogs(t *testing.T) {
+	d := loadData(t)
+	for level := 1; level < careerTo; level++ {
+		for voc, kit := range map[string]hunterKit{
+			"arcanist": casterKit("arcanist", level), "druid": casterKit("druid", level),
+			"ranger": crossbowKit(level),
+		} {
+			d.wearable(t, voc, level, append([]string{kit.weapon, kit.shield}, kit.armor...)...)
+		}
+		b := bowKit(level)
+		d.wearable(t, "ranger", level, append([]string{b.weapon}, b.armor...)...)
+	}
 }
 
 // commonTargets is every common monster of the three islands and its target level.
@@ -651,7 +689,7 @@ func TestVocationCareers(t *testing.T) {
 	d := loadData(t)
 	// The guardian's career is the yardstick: the same harness with its melee kit.
 	guardianKit := func(level int) hunterKit {
-		k := volcanKit(level)
+		k := kitFor(level)
 		return hunterKit{weapon: k.weapon, armor: k.armor, shield: k.shield}
 	}
 	guardian := d.runCareer(t, "guardian", guardianKit)

@@ -68,15 +68,56 @@ type kit struct {
 	shield string
 }
 
-// kitFor is what the island's shops and loot provide at each level.
+// kitFor is the guardian's kit at each level: the band of the compact catalog it has
+// reached (lote 11, docs/02 "Catálogo de equipo"), what the shops of the three islands sell
+// or smith. A new character wears the tunic and the barrel lid; the cap, trousers and boots
+// of band 1 come with the first coins, at level 5 with the band 2 sword and shield. Band 3
+// brings its weapons at level 10 and its armor, shield and amulet at 15; band 4 everything
+// at 30. The rings are rare loot (and band 3 and 4 ones carry no armor): out of the kit.
 func kitFor(level int) kit {
+	band1 := []string{"sailcloth_cap", "patched_tunic", "canvas_trousers", "tarred_boots"}
 	switch {
+	case level >= 30:
+		return kit{"embersteel_sabre", []string{"embersteel_helm", "embersteel_cuirass", "embersteel_greaves",
+			"embersteel_sabatons", "cinder_amulet"}, "embersteel_shield"}
+	case level >= 15:
+		return kit{"boarding_saber", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings",
+			"stagleather_boots", "antler_amulet"}, "elmwood_shield"}
 	case level >= 10:
-		return kit{"boarding_saber", []string{"sailcloth_cap", "leather_jerkin", "canvas_trousers", "tarred_boots"}, "riveted_round_shield"}
+		return kit{"boarding_saber", band1, "plank_shield"}
 	case level >= 5:
-		return kit{"iron_sword", []string{"sailcloth_cap", "patched_tunic", "canvas_trousers", "tarred_boots"}, "plank_shield"}
+		return kit{"iron_sword", band1, "plank_shield"}
 	default:
 		return kit{"rusty_cutlass", []string{"patched_tunic"}, "barrel_lid_shield"}
+	}
+}
+
+// wearable fails t unless a character of voc and level can wear every item of ids: it is
+// in the catalog (not retired) and asks for no more level and no other vocation. The kits
+// of the balance sims are the catalog's, not a wish list.
+func (d *balanceData) wearable(t *testing.T, voc string, level int, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		it := d.item(t, id)
+		switch {
+		case it.Retired:
+			t.Errorf("level %d %s kit: %s is retired", level, voc, id)
+		case it.Requires.Level > level:
+			t.Errorf("level %d %s kit: %s asks for level %d", level, voc, id, it.Requires.Level)
+		case len(it.Requires.Vocations) > 0 && !slices.Contains(it.Requires.Vocations, voc):
+			t.Errorf("level %d %s kit: %s is for %v", level, voc, id, it.Requires.Vocations)
+		}
+	}
+}
+
+func TestGuardianKitIsTheCatalogs(t *testing.T) {
+	d := loadData(t)
+	for level := 1; level <= 60; level++ {
+		k := kitFor(level)
+		d.wearable(t, "guardian", level, append([]string{k.weapon, k.shield}, k.armor...)...)
 	}
 }
 

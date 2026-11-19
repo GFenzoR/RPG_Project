@@ -1,7 +1,8 @@
 package sim_test
 
 // Balance check for the Isla del Bosque bestiary (levels 10-30, Chapter 2, T3.6), with the
-// same Monte Carlo duel as TestPuertoBalance and the kit the forest town sells or crafts.
+// same Monte Carlo duel as TestPuertoBalance and the catalog's kit (kitFor: band 3, whose
+// weapons Puerto sells from level 10 and whose armor the forest town sells or crafts).
 //
 // Targets: each monster lasts 5-15 s and costs 10-40 % of max health at its target level;
 // XP grows with the target level; hunting the island's best monster takes a guardian from
@@ -18,21 +19,6 @@ var bosqueTargetLevel = map[string]int{
 	"coffer_smuggler": 16,
 	"thornling":       20,
 	"hollow_crawler":  24,
-}
-
-// bosqueKit is what Puerto and the forest town (shop and elm recipes) provide; the hood
-// and the boots arrived with the content audit (M3, 2026-11).
-func bosqueKit(level int) kit {
-	switch {
-	case level >= 16:
-		return kit{"thornwood_blade", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings", "stagleather_boots"}, "elmwood_shield"}
-	case level >= 14:
-		return kit{"boarding_saber", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings", "stagleather_boots"}, "elmwood_shield"}
-	case level >= 12:
-		return kit{"boarding_saber", []string{"sailcloth_cap", "leather_jerkin", "stagleather_leggings", "tarred_boots"}, "elmwood_shield"}
-	default:
-		return kitFor(level)
-	}
 }
 
 func TestBosqueBalance(t *testing.T) {
@@ -55,10 +41,10 @@ func TestBosqueBalance(t *testing.T) {
 				t.Errorf("unknown monster %s", id)
 				continue
 			}
-			s := d.simulateWith(t, m, level, bosqueKit(level))
+			s := d.simulateWith(t, m, level, kitFor(level))
 			if debug {
 				t.Logf("%-17s lvl %2d  %5.1f s  %5.1f %% hp  %6.0f xp/h  loot %.1f",
-					id, level, s.seconds, s.damagePct, d.xpPerHourWith(t, m, level, bosqueKit(level)), d.lootValue(t, m))
+					id, level, s.seconds, s.damagePct, d.xpPerHourWith(t, m, level, kitFor(level)), d.lootValue(t, m))
 			}
 			if s.seconds < 5 || s.seconds > 15 || s.damagePct < 10 || s.damagePct > 40 {
 				t.Errorf("%s at level %d: %.1f s (want 5-15), %.1f %% health (want 10-40)",
@@ -85,7 +71,7 @@ func TestBosqueBalance(t *testing.T) {
 				best := 0.0
 				for id, tl := range bosqueTargetLevel {
 					if tl <= lvl {
-						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, bosqueKit(lvl)))
+						best = max(best, d.xpPerHourWith(t, d.monsters[id], lvl, kitFor(lvl)))
 					}
 				}
 				h += float64(cv.TotalFor(lvl+1)-cv.TotalFor(lvl)) / best

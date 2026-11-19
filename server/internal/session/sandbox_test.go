@@ -709,7 +709,7 @@ func TestSandboxProvisioner(t *testing.T) {
 	for _, b := range []struct {
 		id string
 		n  uint32
-	}{{"short_bow", 1}, {"arrow", 60}, {"hide_vest", 1}, {"sailcloth_cap", 1}, {"canvas_trousers", 1},
+	}{{"short_bow", 1}, {"arrow", 60}, {"patched_tunic", 1}, {"sailcloth_cap", 1}, {"canvas_trousers", 1},
 		{"tarred_boots", 1}, {"seaweed_poultice", 2}, {"ship_biscuit", 5}, {"rope", 1}, {"pruebas_key", 1}} {
 		shop.buy(b.id, b.n) // each purchase checks its price
 	}
@@ -719,7 +719,7 @@ func TestSandboxProvisioner(t *testing.T) {
 	for _, slot := range []struct {
 		id   string
 		slot pb.EquipmentSlot
-	}{{"short_bow", slotRight}, {"arrow", pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO}, {"hide_vest", slotArmor},
+	}{{"short_bow", slotRight}, {"arrow", pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO}, {"patched_tunic", slotArmor},
 		{"sailcloth_cap", slotHead}, {"canvas_trousers", pb.EquipmentSlot_EQUIPMENT_SLOT_LEGS},
 		{"tarred_boots", pb.EquipmentSlot_EQUIPMENT_SLOT_FEET}} {
 		s.equip(cl, p, slot.id, slot.slot)
@@ -912,12 +912,12 @@ func TestSandboxPens(t *testing.T) {
 
 	// Pen 2, wolves: a level 8 ranger with a short bow and arrows.
 	cl, p = s.hero(5102, "Arquera", "ranger", 0, 1, 1, gear{"short_bow", 1, slotRight}, gear{"arrow", 100, slotAmmo},
-		gear{"hide_vest", 1, slotArmor}, gear{"seaweed_poultice", 5, 0})
+		gear{"patched_tunic", 1, slotArmor}, gear{"seaweed_poultice", 5, 0})
 	report("pen 2 (ranger 8)", s.huntForLoot("wolf", penGap(2), penAway(2), 10, fighter{cl: cl, p: p}))
 
 	// Pen 3, boars and a spider: a level 20 arcanist with a coral wand.
 	cl, p = s.hero(5103, "Maga", "arcanist", 2, 0, 1, gear{"coral_wand", 1, slotRight},
-		gear{"leather_jerkin", 1, slotArmor}, gear{"seaweed_poultice", 10, 0})
+		gear{"mossweave_robe", 1, slotArmor}, gear{"seaweed_poultice", 10, 0})
 	report("pen 3 (arcanist 20)", s.huntForLoot("bristleback_boar", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 	report("pen 3 (arcanist 20)", s.huntForLoot("moss_spider", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 
@@ -927,7 +927,7 @@ func TestSandboxPens(t *testing.T) {
 	// of pen 4 would bring the other thornling along to the wyrmling (monsters follow out
 	// of their pen), and those two together kill a druid.
 	druid := func(id int64, name string) fighter {
-		cl, p := s.hero(id, name, "druid", 29, 0, 1, gear{"sapling_staff", 1, slotRight}, gear{"hide_vest", 1, slotArmor})
+		cl, p := s.hero(id, name, "druid", 29, 0, 1, gear{"sapling_staff", 1, slotRight}, gear{"mossweave_robe", 1, slotArmor})
 		s.casters[p] = func(target uint32) { s.input(cl, castAt("frost_lance", target)) }
 		return fighter{cl: cl, p: p}
 	}
@@ -1788,7 +1788,7 @@ func TestSandboxToolsHaveAUse(t *testing.T) {
 
 // TestSandboxTraining: the instructor's experience raises the level, not the skills, and
 // her training raises the skills. A guardian of level 21 with the provisioner's iron
-// sword, plank shield, jerkin, cap and 20 poultices dies in pen 4 with sword and shield
+// sword, plank shield, stag-leather coat, cap and 20 poultices dies in pen 4 with sword and shield
 // at 10; the same guardian trained for combat (sword, axe and club 45, shield 40, magic
 // level 2) kills a thornling and lives. Training never lowers a skill.
 func TestSandboxTraining(t *testing.T) {
@@ -1797,7 +1797,7 @@ func TestSandboxTraining(t *testing.T) {
 		s := newSandbox(t)
 		s.mayDie = true
 		cl, p := s.hero(5951, "Espada", "guardian", 2, 1, 1, gear{"iron_sword", 1, slotRight},
-			gear{"plank_shield", 1, slotLeft}, gear{"leather_jerkin", 1, slotArmor}, gear{"sailcloth_cap", 1, slotHead},
+			gear{"plank_shield", 1, slotLeft}, gear{"stagleather_coat", 1, slotArmor}, gear{"sailcloth_cap", 1, slotHead},
 			gear{"seaweed_poultice", 20, 0})
 		if s.w.Level(p) != 21 {
 			t.Fatalf("level %d, want 21", s.w.Level(p))

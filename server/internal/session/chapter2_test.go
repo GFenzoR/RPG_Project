@@ -46,7 +46,7 @@ func TestChapterTwoPlayable(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The kit of the forest town (equipped directly: a level change recomputes equipment).
-	arm := func() { p.EquipForTest(items["thornwood_blade"], items["elmwood_shield"]) }
+	arm := func() { p.EquipForTest(items["boarding_saber"], items["elmwood_shield"]) }
 	hasOption := func(key string) bool {
 		d := h.lastDialog(h.send(cl, talkMsg(druid.ID())))
 		for _, o := range d.Options {

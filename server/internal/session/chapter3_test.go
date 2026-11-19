@@ -289,8 +289,10 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	h.input(cl, walkPath(S, S, S))
 	h.sim.RunFor(3 * time.Second)
-	if p.Pos() != pos(30, 42) {
-		t.Fatalf("through the forge gate: at %v", p.Pos())
+	// Past the gate: the third step may meet a monster of the forge room (where they stand
+	// depends on the fights before, so on every number of the kit).
+	if at := p.Pos(); at.X != forgeGate.X || at.Y <= forgeGate.Y || at.Z != forgeGate.Z {
+		t.Fatalf("through the forge gate: at %v", at)
 	}
 	h.sim.Command(gameFunc(func() {
 		arm("embersteel_sabre", "embersteel_shield")
@@ -356,7 +358,7 @@ func TestBrasalNPCs(t *testing.T) {
 	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))
 	h.sim.Command(gameFunc(func() {
-		h.w.GiveForTest(p, "gold_coin", 2)
+		h.w.GiveForTest(p, "gold_coin", 3) // the whole smithy (lote 11 added the shield) and the blessings
 		h.w.GiveForTest(p, "copper_coin", 250)
 		h.w.GiveForTest(p, "ash_pelt", 3)
 		for _, id := range []string{"pickaxe", "rope", "ship_biscuit"} {
