@@ -326,11 +326,14 @@ items:
   - `book`: `title` y `pages` (1 a 12) son claves i18n de `i18n/<idioma>/books.yaml`
     (`book.<id>.title`, `book.<id>.page_<n>`, en los dos idiomas: el validador lo exige y
     avisa de un texto `book.*` que ningún item lee). El plugin del cliente empaqueta
-    `books.yaml` entero: la ventana de lectura no le pide nada al servidor.
+    `books.yaml` entero: la ventana de lectura no le pide nada al servidor. El servidor
+    también rechaza al cargar un libro sin título, sin páginas o con más de 12
+    (`content.MaxBookPages`).
   - `chest`: `id` (único entre los cofres) y `rewards` (1 a 8 `{ item, count }`, `count`
     de 1 a una pila: 1 para lo que no se apila). `make validate` (`checkChests`) y el
     servidor al arrancar (`content.CheckChests`, más la protección de la forja en
-    `session.initChests`) rechazan un cofre que se levanta, un id repetido, una recompensa
+    `session.initChests`) rechazan un cofre que se levanta, un id repetido, uno sin
+    recompensas o con más de 8 (`content.MaxChestRewards`), una recompensa
     que no existe, que no se levanta (`pickupable: false`: un muro, un atril u otro cofre
     no van a la mochila), retirada (`retired`), de más de una pila o que sea la protección
     de la forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
