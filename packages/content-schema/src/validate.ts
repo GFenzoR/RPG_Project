@@ -225,7 +225,15 @@ class Validator {
     if (lock) {
       const base =
         opts.baseIdsLock === undefined ? undefined : this.parseBaseLock(opts.baseIdsLock);
-      for (const d of checkIdsLock(lock, [...this.index.ids.item.keys()], base)) this.diags.push(d);
+      // The chests of data/items (chest id → item; a repeated id is checkChests' error).
+      const chests = new Map<string, string>();
+      for (const { item } of this.items) {
+        const chest = item["chest"];
+        const cid = isObj(chest) ? chest["id"] : undefined;
+        if (typeof cid === "string" && !chests.has(cid)) chests.set(cid, String(item["id"]));
+      }
+      for (const d of checkIdsLock(lock, [...this.index.ids.item.keys()], base, chests))
+        this.diags.push(d);
     }
   }
 

@@ -10,6 +10,7 @@ const goodChests = `
 - {id: coin, kind: currency, stackable: true, max_stack: 100, currency: {worth: 1}}
 - {id: sword, kind: weapon, weapon: {type: sword, attack: 10}, requires: {level: 1}}
 - {id: amber, kind: material, stackable: true, max_stack: 100}
+- {id: arc_rune, kind: rune, rune: {spell: arc_bolt, charges: 5}}
 - {id: old_axe, kind: weapon, weapon: {type: axe, attack: 9}, requires: {level: 1}, retired: true}
 - {id: chest_a, kind: decoration, pickupable: false, blocks_movement: true, chest: {id: a, rewards: [{item: coin, count: 100}, {item: sword, count: 1}]}}
 - {id: chest_b, kind: decoration, pickupable: false, chest: {id: b, rewards: [{item: amber, count: 3}]}}
@@ -38,6 +39,11 @@ func TestCheckChests(t *testing.T) {
 		"count 0":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 0}]}}`,
 		"count 101":    `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: coin, count: 101}]}}`,
 		"count 2":      `- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: sword, count: 2}]}}`,
+	}
+	// A rune that does not stack is one unit, whatever its charges: the error says 1.
+	runeChest := doorItems(t, goodChests+`- {id: c, kind: decoration, pickupable: false, chest: {id: c, rewards: [{item: arc_rune, count: 3}]}}`)
+	if err := CheckChests(runeChest, ""); err == nil || !strings.Contains(err.Error(), "count 3 must be 1 to one stack (1)") {
+		t.Errorf("three runes of 5 charges: %v", err)
 	}
 	for name, src := range bad {
 		items := doorItems(t, goodChests+src)

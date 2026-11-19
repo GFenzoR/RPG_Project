@@ -481,6 +481,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   de una casilla corta el paso a pie y deja aparte lo de atrás), una `ladder` o un
   `rope_spot` es una casilla más que además lleva a su destino, y un `boat` no lleva a
   ningún lado.
+- **Cofres de recompensa** (items con bloque `chest`, `02-game-design.md` "Libros y
+  cofres"): cada `id` de cofre está una sola vez en todo el mundo (da una vez por personaje
+  con ese id: dos copias se abrirían una vez entre las dos), y alguna casilla del cofre o
+  junto a él (a 1, la distancia a la que se usa) es alcanzable a pie desde el templo de su
+  isla, sin contar las entradas de `stairs`/`hole`/`teleport` (nadie se queda parado ahí).
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
 - Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
   `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla

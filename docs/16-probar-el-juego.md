@@ -196,8 +196,8 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    publicado en el mercado no está en la mochila. Para probar muchos intentos seguidos sin
    gastar tanto, compra piezas de nivel 1 (las más baratas de refinar).
 4c. **Libros y cofres (la esquina noreste del templo; docs/02 "Libros y cofres").** Párate
-   en 2099,2085, junto al atril y al cofre. Usa el atril (click derecho, o "Leer" del menú):
-   se abre la ventana de lectura con «Los remeros del Farol»; pasa las páginas con ‹ ›
+   en 2099,2085, junto al atril y al cofre. Usa el atril (click derecho → "Leer", o doble
+   click): se abre la ventana de lectura con «Los remeros del Farol»; pasa las páginas con ‹ ›
    (abajo dice "Página 2 de 3") y ciérrala con Escape o ×. Lo mismo el pergamino del suelo
    (2097,2084, «Manifiesto del Alba Tardía», dos páginas). Mayús+click sobre ellos da su
    descripción de una línea. Usa el cofre: "Abres el cofre y encuentras: …" con lo

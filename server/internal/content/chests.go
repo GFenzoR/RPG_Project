@@ -70,11 +70,20 @@ func CheckChests(items Items, protection string) error {
 				return fmt.Errorf("item %q: chest reward %q is retired", id, r.Item)
 			case protection != "" && r.Item == protection:
 				return fmt.Errorf("item %q: chest reward %q is the forge's protection: only monsters drop it", id, r.Item)
-			case r.Count < 1 || r.Count > def.StackLimit() || !def.Stackable && r.Count != 1:
+			case r.Count < 1 || r.Count > rewardLimit(def):
 				return fmt.Errorf("item %q: chest reward %q: count %d must be 1 to one stack (%d)", id, r.Item, r.Count,
-					max(def.StackLimit(), 1))
+					rewardLimit(def))
 			}
 		}
 	}
 	return nil
+}
+
+// rewardLimit is the most units of def one chest reward gives: one stack of it, or 1 if it
+// does not stack (a rune's charges are not units: StackLimit gives them).
+func rewardLimit(def *Item) int {
+	if !def.Stackable {
+		return 1
+	}
+	return def.StackLimit()
 }

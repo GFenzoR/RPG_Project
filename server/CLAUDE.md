@@ -302,7 +302,10 @@ server/
   items, así cualquier snapshot tiene los dos o ninguno. Lo que da pasa por `giveItem` (un
   equipable tira su atributo) y `econMade` con `EconChest`. `content.CheckChests` corre al
   cargar los items y otra vez en `initChests` con la protección de la forja: un cofre
-  nunca da el ámbar. El bloque `book` de un item es solo del cliente.
+  nunca da el ámbar. El `id` de un cofre es la clave guardada: `data/ids.lock.yaml`
+  (`chests`) lo fija con su item y `make validate` rechaza renombrarlo o reutilizarlo;
+  `mapcli validate` exige cada cofre una vez en el mundo y alcanzable. El bloque `book` de
+  un item es solo del cliente.
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +

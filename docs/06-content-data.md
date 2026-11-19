@@ -79,6 +79,8 @@ i18n/
 
 ## IDs numéricos (`ids.lock.yaml`)
 ```yaml
+chests:                  # cofres de recompensa: id del cofre → su item
+  puerto_mine: chest_puerto_mine
 items:
   grass: 3
   iron_sword: 13
@@ -88,6 +90,12 @@ items:
 - Solo se agrega: si borras un item su número queda en el lock (aviso "retired id") y
   nunca se reutiliza. `make validate` compara con la rama base (`origin/main`, o la ref
   de `CONTENT_BASE_REF`) y falla si un número cambió o desapareció.
+- `chests` (lote 12): `make gen-ids` agrega cada cofre nuevo (bloque `chest` de un item,
+  "Libros y cofres" más abajo) con su item, en el orden en que aparecen; no agrega uno
+  cuyo id ya es de otro item ni uno cuyo item ya tiene otro id fijado (un id reutilizado o
+  renombrado: `make validate` lo rechaza). Como los números, solo se agrega: un cofre
+  borrado queda (aviso) y la comparación con la rama base falla si uno desapareció o
+  cambió de item. Al resolver un conflicto en el lock, corre `make gen-ids` otra vez.
 
 ## Convenciones
 - IDs en `snake_case` en inglés (`wolf`, `harbor_master`, `iron_sword`).
@@ -327,8 +335,15 @@ items:
     no van a la mochila), retirada (`retired`), de más de una pila o que sea la protección
     de la forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
     fuente de lo que da (lo que compra un NPC necesita una; `catalog.test.ts` también lo
-    cuenta). El mismo item de cofre en dos lugares del mapa comparte el `id`: se abre una
-    vez en total por personaje; un cofre por item.
+    cuenta).
+  - **El `id` de un cofre es para siempre:** es la clave `chest.<id>` del storage de cada
+    personaje que lo abrió. Renombrarlo deja que todos lo abran otra vez; reutilizarlo en
+    otro cofre hace que quien abrió el viejo no pueda abrir el nuevo. `make gen-ids` lo
+    fija con su item en `ids.lock.yaml` (`chests`, ver "IDs numéricos") y `make validate`
+    falla si un id fijado cambia de item o si el item tiene ahora otro id.
+  - **En el mapa** (`mapcli validate`, docs/03 "Validación"): cada `id` de cofre está una
+    sola vez en todo el mundo (dos copias del item se abrirían una vez entre las dos) y
+    junto a una casilla a la que se llega a pie desde el templo de su isla.
 
 ## Atributo
 `data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,

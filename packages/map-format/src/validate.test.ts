@@ -560,6 +560,23 @@ describe("validateWorld", () => {
     expect(m).toContainEqual(expect.stringContaining("portal destination is not a walkable tile"));
   });
 
+  it('places each reward chest once, next to a tile reached from the temple (docs/02 "Libros y cofres")', () => {
+    const i = mini();
+    const c = must(i.chunks.get(chunkKey(7, 0, 0)));
+    pushItem(c, 20, 10, "chest_pruebas");
+    expect(messages(check(i))).toEqual([]);
+    // A second copy shares its chest id: it would open once between the two.
+    pushItem(c, 22, 10, "chest_pruebas");
+    // Water all around: nobody stands next to it.
+    for (let y = 4; y <= 6; y++)
+      for (let x = 24; x <= 26; x++) if (x !== 25 || y !== 5) setGround(c, x, y, "water_shallow");
+    pushItem(c, 25, 5, "chest_puerto_grove");
+    expect(messages(check(i))).toEqual([
+      'error world/islands/mini/chunks/z07/c0000_0000.json items: (25,5,7) chest "chest_puerto_grove" cannot be opened: no tile next to it is reached on foot from the temple',
+      'error world/islands/mini/chunks/z07/c0000_0000.json items: (22,10,7) chest "pruebas" ("chest_pruebas") is also at 20,10,7 ("chest_pruebas"): a chest gives once per character, so each one stands once in the world',
+    ]);
+  });
+
   it("reports what cannot be reached from the temple", () => {
     const i = mini();
     const c = must(i.chunks.get(chunkKey(7, 0, 0)));

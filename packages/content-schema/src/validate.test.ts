@@ -1261,7 +1261,11 @@ describe("validator diagnostics", () => {
     expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(6);
   });
 
-  /** Appends a map item to data/items/decoration.yaml with its numeric id. */
+  /**
+   * Appends a map item to data/items/decoration.yaml with its numeric id (at the end of the
+   * lock) and, for a chest whose id is not locked yet, its chest (at the end of the lock's
+   * chests, before its items).
+   */
   const addItem = (id: string, n: number, block: string, extra = "pickupable: false"): void => {
     appendFileSync(
       file("data/items/decoration.yaml"),
@@ -1276,7 +1280,15 @@ describe("validator diagnostics", () => {
         "",
       ].join("\n"),
     );
-    appendFileSync(file("data/ids.lock.yaml"), `  ${id}: ${n}\n`);
+    const lock = `${readFileSync(file("data/ids.lock.yaml"), "utf8")}  ${id}: ${n}\n`;
+    const items = lock.search(/^items:/m);
+    const head = lock.slice(0, items);
+    const cid = /chest: \{ id: (\w+)/.exec(block)?.[1];
+    const chest =
+      cid === undefined || new RegExp(`^  ${cid}: `, "m").test(head)
+        ? ""
+        : `${head.includes("\nchests:\n") ? "" : "chests:\n"}  ${cid}: ${id}\n`;
+    writeFileSync(file("data/ids.lock.yaml"), head + chest + lock.slice(items));
   };
 
   it("checks reward chests: fixed, unique ids, one stack of what a backpack holds, never retired nor the forge's amber", () => {

@@ -2108,10 +2108,10 @@ sale solo de tres NPCs, y salirse del camino puede dar algo. Las dos cosas son i
 mapa con un bloque propio en `data/items/exploration.yaml` (docs/06 "Item").
 
 **Libros y pergaminos.** Un atril con un libro abierto, un libro cerrado o un pergamino
-(arte del motor de sprites, docs/17). Usarlo (click derecho, o "Leer" del menú) abre la
-**ventana de lectura**: el título y una página a la vez, con el número de página y botones
-para pasarlas; Escape o × la cierran. Mirarlo (Mayús+click) sigue dando una línea: qué es y
-cómo se llama. **Decisión: la ventana es del cliente, sin el servidor.** El texto es
+(arte del motor de sprites, docs/17). Usarlo (click derecho → "Leer", o doble click) abre
+la **ventana de lectura**: el título y una página a la vez, con el número de página y
+botones para pasarlas; Escape o × la cierran. Mirarlo (Mayús+click) sigue dando una
+línea: qué es y cómo se llama. **Decisión: la ventana es del cliente, sin el servidor.** El texto es
 contenido estático (`i18n/<idioma>/books.yaml`, que el cliente ya trae, como los textos de
 los NPCs), igual para todos y sin nada que esconder, como el de un cartel que se lee con
 Mirar desde cualquier casilla a la vista: el cliente no manda nada al leer, así que no hay
@@ -2134,10 +2134,12 @@ Los textos son propios y siguen lo que cuentan los NPCs y los capítulos 1 a 3:
 | «Lo que vimos detrás de la pared» (pergamino) | Galería inundada de la mina, Puerto (3194,6287,8) | La pared tallada, la puerta cerrada desde adentro y el agua |
 
 **Cofres de recompensa.** Un cofre de tablones con bandas de hierro (bloque `chest`: un `id`
-y sus recompensas). Usarlo junto a él (a 1 casilla) le da a **cada personaje** sus
-recompensas **una sola vez**: el personaje lo recuerda en su storage (`chest.<id>`, la
-misma tabla que las quests), y el storage y los items van en el mismo snapshot, así un
-guardado, un logout o una desconexión en el mismo tick nunca guardan uno sin lo otro. Reglas:
+y sus recompensas). Usarlo junto a él (a 1 casilla; click derecho → "Abrir", o doble
+click) le da a **cada personaje** sus recompensas **una sola vez**: el personaje lo
+recuerda en su storage (`chest.<id>`, la misma tabla que las quests; por eso el `id` de un
+cofre no se renombra ni se reutiliza nunca, y `data/ids.lock.yaml` lo fija), y el storage
+y los items van en el mismo snapshot, así un guardado, un logout o una desconexión en el
+mismo tick nunca guardan uno sin lo otro. Reglas:
 - **Todo o nada:** si todas las recompensas no entran (capacidad y lugar en la mochila,
   contando las pilas que se suman a las que ya lleva, como el `give_item` de un diálogo)
   no da nada, no lo marca y lo dice (`chest.no_room`); el jugador libera lugar y lo abre de

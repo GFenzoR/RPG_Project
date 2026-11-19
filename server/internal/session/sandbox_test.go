@@ -1684,7 +1684,8 @@ func TestSandboxArcRune(t *testing.T) {
 // TestSandboxEverythingReachable: from the temple, on foot and through the portals (the
 // practice gate open: its key is sold on the square), a player reaches every walkable
 // tile of the island, and from a reached tile it can use every NPC, gathering spot,
-// crafting station and market board (at inventory.reach, or the spot's own reach).
+// crafting station, market board and reward chest (at inventory.reach, or the spot's own
+// reach).
 func TestSandboxEverythingReachable(t *testing.T) {
 	s := newSandbox(t)
 	recipes, err := content.LoadRecipes(filepath.Join("..", "..", "..", "data"))
@@ -1748,7 +1749,7 @@ func TestSandboxEverythingReachable(t *testing.T) {
 				}
 				for _, n := range append([]uint16{ground}, s.m.Stack(at)...) {
 					def := byNum[n]
-					if def == nil || def.Resource == nil && !stations[def.ID] && !def.MarketBoard {
+					if def == nil || def.Resource == nil && !stations[def.ID] && !def.MarketBoard && def.Chest == nil {
 						continue
 					}
 					reach := 1

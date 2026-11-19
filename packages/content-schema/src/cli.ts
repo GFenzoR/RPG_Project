@@ -43,9 +43,10 @@ switch (positionals[0]) {
     break;
   }
   case "gen-ids": {
-    const { added } = generateIdsLock(root);
+    const { added, chests } = generateIdsLock(root);
+    const news = [...added, ...chests.map((c) => `chest ${c}`)];
     console.log(
-      added.length === 0 ? "ids.lock.yaml: up to date" : `ids.lock.yaml: added ${added.join(", ")}`,
+      news.length === 0 ? "ids.lock.yaml: up to date" : `ids.lock.yaml: added ${news.join(", ")}`,
     );
     break;
   }

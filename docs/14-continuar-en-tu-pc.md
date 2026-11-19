@@ -167,8 +167,10 @@ el punto 5:
     casilla solo ofrece el de arriba (`menuItem`). Es aceptable; si molesta, la casilla
     podría preferir el libro aunque tenga algo encima (como la escalera de mano con
     `climbable`) o los libros podrían bloquear su casilla.
-  - **Un item de cofre en dos lugares** comparte su `id` (se abre una vez en total por
-    personaje): `make validate` no cuenta cuántas veces está en el mapa. Un cofre por item.
+  - **El `id` de un cofre queda fijado** en `data/ids.lock.yaml` (`chests`): es la clave
+    del storage de quien lo abrió, así que `make validate` rechaza renombrarlo o
+    reutilizarlo, y `mapcli validate` que un cofre esté dos veces en el mundo o sin una
+    casilla alcanzable al lado (docs/06 "Libros y cofres").
   - **El libro cerrado del archivo está en el suelo:** cuando lleguen las mesas del kit de
     props (`feat/town-props`), ponerlo sobre una (la elevación lo sube).
   - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.

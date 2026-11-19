@@ -42,6 +42,12 @@ export interface ItemInfo {
    * entrance; one where no portal of its kind leaves is a warning.
    */
   portal?: PortalLook;
+  /**
+   * The chest id of a reward chest (its `chest` block, docs/02 "Libros y cofres"): it gives
+   * once per character under that id, so it stands once in the world, and it is used from
+   * a tile next to it, so one of those must be reached.
+   */
+  chest?: string;
 }
 
 /** What a portal item shows: a kind of portals.yaml and, optionally, the way it leads. */
@@ -202,6 +208,8 @@ export function loadContent(root: string): ContentIndex {
         info.portal = { kind: portal["kind"] };
         if (leads === "up" || leads === "down") info.portal.leads = leads;
       }
+      const chest = raw["chest"];
+      if (isObj(chest) && typeof chest["id"] === "string") info.chest = chest["id"];
       items.set(info.id, info);
     }
   }
