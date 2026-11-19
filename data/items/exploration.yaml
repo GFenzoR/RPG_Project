@@ -62,7 +62,7 @@
   book:
     title: book.book_smith_notes.title
     pages: [book.book_smith_notes.page_1, book.book_smith_notes.page_2, book.book_smith_notes.page_3]
-  notes: "On the floor of the keeper's archive of Brasal (3664,5800,7), south-east corner."
+  notes: "On a table of the keeper's archive of Brasal (3664,5800,7), south-east corner."
 
 - id: book_trail_notebook
   kind: decoration
