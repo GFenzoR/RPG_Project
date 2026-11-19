@@ -907,7 +907,13 @@ conditions:
   siempre. Los ids son el enum `conditionId` de `common.schema.json`; el servidor revisa
   al arrancar que cada fuente nombre una condición de `balance.yaml`.
 - Un monstruo con `behavior.sees_invisible: true` ve (y ataca) a los invisibles.
-- Nombres de la UI: `condition.<id>.name` en `i18n/*/client.yaml`.
+- Textos de la UI (`i18n/*/client.yaml`): `condition.<id>.name` (el nombre) y
+  `condition.<id>.desc` (qué hace, en el tooltip de la bandeja de estados, docs/17). Una
+  condición nueva necesita además su ícono `ui/status/<id>` (`STATUS_ART` de
+  `tools/spritegen/src/recipes/ui.ts`, un test lo exige) y su lugar y tipo en
+  `client/src/state/status.ts` (`STATUS_ORDER`, `STATUS_KIND`).
+- Los ids `in_combat`, `pvp_locked` y `protection_zone` son de los estados que manda el
+  servidor (`02-game-design.md`, "Estados del personaje"): una condición no puede usarlos.
 
 ## Grupos (T3.3)
 Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml → party`

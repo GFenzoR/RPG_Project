@@ -147,7 +147,10 @@ server/
   `KickAccount`) pasa por `disconnect`, que en combate cierra la conexión una vez
   (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
   usarlo salvo que sea una sanción de staff o un guardado que falló. `Input` ignora a un
-  link-dead y un `Leave` de un link-dead no cambia nada. La muerte termina la pelea
+  link-dead y un `Leave` de un link-dead no cambia nada. El cliente ve el bloqueo como el
+  estado `in_combat` (y el del atacante como `pvp_locked`; la zona de protección como
+  `protection_zone`): `session/status.go` los lee del jugador en `sendConditions`, al final
+  de cada tick, sin eventos ni nada guardado (`combatEnd` tiene que seguir a `inCombat`). La muerte termina la pelea
   (`wakeAtTemple` pone `fightAt` en 0) y guarda con `deathSave`: un link-dead sin bloqueo
   PvP no se guarda ahí, sino que sale al final del tick (`Player.diedLinkDead`,
   `checkLinkDead`) y ese es su único guardado. Nunca saques a un jugador del mundo

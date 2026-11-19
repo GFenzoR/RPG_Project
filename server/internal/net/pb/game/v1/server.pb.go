@@ -3361,7 +3361,10 @@ func (x *CreatureAttack) GetRadius() uint32 {
 // PlayerConditions is the full list of the player's own active conditions (T3.2): sent
 // after login and whenever one starts, changes or ends (an empty list = none). Other
 // creatures' conditions are never sent; observers only see their effects (speed,
-// periodic damage, an invisible player's CreatureDisappear).
+// periodic damage, an invisible player's CreatureDisappear). After the conditions come
+// the statuses (docs/05 "Condiciones"), with ids that are not balance.yaml's: in_combat
+// (the logout block), pvp_locked (an attacker's PvP lock) and protection_zone (standing
+// in one; remaining_ms 0 = no end).
 type PlayerConditions struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Conditions    []*ActiveCondition     `protobuf:"bytes,1,rep,name=conditions,proto3" json:"conditions,omitempty"`
@@ -3408,9 +3411,11 @@ func (x *PlayerConditions) GetConditions() []*ActiveCondition {
 
 type ActiveCondition struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Id of balance.yaml conditions (poison, hasted...).
+	// Id of balance.yaml conditions (poison, hasted...) or of a status (in_combat,
+	// pvp_locked, protection_zone).
 	ConditionId string `protobuf:"bytes,1,opt,name=condition_id,json=conditionId,proto3" json:"condition_id,omitempty"`
-	// Time left: until it ends, or for a damage condition its hits left × its interval.
+	// Time left: until it ends, or for a damage condition its hits left × its interval; 0
+	// for a status with no end (protection_zone).
 	RemainingMs uint32 `protobuf:"varint,2,opt,name=remaining_ms,json=remainingMs,proto3" json:"remaining_ms,omitempty"`
 	// Hits left of a damage condition (0 for the others).
 	Ticks         uint32 `protobuf:"varint,3,opt,name=ticks,proto3" json:"ticks,omitempty"`

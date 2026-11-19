@@ -1309,6 +1309,19 @@ Reglas en `02-game-design.md` ("Condiciones").
   final del tick en que alguna empezó, cambió (un golpe más, se apiló) o terminó; una lista
   vacía = ninguna. `remaining_ms` es lo que falta hasta el final, o en una de daño los
   golpes que quedan × su intervalo. Las condiciones de otras criaturas no se mandan.
+- **Estados** (lote 13, `server/internal/session/status.go`; reglas en `02-game-design.md`,
+  "Estados del personaje"): después de las condiciones, la misma lista lleva hasta tres
+  entradas con ids que no son de `balance.yaml`: `in_combat` (el bloqueo de logout,
+  `remaining_ms` hasta que se puede salir), `pvp_locked` (el bloqueo PvP del atacante,
+  hasta que vence) y `protection_zone` (parado en una zona de protección; `remaining_ms` 0
+  = sin fin). `ticks` es 0 en las tres. Es aditivo: un cliente viejo las mostraría como
+  condiciones desconocidas. El servidor las lee del jugador al final de cada tick (una
+  consulta al mapa y unas comparaciones por jugador) y manda la lista otra vez cuando una
+  empieza o termina, o cuando su fin se movió 1 s o más de lo que el cliente sabe
+  (`statusSlack`): una pelea mueve el fin del bloqueo con cada golpe y así cuesta a lo
+  sumo una lista por segundo. El cliente cuenta para atrás lo último que supo: su ícono
+  puede terminar hasta 1 s antes o después que el bloqueo, y la lista sin él llega en el
+  tick en que el bloqueo termina de verdad.
 - **Daño periódico**: cada golpe es un golpe más (`Effect 10 + elemento`, `FloatingText`,
   `CreatureHealth`, `PlayerStats` al afectado).
 - **Velocidad**: el afectado recibe `PlayerStats.speed` y quien lo ve `CreatureSpeed`; los
@@ -1411,7 +1424,7 @@ dice que el servidor los manda.
 | `PlayerStats` | HP, MP, nivel, XP, capacidad, velocidad, alma |
 | `PlayerSkills` | Nivel y % de cada skill |
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
-| `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
+| `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) y de los estados `in_combat`, `pvp_locked` y `protection_zone` (lote 13) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
 | `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
 | `QuestLog` | El diario de misiones entero: al entrar y en cada tick en que cambió una quest ("Diario de misiones") |

@@ -1434,6 +1434,25 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
 - Una zona de protección **no** corta el bloqueo (tampoco el PvP): quien se refugia en un
   templo espera ahí a que venza, a salvo.
 
+### Estados del personaje (lote 13, rama `feat/hud-status`)
+Además de sus condiciones, el jugador ve en la bandeja de estados (docs/17 "Bandeja de
+estados") tres estados que el servidor ya conoce y que antes solo se notaban al chocar con
+ellos. No son condiciones: no tienen reglas propias, no se guardan, no se curan ni se
+apilan; dicen lo que ya vale. Código: `server/internal/session/status.go`.
+
+| Estado | Id | Cuándo | Tiempo |
+|---|---|---|---|
+| En combate | `in_combat` | el bloqueo de logout ("Bloqueo de logout en combate"): pelea en los últimos `combat_block_ms`, o un bloqueo PvP (atacante o víctima) | hasta que se puede salir del juego |
+| Bloqueo de ataque | `pvp_locked` | el bloqueo PvP del atacante ("PvP", `lock_ms` o `kill_lock_ms`): ni zona de protección ni salir del juego | hasta que vence |
+| Zona de protección | `protection_zone` | parado en una zona `protection` de `zones.yaml` (también una casa): nadie lo ataca y el veneno o el fuego no lo dañan | sin fin: mientras siga ahí |
+
+- Un atacante bloqueado ve los dos primeros (el segundo dice además que no puede entrar a
+  una zona de protección); la víctima, solo "En combate".
+- **Morir** termina "En combate" (salvo que lo sostenga un bloqueo PvP); una zona de
+  protección no lo termina (arriba).
+- Ningún `id` de `balance.yaml → conditions` puede ser uno de estos tres: el servidor no
+  arranca (`checkStatusIDs`).
+
 ## Economía
 - Monedas de oro, plata, cobre (100:1): `gold_coin` vale 10 000 cobre y `silver_coin` 100
   (T5.5; antes solo existía el cobre). Todo precio, recompensa y saldo se cuenta en cobre

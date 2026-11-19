@@ -1180,7 +1180,10 @@ export const CreatureAttackSchema: GenMessage<CreatureAttack> = /*@__PURE__*/
  * PlayerConditions is the full list of the player's own active conditions (T3.2): sent
  * after login and whenever one starts, changes or ends (an empty list = none). Other
  * creatures' conditions are never sent; observers only see their effects (speed,
- * periodic damage, an invisible player's CreatureDisappear).
+ * periodic damage, an invisible player's CreatureDisappear). After the conditions come
+ * the statuses (docs/05 "Condiciones"), with ids that are not balance.yaml's: in_combat
+ * (the logout block), pvp_locked (an attacker's PvP lock) and protection_zone (standing
+ * in one; remaining_ms 0 = no end).
  *
  * @generated from message game.v1.PlayerConditions
  */
@@ -1203,14 +1206,16 @@ export const PlayerConditionsSchema: GenMessage<PlayerConditions> = /*@__PURE__*
  */
 export type ActiveCondition = Message$1<"game.v1.ActiveCondition"> & {
   /**
-   * Id of balance.yaml conditions (poison, hasted...).
+   * Id of balance.yaml conditions (poison, hasted...) or of a status (in_combat,
+   * pvp_locked, protection_zone).
    *
    * @generated from field: string condition_id = 1;
    */
   conditionId: string;
 
   /**
-   * Time left: until it ends, or for a damage condition its hits left × its interval.
+   * Time left: until it ends, or for a damage condition its hits left × its interval; 0
+   * for a status with no end (protection_zone).
    *
    * @generated from field: uint32 remaining_ms = 2;
    */
