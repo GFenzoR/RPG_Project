@@ -680,7 +680,9 @@ persona de LPC). Se miran con Read.
 **Pendiente:** otros props animados con `loop` (una bandera o un farol colgado si llegan
 al mapa; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
 dueño quiere, sumar primitivas si hacen falta (un toro para anillos, cajas redondeadas) y
-la revisión en el juego del E2E final (no se corrió en la rama).
+mirar en el juego el jabalí, el ciervo, el eco de la forja, el yunque y los cajones: el E2E
+del lote 9 (verde) solo los muestra de pasada (los carteles de Brasal se leen claros) y
+ningún screenshot los tiene (docs/14).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -2005,8 +2007,11 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
 - **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); un lugar de
   fábrica que se acomode a las ventanas ya abiertas (hoy, si se abren todas a la vez,
   algunas se pisan; los contenedores ya salen bajo el inventario de `feat/equipment-d2`,
-  midiéndolo); revisar en el E2E final los clicks del mapa que ahora puedan caer en una
-  ventana flotante.
+  midiéndolo). El E2E del lote 9 (verde) encontró los clicks del mapa que caían en una
+  ventana (los specs saltan 5 columnas a 1280x800) y la página 7 px más ancha por los
+  pináculos del orbe de maná (el cuerpo del juego recorta); lo que queda para el dueño está
+  en docs/14 (íconos a 1x en el inventario de 16 rem, pináculos cortados en los bordes, el
+  intercambio sobre un compañero).
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.

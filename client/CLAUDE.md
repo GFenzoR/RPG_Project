@@ -1379,7 +1379,8 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
   `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
   `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
-  captura el puntero, así que el `:hover` sigue al mouse). Nivel, vocación y manos libres
+  captura el puntero, así que el `:hover` sigue al mouse), solo con `@media (hover: hover)`:
+  una pantalla táctil deja el `:hover` donde estuvo el último dedo. Nivel, vocación y manos libres
   los sigue diciendo el servidor al soltar.
 - **La mochila equipada** (`state/backpack.ts`, puro y con tests): `WorldState.backpack`
   (`EquippedBackpack`) sabe qué contenedor abierto es el de la espalda: un uso de algo en
@@ -1466,6 +1467,9 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `render/game-canvas.ts` (y a la vista previa) que cubra esa caja (`zoomRange` con
   `cover`, "Zoom del mapa"). Sin marco ni viñeta alrededor del canvas. Se fueron
   `--dock-w`, `aside.side` en escritorio, `--map-reserve-bottom` y `mapLift`.
+  `.game-body` recorta (`overflow: clip`): los pináculos de los hombros del orbe de maná
+  sobresalen 7 px del borde derecho y la página medía 1287 px a 1280 (un `scrollIntoView`
+  corría el juego de lado; `mobile.spec` exige que la página mida justo la pantalla).
 - **La barra** (`ui/HudBar.tsx`, `section.hud-bar`, test id `hud-bar`, `aria-label`
   `client.hud.bar`): `position: absolute` abajo, `zoom: var(--ui-zoom)` (la escala de la
   interfaz la agranda como a las ventanas), grilla de tres columnas: orbe de vida

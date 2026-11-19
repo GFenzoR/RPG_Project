@@ -180,6 +180,11 @@ el punto 5:
       los muelles (Puerto 3201,6430, Volcán 3630,5796, Pruebas 2095,2134) y en los
       depósitos de piso de madera (Puerto 3182,6420; Pruebas 2084,2100), y lo que se apoya
       encima de un cajón (`elevation: 8`) sobre la tapa.
+      El E2E del lote 9 (verde) los muestra poco: los carteles sobre basalto y ceniza de
+      Brasal se leen claros (`65b-volcan-temple-sign`) y el del templo del Farol también
+      (`12b-puerto-temple-sign`); el tablero de Puerto queda bajo la ventana del mercado
+      (`53`–`55`). Ningún screenshot muestra el jabalí, el ciervo, el eco de la forja, el
+      yunque ni los cajones: mirarlos a mano con las coordenadas de arriba (`make play`).
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
       cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
@@ -248,14 +253,20 @@ el punto 5:
     equipada abierta sola abajo de la figura (no durante el tutorial) y la capacidad como
     barra; el tooltip sale al instante, arriba del item (o de la casilla del mapa), compacto
     y centrado. Solo cliente. Queda:
-    - **Revisar en el E2E del lote** (no se corrió en la rama; se miró con `make ui-preview`,
-      escenas `inventory`, `inventoryfloat`, `tooltip`, `tooltipcoin`, `groundtip`, `game`,
-      `server`, `scale` y `windows`): `09-inventory` (la figura y la mochila abajo),
-      `09a-item-menu`, `09b-item-tooltip` (la ficha compacta arriba de la mochila),
-      `10-backpack-on-map` (la mochila tirada, en su propia ventana), `22-ranger-inventory`
-      (el arco a 2x y el carcaj con 30), `52-trade-window` (las monedas de la mochila
-      abierta sola). Que ningún spec abra la mochila equipada con doble click o "Abrir"
-      cuando ya está abierta (la cerraría).
+    - **Revisado en el E2E del lote 9** (verde, 2026-11-18): `09-inventory` (la figura y
+      la mochila abajo, 24 celdas), `09a-item-menu`, `09b-item-tooltip` (la ficha compacta
+      arriba de la mochila, sin taparla), `10-backpack-on-map` (la mochila tirada, en su
+      ventana justo debajo del inventario), `22-ranger-inventory` (el carcaj con 30),
+      `52-trade-window` (las monedas de la mochila abierta). Lo que dejó: un personaje nuevo
+      de Puerto sigue el tutorial y la mochila no se abre sola (a propósito): T5.3 lo
+      comprueba y la abre con doble click. En los teléfonos, el `ResizeObserver` de la figura
+      daba un error "ResizeObserver loop" al mostrar la pestaña del inventario (WebKit se lo
+      pasa a la página): ahora mide en el cuadro siguiente. El rojo de un slot que no acepta
+      lo arrastrado quedaba pegado en una pantalla táctil (`:hover` del último dedo): solo
+      con un puntero que flota. **Queda para el dueño:** el inventario flotante nace de 16
+      rem y los íconos de los slots grandes salen a 1x (a 2x desde ~19 rem): si los quiere a
+      2x de fábrica, el inventario tiene que nacer más ancho, y eso mueve la columna, los
+      contenedores, el tutorial y la pareja tienda + diálogo.
     - **Mirar en el playtest:** si la mochila que se abre sola molesta a alguien que la
       tenía cerrada (queda cerrada mientras el inventario siga abierto); si la ventana
       acoplada, ahora más alta, empuja demasiado la columna a 1280x800 (se puede plegar,
@@ -300,7 +311,27 @@ el punto 5:
     botonera) y todas las ventanas flotantes con imán, como pidió el dueño el 2026-11-18.
     Se miró con `make ui-preview` (escenas nuevas `magnet`, `migrated` y `chat`); el E2E
     no se corrió en la rama. Queda:
-    - **Revisar en el E2E final:** ahora la batalla (arriba a la izquierda), el inventario
+    - **Revisado en el E2E del lote 9** (verde, 2026-11-18): a 1280x800 el inventario
+      flota sobre la 6.ª columna al este del jugador y el chat sobre la 2.ª a la 7.ª al
+      oeste y la 3.ª a la 5.ª al sur; cuatro specs hacían click ahí y no caminaban (minar,
+      Raigal, Brasal y el de la Isla de Pruebas): ahora saltan 5 columnas como mucho
+      (`mapPoint` de `e2e/game.spec.ts`, `clickTile` de `sandbox.spec.ts` falla si una
+      ventana tapa la casilla). La página medía 1287 px a 1280 (los pináculos del orbe de
+      maná sobresalían 7 px): el cuerpo del juego recorta (`overflow: clip`) y `mobile.spec`
+      lo comprueba. Las esquinas góticas de una ventana sobresalen 5 px de su marco: lo que
+      no se desplaza se mide en `.gwin-body`. Capturas revisadas: `04-world`, `07-combat`,
+      `09-inventory`, `13-dialog`, `14-shop`, `16-chat`, `18-gm-announce`,
+      `21-druid-hotbar`, `23-conditions-hud`, `25-party-panel`, `37-report-form`,
+      `41-tutorial-highlight`, `43-tutorial-shop-960`, `44-controls-help-960` (la Ayuda tapa
+      al tutorial, su barra entera), `51-pvp-battle-list`, `52-trade-window`,
+      `97-view-1920x1080` y `mobile-desktop-1280-*`. **Queda para el dueño:** los pináculos
+      de los hombros de los dos orbes quedan cortados 7 px por el borde de la pantalla
+      (siempre fue así; para verlos enteros, una columna de orbe más ancha o los pináculos
+      más adentro); el intercambio, arriba al centro, tapa a un compañero que está justo
+      arriba del jugador; a 960x700 el diálogo de la pareja tienda + diálogo pisa unos 10 px
+      el pie del inventario; con el mouse quieto donde se abre la tienda, su ficha sale al
+      instante sobre los filtros (`14-shop`, `43-tutorial-shop-960`).
+    - Antes del E2E: ahora la batalla (arriba a la izquierda), el inventario
       (arriba a la derecha), los contenedores (debajo del inventario) y el chat (abajo a la
       izquierda) flotan sobre el mapa: un click en una casilla lejos del jugador hacia esas
       esquinas puede caer en una ventana (a 1280x800 el mapa ahora tiene 20 columnas, antes
@@ -316,7 +347,8 @@ el punto 5:
     - Los contenedores salen justo debajo del inventario, que `GameView` mide (con la
       figura y la mochila de `feat/equipment-d2`, unos 500 px): en una pantalla baja
       (1280x720, 960x700) queda poco lugar debajo y salen cortos, con su cuerpo
-      desplazable. Mirarlo en el E2E final; si molesta, que salgan a la izquierda de la
+      desplazable. En el E2E (`10-backpack-on-map`, 1280x800) la mochila tirada salió entera
+      justo debajo; si en una pantalla baja molesta, que salgan a la izquierda de la
       columna del inventario cuando abajo no entran (a 960 px taparían al jugador).
   - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
   - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
