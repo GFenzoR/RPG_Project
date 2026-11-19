@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -310,7 +311,7 @@ func TestChapterOnePlayable(t *testing.T) {
 	// Saved with the character, once it leaves: fresh from the hunt, its closed connection
 	// leaves it link-dead until travel.combat_block_ms is over (linkdead.go).
 	h.sim.Command(h.w.Leave(cl))
-	h.sim.RunFor(13e9)
+	h.sim.RunFor(combatBlock + time.Second) // data/balance.yaml has the same block
 	if h.w.PlayerByCharacter(p.CharacterID()) != nil {
 		t.Fatal("still in the world after the fight's block")
 	}

@@ -106,6 +106,25 @@ func (w *World) deathSave(ctx *game.TickContext, p *Player) {
 	w.save(w.snapshot(p, false))
 }
 
+// diedLinkDeadNotice keeps died, the death.died message of p's death, for p's next login
+// when p is link-dead (nobody to tell now: flushPlayer drops it): that login opens with the
+// death screen (tellDiedAway) instead of a character at the temple with less experience
+// and nothing said. It lives in memory only: a restart in between loses it.
+func (w *World) diedLinkDeadNotice(p *Player, died *pb.ServerMessage) {
+	if p.linkDead {
+		w.diedAway[p.charID] = died
+	}
+}
+
+// tellDiedAway tells p, which just joined, of the death its character died link-dead
+// since its last login (diedLinkDeadNotice), once.
+func (w *World) tellDiedAway(p *Player) {
+	if died, ok := w.diedAway[p.charID]; ok {
+		delete(w.diedAway, p.charID)
+		p.emit(died)
+	}
+}
+
 // carryFight is what a new login takes over from the player it replaces (a link-dead one,
 // or one still connected): its fight, so a relog is no way out of the logout block or the
 // boat's combat rule, and its PvP locks (pvpCarry).

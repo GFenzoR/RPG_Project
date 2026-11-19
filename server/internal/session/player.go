@@ -531,6 +531,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.sendCosmetics(p) // T5.7
+	w.tellDiedAway(p)  // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)

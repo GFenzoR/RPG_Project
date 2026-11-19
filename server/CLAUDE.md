@@ -149,7 +149,9 @@ server/
   PvP no se guarda ahí, sino que sale al final del tick (`Player.diedLinkDead`,
   `checkLinkDead`) y ese es su único guardado. Nunca saques a un jugador del mundo
   (`remove`) desde un camino de daño: el sistema de combate puede estar recorriendo
-  `World.players`. Un camino nuevo que guarde una muerte usa `deathSave`, no `save`.
+  `World.players`. Un camino nuevo que guarde una muerte usa `deathSave`, no `save`. El
+  `death.died` de una muerte link-dead queda en `World.diedAway` (`diedLinkDeadNotice`) y
+  lo recibe el próximo login (`tellDiedAway` en `join`).
 
 - **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +
   `store/market.go` + `app/market.go` (`balance.yaml trade` / `market`; sin bloque, o sin

@@ -865,7 +865,8 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
 - **Morir link-dead** paga lo mismo que cualquier muerte (experiencia, skills, equipo al
   cuerpo, bendiciones) y el personaje sale del mundo en ese momento, con un solo guardado
   (el de la muerte, que es su guardado final). Si todavía lo retiene un bloqueo PvP, espera
-  en el templo a que venza, como antes.
+  en el templo a que venza, como antes. Al volver a entrar, el jugador ve la pantalla de
+  muerte con lo que perdió (salvo que el servidor se haya reiniciado entretanto).
 - **Volver a entrar** mientras está link-dead retoma ese mismo personaje, como un relogueo
   (posición, vida, condiciones y la pelea: el logout sigue bloqueado hasta que vence); nunca
   hay dos en el mundo.

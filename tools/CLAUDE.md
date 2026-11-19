@@ -65,7 +65,9 @@ la ciudad). Reporte JSON (`-report`) y
 resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
 (Ping→Pong), bytes por jugador y desconexiones, comparados con `docs/07`. `make bots N=100`
 levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale
-con código 1 si algún bot no entra o se desconecta. `-profile human|mechanical` (T4.1) les da
+con código 1 si algún bot no entra o se desconecta. Al final cada bot sale como un jugador:
+espera el bloqueo de logout de su última pelea (`logoutWait`); uno que a los 45 s sigue en
+combate cierra la conexión y queda link-dead (`left_link_dead` del reporte, no es error). `-profile human|mechanical` (T4.1) les da
 el ritmo de los perfiles de `server/pkg/bot` (los mismos del test de la detección de bots):
 el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico no.
 

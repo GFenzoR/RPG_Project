@@ -376,3 +376,155 @@ func TestLinkDeadArenaDefeat(t *testing.T) {
 		t.Fatalf("Ana in the world %v, target %d", g.w.PlayerByCharacter(a.CharacterID()) == a, a.Target())
 	}
 }
+
+// withLongPoison gives the world the test conditions with a poison of up to 40 hits.
+func withLongPoison(c *session.Config) {
+	cs := testConditions()
+	cs["poison"].MaxTicks = 40
+	c.Balance.Conditions = cs
+}
+
+// A link-dead character's conditions keep running, and each hit of a poison is a fight
+// too: it stays in the world past the block of the last bite, until
+// travel.combat_block_ms after the poison's last hit, and leaves then with one save.
+func TestLinkDeadPoisonRenewsTheBlock(t *testing.T) {
+	h := fightHarness(t, 15, withLongPoison)
+	cl, p := h.hunter("Poisoned", 20)
+	wolf := onlyMonster(t, h)
+	hit := h.bitten(p)
+	h.away(p)
+	h.do(func(ctx *game.TickContext) {
+		if !h.w.ApplyConditionForTest(ctx, p, nil, &content.ConditionApply{ID: "poison", Damage: 2, Ticks: 20}, wolf.ID()) {
+			t.Fatal("no poison")
+		}
+	})
+	n := len(h.saves)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	h.runTo(hit, combatBlock+5*time.Second) // past the bite's block
+	if left := h.w.ConditionsForTest(p)["poison"]; h.w.PlayerByCharacter(p.CharacterID()) != p || !p.LinkDead() ||
+		left == 0 || left >= 20 || len(h.savesOf(p.CharacterID(), n)) != 0 {
+		t.Fatalf("17 s after the bite: in the world %v, link-dead %v, poison hits left %d, saves %d",
+			h.w.PlayerByCharacter(p.CharacterID()) == p, p.LinkDead(), left, len(h.savesOf(p.CharacterID(), n)))
+	}
+	h.sim.RunUntil(func() bool { return h.w.ConditionsForTest(p)["poison"] == 0 }, sim.MaxSeconds(30))
+	last := h.sim.Now() // the poison's last hit
+	h.runTo(last, combatBlock-time.Second)
+	if h.w.PlayerByCharacter(p.CharacterID()) != p || len(h.savesOf(p.CharacterID(), n)) != 0 {
+		t.Fatal("it left before the block of the poison's last hit ended")
+	}
+	h.runTo(last, combatBlock+time.Second)
+	if s := h.savesOf(p.CharacterID(), n); h.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final {
+		t.Fatalf("after the block: in the world %v, saves %+v", h.w.PlayerByCharacter(p.CharacterID()) != nil, s)
+	}
+}
+
+// A slow client in a fight with a monster (the server cuts it) stays in the world
+// link-dead like a closed tab: its connection is closed once, the gateway's Leave and a
+// late command change nothing, and it leaves with one save when the block ends.
+func TestSlowClientInAMonsterFight(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Laggy", 1)
+	hit := h.bitten(p)
+	h.away(p)
+	n := len(h.saves)
+	h.cutSlow(cl)
+	if h.w.PlayerByCharacter(p.CharacterID()) != p || !p.LinkDead() || cl.closes != 1 || len(h.savesOf(p.CharacterID(), n)) != 0 {
+		t.Fatalf("cut: in the world %v, link-dead %v, closes %d, saves %d", h.w.PlayerByCharacter(p.CharacterID()) == p,
+			p.LinkDead(), cl.closes, len(h.savesOf(p.CharacterID(), n)))
+	}
+	h.sim.Command(h.w.Leave(cl)) // the gateway, once the socket is closed
+	h.input(cl, walk(W))         // read before the close, queued after it
+	h.runTo(hit, combatBlock-time.Second)
+	if h.w.PlayerByCharacter(p.CharacterID()) != p || p.Pos() != far || len(h.savesOf(p.CharacterID(), n)) != 0 {
+		t.Fatalf("before the block ends: in the world %v, at %v", h.w.PlayerByCharacter(p.CharacterID()) == p, p.Pos())
+	}
+	h.runTo(hit, combatBlock+time.Second)
+	if s := h.savesOf(p.CharacterID(), n); h.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final ||
+		s[0].Pos != far || cl.closes != 1 {
+		t.Fatalf("after the block: in the world %v, saves %+v, closes %d", h.w.PlayerByCharacter(p.CharacterID()) != nil, s, cl.closes)
+	}
+}
+
+// diedExperience is the experience a death.died message in evs says was lost, and
+// whether there is one.
+func diedExperience(evs []*pb.ServerMessage) (int64, bool) {
+	for _, m := range find(evs, (*pb.ServerMessage).GetChatMessage) {
+		if l := m.GetLocalized(); l.GetKey() == "death.died" {
+			for _, p := range l.GetParams() {
+				if p.GetName() == "experience" {
+					return p.GetNumber(), true
+				}
+			}
+			return 0, true
+		}
+	}
+	return 0, false
+}
+
+// A character that died link-dead learns it at its next login, which opens with the
+// death screen (the same death.died, with what it lost); only once.
+func TestDiedLinkDeadToldAtNextLogin(t *testing.T) {
+	h := fightHarness(t, 40)
+	cl, p := h.hunter("Unaware", 20)
+	xp := p.Experience()
+	h.bitten(p)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	h.sim.RunUntil(func() bool { return h.w.PlayerByCharacter(p.CharacterID()) == nil }, sim.MaxSeconds(60))
+	lost := xp - p.Experience()
+	back := session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Unaware", Vocation: "guardian", Level: 20}
+	cl2, _ := h.joinChar(back)
+	if got, ok := diedExperience(cl2.take()); !ok || got != lost || lost <= 0 {
+		t.Fatalf("first login: death.died %v with %d experience, lost %d", ok, got, lost)
+	}
+	h.input(cl2, logout())
+	h.sim.Step()
+	if !cl2.closed {
+		t.Fatalf("the death ended the fight, yet the logout was refused: %v", sysKeys(cl2.take()))
+	}
+	cl3, _ := h.joinChar(back)
+	if _, ok := diedExperience(cl3.take()); ok {
+		t.Fatal("the death was told again at the second login")
+	}
+}
+
+// A link-dead character that dies while its PvP lock lasts pays the death and waits out
+// the lock at the temple, still link-dead: the death is saved at once (not the final
+// save) and it leaves with its final save when the lock ends. A login in between takes it
+// over and opens with the death screen.
+func TestLinkDeadDeathUnderPvPLock(t *testing.T) {
+	for _, relog := range []bool{false, true} {
+		g := newPvP(t, nil)
+		ca, a := g.fighter("Ana", 0, 10, 10, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+		_, b := g.fighter("Bea", 0, 11, 10, 30, 0)
+		g.unsafe(ca)
+		g.hit(a, b) // Ana's PvP lock: 10 s
+		g.sim.Command(g.w.Leave(ca))
+		g.sim.Step()
+		n, xp := len(g.saves), a.Experience()
+		g.do(func(ctx *game.TickContext) { g.w.HurtForTest(ctx, a, 1_000_000) }) // the world's damage
+		temple := g.w.Map().Islands()[0].Temple
+		s := g.savesOf(a.CharacterID(), n)
+		if g.w.PlayerByCharacter(a.CharacterID()) != a || !a.LinkDead() || a.Pos() != temple ||
+			len(s) != 1 || s[0].Final || s[0].Experience >= xp || s[0].Pos != temple {
+			t.Fatalf("relog %v: after the death in the world %v, link-dead %v, at %v, saves %+v", relog,
+				g.w.PlayerByCharacter(a.CharacterID()) == a, a.LinkDead(), a.Pos(), s)
+		}
+		if relog {
+			cl2, a2 := g.joinChar(session.Character{ID: a.CharacterID(), AccountID: a.CharacterID(), Name: "Ana",
+				Vocation: "guardian", Level: 30, Health: 100000, Pos: pos(10, 10), HasPos: true})
+			got, ok := diedExperience(cl2.take())
+			if a2 == a || a2.Pos() != temple || !ok || got != xp-a.Experience() {
+				t.Fatalf("took over at %v: death.died %v with %d experience (lost %d)", a2.Pos(), ok, got, xp-a.Experience())
+			}
+			continue
+		}
+		g.sim.RunFor(11 * time.Second)
+		s = g.savesOf(a.CharacterID(), n)
+		if g.w.PlayerByCharacter(a.CharacterID()) != nil || len(s) != 2 || !s[1].Final ||
+			s[1].Experience != s[0].Experience || s[1].Pos != temple {
+			t.Fatalf("after the lock: in the world %v, saves %+v", g.w.PlayerByCharacter(a.CharacterID()) != nil, s)
+		}
+	}
+}

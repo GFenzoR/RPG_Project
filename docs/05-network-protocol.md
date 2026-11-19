@@ -615,8 +615,13 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `CreatureAppear` a quienes ven el templo) y recibe
   `Inventory`, `PlayerStats`, `PlayerSkills` y el `Message` de sistema `death.died` con
   `experience` (perdida) y `blessings` (las que tenía y se consumieron), ambos `number`.
-  El cliente muestra la pantalla de muerte con ese mensaje. Sacar, usar o meter algo en el
-  cuerpo ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
+  El cliente muestra la pantalla de muerte con ese mensaje. Un personaje que muere
+  link-dead no tiene a quién decírselo: el servidor guarda ese mismo `death.died` en memoria
+  y se lo manda al **próximo login** del personaje (también al que retoma al link-dead),
+  después de su `Welcome`, `FullMapView`, `PlayerStats`, `Inventory`, `PlayerSkills` y
+  cosméticos; una sola vez. Un reinicio del servidor en el medio lo pierde. Sacar, usar o
+  meter algo en el cuerpo ajeno dentro de `corpse_owner_only_ms` responde
+  `death.corpse_not_owner`.
 
 ### Items e inventario (T1.8, `server/internal/session/inventory.go`)
 Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").

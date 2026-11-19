@@ -32,9 +32,10 @@ type Client interface {
 	Send(b *pb.ServerBatch) bool
 	// Close ends the connection after the batches already sent, followed by a
 	// Disconnect with reason (none if reason is UNSPECIFIED). It is called at most once
-	// per player: after the player left the world or, for a player under its PvP lock that
-	// stays in the world link-dead (T5.2: a slow client, a password reset), when the loop
-	// ends its connection. Commands from that connection are ignored from then on.
+	// per player: after the player left the world or, for a player in combat (inCombat: a
+	// fight with a monster or a player, or its PvP lock) that stays in the world link-dead
+	// (linkdead.go: a slow client, a password reset), when the loop ends its connection.
+	// Commands from that connection are ignored from then on.
 	Close(reason pb.DisconnectReason)
 }
 
@@ -225,6 +226,9 @@ type World struct {
 	publishedRetry atomic.Int32
 	// slow collects players whose Send failed during flush.
 	slow []*Player
+	// diedAway: the death.died message of a character that died link-dead, by character,
+	// for its next login (linkdead.go diedLinkDeadNotice; until a restart).
+	diedAway map[int64]*pb.ServerMessage
 
 	pf         *world.Pathfinder
 	pathBudget int
@@ -553,6 +557,7 @@ func New(cfg Config) (*World, error) {
 		jobs:        map[uint64]pendingJob{},
 		banned:      map[int64]time.Time{},
 		locked:      map[int64]bool{},
+		diedAway:    map[int64]*pb.ServerMessage{},
 		inFlight:    map[int64]uint64{},
 		heldGround:  map[*Item]groundHold{},
 		shopPending: map[int64]pendingShop{},

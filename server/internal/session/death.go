@@ -113,9 +113,11 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
-	p.emit(systemMsg(msgDied,
+	died := systemMsg(msgDied,
 		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
-		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}}))
+		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}})
+	p.emit(died)
+	w.diedLinkDeadNotice(p, died)
 	w.deathSave(ctx, p)
 }
 
