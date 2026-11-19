@@ -842,6 +842,9 @@ describe("validator diagnostics", () => {
         "  - { type: heal_self, min: 5, max: 9, interval_ms: 2000, area: { shape: circle, radius: 1 } }",
         "  - { type: summon, min: 1, max: 1, interval_ms: 2000, summon: { monster: slagbound_warden, count: 1 } }",
         "  - { type: summon, interval_ms: 2000, summon: { monster: no_such_beast, count: 9 } }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 7 }",
+        "  - { type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: { shape: circle, radius: 2, center: target } }",
+        "  - { type: melee, min: 1, max: 2, interval_ms: 2000, area: { shape: circle, radius: 5, center: target } }",
         "phases:",
         "  - { below_hp_pct: 50, attacks_add: [ { type: melee, min: 4, max: 2, interval_ms: 2000 } ] }",
         "  - { below_hp_pct: 50, speed_mult: 0 }",
@@ -857,6 +860,10 @@ describe("validator diagnostics", () => {
     expect(at("attacks[4].min", "not allowed here")).toBe(true);
     expect(at("attacks[5].summon.count", "<= 8")).toBe(true);
     expect(at("attacks[5].summon.monster", 'unknown monster "no_such_beast"')).toBe(true);
+    // What a monster notices (MaxRange 6): its range, and range + radius around the target.
+    expect(at("attacks[6].range", "<= 6")).toBe(true);
+    expect(at("attacks[7].area.radius", "reach 5 + radius 2")).toBe(true);
+    expect(out.some((m) => m.includes(" attacks[8]."))).toBe(false);
     expect(at("phases[0].attacks_add[0].min", "min (4) is greater than max (2)")).toBe(true);
     expect(at("phases[1].below_hp_pct", "another phase is already below 50 %")).toBe(true);
     expect(at("phases[1].speed_mult", "> 0")).toBe(true);

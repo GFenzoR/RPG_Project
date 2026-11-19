@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
-import { SchemaSet } from "./schemas.ts";
+import { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
 import { loadYaml, parseYaml, suggest } from "./source.ts";
 import type { Diagnostic, PathSegment, SourceFile } from "./source.ts";
@@ -49,6 +49,13 @@ export const DEV_ONLY_ACTIONS: readonly string[] = ["train_skill", "restore_mana
 
 /** The look of every new character (data/outfits.yaml); free, so never sold. */
 const DEFAULT_OUTFIT = "citizen";
+
+/** The longest aimed range: aimRange in common.schema.json (server content.MaxRange). */
+const MAX_RANGE = (
+  JSON.parse(readFileSync(new URL("common.schema.json", SCHEMA_DIR), "utf8")) as {
+    $defs: { aimRange: { maximum: number } };
+  }
+).$defs.aimRange.maximum;
 
 const SKILLS = {
   combat: ["fist", "sword", "axe", "club", "distance", "shield", "magic", "fishing"],
@@ -536,6 +543,21 @@ class Validator {
           [...path, "min"],
           `min (${atk["min"]}) is greater than max (${atk["max"]})`,
         );
+      }
+      // A circle around the target reaches the attack's range plus its radius: past
+      // MAX_RANGE it would hurt a player who does not know the monster (server
+      // content.checkAttack).
+      const area = atk["area"];
+      if (isObj(area) && area["center"] === "target" && typeof area["radius"] === "number") {
+        const range = typeof atk["range"] === "number" ? Math.max(atk["range"], 1) : 1;
+        const reach = atk["type"] === "melee" ? 1 : range;
+        if (reach + area["radius"] > MAX_RANGE) {
+          this.error(
+            src,
+            [...path, "area", "radius"],
+            `reach ${reach} + radius ${area["radius"]} of a circle around the target is above ${MAX_RANGE}, what a monster notices`,
+          );
+        }
       }
     }
     // The remains it leaves: a container that stays on its tile, like creature_remains

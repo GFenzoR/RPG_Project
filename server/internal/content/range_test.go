@@ -60,3 +60,25 @@ func TestAimedRangesStopAtMaxRange(t *testing.T) {
 		t.Error("a negative radius with a range was accepted")
 	}
 }
+
+// A monster's attack stops at MaxRange too (review of the monster abilities): its range,
+// and a circle around its target as far as that range plus the radius (1 + the radius for
+// a melee one). Past it the area would hurt a player who does not even know the monster.
+func TestMonsterReachStopsAtMaxRange(t *testing.T) {
+	for src, ok := range map[string]bool{
+		"{type: distance, min: 1, max: 2, interval_ms: 2000, range: 6}":                                                                  true,
+		"{type: distance, min: 1, max: 2, interval_ms: 2000, range: 7}":                                                                  false,
+		"{type: spell, min: 1, max: 2, interval_ms: 2000, range: -1}":                                                                    false,
+		"{type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: {shape: circle, radius: 1, center: target}}":                true,
+		"{type: distance, min: 1, max: 2, interval_ms: 2000, range: 5, area: {shape: circle, radius: 2, center: target}}":                false,
+		"{type: spell, min: 1, max: 2, interval_ms: 2000, range: 6, area: {shape: circle, radius: 6, center: target}}":                   false,
+		"{type: melee, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 5, center: target}}":                             true,
+		"{type: melee, min: 1, max: 2, interval_ms: 2000, area: {shape: circle, radius: 6, center: target}}":                             false,
+		"{type: spell, min: 1, max: 2, interval_ms: 2000, range: 6, area: {shape: circle, radius: 6}}":                                   true,
+		"{type: spell, min: 1, max: 2, interval_ms: 2000, below_hp_pct: 50, area: {shape: circle, radius: 3, center: target}, range: 4}": false,
+	} {
+		if _, err := ParseMonster([]byte(atk(src))); (err == nil) != ok {
+			t.Errorf("%s: accepted %v, want %v (%v)", src, err == nil, ok, err)
+		}
+	}
+}

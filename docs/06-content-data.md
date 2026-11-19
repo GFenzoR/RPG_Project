@@ -332,7 +332,9 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   arranque del servidor (`content.ParseMonster`, `session.checkSummons`) rechazan lo mismo:
   un tipo, una forma o un centro que no existe, un círculo sin `radius` o un rayo sin
   `length` (o con `radius`, o centrado en el objetivo), radios y largos de más de 6 (lo
-  que nota un monstruo), un `heal_self` o `summon` con `element`, `range`, `area` o
+  que nota un monstruo), un `range` de más de 6, un círculo alrededor del objetivo que
+  llega más lejos que eso (`range` + `radius`, 1 + `radius` cuerpo a cuerpo: dañaría a
+  un jugador que ni conoce al monstruo), un `heal_self` o `summon` con `element`, `range`, `area` o
   `condition`, un `summon` con `min`/`max` o sin `summon`, uno de un monstruo que no
   existe o que invoca a su vez, y dos fases con el mismo `below_hp_pct`. Los duelos de
   balance (`server/internal/sim/foe_test.go`) los simulan: un monstruo nuevo con
@@ -620,8 +622,8 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
-- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal` y
-  de una `condition` va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
+- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal`,
+  de una `condition` y del ataque de un monstruo va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
   esquema y `content.MaxRange`): el medio alto de la ventana clásica de 15x11 + 1, lo que
   nota un monstruo. Así un monstruo golpeado desde tan lejos como apunta un jugador, o
   por un área, siempre lo nota y devuelve el golpe; la vista ancha de 31x21 no lo estiró

@@ -289,6 +289,16 @@ func checkAttack(a *MonsterAttack) error {
 	if err := checkArea(a.Area); err != nil {
 		return err
 	}
+	// How far it hits stops at MaxRange, what a monster notices: its reach and, for a
+	// circle around its target, that reach plus the radius. Past it an area would hurt a
+	// player who does not even know the monster.
+	far := a.Reach()
+	if ar := a.Area; ar != nil && ar.Center == AreaTarget {
+		far += ar.Radius
+	}
+	if a.Targeted() && (a.Range < 0 || far > MaxRange) {
+		return fmt.Errorf("range must be 0-%d, and range + radius of a circle around the target at most %d (what a monster notices)", MaxRange, MaxRange)
+	}
 	if a.Chance == 0 {
 		a.Chance = 1
 	}
@@ -300,7 +310,8 @@ func checkAttack(a *MonsterAttack) error {
 
 // checkArea checks an attack's area: a circle of radius 1..MaxRange around self (the
 // default) or the target, or a beam of length 1..MaxRange from the monster. The bound is
-// what a monster notices (MaxRange): no area reaches a player the monster would not see.
+// what a monster notices (MaxRange); checkAttack bounds a circle around the target with
+// the attack's range too.
 func checkArea(ar *AttackArea) error {
 	if ar == nil {
 		return nil
