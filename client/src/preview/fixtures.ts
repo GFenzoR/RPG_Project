@@ -85,12 +85,18 @@ export function baseScene(content: ClientContent, now: number): Scene {
     level: Number(level),
     percent: Number(percent),
   })) as GameUi["skills"];
+  // Every slot filled with the engine's item icons (docs/17 "Íconos de items"): the level 15
+  // pieces of the catalog's band 3 and the iron sword of band 2.
   ui.inventory = new Map([
-    [EquipmentSlot.HEAD, item("embersteel_helm")],
+    [EquipmentSlot.HEAD, item("stagleather_hood")],
+    [EquipmentSlot.NECK, item("antler_amulet")],
     [EquipmentSlot.BACKPACK, item("backpack")],
-    [EquipmentSlot.LEFT_HAND, item("plank_shield")],
+    [EquipmentSlot.ARMOR, item("stagleather_coat")],
+    [EquipmentSlot.LEFT_HAND, item("elmwood_shield")],
     [EquipmentSlot.RIGHT_HAND, item("iron_sword")],
-    [EquipmentSlot.FEET, item("tarred_boots")],
+    [EquipmentSlot.LEGS, item("stagleather_leggings")],
+    [EquipmentSlot.FEET, item("stagleather_boots")],
+    [EquipmentSlot.RING, item("briar_ring")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
   // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
@@ -109,6 +115,11 @@ export function baseScene(content: ClientContent, now: number): Scene {
       // A quest item: the gold ring of its colour (docs/17 UI-6).
       item("smuggler_tally", 3),
       item("boarding_saber"),
+      // Pieces of the next bands, waiting in the backpack.
+      item("embersteel_helm"),
+      item("smuggler_crossbow"),
+      item("bolt", 24),
+      item("cinder_amulet"),
     ],
   };
   ui.containers = [];
@@ -290,11 +301,16 @@ export function withDeath(s: Scene, now: number): Scene {
 /** The armorer's shop with many items (docs/17 UI-8: categories, a second page). */
 export function withShop(content: ClientContent, s: Scene): Scene {
   const ui = { ...s.ui };
-  const kinds = new Set(["weapon", "armor", "shield", "ammo", "tool", "consumable", "rune"]);
-  const ids = Object.entries(content.items)
-    .filter(([, d]) => kinds.has(d.kind ?? "") && d.sprite !== "")
-    .slice(0, 30)
-    .map(([n]) => Number(n));
+  // Mostly equipment, the engine's item icons (docs/17 "Íconos de items"), and a few tools,
+  // consumables and runes so every category shows.
+  const gear = new Set(["weapon", "armor", "shield", "ammo"]);
+  const other = new Set(["tool", "consumable", "rune"]);
+  const pick = (kinds: Set<string>, n: number): number[] =>
+    Object.entries(content.items)
+      .filter(([, d]) => kinds.has(d.kind ?? "") && d.sprite !== "")
+      .slice(0, n)
+      .map(([id]) => Number(id));
+  const ids = [...pick(gear, 24), ...pick(other, 6)];
   ui.dialog = {
     id: 8,
     npcId: 51,
