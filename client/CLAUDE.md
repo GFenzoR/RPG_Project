@@ -219,10 +219,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - La munición se ve en el slot `ammo` con su cantidad (`.count`), como cualquier pila.
 
 ## Notas de T3.2
-- `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones (`ConditionBar` en `ui/GameView.tsx`; en escritorio va en la placa sobre el
-  orbe de vida, arriba del nombre, y en los teléfonos en el encabezado; nombres
-  `condition.<id>.name`).
+- `WorldState.conditions` (de `PlayerConditions`, solo las propias, y desde el lote 13 los
+  estados del servidor: un `remaining_ms` 0 es `until: undefined`, sin fin) alimenta la
+  bandeja de estados (`ui/StatusTray.tsx`, ver "Notas de la bandeja de estados"; nombres
+  `condition.<id>.name`, qué hace `condition.<id>.desc`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -1289,10 +1289,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (`.win-layer`, la pantalla sobre la barra). En la barra:
   - `ui/Vitals.tsx`: orbes de vida y maná en sus engastes de hierro (se llenan con
     `transform`, el "fantasma" marca lo perdido, el de vida late bajo el 25 %;
-    `orbFill`/`lowHealth` puros), la barra de experiencia (`ExperienceBar`) y, sobre el
-    orbe de vida, una placa con nombre, nivel, experiencia y condiciones (`Vitals`,
-    `data-tutorial="stats"`). Los test ids `health`, `mana`, `level`, `experience` y
-    `conditions` siguen ahí con los mismos textos;
+    `orbFill`/`lowHealth` puros) y la barra de experiencia con la placa del nombre
+    (`ExperienceBar`, `data-tutorial="stats"`; desde el lote 13 la placa de sobre el orbe
+    de vida se fue: ver "Notas de la bandeja de estados");
   - la hotbar (`ui/Hotbar.tsx`, ya no sobre el mapa) y `ui/Toolbar.tsx`: botones con íconos
     propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de seis a 1x, o una
     fila a 2x desde 1600 px) que abren y cierran las ventanas, el mercado (solo lo cierra:
@@ -1638,8 +1637,8 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   interfaz la agranda como a las ventanas), grilla de tres columnas: orbe de vida
   (`--orb-col`, 112 px), el medio (`.bar-centre`: la experiencia arriba y debajo `.bar-row`,
   un pozo con la hotbar y la botonera) y orbe de maná. Los engastes (`.orb-socket`, 106 px)
-  salen 18 px por encima de la barra; la placa (`.vitals`, `--plaque-w` 132 px) va sobre el
-  orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
+  salen 18 px por encima de la barra; la bandeja de estados (`.status-box`, `--tray-w` 132
+  px; antes la placa `.vitals`) va sobre el orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
   remaches arriba, pilares de hierro con filo dorado a los lados del medio y una cresta de
   pináculos al centro. La hotbar mide sus slots en sus propios px aunque la barra tenga
   `zoom` (`cssZoom` de `ui/Hotbar.tsx`: `getBoundingClientRect` da px de pantalla y
@@ -1842,3 +1841,38 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `quests`) y mira las dos pestañas; después lee el atril del templo y abre su cofre dos
   veces (screenshots `96-sandbox-quests`, `96b-sandbox-quests-finished`, `97-sandbox-book`,
   `98-sandbox-chest`).
+
+## Notas de la bandeja de estados (lote 13, rama `feat/hud-status`)
+Lo que pidió el dueño en la prueba del 2026-11-19: ver los estados del personaje junto al
+chat, y el nombre y el nivel al medio, en la barra de experiencia (docs/17 "Hecho: bandeja
+de estados y placa del nombre").
+- **Estado puro** (`state/status.ts`, con tests): `trayEntries(condiciones, ahora,
+  reducido)` da lo que se dibuja: orden fijo (`STATUS_ORDER`: lo que daña, los bloqueos y
+  la zona, lo que ayuda; un id desconocido al final como ventaja), tipo (`STATUS_KIND`:
+  `buff` o `harm`), segundos redondeados para arriba, sin lo que ya terminó y con `flash`
+  en los últimos `FLASH_MS` (5 s) salvo con movimiento reducido. `nextTrayChange` dice en
+  cuántos ms cambia un segundo escrito (o nada sin fin). `statusIconStyle` corta
+  `STATUS_BOX` (8, 8, 16, 16, el `UI_STATUS_BOX` de spritegen: un test los compara) de
+  `ui/status/<id>` del atlas como variables CSS.
+- **Vista** (`ui/StatusTray.tsx`): `StatusTrayView` sin hooks (`ui/StatusTray.test.ts`
+  recorre su árbol) y `StatusTray`, con un `setTimeout` al próximo segundo y el tooltip
+  que abrió un toque (`data-open`; el mouse y el foco lo abren con CSS). Cada ícono es un
+  `li` enfocable con `data-condition`, `data-kind`, `data-flash`, `aria-label` (nombre y
+  tiempo) y su tooltip (`role="tooltip"`, `aria-describedby`); sin sprite, la inicial.
+  Textos: `client.status.*`, `condition.<id>.desc`.
+- **Dónde va:** en escritorio dentro de `HudBar` (prop `tray`), `position: absolute` sobre
+  el orbe de vida y a la izquierda del chat (`windows.css`, íconos a 2x, filas que crecen
+  hacia arriba); mientras un tooltip se ve, `.hud-bar:has(...)` sube la barra a `z-index`
+  21, sobre las ventanas. En teléfonos y tablets, en el encabezado (`client.css`, 1,5x):
+  toma el lugar que sobra (`flex: 1 1 0`, al menos un ícono), lo que no entra baja a una
+  segunda línea recortada y el tooltip cuelga del `.hud` (nada posicionado en el medio,
+  así el recorte de la fila no lo corta).
+- **Placa del nombre** (`ExperienceBar`): nombre y nivel (`client.vitals.level`) sobre la
+  barra, el porcentaje en la barra (`.xppercent`) y en su `title` y `aria-valuetext` la
+  experiencia exacta y lo que falta (`experienceTip`, con `content.experience`, la curva de
+  `balance.yaml` que pasa `vite/content.ts`; `state/experience.ts` es la fórmula del
+  servidor). Test ids: `level` en el nivel, `experience` en la barra, `conditions` en la
+  bandeja.
+- **Vista previa:** escena `status` (y `game`, `danger`) de `make ui-preview`.
+- **E2E:** "T3.2: a guardian casts haste" (`22-haste`, `23-conditions-hud`) y "T5.6: at
+  1280x800 a long name" (la placa).

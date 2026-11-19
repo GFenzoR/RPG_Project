@@ -166,6 +166,41 @@ el punto 5:
     `feat/character-look` tocan el dibujo de criaturas en `packages/renderer/src/map-view.ts`:
     al apilar, las criaturas siguen en la capa de items (`placeEntity`) y las piezas ya no.
   - **Nieve y hielo (lote 14):** una línea en `ladder`, 12 items, su nombre y `make borders`.
+- **Bandeja de estados y placa del nombre (hecho, rama `feat/hud-status`, lote 13; docs/17
+  "Hecho: bandeja de estados y placa del nombre", docs/02 "Estados del personaje", docs/05
+  "Condiciones"):** un ícono propio por condición y por estado (`in_combat`, `pvp_locked`,
+  `protection_zone`, que el servidor suma a `PlayerConditions`) junto al chat, con marco
+  verde o rojo, segundos, parpadeo y tooltip; el nombre y el nivel sobre la barra de
+  experiencia. Queda:
+  - **Teléfono vertical:** en el encabezado de 390 px entra un solo ícono (el más urgente);
+    los demás no se ven ni hay un "+N" que diga que hay más. Acostado o en una tablet
+    entran los diez. Si molesta, un contador o una segunda fila que solo aparezca con
+    estados (empuja el mapa: la regla de T5.6 es un encabezado de una línea).
+  - **Una ventana movida encima de la bandeja la tapa** (la bandeja va bajo las ventanas,
+    como el mapa); su tooltip no, porque sube la barra sobre ellas mientras se ve. Las
+    habilidades en su lugar de fábrica, muy altas, pueden llegar hasta ahí; no se probó
+    que `defaultPlace` (`ui/windows.ts`) la esquive: no es una ventana.
+  - **"En combate" puede terminar hasta 1 s antes o después** que el bloqueo de verdad: el
+    servidor solo reenvía la lista cuando el fin se movió 1 s (`statusSlack`) y el cliente
+    cuenta lo último que supo. Si un jugador sale justo en ese segundo, el servidor lo
+    rechaza como siempre (`combat.logout_locked`).
+  - **Un estado que no es de PvP** (la zona sin logout de `zones.yaml`, una arena) no tiene
+    ícono: si hace falta, otro id en `status.go`, su texto, su ícono y su lugar en
+    `STATUS_ORDER`.
+  - **E2E (verificación final del lote):** sin correr en la rama. "T3.2: a guardian casts
+    haste" mira el ícono de la aceleración en la bandeja (verde, con segundos y su sprite),
+    que la bandeja quede a la izquierda del chat y sobre la barra, y su tooltip
+    (`22-haste`, con el tooltip abierto); `23-conditions-hud` recorta abajo a la izquierda:
+    la bandeja, el orbe de vida y la placa del nombre sobre la barra de experiencia. "T5.6:
+    at 1280x800 a long name" exige el nombre entero en la placa, centrado sobre la barra.
+  - **Para las otras ramas del lote:** sin campos nuevos en el protocolo (solo comentarios
+    en `server.proto`, con su código generado), sin migraciones ni ids nuevos. Claves
+    nuevas en `i18n/*/client.yaml` (`condition.<id>.desc` de las ocho condiciones, nombre y
+    descripción de los tres estados, `client.status.*`, `client.vitals.level`,
+    `.percent`, `.experience_next`, `.experience_max`) y `client.conditions.left` se fue.
+    `HudBar` cambió `conditions` por `tray` (y `curve`); `windows.css` dejó la cresta del
+    medio y `--plaque-w` es `--tray-w`. En spritegen: `UI_STATUS_BOX`, `STATUS_ART` y
+    `ui/status/*` en `recipes/ui.ts`, y una fila en `assets/CREDITS.md`.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al

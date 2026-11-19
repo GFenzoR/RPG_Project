@@ -505,3 +505,11 @@ secundaria.
   orilla propia de cada suelo (matas de pasto, piedritas, terrones, juntas, granos) y la
   espuma debajo de los bordes en el agua; las cinco islas pasaron por `mapcli autoborder`.
   docs/06 "Bordes", docs/17 ART-4; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Bandeja de estados y placa del nombre (prueba del dueño del 2026-11-19; lote 13,
+  rama `feat/hud-status`).** Un ícono de pixel art propio por condición y por estado del
+  servidor (`in_combat`, `pvp_locked`, `protection_zone`, nuevos en `PlayerConditions`) en
+  una bandeja junto al chat (en teléfonos, una fila en el encabezado): marco verde o rojo,
+  los segundos que quedan, un parpadeo en los últimos 5 s y un tooltip con qué hace. El
+  nombre y el nivel pasan al medio, sobre la barra de experiencia, con el porcentaje en la
+  barra y lo que falta para el nivel siguiente en su tooltip. docs/17 "Bandeja de estados",
+  docs/02 "Estados del personaje"; lo que queda: docs/14, "Pendientes conocidos".

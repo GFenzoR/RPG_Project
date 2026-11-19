@@ -1368,9 +1368,9 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
 │                                                                    [Contene-] │
 │[Habilidades]          MAPA a pantalla completa                     [ dores  ] │
 │                    (el jugador al centro, sobre la barra)                    │
-│ ┌placa┐ [Chat translúcido]   [Diálogo / tienda / estación abajo al centro]    │
-│ │nombre│                                                                      │
-│ ╭─────╮════ barra de experiencia ═══════════════════════════════════ ╭─────╮ │
+│ [estados] [Chat translúcido]  [Diálogo / tienda / estación abajo al centro]  │
+│ [▣▣▣]                          ┌ Nombre · Nivel 15 ┐                         │
+│ ╭─────╮════ barra de experiencia ═══════ 62 % ═════════════════════ ╭─────╮ │
 │ │ Vida│ F1 … F12 (hotbar)                       [I][K][B][P][G][O]  │Maná │ │
 │ ╰─────╯                                         [⚙][?][M][Salir]    ╰─────╯ │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -1380,7 +1380,10 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
   salen de la barra, con dos pináculos cada uno; pilares de hierro a los lados del medio y
   una cresta de pináculos al centro. Sobre el orbe de vida, una placa con nombre, nivel,
   experiencia y condiciones. La escala de la interfaz la agranda como a las ventanas; a
-  960 px de ancho entra igual (la hotbar pagina sus slots con flechas).
+  960 px de ancho entra igual (la hotbar pagina sus slots con flechas). **Desde el lote 13**
+  (abajo, "Hecho: bandeja de estados y placa del nombre") la placa se fue: el nombre y el
+  nivel van al medio, sobre la barra de experiencia (la placa del nombre reemplaza a la
+  cresta), y sobre el orbe de vida queda la bandeja de estados.
 - **El mapa** es la pantalla sobre la barra: el jugador queda al centro de esa área y nada
   del mapa se esconde bajo la barra. La vista ajustada siempre la cubre a escala entera
   (tabla de abajo).
@@ -2466,6 +2469,64 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
   los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
   ~125 con la negrita de 12 px).
+
+### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
+Lo que dijo el dueño de la prueba del 2026-11-19 (Isla de Pruebas, build del lote 11):
+"cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique
+que tengo activo o que se indiquen los estados que tiene el personaje (envenenado, fuego,
+etc...)" y "me gusta la ventanita que dice el nombre y nivel pero creo que podría verse al
+medio, integrada a la barra de experiencia". Antes, las condiciones eran insignias de texto
+en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vio.
+- **Bandeja de estados** (`client/src/ui/StatusTray.tsx`, estado puro en
+  `client/src/state/status.ts`):
+  - Un ícono por condición propia y por estado del servidor (`in_combat`, `pvp_locked`,
+    `protection_zone`: docs/02 "Estados del personaje", docs/05). El orden es fijo: primero
+    lo que daña (veneno, fuego, eléctrico, ralentizado), después los bloqueos de la pelea y
+    la zona, al final lo que ayuda (acelerado, invisible, puntería, saciado); una condición
+    que el cliente no conoce va al final.
+  - Marco verde (`--ui-ok`) si ayuda y rojo (`--ui-danger`) si daña. Los segundos que
+    quedan van escritos en la esquina del ícono (desde 100 s, minutos: "7m"). Parpadea en
+    sus últimos 5 s (`FLASH_MS`), nunca con movimiento reducido.
+  - El tooltip dice el nombre, si es ventaja o perjuicio, qué hace
+    (`condition.<id>.desc`), los golpes que quedan y el tiempo. Sale con el mouse encima,
+    con el foco del teclado (cada ícono es enfocable) o con un toque, que lo abre y lo
+    cierra (los teléfonos no tienen hover).
+  - Un temporizador la redibuja cuando cambia un segundo escrito (`nextTrayChange`): el
+    servidor solo manda la lista cuando algo empieza, cambia o termina.
+  - **Escritorio:** abajo a la izquierda, sobre el orbe de vida y sus pináculos (donde
+    estaba la placa), a la izquierda del lugar de fábrica del chat (`--tray-w`, 132 px: el
+    chat empieza 12 px después). Ninguno tapa al otro. Íconos a 2x (32 px en un marco de
+    36), tres por fila; las filas crecen hacia arriba y la de abajo es la más urgente.
+    Mientras se ve un tooltip, la barra sube sobre la capa de ventanas (`z-index` 21 con
+    `:has`), así ninguna ventana lo tapa; si no, la bandeja va bajo las ventanas como el
+    mapa.
+  - **Teléfonos y tablets:** una fila en el encabezado, que sigue siendo de una línea, con
+    los íconos a 1,5x (24 px) y el tooltip colgando bajo el encabezado. La fila toma el
+    lugar que deja la línea, nunca menos de un ícono; lo que no entra pasa a una segunda
+    línea recortada, así se ven solo íconos enteros, los más urgentes primero. En un
+    teléfono vertical de 390 px entra uno; acostado o en una tablet, los diez.
+  - **Íconos:** pixel art propio de spritegen, `ui/status/<id>`
+    (`tools/spritegen/src/recipes/ui.ts`, `STATUS_ART`): mapas de 14x14 escritos a mano,
+    contorneados a 16x16 dentro de `UI_STATUS_BOX` (8, 8, 16, 16) de un sprite de 32x32.
+    Gota de veneno con burbujas, llama, rayo, caracol, bota alada, ojo tachado, diana con
+    una flecha, muslo asado, espadas cruzadas de acero, candado y escudo azul con cruz.
+    Nada calcado de otros juegos. El atlas suma 11 sprites de 32x32. Sin el sprite (o con
+    un placeholder) la bandeja escribe la inicial del nombre.
+- **Placa del nombre** (`ExperienceBar` de `client/src/ui/Vitals.tsx`):
+  - Nombre y nivel ("Nivel 15") centrados sobre la barra de experiencia, en una placa de
+    piedra con filo dorado parada sobre la banda de hierro, con un pináculo en cada
+    hombro (reemplaza a la cresta del centro).
+  - La barra (11 px) lleva escrito el porcentaje. Su tooltip (`title` y `aria-valuetext`)
+    da la experiencia exacta y lo que falta para el nivel siguiente, con la curva de
+    `balance.yaml experience` (`content.experience`, `client/src/state/experience.ts`, la
+    misma fórmula que `content.Experience.TotalFor`); en el nivel máximo, "nivel máximo".
+  - El orbe de vida queda solo. Los test ids `health`, `mana`, `level` (ahora "Nivel 15") y
+    `experience` (ahora la barra) siguen; `conditions` es la bandeja. El resaltado
+    `stats` del tutorial cae en la placa y la barra (`.xp`).
+- **Vista previa:** escena `status` (diez condiciones y estados, dos parpadeando y el
+  tooltip del veneno abierto) en `make ui-preview`; `game` lleva la zona de protección y la
+  comida, y `danger` el veneno, el combate y una aceleración que se acaba. Se revisaron a
+  1920x1080, 1280x800, 960x700, teléfono vertical y horizontal y tablet.
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
