@@ -159,13 +159,13 @@ describe("autoborder", () => {
     ]);
   });
 
-  it("leaves a tile with a wall alone: the wall covers it", () => {
+  it("puts the pieces under a wall too: a thin wall leaves its ground in sight", () => {
     const w = roundTrip(bare(), [
       { op: "paint_ground", floor: 7, rect: { x: 1040, y: 1045, w: 2, h: 1 }, item: "sand" },
       { op: "place_item", pos: { x: 1040, y: 1045, z: 7 }, item: "stone_wall" },
       { op: "autoborder", floor: 7, rect: { x: 1040, y: 1045, w: 2, h: 1 } },
     ]);
-    expect(tile(w, 1040, 1045).stack).toEqual(["stone_wall"]);
+    expect(tile(w, 1040, 1045).stack).toEqual(["gs_inner_nw", "gs_inner_sw", "stone_wall"]);
     expect(tile(w, 1041, 1045).stack).toEqual(["gs_inner_ne", "gs_inner_se"]);
   });
 

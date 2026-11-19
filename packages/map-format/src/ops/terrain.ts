@@ -42,8 +42,8 @@ export function fill(d: Draft, op: FillOp, opts: OpOptions): MapOp[] {
 }
 
 /**
- * Recomputes the border pieces of every tile in the rect. A tile that holds a wall gets none:
- * the wall covers it, and its stack stays the wall's (docs/06 "Bordes").
+ * Recomputes the border pieces of every tile in the rect. They go at the bottom of the stack,
+ * also under a wall: a thin wall piece leaves its tile's ground in sight (docs/06 "Bordes").
  */
 export function autoborder(d: Draft, op: AutoborderOp, opts: OpOptions): MapOp[] {
   if (!opts.borders) throw new InvalidOp("autoborder needs the rules of data/borders.yaml");
@@ -56,8 +56,7 @@ export function autoborder(d: Draft, op: AutoborderOp, opts: OpOptions): MapOp[]
     const pos = { x: c.x, y: c.y, z: op.floor };
     const prev = d.stackAt(c.x, c.y, op.floor);
     const kept = prev.filter((id) => !pieces.has(id));
-    const walled = kept.some((id) => opts.itemKind?.(id) === "wall");
-    const next = walled ? kept : [...borderPieces(c.x, c.y, groundAt, set), ...kept];
+    const next = [...borderPieces(c.x, c.y, groundAt, set), ...kept];
     inverse.push(...d.setStack(pos, next));
   }
   return inverse;

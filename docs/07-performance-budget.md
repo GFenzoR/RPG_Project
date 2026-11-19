@@ -461,11 +461,11 @@ atlas ya tenía 3 páginas en la base (2048x2016, 2048x2048 y 2048x1056); la ter
 2048x1312: 4,59 MB de PNG en total (+239 KB) y 635 KB de JSON (+88 KB), más 220 KB de
 `atlas.json` (+31 KB). El look de cada pieza se elige al armar el chunk (`lookOf`), como los
 de suelo: ni cuentas ni objetos por frame; la espuma va en la lista plana de tiles animados
-(una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 11580 (cada orilla
-natural tiene las suyas; una casilla con muro no lleva ninguna). Medido contra la base en
-la misma máquina: `FullMapView` en el Farol pasó de 1146 a 1330 bytes (más pilas distintas
-en la paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
-`TestCrowdBandwidth`, de 586 a 596 B/s por jugador en base y de 1515 a 1519 en stress,
+(una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 12273 (cada orilla
+natural tiene las suyas, también bajo los muros). Medido contra la base en la misma
+máquina: `FullMapView` en el Farol pasó de 1146 a 1487 bytes (más pilas distintas en la
+paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
+`TestCrowdBandwidth`, de 586 a 599 B/s por jugador en base y de 1515 a 1521 en stress,
 lejos de los 4096.
 
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla

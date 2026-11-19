@@ -1229,8 +1229,8 @@ shore:                              # la espuma donde un borde llega al agua
   la casilla cubierta: `n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa
   diagonal (esquina de afuera); `inner_*` = en los dos lados vecinos (esquina de adentro, que
   también cubre su diagonal). Se apilan abajo de todo en la pila de la casilla, primero los
-  bordes de los suelos más bajos. Una casilla con un muro (`kind: wall`) no lleva piezas: el
-  muro la tapa y su pila sigue siendo la del muro.
+  bordes de los suelos más bajos; también debajo de un muro (una pieza de muro angosta deja
+  ver el suelo de su casilla).
 - **La orilla del agua** (`shore`): en una casilla de un suelo de `water` con algún borde, el
   autoborder pone primero (debajo de los bordes) las piezas `border_surf_<pieza>` con la forma
   de todos esos bordes juntos: el borde mojado de la tierra, una línea de espuma y otra

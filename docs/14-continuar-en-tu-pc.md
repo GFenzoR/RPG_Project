@@ -143,7 +143,7 @@ el punto 5:
   que toca; madera y muelles siguen rectos), cada pieza con 4 looks que el renderer elige por
   casilla (`lookOf`), todos con los mismos puntos de cruce en los lados de la casilla, y la
   espuma debajo de los bordes en el agua. Las cinco islas, en sus dos pisos, pasaron por
-  `mapcli autoborder` (6297 → 11580 piezas; el diff es solo de piezas de borde). Queda:
+  `mapcli autoborder` (6297 → 12273 piezas; el diff es solo de piezas de borde). Queda:
   - **E2E (verificación final del lote 13):** mirar las orillas pasto/tierra y pasto/piedra
     en `32-bosque-plaza`, `04-world` y las capturas del Farol (`12b`, `13`, `14`), la arena
     con el agua (la espuma rompe debajo de la orilla) y la Isla de Pruebas. El spec del editor

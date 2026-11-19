@@ -313,7 +313,7 @@ mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
   (`<pieza>/var_<n>/frame_<m>`). Así, donde dos bordes se pisan, la espuma de uno nunca se ve
   sobre la tierra del otro.
 - **Mapas:** `mapcli autoborder` de las cinco islas en sus dos pisos (también las cuevas, con
-  tierra y piedra): las piezas pasaron de 6297 a 11580 y el diff es solo de piezas de borde.
+  tierra y piedra): las piezas pasaron de 6297 a 12273 y el diff es solo de piezas de borde.
 - Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de
   una casilla) termina en punta (dos esquinas de adentro); se lee como un sendero que se
   afina. Una pieza propia para ese caso serían 4 piezas más por suelo.
