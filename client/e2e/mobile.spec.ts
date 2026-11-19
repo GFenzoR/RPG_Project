@@ -1048,14 +1048,21 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await expect(page.getByTestId("experience")).toBeVisible();
   await expect(page.getByTestId("game")).toHaveAttribute("data-layout", "desktop");
   await page.screenshot({ path: join(shots, "mobile-desktop-1280-long-name.png") });
-  // No header on desktop (docs/17 UI-4): the name and its experience sit on the plaque
-  // over the life orb of the bottom bar, cut with an ellipsis, and the map keeps its 2x
-  // (before T5.6 the header grew to 6 lines with a name like this and pushed the map down
-  // to 1x).
+  // No header on desktop (docs/17 UI-4): the name and the level sit on the name plate in
+  // the middle of the experience bar (docs/17 "Placa del nombre"), the name whole, and the
+  // map keeps its 2x (before T5.6 the header grew to 6 lines with a name like this and
+  // pushed the map down to 1x).
   await expect(page.locator("header.hud")).toHaveCount(0);
-  const vitals = await page.locator(".vitals").boundingBox();
-  expect(vitals?.height ?? 999).toBeLessThan(160);
-  expect(await page.locator(".vname").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  const plate = await page.locator(".nameplate").boundingBox();
+  const xpBar = await page.getByTestId("experience").boundingBox();
+  if (!plate || !xpBar) throw new Error("no name plate or experience bar");
+  expect(Math.abs(plate.x + plate.width / 2 - (xpBar.x + xpBar.width / 2))).toBeLessThan(2);
+  expect(Math.abs(plate.y + plate.height - xpBar.y)).toBeLessThan(4);
+  expect(plate.height).toBeLessThan(40);
+  expect(await page.locator(".vname").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    false,
+  );
+  await expect(page.locator(".nameplate")).toContainText(who.name);
   expect(await page.evaluate(() => window.__rpgClient?.scale())).toBe(2);
   // No touch pad on a PC with a mouse (the Options switch can still turn it on), and no
   // zoom buttons: a PC zooms with Ctrl+wheel.

@@ -257,6 +257,7 @@ const HOVERS: Record<string, string> = {
 };
 const SCENES = [
   "game",
+  "status",
   "allwindows",
   "trade",
   "chattabs",
@@ -423,6 +424,17 @@ try {
         await page.waitForTimeout(1200);
         await page.mouse.move(1, 1);
         await page.waitForTimeout(300);
+      }
+      if (scene === "status") {
+        // docs/17 "Bandeja de estados": ten conditions and statuses at once (two of them in
+        // their last seconds, flashing), with the poison's tooltip opened as a tap does it
+        // (also on phones, which have no hover).
+        const poison = page.locator('[data-testid="conditions"] [data-condition="poison"]');
+        if (await poison.isVisible()) {
+          await poison.click();
+          await page.mouse.move(1, 1);
+          await page.waitForTimeout(200);
+        }
       }
       if (scene === "chat") {
         // docs/17 UI-10: the chat floats translucent; under the pointer it turns clear.

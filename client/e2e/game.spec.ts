@@ -1572,7 +1572,7 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   for (const p of [gmPage, plPage, again]) await p.close();
 });
 
-test("T3.2: a guardian casts haste: condition badge, faster speed and steps", async ({
+test("T3.2: a guardian casts haste: its icon in the status tray, faster speed and steps", async ({
   page,
   playwright,
 }) => {
@@ -1623,14 +1623,29 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
     page.evaluate(() => window.__rpgClient?.stats()?.speed ?? 0);
   await expect.poll(speed).toBeGreaterThan(0);
   const before = await speed();
+  // The status tray (docs/17 "Bandeja de estados"): bottom left over the life orb, left
+  // of the chat. The temple may be a protection zone (a status too); no haste yet.
   const conditions = page.getByTestId("conditions");
-  await expect(conditions.locator("[data-condition]")).toHaveCount(0);
+  const hasted = conditions.locator('[data-condition="hasted"]');
+  await expect(hasted).toHaveCount(0);
 
   // Cast it by its words: the server applies the condition and the faster speed.
   const sayInput = page.getByTestId("say").getByRole("textbox");
   await sayInput.fill("pede celeri");
   await sayInput.press("Enter");
-  await expect(conditions.locator('[data-condition="hasted"]')).toHaveText("Acelerado");
+  // Its own icon in a green frame (a buff), the seconds left on it, and its name and time
+  // for screen readers; the tooltip says what it does.
+  await expect(hasted).toBeVisible();
+  await expect(hasted).toHaveAttribute("data-kind", "buff");
+  await expect(hasted).toHaveAttribute("aria-label", /^Acelerado, Quedan \d+ s$/);
+  await expect(hasted.locator(".status-left")).toHaveText(/^\d+$/);
+  await expect(hasted.locator(".status-icon")).toHaveCount(1); // its sprite, not the letter
+  const tray = await conditions.boundingBox();
+  const chat = await page.getByTestId("window-chat").boundingBox();
+  const bar = await page.getByTestId("hud-bar").boundingBox();
+  if (!tray || !chat || !bar) throw new Error("no tray, chat or bar");
+  expect(tray.x + tray.width).toBeLessThanOrEqual(chat.x); // beside the chat, not under it
+  expect(tray.y + tray.height).toBeLessThanOrEqual(bar.y); // over the bar
   await expect.poll(speed).toBeGreaterThan(before);
   const after = await speed();
   // balance.yaml: hasted is +35 %.
@@ -1646,8 +1661,25 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
     await arrived(page, start.x + i + 1, start.y);
   }
   expect(Date.now() - t0).toBeLessThan(10_000);
+  // The tooltip of the haste icon over the tray, in the full shot.
+  await hasted.hover();
+  await expect(hasted.locator(".status-tip")).toBeVisible();
+  await expect(hasted.locator(".status-tip")).toContainText("Caminas más rápido.");
   await shot(page, "22-haste");
-  await page.locator(".vitals").screenshot({ path: join(shots, "23-conditions-hud.png") });
+  await page.mouse.move(640, 300);
+  // The bottom left of the screen: the tray over the life orb and the name plate (name and
+  // level) on the experience bar, the percent on the bar (docs/17 "Placa del nombre").
+  const shown = await conditions.boundingBox();
+  if (!shown) throw new Error("no tray");
+  await page.screenshot({
+    path: join(shots, "23-conditions-hud.png"),
+    clip: {
+      x: 0,
+      y: shown.y - 8,
+      width: bar.x + bar.width,
+      height: bar.y + bar.height - shown.y + 8,
+    },
+  });
   expect(errors).toEqual([]);
 });
 
