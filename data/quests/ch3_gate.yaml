@@ -6,7 +6,8 @@ notes: >-
   Main line, Chapter 3, part 2. Started by volcan_keeper after ch3_embers. The obsidian
   delvers (levels 33-37) are tunnelling toward the forge: thin them out and take one of
   their charts, which the keeper reads to find the sealed gate. Down at the gate (mine,
-  lower floor), the forge echo takes the ember root and shapes it into the ember key that
+  lower floor), reaching its antechamber is a reach step (docs/06 "Quest"): the tiles within
+  4 of the forge echo, who then takes the ember root and shapes it into the ember key that
   opens the gate (forge_gate, a locked door: docs/02 "Puertas con llave"). Continues in
   ch3_warden.
 steps:
@@ -19,6 +20,9 @@ steps:
   - id: deliver_chart
     description: quest.ch3_gate.step_deliver_chart
     complete_when: { dialog_action: { npc: volcan_keeper, node: ch3_chart_read } }
+  - id: reach_gate
+    description: quest.ch3_gate.step_reach_gate
+    complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }
   - id: open_gate
     description: quest.ch3_gate.step_open_gate
     complete_when: { dialog_action: { npc: volcan_forge_echo, node: ch3_gate_opened } }

@@ -76,6 +76,53 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+  it('checks reach steps and repeatable quests (docs/06 "Quest")', () => {
+    const reachErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
+    // The real world: the reach step of ch3_gate is on the volcano's mine floor.
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    for (const island of readdirSync(join(REPO, "world", "islands"))) {
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      for (const f of ["island.yaml", "zones.yaml"]) {
+        const src = join(REPO, "world", "islands", island, f);
+        if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
+      }
+    }
+    expect(reachErrors()).toEqual([]);
+    const reach = "complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }";
+    // A floor the island does not list, then outside every island.
+    edit("data/quests/ch3_gate.yaml", reach, reach.replace("z: 8", "z: 9"));
+    expect(reachErrors()).toEqual([expect.stringMatching(/reach point 3692,5826,9 is on no island/)]);
+    edit("data/quests/ch3_gate.yaml", "x: 3692, y: 5826, z: 9", "x: 10, y: 10, z: 7");
+    expect(reachErrors()).toEqual([expect.stringMatching(/reach point 10,10,7 is on no island/)]);
+    // A zone: a real one, one of the sandbox island only (dev_only) and an unknown one.
+    edit("data/quests/ch3_gate.yaml", "{ x: 10, y: 10, z: 7, radius: 4 }", "{ zone: volcan_town }");
+    expect(reachErrors()).toEqual([]);
+    edit("data/quests/ch3_gate.yaml", "zone: volcan_town", "zone: pruebas_town");
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(/reach zone "pruebas_town" is no zone of an island that is not dev_only/),
+    ]);
+    // Zone and point together, a radius too wide, and a repeatable without a cooldown.
+    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_town, x: 1 }");
+    edit("data/quests/ch1_shipwreck.yaml", "min_level: 1\n", "min_level: 1\nrepeatable: { cooldown_hours: 0 }\n");
+    edit(
+      "data/quests/pruebas_rats.yaml",
+      "complete_when: { kill: { monster: bilge_rat, count: 3 } }",
+      "complete_when: { reach: { x: 2060, y: 2060, z: 7, radius: 40 } }",
+    );
+    const out = messages(root);
+    const has = (file: string, s: string): boolean =>
+      out.some((m) => m.startsWith("error") && m.includes(file) && m.includes(s));
+    expect(has("ch3_gate.yaml", "reach")).toBe(true);
+    expect(has("ch1_shipwreck.yaml", "cooldown_hours")).toBe(true);
+    expect(has("pruebas_rats.yaml", "radius")).toBe(true);
+    // quest_state tells a repeatable quest's turns apart; any other state is refused.
+    edit("data/npcs/pruebas_trainer.yaml", "state: cooling_down", "state: resting");
+    expect(
+      messages(root).some((m) => m.includes("pruebas_trainer.yaml") && m.includes("state")),
+    ).toBe(true);
+  });
+
   it("checks a monster's corpse: a known container item that stays on its tile", () => {
     const monster = (id: string, corpse: string): void =>
       edit(

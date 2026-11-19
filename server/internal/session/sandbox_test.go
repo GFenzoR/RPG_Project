@@ -99,6 +99,7 @@ func newSandbox(t *testing.T) *sandbox {
 	s.harness = dataHarnessWith(t, func(cfg *session.Config) {
 		cfg.Map, cfg.StartTown = m, "pruebas"
 		cfg.NPCs, cfg.BoatRoutes, cfg.Spells, cfg.Recipes, cfg.Tutorial = npcs, routes, spells, recipes, tutorial
+		cfg.Quests = realQuests(t) // dataConfig parked the reach steps (parkReachSteps)
 		s.items, s.vocations, s.spells = cfg.Items, cfg.Vocations, spells
 		save := cfg.Save
 		cfg.Save = func(sn session.Snapshot) bool {
@@ -370,16 +371,49 @@ func TestSandboxInstructor(t *testing.T) {
 	}
 	d, _ = s.say(cl, d, "dialog.back")
 	xp, money := p.Experience(), s.w.Money(p)
-	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_quest_done")
+	doneAt := s.sim.Now()
+	d, evs = s.say(cl, d, "npc.pruebas_trainer.opt_quest_done")
 	if st, _ := s.w.QuestState(p, "pruebas_rats"); st != quest.Completed {
 		t.Fatalf("handed in: quest %v", st)
 	}
 	if p.Experience() != xp+200 || s.w.Money(p) != money+50 {
 		t.Fatalf("reward: %d experience, %d money (want +200, +50)", p.Experience()-xp, s.w.Money(p)-money)
 	}
+	// A task (repeatable, docs/06 "Quest"): the quest log says when it comes back, three
+	// minutes after it was done, and meanwhile she only says the pen is filling up.
+	if e := logEntry(t, evs, "pruebas_rats"); e.GetState() != pb.QuestLogState_QUEST_LOG_STATE_COOLING || !e.GetRepeatable() ||
+		e.GetAvailableAt() != uint64(doneAt.Unix()+180)*1000 {
+		t.Fatalf("quest log after the hand-in: %v (done at %v)", e, doneAt)
+	}
 	d, _ = s.say(cl, d, "dialog.back")
-	if hasOption(d, "npc.pruebas_trainer.opt_quest") || hasOption(d, "npc.pruebas_trainer.opt_quest_done") {
+	if hasOption(d, "npc.pruebas_trainer.opt_quest") || hasOption(d, "npc.pruebas_trainer.opt_quest_done") ||
+		!hasOption(d, "npc.pruebas_trainer.opt_quest_cooling") {
 		t.Fatalf("greeting after the quest: %v", d.Options)
+	}
+	if d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_quest_cooling"); d.Text.Key != "npc.pruebas_trainer.quest_cooling" {
+		t.Fatalf("cooling down: %s", d.Text.Key)
+	}
+	s.say(cl, d, "dialog.bye")
+	s.sim.Clock().Advance(3 * time.Minute)
+	s.sim.Step()
+	d = s.talk(cl, p, "pruebas_trainer")
+	if !hasOption(d, "npc.pruebas_trainer.opt_quest") || hasOption(d, "npc.pruebas_trainer.opt_quest_cooling") {
+		t.Fatalf("greeting three minutes later: %v", d.Options)
+	}
+	// Again from the first step, no rat counted, and rewarded again.
+	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_quest")
+	d, evs = s.say(cl, d, "dialog.accept")
+	if e := logEntry(t, evs, "pruebas_rats"); e.GetState() != pb.QuestLogState_QUEST_LOG_STATE_ACTIVE || e.GetStepId() != "hunt_rats" ||
+		e.GetKills() != 0 || e.GetKillsNeeded() != 3 || e.GetAvailableAt() != 0 {
+		t.Fatalf("quest log of the second turn: %v", e)
+	}
+	s.say(cl, d, "dialog.bye")
+	s.huntPen(cl, p, "bilge_rat", 3, penGap(1), penAway(1))
+	d = s.talk(cl, p, "pruebas_trainer")
+	xp, money = p.Experience(), s.w.Money(p)
+	s.say(cl, d, "npc.pruebas_trainer.opt_quest_done")
+	if st, _ := s.w.QuestState(p, "pruebas_rats"); st != quest.Completed || p.Experience() != xp+200 || s.w.Money(p) != money+50 {
+		t.Fatalf("second turn: quest %v, %d experience, %d money (want +200, +50)", st, p.Experience()-xp, s.w.Money(p)-money)
 	}
 }
 
@@ -1496,14 +1530,14 @@ func TestSandboxArena(t *testing.T) {
 // ferryman) is reached by talking, and every option of every window leads somewhere: to
 // another window, a shop, a trip, or a goodbye. Each try is a new character (some
 // options change what the greeting offers). The instructor's quest_done needs the rats
-// hunted (TestSandboxInstructor).
+// hunted, and quest_cooling the quest handed in (TestSandboxInstructor).
 func TestSandboxDialogs(t *testing.T) {
 	s := newSandbox(t)
 	npcs, err := content.LoadNPCs(filepath.Join("..", "..", "..", "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	gated := map[string]bool{"pruebas_trainer/quest_done": true}
+	gated := map[string]bool{"pruebas_trainer/quest_done": true, "pruebas_trainer/quest_cooling": true}
 	next := int64(5800)
 	for _, id := range []string{"pruebas_trainer", "pruebas_merchant", "pruebas_ferryman"} {
 		by := s.beside(s.npc(id).Pos())

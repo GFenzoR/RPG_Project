@@ -126,7 +126,10 @@
           "required": ["quest", "state"],
           "properties": {
             "quest": { "$ref": "#/$defs/questRef" },
-            "state": { "enum": ["not_started", "in_progress", "completed"] },
+            "state": {
+              "description": "not_started, in_progress and completed are the stored state; available holds while start_quest would start it (never started, or a repeatable quest past its cooldown) and cooling_down while a repeatable quest waits for its cooldown.",
+              "enum": ["not_started", "in_progress", "completed", "available", "cooling_down"]
+            },
             "step": { "$ref": "#/$defs/id" }
           }
         },

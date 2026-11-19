@@ -34,6 +34,9 @@ func chapterThreeHarness(t *testing.T) *harness {
 			}
 		}
 		worldtest.SetTile(t, cfg.Map, forgeGate, dirt, blocks, cfg.Items["forge_gate"].Numeric)
+		// The antechamber of the sealed gate (a reach step of ch3_gate) is the tile north of it.
+		gate := cfg.Quests["ch3_gate"]
+		placeReach(gate.Steps[gate.StepIndex("reach_gate")].CompleteWhen.Reach, pos(30, 39), 0)
 		is := cfg.Map.Islands()[0]
 		is.NPCs = append(is.NPCs,
 			world.NPCPlacement{NPC: "bosque_druid", Pos: pos(20, 10)},
@@ -201,19 +204,30 @@ func TestChapterThreePlayable(t *testing.T) {
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_progress"))
 	h.pick(cl, d, "npc.volcan_keeper.opt_give_chart")
-	if s := step("ch3_gate"); s != "open_gate" {
+	if s := step("ch3_gate"); s != "reach_gate" {
 		t.Fatalf("after the chart the step is %q", s)
 	}
-	// Down at the sealed gate: it does not let anyone through, and the root is no key.
+	// The echo has nothing to open before the player gets down there.
+	if hasOption(echo, "npc.volcan_forge_echo.opt_open") {
+		t.Fatal("the echo opens the gate before reach_gate")
+	}
+	// Down at the sealed gate: arriving next to it is the reach step; the gate does not let
+	// anyone through, and the root is no key.
 	gateID := uint32(items["forge_gate"].Numeric)
 	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(30, 38)) }))
 	h.sim.Step()
+	if s := step("ch3_gate"); s != "reach_gate" {
+		t.Fatalf("one tile short of the antechamber the step is %q", s)
+	}
+	cl.take()
 	h.input(cl, walkPath(S, S))
 	h.sim.RunFor(3 * time.Second)
 	if p.Pos() != pos(30, 39) {
 		t.Fatalf("walked into the sealed gate: at %v", p.Pos())
 	}
-	cl.take()
+	if evs := cl.take(); step("ch3_gate") != "open_gate" || !messageKeys(evs)["dialog.quest_updated"] {
+		t.Fatalf("at the gate the step is %q (%v)", step("ch3_gate"), messageKeys(evs))
+	}
 	if evs := h.send(cl, useItem(onTile(forgeGate), gateID, 1)); !hasKey(evs, "door.locked") || h.w.Walkable(forgeGate) {
 		t.Fatalf("the gate with the root only: %v", systemKeys(evs))
 	}

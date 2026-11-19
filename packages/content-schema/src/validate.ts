@@ -155,6 +155,7 @@ class Validator {
     this.checkDoors();
     this.checkDialogs();
     this.checkQuestSteps();
+    this.checkQuestReach();
     this.checkNpcActions();
     this.checkDevOnlyActions();
     this.checkShopPrices();
@@ -860,6 +861,94 @@ class Validator {
       }
     };
     for (const src of [...this.npcs, ...this.quests]) visit(src, src.data, []);
+  }
+
+  /**
+   * The place of every reach step (docs/06 "Quest") is on the production map, as the server
+   * checks when it starts (initReach): a zone of the zones.yaml of an island that is not
+   * dev_only, or a point inside such an island's rect (world/world.yaml) on a floor its
+   * island.yaml lists. Not checked without world/ (tests).
+   */
+  private checkQuestReach(): void {
+    const islands = this.productionIslands();
+    if (!islands) return;
+    for (const src of this.quests) {
+      const steps = asList(isObj(src.data) ? src.data["steps"] : undefined);
+      for (const [i, step] of steps.entries()) {
+        const when = isObj(step) ? step["complete_when"] : undefined;
+        const reach = isObj(when) ? when["reach"] : undefined;
+        if (!isObj(reach)) continue;
+        const path = ["steps", i, "complete_when", "reach"];
+        const zone = reach["zone"];
+        if (typeof zone === "string") {
+          if (!islands.some((is) => is.zones.has(zone)))
+            this.error(
+              src,
+              [...path, "zone"],
+              `reach zone "${zone}" is no zone of an island that is not dev_only (world/islands/*/zones.yaml)`,
+            );
+          continue;
+        }
+        const { x, y, z } = reach;
+        if (typeof x !== "number" || typeof y !== "number" || typeof z !== "number") continue;
+        const on = islands.some(
+          (is) =>
+            x >= is.x && y >= is.y && x < is.x + is.w && y < is.y + is.h && is.floors.includes(z),
+        );
+        if (!on)
+          this.error(
+            src,
+            path,
+            `reach point ${x},${y},${z} is on no island that is not dev_only (its rect in world/world.yaml and its floors in island.yaml)`,
+          );
+      }
+    }
+  }
+
+  /**
+   * The islands of world/world.yaml that are not dev_only: rect, floors and zone ids;
+   * undefined without world/.
+   */
+  private productionIslands():
+    | { x: number; y: number; w: number; h: number; floors: number[]; zones: Set<string> }[]
+    | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    const out = [];
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island) || !isObj(entry)) continue;
+      if (entry["dev_only"] === true) continue;
+      const rect = isObj(entry["rect"]) ? entry["rect"] : {};
+      const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+      const dir = `world/islands/${island}`;
+      const read = (name: string): unknown => {
+        const abs = join(this.root, dir, name);
+        return existsSync(abs)
+          ? parseYaml(readFileSync(abs, "utf8"), `${dir}/${name}`, diags)?.data
+          : undefined;
+      };
+      const meta = read("island.yaml");
+      const floors = asList(isObj(meta) ? meta["floors"] : undefined).filter(
+        (f): f is number => typeof f === "number",
+      );
+      const zones = new Set(
+        asList(read("zones.yaml"))
+          .map(idOf)
+          .filter((id) => id !== undefined),
+      );
+      out.push({
+        x: num(rect["x"]),
+        y: num(rect["y"]),
+        w: num(rect["w"]),
+        h: num(rect["h"]),
+        floors,
+        zones,
+      });
+    }
+    return out;
   }
 
   /**
