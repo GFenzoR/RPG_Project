@@ -21,7 +21,11 @@ const times = (v: Vec3, k: number): Vec3 => [v[0] * k, v[1] * k, v[2] * k];
 function growShape(sh: ShapeSpec, k: number): ShapeSpec {
   switch (sh.type) {
     case "ellipsoid":
-      return { ...sh, center: sh.center && times(sh.center, k), radii: times(sh.radii, k) };
+      return {
+        ...sh,
+        ...(sh.center && { center: times(sh.center, k) }),
+        radii: times(sh.radii, k),
+      };
     case "box":
       return { ...sh, min: times(sh.min, k), max: times(sh.max, k) };
     case "cylinder":
@@ -32,7 +36,7 @@ function growShape(sh: ShapeSpec, k: number): ShapeSpec {
         a: times(sh.a, k),
         b: times(sh.b, k),
         radius: sh.radius * k,
-        radius2: sh.radius2 === undefined ? undefined : sh.radius2 * k,
+        ...(sh.radius2 !== undefined && { radius2: sh.radius2 * k }),
       };
     case "extrusion":
       return {
@@ -45,7 +49,7 @@ function growShape(sh: ShapeSpec, k: number): ShapeSpec {
       return {
         ...sh,
         points: sh.points.map(([u, v]) => [u * k, v * k] as const),
-        at: sh.at === undefined ? undefined : sh.at * k,
+        ...(sh.at !== undefined && { at: sh.at * k }),
         thickness: (sh.thickness ?? 1) * k,
       };
   }
@@ -58,11 +62,11 @@ function growShape(sh: ShapeSpec, k: number): ShapeSpec {
 function grow(spec: SpriteSpec, k: number): SpriteSpec {
   return {
     ...spec,
-    parts: spec.parts.map((p) => ({
+    parts: spec.parts.map((p): PartSpec => ({
       ...p,
-      at: p.at && times(p.at, k),
+      ...(p.at && { at: times(p.at, k) }),
       shapes: p.shapes.map((sh) => growShape(sh, k)),
-      marks: p.marks?.map((m): MarkSpec => ({ ...m, at: times(m.at, k) })),
+      ...(p.marks && { marks: p.marks.map((m): MarkSpec => ({ ...m, at: times(m.at, k) })) }),
     })),
   };
 }
