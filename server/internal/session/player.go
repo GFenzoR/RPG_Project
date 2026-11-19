@@ -134,10 +134,12 @@ type Player struct {
 	gatherLast  game.Tick
 
 	// Conditions (T3.2): the active ones (few: at most one per condition id), whether
-	// the client's list is stale, and whether p is hidden by invisibility.
+	// the client's list is stale, and whether p is hidden by invisibility. statusTold is
+	// what the client was last told of p's statuses (status.go).
 	conds           []*condition
 	conditionsDirty bool
 	invisible       bool
+	statusTold      statusView
 
 	// Parties (T3.3): the party, what p's client last heard of it, the first tick of its
 	// next periodic update, and the last tick p helped a fight (0 = never).

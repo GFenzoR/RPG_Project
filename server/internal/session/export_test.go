@@ -274,6 +274,9 @@ func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = u
 // (tests only, loop goroutine).
 func (w *World) SetAttackLockForTest(p *Player, until game.Tick) { p.lockUntil = until }
 
+// InCombatForTest reports whether p is in combat at tick (the logout block, linkdead.go).
+func (w *World) InCombatForTest(p *Player, tick game.Tick) bool { return w.inCombat(tick, p) }
+
 // MonsterCanEnterForTest reports whether a monster may stand on p (tests only).
 func (w *World) MonsterCanEnterForTest(p world.Pos) bool { return w.monsterCanEnter(p) }
 

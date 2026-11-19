@@ -101,6 +101,9 @@ func findCond(list []*condition, id string) *condition {
 // initConditions checks that every condition the spells and monsters apply exists.
 func (w *World) initConditions() error {
 	cs := w.cfg.Balance.Conditions
+	if err := checkStatusIDs(cs); err != nil {
+		return err
+	}
 	if err := w.cfg.Spells.CheckConditions(cs); err != nil {
 		return fmt.Errorf("session: %w", err)
 	}
@@ -361,18 +364,22 @@ func (w *World) conditionsChanged(h holder) {
 }
 
 // sendConditions emits p's PlayerConditions if they changed this tick (at flush, so
-// several changes in one tick cost one message).
-func (w *World) sendConditions(p *Player) {
-	if !p.conditionsDirty {
+// several changes in one tick cost one message), or if its statuses did (status.go): the
+// conditions first, in their order, then the statuses.
+func (w *World) sendConditions(now game.Tick, p *Player) {
+	st := w.statusOf(now, p)
+	if !p.conditionsDirty && !st.stale(p.statusTold) {
 		return
 	}
 	p.conditionsDirty = false
-	msg := &pb.PlayerConditions{Conditions: make([]*pb.ActiveCondition, 0, len(p.conds))}
+	p.statusTold = st
+	msg := &pb.PlayerConditions{Conditions: make([]*pb.ActiveCondition, 0, len(p.conds)+st.count())}
 	for _, c := range p.conds {
 		msg.Conditions = append(msg.Conditions, &pb.ActiveCondition{
 			ConditionId: c.def.ID, RemainingMs: uint32(max(w.leftMs(c), 0)), Ticks: uint32(max(c.ticks, 0)),
 		})
 	}
+	msg.Conditions = appendStatuses(msg.Conditions, st, now)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerConditions{PlayerConditions: msg}})
 }
 
