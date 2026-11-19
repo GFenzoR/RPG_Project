@@ -33,6 +33,7 @@ import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogBox, DialogWindow, ShopWindow } from "./Dialog.tsx";
 import { CraftingWindow, stationTitle } from "./Crafting.tsx";
+import { BookWindow, bookTitle } from "./Book.tsx";
 import { TradeWindow } from "./Trade.tsx";
 import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
@@ -248,6 +249,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             market: ui.market !== undefined,
             house: ui.house !== undefined,
             trade: ui.trade !== undefined,
+            book: ui.book !== undefined,
           },
           [...ckeys.values()],
         )
@@ -263,6 +265,7 @@ export function GameView(props: GameViewProps): JSX.Element {
     else if (id === "market") game?.marketClose();
     else if (id === "house") game?.houseClose();
     else if (id === "trade") game?.tradeCancel();
+    else if (id === "book") game?.closeBook();
     else
       for (const [cid, key] of ckeys)
         if (key === id) {
@@ -652,6 +655,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && !windowed && (
         <TradeWindow t={t} content={props.content} game={game} ui={ui} />
       )}
+      {props.entered && !windowed && ui.book && (
+        <BookWindow key={ui.book.at} t={t} content={props.content} game={game} ui={ui} />
+      )}
       {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
@@ -689,7 +695,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         windows={
           windowed
             ? shownKey(win.state)
-            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade]
+            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade, ui.book]
                 .map((w) => (w ? "1" : "0"))
                 .join("")
         }
@@ -816,6 +822,17 @@ export function GameView(props: GameViewProps): JSX.Element {
                 body: <TradeWindow {...common} />,
                 testid: "trade",
                 closeLabel: t("client.trade.cancel"),
+              }
+            : undefined;
+        case "book":
+          // A new book (or the same one used again) starts at its first page.
+          return ui.book
+            ? {
+                title: bookTitle(t, props.content, ui.book.itemId),
+                icon: "book",
+                body: <BookWindow key={ui.book.at} {...common} />,
+                testid: "book",
+                closeLabel: t("client.book.close"),
               }
             : undefined;
       }

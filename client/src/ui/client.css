@@ -338,6 +338,7 @@ kbd {
 .market,
 .house,
 .trade,
+.book,
 .tutorial,
 .presence,
 .load-failed,
@@ -362,6 +363,7 @@ kbd {
 .market > header,
 .house > header,
 .trade > header,
+.book > header,
 .tutorial > header {
   margin: -0.5rem -0.6rem 0.45rem;
   padding: 0.3rem 0.5rem 0.3rem 0.6rem;
@@ -375,6 +377,7 @@ kbd {
 .market h2,
 .house h2,
 .trade h2,
+.book h2,
 .tutorial h2,
 .presence h2,
 .death h2 {
@@ -388,6 +391,7 @@ kbd {
 .market,
 .house,
 .trade,
+.book,
 .presence,
 .invitation {
   animation: gwin-in var(--ui-dur) var(--ui-ease-out);
@@ -1530,6 +1534,72 @@ body.picking-item .map-hint {
 .shop .price,
 .shop .money {
   color: var(--ui-gold-300);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The reading window (docs/02 "Libros y cofres"): a page of a book or scroll in the
+   book face, on a darker sunk leaf, with the page number between its two buttons. On
+   tablets and phones a sheet like the other windows over the map. -------------------- */
+.book {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  width: 26rem;
+  max-width: calc(100% - 1rem);
+  max-height: calc(100% - 5rem);
+  overflow-y: auto;
+  padding: 0.5rem 0.6rem;
+}
+.book header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.book h2 {
+  margin: 0;
+}
+.book-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.book-page {
+  margin: 0;
+  min-height: 9rem;
+  padding: 0.75rem 0.9rem;
+  font-family: var(--ui-font-book);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  background: linear-gradient(rgb(0 0 0 / 0.28), rgb(0 0 0 / 0.38));
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  box-shadow: inset 0 1px 6px rgb(0 0 0 / 0.55);
+}
+/* A first letter in gold, as in an old book. */
+.book-page::first-letter {
+  font-family: var(--ui-font-title);
+  font-size: 1.6em;
+  color: var(--ui-gold-300);
+}
+.book-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.book-nav button {
+  min-width: 2.4rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.book-page-number {
+  font-family: var(--ui-font-title);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--ui-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3142,7 +3212,8 @@ body.picking-item .map-hint {
 .game:not([data-layout="desktop"]) .crafting,
 .game:not([data-layout="desktop"]) .market,
 .game:not([data-layout="desktop"]) .house,
-.game:not([data-layout="desktop"]) .trade {
+.game:not([data-layout="desktop"]) .trade,
+.game:not([data-layout="desktop"]) .book {
   position: fixed;
   z-index: 12;
   box-sizing: border-box;
@@ -3154,7 +3225,8 @@ body.picking-item .map-hint {
 .game[data-flow="column"] .crafting,
 .game[data-flow="column"] .market,
 .game[data-flow="column"] .house,
-.game[data-flow="column"] .trade {
+.game[data-flow="column"] .trade,
+.game[data-flow="column"] .book {
   top: auto;
   left: env(safe-area-inset-left, 0px);
   right: env(safe-area-inset-right, 0px);
@@ -3166,7 +3238,8 @@ body.picking-item .map-hint {
 .game[data-flow="row"]:not([data-layout="desktop"]) .crafting,
 .game[data-flow="row"]:not([data-layout="desktop"]) .market,
 .game[data-flow="row"]:not([data-layout="desktop"]) .house,
-.game[data-flow="row"]:not([data-layout="desktop"]) .trade {
+.game[data-flow="row"]:not([data-layout="desktop"]) .trade,
+.game[data-flow="row"]:not([data-layout="desktop"]) .book {
   top: env(safe-area-inset-top, 0px);
   left: auto;
   right: env(safe-area-inset-right, 0px);

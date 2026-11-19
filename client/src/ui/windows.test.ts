@@ -24,6 +24,7 @@ import {
   tutorialCovered,
   focusWindow,
   isClosable,
+  isServerWindow,
   keptHeight,
   knownWindows,
   loadWindows,
@@ -531,6 +532,17 @@ describe("which server windows show", () => {
       "house",
       "container-bag",
     ]);
+  });
+
+  it('shows the reading window whatever else is open (docs/02 "Libros y cofres")', () => {
+    expect(serverWindows({ ...none, book: true }, [])).toEqual(["book"]);
+    expect(serverWindows({ ...none, dialog: true, book: true }, ["container-bag"])).toEqual([
+      "dialog",
+      "book",
+      "container-bag",
+    ]);
+    // Remembered like the server's windows: it reopens where the player left it.
+    expect(isServerWindow("book")).toBe(true);
   });
 });
 

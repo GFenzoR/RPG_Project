@@ -198,6 +198,20 @@ describe("client content (T0.5)", () => {
     expect(byId.get("backpack")?.door).toBeUndefined();
   });
 
+  it('ships the books with their texts in both languages, and marks the chests (docs/02 "Libros y cofres")', () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    const book = byId.get("book_lantern_rowers")?.book;
+    expect(book?.title).toBe("book.book_lantern_rowers.title");
+    expect(book?.pages.length).toBeGreaterThan(1);
+    for (const def of Object.values(content.items))
+      for (const key of def.book ? [def.book.title, ...def.book.pages] : [])
+        for (const lang of ["es", "en"])
+          expect(content.i18n[lang]?.[key], `${lang} ${key}`).toBeTruthy();
+    expect(byId.get("chest_puerto_mine")?.chest).toBe(true);
+    expect(byId.get("chest_puerto_mine")?.book).toBeUndefined();
+    expect(byId.get("cargo_crate")?.chest).toBeUndefined();
+  });
+
   it("carries the elevation of the items that raise what is on them (docs/17 ART-8)", () => {
     const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
     expect(byId.get("cargo_crate")?.elevation).toBe(8);

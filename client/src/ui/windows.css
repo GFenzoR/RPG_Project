@@ -659,7 +659,9 @@ body.dragging-window * {
 }
 /* The server's windows in a GameWindow (docs/17 UI-5): the frame is the GameWindow's, so
    their own frame, place and size go (they were boxes of their own over the map). */
-.game[data-ui="windows"] .gwin-body > :is(.dialog, .shop, .crafting, .market, .house, .trade) {
+.game[data-ui="windows"]
+  .gwin-body
+  > :is(.dialog, .shop, .crafting, .market, .house, .trade, .book) {
   position: static;
   width: auto;
   max-width: none;
@@ -794,6 +796,16 @@ body.dragging-window * {
 .gwin[data-window="house"],
 .gwin[data-window="trade"] {
   --gwin-w: 22rem;
+}
+/* The reading window (docs/02 "Libros y cofres"): in the middle, a little above, like the
+   options and the help: the text is what the player came to see. */
+.gwin[data-window="book"] {
+  --gwin-w: min(28rem, calc(100% - 1rem));
+}
+.gwin:not([data-placed])[data-window="book"] {
+  left: calc((100% - var(--gwin-w)) / 2);
+  top: 12%;
+  max-height: 88%;
 }
 .gwin:not([data-placed]):is(
     [data-window="dialog"],

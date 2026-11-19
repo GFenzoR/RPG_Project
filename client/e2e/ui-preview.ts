@@ -284,6 +284,8 @@ const SCENES = [
   "forge",
   "forgerisk",
   "forgeresult",
+  "book",
+  "scroll",
   "danger",
   "death",
   "login",
@@ -404,6 +406,14 @@ try {
         }
         await page.mouse.move(1, 1);
         await page.waitForTimeout(200);
+      }
+      if (scene === "book") {
+        // docs/02 "Libros y cofres": the second page of the lectern's book, both buttons on;
+        // "scroll" stays on the first page of the wreck's manifest.
+        const next = page.getByTestId("book-next");
+        if (await next.isVisible()) await next.click();
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(150);
       }
       if (scene === "chattabs") {
         // docs/17 UI-10: the Local tab picked (the line to speak goes to "Decir"); lines of

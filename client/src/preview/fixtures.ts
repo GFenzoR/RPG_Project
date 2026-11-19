@@ -677,3 +677,11 @@ export function withForge(
   };
   return { ui, name: `forge-${variant}` };
 }
+
+/**
+ * docs/02 "Libros y cofres": the reading window on a book of the islands (the lectern of the
+ * Lantern's temple, three pages) or a scroll (the manifest of the wreck, two pages).
+ */
+export function withBook(content: ClientContent, s: Scene, item: string): Scene {
+  return { ui: { ...s.ui, book: { itemId: itemNumber(content, item), at: 0 } }, name: item };
+}
