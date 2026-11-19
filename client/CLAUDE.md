@@ -148,8 +148,9 @@ client/
   slot es lo que falta del cooldown propio o de grupo (`SpellCooldown`).
 - La línea "Decir" manda `Say` en el canal local: si son palabras mágicas, el servidor
   lanza el hechizo (el chat completo está en T1.13).
-- `WorldState.projectiles` guarda los `Projectile` 250 ms; los proyectiles son formas Pixi
-  coloreadas por elemento (`ELEMENTS`) y los efectos mágicos, la tira de su elemento.
+- `WorldState.projectiles` guarda los `Projectile` 250 ms; los proyectiles son la flecha o
+  el orbe de su elemento (`ELEMENTS`; ver "Sprites de efectos") y los efectos mágicos, la
+  tira de su elemento.
 
 ## Notas de T1.10
 - `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
@@ -640,6 +641,24 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Para cambiar un efecto: su receta en `tools/spritegen/src/recipes/effects.ts`,
   `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
   servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.
+- **Proyectiles** (`Projectile.projectile_id` = `PROJECTILE_ELEMENT` + elemento; rama
+  `feat/combat-visuals`): el arte es de spritegen (`recipes/effects.ts`, "missiles"),
+  32x32 con el dibujo en los 16x16 del medio, alrededor de la esquina entre los píxeles
+  (15, 15) y (16, 16). `render/effects.ts` (puro, con tests): `missileArt(id, hasArt)` da
+  la flecha de uno físico (`ARROW_STRAIGHT` = `missiles/arrow/e`, `ARROW_DIAGONAL` =
+  `missiles/arrow/se`; hacen falta las dos) o el orbe de un elemento
+  (`missiles/<elemento>/0`, `/1`… hasta el primero que falte, y `missiles/<elemento>/trail`
+  si está), o nada (id desconocido o sin arte real: el punto de siempre, `projectileShape`);
+  `octant(dx, dy)` da el paso de 45° hacia el objetivo (0 este, en el sentido del reloj) y
+  `ARROW_POSES`/`arrowPose` el dibujo y el espejo y giro de cuartos de vuelta de cada uno
+  (exactos: ningún píxel se remuestrea; el lado iluminado queda arriba o a la izquierda);
+  `orbFrame(elapsed, frames)` el frame del bucle del orbe (`ORB_FRAME_MS`, 80). En
+  `EffectLayer`, un pool propio de sprites anclados al centro (`missileGroup`, después de
+  las formas de proyectil): la flecha, o el orbe con hasta tres chispas detrás (`TRAIL`:
+  0,3, 0,6 y 0,9 casillas atrás por su camino, más transparentes; ninguna antes de la
+  casilla de salida), primero las chispas y después el orbe. Las texturas de un id se
+  buscan una vez (`missileOf`). Flecha, virote, cuchillo y botella son la misma flecha:
+  distinguirlos pide un campo en `Projectile` (docs/14).
 
 ## Notas de T5.5 (carteles y descripciones)
 - `ItemDef.desc` es la clave del `description` del item en `data/items`; mirar un item
@@ -1128,6 +1147,17 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (tabla `FONTS`) los recorta al latín del juego, los sirve como woff2 en `/fonts/` y los
   emite en el build; `ui/fonts.css` tiene un `@font-face` por fila (`vite/fonts.test.ts`
   compara los dos). Nada se baja de la red: la CSP de escritorio es `font-src 'self'`.
+- **La fuente del canvas** (rama `feat/combat-visuals`): nombres, gremios y números
+  flotantes en Pixelify Sans (`render/canvas-font.ts`: `CANVAS_FONT`, la familia con
+  `sans-serif` de respaldo; `CANVAS_FONT_SIZE` 11, una celda de su grilla de 1/11 de em por
+  píxel; `CANVAS_TEXT_STROKE` 3), en `game-canvas.ts` y `effect-layer.ts`. Pixi mide y
+  rasteriza un `Text` una vez, y `CanvasTextMetrics` guarda las medidas por fuente: por eso
+  `createGameCanvas` espera `loadCanvasFont(document.fonts)` junto con el atlas
+  (`CANVAS_FONT_WAIT_MS`, 2,5 s; sin `FontFaceSet` o si falla, sigue) y, si llega después,
+  `onLate` limpia las medidas y llama `style.update()` de los nombres y gremios que hay
+  (`redrawLabels`). Un número dura un segundo: el siguiente ya sale bien.
+  `vite/canvas-font.test.ts` lee la tabla de avances del `.ttf`: todo nombre de criatura
+  tiene sus letras y uno acortado a zoom 1 (`labelText`) mide como mucho 96 px.
 - **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
   `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
   (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten

@@ -273,7 +273,9 @@ Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el re
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
 exige que cada receta sea una ruta usada en `data/` (o un frame de animación
 `<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como los del jabalí, o de
-efecto `effects/<nombre>/<n>`, sin huecos en la tira, o un icono de interfaz
+efecto `effects/<nombre>/<n>`, sin huecos en la tira, o arte de proyectil
+`missiles/<nombre>/<frame o parte>` de `kind: effect` (la flecha `missiles/arrow/{e,se}` y
+los orbes `missiles/<elemento>/{0,1,2,trail}`, que el cliente busca por ruta), o un icono de interfaz
 `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta, o una
 parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
 `data/` usa). Un test exige además a cada suelo una media de L* entre 20 y 50 (docs/17
@@ -287,7 +289,10 @@ ART-2, "Animales medianos"). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)". Desde el 2026-11-18 una parte de las
 recetas sale del **motor de sprites** (`src/engine/`, siguiente sección): el jabalí, el
-ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel.
+ciervo, el eco de la forja, el yunque, el cajón, el tablero del mercado y el cartel; desde
+el 2026-11-19 también los restos de los monstruos (`specs/remains.ts`: uno por familia y
+`creature_remains`, objetos de 32x32 dibujados con sus proporciones y agrandados con
+`grow` hasta 24-30 px de largo).
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su

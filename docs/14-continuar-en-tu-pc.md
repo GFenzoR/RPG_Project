@@ -98,6 +98,30 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Proyectiles, restos por familia y la fuente del canvas (hecho, rama
+  `feat/combat-visuals`, lote 10; docs/17 §7 "Hecho: proyectiles, restos por familia y la
+  fuente del canvas"):** la flecha apuntada de a 45° y un orbe animado con estela por
+  elemento en vez del punto de color; `corpse:` en `data/monsters` con ocho restos por
+  familia del motor de sprites (y `creature_remains` redibujado); nombres, gremios y
+  números en Pixelify Sans a 11 px. Queda:
+  - **Flecha, virote, cuchillo, botella y esquirla:** todos vuelan como la flecha. El
+    servidor manda `Projectile` con `projectile_id` = 1 + elemento (docs/05), sin saber qué
+    se tiró; distinguirlos necesita un campo nuevo en `Projectile` (el sprite de la
+    munición o del ataque: `data/items` `ammo`, `data/monsters` `attacks[].visual`), que es
+    protocolo y riesgo alto: tarea aparte, con su arte (virote, cuchillo, botella).
+  - **Tamaño de los restos:** son de 32x32 y ocupan su casilla, como los cadáveres de
+    Tibia; la última pose de muerte de las criaturas de 64x64 mide 34-61 px (el custodio,
+    84), así que al terminar la caída el cuerpo "se achica" un poco. Una versión de 64x64
+    anclada abajo a la derecha (pisa la casilla del oeste, como los cadáveres grandes de
+    Tibia) es decisión del dueño; mirar en el E2E cómo se ve el cambio.
+  - **Un solo color por familia:** el lobo gris y el ciervo pardo dejan el mismo
+    `remains_fur`. Un tinte por monstruo pediría un campo más (o un item por monstruo).
+  - **El cuerpo de un jugador** sigue siendo `creature_remains` (huesos sobre un cuero);
+    usar `remains_humanoid` es cambiar el item en `session/death.go` si el dueño lo
+    prefiere.
+  - **E2E del lote:** mirar un montaraz disparando (la flecha, `07b-attack-pose`), un orbe
+    de hechizo, los restos frescos de cada familia que se mate en los tests y los nombres
+    y números en Pixelify Sans (`07-combat`, `47-guild-name-on-map`).
 - **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
   deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
   botonera y ventanas; el dock lo reemplazó A14, la pantalla completa, abajo) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
@@ -243,9 +267,10 @@ el punto 5:
     dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
     letra por letra (click o Espacio lo completa) y retrato que respira; items de misión con
     su color (`quest: true` en `data/items`); ficha sobre el canvas para lo que está en el
-    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: Pixelify Sans en el
-    canvas; el marco de hierro como PNG 9-slice (`ui/frame/iron`); el intercambio con
-    cantidad (`TradeOffer` no la lleva); enfocar una ventana del servidor cuando se abre.
+    suelo; Mayús+arrastrar para dividir una pila. Queda de esa lista: el marco de hierro
+    como PNG 9-slice (`ui/frame/iron`); el intercambio con cantidad (`TradeOffer` no la
+    lleva); enfocar una ventana del servidor cuando se abre. (Pixelify Sans en el canvas
+    llegó con la rama `feat/combat-visuals`, abajo.)
   - **El equipo y el tooltip al estilo Diablo II (hecho, rama `feat/equipment-d2`,
     docs/17 §7 "Hecho: el equipo y el tooltip al estilo Diablo II"):** los dos pedidos del
     dueño del 2026-11-18. El equipo es una figura sobre una grilla de 8x9 celdas con slots

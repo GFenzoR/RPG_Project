@@ -10,6 +10,11 @@ description: Agrega un monstruo nuevo al juego (YAML, textos es/en, sprite o pla
    - Nombre e identidad propios: nunca copies monstruos, nombres ni stats de Tibia (vida,
      experiencia, daño, loot), tampoco para un animal genérico como un lobo.
    - Define `tags` con la isla donde vive.
+   - Define `corpse` con los restos de su familia (`remains_fur`, `remains_chitin`,
+     `remains_scales`, `remains_slag`, `remains_bones`, `remains_feathers`,
+     `remains_humanoid`, `remains_bramble`; docs/06 "Monstruo"). Si ninguna le sirve, una
+     familia nueva es un item más (`kind: container`, `pickupable: false`, 10 slots) y su
+     modelo en `tools/spritegen/src/engine/specs/remains.ts`.
 3. Agrega `monster.<id>.name` en `i18n/es/monsters.yaml` e `i18n/en/monsters.yaml`.
 4. Items nuevos de loot: créalos con la skill `add-item` antes de referenciarlos.
 5. Sprite: si existe en `assets/`, enlázalo; si no, deja que `spritepack` genere el

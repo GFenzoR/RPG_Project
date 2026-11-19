@@ -480,7 +480,7 @@ de un sprite con `death` juega su clip y se desvanece.
 | Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
 | Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
 | Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
-| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor | 400 ms |
+| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor (los restos de su familia: "Hecho: proyectiles, restos por familia y la fuente del canvas") | 400 ms |
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
@@ -1606,7 +1606,8 @@ Lo que se hizo, con las decisiones que cambian o dejan para después partes de U
 - **Fuentes (UI-3):** Cinzel, Grenze Gotisch, Alegreya Sans y Alegreya, de google/fonts con
   commit fijo, en `assets/vendor/font-*/` con su `OFL.txt` y fila en `CREDITS.md`. El
   plugin `client/vite/fonts.ts` las recorta a latín y las sirve como woff2 en `/fonts/`.
-  Pixelify Sans (canvas) no se agregó todavía: el canvas sigue con su fuente.
+  Pixelify Sans (canvas) llegó después: "Hecho: proyectiles, restos por familia y la
+  fuente del canvas".
 - **Tokens y marco (UI-2):** los de la tabla, con los nombres viejos como alias. El marco
   de hierro es CSS (sin el PNG 9-slice de spritegen), la piedra es una veta SVG en línea.
   Los íconos de la botonera son pixel art propio de 16x16 escrito como texto en
@@ -1796,8 +1797,8 @@ quedaba de A3, A4 y A5".
   contenedor, un slot o el mapa) pregunta, donde se suelta, cuántas unidades mover (la
   mitad para empezar, de 1 a la pila menos una, como "Mover parte…"); Enter mueve, Escape
   cancela. Mayús+click sigue mirando: en el mapa, ahora mira al soltar.
-- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); Pixelify Sans en
-  el canvas; el marco de hierro como PNG 9-slice; enfocar una ventana del servidor al
+- **Pendiente:** el intercambio con cantidad (`TradeOffer` no la lleva); el marco de
+  hierro como PNG 9-slice; enfocar una ventana del servidor al
   abrirse. (Si el jugador camina con el mouse quieto, la ficha de la casilla anterior se va
   y la espera empieza de nuevo en la que queda bajo el cursor.)
 
@@ -2016,6 +2017,45 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
+
+### Hecho: proyectiles, restos por familia y la fuente del canvas (2026-11-19, rama `feat/combat-visuals`)
+Del pedido del dueño de un pulido como el de Tibia y "todo animado" (auditoría del
+2026-11-18, `art.items[1]`, `[2]` y `[4]`). Detalle técnico en `client/CLAUDE.md` ("Sprites
+de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
+- **Proyectiles con sprite.** Antes cada proyectil era un punto del color de su elemento.
+  Ahora `tools/spritegen` (`recipes/effects.ts`, sección "missiles") dibuja la flecha
+  (`missiles/arrow/e` y `missiles/arrow/se`: 14 px de punta a culatín, dentro de los 16x16
+  del medio de un sprite de 32x32) y un orbe por elemento con 3 frames y su chispa de
+  estela (`missiles/<elemento>/{0,1,2,trail}`: fuego, hielo, energía, tierra, sagrado y
+  muerte). El cliente vuela un proyectil físico como la flecha apuntada al objetivo de a
+  45°: el dibujo recto o el diagonal, girado y espejado solo de a cuartos de vuelta (cada
+  píxel cae en un píxel) y con el lado iluminado arriba o a la izquierda; uno elemental es
+  su orbe (un frame cada 80 ms) con hasta tres chispas detrás, del mismo pool de sprites
+  (ninguna detrás de quien dispara). Sin arte, el punto de antes. Flechas, virotes,
+  cuchillos, botellas y esquirlas de obsidiana vuelan todos como la flecha: distinguirlos
+  necesita un campo nuevo en `Projectile` (docs/14, "Pendientes conocidos").
+- **Restos por familia** (ART-2 y ANI-7). Antes todo monstruo dejaba el mismo cuerpo
+  (`creature_remains`, el "crawling corpse" de Dungeon Crawl). Ahora `data/monsters` tiene
+  `corpse:` (docs/06) y cada familia deja el suyo, dibujado con el motor de sprites
+  (`engine/specs/remains.ts`) mirando la pose final de la muerte de esa familia: la bestia
+  de costado con las patas hacia la cámara (`remains_fur`), el artrópodo panza arriba con
+  las patas encogidas (`remains_chitin`), el reptil con la cola enroscada
+  (`remains_scales`), el montón de escoria con dos grietas de brasa (`remains_slag`), el
+  esqueleto en un charco (`remains_bones`), el ave con un ala abierta (`remains_feathers`),
+  la persona boca abajo con un brazo tirado (`remains_humanoid`) y las zarzas secas
+  (`remains_bramble`); `creature_remains` quedó como un montón neutro de huesos sobre un
+  cuero (lo usan los monstruos sin `corpse` y los jugadores). Todos en 32x32, de 24 a 30
+  px de largo: ocupan su casilla como los cadáveres de Tibia, así que son más chicos que la
+  última pose de las criaturas de 64x64 (el lobo cae de 41 px). Duran y se abren como
+  antes.
+- **Pixelify Sans en el canvas** (UI-3). Nombres, gremios y números flotantes estaban en
+  la `sans-serif` del sistema, suavizada y distinta en cada sistema operativo. Ahora usan
+  Pixelify Sans (OFL, de google/fonts con el mismo commit que las otras), a 11 px: su
+  grilla es de 1/11 de em (mayúsculas de 7 celdas, minúsculas de 5), así que a 11 px una
+  celda es un píxel de pantalla. Con el contorno negro de 3 px de antes. El canvas espera la
+  fuente junto con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
+  los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
+  ~125 con la negrita de 12 px).
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
