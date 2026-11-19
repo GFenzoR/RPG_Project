@@ -45,6 +45,8 @@ shop:
     - { item: seaweed_poultice, price: 25 }
     - { item: mana_draught, price: 22 }
     - { item: concentrated_mana_draught, price: 50 }
+    - { item: health_draught, price: 60 }
+    - { item: concentrated_health_draught, price: 125 }
     - { item: arc_rune, price: 30 }
     - { item: hatchet, price: 60 }
     - { item: iron_sword, price: 120 }

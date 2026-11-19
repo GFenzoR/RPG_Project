@@ -261,3 +261,5 @@ items:
   rampart_wall: 258
   stone_wall_window: 259
   wooden_wall_window: 260
+  health_draught: 261
+  concentrated_health_draught: 262

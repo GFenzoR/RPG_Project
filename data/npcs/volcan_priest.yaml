@@ -68,6 +68,8 @@ shop:
     - { item: mana_draught, price: 24 }
     - { item: concentrated_mana_draught, price: 50 }
     - { item: seaweed_poultice, price: 25 }
+    - { item: health_draught, price: 60 }
+    - { item: concentrated_health_draught, price: 125 }
     - { item: obsidian_wand, price: 2600 }
     - { item: blackfrost_staff, price: 2600 }
   buys:

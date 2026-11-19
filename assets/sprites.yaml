@@ -109,6 +109,8 @@ sprites:
   armor/embersteel_sabatons: { source: vendor/dungeon-crawl/UNUSED/armour/boots_iron2.png }
   potions/mana_draught: { source: vendor/dungeon-crawl/item/potion/sky_blue.png }
   potions/concentrated_mana_draught: { source: vendor/dungeon-crawl/item/potion/brilliant_blue.png }
+  potions/health_draught: { source: vendor/dungeon-crawl/item/potion/ruby.png }
+  potions/concentrated_health_draught: { source: vendor/dungeon-crawl/item/potion/puce.png }
 
 # Palettes for `recolor` in animation layers: colours light to dark. A layer's recolor maps a
 # source palette onto a target palette of the same length, colour by colour. The ulpc_* ones

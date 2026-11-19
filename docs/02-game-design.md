@@ -785,6 +785,14 @@ Valores iniciales (balance.yaml):
   templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
   vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
   (`sim/balance_vocations_test.go`): sube más rápido que el guardián y junta menos oro.
+- **Brebajes de vida** (progresión de hechizos, 2026-11): la cataplasma de algas (40 de
+  vida, 25 cobre, ~0,6 por punto) servía del nivel 1 al 60. El brebaje de vida (110, 60
+  cobre) lo venden la druida y el mercader del Bosque y el templo de Brasal; el concentrado
+  (250, 125 cobre) solo Brasal: ~0,5 cobre por punto, entre la cataplasma y el maná. Como
+  los de maná, se venden por isla (el Puerto se queda con la cataplasma: un novato no
+  compra una cura del doble de su vida) y nadie los compra de vuelta. En la carrera
+  simulada, quien baja de un tercio de su vida toma el más grande que no se desperdicia, y
+  la caza sigue pagándolo (como mucho 75 % del botín, también el guardián).
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.

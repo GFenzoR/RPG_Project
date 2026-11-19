@@ -532,3 +532,32 @@
   tradeable: true
   consumable: { heal_mp: 125 }
   value: 50
+
+# Health draughts (spell progression, 2026-11): past the Puerto the seaweed poultice (40)
+# no longer keeps up with a body of 300-800 health. Sold like the mana draughts, by island:
+# the small one in the Bosque and in Brasal, the concentrated one only in Brasal. Nobody
+# buys them back. Our own numbers: about 0.5 copper per point of health, between the
+# poultice (0.6) and the mana draughts (0.4) (docs/02 "Economía").
+- id: health_draught
+  kind: consumable
+  sprite: potions/health_draught
+  name: item.health_draught.name
+  description: item.health_draught.desc
+  weight: 300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_hp: 110 }
+  value: 60
+
+- id: concentrated_health_draught
+  kind: consumable
+  sprite: potions/concentrated_health_draught
+  name: item.concentrated_health_draught.name
+  description: item.concentrated_health_draught.desc
+  weight: 350
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_hp: 250 }
+  value: 125
