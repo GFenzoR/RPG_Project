@@ -304,15 +304,30 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     juego (radio 3, 48). La carrera simulada ahora también juega al guardián con sus
     hechizos, y exige además que cada hechizo de daño o cura cueste como mucho la mitad del
     maná de su nivel, que su nivel mágico esté a lo sumo 4 niveles después de su nivel (el
-    guardián llega a ~4 al 30 y ~6 al 49 con su cura y sus golpes) y que las cazas de sus
+    guardián que compra brebajes de maná llega a ~4 al 30 y ~6 al 49) y que las cazas de sus
     primeros niveles lo lancen: cada cura propia, cada ataque a un objetivo y, para quien no
     tiene ataques a un objetivo (el guardián), sus áreas. Las áreas de los magos y del
     montaraz quedan para grupos: en un duelo un área le pega a un solo monstruo y un rayo
     barato hace lo mismo por menos maná, así que la simulación no las necesita y tampoco las
     exige. Por eso `frost_bloom` y `scatter_volley` le pegan a cada monstruo un poco menos que
-    `frost_lance` y `sure_shot`: anchas y livianas. Las vocaciones siguen en 0,5-1,5 veces el
-    tiempo del guardián por franja (el guardián subió más rápido con sus hechizos y los
-    brebajes de vida: de 1 a 50 en ~34 h en vez de ~40 h).
+    `frost_lance` y `sure_shot`: anchas y livianas.
+  - **Revisión de la progresión (2026-11):** los roles se miden ahora en cada franja de la
+    carrera (niveles 12 a 49, con el nivel mágico que la simulación alcanza en cada uno y
+    contando solo los hechizos que ya se pueden lanzar), no solo en el 30. Medido así, el
+    primer reparto invertía dos roles: la cura del guardián curaba más por lanzamiento que
+    `verdant_mend` del druida del nivel 12 al 29, y `steel_whirl` le pegaba más a cada
+    monstruo que `tempest_ring` del arcanista del 35 al 47. Ahora `iron_resolve` cura ~7-9 %
+    de la vida del guardián (menos de 0,8 veces la mejor cura del druida en cada nivel) y
+    `steel_whirl` escala 1,1 por punto de skill (era 1,4). Además, el nivel mágico de los
+    golpes del guardián (1 y 2; eran 2 y 4) es el que alcanza **sin comprar un solo brebaje
+    de maná**, solo con su regeneración, la comida y su cura: con factor de magia 2,7, el
+    nivel 4 pedía ~44 500 de maná, unos 560 brebajes, y un guardián que no los compra no
+    pasa de nivel mágico 3 en toda la carrera. La carrera simulada juega también a ese
+    guardián (hábito `dry`) y exige que llegue a cada hechizo a tiempo. Ritmo: las
+    vocaciones siguen en 0,5-1,5 veces el tiempo del guardián por franja. El guardián que
+    compra brebajes de maná para sus golpes va de 1 a 50 en ~35 h (antes de sus hechizos,
+    ~40 h), a la par de los magos (arcanista ~34 h, druida ~32 h) y del montaraz (~35 h);
+    sin brebajes de maná tarda ~39 h (el oro de cada uno: "Economía", brebajes de maná).
 
 #### Hechizos por vocación
 Nivel / nivel mágico / maná. Las palabras son propias (nunca las de Tibia); los nombres van
@@ -322,9 +337,9 @@ en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
 |---|---|---|---|---|
 | Todas | `swift_stride` | pede celeri | 8 / 0 / 30 | haste 25 s |
 | Todas | `purge_venom` | venenum pelle | 9 / 0 / 25 | cura el veneno |
-| Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~13-15 % de su vida (sobre todo por nivel) |
-| Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 2 / 35 | físico, radio 1, escala con la skill del arma en la mano |
-| Guardián | **`steel_whirl`** | turbo chalybis | 35 / 4 / 60 | el anterior más fuerte, cooldown 6 s |
+| Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~7-9 % de su vida (sobre todo por nivel) |
+| Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 1 / 35 | físico, radio 1, escala con la skill del arma en la mano |
+| Guardián | **`steel_whirl`** | turbo chalybis | 35 / 2 / 60 | el anterior más fuerte, cooldown 6 s |
 | Arcanista | `arc_bolt` | fulgur iacio | 1 / 0 / 10 | energía a 4 casillas, a veces electriza |
 | Arcanista | `conjure_arc_rune` | runa fulguris | 5 / 1 / 60 | conjura una runa de arco |
 | Arcanista | `light_heal` | vita lumen | 6 / 0 / 25 | cura |
@@ -350,9 +365,10 @@ en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
 | Montaraz | **`heartwood_shot`** | sagitta gravis | 40 / 9 / 70 | físico a 5 casillas, su golpe más fuerte, cooldown 6 s |
 
 Los números exactos (base, por nivel, por nivel mágico, por skill, cooldowns) están en
-`data/spells.yaml`; los límites de rol (el druida cura mejor, el arcanista tiene el área más
-fuerte y más ancha, el montaraz el alcance más largo, los golpes del guardián escalan con su
-arma, todo cabe en las 12 teclas de la hotbar) los fija
+`data/spells.yaml`; los límites de rol (el druida cura mejor y el arcanista tiene el área
+más fuerte en cada franja de la carrera del 12 al 49, con lo que cada vocación ya puede
+lanzar ahí; el arcanista tiene el área más ancha, el montaraz el alcance más largo, los
+golpes del guardián escalan con su arma, todo cabe en las 12 teclas de la hotbar) los fija
 `packages/content-schema/src/vocations-balance.test.ts`.
 
 ## Experiencia y nivel
@@ -844,15 +860,30 @@ Valores iniciales (balance.yaml):
   El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
   templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
   vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
-  (`sim/balance_vocations_test.go`): sube más rápido que el guardián y junta menos oro.
+  (`sim/balance_vocations_test.go`). Antes de la progresión de hechizos (2026-11) eso lo
+  hacía subir más rápido que el guardián, que juntaba más oro. Ahora el guardián también
+  puede comprarlos para sus golpes y su cura: con ellos gasta lo mismo (~60 % del botín
+  desde el nivel 20) y sube a la par de los magos (~35 h del 1 al 50, contra ~34 h del
+  arcanista y ~32 h del druida; del 30 al 50 hasta un poco más rápido que el arcanista, que
+  en un duelo no luce sus áreas). Sin brebajes de maná tarda ~13 % más (~39 h, lo que
+  tardaba antes de tener hechizos) y llega igual al nivel mágico de todos sus hechizos
+  ("Vocaciones"). La diferencia de oro ya no es de vocación sino de cuánto gasta cada uno en
+  brebajes: comprarlos es una elección, no un peaje.
 - **Brebajes de vida** (progresión de hechizos, 2026-11): la cataplasma de algas (40 de
   vida, 25 cobre, ~0,6 por punto) servía del nivel 1 al 60. El brebaje de vida (110, 60
   cobre) lo venden la druida y el mercader del Bosque y el templo de Brasal; el concentrado
   (250, 125 cobre) solo Brasal: ~0,5 cobre por punto, entre la cataplasma y el maná. Como
   los de maná, se venden por isla (el Puerto se queda con la cataplasma: un novato no
   compra una cura del doble de su vida) y nadie los compra de vuelta. En la carrera
-  simulada, quien baja de un tercio de su vida toma el más grande que no se desperdicia, y
-  la caza sigue pagándolo (como mucho 75 % del botín, también el guardián).
+  simulada, quien baja de un tercio de su vida toma el más grande que no se desperdicia.
+  Las carreras que compran brebajes de maná casi nunca llegan ahí: sus curas, alimentadas
+  con brebajes de maná, las mantienen arriba y por menos cobre por punto de vida (la cura
+  del guardián al nivel 20: ~36 de vida por 30 de maná, ~13 cobre en brebajes, ~0,37 por
+  punto). Los brebajes de vida son de quien se cura sin maná: el guardián que no compra
+  brebajes de maná toma el de vida del 12 al 29 y el concentrado desde el 30, y su caza los
+  paga (como mucho 75 % del botín; entre ellos y la comida gasta del 17 al 59 % según la
+  franja). Donde más sirven es en grupos y contra golpes fuertes, cuando una cura por
+  segundo no alcanza, y eso la simulación de duelos no lo mide.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.

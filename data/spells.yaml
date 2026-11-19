@@ -263,7 +263,11 @@
 # fist with none). Each caster gets a stronger heal or single-target spell and a bigger
 # area, the ranger an area shot and a heavy shot. Their magic levels are the ones the
 # career simulation reaches a few levels after the spell's level
-# (server/internal/sim/balance_vocations_test.go).
+# (server/internal/sim/balance_vocations_test.go); the guardian's, the ones it reaches
+# without buying a single mana draught (its regeneration and its heal train it), so they
+# are no toll in gold. The roles hold at every level of the career
+# (packages/content-schema/src/vocations-balance.test.ts): the druid heals best, the
+# arcanist's area hits hardest.
 - id: iron_resolve
   name: spell.iron_resolve.name
   words: "sanguis firmus"
@@ -273,15 +277,18 @@
   group: healing
   cooldown_ms: 1500
   group_cooldown_ms: 1000
-  effect: { heal: { base: 20, per_level: 1.6, per_magic_level: 3 } }
-  notes: The guardian's own heal, small for its body (13-15 % of its health) and mostly from its level.
+  effect: { heal: { base: 10, per_level: 1.1, per_magic_level: 2 } }
+  notes: >-
+    The guardian's own heal, small for its body (7-9 % of its health, mostly from its level):
+    under 0.8 of the druid's best self-heal at every level (the druid is the healer), a stopgap
+    between health draughts.
 
 - id: sweeping_blow
   name: spell.sweeping_blow.name
   words: "ferrum gyrus"
   vocations: [guardian]
   level: 20
-  magic_level: 2
+  magic_level: 1
   mana: 35
   group: attack
   cooldown_ms: 4000
@@ -294,12 +301,12 @@
   words: "turbo chalybis"
   vocations: [guardian]
   level: 35
-  magic_level: 4
+  magic_level: 2
   mana: 60
   group: attack
   cooldown_ms: 6000
   group_cooldown_ms: 2000
-  effect: { damage: { element: physical, radius: 1, base: 15, per_level: 0.6, skill: weapon, per_skill: 1.4, spread: 0.2 } }
+  effect: { damage: { element: physical, radius: 1, base: 15, per_level: 0.6, skill: weapon, per_skill: 1.1, spread: 0.2 } }
   notes: The stronger sweeping_blow, with a longer cooldown.
 
 - id: sap_surge

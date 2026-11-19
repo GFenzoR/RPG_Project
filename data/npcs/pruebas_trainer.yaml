@@ -89,7 +89,7 @@ dialog:
             - { train_skill: { skill: axe, level: 45 } }
             - { train_skill: { skill: club, level: 45 } }
             - { train_skill: { skill: shield, level: 40 } }
-            - { train_skill: { skill: magic, level: 4 } }
+            - { train_skill: { skill: magic, level: 2 } }
           goto: trained
         - text: npc.pruebas_trainer.opt_train_combat
           if: { vocation_in: [ranger] }

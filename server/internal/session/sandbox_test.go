@@ -1790,7 +1790,7 @@ func TestSandboxToolsHaveAUse(t *testing.T) {
 // her training raises the skills. A guardian of level 21 with the provisioner's iron
 // sword, plank shield, jerkin, cap and 20 poultices dies in pen 4 with sword and shield
 // at 10; the same guardian trained for combat (sword, axe and club 45, shield 40, magic
-// level 4) kills a thornling and lives. Training never lowers a skill.
+// level 2) kills a thornling and lives. Training never lowers a skill.
 func TestSandboxTraining(t *testing.T) {
 	combat := []string{"sword", "axe", "club", "shield", "magic"}
 	for _, trained := range []bool{false, true} {
@@ -1808,7 +1808,7 @@ func TestSandboxTraining(t *testing.T) {
 			if n := systemKeys(evs)["progress.skill_up"]; n != len(combat) {
 				t.Fatalf("training told %d skill ups, want %d: %v", n, len(combat), systemKeys(evs))
 			}
-			want = map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 4}
+			want = map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 2}
 		}
 		if got := s.skillLevels(p, combat...); !maps.Equal(got, want) {
 			t.Fatalf("trained %v: skills %v, want %v", trained, got, want)
@@ -1849,7 +1849,7 @@ func TestSandboxTrainingByVocation(t *testing.T) {
 		vocation string
 		want     map[string]int
 	}{
-		{"guardian", map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 4}},
+		{"guardian", map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 2}},
 		{"ranger", map[string]int{"distance": 45, "sword": 30, "axe": 30, "club": 30, "shield": 35, "magic": 9}},
 		{"arcanist", map[string]int{"magic": 30, "shield": 20, "sword": 10, "distance": 10}},
 		{"druid", map[string]int{"magic": 30, "shield": 20, "sword": 10, "distance": 10}},

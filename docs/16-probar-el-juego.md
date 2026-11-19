@@ -82,7 +82,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      - **"El combate"** deja las skills de tu vocación como las de quien llegó jugando a
        los corrales 4 y 5, y el nivel mágico del último hechizo de tu vocación (con la
        experiencia gratis se prueban todos, `02-game-design.md` "Hechizos por vocación").
-       Guardián: espada, hacha y maza 45, escudo 40 y nivel mágico 4. Montaraz: distancia
+       Guardián: espada, hacha y maza 45, escudo 40 y nivel mágico 2. Montaraz: distancia
        45, espada, hacha y maza 30, escudo 35 y nivel mágico 9. Arcanista y druida: nivel
        mágico 30 y escudo 20.
      - **"Los oficios"**: minería, tala, herrería, cocina y alquimia 25 y pesca 40. Así

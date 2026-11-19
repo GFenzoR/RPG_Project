@@ -573,13 +573,34 @@ el punto 5:
   hechizo (la skill del arma en la mano, puño sin arma o con varita: `session/magic.go`
   `scalingSkill`), el brebaje de vida (110, Bosque y Brasal) y el concentrado (250, solo
   Brasal), y la carrera simulada con el guardián, los brebajes de vida y chequeos de maná,
-  nivel mágico y uso de cada hechizo. Queda:
+  nivel mágico y uso de cada hechizo. Tras la revisión de la rama: los roles se miden en
+  cada franja del 12 al 49 (la cura del guardián y `steel_whirl` bajaron: el druida cura
+  más y el arcanista pega más en área en cada nivel), los golpes del guardián piden nivel
+  mágico 1 y 2 (lo que alcanza sin comprar brebajes de maná; la carrera simulada juega
+  también a ese guardián) y el test de los brebajes de vida mira que alguien los compre
+  de verdad (`02-game-design.md` "Vocaciones" y "Economía"). Queda:
   - **probarlo a mano** (Isla de Pruebas: el mercader vende los dos brebajes; la
     instructora da la experiencia y, con "El combate", ahora el nivel mágico del último
-    hechizo de cada vocación: guardián 4, montaraz 9, magos 30): que los golpes del guardián
+    hechizo de cada vocación: guardián 2, montaraz 9, magos 30): que los golpes del guardián
     se sientan (radio 1, números de `data/spells.yaml`), que las palabras nuevas se lancen
     dichas en el chat y que la hotbar por defecto de cada vocación las muestre (todas caben
-    en las 12 teclas);
+    en las 12 teclas). **Ojo con la hotbar guardada:** quien ya guardó la suya (en el
+    navegador, `localStorage` `rpg.hotkeys.<vocación>`, `client/src/state/hotkeys.ts`) no
+    ve los hechizos nuevos: solo la hotbar por defecto los trae. Pesa sobre todo en el
+    guardián, que antes tenía dos. Para probar, borrar esa clave (herramientas del
+    navegador) o arrastrar los hechizos desde el selector; si se quiere que lleguen solos,
+    es del cliente (sumar a los huecos vacíos los hechizos que la barra nunca vio);
+  - **para que lo decida el dueño (economía del guardián):** desde que tiene hechizos, el
+    guardián que caza con brebajes de maná gasta en ellos ~60 % de su botín, como los
+    magos, y sube a su ritmo (~35 h del 1 al 50; del 30 al 50 un poco más rápido que el
+    arcanista). Antes subía más lento que los magos y juntaba más oro. Sin brebajes de maná
+    tarda ~39 h y llega igual a todos sus hechizos. Se dejó así: comprar es una elección,
+    no un peaje. Si se quiere que el guardián vuelva a ser el que junta oro, el camino es
+    que sus golpes rindan menos por maná (más caros o más débiles), no subirles el nivel
+    mágico (eso sí sería un peaje: ~560 brebajes para el nivel mágico 4);
+  - los brebajes de vida cuestan más por punto (~0,55 cobre) que curarse con un hechizo
+    alimentado con brebajes de maná (~0,37 con la cura del guardián al 20): en la carrera
+    simulada solo los compra quien no compra maná. Revisarlo con los precios del lote 11;
   - **para que lo decida el dueño:** el Puerto no vende brebajes de vida (se venden por
     isla, como el de maná concentrado; un novato no compra una cura del doble de su vida
     por 60 cobre). Si se quieren ahí, es una línea en `data/npcs/puerto_diver.yaml` o
