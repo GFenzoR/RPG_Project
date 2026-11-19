@@ -4877,8 +4877,8 @@ type MarketUpdate struct {
 	// ignores it (it must not open the window again).
 	Refresh bool `protobuf:"varint,21,opt,name=refresh,proto3" json:"refresh,omitempty"`
 	// For an equipable browsed item: the mods of each instance counted in owned (one entry
-	// per instance), so the player picks which one to sell (MarketCreate.mods,
-	// MarketAccept.mods).
+	// per instance, the lowest refine level and then the weakest roll first), so the player
+	// picks which one to sell (MarketCreate.mods, MarketAccept.mods).
 	OwnedMods     []*ItemMods `protobuf:"bytes,22,rep,name=owned_mods,json=ownedMods,proto3" json:"owned_mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

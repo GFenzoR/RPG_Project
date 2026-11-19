@@ -517,6 +517,25 @@ func TestMarketSellOfferIsTheInstance(t *testing.T) {
 	h.sim.Step()
 }
 
+// The instance picker lists the lowest refine level first (then the weakest roll), wherever
+// the pieces lie: a +7 carried before a +0 of the same roll is never the default choice
+// when selling into a buy offer (the sale is at once).
+func TestMarketOwnedModsLowestRefineFirst(t *testing.T) {
+	h := newMarketHarness(t, withAttributes(t))
+	cs, _ := h.atBoard("Sela", pos(1, 0), rolledAt(swordID, 0, "attack", 3, 7), rolledAt(swordID, 1, "attack", 3, 0),
+		rolledAt(swordID, 2, "attack", 1, 7))
+	browse := marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: swordID}}})
+	u := lastMarket(h.send(cs, browse))
+	var got []session.Mods
+	for _, m := range u.GetOwnedMods() {
+		got = append(got, itemMods(&pb.ItemStack{Mods: m}))
+	}
+	want := []session.Mods{refinedMods("attack", 3, 0), refinedMods("attack", 1, 7), refinedMods("attack", 3, 7)}
+	if !slices.Equal(got, want) {
+		t.Fatalf("owned mods %+v, want %+v", got, want)
+	}
+}
+
 // A buy offer of an equipable is filled by any instance, one at a time: the seller
 // picks which, and that one reaches the buyer's mailbox.
 func TestMarketBuyOfferTakesThePickedInstance(t *testing.T) {

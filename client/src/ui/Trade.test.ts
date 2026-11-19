@@ -401,6 +401,48 @@ describe("MarketWindow with an equipable", () => {
     expect(picker.hidden).toBe(false);
   });
 
+  it("names a refined instance with its level in the picker and in another's offer", () => {
+    // Two swords of one roll, +0 and +7 (the server lists the lowest level first): the
+    // options must not look alike, or accepting a buy offer sells the +7 at a +0's price.
+    const { game, sent } = recorder();
+    const plus7 = { ...attack, refine: 7 };
+    const m = market({
+      itemId: 60,
+      owned: 2,
+      ownedMods: [attack, plus7],
+      sells: [offer({ mods: plus7 })],
+      buys: [offer({ id: 6n, sell: false, amount: 3, price: 10 })],
+    });
+    const tree = MarketWindow({ t, content, game, ui: { market: m } as GameUi });
+    const options = (n: unknown): unknown[] =>
+      nodes(n)
+        .filter((x) => x.type === "option")
+        .map((x) => x.props["children"]);
+    // "+7 sword · +2 attack": the refined name, then the attribute.
+    const refined = t("client.market.refined_line", {
+      name: t("client.item.refined", { level: 7, name: "item.iron_sword.name" }),
+      attribute: 'attribute.attack{"value":2}',
+    });
+    const buyRow = byAttr(tree, "data-offer", "6")[0];
+    expect(options(buyRow)).toEqual(['attribute.attack{"value":2}', refined]);
+    const create = byAttr(tree, "data-testid", "market-create")[0];
+    expect(options(nodes(create).find((n) => n.props["name"] === "instance"))).toEqual([
+      'attribute.attack{"value":2}',
+      refined,
+    ]);
+    // Another's sell offer of a +7: its row says so, not only its tooltip.
+    const line = nodes(byAttr(tree, "data-offer", "5")[0]).find(
+      (n) => n.props["class"] === "attribute card-attribute",
+    );
+    expect(line?.props["children"]).toBe(refined);
+    // The default option is the +0: the sale takes it unless the player picks the +7.
+    submit(
+      nodes(buyRow).find((n) => n.type === "form"),
+      { instance: "0" },
+    );
+    expect(sent).toEqual(["accept 6 1 attack:2"]);
+  });
+
   it("sells into a buy offer the instance the picker names", () => {
     const { game, sent } = recorder();
     const tree = MarketWindow({ t, content, game, ui: { market: sword } as GameUi });

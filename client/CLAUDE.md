@@ -252,7 +252,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `forgeBand`, `forgeChance`, `refineGain`, `forgeCandidates`, `forgeView`, con tests): las
   mismas fórmulas que `server/internal/content/forge.go`. Lo que se lleva lo dice el
   `StationOpen` (`owned` con piedras y ámbar, `StationState.money`).
-- `Game.refine(candidato, protect)` manda `Refine` con el nivel que se ve;
+- `Game.refine(candidato, protect)` manda `Refine` con todos los `mods` que se ven
+  (`refineMessage`; el servidor no refina otra pieza que subió a ese lugar salvo que sea igual
+  en todo) y la ventana no manda otro hasta la respuesta (`refineInFlight`: un `RefineResult`
+  o un mensaje de sistema después del envío, o `IN_FLIGHT_MS`; botones con `disabled`);
   `WorldState.refine` (`RefineState`) es el último `RefineResult`, que la ventana muestra
   `RESULT_MS` (8 s) arriba. La pieza elegida es `chosenPiece`: la de su lugar con el mismo
   item y los mismos `mods`, que siguen al resultado de los intentos sobre ella (una rota se
@@ -262,8 +265,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `forge.smithingBonus.skill`, no un string del código.
 - El nombre de una pieza refinada pasa siempre por `refinedName` (`client.item.refined`):
   la ficha (`cardTitle`, con la línea `card-refine` de `ItemCardView.refine`), el
-  intercambio y el mercado (`ItemLabel`) y los parámetros `item` de los mensajes
-  (`state/messages.ts`). Color `--ui-item-refine`.
+  intercambio y el mercado (`ItemLabel`; el selector de cuál vender y las filas de ofertas
+  ajenas, `instanceLine` de `ui/Market.tsx`, "+7 espada · +3 ataque") y los parámetros `item`
+  de los mensajes (`state/messages.ts`). Color `--ui-item-refine`.
 - Efectos 8 (`effects/refine`) y 9 (`effects/shatter`) en `render/effects.ts`, con su sonido
   (`effect.refine`, `effect.shatter` en `assets/sounds.yaml`).
 - Test ids: `forge`, `forge-slot`, `forge-levels`, `forge-gain`, `forge-chance`,

@@ -8,6 +8,7 @@ import type { JSX } from "preact";
 import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { refinedName } from "../state/forge.ts";
 import { rollsAttribute } from "../state/item-card.ts";
 import { createProblem, marketCost, searchItems } from "../state/market.ts";
 import { tipMods } from "../state/mods.ts";
@@ -51,16 +52,36 @@ export function attributeLine(
 }
 
 /**
- * The instance picker of an equipable (MarketUpdate.owned_mods): one option per instance
- * the player could sell, by its attribute. Its value is the index into ownedMods.
+ * One instance of item itemId as a picker option or an offer row names it: its attribute
+ * (attributeLine) and, refined (the forge, docs/02 "Forja"), its refined name before it
+ * ("+7 sword · +3 attack"), so two pieces of one roll at other levels never look alike.
  */
-function InstancePicker(props: Props & { owned: ItemMods[] }): JSX.Element {
+export function instanceLine(
+  t: Translate,
+  content: ClientContent,
+  itemId: number,
+  mods: ItemMods | undefined,
+): string {
+  const attribute = attributeLine(t, content, mods);
+  const level = mods?.refine ?? 0;
+  if (level <= 0) return attribute;
+  const def = content.items[itemId];
+  const name = refinedName(t, def ? t(`item.${def.id}.name`) : String(itemId), level);
+  return t("client.market.refined_line", { name, attribute });
+}
+
+/**
+ * The instance picker of an equipable (MarketUpdate.owned_mods, the lowest refine level
+ * first): one option per instance the player could sell, by its level and attribute. Its
+ * value is the index into ownedMods.
+ */
+function InstancePicker(props: Props & { itemId: number; owned: ItemMods[] }): JSX.Element {
   const { t } = props;
   return (
     <select name="instance" aria-label={t("client.market.instance")} data-testid="market-instance">
       {props.owned.map((m, i) => (
         <option key={i} value={String(i)}>
-          {attributeLine(t, props.content, m)}
+          {instanceLine(t, props.content, props.itemId, m)}
         </option>
       ))}
     </select>
@@ -116,7 +137,7 @@ function OfferTable(
               data-tip-count={o.amount}
               data-tip-mods={tipMods(o.mods)}
             >
-              {attributeLine(t, props.content, o.mods)}
+              {instanceLine(t, props.content, o.itemId, o.mods)}
             </span>
           )}
           <span class="amount">{t("client.market.units", { count: o.amount })}</span>
@@ -136,7 +157,7 @@ function OfferTable(
               }}
             >
               {pick ? (
-                <InstancePicker {...props} owned={props.m.ownedMods} />
+                <InstancePicker {...props} itemId={props.m.itemId} owned={props.m.ownedMods} />
               ) : (
                 <input
                   name="amount"
@@ -291,7 +312,7 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               <option value="buy">{t("client.market.side_buy")}</option>
             </select>
             {equipable && m.ownedMods.length > 0 && (
-              <InstancePicker {...props} owned={m.ownedMods} />
+              <InstancePicker {...props} itemId={m.itemId} owned={m.ownedMods} />
             )}
             <input
               name="amount"

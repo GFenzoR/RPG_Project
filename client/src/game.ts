@@ -3,6 +3,7 @@
 // says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
 // route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
+import { refineMessage } from "./state/forge.ts";
 import type { ForgeCandidate, RefineState } from "./state/forge.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
@@ -522,23 +523,14 @@ export class Game {
   }
 
   /**
-   * One forge attempt (docs/02 "Forja") on item at the open station: the level the client
-   * sees goes along, so a repeated click never refines twice. The server answers with
-   * RefineResult or a refine.* message.
+   * One forge attempt (docs/02 "Forja") on item at the open station: the piece's mods as the
+   * client sees them go along (refineMessage), so a repeated click never refines twice nor
+   * another piece. The server answers with RefineResult or a system message.
    */
   refine(item: ForgeCandidate, protect: boolean): void {
     const s = this.world.station;
     if (!s) return;
-    this.conn.send({
-      case: "refine",
-      value: {
-        station: { ...s.pos },
-        item: locationInit(item.loc),
-        itemId: item.itemId,
-        level: item.mods?.refine ?? 0,
-        protect,
-      },
-    });
+    this.conn.send({ case: "refine", value: refineMessage(s.pos, item, protect) });
   }
 
   closeStation(): void {

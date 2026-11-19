@@ -149,6 +149,7 @@ func TestForgeCheck(t *testing.T) {
 		"safe that can fail": func(f *Forge) { f.Levels[1].Chance = 90 },
 		"first risky sure":   func(f *Forge) { f.Levels[4].Chance = 100 },
 		"chance grows":       func(f *Forge) { f.Levels[8].Chance = 30 },
+		"chance flat":        func(f *Forge) { f.Levels[8].Chance = f.Levels[7].Chance },
 		"zero chance":        func(f *Forge) { f.Levels[9].Chance = 0 },
 		"no stones":          func(f *Forge) { f.Levels[0].Stones = 0 },
 		"first band":         func(f *Forge) { f.Bands[0].Level = 5 },

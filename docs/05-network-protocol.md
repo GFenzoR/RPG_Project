@@ -749,17 +749,18 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
 
 ### Forja (`server/internal/session/refine.go`)
 Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (docs/06).
-- **`Refine{station, item, item_id, level, protect}`**: un intento sobre la pieza de `item`
+- **`Refine{station, item, item_id, mods, protect}`**: un intento sobre la pieza de `item`
   (un slot de equipo o un contenedor abierto que el jugador lleva; nunca una posición del
-  suelo) en el yunque de `station`. `item_id` y `level` son lo que el cliente ve: otra pieza
-  u otro nivel (una vista vieja, o el mismo click mandado de nuevo después de un éxito) se
-  rechaza con `inventory.not_possible` sin gastar nada. Dos instancias del mismo item y nivel
-  en ese lugar son iguales para el servidor: después de una rotura las piezas de ese
-  contenedor suben un lugar, así que el cliente suelta la pieza rota (y una de otra tirada
-  que quedó en su lugar) y no manda por la que ocupó su índice; el ritmo de los oficios frena
-  un segundo click antes de la respuesta. `protect` gasta un ámbar de resguardo, solo si el
-  intento puede fallar (por encima de `forge.safe_level`; abajo se ignora); el cliente no lo
-  pide sin uno.
+  suelo) en el yunque de `station`. `item_id` y `mods` (todos: atributo, valor y nivel de
+  refinado; sin `mods`, una pieza común) son la pieza que el cliente ve: otra pieza, otra
+  tirada u otro nivel (una vista vieja, o el mismo click mandado de nuevo después de un
+  éxito) se rechaza con `inventory.not_possible` sin gastar nada. Así, con lag, un segundo
+  click mandado antes del resultado de una rotura (las piezas de ese contenedor ya subieron
+  un lugar) nunca refina la que ocupó su índice, salvo que sea igual en todo (entonces da lo
+  mismo cuál). Los `mods` son solo una clave: la instancia conserva los suyos. Además la
+  ventana no manda otro intento hasta que llega la respuesta del anterior (abajo). `protect`
+  gasta un ámbar de resguardo, solo si el intento puede fallar (por encima de
+  `forge.safe_level`; abajo se ignora); el cliente no lo pide sin uno.
 - **Rechazos** (`Message` de sistema; nada se gasta): `refine.unavailable` (forja apagada),
   `inventory.not_possible` (otro piso o fuera de la vista, item que no está ahí o de otro
   nivel, una posición del suelo), `refine.not_carried` (en un contenedor abierto que no
@@ -775,9 +776,13 @@ Reglas y números en `02-game-design.md` ("Forja") y `balance.yaml` `forge` (doc
   romperse, solo `item_id`), su `level` (0 rota) y `text`: `refine.success{item, level}`,
   `refine.broken{item}` o `refine.protected{item, level}`, donde `item` es la pieza como era
   (con sus `mods`: el cliente la nombra "+6 …") y `level` el nivel de ahora (también va
-  `from`, el de antes). El mismo texto llega como `Message` de sistema (el log). Después
-  llegan el `Inventory` o `ContainerUpdate` de la pieza (sus `mods` nuevos, o sin ella), los
-  de las piedras y monedas, `PlayerStats` y el `StationOpen` del yunque con lo que queda.
+  `from`, el de antes). El mismo texto llega como `Message` de sistema (el log). En el mismo
+  lote, **antes** del `RefineResult`, llegan el `Inventory` o `ContainerUpdate` de las monedas,
+  las piedras, el ámbar y la pieza (sus `mods` nuevos, o sin ella; con la pieza puesta,
+  también lo que cambia su equipo); **después**, `PlayerStats` y el `StationOpen` del yunque
+  con lo que queda (y la `MarketUpdate` de una ventana del mercado abierta). Toda respuesta a
+  un `Refine` es un `RefineResult` o un `Message` de sistema: el cliente espera una de las dos
+  (o 10 s) antes de dejar mandar otro intento.
 - **Efectos** en la casilla del yunque, para todos los que la ven: **8** chispas (éxito),
   **9** una pieza que se parte (rota, o el ámbar que se quiebra en su lugar).
 - La pieza refinada lleva su nivel en `ItemMods.refine` en todo mensaje que la nombra
@@ -1065,8 +1070,11 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
   `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y
   `owned` (unidades del item buscado en la mochila; si es un equipable, `owned_mods` trae
-  los `mods` de cada una, en orden, para elegir cuál vender) y `read_only` (solo se puede buscar
-  hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
+  los `mods` de cada una para elegir cuál vender: primero el refinado más bajo y después la
+  tirada más floja, como `spareFirst`, así la opción de entrada nunca es la pieza más
+  refinada; el cliente nombra cada opción con su nivel, "+7 espada · +3 ataque") y
+  `read_only` (solo se puede buscar hasta que el servidor reinicie; las demás acciones
+  responden `market.read_only`).
   `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
   items en orden mientras entren y después todo el oro que entre.
   **Refresco en vivo:** el servidor también manda, por su cuenta, una `MarketUpdate`

@@ -15,6 +15,7 @@ import {
   chosenPiece,
   forgeCandidates,
   forgeView,
+  refineInFlight,
   refinedName,
   resultKey,
   sameLoc,
@@ -37,6 +38,8 @@ interface BodyProps {
   /** The toggle's state (what the attempt does is view.protect). */
   protect: boolean;
   confirming: boolean;
+  /** An attempt was sent and its answer has not come (refineInFlight): no other one goes. */
+  busy: boolean;
   /** The last attempt, when it is still fresh. */
   result: RefineState | undefined;
   onPick: (c: ForgeCandidate) => void;
@@ -184,7 +187,13 @@ export function ForgeBody(p: BodyProps): JSX.Element {
                     })}
               </p>
               <div class="forge-actions">
-                <button type="button" class="danger" data-testid="forge-go" onClick={p.onConfirm}>
+                <button
+                  type="button"
+                  class="danger"
+                  data-testid="forge-go"
+                  disabled={p.busy}
+                  onClick={p.onConfirm}
+                >
                   {t("client.forge.go", { level: view.next })}
                 </button>
                 <button type="button" data-testid="forge-cancel" onClick={p.onCancel}>
@@ -197,7 +206,8 @@ export function ForgeBody(p: BodyProps): JSX.Element {
               <button
                 type="button"
                 data-testid="forge-attempt"
-                disabled={view.blocks.length > 0}
+                disabled={view.blocks.length > 0 || p.busy}
+                aria-busy={p.busy}
                 onClick={p.onAttempt}
               >
                 {t("client.forge.attempt", { level: view.next })}
@@ -267,6 +277,7 @@ export function ForgePanel(props: {
   const [pick, setPick] = useState<ForgeCandidate | undefined>(undefined);
   const [protect, setProtect] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // When the last attempt went (performance.now(); 0: none): its answer ends the wait.
   const [sentAt, setSentAt] = useState(0);
   // When the first attempt on this choice went (0: none yet): the results since then move
   // the chosen piece's level, or let it go when it broke.
@@ -282,11 +293,15 @@ export function ForgePanel(props: {
   const now = performance.now();
   const result =
     ui.refine && ui.refine.at >= sentAt && now - ui.refine.at < RESULT_MS ? ui.refine : undefined;
+  // One attempt at a time: with lag, a second click before the result (after a break the
+  // piece is gone) would name a piece the player may not have meant (docs/02 "Forja").
+  const busy = refineInFlight(sentAt, ui.refine, ui.log, now);
   const send = (): void => {
-    if (!selected || !view || view.blocks.length > 0) return;
+    if (!selected || !view || view.blocks.length > 0 || busy) return;
+    const at = performance.now();
     setConfirming(false);
-    setSentAt(now);
-    if (since === 0) setSince(now);
+    setSentAt(at);
+    if (since === 0) setSince(at);
     game?.refine(selected, view.protect);
   };
   return (
@@ -299,6 +314,7 @@ export function ForgePanel(props: {
       view={view}
       protect={protect}
       confirming={confirming && view !== undefined && view.risky}
+      busy={busy}
       result={result}
       onPick={(c) => {
         setPick(c);

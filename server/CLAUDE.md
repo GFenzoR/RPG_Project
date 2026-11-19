@@ -252,7 +252,7 @@ server/
 
 - **Forja (`session/refine.go`, `content/forge.go`, `balance.yaml forge`, docs/02 "Forja"):**
   `Refine` hace todos los chequeos antes de tocar nada (yunque a 1 casilla, la pieza del
-  jugador en un slot o un contenedor abierto con el nivel que vio el cliente, no ofrecida en
+  jugador en un slot o un contenedor abierto con todos los `mods` que vio el cliente, no ofrecida en
   el intercambio, piedras, ámbar, oro y su vuelto, el ritmo de los oficios `nextGather`),
   después gasta todo junto, tira con `ctx.Rand` y sube, baja o rompe la pieza en el mismo
   comando, y guarda el personaje (`w.save`) si el intento podía fallar (los niveles seguros

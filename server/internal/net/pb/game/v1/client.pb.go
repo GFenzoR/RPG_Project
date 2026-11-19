@@ -3751,23 +3751,24 @@ func (x *Craft) GetStation() *Position {
 
 // Refine is one attempt of the forge (docs/02 "Forja") on the item at item (an equipment
 // slot or an open container the player carries: never the ground) at the anvil on the
-// tile station. item_id and level are the item and the refine level the client saw: a
-// stale view (another item, another level) is refused, so a click repeated after a
-// success does nothing. The server does not tell apart two instances of one item at one
-// level: after a break, a container's items move up and another one may take that place,
-// so the client lets go of a piece that broke (and of a place whose piece changed); the
-// pace of crafting stops a second click before the result. protect spends one protection
-// material in this attempt (only from the first level that can fail; ignored below it).
-// The server checks everything (the station within reach, an equipable that rolls
-// attributes below the top level, carried, not offered in the trade window, the temper
-// stones, the protection and the gold carried, the pace of crafting) and answers with
-// RefineResult, or a system Message (refine.*) when the attempt did not happen.
+// tile station. item_id and mods are the piece the client saw, with all of its mods (its
+// attribute and value and its refine level; none for a plain piece): a stale view
+// (another item, another roll, another level) is refused, so a click repeated after a
+// success does nothing, and after a break, when a container's items move up, a click
+// sent before the result never refines the piece that took that place unless it is the
+// same in every way (then the two are interchangeable). The mods are only a key: the
+// instance keeps its own. protect spends one protection material in this attempt (only
+// from the first level that can fail; ignored below it). The server checks everything
+// (the station within reach, an equipable that rolls attributes below the top level,
+// carried, not offered in the trade window, the temper stones, the protection and the
+// gold carried, the pace of crafting) and answers with RefineResult, or a system Message
+// (refine.* or another refusal) when the attempt did not happen.
 type Refine struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Station       *Position              `protobuf:"bytes,1,opt,name=station,proto3" json:"station,omitempty"`
 	Item          *ItemLocation          `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
 	ItemId        uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
+	Mods          *ItemMods              `protobuf:"bytes,4,opt,name=mods,proto3" json:"mods,omitempty"`
 	Protect       bool                   `protobuf:"varint,5,opt,name=protect,proto3" json:"protect,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3824,11 +3825,11 @@ func (x *Refine) GetItemId() uint32 {
 	return 0
 }
 
-func (x *Refine) GetLevel() uint32 {
+func (x *Refine) GetMods() *ItemMods {
 	if x != nil {
-		return x.Level
+		return x.Mods
 	}
-	return 0
+	return nil
 }
 
 func (x *Refine) GetProtect() bool {
@@ -4297,12 +4298,12 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x06war_id\x18\x05 \x01(\x04R\x05warId\"Q\n" +
 	"\x05Craft\x12\x1b\n" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12+\n" +
-	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation\"\xa9\x01\n" +
+	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation\"\xba\x01\n" +
 	"\x06Refine\x12+\n" +
 	"\astation\x18\x01 \x01(\v2\x11.game.v1.PositionR\astation\x12)\n" +
 	"\x04item\x18\x02 \x01(\v2\x15.game.v1.ItemLocationR\x04item\x12\x17\n" +
-	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12\x14\n" +
-	"\x05level\x18\x04 \x01(\rR\x05level\x12\x18\n" +
+	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12%\n" +
+	"\x04mods\x18\x04 \x01(\v2\x11.game.v1.ItemModsR\x04mods\x12\x18\n" +
 	"\aprotect\x18\x05 \x01(\bR\aprotect\"G\n" +
 	"\fReportPlayer\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
@@ -4518,11 +4519,12 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	64, // 73: game.v1.Craft.station:type_name -> game.v1.Position
 	64, // 74: game.v1.Refine.station:type_name -> game.v1.Position
 	61, // 75: game.v1.Refine.item:type_name -> game.v1.ItemLocation
-	76, // [76:76] is the sub-list for method output_type
-	76, // [76:76] is the sub-list for method input_type
-	76, // [76:76] is the sub-list for extension type_name
-	76, // [76:76] is the sub-list for extension extendee
-	0,  // [0:76] is the sub-list for field type_name
+	63, // 76: game.v1.Refine.mods:type_name -> game.v1.ItemMods
+	77, // [77:77] is the sub-list for method output_type
+	77, // [77:77] is the sub-list for method input_type
+	77, // [77:77] is the sub-list for extension type_name
+	77, // [77:77] is the sub-list for extension extendee
+	0,  // [0:77] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }

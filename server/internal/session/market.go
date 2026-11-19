@@ -743,22 +743,30 @@ func (w *World) marketInstance(p *Player, def *content.Item, mods Mods) *Item {
 	return found
 }
 
-// ownedMods are the mods of every market unit of an equipable def p carries, in the
-// order eachCarried walks them (MarketUpdate.owned_mods; nil for anything else).
+// ownedMods are the mods of every market unit of an equipable def p carries
+// (MarketUpdate.owned_mods; nil for anything else), the ones a path that takes without
+// the player picking would take first at the top (spareFirst: the lowest refine level,
+// then the weakest roll): the client's instance picker starts on the first one, so
+// selling a +7 always takes a choice.
 func (w *World) ownedMods(p *Player, def *content.Item) []*pb.ItemMods {
 	if !content.Rolls(def) {
 		return nil
 	}
-	var out []*pb.ItemMods
+	var units []*Item
 	p.eachCarried(false, func(it *Item) {
 		if marketUnit(it, def) {
-			m := it.mods.msg()
-			if m == nil {
-				m = &pb.ItemMods{}
-			}
-			out = append(out, m)
+			units = append(units, it)
 		}
 	})
+	w.spareFirst(units)
+	out := make([]*pb.ItemMods, 0, len(units))
+	for _, it := range units {
+		m := it.mods.msg()
+		if m == nil {
+			m = &pb.ItemMods{}
+		}
+		out = append(out, m)
+	}
 	return out
 }
 

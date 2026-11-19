@@ -2083,8 +2083,8 @@ export type MarketUpdate = Message$1<"game.v1.MarketUpdate"> & {
 
   /**
    * For an equipable browsed item: the mods of each instance counted in owned (one entry
-   * per instance), so the player picks which one to sell (MarketCreate.mods,
-   * MarketAccept.mods).
+   * per instance, the lowest refine level and then the weakest roll first), so the player
+   * picks which one to sell (MarketCreate.mods, MarketAccept.mods).
    *
    * @generated from field: repeated game.v1.ItemMods owned_mods = 22;
    */

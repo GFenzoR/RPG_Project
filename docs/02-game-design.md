@@ -1044,11 +1044,14 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   Piedras y ámbar se toman de los contenedores (como los ingredientes de una receta); el oro,
   de cualquier moneda que lleve, con el vuelto como en toda compra. Un intento por pedido,
   al ritmo de los oficios (`forge.time_ms`, 2 s, compartido con recolectar y fabricar). El
-  pedido dice la pieza y el nivel que ve el cliente: un click repetido después de un éxito
-  ya no coincide y no hace nada, y uno antes de la respuesta lo frena el ritmo. El servidor
-  no distingue dos piezas iguales del mismo nivel en el mismo lugar: después de una rotura,
-  las de ese contenedor suben un lugar, así que la ventana suelta la pieza rota (y la que
-  cambió de tirada en su lugar) en vez de apuntar a la que quedó ahí.
+  pedido dice la pieza que ve el cliente con todos sus `mods` (atributo, valor y nivel): un
+  click repetido después de un éxito ya no coincide y no hace nada. Después de una rotura las
+  piezas de ese contenedor suben un lugar: un segundo click mandado antes del resultado (con
+  lag) nombra la pieza rota, y el servidor no refina la que ocupó su lugar salvo que sea
+  igual en todo (entonces da lo mismo cuál); eso no depende del ritmo de `balance.yaml`. La
+  ventana, además, no deja mandar otro intento hasta que llega la respuesta del anterior (un
+  resultado o un aviso; 10 s como mucho) y suelta la pieza rota en vez de apuntar a la que
+  quedó en su lugar.
 - **La chance** (`forge.levels[n].chance`, en %): hasta **+4 nunca falla** (`safe_level`);
   desde +5 baja en cada nivel: **+5 70 %, +6 55 %, +7 40 %, +8 25 %, +9 15 %, +10 8 %**. La
   tira la fuente sembrada del loop (`TickContext.Rand`, `IntN(100) < chance`).
@@ -1083,7 +1086,11 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   baja pueden no sumar todavía (0,2 × 4 = 0,8 → 0): la ventana muestra el bono de ahora y el
   del nivel siguiente. Las **joyas** (cuello y anillo) no suman armadura: cada nivel agrega el
   **10 %** del valor de su atributo (`jewelry_pct`, redondeado hacia abajo; un anillo de +20
-  de vida a +5 da 30), y ese total sigue con el tope del atributo. El ataque cuenta solo para
+  de vida a +5 da 30), y ese total sigue con el tope del atributo. Con un atributo
+  chico el redondeo se come los primeros niveles: un anillo de +1 de regeneración no gana
+  nada hasta +10 y uno de +3 de protección recién a +4 (3 × 10 % × 4 = 1,2 → 1), aunque cada
+  intento desde +5 cuesta y arriesga la pieza; la ventana lo muestra (el bono de ahora y el
+  del nivel siguiente, 0 → 0). El ataque cuenta solo para
   el arma de la mano derecha y la defensa para el escudo de la izquierda; la armadura, en
   cualquier slot de armadura. Lo de la mochila no suma.
 - **En las fórmulas** (`attributes.go` `wornGear`, que llama a `refineGain` de `refine.go`): el
@@ -1136,7 +1143,11 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   con el nuevo); no cuenta como ganancia para el detector de anomalías.
 - **Nombre y ficha:** una pieza refinada se llama "+7 espada…" en todo el cliente (ficha,
   tooltip, intercambio, mercado y los mensajes del servidor: la clave `client.item.refined`
-  con `{level}` y `{name}`, nunca texto armado en el código), y la ficha agrega la línea
+  con `{level}` y `{name}`, nunca texto armado en el código). En el mercado, el selector de
+  cuál vender y las filas de ofertas ajenas dicen "+7 espada · +3 ataque"
+  (`client.market.refined_line`), y el selector empieza por el refinado más bajo
+  (`MarketUpdate.owned_mods` viene ordenado como `spareFirst`): aceptar una oferta de compra
+  vende en el acto, así que nunca se elige una +7 sin verla. La ficha agrega la línea
   "Refinado +7: +3 de ataque" en el color del metal caliente (la de una joya no pasa del
   tope de su atributo). "Mirar" (`look.*`) nombra la pieza con su nivel y da su ataque,
   armadura o defensa con lo que suma el refinado.

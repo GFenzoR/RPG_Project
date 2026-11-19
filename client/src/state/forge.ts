@@ -4,6 +4,7 @@
 // (server/internal/content/forge.go); the server checks everything again on Refine.
 import { RefineOutcome } from "@rpg/protocol";
 import type { ClientContent, ForgeRules, ItemDef, ItemMods } from "../content-types.ts";
+import { locationInit } from "./items.ts";
 import type { ItemLoc } from "./items.ts";
 import type { StationState } from "./recipes.ts";
 import type { ContainerState, ItemView } from "./world.ts";
@@ -109,8 +110,8 @@ export function sameMods(a: ItemMods | undefined, b: ItemMods | undefined): bool
 /**
  * The chosen piece as it is now among candidates: the one at its place with the same item
  * and the same mods. A piece moved away or broken is no longer there, and another one that
- * took its place (a container's items move up after a break) is not the choice: the server
- * only checks the item and the level, so the window must not send for it. last is the
+ * took its place (a container's items move up after a break) is not the choice, even one
+ * the same in every way (the server would take that one: refineMessage). last is the
  * latest forge result; it counts only for attempts on this choice (since: when the first
  * one was sent, 0 for none): a break lets the piece go, a success or a protected failure
  * moves the mods it has now.
@@ -270,4 +271,52 @@ export function refinedName(
   level: number | undefined,
 ): string {
   return level && level > 0 ? t("client.item.refined", { level, name }) : name;
+}
+
+/**
+ * The Refine message of one attempt on piece at the anvil on station: the piece as the
+ * window sees it, with all of its mods (none for a plain one). The server refuses a view
+ * that no longer matches (another roll or level in that place), so a click sent again
+ * before the result of a break never refines the piece that moved up into its place
+ * unless the two are the same in every way (docs/05 "Forja").
+ */
+export function refineMessage(
+  station: { x: number; y: number; z: number },
+  piece: ForgeCandidate,
+  protect: boolean,
+): {
+  station: { x: number; y: number; z: number };
+  item: ReturnType<typeof locationInit>;
+  itemId: number;
+  mods?: ItemMods;
+  protect: boolean;
+} {
+  return {
+    station: { ...station },
+    item: locationInit(piece.loc),
+    itemId: piece.itemId,
+    ...(piece.mods ? { mods: { ...piece.mods } } : {}),
+    protect,
+  };
+}
+
+/** How long the window waits for the answer to an attempt before it lets the player try
+ * again anyway (ms): an answer that never comes never locks the forge. */
+export const IN_FLIGHT_MS = 10_000;
+
+/**
+ * Whether the attempt sent at sentAt (performance.now(); 0: none) still waits for its
+ * answer, so the window does not send another one: the server answers every Refine with
+ * a RefineResult (last) or a system message (log) when the attempt did not happen, so
+ * either one that came after sentAt ends the wait, and so does IN_FLIGHT_MS.
+ */
+export function refineInFlight(
+  sentAt: number,
+  last: RefineState | undefined,
+  log: readonly { at: number }[],
+  now: number,
+): boolean {
+  if (sentAt <= 0 || now - sentAt >= IN_FLIGHT_MS) return false;
+  if (last && last.at >= sentAt) return false;
+  return !log.some((l) => l.at >= sentAt);
 }

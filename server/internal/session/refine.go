@@ -120,10 +120,12 @@ func (w *World) refine(ctx *game.TickContext, p *Player, m *pb.Refine) {
 		return
 	}
 	// The item: the player's own, equipped or in an open container it carries (never the
-	// ground, a corpse or a chest), as the client saw it (same item and level: a click
-	// repeated after a success names the old level and does nothing).
+	// ground, a corpse or a chest), as the client saw it, all of its mods (a click repeated
+	// after a success names the old level and does nothing; one sent before the result of
+	// a break, after the container's items moved up, names the broken piece's mods: the
+	// one in its place now is refined only when it is the same in every way).
 	it, pl := w.itemAt(p, m.GetItem(), m.GetItemId(), 0)
-	if it == nil || it.mods.Refine != int(m.GetLevel()) {
+	if it == nil || it.mods != modsOf(m.GetMods()) {
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}

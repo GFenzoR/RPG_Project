@@ -210,7 +210,15 @@ el punto 5:
     Su pedido admite la otra lectura (gastarlo solo al fallar).
   - **Los primeros niveles de una pieza de banda baja pueden no sumar** (0,2 de armadura por
     nivel: +4 da 0): es la tabla de `balance.yaml`; si el dueño lo prefiere, subir esos
-    valores o mostrar el próximo nivel que sí suma.
+    valores o mostrar el próximo nivel que sí suma. Lo mismo pasa con las **joyas de atributo
+    chico** (`JewelGain` redondea hacia abajo): un anillo de +1 de regeneración no gana nada
+    hasta +10 y uno de +3 de protección recién a +4, aunque cada intento desde +5 cuesta y
+    arriesga la pieza (la ventana muestra 0 → 0). Si el dueño quiere, un mínimo de 1 por
+    nivel desde cierto punto o un aviso en la ventana.
+  - **Vender a un NPC una pieza refinada:** el NPC se lleva primero la de refinado más bajo
+    (`spareFirst`), pero si la única copia en los contenedores es una +7, la vende al precio
+    base sin aviso. Opciones (decisión del dueño): sacar las refinadas de la venta a NPCs, o
+    un aviso en la tienda; elegir cuál pide el `mods` en `ShopSell` de arriba.
   - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Brasal y la
     suelta el custodio; las islas nuevas (lotes siguientes) traen sus fuentes.
   - **+10 es una leyenda a propósito** (unos 1 900 ámbares de promedio con ámbar en cada

@@ -114,19 +114,27 @@ func forger(h *harness, r int, skills ...session.SkillState) (*fakeClient, *sess
 	return cl, p
 }
 
-func refineMsg(from *pb.ItemLocation, item uint32, level int, protect bool) *pb.ClientMessage {
+// refineMsg is an attempt on the piece of item at from as the client saw it (mods).
+func refineMsg(from *pb.ItemLocation, item uint32, mods session.Mods, protect bool) *pb.ClientMessage {
+	var m *pb.ItemMods
+	if !mods.Zero() {
+		m = &pb.ItemMods{Attribute: mods.Attr, Value: int32(mods.Value), Refine: uint32(mods.Refine)}
+	}
 	return &pb.ClientMessage{Message: &pb.ClientMessage_Refine{Refine: &pb.Refine{
-		Station: posMsgOf(anvilPos), Item: from, ItemId: item, Level: uint32(level), Protect: protect,
+		Station: posMsgOf(anvilPos), Item: from, ItemId: item, Mods: m, Protect: protect,
 	}}}
 }
+
+// swordAt are the mods of forger's sword at refine level r.
+func swordAt(r int) session.Mods { return refinedMods("attack", 2, r) }
 
 func posMsgOf(p world.Pos) *pb.Position {
 	return &pb.Position{X: uint32(p.X), Y: uint32(p.Y), Z: uint32(p.Z)}
 }
 
-// refineSword sends one attempt on the wielded sword at level and waits out the pace.
+// refineSword sends one attempt on forger's wielded sword at level and waits out the pace.
 func (h *harness) refineSword(cl *fakeClient, level int, protect bool) []*pb.ServerMessage {
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, level, protect))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(level), protect))
 	h.sim.Step()
 	evs := cl.take()
 	h.sim.RunTicks(refineGap)
@@ -183,14 +191,16 @@ func (h *harness) forgeLog() (gold int64, stones, ambers int32, swords []session
 	return gold, stones, ambers, swords
 }
 
-// Up to +4 every attempt succeeds, whatever the roll, and spends one stone and gold × the
-// level: four attempts take a plain sword to +4 with sparks on the anvil, and its attack
-// grows with each level at once (it is worn). A safe level is not saved at once (going back
-// to before it gives nothing): the next save, here the logout's, has it.
+// Up to +4 every attempt succeeds, whatever the roll and whatever the table says (here the
+// safe levels' chances are 0, a table the content check would refuse: the safe level alone
+// keeps them sure), and spends one stone and gold × the level: four attempts take a plain
+// sword to +4 with sparks on the anvil, and its attack grows with each level at once (it
+// is worn). A safe level is not saved at once (going back to before it gives nothing): the
+// next save, here the logout's, has it.
 func TestRefineSafeLevelsNeverFail(t *testing.T) {
 	h := refineHarness(t, func(c *session.Config) {
 		for i := range 4 {
-			c.Balance.Forge.Levels[i].Chance = 100
+			c.Balance.Forge.Levels[i].Chance = 0
 		}
 	})
 	cl, p := forger(h, 0)
@@ -330,9 +340,10 @@ func TestRefineOutcomesAtEachLevel(t *testing.T) {
 }
 
 // With the real table the seeded roll decides: the same seed gives the same outcomes, and
-// a run from +4 with the protection both climbs and falls back.
+// a run from +4 with the protection both climbs and falls back (this seed: one protected
+// failure among four successes), and ends at the level they add up to.
 func TestRefineSeededRolls(t *testing.T) {
-	run := func() []pb.RefineOutcome {
+	run := func() ([]pb.RefineOutcome, int) {
 		h := refineHarness(t)
 		cl, p := forger(h, 4)
 		var got []pb.RefineOutcome
@@ -344,14 +355,26 @@ func TestRefineSeededRolls(t *testing.T) {
 		if n := h.w.CountItem(p, "test_amber"); n != 0 {
 			t.Fatalf("%d ambers left", n)
 		}
-		return got
+		return got, p.Equipped(slotRight).Mods().Refine
 	}
-	a, b := run(), run()
-	if !slices.Equal(a, b) {
+	a, level := run()
+	if b, _ := run(); !slices.Equal(a, b) {
 		t.Fatalf("same seed, other outcomes: %v vs %v", a, b)
 	}
-	if !slices.Contains(a, pb.RefineOutcome_REFINE_OUTCOME_SUCCESS) {
-		t.Fatalf("outcomes %v", a)
+	want := 4
+	for _, o := range a {
+		switch o {
+		case pb.RefineOutcome_REFINE_OUTCOME_SUCCESS:
+			want++
+		case pb.RefineOutcome_REFINE_OUTCOME_PROTECTED:
+			want--
+		default:
+			t.Fatalf("a protected attempt broke the sword: %v", a)
+		}
+	}
+	if !slices.Contains(a, pb.RefineOutcome_REFINE_OUTCOME_SUCCESS) ||
+		!slices.Contains(a, pb.RefineOutcome_REFINE_OUTCOME_PROTECTED) || level != want {
+		t.Fatalf("outcomes %v, level %d (want %d)", a, level, want)
 	}
 }
 
@@ -475,11 +498,11 @@ func TestRefineRefusals(t *testing.T) {
 			t.Fatalf("%s: something was spent", name)
 		}
 	}
-	try("stale level", "inventory.not_possible", refineMsg(inSlot(slotRight), swordID, 3, false))
-	try("other item", "inventory.not_possible", refineMsg(inSlot(slotRight), tunicID, 0, false))
-	try("stones", "refine.not_refinable", refineMsg(inContainer(win, 0), temperID, 0, false))
-	try("backpack", "refine.not_refinable", refineMsg(inSlot(slotBackpack), packID, 0, false))
-	far := refineMsg(inSlot(slotRight), swordID, 0, false)
+	try("stale level", "inventory.not_possible", refineMsg(inSlot(slotRight), swordID, swordAt(3), false))
+	try("other item", "inventory.not_possible", refineMsg(inSlot(slotRight), tunicID, session.Mods{}, false))
+	try("stones", "refine.not_refinable", refineMsg(inContainer(win, 0), temperID, session.Mods{}, false))
+	try("backpack", "refine.not_refinable", refineMsg(inSlot(slotBackpack), packID, session.Mods{}, false))
+	far := refineMsg(inSlot(slotRight), swordID, swordAt(0), false)
 	far.GetRefine().Station = posMsgOf(pos(3, 2))
 	try("no anvil there", "craft.no_station", far)
 
@@ -487,7 +510,7 @@ func TestRefineRefusals(t *testing.T) {
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "test_crown", 1) }))
 	h.sim.Step()
 	cl.take()
-	try("other band", "refine.no_stones", refineMsg(inContainer(win, 3), crownID, 0, false))
+	try("other band", "refine.no_stones", refineMsg(inContainer(win, 3), crownID, session.Mods{}, false))
 
 	// The protection asked for and not carried (only where the attempt can fail).
 	h.sim.Command(gameFunc(func() {
@@ -497,7 +520,7 @@ func TestRefineRefusals(t *testing.T) {
 	h.sim.Step()
 	cl.take()
 	before := h.carried(p)
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, 4, true))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(4), true))
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "refine.no_protection") || h.carried(p) != before {
 		t.Fatalf("no amber: %v", systemKeys(evs))
@@ -509,22 +532,22 @@ func TestRefineRefusals(t *testing.T) {
 	h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, "copper_coin", 100) }))
 	h.sim.Step()
 	cl.take()
-	try("money", "refine.no_money", refineMsg(inSlot(slotRight), swordID, 0, false))
+	try("money", "refine.no_money", refineMsg(inSlot(slotRight), swordID, swordAt(0), false))
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 50) }))
 	h.sim.Step()
 	cl.take()
 
 	// The pace: a second attempt right after the first is refused.
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, 0, false))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(0), false))
 	h.sim.Step()
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, 1, false))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(1), false))
 	h.sim.Step()
 	if evs := cl.take(); len(find(evs, (*pb.ServerMessage).GetRefineResult)) != 1 || !hasKey(evs, "refine.not_ready") {
 		t.Fatalf("pace: %v", systemKeys(evs))
 	}
 	// The same click twice: the second one names the old level and does nothing.
 	h.sim.RunTicks(refineGap)
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, 0, false))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(0), false))
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "inventory.not_possible") || p.Equipped(slotRight).Mods().Refine != 1 {
 		t.Fatalf("repeated click: %v", systemKeys(evs))
@@ -536,7 +559,7 @@ func TestRefineRefusals(t *testing.T) {
 	h.sim.RunTicks(40)
 	cl.take()
 	try2 := h.carried(p)
-	h.input(cl, refineMsg(inSlot(slotRight), swordID, 1, false))
+	h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(1), false))
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "inventory.too_far") || h.carried(p) != try2 {
 		t.Fatalf("too far: %v", systemKeys(evs))
@@ -551,7 +574,7 @@ func TestRefineNotFromTheGround(t *testing.T) {
 	cl, p := forger(h, 0)
 	h.send(cl, moveItem(inSlot(slotRight), swordID, 0, onTile(pos(1, 1)), 1))
 	before := h.carried(p)
-	m := refineMsg(onTile(pos(1, 1)), swordID, 0, false)
+	m := refineMsg(onTile(pos(1, 1)), swordID, swordAt(0), false)
 	h.input(cl, m)
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "inventory.not_possible") || h.carried(p) != before {
@@ -573,10 +596,61 @@ func TestRefineNotFromTheGround(t *testing.T) {
 	if g := h.w.GroundAt(pos(1, 1)); len(g) != 0 {
 		t.Fatalf("the sword stayed on the floor: %v", g)
 	}
-	h.input(cl, refineMsg(inContainer(bag, 0), swordID, 0, false))
+	h.input(cl, refineMsg(inContainer(bag, 0), swordID, swordAt(0), false))
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "refine.not_carried") || h.carried(p) != before {
 		t.Fatalf("a bag on the floor: %v", systemKeys(evs))
+	}
+}
+
+// A click sent again before the result of a break (lag): the broken piece was the first
+// of the backpack, the others moved up, and the message names the first place with the
+// broken piece's mods. Another roll at the same level in that place now is not the piece
+// the player chose: refused, nothing spent. A piece the same in every way is
+// interchangeable: refined.
+func TestRefineAfterABreakNamesTheBrokenPiece(t *testing.T) {
+	for _, same := range []bool{false, true} {
+		t.Run(fmt.Sprintf("same mods %v", same), func(t *testing.T) {
+			h := refineHarness(t, func(c *session.Config) { c.Balance.Forge.Levels[4].Chance = 0 })
+			next := refinedMods("attack", 3, 4)
+			if same {
+				next = swordAt(4)
+			}
+			nextChar++
+			cl, p := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Smith", Vocation: "guardian",
+				Level: 1, Health: 145, Mana: 20, Pos: pos(1, 0), HasPos: true, InventoryLoaded: true,
+				Inventory: []session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{
+					rolledAt(swordID, 0, "attack", 2, 4), {ItemID: swordID, Count: 1, Slot: 1, Mods: next},
+					stack(temperID, 30, 2), stack(coinID, 100, 3)}}}})
+			cl.take()
+			win := openPack(t, h, cl)
+			first := refineMsg(inContainer(win, 0), swordID, swordAt(4), false)
+			h.input(cl, first)
+			h.sim.Step()
+			if r := refineResult(t, cl.take()); r.GetOutcome() != pb.RefineOutcome_REFINE_OUTCOME_BROKEN {
+				t.Fatalf("first attempt %v", r)
+			}
+			if s := h.w.ItemsForTest(p, "test_sword"); len(s) != 1 || s[0].Mods() != next {
+				t.Fatalf("swords left %v", s)
+			}
+			h.sim.RunTicks(refineGap)
+			before := h.carried(p)
+			h.input(cl, first) // the same click, sent before the result came
+			h.sim.Step()
+			evs := cl.take()
+			if same {
+				if r := refineResult(t, evs); r.GetOutcome() != pb.RefineOutcome_REFINE_OUTCOME_BROKEN {
+					t.Fatalf("the identical piece: %v", r)
+				}
+				return
+			}
+			if !hasKey(evs, "inventory.not_possible") || len(find(evs, (*pb.ServerMessage).GetRefineResult)) != 0 {
+				t.Fatalf("another roll in its place: %v", systemKeys(evs))
+			}
+			if s := h.w.ItemsForTest(p, "test_sword"); h.carried(p) != before || len(s) != 1 || s[0].Mods() != next {
+				t.Fatalf("spent %+v -> %+v, swords %v", before, h.carried(p), s)
+			}
+		})
 	}
 }
 
@@ -640,7 +714,7 @@ func TestRefineNotWhileOffered(t *testing.T) {
 	}
 	ca.take()
 	before := h.carried(a)
-	evs := h.send(ca, refineMsg(inContainer(wa, 0), swordID, 0, false))
+	evs := h.send(ca, refineMsg(inContainer(wa, 0), swordID, swordAt(0), false))
 	if !hasKey(evs, "refine.in_trade") || h.carried(a) != before {
 		t.Fatalf("offered: %v", systemKeys(evs))
 	}
@@ -650,7 +724,7 @@ func TestRefineNotWhileOffered(t *testing.T) {
 	// Out of the trade, it can.
 	h.send(ca, tradeCancel)
 	h.sim.RunTicks(refineGap)
-	evs = h.send(ca, refineMsg(inContainer(wa, 0), swordID, 0, false))
+	evs = h.send(ca, refineMsg(inContainer(wa, 0), swordID, swordAt(0), false))
 	if r := refineResult(t, evs); r.GetOutcome() != pb.RefineOutcome_REFINE_OUTCOME_SUCCESS {
 		t.Fatalf("after the trade: %v", r)
 	}
@@ -677,7 +751,7 @@ func TestRefineNotWhileListed(t *testing.T) {
 		t.Fatal("not listed")
 	}
 	before := h.carried(s)
-	evs := h.send(cs, refineMsg(inContainer(win, 0), swordID, 3, false))
+	evs := h.send(cs, refineMsg(inContainer(win, 0), swordID, swordAt(3), false))
 	if !hasKey(evs, "inventory.not_possible") || h.carried(s) != before {
 		t.Fatalf("listed: %v", systemKeys(evs))
 	}
@@ -696,9 +770,9 @@ func TestRefineAndDisconnect(t *testing.T) {
 			cl, _ := forger(h, 4)
 			if leaveFirst {
 				h.sim.Command(h.w.Leave(cl))
-				h.input(cl, refineMsg(inSlot(slotRight), swordID, 4, false))
+				h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(4), false))
 			} else {
-				h.input(cl, refineMsg(inSlot(slotRight), swordID, 4, false))
+				h.input(cl, refineMsg(inSlot(slotRight), swordID, swordAt(4), false))
 				h.sim.Command(h.w.Leave(cl))
 			}
 			h.sim.Step()

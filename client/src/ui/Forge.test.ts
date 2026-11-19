@@ -100,6 +100,7 @@ function render(opts: {
   view?: ForgeView | undefined;
   protect?: boolean;
   confirming?: boolean;
+  busy?: boolean;
   result?: RefineState;
 }): { tree: unknown; calls: string[] } {
   const calls: string[] = [];
@@ -112,6 +113,7 @@ function render(opts: {
     view: opts.view,
     protect: opts.protect ?? false,
     confirming: opts.confirming ?? false,
+    busy: opts.busy ?? false,
     result: opts.result,
     onPick: () => calls.push("pick"),
     onProtect: (on) => calls.push(`protect ${on}`),
@@ -206,6 +208,20 @@ describe("the forge window", () => {
       confirming: true,
     });
     expect(text(byTestId(confirm.tree, "forge-confirm"))).toContain("client.forge.confirm{");
+  });
+
+  it("waits for the answer of an attempt before another one goes", () => {
+    // Lag: the result of a break has not come; a second click would name the place the
+    // next piece moves up into.
+    const { tree } = render({ selected: sabre(5), view: view(5, 0), busy: true });
+    const attempt = byTestId(tree, "forge-attempt");
+    expect(attempt?.props["disabled"]).toBe(true);
+    expect(attempt?.props["aria-busy"]).toBe(true);
+    const confirm = render({ selected: sabre(5), view: view(5, 0), confirming: true, busy: true });
+    expect(byTestId(confirm.tree, "forge-go")?.props["disabled"]).toBe(true);
+    // The answer came: free again.
+    const free = render({ selected: sabre(5), view: view(5, 0), confirming: true });
+    expect(byTestId(free.tree, "forge-go")?.props["disabled"]).toBe(false);
   });
 
   it("cannot attempt what it lacks, and says +10 is the top", () => {

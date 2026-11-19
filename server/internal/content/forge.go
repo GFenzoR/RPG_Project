@@ -204,8 +204,8 @@ func (f *Forge) check() error {
 			return fmt.Errorf("forge: level +%d is safe (safe_level %d): chance must be 100", i+1, f.SafeLevel)
 		case i == f.SafeLevel && l.Chance >= 100:
 			return fmt.Errorf("forge: level +%d is the first that can fail: chance must be below 100", i+1)
-		case i > f.SafeLevel && l.Chance > f.Levels[i-1].Chance:
-			return fmt.Errorf("forge: level +%d: the chance must not grow with the level", i+1)
+		case i > f.SafeLevel && l.Chance >= f.Levels[i-1].Chance:
+			return fmt.Errorf("forge: level +%d: the chance must drop at every level", i+1)
 		}
 	}
 	for i, b := range f.Bands {

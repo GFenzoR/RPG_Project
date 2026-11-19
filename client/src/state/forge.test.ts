@@ -8,8 +8,11 @@ import {
   forgeCandidates,
   forgeChance,
   forgeView,
+  IN_FLIGHT_MS,
   refineGain,
+  refineInFlight,
   refineKind,
+  refineMessage,
   refineOutcome,
   refinedName,
   sameLoc,
@@ -249,6 +252,49 @@ describe("the chosen piece", () => {
     // A result from before the first attempt on this choice (another piece's) does not count.
     expect(chosenPiece([at(1)], pick, result("broken", 0, 5), 10)).toEqual(at(1));
     expect(chosenPiece([at(1)], pick, result("broken", 0, 5), 0)).toEqual(at(1));
+  });
+});
+
+describe("the attempt on the wire", () => {
+  const piece = (mods?: ForgeCandidate["mods"]): ForgeCandidate => ({
+    loc: { kind: "container", id: 4, index: 1 },
+    itemId: 1,
+    mods,
+  });
+
+  it("names the piece with all of its mods, so the server never takes another one", () => {
+    const m = refineMessage(
+      { x: 1, y: 2, z: 7 },
+      piece({ attribute: "attack", value: 3, refine: 4 }),
+      true,
+    );
+    expect(m).toEqual({
+      station: { x: 1, y: 2, z: 7 },
+      item: { location: { case: "container", value: { containerId: 4, index: 1 } } },
+      itemId: 1,
+      mods: { attribute: "attack", value: 3, refine: 4 },
+      protect: true,
+    });
+    // A plain piece goes without mods (the server reads none as a plain one).
+    expect("mods" in refineMessage({ x: 1, y: 2, z: 7 }, piece(), false)).toBe(false);
+  });
+
+  it("waits for the answer: a result or a system message after it was sent, or the time out", () => {
+    const result = (at: number): RefineState => ({
+      outcome: "broken",
+      level: 0,
+      itemId: 1,
+      mods: undefined,
+      from: 4,
+      at,
+    });
+    expect(refineInFlight(0, undefined, [], 50)).toBe(false); // nothing sent
+    expect(refineInFlight(100, undefined, [], 150)).toBe(true);
+    // An answer from before this attempt does not count.
+    expect(refineInFlight(100, result(90), [{ at: 95 }], 150)).toBe(true);
+    expect(refineInFlight(100, result(120), [], 150)).toBe(false);
+    expect(refineInFlight(100, undefined, [{ at: 130 }], 150)).toBe(false); // refused
+    expect(refineInFlight(100, undefined, [], 100 + IN_FLIGHT_MS)).toBe(false);
   });
 });
 

@@ -923,7 +923,7 @@ forge:
     # ...
 ```
 - `levels`: entre 1 y 20 entradas; las de hasta `safe_level` con `chance: 100`, la siguiente
-  por debajo de 100 y, desde ahí, ninguna más alta que la anterior; `chance` de 1 a 100 y
+  por debajo de 100 y, desde ahí, cada una más baja que la anterior (baja en cada nivel); `chance` de 1 a 100 y
   `stones` ≥ 1. `safe_level` menor que el largo (algún nivel tiene que poder fallar).
 - `smithing_bonus.skill`: el oficio cuyo nivel da el bono (una skill de `skills.base`; el
   servidor no arranca con otra), obligatorio si `per_levels` > 0. Es dato: el código no
