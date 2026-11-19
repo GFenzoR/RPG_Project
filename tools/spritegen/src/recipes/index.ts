@@ -1,6 +1,7 @@
 // Every recipe, by sprite path. A path may live in only one book. The sprite engine's specs
 // (engine/specs/) come in as one recipe per frame.
 import { engineRecipes } from "../engine/book.ts";
+import { lookPreviews } from "../engine/specs/humanoid/previews.ts";
 import { ENGINE_SPECS } from "../engine/specs/index.ts";
 import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
@@ -38,4 +39,5 @@ export const RECIPES: RecipeBook = merge(
   MISSILES,
   UI,
   engineRecipes(ENGINE_SPECS),
+  lookPreviews(),
 );

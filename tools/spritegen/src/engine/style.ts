@@ -146,8 +146,10 @@ export const SIZES = {
     width: [12, 30],
   },
   /**
-   * Wolf, boar, deer, hound, spider, toad on 64x64, measured against the LPC person
-   * (~46 px, ~25 px per metre; docs/17 ART-2 "Animales medianos").
+   * Wolf, boar, deer, hound, spider, toad on 64x64, sized against the reference person they
+   * were drawn with (the LPC character, ~46 px: ~25 px per metre; docs/17 ART-2 "Animales
+   * medianos"). The engine humanoid that replaced it is smaller (36-40 px, the owner's
+   * proportions of 2026-11-19); the animals keep their size: the owner likes them as they are.
    */
   mediumAnimal: {
     kind: "creature",
@@ -157,14 +159,18 @@ export const SIZES = {
     height: [16, 50],
     width: [24, 56],
   },
-  /** Player, NPC, bandit: 64x64 frames, a 40-48 px figure (1.25 to 1.5 tiles), like LPC. */
+  /**
+   * Player, NPC, bandit (docs/17 ART-2 "Humanoides del motor"): 64x64 frames (room for a
+   * swing), a figure 36-40 px from the feet to the crown (37-42 with its outline), the head
+   * about a sixth of it; adult proportions, not the big-headed LPC person of 46 px.
+   */
   humanoid: {
     kind: "creature",
     canvases: [[64, 64]],
     anchor: "bc",
     ground: 9,
-    height: [40, 50],
-    width: [16, 48],
+    height: [37, 42],
+    width: [10, 34],
   },
   /** Big creature or boss: 64x64 or 96x96, feet centred. */
   bigCreature: {
@@ -236,7 +242,11 @@ export const ACTIONS: Record<
   }
 > = {
   idle: { frames: [2, 4], loop: true, ms: [400, 600] },
-  walk: { frames: [2, 4], loop: true },
+  /**
+   * 2-4 for the animals (two per tile); up to 8 for a humanoid, whose frames per tile come
+   * from its stride (a full cycle per tile: the planted foot stays put, specs/humanoid).
+   */
+  walk: { frames: [2, 8], loop: true },
   attack: { frames: [3, 4], loop: false, total: [300, 400] },
   shoot: { frames: [3, 3], loop: false, total: [280, 320] },
   cast: { frames: [3, 4], loop: false, total: [360, 440] },

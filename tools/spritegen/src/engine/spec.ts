@@ -144,6 +144,32 @@ export interface SpriteSpec {
   flying?: boolean;
   /** The ground its review lineup stands on (a ground sprite such as ground/ash; default grass). */
   seenOn?: string;
+  /**
+   * A paper-doll layer (docs/17 ART-2 "Humanoides del motor"): only the `draw` parts give
+   * pixels; the `occlude` parts (default: every other part) are cast too and hide what is
+   * behind them, but give no pixels, so the layer drawn over the body shows only where it
+   * is in front of it. Parts in neither list are left out (a robe is not pierced by the legs
+   * it hides).
+   */
+  layer?: { draw: readonly string[]; occlude?: readonly string[] };
+  /**
+   * Walk frames per tile walked (atlas.json `perTile`; spritepack's default is half the
+   * frames). A humanoid derives it from its stride (specs/humanoid) so the planted foot
+   * stays on its ground point while the body passes.
+   */
+  perTile?: number;
+  /**
+   * Walk frames per tile walked facing north or south: perTile over the depth foreshortening
+   * of the 3/4 view (style.ts PROJECTION.depth). A tile is as tall on the map as it is wide,
+   * but the model's depth shows at 0.58 a pixel per unit, so walking toward or away from the
+   * camera the planted foot holds only when the cycle is that much longer on screen.
+   */
+  perTileNS?: number;
+  /**
+   * Packed cropped to the opaque box of each frame (assets/sprites.yaml `trim: true`): the
+   * paper-doll frames, mostly empty 64x64 (docs/07 "Atlas").
+   */
+  trim?: boolean;
 }
 
 const SPRITE_PATH = /^[a-z0-9_]+(\/[a-z0-9_]+)+$/;
@@ -185,6 +211,14 @@ export function validateSpec(spec: SpriteSpec): string[] {
 
   // Parts.
   const names = new Set<string>();
+  const declared = new Set(spec.parts.map((p) => p.name));
+  for (const n of [...(spec.layer?.draw ?? []), ...(spec.layer?.occlude ?? [])])
+    if (!declared.has(n)) bad(`layer names part ${n}, which it does not have`);
+  if (spec.layer && spec.layer.draw.length === 0) bad("layer.draw names no part");
+  if (spec.perTile !== undefined && !(isNum(spec.perTile) && spec.perTile > 0))
+    bad("perTile must be > 0");
+  if (spec.perTileNS !== undefined && !(isNum(spec.perTileNS) && spec.perTileNS > 0))
+    bad("perTileNS must be > 0");
   if (spec.parts.length === 0) bad("has no parts");
   for (const p of spec.parts) {
     const where = `part ${p.name}`;

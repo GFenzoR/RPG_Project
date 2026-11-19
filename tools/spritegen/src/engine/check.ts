@@ -46,7 +46,21 @@ export function hintProblems(
   }
   if (entry.layers.length) bad("animations entry must have no layers");
   if ((entry.anchor ?? "br") !== size.anchor) bad(`anchor must be ${size.anchor}`);
-  if (entry.shadow !== "ellipse") bad("shadow must be ellipse (the frames paint none)");
+  // A paper-doll layer casts no shadow of its own: the body's ellipse is the figure's.
+  const shadow = spec.layer ? "none" : "ellipse";
+  if (entry.shadow !== shadow)
+    bad(
+      `shadow must be ${shadow}${spec.layer ? " (a layer over the body)" : " (the frames paint none)"}`,
+    );
+  if (entry.perTile !== spec.perTile)
+    bad(
+      `per_tile must be ${String(spec.perTile)} (the rig's stride${spec.perTile ? "" : ": none"})`,
+    );
+  if (entry.perTileNS !== spec.perTileNS)
+    bad(`per_tile_ns must be ${String(spec.perTileNS)} (per_tile over the 3/4 depth)`);
+  const trim = Boolean(spec.trim);
+  if (Boolean(entry.trim) !== trim)
+    bad(`trim must be ${trim}${trim ? " (paper-doll frames are packed cropped, docs/07)" : ""}`);
   if (entry.facing) bad("must not have facing: the four facings are drawn");
   if (entry.mirror) bad("must not have mirror: the four facings are drawn (and keep the light)");
   if (Boolean(entry.flying) !== Boolean(spec.flying)) bad(`flying must be ${Boolean(spec.flying)}`);

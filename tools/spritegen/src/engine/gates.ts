@@ -210,6 +210,8 @@ export const GATES = {
    */
   iconCentre: 1.5,
   iconSpan: 16,
+  /** A paper-doll layer's dither share counts from this many opaque pixels (a blade has none). */
+  layerDitherFrom: 120,
   /** Extra rows a hovering (flying) sprite may keep under its lowest point. */
   hover: 4,
   /** An animated prop's loop moves: some frame differs from frame 0 in this many pixels. */
@@ -250,15 +252,24 @@ export function gateProblems(spec: SpriteSpec): string[] {
     const off = offPalette(img, allowed);
     if (off.length) bad(`colours outside its palette.ts materials: ${off.slice(0, 4).join(" ")}`);
     const dither = ditherShare(img);
-    if (dither > DITHER_MAX_SHARE)
+    // A thin piece of a layer (a blade on the diagonal) is all edge: its stairs are not a
+    // dither. The share counts on a layer with some body to it only.
+    if (
+      dither > DITHER_MAX_SHARE &&
+      (!spec.layer || (components(img)[0] ?? 0) >= GATES.layerDitherFrom)
+    )
       bad(`${(dither * 100).toFixed(1)} % checkerboard pixels (ART-6)`);
     const b = box(img);
+    // A paper-doll layer can be all hidden in a frame (a beard seen from behind).
     if (!b) {
-      bad("is empty");
+      if (!spec.layer) bad("is empty");
       continue;
     }
     if (b[0] === 0 || b[1] === 0 || b[2] === w - 1 || b[3] === h - 1)
       bad("touches the canvas edge (clipped)");
+    // A layer is a piece of a figure: the figure gates judge the composed figure instead
+    // (specs/humanoid, engine/humanoid.test.ts), not the piece.
+    if (spec.layer) continue;
     const cov = outlineCoverage(img, outline);
     if (cov < GATES.outlineCoverage)
       bad(`outline covers ${(cov * 100).toFixed(0)} % of the silhouette`);
@@ -274,6 +285,8 @@ export function gateProblems(spec: SpriteSpec): string[] {
     if (l < lo || l > hi)
       bad(`mean L* ${l.toFixed(1)} outside the ${size.kind} band ${lo}-${hi} (ART-6)`);
   }
+
+  if (spec.layer) return out;
 
   // Size and anchor (ART-2): on the walk frames (creatures) or the image (objects). Height and
   // length are profile measures (the ART-2 notes give them for the side view), so they are

@@ -637,9 +637,10 @@ describe("quality gates", () => {
 });
 
 describe("the engine sprites of the game", () => {
+  // With the engine humanoids' ~3600 frames, the passes over every spec take seconds.
   it("pass every gate and match their assets/sprites.yaml hints (spritegen check)", () => {
     expect(engineProblems(root)).toEqual([]);
-  });
+  }, 60_000);
 
   it("are spritegen recipes, one per ANI-4 frame name, so ONLY= filters them too", () => {
     for (const spec of ENGINE_SPECS) {
@@ -675,7 +676,7 @@ describe("the engine sprites of the game", () => {
         expect(encodePng(f.image).equals(encodePng(must(b[i]).image)), f.path).toBe(true),
       );
     }
-  });
+  }, 60_000);
 
   it("make a contact sheet with a row per action and facing, and a lineup", () => {
     const boar = must(ENGINE_SPECS.find((s) => s.sprite === "creatures/bristleback_boar"));

@@ -36,6 +36,7 @@ import {
 import { EFFECT_FRAMES, MAX_ORB_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { SLOT_MASKS } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
+import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -81,10 +82,15 @@ describe("draw helpers", () => {
 
 describe("recipes", () => {
   const paths = recipePaths();
+  // A paper-doll layer of the engine humanoids (docs/17 "Humanoides del motor") can be all
+  // hidden by the body in a frame (a beard seen from behind): it may draw nothing.
+  const dollFrame = (p: string): boolean =>
+    HUMANOID_LAYERS.some((l) => l.slot !== "body" && p.startsWith(`${l.sprite}/`));
 
+  // With the engine humanoids' ~3600 frames, the tests over every recipe take seconds.
   it("render the same bytes every time", () => {
     for (const p of paths) expect(encodePng(render(p)).equals(encodePng(render(p))), p).toBe(true);
-  });
+  }, 60_000);
 
   it("have sizes in multiples of 32, only fully opaque or transparent pixels, and draw something", () => {
     for (const p of paths) {
@@ -101,9 +107,9 @@ describe("recipes", () => {
         else if (a !== 0 && partial < 0) partial = a;
       }
       expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
-      expect(opaque, p).toBeGreaterThan(20);
+      if (!dollFrame(p)) expect(opaque, p).toBeGreaterThan(20);
     }
-  }, 30_000);
+  }, 60_000);
 
   it("ground and walls are opaque and tile seamlessly", () => {
     for (const p of paths) {
@@ -166,7 +172,7 @@ describe("recipes", () => {
         `${p}: stale, run make spritegen`,
       ).toBe(true);
     }
-  });
+  }, 60_000);
 
   it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);

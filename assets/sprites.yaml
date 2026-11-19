@@ -64,335 +64,57 @@ sprites:
   potions/health_draught: { source: vendor/dungeon-crawl/item/potion/ruby.png }
   potions/concentrated_health_draught: { source: vendor/dungeon-crawl/item/potion/puce.png }
 
-# Palettes for `recolor` in animation layers: colours light to dark. A layer's recolor maps a
-# source palette onto a target palette of the same length, colour by colour. The ulpc_* ones
-# are the base ramps of the Universal LPC sheets (vendor/ulpc); the rest are our own.
-palettes:
-  ulpc_skin: ["#faece7", "#f9d5ba", "#e4a47c", "#cc8665", "#99423c"]
-  ulpc_cloth: ["#ffffff", "#e5e6c7", "#c4b59f", "#958080", "#4d4a5d"]
-  ulpc_hair: ["#ff8a00", "#e55600", "#bf4000", "#a42600", "#6a1108"]
-  skin_tan: ["#f3d9c0", "#e8b98f", "#cf956a", "#ad7150", "#7a4433"]
-  skin_brown: ["#d9a982", "#bf8a62", "#a06b48", "#7d5035", "#533022"]
-  skin_dark: ["#a77a5b", "#8c6045", "#714a34", "#563626", "#38221a"]
-  skin_ghoul: ["#d3dbc4", "#b5c1a3", "#93a183", "#6e7b64", "#48523f"]
-  skin_ash: ["#c7c0bc", "#aaa19e", "#8a807f", "#685f61", "#443d41"]
-  hair_black: ["#6a5f6e", "#4e4553", "#3a323f", "#2a2430", "#1a151f"]
-  hair_brown: ["#b07a4f", "#92603a", "#744828", "#57341c", "#382010"]
-  hair_blond: ["#f2dc96", "#dcbd6c", "#bb984a", "#8f7034", "#5c451f"]
-  hair_grey: ["#ecebe6", "#cfcdc8", "#aeaba8", "#86828a", "#57535e"]
-  hair_auburn: ["#d07a42", "#b0602e", "#8c4622", "#683218", "#401c10"]
-  cloth_linen: ["#ece2c8", "#d4c3a0", "#b19d7b", "#85735c", "#514539"]
-  cloth_brown: ["#b78e64", "#977049", "#775535", "#573c26", "#36251a"]
-  cloth_navy: ["#7c96c4", "#5a76a8", "#435a87", "#304064", "#1d263e"]
-  cloth_green: ["#98b674", "#779856", "#5a7a3e", "#42592d", "#283820"]
-  cloth_wine: ["#c86a64", "#a54b4c", "#82353c", "#5e242e", "#3a161f"]
-  cloth_black: ["#76727c", "#5a5662", "#43404b", "#312e38", "#1d1b22"]
-  cloth_teal: ["#78c0b6", "#579f97", "#3f7f79", "#2d5e5b", "#1b3a3a"]
-  cloth_ochre: ["#e8c56e", "#c9a04c", "#a27c37", "#775a28", "#4a3719"]
-  cloth_white: ["#ffffff", "#ebe8de", "#ccc7ba", "#9e978f", "#615a66"]
-  cloth_ember: ["#e07a3c", "#c05a2a", "#95401f", "#6a2c18", "#401a10"]
-  cloth_grey: ["#bdb9b2", "#9d9993", "#7c7880", "#5b5762", "#38343f"]
-
-# Animated creature sprites (docs/17 ANI, assets/README.md "Sprites animados"). With layers:
-# frames composed from vendor sheets, drawn bottom to top, "<sheet>" replaced by each action's
-# sheet; spritepack names them <sprite>/<action>_<dir>_<n>. Without layers: drawing hints for a
-# single-frame sprite (facing, flying, shadow), which the client animates procedurally.
-#
-# People: Universal LPC Spritesheet Character Generator layers (vendor/ulpc, licence per file
-# in its CREDITS.csv). A composed sprite is OGA-BY 3.0 when every layer lists it, else
-# CC-BY-SA 3.0, and assets/CREDITS.md must name it in that row (make test checks it). Layer
-# order: body, legs, feet, torso, head, beard, hair, hat.
 animations:
-  # ---- player outfits (data/outfits.yaml): every action (the bow and the spell too) ---------
-  outfits/citizen:
-    preset: lpc
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_linen } }
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-  outfits/sailor:
-    preset: lpc
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_white } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  outfits/ranger:
-    preset: lpc
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-  outfits/noble:
-    preset: lpc
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_blond } }
-
-  # ---- humanoid monsters: their own attacks (data/monsters: distance throws, a spell casts) --
-  creatures/wreck_looter:
-    preset: lpc
-    actions: [idle, walk, attack, shoot, death]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
-  creatures/coffer_smuggler:
-    preset: lpc
-    actions: [idle, walk, attack, shoot, death]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-  creatures/obsidian_delver:
-    preset: lpc
-    actions: [idle, walk, attack, shoot, death]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_ash } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/chainmail/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_ash } }
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  creatures/drowned_miner:
-    preset: lpc
-    actions: [idle, walk, attack, cast, death]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_ghoul } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_teal } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male_elderly/<sheet>.png, recolor: { ulpc_skin: skin_ghoul } }
-      - { file: vendor/ulpc/spritesheets/hair/bedhead/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-
-  # ---- NPCs: they only stand and walk -------------------------------------------------------
-  npcs/sailor_old:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male_elderly/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-      - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-  npcs/armorer:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/armour/plate/male/<sheet>.png
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-  npcs/merchant:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_ochre } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  npcs/priestess:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/female/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_white } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_ochre } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/female/<sheet>.png, recolor: { ulpc_cloth: cloth_white } }
-      - vendor/ulpc/spritesheets/head/heads/human/female/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/hair/long/adult/<sheet>.png, recolor: { ulpc_hair: hair_blond } }
-  npcs/miner_old:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - vendor/ulpc/spritesheets/head/heads/human/male_elderly/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-      - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-  npcs/diver_old:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_teal } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_teal } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male_elderly/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/hair/bedhead/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-  npcs/druid_elder:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-      - vendor/ulpc/spritesheets/head/heads/human/male_elderly/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-      - { file: vendor/ulpc/spritesheets/hair/long/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-  npcs/priest_forest:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_linen } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_white } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-  npcs/tanner:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/hair/bedhead/adult/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-  npcs/ferryman:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_linen } }
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_brown } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-  # The sandbox island (docs/16-probar-el-juego.md): instructor, provisioner and ferryman.
-  npcs/sandbox_trainer:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/chainmail/male/<sheet>.png
-      - vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  npcs/sandbox_merchant:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - { file: vendor/ulpc/spritesheets/feet/shoes/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_ochre } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
-  npcs/sandbox_ferryman:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_teal } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-      - { file: vendor/ulpc/spritesheets/hair/bedhead/adult/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-  # Isla Volcánica (T5.5). The forge echo is a spirit of fire drawn by the sprite engine, below.
-  npcs/forge_keeper:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/female/<sheet>.png, recolor: { ulpc_skin: skin_dark } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/female/<sheet>.png, recolor: { ulpc_cloth: cloth_ember } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/female/<sheet>.png, recolor: { ulpc_skin: skin_dark } }
-      - { file: vendor/ulpc/spritesheets/hair/long/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  npcs/priest_volcanic:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/female/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/thin/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/female/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/female/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/hair/long/adult/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_ember } }
-  npcs/smith_volcanic:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_dark } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_dark } }
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hair/balding/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-  npcs/ferryman_volcanic:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - { file: vendor/ulpc/spritesheets/torso/clothes/longsleeve/longsleeve/male/<sheet>.png, recolor: { ulpc_cloth: cloth_grey } }
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_black } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/bandana/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_ember } }
-  # The bounty hunters of Raigal and Brasal (lote 12, docs/02 "Tareas").
-  npcs/hunter_forest:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_green } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-      - vendor/ulpc/spritesheets/torso/armour/leather/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_tan } }
-      - { file: vendor/ulpc/spritesheets/beards/beard/basic/<sheet>.png, recolor: { ulpc_hair: hair_auburn } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_brown } }
-  npcs/hunter_volcanic:
-    preset: lpc
-    actions: [idle, walk]
-    layers:
-      - { file: vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_wine } }
-      - { file: vendor/ulpc/spritesheets/feet/boots/basic/male/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
-      - vendor/ulpc/spritesheets/torso/armour/plate/male/<sheet>.png
-      - { file: vendor/ulpc/spritesheets/head/heads/human/male/<sheet>.png, recolor: { ulpc_skin: skin_brown } }
-      - { file: vendor/ulpc/spritesheets/hair/plain/adult/<sheet>.png, recolor: { ulpc_hair: hair_grey } }
-      - { file: vendor/ulpc/spritesheets/hat/cloth/hood/adult/<sheet>.png, recolor: { ulpc_cloth: cloth_black } }
+  # ---- engine humanoids (tools/spritegen/src/engine/specs/humanoid, docs/17 "Humanoides del
+  # motor"): players, NPCs and humanoid monsters are a body and paper-doll layers over it, each
+  # drawn in a neutral ramp and tinted by the client (data/looks.yaml). Frames from files in all
+  # four facings (death only south); bc: feet on the tile; the body stands on the contact shadow
+  # (ellipse), a layer casts none. per_tile: walk frames per tile from the stride (per_tile_ns
+  # facing north or south, over the 3/4 depth); trim: packed cropped to their opaque box
+  # (docs/07); ms: the rig's (spritegen check fails if any of this differs from its spec).
+  humans/body_sturdy: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/body_slender: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_short: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_crop: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_long: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_ponytail: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_topknot: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/hair_curly: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/beard_short: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/beard_full: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/head_cap: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/head_hood: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/head_open_helm: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/head_full_helm: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/head_circlet: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_tunic_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_tunic_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_robe_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_robe_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_leather_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_leather_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_mail_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_mail_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_plate_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_plate_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/legs_trousers: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/legs_greaves: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/feet_shoes: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/feet_boots: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/feet_sabatons: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/shield_buckler: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/shield_round: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/shield_kite: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/shield_tower: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_sword: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_axe: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_mace: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_dagger: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_spear: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_staff: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_wand: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_bow: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/weapon_crossbow: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
 
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.

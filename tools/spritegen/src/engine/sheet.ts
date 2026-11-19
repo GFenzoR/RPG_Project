@@ -3,7 +3,7 @@
 //   cell cropped to the box all the frames share, on a flat backdrop;
 // - the lineup: the sprite at 1x and 2x as the client draws it (bc: feet FEET_LINE px above
 //   the tile's bottom, the contact shadow under them; br: bottom-right of its tile) on a
-//   ground, beside reference sprites (a Gemini wolf, an LPC person from the atlas) for scale;
+//   ground, beside reference sprites (a Gemini wolf, a person: the citizen outfit) for scale;
 //   an item icon also in the client's inventory slots, at 1x and at 2x (the big slots of the
 //   equipment figure);
 // - the icon board: many item icons in rows (a line of the catalog per row, a level band per
@@ -49,7 +49,7 @@ export function unionBox(imgs: readonly Image[]): [number, number, number, numbe
 }
 
 /** Draws src over dst at (dx, dy), only its opaque pixels. */
-function over(dst: Image, src: Image, dx: number, dy: number): void {
+export function over(dst: Image, src: Image, dx: number, dy: number): void {
   for (let y = 0; y < src.height; y++)
     for (let x = 0; x < src.width; x++) {
       const i = (y * src.width + x) * 4;
@@ -210,8 +210,8 @@ export function slotCell(icon: Image, scale: number): Image {
 const LINEUP_FRAMES = ["idle_s_0", "walk_s_1", "walk_w_0", "walk_w_1", "walk_n_2", "walk_e_3"];
 
 /**
- * The review lineup of a spec at 1x (scale it up to look): a Gemini wolf (and an LPC person
- * when the atlas is built) for scale, then the sprite's frames as the client places them,
+ * The review lineup of a spec at 1x (scale it up to look): a Gemini wolf and a person (the
+ * citizen outfit, drawn by the engine humanoid) for scale, then the sprite's frames as the client places them,
  * on the ground it is seen on.
  */
 export function reviewLineup(root: string, spec: SpriteSpec): Image {
@@ -221,7 +221,7 @@ export function reviewLineup(root: string, spec: SpriteSpec): Image {
   const refs: { image: Image; anchor: "bc" | "br"; foot: number; shadow: boolean }[] = [];
   const wolf = spriteFrame(root, "creatures/wolf/walk_w_0");
   if (wolf) refs.push({ image: wolf, anchor: "bc", foot: footOf([wolf]), shadow: true });
-  const person = atlasFrame(root, "outfits/citizen/walk_s_0");
+  const person = spriteFrame(root, "outfits/citizen/s_0");
   if (person) refs.push({ image: person, anchor: "bc", foot: footOf([person]), shadow: true });
   if (!spec.actions) {
     // An object: its one image, or every frame of its loop.
@@ -322,7 +322,7 @@ export { canvasOf };
 
 /**
  * Props on the floors of the towns (docs/17 "Kit de props de pueblo"): one row per ground,
- * each starting with an LPC person (when the atlas is built) and then the frame 0 of every
+ * each starting with a person (the citizen outfit) and then the frame 0 of every
  * prop, at 1x as the client places them. A one-tile prop is judged by how it stands off each
  * floor it is put on, next to a person, so every floor of the towns gets its row.
  */
@@ -331,7 +331,7 @@ export function floorBoard(
   specs: readonly SpriteSpec[],
   grounds: readonly string[],
 ): Image {
-  const person = atlasFrame(root, "outfits/citizen/walk_s_0");
+  const person = spriteFrame(root, "outfits/citizen/s_0");
   const refs = person
     ? [{ image: person, anchor: "bc" as const, foot: footOf([person]), shadow: true }]
     : [];
