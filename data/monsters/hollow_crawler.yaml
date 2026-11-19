@@ -2,7 +2,7 @@ id: hollow_crawler
 name: monster.hollow_crawler.name
 sprite: creatures/hollow_crawler
 health: 255
-experience: 255
+experience: 248
 speed: 170
 armor: 13
 defense: 16

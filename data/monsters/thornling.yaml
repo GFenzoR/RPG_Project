@@ -2,7 +2,7 @@ id: thornling
 name: monster.thornling.name
 sprite: creatures/thornling
 health: 215
-experience: 210
+experience: 204
 speed: 150
 armor: 12
 defense: 14

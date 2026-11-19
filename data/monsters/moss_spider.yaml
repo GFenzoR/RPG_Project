@@ -10,7 +10,7 @@ behavior:
   aggressive: true
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 14, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 16, interval_ms: 2000 }
   - { type: distance, element: earth, min: 4, max: 12, interval_ms: 2000, chance: 0.25, range: 3,
       condition: { id: poison, chance: 0.6, ticks: 6, damage: 2 } }
 resistances: { earth: 50, fire: -20, ice: -10 }

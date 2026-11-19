@@ -32,6 +32,9 @@ type foe struct {
 	summons []*foe
 	// from is the index of the summoner's attack that called it (-1 for none).
 	from int
+	// protect is the hunter's mean protection % by element (its kit's attributes,
+	// gear_test.go): an elemental hit loses that share, as the server rounds it.
+	protect map[string]float64
 }
 
 type foeAttack struct {
@@ -166,10 +169,15 @@ func (f *foe) act(now int, player combat.PlayerTarget) int {
 				f.summons = append(f.summons, c)
 			}
 		default:
-			dmg += combat.HitPlayer(f.r, f.c, a.a.Min, a.a.Max, a.a.Element == "physical", player)
+			d := combat.HitPlayer(f.r, f.c, a.a.Min, a.a.Max, a.a.Element == "physical", player)
+			if pct := round(f.protect[a.a.Element]); pct > 0 {
+				d -= d * min(pct, 100) / 100
+			}
+			dmg += d
 		}
 	}
 	for _, s := range f.summons {
+		s.protect = f.protect
 		dmg += s.act(now, player)
 	}
 	return dmg

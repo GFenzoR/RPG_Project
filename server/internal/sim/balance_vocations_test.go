@@ -233,12 +233,17 @@ type hunter struct {
 	level, magic, skill int
 	weapon, ammo        *content.Item
 	armor, shield       int
-	attacks, heals      []*content.Spell
-	conjure             *content.Spell // conjures the ammo (the ranger's arrows)
-	regenPct            int            // extra regeneration while fed (balance.yaml well_fed)
-	draught             *content.Item
-	potions             []*content.Item // health potions the shops of its level sell, biggest first
-	food                *content.Item   // eaten all along: what keeps well_fed going
+	// kit is what it wears: each fight rolls their attributes (gear_test.go). magicBonus
+	// is the kit's mean magic level attribute, for ranking the spells (it raises what they
+	// do, never what they require).
+	kit            []*content.Item
+	magicBonus     int
+	attacks, heals []*content.Spell
+	conjure        *content.Spell // conjures the ammo (the ranger's arrows)
+	regenPct       int            // extra regeneration while fed (balance.yaml well_fed)
+	draught        *content.Item
+	potions        []*content.Item // health potions the shops of its level sell, biggest first
+	food           *content.Item   // eaten all along: what keeps well_fed going
 }
 
 func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunterKit) *hunter {
@@ -252,9 +257,17 @@ func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunte
 	for _, id := range k.armor {
 		h.armor += d.item(t, id).Armor.Armor
 	}
+	h.kit = append(h.kit, h.weapon)
+	for _, id := range k.armor {
+		h.kit = append(h.kit, d.item(t, id))
+	}
+	shieldID := ""
 	if k.shield != "" && h.weapon.Weapon.Hands < 2 {
 		h.shield = d.item(t, k.shield).Shield.Defense
+		shieldID = k.shield
+		h.kit = append(h.kit, d.item(t, k.shield))
 	}
+	h.magicBonus = round(d.gearMean(t, append([]string{k.weapon, shieldID}, k.armor...)...).skill["magic"])
 	for _, id := range d.spells.IDs() {
 		s := d.spells[id]
 		if !s.CastBy(voc) || s.Level > level || s.MagicLevel > magic {
@@ -305,7 +318,7 @@ const fedCondition = "well_fed"
 
 // amount is the average of a spell scaling for h, without spread.
 func (h *hunter) amount(s content.Scaling) float64 {
-	v := s.Base + float64(h.level)*s.PerLevel + float64(h.magic)*s.PerMagicLevel
+	v := s.Base + float64(h.level)*s.PerLevel + float64(h.magic+h.magicBonus)*s.PerMagicLevel
 	if s.Skill != "" {
 		v += float64(h.skill) * s.PerSkill
 	}
@@ -347,11 +360,34 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	c := h.d.balance.Combat
 	balanced := c.Modes["balanced"]
 	stats := h.voc.AtLevel(h.level)
-	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
-	player := combat.PlayerTarget{Armor: h.armor, Defense: h.shield + h.weapon.Weapon.Defense, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
 	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
-	regenHP, regenMP := float64(tickHP), float64(tickMP)
+	// Each fight is the kit with its own rolled attributes (gear_test.go): over the fights,
+	// the kit's mean. wear rolls it: maximums, armor and defense, regeneration, the skill,
+	// magic level and attack the attacks use, leech and protection.
+	var g gearMean
+	var maxHP, maxMP, regenHP, regenMP float64
+	var player combat.PlayerTarget
+	var skill, magic, attack int
+	var hp, mp float64
+	var f *foe
+	wear := func() {
+		g = h.d.rollGear(r, h.kit...)
+		maxHP, maxMP = float64(stats.Health)+g.health, float64(stats.Mana)+g.mana
+		player = combat.PlayerTarget{Armor: h.armor + int(g.armor), Defense: h.shield + int(g.defense) + h.weapon.Weapon.Defense,
+			ModeDefense: balanced.Defense}
+		regenHP, regenMP = float64(tickHP)+g.regenHP, float64(tickMP)+g.regenMP
+		skill, magic, attack = h.skill+int(g.skill[h.weapon.Weapon.Type]), h.magic+int(g.skill["magic"]), int(g.attack)
+		hp, mp = math.Min(hp, maxHP), math.Min(mp, maxMP)
+	}
+	// shot lands a weapon hit of dmg on the foe and gives the leech attributes' share back
+	// (the server's integer leech).
+	shot := func(now, dmg int) {
+		f.hit(now, dmg)
+		hp = math.Min(maxHP, hp+float64(dmg*int(g.lifeLeech)/100))
+		mp = math.Min(maxMP, mp+float64(dmg*int(g.manaLeech)/100))
+	}
+	wear()
 	useMs := h.d.balance.Inventory.UseCooldownMs
 
 	// Spells sorted by what they do on m; the best ready and affordable one is cast.
@@ -369,7 +405,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		reserve = float64(heals[0].Mana)
 	}
 
-	hp, mp := maxHP, maxMP
+	hp, mp = maxHP, maxMP
 	var mana, spend, loot, damage, deaths, low float64
 	stock := 0 // conjured ammo left
 	var nDraught, nPotion, nAmmo float64
@@ -386,9 +422,11 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		return false
 	}
 	totalMs := 0
-	f := newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
+	f = newFoe(m, h.d.monsters, c, r) // its abilities and summons: foe_test.go
 	ready := map[string]int{}
 	for range careerFights {
+		wear() // this fight's kit
+		f.protect = g.protect
 		f.start(0)
 		now, nextShot, nextAttackGroup, nextHealGroup, nextUse := 0, 0, 0, 0, 0
 		nextRegen := regen.IntervalMs
@@ -426,7 +464,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						mp -= float64(s.Mana)
 						mana += float64(s.Mana)
 						casts[s.ID]++
-						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, h.magic, h.skill)))
+						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, magic, skill)))
 						ready[s.ID] = now + s.CooldownMs
 						nextHealGroup = now + s.GroupCooldownMs
 						healed = true
@@ -447,10 +485,10 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 				w := h.weapon.Weapon
 				switch {
 				case w.Type == "wand":
-					f.hit(now, combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
+					shot(now, combat.Resist(combat.WandHit(r, w.Attack+attack, c.WandMinFactor), f.cur().Resistances[w.Element]))
 				case h.ammo != nil: // a bow or crossbow and its ammo
-					maxHit := combat.MaxHit(c, h.skill, w.Attack+h.ammo.Ammo.Attack, h.level, balanced.Attack)
-					f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+					maxHit := combat.MaxHit(c, skill, w.Attack+h.ammo.Ammo.Attack+attack, h.level, balanced.Attack)
+					shot(now, combat.HitMonster(r, maxHit, f.target()))
 					if stock > 0 {
 						stock--
 					} else {
@@ -458,7 +496,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 						nAmmo++
 					}
 				default: // melee: the guardian's reference career
-					f.hit(now, combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), f.target()))
+					shot(now, combat.HitMonster(r, combat.MaxHit(c, skill, w.Attack+attack, h.level, balanced.Attack), f.target()))
 				}
 			}
 			if now >= nextAttackGroup && f.alive() {
@@ -483,7 +521,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 					mana += float64(s.Mana)
 					casts[s.ID]++
 					d := s.Effect.Damage
-					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), f.cur().Resistances[d.Element]))
+					f.hit(now, combat.Resist(combat.Scaled(r, d.Scaling, h.level, magic, skill), f.cur().Resistances[d.Element]))
 					ready[s.ID] = now + s.CooldownMs
 					nextAttackGroup = now + s.GroupCooldownMs
 					break

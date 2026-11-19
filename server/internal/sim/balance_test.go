@@ -128,6 +128,8 @@ type balanceData struct {
 	vocations content.Vocations
 	spells    content.Spells
 	balance   content.Balance
+	// attrs is the attribute pool every kit piece rolls from (gear_test.go).
+	attrs content.Attributes
 }
 
 func loadData(t *testing.T) *balanceData {
@@ -152,7 +154,12 @@ func loadData(t *testing.T) *balanceData {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], vocations: vs, spells: spells, balance: b}
+	attrs, err := content.LoadAttributes(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], vocations: vs, spells: spells, balance: b,
+		attrs: attrs}
 }
 
 func (d *balanceData) item(t *testing.T, id string) *content.Item {
@@ -191,21 +198,32 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 		shield = s.Defense
 	}
 	balanced := c.Modes["balanced"]
-	maxHP := d.guardian.AtLevel(level).Health
-	skill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
-	maxHit := combat.MaxHit(c, skill, weapon.Attack, level, balanced.Attack)
-	player := combat.PlayerTarget{Armor: armor, Defense: shield + weapon.Defense, ModeDefense: balanced.Defense}
+	pieces := []*content.Item{d.item(t, k.weapon), d.item(t, k.shield)}
+	for _, id := range k.armor {
+		pieces = append(pieces, d.item(t, id))
+	}
+	baseHP := float64(d.guardian.AtLevel(level).Health)
+	baseSkill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
 
-	totalMs, totalDmg := 0, 0
+	totalMs, totalDmg := 0, 0.0
 	f := newFoe(m, d.monsters, c, r) // its abilities and summons: foe_test.go
 	for range fights {
-		taken, now, nextPlayer := 0, 0, 0
+		// Each fight is a kit with its own rolled attributes (gear_test.go): over the
+		// fights, a kit's mean attributes.
+		g := d.rollGear(r, pieces...)
+		maxHit := combat.MaxHit(c, baseSkill+int(g.skill[weapon.Type]), weapon.Attack+int(g.attack), level, balanced.Attack)
+		player := combat.PlayerTarget{Armor: armor + int(g.armor), Defense: shield + int(g.defense) + weapon.Defense,
+			ModeDefense: balanced.Defense}
+		f.protect = g.protect
+		taken, leeched, now, nextPlayer := 0, 0, 0, 0
 		f.start(0)
 		for f.alive() && now < maxFightMs {
 			tMonster := f.nextAt()
 			if nextPlayer <= tMonster {
 				now = nextPlayer
-				f.hit(now, combat.HitMonster(r, maxHit, f.target()))
+				dmg := combat.HitMonster(r, maxHit, f.target())
+				f.hit(now, dmg)
+				leeched += dmg * int(g.lifeLeech) / 100 // the server's integer leech
 				nextPlayer += c.AttackIntervalMs
 				continue
 			}
@@ -213,11 +231,12 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 			taken += f.act(now, player)
 		}
 		totalMs += now
-		totalDmg += taken
+		// Health lost, as a share of this kit's maximum; leech gives back at most that.
+		totalDmg += float64(max(taken-leeched, 0)) / (baseHP + g.health)
 	}
 	return fightStats{
 		seconds:   float64(totalMs) / fights / 1000,
-		damagePct: 100 * float64(totalDmg) / fights / float64(maxHP),
+		damagePct: 100 * totalDmg / fights,
 	}
 }
 

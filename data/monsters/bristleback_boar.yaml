@@ -11,7 +11,7 @@ behavior:
   flee_at_health_pct: 15
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 18, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 20, interval_ms: 2000 }
 resistances: { physical: 5, fire: -10 }
 loot:
   - { item: boar_meat, chance: 0.5, count: [1, 2] }
