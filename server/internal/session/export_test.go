@@ -64,6 +64,9 @@ func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
 // RestoreForTest refills p's health (tests only, loop goroutine).
 func (w *World) RestoreForTest(p *Player) { p.health = p.maxHealth }
 
+// SetPlayerHealthForTest sets p's health (tests only, loop goroutine).
+func (w *World) SetPlayerHealthForTest(p *Player, hp int) { p.health = hp }
+
 // DieForTest kills p now (as if a monster had taken its last hit point).
 func (w *World) DieForTest(ctx *game.TickContext, p *Player) { w.die(ctx, p) }
 
@@ -477,4 +480,16 @@ func (w *World) DespawnForTest(m *Monster) { w.removeMonster(m, goneDespawn) }
 func (w *World) StrayLinkDeadForTest(p *Player) {
 	p.linkDead = true
 	w.linkDead = append(w.linkDead, p)
+}
+
+// ChaseWayForTest returns the tiles of the rest of the way m follows to its target
+// (chaseWay), the next one first (tests only, loop goroutine).
+func (m *Monster) ChaseWayForTest() []world.Pos {
+	var out []world.Pos
+	at := m.chaseAt
+	for i := len(m.chaseWay) - 1; i >= 0; i-- {
+		at, _ = at.Step(m.chaseWay[i])
+		out = append(out, at)
+	}
+	return out
 }

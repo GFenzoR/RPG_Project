@@ -166,6 +166,48 @@ attacks:
 	}
 }
 
+// An area that kills a player halfway through goes on (review of the monster
+// abilities): the players after it in the area are still hit, and the dead one, who
+// wakes up at the temple inside the same circle (a protection zone), is not hit again.
+func TestMonsterAreaKillsAPlayerHalfway(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"...........",
+		"...........",
+		"...........",
+		"...........",
+		"...........",
+		"...........",
+		"...........",
+		".....T.....",
+		"...........",
+	)
+	temple := pos(5, 7)
+	worldtest.SetTile(t, m, temple, worldtest.Grass, world.FlagProtection)
+	slam := parsedMonster(t, `id: slammer
+health: 500
+speed: 100
+behavior: {aggressive: true}
+attacks:
+  - { type: spell, element: fire, min: 10, max: 10, interval_ms: 2000, area: { shape: circle, radius: 2 } }
+`)
+	h := abilityHarness(t, m, []*content.Monster{slam}, spawnAt("slammer", 5, 5, 0, 60))
+	// The circle covers its tiles row by row: the victim (row 4) is hit before the others
+	// (rows 5 and 6), and the temple (row 7) is in the circle.
+	_, ps := h.joinAll([]world.Pos{pos(5, 4), pos(4, 5), pos(6, 6)}, func(ps []*session.Player) {
+		h.w.SetPlayerHealthForTest(ps[0], 5)
+	})
+	victim, others := ps[0], ps[1:]
+	h.sim.RunUntil(func() bool { return health(others[0]) < 145 }, sim.MaxSeconds(5))
+	if victim.Pos() != temple || health(victim) != 145 {
+		t.Errorf("the victim is on %v with %d health, want woken up on the temple %v with full health (145)", victim.Pos(), health(victim), temple)
+	}
+	for _, p := range others {
+		if health(p) != 135 {
+			t.Errorf("%v: health %d after the victim died, want 135", p.Pos(), health(p))
+		}
+	}
+}
+
 // A beam goes length tiles from the monster towards its target and stops at a wall: it
 // hits who stands on it, not who stands beside it or behind the wall. Diagonal too.
 func TestMonsterBeam(t *testing.T) {
@@ -522,22 +564,38 @@ type gameCtx func(*game.TickContext)
 
 func (f gameCtx) Execute(ctx *game.TickContext) { f(ctx) }
 
-// A caller that gives up (its target walked out of its leash) takes its summons away
-// with it: the next fight starts afresh.
+// A caller that gives up takes its summons away with it: the next fight starts afresh.
+// Its target steps out of its leash area (3 tiles around 10,10) and of its reach, still
+// in its sight: the leash drops it (beyondLeash, dropTarget) and, with nobody else to
+// fight, the caller gives up (giveUp: full health, its imps DESPAWN).
 func TestMonsterSummonsGoWhenItGivesUp(t *testing.T) {
-	h := abilityHarness(t, worldtest.Open(t, 0, 0, 32, 32), summonerDefs(t), spawnAt("caller", 10, 10, 0, 60))
-	h.join("Hunter", at(10, 12))
+	h := leashHarness(t, 3, summonerDefs(t), spawnAt("caller", 10, 10, 0, 60))
+	cl, p := h.join("Hunter", at(10, 12))
 	h.sim.RunTicks(10)
 	boss := onlyMonster(t, h)
 	h.sim.Command(gameFunc(func() { boss.SetHealth(500) }))
 	h.sim.RunTicks(2)
-	if n := len(monstersOf(h, "imp")); n != 2 {
-		t.Fatalf("%d imps", n)
+	imps := monstersOf(h, "imp")
+	if len(imps) != 2 || boss.TargetID() != p.ID() {
+		t.Fatalf("%d imps, the caller targets %d (want 2 and the hunter)", len(imps), boss.TargetID())
 	}
-	h.sim.Command(gameCtx(func(ctx *game.TickContext) { h.w.GiveUpForTest(ctx, boss) }))
+	cl.take()
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(10, 15)) }))
 	h.sim.Step()
+	if hp, maxHP := boss.Health(); boss.TargetID() != 0 || hp != maxHP {
+		t.Fatalf("the caller targets %d at %d/%d health: want given up (no target, full health)", boss.TargetID(), hp, maxHP)
+	}
 	if n := len(monstersOf(h, "imp")); n != 0 {
 		t.Errorf("%d imps after the caller gave up", n)
+	}
+	gone := map[uint32]pb.DisappearReason{}
+	for _, d := range find(cl.take(), (*pb.ServerMessage).GetCreatureDisappear) {
+		gone[d.GetId()] = d.GetReason()
+	}
+	for _, imp := range imps {
+		if gone[imp.ID()] != pb.DisappearReason_DISAPPEAR_REASON_DESPAWN {
+			t.Errorf("imp %d left as %v, want DESPAWN", imp.ID(), gone[imp.ID()])
+		}
 	}
 }
 
