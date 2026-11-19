@@ -315,6 +315,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de
   ambiente (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
   La música no se decodifica entera (docs/07 "Audio").
+- **Sonidos que no bajan** (lote 10): `load` (efectos y loops de ambiente) pide el archivo
+  con `withRetry` y `ASSET_RETRY` de `@rpg/renderer/retry` (4 intentos, esperas de 0,5, 1
+  y 2 s por `AudioPorts.sleep`: los tests usan un reloj falso). Agotados, lo anota en
+  `soundFailed` (hora de `ports.now` en que vuelve a valer) y borra la entrada de `buffers`:
+  una reproducción antes de esa hora no pide nada; después, lo pide de nuevo. La espera es
+  `STREAM_RETRY_MS` (5 s), doblando hasta `STREAM_RETRY_MAX_MS` (60 s), como la música.
+  El ambiente que se quiere vuelve solo: la bomba (`retryAmbient`) lo arranca cuando vence
+  la espera. Antes el fallo quedaba guardado (`undefined`) toda la sesión.
 
 ## Notas de T4.1
 - Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que
@@ -336,7 +344,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   inventario y bajo las ventanas; no toma teclas) con "Saltar tutorial"
   (`Game.skipTutorial` → `TutorialSkip`; el panel se cierra cuando el servidor confirma).
   Se oculta mientras hay `dialog`, `shop` o `station` abiertos: en pantallas angostas
-  (la app de escritorio a 960 px) la tienda llega a esa esquina.
+  (la app de escritorio a 960 px) la tienda llega a esa esquina. En escritorio también
+  mientras la Ayuda, el gremio o la apariencia están abiertos en su lugar de fábrica
+  (`covered`, `tutorialCovered` de `ui/windows.ts`): las ventanas van sobre el panel.
 - Resaltado: el panel marca con `data-tutorial-active` el elemento cuyo `data-tutorial` es
   el `highlight` del paso, y `client.css` tiene una sola regla para eso. Valores:
   `inventory`, `hotbar`, `battle`, `chat`, `skills`, `stats`. Un elemento nuevo resaltable
@@ -1181,9 +1191,10 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de cinco a 1x, o una
     fila a 2x desde 1600 px) que abren y cierran las ventanas, el mercado (solo lo cierra:
     se abre desde un tablero) y "Salir del juego";
-  - el chat ya no está en una columna: es una ventana más, flotante y translúcida, con el log
-    como segunda pestaña en su barra de título (`ChatTabs`; mientras el log no se ve, todos
-    los avisos flotan sobre el mapa, no solo los importantes).
+  - el chat ya no está en una columna: es una ventana más, flotante y translúcida, con sus
+    pestañas en la barra de título (`ChatTabs`: Todo, Local, Grupo, Gremio, Global y el log,
+    "Registro"; mientras el log no se ve, todos los avisos flotan sobre el mapa, no solo los
+    importantes).
 - **Ventanas** (UI-5): `ui/windows.ts` (puro, con tests) guarda cuáles están abiertas,
   dónde, plegadas y en qué orden; se recuerda por dispositivo en `localStorage`
   `rpg.windows` (si no se puede leer, vuelven las de fábrica: batalla, inventario y chat
@@ -1204,7 +1215,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   Sigue sin hooks y `ui/Guild.test.ts` recorre las pestañas.
 - **Opciones**: Sonido (`SoundOptions` de `ui/AudioOptions.tsx`; la esquina del login y el
   menú ☰ siguen con `AudioOptions`), Controles (pad), Interfaz (idioma, "Animaciones
-  reducidas" y "Restablecer ventanas"). `main.tsx` arma esas piezas (`GameSettings`).
+  reducidas", escala, texto, sacudida, opacidad del chat y "Restablecer ventanas").
+  `main.tsx` arma esas piezas (`GameSettings`).
 - **Animaciones** (UI-9): solo `transform` y `opacity`, ≤ 240 ms salvo los bucles (ola de
   los orbes, latido). `prefers-reduced-motion` o la opción (`state/ui-prefs.ts`,
   `localStorage` `rpg.motion`, `data-motion="reduced"` en `<html>`) las cortan con una
@@ -1322,7 +1334,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   "Notas de la pantalla completa" (los contenedores bajo el inventario, arriba a la
   derecha; diálogo, crafteo, mercado y casa abajo al centro sobre la barra, con la tienda a
   la izquierda del diálogo, `.game-body[data-shop]`, `--shop-w`; el intercambio arriba al
-  centro). Movidas, guardan su lugar.
+  centro). Movidas, guardan su lugar. Desde el lote 10 ese lugar mira las ventanas
+  abiertas ("Lugares de fábrica que miran las ventanas abiertas", abajo).
 - **Componentes `framed`:** `DialogView`/`ShopView`, `CraftingWindow`, `MarketWindow`,
   `HouseWindow`, `TradeWindow` y `ContainerView` (`ui/Inventory.tsx`) toman `framed`: sin
   su encabezado (la barra del `GameWindow` lo nombra y lo cierra) y **sin su `data-testid`,
@@ -1454,7 +1467,11 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
 - **El tooltip** (`ui/ItemTooltip.tsx`): sin espera (`pointerover` muestra en el acto),
   `TOOLTIP_GRACE_MS` (80) al salir de un item antes de irse, así el siguiente lo toma sin
   parpadeo; tras una presión vuelve con el siguiente `pointermove` sin botones; nada
-  mientras `GameUi.dragging` o `body.dragging-item`. Se dibuja oculto, un
+  mientras `GameUi.dragging` o `body.dragging-item`. Después de que una ventana se abre,
+  cierra o pliega (`windows`: `shownKey` en escritorio), nada hasta el primer
+  `pointermove` que mueve el mouse (`TipGate`, puro y con tests: el `pointerover` que el
+  navegador manda cuando una ventana aparece bajo un mouse quieto no cuenta; la tienda
+  sacaba la ficha sobre sus filtros); el foco del teclado lo abre igual. Se dibuja oculto, un
   `useLayoutEffect` mide su tamaño real (solo cuando cambia `placeKey`: el item, su
   cantidad, su caja y quién mira; no en cada publish del `Game`) y `tipPlacement` (puro y con tests) lo pone
   centrado arriba del item (`TIP_GAP` 6, `TIP_MARGIN` 6), abajo si no entra, y si no entra
@@ -1595,9 +1612,23 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   - **El chat** es `chat` en `WINDOW_IDS` (sin botón ni tecla), en `FIXED_WINDOWS`: no se
     cierra (sin ×; `closeWindow` no hace nada) y Escape lo salta; se pliega y se mueve como
     las demás. Sus pestañas van en la barra de título (`GameWindow` `barExtra`, con el título
-    solo para lectores de pantalla: `hideTitle`). Translúcido (`::before` con la piedra al
-    50 %) y casi opaco con el mouse encima o escribiendo (`:hover`, `:focus-within`; solo
-    cambia `opacity`, UI-9).
+    solo para lectores de pantalla: `hideTitle`, y sin ícono, para que entren las seis).
+    Translúcido (`::before` con la piedra a `--chat-opacity`, 50 % salvo que el jugador
+    elija otra en Opciones → Interfaz) y casi opaco con el mouse encima o escribiendo
+    (`:hover`, `:focus-within`; solo cambia `opacity`, UI-9).
+  - **Pestañas del chat** (docs/17 UI-10, lote 10; `state/chat.ts`, puro y con tests):
+    `CHAT_TABS` = `chat` (Todo: su id es el de antes), `local` (decir, gritar, susurrar y
+    NPCs), `party`, `guild`, `global` y `log` (el registro del sistema). `chatFilter` da las
+    líneas de una pestaña (un `BROADCAST` sale en todas) y `ChatPanel` (`tab`) dibuja solo
+    esas; la pestaña elegida fija el canal del selector (`tabChannel`: Local → decir; Todo
+    y el log no lo cambian). Punto de no leído (`data-unread`, `unreadTabs`): una pestaña
+    con líneas que no se vieron en ninguna (las de la pestaña abierta se marcan vistas al
+    dibujarse, un `WeakSet` de `ChatLine`: el `Game` publica los mismos objetos) y que no
+    dijo el propio jugador; el del log, como antes, por la hora de su último mensaje. Las
+    flechas recorren las pestañas (`nextTab`). Opacidad: `rpg.chat-opacity` (30–100,
+    pasos de 5, `CHAT_OPACITY`; `loadChatOpacity`/`saveChatOpacity` con try/catch,
+    `applyChatOpacity` pone `--chat-opacity` en `<html>`), deslizador `chat-opacity` en
+    `InterfaceOptions`.
   - **Escape** cierra la de arriba de `z` (la última abierta, movida o tocada) que se pueda
     cerrar; la batalla y el inventario del principio no están en `z` hasta que se tocan,
     así Escape en una pantalla recién abierta sigue abriendo Opciones. El `Game` cierra
@@ -1622,3 +1653,42 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   falla si una ventana tapa la casilla. Que el cuerpo de la tienda no se desplace se mide
   en `.gwin-body` (el marco no es un contenedor de scroll y sus esquinas góticas sobresalen
   5 px).
+
+## Lugares de fábrica que miran las ventanas abiertas (lote 10, docs/17 UI-5)
+- **La regla** (`defaultPlace` de `ui/windows.ts`, pura y con tests): una ventana que se abre
+  en su lugar de fábrica (sin `x`/`y`) se mide ahí (`usual`); si tapa a otra ventana
+  abierta, o, el intercambio, la casilla del jugador y las `TRADE_CLEAR_TILES` (3) al norte
+  (`northOfPlayer`: ahí suele estar el compañero), prueba otros lugares en orden y toma el
+  primero que no tapa nada; si no hay, el que menos tapa (área en px², `overlapArea`), si
+  tapa menos que el de siempre. Solo tres clases tienen otros lugares (`movesAside`):
+  - `trade`: por la fila de arriba, contra los bordes, la columna del jugador u otra
+    ventana (`PLACE_GAP`, 4 px), el más cercano primero; nunca sobre esas casillas;
+  - `dialog`, `crafting`, `market`, `house`: más bajas, con su fondo donde estaba, hasta el
+    pie de lo que baja hasta ellas (`givingWay`), si les quedan al menos
+    `GIVE_WAY_MIN_PX` (120): `short`, su `max-height` es su alto y el cuerpo se desplaza;
+  - `skills`: al lado de la batalla o del grupo, a la izquierda de la apariencia, el gremio
+    o el inventario, y al final acortadas sobre el chat.
+- **El DOM** (`placeOpened` de `ui/window-dom.ts`, con tests sobre elementos falsos): mide
+  las ventanas de la capa sin la escala de su animación de entrada (`unscaledIn`), deja
+  afuera las que se cierran, y las que deciden primero cuentan en su lugar nuevo para las
+  siguientes. `useWindows` (`GameView`) lo corre en un `useLayoutEffect` cada vez que cambia
+  el estado: para las que se abrieron desde la última vez (todas al montar), antes de
+  pintarlas; `Game.selfTile` da la casilla del jugador en la página (`tileToClient`).
+- **Dónde vive:** `WindowsApi.auto` (un `Map` de `AutoPlace`, px de pantalla), no en
+  `rpg.windows`: no es un lugar del jugador. Se olvida al cerrar o mover la ventana; si el
+  área cambia de tamaño (el `ResizeObserver` de la capa ve otro tamaño), se vacía y todas
+  las abiertas se miran de nuevo en su lugar de siempre. `GameWindow` lo recibe en `auto`
+  y `placeStyle` lo escribe como `left`/`top` con `right`/`bottom` en `auto` (el lugar de
+  siempre puede colgar de la derecha o de abajo) y `data-auto`; arrastrarla la deja en
+  `x`/`y` como siempre.
+- **El tutorial** se oculta mientras la Ayuda, el gremio o la apariencia están abiertos en
+  su lugar de fábrica (`tutorialCovered`; ver "Notas de T4.2").
+- **Vista previa:** escenas `allwindows` (todas las de la botonera abiertas), `trade`,
+  `chattabs` (la pestaña Local elegida y líneas de otros canales que llegan después, con
+  sus puntos), `tutorialhelp` y `tutorialshop` (un personaje del tutorial, con la mochila
+  cerrada: el inventario corto del E2E `43-tutorial-shop-960`). El `selfTile` de la vista
+  previa es el centro de la caja del mapa (`mapBox`), a la escala ajustada.
+- **E2E:** sin specs nuevos (no se corrió en la rama). `[data-chat-tab]` vale `chat`,
+  `local`, `party`, `guild`, `global` o `log`; `chat-opacity` es el deslizador; una ventana
+  en un lugar que eligió `defaultPlace` lleva `data-auto`. A 1280x800 el intercambio de
+  `52-trade-window` ya no sale arriba al centro si eso tapa al compañero de arriba.

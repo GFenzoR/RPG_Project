@@ -373,8 +373,10 @@ golpes del guardián escalan con su arma, todo cabe en las 12 teclas de la hotba
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
-  "Grupos"), por quests y por
-  algunos oficios (poca).
+  "Grupos") y por quests. Los oficios y la recolección no dan experiencia de nivel: solo
+  suben su propia skill con el uso ("Oficios"; `session/crafting.go` y
+  `session/gathering.go`). Darles un poco sería una tarea de balance aparte, si el dueño
+  la pide.
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
   (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).

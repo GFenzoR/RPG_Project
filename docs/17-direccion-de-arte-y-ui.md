@@ -1290,7 +1290,11 @@ con el mouse encima o mientras se escribe. Es una ventana más (se mueve, se pli
 de tamaño, con imán), pero nunca se cierra. El log sigue como segunda pestaña
 ("Registro"), ahora en la barra de título. Mientras el log no se ve, todos los mensajes del
 servidor flotan sobre el mapa (no solo los importantes). Antes (A3) iba abajo del dock.
-Las pestañas por canal y la opacidad configurable siguen pendientes.
+**Desde el lote 10** tiene pestañas por canal y opacidad configurable ("Hecho: lugares de
+fábrica, pestañas del chat y sonidos que reintentan", §7): Todo, Local, Grupo, Gremio,
+Global y Registro, con un punto de no leído; la elegida fija el canal del selector; la
+opacidad va del 30 al 100 % en Opciones → Interfaz. No hay pestaña de Comercio (no hay
+canal de comercio en el protocolo) y plegado sigue mostrando solo su barra.
 - Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
   Comercio, Sistema).
 - Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
@@ -1376,7 +1380,7 @@ Por impacto en pantalla y por costo:
 | 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
 | 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
-| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
+| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar, disparar, conjurar y caer; disparar y conjurar desde `feat/lpc-actions`, ver "Hecho: disparar, conjurar, desvanecerse, pasos y girar") |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |
 | 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen (desde el 2026-11-18, del motor de sprites con quieto, caminar, atacar y morir en cuatro direcciones). Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado). **Desde el 2026-11-18**, `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` y `thornling` son hojas de Gemini (SRC-5) con caminar, quieto, atacar y morir en 3 direcciones más el espejo ("Hecho: criaturas de Gemini"), y en la segunda tanda `hollow_crawler`, `ore_beetle` y los cinco del Volcán: solo la gaviota sigue con un frame (de spritegen) |
 | 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
@@ -2008,14 +2012,47 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   fuentes: las de UI-3 siguen). No se usó Gemini: con el CSS y estas piezas alcanzó, y el
   navegador del dueño queda libre para los otros lotes. Las reglas de movimiento reducido
   siguen (la ola de los orbes y el latido se detienen).
-- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); un lugar de
-  fábrica que se acomode a las ventanas ya abiertas (hoy, si se abren todas a la vez,
-  algunas se pisan; los contenedores ya salen bajo el inventario de `feat/equipment-d2`,
-  midiéndolo). El E2E del lote 9 (verde) encontró los clicks del mapa que caían en una
-  ventana (los specs saltan 5 columnas a 1280x800) y la página 7 px más ancha por los
-  pináculos del orbe de maná (el cuerpo del juego recorta); lo que queda para el dueño está
-  en docs/14 (íconos a 1x en el inventario de 16 rem, pináculos cortados en los bordes, el
-  intercambio sobre un compañero).
+- **Queda:** las pestañas del chat, su opacidad y el lugar de fábrica que mira las
+  ventanas abiertas se hicieron en el lote 10 (abajo). El E2E del lote 9 (verde) encontró
+  los clicks del mapa que caían en una ventana (los specs saltan 5 columnas a 1280x800) y
+  la página 7 px más ancha por los pináculos del orbe de maná (el cuerpo del juego
+  recorta); lo que queda para el dueño está en docs/14 (íconos a 1x en el inventario de 16
+  rem, pináculos cortados en los bordes).
+
+### Hecho: lugares de fábrica, pestañas del chat y sonidos que reintentan (2026-11-19, lote 10, rama `feat/ui-polish`)
+Lo que el E2E del lote 9 y la auditoría del 2026-11-18 dejaron de la UI (UI-5, UI-10) y del
+sonido. Solo cliente, más una línea de diálogo y el arte del teletransporte.
+- **Un lugar de fábrica que mira las ventanas abiertas** (`defaultPlace` de
+  `client/src/ui/windows.ts`, puro y con tests; `placeOpened` de `ui/window-dom.ts`): una
+  ventana que se abre en su lugar de siempre (windows.css) se mide ahí antes de pintarse;
+  si tapa a otra ventana abierta, o (el intercambio) las 3 casillas al norte del jugador
+  (`Game.selfTile`, donde suele estar el compañero), prueba una lista corta de lugares y
+  toma el primero que no tapa nada, o el que menos tapa:
+  - el **intercambio** se corre por la fila de arriba (contra los bordes, la columna del
+    jugador u otra ventana, el más cercano primero) y nunca queda sobre esas casillas;
+  - el **diálogo** (y crafteo, mercado y casa, sobre la barra) se acorta hasta el pie de lo
+    que baja hasta él, con su fondo donde estaba, si le quedan al menos `GIVE_WAY_MIN_PX`
+    (120): a 960x700 la pareja tienda + diálogo ya no pisa el pie del inventario;
+  - las **habilidades** van bajo la batalla solo si entran sobre el chat; si no, al lado de
+    la batalla o del grupo, a la izquierda de la columna del inventario, o acortadas sobre
+    el chat.
+  El lugar dura mientras la ventana sigue abierta y sin mover (no se guarda en
+  `rpg.windows`); si cambia el área, todas vuelven a su lugar de siempre y se miran de
+  nuevo. El panel del tutorial se oculta mientras la Ayuda, el gremio o la apariencia
+  están en su lugar de fábrica (`tutorialCovered`).
+- **La ficha espera al mouse** (`TipGate` de `ui/ItemTooltip.tsx`): después de que se abre,
+  cierra o pliega una ventana no sale ninguna ficha hasta el primer `pointermove` que
+  mueve el mouse (la tienda se abre bajo un mouse quieto y su ficha tapaba los filtros);
+  el teclado la muestra igual.
+- **Pestañas del chat** (UI-10, `client/src/state/chat.ts`, puro y con tests): ver UI-10.
+  Una línea propia no marca nada; un anuncio del staff sale en todas.
+- **Sonidos que reintentan:** `AudioEngine.load` usa `ASSET_RETRY` de
+  `@rpg/renderer/retry` (por `AudioPorts.sleep`); agotado, el sonido se vuelve a pedir
+  recién después de `STREAM_RETRY_MS`, como la música, y el ambiente vuelve solo.
+- **El teletransporte gira** (ART-7): 6 frames de 100 ms en `world`
+  (`recipes/portals.ts`, `tiles` de `assets/sprites.yaml`).
+- **Vista previa:** escenas `allwindows`, `trade`, `chattabs`, `tutorialhelp` y
+  `tutorialshop` en `make ui-preview`.
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.
