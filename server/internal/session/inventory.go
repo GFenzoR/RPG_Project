@@ -574,15 +574,15 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			return
 		}
 		if p.intoBackpack(it, to) { // no backpack: it goes to the pockets (pockets.go)
-			m, ok := p.pocketRoom(it, count)
+			if from.kind == locContainer && from.cont == p.pockets {
+				return // already there
+			}
+			into, ok := p.pocketRoom(it, count)
 			if !ok {
 				p.emit(systemMsg(msgContainerFull))
 				return
 			}
-			if from.kind == locContainer && from.cont == p.pockets {
-				return // already there
-			}
-			to, merge = place{kind: locContainer, cont: p.pockets}, m
+			to, merge = place{kind: locContainer, cont: p.pockets}, into
 			break
 		}
 		if key, params := w.canEquip(p, it.def, to.slot); key != "" {
