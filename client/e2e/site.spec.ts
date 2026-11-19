@@ -225,24 +225,11 @@ test.describe.serial("public website", () => {
     const credits = page.getByTestId("credits");
     await expect(credits.getByRole("heading", { level: 1 })).toHaveText("Créditos");
     await expect(credits.locator("[data-pack=dungeon-crawl] h3")).toContainText("Dungeon Crawl");
-    await expect(credits.locator("[data-pack=ulpc] h3")).toContainText("Universal LPC");
-    // Each LPC file group names its authors and links its licence and its source.
-    const files = page.getByTestId("credits-files");
-    await expect(files.locator("li").first()).toBeVisible();
-    expect(await files.locator("li").count()).toBeGreaterThan(10);
-    await expect(files).toContainText("Johannes Sjölund (wulax)");
-    await expect(files.locator('a[data-licence="OGA-BY 3.0"]').first()).toHaveAttribute(
-      "href",
-      "https://static.opengameart.org/OGA-BY-3.0.txt",
-    );
-    await expect(files.locator('a[data-licence="CC-BY-SA 3.0"]').first()).toHaveAttribute(
-      "href",
-      "https://creativecommons.org/licenses/by-sa/3.0/",
-    );
-    await expect(files.locator('a[href^="https://opengameart.org/"]').first()).toBeVisible();
-    const derived = page.getByTestId("credits-derived");
-    await expect(derived).toContainText("outfits/citizen");
-    await expect(derived).toContainText("npcs/sailor_old");
+    // The LPC characters left with the engine humanoids (docs/17): no per-file pack and no
+    // composed sprite to credit, so those sections are not on the page.
+    await expect(credits.locator("[data-pack=ulpc]")).toHaveCount(0);
+    await expect(page.getByTestId("credits-files")).toHaveCount(0);
+    await expect(page.getByTestId("credits-derived")).toHaveCount(0);
     const fonts = page.getByTestId("credits-fonts");
     // Cinzel, Grenze Gotisch, Alegreya Sans, Alegreya and the canvas font (lote 10).
     await expect(fonts.locator("[data-font]")).toHaveCount(5);
