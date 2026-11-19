@@ -217,7 +217,10 @@ func (h *harness) hunt(cl *fakeClient, p *session.Player, kind string, n int) {
 // hunt six wolves and five gloom bats, get the bosun's logbook from the foreman and
 // hand it in for the guardian's reward and the quest rewards. Progress is saved.
 func TestChapterOnePlayable(t *testing.T) {
-	h := dataHarness(t,
+	var block time.Duration // travel.combat_block_ms of data/balance.yaml
+	h := dataHarnessWith(t, func(c *session.Config) {
+		block = time.Duration(c.Balance.Travel.CombatBlockMs) * time.Millisecond
+	},
 		world.Spawn{ID: "wolves", Center: pos(40, 44), Radius: 3, RespawnSeconds: 60,
 			Monsters: []world.SpawnMonster{{Monster: "wolf", Count: 6}}},
 		world.Spawn{ID: "bats", Center: pos(44, 12), Radius: 3, RespawnSeconds: 60,
@@ -311,7 +314,7 @@ func TestChapterOnePlayable(t *testing.T) {
 	// Saved with the character, once it leaves: fresh from the hunt, its closed connection
 	// leaves it link-dead until travel.combat_block_ms is over (linkdead.go).
 	h.sim.Command(h.w.Leave(cl))
-	h.sim.RunFor(combatBlock + time.Second) // data/balance.yaml has the same block
+	h.sim.RunFor(block + time.Second)
 	if h.w.PlayerByCharacter(p.CharacterID()) != nil {
 		t.Fatal("still in the world after the fight's block")
 	}

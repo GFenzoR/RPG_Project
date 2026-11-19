@@ -153,7 +153,11 @@ el punto 5:
   `server/internal/session/linkdead.go`. Queda:
   - **Revisar en el E2E:** `07c-logout-locked` (el aviso "Estás en combate" sobre el mapa
     en plena pelea con el lobo) y que los dos tests que salen después de pelear (el lobo
-    y la arcanista) salgan con `leaveAfterFight` sin pasarse de tiempo.
+    y la arcanista) salgan con `leaveAfterFight` sin pasarse de tiempo. Todo test que
+    salga justo después de pasar por una zona de caza ahora se rechaza si un monstruo lo
+    atacó en los últimos 12 s: el más cercano es el de las puertas con llave
+    (`client/e2e/game.spec.ts`, la forja junto al spawn del guardián en (3692,5845,z8));
+    por la distancia parece fuera de alcance, pero hay que confirmarlo en la corrida.
   - **Para que lo decida el dueño:** una zona de protección no corta el bloqueo (como el
     PvP de T5.2; en el género, entrar a una zona de protección suele terminar el combate,
     pero no el bloqueo PvP). Si se quiere, es una condición más en `inCombat`.
@@ -163,9 +167,10 @@ el punto 5:
     llega a hacer daño (armadura) lo mantiene en el mundo sin límite, y mientras tanto
     entrena escudo y suma a la experiencia compartida del grupo, sin el cliente abierto.
     Es lo que pasa en el género y lo mismo que un AFK conectado (la inactividad y el
-    chequeo de presencia ya se saltan en combate). Si se quiere cortar: un tope de tiempo
-    link-dead (sale y se guarda al vencer, aunque siga en combate) o no entrenar escudo
-    ni contar para el grupo mientras está link-dead.
+    chequeo de presencia ya se saltan en combate; tampoco salta la alerta a los GM por un
+    chequeo de presencia esquivado, porque no se le pide ninguno). Si se quiere cortar:
+    un tope de tiempo link-dead (sale y se guarda al vencer, aunque siga en combate) o no
+    entrenar escudo ni contar para el grupo mientras está link-dead.
   - las **zonas sin logout** (`no_logout` de `zones.yaml`, el muelle de cada isla) siguen
     sin rechazar el `Logout`: solo las miran la inactividad y los chequeos de presencia.
     Es otra regla (no depende de pelear) y queda para cuando se decida qué pasa al cerrar la

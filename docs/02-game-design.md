@@ -1183,9 +1183,11 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - Al elegir una ruta, el servidor revisa, en este orden, y si algo falla no cambia nada y
   dice por qué: **combate** (`travel.in_combat`), **nivel** mínimo, **quest**
   completada, **item** requerido (o pasaje), **oro** y **llegada libre**.
-- **Regla de combate (decidida):** no se zarpa durante `combat_block_ms` (12 s) desde la
+- **Regla de combate (decidida):** no se zarpa **en combate**, la misma ventana que bloquea
+  el logout ("Bloqueo de logout en combate"): durante `combat_block_ms` (12 s) desde la
   última vez que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño
-  (también de veneno o fuego) o que golpeó a un monstruo.
+  (también de veneno o fuego, de un monstruo o de otro jugador) o que le pegó a un monstruo
+  o a un jugador; o mientras dura su bloqueo PvP.
   La marca no se guarda en la base, pero salir no la borra: en combate no se sale del
   juego, y quien cierra la conexión queda link-dead y al volver la retoma ("Muerte",
   "Bloqueo de logout en combate"). La muerte la termina.

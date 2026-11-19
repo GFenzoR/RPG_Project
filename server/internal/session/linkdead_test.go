@@ -1,7 +1,9 @@
 package session_test
 
 import (
+	"bytes"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,8 +20,12 @@ import (
 // Logout within travel.combat_block_ms of fighting a monster, and a connection closed in
 // that time leaves the character in the world link-dead until the fight is over.
 
-// combatBlock is travel.combat_block_ms of data/balance.yaml.
+// combatBlock is the travel.combat_block_ms the fight tests set (fightHarness, blockMs):
+// their own, not the one of data/balance.yaml (TestChapterOnePlayable reads that one).
 const combatBlock = 12 * time.Second
+
+// blockMs is a harness option: travel.combat_block_ms is combatBlock.
+func blockMs(c *session.Config) { c.Balance.Travel.CombatBlockMs = int(combatBlock / time.Millisecond) }
 
 // far is a tile out of the wolf's sight and far from the temple (worldtest: its first
 // tile, (0, 0)).
@@ -41,8 +47,7 @@ func fightHarness(t *testing.T, bite int, opts ...option) *harness {
 	return newHarness(t, m, append([]option{func(c *session.Config) {
 		c.Monsters = content.Monsters{"wolf": def}
 		c.Items = testItems()
-		c.Balance.Travel.CombatBlockMs = int(combatBlock / time.Millisecond)
-	}}, opts...)...)
+	}, blockMs}, opts...)...)
 }
 
 // hunter joins a level-level guardian with full health next to the wolf, carrying a
@@ -256,8 +261,12 @@ func TestRelogTakesTheLinkDeadBack(t *testing.T) {
 		Vocation: "guardian", Level: 1, Health: 1 << 20, Pos: pos(21, 20), HasPos: true}, cl2))
 	h.sim.Step()
 	p2 := h.w.PlayerByCharacter(p.CharacterID())
-	if hp2, _ := p2.Health(); p2 == nil || p2 == p || p2.LinkDead() || p2.Pos() != far || hp2 != hp || len(h.w.Players()) != 1 {
-		t.Fatalf("took over: %v, link-dead %v, at %v, %d players", p2 != p, p2 != nil && p2.LinkDead(), p2.Pos(), len(h.w.Players()))
+	if p2 == nil {
+		t.Fatalf("the relog left no player in the world (new connection closed %v: %v)", cl2.closed, cl2.reason)
+	}
+	if hp2, _ := p2.Health(); p2 == p || p2.LinkDead() || p2.Pos() != far || hp2 != hp || len(h.w.Players()) != 1 {
+		t.Fatalf("took over: %v, link-dead %v, at %v, health %d (had %d), %d players", p2 != p, p2.LinkDead(), p2.Pos(),
+			hp2, hp, len(h.w.Players()))
 	}
 	if cl2.closed {
 		t.Fatalf("the new connection closed: %v", cl2.reason)
@@ -288,34 +297,70 @@ func TestDeathEndsTheLogoutBlock(t *testing.T) {
 	}
 }
 
-// Staff sanctions are no fight to wait for: a kick takes a player in combat out at once,
-// connected or link-dead, and saves it once. A password reset (the server ends the
+// Staff sanctions and a failed save are no fight to wait for: a kick, a ban and a
+// transfer that was not stored (Tainted, SAVE_FAILED) take a player in combat out at once,
+// connected or link-dead, and save it once. A password reset (the server ends the
 // connection, not staff) leaves it link-dead like a closed tab.
-func TestKickInCombatRemovesAtOnce(t *testing.T) {
-	a := newAdminHarness(t, func(c *session.Config) { c.Balance.Travel.CombatBlockMs = 12000 })
+func TestSanctionInCombatRemovesAtOnce(t *testing.T) {
+	a := newAdminHarness(t, blockMs)
 	gm, _ := a.joinAs("Warden", session.RoleGM, pos(2, 2))
 	hurt := func(p *session.Player) {
 		a.sim.Command(ctxFunc(func(ctx *game.TickContext) { a.w.HurtForTest(ctx, p, 1) }))
 		a.sim.Step()
 	}
-	for _, linkDead := range []bool{false, true} {
-		name := map[bool]string{false: "Online", true: "Gone"}[linkDead]
-		cl, p := a.joinAs(name, session.RolePlayer, pos(5, 5))
-		hurt(p)
-		if linkDead {
-			a.sim.Command(a.w.Leave(cl))
-			a.sim.Step()
-			if !p.LinkDead() {
-				t.Fatalf("%s is not link-dead", name)
-			}
-		}
-		n := len(a.saves)
+	kick := func(_ *session.Player, name string) {
 		if got := a.cmd(gm, "/kick "+name); !slices.Equal(got, []string{"gm.kicked"}) {
 			t.Fatalf("kick %s: %v", name, got)
 		}
-		if s := a.savesOf(p.CharacterID(), n); a.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final ||
-			cl.reason != pb.DisconnectReason_DISCONNECT_REASON_KICKED {
-			t.Fatalf("%s: in the world %v, saves %d, reason %v", name, a.w.PlayerByCharacter(p.CharacterID()) != nil, len(s), cl.reason)
+	}
+	ban := func(p *session.Player, name string) {
+		a.takeJobs()
+		if got := a.cmd(gm, "/ban "+name+" 7d botting"); len(got) != 0 {
+			t.Fatalf("ban %s answered before the database: %v", name, got)
+		}
+		var job *session.AdminJob
+		for _, j := range a.takeJobs() {
+			if j.Kind == session.AdminBan {
+				job = &j
+			}
+		}
+		if job == nil {
+			t.Fatalf("ban %s: no ban job", name)
+		}
+		a.sim.Command(a.w.AdminDone(session.AdminResult{ID: job.ID, Result: session.AdminOK, AccountID: p.CharacterID(), Name: name}))
+		a.sim.Step()
+	}
+	taint := func(p *session.Player, _ string) {
+		a.sim.Command(a.w.Tainted([]int64{p.CharacterID()}))
+		a.sim.Step()
+	}
+	for _, c := range []struct {
+		names  [2]string // connected, link-dead
+		do     func(*session.Player, string)
+		reason pb.DisconnectReason
+	}{
+		{[2]string{"Online", "Gone"}, kick, pb.DisconnectReason_DISCONNECT_REASON_KICKED},
+		{[2]string{"Outlaw", "Fugitive"}, ban, pb.DisconnectReason_DISCONNECT_REASON_BANNED},
+		{[2]string{"Tainted", "Lost"}, taint, pb.DisconnectReason_DISCONNECT_REASON_SAVE_FAILED},
+	} {
+		for i, linkDead := range []bool{false, true} {
+			name := c.names[i]
+			cl, p := a.joinAs(name, session.RolePlayer, pos(5, 5))
+			hurt(p)
+			if linkDead {
+				a.sim.Command(a.w.Leave(cl))
+				a.sim.Step()
+				if !p.LinkDead() {
+					t.Fatalf("%s is not link-dead", name)
+				}
+			}
+			n := len(a.saves)
+			c.do(p, name)
+			if s := a.savesOf(p.CharacterID(), n); a.w.PlayerByCharacter(p.CharacterID()) != nil || p.LinkDead() ||
+				len(s) != 1 || !s[0].Final || cl.reason != c.reason {
+				t.Fatalf("%s: in the world %v, link-dead %v, saves %d, reason %v (want %v)", name,
+					a.w.PlayerByCharacter(p.CharacterID()) != nil, p.LinkDead(), len(s), cl.reason, c.reason)
+			}
 		}
 	}
 
@@ -327,7 +372,7 @@ func TestKickInCombatRemovesAtOnce(t *testing.T) {
 		!p.LinkDead() || a.w.PlayerByCharacter(p.CharacterID()) != p {
 		t.Fatalf("reset: closed %v (%d, %v), link-dead %v", cl.closed, cl.closes, cl.reason, p.LinkDead())
 	}
-	a.sim.RunFor(13 * time.Second)
+	a.sim.RunFor(combatBlock + time.Second)
 	if a.w.PlayerByCharacter(p.CharacterID()) != nil || cl.closes != 1 {
 		t.Fatalf("reset: still in the world %v after the block, closes %d", a.w.PlayerByCharacter(p.CharacterID()) != nil, cl.closes)
 	}
@@ -354,7 +399,7 @@ func TestShutdownSavesLinkDead(t *testing.T) {
 // while it goes over the players: deathSave leaves the removal to the end of the tick)
 // leaves with one save and loses nothing; the rival stays, its target gone.
 func TestLinkDeadArenaDefeat(t *testing.T) {
-	g := newPvP(t, nil, func(c *session.Config) { c.Balance.Travel.CombatBlockMs = 12000 })
+	g := newPvP(t, nil, blockMs)
 	ca, a := g.fighter("Ana", 0, 45, 45, 30, 0)
 	cb, b := g.fighter("Bea", 0, 46, 45, 30, 0, func(c *session.Character) { c.Experience = 200000 })
 	g.hit(a, b) // an arena hit: no PvP lock, but a fight
@@ -526,5 +571,34 @@ func TestLinkDeadDeathUnderPvPLock(t *testing.T) {
 			s[1].Experience != s[0].Experience || s[1].Pos != temple {
 			t.Fatalf("after the lock: in the world %v, saves %+v", g.w.PlayerByCharacter(a.CharacterID()) != nil, s)
 		}
+	}
+}
+
+// A listed link-dead player that is not in the world (a broken invariant: only remove
+// takes one out of World.linkDead) is dropped with an error log: checkLinkDead never
+// spins on it, which would hang the game loop.
+func TestCheckLinkDeadDropsAStrayEntry(t *testing.T) {
+	var buf bytes.Buffer
+	h := fightHarness(t, 0, logTo(&buf))
+	cl, p := h.join("Stray", &far)
+	h.sim.Command(h.w.Leave(cl)) // no fight: it leaves at once
+	h.sim.Step()
+	if h.w.PlayerByCharacter(p.CharacterID()) != nil {
+		t.Fatal("still in the world")
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.sim.Command(gameFunc(func() { h.w.StrayLinkDeadForTest(p) }))
+		h.sim.Step() // checkLinkDead runs at the end of this tick
+		h.sim.Step()
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second): //nolint:forbidigo // a real deadline: a hung tick never returns
+		t.Fatal("checkLinkDead spins on a link-dead player out of the world: the game loop hangs")
+	}
+	if p.LinkDead() || !strings.Contains(buf.String(), "a link-dead player out of the world was still listed") {
+		t.Fatalf("link-dead %v, log %q", p.LinkDead(), buf.String())
 	}
 }

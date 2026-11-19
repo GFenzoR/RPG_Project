@@ -471,3 +471,10 @@ func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx,
 // DespawnForTest takes m out of the world without a death: no game path does it yet,
 // but the protocol already has the reason (DISAPPEAR_REASON_DESPAWN).
 func (w *World) DespawnForTest(m *Monster) { w.removeMonster(m, goneDespawn) }
+
+// StrayLinkDeadForTest lists p as link-dead although it is not in the world (tests only,
+// loop goroutine): the broken invariant checkLinkDead must survive without hanging.
+func (w *World) StrayLinkDeadForTest(p *Player) {
+	p.linkDead = true
+	w.linkDead = append(w.linkDead, p)
+}

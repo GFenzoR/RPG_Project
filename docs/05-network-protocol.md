@@ -68,8 +68,9 @@ Detalles (T1.4, `server/internal/net/gateway`):
 - **Entrar dos veces:** si el personaje ya está en el mundo, la conexión vieja recibe
   `Disconnect{LOGGED_IN_ELSEWHERE}` y la nueva sigue con el estado en memoria.
 - **Logout:** `Disconnect{LOGGED_OUT}` y cierre; se guarda el personaje. En combate
-  (`travel.combat_block_ms` desde la última pelea con un monstruo o el último daño, o el
-  bloqueo PvP) se rechaza con un mensaje de sistema, `combat.logout_locked` (o
+  (`travel.combat_block_ms` desde la última vez que un monstruo lo atacó, que recibió daño
+  o que le pegó a un monstruo o a un jugador, o el bloqueo PvP; docs/02 "Bloqueo de logout
+  en combate") se rechaza con un mensaje de sistema, `combat.logout_locked` (o
   `pvp.logout_locked` con el bloqueo PvP), y la conexión sigue. Cerrar el socket sin
   `Logout` también saca al personaje y lo guarda, salvo en combate: queda en el mundo
   link-dead hasta que la pelea termina ("Desconexión en combate", abajo). Una casilla sin

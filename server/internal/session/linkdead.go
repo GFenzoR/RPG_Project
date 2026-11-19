@@ -8,10 +8,10 @@ import (
 )
 
 // The logout block of a fight (docs/02-game-design.md "Bloqueo de logout en combate"): a
-// player in combat (inCombat: it fought a monster or took damage within balance
-// travel.combat_block_ms, or its PvP lock lasts, T5.2) cannot log out, and closing the
-// connection does not take it out of the world either: it stays link-dead until the fight
-// is over. Leaving the game is no way out of a death.
+// player in combat (inCombat: within balance travel.combat_block_ms a monster attacked it,
+// it took damage or it hit a monster or a player; or its PvP lock lasts, T5.2) cannot log
+// out, and closing the connection does not take it out of the world either: it stays
+// link-dead until the fight is over. Leaving the game is no way out of a death.
 
 // msgLogoutLocked refuses a Logout in a fight that is not a PvP lock (that one says
 // pvp.logout_locked).
@@ -77,11 +77,21 @@ func (p *Player) LinkDead() bool { return p.linkDead }
 // only (usually empty).
 func (w *World) checkLinkDead(ctx *game.TickContext) {
 	for i := 0; i < len(w.linkDead); {
-		if p := w.linkDead[i]; p.diedLinkDead || !w.inCombat(ctx.Tick, p) {
-			w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false) // drops index i
+		p := w.linkDead[i]
+		if !p.diedLinkDead && w.inCombat(ctx.Tick, p) {
+			i++
 			continue
 		}
-		i++
+		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false) // drops index i
+		if i < len(w.linkDead) && w.linkDead[i] == p {
+			// remove did nothing: p is listed but not in the world (byClient), which only
+			// remove should leave (forgetLinkDead). Drop the entry rather than spin on it:
+			// a loop that never ends would hang the game loop (game.Loop recovers a
+			// panic, not a hang).
+			w.log.Error("session: a link-dead player out of the world was still listed", "character", p.charID)
+			p.linkDead = false
+			w.linkDead = slices.Delete(w.linkDead, i, i+1)
+		}
 	}
 }
 
