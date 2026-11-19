@@ -1,13 +1,21 @@
 // The desktop game screen's windows (docs/17 UI-5): the toolbar of the bottom bar opens
 // them, and they float over the full-screen map. The battle list (top left), the inventory
 // (top right) and the chat (bottom left, never closed: no toolbar button) start open;
-// skills, party, guild, appearance, options and help wait closed (ui/windows.ts
+// skills, quests, party, guild, appearance, options and help wait closed (ui/windows.ts
 // defaultWindows).
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 export type WindowId =
-  "battle" | "inventory" | "skills" | "party" | "guild" | "appearance" | "options" | "help";
+  | "battle"
+  | "inventory"
+  | "skills"
+  | "quests"
+  | "party"
+  | "guild"
+  | "appearance"
+  | "options"
+  | "help";
 
 /** Opens a window from the toolbar unless it is already open, and waits for it. */
 export async function openWindow(page: Page, id: WindowId): Promise<void> {

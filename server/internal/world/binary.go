@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-// world.bin, format version 6. Little endian throughout:
+// world.bin, format version 7. Little endian throughout:
 //
 //	magic        "RPGWORLD"
 //	version      u16
@@ -30,7 +30,9 @@ import (
 //	             doors u8 count × (u16 x, u16 y, u8 z), exit u16 x, u16 y, u8 z
 //	  portals    u16 count, then per portal (v5): id u8 length + bytes, kind u8 (PortalKind),
 //	             from u16 x, u16 y, u8 z, to u16 x, u16 y, u8 z
-//	  sectors    u32 count, then per sector (ordered by z, cy, cx):
+//	  zones      u16 count, then per zone (v7): id u8 length + bytes, floors u8 count +
+//	             bytes, rects u8 count × (u16 x, u16 y, u16 w, u16 h)
+//	  sectors   u32 count, then per sector (ordered by z, cy, cx):
 //	    z u8, cx u16, cy u16
 //	    ground   1024 × u16
 //	    flags    1024 × u8
@@ -40,7 +42,7 @@ import (
 // Encoding the same Map always produces the same bytes.
 
 // BinaryVersion is the world.bin format version this package reads and writes.
-const BinaryVersion = 6
+const BinaryVersion = 7
 
 var binaryMagic = [8]byte{'R', 'P', 'G', 'W', 'O', 'R', 'L', 'D'}
 
@@ -115,6 +117,14 @@ func checkEncodable(m *Map) error {
 		for _, pt := range is.Portals {
 			if len(pt.ID) > 0xFF {
 				return fmt.Errorf("island %q: portal id %q too long", is.ID, pt.ID)
+			}
+		}
+		if len(is.Zones) > 0xFFFF {
+			return fmt.Errorf("island %q: %d zones do not fit", is.ID, len(is.Zones))
+		}
+		for _, z := range is.Zones {
+			if len(z.ID) > 0xFF || len(z.Floors) > 0xFF || len(z.Rects) > 0xFF {
+				return fmt.Errorf("island %q: zone %q: id, floors or rects too long", is.ID, z.ID)
 			}
 		}
 		for _, s := range is.Sectors() {
@@ -223,6 +233,20 @@ func Encode(w io.Writer, m *Map) error {
 			b.u16(pt.To.X)
 			b.u16(pt.To.Y)
 			b.u8(pt.To.Z)
+		}
+		b.u16(uint16(len(is.Zones)))
+		for _, z := range is.Zones {
+			b.u8(uint8(len(z.ID)))
+			b.bytes([]byte(z.ID))
+			b.u8(uint8(len(z.Floors)))
+			b.bytes(z.Floors)
+			b.u8(uint8(len(z.Rects)))
+			for _, r := range z.Rects {
+				b.u16(r.X)
+				b.u16(r.Y)
+				b.u16(r.W)
+				b.u16(r.H)
+			}
 		}
 		sectors := is.Sectors()
 		b.u32(uint32(len(sectors)))
@@ -389,6 +413,19 @@ func Decode(data []byte) (*Map, error) {
 			pt.From = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
 			pt.To = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
 			is.Portals = append(is.Portals, pt)
+		}
+		zones := int(b.u16())
+		for range zones {
+			if b.err != nil {
+				break
+			}
+			z := Zone{ID: string(b.take(int(b.u8())))}
+			z.Floors = append([]uint8(nil), b.take(int(b.u8()))...)
+			rects := int(b.u8())
+			for range rects {
+				z.Rects = append(z.Rects, ZoneRect{X: b.u16(), Y: b.u16(), W: b.u16(), H: b.u16()})
+			}
+			is.Zones = append(is.Zones, z)
 		}
 		count := int(b.u32())
 		const minSectorBytes = 5 + SectorTiles*3 + 2

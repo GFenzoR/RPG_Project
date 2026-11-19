@@ -6,10 +6,11 @@ notes: >-
   temple: free experience (houses ask for level 12, PvP for level 20), money, healing with
   mana, and training (the combat skills and magic level of the player's vocation, or the
   trades) so every system can be tried by hand in a few minutes, and the short quest
-  pruebas_rats. Only on the sandbox island, which normal play never reaches (no boat goes
-  there): dev_only makes every action of hers dev-only, the free experience and gold too,
-  not only train_skill and restore_mana (docs/06, "Diálogos"); make validate and the server
-  refuse them anywhere but on a dev_only island.
+  pruebas_rats, a repeatable task (a three-minute cooldown: docs/16). Only on the sandbox
+  island, which normal play never reaches (no boat goes there): dev_only makes every action
+  of hers dev-only, the free experience and gold too, not only train_skill and
+  restore_mana (docs/06, "Diálogos"); make validate and the server refuse them anywhere but
+  on a dev_only island.
 dev_only: true
 dialog:
   start: greet
@@ -18,8 +19,11 @@ dialog:
       text: npc.pruebas_trainer.greet
       options:
         - text: npc.pruebas_trainer.opt_quest
-          if: { quest_not_started: pruebas_rats }
+          if: { quest_state: { quest: pruebas_rats, state: available } }
           goto: quest_offer
+        - text: npc.pruebas_trainer.opt_quest_cooling
+          if: { quest_state: { quest: pruebas_rats, state: cooling_down } }
+          goto: quest_cooling
         - text: npc.pruebas_trainer.opt_quest_done
           if: { quest_state: { quest: pruebas_rats, state: in_progress, step: report } }
           goto: quest_done
@@ -50,6 +54,11 @@ dialog:
         - { text: dialog.bye, action: close }
     quest_done:
       text: npc.pruebas_trainer.quest_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    quest_cooling:
+      text: npc.pruebas_trainer.quest_cooling
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

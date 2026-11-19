@@ -4,7 +4,9 @@ sprite: npcs/smith_volcanic
 notes: >-
   Smith of Brasal: sells the first embersteel pieces (levels 30-34), smithing tools and elm
   logs, and buys the island's materials at about a third of their value. Chapter 3 part 1
-  ends with him: he reads the forge-sign on the ember root.
+  ends with him: he reads the forge-sign on the ember root. Since lote 12 he gives the side
+  quest smith_ring (level 42): five slag cores for an obsidian ring, quenched in the Still
+  Flame by Madre Oriela (volcan_priest) before he hands it over.
 dialog:
   start: greet
   nodes:
@@ -21,6 +23,21 @@ dialog:
             - { quest_state: { quest: ch3_embers, state: in_progress, step: ask_smith } }
             - { lacks_item: { item: ember_root } }
           goto: ch3_no_root
+        - text: npc.volcan_smith.opt_ring
+          if: [{ quest_not_started: smith_ring }, { level_at_least: 42 }]
+          goto: ring_offer
+        - text: npc.volcan_smith.opt_ring_cores
+          if:
+            - { quest_state: { quest: smith_ring, state: in_progress, step: deliver_cores } }
+            - { has_item: { item: slag_core, count: 5 } }
+          action: { take_item: { item: slag_core, count: 5 } }
+          goto: ring_cores
+        - text: npc.volcan_smith.opt_ring_help
+          if: { quest_state: { quest: smith_ring, state: in_progress } }
+          goto: ring_help
+        - text: npc.volcan_smith.opt_ring_collect
+          if: { quest_state: { quest: smith_ring, state: in_progress, step: collect_ring } }
+          goto: ring_done
         - text: dialog.trade
           action: { open_shop: brasal_smithy }
         - text: npc.volcan_smith.opt_embersteel
@@ -34,6 +51,32 @@ dialog:
         - { text: dialog.bye, action: close }
     ch3_no_root:
       text: npc.volcan_smith.ch3_no_root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ring_offer:
+      text: npc.volcan_smith.ring_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: smith_ring }
+          goto: ring_accepted
+        - text: dialog.decline
+          goto: greet
+    ring_accepted:
+      text: npc.volcan_smith.ring_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    ring_help:
+      text: npc.volcan_smith.ring_help
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ring_cores:
+      text: npc.volcan_smith.ring_cores
+      options:
+        - { text: dialog.bye, action: close }
+    ring_done:
+      text: npc.volcan_smith.ring_done
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

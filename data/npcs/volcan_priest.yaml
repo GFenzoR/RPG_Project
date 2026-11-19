@@ -4,6 +4,10 @@ sprite: npcs/priest_volcanic
 notes: >-
   Temple of the Still Flame in Brasal (respawn point of the island). Heals for free and sells
   the same five blessings as the other temples at the same level-based price (docs/02 "Muerte").
+  Since lote 12 she gives the side quest flame_crater (level 45): reach the lava lake in the
+  crater's heart and thin the wyrmlings' nest (it ends on the last kill), and she quenches
+  Bram's obsidian ring in the Still Flame (smith_ring: set_flag smith_ring_quenched, the
+  quest's flag_equals step).
 dialog:
   start: greet
   nodes:
@@ -15,6 +19,19 @@ dialog:
         - text: npc.volcan_priest.opt_heal
           action: { heal: true }
           goto: healed
+        - text: npc.volcan_priest.opt_quench
+          if: { quest_state: { quest: smith_ring, state: in_progress, step: quench_ring } }
+          action: { set_flag: { key: smith_ring_quenched, value: 1 } }
+          goto: ring_quenched
+        - text: npc.volcan_priest.opt_crater
+          if: [{ quest_not_started: flame_crater }, { level_at_least: 45 }]
+          goto: crater_offer
+        - text: npc.volcan_priest.opt_crater_help
+          if: { quest_state: { quest: flame_crater, state: in_progress } }
+          goto: crater_help
+        - text: npc.volcan_priest.opt_crater_done
+          if: { quest_state: { quest: flame_crater, state: completed } }
+          goto: crater_thanks
         - text: npc.volcan_priest.opt_mountain
           goto: mountain
         - text: dialog.trade
@@ -52,6 +69,33 @@ dialog:
         - { text: dialog.bye, action: close }
     healed:
       text: npc.volcan_priest.healed
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ring_quenched:
+      text: npc.volcan_priest.ring_quenched
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    crater_offer:
+      text: npc.volcan_priest.crater_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: flame_crater }
+          goto: crater_accepted
+        - text: dialog.decline
+          goto: greet
+    crater_accepted:
+      text: npc.volcan_priest.crater_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    crater_help:
+      text: npc.volcan_priest.crater_help
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    crater_thanks:
+      text: npc.volcan_priest.crater_thanks
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

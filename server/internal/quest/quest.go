@@ -7,9 +7,16 @@
 //   - has_item and flag_equals are evaluated when the step becomes current and after
 //     every relevant change (Recheck, SetFlag).
 //   - A completed step never goes back.
+//   - reach is evaluated when the step becomes current and after every move or
+//     relocation of the character (Moved), through Host.Inside.
+//   - A completed quest is final, unless it is repeatable: Start takes it again once its
+//     cooldown passed since it was done (the done_at key, unix seconds of Host.Now), from
+//     the first step, and its rewards are given every time.
 //
 // It is pure game logic: the caller (the session, on the game loop goroutine) owns the
-// Log and applies rewards through Host.
+// Log and applies rewards through Host. Every change of a quest's state, step or kill
+// count reaches Host.Notify as an Event (a SetStep too, StepSet, even when the step does
+// not complete): the host refreshes what it derives from the Log there (its quest log).
 package quest
 
 import (
@@ -35,9 +42,10 @@ func (s State) String() string {
 }
 
 // Storage keys of a character's Log.
-func stateKey(q string) string { return "quest." + q }
-func stepKey(q string) string  { return "quest." + q + ".step" }
-func killsKey(q string) string { return "quest." + q + ".kills" }
+func stateKey(q string) string  { return "quest." + q }
+func stepKey(q string) string   { return "quest." + q + ".step" }
+func killsKey(q string) string  { return "quest." + q + ".kills" }
+func doneAtKey(q string) string { return "quest." + q + ".done_at" }
 
 // FlagKey is the storage key of a content flag (set_flag, flag_equals).
 func FlagKey(key string) string { return "flag." + key }
@@ -75,19 +83,21 @@ func (l *Log) Values() map[string]int64 { return maps.Clone(l.v) }
 type EventKind uint8
 
 // Event kinds: a quest started, a step was completed, a kill was counted, the quest
-// was completed.
+// was completed, a quest was moved to a step (set_quest_step).
 const (
 	Started EventKind = iota + 1
 	StepDone
 	KillProgress
 	Done
+	StepSet
 )
 
 // Event is a change the player should hear about.
 type Event struct {
 	Kind  EventKind
 	Quest *content.Quest
-	// Step is the step that just completed (StepDone) or is counting kills.
+	// Step is the step that just completed (StepDone), is counting kills (KillProgress)
+	// or was made current (StepSet).
 	Step *content.QuestStepDef
 	// Kills is the kill count of the step (KillProgress).
 	Kills int
@@ -102,6 +112,11 @@ type Host interface {
 	Reward(q *content.Quest, r content.QuestReward)
 	// Notify reports an event.
 	Notify(e Event)
+	// Now is the game clock in unix seconds (the loop's injected clock, never the wall
+	// clock read directly): a repeatable quest stores when it was done with it.
+	Now() int64
+	// Inside reports whether the character stands in the place of a reach step.
+	Inside(r *content.Reach) bool
 }
 
 // Engine runs the quests of data/quests.
@@ -163,20 +178,57 @@ func (e *Engine) State(l *Log, id string) (State, string) {
 	return NotStarted, ""
 }
 
-// Start starts quest id. It does nothing (and returns false) if the quest does not exist
-// or was already started.
-func (e *Engine) Start(l *Log, id string, h Host) bool {
+// Available reports whether Start would start quest id at now (unix seconds): it was
+// never started, or it is repeatable and was done at least its cooldown ago.
+func (e *Engine) Available(l *Log, id string, now int64) bool {
 	q := e.quests[id]
-	if q == nil || l.Get(stateKey(id)) != 0 {
+	if q == nil {
 		return false
 	}
+	switch l.Get(stateKey(id)) {
+	case 0:
+		return true
+	case int64(Completed):
+		return q.Repeatable != nil && now >= e.availableAt(l, q)
+	}
+	return false
+}
+
+// CoolingDown reports whether quest id is repeatable, done, and waits for its cooldown at
+// now (unix seconds).
+func (e *Engine) CoolingDown(l *Log, id string, now int64) bool {
+	q := e.quests[id]
+	return q != nil && q.Repeatable != nil && l.Get(stateKey(id)) == int64(Completed) && now < e.availableAt(l, q)
+}
+
+// availableAt is when a done repeatable quest can be started again (unix seconds): its
+// done_at plus the cooldown; 0 without done_at (done before the quest was repeatable).
+func (e *Engine) availableAt(l *Log, q *content.Quest) int64 {
+	done := l.Get(doneAtKey(q.ID))
+	if done == 0 {
+		return 0
+	}
+	return done + q.Repeatable.CooldownSeconds()
+}
+
+// Start starts quest id. It does nothing (and returns false) if the quest does not exist
+// or is not available (Available): in progress, completed, or a repeatable one still
+// cooling down. A repeatable one starts again from its first step with no kills counted.
+func (e *Engine) Start(l *Log, id string, h Host) bool {
+	q := e.quests[id]
+	if q == nil || !e.Available(l, id, h.Now()) {
+		return false
+	}
+	l.Set(doneAtKey(id), 0)
 	l.Set(stateKey(id), int64(InProgress))
 	h.Notify(Event{Kind: Started, Quest: q})
 	e.enter(l, q, 0, h)
 	return true
 }
 
-// SetStep moves a quest in progress to step (set_quest_step), forwards or back.
+// SetStep moves a quest in progress to step (set_quest_step), forwards or back. It
+// reports the move (StepSet) before the step is evaluated, so the host hears of it even
+// when the step does not complete right away (a reach step elsewhere, a kill step).
 func (e *Engine) SetStep(l *Log, id, step string, h Host) bool {
 	q := e.quests[id]
 	if q == nil || l.Get(stateKey(id)) != int64(InProgress) {
@@ -186,6 +238,7 @@ func (e *Engine) SetStep(l *Log, id, step string, h Host) bool {
 	if i < 0 {
 		return false
 	}
+	h.Notify(Event{Kind: StepSet, Quest: q, Step: &q.Steps[i]})
 	e.enter(l, q, i, h)
 	return true
 }
@@ -229,8 +282,74 @@ func (e *Engine) ReachedNode(l *Log, npc, node string, h Host) {
 	}
 }
 
-// Recheck evaluates the current has_item and flag_equals steps (after the character's
-// inventory or flags changed).
+// Moved completes the current reach steps the character now stands in (after it moved or
+// was relocated: the session calls it only for characters with a reach step current).
+func (e *Engine) Moved(l *Log, h Host) {
+	for _, id := range e.ids {
+		q, i, ok := e.current(l, id)
+		if !ok {
+			continue
+		}
+		if r := q.Steps[i].CompleteWhen.Reach; r != nil && h.Inside(r) {
+			e.complete(l, q, i, h)
+		}
+	}
+}
+
+// Reaches appends to out the reach completions of the current steps of every quest in
+// progress, in quest id order (the session indexes them to check moves cheaply).
+func (e *Engine) Reaches(l *Log, out []*content.Reach) []*content.Reach {
+	for _, id := range e.ids {
+		if q, i, ok := e.current(l, id); ok && q.Steps[i].CompleteWhen.Reach != nil {
+			out = append(out, q.Steps[i].CompleteWhen.Reach)
+		}
+	}
+	return out
+}
+
+// Entry is one quest of a character's quest log (docs/05 "Diario de misiones").
+type Entry struct {
+	Quest *content.Quest
+	// State is InProgress or Completed.
+	State State
+	// Step is the current step (InProgress), or nil.
+	Step *content.QuestStepDef
+	// Kills is the kill count of a current kill step.
+	Kills int
+	// AvailableAt is when a completed repeatable quest can be started again (unix
+	// seconds); 0 for any other.
+	AvailableAt int64
+}
+
+// Entries returns the character's quest log: every quest it has started or completed, in
+// quest id order.
+func (e *Engine) Entries(l *Log) []Entry {
+	var out []Entry
+	for _, id := range e.ids {
+		q := e.quests[id]
+		switch l.Get(stateKey(id)) {
+		case int64(InProgress):
+			en := Entry{Quest: q, State: InProgress}
+			if _, i, ok := e.current(l, id); ok {
+				en.Step = &q.Steps[i]
+				if q.Steps[i].CompleteWhen.Kill != nil {
+					en.Kills = int(l.Get(killsKey(id)))
+				}
+			}
+			out = append(out, en)
+		case int64(Completed):
+			en := Entry{Quest: q, State: Completed}
+			if q.Repeatable != nil {
+				en.AvailableAt = e.availableAt(l, q)
+			}
+			out = append(out, en)
+		}
+	}
+	return out
+}
+
+// Recheck evaluates the current has_item, flag_equals and reach steps (after the
+// character's inventory or flags changed).
 func (e *Engine) Recheck(l *Log, h Host) {
 	for _, id := range e.ids {
 		if q, i, ok := e.current(l, id); ok && e.holds(l, q.Steps[i].CompleteWhen, h) {
@@ -258,12 +377,14 @@ func (e *Engine) holds(l *Log, c content.Completion, h Host) bool {
 		return h.ItemCount(c.HasItem.Item) >= c.HasItem.N()
 	case c.FlagEquals != nil:
 		return l.Get(FlagKey(c.FlagEquals.Key)) == c.FlagEquals.Value
+	case c.Reach != nil:
+		return h.Inside(c.Reach)
 	}
 	return false
 }
 
-// enter makes step i current: its kill count starts at 0 and has_item/flag_equals are
-// evaluated right away.
+// enter makes step i current: its kill count starts at 0 and has_item, flag_equals and
+// reach are evaluated right away.
 func (e *Engine) enter(l *Log, q *content.Quest, i int, h Host) {
 	l.Set(stepKey(q.ID), int64(i))
 	l.Set(killsKey(q.ID), 0)
@@ -282,6 +403,9 @@ func (e *Engine) complete(l *Log, q *content.Quest, i int, h Host) {
 	l.Set(stateKey(q.ID), int64(Completed))
 	l.Set(stepKey(q.ID), 0)
 	l.Set(killsKey(q.ID), 0)
+	if q.Repeatable != nil {
+		l.Set(doneAtKey(q.ID), max(h.Now(), 1)) // 0 would remove the key
+	}
 	var flags []content.Flag
 	for _, r := range q.Rewards {
 		if r.SetFlag != nil {

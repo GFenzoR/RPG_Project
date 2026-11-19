@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,24 @@ type Quest struct {
 	MinLevel int            `yaml:"min_level"`
 	Steps    []QuestStepDef `yaml:"steps"`
 	Rewards  []QuestReward  `yaml:"rewards"`
+	// Repeatable makes it a task (docs/06 "Quest"): once completed it can be started again
+	// after its cooldown, from its first step, and its rewards are given every time.
+	Repeatable *Repeatable `yaml:"repeatable"`
+}
+
+// Repeatable is the cooldown of a repeatable quest: the time between completing it and
+// being able to start it again.
+type Repeatable struct {
+	CooldownHours float64 `yaml:"cooldown_hours"`
+}
+
+// MaxCooldownHours bounds a repeatable quest's cooldown (a year).
+const MaxCooldownHours = 24 * 366
+
+// CooldownSeconds is the cooldown rounded to whole seconds (at least one): 1.1 h is 3960 s,
+// whatever float64 makes of 1.1 × 3600 (3960.0000000000005).
+func (r *Repeatable) CooldownSeconds() int64 {
+	return max(int64(math.Round(r.CooldownHours*3600)), 1)
 }
 
 // QuestStepDef is one step and the event that completes it.
@@ -34,6 +53,52 @@ type Completion struct {
 	DialogAction *DialogAction `yaml:"dialog_action"`
 	Kill         *Kill         `yaml:"kill"`
 	FlagEquals   *Flag         `yaml:"flag_equals"`
+	Reach        *Reach        `yaml:"reach"`
+}
+
+// Reach completes a step while the player stands in a place (docs/06 "Quest"): a zone of
+// world/islands/*/zones.yaml (Zone), or the tiles within Radius (Chebyshev) of X, Y on
+// floor Z. The session resolves it against the map when it starts (unknown zone, a point
+// outside every island, or a place with no walkable tile to stand on refuse to start) and
+// checks it after every move and relocation while the step is current.
+type Reach struct {
+	Zone string `yaml:"zone"`
+	X    *int   `yaml:"x"`
+	Y    *int   `yaml:"y"`
+	Z    *int   `yaml:"z"`
+	// Radius is nil when not written: a point is then its tile alone, and a zone takes
+	// none (the schema's oneOf refuses even radius: 0 with a zone).
+	Radius *int `yaml:"radius"`
+}
+
+// R is the radius of a reach point: 0 when not written.
+func (r *Reach) R() int {
+	if r.Radius == nil {
+		return 0
+	}
+	return *r.Radius
+}
+
+// MaxReachRadius bounds the radius of a reach point: half the width of the player's view
+// with its margin (session.ViewHalfW of the 31-tile view), 33 tiles across at most.
+const MaxReachRadius = 16
+
+// check reports what is wrong with a reach completion, or "".
+func (r *Reach) check() string {
+	point := r.X != nil || r.Y != nil || r.Z != nil
+	switch {
+	case r.Zone != "" && (point || r.Radius != nil):
+		return "reach takes a zone or x, y, z and radius, not both"
+	case r.Zone != "":
+		return ""
+	case r.X == nil || r.Y == nil || r.Z == nil:
+		return "reach needs a zone or x, y and z"
+	case *r.X < 0 || *r.X > 0xFFFF || *r.Y < 0 || *r.Y > 0xFFFF || *r.Z < 0 || *r.Z > 15:
+		return "reach point outside the world"
+	case r.R() < 0 || r.R() > MaxReachRadius:
+		return fmt.Sprintf("reach radius outside 0..%d", MaxReachRadius)
+	}
+	return ""
 }
 
 // DialogAction completes a step when the player reaches node of npc.
@@ -109,7 +174,7 @@ func ParseQuest(raw []byte) (*Quest, error) {
 	for i, s := range q.Steps {
 		c := s.CompleteWhen
 		n := 0
-		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil} {
+		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil, c.Reach != nil} {
 			if set {
 				n++
 			}
@@ -120,13 +185,22 @@ func ParseQuest(raw []byte) (*Quest, error) {
 		if c.Kill != nil && (c.Kill.Monster == "" || c.Kill.Count <= 0) {
 			return nil, fmt.Errorf("quest %q: steps[%d]: kill needs a monster and count > 0", q.ID, i)
 		}
+		if c.Reach != nil {
+			if msg := c.Reach.check(); msg != "" {
+				return nil, fmt.Errorf("quest %q: steps[%d]: %s", q.ID, i, msg)
+			}
+		}
 		seen[s.ID] = true
+	}
+	if r := q.Repeatable; r != nil && !(r.CooldownHours > 0 && r.CooldownHours <= MaxCooldownHours) {
+		return nil, fmt.Errorf("quest %q: repeatable cooldown_hours must be in (0, %d]", q.ID, MaxCooldownHours)
 	}
 	return &q, nil
 }
 
 // CheckRefs checks that what NPCs and quests reference exists: items, quests and
-// their steps, dialog_action nodes, monsters and skills (when given).
+// their steps, dialog_action nodes, monsters and skills (when given); and that no step of a
+// repeatable quest lets a turn be done with no effort (CheckRepeatable, without the map).
 func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills []string) error {
 	item := func(where, id string) error {
 		if items[id] == nil {
@@ -141,6 +215,23 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 		}
 		if step != "" && q.StepIndex(step) < 0 {
 			return fmt.Errorf("%s: quest %q has no step %q", where, quest, step)
+		}
+		return nil
+	}
+	// questState also refuses what never means anything: a step with a state other than
+	// in_progress (ignored by available and cooling_down, never holding with the others),
+	// and cooling_down of a quest that is not repeatable (it never cools down).
+	questState := func(where string, c *QuestStateCond) error {
+		if err := questStep(where, c.Quest, c.Step); err != nil {
+			return err
+		}
+		switch {
+		case !slices.Contains([]string{QuestNotStarted, QuestInProgress, QuestCompleted, QuestAvailable, QuestCoolingDown}, c.State):
+			return fmt.Errorf("%s: quest_state of %q: unknown state %q", where, c.Quest, c.State)
+		case c.Step != "" && c.State != QuestInProgress:
+			return fmt.Errorf("%s: quest_state of %q: a step only goes with state %s, not %s", where, c.Quest, QuestInProgress, c.State)
+		case c.State == QuestCoolingDown && quests[c.Quest].Repeatable == nil:
+			return fmt.Errorf("%s: quest_state of %q: %s, but the quest is not repeatable", where, c.Quest, QuestCoolingDown)
 		}
 		return nil
 	}
@@ -165,7 +256,7 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 					case c.LacksItem != nil:
 						err = item(where, c.LacksItem.Item)
 					case c.QuestState != nil:
-						err = questStep(where, c.QuestState.Quest, c.QuestState.Step)
+						err = questState(where, c.QuestState)
 					case c.QuestNotStarted != "":
 						err = questStep(where, c.QuestNotStarted, "")
 					case c.SkillAtLeast != nil && !hasSkill(c.SkillAtLeast.Skill):
@@ -234,7 +325,8 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 			}
 		}
 	}
-	return nil
+	// Without the map: the session checks the reach steps again with it (initReach).
+	return CheckRepeatable(quests, npcs, nil)
 }
 
 // checkShopPrices rejects an item some NPC buys for more than any NPC sells it: buying

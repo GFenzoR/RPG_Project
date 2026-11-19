@@ -171,6 +171,7 @@ class WorldValidator {
     this.checkWorldIndex();
     for (const island of this.world.islands.values()) this.checkIsland(island);
     this.checkUniqueAcrossWorld();
+    this.checkChestsPlacedOnce();
     this.checkPortalArrivals();
     this.checkPortalExits();
     this.checkBoatRoutes();
@@ -817,6 +818,32 @@ class WorldValidator {
   }
 
   /**
+   * Reward chests (docs/02 "Libros y cofres"): a chest gives once per character under its
+   * chest id (storage chest.<id>), so each chest id stands once in the whole world: a second
+   * copy of the item, or another item with the same id, would be opened once between them.
+   */
+  private checkChestsPlacedOnce(): void {
+    const placed = new Map<string, { id: string; pos: Position }>();
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      for (const { c, s, pos } of placedItems(island))
+        for (const id of s.stack) {
+          const cid = this.content.items.get(id)?.chest;
+          if (cid === undefined) continue;
+          const first = placed.get(cid);
+          if (!first) placed.set(cid, { id, pos });
+          else
+            this.err(
+              chunkFile(dir, c),
+              ["items"],
+              `chest "${cid}" ("${id}") is also at ${formatPos(first.pos)} ("${first.id}"): a chest gives once per character, so each one stands once in the world`,
+              pos,
+            );
+        }
+    }
+  }
+
+  /**
    * Arrivals through portals (docs/02 "Cambiar de piso"): a player lands on `to` or, if it
    * is taken, on the nearest free tile within travel.arrival_radius, which the server finds
    * by rings, not on foot (session freeAround). Every tile that search could pick (walkable,
@@ -1275,7 +1302,27 @@ class WorldValidator {
           "house exit cannot be reached on foot from the temple",
           h.exit,
         );
+    // A reward chest opens from its tile or one next to it (docs/02 "Libros y cofres"), where
+    // a player stands: not the entrance of stairs, a hole or a teleport, which moves it on.
+    const standsNear = (p: Position): boolean => {
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const k = formatPos({ x: p.x + dx, y: p.y + dy, z: p.z });
+          if (reached.has(k) && portals.get(k)?.onStep !== true) return true;
+        }
+      return false;
+    };
+    for (const { c, s, pos } of placedItems(island))
+      for (const id of s.stack)
+        if (this.content.items.get(id)?.chest !== undefined && !standsNear(pos))
+          this.err(
+            chunkFile(dir, c),
+            ["items"],
+            `chest "${id}" cannot be opened: no tile next to it is reached on foot from the temple`,
+            pos,
+          );
     this.warnUnreachableAreas(island, reached, portals);
+    this.checkReachPlaces(island, reached, portals);
     for (const [i, z] of island.zones.entries()) {
       if (z.type === "community_plot") continue;
       const any = z.floors.some((f) =>
@@ -1283,6 +1330,58 @@ class WorldValidator {
       );
       if (!any)
         this.err(`${dir}/zones.yaml`, [i], `zone "${z.id}" has no tile reachable from the temple`);
+    }
+  }
+
+  /**
+   * The place of every reach step of data/quests on this island (docs/06 "Quest") needs a
+   * tile reached on foot from the temple (the BFS of checkReachability) where a player can
+   * stand: walkable, and no entrance of stairs, a hole or a teleport (a step onto one
+   * lands elsewhere). Otherwise the step can never be done, and the quest is stuck there. A
+   * point counts on the island whose rect and floors hold it; a zone, on the island that has
+   * it. The server checks that some such tile is walkable (initReach), not that it is
+   * reached.
+   */
+  private checkReachPlaces(
+    island: Island,
+    reached: Set<string>,
+    portals: Map<string, { onStep: boolean }>,
+  ): void {
+    const meta = island.meta;
+    const stands = (p: Position): boolean => {
+      const k = formatPos(p);
+      return (
+        reached.has(k) &&
+        portals.get(k)?.onStep !== true &&
+        isWalkable(this.tiles.tileAt(p), this.content)
+      );
+    };
+    for (const r of this.content.reaches ?? []) {
+      const path = ["steps", r.step, "complete_when", "reach"];
+      let ok: boolean;
+      let where: string;
+      if (r.zone !== undefined) {
+        const z = island.zones.find((zone) => zone.id === r.zone);
+        if (!z) continue;
+        where = `zone "${r.zone}"`;
+        ok = z.floors.some((f) =>
+          z.rects.some((rect) => anyIn(clip(rect, meta.rect), (x, y) => stands({ x, y, z: f }))),
+        );
+      } else if (r.at) {
+        const { x, y, z } = r.at;
+        if (!rectContains(meta.rect, x, y) || !meta.floors.includes(z)) continue;
+        const radius = r.radius ?? 0;
+        where = `point ${x},${y},${z} radius ${radius}`;
+        const square = { x: x - radius, y: y - radius, w: 2 * radius + 1, h: 2 * radius + 1 };
+        ok = anyIn(clip(square, meta.rect), (tx, ty) => stands({ x: tx, y: ty, z }));
+      } else continue;
+      if (!ok)
+        this.err(
+          r.file,
+          path,
+          `reach step of quest "${r.quest}": no tile of its ${where} on island "${meta.id}" is walkable ground reached on foot from the temple (stairs, holes and teleports count where they land): the step could never be done`,
+          r.at,
+        );
     }
   }
 
@@ -1354,6 +1453,21 @@ class WorldValidator {
 /** The file of chunk c of the island in directory dir. */
 function chunkFile(dir: string, c: Chunk): string {
   return `${dir}/chunks/${floorDir(c.z)}/${chunkFileName(c.cx, c.cy)}`;
+}
+
+/**
+ * Every item stack of the island's chunks (by floor, then chunk row and column) with its
+ * chunk and world position.
+ */
+function placedItems(island: Island): { c: Chunk; s: Chunk["items"][number]; pos: Position }[] {
+  const out: { c: Chunk; s: Chunk["items"][number]; pos: Position }[] = [];
+  const chunks = [...island.chunks.values()].sort(
+    (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
+  );
+  for (const c of chunks)
+    for (const s of c.items)
+      out.push({ c, s, pos: { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z } });
+  return out;
 }
 
 /** The [x, y] of every tile of a rect. */

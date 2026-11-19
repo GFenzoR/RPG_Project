@@ -35,6 +35,7 @@ func TestRealWorldStarts(t *testing.T) {
 		}
 		cfg := dataConfig(t, routes)
 		cfg.Map, cfg.NPCs = m, npcs
+		cfg.Quests = realQuests(t) // every reach step of data/ (dataConfig parks them)
 		w, err := session.New(cfg)
 		if err != nil {
 			t.Fatalf("dev islands %v: %v", dev, err)

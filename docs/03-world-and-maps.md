@@ -133,7 +133,9 @@ lo mismo que el item. Un cartel sin item sigue siendo válido.
   respawn_seconds: 60
 ```
 
-`zones.yaml` (`type`: `protection` | `no_logout` | `pvp` | `no_pvp` | `community_plot`):
+`zones.yaml` (`type`: `protection` | `no_logout` | `pvp` | `no_pvp` | `community_plot`;
+de 1 a 255 `rects` por zona, porque `world.bin` guarda la cantidad en un byte: el esquema,
+`mapcompile` y el servidor rechazan más):
 ```yaml
 - id: puerto_town
   type: protection
@@ -249,6 +251,40 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   el formato canónico. Para construir una casa: `stamp` de los prefabs `house_wood_small` /
   `house_wood_medium` y luego su entrada en `houses.yaml`.
 
+### Muebles y luces (lote 12, rama `feat/town-props`)
+Los pueblos se amueblan con el kit de props de `data/items/decoration.yaml` (docs/17 "Kit
+de props de pueblo") y con lo que ya había (brasero, fuente, antorcha y estandarte de
+pared, muros con ventana). Son items comunes del mapa: se ponen con `mapcli place` o con
+una lista de ops (`place_item`), y el servidor no los ve distinto de un cajón. Reglas de
+quien arma un mapa (las vigila `packages/map-format/src/town-props.test.ts`):
+- **Lo que cuelga de un muro** (`wall_torch`, `wall_banner`) va en la casilla del muro,
+  arriba de él en la pila, y solo en un muro con su cara a la vista: con una casilla abierta
+  al sur (un muro este-oeste, o la punta de roca que asoma en una cueva). En un tramo
+  norte-sur no se ve.
+- **Una ventana** es otro muro (`stone_wall_window`, `wooden_wall_window`): se cambia la
+  pieza (`remove_item` del muro y `place_item` de la ventana con `index: 0`) en un tramo
+  este-oeste, con muro a los dos lados (la ventana se dibuja solo en las piezas con cara
+  de lado a lado, docs/17 ART-3).
+- **En una casa que se alquila, nada fijo bloquea:** solo la cama, el banco y la jardinera
+  (que no bloquean) y las ventanas y lo que cuelga de sus muros, que no son casillas de la
+  casa. Lo que el inquilino deja va al suelo de una casilla caminable (`moveItem`) y se
+  guarda aparte de lo fijo del mapa (`house_items`, solo los items dinámicos de
+  `w.ground`), así que un mueble que no bloquea no le quita lugar ni cuenta para su límite
+  de items.
+- **Nada que bloquee** (un mueble del kit, un brasero, una fuente) en la casilla de un NPC
+  ni al lado, en el centro de un spawn, en un extremo de portal, en una puerta o la salida
+  de una casa, en un cartel o libro de `texts.yaml`, en el templo, ni en las casillas que
+  camina o usa el E2E (la lista `E2E_TILES` del test: si el E2E cambia de camino, se cambia
+  ahí también). Lo demás (que todo se siga alcanzando a pie) lo revisa la validación.
+- **Una cueva lleva una antorcha de pared cada 6 a 8 casillas** en las caras de su roca:
+  ninguna cara a más de 6 casillas (Chebyshev) de una antorcha y ninguna antorcha a menos
+  de 6 de otra; las salas hondas, que las antorchas del muro norte no alcanzan, llevan
+  braseros contra el muro sur. La luz (radio 3 la antorcha, 3,5 el brasero y la fragua)
+  solo se dibuja en pisos subterráneos (docs/17 ART-7).
+- **Un libro sobre una mesa:** la mesa va abajo en la pila (`place_item` con `index: 0`) y
+  levanta al libro 8 px (`elevation`, docs/17 ART-8); "Leer" usa el de arriba, y como la
+  mesa bloquea, nadie le tira nada encima.
+
 ## Prefabs (`world/prefabs/<id>.yaml`)
 Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior
 izquierda en `pos`, sobre un solo piso. `rows` es un dibujo, un carácter por casilla, que
@@ -339,13 +375,13 @@ no de render: el cliente sigue mostrando toda la vista (hasta 31x21) del piso ac
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 6)
+### Formato de `world.bin` (versión 7)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 6
+version      u16 = 7
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -368,6 +404,9 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
   portals    u16 cantidad, luego por portal (en el orden de portals.yaml, v5):
     id u8 largo + bytes, kind u8 (1 stairs, 2 ladder, 3 hole, 4 rope_spot,
     5 teleport, 6 boat), from x u16, y u16, z u8, to x u16, y u16, z u8
+  zones      u16 cantidad, luego por zona (en el orden de zones.yaml, v7):
+    id u8 largo + bytes, floors u8 cantidad + bytes,
+    rects u8 cantidad × (x u16, y u16, w u16, h u16)
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
@@ -378,7 +417,13 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
+- Historial: la versión 7 agregó `zones` por isla: el id, los pisos y los rectángulos de
+  cada zona de `zones.yaml` (de todos los tipos), que antes solo llegaban como flags de
+  casilla. Los usan los pasos `reach: { zone }` de `data/quests` (06-content-data.md,
+  "Quest": `Map.Zone`). `NewMap` rechaza una zona sin id, sin pisos o sin rectángulos, en
+  un piso que su isla no lista o con un rectángulo vacío o fuera de la isla. Un
+  `world.bin` de la versión 6 no carga: vuelve a compilarlo (`make mapcompile`).
+- La versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
   marca cada isla `dev_only` que deja entrar (hoy la Isla de Pruebas) y `Map.DevIslands`
   las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
   él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de
@@ -470,6 +515,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   de una casilla corta el paso a pie y deja aparte lo de atrás), una `ladder` o un
   `rope_spot` es una casilla más que además lleva a su destino, y un `boat` no lleva a
   ningún lado.
+- **Cofres de recompensa** (items con bloque `chest`, `02-game-design.md` "Libros y
+  cofres"): cada `id` de cofre está una sola vez en todo el mundo (da una vez por personaje
+  con ese id: dos copias se abrirían una vez entre las dos), y alguna casilla del cofre o
+  junto a él (a 1, la distancia a la que se usa) es alcanzable a pie desde el templo de su
+  isla, sin contar las entradas de `stairs`/`hole`/`teleport` (nadie se queda parado ahí).
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
 - Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
   `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla
@@ -481,7 +531,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   isla (BFS en 8 direcciones por tiles caminables y portales; una **puerta**, item con
   bloque `door`, cuenta como abierta aunque esté cerrada o con llave: en el juego se abre,
   ver `02-game-design.md` "Puertas con llave"). Zonas sin ningún tile
-  alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+  alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir). El lugar de
+  un paso `reach` de `data/quests` (una zona, o un punto con su radio, en esta isla)
+  necesita una casilla alcanzable, caminable y que no sea la entrada de una escalera, un
+  agujero o un teletransporte: si no, el paso no se cumple nunca (docs/06 "Quest").
 - **Puertas** (`02-game-design.md` "Puertas con llave"; el servidor no arranca con lo que
   aquí es error): un solo item de puerta (bloque `door`) por casilla; advertencia si una
   puerta está colocada abierta (vuelve a estar abierta tras cada reinicio). Cada puerta
@@ -565,6 +618,13 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (escalera en 3176,6322): murciélagos al oeste, galería de vetas de hierro con escarabajos
   al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
   aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
+  Muebles y luces (lote 12, "Muebles y luces" arriba): el templo con braseros a los lados
+  de la puerta este, estandartes, ventanas, bancos y un altar entre jardineras; el depósito
+  con estantes, barriles, sacos, cajones y una mesa; la plaza con la fuente (3170,6387),
+  dos puestos de mercado contra el depósito, faroles, bancos y un mástil con bandera
+  (3163,6380); la armería con estantes y una mesa; cada casa con una cama y ventanas (y
+  jardineras afuera); redes de pesca en la playa del muelle. La mina tiene 28 antorchas de
+  pared y 7 braseros.
   Oficios (T3.4): fragua, yunque y fogón al norte del templo (3166–3172, 6366) y una
   arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377), más dos
   arboledas de 4 (auditoría de contenido M1) en el prado norte (≈3161–3166, 6326–6330) y al
@@ -610,6 +670,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
+  Muebles y luces (lote 12): braseros a los lados de las dos puertas del templo,
+  estandartes, ventanas y bancos; en la plaza la fuente (4159,6111), dos puestos, faroles y
+  un mástil; la curtiduría con estantes, barriles y una mesa; cada casa con una cama y
+  ventanas; un pozo en la arena de las cabañas (4164,6095). La cueva tiene 8 antorchas y 3
+  braseros.
 
 - `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
   `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
@@ -636,6 +701,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `volcan_house_flint` (`house_wood_small` en 3669,5788, al este de la plaza y fuera de su
   zona: su salida da al PvP abierto, como las de Raigal). Tablero del mercado en la plaza,
   3660,5790 (m7).
+  Muebles y luces (lote 12): braseros a los lados de la puerta del templo (adentro) y en
+  las esquinas de su frente, estandartes, ventanas y bancos; en la plaza la fuente
+  (3656,5791), una fila de puestos al noreste, faroles, un pozo y un mástil junto al
+  muelle; el archivo de Casia con estantes y mesas (el libro de la herrera, sobre una);
+  cada casa con una cama y ventanas. La mina tiene 19 antorchas y 7 braseros.
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la

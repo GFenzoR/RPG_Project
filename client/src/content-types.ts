@@ -84,6 +84,20 @@ export interface ItemDef {
   board?: true;
   /** `quest: true` (docs/17 UI-6): a quest item, named in the quest colour. */
   quest?: true;
+  /**
+   * A readable book or scroll (docs/02 "Libros y cofres"): the i18n keys of its title and
+   * pages. Using it opens the reading window with the texts the client already has
+   * (ui/Book.tsx); the server is not asked. Absent on any other item.
+   */
+  book?: BookDef;
+  /** A reward chest of the map (`chest` block): using it asks the server, which gives once. */
+  chest?: true;
+}
+
+/** The `book` block of an item (data/items): i18n keys of i18n/<lang>/books.yaml. */
+export interface BookDef {
+  title: string;
+  pages: string[];
 }
 
 /** The `weapon` block of an item (data/items). */

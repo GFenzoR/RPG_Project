@@ -47,6 +47,51 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	return h
 }
 
+// parkedReach is where parkReachSteps leaves the reach steps of data/ on the test maps: a
+// corner no test walks.
+var parkedReach = pos(62, 62)
+
+// parkReachSteps moves the reach steps of data/quests whose place is not on m (they name
+// the zones and tiles of the real islands, not of the 64x64 test maps) to parkedReach,
+// which session.New would otherwise refuse (initReach). A test that walks one moves it
+// where it wants (chapterThreeHarness). TestRealWorldStarts runs them on the real map.
+func parkReachSteps(quests content.Quests, m *world.Map) {
+	for _, q := range quests {
+		for i := range q.Steps {
+			r := q.Steps[i].CompleteWhen.Reach
+			if r == nil {
+				continue
+			}
+			if r.Zone != "" {
+				if _, z := m.Zone(r.Zone); z != nil {
+					continue
+				}
+			} else if *r.X >= 0 && *r.X <= 0xFFFF && *r.Y >= 0 && *r.Y <= 0xFFFF && *r.Z >= 0 && *r.Z <= world.MaxFloor &&
+				m.IslandAt(world.Pos{X: uint16(*r.X), Y: uint16(*r.Y), Z: uint8(*r.Z)}) != nil {
+				continue
+			}
+			placeReach(r, parkedReach, 0)
+		}
+	}
+}
+
+// realQuests are the quests of data/ as they are, for a test that runs the real map (the ones
+// of dataConfig wait at parkedReach).
+func realQuests(t testing.TB) content.Quests {
+	t.Helper()
+	qs, err := content.LoadQuests(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return qs
+}
+
+// placeReach makes r the tiles within radius of at.
+func placeReach(r *content.Reach, at world.Pos, radius int) {
+	x, y, z := int(at.X), int(at.Y), int(at.Z)
+	*r = content.Reach{X: &x, Y: &y, Z: &z, Radius: &radius}
+}
+
 // dropDialogTeleports takes out of the dialogs of data/ the teleports that land on no
 // walkable tile of m (the sandbox ferryman's, docs/16, point at the real islands, not at the
 // 64x64 test maps), which session.New would refuse (checkArrivals). The real boat routes
@@ -98,6 +143,7 @@ func dataConfig(t testing.TB, routes content.BoatRoutes, spawns ...world.Spawn) 
 	quests, err := content.LoadQuests(dir)
 	must(err)
 	m := worldtest.Open(t, 0, 0, 64, 64)
+	parkReachSteps(quests, m)
 	npcs, err := content.LoadNPCs(dir)
 	must(err)
 	dropDialogTeleports(npcs, m)

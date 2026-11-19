@@ -59,7 +59,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 
 | Sector | Dónde | Qué hay |
 |---|---|---|
-| Templo | 2091–2099 × 2084–2090 (puerta al sur) | Donde despiertas (2095,2086). **Irene Ensayo**, instructora (2093,2085): experiencia, entrenamiento, dinero, curación y una misión. Zona de protección con la plaza |
+| Templo | 2091–2099 × 2084–2090 (puerta al sur) | Donde despiertas (2095,2086). **Irene Ensayo**, instructora (2093,2085): experiencia, entrenamiento, dinero, curación y una misión. En la esquina noreste, un atril con un libro (2099,2084), un cofre de recompensa (2098,2084) y un pergamino en el suelo (2097,2084). Zona de protección con la plaza |
 | Plaza | 2083–2107 × 2092–2103 | **Tobías Muestra**, proveedor, en el puesto del oeste (2086,2100). Tablero del mercado (2091,2103). Cartel del templo (2093,2092) |
 | Caza (norte) | Corrales 2076–2119 × 2073–2079, sendero en y 2080–2081 | De oeste a este y de débil a fuerte: 1 ratas de sentina, 2 lobos, 3 jabalíes y una araña, 4 espinosos, 5 un dragoncillo de ascua. Cartel en 2084,2082 |
 | Recolección y oficios (oeste) | Camino en y 2097–2098 | Cantera con vetas de hierro (2064–2071 × 2087–2094), abedules (2074–2080 × 2086–2094), taller con fragua (2070,2102), yunque (2073,2102) y fogón (2076,2102), muelle de pesca (2052–2055 × 2097–2098) con agua con peces alrededor. Cartel en 2080,2096 |
@@ -122,9 +122,45 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    ratas de la misión) y vuelve con la instructora para cerrarla. Sigue hacia el este solo
    si tu nivel da: el corral 5 mata a un personaje de nivel bajo. Si algo te persigue,
    vuelve a la plaza: en la zona de protección nadie ataca.
+   - **Diario de misiones y tareas** (docs/02 "Diario de misiones y tareas"): abre
+     "Misiones" con la tecla **L** o el libro de la botonera (en el teléfono, la pestaña
+     "Misiones"). Al aceptar "Ratas de práctica" aparece en "Activas" con su paso y "0/3";
+     cada rata suma una ("1/3", "2/3") y la tercera cambia el paso a "Vuelve con Irene
+     Ensayo". Es una **tarea repetible** con tres minutos de espera: entregada, pasa a
+     "Terminadas" con "Disponible otra vez en 2 min 59 s" (cuenta hacia atrás) e Irene
+     solo ofrece "¿Hay más ratas?" (todavía no). Pasados los tres minutos el diario dice
+     "Disponible otra vez" e Irene vuelve a ofrecer el encargo: empieza otra vez en "0/3" y
+     paga otra vez 200 de experiencia y 50 monedas.
+   - **Tareas de caza de verdad** (docs/02 "Tareas"): no están en esta isla. Las dan Fenn
+     Zarzal en Raigal (borde este de la plaza, `/tp 4173 6108 7`; contrabandistas desde el
+     nivel 15, espinosos desde el 18, reptantes desde el 22) y Orso Pedernal en Brasal
+     (borde norte de la plaza, `/tp 3655 5785 7`; sabuesos desde el 26, gólems desde el 39,
+     dragoncillos desde el 48): ve con Remo Vaivén o con `/tp`, sube de nivel con Irene antes
+     de salir y pide "¿Qué paga el tablón?" o "¿Qué presas hay en el libro?". Cobrada, la
+     tarea espera 20 horas; para no esperar, con el personaje fuera del juego, adelanta la
+     entrega con `psql` sobre la base de `make play`: `UPDATE quest_state SET value = value
+     - 72000 WHERE character_id = <id> AND key = 'quest.bounty_crawlers.done_at'` (o la que
+     sea). Las quests secundarias del lote 12 (docs/02 "Quests secundarias") las dan Tavin y
+     Gisla en Raigal y Nerea, Bram y Madre Oriela en Brasal. La de Tavin (`ferryman_jetty`)
+     pide además `ch2_roots` (Capítulo 2) completada; sin jugarlo, con el personaje
+     fuera del juego: `INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
+     'quest.ch2_roots', 2)`.
+   - **Llegar a un lugar** (un paso `reach`): hay tres, todos fuera de esta isla:
+     `reach_gate` de `ch3_gate` (la antesala de la puerta sellada, en la mina de la Isla
+     Volcánica), `see_jetty` de `ferryman_jetty` (el embarcadero de los contrabandistas,
+     `/tp 4253 6140 7`, justo al oeste de las tablas, que en esa fila empiezan en 4254: un
+     paso al este lo cumple) y
+     `reach_heart` de `flame_crater` (la orilla del lago de lava del cráter, alrededor de
+     3714,5756). El de la mina, paso a paso: para verlo sin jugar los capítulos, con el
+     personaje fuera del juego, ponle la quest en ese paso con `psql` sobre la base de
+     `make play` (`INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
+     'quest.ch3_gate', 1), (<id>, 'quest.ch3_gate.step', 3)`), entra, hazte gm (sección 5)
+     y ve a la mina con `/tp 3691 5818 8`: el diario dice "Baja hasta la antesala..."; al
+     entrar a la antesala por el pasillo (4 pasos al sur, a 4 casillas o menos del eco de
+     la forja, 3692,5826,8) pasa a "Muéstrale la raíz de ascua al eco". Un `/tp` directo a la antesala también cuenta.
    - Lo que juegan los tests (sección 8), como referencia: corral 1, un guardián de nivel
      1 con hacha de mano; corral 2, un montaraz de nivel 8 con arco corto y flechas;
-     corral 3, una arcanista de nivel 20 con varita de coral; corrales 4 y 5, un druida de
+     corral 3, una arcanista de nivel 20 con varita de coral y 20 cataplasmas; corrales 4 y 5, un druida de
      nivel 50 que lanza "glacies hasta" (lanza de escarcha: crece con el nivel), uno por
      corral: el del 4 se trae detrás al otro espinoso, y los dos con el dragoncillo matan a
      un druida. Un guardián de nivel 21 con espada de hierro, escudo y 20 cataplasmas
@@ -178,6 +214,18 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    más. Una pieza ofrecida en el intercambio no se puede refinar hasta sacarla; lo que está
    publicado en el mercado no está en la mochila. Para probar muchos intentos seguidos sin
    gastar tanto, compra piezas de nivel 1 (las más baratas de refinar).
+4c. **Libros y cofres (la esquina noreste del templo; docs/02 "Libros y cofres").** Párate
+   en 2099,2085, junto al atril y al cofre. Usa el atril (click derecho → "Leer", o doble
+   click): se abre la ventana de lectura con «Los remeros del Farol»; pasa las páginas con ‹ ›
+   (abajo dice "Página 2 de 3") y ciérrala con Escape o ×. Lo mismo el pergamino del suelo
+   (2097,2084, «Manifiesto del Alba Tardía», dos páginas). Mayús+click sobre ellos da su
+   descripción de una línea. Usa el cofre: "Abres el cofre y encuentras: …" con lo
+   que trae (5 monedas de plata, 2 piedras de temple menores, 2 brebajes de vida y una
+   espada de hierro, con su atributo al azar: pasa el mouse por ella); úsalo otra vez: "El cofre está vacío".
+   Cada personaje lo abre una vez: para repetirlo, crea otro. Para probar que no da nada
+   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías)
+   y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera lugar y vuelve a
+   usarlo. Los libros y cofres de las islas de verdad están en la tabla de docs/02.
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
    vender (un selector por atributo) y la oferta sale con su atributo en el listado; una
@@ -255,7 +303,7 @@ un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
 
 | Test | Qué juega |
 |---|---|
-| `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación de vida y maná y la misión de las ratas de punta a punta |
+| `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación de vida y maná y la misión de las ratas de punta a punta: entregada, el diario la muestra esperando tres minutos, Irene solo dice que el corral se está llenando, y pasados los tres minutos se toma y se cobra otra vez |
 | `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que en ninguna tienda de `data/` se gane dinero comprando y revendiendo, tampoco pasando por una receta |
 | `TestSandboxPens` | Cada corral con una vocación hasta que deja botín (ver arriba qué hace falta en el 4 y el 5) |
 | `TestSandboxTraining` | El guardián de nivel 21 que muere en el corral 4 con las skills en 10 y sobrevive entrenado por la instructora ("El combate"); el entrenamiento nunca baja una skill |

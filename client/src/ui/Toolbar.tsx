@@ -1,5 +1,5 @@
 // The toolbar of the desktop game screen (docs/17 UI-5): icon buttons, Tibia-like, in the
-// bottom bar (ui/HudBar.tsx, two rows of five beside the hotbar, one row on wide screens),
+// bottom bar (ui/HudBar.tsx, two rows of six beside the hotbar, one row on wide screens),
 // that open and close the windows (ui/windows.ts), plus the market and leaving the game.
 // Each button names its window and key in its tooltip and in aria-keyshortcuts.
 import type { JSX } from "preact";
@@ -13,6 +13,7 @@ import type { WindowId, WindowsState } from "./windows.ts";
 export const TOOLBAR: readonly { id: WindowId; icon: IconName }[] = [
   { id: "inventory", icon: "inventory" },
   { id: "skills", icon: "skills" },
+  { id: "quests", icon: "journal" },
   { id: "battle", icon: "battle" },
   { id: "party", icon: "party" },
   { id: "guild", icon: "guild" },

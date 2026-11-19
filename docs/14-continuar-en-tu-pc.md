@@ -98,6 +98,153 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
+  `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
+  docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al
+  caminar, al reubicarse y al entrar), `repeatable: { cooldown_hours }` (`done_at` del reloj
+  del loop, recompensa cada vez, `quest_state` `available` y `cooling_down`), el mensaje
+  `QuestLog` y la ventana "Misiones" (L). `world.bin` pasó a la versión 7 (las zonas por
+  id). Como prueba: el paso `reach_gate` de `ch3_gate` y la tarea de práctica de la Isla de
+  Pruebas (3 minutos). Queda:
+  - **Las tareas de caza y las quests secundarias** del Bosque y del Volcán ya están (rama
+    `feat/side-quests`, el punto siguiente). Tras la revisión de esta rama, `make validate`
+    y el servidor rechazan un lugar `reach` sin casilla caminable (y `make validate`, uno
+    que no se alcanza a pie desde el templo) y las tareas que se cumplen solas al tomarlas
+    (docs/06 "Quests repetibles": `has_item` sin entrega que lo quite, `flag_equals` que
+    pone su propia recompensa, o empezar con un `dialog_action` de quien la da o un `reach`
+    a 3 casillas de él).
+  - **El `QuestLog` va entero con cada cambio** (también con cada muerte que cuenta un paso):
+    docs/07 lo midió con las 20 quests de hoy (1937 B con todas empezadas,
+    `TestQuestLogSize`). Ese test falla pasando 4096 B (unas 42 quests empezadas a la vez):
+    ese día, mandar solo la entrada que cambió (un delta; cambia el protocolo).
+  - **Zonas sin reglas:** `reach: { zone }` toma cualquier zona de `zones.yaml`, pero hoy
+    todos sus tipos tienen reglas (protección, no-logout, pvp, no_pvp, parcela). Para nombrar
+    una cueva o un santuario sin cambiar sus reglas hace falta un tipo `area` (sin flags) en
+    `packages/map-format`, `mapcompile` (`zoneFlags`), el editor y `mapcli`; mientras, el
+    punto con radio.
+  - **Un `world.bin` de la versión 6 no carga:** `make mapcompile` (lo corren `make play`,
+    `make dev` y el E2E).
+  - **Personajes guardados en el viejo `open_gate` de `ch3_gate`** (índice 3) quedan en
+    `reach_gate`: el eco está en la antesala, así que al bajar a hablarle el paso se cumple
+    solo y siguen igual. Nadie queda trabado (lo juega `TestReachStepAtLogin` con otra
+    quest: estar ya en el lugar al entrar también cuenta).
+  - **E2E (verificación final del lote 12):** "sandbox: the quest log, a lectern's book and
+    a reward chest that gives once" (`client/e2e/sandbox.spec.ts`) siembra el capítulo 1 en
+    2/6 lobos y la tarea de práctica recién hecha, y abre "Misiones" desde la botonera
+    (capturas `96-sandbox-quests`, "Activas (1)" con 2/6, y `96b-sandbox-quests-finished`,
+    "Disponible otra vez en 2 min 59 s"). Ningún spec acepta todavía una quest en un diálogo
+    ni ve contar una muerte en el diario: lo natural es extender "T3.6: wake up at the
+    temple of Raigal and talk to the druid" (`client/e2e/game.spec.ts`, ya siembra
+    `quest.ch1_shipwreck = 2`) aceptando `ch2_roots`.
+  - **El diario no cuenta las veces** que se hizo una tarea ni guarda cuándo se terminó una
+    quest que no es repetible: no hay dónde mostrarlo todavía y serían más filas de
+    `quest_state` por personaje.
+  - **Una tarea que corre de nuevo vuelve a `in_progress`:** una ruta de barco o una
+    condición `completed` sobre ella deja de valer mientras corre (docs/06). Ninguna lo hace.
+  - **La botonera tiene dos filas de seis** (once botones con el diario; una fila de once
+    desde 1600 px): a 960x700 la hotbar muestra un slot menos que antes.
+- **Pueblos amueblados y minas con luz (hecho, rama `feat/town-props`, lote 12; docs/17
+  "Kit de props de pueblo", docs/03 "Muebles y luces"):** un kit de doce props del motor
+  de sprites (barril, mesa, banco, estante, cama, farol, pozo, sacos, red de pesca,
+  jardinera, puesto de mercado con toldo que flamea y mástil con bandera que ondea);
+  templos, plazas, depósito, tiendas y las 13 casas del Farol, Raigal y Brasal amueblados;
+  una fuente por plaza, braseros, estandartes y ventanas en los templos; antorchas de
+  pared cada 7 casillas y braseros en las minas de Puerto, Bosque y Volcán. Queda:
+  - **E2E (verificación final del lote 12):** el amueblado se ve en las capturas del Farol
+    (`12b`, `13`, `14`, `43`: braseros, estandartes, ventanas, bancos, el atril, el mástil y
+    la plaza), de Raigal (`31` a `33`), de Brasal (`65`, `66`: el archivo con estantes y el
+    atril), de la casa (`56` a `59`: cama, ventanas, jardineras; la mochila sigue cayendo
+    libre) y del piso 8 (`70-forge-gate-open`: la antorcha junto a la puerta de la forja
+    con su luz). Sin captura: la mina del Farol y la cueva del Bosque, y las antorchas de la
+    sala de entrada de la mina del Volcán (y 5787) quedan fuera de `74-volcan-mine-floor-8`.
+  - **La luz en el juego:** `mapcli render` muestra el frame 0 sin la capa de luz; que las
+    antorchas (radio 3) y los braseros (3,5) se vean en la oscuridad de las minas se mira
+    en el E2E o con `make play` bajando la escalera de la mina del Farol (3176,6322).
+  - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar del Farol es playa
+    abierta con el muelle; queda para un pueblo amurallado de una isla nueva.
+  - **El farol no alumbra en la superficie** (la capa de luz solo dibuja en z ≥ 8 y no hay
+    noche): si llega un ciclo de día y noche, ya tiene su `light`.
+  - **Una casa no se puede amueblar con más fijo que bloquee:** cama, banco y jardinera
+    son lo único que va adentro (docs/03); una mesa o un estante fijo le quitaría casillas
+    al inquilino. Muebles que el jugador compre y ponga son otra tarea (decoración de casas,
+    fuera de alcance de T5.4).
+  - **Los ids del kit son 324–335** en `data/ids.lock.yaml`: si otra rama del lote suma
+    items, el que apile las ramas vuelve a correr `make gen-ids` sobre la suma (el archivo
+    es append-only; nunca se reusa un número).
+  - **Si el E2E cambia de camino** en un pueblo, `E2E_TILES` de
+    `packages/map-format/src/town-props.test.ts` se cambia también, y ninguna pieza que
+    bloquee puede quedar en esas casillas.
+- **Libros y cofres (hecho, rama `feat/chests-books`, lote 12; docs/02 "Libros y cofres"):**
+  nueve libros y pergaminos con lore (templos, el archivo de Casia, el atril de Velia, el
+  naufragio, la cueva de los contrabandistas y la mina inundada) y cinco cofres que dan una
+  vez por personaje (la mina de Puerto, el bosque de Puerto, el nido de la cueva del
+  Bosque, la mina del Volcán pasando los gólems y el templo de la Isla de Pruebas). Queda:
+  - **E2E (verificación final del lote 12):** el spec nuevo de `e2e/sandbox.spec.ts` camina
+    a 2099,2085, lee el atril con "Leer" (página 1 de 3, pasa a la 2, Escape la cierra,
+    `__rpgClient.book()`) y abre el cofre dos veces: `chest.found` con las cuatro
+    recompensas y después `chest.empty` (capturas `97-sandbox-book` y `98-sandbox-chest`).
+    Sin E2E: el pergamino del suelo y `chest.no_room` (los cubren los tests del servidor y
+    del cliente).
+  - **Un cofre se ve siempre cerrado:** verlo abierto solo quien ya lo abrió pide estado
+    del mapa por personaje; el servidor lo dice con el mensaje. Si un día se quiere, el
+    cliente podría recordar los cofres abiertos de la sesión, pero no sabe de los de antes.
+  - **Un libro se lee desde cualquier casilla a la vista**, como un cartel: la ventana es
+    del cliente y el texto no tiene secretos. Si el dueño prefiere tener que acercarse, es
+    una regla del cliente (la distancia de `reach`).
+  - **Las páginas se pasan con los botones:** las flechas siguen caminando (la ventana no
+    toma el teclado). Un atajo (Re Pág / Av Pág) es fácil de sumar.
+  - **Un libro o pergamino en el suelo se puede tapar:** los que no bloquean su casilla
+    (los pergaminos; el libro cerrado del archivo ya está sobre una mesa, que bloquea) quedan debajo de lo que alguien tire
+    encima o de un cadáver, y "Leer" (o el click derecho) de la casilla usa el item de
+    arriba (`tileUse`). Se lee de nuevo cuando eso se levanta o se pudre; el menú de la
+    casilla solo ofrece el de arriba (`menuItem`). Es aceptable; si molesta, la casilla
+    podría preferir el libro aunque tenga algo encima (como la escalera de mano con
+    `climbable`) o los libros podrían bloquear su casilla.
+  - **El `id` de un cofre queda fijado** en `data/ids.lock.yaml` (`chests`): es la clave
+    del storage de quien lo abrió, así que `make validate` rechaza renombrarlo o
+    reutilizarlo, y `mapcli validate` que un cofre esté dos veces en el mundo o sin una
+    casilla alcanzable al lado (docs/06 "Libros y cofres").
+  - **El libro cerrado del archivo está sobre una mesa** (hecho en `feat/town-props`: la
+    mesa del kit va debajo en la pila y lo sube 8 px; nadie le tira nada encima).
+  - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.
+- **Quests secundarias y tareas de caza (hecho, rama `feat/side-quests`, lote 12, sobre
+  `feat/quest-engine`; docs/02 "Quests secundarias" y "Tareas"):** cinco quests
+  secundarias con NPCs que ya estaban (Tavin y Gisla en Raigal, 22–28; Nerea, Bram y Madre
+  Oriela en Brasal, 30–33 y 42–48), con pasos `reach` (el embarcadero de los
+  contrabandistas, el lago de lava del cráter), un `flag_equals` (la brasa de la Llama
+  Quieta) y una que termina en su muerte (`flame_crater`, que ahora usa
+  `TestHouseRuneKillsAQuestMonsterFromTheStreet`); y seis tareas de caza de 20 horas con
+  dos NPCs nuevos, Fenn Zarzal (Raigal, 4173,6106) y Orso Pedernal (Brasal, 3655,5783), con
+  sprites de LPC compuestos de capas que ya estaban (`npcs/hunter_forest`, CC-BY-SA;
+  `npcs/hunter_volcanic`, OGA-BY). Recompensas medidas contra la caza simulada
+  (`sim/balance_tasks_test.go`). Queda:
+  - **Las casillas de los dos NPCs nuevos** son de `feat/town-props`, que amuebla los
+    pueblos en paralelo: Fenn en 4173,6106 (pasto al este de la plaza de Raigal) y Orso en
+    3655,5783 (basalto al norte de la plaza de Brasal). Un NPC nunca deja su casilla, pero
+    hay que dejarla libre y caminable, y alcanzable para hablarle (3 casillas). Si al
+    juntar las ramas un prop cae ahí, se mueve el NPC (`npcs.yaml`) o el prop.
+  - **`TestSandboxPens` es sensible a los ids de criatura:** sumar dos NPCs en el Bosque y el
+    Volcán corre los ids de los monstruos de la Isla de Pruebas, y la arcanista del corral 3
+    se quedaba sin cataplasmas (10) en una tirada peor: ahora lleva 20. Cualquier rama que
+    sume NPCs o spawns puede volver a moverlo; el arreglo de fondo sería que la simulación no
+    dependa del orden de los ids.
+  - **Del 48 en adelante** solo queda la tarea de los dragoncillos: la próxima isla (banda
+    5) trae sus quests. El sello de la aduana de Puerto (`ferryman_jetty`) deja abierto quién
+    abastece a los contrabandistas: es un gancho para un capítulo o una quest futura.
+  - **Música:** ninguna quest secundaria tiene `music`; el cráter la merecería con un tema
+    propio (`flame_crater`, docs/06 "Música de una quest importante").
+  - **La recompensa de `flame_crater` puede caer al suelo del cráter** (revisión final del
+    lote 12, sin cambio): la quest termina en su muerte y paga donde está el jugador; si el
+    amuleto no entra, cae en zona hostil y otro jugador puede levantarlo (`holdGround` solo
+    protege durante un transfer sin confirmar). La experiencia va primero y lo atenúa. Si el
+    dueño prefiere cerrarlo, el pago pasa a la vuelta con Madre Oriela (un paso
+    `dialog_action`), y `TestHouseRuneKillsAQuestMonsterFromTheStreet` necesita otra quest
+    que termine en una muerte (vuelve a ser una del test).
+  - **E2E (verificación final del lote 12):** Fenn Zarzal se ve con su sprite de LPC y su
+    nombre no pisa el de la druida (`32-bosque-plaza`, `33-bosque-druid`); el camino de T3.6
+    no choca con él. Ningún spec habla todavía con Fenn ni con Orso ni abre el tablón: lo
+    natural es extender "T3.6: wake up at the temple of Raigal and talk to the druid" con
+    Fenn (está a 4 casillas del camino que recorre ese spec) y sacar la captura del tablón.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
   tienen su propio ícono de 32x32, una banda con su material y su acento; ya no se usa
@@ -994,8 +1141,9 @@ el punto 5:
       medir (no hace falta `--fresh` ni subir `ANALYSIS`).
     - **Música de quest por paso:** una quest importante ya puede tener música en un lugar
       (`music` en su YAML, docs/06), pero ninguna la usa (falta un tema propio para
-      pedirle a Gemini) y el cliente no sabe en qué paso va el jugador: una música que
-      dependa del paso necesita que el servidor lo mande (un campo en el protocolo).
+      pedirle a Gemini). El cliente ya sabe en qué paso va el jugador (`QuestLog`, el
+      diario de misiones): una música que dependa del paso solo necesita su campo en
+      `music` y que `questPoolAt` lo mire.
     - **Safari/iOS y el WKWebView de macOS:** la música suena por un `<audio>` conectado a
       Web Audio, que arranca después del primer gesto. Chromium (y el E2E) lo hacen sin
       problema. WebKit pide un gesto por elemento: el motor crea sus cuatro elementos en el
@@ -1150,9 +1298,12 @@ el punto 5:
   - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
     del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
     muertes cuya recompensa no entra) lo juega `TestHouseRuneKillsAQuestMonsterFromTheStreet`
-    con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
-    ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
-    alguna llega a terminar en una muerte, conviene pasar el test a ella.
+    con la runa, el monstruo, la quest y la recompensa de `data/`: desde el lote 12, la
+    quest secundaria `flame_crater` (rama `feat/side-quests`), que termina en su paso
+    `kill` (antes era una quest del test: ninguna de `data/` terminaba en una muerte). El
+    dragoncillo llega con un punto de vida y el amuleto y las monedas de la recompensa caen
+    a los pies de Ana (nivel 60 y sin capacidad: la experiencia, que va primero, no le
+    sube el nivel ni, con él, la capacidad).
 - **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:

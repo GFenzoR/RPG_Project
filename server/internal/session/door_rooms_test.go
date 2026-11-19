@@ -374,7 +374,7 @@ func TestRoomsOnTheMap(t *testing.T) {
 	at8 := func(x, y int) world.Pos { return world.Pos{X: uint16(x), Y: uint16(y), Z: 8} }
 	gate, forge := at8(3692, 5832), at8(3692, 5840)
 	cfg := dataConfig(t, routes)
-	cfg.Map = m
+	cfg.Map, cfg.Quests = m, realQuests(t)
 	w, err := session.New(cfg)
 	if err != nil {
 		t.Fatalf("the real world: %v", err)

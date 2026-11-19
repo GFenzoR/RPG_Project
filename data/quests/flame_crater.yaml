@@ -1,0 +1,25 @@
+id: flame_crater
+name: quest.flame_crater.name
+min_level: 45
+notes: >-
+  Side quest from volcan_priest, Madre Oriela (lote 12, levels 45-48). The Still Flame was
+  lit at the lava lake in the heart of the crater; since the mountain woke, the ember
+  wyrmlings nest there and the temple's flame gutters. Climb into the crater to the edge
+  of the lava lake (a reach step: 3714,5756 within 2, between the rim and nest spawns) and
+  thin the nest (6 ember wyrmlings, levels 48-58): the quest ends on that kill, where the
+  player stands (the rewards reach the backpack, or the floor if they do not fit), and
+  Oriela thanks you afterwards. The experience comes first: the level-up it may bring
+  raises the capacity, so the cinder amulet after it fits (TestFlameCraterSideQuest).
+  Rewards: ~12 % of the experience from 45 to 48 and about 6 minutes of a wyrmling hunt's
+  loot.
+steps:
+  - id: reach_heart
+    description: quest.flame_crater.step_reach_heart
+    complete_when: { reach: { x: 3714, y: 5756, z: 7, radius: 2 } }
+  - id: thin_nest
+    description: quest.flame_crater.step_thin_nest
+    complete_when: { kill: { monster: ember_wyrmling, count: 6 } }
+rewards:
+  - { xp: 28000 }
+  - { item: cinder_amulet }
+  - { gold: 1800 }

@@ -1,0 +1,56 @@
+# Books and scrolls that can be read (docs/02 "Libros y cofres"): the title and pages of each
+# item with a book block in data/items/exploration.yaml. The client shows them in its reading
+# window; the server never sends them. Our own texts: the history of the sunken empire and
+# of the islands, consistent with what the NPCs and the quests tell.
+
+# Temple of the Lantern, Puerto.
+book.book_lantern_rowers.title: "The Rowers of the Lantern"
+book.book_lantern_rowers.page_1: "This is what the first people of the Lantern told, and we repeat it every year on the longest night. When the empire's land split open and the sea poured into its streets, those who reached the boats rowed with no heading. There were no stars: the smoke of the sinking city hid every one."
+book.book_lantern_rowers.page_2: "On the third day, when no fresh water was left, they saw a light low over the water, still, that did not move with the waves. They rowed toward it all night. At dawn the light was gone, and before them lay the beach of this island."
+book.book_lantern_rowers.page_3: "No one ever learned who lit it. That is why the Lantern burns in this temple and never goes out: so that no one else is lost at sea. And that is why no wrong is worse than lighting a lamp to deceive a ship."
+
+# Temple of the Root, Raigal.
+book.book_root_below.title: "What the Root Holds Up"
+book.book_root_below.page_1: "Before Raigal there was the forest, and before the forest, the tree. Those who came from the sea found no temples and no roads: only roots as thick as a house, reaching deeper than any well."
+book.book_root_below.page_2: "The first druids learned to listen to the earth with a hand on the root. They say the earth remembers everything that passes over it, and that sometimes it complains of things brought from far away. At the Farol they look to the sea; here we look down."
+book.book_root_below.page_3: "We plant two elms for every one we fell. We pray to no one with a name: we ask the tree to keep holding the island up when we are gone."
+
+# Temple of the Still Flame, Brasal.
+book.book_still_flame.title: "The Still Flame"
+book.book_still_flame.page_1: "The mountain was burning before Brasal existed. Those who came to work at its feet learned two things: that fire feeds you, and that fire that moves kills."
+book.book_still_flame.page_2: "That is why the flame on this altar does not flicker. We keep it sheltered from the wind and ask the same of the mountain: that its fire stay where it is. When the mountain breathes, we light one more candle."
+book.book_still_flame.page_3: "We also pray for those who go down to look for the fire under the stone. Some fires belonged to others, and not all of them want to come back to new hands."
+
+# Casia's archive, Brasal.
+book.book_forge_register.title: "Register of the Forge, Third Volume"
+book.book_forge_register.page_1: "A copy made in Brasal of what was saved from the old registers. The original pages burned; what follows was dictated from memory by the children of the last stokers."
+book.book_forge_register.page_2: "The great forge lay under the mountain, and it did not belong to Brasal: Brasal belonged to the forge. The town was born to give it coal, ore and hands. The pieces that came out of it bore its mark, and the doors that led to it were locked with keys of tempered stone."
+book.book_forge_register.page_3: "On the night the sea swallowed the empire, the forge went out. Or so they wrote. Further down, in another ink, someone added: \"It did not go out. It left.\" No one signed that line."
+
+book.book_smith_notes.title: "Notes of a Smith of Brasal"
+book.book_smith_notes.page_1: "For whoever inherits the anvil. Ember ore is not worked like iron: it only softens at white heat and cracks if it cools all at once. Three parts ore, one iron ingot to give it body and one elm log from the Forest so the fire burns even."
+book.book_smith_notes.page_2: "The old marks of the forge are not decoration. My mother taught me to know them, as her mother taught her: the flame inside the ring is the mark of the great forge, the one they put on the keys to its doors. If you ever see that mark on something, do not sell it."
+book.book_smith_notes.page_3: "One more piece of advice: do not push a piece beyond what it can bear. Up to the fourth temper the steel obeys; after that, every blow is a wager, and the anvil does not give back what it breaks."
+
+# Velia's reading stand, Raigal.
+book.book_trail_notebook.title: "Notebook of Trails"
+book.book_trail_notebook.page_1: "The tracking lantern burns glowcap. Its light does not show what is there, but what passed: yesterday's footprints, a branch someone pushed aside, the weight someone dragged. It burns out fast; you have to read quickly."
+book.book_trail_notebook.page_2: "Since the last moon the earth to the east has been complaining. It is not an animal or a fire: it is something old that does not belong here, and that the earth does not want. The roots shy away from it as from a hot stone."
+book.book_trail_notebook.page_3: "I write it down so as not to forget: what they brought from the sea weighs more than it looks and is warm. If it is what I think, this forest cannot keep it. What it opens lies where the stone burns."
+
+# The wreck of the Late Dawn, Puerto.
+book.scroll_dawn_manifest.title: "Manifest of the Late Dawn"
+book.scroll_dawn_manifest.page_1: "The Late Dawn, from Farol to the Forest Isle. Cargo: twenty sacks of salt, twelve coils of rope, water barrels and one sealed coffer, no sender and no addressee. The coffer is paid at triple the rate, in advance, and is not to be opened."
+book.scroll_dawn_manifest.page_2: "Note by the bosun, E. Sall: whoever paid for the coffer gave no name. The coins were old and worn, with a seal I do not know. He asked us to sail by night and to follow the light on the northern rocks to come in. The lantern on the point is not on those rocks."
+
+# The smugglers' cave, Bosque.
+book.scroll_burnt_oar_log.title: "Log of the Burnt Oar"
+book.scroll_burnt_oar_log.page_1: "Third night. The lamp on the rocks did its work and the Farol ship broke apart on the reef. The beach crew got the coffer out before anyone else. We crossed to the Forest in the flagless boat, as agreed."
+book.scroll_burnt_oar_log.page_2: "The coffer warms your hands even shut. We took it down to the cave on the shore until they come for it: the crawlers let no one through, and that suits us. Every load is marked on the tallies, with the sign of the oar."
+book.scroll_burnt_oar_log.page_3: "The one who pays never comes to the island. Word is the coffer goes to the smoking mountain, where others are already digging. He pays in old coins. As long as he pays, I ask nothing."
+
+# The flooded gallery of the mine, Puerto.
+book.scroll_drowned_wall.title: "What We Saw Behind the Wall"
+book.scroll_drowned_wall.page_1: "Doran says not to write this down, but someone has to. Picking at the deep vein, the rock rang hollow. Behind it there was no rock: there was carved stone, smooth, with letters no one could read."
+book.scroll_drowned_wall.page_2: "We opened a hole the size of a man. On the other side a stair went down, and at the foot of the stair there was a door shut from the inside. Before we could touch it, the water began to come in through the joints. Salt. Cold."
+book.scroll_drowned_wall.page_3: "We ran. Not all of us. The ones who stayed are still digging down there, in the water, as if no one had told them the shift was over."

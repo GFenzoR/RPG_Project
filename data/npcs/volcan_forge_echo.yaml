@@ -3,10 +3,11 @@ name: npc.volcan_forge_echo.name
 sprite: npcs/forge_echo
 notes: >-
   What is left of the forge's last smith, bound to the sealed gate at the bottom of the
-  mine (Chapter 3). Reaching it is the "go to a place" of ch3_gate; it takes the ember
-  root and shapes it into the ember key that opens the forge gate (a locked door,
-  data/items/doors.yaml) (open_gate), then it starts ch3_warden. Whoever finished ch3_gate
-  and lost the key gets another one here, one at a time.
+  mine (Chapter 3). Reaching it completes reach_gate of ch3_gate (a reach step: the tiles
+  within 4 of it, docs/06 "Quest"); then it takes the ember root and shapes it into the
+  ember key that opens the forge gate (a locked door, data/items/doors.yaml) (open_gate),
+  then it starts ch3_warden. Whoever finished ch3_gate and lost the key gets another one
+  here, one at a time.
 dialog:
   start: greet
   nodes:

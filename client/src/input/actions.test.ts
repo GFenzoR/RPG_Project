@@ -38,6 +38,15 @@ describe("defaultAction (the text beside the cursor, docs/17 MOV-7)", () => {
     ).toBe("use");
     expect(defaultAction({ item: { container: false }, known: true })).toBe("use"); // loose
   });
+
+  it('reads a book or scroll and opens a reward chest (docs/02 "Libros y cofres")', () => {
+    const book = { container: false, fixed: true, usable: true, book: true };
+    const chest = { container: false, fixed: true, usable: true, chest: true };
+    expect(defaultAction({ item: book, known: true })).toBe("read");
+    expect(defaultAction({ item: chest, known: true })).toBe("open");
+    expect(itemPrimary({ container: false, book: true })).toBe("read");
+    expect(tileActions({ item: chest, known: true })).toEqual(["open", "look"]);
+  });
 });
 
 describe("tileActions", () => {

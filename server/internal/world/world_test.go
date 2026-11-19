@@ -208,11 +208,48 @@ func TestNewMapErrors(t *testing.T) {
 			{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}},
 			{ID: "a", Rect: Rect{X: 64, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{X: 64, Z: 7}},
 		}, nil, "twice"},
+		mapCase{"zone without rects", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7},
+			Zones: []Zone{{ID: "z", Floors: []uint8{7}}}}}, nil, "zone"},
+		mapCase{"zone on a floor not listed", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7},
+			Zones: []Zone{{ID: "z", Floors: []uint8{8}, Rects: []ZoneRect{{W: 1, H: 1}}}}}}, nil, "floor 8"},
+		mapCase{"zone leaves the island", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7},
+			Zones: []Zone{{ID: "z", Floors: []uint8{7}, Rects: []ZoneRect{{X: 30, W: 3, H: 1}}}}}}, nil, "leaves the island"},
 	)
 	for _, c := range cases {
 		if _, err := NewMap(c.islands, c.sectors, nil); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
 		}
+	}
+}
+
+// Zones name places by id (the reach steps of data/quests): a tile is in a zone on one of
+// its floors inside one of its rects, and IslandAt finds the island of a tile on a floor it
+// lists.
+func TestZonesAndIslandAt(t *testing.T) {
+	m := asciiMap(t, 0, 0, 7, "....")
+	is := m.Islands()[0]
+	is.Zones = []Zone{{ID: "yard", Floors: []uint8{7}, Rects: []ZoneRect{{X: 1, Y: 0, W: 2, H: 2}, {X: 10, Y: 10, W: 1, H: 1}}}}
+	gotIs, z := m.Zone("yard")
+	if gotIs != is || z == nil {
+		t.Fatal("zone yard not found")
+	}
+	if i, z := m.Zone("nowhere"); i != nil || z != nil {
+		t.Fatal("found an unknown zone")
+	}
+	for _, c := range []struct {
+		p    Pos
+		want bool
+	}{
+		{Pos{X: 1, Y: 0, Z: 7}, true}, {Pos{X: 2, Y: 1, Z: 7}, true}, {Pos{X: 10, Y: 10, Z: 7}, true},
+		{Pos{X: 0, Y: 0, Z: 7}, false}, {Pos{X: 3, Y: 0, Z: 7}, false}, {Pos{X: 1, Y: 2, Z: 7}, false},
+		{Pos{X: 1, Y: 0, Z: 8}, false},
+	} {
+		if got := z.Contains(c.p); got != c.want {
+			t.Errorf("Contains(%v) = %v, want %v", c.p, got, c.want)
+		}
+	}
+	if m.IslandAt(Pos{X: 5, Y: 5, Z: 7}) != is || m.IslandAt(Pos{X: 5, Y: 5, Z: 8}) != nil || m.IslandAt(Pos{X: 40, Y: 5, Z: 7}) != nil {
+		t.Fatal("IslandAt")
 	}
 }
 
@@ -226,6 +263,7 @@ func TestBinaryRoundTrip(t *testing.T) {
 	m.Islands()[0].Spawns = []Spawn{{ID: "wolves", Center: pt(31, 30), Radius: 2, RespawnSeconds: 60,
 		Monsters: []SpawnMonster{{Monster: "wolf", Count: 3}, {Monster: "bilge_rat", Count: 1}}}}
 	m.Islands()[0].NPCs = []NPCPlacement{{NPC: "harbor_master", Pos: pt(32, 30)}}
+	m.Islands()[0].Zones = []Zone{{ID: "dock", Floors: []uint8{7}, Rects: []ZoneRect{{X: 30, Y: 30, W: 3, H: 2}, {X: 40, Y: 31, W: 1, H: 1}}}}
 	var buf bytes.Buffer
 	if err := Encode(&buf, m); err != nil {
 		t.Fatal(err)
@@ -301,6 +339,7 @@ func seventeenFloors() []byte {
 	w.u16(0) // no NPCs
 	w.u16(0) // no houses
 	w.u16(0) // no portals
+	w.u16(0) // no zones (v7)
 	w.u32(0) // no sectors
 	_ = bw.Flush()
 	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))

@@ -6,10 +6,12 @@ import { CRATE } from "./crate.ts";
 import { FORGE_ECHO } from "./forge-echo.ts";
 import { FORGE_MATERIALS } from "./forge-materials.ts";
 import { ITEM_ICONS } from "./items/index.ts";
+import { BOOK_CLOSED, LECTERN_BOOK, REWARD_CHEST, SCROLL } from "./lore.ts";
 import { MARKET_BOARD } from "./market-board.ts";
 import { REMAINS } from "./remains.ts";
 import { SIGNPOST } from "./signpost.ts";
 import { STAG } from "./stag.ts";
+import { TOWN_PROPS } from "./town.ts";
 
 export const ENGINE_SPECS: readonly SpriteSpec[] = [
   BOAR,
@@ -22,4 +24,9 @@ export const ENGINE_SPECS: readonly SpriteSpec[] = [
   ...REMAINS,
   ...ITEM_ICONS,
   ...FORGE_MATERIALS,
+  BOOK_CLOSED,
+  LECTERN_BOOK,
+  SCROLL,
+  REWARD_CHEST,
+  ...TOWN_PROPS,
 ];

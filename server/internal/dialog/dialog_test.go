@@ -24,6 +24,7 @@ type fake struct {
 	engine       *quest.Engine
 	log          *quest.Log
 	did          []string
+	now          int64 // the clock, unix seconds
 }
 
 func (f *fake) Level() int                { return f.level }
@@ -38,6 +39,8 @@ func (f *fake) CanTeleport(content.Position) bool {
 	return true
 }
 func (f *fake) QuestState(q string) (quest.State, string) { return f.engine.State(f.log, q) }
+func (f *fake) QuestAvailable(q string) bool              { return f.engine.Available(f.log, q, f.now) }
+func (f *fake) QuestCoolingDown(q string) bool            { return f.engine.CoolingDown(f.log, q, f.now) }
 func (f *fake) GiveItem(it string)                        { f.items[it]++; f.did = append(f.did, "give:"+it) }
 func (f *fake) TakeItem(it string, n int)                 { f.items[it] -= n; f.did = append(f.did, "take:"+it) }
 func (f *fake) GiveXP(int64)                              {}
@@ -58,6 +61,8 @@ func (f *fake) TrainSkill(s string, n int)                 { f.did = append(f.di
 func (f *fake) RestoreMana()                               { f.did = append(f.did, "mana") }
 func (f *fake) Reward(*content.Quest, content.QuestReward) {}
 func (f *fake) Notify(quest.Event)                         {}
+func (f *fake) Now() int64                                 { return f.now }
+func (f *fake) Inside(*content.Reach) bool                 { return false }
 
 func load(t *testing.T, id string) *content.NPC {
 	t.Helper()
@@ -318,5 +323,48 @@ func TestBlessingsFromLevelNine(t *testing.T) {
 		if n := count(); n != b.Death.MaxBlessings {
 			t.Errorf("%s: %d blessings offered at level %d, want %d", id, n, novice+1, b.Death.MaxBlessings)
 		}
+	}
+}
+
+// quest_state tells a repeatable quest's turns apart: available (start_quest would start
+// it), in_progress, and cooling_down until its cooldown passes, when it is available again.
+func TestQuestStateOfARepeatableQuest(t *testing.T) {
+	q, err := content.ParseQuest([]byte(`
+id: bounty
+name: n
+repeatable: { cooldown_hours: 1 }
+steps:
+  - { id: report, description: d, complete_when: { dialog_action: { npc: a, node: paid } } }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{items: map[string]int{}, engine: quest.NewEngine(content.Quests{"bounty": q}), log: quest.NewLog(nil), now: 1000}
+	cond := func(state string) content.Conditions {
+		return content.Conditions{{QuestState: &content.QuestStateCond{Quest: "bounty", State: state}}}
+	}
+	holding := func() []string {
+		var out []string
+		for _, s := range []string{"not_started", "in_progress", "completed", "available", "cooling_down"} {
+			if Holds(cond(s), f) {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	if got := holding(); !slices.Equal(got, []string{"not_started", "available"}) {
+		t.Fatalf("never started: %v", got)
+	}
+	f.StartQuest("bounty")
+	if got := holding(); !slices.Equal(got, []string{"in_progress"}) {
+		t.Fatalf("running: %v", got)
+	}
+	f.engine.ReachedNode(f.log, "a", "paid", f)
+	if got := holding(); !slices.Equal(got, []string{"completed", "cooling_down"}) {
+		t.Fatalf("done: %v", got)
+	}
+	f.now += 3600
+	if got := holding(); !slices.Equal(got, []string{"completed", "available"}) {
+		t.Fatalf("after the cooldown: %v", got)
 	}
 }

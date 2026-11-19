@@ -522,7 +522,7 @@ describe("mapcli patch", () => {
       read(src, "world/islands/testisle/zones.yaml"),
     );
     expect(view(clash, "1046,1046,1,1")).not.toEqual(view(src, "1046,1046,1,1"));
-  }, 30_000); // ~10 mapcli processes and git calls: over 5 s on a slow machine
+  }, 90_000); // four sandboxes (1758 files committed with git each) and ~10 mapcli runs: ~35 s on native Windows
 
   it("merges format 1 patches using the base at base_ref", () => {
     const src = sandbox();

@@ -12,3 +12,7 @@
 
 - npc: volcan_forge_echo
   pos: { x: 3692, y: 5826, z: 8 }
+
+- npc: volcan_hunter
+  pos: { x: 3655, y: 5783, z: 7 }
+  notes: "The bounty ledger of Brasal (lote 12): north edge of the plaza, by the path to the ash flats."

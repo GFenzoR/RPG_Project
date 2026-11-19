@@ -12,6 +12,7 @@ export type ActionKind =
   | "climb"
   | "use"
   | "open"
+  | "read"
   | "use_with"
   | "eat"
   | "equip"
@@ -21,11 +22,15 @@ export type ActionKind =
 
 /**
  * What the client knows of an item a menu offers buttons for (docs/17 UI-6): its first
- * button (open, use with, eat, equip or use) is its default action, the one a double click
- * does. `split`: a stack of more than one unit can move part of it.
+ * button (open, read, use with, eat, equip or use) is its default action, the one a double
+ * click does. `split`: a stack of more than one unit can move part of it.
  */
 export interface ItemFacts {
   container: boolean;
+  /** A book or scroll (docs/02 "Libros y cofres"): "Read" opens the reading window. */
+  book?: boolean | undefined;
+  /** A reward chest of the map: "Open" asks the server for what it holds. */
+  chest?: boolean | undefined;
   /** A tool: "Use with…" (the next click picks where). */
   useWith?: boolean | undefined;
   /** Food: "Eat". */
@@ -45,7 +50,8 @@ export interface ItemFacts {
 
 /** The default action of an item: the first button of its menu. */
 export function itemPrimary(f: ItemFacts): ActionKind {
-  if (f.container) return "open";
+  if (f.container || f.chest) return "open";
+  if (f.book) return "read";
   if (f.useWith) return "use_with";
   if (f.food) return "eat";
   if (f.equip) return "equip";

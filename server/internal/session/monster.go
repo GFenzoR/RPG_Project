@@ -1258,7 +1258,7 @@ func checkQuestDrop(quests content.Quests, npcs content.NPCs, item *content.Item
 			if i+1 >= len(steps) || steps[i+1].CompleteWhen.DialogAction == nil {
 				return fmt.Errorf("quest %q step %q: the has_item of a quest drop must be followed by its delivery (a dialog_action step), or a lost one would never come back", id, s.ID)
 			}
-			if d := steps[i+1].CompleteWhen.DialogAction; !deliveryTakes(npcs[d.NPC], d.Node, item.ID) {
+			if d := steps[i+1].CompleteWhen.DialogAction; !content.DeliveryTakes(npcs[d.NPC], d.Node, item.ID, 1) {
 				return fmt.Errorf("quest %q step %q: its delivery must take the quest drop: every option of npc %q that leads to node %q (one at least) needs take_item of it, and the node cannot be where the dialog starts", id, steps[i+1].ID, d.NPC, d.Node)
 			}
 		}
@@ -1267,28 +1267,4 @@ func checkQuestDrop(quests content.Quests, npcs content.NPCs, item *content.Item
 		return fmt.Errorf("the has_item of no quest step: it would never drop")
 	}
 	return nil
-}
-
-// deliveryTakes reports whether node of npc's dialog is a delivery of item: not where the
-// dialog starts, and every option that leads there (goto, one at least) takes the item
-// (take_item).
-func deliveryTakes(npc *content.NPC, node, item string) bool {
-	if npc == nil || node == npc.Dialog.Start {
-		return false
-	}
-	leads := false
-	for _, n := range npc.Dialog.Nodes {
-		for _, o := range n.Options {
-			if o.Goto != node {
-				continue
-			}
-			leads = true
-			if !slices.ContainsFunc(o.Action, func(a content.Action) bool {
-				return a.TakeItem != nil && a.TakeItem.Item == item
-			}) {
-				return false
-			}
-		}
-	}
-	return leads
 }

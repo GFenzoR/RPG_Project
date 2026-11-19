@@ -411,11 +411,11 @@
 }
 
 /* ---- Toolbar: icon buttons that open the windows (Tibia-like, own pixel icons) -------
-   Two rows of five beside the hotbar; one row with the icons at 2x where it fits. */
+   Two rows of six beside the hotbar; one row with the icons at 2x where it fits. */
 .toolbar {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(5, 30px);
+  grid-template-columns: repeat(6, 30px);
   grid-auto-rows: 26px;
   gap: 3px;
 }
@@ -433,7 +433,7 @@
 }
 @media (min-width: 1600px) {
   .toolbar {
-    grid-template-columns: repeat(10, 40px);
+    grid-template-columns: repeat(11, 40px);
     grid-auto-rows: 40px;
   }
   .tool .icon {
@@ -659,7 +659,9 @@ body.dragging-window * {
 }
 /* The server's windows in a GameWindow (docs/17 UI-5): the frame is the GameWindow's, so
    their own frame, place and size go (they were boxes of their own over the map). */
-.game[data-ui="windows"] .gwin-body > :is(.dialog, .shop, .crafting, .market, .house, .trade) {
+.game[data-ui="windows"]
+  .gwin-body
+  > :is(.dialog, .shop, .crafting, .market, .house, .trade, .book) {
   position: static;
   width: auto;
   max-width: none;
@@ -707,7 +709,7 @@ body.dragging-window * {
 /* ---- Where each window shows before the player moves it (docs/17 UI-5) ---------------
    Percentages are of the area above the bar. The battle list top left with the party
    beside it and the skills under it; the equipment top right with the guild and the
-   appearance beside it and the containers under it; the chat at the bottom left, past the
+   appearance (and the quest log) beside it and the containers under it; the chat at the bottom left, past the
    plaque; the options and the help in the middle; the trade at the top centre; the NPC's
    and the stations' windows at the bottom centre, just over the bar, the shop left of its
    dialog, the two clear of the equipment's column. Moved, a window keeps its own place
@@ -737,6 +739,13 @@ body.dragging-window * {
 .gwin:not([data-placed])[data-window="appearance"] {
   top: 3rem;
   max-height: calc(100% - 3rem);
+}
+/* The quest log beside the equipment too, a step lower than the appearance. */
+.gwin:not([data-placed])[data-window="quests"] {
+  left: auto;
+  right: 16rem;
+  top: 6rem;
+  max-height: calc(100% - 6rem);
 }
 /* Right under the equipment while it sits at its default place (--containers-top, its
    height measured by GameView: about 500 px with the figure and the backpack under it;
@@ -787,6 +796,16 @@ body.dragging-window * {
 .gwin[data-window="house"],
 .gwin[data-window="trade"] {
   --gwin-w: 22rem;
+}
+/* The reading window (docs/02 "Libros y cofres"): in the middle, a little above, like the
+   options and the help: the text is what the player came to see. */
+.gwin[data-window="book"] {
+  --gwin-w: min(28rem, calc(100% - 1rem));
+}
+.gwin:not([data-placed])[data-window="book"] {
+  left: calc((100% - var(--gwin-w)) / 2);
+  top: 12%;
+  max-height: 88%;
 }
 .gwin:not([data-placed]):is(
     [data-window="dialog"],

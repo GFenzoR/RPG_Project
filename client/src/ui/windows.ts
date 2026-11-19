@@ -5,7 +5,9 @@
 // screen's edges, the bar's top and the other windows. Three kinds share these rules:
 // - the toolbar's windows (WINDOW_IDS): the toolbar and its keys open and close them, and
 //   the chat, which is always open (FIXED_WINDOWS: no ×, Escape skips it);
-// - the server's windows (SERVER_WINDOWS: dialog, shop, crafting, market, house, trade);
+// - the server's windows (SERVER_WINDOWS: dialog, shop, crafting, market, house, trade),
+//   and the reading window, which the client opens and closes on its own (book: docs/02
+//   "Libros y cofres") but follows the same rules;
 // - one window per open container ("container-<item>", or "container-remains" for any
 //   remains on the ground, containerKeys).
 // The server opens and closes the last two (syncWindows follows it); the player still
@@ -18,6 +20,7 @@ export const WINDOW_IDS = [
   "battle",
   "inventory",
   "skills",
+  "quests",
   "party",
   "guild",
   "appearance",
@@ -27,8 +30,19 @@ export const WINDOW_IDS = [
 ] as const;
 export type WindowId = (typeof WINDOW_IDS)[number];
 
-/** The server's windows: they open when the server says so and close through it. */
-export const SERVER_WINDOWS = ["dialog", "shop", "crafting", "market", "house", "trade"] as const;
+/**
+ * The server's windows: they open when the server says so and close through it. The reading
+ * window (`book`) is the client's own but behaves the same: GameUi opens it, × closes it.
+ */
+export const SERVER_WINDOWS = [
+  "dialog",
+  "shop",
+  "crafting",
+  "market",
+  "house",
+  "trade",
+  "book",
+] as const;
 export type ServerWindowId = (typeof SERVER_WINDOWS)[number];
 
 /** A container's window: `container-<item id>`, `container-<item id>-2` for a second one. */
@@ -111,6 +125,7 @@ export function defaultWindows(): WindowsState {
       battle: place(true),
       inventory: place(true),
       skills: place(false),
+      quests: place(false),
       party: place(false),
       guild: place(false),
       appearance: place(false),
@@ -344,12 +359,14 @@ export interface ServerOpen {
   market: boolean;
   house: boolean;
   trade: boolean;
+  /** A book or scroll being read (state/book.ts). */
+  book?: boolean | undefined;
 }
 
 /**
  * The server's windows to show, as they always showed: the shop only with its dialog; the
  * station and the market wait while a dialog is open; the house waits for the dialog and
- * the market. Then one window per open container.
+ * the market; the book being read waits for nothing. Then one window per open container.
  */
 export function serverWindows(o: ServerOpen, containers: readonly ContainerKey[]): WinKey[] {
   const out: WinKey[] = [];
@@ -359,6 +376,7 @@ export function serverWindows(o: ServerOpen, containers: readonly ContainerKey[]
   if (!o.dialog && o.market) out.push("market");
   if (!o.dialog && !o.market && o.house) out.push("house");
   if (o.trade) out.push("trade");
+  if (o.book) out.push("book");
   return [...out, ...containers];
 }
 
@@ -617,7 +635,7 @@ function alternatives(
       const r = box(w);
       if (r) out.push(at(r.x + r.width, r.y));
     }
-    for (const w of ["appearance", "guild", "inventory"] as const) {
+    for (const w of ["appearance", "guild", "quests", "inventory"] as const) {
       const r = box(w);
       if (r) out.push(at(r.x - usual.width, r.y));
     }
@@ -707,12 +725,13 @@ export function toLookAt(
 }
 
 /**
- * Whether the tutorial's hint gives way (GameView hides it): the help, the guild or the
- * appearance is open at its factory place, which covers the hint's (the guild and the
- * appearance always; the help on screens under ~1600 px), and the windows go over it.
+ * Whether the tutorial's hint gives way (GameView hides it): the help, the guild, the
+ * appearance or the quest log is open at its factory place, which covers the hint's (the
+ * guild, the appearance and the quest log always; the help on screens under ~1600 px), and
+ * the windows go over it.
  */
 export function tutorialCovered(s: WindowsState): boolean {
-  return (["help", "guild", "appearance"] as const).some((id) => {
+  return (["help", "guild", "appearance", "quests"] as const).some((id) => {
     const p = s.win[id];
     return p.open && (p.x === undefined || p.y === undefined);
   });
@@ -808,6 +827,7 @@ export const WINDOW_KEYS: Readonly<Record<string, WindowId>> = {
   KeyB: "battle",
   KeyI: "inventory",
   KeyK: "skills",
+  KeyL: "quests",
   KeyP: "party",
   KeyG: "guild",
   KeyO: "appearance",
@@ -819,6 +839,7 @@ export const WINDOW_KEY_LABEL: Readonly<Record<WindowId, string>> = {
   battle: "B",
   inventory: "I",
   skills: "K",
+  quests: "L",
   party: "P",
   guild: "G",
   appearance: "O",
@@ -832,6 +853,7 @@ export const WINDOW_TITLE: Readonly<Record<WindowId, string>> = {
   battle: "client.battle.title",
   inventory: "client.inventory.title",
   skills: "client.skills.title",
+  quests: "client.quests.title",
   party: "client.party.title",
   guild: "client.guild.title",
   appearance: "client.appearance.title",

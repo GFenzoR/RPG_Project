@@ -197,3 +197,51 @@ func TestBlessPriceAt(t *testing.T) {
 		}
 	}
 }
+
+// A quest_state condition that can mean nothing refuses to load: a step with a state other
+// than in_progress (available and cooling_down would ignore it, the others never hold),
+// cooling_down of a quest that is not repeatable (it never cools down), an unknown state.
+func TestQuestStateCombinations(t *testing.T) {
+	once, err := ParseQuest([]byte("{id: once, name: n, steps: [{id: s, complete_when: {kill: {monster: wolf, count: 1}}}]}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := ParseQuest([]byte("{id: task, name: n, repeatable: {cooldown_hours: 1}, steps: [{id: s, complete_when: {kill: {monster: wolf, count: 1}}}]}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	quests := Quests{"once": once, "task": task}
+	check := func(cond string) error {
+		n, err := ParseNPC([]byte("{id: a, dialog: {start: g, nodes: {g: {text: t, options: [{text: x, if: {quest_state: " + cond + "}, action: close}]}}}}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return CheckRefs(NPCs{"a": n}, quests, Items{}, nil, nil)
+	}
+	for _, ok := range []string{
+		"{quest: once, state: in_progress, step: s}",
+		"{quest: once, state: not_started}",
+		"{quest: once, state: completed}",
+		"{quest: once, state: available}",
+		"{quest: task, state: available}",
+		"{quest: task, state: cooling_down}",
+		"{quest: task, state: in_progress, step: s}",
+	} {
+		if err := check(ok); err != nil {
+			t.Errorf("%s refused: %v", ok, err)
+		}
+	}
+	for cond, want := range map[string]string{
+		"{quest: once, state: completed, step: s}":    "a step only goes with state in_progress",
+		"{quest: once, state: not_started, step: s}":  "a step only goes with state in_progress",
+		"{quest: task, state: available, step: s}":    "a step only goes with state in_progress",
+		"{quest: task, state: cooling_down, step: s}": "a step only goes with state in_progress",
+		"{quest: once, state: cooling_down}":          "not repeatable",
+		"{quest: once, state: finished}":              "unknown state",
+		"{quest: once, state: in_progress, step: x}":  "has no step",
+	} {
+		if err := check(cond); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", cond, err, want)
+		}
+	}
+}

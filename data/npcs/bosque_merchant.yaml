@@ -4,7 +4,8 @@ sprite: npcs/tanner
 notes: >-
   Tanner and outfitter of Raigal: the forest gear (levels 12-16), elm work and broth, tools
   for the elm grove, and she buys the island's hunting materials at about a third of their
-  value.
+  value. Since lote 12 she gives the side quest tanner_chitin (level 25): crawler chitin and
+  thorn heartwood for chitin-stitched leather, for an antler amulet of her own carving.
 dialog:
   start: greet
   nodes:
@@ -13,6 +14,21 @@ dialog:
       options:
         - text: dialog.trade
           action: { open_shop: tannery_shop }
+        - text: npc.bosque_merchant.opt_chitin
+          if: [{ quest_not_started: tanner_chitin }, { level_at_least: 25 }]
+          goto: chitin_offer
+        - text: npc.bosque_merchant.opt_chitin_give
+          if:
+            - { quest_state: { quest: tanner_chitin, state: in_progress, step: deliver } }
+            - { has_item: { item: crawler_chitin, count: 8 } }
+            - { has_item: { item: thorn_heartwood, count: 4 } }
+          action:
+            - { take_item: { item: crawler_chitin, count: 8 } }
+            - { take_item: { item: thorn_heartwood, count: 4 } }
+          goto: chitin_delivered
+        - text: npc.bosque_merchant.opt_chitin_help
+          if: { quest_state: { quest: tanner_chitin, state: in_progress } }
+          goto: chitin_help
         - text: npc.bosque_merchant.opt_elm
           goto: elm
         - text: npc.bosque_merchant.opt_gossip
@@ -25,6 +41,28 @@ dialog:
         - text: dialog.trade
           action: { open_shop: tannery_shop }
         - { text: dialog.back, goto: greet }
+    chitin_offer:
+      text: npc.bosque_merchant.chitin_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: tanner_chitin }
+          goto: chitin_accepted
+        - text: dialog.decline
+          goto: greet
+    chitin_accepted:
+      text: npc.bosque_merchant.chitin_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    chitin_help:
+      text: npc.bosque_merchant.chitin_help
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    chitin_delivered:
+      text: npc.bosque_merchant.chitin_delivered
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     gossip:
       text: npc.bosque_merchant.gossip
       options:

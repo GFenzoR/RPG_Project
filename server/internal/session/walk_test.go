@@ -24,8 +24,9 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 		t.Fatalf("placed at %v, want the temple", p.Pos())
 	}
 	evs := cl.take()
-	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills"}
-	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] {
+	// The quest log comes too, empty for a character with no quest (questlog.go).
+	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills", "quest_log"}
+	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] || got[5] != want[5] {
 		t.Fatalf("join events %v, want %v", got, want)
 	}
 	if wl := evs[0].GetWelcome(); wl.GetCreatureId() != p.ID() || wl.GetTickMs() != 50 || wl.GetViewWidth() != 31 || wl.GetViewHeight() != 21 {

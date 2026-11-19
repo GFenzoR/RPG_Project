@@ -1,0 +1,24 @@
+id: tanner_chitin
+name: quest.tanner_chitin.name
+min_level: 25
+notes: >-
+  Side quest from bosque_merchant, Gisla the tanner (lote 12, levels 25-28). She wants to
+  stitch crawler chitin over stag leather and needs thornling heartwood for the tanning
+  vat: 8 crawler chitin (hollow crawlers, level 24, 20 %) and 4 thorn heartwood
+  (thornlings, level 20, 20 %), handed in together. Rewards: ~12 % of the experience from
+  25 to 28, about 6 minutes of a crawler hunt's loot and an antler amulet she carved, which
+  rolls its attribute like any other (docs/02 "Atributos de items").
+steps:
+  - id: gather_chitin
+    description: quest.tanner_chitin.step_gather_chitin
+    complete_when: { has_item: { item: crawler_chitin, count: 8 } }
+  - id: gather_heartwood
+    description: quest.tanner_chitin.step_gather_heartwood
+    complete_when: { has_item: { item: thorn_heartwood, count: 4 } }
+  - id: deliver
+    description: quest.tanner_chitin.step_deliver
+    complete_when: { dialog_action: { npc: bosque_merchant, node: chitin_delivered } }
+rewards:
+  - { xp: 9000 }
+  - { item: antler_amulet }
+  - { gold: 750 }

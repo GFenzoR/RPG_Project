@@ -374,7 +374,9 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
   orilla (250 ms, `world`), copas de roble, olmo, abedul y pino y el arbusto (700–900 ms,
   `tile`), fragua y fogón (110–120 ms, `tile`), y cuatro props nuevos para los pueblos:
   antorcha y estandarte de pared (cuelgan en la cara de un muro este-oeste: van en su
-  casilla, después del muro), brasero y fuente. Los props todavía no están en ningún mapa.
+  casilla, después del muro), brasero y fuente. Desde el lote 12 están en los pueblos y
+  las minas (ver "Kit de props de pueblo", más abajo), junto con el farol, el puesto de
+  mercado y el mástil con bandera del kit, también animados.
 - **Luz en cuevas:** `client/src/render/light-layer.ts`. Un mapa de luz a un cuarto de la
   pantalla, borrado a un gris frío (`AMBIENT`), con un brillo suave por luz, encima del
   mapa con blend multiply y debajo de efectos y nombres. Da luz el jugador (4,5 casillas) y
@@ -384,8 +386,8 @@ spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
 - **Partículas de ambiente (hecho, 2026-11-18):** brasas, polen, rocío y polvo de cueva
   ("Hecho: el resto de A1, A10, A11 y A13").
 - **Pendiente:** polvo y ondas al pisar, pasto que se agita, niebla y gaviotas sobre el
-  mar, vetas con destello (`sync: random` ya existe, falta el arte) y poner los props
-  nuevos en los pueblos.
+  mar y vetas con destello (`sync: random` ya existe, falta el arte). Los props nuevos ya
+  están en los pueblos (lote 12).
 
 ### ART-8 Elevación
 Una propiedad `elevation: <px>` en `data/items` (mesas, cajones, barriles: 8 px) sube lo
@@ -396,8 +398,9 @@ también sube.
 debajo (`stackElevation`, tope `MAX_ELEVATION` = 24; las sombras proyectadas no suben) y
 `elevationAt` dice cuánto sube la criatura de esa casilla; el cliente la sube también a
 mitad de paso, entre la altura de las dos casillas. El editor y `mapcli render` leen el
-mismo campo. Hoy lo tiene el cajón de carga (8 px); no hay mesas ni barriles en
-`data/items` todavía.
+mismo campo. Lo tienen el cajón de carga, el barril y la mesa (8 px; los dos últimos son
+del kit de props del lote 12): el libro de la herrera del archivo de Brasal está sobre una
+mesa y se dibuja 8 px más arriba.
 
 ## 3. Animación de criaturas y personajes (ANI)
 
@@ -628,6 +631,19 @@ persona de LPC). Se miran con Read.
   una silueta de costado de figura con el martillo en alto; se compararon las tres
   versiones lado a lado sobre su suelo y quedó la nueva.
 - **Íconos de items** (2026-11-19): las 86 piezas de equipo; ver "Íconos de items", abajo.
+- **Libros y cofres** (2026-11-19, lote 12, docs/02 "Libros y cofres";
+  `specs/lore.ts`): un libro cerrado forrado en tela roja con su broche de latón y el borde
+  de las páginas a la vista (`decor/book_closed`), un atril de madera con el escritorio
+  inclinado hacia quien lee y un libro abierto con sus renglones y la cinta que marca la
+  página (`decor/lectern_book`), un pergamino enrollado con sus perillas de madera, la cinta
+  y el sello de cera (`decor/scroll`) y un cofre de tablones con la tapa redonda, dos bandas
+  de hierro, las esquinas de hierro y la cerradura de latón (`decor/reward_chest`; siempre
+  cerrado: el mapa es el mismo para todos). Revisión: los renglones del primer atril,
+  apretados, se juntaban a 1x en dos manchas que se leían como una cara; quedaron tres por
+  página, separados. El primer pergamino tenía la hoja suelta y se leía como un hueso.
+- **Kit de props de pueblo** (2026-11-19, lote 12, `specs/town.ts`): doce props de una
+  casilla para amueblar templos, depósitos, plazas y casas; ver "Kit de props de pueblo",
+  abajo.
 - **Yunque** (`decor/anvil`): el mismo yunque como modelo (pie, cintura redonda, bloque,
   cuerno y la cara pulida con su brillo y el agujero), con la luz del motor.
 - **Props de una casilla** (2026-11-18, pedido del dueño: *"si bien las gráficas no están
@@ -678,8 +694,8 @@ persona de LPC). Se miran con Read.
   en `tiles` de `sprites.yaml`, como la de los props de `recipes/props.ts`: ni spritepack
   ni el cliente cambian.
 
-**Pendiente:** otros props animados con `loop` (una bandera o un farol colgado si llegan
-al mapa; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
+**Pendiente:** otros props animados con `loop` (la bandera, el farol y el puesto de
+mercado ya lo son, lote 12; el estandarte y la antorcha siguen en `recipes/props.ts`), la gaviota si el
 dueño quiere, sumar primitivas si hacen falta (cajas redondeadas; los anillos de los
 íconos de items salieron bien con un aro de cápsulas, sin toro) y
 mirar en el juego el jabalí, el ciervo, el eco de la forja, el yunque y los cajones: el E2E
@@ -761,6 +777,80 @@ alquitranadas, el anillo de zarza y el amuleto de brasa quedaban bajo L\* 25 (m�
 **Siguen de Dungeon Crawl:** la comida, los materiales, las pociones, los items de quest,
 el hacha de leñador, el martillo de herrero, la runa y las escaleras. El pack queda entero
 en `assets/vendor/dungeon-crawl/` (se guarda tal como se bajó).
+
+### Kit de props de pueblo (hecho, 2026-11-19, rama `feat/town-props`, lote 12)
+Auditoría del 2026-11-19 (art.items[0] y [3]): lo primero que ve un jugador nuevo es el
+Farol, y el templo, la plaza, el depósito y las casas tenían el piso vacío; las minas eran
+salas oscuras donde solo alumbraba el jugador, con arte animado y con luz (antorcha y
+estandarte de pared, brasero, fuente, muros con ventana) que no estaba en ningún mapa.
+
+**El kit** (`tools/spritegen/src/engine/specs/town.ts`, `data/items/decoration.yaml`):
+doce props de una casilla dibujados con el motor, en materiales cálidos (madera clara,
+madera oscura, piedra, tela) que se despegan de los suelos de los pueblos.
+
+| Prop | Lienzo | Bloquea | Elevación | Animación |
+|---|---|---|---|---|
+| Barril (`barrel`): duelas que se abren en el medio, cuatro aros de hierro, tapa oscura | 32x32 | sí | 8 | — |
+| Mesa (`table`): tapa de tablas con dos juntas sobre cuatro patas cuadradas | 32x32 | sí | 8 | — |
+| Banco (`bench`): asiento de tablas sobre dos patas de tabla y un travesaño | 32x32 | no | — | — |
+| Estante (`shelf`): estante abierto contra el fondo de su casilla, con tarros, botellas, una tela doblada y libros | 32x64 | sí | — | — |
+| Cama (`bed`): cabecera redonda, colchón, frazada roja doblada y almohada | 32x32 | no | — | — |
+| Farol (`lamp_post`): poste de hierro sobre un pie de piedra y un farol abierto | 32x64 | sí | — | la llama se mece: 3 frames de 130 ms, `tile`; `light: 3` |
+| Pozo (`well`): brocal redondo de piedra con agua oscura, dos postes, techito, torno con soga y balde | 32x64 | sí | — | — |
+| Sacos (`sacks`): dos sacos de arpillera atados y un tercero acostado delante | 32x32 | sí | — | — |
+| Red de pesca (`fishing_net`): red en malla de rombos colgada de un bastidor, que se comba, con corchos rojos | 32x32 | sí | — | — |
+| Jardinera (`flower_box`): cajón de tablas con hojas y flores rojas, amarillas y blancas | 32x32 | no | — | — |
+| Puesto de mercado (`market_stall`): mostrador con canastas de manzanas y pan y una pieza de tela, toldo a rayas rojas y crema | 32x64 | sí | — | el fleco flamea: 4 frames de 160 ms, `tile` |
+| Mástil con bandera (`flag_pole`): mástil en un pie de piedra con remate dorado; bandera azul con franja dorada y cola de golondrina | 32x64 | sí | — | 4 frames de 170 ms, `tile` |
+
+- **La bandera son cuatro tarjetas colgadas una de otra** (cada una `parent` de la
+  siguiente, con la articulación en el borde de la anterior): en cada frame cada tarjeta
+  gira sobre la vertical un cuarto de vuelta de fase detrás de la anterior, así la onda
+  corre a lo largo de la bandera. El fleco del toldo, igual: una parte por festón, cada
+  una colgada del borde del toldo, y la ráfaga las levanta de oeste a este (un giro en x
+  hacia atrás: las puntas suben y se acortan, que es lo que se lee a 1x; hacia la cámara
+  casi no cambian).
+- **Lo que no bloquea** (banco, cama, jardinera) es lo que puede ir en una casa que se
+  alquila: no le quita casillas al inquilino (docs/03 "Muebles y luces"). Barril y mesa
+  levantan lo que se apila encima (ART-8).
+- **El farol da luz** en las cuevas como una antorcha (`light: 3`); en la superficie la
+  capa de luz no dibuja nada (no hay noche), así que ahí es decoración.
+- **Revisión:** `spritegen sheet --only decor/` escribe, además de la hoja y el lineup de
+  cada uno, `build/spritegen/town.floors.png`: los doce sobre cada suelo de los pueblos
+  (piedra, madera, tierra, basalto, pasto, arena y tablones de muelle), al lado de una
+  persona de LPC, a 1x (mostrado a 2x). Lo que aprendió la revisión: los sacos de tela
+  clara eran una nube sobre cualquier suelo y pasaban la banda de valor (L\* 68): son de
+  arpillera (`sand`), más altos, con el cuello atado oscuro y separados; la primera red,
+  una grilla recta de hilos, se leía como la reja de una ventana: es una malla de rombos
+  que se comba hacia el medio, y sus hilos son de 2 px (de 1 px en diagonal salía un
+  damero de más del 10 %); el fleco del toldo que giraba hacia la cámara no se veía
+  moverse.
+- **Tests:** `tools/spritegen/src/engine/town.test.ts` (el kit, los `loop` en el rango de
+  ART-7 y la luz del farol en `sprites.yaml`, la onda que recorre la bandera sin mover el
+  mástil, la hoja de revisión) y `packages/map-format/src/town-props.test.ts` (los items
+  del kit, lo que tiene cada pueblo, las antorchas de las minas y que nada bloquee donde no
+  debe; docs/03 "Muebles y luces"). Las puertas del motor corren sobre los doce como sobre
+  todo spec.
+
+**Dónde está** (con `mapcli ops apply`; reglas en docs/03 "Muebles y luces"):
+- **Templos** de Farol, Raigal y Brasal: braseros a los lados de las puertas, dos
+  estandartes en el muro norte, muros de piedra con ventana, bancos como reclinatorios y
+  una mesa de altar.
+- **Plazas:** una fuente en cada una (3170,6387; 4159,6111; 3656,5791), puestos de
+  mercado, faroles, bancos, un mástil con bandera; un pozo en Raigal y en Brasal.
+- **Depósito del Farol, armería, curtiduría de Raigal y archivo de Casia:** estantes,
+  barriles, sacos, cajones y mesas. El libro cerrado del archivo (`book_smith_notes`) quedó
+  sobre una mesa.
+- **Las 13 casas:** una cama (no bloquea) y dos ventanas de madera cada una; jardineras
+  afuera en las del Farol que dan a la calle.
+- **Minas:** una antorcha de pared cada 7 casillas en las caras de la roca (28 en la de
+  Puerto, 8 en la cueva del Bosque, 19 en la del Volcán) y braseros en las salas hondas
+  (7, 3 y 7), que las antorchas del muro norte no alcanzan.
+
+**Lo que queda:** la muralla (`rampart_wall`) no encajó en el Farol (el frente de mar es
+una playa abierta con el muelle; una muralla ahí cortaría el paso) y queda para un pueblo
+amurallado de una isla nueva; los props del kit en las islas que vengan; ver la luz de
+las antorchas y los braseros en el juego (el E2E del lote, docs/14).
 
 ## 4. Sensación de movimiento (MOV)
 

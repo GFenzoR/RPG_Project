@@ -66,11 +66,17 @@ type Flag struct {
 	Value int64  `yaml:"value"`
 }
 
-// Quest states as written in quest_state conditions.
+// Quest states as written in quest_state conditions. not_started, in_progress and
+// completed are the stored state; available and cooling_down tell a repeatable quest's
+// turns apart (docs/06 "Quest"): available holds while start_quest would start it (never
+// started, or a repeatable one done at least its cooldown ago), cooling_down while a
+// repeatable one waits for its cooldown.
 const (
-	QuestNotStarted = "not_started"
-	QuestInProgress = "in_progress"
-	QuestCompleted  = "completed"
+	QuestNotStarted  = "not_started"
+	QuestInProgress  = "in_progress"
+	QuestCompleted   = "completed"
+	QuestAvailable   = "available"
+	QuestCoolingDown = "cooling_down"
 )
 
 // QuestStateCond holds when the quest is in State (and, with Step, on that step).

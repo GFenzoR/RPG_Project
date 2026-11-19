@@ -851,18 +851,22 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
   lugar de la espada corta forjada.
 - **Bosque:** la curtidora vende las armas, el torso pesado, la capucha, las calzas, las
   botas y el escudo de olmo (que también se forja) de la banda 3; la druida Velia, las
-  varitas y varas, la túnica de musgo y el amuleto de asta. El anillo de zarza es botín
-  raro de espinosos y reptantes huecos.
+  varitas y varas, la túnica de musgo y el amuleto de asta (y Gisla talla uno como
+  recompensa de `tanner_chitin`). El anillo de zarza es botín raro de espinosos y reptantes
+  huecos.
 - **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
   solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
   escarcha negra, la túnica de ceniza y el amuleto de brasa. El anillo de obsidiana es
-  botín raro de mineros de obsidiana y gólems de escoria.
+  botín raro de mineros de obsidiana y gólems de escoria, y la recompensa de `smith_ring`.
 - **Botín de antes:** el saqueador suelta el alfanje, la cabilla (en lugar del garrote de
   deriva) y la gorra; el contrabandista, las calzas de ciervo y su ballesta; el
   dragoncillo, el sable de ascua; el minero, el yelmo, la varita y la vara.
 - **Recompensas:** el capitán del puerto sigue dando el kit inicial de cada vocación y, al
   cerrar el capítulo 1, la espada de hierro al guardián; los demás reciben su valor, 150
-  monedas (antes 120, lo que valía la espada). Las demás quests dan oro y experiencia.
+  monedas (antes 120, lo que valía la espada). Las quests secundarias del lote 12 dan,
+  además de oro y experiencia, a lo sumo un equipable de una banda que ya se consigue (el
+  amuleto de asta, el anillo de obsidiana y el amuleto de brasa: "Quests secundarias");
+  las demás quests y las tareas, oro y experiencia.
 - **Bandas 5 y 6: todavía no se consiguen.** Ninguna tienda, botín, receta, diálogo,
   recompensa (de quest o del tutorial) ni hechizo las da (el test del catálogo lo
   comprueba con `OBTAINABLE_BANDS`, que sube cuando llegue la
@@ -1482,6 +1486,14 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   paga (como mucho 75 % del botín; entre ellos y la comida gasta del 17 al 59 % según la
   franja). Donde más sirven es en grupos y contra golpes fuertes, cuando una cura por
   segundo no alcanza, y eso la simulación de duelos no lo mide.
+- **Quests y tareas como fuente de oro** (lote 12): la medida es el botín de una hora de
+  la mejor caza de su nivel, el de las simulaciones de balance (el mismo duelo que mide el
+  ritmo de "Experiencia y nivel", así que es la hora del que mejor caza). Una quest
+  secundaria paga, una sola vez, entre 4 y 10 minutos de ese botín (entre 5,7 y 6,7 las de
+  hoy) y una tarea de caza, una vez cada 20 horas, entre un décimo y un cuarto de la hora
+  de su presa (hoy ~20 %). Las dos lo comprueba `sim/balance_tasks_test.go` (números en
+  "Quests secundarias" y "Tareas"). Una tarea no da items: uno que un NPC compre por más
+  que su oro pagaría más de lo que dice (el test también lo rechaza).
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado, el alquiler de las casas (T5.4) y la
   forja (cada intento cuesta oro y piedras de temple, y un fallo puede destruir la pieza:
@@ -1982,7 +1994,25 @@ mínimo**, para que el jugador explore y grindee entre capítulos:
 | 4. Silencio blanco | 50 | Heladas | Una expedición desaparecida |
 | 5. Lo que se hundió | 75 | Hundida | La verdad del imperio |
 
-Además: quests secundarias, libros con lore, secretos en el mapa.
+Además: quests secundarias, libros con lore y cofres escondidos en el mapa (ver "Libros y
+cofres").
+
+**Diario de misiones y tareas.** Cada personaje tiene su diario (ventana "Misiones", tecla L
+o el libro de la botonera; una pestaña del panel en teléfonos), que el servidor le manda
+entero al entrar y cada vez que cambia una quest (`QuestLog`, docs/05). Dos pestañas:
+"Activas" (nombre, capítulo o "Secundaria", el texto del paso actual y, en un paso de
+matar, las muertes contadas, "5/8", con una barra) y "Terminadas". La línea principal va
+primero, por capítulo. Además de matar, juntar, hablar y los flags, un paso puede ser
+**llegar a un lugar** (`reach`: una zona del mapa o unas casillas alrededor de un punto;
+cuenta al caminar, al usar una escalera o un teletransporte, al viajar en barco y al
+despertar en el templo; docs/06 "Quest"). Una quest puede ser una **tarea repetible**
+(`repeatable: { cooldown_hours }`): terminada, se puede tomar otra vez cuando pasa su
+espera, desde el primer paso, y paga su recompensa cada vez. Es la base de las tareas de
+caza del final del juego (pedirle al jugador que vuelva a un coto cada día). El diario
+muestra cuánto falta para volver a tomarla ("Disponible otra vez en 2 h 15 min") y el NPC
+que la da distingue si está disponible o si todavía espera. Las tareas de caza de Raigal
+y Brasal están en "Tareas" (abajo); la de práctica de la Isla de Pruebas espera tres
+minutos (docs/16).
 
 **Capítulo 2 "Raíces" (T3.6, Isla del Bosque).** Lo da Velia Musgo, la druida de Raigal,
 a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
@@ -2016,10 +2046,11 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
    de la forja antigua. 14 000 XP y 800 monedas.
 2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
-   (botín de los mineros), entregarlo a Casia y bajar hasta la puerta sellada, en lo más
-   hondo de la mina, donde el eco de la forja toma la raíz y le devuelve su forma: la
-   **llave de ascua** (`ember_key`, no comerciable), que abre la puerta (ir a un lugar y
-   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas. Quien terminó
+   (botín de los mineros), entregarlo a Casia, bajar hasta la antesala de la puerta
+   sellada, en lo más hondo de la mina (un paso `reach`: llegar a 4 casillas del eco lo
+   cumple, "Diario de misiones y tareas"), y mostrarle la raíz al eco de la forja, que le
+   devuelve su forma: la **llave de ascua** (`ember_key`, no comerciable), que abre la
+   puerta. Casia da la pista del camino en los dos últimos pasos. 22 000 XP y 1100 monedas. Quien terminó
    `ch3_gate` y no tiene la llave (la perdió, o terminó antes de que existiera) le pide
    otra al eco, una a la vez.
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
@@ -2060,8 +2091,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   sus recetas vuelven con la isla de esa banda. Bram Tizón vende la banda 4 y compra los
   materiales de la isla a un tercio de su valor.
 - **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Brasal al oeste (templo de la Llama
-  Quieta, plaza con fragua, yunque y fogón, el archivo de Casia y una casa), muelle al oeste
-  con Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se
+  Quieta, plaza con fragua, yunque y fogón, el archivo de Casia, una casa y, en el borde
+  norte de la plaza, Orso Pedernal con el libro de presas: "Tareas"), muelle al oeste con
+  Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se
   vuelve al Bosque (100) o al Puerto (140). Sabuesos en el llano de ceniza al norte,
   salamandras en la ladera de piedra al sureste, dragoncillos en el cráter amurallado al
   noreste; la mina (piso 8, escalera al este del pueblo) tiene la galería de los mineros al
@@ -2082,6 +2114,196 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   caminos de escoria (110) son más rápidos que la ceniza que cruzan.
 - **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
   oro (ver "Economía"), así que caben en una mochila normal.
+
+## Libros y cofres (lote 12, 2026-11)
+Explorar tiene que pagar (auditoría del 2026-11-19): la historia del imperio hundido ya no
+sale solo de tres NPCs, y salirse del camino puede dar algo. Las dos cosas son items del
+mapa con un bloque propio en `data/items/exploration.yaml` (docs/06 "Item").
+
+**Libros y pergaminos.** Un atril con un libro abierto, un libro cerrado o un pergamino
+(arte del motor de sprites, docs/17). Usarlo (click derecho → "Leer", o doble click) abre
+la **ventana de lectura**: el título y una página a la vez, con el número de página y
+botones para pasarlas; Escape o × la cierran. Mirarlo (Mayús+click) sigue dando una
+línea: qué es y cómo se llama. **Decisión: la ventana es del cliente, sin el servidor.** El texto es
+contenido estático (`i18n/<idioma>/books.yaml`, que el cliente ya trae, como los textos de
+los NPCs), igual para todos y sin nada que esconder, como el de un cartel que se lee con
+Mirar desde cualquier casilla a la vista: el cliente no manda nada al leer, así que no hay
+mensaje nuevo ni regla de distancia (un libro se lee desde donde se ve, como un cartel). Un
+libro no se lleva (`pickupable: false`) ni tiene estado: el mismo item puede estar en dos
+lugares (el atril del Farol está también en la Isla de Pruebas).
+
+Los textos son propios y siguen lo que cuentan los NPCs y los capítulos 1 a 3:
+
+| Libro | Dónde | De qué habla |
+|---|---|---|
+| «Los remeros del Farol» (atril) | Templo del Farol, Puerto (3152,6381,7) | Cómo los sobrevivientes del imperio llegaron remando a una luz que nadie encendió |
+| «Lo que sostiene la raíz» (atril) | Templo de la Raíz, Raigal (4148,6101,7) | El árbol antes que el bosque; los druidas que escuchan la tierra |
+| «La Llama Quieta» (atril) | Templo de la Llama Quieta, Brasal (3640,5785,7) | Por qué la llama del altar no tiembla; los fuegos que fueron de otros |
+| «Registro de la forja, tomo tercero» (atril) | Archivo de Casia, Brasal (3660,5796,7) | Brasal nació para la forja; las llaves de piedra templada; «no se apagó, se fue» |
+| «Apuntes de una herrera de Brasal» (libro) | Archivo de Casia (3664,5800,7) | El acero de ascua, la marca de la forja (la llama en el aro) y hasta dónde aguanta el temple |
+| «Cuaderno de rastros» (atril) | El atril de Velia bajo los olmos de Raigal (4180,6112,7) | El farol de rastreo y lo tibio que llegó del mar |
+| «Manifiesto del Alba Tardía» (pergamino) | Entre los cajones del naufragio, Puerto (3119,6328,7) | La carga y el cofre pagado al triple; la luz falsa de las rocas |
+| «Bitácora del remo quemado» (pergamino) | Cueva de los contrabandistas, Bosque (4219,6136,8) | El cofre bajado a la cueva y el que paga en monedas viejas, para la montaña |
+| «Lo que vimos detrás de la pared» (pergamino) | Galería inundada de la mina, Puerto (3194,6287,8) | La pared tallada, la puerta cerrada desde adentro y el agua |
+
+**Cofres de recompensa.** Un cofre de tablones con bandas de hierro (bloque `chest`: un `id`
+y sus recompensas). Usarlo junto a él (a 1 casilla; click derecho → "Abrir", o doble
+click) le da a **cada personaje** sus recompensas **una sola vez**: el personaje lo
+recuerda en su storage (`chest.<id>`, la misma tabla que las quests; por eso el `id` de un
+cofre no se renombra ni se reutiliza nunca, y `data/ids.lock.yaml` lo fija), y el storage
+y los items van en el mismo snapshot, así un guardado, un logout o una desconexión en el
+mismo tick nunca guardan uno sin lo otro. Reglas:
+- **Todo o nada:** si todas las recompensas no entran (capacidad y lugar en la mochila,
+  contando las pilas que se suman a las que ya lleva, como el `give_item` de un diálogo)
+  no da nada, no lo marca y lo dice (`chest.no_room`); el jugador libera lugar y lo abre de
+  nuevo. Nada cae al suelo.
+- **Otra vez:** "El cofre está vacío" (`chest.empty`); dos usos en el mismo tick dan una
+  sola vez.
+- **Lo que da:** dinero, las piedras de temple de su banda, pociones y una pieza del
+  catálogo de su banda que sirve a cualquier vocación. Un equipable se crea como cualquier
+  otro (`giveItem`): tira su atributo al azar (docs/02 "Atributos de items"). Nunca el
+  ámbar de resguardo (la protección de la forja solo cae de monstruos), nunca un item
+  retirado ni uno que no se levanta (`pickupable: false`), y cada recompensa es una pila
+  como mucho (`make validate` y el arranque del servidor lo revisan).
+- **Por personaje, no por cuenta (para que el dueño lo decida):** las recompensas se pueden
+  comerciar y `puerto_grove` está al alcance de un personaje de nivel 1 en la isla de
+  inicio, así que cada personaje nuevo de una cuenta saca otra vez sus 2 piedras de temple
+  menores y un gorro con su atributo al azar, y puede pasárselos al principal. Es lo
+  pedido (como las quests, que también son por personaje) y lo que da es poco; si se
+  quiere cerrar, el cofre podría recordarse en la cuenta o dar sus piezas sin comercio.
+- **Economía:** cada unidad se registra en `economy_log` con la fuente `chest` y el id del
+  cofre (docs/01 "Log de economía"); cuenta como ganancia para los atípicos, como el botín.
+- **El cofre se ve siempre cerrado.** Mostrarlo abierto solo a quien ya lo abrió pediría
+  estado del mapa por personaje (los items del mapa son los mismos para todos): no vale lo
+  que cuesta. El mensaje del servidor dice si ya estaba vacío.
+
+| Cofre | Dónde | Banda | Recompensas |
+|---|---|---|---|
+| `puerto_mine` | Fondo de la mina de Puerto, en el nicho de la galería inundada, pasando los mineros ahogados (3193,6286,8) | 2 | 3 de plata, 3 piedras de temple menores, 5 cataplasmas de algas, escudo de tablones |
+| `puerto_grove` | Bajo los robles de la esquina noroeste del bosque de Puerto, lejos de los caminos (3107,6353,7) | 1 | 1 de plata, 2 piedras de temple menores, 3 cataplasmas de algas, gorro de lona |
+| `bosque_cave` | Nido de los reptantes de la cueva de los contrabandistas, Bosque (4252,6170,8) | 3 | 6 de plata, 2 piedras de temple mayores, 3 brebajes de vida, capucha de cuero de ciervo |
+| `volcan_mine` | Mina del Volcán, pasando los gólems: esquina noreste de su galería (3734,5782,8) | 4 | 15 de plata, 4 piedras de temple mayores, 3 brebajes de vida concentrados, amuleto de brasa |
+| `pruebas` | Templo de la Isla de Pruebas (2098,2084,7), para probarlo (docs/16) | — | 5 de plata, 2 piedras de temple menores, 2 brebajes de vida, espada de hierro |
+
+Cada isla nueva trae los suyos al final de sus mazmorras, con las recompensas de su banda.
+### Quests secundarias (lote 12)
+Pedido del dueño del 2026-11-18 (un mundo con quests por banda de nivel) y auditoría de
+juego del lote 10: entre `ch2_coffer` (20) y `ch3_embers` (30), y después del custodio
+(40), solo se cazaba. Cinco quests secundarias llenan esos huecos con NPCs que ya estaban
+en los pueblos y que no daban encargos. Todo en datos (`data/quests/*.yaml`, los diálogos
+de `data/npcs/`); las ofrece la opción del NPC desde su nivel (`level_at_least`) y sin la
+quest empezada. `ferryman_jetty` pide además `ch2_roots` completada (`quest_state`): sigue
+al "bote sin bandera" del Capítulo 2, y quien no lo vio no entendería el encargo.
+
+| Isla | Niveles | Quest | La da | Pasos | Recompensa |
+|---|---|---|---|---|---|
+| Puerto | 8 | `diver_locket` "Lo que el mar se llevó" | Corvo, el buzo | un relicario de los saqueadores, entregarlo | 900 XP, 200 monedas |
+| Puerto | 10 | `foreman_ore` "Hierro de las vetas viejas" | Doran Pike, el capataz | 5 minerales de hierro, entregarlos | 1200 XP, un pico |
+| Bosque | 22–25 | `ferryman_jetty` "Luces en la costa este" (con `ch2_roots` completada) | Tavin Rema, el barquero | llegar al embarcadero de los contrabandistas (`reach`), matar 12 reptantes huecos en la cueva de al lado, contárselo | 7000 XP, 700 monedas |
+| Bosque | 25–28 | `tanner_chitin` "Cuero de quitina" | Gisla, la curtidora | 8 quitinas de reptante, 4 corazones de espino, entregarlos juntos | 9000 XP, un amuleto de asta, 750 monedas |
+| Volcán | 30–33 | `captain_fenders` "Defensas que no arden" | Nerea Vado, la capitana | matar 10 salamandras de brasa, 5 pieles de sabueso de ceniza, entregarlas | 13 000 XP, 900 monedas |
+| Volcán | 42–45 | `smith_ring` "El anillo de obsidiana" | Bram Tizón, el herrero | 5 núcleos de escoria, entregarlos, pedirle a Madre Oriela una brasa de la Llama Quieta (`flag_equals`: su opción pone el flag), volver por el anillo | 25 000 XP, un anillo de obsidiana, 1500 monedas |
+| Volcán | 45–48 | `flame_crater` "La llama del cráter" | Madre Oriela, la sacerdotisa | llegar a la orilla del lago de lava del cráter (`reach`), matar 6 dragoncillos de ascua: **termina en esa muerte** | 28 000 XP, un amuleto de brasa, 1800 monedas |
+
+Con la línea principal, la secuencia queda: 15 `ch2_roots`, 20 `ch2_coffer`, 22 y 25 las
+del Bosque, 30 `ch3_embers` y `captain_fenders`, 35 `ch3_gate`, 40 `ch3_warden`, 42 y 45
+las del Volcán. Del 48 en adelante solo queda la tarea de los dragoncillos hasta la isla
+de la banda siguiente.
+
+- **Experiencia:** alrededor del 12 % (entre 10 y 15 %) de la experiencia de su banda: de
+  su nivel a tres más arriba (`sim/balance_tasks_test.go`, `TestSideQuestRewards`). Del 22
+  al 25 son 56 376 puntos (7000 son el 12,4 %); del 25 al 28, 72 144 (12,5 %); del 30 al
+  33, 102 744 (12,7 %); del 42 al 45, 198 216 (12,6 %), y del 45 al 48, 226 944 (12,3 %).
+  Los capítulos pagan algo más (`ch2_coffer`, ~19 % de la suya; `ch3_warden`, ~20 %). En
+  tiempo, una quest secundaria vale entre 14 y 33 minutos de la mejor caza de su nivel
+  (más arriba, más: las bandas se estiran), más o menos lo que cuesta hacerla.
+- **Oro:** entre 4 y 10 minutos del botín de la mejor caza de la banda ("Economía"): 5,7
+  minutos de reptantes (`ferryman_jetty`), 6,1 (`tanner_chitin`), 6,7 de salamandras, 6,7
+  de gólems y 5,9 de dragoncillos.
+- **Equipo:** a lo sumo un equipable por quest, de una banda que ya se consigue y que se
+  puede llevar a su nivel; tira su atributo como cualquier pieza creada ("Atributos de
+  items"). El anillo de obsidiana era solo botín raro: es la primera fuente segura. Va
+  después de la experiencia y antes del oro en la lista de recompensas, que se dan en
+  orden: la experiencia puede subir el nivel, y con él la capacidad, así que quien no
+  podía cargar el item antes de cobrar lo recibe en la mochila y no en el suelo (que en
+  `flame_crater` es el cráter, entre dragoncillos). Lo juega `TestFlameCraterSideQuest`, y
+  `sim/balance_tasks_test.go` (`TestQuestRewardOrder`) exige a toda quest de `data/` la
+  experiencia, el item y el oro en ese orden.
+- **Lo que piden:** todo `has_item` tiene una fuente a 4 niveles o menos de la quest
+  (`TestPuertoBalance`, "quest items near the quest level"): quitina (reptante, 24), corazón de espino
+  (espinoso, 20), piel de sabueso (27), núcleo de escoria (gólem, 41). Ninguna pide un item
+  de quest nuevo.
+- **Llegar a un lugar** (`reach`): el embarcadero que armaron los contrabandistas en la
+  costa este (4256,6139, radio 2, sobre las tablas) y la orilla del lago de lava en el
+  corazón del cráter (3714,5756, radio 2, entre los dos nidos de dragoncillos). Los dos se
+  alcanzan a pie desde el templo de su isla (`make validate`) y tienen dónde pararse
+  (`TestRealWorldStarts`).
+- **Termina en una muerte:** `flame_crater` no vuelve al NPC: la llama del templo "le
+  avisa" a Oriela y la recompensa llega donde esté el jugador (a la mochila, o a sus pies
+  si no entra). Después ella tiene una opción de agradecimiento.
+- **Historia:** las cajas del embarcadero llevan el sello de la aduana de Puerto: alguien
+  con permisos abastece a los contrabandistas del remo quemado (Capítulo 2), con
+  compradores que no existen. Queda abierto, como quién les pagó por el cofre. El anillo y
+  la llama cuentan de los sacerdotes de la forja vieja y del cráter donde se encendió la
+  Llama Quieta. Ningún nombre ni texto viene de otro juego.
+- **Música:** ninguna tiene música propia (`music` de la quest): el cráter es el lugar que
+  la merecería si hay un tema para él.
+- **Tests:** un test de sesión por quest (`session/sidequests_test.go`: oferta por nivel,
+  cada paso, entrega, recompensas y la tirada de los equipables; en `tanner_chitin` y
+  `captain_fenders`, que la entrega se esconde y no completa nada si el jugador vendió lo
+  que pedía después de cumplir el paso, y en `flame_crater`, que la subida de nivel de la
+  recompensa hace entrar el amuleto) y el de las recompensas.
+
+### Tareas (lote 12)
+Tareas de caza repetibles (`repeatable`, "Diario de misiones y tareas"): una razón para
+volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
+
+- **Fenn Zarzal, montero** (`bosque_hunter`, en el borde este de la plaza de Raigal,
+  4173,6106, donde sale el camino al bosque profundo): el **tablón** del pueblo.
+- **Orso Pedernal, jefe de cazadores** (`volcan_hunter`, en el borde norte de la plaza de
+  Brasal, 3655,5783, junto al camino al llano de ceniza): el **libro de presas**.
+
+| Tarea | La da | Desde el nivel | Presa | XP | Oro | Una hora de esa caza (simulada) | Parte de la hora |
+|---|---|---|---|---|---|---|---|
+| `bounty_smugglers` | Fenn | 15 | 25 contrabandistas del cofre | 4500 | 1200 | 22 216 XP, 6068 de botín (nivel 16) | 20,3 % y 19,8 % |
+| `bounty_thornlings` | Fenn | 18 | 25 espinosos | 5000 | 1000 | 25 358 XP, 5169 (nivel 20) | 19,7 % y 19,3 % |
+| `bounty_crawlers` | Fenn | 22 | 30 reptantes huecos | 6200 | 1450 | 30 976 XP, 7351 (nivel 24) | 20,0 % y 19,7 % |
+| `bounty_hounds` | Orso | 26 | 30 sabuesos de ceniza | 6700 | 1150 | 33 632 XP, 5786 (nivel 27) | 19,9 % y 19,9 % |
+| `bounty_golems` | Orso | 39 | 20 gólems de escoria | 9100 | 2650 | 45 736 XP, 13 396 (nivel 41) | 19,9 % y 19,8 % |
+| `bounty_wyrmlings` | Orso | 48 | 8 dragoncillos de ascua | 10 400 | 3600 | 52 336 XP, 18 193 (nivel 50) | 19,9 % y 19,8 % |
+
+- **Turnos:** cada una se toma en el tablón o en el libro (la opción de la presa, con
+  `quest_state` `available` y su nivel), se cumple con las muertes (el diario las cuenta)
+  y se cobra con el mismo NPC. Cobrada, la opción lleva a "ya la cobraste" hasta **20
+  horas** después de la entrega (el reloj del servidor; `cooling_down`) y después vuelve a
+  ofrecerse, desde cero. La espera es de cada jugador y empieza al cobrar (no hay un
+  tablón que se renueva para todos a una hora), y así lo dicen el tablón y el libro. En
+  curso no aparece en el tablón: está en el diario. Se pueden tener las tres de un NPC a
+  la vez.
+- **Cuánto pagan, y por qué:** una tarea suma como mucho alrededor de un cuarto de lo que
+  ya da una hora de cazar ahí, en experiencia y en oro; hoy, un quinto. La hora es la de
+  la simulación de balance, al nivel objetivo de la presa (`TestVolcanBalance` y
+  `TestBosqueBalance`): la del que mejor caza, así que para un jugador real la tarea pesa
+  algo más, y por eso el tope de un cuarto deja margen. Las muertes de la tarea son parte
+  de esa hora (30 reptantes son ~14 minutos de la simulación, 8 dragoncillos ~4), y la
+  espera de 20 horas la vuelve diaria: quien caza una hora al día ahí gana ~20 % más ese
+  día; quien caza cuatro, ~5 %. Es un motivo para volver, no un reemplazo de la caza: el
+  ritmo de "Experiencia y nivel" casi no cambia. `sim/balance_tasks_test.go`
+  (`TestTaskRewards`) exige a toda tarea de una isla real entre un 10 y un 25 % de la hora
+  de su presa, en experiencia y en oro, y una espera de 20 horas o más.
+- **Sin items:** una tarea paga experiencia y oro. Un item como recompensa diaria podría
+  venderse a un NPC por más que el oro que dice la tarea; el test rechaza cualquier item
+  que un NPC compre por más que ese oro.
+- **Por qué esas presas:** cada isla tiene una tarea al principio, al medio y al final de
+  sus niveles (el Bosque del 15 al 26, el Volcán del 26 al 58). Los contrabandistas siguen
+  volviendo a la costa este después del Capítulo 2, y el libro de Brasal paga por lo que
+  baja de la montaña desde que la forja vieja despertó (el comienzo del Capítulo 3: el
+  texto lo cuenta, así se entiende sin haberlo jugado).
+- **Tests:** `session/bounty_test.go` juega la de los reptantes con muertes reales y el
+  reloj del loop (oferta desde el 22, la muerte 30, el pago, el diario con "disponible otra
+  vez", la espera de 20 horas al minuto y el segundo turno desde cero) y recorre las seis
+  contra `data/` (nivel, pago exacto, sin items, la espera); `TestTaskRewards` exige que
+  un solo NPC dé cada tarea (el tablón de un cazador nunca muestra las del otro).
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).

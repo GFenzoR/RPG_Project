@@ -76,6 +76,208 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+  // The real world's islands, zones and portals (and the files in extra) next to the
+  // copied content.
+  const realWorld = (...extra: string[]): void => {
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    for (const island of readdirSync(join(REPO, "world", "islands"))) {
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      for (const f of ["island.yaml", "zones.yaml", "portals.yaml", ...extra]) {
+        const src = join(REPO, "world", "islands", island, f);
+        if (existsSync(src)) cpSync(src, file(`world/islands/${island}/${f}`));
+      }
+    }
+  };
+  const reachErrors = (): string[] =>
+    messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
+  // The reach step of ch3_gate, on the volcano's mine floor.
+  const gateReach = "complete_when: { reach: { x: 3692, y: 5826, z: 8, radius: 4 } }";
+  // The reach tests validate the whole content up to six times each: one test with all of
+  // them (nine) ran past its 30 s with the whole suite running.
+
+  it('checks a reach point against the islands and their stairs (docs/06 "Quest")', () => {
+    realWorld();
+    expect(reachErrors()).toEqual([]);
+    // A floor the island does not list, then outside every island.
+    edit("data/quests/ch3_gate.yaml", gateReach, gateReach.replace("z: 8", "z: 9"));
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(/reach point 3692,5826,9 is on no island/),
+    ]);
+    edit("data/quests/ch3_gate.yaml", "x: 3692, y: 5826, z: 9", "x: 10, y: 10, z: 7");
+    expect(reachErrors()).toEqual([expect.stringMatching(/reach point 10,10,7 is on no island/)]);
+    // A place whose every tile is the entrance of stairs (the volcano mine's, portals.yaml):
+    // a step onto them lands below, nobody stands there. With a tile around, it is fine.
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 10, y: 10, z: 7, radius: 4 }",
+      "{ x: 3692, y: 5796, z: 7 }",
+    );
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(
+        /every tile of reach point 3692,5796,7 radius 0 is the entrance of stairs/,
+      ),
+    ]);
+    edit("data/quests/ch3_gate.yaml", "z: 7 }", "z: 7, radius: 1 }");
+    expect(reachErrors()).toEqual([]);
+  });
+
+  it('checks a reach zone: a real one, none of a dev_only island, not all stairs (docs/06 "Quest")', () => {
+    realWorld();
+    // A zone: a real one, one of the sandbox island only (dev_only) and an unknown one.
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 3692, y: 5826, z: 8, radius: 4 }",
+      "{ zone: volcan_town }",
+    );
+    expect(reachErrors()).toEqual([]);
+    edit("data/quests/ch3_gate.yaml", "zone: volcan_town", "zone: pruebas_town");
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(
+        /reach zone "pruebas_town" is no zone of an island that is not dev_only/,
+      ),
+    ]);
+    // A zone whose only tile is the entrance of the volcano mine's stairs.
+    edit(
+      "world/islands/volcan/zones.yaml",
+      "- id: volcan_temple",
+      "- id: volcan_stairs\n  type: protection\n  floors: [7]\n  rects:\n    - { x: 3692, y: 5796, w: 1, h: 1 }\n\n- id: volcan_temple",
+    );
+    edit("data/quests/ch3_gate.yaml", "{ zone: pruebas_town }", "{ zone: volcan_stairs }");
+    expect(reachErrors()).toEqual([
+      expect.stringMatching(/every tile of reach zone "volcan_stairs" is the entrance of stairs/),
+    ]);
+  });
+
+  it('refuses a reach with a zone and a point, a radius too wide, a repeatable without a cooldown and an unknown quest_state (docs/06 "Quest")', () => {
+    realWorld();
+    edit(
+      "data/quests/ch3_gate.yaml",
+      "{ x: 3692, y: 5826, z: 8, radius: 4 }",
+      "{ zone: volcan_town, x: 1 }",
+    );
+    edit(
+      "data/quests/ch1_shipwreck.yaml",
+      "min_level: 1\n",
+      "min_level: 1\nrepeatable: { cooldown_hours: 0 }\n",
+    );
+    edit(
+      "data/quests/pruebas_rats.yaml",
+      "complete_when: { kill: { monster: bilge_rat, count: 3 } }",
+      "complete_when: { reach: { x: 2060, y: 2060, z: 7, radius: 40 } }",
+    );
+    const out = messages(root);
+    const has = (file: string, s: string): boolean =>
+      out.some((m) => m.startsWith("error") && m.includes(file) && m.includes(s));
+    expect(has("ch3_gate.yaml", "reach")).toBe(true);
+    expect(has("ch1_shipwreck.yaml", "cooldown_hours")).toBe(true);
+    expect(has("pruebas_rats.yaml", "radius")).toBe(true);
+    // quest_state tells a repeatable quest's turns apart; any other state is refused.
+    edit("data/npcs/pruebas_trainer.yaml", "state: cooling_down", "state: resting");
+    expect(
+      messages(root).some((m) => m.includes("pruebas_trainer.yaml") && m.includes("state")),
+    ).toBe(true);
+  });
+
+  it('refuses a repeatable quest that pays with no effort (docs/06 "Quests repetibles")', () => {
+    const errors = (): string[] =>
+      messages(root).filter(
+        (m) =>
+          m.startsWith("error") &&
+          /repeatable quest|own rewards set|talk range/.test(m) &&
+          !m.includes("i18n"),
+      );
+    // The real world, with where its NPCs stand.
+    realWorld("npcs.yaml");
+    expect(errors()).toEqual([]);
+    // A task of the volcano keeper whose first step is a reach two tiles from him: taking
+    // it completes it. Four tiles away is a walk.
+    const gate = "data/quests/ch3_gate.yaml";
+    edit(gate, "min_level: 35\n", "min_level: 35\nrepeatable: { cooldown_hours: 1 }\n");
+    edit(
+      gate,
+      "complete_when: { kill: { monster: obsidian_delver, count: 10 } }",
+      "complete_when: { reach: { x: 3664, y: 5798, z: 7 } }",
+    );
+    expect(errors()).toEqual([
+      expect.stringMatching(/reach whose place comes within talk range of npc "volcan_keeper"/),
+    ]);
+    edit(gate, "x: 3664, y: 5798, z: 7", "x: 3666, y: 5798, z: 7");
+    expect(errors()).toEqual([]);
+    const rats = "data/quests/pruebas_rats.yaml";
+    // Tails shown to the instructor, who takes none of them: the same tails every turn.
+    edit(
+      rats,
+      "complete_when: { kill: { monster: bilge_rat, count: 3 } }",
+      "complete_when: { has_item: { item: bilge_rat_tail, count: 3 } }",
+    );
+    expect(errors()).toEqual([
+      expect.stringMatching(/has_item must be followed by its delivery.*take_item of 3/),
+    ]);
+    // After a flag that may hold already, talking on to the instructor ends the turn.
+    edit(
+      rats,
+      "complete_when: { has_item: { item: bilge_rat_tail, count: 3 } }",
+      "complete_when: { flag_equals: { key: rats_cleared, value: 1 } }",
+    );
+    const talk = /cannot start with a dialog_action of npc "pruebas_trainer"/;
+    expect(errors()).toEqual([expect.stringMatching(talk)]);
+    // A flag its own rewards set holds from the second turn on.
+    edit(
+      rats,
+      "  - { gold: 50 }",
+      "  - { gold: 50 }\n  - { set_flag: { key: rats_cleared, value: 1 } }",
+    );
+    const out = errors();
+    expect(out).toHaveLength(2);
+    expect(out).toContainEqual(expect.stringMatching(/flag_equals rats_cleared = 1.*own rewards/));
+    expect(out).toContainEqual(expect.stringMatching(talk));
+  });
+
+  it("warns of quest_not_started of a repeatable quest", () => {
+    const warnings = (): string[] =>
+      messages(root).filter((m) => m.startsWith("warning") && m.includes("not_started of"));
+    expect(warnings()).toEqual([]);
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "if: { quest_state: { quest: pruebas_rats, state: available } }",
+      "if: { quest_not_started: pruebas_rats }",
+    );
+    expect(warnings()).toEqual([
+      expect.stringMatching(/not_started of repeatable quest "pruebas_rats" holds only before/),
+    ]);
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "if: { quest_not_started: pruebas_rats }",
+      "if: { quest_state: { quest: pruebas_rats, state: not_started } }",
+    );
+    expect(warnings()).toHaveLength(1);
+  });
+
+  it("refuses a quest_state that means nothing", () => {
+    const stateErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("quest_state:"));
+    expect(stateErrors()).toEqual([]);
+    // A step only goes with in_progress: available would ignore it.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "quest: pruebas_rats, state: available }",
+      "quest: pruebas_rats, state: available, step: hunt_rats }",
+    );
+    expect(stateErrors()).toEqual([
+      expect.stringMatching(/a step only goes with state in_progress, not available/),
+    ]);
+    edit("data/npcs/pruebas_trainer.yaml", ", step: hunt_rats }", " }");
+    // cooling_down of a quest that is not repeatable never holds.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "quest: pruebas_rats, state: cooling_down",
+      "quest: ch1_shipwreck, state: cooling_down",
+    );
+    expect(stateErrors()).toEqual([
+      expect.stringMatching(/cooling_down of quest "ch1_shipwreck", which is not repeatable/),
+    ]);
+  });
+
   it("checks a monster's corpse: a known container item that stays on its tile", () => {
     const monster = (id: string, corpse: string): void =>
       edit(
@@ -1073,6 +1275,118 @@ describe("validator diagnostics", () => {
       ]),
     );
     expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(6);
+  });
+
+  /**
+   * Appends a map item to data/items/decoration.yaml with its numeric id (at the end of the
+   * lock) and, for a chest whose id is not locked yet, its chest (at the end of the lock's
+   * chests, before its items).
+   */
+  const addItem = (id: string, n: number, block: string, extra = "pickupable: false"): void => {
+    appendFileSync(
+      file("data/items/decoration.yaml"),
+      [
+        "",
+        `- id: ${id}`,
+        "  kind: decoration",
+        "  sprite: decor/cargo_crate",
+        "  name: item.cargo_crate.name",
+        `  ${extra}`,
+        `  ${block}`,
+        "",
+      ].join("\n"),
+    );
+    const lock = `${readFileSync(file("data/ids.lock.yaml"), "utf8")}  ${id}: ${n}\n`;
+    const items = lock.search(/^items:/m);
+    const head = lock.slice(0, items);
+    const cid = /chest: \{ id: (\w+)/.exec(block)?.[1];
+    const chest =
+      cid === undefined || new RegExp(`^  ${cid}: `, "m").test(head)
+        ? ""
+        : `${head.includes("\nchests:\n") ? "" : "chests:\n"}  ${cid}: ${id}\n`;
+    writeFileSync(file("data/ids.lock.yaml"), head + chest + lock.slice(items));
+  };
+
+  it("checks reward chests: fixed, unique ids, one stack of what a backpack holds, never retired nor the forge's amber", () => {
+    const chest = (id: string, n: number, rewards: string, extra?: string): void =>
+      addItem(
+        id,
+        n,
+        `chest: { id: ${id.replace("test_chest", "cache")}, rewards: [${rewards}] }`,
+        extra,
+      );
+    chest(
+      "test_chest_a",
+      60001,
+      "{ item: silver_coin, count: 100 }, { item: iron_sword, count: 1 }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    addItem(
+      "test_chest_b",
+      60002,
+      "chest: { id: cache_a, rewards: [{ item: warding_amber, count: 1 }] }",
+    );
+    chest(
+      "test_chest_c",
+      60003,
+      "{ item: silver_coin, count: 101 }, { item: iron_sword, count: 2 }",
+    );
+    chest("test_chest_d", 60004, "{ item: driftwood_club, count: 1 }", "blocks_movement: true");
+    chest("test_chest_e", 60005, "{ item: nothing_here, count: 1 }");
+    chest("test_chest_f", 60006, "{ item: test_chest_a, count: 1 }");
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/chest id "cache_a" is also the one of "test_chest_a"/),
+        expect.stringMatching(/"warding_amber" is the forge's rare protection: no chest gives it/),
+        expect.stringMatching(/101 "silver_coin" do not make one stack \(at most 100\)/),
+        expect.stringMatching(/2 "iron_sword" do not make one stack \(at most 1\)/),
+        expect.stringMatching(/chest "test_chest_d" needs pickupable: false/),
+        expect.stringMatching(/"driftwood_club" is retired.*no chest gives it/),
+        expect.stringMatching(/nothing_here/),
+        expect.stringMatching(/"test_chest_a" cannot be picked up \(pickupable: false\)/),
+      ]),
+    );
+    expect(errors).toHaveLength(8);
+  });
+
+  it("counts a chest's rewards as a source of what NPCs buy", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    expect(messages(root).filter((m) => m.includes('buys "belaying_pin"'))).toHaveLength(1);
+    addItem(
+      "test_chest",
+      60000,
+      "chest: { id: test_cache, rewards: [{ item: belaying_pin, count: 1 }] }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+  });
+
+  it("checks a book's texts in every language and warns about book texts no item reads", () => {
+    addItem(
+      "test_book",
+      60000,
+      "book: { title: book.test_book.title, pages: [book.test_book.page_1, book.test_book.page_2] }",
+    );
+    for (const lang of ["es", "en"])
+      writeFileSync(
+        file(`i18n/${lang}/test_books.yaml`),
+        [
+          'book.test_book.title: "T"',
+          'book.test_book.page_1: "P"',
+          'book.test_book.unused: "U"',
+          "",
+        ].join("\n"),
+      );
+    const out = messages(root);
+    expect(out.filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(/i18n key "book\.test_book\.page_2" is missing in: es, en/),
+    ]);
+    expect(out).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/warning.*"book\.test_book\.unused" is not used/),
+      ]),
+    );
   });
 
   it("counts the tutorial's reward as a source of what NPCs buy (review of lote 11)", () => {

@@ -33,6 +33,7 @@ import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogBox, DialogWindow, ShopWindow } from "./Dialog.tsx";
 import { CraftingWindow, stationTitle } from "./Crafting.tsx";
+import { BookWindow, bookTitle } from "./Book.tsx";
 import { TradeWindow } from "./Trade.tsx";
 import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
@@ -40,6 +41,7 @@ import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import type { GuildTab } from "./Guild.tsx";
 import { AppearancePanel } from "./Appearance.tsx";
+import { QuestsPanel } from "./Quests.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
@@ -159,6 +161,8 @@ export function emptyGameUi(): GameUi {
     house: undefined,
     presence: undefined,
     tutorial: undefined,
+    quests: undefined,
+    clockOffset: 0,
     party: undefined,
     invitations: [],
     guild: undefined,
@@ -245,6 +249,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             market: ui.market !== undefined,
             house: ui.house !== undefined,
             trade: ui.trade !== undefined,
+            book: ui.book !== undefined,
           },
           [...ckeys.values()],
         )
@@ -260,6 +265,7 @@ export function GameView(props: GameViewProps): JSX.Element {
     else if (id === "market") game?.marketClose();
     else if (id === "house") game?.houseClose();
     else if (id === "trade") game?.tradeCancel();
+    else if (id === "book") game?.closeBook();
     else
       for (const [cid, key] of ckeys)
         if (key === id) {
@@ -530,6 +536,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
+  const quests = <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} />;
   const chat = (
     <ChatPanel
       t={t}
@@ -648,6 +655,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && !windowed && (
         <TradeWindow t={t} content={props.content} game={game} ui={ui} />
       )}
+      {props.entered && !windowed && ui.book && (
+        <BookWindow key={ui.book.at} t={t} content={props.content} game={game} ui={ui} />
+      )}
       {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
@@ -685,7 +695,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         windows={
           windowed
             ? shownKey(win.state)
-            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade]
+            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade, ui.book]
                 .map((w) => (w ? "1" : "0"))
                 .join("")
         }
@@ -710,6 +720,8 @@ export function GameView(props: GameViewProps): JSX.Element {
           return inventory;
         case "skills":
           return skills;
+        case "quests":
+          return quests;
         case "party":
           return party;
         case "guild":
@@ -810,6 +822,17 @@ export function GameView(props: GameViewProps): JSX.Element {
                 body: <TradeWindow {...common} />,
                 testid: "trade",
                 closeLabel: t("client.trade.cancel"),
+              }
+            : undefined;
+        case "book":
+          // A new book (or the same one used again) starts at its first page.
+          return ui.book
+            ? {
+                title: bookTitle(t, props.content, ui.book.itemId),
+                icon: "book",
+                body: <BookWindow key={ui.book.at} {...common} />,
+                testid: "book",
+                closeLabel: t("client.book.close"),
               }
             : undefined;
       }
@@ -1025,6 +1048,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             <div {...pane("battle", false)}>{fight}</div>
             <div {...pane("inventory", true)}>{inventory}</div>
             <div {...pane("skills", true)}>{skills}</div>
+            <div {...pane("quests", true)}>{quests}</div>
             <div {...pane("appearance", true)}>{appearance}</div>
           </div>
           <div {...pane("chat", true)}>
@@ -1061,6 +1085,7 @@ const WINDOW_SIZE: Record<Exclude<WindowId, "chat">, "narrow" | "normal" | "wide
   battle: "narrow",
   inventory: "narrow",
   skills: "narrow",
+  quests: "normal",
   party: "narrow",
   guild: "wide",
   appearance: "normal",
@@ -1540,6 +1565,7 @@ function HelpBody(props: { t: Translate }): JSX.Element {
   const keys: [string, string][] = [
     ["I", "client.inventory.title"],
     ["K", "client.skills.title"],
+    ["L", "client.quests.title"],
     ["B", "client.battle.title"],
     ["P", "client.party.title"],
     ["G", "client.guild.title"],

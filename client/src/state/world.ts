@@ -57,6 +57,8 @@ import { movesOnStep } from "./portals.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
+import { questLogFrom } from "./quests.ts";
+import type { QuestLogView } from "./quests.ts";
 import { heavyHit } from "../render/shake.ts";
 import { houseFrom } from "./house.ts";
 import type { HouseView } from "./house.ts";
@@ -464,6 +466,13 @@ export class WorldState implements TileSource {
   private presenceAnswered = 0;
   /** The tutorial step on screen (T4.2), until the server says it ended. */
   tutorial: TutorialView | undefined;
+  /**
+   * The quest log (QuestLog, docs/02 "Diario de misiones"); undefined until the server
+   * sends it (at login), or from a server without one.
+   */
+  quests: QuestLogView | undefined;
+  /** The server's clock minus the client's at the Welcome (ms): a task's countdown. */
+  clockOffset = 0;
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
@@ -632,6 +641,7 @@ export class WorldState implements TileSource {
         this.maxQueued = msg.value.maxQueuedSteps;
         this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
         this.attackEvents = msg.value.attackEvents;
+        if (msg.value.serverTime > 0n) this.clockOffset = Number(msg.value.serverTime) - Date.now();
         break;
       case "fullMapView":
         this.chunks.clear();
@@ -738,6 +748,9 @@ export class WorldState implements TileSource {
       }
       case "tutorialStep":
         this.tutorial = tutorialFrom(msg.value);
+        break;
+      case "questLog":
+        this.quests = questLogFrom(msg.value);
         break;
       case "presenceCheck":
         if (msg.value.checkId === this.presenceAnswered) break;

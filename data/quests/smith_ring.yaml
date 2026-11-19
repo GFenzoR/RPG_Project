@@ -1,0 +1,29 @@
+id: smith_ring
+name: quest.smith_ring.name
+min_level: 42
+notes: >-
+  Side quest from volcan_smith, Bram Tizón (lote 12, levels 42-45). He wants to set
+  obsidian in a ring the old way, with the heat of slag cores (slag golems, level 41,
+  15 %): bring 5. The forge-priests' rule says a ring of the old forge is quenched in the
+  Still Flame, so he sends you to Madre Oriela, whose option sets the flag
+  smith_ring_quenched (a flag_equals step), and back to him for the ring. The reward is an
+  obsidian ring (band 4, until now only rare loot), which rolls its attribute; it comes
+  after the experience, whose level-up raises the capacity it needs. Rewards: ~13 % of
+  the experience from 42 to 45 and about 7 minutes of a golem hunt's loot.
+steps:
+  - id: gather_cores
+    description: quest.smith_ring.step_gather_cores
+    complete_when: { has_item: { item: slag_core, count: 5 } }
+  - id: deliver_cores
+    description: quest.smith_ring.step_deliver_cores
+    complete_when: { dialog_action: { npc: volcan_smith, node: ring_cores } }
+  - id: quench_ring
+    description: quest.smith_ring.step_quench_ring
+    complete_when: { flag_equals: { key: smith_ring_quenched, value: 1 } }
+  - id: collect_ring
+    description: quest.smith_ring.step_collect_ring
+    complete_when: { dialog_action: { npc: volcan_smith, node: ring_done } }
+rewards:
+  - { xp: 25000 }
+  - { item: obsidian_ring }
+  - { gold: 1500 }

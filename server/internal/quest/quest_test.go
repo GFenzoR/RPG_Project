@@ -10,11 +10,15 @@ type host struct {
 	items   map[string]int
 	rewards []content.QuestReward
 	events  []EventKind
+	now     int64
+	inside  map[*content.Reach]bool
 }
 
 func (h *host) ItemCount(item string) int                      { return h.items[item] }
 func (h *host) Reward(_ *content.Quest, r content.QuestReward) { h.rewards = append(h.rewards, r) }
 func (h *host) Notify(e Event)                                 { h.events = append(h.events, e.Kind) }
+func (h *host) Now() int64                                     { return h.now }
+func (h *host) Inside(r *content.Reach) bool                   { return h.inside[r] }
 
 func testQuests(t *testing.T) content.Quests {
 	t.Helper()
@@ -100,10 +104,22 @@ func TestSetStepAndKillCountReset(t *testing.T) {
 	}
 	e.Start(l, "q", h)
 	e.Killed(l, "wolf", h)
+	h.events = nil
 	e.SetStep(l, "q", "wolves", h) // re-entering resets the kill count
+	// The host hears of the move although the step does not complete (its quest log, its
+	// reach places).
+	if len(h.events) != 1 || h.events[0] != StepSet {
+		t.Fatalf("events of SetStep %v, want [StepSet]", h.events)
+	}
 	e.Killed(l, "wolf", h)
 	if _, step := e.State(l, "q"); step != "wolves" {
 		t.Fatalf("step %q: kills before re-entering counted", step)
+	}
+	// A step that holds already completes after the move is reported.
+	h.items["pelt"], h.events = 2, nil
+	e.SetStep(l, "q", "pelt", h)
+	if _, step := e.State(l, "q"); step != "talk" || len(h.events) != 2 || h.events[0] != StepSet || h.events[1] != StepDone {
+		t.Fatalf("SetStep onto a step that holds: step %q, events %v", step, h.events)
 	}
 }
 

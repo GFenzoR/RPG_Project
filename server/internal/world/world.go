@@ -8,7 +8,10 @@
 // (Map.ReplaceItem, docs/02-game-design.md "Puertas con llave").
 package world
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // SectorSize is the side of a sector in tiles. It equals the chunk size of world/ JSON.
 const SectorSize = 32
@@ -126,6 +129,10 @@ type Island struct {
 	// (world/islands/<id>/portals.yaml), in file order: each leaves from a tile of the
 	// island and may lead to any island.
 	Portals []Portal
+	// Zones are the island's named zones (world/islands/<id>/zones.yaml), in file order:
+	// their rules are already tile flags; ids and rects stay for what names a place by
+	// zone (the reach steps of data/quests, docs/06 "Quest").
+	Zones []Zone
 
 	cx0, cy0 int                // first sector column/row
 	cw, ch   int                // sectors per row/column
@@ -152,6 +159,33 @@ func (is *Island) Sectors() []*Sector {
 		}
 	}
 	return out
+}
+
+// Zone is a named area of an island (world/islands/<id>/zones.yaml): the tiles of Rects on
+// each of Floors.
+type Zone struct {
+	ID     string
+	Floors []uint8
+	Rects  []ZoneRect
+}
+
+// ZoneRect is a rectangle of a zone, in tiles.
+type ZoneRect struct {
+	X, Y, W, H uint16
+}
+
+// Contains reports whether p lies in the zone.
+func (z *Zone) Contains(p Pos) bool {
+	if !slices.Contains(z.Floors, p.Z) {
+		return false
+	}
+	x, y := int(p.X), int(p.Y)
+	for _, r := range z.Rects {
+		if x >= int(r.X) && y >= int(r.Y) && x < int(r.X)+int(r.W) && y < int(r.Y)+int(r.H) {
+			return true
+		}
+	}
+	return false
 }
 
 // Spawn is a monster spawn: Monsters appear on free walkable tiles within Radius
@@ -494,6 +528,30 @@ func checkIsland(is *Island) error {
 			return fmt.Errorf("island %q: NPC %q at %v needs an id and a tile inside the island", is.ID, n.NPC, n.Pos)
 		}
 	}
+	for _, z := range is.Zones {
+		if err := checkZone(is, &z); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkZone checks a zone of is: an id, floors the island lists and rects inside it.
+func checkZone(is *Island, z *Zone) error {
+	if z.ID == "" || len(z.Floors) == 0 || len(z.Rects) == 0 || len(z.Floors) > MaxFloor+1 || len(z.Rects) > 0xFF {
+		return fmt.Errorf("island %q: zone %q needs an id, 1..%d floors and 1..255 rects", is.ID, z.ID, MaxFloor+1)
+	}
+	for _, f := range z.Floors {
+		if !is.hasFloor(f) {
+			return fmt.Errorf("island %q: zone %q is on floor %d, which the island does not list", is.ID, z.ID, f)
+		}
+	}
+	r := is.Rect
+	for _, zr := range z.Rects {
+		if zr.W == 0 || zr.H == 0 || !r.Contains(int(zr.X), int(zr.Y)) || !r.Contains(int(zr.X)+int(zr.W)-1, int(zr.Y)+int(zr.H)-1) {
+			return fmt.Errorf("island %q: zone %q: rect %+v is empty or leaves the island", is.ID, z.ID, zr)
+		}
+	}
 	return nil
 }
 
@@ -508,6 +566,29 @@ func (is *Island) hasFloor(z uint8) bool {
 
 // Islands returns the islands in load order.
 func (m *Map) Islands() []*Island { return m.islands }
+
+// Zone returns the zone with the given id and its island, or nil, nil. Zone ids are
+// unique in the world (mapcli validate); the first one wins.
+func (m *Map) Zone(id string) (*Island, *Zone) {
+	for _, is := range m.islands {
+		for i := range is.Zones {
+			if is.Zones[i].ID == id {
+				return is, &is.Zones[i]
+			}
+		}
+	}
+	return nil, nil
+}
+
+// IslandAt returns the island whose rect holds p on a floor it lists, or nil.
+func (m *Map) IslandAt(p Pos) *Island {
+	for _, is := range m.islands {
+		if is.Rect.Contains(int(p.X), int(p.Y)) && is.hasFloor(p.Z) {
+			return is
+		}
+	}
+	return nil
+}
 
 // Island returns the island with the given ID, or nil.
 func (m *Map) Island(id string) *Island {

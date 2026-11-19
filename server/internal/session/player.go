@@ -117,6 +117,13 @@ type Player struct {
 	dialog     *openDialog
 	nextDialog uint32
 	questDirty bool
+	// The quest log (questlog.go): the places of the current reach steps and the floors
+	// they are on (a bit per floor: a move off them costs one test), whether those must
+	// be read again after a quest changed, and whether the client's QuestLog is stale.
+	reach         []*reachPlace
+	reachFloors   uint16
+	reachStale    bool
+	questLogDirty bool
 
 	// Gathering (T1.12): the first tick p can gather again, the tile p has been
 	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet) and its last
@@ -543,13 +550,20 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.sendCosmetics(p) // T5.7
-	w.tellDiedAway(p)  // after its state: the death screen of a death while link-dead
+	// The quest log (questlog.go), empty too, goes at the flush of this tick: one QuestLog
+	// even when checkReach below completes a step.
+	p.questLogDirty = true
+	w.tellDiedAway(p) // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
 	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
 	w.tutorialJoin(p)
+	// Standing in the place of a reach step counts at login too (after the ledger: it may
+	// give the quest's rewards).
+	p.reachStale = true
+	w.checkReach(p)
 	w.guildJoin(p) // T5.1: its GuildUpdate, and the others see it online
 	if w.houseOn {
 		w.houseSeen(ctx.Now, p, true) // content audit M6: the account is not away

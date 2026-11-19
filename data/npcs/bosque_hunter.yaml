@@ -1,0 +1,108 @@
+id: bosque_hunter
+name: npc.bosque_hunter.name
+sprite: npcs/hunter_forest
+notes: >-
+  Huntsman of Raigal (lote 12): keeps the hunt board, the town's standing bounties on what
+  threatens the woods, as three repeatable tasks (data/quests/bounty_*.yaml): 25 coffer
+  smugglers from level 15, 25 thornlings from 18 and 30 hollow crawlers from 22, each every
+  20 hours (docs/02 "Tareas"). He stands at the east edge of the plaza (4173,6106), where
+  the road leaves for the deep forest.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.bosque_hunter.greet
+      options:
+        - text: npc.bosque_hunter.opt_report_smugglers
+          if: { quest_state: { quest: bounty_smugglers, state: in_progress, step: report } }
+          goto: smugglers_paid
+        - text: npc.bosque_hunter.opt_report_thornlings
+          if: { quest_state: { quest: bounty_thornlings, state: in_progress, step: report } }
+          goto: thornlings_paid
+        - text: npc.bosque_hunter.opt_report_crawlers
+          if: { quest_state: { quest: bounty_crawlers, state: in_progress, step: report } }
+          goto: crawlers_paid
+        - text: npc.bosque_hunter.opt_board
+          goto: board
+        - text: npc.bosque_hunter.opt_woods
+          goto: woods
+        - text: dialog.bye
+          action: close
+    # The board: a task shows its offer while available (and at its level) or its wait while
+    # cooling down (docs/06 "Quests repetibles"); one in progress shows in the quest log.
+    board:
+      text: npc.bosque_hunter.board
+      options:
+        - text: npc.bosque_hunter.opt_smugglers
+          if: [{ quest_state: { quest: bounty_smugglers, state: available } }, { level_at_least: 15 }]
+          goto: smugglers_offer
+        - text: npc.bosque_hunter.opt_smugglers
+          if: { quest_state: { quest: bounty_smugglers, state: cooling_down } }
+          goto: wait
+        - text: npc.bosque_hunter.opt_thornlings
+          if: [{ quest_state: { quest: bounty_thornlings, state: available } }, { level_at_least: 18 }]
+          goto: thornlings_offer
+        - text: npc.bosque_hunter.opt_thornlings
+          if: { quest_state: { quest: bounty_thornlings, state: cooling_down } }
+          goto: wait
+        - text: npc.bosque_hunter.opt_crawlers
+          if: [{ quest_state: { quest: bounty_crawlers, state: available } }, { level_at_least: 22 }]
+          goto: crawlers_offer
+        - text: npc.bosque_hunter.opt_crawlers
+          if: { quest_state: { quest: bounty_crawlers, state: cooling_down } }
+          goto: wait
+        - { text: dialog.back, goto: greet }
+    smugglers_offer:
+      text: npc.bosque_hunter.smugglers_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: bounty_smugglers }
+          goto: accepted
+        - text: dialog.decline
+          goto: board
+    thornlings_offer:
+      text: npc.bosque_hunter.thornlings_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: bounty_thornlings }
+          goto: accepted
+        - text: dialog.decline
+          goto: board
+    crawlers_offer:
+      text: npc.bosque_hunter.crawlers_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: bounty_crawlers }
+          goto: accepted
+        - text: dialog.decline
+          goto: board
+    accepted:
+      text: npc.bosque_hunter.accepted
+      options:
+        - { text: dialog.back, goto: board }
+        - { text: dialog.bye, action: close }
+    wait:
+      text: npc.bosque_hunter.wait
+      options:
+        - { text: dialog.back, goto: board }
+        - { text: dialog.bye, action: close }
+    smugglers_paid:
+      text: npc.bosque_hunter.smugglers_paid
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    thornlings_paid:
+      text: npc.bosque_hunter.thornlings_paid
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    crawlers_paid:
+      text: npc.bosque_hunter.crawlers_paid
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    woods:
+      text: npc.bosque_hunter.woods
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }

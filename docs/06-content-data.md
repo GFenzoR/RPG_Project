@@ -79,6 +79,8 @@ i18n/
 
 ## IDs numéricos (`ids.lock.yaml`)
 ```yaml
+chests:                  # cofres de recompensa: id del cofre → su item
+  puerto_mine: chest_puerto_mine
 items:
   grass: 3
   iron_sword: 13
@@ -88,6 +90,12 @@ items:
 - Solo se agrega: si borras un item su número queda en el lock (aviso "retired id") y
   nunca se reutiliza. `make validate` compara con la rama base (`origin/main`, o la ref
   de `CONTENT_BASE_REF`) y falla si un número cambió o desapareció.
+- `chests` (lote 12): `make gen-ids` agrega cada cofre nuevo (bloque `chest` de un item,
+  "Libros y cofres" más abajo) con su item, en el orden en que aparecen; no agrega uno
+  cuyo id ya es de otro item ni uno cuyo item ya tiene otro id fijado (un id reutilizado o
+  renombrado: `make validate` lo rechaza). Como los números, solo se agrega: un cofre
+  borrado queda (aviso) y la comparación con la rama base falla si uno desapareció o
+  cambió de item. Al resolver un conflicto en el lock, corre `make gen-ids` otra vez.
 
 ## Convenciones
 - IDs en `snake_case` en inglés (`wolf`, `harbor_master`, `iron_sword`).
@@ -290,6 +298,55 @@ items:
   puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
   diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo sin llaves
   ni herramientas; nadie entra a una sala sin su llave).
+- **Libros y cofres** (`02-game-design.md` "Libros y cofres"; los del juego están en
+  `data/items/exploration.yaml`): dos bloques para items del mapa (`pickupable: false`).
+  ```yaml
+  - id: scroll_dawn_manifest
+    kind: decoration
+    sprite: decor/scroll          # decor/book_closed, decor/lectern_book (bloquea) o decor/scroll
+    name: item.scroll.name        # nombre compartido: item.<id>.name lo recibe en el cliente
+    description: item.scroll_dawn_manifest.desc   # lo que dice Mirar: una línea
+    pickupable: false
+    book:
+      title: book.scroll_dawn_manifest.title
+      pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
+  - id: chest_puerto_mine
+    kind: decoration
+    sprite: decor/reward_chest
+    name: item.reward_chest.name
+    description: item.reward_chest.desc
+    pickupable: false
+    blocks_movement: true
+    chest:
+      id: puerto_mine             # storage chest.puerto_mine: único entre los cofres
+      rewards:                    # todas juntas o nada
+        - { item: silver_coin, count: 3 }
+        - { item: plank_shield, count: 1 }
+  ```
+  - `book`: `title` y `pages` (1 a 12) son claves i18n de `i18n/<idioma>/books.yaml`
+    (`book.<id>.title`, `book.<id>.page_<n>`, en los dos idiomas: el validador lo exige y
+    avisa de un texto `book.*` que ningún item lee). El plugin del cliente empaqueta
+    `books.yaml` entero: la ventana de lectura no le pide nada al servidor. El servidor
+    también rechaza al cargar un libro sin título, sin páginas o con más de 12
+    (`content.MaxBookPages`).
+  - `chest`: `id` (único entre los cofres) y `rewards` (1 a 8 `{ item, count }`, `count`
+    de 1 a una pila: 1 para lo que no se apila). `make validate` (`checkChests`) y el
+    servidor al arrancar (`content.CheckChests`, más la protección de la forja en
+    `session.initChests`) rechazan un cofre que se levanta, un id repetido, uno sin
+    recompensas o con más de 8 (`content.MaxChestRewards`), una recompensa
+    que no existe, que no se levanta (`pickupable: false`: un muro, un atril u otro cofre
+    no van a la mochila), retirada (`retired`), de más de una pila o que sea la protección
+    de la forja (`balance.yaml → forge.protection`, el ámbar de resguardo). Un cofre cuenta como
+    fuente de lo que da (lo que compra un NPC necesita una; `catalog.test.ts` también lo
+    cuenta).
+  - **El `id` de un cofre es para siempre:** es la clave `chest.<id>` del storage de cada
+    personaje que lo abrió. Renombrarlo deja que todos lo abran otra vez; reutilizarlo en
+    otro cofre hace que quien abrió el viejo no pueda abrir el nuevo. `make gen-ids` lo
+    fija con su item en `ids.lock.yaml` (`chests`, ver "IDs numéricos") y `make validate`
+    falla si un id fijado cambia de item o si el item tiene ahora otro id.
+  - **En el mapa** (`mapcli validate`, docs/03 "Validación"): cada `id` de cofre está una
+    sola vez en todo el mundo (dos copias del item se abrirían una vez entre las dos) y
+    junto a una casilla a la que se llega a pie desde el templo de su isla.
 
 ## Atributo
 `data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,
@@ -496,7 +553,17 @@ Viaje en barco (de `data/npcs/harbor_master.yaml`): el nodo marcado ofrece las r
 ```
 Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 `lacks_item` (tiene menos de `count`, por defecto 1: lo contrario de `has_item`),
-`quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
+`quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`. El `state` de
+`quest_state` es `not_started`, `in_progress` o `completed` (lo guardado), o uno de los dos
+que separan los turnos de una tarea repetible ("Quest"): `available` (`start_quest` la
+empezaría ahora: nunca empezada, o repetible y ya pasó su espera) y `cooling_down`
+(repetible, terminada, esperando). Una tarea se ofrece con `available`, no con
+`quest_not_started` (que después de la primera vez no vuelve a valer): `make validate` avisa
+(warning) de un `quest_not_started` o un `quest_state` `not_started` de una quest
+repetible, y el servidor lo registra en el log al arrancar (`content.RefWarnings`). `make validate` y el
+servidor al arrancar (`CheckRefs`) rechazan lo que no significa nada: `step` con un `state`
+que no sea `in_progress` (con `available` o `cooling_down` se ignoraría, con los demás nunca
+vale) y `cooling_down` de una quest que no es repetible.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
 `teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
@@ -598,7 +665,8 @@ Semántica del motor (T1.10):
 
 Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
 `quest.<id>` (1 en curso, 2 completada), `quest.<id>.step` (índice del paso actual),
-`quest.<id>.kills` (muertes del paso actual), `flag.<key>` (los `set_flag` y
+`quest.<id>.kills` (muertes del paso actual), `quest.<id>.done_at` (una tarea repetible:
+cuándo se terminó, segundos Unix del reloj del loop), `flag.<key>` (los `set_flag` y
 `flag_equals`) y `bless.<id>`. Se guarda con el personaje, en la misma transacción.
 
 El motor de diálogos (`server/internal/dialog`) solo interpreta este YAML: no hay
@@ -634,8 +702,18 @@ unos rectángulos de unos pisos): ver "Música de una quest importante", en "Son
 
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
-  cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`.
+  cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`. Se dan en
+  el orden escrito (los `set_flag` al final). La experiencia puede subir el nivel, y con
+  él la capacidad: un item escrito antes cae a los pies de quien no lo podía cargar, uno
+  escrito después ya entra. Por eso la experiencia va primero, después el item y al final
+  el oro (`sim/balance_tasks_test.go`, `TestQuestRewardOrder`, lo exige a toda quest de
+  `data/`). Una quest que termina en un paso `kill` paga donde está el jugador, sin volver
+  al NPC.
 - `quest_state` con `step` se cumple si la quest está `in_progress` y su paso actual es ese.
+- `set_quest_step` lleva una quest `in_progress` a un paso, adelante o atrás: el paso pasa
+  a ser el actual como cualquier otro (su conteo de `kill` empieza en 0 y `has_item`,
+  `flag_equals` y `reach` se evalúan en el acto), el servidor relee los lugares `reach` del
+  jugador y el diario de misiones sale en ese tick aunque el paso no se cumpla.
 - `dialog_action` se cumple cuando el jugador llega a ese nodo del NPC (las acciones de la
   opción se ejecutan antes de entrar al nodo). Las opciones que llevan a ese nodo deben
   estar condicionadas al paso correcto con `quest_state`.
@@ -651,14 +729,87 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
 - `make validate` exige que todo item de un paso `has_item` se pueda conseguir (loot, tienda,
   `give_item` o recompensa de quest). `server/internal/sim/balance_test.go` comprueba además que la
   fuente más fácil no esté más de 4 niveles por encima del `min_level` de la quest.
+- `reach` se cumple mientras el jugador está en un lugar: `reach: { zone: <id> }` (una
+  zona de `world/islands/*/zones.yaml`, de cualquier tipo: un pueblo, un muelle, una arena)
+  o `reach: { x, y, z, radius }` (las casillas a `radius` o menos, Chebyshev, de ese punto,
+  en el piso `z`; `radius` va de 0, la casilla sola, a 16). Se evalúa cuando el paso pasa a
+  ser el actual (si el jugador ya está ahí, se cumple en el acto), después de cada paso y
+  de cada reubicación (teletransporte, escalera, agujero, soga, barco, el templo al morir,
+  un `teleport` de diálogo) y al entrar al juego. El paso sobre la entrada de una escalera,
+  un agujero o un teletransporte no cuenta: el jugador nunca se queda ahí, cuenta la casilla
+  donde cae. No cuesta nada por tick: el servidor
+  guarda por jugador los lugares de sus pasos `reach` actuales y un bit por piso, y solo
+  mira a quien camina por uno de esos pisos (`session/questlog.go`). Para que el paso se
+  pueda cumplir siempre (una coordenada mal escrita que cae en roca o en agua dejaría la
+  quest trabada para siempre, sin forma de abandonarla):
+  - `make validate`, el servidor al arrancar y la prueba del mundo real
+    (`TestRealWorldStarts`) exigen que la zona exista o que el punto caiga dentro del
+    rectángulo de una isla (`world.yaml`) en un piso que su `island.yaml` liste, y que el
+    lugar tenga al menos una casilla caminable que no sea la entrada de una escalera, un
+    agujero o un teletransporte (`portals.yaml`);
+  - `make validate` exige además que el lugar esté en una isla que no sea `dev_only` (el
+    servidor de producción no la tiene: su `world.bin` se compila sin islas dev, y un
+    servidor de desarrollo sí acepta zonas de la Isla de Pruebas) y que esa casilla se
+    alcance a pie desde el templo de su isla (`mapcli validate`, el mismo recorrido que
+    las zonas, con escaleras, agujeros y teletransportes contando donde caen).
+
+  Para un lugar sin zona propia (una cueva, un santuario), el punto con radio.
+- Los pasos se guardan por índice (`quest.<id>.step`): agregar, quitar o reordenar pasos de
+  una quest que ya se juega corre a los personajes que van por ella a otro paso. Agrega
+  pasos nuevos al final o, si van en el medio, asegúrate de que nadie quede trabado en el
+  paso que pasa a ocupar su índice (así se insertó `reach_gate` en `ch3_gate`, docs/14).
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
 `completed` y su propio `level_at_least`; entregas con `has_item` + `take_item` con
-`count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: "ir a un
-lugar y abrir" es un `dialog_action` con un NPC puesto en ese lugar, el eco de la forja,
-que toma la llave con `take_item`) y las quests secundarias `foreman_ore` y
-`diver_locket`.
+`count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: llegar a la
+antesala de la puerta sellada es el paso `reach_gate`, un `reach` a 4 casillas del eco de
+la forja, y abrirla es un `dialog_action` con el eco, que toma la raíz con `take_item`), las
+quests secundarias `foreman_ore` y `diver_locket`, las del lote 12 (docs/02 "Quests
+secundarias": `ferryman_jetty` y `flame_crater` con un `reach` a un punto con radio,
+`flame_crater` que termina en su paso `kill`, `smith_ring` con un `flag_equals` cuyo flag
+pone la opción de otro NPC, `set_flag` de Madre Oriela), las tareas de caza
+`bounty_*` de Raigal y Brasal (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de la
+Isla de Pruebas (`repeatable`, docs/16).
+
+### Quests repetibles (tareas)
+```yaml
+id: pruebas_rats
+repeatable: { cooldown_hours: 0.05 }   # tres minutos; acepta fracciones
+steps: [...]
+rewards:
+  - { xp: 200 }
+  - { gold: 50 }
+```
+- Al terminarla se guarda `quest.<id>.done_at` (segundos Unix del reloj del loop, el reloj
+  inyectado; nunca `time.Now()`). `start_quest` la vuelve a empezar cuando pasaron
+  `cooldown_hours` desde entonces: desde el primer paso, sin muertes contadas y sin
+  `done_at` hasta que se termine otra vez. Antes, no hace nada.
+- Las `rewards` (también los `set_flag`) se dan cada vez.
+- Mientras corre otra vez está `in_progress`; terminada, `completed` (con `available` o
+  `cooling_down` según su espera). Una ruta de barco con `requires: { quest }` de una tarea
+  dejaría de valer mientras la tarea corre de nuevo: no la uses así.
+- `cooldown_hours` va de más de 0 a 8784 (un año). Una quest que se volvió repetible
+  después de terminada (sin `done_at`) está disponible en el acto.
+- El diálogo que la ofrece pregunta `quest_state: { quest: <id>, state: available }` y
+  puede tener otra opción con `cooling_down` ("vuelve más tarde").
+- Ningún turno se puede cumplir sin esfuerzo, que pagaría una recompensa por cada espera
+  con uno o dos clicks. `make validate` (`checkRepeatable`) y el servidor al arrancar
+  (`content.CheckRepeatable`, en `CheckRefs` y otra vez con el mapa en `initReach`)
+  rechazan en una quest repetible:
+  - un paso `has_item` que no va seguido de su entrega: un paso `dialog_action` cuyo nodo
+    se alcanza solo por opciones que quitan con `take_item` al menos esa cantidad del item
+    (si no, los mismos items la cumplen en cada turno);
+  - un paso `flag_equals` de una clave y un valor que ponen sus propias `rewards`
+    (`set_flag`): desde el segundo turno se cumple apenas pasa a ser el actual;
+  - entre los pasos que pueden cumplirse en el momento de tomarla (los primeros, mientras
+    sean `flag_equals`, que puede valer ya), un `dialog_action` con un NPC que la da
+    (seguir hablando ahí mismo la termina) o un `reach` cuyo lugar queda a 3 casillas o
+    menos (`TalkRange`, mismo piso) de donde está parado un NPC que la da (tomarla ahí la
+    termina). Después de un paso que cuesta (matar, juntar items que se entregan, ir a otro
+    lugar), volver al NPC sí vale: así cierra `pruebas_rats`.
+- El diario de misiones (docs/02 "Diario de misiones", `QuestLog` de docs/05) muestra una
+  tarea terminada con el tiempo que falta para volver a tomarla.
 
 ## Hechizo
 ```yaml

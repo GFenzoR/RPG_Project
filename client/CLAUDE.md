@@ -159,8 +159,8 @@ client/
 - Click derecho sobre un NPC (o `Game.attack` con un NPC) = `NpcTalk`. Con un diálogo
   abierto, 1–9 eligen el botón con ese número (desde A5 los botones van por tema:
   `state/dialog.ts` `dialogLayout`), 0 "Volver" y Escape manda `DialogChoose` 0.
-- Los NPCs no van en la lista de batalla. El plugin de Vite incluye `dialog.yaml` y
-  `npcs.yaml` completos y los nombres de `quests.yaml`; un `content_id` llamado `quest`
+- Los NPCs no van en la lista de batalla. El plugin de Vite incluye `dialog.yaml`,
+  `npcs.yaml` y `quests.yaml` completos (los textos de los pasos, para el diario); un `content_id` llamado `quest`
   se traduce como `quest.<id>.name`.
 
 ## Notas de T1.11
@@ -726,6 +726,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
   `12b-puerto-temple-sign`).
 
+## Notas de libros y cofres (docs/02 "Libros y cofres", rama `feat/chests-books`)
+- `ItemDef.book` (`BookDef`: claves de título y páginas) y `ItemDef.chest` salen de
+  `cardFields` (`vite/content.ts`); el plugin empaqueta `books.yaml` entero (`CATALOGS`).
+- **Ventana de lectura, sin servidor** (`state/book.ts`, `ui/Book.tsx`): `Game.useItem` de
+  un item con `book` no manda `UseItem`: `openBook` publica `GameUi.book` (`BookState`:
+  item y hora) y `closeBook` lo borra (×, Escape del `Game`). En escritorio es la ventana
+  `book` de `SERVER_WINDOWS` (`serverWindows` con `book`, `serverClose` → `closeBook`),
+  centrada (`windows.css`) y con el ícono `book`; en tablets y teléfonos, una hoja sobre el
+  mapa como las del servidor (`client.css`). `BookWindow` lleva `key` por la hora de
+  apertura: cada uso empieza en la página 1. `BookBody` no usa hooks (`ui/Book.test.ts`).
+  Test ids: `book` (el marco), `book-page`, `book-prev`, `book-next`,
+  `book-page-number`. Hook E2E `__rpgClient.book()`.
+- **Cofres:** un `UseItem` común; el servidor contesta `chest.found`, `chest.empty` o
+  `chest.no_room`. `ItemFacts.chest` da "Abrir" y `ItemFacts.book` "Leer"
+  (`input/actions.ts`, `client.touch.action.read`, `client.action.read`); los dos cuentan
+  como `usable` (el texto del cursor). Vista previa: escenas `book` y `scroll`.
+
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
   listeners de puntero del canvas y de los items del DOM separan por `pointerType`
@@ -1231,7 +1248,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     `data-tutorial="stats"`). Los test ids `health`, `mana`, `level`, `experience` y
     `conditions` siguen ahí con los mismos textos;
   - la hotbar (`ui/Hotbar.tsx`, ya no sobre el mapa) y `ui/Toolbar.tsx`: botones con íconos
-    propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de cinco a 1x, o una
+    propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de seis a 1x, o una
     fila a 2x desde 1600 px) que abren y cierran las ventanas, el mercado (solo lo cierra:
     se abre desde un tablero) y "Salir del juego";
   - el chat ya no está en una columna: es una ventana más, flotante y translúcida, con sus
@@ -1246,7 +1263,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   arrastran por la barra, con el imán (`snapPlace`). Doble click en la barra la pliega. Cierran con un
   fundido de 100 ms (`CLOSE_MS`, `[data-closing]`). Teclas (`WINDOW_KEYS`, solo fuera de
   un campo de texto y después del listener del `Game`): I inventario, K habilidades,
-  B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
+  L misiones, B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
   la de arriba de la pila (la última abierta o tocada; el chat nunca) o, si no hay, abre
   Opciones. Un resaltado del tutorial abre su
   ventana (`windowForHighlight`). Desde `feat/ui-windows-2` las ventanas del servidor
@@ -1752,3 +1769,29 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `local`, `party`, `guild`, `global` o `log`; `chat-opacity` es el deslizador; una ventana
   en un lugar que eligió `defaultPlace` lleva `data-auto`. A 1280x800 el intercambio de
   `52-trade-window` ya no sale arriba al centro si eso tapa al compañero de arriba.
+
+## Notas del diario de misiones (lote 12, rama `feat/quest-engine`)
+- `WorldState.quests` (de `QuestLog`, `state/quests.ts`, puro y con tests: `questLogFrom`,
+  `questTabs`, `cooldownLeft`, `timeLeft`) es el diario entero que manda el servidor al
+  entrar y en cada tick en que cambia una quest; `undefined` hasta entonces.
+  `WorldState.clockOffset` es el reloj del servidor menos el del cliente al llegar el
+  `Welcome` (`server_time`): la cuenta atrás de una tarea (`available_at`, ms Unix del
+  servidor) va sobre `Date.now() + clockOffset`. `GameUi.quests` y `GameUi.clockOffset`.
+- `ui/Quests.tsx`: `QuestsBody` sin hooks (`ui/Quests.test.ts` recorre su árbol, expandiendo
+  `QuestItem`) y `QuestsPanel` con la pestaña abierta y un intervalo de 1 s solo mientras
+  una tarea espera (`cooling`). Ventana `quests` de `WINDOW_IDS` (tecla L, `normal`, su
+  lugar de fábrica a la izquierda del inventario, 6rem abajo, como el gremio y la
+  apariencia; tapa el tutorial como ellos, `tutorialCovered`), ícono `journal` en la
+  botonera y pestaña `quests` del panel en teléfonos.
+- Test ids: `quests`, `[data-quest-tab=active|finished]`, `.quest[data-quest=<id>]`
+  (`data-state` `active`, `done` o `cooling`), `quest-step`, `quest-kills`,
+  `quest-cooldown`, `quest-done`, `quests-empty`; la ventana es `window-quests` y su botón
+  `toolbar-quests`.
+- Vista previa: escenas `quests` y `questsdone` (la pestaña de terminadas) de
+  `make ui-preview`; `allwindows` la abre también.
+- E2E: "sandbox: the quest log, a lectern's book and a reward chest that gives once"
+  (`e2e/sandbox.spec.ts`) siembra el capítulo 1 en 2/6 lobos y la tarea de práctica en
+  espera con `psql`, abre `quests` con `openWindow` (`WindowId` de `e2e/windows.ts` incluye
+  `quests`) y mira las dos pestañas; después lee el atril del templo y abre su cofre dos
+  veces (screenshots `96-sandbox-quests`, `96b-sandbox-quests-finished`, `97-sandbox-book`,
+  `98-sandbox-chest`).

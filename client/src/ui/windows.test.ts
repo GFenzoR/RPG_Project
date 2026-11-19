@@ -6,6 +6,7 @@ import {
   SNAP_PX,
   WINDOW_IDS,
   WINDOW_KEYS,
+  WINDOW_KEY_LABEL,
   WINDOWS_VERSION,
   clampPlace,
   clampSize,
@@ -23,6 +24,7 @@ import {
   tutorialCovered,
   focusWindow,
   isClosable,
+  isServerWindow,
   keptHeight,
   knownWindows,
   loadWindows,
@@ -294,6 +296,9 @@ describe("keys", () => {
     expect(windowKey(s, { code: "KeyK" })?.win.skills.open).toBe(true);
     expect(windowKey(s, { code: "KeyI" })?.win.inventory.open).toBe(false);
     expect(windowKey(s, { code: "KeyK", ctrlKey: true })).toBeUndefined();
+    // L: the quest log (docs/02 "Diario de misiones").
+    expect(windowKey(s, { code: "KeyL" })?.win.quests.open).toBe(true);
+    expect(WINDOW_KEY_LABEL.quests).toBe("L");
     for (const code of ["KeyW", "KeyA", "KeyS", "KeyD", "Digit1", "F1", "Enter"])
       expect(windowKey(s, { code })).toBeUndefined();
     expect(Object.keys(WINDOW_KEYS)).not.toContain("KeyW");
@@ -527,6 +532,17 @@ describe("which server windows show", () => {
       "house",
       "container-bag",
     ]);
+  });
+
+  it('shows the reading window whatever else is open (docs/02 "Libros y cofres")', () => {
+    expect(serverWindows({ ...none, book: true }, [])).toEqual(["book"]);
+    expect(serverWindows({ ...none, dialog: true, book: true }, ["container-bag"])).toEqual([
+      "dialog",
+      "book",
+      "container-bag",
+    ]);
+    // Remembered like the server's windows: it reopens where the player left it.
+    expect(isServerWindow("book")).toBe(true);
   });
 });
 
@@ -786,12 +802,13 @@ describe("which windows are looked at for a place that sees the others (toLookAt
 });
 
 describe("the tutorial's hint gives way (tutorialCovered)", () => {
-  it("while the help, the guild or the appearance sits at its factory place", () => {
+  it("while the help, the guild, the appearance or the quest log sits at its factory place", () => {
     const s = defaultWindows();
     expect(tutorialCovered(s)).toBe(false);
     expect(tutorialCovered(openWindow(s, "help"))).toBe(true);
     expect(tutorialCovered(openWindow(s, "guild"))).toBe(true);
     expect(tutorialCovered(openWindow(s, "appearance"))).toBe(true);
+    expect(tutorialCovered(openWindow(s, "quests"))).toBe(true);
     // Moved elsewhere, or another window: the hint stays.
     expect(tutorialCovered(moveWindow(openWindow(s, "help"), "help", 300, 400))).toBe(false);
     expect(tutorialCovered(openWindow(s, "options"))).toBe(false);

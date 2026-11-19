@@ -462,3 +462,38 @@ secundaria.
   con runas); ninguna pieza de equipo usa ya un ícono de Dungeon Crawl. `spritegen sheet`
   deja las hojas en el slot del inventario a 1x y 2x. Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (lote 12,
+  rama `feat/quest-engine`; auditoría de juego del lote 10).** Lo que pide cada isla nueva:
+  un paso `reach` (una zona del mapa o un punto con radio; cuenta al caminar, al
+  reubicarse y al entrar, sin costo por tick), quests repetibles con espera
+  (`repeatable: { cooldown_hours }`, recompensa cada vez, `quest_state` `available` y
+  `cooling_down`) y el diario de misiones: el mensaje `QuestLog` y la ventana "Misiones"
+  (tecla L; pestaña en teléfonos) con el paso actual, las muertes y la espera de una tarea.
+  `world.bin` v7 guarda las zonas por id. Como prueba: el paso `reach_gate` de `ch3_gate`
+  y la tarea de práctica de la Isla de Pruebas. Lo que queda: docs/14, "Pendientes
+  conocidos" (las tareas de caza son de `feat/side-quests`).
+- [x] **Libros y cofres (auditoría del 2026-11-19, game.items[12]; lote 12, rama
+  `feat/chests-books`).** Explorar paga: nueve libros y pergaminos con lore propio (el
+  imperio hundido, las islas, los capítulos 1 a 3) en los templos, el archivo de Casia, el
+  atril de Velia, el naufragio, la cueva de los contrabandistas y la mina inundada, que se
+  leen en una ventana del cliente sin pedirle nada al servidor; y cinco cofres de
+  recompensa (bloque `chest`) que dan una vez por personaje, todo o nada, con lo de su
+  banda, registrados en `economy_log` con la fuente `chest`. Arte del motor de sprites.
+  docs/02 "Libros y cofres"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Pueblos amueblados y minas con luz (auditoría del 2026-11-19, art.items[0] y [3];
+  lote 12, rama `feat/town-props`).** Un kit de doce props de una casilla del motor de
+  sprites (barril y mesa con elevación, banco, estante, cama, farol con luz, pozo, sacos,
+  red de pesca, jardinera, puesto de mercado y mástil con bandera; el toldo, la bandera y
+  la llama del farol animados con `sync: tile`), los templos, plazas, depósito, tiendas y
+  casas del Farol, Raigal y Brasal amueblados con `mapcli`, y el arte que no estaba en
+  ningún mapa en su lugar: fuentes, braseros, estandartes, muros con ventana y una
+  antorcha de pared cada 7 casillas en las tres minas. docs/17 "Kit de props de pueblo",
+  docs/03 "Muebles y luces"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Quests secundarias y tareas de caza del Bosque y del Volcán (lote 12, rama
+  `feat/side-quests`; auditoría de juego del lote 10).** Cinco quests secundarias para los
+  huecos de nivel (22–28 en el Bosque; 30–33 y 42–48 en el Volcán) con NPCs que ya estaban,
+  pasos `reach`, `flag_equals` y una que termina en su muerte, y seis tareas de caza de 20
+  horas en Raigal y Brasal con dos NPCs nuevos (Fenn Zarzal y Orso Pedernal), todo en
+  datos. Recompensas medidas contra la caza simulada (`sim/balance_tasks_test.go`; docs/02
+  "Quests secundarias", "Tareas" y "Economía"). Lo que queda: docs/14, "Pendientes
+  conocidos".

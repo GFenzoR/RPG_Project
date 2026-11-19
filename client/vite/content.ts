@@ -66,13 +66,17 @@ const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
 const CATALOGS = [
   "client.yaml",
+  // The texts of the books and scrolls (docs/02 "Libros y cofres"): read without the server.
+  "books.yaml",
   "vocations.yaml",
   "dialog.yaml",
   "npcs.yaml",
   "tutorial.yaml",
   "cosmetics.yaml",
+  // Every key: the quest log (ui/Quests.tsx) shows each step's text, not only names.
+  "quests.yaml",
 ];
-const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "quests.yaml", "world.yaml"];
+const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "world.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 
 export const repoRoot = (): string =>
@@ -405,6 +409,13 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
   if (raw["pickupable"] === false) out.fixed = true;
   if (raw["market_board"] === true) out.board = true;
   if (raw["quest"] === true) out.quest = true;
+  const b = raw["book"];
+  if (isObj(b) && typeof b["title"] === "string" && Array.isArray(b["pages"]))
+    out.book = {
+      title: b["title"],
+      pages: b["pages"].filter((p): p is string => typeof p === "string"),
+    };
+  if (isObj(raw["chest"])) out.chest = true;
   return out;
 }
 

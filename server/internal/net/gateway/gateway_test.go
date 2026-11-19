@@ -219,7 +219,8 @@ func TestHandshakeAndWalk(t *testing.T) {
 		t.Fatal(err)
 	}
 	evs := b.GetEvents()
-	if len(evs) != 5 || evs[0].GetWelcome() == nil || evs[1].GetFullMapView() == nil || evs[2].GetPlayerStats() == nil {
+	// welcome, full_map_view, player_stats, inventory, player_skills and quest_log.
+	if len(evs) != 6 || evs[0].GetWelcome() == nil || evs[1].GetFullMapView() == nil || evs[2].GetPlayerStats() == nil {
 		t.Fatalf("first batch %v", b)
 	}
 	id := evs[0].GetWelcome().GetCreatureId()

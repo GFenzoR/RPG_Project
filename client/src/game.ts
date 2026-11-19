@@ -3,11 +3,14 @@
 // says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
 // route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
+import { bookOf } from "./state/book.ts";
+import type { BookState } from "./state/book.ts";
 import { refineMessage } from "./state/forge.ts";
 import type { ForgeCandidate, RefineState } from "./state/forge.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
+import type { QuestLogView } from "./state/quests.ts";
 import {
   ChatChannel,
   CreatureKind,
@@ -128,10 +131,18 @@ export interface GameUi {
   market: MarketView | undefined;
   /** The house window (T5.4). */
   house: HouseView | undefined;
+  /** The book or scroll being read (docs/02 "Libros y cofres"): the client's own window. */
+  book?: BookState | undefined;
   /** A presence check waiting for an answer (T4.1), or undefined. */
   presence: PresenceState | undefined;
   /** The tutorial step (T4.2), or undefined when there is none. */
   tutorial: TutorialView | undefined;
+  /**
+   * The quest log (docs/02 "Diario de misiones"), undefined before the server sends it,
+   * and the server's clock minus the client's (ms) for a task's countdown.
+   */
+  quests: QuestLogView | undefined;
+  clockOffset: number;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -249,6 +260,8 @@ export interface ClientTestHooks {
   inventory(): { slot: number; itemId: number; count: number }[];
   /** Open containers with their content. */
   containers(): ContainerState[];
+  /** The item id of the book or scroll being read, if any (docs/02 "Libros y cofres"). */
+  book(): number | undefined;
   /** Item IDs of a known tile, ground first. */
   tile(x: number, y: number, z: number): readonly number[] | undefined;
   /** Numeric ID of a data/items content ID. */
@@ -406,6 +419,8 @@ export class Game {
   private cast: { spellId: string; at: number } | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
   private groundTip: GameUi["groundTip"];
+  /** The book or scroll being read (docs/02 "Libros y cofres"); undefined when closed. */
+  private book: BookState | undefined;
   /**
    * The last state given to the UI: a change of the ground card alone (the mouse sweeping
    * the map) reuses it instead of building it again (publishTip).
@@ -536,6 +551,20 @@ export class Game {
   closeStation(): void {
     if (!this.world.station) return;
     this.world.station = undefined;
+    this.publish();
+  }
+
+  /** Opens the reading window on a book or scroll (docs/02 "Libros y cofres"). */
+  openBook(itemId: number): void {
+    if (!bookOf(this.opts.content, itemId)) return;
+    this.book = { itemId, at: performance.now() };
+    this.publish();
+  }
+
+  /** Closes the reading window (nothing goes to the server). */
+  closeBook(): void {
+    if (!this.book) return;
+    this.book = undefined;
     this.publish();
   }
 
@@ -859,6 +888,14 @@ export class Game {
   // ---- items (T1.8): the server validates every one of these ---------------------------
 
   useItem(ref: ItemRef): void {
+    // docs/02 "Libros y cofres": a book or scroll opens the reading window with the texts
+    // the client has; the server is not asked (state/book.ts).
+    if (bookOf(this.opts.content, ref.itemId)) {
+      this.setPending(undefined);
+      this.toolAt = undefined;
+      this.openBook(ref.itemId);
+      return;
+    }
     const useWith = this.opts.content.items[ref.itemId]?.useWith ?? false;
     this.setPending(afterUse(ref, useWith));
     this.toolAt = undefined;
@@ -1338,6 +1375,8 @@ export class Game {
     const def = this.opts.content.items[ref.itemId];
     return {
       container: (def?.slots ?? 0) > 0,
+      book: def?.book !== undefined,
+      chest: def?.chest === true,
       useWith: def?.useWith === true,
       food: (def?.consumable?.foodMs ?? 0) > 0,
       equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
@@ -1346,6 +1385,8 @@ export class Game {
       usable:
         def?.door === true ||
         def?.board === true ||
+        def?.chest === true ||
+        def?.book !== undefined ||
         this.opts.content.recipes.some((r) => r.station === ref.itemId),
     };
   }
@@ -1413,9 +1454,15 @@ export class Game {
     );
   }
 
-  /** Does one of an item's menu actions (use, open, use with, eat, equip, look, move). */
+  /** Does one of an item's menu actions (use, open, read, use with, eat, equip, look, move). */
   private itemAction(kind: ActionKind, ref: ItemRef): void {
-    if (kind === "use" || kind === "open" || kind === "use_with" || kind === "eat")
+    if (
+      kind === "use" ||
+      kind === "open" ||
+      kind === "read" ||
+      kind === "use_with" ||
+      kind === "eat"
+    )
       this.useItem(ref);
     else if (kind === "equip") this.equip(ref);
     else if (kind === "look") this.lookAt(ref);
@@ -1472,7 +1519,13 @@ export class Game {
       if ((kind === "attack" || kind === "talk") && t.creature !== undefined)
         this.attack(t.creature);
       else if (kind === "climb") this.useTop(x, y, z);
-      else if (kind === "use" || kind === "open" || kind === "use_with" || kind === "eat")
+      else if (
+        kind === "use" ||
+        kind === "open" ||
+        kind === "read" ||
+        kind === "use_with" ||
+        kind === "eat"
+      )
         this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
       else if (kind === "move" || kind === "equip") {
@@ -1618,9 +1671,12 @@ export class Game {
       trade: w.trade,
       market: w.market,
       house: w.house,
+      book: this.book,
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,
+      quests: w.quests,
+      clockOffset: w.clockOffset,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       guild: w.guild.view(performance.now()),
@@ -1857,6 +1913,7 @@ export class Game {
       inventory: () =>
         [...world.inventory].map(([slot, it]) => ({ slot, itemId: it.itemId, count: it.count })),
       containers: () => world.containers,
+      book: () => this.book?.itemId,
       tile: (x, y, z) => world.tile(x, y, z),
       magic: (ms) => {
         const now = performance.now();
@@ -2054,6 +2111,11 @@ export class Game {
     }
     if (e.code === "Escape" && this.world.station && !this.world.dialog) {
       this.closeStation();
+      e.preventDefault();
+      return;
+    }
+    if (e.code === "Escape" && this.book) {
+      this.closeBook();
       e.preventDefault();
       return;
     }

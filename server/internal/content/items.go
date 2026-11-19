@@ -1,9 +1,11 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -96,6 +98,11 @@ type Item struct {
 	// Retired: out of the equipment catalog (lote 11), kept so the characters that own one
 	// keep it; make validate refuses every source of it. No game rule reads it.
 	Retired bool `yaml:"retired"`
+	// Book makes an item readable: the client opens its reading window from the texts it
+	// has (docs/02 "Libros y cofres"); the server only uses its description on Look.
+	Book *Book `yaml:"book"`
+	// Chest makes a map item a reward chest: once per character (chests.go, session/chest.go).
+	Chest *Chest `yaml:"chest"`
 	// Numeric is the stable numeric id from data/ids.lock.yaml.
 	Numeric uint16 `yaml:"-"`
 }
@@ -160,10 +167,16 @@ func (is Items) ByNumeric() map[uint16]*Item {
 }
 
 // check verifies what the server needs of an item beyond its schema: a weapon's range
-// within MaxRange (0 = melee).
+// within MaxRange (0 = melee), a book's title and its 1 to MaxBookPages pages.
 func (it *Item) check() error {
 	if wp := it.Weapon; wp != nil && (wp.Range < 0 || wp.Range > MaxRange) {
 		return fmt.Errorf("weapon range must be 0 to %d", MaxRange)
+	}
+	if b := it.Book; b != nil && (b.Title == "" || len(b.Pages) == 0 || slices.Contains(b.Pages, "")) {
+		return errors.New("a book needs a title and at least one page")
+	}
+	if b := it.Book; b != nil && len(b.Pages) > MaxBookPages {
+		return fmt.Errorf("a book has at most %d pages, not %d", MaxBookPages, len(b.Pages))
 	}
 	return nil
 }
@@ -209,6 +222,10 @@ func LoadItems(dataDir string) (Items, error) {
 			it.Numeric = uint16(n)
 			items[it.ID] = it
 		}
+	}
+	// The forge's protection is balance.yaml's: session.initChests checks that one too.
+	if err := CheckChests(items, ""); err != nil {
+		return nil, err
 	}
 	return items, nil
 }

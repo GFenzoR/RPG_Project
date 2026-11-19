@@ -102,8 +102,52 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** The rewards of an item's chest block (docs/02 "Libros y cofres"), with their index. */
+const chestRewards = (item: Obj): { item: string; count: number; index: number }[] => {
+  const chest = item["chest"];
+  const out: { item: string; count: number; index: number }[] = [];
+  for (const [index, r] of (isObj(chest) ? asList(chest["rewards"]) : []).entries())
+    if (isObj(r) && typeof r["item"] === "string")
+      out.push({ item: r["item"], count: typeof r["count"] === "number" ? r["count"] : 1, index });
+  return out;
+};
 const idOf = (v: unknown): string | undefined =>
   isObj(v) && typeof v["id"] === "string" ? v["id"] : undefined;
+
+/** The count of a has_item or take_item: 1 when unset (content.ItemCount.N). */
+const countOf = (c: Obj): number => (typeof c["count"] === "number" ? Math.max(c["count"], 1) : 1);
+
+/** A tile of the map: x, y and floor. */
+type Tile = [number, number, number];
+
+/**
+ * The portal kinds a step onto leaves at once, so nobody stands on their entrance
+ * (PortalKind.OnStep on the server, ON_STEP_KINDS of @rpg/map-format).
+ */
+const STEP_PORTALS = ["stairs", "hole", "teleport"];
+
+/** How far (Chebyshev, same floor) a player may stand from an NPC to talk (session.TalkRange). */
+const TALK_RANGE = 3;
+
+/** The tiles within r (Chebyshev) of x, y on floor z. */
+function* square(x: number, y: number, z: number, r: number): Generator<Tile> {
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) yield [x + dx, y + dy, z];
+}
+
+/** An island of world/world.yaml that is not dev_only, as checkQuestReach reads it. */
+interface ProductionIsland {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  floors: number[];
+  /** Zone id → its tiles, produced as they are read. */
+  zones: Map<string, Iterable<Tile>>;
+  /** The entrances of its stairs, holes and teleports (portals.yaml), "x,y,z". */
+  entrances: Set<string>;
+  /** Where its NPCs stand (npcs.yaml). */
+  npcs: { npc: string; at: Tile }[];
+}
 
 export function validateContent(root: string, opts: ValidateOptions = {}): ValidationReport {
   const v = new Validator(root);
@@ -155,6 +199,8 @@ class Validator {
     this.checkDoors();
     this.checkDialogs();
     this.checkQuestSteps();
+    this.checkQuestReach();
+    this.checkRepeatable();
     this.checkNpcActions();
     this.checkDevOnlyActions();
     this.checkShopPrices();
@@ -164,6 +210,7 @@ class Validator {
     this.checkRetiredItems();
     this.checkEquipLevels();
     this.checkForge();
+    this.checkChests();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -178,7 +225,15 @@ class Validator {
     if (lock) {
       const base =
         opts.baseIdsLock === undefined ? undefined : this.parseBaseLock(opts.baseIdsLock);
-      for (const d of checkIdsLock(lock, [...this.index.ids.item.keys()], base)) this.diags.push(d);
+      // The chests of data/items (chest id → item; a repeated id is checkChests' error).
+      const chests = new Map<string, string>();
+      for (const { item } of this.items) {
+        const chest = item["chest"];
+        const cid = isObj(chest) ? chest["id"] : undefined;
+        if (typeof cid === "string" && !chests.has(cid)) chests.set(cid, String(item["id"]));
+      }
+      for (const d of checkIdsLock(lock, [...this.index.ids.item.keys()], base, chests))
+        this.diags.push(d);
     }
   }
 
@@ -844,6 +899,9 @@ class Validator {
             );
           }
         }
+        if (key === "quest_state" && isObj(inner)) this.checkQuestState(src, inner, here);
+        if (key === "quest_not_started" && typeof inner === "string")
+          this.warnNotStartedTask(src, here, inner);
         if (key === "dialog_action" && isObj(inner) && typeof inner["npc"] === "string") {
           const npc = this.index.ids.npc.get(inner["npc"]);
           const dialog = npc && isObj(npc.src.data) ? npc.src.data["dialog"] : undefined;
@@ -860,6 +918,305 @@ class Validator {
       }
     };
     for (const src of [...this.npcs, ...this.quests]) visit(src, src.data, []);
+  }
+
+  /**
+   * A quest_state condition that means something (docs/06 "NPC", as the server's CheckRefs):
+   * a step only with state in_progress (available and cooling_down would ignore it, the
+   * others never hold), and cooling_down only of a repeatable quest (no other cools down).
+   */
+  private checkQuestState(src: SourceFile, cond: Obj, path: PathSegment[]): void {
+    const state = cond["state"];
+    if (state === "not_started" && typeof cond["quest"] === "string")
+      this.warnNotStartedTask(src, [...path, "state"], cond["quest"]);
+    if (typeof cond["step"] === "string" && typeof state === "string" && state !== "in_progress")
+      this.error(
+        src,
+        [...path, "step"],
+        `quest_state: a step only goes with state in_progress, not ${state}`,
+      );
+    const quest = typeof cond["quest"] === "string" ? cond["quest"] : undefined;
+    const owned = quest === undefined ? undefined : this.index.ids.quest.get(quest);
+    if (
+      state === "cooling_down" &&
+      owned &&
+      isObj(owned.src.data) &&
+      !isObj(owned.src.data["repeatable"])
+    )
+      this.error(
+        src,
+        [...path, "state"],
+        `quest_state: cooling_down of quest "${quest}", which is not repeatable (it never cools down)`,
+      );
+  }
+
+  /**
+   * A warning for quest_not_started (or quest_state not_started) of a repeatable quest: it
+   * holds only before the first turn; a task is offered with quest_state available (docs/06
+   * "Quests repetibles"; the server logs the same, content.RefWarnings).
+   */
+  private warnNotStartedTask(src: SourceFile, path: PathSegment[], quest: string): void {
+    const owned = this.index.ids.quest.get(quest);
+    if (owned && isObj(owned.src.data) && isObj(owned.src.data["repeatable"]))
+      this.warn(
+        src,
+        path,
+        `not_started of repeatable quest "${quest}" holds only before its first turn; offer it with quest_state available`,
+      );
+  }
+
+  /** The NPCs whose dialog starts quest (a start_quest action). */
+  private giversOf(quest: string): Set<string> {
+    const out = new Set<string>();
+    for (const src of this.npcs) {
+      const id = idOf(src.data);
+      const dialog = isObj(src.data) ? src.data["dialog"] : undefined;
+      const nodes = isObj(dialog) && isObj(dialog["nodes"]) ? dialog["nodes"] : {};
+      for (const n of Object.values(nodes))
+        for (const opt of isObj(n) ? asList(n["options"]) : []) {
+          const action = isObj(opt) ? opt["action"] : undefined;
+          for (const a of Array.isArray(action) ? action : [action])
+            if (id !== undefined && isObj(a) && a["start_quest"] === quest) out.add(id);
+        }
+    }
+    return out;
+  }
+
+  /**
+   * The steps of a repeatable quest that would let a turn be done, and paid, with no effort
+   * (docs/06 "Quests repetibles"; the server's content.CheckRepeatable refuses the same):
+   * a has_item not followed by its delivery (a dialog_action step whose node every option
+   * leading there reaches taking at least that many, deliveryTakes); a flag_equals on a key
+   * and value its own rewards set; and, among the steps that may hold the moment it starts
+   * (its first ones while they are flag_equals), a dialog_action with an NPC that gives it,
+   * or a reach whose place comes within talk range (TALK_RANGE, same floor) of where such an
+   * NPC stands (with world/: the NPCs of the islands that are not dev_only).
+   */
+  private checkRepeatable(): void {
+    const islands = this.productionIslands();
+    const when = (step: unknown): Obj | undefined =>
+      isObj(step) && isObj(step["complete_when"]) ? step["complete_when"] : undefined;
+    for (const src of this.quests) {
+      if (!isObj(src.data) || !isObj(src.data["repeatable"])) continue;
+      const quest = idOf(src.data) ?? "";
+      const steps = asList(src.data["steps"]);
+      const rewards = asList(src.data["rewards"]);
+      for (const [i, step] of steps.entries()) {
+        const c = when(step);
+        const has = c?.["has_item"];
+        if (isObj(has) && typeof has["item"] === "string") {
+          const d = when(steps[i + 1])?.["dialog_action"];
+          const n = countOf(has);
+          if (!isObj(d) || !this.deliveryTakes(d["npc"], d["node"], has["item"], n))
+            this.error(
+              src,
+              ["steps", i, "complete_when", "has_item"],
+              `a repeatable quest's has_item must be followed by its delivery, a dialog_action step whose node every option leading there reaches with take_item of ${n} "${has["item"]}", or the same items would do it every turn`,
+            );
+        }
+        const flag = c?.["flag_equals"];
+        const own = (r: unknown): boolean => {
+          const set = isObj(r) ? r["set_flag"] : undefined;
+          return (
+            isObj(set) &&
+            isObj(flag) &&
+            set["key"] === flag["key"] &&
+            (set["value"] ?? 0) === (flag["value"] ?? 0)
+          );
+        };
+        if (isObj(flag) && rewards.some(own))
+          this.error(
+            src,
+            ["steps", i, "complete_when", "flag_equals"],
+            `flag_equals ${String(flag["key"])} = ${String(flag["value"] ?? 0)}, which the quest's own rewards set: from its second turn on the step would hold at once`,
+          );
+      }
+      const givers = this.giversOf(quest);
+      for (const [i, step] of steps.entries()) {
+        const c = when(step);
+        if (isObj(c?.["flag_equals"])) continue; // it may hold already
+        const d = c?.["dialog_action"];
+        if (isObj(d) && typeof d["npc"] === "string" && givers.has(d["npc"]))
+          this.error(
+            src,
+            ["steps", i, "complete_when", "dialog_action"],
+            `a repeatable quest cannot start with a dialog_action of npc "${d["npc"]}", which gives it: talking on would complete the turn right where it is taken`,
+          );
+        const reach = c?.["reach"];
+        const by = isObj(reach) && islands ? this.giverNear(reach, givers, islands) : undefined;
+        if (by !== undefined)
+          this.error(
+            src,
+            ["steps", i, "complete_when", "reach"],
+            `a repeatable quest cannot start with a reach whose place comes within talk range of npc "${by}", which gives it: taking it there would complete the turn`,
+          );
+        break;
+      }
+    }
+  }
+
+  /** The first of givers that stands within TALK_RANGE of a tile of reach's place, if any. */
+  private giverNear(
+    reach: Obj,
+    givers: Set<string>,
+    islands: ProductionIsland[],
+  ): string | undefined {
+    const at = islands.flatMap((is) => is.npcs).filter((n) => givers.has(n.npc));
+    if (at.length === 0) return undefined;
+    const { zone, x, y, z } = reach;
+    let tiles: Iterable<Tile> | undefined;
+    if (typeof zone === "string")
+      tiles = islands.map((is) => is.zones.get(zone)).find((t) => t !== undefined);
+    else if (typeof x === "number" && typeof y === "number" && typeof z === "number")
+      tiles = square(x, y, z, typeof reach["radius"] === "number" ? reach["radius"] : 0);
+    for (const [tx, ty, tz] of tiles ?? [])
+      for (const { npc, at: pos } of at)
+        if (tz === pos[2] && Math.max(Math.abs(tx - pos[0]), Math.abs(ty - pos[1])) <= TALK_RANGE)
+          return npc;
+    return undefined;
+  }
+
+  /**
+   * The place of every reach step (docs/06 "Quest") is on the production map, as the server
+   * checks when it starts (initReach): a zone of the zones.yaml of an island that is not
+   * dev_only, or a point inside such an island's rect (world/world.yaml) on a floor its
+   * island.yaml lists; and either has a tile that is no entrance of stairs, a hole or a
+   * teleport (portals.yaml): a step onto one counts where it lands, nobody stands there.
+   * Not checked without world/ (tests).
+   */
+  private checkQuestReach(): void {
+    const islands = this.productionIslands();
+    if (!islands) return;
+    const entrances = new Set(islands.flatMap((is) => [...is.entrances]));
+    // Stops at the first tile that is no entrance: a place of open ground answers at once.
+    const someStandable = (tiles: Iterable<Tile>): boolean => {
+      for (const [x, y, z] of tiles) if (!entrances.has(`${x},${y},${z}`)) return true;
+      return false;
+    };
+    for (const src of this.quests) {
+      const steps = asList(isObj(src.data) ? src.data["steps"] : undefined);
+      for (const [i, step] of steps.entries()) {
+        const when = isObj(step) ? step["complete_when"] : undefined;
+        const reach = isObj(when) ? when["reach"] : undefined;
+        if (!isObj(reach)) continue;
+        const path = ["steps", i, "complete_when", "reach"];
+        const zone = reach["zone"];
+        if (typeof zone === "string") {
+          const tiles = islands.map((is) => is.zones.get(zone)).find((t) => t !== undefined);
+          if (!tiles)
+            this.error(
+              src,
+              [...path, "zone"],
+              `reach zone "${zone}" is no zone of an island that is not dev_only (world/islands/*/zones.yaml)`,
+            );
+          else if (!someStandable(tiles))
+            this.error(
+              src,
+              [...path, "zone"],
+              `every tile of reach zone "${zone}" is the entrance of stairs, a hole or a teleport (portals.yaml), where nobody stands`,
+            );
+          continue;
+        }
+        const { x, y, z } = reach;
+        if (typeof x !== "number" || typeof y !== "number" || typeof z !== "number") continue;
+        const on = islands.some(
+          (is) =>
+            x >= is.x && y >= is.y && x < is.x + is.w && y < is.y + is.h && is.floors.includes(z),
+        );
+        if (!on) {
+          this.error(
+            src,
+            path,
+            `reach point ${x},${y},${z} is on no island that is not dev_only (its rect in world/world.yaml and its floors in island.yaml)`,
+          );
+          continue;
+        }
+        const r = typeof reach["radius"] === "number" ? reach["radius"] : 0;
+        if (!someStandable(square(x, y, z, r)))
+          this.error(
+            src,
+            path,
+            `every tile of reach point ${x},${y},${z} radius ${r} is the entrance of stairs, a hole or a teleport (portals.yaml), where nobody stands`,
+          );
+      }
+    }
+  }
+
+  /** productionIslands, read once: null before the first read. */
+  private islandsRead: ProductionIsland[] | undefined | null = null;
+
+  /**
+   * The islands of world/world.yaml that are not dev_only: rect, floors, zones, the
+   * entrances of their stairs, holes and teleports and their NPCs (ProductionIsland);
+   * undefined without world/.
+   */
+  private productionIslands(): ProductionIsland[] | undefined {
+    if (this.islandsRead === null) this.islandsRead = this.readProductionIslands();
+    return this.islandsRead;
+  }
+
+  private readProductionIslands(): ProductionIsland[] | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    const out: ProductionIsland[] = [];
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island) || !isObj(entry)) continue;
+      if (entry["dev_only"] === true) continue;
+      const rect = isObj(entry["rect"]) ? entry["rect"] : {};
+      const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+      const dir = `world/islands/${island}`;
+      const read = (name: string): unknown => {
+        const abs = join(this.root, dir, name);
+        return existsSync(abs)
+          ? parseYaml(readFileSync(abs, "utf8"), `${dir}/${name}`, diags)?.data
+          : undefined;
+      };
+      const meta = read("island.yaml");
+      const floors = asList(isObj(meta) ? meta["floors"] : undefined).filter(
+        (f): f is number => typeof f === "number",
+      );
+      const zones = new Map<string, Iterable<Tile>>();
+      for (const zone of asList(read("zones.yaml"))) {
+        const id = idOf(zone);
+        if (id === undefined || !isObj(zone)) continue;
+        const zFloors = asList(zone["floors"]).filter((f): f is number => typeof f === "number");
+        const rects = asList(zone["rects"]).filter(isObj);
+        zones.set(id, {
+          *[Symbol.iterator](): Generator<Tile> {
+            for (const f of zFloors)
+              for (const r of rects)
+                for (let y = num(r["y"]); y < num(r["y"]) + num(r["h"]); y++)
+                  for (let x = num(r["x"]); x < num(r["x"]) + num(r["w"]); x++) yield [x, y, f];
+          },
+        });
+      }
+      const entrances = new Set<string>();
+      for (const p of asList(read("portals.yaml"))) {
+        if (!isObj(p) || !STEP_PORTALS.includes(String(p["kind"]))) continue;
+        const from = p["from"];
+        if (isObj(from)) entrances.add(`${num(from["x"])},${num(from["y"])},${num(from["z"])}`);
+      }
+      const npcs: ProductionIsland["npcs"] = [];
+      for (const n of asList(read("npcs.yaml"))) {
+        const at = isObj(n) ? n["pos"] : undefined;
+        if (isObj(n) && typeof n["npc"] === "string" && isObj(at))
+          npcs.push({ npc: n["npc"], at: [num(at["x"]), num(at["y"]), num(at["z"])] });
+      }
+      out.push({
+        x: num(rect["x"]),
+        y: num(rect["y"]),
+        w: num(rect["w"]),
+        h: num(rect["h"]),
+        floors,
+        zones,
+        entrances,
+        npcs,
+      });
+    }
+    return out;
   }
 
   /**
@@ -1236,10 +1593,80 @@ class Validator {
   }
 
   /**
+   * Reward chests (docs/02 "Libros y cofres", same rules as content.CheckChests in Go): a
+   * chest is a map item nobody picks up, its chest id is unique, and each reward can go in a
+   * backpack (not pickupable: false, like a wall, a lectern or another chest), comes in a
+   * count from 1 to one stack of its item (1 if it does not stack) and is never the forge's
+   * protection (the warding amber: only monsters drop it). That a reward exists is the
+   * schema's itemRef; that it is not retired, checkRetiredItems'.
+   */
+  private checkChests(): void {
+    const byId = new Map<string, Obj>();
+    for (const { item } of this.items) {
+      const id = idOf(item);
+      if (id !== undefined) byId.set(id, item);
+    }
+    const forge = isObj(this.balance?.data) ? this.balance.data["forge"] : undefined;
+    const protection =
+      isObj(forge) && forge["enabled"] === true && typeof forge["protection"] === "string"
+        ? forge["protection"]
+        : "";
+    const seen = new Map<string, string>();
+    for (const { item, src, path } of this.items) {
+      const chest = item["chest"];
+      if (!isObj(chest)) continue;
+      const id = String(item["id"]);
+      if (item["pickupable"] !== false)
+        this.error(src, [...path, "chest"], `chest "${id}" needs pickupable: false (a map item)`);
+      const cid = chest["id"];
+      if (typeof cid === "string") {
+        const other = seen.get(cid);
+        if (other !== undefined)
+          this.error(
+            src,
+            [...path, "chest", "id"],
+            `chest id "${cid}" is also the one of "${other}"`,
+          );
+        else seen.set(cid, id);
+      }
+      for (const r of chestRewards(item)) {
+        const at: PathSegment[] = [...path, "chest", "rewards", r.index];
+        if (protection !== "" && r.item === protection)
+          this.error(
+            src,
+            [...at, "item"],
+            `"${protection}" is the forge's rare protection: no chest gives it (only monsters drop it)`,
+          );
+        const def = byId.get(r.item);
+        if (!def) continue;
+        if (def["pickupable"] === false)
+          this.error(
+            src,
+            [...at, "item"],
+            `"${r.item}" cannot be picked up (pickupable: false): a chest only gives what goes in a backpack`,
+          );
+        const limit =
+          def["stackable"] === true
+            ? typeof def["max_stack"] === "number"
+              ? def["max_stack"]
+              : 100
+            : 1;
+        if (r.count > limit)
+          this.error(
+            src,
+            [...at, "count"],
+            `${r.count} "${r.item}" do not make one stack (at most ${limit}): a chest gives one stack per reward`,
+          );
+      }
+    }
+  }
+
+  /**
    * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
    * that is not dev_only count (without it, tests, every NPC):
    * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
-   *   a shop, a dialog give_item, a quest or tutorial reward or a conjuring spell);
+   *   a shop, a dialog give_item, a quest or tutorial reward, a conjuring spell or a reward
+   *   chest);
    * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
    *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
    *   quest or dialog that takes it;
@@ -1259,6 +1686,7 @@ class Validator {
       const res = item["resource"];
       for (const d of isObj(res) ? asList(res["drops"]) : [])
         if (isObj(d) && typeof d["item"] === "string") got.add(d["item"]);
+      for (const r of chestRewards(item)) got.add(r.item);
     }
     for (const r of this.recipes ? asList(this.recipes.data).filter(isObj) : []) {
       const out = r["output"];
@@ -1312,7 +1740,7 @@ class Validator {
         this.error(
           at.src,
           at.path,
-          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward or a spell)`,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest or tutorial reward, a spell or a chest)`,
         );
     for (const { item, src, path } of this.items) {
       const id = item["id"];
@@ -1373,6 +1801,8 @@ class Validator {
       for (const [i, d] of (isObj(res) ? asList(res["drops"]) : []).entries())
         if (isObj(d))
           refuse(src, [...path, "resource", "drops", i, "item"], d["item"], "no resource drops it");
+      for (const r of chestRewards(item))
+        refuse(src, [...path, "chest", "rewards", r.index, "item"], r.item, "no chest gives it");
     }
     if (this.recipes)
       for (const [i, r] of asList(this.recipes.data).entries()) {
@@ -1504,10 +1934,11 @@ class Validator {
   }
 
   /**
-   * Whether node of NPC npc's dialog is a delivery of item: not where the dialog starts,
-   * and every option that leads there (goto, one at least) takes the item (take_item).
+   * Whether node of NPC npc's dialog is a delivery of `units` of item
+   * (content.DeliveryTakes): not where the dialog starts, and every option that leads there
+   * (goto, one at least) takes at least that many of the item (take_item, count 1 when unset).
    */
-  private deliveryTakes(npc: unknown, node: unknown, item: string): boolean {
+  private deliveryTakes(npc: unknown, node: unknown, item: string, units = 1): boolean {
     const owned = typeof npc === "string" ? this.index.ids.npc.get(npc) : undefined;
     const dialog = owned && isObj(owned.src.data) ? owned.src.data["dialog"] : undefined;
     if (!isObj(dialog) || dialog["start"] === node) return false;
@@ -1520,7 +1951,7 @@ class Validator {
         const action = opt["action"];
         const takes = (Array.isArray(action) ? action : [action]).some((a) => {
           const take = isObj(a) ? a["take_item"] : undefined;
-          return isObj(take) && take["item"] === item;
+          return isObj(take) && take["item"] === item && countOf(take) >= units;
         });
         if (!takes) return false;
       }
@@ -1663,6 +2094,7 @@ class Validator {
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
     const dataPrefixes = [
       "attribute.",
+      "book.",
       "item.",
       "monster.",
       "npc.",
