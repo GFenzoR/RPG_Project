@@ -163,6 +163,7 @@ class Validator {
     this.checkItemTrade();
     this.checkRetiredItems();
     this.checkEquipLevels();
+    this.checkForge();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -1145,6 +1146,77 @@ class Validator {
     }
   }
 
+  /** The forge's temper stones and protection (balance.yaml forge), when it is on. */
+  private forgeMaterials(): string[] {
+    const forge = isObj(this.balance?.data) ? this.balance.data["forge"] : undefined;
+    if (!isObj(forge) || forge["enabled"] !== true) return [];
+    const out: string[] = [];
+    if (typeof forge["protection"] === "string") out.push(forge["protection"]);
+    for (const b of asList(forge["bands"]))
+      if (isObj(b) && typeof b["stone"] === "string") out.push(b["stone"]);
+    return out;
+  }
+
+  /**
+   * The forge (docs/02 "Forja", same rules as content.Forge.CheckItems in Go): its station is
+   * an item nobody picks up; its stones and protection are stackable materials (counted and
+   * spent by units); the protection is rare, so no NPC of a production island sells it or
+   * gives it (checked with world/ only, where NPCs placed only on dev_only islands do not
+   * count: the sandbox merchant sells it); every band's stone and the protection have a way
+   * to be had in production (a shop or loot).
+   */
+  private checkForge(): void {
+    const src = this.balance;
+    const forge = isObj(src?.data) ? src.data["forge"] : undefined;
+    if (!src || !isObj(forge) || forge["enabled"] !== true) return;
+    const byId = new Map<string, Obj>();
+    for (const { item } of this.items) {
+      const id = idOf(item);
+      if (id !== undefined) byId.set(id, item);
+    }
+    const station = typeof forge["station"] === "string" ? byId.get(forge["station"]) : undefined;
+    if (station && station["pickupable"] !== false)
+      this.error(src, ["forge", "station"], `the forge's station "${String(forge["station"])}" needs pickupable: false`);
+    const materials = (): { id: string; path: PathSegment[] }[] => {
+      const out: { id: string; path: PathSegment[] }[] = [];
+      if (typeof forge["protection"] === "string") out.push({ id: forge["protection"], path: ["forge", "protection"] });
+      for (const [i, b] of asList(forge["bands"]).entries())
+        if (isObj(b) && typeof b["stone"] === "string") out.push({ id: b["stone"], path: ["forge", "bands", i, "stone"] });
+      return out;
+    };
+    for (const { id, path } of materials()) {
+      const it = byId.get(id);
+      if (it && (it["kind"] !== "material" || it["stackable"] !== true))
+        this.error(src, path, `the forge's "${id}" must be a stackable material (spent by units)`);
+    }
+    const placed = this.npcPlacements();
+    const prodNpc = (id: string): boolean => !placed || (placed.get(id) ?? []).some((p) => !p.dev);
+    const sold = new Set<string>();
+    const protection = typeof forge["protection"] === "string" ? forge["protection"] : "";
+    for (const npcSrc of this.npcs) {
+      const npc = isObj(npcSrc.data) ? npcSrc.data : undefined;
+      const id = typeof npc?.["id"] === "string" ? npc["id"] : "";
+      if (!prodNpc(id)) continue;
+      const shop = npc?.["shop"];
+      for (const [i, o] of (isObj(shop) ? asList(shop["sells"]) : []).entries()) {
+        if (!isObj(o) || typeof o["item"] !== "string") continue;
+        sold.add(o["item"]);
+        if (placed && o["item"] === protection)
+          this.error(npcSrc, ["shop", "sells", i, "item"], `"${protection}" is the forge's rare protection: no NPC sells it (only the boss and strong monsters drop it)`);
+      }
+      for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (placed && key === "give_item" && value === protection)
+          this.error(npcSrc, path, `"${protection}" is the forge's rare protection: no NPC gives it`);
+    }
+    const dropped = new Set<string>();
+    for (const m of this.monsters)
+      for (const drop of isObj(m.data) ? asList(m.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") dropped.add(drop["item"]);
+    for (const { id, path } of materials())
+      if (byId.has(id) && !sold.has(id) && !dropped.has(id))
+        this.error(src, path, `nothing gives the forge's "${id}" in production: a smith that sells it or a monster that drops it`);
+  }
+
   /**
    * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
    * that is not dev_only count (without it, tests, every NPC):
@@ -1214,6 +1286,8 @@ class Validator {
     const retired = new Set(
       this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
     );
+    // The forge (balance.yaml forge, docs/02 "Forja") spends its stones and protection.
+    for (const id of this.forgeMaterials()) used.add(id);
     for (const [id, at] of bought)
       // A retired item (lote 11) has no source on purpose: its buyer is for old copies.
       if (this.index.ids.item.has(id) && !got.has(id) && !retired.has(id))
@@ -1238,7 +1312,7 @@ class Validator {
         this.error(
           src,
           [...path, "value"],
-          `material "${id}" can be had and has a value, but no NPC buys it and no recipe or quest takes it`,
+          `material "${id}" can be had and has a value, but no NPC buys it and no recipe, quest or the forge takes it`,
         );
     }
     const untradeable = new Set(

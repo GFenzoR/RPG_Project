@@ -52,6 +52,8 @@ shop:
     - { item: glowcap_broth, price: 40 }
     - { item: mana_draught, price: 22 }
     - { item: health_draught, price: 60 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
   buys:
     - { item: boarding_saber, price: 200 }
     - { item: bearded_axe, price: 200 }

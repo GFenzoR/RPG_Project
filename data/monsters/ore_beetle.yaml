@@ -16,6 +16,7 @@ loot:
   - { item: iron_ore, chance: 0.35 }
   - { item: beetle_carapace, chance: 0.2 }
   - { item: copper_coin, chance: 0.7, count: [5, 20] }
+  - { item: lesser_temper_stone, chance: 0.05 } # the forge
 tags: [insect, cave, puerto]
 notes: Mine, levels 11-14. High armor rewards high-attack weapons and wands.
 corpse: remains_chitin

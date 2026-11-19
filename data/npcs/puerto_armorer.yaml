@@ -54,6 +54,8 @@ shop:
     - { item: bearded_axe, price: 600 }
     - { item: elmroot_maul, price: 600 }
     - { item: thornwood_longbow, price: 600 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
   buys:
     - { item: rusty_cutlass, price: 10 }
     - { item: hatchet, price: 10 }

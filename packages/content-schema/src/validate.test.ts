@@ -1,8 +1,10 @@
 import {
   appendFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -113,6 +115,60 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('duplicate id "fire_protection"'))).toBe(true);
     expect(out.some((m) => m.includes("never stacks"))).toBe(true);
     expect(out.some((m) => m.includes("[1].skill: not allowed here"))).toBe(true);
+  });
+
+  it("checks the forge: its items, stones that are spent and a protection no NPC sells (docs/02 \"Forja\")", () => {
+    const forgeErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("the forge's"));
+    expect(forgeErrors()).toEqual([]);
+    // The real world (where each NPC stands): the sandbox merchant sells the amber, but
+    // stands only on the sandbox island.
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    for (const island of readdirSync(join(REPO, "world", "islands"))) {
+      const npcs = join(REPO, "world", "islands", island, "npcs.yaml");
+      if (!existsSync(npcs)) continue;
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      cpSync(npcs, file(`world/islands/${island}/npcs.yaml`));
+    }
+    expect(forgeErrors()).toEqual([]);
+    // A smith of a real island selling it.
+    const radiant = "    - { item: radiant_temper_stone, price: 600 }\n";
+    edit(
+      "data/npcs/volcan_smith.yaml",
+      radiant,
+      `${radiant}    - { item: warding_amber, price: 3000 }\n`,
+    );
+    expect(forgeErrors()).toEqual([
+      expect.stringMatching(
+        /volcan_smith\.yaml:.*"warding_amber" is the forge's rare protection: no NPC sells it/,
+      ),
+    ]);
+    // A stone that does not stack, a station people carry, an unknown stone, and a stone
+    // nothing gives.
+    edit("data/items/forge.yaml", "  weight: 300\n  stackable: true\n  max_stack: 100\n", "  weight: 300\n");
+    edit(
+      "data/items/decoration.yaml",
+      "  description: item.anvil.desc\n  pickupable: false\n",
+      "  description: item.anvil.desc\n",
+    );
+    edit(
+      "data/balance.yaml",
+      "stone: radiant_temper_stone, gold: 700",
+      "stone: no_such_stone, gold: 700",
+    );
+    edit("data/npcs/volcan_smith.yaml", radiant, "");
+    edit("data/npcs/pruebas_merchant.yaml", radiant, "");
+    edit(
+      "data/monsters/slagbound_warden.yaml",
+      "  - { item: radiant_temper_stone, chance: 0.3 } # the forge\n",
+      "",
+    );
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.startsWith("error") && m.includes(s));
+    expect(has(`the forge's "lesser_temper_stone" must be a stackable material`)).toBe(true);
+    expect(has(`the forge's station "anvil" needs pickupable: false`)).toBe(true);
+    expect(has(`unknown item "no_such_stone"`)).toBe(true);
+    expect(has(`nothing gives the forge's "radiant_temper_stone" in production`)).toBe(true);
   });
 
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {

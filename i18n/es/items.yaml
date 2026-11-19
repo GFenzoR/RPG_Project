@@ -116,6 +116,15 @@ item.rough_stone.name: "piedra tosca"
 item.rough_stone.desc: "Un trozo de roca sin valor... casi."
 item.quartz_crystal.name: "cristal de cuarzo"
 item.quartz_crystal.desc: "Un cristal claro que brilla al trasluz."
+# The forge (docs/02 "Forja")
+item.lesser_temper_stone.name: "piedra de temple menor"
+item.lesser_temper_stone.desc: "Una piedra gris y áspera. En el yunque templa el metal de las piezas de nivel 1 a 9."
+item.greater_temper_stone.name: "piedra de temple mayor"
+item.greater_temper_stone.desc: "Una piedra azulada de grano fino. En el yunque templa las piezas de nivel 10 a 49."
+item.radiant_temper_stone.name: "piedra de temple radiante"
+item.radiant_temper_stone.desc: "Una piedra pálida con vetas que brillan solas. En el yunque templa las piezas de nivel 50 o más."
+item.warding_amber.name: "ámbar de resguardo"
+item.warding_amber.desc: "Una gota de ámbar que guarda una chispa dentro. Gastada al refinar, si la pieza se iba a romper solo pierde un nivel."
 
 # Autoborder pieces
 item.border_grass_sand.name: "borde de pasto"

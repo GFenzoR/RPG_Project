@@ -20,6 +20,7 @@ loot:
   - { item: belaying_pin, chance: 0.04 } # lote 11: the retired driftwood club's place
   - { item: sailcloth_cap, chance: 0.04 }
   - { item: tarnished_locket, chance: 0.08 }
+  - { item: lesser_temper_stone, chance: 0.06 } # the forge (docs/02 "Forja")
 tags: [human, shore, puerto]
 notes: Scavengers picking over the Chapter 1 wreck. Throws bottles (physical) at range.
 corpse: remains_humanoid

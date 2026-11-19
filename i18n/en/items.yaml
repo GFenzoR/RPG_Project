@@ -116,6 +116,15 @@ item.rough_stone.name: "rough stone"
 item.rough_stone.desc: "A lump of rock, almost worthless."
 item.quartz_crystal.name: "quartz crystal"
 item.quartz_crystal.desc: "A clear crystal that glows against the light."
+# The forge (docs/02 "Forja")
+item.lesser_temper_stone.name: "lesser temper stone"
+item.lesser_temper_stone.desc: "A rough grey stone. At an anvil it tempers the metal of items of level 1 to 9."
+item.greater_temper_stone.name: "greater temper stone"
+item.greater_temper_stone.desc: "A fine-grained bluish stone. At an anvil it tempers items of level 10 to 49."
+item.radiant_temper_stone.name: "radiant temper stone"
+item.radiant_temper_stone.desc: "A pale stone with veins that glow on their own. At an anvil it tempers items of level 50 and up."
+item.warding_amber.name: "warding amber"
+item.warding_amber.desc: "A drop of amber with a spark held inside. Spent on a refine, an item about to break only loses one level."
 
 # Autoborder pieces
 item.border_grass_sand.name: "grass edge"

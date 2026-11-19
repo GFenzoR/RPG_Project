@@ -23,6 +23,8 @@ loot:
   - { item: obsidian_wand, chance: 0.006 }
   - { item: blackfrost_staff, chance: 0.006 }
   - { item: obsidian_ring, chance: 0.005 } # lote 11: band 4 jewelry, only as loot
+  - { item: greater_temper_stone, chance: 0.06 } # the forge
+  - { item: warding_amber, chance: 0.003 } # rare: the forge's protection
 tags: [human, cave, volcan]
 notes: Renegade miners, too stubborn to run, digging toward the old forge (Chapter 3), the mine under the mountain, levels 33-37. Throw obsidian shards (physical) at range that shatter on their target and its neighbours.
 corpse: remains_humanoid

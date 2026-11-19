@@ -64,6 +64,9 @@ shop:
     - { item: smithing_hammer, price: 105 }
     - { item: pickaxe, price: 60 }
     - { item: elm_log, price: 12 }
+    - { item: lesser_temper_stone, price: 10 }
+    - { item: greater_temper_stone, price: 150 }
+    - { item: radiant_temper_stone, price: 600 }
   buys:
     - { item: embersteel_sabre, price: 660 }
     - { item: embersteel_axe, price: 660 }

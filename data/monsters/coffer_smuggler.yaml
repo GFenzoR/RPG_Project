@@ -20,6 +20,7 @@ loot:
   - { item: stagleather_leggings, chance: 0.03 }
   - { item: smuggler_crossbow, chance: 0.02 }
   - { item: bolt, chance: 0.25, count: [2, 6] }
+  - { item: greater_temper_stone, chance: 0.03 } # the forge
 tags: [human, camp, bosque]
 notes: The crew of the unflagged boat (Chapter 2), camped on the east shore, levels 15-18. Throws knives (physical) at range.
 corpse: remains_humanoid
