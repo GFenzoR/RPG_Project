@@ -37,7 +37,7 @@ func loadMarket(ms MarketStore, now time.Time, cfg content.Market) (*session.Mar
 	for _, o := range d.Offers {
 		out.Offers = append(out.Offers, session.MarketOffer{ID: o.ID, CharacterID: o.CharacterID, AccountID: o.AccountID,
 			Name: o.Name, Sell: o.Side == store.MarketSell, ItemID: uint16(o.ItemID), Amount: o.Amount, Price: o.Price,
-			Created: o.Created, Expires: o.Expires})
+			Created: o.Created, Expires: o.Expires, Mods: sessionMods(o.Mods)})
 	}
 	for _, m := range d.Mail {
 		out.Mail = append(out.Mail, session.MarketMail{ID: m.ID, CharacterID: m.CharacterID, Item: sessionItem(m.Item),
@@ -55,7 +55,7 @@ func loadMarket(ms MarketStore, now time.Time, cfg content.Market) (*session.Mar
 }
 
 func sessionItem(it store.InventoryItem) session.ItemState {
-	s := session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot}
+	s := session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Mods: sessionMods(it.Mods)}
 	for _, c := range it.Items {
 		s.Items = append(s.Items, sessionItem(c))
 	}
@@ -87,7 +87,7 @@ func (a *App) writeTransfer(ctx context.Context, t session.Transfer) error {
 		case session.MarketOfferAdd:
 			x := op.Offer
 			o.Offer = store.MarketOffer{ID: x.ID, CharacterID: x.CharacterID, Side: side(x.Sell), ItemID: int(x.ItemID),
-				Amount: x.Amount, Price: x.Price, Created: x.Created, Expires: x.Expires}
+				Amount: x.Amount, Price: x.Price, Created: x.Created, Expires: x.Expires, Mods: storeMods(x.Mods)}
 		case session.MarketMailAdd:
 			m := op.Mail
 			items := storeItems([]session.ItemState{m.Item})

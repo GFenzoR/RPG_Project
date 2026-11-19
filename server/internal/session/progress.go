@@ -96,7 +96,7 @@ func (w *World) Skill(p *Player, id string) SkillState {
 func (w *World) meleeSkill(p *Player) (id string, attack int) {
 	if wp := p.weapon; wp != nil && wp.Weapon != nil {
 		if _, ok := w.skillIdx[wp.Weapon.Type]; ok {
-			return wp.Weapon.Type, wp.Weapon.Attack
+			return wp.Weapon.Type, wp.Weapon.Attack + p.gear.attack // with its attack attribute
 		}
 	}
 	return SkillFist, w.cfg.Balance.Combat.FistAttack
@@ -237,7 +237,7 @@ func (w *World) setLevel(p *Player, level int) {
 	pct := healthPercent(p.health, p.maxHealth)
 	old, now := p.vocation.AtLevel(from), p.vocation.AtLevel(level)
 	p.level = level
-	p.maxHealth, p.maxMana, p.capacity = now.Health, now.Mana, now.Capacity
+	p.maxHealth, p.maxMana, p.capacity = now.Health+p.gear.health, now.Mana+p.gear.mana, now.Capacity
 	p.health = min(max(p.health+now.Health-old.Health, 1), p.maxHealth)
 	p.mana = min(max(p.mana+now.Mana-old.Mana, 0), p.maxMana)
 	p.baseSpeed = max(now.Speed, 1)
@@ -284,8 +284,9 @@ func (w *World) regenerate(p *Player) {
 	pct := healthPercent(p.health, p.maxHealth)
 	// Fed (content audit m2): the regen conditions make every tick regen_pct % stronger.
 	hp, mp := r.Tick(regenPct(p.conds))
-	p.health = min(p.health+hp, p.maxHealth)
-	p.mana = min(p.mana+mp, p.maxMana)
+	// The worn regeneration attributes add to every tick (attributes.go).
+	p.health = min(p.health+hp+p.gear.healthRegen, p.maxHealth)
+	p.mana = min(p.mana+mp+p.gear.manaRegen, p.maxMana)
 	w.healthBar(p, pct)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }

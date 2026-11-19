@@ -2,7 +2,8 @@
 -- start and write each change inside the transaction of a session.Transfer.
 
 -- name: LoadMarketOffers :many
-SELECT o.id, o.character_id, c.account_id, c.name, o.side, o.item_id, o.amount, o.price, o.created_at, o.expires_at
+SELECT o.id, o.character_id, c.account_id, c.name, o.side, o.item_id, o.amount, o.price, o.created_at, o.expires_at,
+       o.attributes
 FROM market_offers o JOIN characters c ON c.id = o.character_id
 ORDER BY o.id;
 
@@ -58,8 +59,8 @@ UPDATE market_id_high SET offer_high = GREATEST(offer_high, sqlc.arg(offer_high)
     mail_high = GREATEST(mail_high, sqlc.arg(mail_high)::bigint);
 
 -- name: InsertMarketOffer :exec
-INSERT INTO market_offers (id, character_id, side, item_id, amount, price, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+INSERT INTO market_offers (id, character_id, side, item_id, amount, price, created_at, expires_at, attributes)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- name: FillMarketOffer :one
 -- Takes units from an offer that keeps some; no row when the offer is gone or does not

@@ -89,7 +89,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience, 1); level != p.level {
 		p.level = level
 		stats := p.vocation.AtLevel(level)
-		p.maxHealth, p.maxMana, p.capacity = stats.Health, stats.Mana, stats.Capacity
+		p.maxHealth, p.maxMana, p.capacity = stats.Health+p.gear.health, stats.Mana+p.gear.mana, stats.Capacity
 		p.baseSpeed = max(stats.Speed, 1)
 	}
 	// A death ends every condition (T3.2): the speed returns to its base, an invisible

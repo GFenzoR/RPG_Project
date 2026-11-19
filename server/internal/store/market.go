@@ -48,7 +48,8 @@ const (
 	MarketBuy  = 2
 )
 
-// MarketOffer is a row of market_offers (Name and AccountID: the owner's, on load).
+// MarketOffer is a row of market_offers (Name and AccountID: the owner's, on load). Mods:
+// a sell offer of an equipable is one instance with its own data (attributes; nil: none).
 type MarketOffer struct {
 	ID, CharacterID, AccountID int64
 	Name                       string
@@ -56,6 +57,7 @@ type MarketOffer struct {
 	ItemID, Amount             int
 	Price                      int64
 	Created, Expires           time.Time
+	Mods                       *ItemMods
 }
 
 // MarketMail is a row of market_mail_items: Item is the instance (InventoryItem).
@@ -187,7 +189,7 @@ func applyMarketOp(ctx context.Context, q *db.Queries, op MarketOp) error {
 		o := op.Offer
 		return q.InsertMarketOffer(ctx, db.InsertMarketOfferParams{ID: o.ID, CharacterID: o.CharacterID,
 			Side: int16(o.Side), ItemID: int32(o.ItemID), Amount: int32(o.Amount), Price: o.Price,
-			CreatedAt: ts(o.Created), ExpiresAt: ts(o.Expires)})
+			CreatedAt: ts(o.Created), ExpiresAt: ts(o.Expires), Attributes: modsJSON(o.Mods)})
 	case MarketOfferFill:
 		_, err := q.FillMarketOffer(ctx, db.FillMarketOfferParams{ID: op.ID, Units: int32(op.Units)})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -256,9 +258,13 @@ func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perC
 			return fmt.Errorf("market offers: %w", err)
 		}
 		for _, o := range offers {
+			mods, err := modsOf(o.Attributes)
+			if err != nil {
+				return fmt.Errorf("market offer %d: %w", o.ID, err)
+			}
 			d.Offers = append(d.Offers, MarketOffer{ID: o.ID, CharacterID: o.CharacterID, AccountID: o.AccountID,
 				Name: o.Name, Side: int(o.Side), ItemID: int(o.ItemID), Amount: int(o.Amount), Price: o.Price,
-				Created: o.CreatedAt.Time, Expires: o.ExpiresAt.Time})
+				Created: o.CreatedAt.Time, Expires: o.ExpiresAt.Time, Mods: mods})
 		}
 		mail, err := q.LoadMarketMailItems(ctx)
 		if err != nil {

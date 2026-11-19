@@ -493,3 +493,41 @@ func (m *Monster) ChaseWayForTest() []world.Pos {
 	}
 	return out
 }
+
+// ItemsForTest returns every instance of item id p carries: equipment, then containers
+// depth-first (tests only).
+func (w *World) ItemsForTest(p *Player, id string) []*Item {
+	var out []*Item
+	p.eachCarried(true, func(it *Item) {
+		if it.def.ID == id {
+			out = append(out, it)
+		}
+	})
+	return out
+}
+
+// GearForTest returns what p's equipment gives the formulas: armor, the hands' defense,
+// the melee attack, the speed and the combat skill skill (tests only).
+func (w *World) GearForTest(p *Player, skill string) (armor, defense, attack, speed, level int) {
+	_, attack = w.meleeSkill(p)
+	return p.armor, handsDefense(p), attack, p.speed, w.combatSkill(p, skill)
+}
+
+// ElementHitForTest makes p take dmg of element as if a monster hit it (tests only).
+func (w *World) ElementHitForTest(ctx *game.TickContext, p *Player, dmg int, element string) {
+	w.damagePlayer(ctx, p, dmg, element)
+}
+
+// LeechForTest is p's leech after one of its weapon hits dealt dmg (tests only).
+func (w *World) LeechForTest(p *Player, dmg int) { w.leech(p, dmg) }
+
+// RegenForTest runs one regeneration tick of p (tests only).
+func (w *World) RegenForTest(p *Player) { w.regenerate(p) }
+
+// MarketOfferModsForTest returns the mods of offer id (tests only).
+func (w *World) MarketOfferModsForTest(id int64) Mods {
+	if o := w.offers[id]; o != nil {
+		return o.Mods
+	}
+	return Mods{}
+}

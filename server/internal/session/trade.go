@@ -309,7 +309,7 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 	for s := range 2 {
 		giver, taker := t.p[s], t.p[1-s]
 		for _, x := range t.offer[s] {
-			w.econItemWith(giver, EconTrade, "trade", taker.charID, x.it.def, -units(x.it))
+			w.econInstance(giver, EconTrade, "trade", taker.charID, x.it, -1) // with its mods
 			w.removeItem(x.it)
 		}
 	}
@@ -321,7 +321,7 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 		}
 		for _, x := range t.offer[s] {
 			w.attach(taker, x.it, place{kind: locContainer, cont: bp})
-			w.econItemWith(taker, EconTrade, "trade", giver.charID, x.it.def, units(x.it))
+			w.econInstance(taker, EconTrade, "trade", giver.charID, x.it, 1)
 		}
 		w.containerChanged(bp)
 	}

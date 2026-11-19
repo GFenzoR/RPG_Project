@@ -176,6 +176,10 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	attributes, err := content.LoadAttributes(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	routes, err := content.LoadBoatRoutes(o.dataDir)
 	if o.boatRoutes != "" {
 		routes, err = content.LoadBoatRoutesFile(o.boatRoutes, false)
@@ -275,6 +279,7 @@ func run(logger *slog.Logger, o options) error {
 		Items:            items,
 		Spells:           spells,
 		Recipes:          recipes,
+		Attributes:       attributes,
 		BoatRoutes:       routes,
 		Tutorial:         tutorial,
 		NPCs:             npcs,

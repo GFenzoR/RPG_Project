@@ -455,7 +455,7 @@ func (w *World) refreshSpeed(h holder) {
 	var id uint32
 	var speed int
 	if p := h.p; p != nil {
-		speed = withPct(p.baseSpeed, speedPct(p.conds))
+		speed = withPct(p.baseSpeed+p.gear.speed, speedPct(p.conds)) // with its speed attribute
 		if speed == p.speed {
 			return
 		}
@@ -485,10 +485,11 @@ func speedMsg(id uint32, speed int) *pb.ServerMessage {
 	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureSpeed{CreatureSpeed: &pb.CreatureSpeed{Id: id, Speed: uint32(speed)}}}
 }
 
-// combatSkill is p's level in skill id plus its skill conditions (keen_eye): what
-// attacks and spells use. Training, the skills panel and saves use the plain level.
+// combatSkill is p's level in skill id plus its skill conditions (keen_eye) and the skill
+// attributes of its worn items: what attacks and spells use. Training, the skills panel
+// and saves use the plain level.
 func (w *World) combatSkill(p *Player, id string) int {
-	lvl := w.skillLevel(p, id)
+	lvl := w.skillLevel(p, id) + p.gear.skill[id] // and its worn skill attributes (attributes.go)
 	for _, c := range p.conds {
 		if c.def.Kind == content.ConditionSkill && c.def.Skill == id {
 			lvl += c.def.Amount

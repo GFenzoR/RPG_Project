@@ -390,9 +390,9 @@ func (w *World) shopBuy(p *Player, dialogID, itemID, count uint32) {
 		return
 	}
 	w.pay(p, price)
-	w.giveItem(p, l.def, n)
+	made := w.giveItem(p, l.def, n)
 	w.econGold(p, EconNPCBuy, p.dialog.npc.def.ID, -price)
-	w.econItem(p, EconNPCBuy, p.dialog.npc.def.ID, l.def, n)
+	w.econMade(p, EconNPCBuy, p.dialog.npc.def.ID, 0, l.def, n, made)
 	w.log.Info("economy: npc sale", "character", p.charID, "npc", p.dialog.npc.def.ID, "item", l.def.ID, "count", n, "amount", price)
 	p.emit(systemMsg(msgShopBought, itemParam(l.def, n), num("price", int(price))))
 	w.afterTrade(p)
@@ -412,10 +412,12 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 		p.emit(systemMsg(msgShopNotEnough))
 		return
 	}
+	// The NPC pays the base value: an equipable's attribute never changes the price
+	// (docs/02 "Atributos de items"); it takes the units in backpack order.
 	amount := l.sell * int64(n)
-	w.takeItem(p, l.def, n, false)
+	taken := w.takeItem(p, l.def, n, false)
 	w.giveMoney(p, amount)
-	w.econItem(p, EconNPCSell, p.dialog.npc.def.ID, l.def, -n)
+	w.econTaken(p, EconNPCSell, p.dialog.npc.def.ID, l.def, n, taken)
 	w.econGold(p, EconNPCSell, p.dialog.npc.def.ID, amount)
 	w.log.Info("economy: npc purchase", "character", p.charID, "npc", p.dialog.npc.def.ID, "item", l.def.ID, "count", n, "amount", amount)
 	p.emit(systemMsg(msgShopSold, itemParam(l.def, n), num("price", int(amount))))
@@ -490,9 +492,10 @@ func takeable(it *Item, def *content.Item) bool {
 	return it.def == def && len(it.items) == 0
 }
 
-// takeItem removes n units of def from p (the caller checked p has them).
-func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) {
-	var found []*Item
+// takeItem removes n units of def from p (the caller checked p has them), in the order
+// eachCarried walks them, and returns the instances it removed whole (for econTaken).
+func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) []*Item {
+	var found, taken []*Item
 	p.eachCarried(equipped, func(it *Item) {
 		if takeable(it, def) {
 			found = append(found, it)
@@ -511,8 +514,22 @@ func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) {
 			n -= k
 		}
 		w.removeItem(it)
+		taken = append(taken, it)
 	}
 	p.questDirty = true
+	return taken
+}
+
+// econTaken records the n units of def that takeItem took from p: an equipable is one
+// entry per instance with its attribute (taken), anything else one entry for all n.
+func (w *World) econTaken(p *Player, kind, ref string, def *content.Item, n int, taken []*Item) {
+	if !content.Rolls(def) {
+		w.econItem(p, kind, ref, def, -n)
+		return
+	}
+	for _, it := range taken {
+		w.econInstance(p, kind, ref, 0, it, -1)
+	}
 }
 
 // removeItem takes it out of p's inventory for good.
@@ -559,12 +576,31 @@ func (w *World) canReceive(p *Player, def *content.Item, n, extra int) bool {
 	return def.Weight*n <= p.capacity-p.carried() && w.room(p, def, n, extra)
 }
 
-// giveItem puts n units of def in p's backpack, merging stacks. What does not fit (no
-// backpack, no room or too heavy) falls on p's tile, with a message.
-func (w *World) giveItem(p *Player, def *content.Item, n int) {
+// giveItem puts n new units of def in p's backpack, merging stacks. What does not fit (no
+// backpack, no room or too heavy) falls on p's tile, with a message. An equipable is
+// created: it rolls its attribute (attributes.go). It returns the new instances (not the
+// units merged into a stack p had), for econMade.
+func (w *World) giveItem(p *Player, def *content.Item, n int) []*Item {
+	return w.give(p, def, n, nil)
+}
+
+// giveMods is giveItem of one instance whose mods are known (a market offer, a mailbox
+// entry): it keeps them (an equipable without an attribute rolls one, as on load).
+func (w *World) giveMods(p *Player, def *content.Item, mods Mods) []*Item {
+	return w.give(p, def, 1, &mods)
+}
+
+func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 	if def == nil || n <= 0 {
-		return
+		return nil
 	}
+	newUnits := func(k int) *Item {
+		if mods != nil {
+			return w.instance(def, k, *mods)
+		}
+		return w.created(def, k)
+	}
+	var made []*Item
 	p.questDirty = true
 	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	before := p.carried()
@@ -590,17 +626,19 @@ func (w *World) giveItem(p *Player, def *content.Item, n int) {
 			merge.count += k
 			w.changed(merge)
 		case bp != nil && bp.def.Container != nil && len(bp.items) < bp.def.Slots() && !heavy:
-			it := newItem(def, k)
+			it := newUnits(k)
 			if !def.Stackable {
 				it.count = def.StackLimit() // a rune comes with all its charges
 			}
+			made = append(made, it)
 			w.attach(p, it, place{kind: locContainer, cont: bp})
 			w.containerChanged(bp)
 		default:
-			it := newItem(def, k)
+			it := newUnits(k)
 			if !def.Stackable {
 				it.count = def.StackLimit()
 			}
+			made = append(made, it)
 			w.drop(it, p.pos)
 			w.holdGround(p, it) // T5.3 fail-safe: p's own while a transfer of p is unconfirmed
 			w.tileChanged(p.pos)
@@ -615,6 +653,7 @@ func (w *World) giveItem(p *Player, def *content.Item, n int) {
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
+	return made
 }
 
 // money is the worth of every coin p carries, in the smallest coin.
@@ -743,8 +782,8 @@ func (h *questHost) Reward(q *content.Quest, r content.QuestReward) {
 		h.w.econGold(h.p, EconQuest, q.ID, r.Gold)
 		h.p.emit(systemMsg(msgReceivedGold, num("amount", int(r.Gold))))
 	case r.Item != "":
-		h.w.giveItem(h.p, h.w.cfg.Items[r.Item], 1)
-		h.w.econItem(h.p, EconQuest, q.ID, h.w.cfg.Items[r.Item], 1)
+		def := h.w.cfg.Items[r.Item]
+		h.w.econMade(h.p, EconQuest, q.ID, 0, def, 1, h.w.giveItem(h.p, def, 1))
 	}
 }
 
@@ -815,12 +854,12 @@ func (a *actor) CanTeleport(pos content.Position) bool {
 func (a *actor) DevIsland() bool { return a.d != nil && a.d.npc != nil && a.d.npc.dev }
 
 func (a *actor) GiveItem(item string) {
-	a.w.giveItem(a.p, a.w.cfg.Items[item], 1)
-	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], 1)
+	def := a.w.cfg.Items[item]
+	a.w.econMade(a.p, EconNPC, a.npcID(), 0, def, 1, a.w.giveItem(a.p, def, 1))
 }
 func (a *actor) TakeItem(item string, n int) {
-	a.w.takeItem(a.p, a.w.cfg.Items[item], n, true)
-	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], -n)
+	def := a.w.cfg.Items[item]
+	a.w.econTaken(a.p, EconNPC, a.npcID(), def, n, a.w.takeItem(a.p, def, n, true))
 }
 
 // npcID is the NPC whose dialog runs the action (economy log), or "".

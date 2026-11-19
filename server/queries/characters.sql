@@ -73,7 +73,7 @@ DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries;
 
 -- name: GetCharacterInventory :many
 -- Every item of a character; the server rebuilds the tree from container_id.
-SELECT id, container_id, slot, item_id, count
+SELECT id, container_id, slot, item_id, count, attributes
 FROM inventory_items
 WHERE character_id = sqlc.arg(character_id)
 ORDER BY container_id NULLS FIRST, slot;
@@ -83,8 +83,9 @@ ORDER BY container_id NULLS FIRST, slot;
 DELETE FROM inventory_items WHERE character_id = sqlc.arg(character_id);
 
 -- name: InsertInventoryItem :one
-INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
-VALUES (sqlc.arg(character_id), sqlc.narg(container_id), sqlc.arg(slot), sqlc.arg(item_id), sqlc.arg(count))
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes)
+VALUES (sqlc.arg(character_id), sqlc.narg(container_id), sqlc.arg(slot), sqlc.arg(item_id), sqlc.arg(count),
+        sqlc.arg(attributes))
 RETURNING id;
 
 -- name: GetCharacterQuestState :many

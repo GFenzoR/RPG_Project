@@ -42,7 +42,9 @@ const (
 // EconomyEntry is one row of the economy log. Count (item units) and Amount (money, in
 // the smallest coin) are signed: positive is created or received, negative destroyed or
 // lost. ItemID 0 means a money entry. Ref is the content id of the source (monster, NPC,
-// quest, recipe, resource...) and always a static string.
+// quest, recipe, resource...) and always a static string. Mods are the instance's own data
+// (an equipable's attribute, attributes.go): one entry per such instance, so the log says
+// which one moved.
 type EconomyEntry struct {
 	At               time.Time
 	Kind             string
@@ -52,6 +54,7 @@ type EconomyEntry struct {
 	Count            int32
 	Amount           int64
 	Ref              string
+	Mods             Mods
 }
 
 // holdings is what the ledger reconciles: money (smallest coin) and item units (coins
@@ -119,6 +122,29 @@ func (w *World) econItem(p *Player, kind, ref string, def *content.Item, n int) 
 
 // econItemWith is econItem with the other character of a trade or market operation.
 func (w *World) econItemWith(p *Player, kind, ref string, other int64, def *content.Item, n int) {
+	w.econEntry(p, kind, ref, other, def, n, Mods{})
+}
+
+// econInstance records it (all its units, signed by sign) for p, with its mods.
+func (w *World) econInstance(p *Player, kind, ref string, other int64, it *Item, sign int) {
+	w.econEntry(p, kind, ref, other, it.def, sign*units(it), it.mods)
+}
+
+// econMade records the n units of def that giveItem made for p: made are the new
+// instances, so an equipable is one entry per instance with its attribute (anything else
+// one entry for all n).
+func (w *World) econMade(p *Player, kind, ref string, other int64, def *content.Item, n int, made []*Item) {
+	if def == nil || !content.Rolls(def) {
+		w.econItemWith(p, kind, ref, other, def, n)
+		return
+	}
+	for _, it := range made {
+		w.econInstance(p, kind, ref, other, it, 1)
+	}
+}
+
+// econEntry is econItemWith of an instance with mods.
+func (w *World) econEntry(p *Player, kind, ref string, other int64, def *content.Item, n int, mods Mods) {
 	if def == nil || n == 0 || p == nil {
 		return
 	}
@@ -131,7 +157,7 @@ func (w *World) econItemWith(p *Player, kind, ref string, other int64, def *cont
 		p.earn.items += int64(n)
 	}
 	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, OtherCharacterID: other, ItemID: def.Numeric,
-		Count: int32(n), Ref: ref})
+		Count: int32(n), Ref: ref, Mods: mods})
 }
 
 // econGold records amount (signed) of money for p and books it.
@@ -157,7 +183,7 @@ func (w *World) econGoldWith(p *Player, kind, ref string, other int64, amount in
 // econTree records it and everything inside it (signed by sign) for p: a whole
 // container lost at death.
 func (w *World) econTree(p *Player, kind, ref string, it *Item, sign int) {
-	w.econItem(p, kind, ref, it.def, sign*units(it))
+	w.econInstance(p, kind, ref, 0, it, sign)
 	for _, c := range it.items {
 		w.econTree(p, kind, ref, c, sign)
 	}
@@ -166,10 +192,15 @@ func (w *World) econTree(p *Player, kind, ref string, it *Item, sign int) {
 // econWorld records n units (signed) of def that are not anyone's possessions (used
 // or decayed on the ground): logged for character id charID (0 = nobody), no ledger.
 func (w *World) econWorld(charID int64, kind, ref string, def *content.Item, n int) {
+	w.econWorldMods(charID, kind, ref, def, n, Mods{})
+}
+
+// econWorldMods is econWorld of an instance with mods.
+func (w *World) econWorldMods(charID int64, kind, ref string, def *content.Item, n int, mods Mods) {
 	if def == nil || n == 0 {
 		return
 	}
-	e := EconomyEntry{Kind: kind, CharacterID: charID, Ref: ref}
+	e := EconomyEntry{Kind: kind, CharacterID: charID, Ref: ref, Mods: mods}
 	if c := def.Currency; c != nil {
 		e.Amount = c.Worth * int64(n)
 	} else {
@@ -180,7 +211,7 @@ func (w *World) econWorld(charID int64, kind, ref string, def *content.Item, n i
 
 // econWorldTree records it and everything inside it as destroyed (econWorld).
 func (w *World) econWorldTree(charID int64, kind, ref string, it *Item) {
-	w.econWorld(charID, kind, ref, it.def, -units(it))
+	w.econWorldMods(charID, kind, ref, it.def, -units(it), it.mods)
 	for _, c := range it.items {
 		w.econWorldTree(charID, kind, ref, c)
 	}
@@ -189,7 +220,7 @@ func (w *World) econWorldTree(charID int64, kind, ref string, it *Item) {
 // econLoot records the loot of a monster's remains: it is created on the ground, so no
 // ledger moves, but it counts as what the owner earned (outliers).
 func (w *World) econLoot(owner *Player, monster string, it *Item) {
-	e := EconomyEntry{Kind: EconLoot, Ref: monster}
+	e := EconomyEntry{Kind: EconLoot, Ref: monster, Mods: it.mods}
 	if owner != nil {
 		e.CharacterID = owner.charID
 	}

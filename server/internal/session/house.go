@@ -246,8 +246,14 @@ func (w *World) initHouses() {
 			w.log.Warn("house: saved item outside its house dropped", "house", it.HouseID, "pos", it.Pos.String())
 			continue
 		}
+		rolls := w.needsRoll(it.Item)
 		if x := w.loadItem(it.Item); x != nil {
 			w.drop(x, it.Pos)
+			if rolls {
+				// An equipable saved before attributes rolled its own now: the house is
+				// written again with it, so a restart does not roll another.
+				w.houseTouched(it.Pos)
+			}
 		}
 	}
 }

@@ -278,6 +278,7 @@ type MarketOffer struct {
 	Price       int64
 	CreatedAt   pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
+	Attributes  []byte
 }
 
 type OauthPending struct {

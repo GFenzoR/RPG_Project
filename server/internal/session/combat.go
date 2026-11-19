@@ -166,15 +166,16 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 }
 
 // physicalHit lands one physical hit of up to maxHit on f: a monster's armor and defense,
-// or a player's armor, shield and stance. A monster hit trains skill.
+// or a player's armor, shield and stance. A monster hit trains skill. p's leech
+// attributes give back their share of what it dealt (attributes.go).
 func (w *World) physicalHit(ctx *game.TickContext, p *Player, f foe, maxHit int, skill string) {
 	if v := f.p; v != nil {
 		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, 0, maxHit, true, w.playerDefense(v))
-		w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true)
+		w.leech(p, w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true))
 		return
 	}
 	w.train(p, skill, w.afk(ctx, p) || w.beyondLeash(ctx.Tick, f.m, p))
-	w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical)
+	w.leech(p, w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical))
 }
 
 // distanceFight is playerFight with a distance weapon (T3.1): every attack round, within
@@ -193,7 +194,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, f foe) {
 		p.emit(systemMsg(msgNoAmmo))
 		return
 	}
-	attack := wp.Attack + ammo.def.Ammo.Attack
+	attack := wp.Attack + ammo.def.Ammo.Attack + p.gear.attack // with its attack attribute
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
 	w.useUp(p, ammo)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
@@ -202,8 +203,9 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, f foe) {
 	w.physicalHit(ctx, p, f, maxHit, SkillDistance)
 }
 
-// damageMonster applies one hit of player p, of element, to m.
-func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg int, element string) {
+// damageMonster applies one hit of player p, of element, to m, and returns the damage it
+// dealt.
+func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg int, element string) int {
 	dmg = min(dmg, m.health)
 	m.health -= dmg
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
@@ -215,12 +217,13 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
 	if m.health <= 0 {
 		w.killMonster(ctx, m)
-		return
+		return dmg
 	}
 	if m.target == nil && w.validTarget(m, p) {
 		m.setTarget(p) // even a passive monster fights back
 		m.state = StateAlert
 	}
+	return dmg
 }
 
 func (w *World) addShare(m *Monster, id uint32, dmg int) {
@@ -350,7 +353,7 @@ func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element 
 // PvP everyone heals fast. It reports whether p died.
 func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, element string, attacker *Player) bool {
 	w.markFight(ctx, p)
-	dmg = min(dmg, p.health)
+	dmg = min(protected(p, element, dmg), p.health) // the worn protection of element (attributes.go)
 	p.health -= dmg
 	if dmg > 0 && attacker == nil {
 		w.abHurt(ctx.Tick, p)
@@ -417,7 +420,8 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
 		if !l.def.Stackable {
 			for range n {
-				add(newItem(l.def, l.def.StackLimit())) // a rune drops with all its charges
+				// A rune drops with all its charges; an equipable rolls its attribute.
+				add(w.created(l.def, l.def.StackLimit()))
 			}
 			continue
 		}
@@ -460,8 +464,8 @@ func (w *World) questDrop(ctx *game.TickContext, m *Monster, l lootItem) {
 		}
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
 		p.emit(systemMsg(msgQuestDrop, itemParam(l.def, n)))
-		w.giveItem(p, l.def, n) // tells "on the floor" itself if it does not fit
-		w.econItem(p, EconLoot, m.kind.def.ID, l.def, n)
+		made := w.giveItem(p, l.def, n) // tells "on the floor" itself if it does not fit
+		w.econMade(p, EconLoot, m.kind.def.ID, 0, l.def, n, made)
 	}
 }
 

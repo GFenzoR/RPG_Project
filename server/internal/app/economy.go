@@ -183,7 +183,8 @@ func coalesce(batch []session.EconomyEntry) []store.EconomyEntry {
 	for _, e := range batch {
 		k := coalesceKey{kind: e.Kind, char: e.CharacterID, other: e.OtherCharacterID, item: e.ItemID, ref: e.Ref,
 			money: e.ItemID == 0, minus: e.Count < 0 || e.Amount < 0}
-		if len(out) > 0 && k == last {
+		// An instance with mods (an equipable) is a row of its own: the log says which one.
+		if len(out) > 0 && k == last && e.Mods.Zero() && out[len(out)-1].Mods == nil {
 			r := &out[len(out)-1]
 			sum := int64(r.Count) + int64(e.Count)
 			if sum >= math.MinInt32 && sum <= math.MaxInt32 && (e.Amount >= 0) == (r.Amount+e.Amount >= 0) {
@@ -193,7 +194,8 @@ func coalesce(batch []session.EconomyEntry) []store.EconomyEntry {
 		}
 		last = k
 		out = append(out, store.EconomyEntry{At: e.At, Kind: e.Kind, CharacterID: e.CharacterID,
-			OtherCharacterID: e.OtherCharacterID, ItemID: int(e.ItemID), Count: int(e.Count), Amount: e.Amount, Ref: e.Ref})
+			OtherCharacterID: e.OtherCharacterID, ItemID: int(e.ItemID), Count: int(e.Count), Amount: e.Amount, Ref: e.Ref,
+			Mods: storeMods(e.Mods)})
 	}
 	return out
 }
