@@ -158,7 +158,8 @@ const WINDOWS: Record<string, unknown> = {
     },
   },
   // docs/17 UI-5: the corpse's container where the player left it, resized; a second one
-  // (container-creature_remains-2) at its default place, right under the equipment.
+  // (container-remains-2: every remains shares one place) at its default place, right under
+  // the equipment.
   server: {
     v: 3,
     z: [],
@@ -167,7 +168,7 @@ const WINDOWS: Record<string, unknown> = {
       inventory: { open: true, collapsed: false },
     },
     others: {
-      "container-creature_remains": { collapsed: false, x: 24, y: 300, w: 240 },
+      "container-remains": { collapsed: false, x: 24, y: 300, w: 240 },
     },
   },
   // The magnet (docs/17 UI-5): windows dropped edge to edge, as the magnet leaves them —

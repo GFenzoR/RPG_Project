@@ -411,6 +411,30 @@ describe("the server's windows and the containers (docs/17 UI-5)", () => {
     ]);
     expect(keys.get(12)).toBe("container-backpack");
   });
+
+  it("opens the remains of every family in one place, not one per kind of remains", () => {
+    // A wolf's and a crab's remains (and a player's) are fixed containers: one place.
+    let keys = containerKeys(new Map(), [
+      { id: 3, item: "remains_fur", fixed: true },
+      { id: 5, item: "backpack" },
+    ]);
+    expect([...keys]).toEqual([
+      [3, "container-remains"],
+      [5, "container-backpack"],
+    ]);
+    // The wolf's closes; the crab's opens where the wolf's was.
+    keys = containerKeys(keys, [
+      { id: 5, item: "backpack" },
+      { id: 8, item: "remains_chitin", fixed: true },
+    ]);
+    expect(keys.get(8)).toBe("container-remains");
+    // Two open at once: the second beside it, as two backpacks.
+    keys = containerKeys(keys, [
+      { id: 8, item: "remains_chitin", fixed: true },
+      { id: 9, item: "creature_remains", fixed: true },
+    ]);
+    expect(keys.get(9)).toBe("container-remains-2");
+  });
 });
 
 describe("size and keyboard (docs/17 UI-1, UI-5)", () => {

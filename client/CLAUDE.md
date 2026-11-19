@@ -1150,14 +1150,16 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **La fuente del canvas** (rama `feat/combat-visuals`): nombres, gremios y números
   flotantes en Pixelify Sans (`render/canvas-font.ts`: `CANVAS_FONT`, la familia con
   `sans-serif` de respaldo; `CANVAS_FONT_SIZE` 11, una celda de su grilla de 1/11 de em por
-  píxel; `CANVAS_TEXT_STROKE` 3), en `game-canvas.ts` y `effect-layer.ts`. Pixi mide y
+  píxel de alto, aunque los avances no son celdas enteras y las letras caen entre píxeles a
+  lo ancho; `CANVAS_TEXT_STROKE` 3), en `game-canvas.ts` y `effect-layer.ts`. Pixi mide y
   rasteriza un `Text` una vez, y `CanvasTextMetrics` guarda las medidas por fuente: por eso
   `createGameCanvas` espera `loadCanvasFont(document.fonts)` junto con el atlas
   (`CANVAS_FONT_WAIT_MS`, 2,5 s; sin `FontFaceSet` o si falla, sigue) y, si llega después,
   `onLate` limpia las medidas y llama `style.update()` de los nombres y gremios que hay
   (`redrawLabels`). Un número dura un segundo: el siguiente ya sale bien.
-  `vite/canvas-font.test.ts` lee la tabla de avances del `.ttf`: todo nombre de criatura
-  tiene sus letras y uno acortado a zoom 1 (`labelText`) mide como mucho 96 px.
+  `vite/canvas-font.test.ts` lee las tablas del `.ttf`: todo nombre de criatura tiene sus
+  letras, uno acortado a zoom 1 (`labelText`) mide como mucho 96 px, las letras miden 7 y
+  5 px de alto y los avances no son píxeles enteros (lo que dice `canvas-font.ts`).
 - **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
   `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
   (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten
@@ -1300,6 +1302,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `crafting`, `market`, `house`, `trade`) y una por contenedor abierto
   (`container-<item>`, `-2`, `-3`… si hay varios del mismo item: `containerKeys` le deja
   su clave mientras sigue abierto, así un segundo contenedor no toma el lugar del primero).
+  Los restos de cualquier familia y el cuerpo de un jugador (contenedores `fixed`, que no
+  se levantan) comparten `container-remains` (`REMAINS_PLACE`): se abren donde el jugador
+  dejó los últimos y ocupan uno o dos de los `MAX_CONTAINER_PLACES`, no uno por familia.
   Las dos últimas viven en `WindowsState.others`; `placeOf(s, id)` da el lugar de
   cualquiera. El servidor las abre y las cierra: `GameView` calcula cuáles muestra
   (`serverWindows`, con la precedencia de antes: la tienda solo con su diálogo, el crafteo

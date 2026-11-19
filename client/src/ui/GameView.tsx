@@ -195,7 +195,10 @@ export function GameView(props: GameViewProps): JSX.Element {
   const ckeys = windowed
     ? containerKeys(
         containerKeysRef.current,
-        ui.containers.map((c) => ({ id: c.id, item: props.content.items[c.itemId]?.id ?? "item" })),
+        ui.containers.map((c) => {
+          const def = props.content.items[c.itemId];
+          return { id: c.id, item: def?.id ?? "item", fixed: def?.fixed === true };
+        }),
       )
     : new Map<number, ContainerKey>();
   containerKeysRef.current = ckeys;

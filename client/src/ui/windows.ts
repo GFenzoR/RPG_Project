@@ -6,7 +6,8 @@
 // - the toolbar's windows (WINDOW_IDS): the toolbar and its keys open and close them, and
 //   the chat, which is always open (FIXED_WINDOWS: no ×, Escape skips it);
 // - the server's windows (SERVER_WINDOWS: dialog, shop, crafting, market, house, trade);
-// - one window per open container ("container-<item>", containerKeys).
+// - one window per open container ("container-<item>", or "container-remains" for any
+//   remains on the ground, containerKeys).
 // The server opens and closes the last two (syncWindows follows it); the player still
 // moves, resizes and folds them. GameView.tsx only renders what this state says.
 // Remembered per device in localStorage (`rpg.windows`, a convenience: if it is lost or
@@ -550,13 +551,21 @@ export function windowNudge(
 }
 
 /**
+ * The name in the window key of every container that stays on the ground (`fixed`: the
+ * remains of a monster of any family, or of a player): they all open in one place, the one
+ * the player left the last of them in, instead of one per kind of remains.
+ */
+export const REMAINS_PLACE = "remains";
+
+/**
  * The window key of each open container (`container-<item>`, `-2`, `-3`... for more of the
- * same item): a container keeps its key while it stays open, so a second backpack does not
- * take the first one's place when that one closes. `open` is the server's order.
+ * same item; `container-remains` for the remains, REMAINS_PLACE): a container keeps its key
+ * while it stays open, so a second backpack does not take the first one's place when that
+ * one closes. `open` is the server's order; `fixed` is the item's `pickupable: false`.
  */
 export function containerKeys(
   prev: ReadonlyMap<number, ContainerKey>,
-  open: readonly { id: number; item: string }[],
+  open: readonly { id: number; item: string; fixed?: boolean }[],
 ): Map<number, ContainerKey> {
   const next = new Map<number, ContainerKey>();
   for (const c of open) {
@@ -566,7 +575,7 @@ export function containerKeys(
   const used = new Set(next.values());
   for (const c of open) {
     if (next.has(c.id)) continue;
-    const item = c.item.replace(/[^a-z0-9_]/g, "_") || "item";
+    const item = c.fixed ? REMAINS_PLACE : c.item.replace(/[^a-z0-9_]/g, "_") || "item";
     let k: ContainerKey = `container-${item}`;
     for (let n = 2; used.has(k) && n < 100; n++) k = `container-${item}-${n}`;
     next.set(c.id, k);
