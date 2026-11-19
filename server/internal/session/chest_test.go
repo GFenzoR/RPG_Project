@@ -192,8 +192,9 @@ func TestChestAndDisconnectInTheSameTick(t *testing.T) {
 // and the same character opens it once it makes room.
 func TestChestWithNoRoomGivesNothingAndCanBeRetried(t *testing.T) {
 	h := chestHarness(t)
-	// Three bags in the 4-slot backpack: the coins, the salves and the tunic need three.
-	cl, p := opener(h, pos(1, 0), stack(bagID, 1, 0), stack(bagID, 1, 1), stack(bagID, 1, 2))
+	// Three bags in the 4-slot backpack, full pockets: the coins, the salves and the tunic
+	// need three.
+	cl, p := opener(h, pos(1, 0), full(stack(bagID, 1, 0), stack(bagID, 1, 1), stack(bagID, 1, 2))...)
 	h.input(cl, useChest)
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "chest.no_room") {
@@ -229,10 +230,10 @@ func TestChestWithNoRoomGivesNothingAndCanBeRetried(t *testing.T) {
 }
 
 // Rewards merge into the stacks the backpack holds: a full backpack whose salves and
-// coins have room left only needs a slot for the tunic.
+// coins have room left only needs a slot for the tunic (and full pockets give none).
 func TestChestRewardsMergeIntoStacks(t *testing.T) {
 	h := chestHarness(t)
-	cl, p := opener(h, pos(1, 0), stack(coinID, 50, 0), stack(salveID, 97, 1), stack(bagID, 1, 2))
+	cl, p := opener(h, pos(1, 0), full(stack(coinID, 50, 0), stack(salveID, 97, 1), stack(bagID, 1, 2))...)
 	h.input(cl, useChest)
 	h.sim.Step()
 	if evs := cl.take(); !hasKey(evs, "chest.found") {
@@ -245,7 +246,7 @@ func TestChestRewardsMergeIntoStacks(t *testing.T) {
 	h2 := newHarness(t, worldtest.Map(t, 0, 0, 7, chestMap...), func(c *session.Config) {
 		c.Items = chestItems(t, strings.Replace(testChest, "count: 3}", "count: 4}", 1))
 	})
-	cl2, p2 := opener(h2, pos(1, 0), stack(coinID, 50, 0), stack(salveID, 97, 1), stack(bagID, 1, 2))
+	cl2, p2 := opener(h2, pos(1, 0), full(stack(coinID, 50, 0), stack(salveID, 97, 1), stack(bagID, 1, 2))...)
 	h2.input(cl2, useChest)
 	h2.sim.Step()
 	if evs := cl2.take(); !hasKey(evs, "chest.no_room") {

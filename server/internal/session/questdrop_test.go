@@ -287,8 +287,8 @@ func TestQuestDropKeptWhenTheHolderStepsOut(t *testing.T) {
 }
 
 // Content audit m9 with death: at return_seal, a death without blessings leaves the
-// backpack, seal inside, in the corpse; the character wakes up with a new backpack, and the
-// next warden puts a new seal in it.
+// backpack, seal inside, in the corpse; the character wakes up without a backpack (docs/02
+// "Bolsillos"), and the next warden puts a new seal in its pockets.
 func TestQuestDropAfterDyingWithTheSeal(t *testing.T) {
 	h := chapterThreeHarness(t)
 	c := session.Character{ID: 961, AccountID: 961, Name: "Clinker", Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
@@ -299,10 +299,10 @@ func TestQuestDropAfterDyingWithTheSeal(t *testing.T) {
 		h.w.GiveForTest(p, "forge_seal", 1)
 	}))
 	h.sim.Step()
-	inPack := func() int {
+	seals := func(in *session.Item) int {
 		n := 0
-		if bp := p.Equipped(slotBackpack); bp != nil {
-			for _, it := range bp.Items() {
+		if in != nil {
+			for _, it := range in.Items() {
 				if it.Def().ID == "forge_seal" {
 					n += it.Count()
 				}
@@ -310,13 +310,13 @@ func TestQuestDropAfterDyingWithTheSeal(t *testing.T) {
 		}
 		return n
 	}
-	if inPack() != 1 {
+	if seals(p.Equipped(slotBackpack)) != 1 {
 		t.Fatal("no seal in the pack to lose")
 	}
 	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) { h.w.DieForTest(ctx, p) }))
 	h.sim.Step()
-	if n := h.w.CountItem(p, "forge_seal"); n != 0 || p.Equipped(slotBackpack) == nil {
-		t.Fatalf("after dying: %d seals carried, backpack %v (want 0 and a new one)", n, p.Equipped(slotBackpack))
+	if n := h.w.CountItem(p, "forge_seal"); n != 0 || p.Equipped(slotBackpack) != nil {
+		t.Fatalf("after dying: %d seals carried, backpack %v (want 0 and none)", n, p.Equipped(slotBackpack))
 	}
 	// Far from the forge (a monster does not respawn under a player's eyes), then the warden.
 	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(20, 12)) }))
@@ -336,8 +336,8 @@ func TestQuestDropAfterDyingWithTheSeal(t *testing.T) {
 		h.w.DamageMonsterForTest(ctx, warden, p, 10)
 	}))
 	h.sim.Step()
-	if _, step := h.w.QuestState(p, "ch3_warden"); inPack() != 1 || step != "return_seal" {
-		t.Fatalf("after the next warden: %d seals in the new pack, step %q", inPack(), step)
+	if _, step := h.w.QuestState(p, "ch3_warden"); seals(p.Pockets()) != 1 || step != "return_seal" {
+		t.Fatalf("after the next warden: %d seals in the pockets, step %q", seals(p.Pockets()), step)
 	}
 	if !hasKey(cl.take(), "dialog.quest_drop") {
 		t.Error("not told about the new seal")

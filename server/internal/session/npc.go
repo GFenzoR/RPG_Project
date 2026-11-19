@@ -455,7 +455,9 @@ func units(it *Item) int {
 }
 
 // eachCarried calls fn for every item p carries, equipment slots in order and then
-// each container depth-first. With equipped false, only items inside containers.
+// each container depth-first, and last what p's pockets hold (pockets.go; never the
+// pockets themselves). With equipped false, only items inside containers (the pockets'
+// count as such).
 func (p *Player) eachCarried(equipped bool, fn func(*Item)) {
 	var walk func(it *Item)
 	walk = func(it *Item) {
@@ -472,6 +474,9 @@ func (p *Player) eachCarried(equipped bool, fn func(*Item)) {
 			fn(it)
 		}
 		walk(it)
+	}
+	if p.pockets != nil {
+		walk(p.pockets)
 	}
 }
 
@@ -562,40 +567,28 @@ func (w *World) removeItem(it *Item) {
 	}
 }
 
-// room returns where n units of def would go in p's backpack (top level): how many
-// merge into existing stacks and how many new stacks are needed and fit.
+// room reports whether n units of def fit at the top level of p's packs (its backpack,
+// then its pockets: pockets.go) with extra more cells left free: the units that merge
+// into the stacks there, and a cell for each new stack.
 func (w *World) room(p *Player, def *content.Item, n, extra int) (fits bool) {
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	if bp == nil || bp.def.Container == nil {
-		return false
-	}
-	if def.Stackable {
-		for _, c := range bp.items {
-			if c.def == def {
-				n -= min(n, def.StackLimit()-c.count)
-			}
-		}
-	}
-	if n <= 0 {
-		return len(bp.items)+extra <= bp.def.Slots()
-	}
+	n -= min(n, p.mergeRoom(def))
 	stacks := n
 	if def.Stackable {
 		stacks = (n + def.StackLimit() - 1) / def.StackLimit()
 	}
-	return len(bp.items)+stacks+extra <= bp.def.Slots()
+	return stacks+extra <= p.freeCells()
 }
 
-// canReceive reports whether n units of def fit in p's capacity and backpack, with
-// extra backpack slots left free.
+// canReceive reports whether n units of def fit in p's capacity and packs (backpack and
+// pockets), with extra cells left free.
 func (w *World) canReceive(p *Player, def *content.Item, n, extra int) bool {
 	return def.Weight*n <= p.capacity-p.carried() && w.room(p, def, n, extra)
 }
 
-// giveItem puts n new units of def in p's backpack, merging stacks. What does not fit (no
-// backpack, no room or too heavy) falls on p's tile, with a message. An equipable is
-// created: it rolls its attribute (attributes.go). It returns the new instances (not the
-// units merged into a stack p had), for econMade.
+// giveItem puts n new units of def in p's backpack and then its pockets (pockets.go),
+// merging stacks. What does not fit (no room or too heavy) falls on p's tile, with a
+// message. An equipable is created: it rolls its attribute (attributes.go). It returns the
+// new instances (not the units merged into a stack p had), for econMade.
 func (w *World) giveItem(p *Player, def *content.Item, n int) []*Item {
 	return w.give(p, def, n, nil)
 }
@@ -618,7 +611,6 @@ func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 	}
 	var made []*Item
 	p.questDirty = true
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	before := p.carried()
 	floor := false
 	for n > 0 {
@@ -626,29 +618,24 @@ func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 		if !def.Stackable {
 			k = 1
 		}
-		var merge *Item
-		if bp != nil && def.Stackable {
-			for _, c := range bp.items {
-				if c.def == def && c.count < def.StackLimit() {
-					merge = c
-					k = min(n, def.StackLimit()-c.count)
-					break
-				}
-			}
+		merge := p.packStack(def)
+		if merge != nil {
+			k = min(n, def.StackLimit()-merge.count)
 		}
+		pack := p.packWithRoom()
 		heavy := def.Weight*k > p.capacity-p.carried()
 		switch {
 		case merge != nil && !heavy:
 			merge.count += k
 			w.changed(merge)
-		case bp != nil && bp.def.Container != nil && len(bp.items) < bp.def.Slots() && !heavy:
+		case merge == nil && pack != nil && !heavy:
 			it := newUnits(k)
 			if !def.Stackable {
 				it.count = def.StackLimit() // a rune comes with all its charges
 			}
 			made = append(made, it)
-			w.attach(p, it, place{kind: locContainer, cont: bp})
-			w.containerChanged(bp)
+			w.attach(p, it, place{kind: locContainer, cont: pack})
+			w.containerChanged(pack)
 		default:
 			it := newUnits(k)
 			if !def.Stackable {
@@ -716,16 +703,16 @@ func (w *World) changeFor(p *Player, amount int64) (taken []int, change int64) {
 	return taken, max(-amount, 0)
 }
 
-// changeNeeds is what paying amount does to p's top backpack and load: the new stacks
-// its change needs (after merging into the backpack's coin stacks) and the net weight
-// (change minus the coins taken; negative when paying lightens p). Conservative: the
-// slots that the paid coins free are not counted. p must carry amount.
+// changeNeeds is what paying amount does to the top level of p's packs (backpack and
+// pockets, pockets.go) and to its load: the new stacks its change needs (after merging
+// into the coin stacks there) and the net weight (change minus the coins taken; negative
+// when paying lightens p). Conservative: the cells that the paid coins free are not
+// counted. p must carry amount.
 func (w *World) changeNeeds(p *Player, amount int64) (stacks, weight int) {
 	taken, change := w.changeFor(p, amount)
 	for i, n := range taken {
 		weight -= w.coins[i].Weight * n
 	}
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	for _, coin := range w.coins {
 		n := int(change / coin.Currency.Worth)
 		if n == 0 {
@@ -733,31 +720,20 @@ func (w *World) changeNeeds(p *Player, amount int64) (stacks, weight int) {
 		}
 		change -= int64(n) * coin.Currency.Worth
 		weight += coin.Weight * n
-		if bp != nil {
-			for _, c := range bp.items {
-				if c.def == coin {
-					n -= min(n, coin.StackLimit()-c.count)
-				}
-			}
-		}
+		n -= min(n, p.mergeRoom(coin))
 		stacks += (n + coin.StackLimit() - 1) / coin.StackLimit()
 	}
 	return stacks, weight
 }
 
-// canPay reports whether p carries amount and its change fits (changeNeeds) in the top
-// backpack and in capacity.
+// canPay reports whether p carries amount and its change fits (changeNeeds) at the top
+// level of its packs and in capacity.
 func (w *World) canPay(p *Player, amount int64) bool {
 	if w.money(p) < amount {
 		return false
 	}
 	stacks, weight := w.changeNeeds(p, amount)
-	if stacks == 0 {
-		return weight <= p.capacity-p.carried()
-	}
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	return bp != nil && bp.def.Container != nil && len(bp.items)+stacks <= bp.def.Slots() &&
-		weight <= p.capacity-p.carried()
+	return stacks <= p.freeCells() && weight <= p.capacity-p.carried()
 }
 
 // canBuy reports whether p can pay price for n units of def: the money, and room and

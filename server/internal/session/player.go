@@ -90,7 +90,10 @@ type Player struct {
 	// container windows (oldest first), the last window id, the first tick a
 	// consumable can be used again and the first tick p may open or close a door again.
 	equip [equipSlots]*Item
-	armor int
+	// pockets are p's built-in pocket cells (pockets.go): a container that is part of p,
+	// never an item of its equipment.
+	pockets *Item
+	armor   int
 	// gear is what the attributes of the worn items add up to (attributes.go): already
 	// in maxHealth, maxMana and armor; the rest is read by the formulas. gearFrom are the
 	// worn instances with an attribute it was summed from.

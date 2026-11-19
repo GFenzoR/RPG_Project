@@ -638,7 +638,8 @@ func (w *World) doorReady(ctx *game.TickContext, p *Player) bool {
 }
 
 // keyFor returns the first item p carries (equipped, then inside each equipped container
-// in depth-first order, like eachCarried) that opens lock, or nil. It stops at the key.
+// in depth-first order, then in its pockets, like eachCarried) that opens lock, or nil. It
+// stops at the key.
 func (w *World) keyFor(p *Player, lock string) *Item {
 	for _, it := range p.equip {
 		if it == nil {
@@ -650,6 +651,9 @@ func (w *World) keyFor(p *Player, lock string) *Item {
 		if k := keyIn(it.items, lock); k != nil {
 			return k
 		}
+	}
+	if p.pockets != nil {
+		return keyIn(p.pockets.items, lock)
 	}
 	return nil
 }

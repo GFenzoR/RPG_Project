@@ -106,11 +106,17 @@ func measure(it *Item, count int) holdings {
 	return h
 }
 
-// held returns what p carries now.
+// held returns what p carries now: its equipment and what its pockets hold (never the
+// pockets themselves: they are no item).
 func (w *World) held(p *Player) holdings {
 	var h holdings
 	for _, it := range p.equip {
 		if it != nil {
+			h = h.add(measure(it, it.count))
+		}
+	}
+	if p.pockets != nil {
+		for _, it := range p.pockets.items {
 			h = h.add(measure(it, it.count))
 		}
 	}

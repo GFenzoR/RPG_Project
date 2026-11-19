@@ -51,32 +51,42 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	pen.EquipmentDropPct, pen.BackpackDropPct = w.deathDrop(ctx.Now, p, pen.EquipmentDropPct, pen.BackpackDropPct)
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
-	packDropped := false
+	// What the pockets hold falls with the backpack, on its roll, also without a backpack
+	// (pockets.go): the pockets themselves are part of p and stay.
 	if w.corpseItem != nil {
 		corpse := &Corpse{Item: newItem(w.corpseItem, 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
-		for slot := 1; slot < equipSlots; slot++ {
-			it := p.equip[slot]
-			if it == nil {
-				continue
-			}
-			chance := pen.EquipmentDropPct
-			if slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) {
-				chance = pen.BackpackDropPct
-			}
-			if chance <= 0 || ctx.Rand.Float64()*100 >= chance {
-				continue
-			}
+		fall := func(it *Item) {
 			w.econTree(p, EconDeath, "", it, -1)
-			packDropped = packDropped || slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK)
 			w.detach(it)
 			if len(corpse.Item.items) < w.corpseItem.Slots() {
 				it.parent = corpse.Item
 				corpse.Item.items = append(corpse.Item.items, it)
 			} else {
-				w.drop(it, at)      // never lost (unreserved): only if the corpse had fewer slots than the equipment
+				w.drop(it, at)      // never lost (unreserved): only if the corpse had fewer slots than what fell
 				w.holdGround(p, it) // T5.3 fail-safe: reserved like the corpse while p is held
 			}
 			w.closeUnreachable(it)
+		}
+		for slot := 1; slot < equipSlots; slot++ {
+			it := p.equip[slot]
+			pack := slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK)
+			pockets := pack && p.pockets != nil && len(p.pockets.items) > 0
+			if it == nil && !pockets {
+				continue
+			}
+			chance := pen.EquipmentDropPct
+			if pack {
+				chance = pen.BackpackDropPct
+			}
+			if chance <= 0 || ctx.Rand.Float64()*100 >= chance {
+				continue
+			}
+			if it != nil {
+				fall(it)
+			}
+			for pockets && len(p.pockets.items) > 0 {
+				fall(p.pockets.items[0])
+			}
 		}
 		w.equipmentChanged(p)
 		w.addCorpse(ctx, at, corpse, w.playerCorpseFor)
@@ -106,9 +116,8 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 		}
 	}
 
-	if packDropped {
-		w.newBackpack(p)
-	}
+	// No free backpack (the playtest of 2026-11-19): p wakes up with its pockets, empty if
+	// they fell with the backpack, where it can hold coins and pick things up again.
 	w.wakeAtTemple(ctx, p, false)
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
@@ -119,21 +128,6 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	p.emit(died)
 	w.diedLinkDeadNotice(p, died)
 	w.deathSave(ctx, p)
-}
-
-// newBackpack puts an empty inventory.start_container in p's backpack slot after a death
-// dropped its backpack (only then: a character that took its backpack off and died would
-// get backpacks for free): what the old backpack held stays in the corpse, but without a container a
-// player can hold no coin and pick up nothing, so it could never buy another (the
-// playtest's M5: a death above the novice levels left a character stuck for good).
-func (w *World) newBackpack(p *Player) {
-	slot := pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK
-	if w.startContainer == nil || p.equip[slot] != nil {
-		return
-	}
-	w.attach(p, newItem(w.startContainer, 1), place{kind: locSlot, slot: slot})
-	w.econItem(p, EconDeath, "new_backpack", w.startContainer, 1)
-	w.equipmentChanged(p)
 }
 
 // wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, its

@@ -112,11 +112,15 @@ func testBalance() content.Balance {
 	b.Economy.Outlier.GoldPerHour.Base, b.Economy.Outlier.ItemsPerHour.Base = 1<<40, 1<<40
 	b.Reports = content.Reports{Burst: 2, RefillMs: 60000, SameTargetMs: 600000, MaxReason: 200, Events: 20}
 	b.Inventory.DoorCooldownMs = doorWait
+	b.Inventory.PocketSlots = pocketSlots
 	return b
 }
 
 // doorWait is the inventory.door_cooldown_ms of the tests (500 in data/balance.yaml).
 const doorWait = 500
+
+// pocketSlots is the inventory.pocket_slots of the tests (as data/balance.yaml).
+const pocketSlots = 4
 
 var testVocations = content.Vocations{
 	"guardian": {ID: "guardian",

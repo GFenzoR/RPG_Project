@@ -268,7 +268,7 @@ rewards:
 		t.Fatal(err)
 	}
 	h := reachHarness(t, func(c *session.Config) { c.Quests = content.Quests{q.ID: q} })
-	cl, p := h.join("Stairs", at(4, 3)) // no backpack: the sword goes to the floor
+	cl, p := h.join("Stairs", at(4, 3)) // no backpack: the sword goes to the pockets
 	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "landing") }))
 	h.sim.Step()
 	state := func() quest.State { s, _ := h.w.QuestState(p, "landing"); return s }
@@ -282,8 +282,8 @@ rewards:
 	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(5, 3, 7)) }))
 	h.sim.Step()
 	h.step(cl, NE) // (6,2,7): in the place
-	if p.Pos() != at3(6, 2, 7) || state() != quest.Completed || len(h.w.GroundAt(at3(6, 2, 7))) != 1 {
-		t.Fatalf("walked in at %v: quest %v, %d items there", p.Pos(), state(), len(h.w.GroundAt(p.Pos())))
+	if p.Pos() != at3(6, 2, 7) || state() != quest.Completed || h.w.CountItem(p, "test_sword") != 1 {
+		t.Fatalf("walked in at %v: quest %v, %d swords carried", p.Pos(), state(), h.w.CountItem(p, "test_sword"))
 	}
 }
 

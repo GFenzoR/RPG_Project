@@ -228,7 +228,7 @@ func TestCreateItem(t *testing.T) {
 		t.Fatalf("a corpse: %v", got)
 	}
 	a.takeJobs()
-	// By content id and by numeric id. Without a backpack it lands under the admin.
+	// By content id and by numeric id. Without a backpack it goes to the admin's pockets.
 	got := a.cmd(ad, "/item test_salve 30")
 	if !slices.Contains(got, "gm.item_created") {
 		t.Fatalf("create: %v", got)
@@ -237,13 +237,13 @@ func TestCreateItem(t *testing.T) {
 		t.Fatalf("audit %+v", e)
 	}
 	a.cmd(ad, "/item 68 5")
-	ground := a.w.GroundAt(p.Pos())
-	n := 0
-	for _, it := range ground {
-		n += it.Count()
+	if n := a.w.CountItem(p, "test_salve"); n != 35 || len(p.Pockets().Items()) != 1 || len(a.w.GroundAt(p.Pos())) != 0 {
+		t.Fatalf("the admin carries %d salves in %d cells, want 35 in one", n, len(p.Pockets().Items()))
 	}
-	if len(ground) == 0 || n != 35 {
-		t.Fatalf("ground has %d units in %d stacks, want 35", n, len(ground))
+	// What does not fit lands under the admin.
+	a.cmd(ad, "/item test_sword 4")
+	if got := a.w.GroundAt(p.Pos()); len(got) != 1 || got[0].Def().ID != "test_sword" {
+		t.Fatalf("ground has %v, want the fourth sword", got)
 	}
 }
 

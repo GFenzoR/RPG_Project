@@ -272,7 +272,7 @@ func heldOverflow(t *testing.T) (h *marketHarness, cb, cc *fakeClient, b *sessio
 	t.Helper()
 	h = newMarketHarness(t)
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
-	cb, b = h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))
+	cb, b = h.atBoard("Bruno", pos(0, 1), full(stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))...)
 	cc, _ = h.trader("Caio", pos(1, 1), stack(coinID, 5, 0), stack(salveID, 3, 1))
 	h.send(cs, createOffer(sell, salveID, 10, 4))
 	h.send(cb, acceptOffer(h.w.MarketOffers(s.CharacterID())[0], 4))
@@ -689,7 +689,7 @@ func TestHouseItemLeavingGoesIntoNoCorpse(t *testing.T) {
 func TestReservationEndsWithItsOwnAck(t *testing.T) {
 	h := newMarketHarness(t)
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
-	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))
+	cb, b := h.atBoard("Bruno", pos(0, 1), full(stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))...)
 	cc, c := h.trader("Caio", pos(1, 1), stack(coinID, 5, 0))
 	h.send(cs, createOffer(sell, salveID, 10, 4))
 	id := h.w.MarketOffers(s.CharacterID())[0]
@@ -752,8 +752,8 @@ func TestHeldContainerTakesNothing(t *testing.T) {
 // Saver skips the write and taints the house instead of storing the item there.
 func TestServerDropOnHouseFloorCarriesTheSnapshot(t *testing.T) {
 	h := newHouseHarness(t)
-	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1), stack(salveID, 5, 2),
-		stack(salveID, 5, 3))
+	cl, a := h.tenant("Ana", 0, cottageExit, full(stack(coinID, 100, 0), stack(coinID, 100, 1), stack(salveID, 5, 2),
+		stack(salveID, 5, 3))...)
 	h.rent(cl)
 	h.step(cl, N)
 	h.step(cl, N) // (3,3), inside

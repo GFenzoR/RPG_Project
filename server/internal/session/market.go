@@ -828,8 +828,8 @@ func (w *World) moneyThatFits(p *Player, amount int64) int64 {
 	return lo
 }
 
-// canReceiveMoney reports whether amount, in the fewest coins, fits in p's backpack
-// (new stacks only: conservative) and capacity.
+// canReceiveMoney reports whether amount, in the fewest coins, fits in p's packs
+// (backpack and pockets, pockets.go; new stacks only: conservative) and capacity.
 func (w *World) canReceiveMoney(p *Player, amount int64) bool {
 	weight, stacks := 0, 0
 	for _, coin := range w.coins {
@@ -844,11 +844,10 @@ func (w *World) canReceiveMoney(p *Player, amount int64) bool {
 		weight += coin.Weight * int(n)
 		stacks += (int(n) + coin.StackLimit() - 1) / coin.StackLimit()
 	}
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	if stacks == 0 {
 		return true
 	}
-	return bp != nil && bp.def.Container != nil && len(bp.items)+stacks <= bp.def.Slots() && weight <= p.capacity-p.carried()
+	return stacks <= p.freeCells() && weight <= p.capacity-p.carried()
 }
 
 // ---- operations --------------------------------------------------------------------
@@ -1126,15 +1125,14 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 			// still has content, from before houses mailed them flat, keeps it), an
 			// equipable its attribute (one mailed without, from before attributes, rolls it).
 			it := w.loadItem(m.Item)
-			bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-			if it == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() ||
-				it.weight() > p.capacity-p.carried() || depth(bp)+1+it.height() > maxDepth {
+			pack := p.packWithRoom() // the backpack, or else the pockets (pockets.go)
+			if it == nil || pack == nil || it.weight() > p.capacity-p.carried() || depth(pack)+1+it.height() > maxDepth {
 				full = true
 				kept = append(kept, m)
 				continue
 			}
-			w.attach(p, it, place{kind: locContainer, cont: bp})
-			w.containerChanged(bp)
+			w.attach(p, it, place{kind: locContainer, cont: pack})
+			w.containerChanged(pack)
 			w.econTree(p, EconMarket, "mailbox", it, 1)
 			ops = append(ops, MarketOp{Kind: MarketMailRemove, ID: m.ID, CharacterID: p.charID})
 			continue

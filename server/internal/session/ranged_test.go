@@ -334,7 +334,8 @@ func TestConjureArrowsMergesStacks(t *testing.T) {
 		h.w.GiveForTest(p, "test_arrow", 30)
 		h.w.GiveForTest(p, "test_sword", 1)
 		h.w.GiveForTest(p, "test_sword", 1)
-		h.w.GiveForTest(p, "test_sword", 1) // the 4-slot backpack is full
+		h.w.GiveForTest(p, "test_sword", 1)            // the 4-slot backpack is full
+		h.w.GiveForTest(p, "test_pebble", pocketSlots) // and so are the pockets
 	}))
 	h.sim.Step()
 	cl.take()

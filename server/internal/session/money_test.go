@@ -30,12 +30,12 @@ func withSilver(t *testing.T) option {
 
 func TestPayBreaksACoinOnlyWithRoomForTheChange(t *testing.T) {
 	h := newMarketHarness(t, withSilver(t))
-	// A full 4-slot backpack: one silver, salves, a sword and a bag.
-	cf, full := h.atBoard("Lleno", pos(1, 0), stack(silverID, 1, 0), stack(salveID, 5, 1), stack(swordID, 1, 2), stack(bagID, 1, 3))
+	// A full 4-slot backpack (one silver, salves, a sword and a bag) and full pockets.
+	cf, packed := h.atBoard("Lleno", pos(1, 0), full(stack(silverID, 1, 0), stack(salveID, 5, 1), stack(swordID, 1, 2), stack(bagID, 1, 3))...)
 	// A buy offer of 48 pays 48 + a fee of 4: the silver must be broken for 48 copper back.
 	evs := h.send(cf, createOffer(pb.MarketSide_MARKET_SIDE_BUY, salveID, 1, 48))
-	if !hasKey(evs, "dialog.no_change_room") || h.w.CountItem(full, "silver_coin") != 1 || len(h.w.MarketOffers(full.CharacterID())) != 0 {
-		t.Fatalf("with no room for the change: %v, silver %d", systemKeys(evs), h.w.CountItem(full, "silver_coin"))
+	if !hasKey(evs, "dialog.no_change_room") || h.w.CountItem(packed, "silver_coin") != 1 || len(h.w.MarketOffers(packed.CharacterID())) != 0 {
+		t.Fatalf("with no room for the change: %v, silver %d", systemKeys(evs), h.w.CountItem(packed, "silver_coin"))
 	}
 	// With room, the silver is broken and the change comes back in copper.
 	cr, room := h.atBoard("Holgado", pos(0, 1), stack(silverID, 1, 0))

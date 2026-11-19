@@ -46,10 +46,20 @@ func lookAt(from *pb.ItemLocation, item, index uint32) *pb.ClientMessage {
 
 func hasKey(evs []*pb.ServerMessage, key string) bool { return systemKeys(evs)[key] > 0 }
 
-// withPack is a character at pos with an empty backpack (4 slots) and the given items in it.
+// withPack is a character at pos with a backpack (4 slots) and the given items in it; the
+// ones marked Pocket (pocket, pebbles) go to its pockets instead.
 func withPack(id int64, p world.Pos, inPack ...session.ItemState) session.Character {
+	var pack, pockets []session.ItemState
+	for _, s := range inPack {
+		if s.Pocket {
+			pockets = append(pockets, s)
+		} else {
+			pack = append(pack, s)
+		}
+	}
 	return session.Character{ID: id, AccountID: id, Name: "Packer", Vocation: "guardian", Level: 1, Health: 145,
-		HasPos: true, Pos: p, Inventory: []session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: inPack}}}
+		HasPos: true, Pos: p, Inventory: append([]session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: pack}},
+			pockets...)}
 }
 
 // openPack opens the backpack of the test items (packID, 4 slots) and returns its window

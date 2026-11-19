@@ -287,6 +287,8 @@ type World struct {
 	// inventory rules of balance.yaml.
 	byNum          map[uint16]*content.Item
 	startContainer *content.Item
+	// pocketsDef is the definition of every player's pockets (pockets.go).
+	pocketsDef *content.Item
 	// rng is Config.Rand: the attribute rolls (attributes.go).
 	rng     *rand.Rand
 	useFor  game.Tick

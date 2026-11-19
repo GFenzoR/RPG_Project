@@ -178,14 +178,17 @@ type openContainer struct {
 // ---- saved state ---------------------------------------------------------------
 
 // ItemState is a saved item: its numeric id (data/ids.lock.yaml), stack size, slot
-// (pb.EquipmentSlot for an equipped item, index for an item inside a container), its mods
-// (attribute and refine, attributes.go) and the content of a container.
+// (pb.EquipmentSlot for an equipped item, the cell for an item in the pockets, index for
+// an item inside a container), its mods (attribute and refine, attributes.go) and the
+// content of a container. Pocket marks a top-level item that lies in the pockets
+// (pockets.go), not in an equipment slot.
 type ItemState struct {
 	ItemID uint16
 	Count  int
 	Slot   int
 	Mods   Mods
 	Items  []ItemState
+	Pocket bool
 }
 
 func (it *Item) state(slot int) ItemState {
@@ -196,6 +199,7 @@ func (it *Item) state(slot int) ItemState {
 	return s
 }
 
+// inventoryStates is everything p carries as saved: the equipment, then the pockets.
 func (p *Player) inventoryStates() []ItemState {
 	var out []ItemState
 	for slot, it := range p.equip {
@@ -203,7 +207,7 @@ func (p *Player) inventoryStates() []ItemState {
 			out = append(out, it.state(slot))
 		}
 	}
-	return out
+	return p.pocketStates(out)
 }
 
 // loadItem builds an item from its saved state, with its mods; unknown (retired) items
@@ -228,11 +232,12 @@ func (w *World) loadItem(s ItemState) *Item {
 	return it
 }
 
-// loadInventory equips the saved items of a joining player. A character that never
-// played starts with balance.yaml inventory.start_container.
+// loadInventory equips the saved items of a joining player and fills its pockets. A
+// character that never played starts with balance.yaml inventory.start_container.
 func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
+	w.loadPockets(p, saved)
 	for _, s := range saved {
-		if s.Slot <= 0 || s.Slot >= equipSlots || p.equip[s.Slot] != nil {
+		if s.Pocket || s.Slot <= 0 || s.Slot >= equipSlots || p.equip[s.Slot] != nil {
 			continue
 		}
 		if it := w.loadItem(s); it != nil {
@@ -251,13 +256,16 @@ func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
 
 // ---- weight and equipment effects ----------------------------------------------
 
-// carried is the weight p carries, in grams.
+// carried is the weight p carries, in grams: its equipment and what its pockets hold.
 func (p *Player) carried() int {
 	n := 0
 	for _, it := range p.equip {
 		if it != nil {
 			n += it.weight()
 		}
+	}
+	if p.pockets != nil {
+		n += p.pockets.weight() // the pockets themselves weigh nothing
 	}
 	return n
 }
@@ -354,7 +362,7 @@ const (
 )
 
 // place is a resolved ItemLocation: a tile, an equipment slot of the player, or an
-// open container.
+// open container (the player's pockets too: a container that is never a window).
 type place struct {
 	kind locKind
 	pos  world.Pos
@@ -429,6 +437,12 @@ func (w *World) itemAt(p *Player, loc *pb.ItemLocation, itemID, index uint32) (*
 			return nil, place{}
 		}
 		return c.items[i], place{kind: locContainer, cont: c}
+	case *pb.ItemLocation_Pocket:
+		c := p.pockets
+		if c == nil || l.Pocket >= uint32(len(c.items)) || uint32(c.items[l.Pocket].def.Numeric) != itemID {
+			return nil, place{}
+		}
+		return c.items[l.Pocket], place{kind: locContainer, cont: c}
 	}
 	return nil, place{}
 }
@@ -455,6 +469,15 @@ func (w *World) destination(p *Player, loc *pb.ItemLocation) (place, bool) {
 		}
 		if i := int(l.Container.GetIndex()); i < len(c.items) && c.items[i].def.Container != nil {
 			return place{kind: locContainer, cont: c.items[i]}, true
+		}
+		return place{kind: locContainer, cont: c}, true
+	case *pb.ItemLocation_Pocket:
+		c := p.pockets
+		if c == nil {
+			return place{}, false
+		}
+		if l.Pocket < uint32(len(c.items)) && c.items[l.Pocket].def.Container != nil {
+			return place{kind: locContainer, cont: c.items[l.Pocket]}, true
 		}
 		return place{kind: locContainer, cont: c}, true
 	}
@@ -550,6 +573,18 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		if from.kind == locSlot && from.slot == to.slot {
 			return
 		}
+		if p.intoBackpack(it, to) { // no backpack: it goes to the pockets (pockets.go)
+			m, ok := p.pocketRoom(it, count)
+			if !ok {
+				p.emit(systemMsg(msgContainerFull))
+				return
+			}
+			if from.kind == locContainer && from.cont == p.pockets {
+				return // already there
+			}
+			to, merge = place{kind: locContainer, cont: p.pockets}, m
+			break
+		}
 		if key, params := w.canEquip(p, it.def, to.slot); key != "" {
 			p.emit(systemMsg(key, params...))
 			return
@@ -590,8 +625,16 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 		merge = mergeTarget(to.cont.items, it, count)
 		if merge == nil && len(to.cont.items) >= to.cont.def.Slots() {
-			p.emit(systemMsg(msgContainerFull))
-			return
+			// A full backpack: a pickup goes on to the pockets (pockets.go).
+			ok := false
+			if p.intoBackpack(it, to) && (from.kind != locContainer || from.cont != p.pockets) {
+				merge, ok = p.pocketRoom(it, count)
+			}
+			if !ok {
+				p.emit(systemMsg(msgContainerFull))
+				return
+			}
+			to.cont = p.pockets
 		}
 	}
 
@@ -796,6 +839,7 @@ func (w *World) changedPlace(p *Player, pl place) {
 	}
 }
 
+// sendInventory sends p its equipment and what its pockets hold.
 func (w *World) sendInventory(p *Player) {
 	p.questDirty = true
 	inv := &pb.Inventory{}
@@ -804,11 +848,19 @@ func (w *World) sendInventory(p *Player) {
 			inv.Slots = append(inv.Slots, &pb.EquippedItem{Slot: pb.EquipmentSlot(slot), Item: it.stack()})
 		}
 	}
+	if pk := p.pockets; pk != nil {
+		inv.Pockets, inv.PocketSlots = pk.stacks(), uint32(pk.def.Slots())
+	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Inventory{Inventory: inv}})
 }
 
-// containerChanged sends the content of c to everyone who has it open.
+// containerChanged sends the content of c to everyone who has it open; what the pockets
+// hold goes to their player in its Inventory.
 func (w *World) containerChanged(c *Item) {
+	if isPockets(c) {
+		w.sendInventory(c.owner)
+		return
+	}
 	if r := c.root(); r.owner != nil {
 		r.owner.questDirty = true
 	} else if r.onGround {
@@ -1135,6 +1187,7 @@ func (w *World) initItems() error {
 		w.maxOpen = 16
 	}
 	w.useFor = ticksFor(max(inv.UseCooldownMs, 1))
+	w.initPockets()
 	if inv.StartContainer != "" {
 		def := w.cfg.Items[inv.StartContainer]
 		if def == nil || def.Container == nil {

@@ -78,14 +78,10 @@ func (w *World) openChest(p *Player, c *content.Chest) {
 	p.emit(systemMsg(msgChestFound, params...))
 }
 
-// roomForAll reports whether every reward fits in p's capacity and backpack at once: the
-// weight of all of them, and the backpack's free slots for the stacks that do not merge
-// into the ones it holds (room, for several items).
+// roomForAll reports whether every reward fits in p's capacity and packs (backpack and
+// pockets, pockets.go) at once: the weight of all of them, and the free cells for the
+// stacks that do not merge into the ones there (room, for several items).
 func (w *World) roomForAll(p *Player, rewards []content.ChestReward) bool {
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	if bp == nil || bp.def.Container == nil {
-		return false
-	}
 	weight, stacks := 0, 0
 	counted := map[*content.Item]bool{}
 	for _, r := range rewards {
@@ -108,12 +104,8 @@ func (w *World) roomForAll(p *Player, rewards []content.ChestReward) bool {
 			stacks += n
 			continue
 		}
-		for _, it := range bp.items {
-			if it.def == def {
-				n -= min(n, def.StackLimit()-it.count)
-			}
-		}
+		n -= min(n, p.mergeRoom(def))
 		stacks += (n + def.StackLimit() - 1) / def.StackLimit()
 	}
-	return weight <= p.capacity-p.carried() && len(bp.items)+stacks <= bp.def.Slots()
+	return weight <= p.capacity-p.carried() && stacks <= p.freeCells()
 }
