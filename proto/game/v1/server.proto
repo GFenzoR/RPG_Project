@@ -61,6 +61,7 @@ message ServerMessage {
     CosmeticsState cosmetics_state = 42;
     CreatureAttack creature_attack = 43;
     RefineResult refine_result = 44;
+    QuestLog quest_log = 45;
   }
 }
 
@@ -917,4 +918,47 @@ message RefineResult {
   ItemStack item = 2;
   uint32 level = 3;
   LocalizedText text = 4;
+}
+
+// QuestLogState is where the character is in one quest of its quest log.
+enum QuestLogState {
+  QUEST_LOG_STATE_UNSPECIFIED = 0;
+  // ACTIVE: in progress; step_id is the current step.
+  QUEST_LOG_STATE_ACTIVE = 1;
+  // DONE: completed. A repeatable quest past its cooldown can be taken again.
+  QUEST_LOG_STATE_DONE = 2;
+  // COOLING: a repeatable quest done that cannot be taken again until available_at.
+  QUEST_LOG_STATE_COOLING = 3;
+}
+
+// QuestLog is the character's quest log (docs/05 "Diario de misiones"): one entry per
+// quest it has started or completed, in quest id order. It comes in full at login (empty
+// too) and in the tick of every change of a quest (started, a step done, a kill counted,
+// completed). Nothing comes when a cooldown ends: the client compares available_at with
+// the server clock (Welcome.server_time).
+message QuestLog {
+  repeated QuestLogEntry entries = 1;
+}
+
+// QuestLogEntry is one quest of the QuestLog.
+message QuestLogEntry {
+  // data/quests id.
+  string quest_id = 1;
+  // i18n key of the quest's name.
+  string name = 2;
+  // The main line's chapter; 0 for a side quest or a task.
+  uint32 chapter = 3;
+  QuestLogState state = 4;
+  // ACTIVE: the current step's id and the i18n key of its text.
+  string step_id = 5;
+  string step_text = 6;
+  // ACTIVE on a kill step: the kills counted since the step began and the kills it needs
+  // (kills_needed 0: not a kill step).
+  uint32 kills = 7;
+  uint32 kills_needed = 8;
+  // The quest can be done again after a cooldown (a task, docs/06 "Quest").
+  bool repeatable = 9;
+  // A completed repeatable quest: when it can be taken again, Unix milliseconds (DONE
+  // when that already passed at sending); 0 for any other.
+  uint64 available_at = 10;
 }
