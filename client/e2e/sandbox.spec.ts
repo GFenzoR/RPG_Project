@@ -257,15 +257,22 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
       b: y,
     });
     if (!p) throw new Error("no canvas");
+    // The windows float over the map (docs/17 A14): a click there would not reach it.
+    const hit = await page.evaluate(
+      ({ a, b }) => document.elementFromPoint(a, b)?.getAttribute("data-testid") ?? "",
+      { a: p.x, b: p.y },
+    );
+    expect(hit, `tile ${x},${y} is under a window`).toBe("game-canvas");
     await page.mouse.click(p.x, p.y);
   };
   await standsOn(2095, 2086, 7);
 
   // M1: the temple's stone wall blocks for the client too, so a click on the other side of
   // it walks around through the door (it used to take one step into the wall and stop).
+  // (Not 2092,2089 first: at 1280x800 the chat floats over that tile, 3 down and 3 left.)
   expect(await page.evaluate(() => window.__rpgClient?.walkable(2090, 2088, 7))).toBe(false);
-  await clickTile(2092, 2089);
-  await standsOn(2092, 2089, 7);
+  await clickTile(2092, 2088);
+  await standsOn(2092, 2088, 7);
   await clickTile(2091, 2093);
   await standsOn(2091, 2093, 7);
   await shot(page, "94-sandbox-around-the-wall");
@@ -317,8 +324,11 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   if (!box) throw new Error("no shop box");
   expect(box.y + box.height).toBeLessThanOrEqual(800);
   // docs/17 UI-8: the whole shop fits; its grid pages instead of scrolling. The merchant
-  // sells more than a page: the arrows go to the next one.
-  const sizes = await shop.evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
+  // sells more than a page: the arrows go to the next one. The window's body is what would
+  // scroll: the frame is not a scroller, and its gothic corners stick out 5 px past it.
+  const sizes = await shop
+    .locator(".gwin-body")
+    .evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
   expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
   await expect(shop.getByTestId("shop-next")).toBeEnabled();
   await shop.getByTestId("shop-next").click();

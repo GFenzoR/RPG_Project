@@ -23,6 +23,7 @@ import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { sameRef } from "../input/actions.ts";
 import { autoOpen } from "../state/backpack.ts";
+import { deferredMeasure } from "./next-frame.ts";
 import {
   DOLL,
   capacityLoad,
@@ -70,9 +71,16 @@ function useWidth(ref: { current: HTMLElement | null }): number {
     const measure = (): void => setWidth(el.clientWidth);
     measure();
     if (typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(measure);
+    // A change seen by the observer is applied on the next frame (deferredMeasure): the
+    // figure it resizes changes the box's height, and inside the observer's own delivery
+    // that is a "ResizeObserver loop" error (a tab shown on a phone, WebKit reports it).
+    const later = deferredMeasure(measure);
+    const observer = new ResizeObserver(later.run);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      later.cancel();
+    };
   }, []);
   return width;
 }

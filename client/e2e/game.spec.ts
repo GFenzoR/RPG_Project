@@ -182,6 +182,29 @@ async function keysToGame(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Page coordinates of the centre of map tile (x, y) when the canvas is what is there, or
+ * undefined: since the full-screen desktop (docs/17 A14) the battle list (top left), the
+ * inventory (top right) and the chat (bottom left) float over the map, and a click on a
+ * tile under one of them goes to the window.
+ */
+async function mapPoint(
+  page: Page,
+  x: number,
+  y: number,
+): Promise<{ x: number; y: number } | undefined> {
+  return page.evaluate(
+    ({ a, b }) => {
+      const p = window.__rpgClient?.tileToClient(a, b);
+      const el = p && document.elementFromPoint(p.x, p.y);
+      return p && el instanceof HTMLCanvasElement && el.dataset["testid"] === "game-canvas"
+        ? p
+        : undefined;
+    },
+    { a: x, b: y },
+  );
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -1021,8 +1044,11 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(shop.locator('[data-item="rope"]')).toContainText("45");
   await page.waitForTimeout(300); // let the icons load before the screenshot
   await shot(page, "14-shop");
-  // No scroll bar: the grid pages instead (docs/17 UI-8).
-  expect(await shop.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  // No scroll bar: the grid pages instead (docs/17 UI-8). The window's body is what would
+  // scroll: the frame is not a scroller, and its gothic corners stick out 5 px past it.
+  expect(
+    await shop.locator(".gwin-body").evaluate((el) => el.scrollHeight - el.clientHeight),
+  ).toBeLessThanOrEqual(1);
   await shop.getByRole("tab", { name: "Vender" }).click();
   await shop.getByTestId("shop-search").fill("piel de lobo");
   await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("×0");
@@ -1238,7 +1264,8 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
         const s = await self(page);
         if (!s || s.pending || s.walking) return "moving";
         if (s.x === goal.x && s.y === goal.y) return "there";
-        const hx = s.x + Math.max(-6, Math.min(6, goal.x - s.x));
+        // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
+        const hx = s.x + Math.max(-5, Math.min(5, goal.x - s.x));
         const hy = s.y + Math.max(-4, Math.min(4, goal.y - s.y));
         const near = hx === goal.x && hy === goal.y;
         const tries = near
@@ -1253,11 +1280,11 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
               [-2, 0],
             ];
         for (const [dx = 0, dy = 0] of tries) {
-          if (await free(hx + dx, hy + dy)) {
-            const p = await toClient(hx + dx, hy + dy);
-            await page.mouse.click(p.x, p.y);
-            break;
-          }
+          if (!(await free(hx + dx, hy + dy))) continue;
+          const p = await mapPoint(page, hx + dx, hy + dy);
+          if (!p) continue; // under a window
+          await page.mouse.click(p.x, p.y);
+          break;
         }
         return `${s.x},${s.y}`;
       },
@@ -2005,12 +2032,14 @@ test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
   await enterGame(page, email, password);
   await arrived(page, 4150, 6105);
   await shot(page, "31-bosque-temple");
-  // Out of the temple door and east across the plaza to the druid's grove, by clicks.
+  // Out of the temple door and east across the plaza to the druid's grove, by clicks: 5
+  // columns at most, since at 1280x800 the inventory floats over the 6th to the east.
   for (const [x, y] of [
     [4150, 6109],
-    [4156, 6109],
-    [4162, 6109],
-    [4169, 6110],
+    [4155, 6109],
+    [4160, 6109],
+    [4165, 6109],
+    [4170, 6110],
     [4175, 6110],
   ] as const) {
     const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
@@ -2630,12 +2659,23 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   const b = await enter(buyer.email);
   await arrived(a, 3167, 6382);
   await arrived(b, 3167, 6383);
-  // docs/17 UI-5: the inventory opens the equipped backpack by itself, under the figure
-  // (a double click on it would close it now). The trade offers what lies in it.
+  // docs/17 UI-5: the inventory opens the equipped backpack by itself, under the figure,
+  // but not during the tutorial, whose step teaches it (a new character of Puerto follows
+  // it). So it stays closed, and a double click on the slot opens it under the figure (on
+  // an open one it would close it). The trade offers what lies in it.
   for (const page of [a, b]) {
-    await expect(
-      page.getByTestId("inventory").locator('[data-container-item="backpack"][data-docked]'),
-    ).toBeVisible();
+    const docked = page
+      .getByTestId("inventory")
+      .locator('[data-container-item="backpack"][data-docked]');
+    await expect(page.getByTestId("tutorial-panel")).toBeVisible();
+    await expect(docked).toHaveCount(0);
+    await page
+      .getByTestId("inventory")
+      .getByTestId("slot-backpack")
+      .locator("[data-item]")
+      .dblclick();
+    await expect(docked).toBeVisible();
+    await expect(page.getByTestId("window-container-backpack")).toHaveCount(0);
   }
 
   // Trade: the seller invites from the battle list, the buyer joins; fish for 50 coins.
@@ -3010,9 +3050,11 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
     "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
   );
   await shot(page, "65b-volcan-temple-sign");
+  // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
   for (const [x, y] of [
-    [3648, 5794],
-    [3655, 5794],
+    [3647, 5794],
+    [3652, 5794],
+    [3657, 5794],
     [3662, 5794],
     [3662, 5796],
   ] as const) {
