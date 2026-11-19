@@ -3194,7 +3194,8 @@ button.credits-link {
 .card-effects li {
   color: var(--ui-mana-300);
 }
-/* The attribute's line, under the stats; the one a new equipable will roll, dimmer. */
+/* The attribute's line, under the stats; a line without a value (one to roll, any
+   instance, a retired one), dimmer. */
 .card-attribute {
   margin: 2px 0;
   color: var(--ui-item-attribute);

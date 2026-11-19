@@ -131,25 +131,34 @@ export class TipGate {
   }
 }
 
-interface Shown {
+/** The item a data-tip-item element shows. */
+export interface TipItem {
   itemId: number;
   count: number;
   mods?: ItemMods | undefined;
+  /** data-tip-any: it stands for any instance someone else picks (the market). */
+  any?: boolean | undefined;
+}
+
+interface Shown extends TipItem {
   anchor: Rect;
 }
 
-/** The item a data-tip-item element shows: its number, count and mods, or undefined. */
-export function tipOf(
-  el: Element | null | undefined,
-): { itemId: number; count: number; mods?: ItemMods | undefined } | undefined {
+/**
+ * The item a data-tip-item element shows: its number, count, mods and whether it stands
+ * for any instance (data-tip-any), or undefined.
+ */
+export function tipOf(el: Element | null | undefined): TipItem | undefined {
   const host = el?.closest<HTMLElement>("[data-tip-item]");
   if (!host) return undefined;
   const itemId = Number(host.dataset["tipItem"]);
   if (!Number.isFinite(itemId) || itemId <= 0) return undefined;
   const count = Number(host.dataset["tipCount"] ?? "1");
   const mods = parseTipMods(host.dataset["tipMods"]);
-  const tip = { itemId, count: Number.isFinite(count) && count > 0 ? count : 1 };
-  return mods ? { ...tip, mods } : tip;
+  const tip: TipItem = { itemId, count: Number.isFinite(count) && count > 0 ? count : 1 };
+  if (mods) tip.mods = mods;
+  else if (host.dataset["tipAny"] !== undefined) tip.any = true;
+  return tip;
 }
 
 /**
@@ -157,13 +166,10 @@ export function tipOf(
  * is. The Game publishes about 20 times a second; the card is measured and placed again
  * only when this changes, not on every publish (a layout each time).
  */
-export function placeKey(
-  tip: { itemId: number; count: number; mods?: ItemMods | undefined; anchor: Rect } | undefined,
-  card: string,
-): string {
+export function placeKey(tip: (TipItem & { anchor: Rect }) | undefined, card: string): string {
   if (!tip) return "";
   const a = tip.anchor;
-  const mods = tipMods(tip.mods) ?? "";
+  const mods = tipMods(tip.mods) ?? (tip.any ? "any" : "");
   return `${tip.itemId}:${tip.count}:${mods}:${a.left}:${a.top}:${a.width}:${a.height}:${card}`;
 }
 
@@ -319,6 +325,7 @@ export function ItemTooltip(props: {
     { level: ui.stats?.level, vocation: ui.vocation, magicLevel: magic?.level },
     tip.mods,
     props.content.attributes,
+    tip.any,
   );
   return (
     <div

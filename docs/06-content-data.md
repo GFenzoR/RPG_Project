@@ -323,15 +323,16 @@ nombres y números son propios.
   weight: 10
   bands: [{ level: 1, min: 1, max: 1 }]
 ```
-- `make validate` (y el cargador del servidor, `content.LoadAttributes`): ids únicos, la
+- `make validate` y el cargador del servidor (`content.LoadAttributes`): ids únicos, la
   primera banda es nivel 1 y los niveles crecen, `1 <= min <= max`, `skill` solo (y siempre)
-  con `effect: skill`, `element` solo (y siempre) con `protection`, y el `text` existe en
-  `es` y `en`. Un equipable sin ningún atributo posible no tira (y el test de
+  con `effect: skill` y `element` solo (y siempre) con `protection`. Que el `text` exista en
+  `es` y `en` lo comprueba solo `make validate` (el servidor no lee textos). Un equipable sin ningún atributo posible no tira (y el test de
   `content/attributes_test.go` lo marca para el catálogo).
 - El cliente recibe de cada atributo solo su `text` (`virtual:rpg-content`,
   `ClientContent.attributes`) y toma las claves `attribute.*` de `items.yaml`.
 - Cambiar o quitar un atributo no toca las instancias guardadas: un id que ya no está en el
-  pool sigue en el item pero no suma nada ni se muestra.
+  pool sigue en el item pero no suma nada; la ficha y el mercado lo muestran como atributo
+  retirado (`client.card.attribute_retired`).
 
 ## Monstruo
 ```yaml

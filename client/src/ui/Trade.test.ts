@@ -326,6 +326,43 @@ describe("MarketWindow with an equipable", () => {
     buys: [offer({ id: 6n, sell: false, amount: 3, price: 10 })],
   });
 
+  it("its card in the market says each piece has its own attribute, not that it rolls one", () => {
+    const own = market({
+      itemId: 60,
+      own: [
+        offer({ id: 8n, own: true, mods: attack }),
+        offer({ id: 9n, own: true, sell: false, amount: 2 }),
+      ],
+      history: [{ sold: false, itemId: 60, amount: 1, price: 30, at: 1 }],
+    });
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: own } as GameUi });
+    const browse = byAttr(tree, "data-testid", "market-browse")[0];
+    const label = (n: unknown): Node | undefined =>
+      nodes(n).find((x) => x.props["class"] === "item-label");
+    expect(label(browse)?.props).toHaveProperty("data-tip-any", "");
+    // An own sell offer is one instance (its mods); an own buy offer is any.
+    expect(label(byAttr(tree, "data-offer", "8")[0])?.props["data-tip-any"]).toBeUndefined();
+    expect(label(byAttr(tree, "data-offer", "8")[0])?.props["data-tip-mods"]).toBe("attack:2:0");
+    expect(label(byAttr(tree, "data-offer", "9")[0])?.props).toHaveProperty("data-tip-any", "");
+    expect(label(byAttr(tree, "data-testid", "market-history")[0])?.props).toHaveProperty(
+      "data-tip-any",
+      "",
+    );
+  });
+
+  it("names an attribute retired from the pool as retired, not as none", () => {
+    const gone = market({
+      itemId: 60,
+      sells: [offer({ mods: { attribute: "gone", value: 2, refine: 0 } })],
+    });
+    const tree = MarketWindow({ t, content, game: undefined, ui: { market: gone } as GameUi });
+    const line = nodes(byAttr(tree, "data-offer", "5")[0]).find(
+      (n) => n.props["class"] === "attribute card-attribute",
+    );
+    expect(line?.props["children"]).toBe("client.card.attribute_retired");
+    expect(line?.props["data-tip-mods"]).toBe("gone:2:0");
+  });
+
   it("lists each sell offer with its attribute", () => {
     const tree = MarketWindow({ t, content, game: undefined, ui: { market: sword } as GameUi });
     const row = byAttr(tree, "data-offer", "5")[0];

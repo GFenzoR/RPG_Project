@@ -924,13 +924,16 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
 - **Cuándo se tira:** en **cada creación** de un equipable, con la fuente sembrada del loop
   (`session.Config.Rand`, la misma del `game.Loop`): botín de monstruos, compra a un NPC
   (también la tienda de la Isla de Pruebas), recompensas de quest y de diálogo (el kit del
-  capítulo 1), oficios, `/item` del staff y la recompensa del tutorial. Se elige entre los
+  capítulo 1), oficios, `/item` del staff, la recompensa del tutorial y un botín de quest
+  (`each_player`); también un hechizo que conjure o una recolección que dé un equipable
+  (ningún dato lo hace todavía). Se elige entre los
   atributos cuyo `on` nombra la clase del item (el `weapon.type` de un arma, `shield`, o el
   `armor.slot`) por su `weight`, con un valor uniforme en la banda del `requires.level` del
   item (sin requisito = nivel 1). El inventario inicial es una mochila (no tira) y los items
   fijos del mapa (`world.bin`) no son instancias: nunca tiran.
 - **Items de antes:** un equipable guardado sin atributo (de antes de este cambio) tira el
-  suyo una vez al cargarse y se guarda con él: el personaje en su próximo guardado, el
+  suyo una vez al cargarse y se guarda con él: el personaje en el mismo login (un guardado
+  aparte, así una caída antes del autoguardado no tira otro al volver a entrar), el
   suelo de una casa en la escritura de la casa que la carga provoca al arrancar, y lo que
   espera en el buzón del mercado al retirarlo (una oferta de venta vieja se compra sin
   atributo y lo tira en el inventario del comprador; si tenía varias unidades, se compran
@@ -941,7 +944,13 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   economía (cada instancia con atributo es una fila propia con `details.mods`) mueven la
   instancia tal cual. Persistencia: `inventory_items.attributes`, la columna nueva
   `market_offers.attributes` (migración 00019) y `mods` dentro del JSON de
-  `market_mail_items.item` y `house_items.item` (docs/05 `ItemMods`).
+  `market_mail_items.item` y `house_items.item` (docs/05 `ItemMods`). Una columna
+  `attributes` que no se puede leer (solo una edición a mano de la base la escribe) se
+  registra con nivel error y se lee como item sin atributo: el personaje entra igual y el
+  mercado arranca, y el equipable tira uno nuevo al cargarse.
+- **Intercambio:** lo ofrecido es la instancia tal como se ofreció: si sus `mods` cambian
+  en el lugar (la forja), sale de la oferta como si se hubiera movido y se borran las
+  confirmaciones (`checkTrade`).
 - **NPCs:** un NPC paga el `value` base; el atributo no cambia el precio. Lo que vende un
   jugador sigue siendo "N de este item", sin elegir cuál: el NPC (y un `take_item` de
   diálogo o el ingrediente de una receta) se lleva primero lo que está en los contenedores
@@ -964,7 +973,7 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   | `max_mana` | + maná máximo | varita/vara, cabeza, torso, piernas, pies, cuello, anillo | igual que la vida | 12 | — |
   | `health_regen` | + vida por tic de regeneración | escudo, cabeza, torso, cuello, anillo | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 6 | — |
   | `mana_regen` | + maná por tic de regeneración | varita/vara, cabeza, torso, cuello, anillo | igual que la vida | 6 | — |
-  | `attack` | + ataque del arma (cuerpo a cuerpo, disparo o varita) | espada, hacha, maza, distancia | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
+  | `attack` | + ataque del arma (cuerpo a cuerpo o disparo) | espada, hacha, maza, distancia | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
   | `armor` | + armadura | cabeza, torso, piernas, pies | 1: 1 · 25: 1-2 · 50: 2-3 · 80: 2-4 | 14 | — |
   | `defense` | + defensa de las manos | escudo | 1: 1-2 · 10: 1-3 · 25: 2-4 · 50: 3-5 · 80: 4-7 | 14 | — |
   | `sword_skill`, `axe_skill`, `club_skill`, `distance_skill` | + la skill del arma en los ataques | el arma de esa skill | 1: 1 · 10: 1-2 · 25: 1-3 · 50: 2-4 · 80: 3-5 | 10 | — |
@@ -979,7 +988,8 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   `equipmentChanged`): la vida y el maná máximos son los de la vocación más el equipo (al
   sacarse una pieza la vida baja con el máximo si hace falta, nunca sube sola; el login
   restaura la vida guardada después de cargar el equipo); el ataque suma al del arma
-  (`meleeSkill`, el disparo, la varita); la armadura a la del equipo; la defensa a la de las
+  (`meleeSkill`, el disparo; `wandFight` también lo lee, pero ninguna pieza que se lleve
+  con una varita tira `attack`, así que ahí vale 0); la armadura a la del equipo; la defensa a la de las
   manos (`handsDefense`, también en PvP); las skills a `combatSkill` (lo que usan ataques y
   hechizos, como `keen_eye`: no lo que se entrena ni el panel) y el nivel mágico a lo que
   escalan los hechizos (no a sus requisitos); la velocidad a la base antes de las condiciones
@@ -997,8 +1007,11 @@ tiene lugar en los datos de cada instancia (`refine`, hoy siempre 0).
   reptante hueco del Bosque dan un poco menos de experiencia (204 y 248).
 - **Cliente:** la ficha (tooltip y menú) muestra el atributo traducido, con su valor, bajo
   las stats y en su color (`--ui-item-attribute`); la de un equipable sin atributo (una
-  tienda, una receta) dice que trae uno al azar. Equipo, contenedores, suelo, intercambio y
-  mercado usan la misma ficha.
+  tienda, una receta) dice que trae uno al azar; en el mercado (la búsqueda, una oferta de
+  compra, el historial) dice en cambio que cada pieza trae el suyo, porque llega la que
+  elige quien vende. Un atributo retirado del pool se muestra como retirado (no suma nada),
+  en la ficha y en el mercado. Equipo, contenedores, suelo, intercambio y mercado usan la
+  misma ficha.
 - **Pendiente:** el refinado (rama `feat/item-forge`); un atributo del collar o del anillo
   (no hay ninguno en el catálogo todavía); la skill de escudo en las fórmulas.
 

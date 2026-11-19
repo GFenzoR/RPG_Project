@@ -205,12 +205,29 @@ describe("itemCard's attribute", () => {
     );
     expect(card.attribute).toEqual({ text: "attribute.attack", value: 3 });
   });
-  it("an equipable without one (a shop's) says it rolls one; an unknown one shows nothing", () => {
+  it("an equipable without one (a shop's) says it rolls one", () => {
     expect(itemCard(sword, 7, 1).attribute).toEqual({ random: true });
     const tunic: ItemDef = { ...base, kind: "armor", armor: { slot: "body", armor: 2 } };
     expect(itemCard(tunic, 8, 1, {}, undefined, attributes).attribute).toEqual({ random: true });
-    const odd = itemCard(sword, 7, 1, {}, { attribute: "gone", value: 2, refine: 0 }, attributes);
-    expect(odd.attribute).toBeUndefined();
+  });
+  it("in the market (any instance) it says each piece has its own, not that it rolls", () => {
+    expect(itemCard(sword, 7, 1, {}, undefined, attributes, true).attribute).toEqual({ any: true });
+    // An instance shown there is still that instance.
+    const own = itemCard(
+      sword,
+      7,
+      1,
+      {},
+      { attribute: "attack", value: 3, refine: 0 },
+      attributes,
+      true,
+    );
+    expect(own.attribute).toEqual({ text: "attribute.attack", value: 3 });
+  });
+  it("an attribute retired from the pool says so (without the pool, nothing)", () => {
+    const gone = { attribute: "gone", value: 2, refine: 0 };
+    expect(itemCard(sword, 7, 1, {}, gone, attributes).attribute).toEqual({ retired: true });
+    expect(itemCard(sword, 7, 1, {}, gone).attribute).toBeUndefined();
   });
   it("never on a stack, ammo, a container or a consumable", () => {
     const stack: ItemDef = { ...base, kind: "material", stackable: true };

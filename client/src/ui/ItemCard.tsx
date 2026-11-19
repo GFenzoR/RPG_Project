@@ -116,13 +116,17 @@ export function nameClass(card: ItemCardView): string {
 }
 
 /**
- * The attribute's line (docs/02 "Atributos de items"): "+12 maximum health", or that an
- * equipable without one rolls one when it is made.
+ * The attribute's line (docs/02 "Atributos de items"): "+12 maximum health"; for an
+ * equipable without one, that it rolls one when it is made or (the market) that each
+ * piece has its own; or that the instance's attribute was retired.
  */
 export function attributeText(t: Translate, card: ItemCardView): string {
   const a = card.attribute;
   if (!a) return "";
-  return "random" in a ? t("client.card.attribute_random") : t(a.text, { value: a.value });
+  if ("random" in a) return t("client.card.attribute_random");
+  if ("any" in a) return t("client.card.attribute_any");
+  if ("retired" in a) return t("client.card.attribute_retired");
+  return t(a.text, { value: a.value });
 }
 
 /** The attribute's line in its own colour, under the stats (both forms of the card). */
@@ -131,7 +135,7 @@ function AttributeLine(props: { t: Translate; card: ItemCardView }): JSX.Element
   if (!a) return null;
   return (
     <p
-      class={"random" in a ? "card-attribute random" : "card-attribute"}
+      class={"text" in a ? "card-attribute" : "card-attribute random"}
       data-testid="card-attribute"
     >
       {attributeText(props.t, props.card)}

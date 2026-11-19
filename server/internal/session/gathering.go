@@ -166,8 +166,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 	item := w.cfg.Items[drop.Item]
 	w.gatherEffect(pos, EffectGather)
 	p.emit(systemMsg(msgGatherGot, itemParam(item, n)))
-	w.giveItem(p, item, n)
-	w.econItem(p, EconGather, def.ID, item, n)
+	w.econMade(p, EconGather, def.ID, 0, item, n, w.giveItem(p, item, n))
 	w.tutorialEvent(p, content.TriggerGather, item.ID)
 }
 

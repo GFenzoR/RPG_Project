@@ -97,8 +97,9 @@ func (as Attributes) ByID(id string) *Attribute {
 }
 
 // AttributeKind is the kind an item rolls its attribute as: the weapon's weapon.type,
-// "shield", or the armor's armor.slot; "" when it never rolls one (ammo, containers,
-// consumables, tools, materials and the map's items).
+// "shield", or the armor's armor.slot; "" for anything else, which never rolls one (ammo,
+// containers, consumables, tools, materials, grounds, walls and decorations). The fixed
+// items of the map (world.bin) are not instances: they never roll, whatever their kind.
 func AttributeKind(def *Item) string {
 	switch {
 	case def == nil || def.Stackable:

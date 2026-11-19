@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestLoadAttributesOfTheRepository(t *testing.T) {
@@ -37,6 +39,66 @@ func TestLoadAttributesOfTheRepository(t *testing.T) {
 			t.Errorf("%s rolls an attribute", id)
 		}
 	}
+}
+
+// The line of a skill attribute names the skill as the game itself does (skill.<id>.name,
+// the skills panel) and nothing else: no wording of another game's skill names (the
+// legal rule of CLAUDE.md). Only "+{value}" and a connector word may go around it. The
+// magic level's line names the level, as the card's requirement does.
+func TestAttributeSkillLinesUseOurSkillNames(t *testing.T) {
+	as, err := LoadAttributes(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectors := map[string]bool{"a": true, "de": true, "to": true, "skill": true}
+	for _, lang := range []string{"es", "en"} {
+		texts := i18nTexts(t, lang)
+		for _, a := range as {
+			if a.Effect != EffectSkill || a.Skill == "magic" {
+				continue
+			}
+			line, name := texts[a.Text], texts["skill."+a.Skill+".name"]
+			if line == "" || name == "" {
+				t.Fatalf("%s: %s %q, skill name %q", lang, a.Text, line, name)
+			}
+			rest := strings.ToLower(strings.ReplaceAll(line, "+{value}", ""))
+			if !strings.Contains(rest, strings.ToLower(name)) {
+				t.Errorf("%s: %s = %q does not name the skill %q", lang, a.Text, line, name)
+				continue
+			}
+			for _, word := range strings.Fields(strings.Replace(rest, strings.ToLower(name), "", 1)) {
+				if !connectors[word] {
+					t.Errorf("%s: %s = %q: %q is not our skill's name", lang, a.Text, line, word)
+				}
+			}
+		}
+	}
+}
+
+// i18nTexts reads every key of i18n/<lang>/*.yaml (flat "key: text" files).
+func i18nTexts(t *testing.T, lang string) map[string]string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("..", "..", "..", "i18n", lang, "*.yaml"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("i18n %s: %v", lang, err)
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for k, v := range m {
+			if s, ok := v.(string); ok {
+				out[k] = s
+			}
+		}
+	}
+	return out
 }
 
 func TestAttributeBandAndRoll(t *testing.T) {

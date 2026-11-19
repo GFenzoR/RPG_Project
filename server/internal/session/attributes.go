@@ -11,8 +11,9 @@ import (
 // Item attributes (docs/02-game-design.md "Atributos de items"). Every equipable (a
 // weapon, a shield or an armor piece: content.Rolls) carries its own Mods: exactly one
 // attribute of data/attributes.yaml, rolled with the World's seeded source at every
-// creation of the item (loot, shops, rewards, crafting, staff, the market's mailbox of an
-// old offer) and kept by every path that moves it. An instance with mods never stacks.
+// creation of the item (loot, shops, rewards, crafting, conjuring, gathering, staff, the
+// market's mailbox of an old offer) and kept by every path that moves it. An instance
+// with mods never stacks.
 // What the worn items' attributes add up to is Player.gear, recomputed with the
 // equipment (equipmentChanged) and read by the formulas: maximums, attack, armor,
 // defense, the skills fights use, speed, regeneration, elemental protection and leech.

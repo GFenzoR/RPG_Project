@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"time"
@@ -121,6 +122,19 @@ func modsJSON(m *ItemMods) []byte {
 	return raw
 }
 
+// readMods reads the attributes column of row id of table (modsOf). A value that does
+// not decode (only a hand edit of the database writes one) must not keep a character
+// from playing nor the market from loading: it is logged and read as a plain item, so an
+// equipable rolls a new attribute when it loads and is saved with it.
+func readMods(raw []byte, table string, id int64) *ItemMods {
+	m, err := modsOf(raw)
+	if err != nil {
+		slog.Error("store: unreadable item attributes read as none", "table", table, "id", id, "err", err)
+		return nil
+	}
+	return m
+}
+
 // modsOf reads a column written by modsJSON (nil: a plain item).
 func modsOf(raw []byte) (*ItemMods, error) {
 	if len(raw) == 0 {
@@ -215,10 +229,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("character inventory: %w", err)
 	}
-	tree, err := inventoryTree(inv)
-	if err != nil {
-		return PlayCharacter{}, fmt.Errorf("character inventory: %w", err)
-	}
+	tree := inventoryTree(inv)
 	qs, err := s.q.GetCharacterQuestState(ctx, id)
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("character quest state: %w", err)
@@ -375,14 +386,10 @@ func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgt
 
 // inventoryTree rebuilds the item tree from inventory_items rows (top level first,
 // then by slot), with each row's attributes. Rows whose container is missing are dropped.
-func inventoryTree(rows []db.GetCharacterInventoryRow) ([]InventoryItem, error) {
+func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
 	mods := make(map[int64]*ItemMods, len(rows))
 	for _, r := range rows {
-		m, err := modsOf(r.Attributes)
-		if err != nil {
-			return nil, fmt.Errorf("row %d: %w", r.ID, err)
-		}
-		mods[r.ID] = m
+		mods[r.ID] = readMods(r.Attributes, "inventory_items", r.ID)
 	}
 	children := map[int64][]db.GetCharacterInventoryRow{}
 	var top []db.GetCharacterInventoryRow
@@ -405,7 +412,7 @@ func inventoryTree(rows []db.GetCharacterInventoryRow) ([]InventoryItem, error) 
 		}
 		return out
 	}
-	return build(top, 0), nil
+	return build(top, 0)
 }
 
 // tsOrNull is ts, or NULL for the zero time.

@@ -10,6 +10,7 @@ import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { rollsAttribute } from "../state/item-card.ts";
 import { createProblem, marketCost, searchItems } from "../state/market.ts";
+import { tipMods } from "../state/mods.ts";
 import type { MarketView, OfferView } from "../state/market.ts";
 import { ItemLabel } from "./Trade.tsx";
 
@@ -36,15 +37,17 @@ function report(form: HTMLFormElement, text: string): void {
 
 /**
  * An instance's attribute as a market line writes it ("+3 attack"; docs/02 "Atributos de
- * items"), or the "no attribute" text for an instance without one.
+ * items"), the "no attribute" text for an instance without one, or the "retired" one for
+ * an attribute no longer in the pool (it does nothing).
  */
 export function attributeLine(
   t: Translate,
   content: ClientContent,
   mods: ItemMods | undefined,
 ): string {
-  const a = mods && content.attributes?.[mods.attribute];
-  return a && mods ? t(a.text, { value: mods.value }) : t("client.market.no_attribute");
+  if (!mods || mods.attribute === "") return t("client.market.no_attribute");
+  const a = content.attributes?.[mods.attribute];
+  return a ? t(a.text, { value: mods.value }) : t("client.card.attribute_retired");
 }
 
 /**
@@ -111,7 +114,7 @@ function OfferTable(
               class="attribute card-attribute"
               data-tip-item={o.itemId}
               data-tip-count={o.amount}
-              data-tip-mods={`${o.mods.attribute}:${o.mods.value}:${o.mods.refine}`}
+              data-tip-mods={tipMods(o.mods)}
             >
               {attributeLine(t, props.content, o.mods)}
             </span>
@@ -236,7 +239,14 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
       {def && (
         <div class="browse" data-testid="market-browse" data-item={def.id}>
           <h3>
-            <ItemLabel t={t} content={content} game={game} itemId={m.itemId} count={1} />
+            <ItemLabel
+              t={t}
+              content={content}
+              game={game}
+              itemId={m.itemId}
+              count={1}
+              anyInstance={true}
+            />
           </h3>
           <p class="reference" data-testid="market-reference">
             {m.referencePrice > 0
@@ -336,6 +346,7 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
                 itemId={o.itemId}
                 count={o.amount}
                 mods={o.mods}
+                anyInstance={true}
               />
               {o.mods && (
                 <span class="attribute card-attribute">{attributeLine(t, content, o.mods)}</span>
@@ -399,7 +410,14 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               <span class="mside">
                 {h.sold ? t("client.market.sold") : t("client.market.bought")}
               </span>
-              <ItemLabel t={t} content={content} game={game} itemId={h.itemId} count={h.amount} />
+              <ItemLabel
+                t={t}
+                content={content}
+                game={game}
+                itemId={h.itemId}
+                count={h.amount}
+                anyInstance={true}
+              />
               <span class="price">{t("client.market.each", { price: h.price })}</span>
             </li>
           ))}

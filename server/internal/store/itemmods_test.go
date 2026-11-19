@@ -43,10 +43,7 @@ func TestInventoryTreeKeepsMods(t *testing.T) {
 		{ID: 3, ContainerID: pgtype.Int8{Int64: 2, Valid: true}, Slot: 0, ItemID: 63, Count: 1,
 			Attributes: []byte(`{"attribute":"armor","value":1}`)},
 	}
-	got, err := inventoryTree(rows)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := inventoryTree(rows)
 	want := []InventoryItem{
 		{ItemID: 60, Count: 1, Slot: 5, Mods: &ItemMods{Attribute: "attack", Value: 2}},
 		{ItemID: 66, Count: 1, Slot: 3, Items: []InventoryItem{{ItemID: 63, Count: 1, Mods: &ItemMods{Attribute: "armor", Value: 1}}}},
@@ -54,8 +51,25 @@ func TestInventoryTreeKeepsMods(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v", got)
 	}
-	rows[0].Attributes = []byte("nope")
-	if _, err := inventoryTree(rows); err == nil {
-		t.Fatal("a broken row was read")
+	// A row whose attributes do not decode is read as a plain item: the character still
+	// plays (its equipable rolls a new attribute when it loads), the rest is intact.
+	rows[0].Attributes = []byte(`{"value":"x"}`)
+	want[0].Mods = nil
+	if got := inventoryTree(rows); !reflect.DeepEqual(got, want) {
+		t.Fatalf("with a broken row %+v", got)
+	}
+}
+
+// A market offer whose attributes do not decode loads as an offer without them: the
+// server still starts.
+func TestMarketOfferReadsBrokenModsAsNone(t *testing.T) {
+	row := db.LoadMarketOffersRow{ID: 7, CharacterID: 3, ItemID: 60, Amount: 1, Price: 50,
+		Attributes: []byte(`{"attribute":"attack","value":3}`)}
+	if o := marketOffer(row); o.ID != 7 || o.ItemID != 60 || !reflect.DeepEqual(o.Mods, &ItemMods{Attribute: "attack", Value: 3}) {
+		t.Fatalf("offer %+v", o)
+	}
+	row.Attributes = []byte(`[1]`)
+	if o := marketOffer(row); o.ID != 7 || o.Price != 50 || o.Mods != nil {
+		t.Fatalf("offer with broken mods %+v", o)
 	}
 }

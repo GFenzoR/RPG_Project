@@ -528,6 +528,23 @@ func (w *World) ElementHitForTest(ctx *game.TickContext, p *Player, dmg int, ele
 // LeechForTest is p's leech after one of its weapon hits dealt dmg (tests only).
 func (w *World) LeechForTest(p *Player, dmg int) { w.leech(p, dmg) }
 
+// PhysicalHitForTest lands one melee or shot hit of up to maxHit of p on monster m or
+// player v, as its fight does after the attack round (tests only, loop goroutine).
+func (w *World) PhysicalHitForTest(ctx *game.TickContext, p *Player, m *Monster, v *Player, maxHit int) {
+	w.physicalHit(ctx, p, foe{m: m, p: v}, maxHit, "sword")
+}
+
+// WandShotForTest shoots p's wand at monster m or player v with its attack round due
+// (tests only, loop goroutine): nothing when the target is out of range or sight.
+func (w *World) WandShotForTest(ctx *game.TickContext, p *Player, m *Monster, v *Player) {
+	p.nextAttack = ctx.Tick
+	w.wandFight(ctx, p, foe{m: m, p: v})
+}
+
+// SetModsForTest changes it's mods in place, as the forge will (tests only, loop
+// goroutine).
+func (it *Item) SetModsForTest(m Mods) { it.mods = m }
+
 // RegenForTest runs one regeneration tick of p (tests only).
 func (w *World) RegenForTest(p *Player) { w.regenerate(p) }
 

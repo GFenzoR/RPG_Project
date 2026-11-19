@@ -54,10 +54,13 @@ type trade struct {
 	pos [2]world.Pos
 }
 
-// tradeItem is one offered item and the stack size it had when offered.
+// tradeItem is one offered item and the stack size and mods it had when offered.
 type tradeItem struct {
 	it    *Item
 	count int
+	// An instance whose mods change in place (the forge) is no longer what the partner
+	// saw: it leaves the offer like a moved one (checkTrade).
+	mods Mods
 }
 
 func (t *trade) side(p *Player) int {
@@ -193,7 +196,7 @@ func (w *World) tradeAdd(p *Player, loc *pb.ItemLocation, itemID, index uint32) 
 		p.emit(systemMsg(msgTradeFull, num("max", w.trade.MaxItems)))
 		return false
 	}
-	t.offer[s] = append(t.offer[s], tradeItem{it: it, count: it.count})
+	t.offer[s] = append(t.offer[s], tradeItem{it: it, count: it.count, mods: it.mods})
 	t.accepted = [2]bool{}
 	return true
 }
@@ -247,7 +250,8 @@ func (w *World) endTrade(t *trade, state pb.TradeState, reason string) {
 
 // checkTrade validates t now: it cancels t (false) when the players are no longer
 // adjacent, in a PvP fight, staff, or the invitation expired; it drops offered items that
-// left their owner or changed, and clears the confirmations when anything changed.
+// left their owner or changed (count or mods), and clears the confirmations when anything
+// changed.
 func (w *World) checkTrade(ctx *game.TickContext, t *trade) bool {
 	a, b := t.p[0], t.p[1]
 	reason := ""
@@ -269,7 +273,8 @@ func (w *World) checkTrade(ctx *game.TickContext, t *trade) bool {
 	for s := range t.offer {
 		kept := t.offer[s][:0]
 		for _, x := range t.offer[s] {
-			if x.it.carriedBy() == t.p[s] && x.it.parent != nil && x.it.count == x.count && tradeableItem(x.it) {
+			if x.it.carriedBy() == t.p[s] && x.it.parent != nil && x.it.count == x.count && x.it.mods == x.mods &&
+				tradeableItem(x.it) {
 				kept = append(kept, x)
 			} else {
 				changed = true

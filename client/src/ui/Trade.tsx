@@ -27,6 +27,12 @@ export function ItemLabel(props: {
   count: number;
   /** The instance's mods (an equipable's attribute): its card shows them. */
   mods?: ItemMods | undefined;
+  /**
+   * Without mods, it stands for any instance someone else picks (the market: a search, a
+   * buy offer, the history): its card says each piece has its own attribute, not that it
+   * rolls one.
+   */
+  anyInstance?: boolean | undefined;
 }): JSX.Element {
   const { t, game, itemId, count } = props;
   const def = props.content.items[itemId];
@@ -47,6 +53,7 @@ export function ItemLabel(props: {
       data-tip-item={itemId}
       data-tip-count={count}
       data-tip-mods={tipMods(props.mods)}
+      data-tip-any={props.anyInstance && !props.mods ? "" : undefined}
     >
       <span class={icon ? "item" : "item missing"} style={style} aria-hidden="true">
         {!icon && name.slice(0, 2)}

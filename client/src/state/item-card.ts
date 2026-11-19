@@ -61,10 +61,18 @@ export interface ItemCardView {
   currency?: boolean | undefined;
   /**
    * The instance's attribute (docs/02 "Atributos de items"), drawn in its own colour under
-   * the stats: its line's i18n key with {value}. `random` on an equipable seen without one
-   * (a shop's, a recipe's output): it rolls one when it is made.
+   * the stats: its line's i18n key with {value}. On an equipable seen without one,
+   * `random` when it rolls one as it is made (a shop's, a recipe's output) and `any` when
+   * it stands for any instance someone else picks (the market: a search, a buy offer, the
+   * history). `retired` for an attribute no longer in the pool: the item keeps it, it does
+   * nothing.
    */
-  attribute?: { text: string; value: number } | { random: true } | undefined;
+  attribute?:
+    | { text: string; value: number }
+    | { random: true }
+    | { any: true }
+    | { retired: true }
+    | undefined;
 }
 
 /**
@@ -92,7 +100,8 @@ const CARRIED = new Set([
 /**
  * The card of an item (an unknown item gets an empty card with its number). mods are the
  * instance's (its attribute, named in attributes: content.attributes); without them an
- * equipable's card says it rolls one.
+ * equipable's card says it rolls one, or, with anyInstance (the market), that each piece
+ * has its own.
  */
 export function itemCard(
   def: ItemDef | undefined,
@@ -101,6 +110,7 @@ export function itemCard(
   who: Viewer = {},
   mods?: ItemMods | undefined,
   attributes?: Record<string, AttributeDef> | undefined,
+  anyInstance = false,
 ): ItemCardView {
   const card: ItemCardView = {
     itemId,
@@ -132,8 +142,9 @@ export function itemCard(
   if (def.slots > 0) card.stats.push({ id: "slots", value: def.slots });
   if (mods && mods.attribute !== "") {
     const a = attributes?.[mods.attribute];
-    if (a) card.attribute = { text: a.text, value: mods.value }; // unknown: no line
-  } else if (rollsAttribute(def)) card.attribute = { random: true };
+    if (a) card.attribute = { text: a.text, value: mods.value };
+    else if (attributes) card.attribute = { retired: true }; // no pool given: no line
+  } else if (rollsAttribute(def)) card.attribute = anyInstance ? { any: true } : { random: true };
   if (def.rune) {
     card.stats.push({ id: "charges", value: def.rune.charges });
     card.effects.push({ id: "rune", spell: def.rune.spell });

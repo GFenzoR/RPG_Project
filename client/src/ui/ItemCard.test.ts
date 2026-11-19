@@ -204,4 +204,16 @@ describe("ItemCard's attribute line", () => {
       nodes(ItemCard({ t, card })).some((n) => n.props["data-testid"] === "card-attribute"),
     ).toBe(false);
   });
+  it("any instance (the market) and a retired attribute have their own dimmer lines", () => {
+    for (const [attribute, key] of [
+      [{ any: true }, "client.card.attribute_any"],
+      [{ retired: true }, "client.card.attribute_retired"],
+    ] as const) {
+      const line = nodes(TipCard({ t, card: { ...card, attribute } })).find(
+        (n) => n.props["data-testid"] === "card-attribute",
+      );
+      expect(line?.props["class"]).toBe("card-attribute random");
+      expect(texts(line)).toEqual([key]);
+    }
+  });
 });

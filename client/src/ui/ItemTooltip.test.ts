@@ -6,6 +6,7 @@ import {
   TipGate,
   groundAnchor,
   placeKey,
+  tipOf,
   tipPlacement,
 } from "./ItemTooltip.tsx";
 import type { Rect } from "./ItemTooltip.tsx";
@@ -147,5 +148,27 @@ describe("placeKey and an instance's attribute (docs/02)", () => {
     expect(placeKey(a, "")).not.toBe(placeKey(b, ""));
     expect(placeKey(a, "")).toBe(placeKey({ ...a }, ""));
     expect(placeKey({ itemId: 60, count: 1, anchor: cell }, "")).not.toBe(placeKey(a, ""));
+    // Any instance (the market) is another card than one that rolls (a shop's).
+    const plain = { itemId: 60, count: 1, anchor: cell };
+    expect(placeKey({ ...plain, any: true }, "")).not.toBe(placeKey(plain, ""));
+  });
+});
+
+describe("tipOf", () => {
+  // A stand-in for the element under the mouse: closest() finds the data-tip-item host.
+  const at = (dataset: Record<string, string>): Element =>
+    ({ closest: () => ({ dataset }) }) as unknown as Element;
+  it("reads the item, its count and its mods", () => {
+    expect(tipOf(at({ tipItem: "60", tipCount: "2", tipMods: "attack:3:0" }))).toEqual({
+      itemId: 60,
+      count: 2,
+      mods: { attribute: "attack", value: 3, refine: 0 },
+    });
+    expect(tipOf(at({ tipItem: "0" }))).toBeUndefined();
+  });
+  it("marks an item that stands for any instance (data-tip-any), unless it has mods", () => {
+    expect(tipOf(at({ tipItem: "60", tipAny: "" }))).toEqual({ itemId: 60, count: 1, any: true });
+    expect(tipOf(at({ tipItem: "60", tipAny: "", tipMods: "attack:3:0" }))?.any).toBeUndefined();
+    expect(tipOf(at({ tipItem: "60" }))?.any).toBeUndefined();
   });
 });

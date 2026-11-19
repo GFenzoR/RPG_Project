@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"sort"
 	"time"
 
@@ -497,6 +498,10 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	p.pos = w.placement(c)
 	w.loadSkills(p, c.Skills)
+	// An equipable saved before attributes existed rolls its own while loading: the
+	// character is saved at once with it (below), so a crash before its first autosave
+	// does not roll another at the next login.
+	rolled := slices.ContainsFunc(c.Inventory, w.needsRoll)
 	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	// After the equipment: its attributes may raise the maximums (attributes.go).
 	p.health = min(max(c.Health, 0), p.maxHealth)
@@ -554,6 +559,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
 	w.scheduleAutosave(ctx, p, first)
 	w.scheduleRegen(ctx, p)
+	if rolled {
+		w.save(w.snapshot(p, false))
+	}
 }
 
 // state returns c with the in-memory state of the online player p.

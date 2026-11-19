@@ -32,14 +32,15 @@ func TestItemModsRoundTrip(t *testing.T) {
 	armor := &store.ItemMods{Attribute: "armor", Value: 1, Refine: 2}
 
 	// The inventory: an equipped sword and, inside a bag in the backpack, a tunic; the
-	// plain items stay without mods.
+	// plain items stay without mods. Listed in the order PlayCharacter reads them back
+	// (GetCharacterInventory: by container, then slot), so slot 3 before slot 5.
 	state := store.CharacterState{ID: c.ID, Level: 5, Health: 1, X: 5, Y: 5, Z: 7, SavedAt: now,
 		Inventory: []store.InventoryItem{
-			{ItemID: 60, Count: 1, Slot: 5, Mods: attack},
 			{ItemID: 66, Count: 1, Slot: 3, Items: []store.InventoryItem{
 				{ItemID: 68, Count: 12, Slot: 0},
 				{ItemID: 67, Count: 1, Slot: 1, Items: []store.InventoryItem{{ItemID: 63, Count: 1, Slot: 0, Mods: armor}}},
 			}},
+			{ItemID: 60, Count: 1, Slot: 5, Mods: attack},
 		}}
 	if err := st.SaveCharacterState(ctx, state); err != nil {
 		t.Fatal(err)
@@ -49,8 +50,9 @@ func TestItemModsRoundTrip(t *testing.T) {
 		t.Fatalf("inventory:\n got %+v\nwant %+v (%v)", pc.Inventory, state.Inventory, err)
 	}
 
-	// A sell offer of one instance and a mailbox entry, in one transfer.
-	state.Inventory = state.Inventory[1:]
+	// A sell offer of one instance (the sword leaves the inventory) and a mailbox entry, in
+	// one transfer.
+	state.Inventory = state.Inventory[:1]
 	tr := store.Transfer{ID: 1, OfferHigh: 1, MailHigh: 1, Characters: []store.CharacterState{state},
 		Market: []store.MarketOp{
 			{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 1, CharacterID: c.ID, Side: store.MarketSell,

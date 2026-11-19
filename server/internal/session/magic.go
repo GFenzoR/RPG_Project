@@ -537,14 +537,15 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 			p.emit(systemMsg(msgNoRoom))
 			return false
 		}
-		it := newItem(def, def.StackLimit()) // a rune with all its charges
+		// A rune with all its charges; an equipable rolls its attribute (attributes.go).
+		it := w.created(def, def.StackLimit())
 		if it.weight() > p.capacity-p.carried() {
 			p.emit(systemMsg(msgTooHeavy))
 			return false
 		}
 		w.attach(p, it, place{kind: locContainer, cont: bp})
 		w.containerChanged(bp)
-		w.econItem(p, EconConjure, "", def, 1)
+		w.econMade(p, EconConjure, "", 0, def, 1, []*Item{it})
 		shown = it.stack()
 	}
 	w.eachWatcher(p, func(o *Player) {

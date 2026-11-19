@@ -267,6 +267,11 @@ func TestSavedEquipablesKeepOrRollTheirAttribute(t *testing.T) {
 		t.Fatalf("tunic %v sword %v", tunic, sword)
 	}
 	checkRolled(t, attrPool(t), sword[0].Def(), sword[0].Mods())
+	// The roll is saved with the login itself, not at the first autosave: a crash before
+	// it does not roll another at the next login.
+	if len(h.saves) != 1 || h.saves[0].CharacterID != c.ID || h.saves[0].Inventory[0].Items[1].Mods != sword[0].Mods() {
+		t.Fatalf("saves at login %+v", h.saves)
+	}
 	h.sim.Command(h.w.ForceSaveForTest(cl))
 	h.sim.Step()
 	inv := h.saves[len(h.saves)-1].Inventory
@@ -278,9 +283,13 @@ func TestSavedEquipablesKeepOrRollTheirAttribute(t *testing.T) {
 	h.sim.Command(h.w.Leave(cl))
 	h.sim.Step()
 	c.Inventory = inv
+	saves := len(h.saves)
 	_, p = h.joinChar(c)
 	if got := h.w.ItemsForTest(p, "test_sword"); len(got) != 1 || got[0].Mods() != sword[0].Mods() {
 		t.Fatalf("after relogin %v, saved %+v", got, sword[0].Mods())
+	}
+	if len(h.saves) != saves {
+		t.Fatalf("a login with nothing to roll saved: %+v", h.saves[saves:])
 	}
 }
 
