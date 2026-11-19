@@ -800,7 +800,15 @@ func (h *questHost) Reward(q *content.Quest, r content.QuestReward) {
 	}
 }
 
+func (h *questHost) Now() int64 { return h.w.nowUnix() }
+
+func (h *questHost) Inside(r *content.Reach) bool {
+	pl := h.w.reachAt[r]
+	return pl != nil && pl.contains(h.p.pos)
+}
+
 func (h *questHost) Notify(e quest.Event) {
+	h.p.questsChanged() // the quest log and the reach places (questlog.go)
 	q := &pb.TextParam{Name: "quest", Value: &pb.TextParam_ContentId{ContentId: e.Quest.ID}}
 	switch e.Kind {
 	case quest.Started:
@@ -852,11 +860,17 @@ func (a *actor) ItemCount(item string) int {
 	return a.w.countItem(a.p, a.w.cfg.Items[item], true)
 }
 func (a *actor) QuestState(id string) (quest.State, string) { return a.w.QuestState(a.p, id) }
-func (a *actor) Flag(key string) int64                      { return a.p.storage.Get(quest.FlagKey(key)) }
-func (a *actor) SkillLevel(skill string) int                { return a.w.skillLevel(a.p, skill) }
-func (a *actor) Money() int64                               { return a.w.money(a.p) }
-func (a *actor) CanPay(amount int64) bool                   { return a.w.canPay(a.p, amount) }
-func (a *actor) HasBlessing(id string) bool                 { return a.p.storage.Get(blessKey+id) != 0 }
+func (a *actor) QuestAvailable(id string) bool {
+	return a.w.quests.Available(a.p.storage, id, a.w.nowUnix())
+}
+func (a *actor) QuestCoolingDown(id string) bool {
+	return a.w.quests.CoolingDown(a.p.storage, id, a.w.nowUnix())
+}
+func (a *actor) Flag(key string) int64       { return a.p.storage.Get(quest.FlagKey(key)) }
+func (a *actor) SkillLevel(skill string) int { return a.w.skillLevel(a.p, skill) }
+func (a *actor) Money() int64                { return a.w.money(a.p) }
+func (a *actor) CanPay(amount int64) bool    { return a.w.canPay(a.p, amount) }
+func (a *actor) HasBlessing(id string) bool  { return a.p.storage.Get(blessKey+id) != 0 }
 
 func (a *actor) CanTeleport(pos content.Position) bool {
 	_, ok := a.w.teleportDest(pos)

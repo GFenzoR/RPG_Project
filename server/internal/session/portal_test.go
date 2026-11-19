@@ -543,7 +543,7 @@ func TestVolcanicMineStairsOnTheMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := dataHarnessWith(t, func(cfg *session.Config) {
-		cfg.Map = m
+		cfg.Map, cfg.Quests = m, realQuests(t)
 		for _, is := range m.Islands() {
 			is.Spawns = nil // no monsters: this is about the stairs
 		}

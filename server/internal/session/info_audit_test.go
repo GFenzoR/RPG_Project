@@ -39,7 +39,7 @@ var idFields = map[protoreflect.Name]bool{"id": true, "creature_id": true, "spea
 // privateKinds are the messages that describe the receiver itself: exact health and
 // mana, skills, inventory, containers and conditions.
 var privateKinds = map[string]bool{"player_stats": true, "player_skills": true, "inventory": true,
-	"container_open": true, "container_update": true, "player_conditions": true}
+	"container_open": true, "container_update": true, "player_conditions": true, "quest_log": true}
 
 func scan(evs []*pb.ServerMessage) seen {
 	s := seen{ids: map[uint32]bool{}, floors: map[uint32]bool{}, kinds: map[string]int{}, private: map[string]int{}}

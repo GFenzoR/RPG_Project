@@ -101,7 +101,7 @@ func newCrowd(t testing.TB, scenario string, n int) *crowd {
 		t.Fatal(err)
 	}
 	cfg := dataConfig(t, routes)
-	cfg.Map, cfg.NPCs = m, npcs
+	cfg.Map, cfg.NPCs, cfg.Quests = m, npcs, realQuests(t)
 	cfg.Balance.AntiBot.EvalEveryMs = 0 // no presence checks: bots of the load test answer them
 	w, err := session.New(cfg)
 	if err != nil {

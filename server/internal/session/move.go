@@ -373,6 +373,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 		w.stepView(p, to, d)
 	}
 	w.tutorialEvent(p, content.TriggerWalk, "")
+	w.checkReach(p) // a reach step of its quests (questlog.go)
 }
 
 // stepView tells p's own client what its step to `to` in d changed: creatures out of view
@@ -432,6 +433,7 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.checkHouseView(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
+	w.checkReach(p) // a teleport, a portal, a boat or the temple count for a reach step
 }
 
 // playerByID returns the online player with creature id, or nil.
@@ -481,6 +483,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
+		w.flushQuestLog(p) // after the recheck: its changes are in this one
 		w.sendConditions(p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)

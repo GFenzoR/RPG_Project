@@ -316,6 +316,10 @@ type World struct {
 	npcAt    map[world.Pos]*NPC
 	nsectors map[uint64][]*NPC
 	quests   *quest.Engine
+	// reachAt is the place of every reach step of the quests (questlog.go); reachBuf is
+	// scratch for reading a player's current ones.
+	reachAt  map[*content.Reach]*reachPlace
+	reachBuf []*content.Reach
 	coins    []*content.Item // currency items, highest worth first
 
 	// Gathering (T1.12): harvested tiles (charges left, refill event), the rate limit
@@ -600,6 +604,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initNPCs(); err != nil {
+		return nil, err
+	}
+	if err := w.initReach(); err != nil {
 		return nil, err
 	}
 	if err := w.initTravel(); err != nil {

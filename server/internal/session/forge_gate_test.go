@@ -23,7 +23,7 @@ func TestForgeGateOnTheMap(t *testing.T) {
 	at8 := func(x, y int) world.Pos { return world.Pos{X: uint16(x), Y: uint16(y), Z: 8} }
 	gate, mine, forge := at8(3692, 5832), at8(3688, 5826), at8(3692, 5845)
 	h := dataHarnessWith(t, func(cfg *session.Config) {
-		cfg.Map = m
+		cfg.Map, cfg.Quests = m, realQuests(t)
 		for _, is := range m.Islands() {
 			is.Spawns = nil // no monsters: this is about the gate
 		}

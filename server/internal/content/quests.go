@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,23 @@ type Quest struct {
 	MinLevel int            `yaml:"min_level"`
 	Steps    []QuestStepDef `yaml:"steps"`
 	Rewards  []QuestReward  `yaml:"rewards"`
+	// Repeatable makes it a task (docs/06 "Quest"): once completed it can be started again
+	// after its cooldown, from its first step, and its rewards are given every time.
+	Repeatable *Repeatable `yaml:"repeatable"`
+}
+
+// Repeatable is the cooldown of a repeatable quest: the time between completing it and
+// being able to start it again.
+type Repeatable struct {
+	CooldownHours float64 `yaml:"cooldown_hours"`
+}
+
+// MaxCooldownHours bounds a repeatable quest's cooldown (a year).
+const MaxCooldownHours = 24 * 366
+
+// CooldownSeconds is the cooldown in whole seconds (at least one).
+func (r *Repeatable) CooldownSeconds() int64 {
+	return max(int64(math.Ceil(r.CooldownHours*3600)), 1)
 }
 
 // QuestStepDef is one step and the event that completes it.
@@ -34,6 +52,41 @@ type Completion struct {
 	DialogAction *DialogAction `yaml:"dialog_action"`
 	Kill         *Kill         `yaml:"kill"`
 	FlagEquals   *Flag         `yaml:"flag_equals"`
+	Reach        *Reach        `yaml:"reach"`
+}
+
+// Reach completes a step while the player stands in a place (docs/06 "Quest"): a zone of
+// world/islands/*/zones.yaml (Zone), or the tiles within Radius (Chebyshev) of X, Y on
+// floor Z. The session resolves it against the map when it starts (unknown zone, or a point
+// outside every island, refuse to start) and checks it after every move and relocation
+// while the step is current.
+type Reach struct {
+	Zone   string `yaml:"zone"`
+	X      *int   `yaml:"x"`
+	Y      *int   `yaml:"y"`
+	Z      *int   `yaml:"z"`
+	Radius int    `yaml:"radius"`
+}
+
+// MaxReachRadius bounds the radius of a reach point (the classic view's width).
+const MaxReachRadius = 16
+
+// check reports what is wrong with a reach completion, or "".
+func (r *Reach) check() string {
+	point := r.X != nil || r.Y != nil || r.Z != nil
+	switch {
+	case r.Zone != "" && (point || r.Radius != 0):
+		return "reach takes a zone or x, y, z and radius, not both"
+	case r.Zone != "":
+		return ""
+	case r.X == nil || r.Y == nil || r.Z == nil:
+		return "reach needs a zone or x, y and z"
+	case *r.X < 0 || *r.X > 0xFFFF || *r.Y < 0 || *r.Y > 0xFFFF || *r.Z < 0 || *r.Z > 15:
+		return "reach point outside the world"
+	case r.Radius < 0 || r.Radius > MaxReachRadius:
+		return fmt.Sprintf("reach radius outside 0..%d", MaxReachRadius)
+	}
+	return ""
 }
 
 // DialogAction completes a step when the player reaches node of npc.
@@ -109,7 +162,7 @@ func ParseQuest(raw []byte) (*Quest, error) {
 	for i, s := range q.Steps {
 		c := s.CompleteWhen
 		n := 0
-		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil} {
+		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil, c.Reach != nil} {
 			if set {
 				n++
 			}
@@ -120,7 +173,15 @@ func ParseQuest(raw []byte) (*Quest, error) {
 		if c.Kill != nil && (c.Kill.Monster == "" || c.Kill.Count <= 0) {
 			return nil, fmt.Errorf("quest %q: steps[%d]: kill needs a monster and count > 0", q.ID, i)
 		}
+		if c.Reach != nil {
+			if msg := c.Reach.check(); msg != "" {
+				return nil, fmt.Errorf("quest %q: steps[%d]: %s", q.ID, i, msg)
+			}
+		}
 		seen[s.ID] = true
+	}
+	if r := q.Repeatable; r != nil && !(r.CooldownHours > 0 && r.CooldownHours <= MaxCooldownHours) {
+		return nil, fmt.Errorf("quest %q: repeatable cooldown_hours must be in (0, %d]", q.ID, MaxCooldownHours)
 	}
 	return &q, nil
 }

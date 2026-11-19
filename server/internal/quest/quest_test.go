@@ -10,11 +10,15 @@ type host struct {
 	items   map[string]int
 	rewards []content.QuestReward
 	events  []EventKind
+	now     int64
+	inside  map[*content.Reach]bool
 }
 
 func (h *host) ItemCount(item string) int                      { return h.items[item] }
 func (h *host) Reward(_ *content.Quest, r content.QuestReward) { h.rewards = append(h.rewards, r) }
 func (h *host) Notify(e Event)                                 { h.events = append(h.events, e.Kind) }
+func (h *host) Now() int64                                     { return h.now }
+func (h *host) Inside(r *content.Reach) bool                   { return h.inside[r] }
 
 func testQuests(t *testing.T) content.Quests {
 	t.Helper()

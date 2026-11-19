@@ -569,3 +569,8 @@ func (w *World) MarketOfferModsForTest(id int64) Mods {
 	}
 	return Mods{}
 }
+
+// StartQuestForTest starts quest id for p as a dialog's start_quest does.
+func (w *World) StartQuestForTest(p *Player, id string) bool {
+	return w.quests.Start(p.storage, id, &questHost{w: w, p: p})
+}

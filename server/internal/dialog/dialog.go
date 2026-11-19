@@ -31,6 +31,11 @@ type Facts interface {
 	// containers).
 	ItemCount(item string) int
 	QuestState(quest string) (quest.State, string)
+	// QuestAvailable reports whether start_quest would start the quest now (never started,
+	// or a repeatable one past its cooldown); QuestCoolingDown whether it is a repeatable one
+	// done and waiting for its cooldown.
+	QuestAvailable(quest string) bool
+	QuestCoolingDown(quest string) bool
 	Flag(key string) int64
 	SkillLevel(skill string) int
 	// Money is the carried money in the smallest coin.
@@ -94,6 +99,12 @@ func holds(c content.Condition, f Facts) bool {
 	case c.LacksItem != nil:
 		return f.ItemCount(c.LacksItem.Item) < c.LacksItem.N()
 	case c.QuestState != nil:
+		switch c.QuestState.State {
+		case content.QuestAvailable:
+			return f.QuestAvailable(c.QuestState.Quest)
+		case content.QuestCoolingDown:
+			return f.QuestCoolingDown(c.QuestState.Quest)
+		}
 		s, step := f.QuestState(c.QuestState.Quest)
 		if s.String() != c.QuestState.State {
 			return false
