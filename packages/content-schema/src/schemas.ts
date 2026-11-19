@@ -12,6 +12,7 @@ const SCHEMA_BASE = "https://rpg-project.local/schemas/";
 export type RefKind = "item" | "monster" | "npc" | "quest" | "vocation" | "spell" | "shop";
 
 export type SchemaName =
+  | "attributes"
   | "balance"
   | "vocations"
   | "items"

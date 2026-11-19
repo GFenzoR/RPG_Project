@@ -274,6 +274,9 @@ class Validator {
       if (schema === "recipes") this.recipes = src;
     }
 
+    const attributes = single("attributes.yaml", "attributes", false);
+    if (attributes) this.checkAttributes(attributes);
+
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
     if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
@@ -364,6 +367,29 @@ class Validator {
   }
 
   // ---- per-type rules --------------------------------------------------------
+
+  /**
+   * data/attributes.yaml (docs/06 "Atributo"): unique ids, bands from level 1 with growing
+   * levels and min <= max.
+   */
+  private checkAttributes(src: SourceFile): void {
+    this.checkUniqueIds(src);
+    for (const [i, attr] of asList(src.data).entries()) {
+      if (!isObj(attr)) continue;
+      let last = 0;
+      for (const [j, band] of asList(attr["bands"]).entries()) {
+        if (!isObj(band)) continue;
+        const level = Number(band["level"]);
+        if (j === 0 && level !== 1)
+          this.error(src, [i, "bands", j, "level"], "the first band is level 1");
+        if (j > 0 && level <= last)
+          this.error(src, [i, "bands", j, "level"], "band levels must grow");
+        last = level;
+        if (Number(band["min"]) > Number(band["max"]))
+          this.error(src, [i, "bands", j], "min is greater than max");
+      }
+    }
+  }
 
   /**
    * data/cosmetics.yaml (T5.7): unique ids (packs and cosmetics apart), each cosmetic only
@@ -486,6 +512,11 @@ class Validator {
     }
     if ("max_stack" in item && item["stackable"] !== true) {
       this.error(src, [...path, "max_stack"], "max_stack requires stackable: true");
+    }
+    // An equipable rolls one attribute of its own (docs/02 "Atributos de items"): it is an
+    // instance, never part of a pile.
+    if (item["stackable"] === true && ["weapon", "armor", "shield"].some((k) => k in item)) {
+      this.error(src, [...path, "stackable"], "an equipable (weapon, armor, shield) never stacks");
     }
     const portal = item["portal"];
     if (isObj(portal)) this.checkPortalItem(item, portal, src, [...path, "portal"]);
@@ -1539,6 +1570,7 @@ class Validator {
     this.checkCodeKeys(catalogs);
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
     const dataPrefixes = [
+      "attribute.",
       "item.",
       "monster.",
       "npc.",

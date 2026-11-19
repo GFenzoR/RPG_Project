@@ -31,6 +31,7 @@ describe("repository content", () => {
   it("compiles every schema", () => {
     const set = new SchemaSet();
     const names: SchemaName[] = [
+      "attributes",
       "balance",
       "vocations",
       "items",
@@ -87,6 +88,31 @@ describe("validator diagnostics", () => {
     ).toBe(true);
     expect(has('item "backpack" must be a container with pickupable: false')).toBe(true);
     expect(has('unknown item "no_such_remains"')).toBe(true);
+  });
+
+  it("checks the attribute pool: bands, fields of the effect, texts and stacking equipables", () => {
+    edit(
+      "data/attributes.yaml",
+      "    - { level: 1, min: 4, max: 10 }",
+      "    - { level: 2, min: 12, max: 10 }",
+    );
+    edit("data/attributes.yaml", "  effect: max_mana\n", "  effect: max_mana\n  skill: sword\n");
+    edit(
+      "data/attributes.yaml",
+      "    - { level: 25, min: 2, max: 4 }",
+      "    - { level: 5, min: 2, max: 4 }",
+    );
+    edit("data/attributes.yaml", "text: attribute.speed", "text: attribute.nowhere");
+    edit("data/attributes.yaml", "- id: ice_protection", "- id: fire_protection");
+    edit("data/items/weapons.yaml", "  weight: 3300\n", "  weight: 3300\n  stackable: true\n");
+    const out = messages(root);
+    expect(out.some((m) => m.includes("the first band is level 1"))).toBe(true);
+    expect(out.some((m) => m.includes("min is greater than max"))).toBe(true);
+    expect(out.some((m) => m.includes("band levels must grow"))).toBe(true);
+    expect(out.some((m) => m.includes('i18n key "attribute.nowhere" is missing'))).toBe(true);
+    expect(out.some((m) => m.includes('duplicate id "fire_protection"'))).toBe(true);
+    expect(out.some((m) => m.includes("never stacks"))).toBe(true);
+    expect(out.some((m) => m.includes("[1].skill: not allowed here"))).toBe(true);
   });
 
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
