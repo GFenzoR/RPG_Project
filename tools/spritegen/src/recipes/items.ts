@@ -24,7 +24,7 @@ import { darken, hex, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, iron, darkIron, silver, leather, cloth, rope, bone } = PALETTE;
+const { wood, darkWood, iron, darkIron, silver, leather, rope, bone } = PALETTE;
 
 // One-off materials for single items.
 const BIRCH_BARK = material("#ece8dc", "#d2cdbd", "#a8a291", "#6f6a5c");
@@ -32,7 +32,6 @@ const ELM_BARK = material("#8a7b62", "#685a45", "#4b4031", "#2f281e");
 const END_GRAIN = material("#e2c48e", "#c9a46c", "#a37f4d", "#735634");
 const THORNWOOD = material("#8a4e4a", "#653434", "#472323", "#2d1515");
 const CANVAS = material("#c2b58c", "#9f9269", "#776c4c", "#504833");
-const STAG_LEATHER = material("#c09466", "#9a6e45", "#704e2f", "#4a321d");
 const ANTLER = material("#ddcda8", "#b8a077", "#8c7553", "#5e4d35");
 const IVORY = material("#f5eedb", "#ddd1b0", "#b3a27c", "#7e6f50");
 const CRAB = material("#ec8a5a", "#c75a34", "#923a22", "#5e2215");
@@ -1027,142 +1026,6 @@ function backpack(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
-// ---- armor -------------------------------------------------------------------------------
-
-/**
- * Trousers seen from the front: a waistband, hips, two legs that part below the crotch.
- * legW is the half-width of a leg at the cuff; flare widens the hips.
- */
-function trousers(img: Image, m: Material, legTop: number, legW: number): void {
-  for (let y = 8; y <= 27; y++) {
-    if (y < legTop) {
-      const half = 7.5 + Math.min(1, (y - 8) * 0.25);
-      for (let x = Math.ceil(16 - half); x < 16 + half; x++) {
-        const u = (x + 0.5 - 16) / half;
-        px(img, x, y, shadeOf(m, cylinderLight(u) + 0.08));
-      }
-      continue;
-    }
-    const k = (y - legTop) / (27 - legTop);
-    const gap = 0.5 + k * 1.2;
-    const outer = 8.5 - k * (8.5 - gap - legW * 2);
-    for (const side of [-1, 1]) {
-      const a = 16 + side * gap;
-      const b = 16 + side * outer;
-      const lo = Math.min(a, b);
-      const hi = Math.max(a, b);
-      for (let x = Math.ceil(lo); x < hi; x++) {
-        const u = ((x + 0.5 - (lo + hi) / 2) / (hi - lo)) * 2;
-        px(img, x, y, shadeOf(m, cylinderLight(u) - (side > 0 ? 0.1 : 0)));
-      }
-    }
-  }
-  // Crotch shadow.
-  line(img, 16, legTop - 2, 16, legTop, m.deep);
-  // Waistband.
-  rect(img, 8, 5, 16, 3, m.base);
-  rect(img, 8, 5, 16, 1, m.light);
-  rect(img, 8, 7, 16, 1, m.shadow);
-}
-
-function canvasTrousers(img: Image): void {
-  trousers(img, cloth, 15, 3.4);
-  // Drawstring through the waistband, tied in front.
-  line(img, 8, 6, 23, 6, rope.shadow);
-  px(img, 16, 6, rope.light);
-  line(img, 15, 8, 14, 11, rope.base);
-  line(img, 17, 8, 18, 11, rope.base);
-  // A patch on the left knee and rolled cuffs.
-  rect(img, 9, 19, 4, 4, CANVAS.shadow);
-  rect(img, 9, 19, 4, 1, CANVAS.base);
-  for (const [x, y] of [
-    [9, 19],
-    [12, 22],
-    [9, 22],
-    [12, 19],
-  ] as const)
-    px(img, x, y, CANVAS.deep);
-  for (const x of [6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 24, 25])
-    tint(img, x, 26, (c) => lighten(c, 0.25));
-  outline(img, { amount: 0.5 });
-}
-
-function stagleatherLeggings(img: Image): void {
-  trousers(img, STAG_LEATHER, 14, 2.6);
-  // Belt with a buckle.
-  rect(img, 8, 6, 16, 2, darkWood.base);
-  rect(img, 8, 6, 16, 1, darkWood.light);
-  rect(img, 14, 5, 4, 3, iron.base);
-  px(img, 15, 6, darkIron.deep);
-  px(img, 16, 6, darkIron.deep);
-  // Lacing down the front.
-  for (let y = 9; y <= 13; y += 2) {
-    px(img, 15, y, leather.light);
-    px(img, 16, y + 1, leather.light);
-  }
-  // Stitched seams down the outer sides and darker knee guards.
-  for (let y = 10; y <= 25; y += 2) {
-    const k = Math.max(0, (y - 14) / 13);
-    px(img, Math.ceil(16 - 8.5 + k * 3.2) + 1, y, STAG_LEATHER.light);
-    px(img, Math.floor(16 + 8.5 - k * 3.2) - 2, y, STAG_LEATHER.base);
-  }
-  for (const cx of [11.5, 20.5]) {
-    eachInEllipse(cx, 20, 2.4, 2, (x, y, nx, ny) =>
-      px(img, x, y, shadeOf(leather, domeLight(nx, ny) - 0.15)),
-    );
-  }
-  outline(img, { amount: 0.5 });
-}
-
-/**
- * Embersteel greaves (content audit M3): dark plates over ash-hound leather, a plate on
- * each thigh and knee, the plate edges glowing like the ingots they came from.
- */
-function embersteelGreaves(img: Image): void {
-  const { darkIron, ember } = PALETTE;
-  const houndLeather = material("#8d8478", "#6a6259", "#4b453f", "#302c28");
-  trousers(img, houndLeather, 14, 2.9);
-  // Belt with an embersteel buckle.
-  rect(img, 8, 5, 16, 3, darkWood.base);
-  rect(img, 8, 5, 16, 1, darkWood.light);
-  rect(img, 14, 5, 4, 3, darkIron.base);
-  px(img, 15, 6, ember.base);
-  px(img, 16, 6, ember.shadow);
-  // Plates: a thigh plate and a knee cop on each leg, lit from the top left.
-  for (const [cx, side] of [
-    [11.5, -1],
-    [20.5, 1],
-  ] as const) {
-    eachInEllipse(cx, 12.5, 3.3, 3, (x, y, nx, ny) =>
-      px(img, x, y, shadeOf(darkIron, domeLight(nx, ny) + (side > 0 ? -0.08 : 0.05))),
-    );
-    eachInEllipse(cx + side * 0.6, 20, 2.6, 2.2, (x, y, nx, ny) =>
-      px(img, x, y, shadeOf(darkIron, domeLight(nx, ny) + 0.12)),
-    );
-    // Shin plate down to the cuff.
-    for (let y = 23; y <= 26; y++) {
-      const half = 2.2 - (y - 23) * 0.15;
-      const mid = cx + side * (1 + (y - 23) * 0.35);
-      for (let x = Math.ceil(mid - half); x < mid + half; x++) {
-        const u = (x + 0.5 - mid) / half;
-        px(img, x, y, shadeOf(darkIron, cylinderLight(u) - (side > 0 ? 0.1 : 0)));
-      }
-    }
-    // The glowing lower edges of the plates.
-    for (const [ex, ey] of [
-      [cx - 2, 15],
-      [cx - 1, 15],
-      [cx, 15],
-      [cx + 1, 15],
-      [cx + side * 0.6 - 1, 22],
-      [cx + side * 0.6, 22],
-      [cx + side * 0.6 + 1, 22],
-    ] as const)
-      px(img, Math.round(ex), ey, ember.shadow);
-  }
-  outline(img, { amount: 0.5, color: darken(ember.deep, 0.45) });
-}
-
 // ---- quest -------------------------------------------------------------------------------
 
 function smugglerTally(img: Image, _rand: Rng, seed: number): void {
@@ -1289,9 +1152,6 @@ export const ITEMS: RecipeBook = {
   "tools/pickaxe": { kind: "item", draw: pickaxe },
   "tools/shovel": { kind: "item", draw: shovel },
   "containers/backpack": { kind: "item", draw: backpack },
-  "armor/canvas_trousers": { kind: "item", draw: canvasTrousers },
-  "armor/stagleather_leggings": { kind: "item", draw: stagleatherLeggings },
-  "armor/embersteel_greaves": { kind: "item", draw: embersteelGreaves },
   "quest/smuggler_tally": { kind: "item", draw: smugglerTally },
   "quest/ember_key": { kind: "item", draw: emberKey },
   "tools/brass_key": { kind: "item", draw: brassKey },

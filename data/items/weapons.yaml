@@ -87,7 +87,7 @@
 
 - id: forged_axe
   kind: weapon
-  sprite: weapons/hatchet
+  sprite: weapons/forged_axe
   name: item.forged_axe.name
   description: item.forged_axe.desc
   weight: 4300
@@ -315,7 +315,7 @@
 
 - id: wyrmbone_axe
   kind: weapon
-  sprite: weapons/embersteel_axe
+  sprite: weapons/wyrmbone_axe
   name: item.wyrmbone_axe.name
   description: item.wyrmbone_axe.desc
   weight: 5200
@@ -326,7 +326,7 @@
 
 - id: wyrmbone_maul
   kind: weapon
-  sprite: weapons/embersteel_mace
+  sprite: weapons/wyrmbone_maul
   name: item.wyrmbone_maul.name
   description: item.wyrmbone_maul.desc
   weight: 5400
@@ -337,7 +337,7 @@
 
 - id: wyrmsinew_bow
   kind: weapon
-  sprite: weapons/embersteel_longbow
+  sprite: weapons/wyrmsinew_bow
   name: item.wyrmsinew_bow.name
   description: item.wyrmsinew_bow.desc
   weight: 3600
@@ -348,7 +348,7 @@
 
 - id: wyrmsinew_crossbow
   kind: weapon
-  sprite: weapons/embersteel_crossbow
+  sprite: weapons/wyrmsinew_crossbow
   name: item.wyrmsinew_crossbow.name
   description: item.wyrmsinew_crossbow.desc
   weight: 4000
@@ -359,7 +359,7 @@
 
 - id: wyrmhorn_wand
   kind: weapon
-  sprite: weapons/obsidian_wand
+  sprite: weapons/wyrmhorn_wand
   name: item.wyrmhorn_wand.name
   description: item.wyrmhorn_wand.desc
   weight: 1600
@@ -370,7 +370,7 @@
 
 - id: glacierheart_staff
   kind: weapon
-  sprite: weapons/blackfrost_staff
+  sprite: weapons/glacierheart_staff
   name: item.glacierheart_staff.name
   description: item.glacierheart_staff.desc
   weight: 1800
@@ -383,7 +383,7 @@
 # ---- Band 6 (levels 75-100+): not obtainable yet, like band 5.
 - id: tidesteel_sword
   kind: weapon
-  sprite: weapons/embersteel_sabre
+  sprite: weapons/tidesteel_sword
   name: item.tidesteel_sword.name
   description: item.tidesteel_sword.desc
   weight: 3750
@@ -394,7 +394,7 @@
 
 - id: tidesteel_axe
   kind: weapon
-  sprite: weapons/bearded_axe
+  sprite: weapons/tidesteel_axe
   name: item.tidesteel_axe.name
   description: item.tidesteel_axe.desc
   weight: 5500
@@ -405,7 +405,7 @@
 
 - id: tidesteel_mace
   kind: weapon
-  sprite: weapons/embersteel_mace
+  sprite: weapons/tidesteel_mace
   name: item.tidesteel_mace.name
   description: item.tidesteel_mace.desc
   weight: 5800
@@ -416,7 +416,7 @@
 
 - id: drownwood_bow
   kind: weapon
-  sprite: weapons/thornwood_longbow
+  sprite: weapons/drownwood_bow
   name: item.drownwood_bow.name
   description: item.drownwood_bow.desc
   weight: 3900
@@ -427,7 +427,7 @@
 
 - id: tidesteel_crossbow
   kind: weapon
-  sprite: weapons/embersteel_crossbow
+  sprite: weapons/tidesteel_crossbow
   name: item.tidesteel_crossbow.name
   description: item.tidesteel_crossbow.desc
   weight: 4400
@@ -438,7 +438,7 @@
 
 - id: pearlstorm_wand
   kind: weapon
-  sprite: weapons/stormglass_wand
+  sprite: weapons/pearlstorm_wand
   name: item.pearlstorm_wand.name
   description: item.pearlstorm_wand.desc
   weight: 1700
@@ -449,7 +449,7 @@
 
 - id: deepfrost_staff
   kind: weapon
-  sprite: weapons/hoarfrost_staff
+  sprite: weapons/deepfrost_staff
   name: item.deepfrost_staff.name
   description: item.deepfrost_staff.desc
   weight: 1900

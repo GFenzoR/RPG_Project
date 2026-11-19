@@ -102,7 +102,7 @@
 
 - id: mossweave_robe
   kind: armor
-  sprite: armor/patched_tunic
+  sprite: armor/mossweave_robe
   name: item.mossweave_robe.name
   description: item.mossweave_robe.desc
   weight: 2600
@@ -146,7 +146,7 @@
 
 - id: antler_amulet
   kind: armor
-  sprite: materials/tarnished_locket
+  sprite: jewelry/antler_amulet
   name: item.antler_amulet.name
   description: item.antler_amulet.desc
   weight: 300
@@ -157,7 +157,7 @@
 
 - id: briar_ring
   kind: armor
-  sprite: materials/quartz_crystal
+  sprite: jewelry/briar_ring
   name: item.briar_ring.name
   description: item.briar_ring.desc
   weight: 100
@@ -192,7 +192,7 @@
 
 - id: ashweave_robe
   kind: armor
-  sprite: armor/patched_tunic
+  sprite: armor/ashweave_robe
   name: item.ashweave_robe.name
   description: item.ashweave_robe.desc
   weight: 2900
@@ -236,7 +236,7 @@
 
 - id: cinder_amulet
   kind: armor
-  sprite: materials/tarnished_locket
+  sprite: jewelry/cinder_amulet
   name: item.cinder_amulet.name
   description: item.cinder_amulet.desc
   weight: 300
@@ -247,7 +247,7 @@
 
 - id: obsidian_ring
   kind: armor
-  sprite: materials/quartz_crystal
+  sprite: jewelry/obsidian_ring
   name: item.obsidian_ring.name
   description: item.obsidian_ring.desc
   weight: 100
@@ -261,7 +261,7 @@
 # dialog gives them until an island of the band does (docs/02).
 - id: wyrmscale_pavise
   kind: shield
-  sprite: shields/embersteel_shield
+  sprite: shields/wyrmscale_pavise
   name: item.wyrmscale_pavise.name
   description: item.wyrmscale_pavise.desc
   weight: 5900
@@ -283,7 +283,7 @@
 
 - id: duskweave_robe
   kind: armor
-  sprite: armor/patched_tunic
+  sprite: armor/duskweave_robe
   name: item.duskweave_robe.name
   description: item.duskweave_robe.desc
   weight: 3200
@@ -294,7 +294,7 @@
 
 - id: wyrmcrest_helm
   kind: armor
-  sprite: armor/embersteel_helm
+  sprite: armor/wyrmcrest_helm
   name: item.wyrmcrest_helm.name
   description: item.wyrmcrest_helm.desc
   weight: 2400
@@ -305,7 +305,7 @@
 
 - id: wyrmhide_greaves
   kind: armor
-  sprite: armor/embersteel_greaves
+  sprite: armor/wyrmhide_greaves
   name: item.wyrmhide_greaves.name
   description: item.wyrmhide_greaves.desc
   weight: 3600
@@ -316,7 +316,7 @@
 
 - id: wyrmhide_boots
   kind: armor
-  sprite: armor/embersteel_sabatons
+  sprite: armor/wyrmhide_boots
   name: item.wyrmhide_boots.name
   description: item.wyrmhide_boots.desc
   weight: 2800
@@ -327,7 +327,7 @@
 
 - id: wyrmtooth_amulet
   kind: armor
-  sprite: materials/tarnished_locket
+  sprite: jewelry/wyrmtooth_amulet
   name: item.wyrmtooth_amulet.name
   description: item.wyrmtooth_amulet.desc
   weight: 300
@@ -338,7 +338,7 @@
 
 - id: emberheart_ring
   kind: armor
-  sprite: materials/quartz_crystal
+  sprite: jewelry/emberheart_ring
   name: item.emberheart_ring.name
   description: item.emberheart_ring.desc
   weight: 100
@@ -351,7 +351,7 @@
 # ---- Band 6 (levels 75-100+): not obtainable yet, like band 5.
 - id: tidesteel_shield
   kind: shield
-  sprite: shields/embersteel_shield
+  sprite: shields/tidesteel_shield
   name: item.tidesteel_shield.name
   description: item.tidesteel_shield.desc
   weight: 6500
@@ -362,7 +362,7 @@
 
 - id: tidesteel_plate
   kind: armor
-  sprite: armor/embersteel_cuirass
+  sprite: armor/tidesteel_plate
   name: item.tidesteel_plate.name
   description: item.tidesteel_plate.desc
   weight: 11000
@@ -373,7 +373,7 @@
 
 - id: pearlweave_robe
   kind: armor
-  sprite: armor/patched_tunic
+  sprite: armor/pearlweave_robe
   name: item.pearlweave_robe.name
   description: item.pearlweave_robe.desc
   weight: 3500
@@ -384,7 +384,7 @@
 
 - id: tidesteel_helm
   kind: armor
-  sprite: armor/embersteel_helm
+  sprite: armor/tidesteel_helm
   name: item.tidesteel_helm.name
   description: item.tidesteel_helm.desc
   weight: 2800
@@ -395,7 +395,7 @@
 
 - id: tidesteel_greaves
   kind: armor
-  sprite: armor/embersteel_greaves
+  sprite: armor/tidesteel_greaves
   name: item.tidesteel_greaves.name
   description: item.tidesteel_greaves.desc
   weight: 4100
@@ -406,7 +406,7 @@
 
 - id: tidesteel_sabatons
   kind: armor
-  sprite: armor/embersteel_sabatons
+  sprite: armor/tidesteel_sabatons
   name: item.tidesteel_sabatons.name
   description: item.tidesteel_sabatons.desc
   weight: 3200
@@ -417,7 +417,7 @@
 
 - id: blackpearl_amulet
   kind: armor
-  sprite: materials/tarnished_locket
+  sprite: jewelry/blackpearl_amulet
   name: item.blackpearl_amulet.name
   description: item.blackpearl_amulet.desc
   weight: 300
@@ -428,7 +428,7 @@
 
 - id: tidestone_ring
   kind: armor
-  sprite: materials/quartz_crystal
+  sprite: jewelry/tidestone_ring
   name: item.tidestone_ring.name
   description: item.tidestone_ring.desc
   weight: 100
