@@ -391,20 +391,12 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 	r := d.Radius
 	w.areaAttack(ctx, p, r)
 	effect := elementEffect(d.Element)
-	for dy := -r; dy <= r; dy++ {
-		for dx := -r; dx <= r; dx++ {
-			x, y := int(p.pos.X)+dx, int(p.pos.Y)+dy
-			if !inArea(dx, dy, r) || x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF {
-				continue
-			}
-			to := world.Pos{X: uint16(x), Y: uint16(y), Z: p.pos.Z}
-			if (dx != 0 || dy != 0) && !w.m.LineOfSight(p.pos, to) {
-				continue
-			}
-			msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(to), EffectId: effect}}}
-			w.eachObserver(nil, to, func(o *Player) { o.emit(msg) })
-		}
+	tiles := w.circleTiles(p.pos, r, w.areaTiles[:0])
+	for _, to := range tiles {
+		msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(to), EffectId: effect}}}
+		w.eachObserver(nil, to, func(o *Player) { o.emit(msg) })
 	}
+	w.areaTiles = tiles[:0]
 	// Collect first: a monster that dies leaves the sector being walked.
 	var hit []*Monster
 	w.eachMonsterInRect(int(p.pos.X)-r, int(p.pos.Y)-r, int(p.pos.X)+r, int(p.pos.Y)+r, p.pos.Z, func(m *Monster) {

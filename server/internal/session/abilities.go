@@ -86,7 +86,8 @@ func (w *World) monsterArea(ctx *game.TickContext, m *Monster, a *content.Monste
 }
 
 // circleTiles appends to dst the tiles of the round area of radius r around c (inArea)
-// that c has line of sight to, the centre first, row by row: what an area spell covers.
+// that c has line of sight to, row by row: what an area spell or a monster's circle
+// covers (a wall tile itself is covered, what it hides is not).
 func (w *World) circleTiles(c world.Pos, r int, dst []world.Pos) []world.Pos {
 	for dy := -r; dy <= r; dy++ {
 		for dx := -r; dx <= r; dx++ {
@@ -221,8 +222,9 @@ func (m *Monster) summoned(i int) int {
 }
 
 // summon calls what m's attack i summons: up to its count, never beyond max_alive, each on
-// a free tile next to m (a monster may stand there; the first one tried is random), with
-// the conjuring effect. A summon fights m's target from the start and shares m's spawn
+// a tile next to m that a monster may enter (the first one tried is random), with the
+// conjuring effect; with no such tile, fewer. A summon fights m's target from the start
+// and shares m's spawn
 // (its leash area and its home), but gives no experience nor loot and never respawns
 // (killMonster); it goes when m dies or gives up (despawnSummons).
 func (w *World) summon(ctx *game.TickContext, m *Monster, i int) {
