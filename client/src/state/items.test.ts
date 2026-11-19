@@ -293,6 +293,38 @@ describe("look messages", () => {
     expect(formatOz(420000)).toBe("4200.00");
   });
 
+  it('names a refined instance with its level (the forge, docs/02 "Forja")', () => {
+    const msg = formatMessage(
+      {
+        key: "refine.success",
+        at: 0,
+        params: [
+          {
+            $typeName: "game.v1.TextParam",
+            name: "item",
+            value: {
+              case: "item",
+              value: {
+                $typeName: "game.v1.ItemStack",
+                itemId: 20,
+                count: 0,
+                mods: { $typeName: "game.v1.ItemMods", attribute: "attack", value: 2, refine: 6 },
+              },
+            },
+          },
+          { $typeName: "game.v1.TextParam", name: "level", value: { case: "number", value: 7n } },
+        ],
+      },
+      content,
+      translator({
+        "refine.success": "{item} rises to +{level}!",
+        "item.iron_sword.name": "iron sword",
+        "client.item.refined": "+{level} {name}",
+      }),
+    );
+    expect(msg).toBe("+6 iron sword rises to +7!");
+  });
+
   it("reads a sign: the description key its data/items entry names, not item.<id>.desc", () => {
     expect(look("look.ground", 60, 0, 0)).toBe("You see sign. Dock of Brasal.");
   });

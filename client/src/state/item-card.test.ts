@@ -264,3 +264,45 @@ describe("shopCategory and equipSlot", () => {
     expect(equipSlot(undefined)).toBeUndefined();
   });
 });
+
+describe('a refined instance (the forge, docs/02 "Forja")', () => {
+  const forge = {
+    station: 95,
+    safeLevel: 4,
+    protection: 274,
+    smithingBonus: { perLevels: 6, max: 5 },
+    jewelryPct: 10,
+    levels: [{ chance: 100, stones: 1 }],
+    bands: [
+      { level: 1, stone: 271, gold: 3, attack: 0.5, armor: 0.2, defense: 0.3 },
+      { level: 5, stone: 271, gold: 12, attack: 0.7, armor: 0.2, defense: 0.4 },
+    ],
+  };
+
+  it("says its level and what it adds; a plain one says nothing", () => {
+    const mods = { attribute: "attack", value: 2, refine: 7 };
+    expect(itemCard(sword, 20, 1, {}, mods, undefined, false, forge).refine).toEqual({
+      level: 7,
+      kind: "attack",
+      gain: 4,
+    });
+    // Without the forge's rules, the level alone.
+    expect(itemCard(sword, 20, 1, {}, mods).refine).toEqual({ level: 7, kind: "attack", gain: 0 });
+    expect(
+      itemCard(sword, 20, 1, {}, { ...mods, refine: 0 }, undefined, false, forge).refine,
+    ).toBeUndefined();
+    const ring: ItemDef = { ...base, kind: "armor", armor: { slot: "ring", armor: 0 } };
+    expect(
+      itemCard(
+        ring,
+        21,
+        1,
+        {},
+        { attribute: "max_health", value: 20, refine: 5 },
+        undefined,
+        false,
+        forge,
+      ).refine,
+    ).toEqual({ level: 5, kind: "jewel", gain: 10 });
+  });
+});

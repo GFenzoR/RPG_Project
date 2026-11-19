@@ -326,6 +326,7 @@ export function ItemTooltip(props: {
     tip.mods,
     props.content.attributes,
     tip.any,
+    props.content.forge,
   );
   return (
     <div

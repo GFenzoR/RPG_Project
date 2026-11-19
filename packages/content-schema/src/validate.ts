@@ -1176,12 +1176,18 @@ class Validator {
     }
     const station = typeof forge["station"] === "string" ? byId.get(forge["station"]) : undefined;
     if (station && station["pickupable"] !== false)
-      this.error(src, ["forge", "station"], `the forge's station "${String(forge["station"])}" needs pickupable: false`);
+      this.error(
+        src,
+        ["forge", "station"],
+        `the forge's station "${String(forge["station"])}" needs pickupable: false`,
+      );
     const materials = (): { id: string; path: PathSegment[] }[] => {
       const out: { id: string; path: PathSegment[] }[] = [];
-      if (typeof forge["protection"] === "string") out.push({ id: forge["protection"], path: ["forge", "protection"] });
+      if (typeof forge["protection"] === "string")
+        out.push({ id: forge["protection"], path: ["forge", "protection"] });
       for (const [i, b] of asList(forge["bands"]).entries())
-        if (isObj(b) && typeof b["stone"] === "string") out.push({ id: b["stone"], path: ["forge", "bands", i, "stone"] });
+        if (isObj(b) && typeof b["stone"] === "string")
+          out.push({ id: b["stone"], path: ["forge", "bands", i, "stone"] });
       return out;
     };
     for (const { id, path } of materials()) {
@@ -1202,11 +1208,19 @@ class Validator {
         if (!isObj(o) || typeof o["item"] !== "string") continue;
         sold.add(o["item"]);
         if (placed && o["item"] === protection)
-          this.error(npcSrc, ["shop", "sells", i, "item"], `"${protection}" is the forge's rare protection: no NPC sells it (only the boss and strong monsters drop it)`);
+          this.error(
+            npcSrc,
+            ["shop", "sells", i, "item"],
+            `"${protection}" is the forge's rare protection: no NPC sells it (only the boss and strong monsters drop it)`,
+          );
       }
       for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"]))
         if (placed && key === "give_item" && value === protection)
-          this.error(npcSrc, path, `"${protection}" is the forge's rare protection: no NPC gives it`);
+          this.error(
+            npcSrc,
+            path,
+            `"${protection}" is the forge's rare protection: no NPC gives it`,
+          );
     }
     const dropped = new Set<string>();
     for (const m of this.monsters)
@@ -1214,7 +1228,11 @@ class Validator {
         if (isObj(drop) && typeof drop["item"] === "string") dropped.add(drop["item"]);
     for (const { id, path } of materials())
       if (byId.has(id) && !sold.has(id) && !dropped.has(id))
-        this.error(src, path, `nothing gives the forge's "${id}" in production: a smith that sells it or a monster that drops it`);
+        this.error(
+          src,
+          path,
+          `nothing gives the forge's "${id}" in production: a smith that sells it or a monster that drops it`,
+        );
   }
 
   /**

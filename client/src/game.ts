@@ -3,6 +3,7 @@
 // says; the one thing it predicts is the own steps (a few ahead: keys, the pad, a click's
 // route and the mouse held, state/steering.ts).
 import { nearStation } from "./state/recipes.ts";
+import type { ForgeCandidate, RefineState } from "./state/forge.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
@@ -119,6 +120,8 @@ export interface GameUi {
   shop: ShopState | undefined;
   /** The crafting station window (T3.4). */
   station: StationState | undefined;
+  /** The last forge attempt (docs/02 "Forja"), for the forge window. */
+  refine: RefineState | undefined;
   /** The trade and market windows (T5.3). */
   trade: TradeView | undefined;
   market: MarketView | undefined;
@@ -516,6 +519,26 @@ export class Game {
     const s = this.world.station;
     this.toolAt = undefined; // the station's effect is not a swing of the tool
     if (s) this.conn.send({ case: "craft", value: { recipeId, station: { ...s.pos } } });
+  }
+
+  /**
+   * One forge attempt (docs/02 "Forja") on item at the open station: the level the client
+   * sees goes along, so a repeated click never refines twice. The server answers with
+   * RefineResult or a refine.* message.
+   */
+  refine(item: ForgeCandidate, protect: boolean): void {
+    const s = this.world.station;
+    if (!s) return;
+    this.conn.send({
+      case: "refine",
+      value: {
+        station: { ...s.pos },
+        item: locationInit(item.loc),
+        itemId: item.itemId,
+        level: item.mods?.refine ?? 0,
+        protect,
+      },
+    });
   }
 
   closeStation(): void {
@@ -1355,6 +1378,8 @@ export class Game {
       this.viewer(),
       ref.mods,
       c.attributes,
+      false,
+      c.forge,
     );
   }
 
@@ -1597,6 +1622,7 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
+      refine: w.refine,
       trade: w.trade,
       market: w.market,
       house: w.house,

@@ -8,6 +8,8 @@
 // where the server says it is, gliding. Steps the server takes (other creatures, a
 // click-to-walk path) are drawn on the server's tick timeline (state/motion.ts Playout).
 import type { StationState } from "./recipes.ts";
+import { refineOutcome } from "./forge.ts";
+import type { RefineState } from "./forge.ts";
 
 /** How long before its time a presence check closes (covers the latency). */
 export const PRESENCE_GRACE_MS = 3000;
@@ -279,6 +281,10 @@ export const EFFECT_GATHER = 5;
 export const EFFECT_GATHER_MISS = 6;
 /** A condition spell on its target, or a cure (T3.2, server/internal/session/condition.go). */
 export const EFFECT_BUFF = 7;
+/** The forge (docs/02 "Forja", server/internal/session/refine.go) on the anvil: sparks on a
+ * success, a shatter on a break or when the protection breaks instead. */
+export const EFFECT_REFINE = 8;
+export const EFFECT_SHATTER = 9;
 /** Projectile ids are PROJECTILE_ELEMENT + index of ELEMENTS. */
 export const PROJECTILE_ELEMENT = 1;
 export const ELEMENTS = ["physical", "fire", "ice", "energy", "earth", "holy", "death"] as const;
@@ -444,6 +450,8 @@ export class WorldState implements TileSource {
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
+  /** The last forge attempt's result (docs/02 "Forja"), for the forge window. */
+  refine: RefineState | undefined;
   /**
    * A presence check waiting for an answer (T4.1), until answered or out of time (see
    * `activePresence`). The server's clock runs only while the player plays, it is sent
@@ -797,6 +805,19 @@ export class WorldState implements TileSource {
           itemId: v.itemId,
           owned: new Map(v.owned.map((o) => [o.itemId, o.count])),
           tools: new Set(v.tools),
+          money: Number(v.money),
+        };
+        break;
+      }
+      case "refineResult": {
+        const v = msg.value;
+        this.refine = {
+          outcome: refineOutcome(v.outcome),
+          level: v.level,
+          itemId: v.item?.itemId ?? 0,
+          mods: v.item ? modsOf(v.item) : undefined,
+          from: Number(v.text?.params.find((p) => p.name === "from")?.value.value ?? 0),
+          at: now,
         };
         break;
       }

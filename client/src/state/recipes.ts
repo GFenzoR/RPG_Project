@@ -12,6 +12,8 @@ export interface StationState {
   owned: Map<number, number>;
   /** tool.use of every tool carried. */
   tools: Set<string>;
+  /** The money carried (smallest coin), at the forge's station (docs/02 "Forja"). */
+  money?: number;
 }
 
 export interface RecipeView {

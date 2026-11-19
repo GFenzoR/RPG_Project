@@ -9,6 +9,7 @@ import {
   dialogTopics,
   loadAttributes,
   loadClientContent,
+  loadForge,
   loadPortals,
   loadSiteContent,
 } from "./content.ts";
@@ -25,6 +26,25 @@ describe("client content (T0.5)", () => {
     for (const lang of ["es", "en"])
       for (const a of Object.values(attrs))
         expect(content.i18n[lang]?.[a.text]).toContain("{value}");
+  });
+
+  it('ships the forge\'s rules with numeric item ids, and its texts (docs/02 "Forja")', () => {
+    const f = content.forge;
+    const ids = Object.fromEntries(
+      Object.entries(content.items).map(([n, d]) => [d.id, Number(n)]),
+    );
+    expect(f?.station).toBe(ids["anvil"]);
+    expect(f?.protection).toBe(ids["warding_amber"]);
+    expect(f?.levels.map((l) => l.chance)).toEqual([100, 100, 100, 100, 70, 55, 40, 25, 15, 8]);
+    expect(f?.safeLevel).toBe(4);
+    expect(f?.bands[0]).toMatchObject({ level: 1, stone: ids["lesser_temper_stone"] });
+    expect(f?.bands.at(-1)).toMatchObject({ level: 75, stone: ids["radiant_temper_stone"] });
+    for (const lang of ["es", "en"]) {
+      expect(content.i18n[lang]?.["client.item.refined"]).toContain("{level}");
+      expect(content.i18n[lang]?.["refine.broken"]).toContain("{item}");
+    }
+    expect(loadForge({ forge: { enabled: false } }, ids)).toBeUndefined();
+    expect(loadForge({ forge: { enabled: true, station: "nowhere" } }, ids)).toBeUndefined();
   });
 
   it("reads no attributes without the file and fails on a broken one", () => {

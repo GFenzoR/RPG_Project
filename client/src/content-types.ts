@@ -166,6 +166,33 @@ export interface RecipeDef {
   maxSuccess: number;
 }
 
+/**
+ * balance.yaml forge (docs/02 "Forja"): the refine of an equipable at the station item. The
+ * server keeps every rule; the forge window shows the chance, the cost and the gain with it.
+ */
+export interface ForgeRules {
+  /** Numeric id of the station item (the anvil). */
+  station: number;
+  /** An attempt to reach this level or a lower one never fails. */
+  safeLevel: number;
+  /** Numeric id of the protection material. */
+  protection: number;
+  smithingBonus: { perLevels: number; max: number };
+  /** % of a jewel's attribute value each level adds. */
+  jewelryPct: number;
+  /** The attempt to reach +1, +2...: success % and stones; its length is the top level. */
+  levels: { chance: number; stones: number }[];
+  /** By the item's requires.level, ascending from 1. stone is a numeric item id. */
+  bands: {
+    level: number;
+    stone: number;
+    gold: number;
+    attack: number;
+    armor: number;
+    defense: number;
+  }[];
+}
+
 /** Audio channels with their own volume (T3.7); "master" scales all of them. */
 export type SoundChannel = "sfx" | "ui" | "music" | "ambient";
 
@@ -292,6 +319,11 @@ export interface ClientContent {
   spells: SpellDef[];
   /** data/recipes.yaml in file order (T3.4). */
   recipes: RecipeDef[];
+  /**
+   * balance.yaml forge (docs/02 "Forja"); absent when it is off or in fixtures that leave it
+   * out (then the anvil only crafts).
+   */
+  forge?: ForgeRules | undefined;
   /**
    * balance.yaml movement: the step formula and the click-to-walk limit. How many keyboard
    * steps the client predicts ahead comes from the server (Welcome.max_queued_steps).

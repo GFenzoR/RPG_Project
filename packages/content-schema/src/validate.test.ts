@@ -117,7 +117,7 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("[1].skill: not allowed here"))).toBe(true);
   });
 
-  it("checks the forge: its items, stones that are spent and a protection no NPC sells (docs/02 \"Forja\")", () => {
+  it('checks the forge: its items, stones that are spent and a protection no NPC sells (docs/02 "Forja")', () => {
     const forgeErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("the forge's"));
     expect(forgeErrors()).toEqual([]);
@@ -145,7 +145,11 @@ describe("validator diagnostics", () => {
     ]);
     // A stone that does not stack, a station people carry, an unknown stone, and a stone
     // nothing gives.
-    edit("data/items/forge.yaml", "  weight: 300\n  stackable: true\n  max_stack: 100\n", "  weight: 300\n");
+    edit(
+      "data/items/forge.yaml",
+      "  weight: 300\n  stackable: true\n  max_stack: 100\n",
+      "  weight: 300\n",
+    );
     edit(
       "data/items/decoration.yaml",
       "  description: item.anvil.desc\n  pickupable: false\n",

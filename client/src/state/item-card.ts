@@ -4,7 +4,9 @@
 // The server's "look" text is still the one that knows live data (a house's owner,
 // charges): "Look" in the menu keeps sending LookAt.
 import { EquipmentSlot } from "@rpg/protocol";
-import type { AttributeDef, ItemDef, ItemMods } from "../content-types.ts";
+import type { AttributeDef, ForgeRules, ItemDef, ItemMods } from "../content-types.ts";
+import { refineGain, refineKind } from "./forge.ts";
+import type { RefineKind } from "./forge.ts";
 import { formatOz } from "./items.ts";
 
 /** What the card needs to know of the player looking. Unknown fields skip the check. */
@@ -73,6 +75,12 @@ export interface ItemCardView {
     | { any: true }
     | { retired: true }
     | undefined;
+  /**
+   * The instance's refine level (the forge, docs/02 "Forja"): the name says "+7" and a line
+   * what it adds (gain points of kind, from balance.yaml forge; 0 when the client does not
+   * know the forge's rules). Absent on a plain item.
+   */
+  refine?: { level: number; kind: RefineKind; gain: number } | undefined;
 }
 
 /**
@@ -111,6 +119,7 @@ export function itemCard(
   mods?: ItemMods | undefined,
   attributes?: Record<string, AttributeDef> | undefined,
   anyInstance = false,
+  forge?: ForgeRules | undefined,
 ): ItemCardView {
   const card: ItemCardView = {
     itemId,
@@ -145,6 +154,13 @@ export function itemCard(
     if (a) card.attribute = { text: a.text, value: mods.value };
     else if (attributes) card.attribute = { retired: true }; // no pool given: no line
   } else if (rollsAttribute(def)) card.attribute = anyInstance ? { any: true } : { random: true };
+  const refined = refineKind(def);
+  if (refined && mods && mods.refine > 0)
+    card.refine = {
+      level: mods.refine,
+      kind: refined,
+      gain: forge ? refineGain(forge, def, mods.refine, mods.value) : 0,
+    };
   if (def.rune) {
     card.stats.push({ id: "charges", value: def.rune.charges });
     card.effects.push({ id: "rune", spell: def.rune.spell });

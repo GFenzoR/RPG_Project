@@ -7,6 +7,7 @@ import type { ClientContent, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { TradeItemView, TradeView } from "../state/market.ts";
+import { refinedName } from "../state/forge.ts";
 import { tipMods } from "../state/mods.ts";
 
 interface Props {
@@ -36,7 +37,9 @@ export function ItemLabel(props: {
 }): JSX.Element {
   const { t, game, itemId, count } = props;
   const def = props.content.items[itemId];
-  const name = def ? t(`item.${def.id}.name`) : String(itemId);
+  const base = def ? t(`item.${def.id}.name`) : String(itemId);
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
+  const name = refinedName(t, base, props.mods?.refine);
   const icon = game?.itemIcon(itemId);
   const style: JSX.CSSProperties = icon
     ? {
@@ -56,7 +59,7 @@ export function ItemLabel(props: {
       data-tip-any={props.anyInstance && !props.mods ? "" : undefined}
     >
       <span class={icon ? "item" : "item missing"} style={style} aria-hidden="true">
-        {!icon && name.slice(0, 2)}
+        {!icon && base.slice(0, 2)}
       </span>
       <span class="iname">{count > 1 ? t("client.trade.count", { count, name }) : name}</span>
     </span>
