@@ -73,6 +73,14 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   igual que antes (545 → 548 µs). Es el juego: el círculo ya no gasta su ronda en un
   jugador en la esquina de su radio, espera y le pega, así hay más golpes, más muertes y
   más vueltas al templo en el benchmark.
+- Estados del personaje (`session/status.go`, lote 13): `sendConditions` mira en cada
+  tick, por jugador, una casilla del mapa (zona de protección) y tres ticks guardados, y
+  solo manda la lista si algo empezó, terminó o un fin se movió 1 s o más (una pelea
+  larga: a lo sumo una lista por segundo). Medido (2026-11-19, i7-13650HX, 3 corridas
+  contra la base): `BenchmarkTickPlayersWalking` igual (100 jugadores ~36 µs, 300 ~163
+  µs, sin asignaciones nuevas); `BenchmarkTickConditions` igual en tiempo (~1,0 ms) y
+  +135 asignaciones y +12 KB por tick: las entradas `in_combat` que viajan en las listas
+  que ya se mandaban (los envenenados están en combate).
 - Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
   mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
   antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada
