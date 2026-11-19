@@ -550,7 +550,8 @@ tiles:
 });
 
 describe("repository content", () => {
-  it("maps every sprite used in data/ and builds without errors", () => {
+  // The whole repository's art, the engine humanoids' ~3600 frames among them: seconds.
+  it("maps every sprite used in data/ and builds without errors", { timeout: 60_000 }, () => {
     const r = buildAtlas(REPO);
     expect(errors(r)).toEqual([]);
     const used = new Set(collectSpriteRefs(REPO).map((ref) => ref.sprite));
