@@ -294,6 +294,66 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     `rime_burst`) le peguen más que las de antes a los monstruos de su isla.
     `base_tries` de magia (1450) y la regeneración por vocación no cambiaron: el maná que
     faltaba lo ponen la comida y los brebajes.
+  - **Progresión de hechizos (2026-11, rama `feat/spells-progression`):** antes el guardián
+    no tenía hechizos propios y los demás dejaban de aprender entre el nivel 12 y el 28.
+    Ahora cada vocación suma hechizos hasta el ~50 (tabla de abajo): el guardián, una cura
+    propia (12) y dos golpes de área alrededor suyo que crecen con el arma que tiene en la
+    mano (20 y 35, `skill: weapon`, `06-content-data.md` "Hechizo"); el druida, una cura
+    fuerte (30) y un área de radio 2 (40); el montaraz, un área de flechas (25) y un tiro
+    pesado (40); el arcanista, un golpe fuerte a un objetivo (40) y el área más ancha del
+    juego (radio 3, 48). La carrera simulada ahora también juega al guardián con sus
+    hechizos, y exige además que cada hechizo de daño o cura cueste como mucho la mitad del
+    maná de su nivel, que su nivel mágico esté a lo sumo 4 niveles después de su nivel (el
+    guardián llega a ~4 al 30 y ~6 al 49 con su cura y sus golpes) y que las cazas de sus
+    primeros niveles lo lancen: cada cura propia, cada ataque a un objetivo y, para quien no
+    tiene ataques a un objetivo (el guardián), sus áreas. Las áreas de los magos y del
+    montaraz quedan para grupos: en un duelo un área le pega a un solo monstruo y un rayo
+    barato hace lo mismo por menos maná, así que la simulación no las necesita y tampoco las
+    exige. Por eso `frost_bloom` y `scatter_volley` le pegan a cada monstruo un poco menos que
+    `frost_lance` y `sure_shot`: anchas y livianas. Las vocaciones siguen en 0,5-1,5 veces el
+    tiempo del guardián por franja (el guardián subió más rápido con sus hechizos y los
+    brebajes de vida: de 1 a 50 en ~34 h en vez de ~40 h).
+
+#### Hechizos por vocación
+Nivel / nivel mágico / maná. Las palabras son propias (nunca las de Tibia); los nombres van
+en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
+
+| Vocación | Hechizo | Palabras | Nivel / NM / maná | Qué hace |
+|---|---|---|---|---|
+| Todas | `swift_stride` | pede celeri | 8 / 0 / 30 | haste 25 s |
+| Todas | `purge_venom` | venenum pelle | 9 / 0 / 25 | cura el veneno |
+| Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~13-15 % de su vida (sobre todo por nivel) |
+| Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 2 / 35 | físico, radio 1, escala con la skill del arma en la mano |
+| Guardián | **`steel_whirl`** | turbo chalybis | 35 / 4 / 60 | el anterior más fuerte, cooldown 6 s |
+| Arcanista | `arc_bolt` | fulgur iacio | 1 / 0 / 10 | energía a 4 casillas, a veces electriza |
+| Arcanista | `conjure_arc_rune` | runa fulguris | 5 / 1 / 60 | conjura una runa de arco |
+| Arcanista | `light_heal` | vita lumen | 6 / 0 / 25 | cura |
+| Arcanista | `ember_ring` | ignis corona | 10 / 3 / 45 | fuego, radio 2, a veces quema |
+| Arcanista | `shroud` | umbra tegit | 14 / 4 / 110 | invisibilidad 40 s |
+| Arcanista | `tempest_ring` | tonitrus corona | 28 / 14 / 80 | energía, radio 2, a veces electriza |
+| Arcanista | **`storm_spear`** | fulmen telum | 40 / 26 / 90 | energía a 4 casillas, su golpe más fuerte |
+| Arcanista | **`dusk_maelstrom`** | vortex noctis | 48 / 30 / 160 | muerte, radio 3: el área más ancha |
+| Druida | `frost_lance` | glacies hasta | 1 / 0 / 10 | hielo a 4 casillas |
+| Druida | `verdant_mend` | viridis cura | 1 / 0 / 20 | cura |
+| Druida | `mend_other` | sana amicum | 8 / 2 / 40 | cura a otro jugador a 5 casillas |
+| Druida | `entangle` | radix vincit | 10 / 3 / 40 | `slowed` a 4 casillas |
+| Druida | `bramble_burst` | rubus orbis | 12 / 4 / 50 | tierra, radio 1 |
+| Druida | `rime_burst` | pruina orbis | 16 / 6 / 55 | hielo, radio 1 |
+| Druida | **`sap_surge`** | sucus vitae | 30 / 18 / 45 | cura fuerte (~2 veces `verdant_mend`) |
+| Druida | **`frost_bloom`** | hiemis flos | 40 / 25 / 60 | hielo, radio 2: llega a lo que está a 2 casillas |
+| Montaraz | `sure_shot` | sagitta certa | 2 / 0 / 15 | físico a 5 casillas, escala con distancia |
+| Montaraz | `conjure_arrows` | fabrica sagittas | 3 / 0 / 35 | conjura 25 flechas |
+| Montaraz | `ranger_mend` | cura silvae | 4 / 0 / 20 | cura |
+| Montaraz | `keen_eye` | oculus acer | 10 / 0 / 50 | +7 de distancia en combate |
+| Montaraz | `briar_arrow` | spina volans | 12 / 1 / 35 | tierra a 5 casillas, escala con distancia |
+| Montaraz | **`scatter_volley`** | imber sagittarum | 25 / 5 / 40 | físico, radio 2, escala con distancia |
+| Montaraz | **`heartwood_shot`** | sagitta gravis | 40 / 9 / 70 | físico a 5 casillas, su golpe más fuerte, cooldown 6 s |
+
+Los números exactos (base, por nivel, por nivel mágico, por skill, cooldowns) están en
+`data/spells.yaml`; los límites de rol (el druida cura mejor, el arcanista tiene el área más
+fuerte y más ancha, el montaraz el alcance más largo, los golpes del guardián escalan con su
+arma, todo cabe en las 12 teclas de la hotbar) los fija
+`packages/content-schema/src/vocations-balance.test.ts`.
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver

@@ -256,3 +256,130 @@
   group_cooldown_ms: 2000
   effect: { damage: { element: ice, radius: 1, base: 14, per_level: 0.25, per_magic_level: 2.7, spread: 0.2 } }
   notes: Frost on every monster next to the druid; the Bosque's answer to bramble_burst (earth).
+
+# ---- Spell progression (2026-11): every vocation keeps learning past level 12-28. The
+# guardian gets spells of its own: a self-heal that grows with its level and two melee
+# areas that grow with the weapon it holds (`skill: weapon`: the sword, axe or club skill,
+# fist with none). Each caster gets a stronger heal or single-target spell and a bigger
+# area, the ranger an area shot and a heavy shot. Their magic levels are the ones the
+# career simulation reaches a few levels after the spell's level
+# (server/internal/sim/balance_vocations_test.go).
+- id: iron_resolve
+  name: spell.iron_resolve.name
+  words: "sanguis firmus"
+  vocations: [guardian]
+  level: 12
+  mana: 30
+  group: healing
+  cooldown_ms: 1500
+  group_cooldown_ms: 1000
+  effect: { heal: { base: 20, per_level: 1.6, per_magic_level: 3 } }
+  notes: The guardian's own heal, small for its body (13-15 % of its health) and mostly from its level.
+
+- id: sweeping_blow
+  name: spell.sweeping_blow.name
+  words: "ferrum gyrus"
+  vocations: [guardian]
+  level: 20
+  magic_level: 2
+  mana: 35
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: physical, radius: 1, base: 8, per_level: 0.4, skill: weapon, per_skill: 0.9, spread: 0.2 } }
+  notes: Hits every monster next to the guardian with the weapon it holds; physical resistance applies, armor does not.
+
+- id: steel_whirl
+  name: spell.steel_whirl.name
+  words: "turbo chalybis"
+  vocations: [guardian]
+  level: 35
+  magic_level: 4
+  mana: 60
+  group: attack
+  cooldown_ms: 6000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: physical, radius: 1, base: 15, per_level: 0.6, skill: weapon, per_skill: 1.4, spread: 0.2 } }
+  notes: The stronger sweeping_blow, with a longer cooldown.
+
+- id: sap_surge
+  name: spell.sap_surge.name
+  words: "sucus vitae"
+  vocations: [druid]
+  level: 30
+  magic_level: 18
+  mana: 45
+  group: healing
+  cooldown_ms: 2000
+  group_cooldown_ms: 1000
+  effect: { heal: { base: 40, per_level: 0.5, per_magic_level: 4 } }
+  notes: The druid's strong self-heal, about twice verdant_mend for a little more than twice its mana.
+
+- id: frost_bloom
+  name: spell.frost_bloom.name
+  words: "hiemis flos"
+  vocations: [druid]
+  level: 40
+  magic_level: 25
+  mana: 60
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: ice, radius: 2, base: 15, per_level: 0.25, per_magic_level: 2, spread: 0.2 } }
+  notes: >-
+    Frost on every monster within 2 tiles of the druid that it can see (the Volcán's creatures
+    are weak to ice): it reaches what a druid keeping its distance cannot touch with rime_burst.
+    Wide and light, a spell for packs: less per monster than rime_burst and frost_lance, far
+    below the arcanist's areas.
+
+- id: scatter_volley
+  name: spell.scatter_volley.name
+  words: "imber sagittarum"
+  vocations: [ranger]
+  level: 25
+  magic_level: 5
+  mana: 40
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: physical, radius: 2, base: 4, per_level: 0.2, skill: distance, per_skill: 0.9, spread: 0.2 } }
+  notes: Arrows on every monster within 2 tiles of the ranger that it can see; a spell for packs, a little less per monster than sure_shot.
+
+- id: heartwood_shot
+  name: spell.heartwood_shot.name
+  words: "sagitta gravis"
+  vocations: [ranger]
+  level: 40
+  magic_level: 9
+  mana: 70
+  group: attack
+  cooldown_ms: 6000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: physical, range: 5, base: 25, per_level: 0.5, skill: distance, per_skill: 2.6, spread: 0.2 } }
+  notes: A heavy aimed shot at up to 5 tiles, the ranger's hardest single hit.
+
+- id: storm_spear
+  name: spell.storm_spear.name
+  words: "fulmen telum"
+  vocations: [arcanist]
+  level: 40
+  magic_level: 26
+  mana: 90
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: energy, range: 4, base: 45, per_level: 0.4, per_magic_level: 5, spread: 0.2 } }
+  notes: A spear of lightning at up to 4 tiles in line of sight, the arcanist's hardest single hit.
+
+- id: dusk_maelstrom
+  name: spell.dusk_maelstrom.name
+  words: "vortex noctis"
+  vocations: [arcanist]
+  level: 48
+  magic_level: 30
+  mana: 160
+  group: attack
+  cooldown_ms: 6000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: death, radius: 3, base: 40, per_level: 0.4, per_magic_level: 4, spread: 0.2 } }
+  notes: Death on every monster within 3 tiles of the arcanist that it can see; the widest area of any vocation.

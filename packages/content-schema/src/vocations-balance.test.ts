@@ -162,10 +162,12 @@ describe("spell roles", () => {
   // A mid-game character of each vocation: level 30 with the magic level and weapon skill
   // its vocation reaches there. The magic levels are what the career simulation of
   // server/internal/sim/balance_vocations_test.go gets from the mana a hunter really
-  // spends (regeneration, food and mana draughts): ~20 for the casters and ~8 for the
-  // ranger at level 30 (content audit M2; 40 was out of reach).
+  // spends (regeneration, food and mana draughts): ~20 for the casters, ~8 for the ranger
+  // (content audit M2; 40 was out of reach) and ~4 for the guardian, which casts its own
+  // heal and strikes since the spell progression (2026-11). The guardian's strikes scale
+  // with the skill of the weapon it holds (`skill: weapon`): its sword skill here.
   const profile: Record<string, { magic: number; skill: number }> = {
-    guardian: { magic: 2, skill: 53 },
+    guardian: { magic: 4, skill: 53 },
     arcanist: { magic: 20, skill: 15 },
     ranger: { magic: 8, skill: 53 },
     druid: { magic: 20, skill: 15 },
@@ -181,20 +183,33 @@ describe("spell roles", () => {
     return Math.max(0, ...amounts);
   };
 
-  it("every vocation but the guardian has 3-6 spells of its own", () => {
+  it("every vocation has 3-8 spells of its own and all of them fit the hotbar", () => {
     // Own = only it casts them; the support spells every vocation shares (haste and the
     // poison cure, T3.2) do not count. Six since the content audit (M5): each caster has
-    // a second area spell of another element for the island that resists the first.
+    // a second area spell of another element for the island that resists the first; eight
+    // since the spell progression (2026-11), when the guardian got spells of its own too.
+    // The default hotbar (client/src/state/hotkeys.ts) puts a vocation's spells on its 12
+    // keys by level: they all fit.
     const own = (v: string) => castBy(v).filter((s) => s.vocations.length === 1);
-    for (const v of ["arcanist", "ranger", "druid"]) {
+    for (const v of ["guardian", "arcanist", "ranger", "druid"]) {
       expect(own(v).length, v).toBeGreaterThanOrEqual(3);
-      expect(own(v).length, v).toBeLessThanOrEqual(6);
+      expect(own(v).length, v).toBeLessThanOrEqual(8);
+      expect(castBy(v).length, v).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it("the guardian's strikes scale with the weapon it holds", () => {
+    const strikes = castBy("guardian").filter((s) => s.vocations.length === 1 && s.effect.damage);
+    expect(strikes.length).toBeGreaterThanOrEqual(2);
+    for (const s of strikes) {
+      expect(s.effect.damage?.skill, s.id).toBe("weapon");
+      expect(s.effect.damage?.radius, s.id).toBe(1); // around itself: melee
     }
   });
 
   it("the druid is the best healer and the only one that heals others", () => {
     const heal = (s: Spell) => s.effect.heal;
-    for (const v of ["arcanist", "ranger"]) {
+    for (const v of ["guardian", "arcanist", "ranger"]) {
       expect(best("druid", heal), v).toBeGreaterThan(1.25 * best(v, heal));
     }
     const healers = spells
@@ -215,7 +230,9 @@ describe("spell roles", () => {
     const area = (s: Spell) => (s.effect.damage?.radius ? s.effect.damage : undefined);
     const radius = (v: string) =>
       Math.max(0, ...castBy(v).map((s) => s.effect.damage?.radius ?? 0));
-    expect(best("arcanist", area)).toBeGreaterThan(best("druid", area));
-    expect(radius("arcanist")).toBeGreaterThan(radius("druid"));
+    for (const v of ["guardian", "ranger", "druid"]) {
+      expect(best("arcanist", area), v).toBeGreaterThan(best(v, area));
+      expect(radius("arcanist"), v).toBeGreaterThan(radius(v));
+    }
   });
 });
