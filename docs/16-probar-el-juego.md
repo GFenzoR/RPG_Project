@@ -100,8 +100,9 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    nivel 10, que deja usar escudo; druida: vara de retoño), ropa (la del kit inicial y,
    desde el nivel 15, la túnica de musgo para todos y el abrigo de cuero de ciervo para
    guardián y montaraz: el catálogo de docs/02), la llave de latón y una mochila
-   de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
-   servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
+   de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver, con
+   lo que llevaban los bolsillos, y ya no te dan otra: ver **Bolsillos**, abajo). Prueba
+   también vender (compra pescado, mineral, troncos,
    lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego. Vende
    también lo de la forja: las tres piedras de temple y el **ámbar de resguardo** (3000;
    en el juego real ningún NPC lo vende: aquí está para probar la forja, punto 4b).
@@ -223,9 +224,19 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    que trae (5 monedas de plata, 2 piedras de temple menores, 2 brebajes de vida y una
    espada de hierro, con su atributo al azar: pasa el mouse por ella); úsalo otra vez: "El cofre está vacío".
    Cada personaje lo abre una vez: para repetirlo, crea otro. Para probar que no da nada
-   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías)
-   y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera lugar y vuelve a
-   usarlo. Los libros y cofres de las islas de verdad están en la tabla de docs/02.
+   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías) y
+   los 4 bolsillos, y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera
+   lugar y vuelve a usarlo. Los libros y cofres de las islas de verdad están en la tabla de
+   docs/02.
+   - **Bolsillos (docs/02 "Bolsillos", lote 13):** bajo la figura del inventario, arriba de
+     la mochila, está la fila **Bolsillos**: cuatro casillas del personaje, que nunca se
+     pierden ni se mueven. Arrastra algo a una, úsalo o míralo desde ahí, véndelo en el
+     mercado u ofrécelo en un intercambio. Con la mochila llena, lo que compras, lo que te
+     dan y lo que arrastras al slot de la mochila va a los bolsillos. Para ver la regla de
+     la muerte: sin bendiciones y desde el nivel 9 (la experiencia de la instructora), muere
+     con algo en los bolsillos; despiertas sin mochila y con los bolsillos vacíos, y todo
+     está en tu cadáver. Con los bolsillos te alcanza para juntar monedas y comprar otra
+     mochila a Tobías.
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
    vender (un selector por atributo) y la oferta sale con su atributo en el listado; una

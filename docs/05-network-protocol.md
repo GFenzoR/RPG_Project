@@ -19,9 +19,11 @@
 ## Tipos comunes (`common.proto`)
 - `Position {x, y, z}`: coordenadas globales (ver `03-world-and-maps.md`).
 - `Direction`: N, NE, E, SE, S, SW, W, NW (`DIRECTION_NORTH`…). `0` = sin especificar.
-- `ItemLocation`: `oneof` de `pos` (tile), `slot` (`EquipmentSlot`) o `container`
+- `ItemLocation`: `oneof` de `pos` (tile), `slot` (`EquipmentSlot`), `container`
   (`ContainerSlot {container_id, index}`; `container_id` lo asigna el servidor en
-  `ContainerOpen` y vale solo durante la sesión).
+  `ContainerOpen` y vale solo durante la sesión) o `pocket` (campo 4, el lote 13: un
+  bolsillo del personaje, su índice en `Inventory.pockets`; docs/02 "Bolsillos"). Como
+  `oneof`, `pocket = 0` se distingue de no tenerlo.
 - `ActionTarget`: `oneof` de `pos` o `creature_id`.
 - `ItemStack {item_id, count, mods}`: `item_id` es el ID estable de `data/ids.lock.yaml`;
   `mods` (`ItemMods`) son los datos propios de la instancia, sin poner en un item común.
@@ -662,9 +664,24 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `portal.no_room` y nada cambia. Sobre una escalera de mano o un punto de soga el item
   queda en la casilla.
 - **Respuestas:** cada lugar que cambió manda su estado completo: `TileUpdate` a quien ve
-  el tile, `Inventory` (todos los slots ocupados) al dueño y `ContainerUpdate` a cada
-  jugador que tiene el contenedor abierto. Si cambió el peso cargado, `PlayerStats`
-  (`capacity` = capacidad libre en gramos, `max_capacity` = la total).
+  el tile, `Inventory` (todos los slots ocupados y los bolsillos) al dueño y
+  `ContainerUpdate` a cada jugador que tiene el contenedor abierto. Si cambió el peso
+  cargado, `PlayerStats` (`capacity` = capacidad libre en gramos, `max_capacity` = la
+  total).
+- **Bolsillos** (lote 13, docs/02 "Bolsillos"): `Inventory.pockets` (campo 2) es lo que
+  llevan los bolsillos del personaje, el 0 primero y sin huecos (como
+  `ContainerUpdate.items`), y `Inventory.pocket_slots` (campo 3) cuántos tiene
+  (`inventory.pocket_slots`, 4). Llegan en cada `Inventory`; un cambio en los bolsillos
+  manda el `Inventory` entero (nunca un `ContainerUpdate`: los bolsillos no son una ventana
+  y no tienen `container_id`). Se los nombra con `ItemLocation.pocket` en `MoveItem`,
+  `UseItem`, `UseItemOn`, `LookAt`, `TradeOffer`/`TradeRequest` y `Refine`, con
+  `stack_index` = el índice; un índice sin item, o con otro item, es
+  `inventory.not_possible`. Un `MoveItem` a un bolsillo con un contenedor lo mete adentro.
+  Un `MoveItem` al slot de mochila o a la ventana de la mochila equipada (su primer nivel)
+  que no tiene lugar, o al slot de mochila vacío de algo que no es una mochila, lo deja en
+  los bolsillos; sin lugar ahí tampoco, `inventory.container_full`. Los bolsillos mismos
+  no tienen ningún `ItemLocation`: nada los mueve. Un cliente viejo ignora los campos y
+  no ve lo que llevan.
 - **Contenedores:** `UseItem` sobre un contenedor lo abre (`ContainerOpen` con un
   `container_id` nuevo de la sesión, `capacity` = lugares, `has_parent` si está dentro de
   otro contenedor) o lo cierra si ya estaba abierto (`ContainerClose`). Como máximo
@@ -694,8 +711,8 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `look.ground` sin peso (T5.5). El cliente agrega la descripción que nombra el
   `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
   existe y muestra el peso en oz.
-- **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
-  `inventory.start_container` en el slot de mochila.
+- **Login:** `Inventory` lleva el equipo guardado y los bolsillos; un personaje que nunca
+  jugó recibe `inventory.start_container` en el slot de mochila (y sus bolsillos vacíos).
 
 ### Magia (T1.9, `server/internal/session/magic.go`)
 Reglas de juego en `02-game-design.md` ("Magia (T1.9)").

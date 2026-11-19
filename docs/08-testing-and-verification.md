@@ -71,7 +71,9 @@ interfaz al 125 % con el texto al 115 %; la página toma `?ui=` y `?text=`), `op
 `dialog`, `shop` (la tienda con dos páginas), `dialog18` (18 opciones sin scroll),
 `itemmenu` (el menú del click derecho con la ficha), `inventory` (el equipo al estilo
 Diablo II con una espada arrastrada encima: los slots que la aceptan brillan, el que no, rojo
-bajo el puntero), `inventoryfloat` (el inventario flotando y más ancho), `tooltip` y
+bajo el puntero), `pockets` (sin mochila, como después de una muerte: los cuatro
+bolsillos bajo la figura, con la ficha del brebaje de uno; docs/02 "Bolsillos"),
+`inventoryfloat` (el inventario flotando y más ancho), `tooltip` y
 `tooltipcoin` (la ficha compacta con el mouse sobre la espada de la mano derecha y sobre
 las monedas de la mochila; en teléfono y tablet esas escenas abren la pestaña del
 inventario), `guild` (la ventana del gremio), `danger` (vida baja y subida de nivel), `death`,

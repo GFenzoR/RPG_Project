@@ -513,3 +513,11 @@ secundaria.
   nombre y el nivel pasan al medio, sobre la barra de experiencia, con el porcentaje en la
   barra y lo que falta para el nivel siguiente en su tooltip. docs/17 "Bandeja de estados",
   docs/02 "Estados del personaje"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Bolsillos (prueba del dueño del 2026-11-19; lote 13, rama `feat/pockets`).** Todo
+  personaje tiene 4 bolsillos propios (`inventory.pocket_slots`), parte de él y nunca un
+  item; la mochila equipada suma sus lugares. Lo que se recibe va primero a la mochila y
+  después a los bolsillos, los pagos y chequeos leen los dos, y la muerte ya no da una
+  mochila gratis: lo de los bolsillos cae con la mochila, en su misma tirada. Protocolo
+  aditivo (`ItemLocation.pocket`, `Inventory.pockets`/`pocket_slots`), migración 00020 y la
+  fila "Bolsillos" bajo la figura del inventario. docs/02 "Bolsillos"; lo que queda:
+  docs/14, "Pendientes conocidos".

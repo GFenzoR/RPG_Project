@@ -298,9 +298,21 @@ server/
   `Forge.CheckItems` al arrancar y por `checkForge` de `make validate`); el yunque cuenta
   esos materiales en su `StationOpen` y manda `money`.
 
+- **Bolsillos** (`session/pockets.go`, docs/02 "Bolsillos", lote 13): `Player.pockets` es un
+  `*Item` contenedor con `owner` p (slot 0) y una definición sin id (`World.pocketsDef`,
+  `inventory.pocket_slots` celdas), fuera de `p.equip`. Nunca se separa ni lo alcanza un
+  cliente (`itemAt` solo da lo que hay en una celda, `ItemLocation.pocket`); lo que lleva es
+  "un item en un contenedor que p carga". Todo camino que **busque o cuente** lo que lleva
+  un jugador pasa por `eachCarried` (que los recorre al final), `carried`, `held` o
+  `keyFor`, nunca por `p.equip` solo; uno que **dé** algo usa `giveItem`/`giveMods` o, si
+  lo pone a mano, `packWithRoom`/`packStack` (la mochila primero, después los bolsillos), y
+  sus chequeos de lugar `room`, `freeCells` y `mergeRoom` (nunca `len(bp.items)`). Un cambio
+  en ellos llama a `containerChanged` (manda el `Inventory`, no un `ContainerUpdate`). Se
+  guardan como `ItemState.Pocket` (filas `inventory_items.pocket`, migración 00020). La
+  muerte los vacía en el cuerpo con la tirada de la mochila (`dieBy`).
 - **Cofres de recompensa** (`session/chest.go`, `content/chests.go`, docs/02 "Libros y
   cofres"): `useChest` va en la cadena de `useItem` antes de `useStation` (como el tablero
-  del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila contando las pilas
+  del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila y los bolsillos contando las pilas
   que se suman) y lo marca en el storage (`content.ChestKey`) en el mismo comando que los
   items, así cualquier snapshot tiene los dos o ninguno. Lo que da pasa por `giveItem` (un
   equipable tira su atributo) y `econMade` con `EconChest`. `content.CheckChests` corre al

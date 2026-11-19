@@ -204,7 +204,10 @@ items:
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
   `reach` (de 1 a 6: el medio alto de la ventana clásica de 15x11 + 1, lo que nota un
   monstruo; la vista ancha de 31x21 no lo estiró, `02-game-design.md` "La vista"; el esquema
-  y `content.MaxReach` lo exigen).
+  y `content.MaxReach` lo exigen) y `pocket_slots` (lote 13: los bolsillos propios de todo
+  personaje, `02-game-design.md` "Bolsillos"; 4, de 1 a 8 por el esquema y
+  `content.MaxPocketSlots`, una fila de la figura del inventario). No lo bajes: lo guardado
+  en un bolsillo que deja de existir se conserva y se puede sacar, pero no vuelve a entrar.
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml

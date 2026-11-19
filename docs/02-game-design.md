@@ -688,8 +688,9 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   `max_stack`. Un tile admite hasta 20 items distintos soltados (las pilas iguales se
   juntan).
 - **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
-  items equipados con su contenido (`weight × cantidad`). Solo lo que entra al
-  inventario desde afuera consume capacidad. La UI muestra oz = gramos / 100.
+  items equipados con su contenido y el de lo que llevan los bolsillos (abajo)
+  (`weight × cantidad`). Solo lo que entra al inventario desde afuera consume capacidad.
+  La UI muestra oz = gramos / 100.
 - **Alcance:** tomar, soltar, abrir o usar en el suelo exige el mismo piso y distancia
   ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
@@ -701,7 +702,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
   herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
-  slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
+  slot de mochila (el tutorial la abre) y con sus bolsillos vacíos. El kit de cada vocación
+  llega con los diálogos (T1.10): al aceptar el
   capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
   arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
   flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y la
@@ -724,6 +726,40 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+
+### Bolsillos (decisión del dueño, 2026-11-19)
+La prueba de la Isla de Pruebas del 2026-11-19 mostró que la muerte deja la mochila en el
+cuerpo y que el personaje reaparecía con una mochila nueva gratis (hallazgo M5: sin un
+contenedor no se puede tener ni una moneda). El dueño decidió: *"al no tener contenedor el
+personaje debiese tener 4 slots (los bolsillos) pero si te compras una mochila ganas mas
+slots"*. Código: `server/internal/session/pockets.go`.
+- **Qué son:** todo personaje tiene `inventory.pocket_slots` (4) bolsillos propios. Son
+  parte del personaje, nunca un item: no se equipan, no se mueven, no se levantan, no se
+  venden ni se intercambian y no se pierden nunca. Lo que llevan se mueve, se usa, se mira
+  y pesa como lo de un contenedor que el personaje lleva (la capacidad los cuenta; un
+  contenedor en un bolsillo se abre y anida como cualquiera). La mochila equipada suma
+  sus lugares a los de los bolsillos.
+- **Adónde va lo que se recibe:** compras, resultados de oficios, recompensas de quests,
+  diálogos, cofres y tareas, el buzón del mercado, un intercambio, lo conjurado, el vuelto
+  de un pago, los items de quest de un monstruo y lo que da un GM van **primero a la
+  mochila (su primer nivel) y después a los bolsillos**; lo que no entra cae a los pies
+  como antes (o se rechaza donde se rechazaba: tienda, cofre, mercado, intercambio,
+  conjurar, oficios). Las cuentas de lugar (`room`, `canPay`, `roomForAll`, `tradeFits`,
+  `canReceiveMoney`) suman los dos.
+- **Levantar:** soltar algo sobre el slot de la mochila o en su ventana con la mochila
+  llena lo deja en los bolsillos; sin mochila, soltar algo que no es una mochila sobre su
+  slot vacío también. Una mochila soltada ahí se equipa. Soltarlo en un bolsillo
+  (`ItemLocation.pocket`) lo deja ahí; sobre un bolsillo con un contenedor, adentro. Un
+  contenedor que está dentro de la mochila, elegido a mano, nunca derrama a los bolsillos.
+- **Pagar y contar:** pagos (tiendas, mercado, bendiciones, gremio, casas, barcos, la
+  forja), ingredientes, `has_item`/`take_item`, el chequeo de items de una quest, el
+  selector del mercado, el intercambio, las llaves de las puertas y la forja leen la mochila
+  y los bolsillos (`eachCarried`: el equipo, cada contenedor y al final los bolsillos).
+- **Al morir:** ver "Muerte": lo que llevan cae al cuerpo con la mochila.
+- **Guardado:** filas de `inventory_items` de primer nivel con `pocket` y el bolsillo en
+  `slot` (migración 00020); los personajes de antes tienen los bolsillos vacíos. Bajar
+  `inventory.pocket_slots` no borra nada guardado (lo que sobra se puede sacar, pero no
+  vuelve a entrar): mejor no bajarlo.
 
 ### Catálogo de equipo (lote 11, 2026-11)
 Pedido del dueño (2026-11-18): pocos items, como en los MMORPG de casillas clásicos, para
@@ -1371,16 +1407,24 @@ Valores iniciales (balance.yaml):
   - Equipo: cada pieza (salvo el slot de mochila) cae al cuerpo con
     `equipment_drop_pct × (1 − f)` %; la mochila (con su contenido) con
     `backpack_drop_pct × (1 − f)` %. Se tira en orden de slot con el `rand` sembrado.
+  - **Bolsillos** ("Bolsillos", arriba): lo que llevan cae al cuerpo **con la mochila, en
+    la misma tirada** (el slot de mochila), también sin mochila. Los bolsillos se quedan:
+    son del personaje. Bendiciones, protección de novato y marcas PvP pesan igual que
+    sobre la mochila.
   - Todas las bendiciones `bless.*` se borran al morir (también las de un novato).
 - Reapareces en el templo de tu ciudad de residencia (`characters.town`, o la primera isla)
   con vida y maná completos. La muerte se guarda al instante (no espera al autoguardado).
-- **Mochila nueva:** si la mochila cayó al cuerpo, reapareces con una vacía
-  (`inventory.start_container`) en su slot; la vieja, con todo lo que llevaba, sigue en el
-  cuerpo (se recupera arrastrándola o abriéndolo). Sin un contenedor no se puede tener ni una
-  moneda ni levantar nada, así que no habría forma de comprar otra (hallazgo M5 de la
-  prueba exploratoria). La nueva entra al log de economía como `death` con ref
-  `new_backpack`. Además los proveedores (Puerto y la Isla de Pruebas) venden mochilas
-  (20 de cobre) para tener una de repuesto.
+- **Sin mochila nueva** (decisión del dueño del 2026-11-19, "Bolsillos"): si la mochila
+  cayó al cuerpo, reapareces sin mochila y con los bolsillos vacíos; la vieja, con todo lo
+  que llevaba, sigue en el cuerpo con lo que llevaban los bolsillos (se recupera
+  arrastrándola o abriéndolo). Los bolsillos alcanzan para tener monedas y levantar cosas
+  (el hallazgo M5 de la prueba exploratoria, que antes resolvía una mochila gratis: esa
+  regla y su ref `new_backpack` del log de economía ya no existen). Los proveedores
+  (Puerto y la Isla de Pruebas) venden mochilas (20 de cobre).
+- El cuerpo tiene 10 lugares: si cae más (un asesino o un proscrito pierde todo: diez
+  piezas y cuatro bolsillos), lo que no entra queda en el suelo de la casilla de la
+  muerte, reservado como el cuerpo mientras el personaje espera su guardado; nunca se
+  pierde.
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;

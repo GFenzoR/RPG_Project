@@ -86,7 +86,9 @@ el punto 5:
     segura en mente;
   - el check `map-pr` valida el mapa con el `data/` y el `i18n/` de `main`: el contenido
     nuevo va en un PR antes del mapa que lo usa;
-  - el vuelto de los pagos tiene que entrar en la mochila (T5.5);
+  - el vuelto de los pagos tiene que entrar en la mochila o los bolsillos (T5.5, lote 13);
+  - todo camino nuevo que busque, cuente, dé o tome items del jugador pasa por los
+    bolsillos (`eachCarried`, `packs`, `room`, `freeCells`: docs/02 "Bolsillos");
   - nada de textos sin i18n, y nombres, textos y números originales (regla legal);
   - tests que digan lo que prueban y e2e que confirmen la respuesta del servidor, no
     solo el estado local del cliente.
@@ -201,6 +203,30 @@ el punto 5:
     `HudBar` cambió `conditions` por `tray` (y `curve`); `windows.css` dejó la cresta del
     medio y `--plaque-w` es `--tray-w`. En spritegen: `UI_STATUS_BOX`, `STATUS_ART` y
     `ui/status/*` en `recipes/ui.ts`, y una fila en `assets/CREDITS.md`.
+- **Bolsillos (hecho, rama `feat/pockets`, lote 13; docs/02 "Bolsillos" y "Muerte", docs/05
+  "Bolsillos", docs/06 `inventory.pocket_slots`):** cuatro casillas propias de todo
+  personaje (un contenedor fijo que es parte del personaje, `session/pockets.go`), con lo
+  recibido yendo primero a la mochila y después a ellos, pagos y chequeos que leen los dos,
+  y la muerte sin mochila gratis (lo de los bolsillos cae con la mochila, en su tirada).
+  Protocolo aditivo (`ItemLocation.pocket` 4, `Inventory.pockets` 2 y `pocket_slots` 3) y
+  migración 00020 (`inventory_items.pocket`). Queda:
+  - **E2E sin correr en la rama:** el de la muerte (`die to a wolf`, `13-death` y
+    `14-respawn`) siembra ahora un nivel 10 para que la mochila caiga y comprueba el slot
+    vacío y los cuatro bolsillos vacíos al despertar; la revisión final del lote tiene que
+    mirar esas capturas. El resto de los specs no cambió: ninguno dependía de la mochila
+    nueva.
+  - **El cuerpo tiene 10 lugares:** un asesino o un proscrito que lo pierde todo (diez
+    piezas y cuatro bolsillos) deja lo que no entra en el suelo de la casilla, reservado
+    como el cuerpo (`TestDeathPocketsOverflowTheCorpse`). Si molesta, se agranda
+    `creature_remains` (lo comparten los monstruos) o el cuerpo de un jugador pasa a ser
+    otro item.
+  - **Un contenedor en un bolsillo** se abre y se llena a mano, pero lo que se recibe va
+    solo al primer nivel de la mochila y de los bolsillos (como antes una bolsa dentro de
+    la mochila).
+  - **Bajar `inventory.pocket_slots`** no borra lo guardado (se puede sacar, no vuelve a
+    entrar): el esquema lo deja entre 1 y 8, pero conviene no bajarlo nunca.
+  - **Textos:** el aviso del intercambio sin nada que ofrecer sigue diciendo "Abre tu
+    mochila…" aunque los bolsillos se ofrecen siempre; el tutorial no los menciona.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al
@@ -1010,7 +1036,8 @@ el punto 5:
     ~40 ms antes de que se dibuje su paso. No se nota; se dejó así.
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
-  correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
+  correa de los monstruos, la mochila tras morir (desde el lote 13, los bolsillos en vez de
+  una mochila gratis: docs/02 "Bolsillos"), la hotbar sobre la última fila, la
   puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
   `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
   - **Dividir pilas (m1), a medias.** Desde A4 el menú de una pila (click derecho o toque

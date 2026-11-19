@@ -1619,6 +1619,25 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   abierta. Un spec nuevo que abra la mochila equipada con un doble click o "Abrir" la
   cierra si ya estaba abierta.
 
+## Notas de los bolsillos (docs/02 "Bolsillos", lote 13, rama `feat/pockets`)
+- `WorldState.pockets` (`PocketsState` de `state/pockets.ts`, puro y con tests:
+  `pocketCells`, `pocketRef`, `pocketOffers`) sale de cada `Inventory` (`pockets`,
+  `pocket_slots`); `GameUi.pockets`. Un bolsillo es `ItemLoc` `{ kind: "pocket", index }`
+  (`locationInit` → `ItemLocation.pocket`, `locKey`, `sameLoc` de `input/actions.ts` y de
+  `state/forge.ts`). No es una ventana de contenedor: nunca tiene `container_id`.
+- `PocketsRow` (`ui/Inventory.tsx`, sin hooks, `ui/Pockets.test.ts`): la fila
+  "Bolsillos" bajo la figura y arriba de la mochila; cada celda es `[data-drop="pocket"]`
+  con `data-index` (`Game.dropTarget`) y su item tiene el menú, la ficha, el arrastre y el
+  doble click de cualquier otro (`ItemCell`). El intercambio ofrece la mochila, después
+  los bolsillos y después las demás ventanas (`offerable` de `ui/Trade.tsx`); la forja,
+  el equipo y después los bolsillos (`forgeCandidates`). El mercado ya los cuenta en el
+  servidor (`owned_mods`).
+- Test ids: `pockets`, `pocket-<n>`. Hook E2E `__rpgClient.pockets()` (`capacity` e
+  `items`). Vista previa: escena `pockets` de `make ui-preview` (sin mochila, como después
+  de una muerte, con la ficha del brebaje del bolsillo); la base lleva dos items en los
+  bolsillos. E2E: "die to a wolf" despierta sin mochila y con los cuatro bolsillos vacíos
+  (`14-respawn`).
+
 ## Notas de la pantalla completa (docs/17 UI-4 y UI-5, rama `feat/hud-fullscreen`)
 El dueño (2026-11-18): el juego a pantalla completa, como Diablo 2 o Ragnarok Online, con
 los menús flotando donde el jugador los acomode; abajo una barra gótica (orbes de vida y
