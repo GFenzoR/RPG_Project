@@ -7,6 +7,7 @@ const msg = (key: string, at: number): LogMessage => ({ key, params: [], at });
 describe("isImportant", () => {
   it("floats refusals and notices, not look or loot lines", () => {
     expect(isImportant("pvp.logout_locked")).toBe(true);
+    expect(isImportant("combat.logout_locked")).toBe(true);
     expect(isImportant("pvp.safe_mode")).toBe(true);
     expect(isImportant("market.not_enough_money")).toBe(true);
     expect(isImportant("house.no_access")).toBe(true);

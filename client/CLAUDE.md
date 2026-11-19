@@ -168,6 +168,12 @@ client/
   pantalla de muerte (`.death` en `ui/App.tsx`) hasta que el jugador la cierra.
 - El E2E de muerte deja al personaje con 1 de vida con `psql` (`DATABASE_URL`) antes de
   entrar y lo lleva a los lobos.
+- Bloqueo de logout en combate (docs/02): un "Salir del juego" a menos de 12 s de una pelea
+  lo rechaza el servidor con `combat.logout_locked` (`pvp.logout_locked` con el bloqueo
+  PvP). El cliente no hace nada propio: el mensaje flota sobre el mapa (`notices.ts`) y va
+  al log, y el jugador sigue en el juego con su objetivo. Un E2E que sale después de pelear
+  usa `leaveAfterFight` (`e2e/game.spec.ts`), que reintenta cada 2 s hasta salir; el de la
+  pelea con el lobo mira el rechazo (`07c-logout-locked`).
 
 ## Notas de T1.12
 - `ItemDef.useWith` (items `kind: tool`): usarlo (click derecho) no manda `UseItem` sino que

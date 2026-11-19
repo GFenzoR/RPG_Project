@@ -143,6 +143,38 @@ function randomLetters(n: number): string {
   return s;
 }
 
+/**
+ * Leaves the game with "Salir del juego" right after a fight. The server refuses a logout
+ * for travel.combat_block_ms (12 s) after the last blow given or taken
+ * (`combat.logout_locked`, docs/02 "Bloqueo de logout en combate") and the connection
+ * stays, so this asks again every 2 s until the player is out: the fight ends when the
+ * wolf dies (the player keeps hitting its target) or when the player does (it wakes at the
+ * temple, where the death ends the block; the death screen is closed first).
+ */
+async function leaveAfterFight(page: Page): Promise<void> {
+  const status = page.getByRole("status");
+  const out = async (): Promise<boolean> =>
+    (await status.allTextContents()).some((t) => t.includes("Saliste del juego."));
+  const death = page.getByTestId("death-screen");
+  const leave = page.getByRole("button", { name: "Salir del juego" });
+  await expect
+    .poll(
+      async () => {
+        if (await out()) return true;
+        if (await death.isVisible())
+          await death
+            .getByRole("button", { name: "Aceptar" })
+            .click({ timeout: 1_000 })
+            .catch(() => undefined);
+        if (await leave.isVisible()) await leave.click({ timeout: 1_000 }).catch(() => undefined);
+        return false;
+      },
+      { timeout: 120_000, intervals: [2_000] },
+    )
+    .toBe(true);
+  await expect(status).toHaveText("Saliste del juego.");
+}
+
 interface Self {
   x: number;
   y: number;
@@ -446,6 +478,8 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
 });
 
 test("walk out of town, fight a wolf from the battle list", async ({ page, playwright }) => {
+  // Leaving at the end waits out the fight's logout block (leaveAfterFight).
+  test.setTimeout(240_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -561,6 +595,15 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   const swing = await shotPose(page, "07b-attack-pose", "attack", 30_000);
   expect(swing.attacks.filter((a) => swing.ids.includes(a.id))).not.toEqual([]);
 
+  // In the middle of the fight the game cannot be left (docs/02 "Bloqueo de logout en
+  // combate"): the server refuses, the notice over the map says why and the player stays.
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  const locked = page.getByTestId("notices").locator('[data-key="combat.logout_locked"]');
+  await expect(locked).toBeVisible();
+  await expect(locked).toContainText("Estás en combate");
+  await expect(page.getByRole("button", { name: "Salir del juego" })).toBeVisible();
+  await shot(page, "07c-logout-locked");
+
   // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
   // progress.
   await openWindow(page, "skills");
@@ -581,8 +624,7 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   );
   await skills.screenshot({ path: join(shots, "08-skills-panel.png") });
 
-  await page.getByRole("button", { name: "Salir del juego" }).click();
-  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  await leaveAfterFight(page);
   expect(errors).toEqual([]);
 });
 
@@ -599,8 +641,9 @@ const WOLF_WAIT = { x: 1056, y: 1052 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
   // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
-  // --repeat-each) killed them all; killing one at the end (A9) can take another.
-  test.setTimeout(330_000);
+  // --repeat-each) killed them all; killing one at the end (A9) can take another, and
+  // leaving after it waits out the fight's logout block (leaveAfterFight).
+  test.setTimeout(450_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -782,8 +825,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   const dead = await fall;
   for (const id of dead.ids) expect(dead.departures).toContainEqual({ id, reason: "DEATH" });
 
-  await page.getByRole("button", { name: "Salir del juego" }).click();
-  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  await leaveAfterFight(page);
   expect(errors).toEqual([]);
 });
 
