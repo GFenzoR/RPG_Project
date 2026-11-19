@@ -43,14 +43,15 @@
   max_success: 0.9
   xp: 2
 
-- id: smith_forged_shortsword
+# Lote 11: the band 2 axe (the forged shortsword is retired: iron_sword is the band's sword).
+- id: smith_forged_axe
   craft: smithing
   station: anvil
   tool: smithing
   level: 6
   time_ms: 5000
   inputs: [{ item: iron_ingot, count: 3 }, { item: birch_log, count: 1 }, { item: tree_resin, count: 1 }]
-  output: { item: forged_shortsword, count: 1 }
+  output: { item: forged_axe, count: 1 }
   base_success: 0.4
   success_per_level: 0.05
   max_success: 0.85
@@ -198,31 +199,9 @@
   max_success: 0.8
   xp: 8
 
-- id: smith_wyrmscale_mail
-  craft: smithing
-  station: anvil
-  tool: smithing
-  level: 20
-  time_ms: 8000
-  inputs: [{ item: embersteel_ingot, count: 5 }, { item: wyrm_scale, count: 6 }, { item: slag_core, count: 1 }]
-  output: { item: wyrmscale_mail, count: 1 }
-  base_success: 0.28
-  success_per_level: 0.035
-  max_success: 0.75
-  xp: 10
-
-- id: smith_wyrmfang_blade
-  craft: smithing
-  station: anvil
-  tool: smithing
-  level: 22
-  time_ms: 8000
-  inputs: [{ item: embersteel_ingot, count: 5 }, { item: wyrm_scale, count: 3 }, { item: slag_core, count: 2 }]
-  output: { item: wyrmfang_blade, count: 1 }
-  base_success: 0.26
-  success_per_level: 0.035
-  max_success: 0.75
-  xp: 10
+# Lote 11: the wyrmscale mail and the wyrmfang blade are band 5 (level 50), not obtainable
+# until an island of that band: their recipes (smithing 20 and 22: 5 embersteel ingots, wyrm
+# scales and slag cores) come back with it (docs/02 "Catálogo de equipo").
 
 # ---- Content audit (2026-11): bolts, the elm maul and the embersteel club, bow, crossbow,
 # greaves and sabatons (M3/M4). Bolts give gull feathers a use.

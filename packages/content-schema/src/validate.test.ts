@@ -810,7 +810,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:118:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:117:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
@@ -908,8 +908,12 @@ describe("validator diagnostics", () => {
 
   it("wants a source for what NPCs buy, a buyer for gear and materials, and quest drops each_player (m4)", () => {
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
-    edit("data/monsters/wreck_looter.yaml", "  - { item: driftwood_club, chance: 0.06 }", "");
-    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_shortsword, price: 50 }\n", "");
+    // The armorer stops selling the belaying pin and the looters stop dropping it, but the
+    // armorer still buys it; the forged axe loses its buyer (its recipe still makes it).
+    edit("data/monsters/wreck_looter.yaml", "  - { item: belaying_pin, chance: 0.04 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: belaying_pin, price: 30 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_axe, price: 150 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_axe, price: 50 }\n", "");
     edit("data/npcs/puerto_armorer.yaml", "    - { item: quartz_crystal, price: 13 }\n", "");
     edit(
       "data/monsters/coffer_smuggler.yaml",
@@ -919,15 +923,74 @@ describe("validator diagnostics", () => {
     const errors = messages(root).filter((m) => m.startsWith("error"));
     expect(errors).toEqual([
       expect.stringMatching(
-        /puerto_armorer\.yaml:.*an NPC buys "driftwood_club" but nothing gives it/,
+        /puerto_armorer\.yaml:.*an NPC buys "belaying_pin" but nothing gives it/,
       ),
       expect.stringMatching(/misc\.yaml:.*material "quartz_crystal" can be had.*no NPC buys it/),
-      expect.stringMatching(
-        /weapons\.yaml:.*"forged_shortsword" \(weapon\) can be had.*no NPC buys it/,
-      ),
+      expect.stringMatching(/weapons\.yaml:.*"forged_axe" \(weapon\) can be had.*no NPC buys it/),
       expect.stringMatching(
         /coffer_smuggler\.yaml:.*quest item "smuggler_tally" drops as plain loot/,
       ),
+    ]);
+  });
+
+  it("refuses every source of a retired item and lets an NPC buy it (lote 11)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    // The armorer buys the retired driftwood club with no source: no error (above).
+    edit(
+      "data/monsters/wreck_looter.yaml",
+      "  - { item: belaying_pin, chance: 0.04 }",
+      "  - { item: driftwood_club, chance: 0.04 }",
+    );
+    edit(
+      "data/npcs/puerto_armorer.yaml",
+      "    - { item: rusty_cutlass, price: 30 }\n",
+      "    - { item: rusty_cutlass, price: 30 }\n    - { item: hide_vest, price: 45 }\n",
+    );
+    edit(
+      "data/recipes.yaml",
+      "  output: { item: forged_axe, count: 1 }",
+      "  output: { item: forged_shortsword, count: 1 }",
+    );
+    edit(
+      "data/npcs/harbor_master.yaml",
+      "- { give_item: iron_sword }",
+      "- { give_item: thornwood_blade }",
+    );
+    edit("data/quests/foreman_ore.yaml", "  - { item: pickaxe }", "  - { item: leather_jerkin }");
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /wreck_looter\.yaml:.*"driftwood_club" is retired.*no monster drops it/,
+        ),
+        expect.stringMatching(/puerto_armorer\.yaml:.*"hide_vest" is retired.*no shop sells it/),
+        expect.stringMatching(/recipes\.yaml:.*"forged_shortsword" is retired.*no recipe makes it/),
+        expect.stringMatching(
+          /harbor_master\.yaml:.*"thornwood_blade" is retired.*no dialog gives it/,
+        ),
+        expect.stringMatching(
+          /foreman_ore\.yaml:.*"leather_jerkin" is retired.*no quest rewards it/,
+        ),
+      ]),
+    );
+    expect(errors.filter((m) => m.includes("is retired"))).toHaveLength(5);
+  });
+
+  it("wants a level on every weapon, armor and shield (lote 11)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/items/weapons.yaml",
+      "  requires: { level: 1 }\n  value: 30\n",
+      "  requires: { vocations: [guardian] }\n  value: 30\n",
+    );
+    edit(
+      "data/items/equipment.yaml",
+      "  shield: { defense: 9 }\n  requires: { level: 1 }\n",
+      "  shield: { defense: 9 }\n",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(/equipment\.yaml:.*shield "barrel_lid_shield" has no requires\.level/),
+      expect.stringMatching(/weapons\.yaml:.*weapon "rusty_cutlass" has no requires\.level/),
     ]);
   });
 

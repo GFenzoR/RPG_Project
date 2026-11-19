@@ -208,8 +208,8 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
   it("ships what the item card shows: kind, weight, stats and requirements", () => {
     expect(byId.get("iron_sword")).toMatchObject({
       kind: "weapon",
-      weight: 3300,
-      weapon: { type: "sword", attack: 13, defense: 9, hands: 1, range: 0, element: "", ammo: "" },
+      weight: 3150,
+      weapon: { type: "sword", attack: 13, defense: 7, hands: 1, range: 0, element: "", ammo: "" },
       requires: { level: 5, vocations: [] },
     });
     expect(byId.get("coral_wand")?.weapon).toMatchObject({ range: 4, element: "ice" });

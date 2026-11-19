@@ -1,24 +1,466 @@
-- id: iron_sword
+# Weapons: the compact catalog (lote 11, docs/02 "Catálogo de equipo"). One weapon per
+# line and band; the numbers follow the band formula of docs/02 (our own numbers, CLAUDE.md
+# legal rule). Every weapon says its level (requires.level). A bow shoots one arrow of its
+# weapon.ammo per round from the ammo slot (attack = bow + arrow, T3.1); a crossbow is
+# one-handed and shoots bolts (content audit M4); a staff is the druid's wand.
+
+# ---- Band 1 (levels 1-4): the starting kit, Isla del Puerto.
+- id: rusty_cutlass
   kind: weapon
-  sprite: weapons/iron_sword
-  name: item.iron_sword.name
-  description: item.iron_sword.desc
-  weight: 3300
+  sprite: weapons/rusty_cutlass
+  name: item.rusty_cutlass.name
+  description: item.rusty_cutlass.desc
+  weight: 3000
   tradeable: true
-  weapon: { type: sword, attack: 13, defense: 9, hands: 1 }
-  requires: { level: 5 }
-  value: 120
+  weapon: { type: sword, attack: 10, defense: 5, hands: 1 }
+  requires: { level: 1 }
+  value: 30
 
 - id: hatchet
   kind: weapon
   sprite: weapons/hatchet
   name: item.hatchet.name
   description: item.hatchet.desc
-  weight: 3700
+  weight: 4000
   tradeable: true
-  weapon: { type: axe, attack: 11, defense: 5, hands: 1 }
-  value: 60
+  weapon: { type: axe, attack: 12, defense: 3, hands: 1 }
+  requires: { level: 1 }
+  value: 30
 
+- id: belaying_pin
+  kind: weapon
+  sprite: weapons/belaying_pin
+  name: item.belaying_pin.name
+  description: item.belaying_pin.desc
+  weight: 3800
+  tradeable: true
+  weapon: { type: club, attack: 11, defense: 4, hands: 1 }
+  requires: { level: 1 }
+  value: 30
+
+- id: short_bow
+  kind: weapon
+  sprite: weapons/short_bow
+  name: item.short_bow.name
+  description: item.short_bow.desc
+  weight: 2400
+  tradeable: true
+  weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
+  requires: { level: 1, vocations: [ranger] }
+  value: 30
+
+- id: spark_wand
+  kind: weapon
+  sprite: weapons/spark_wand
+  name: item.spark_wand.name
+  description: item.spark_wand.desc
+  weight: 1200
+  tradeable: true
+  weapon: { type: wand, attack: 8, range: 4, element: energy, hands: 1 }
+  requires: { level: 1, vocations: [arcanist] }
+  value: 30
+
+- id: sapling_staff
+  kind: weapon
+  sprite: weapons/sapling_staff
+  name: item.sapling_staff.name
+  description: item.sapling_staff.desc
+  weight: 1400
+  tradeable: true
+  weapon: { type: wand, attack: 8, range: 4, element: earth, hands: 1 }
+  requires: { level: 1, vocations: [druid] }
+  value: 30
+
+
+# ---- Band 2 (levels 5-9): Isla del Puerto. The step Puerto's hunts of levels 5-8 need
+# (TestPuertoBalance: the crab and the boar outlast 15 s with a band 1 weapon).
+- id: iron_sword
+  kind: weapon
+  sprite: weapons/iron_sword
+  name: item.iron_sword.name
+  description: item.iron_sword.desc
+  weight: 3150
+  tradeable: true
+  weapon: { type: sword, attack: 13, defense: 7, hands: 1 }
+  requires: { level: 5 }
+  value: 150
+
+- id: forged_axe
+  kind: weapon
+  sprite: weapons/hatchet
+  name: item.forged_axe.name
+  description: item.forged_axe.desc
+  weight: 4300
+  tradeable: true
+  weapon: { type: axe, attack: 15, defense: 4, hands: 1 }
+  requires: { level: 5 }
+  value: 150
+
+- id: spiked_cudgel
+  kind: weapon
+  sprite: weapons/spiked_cudgel
+  name: item.spiked_cudgel.name
+  description: item.spiked_cudgel.desc
+  weight: 4200
+  tradeable: true
+  weapon: { type: club, attack: 14, defense: 5, hands: 1 }
+  requires: { level: 5 }
+  value: 150
+
+- id: yew_longbow
+  kind: weapon
+  sprite: weapons/yew_longbow
+  name: item.yew_longbow.name
+  description: item.yew_longbow.desc
+  weight: 2700
+  tradeable: true
+  weapon: { type: distance, attack: 7, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 5, vocations: [ranger] }
+  value: 150
+
+- id: coral_wand
+  kind: weapon
+  sprite: weapons/coral_wand
+  name: item.coral_wand.name
+  description: item.coral_wand.desc
+  weight: 1300
+  tradeable: true
+  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
+  requires: { level: 5, vocations: [arcanist] }
+  value: 150
+
+- id: rimewood_staff
+  kind: weapon
+  sprite: weapons/rimewood_staff
+  name: item.rimewood_staff.name
+  description: item.rimewood_staff.desc
+  weight: 1500
+  tradeable: true
+  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
+  requires: { level: 5, vocations: [druid] }
+  value: 150
+
+
+# ---- Band 3 (levels 10-29): sold in Puerto from level 10 (the island's last hunts) and in
+# the Isla del Bosque; attack 22 is what the forest's hunts ask for up to level 29.
+- id: boarding_saber
+  kind: weapon
+  sprite: weapons/boarding_saber
+  name: item.boarding_saber.name
+  description: item.boarding_saber.desc
+  weight: 3300
+  tradeable: true
+  weapon: { type: sword, attack: 22, defense: 11, hands: 1 }
+  requires: { level: 10 }
+  value: 600
+
+- id: bearded_axe
+  kind: weapon
+  sprite: weapons/bearded_axe
+  name: item.bearded_axe.name
+  description: item.bearded_axe.desc
+  weight: 4600
+  tradeable: true
+  weapon: { type: axe, attack: 24, defense: 7, hands: 1 }
+  requires: { level: 10 }
+  value: 600
+
+- id: elmroot_maul
+  kind: weapon
+  sprite: weapons/elmroot_maul
+  name: item.elmroot_maul.name
+  description: item.elmroot_maul.desc
+  weight: 4600
+  tradeable: true
+  weapon: { type: club, attack: 23, defense: 9, hands: 1 }
+  requires: { level: 10 }
+  value: 600
+
+- id: thornwood_longbow
+  kind: weapon
+  sprite: weapons/thornwood_longbow
+  name: item.thornwood_longbow.name
+  description: item.thornwood_longbow.desc
+  weight: 3000
+  tradeable: true
+  weapon: { type: distance, attack: 12, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 10, vocations: [ranger] }
+  value: 600
+
+- id: smuggler_crossbow
+  kind: weapon
+  sprite: weapons/smuggler_crossbow
+  name: item.smuggler_crossbow.name
+  description: item.smuggler_crossbow.desc
+  weight: 3200
+  tradeable: true
+  weapon: { type: distance, attack: 8, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 10, vocations: [ranger] }
+  value: 540
+
+- id: stormglass_wand
+  kind: weapon
+  sprite: weapons/stormglass_wand
+  name: item.stormglass_wand.name
+  description: item.stormglass_wand.desc
+  weight: 1400
+  tradeable: true
+  weapon: { type: wand, attack: 21, range: 4, element: energy, hands: 1 }
+  requires: { level: 10, vocations: [arcanist] }
+  value: 600
+
+- id: hoarfrost_staff
+  kind: weapon
+  sprite: weapons/hoarfrost_staff
+  name: item.hoarfrost_staff.name
+  description: item.hoarfrost_staff.desc
+  weight: 1600
+  tradeable: true
+  weapon: { type: wand, attack: 21, range: 4, element: ice, hands: 1 }
+  requires: { level: 10, vocations: [druid] }
+  value: 600
+
+
+# ---- Band 4 (levels 30-49): the Isla Volcánica (Brasal's smithy and temple).
+- id: embersteel_sabre
+  kind: weapon
+  sprite: weapons/embersteel_sabre
+  name: item.embersteel_sabre.name
+  description: item.embersteel_sabre.desc
+  weight: 3450
+  tradeable: true
+  weapon: { type: sword, attack: 29, defense: 15, hands: 1 }
+  requires: { level: 30 }
+  value: 2000
+
+- id: embersteel_axe
+  kind: weapon
+  sprite: weapons/embersteel_axe
+  name: item.embersteel_axe.name
+  description: item.embersteel_axe.desc
+  weight: 4900
+  tradeable: true
+  weapon: { type: axe, attack: 31, defense: 9, hands: 1 }
+  requires: { level: 30 }
+  value: 2000
+
+- id: embersteel_mace
+  kind: weapon
+  sprite: weapons/embersteel_mace
+  name: item.embersteel_mace.name
+  description: item.embersteel_mace.desc
+  weight: 5000
+  tradeable: true
+  weapon: { type: club, attack: 30, defense: 12, hands: 1 }
+  requires: { level: 30 }
+  value: 2000
+
+- id: embersteel_longbow
+  kind: weapon
+  sprite: weapons/embersteel_longbow
+  name: item.embersteel_longbow.name
+  description: item.embersteel_longbow.desc
+  weight: 3300
+  tradeable: true
+  weapon: { type: distance, attack: 17, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 30, vocations: [ranger] }
+  value: 2000
+
+- id: embersteel_crossbow
+  kind: weapon
+  sprite: weapons/embersteel_crossbow
+  name: item.embersteel_crossbow.name
+  description: item.embersteel_crossbow.desc
+  weight: 3600
+  tradeable: true
+  weapon: { type: distance, attack: 13, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 30, vocations: [ranger] }
+  value: 1800
+
+- id: obsidian_wand
+  kind: weapon
+  sprite: weapons/obsidian_wand
+  name: item.obsidian_wand.name
+  description: item.obsidian_wand.desc
+  weight: 1500
+  tradeable: true
+  weapon: { type: wand, attack: 30, range: 4, element: energy, hands: 1 }
+  requires: { level: 30, vocations: [arcanist] }
+  value: 2000
+
+- id: blackfrost_staff
+  kind: weapon
+  sprite: weapons/blackfrost_staff
+  name: item.blackfrost_staff.name
+  description: item.blackfrost_staff.desc
+  weight: 1700
+  tradeable: true
+  weapon: { type: wand, attack: 30, range: 4, element: ice, hands: 1 }
+  requires: { level: 30, vocations: [druid] }
+  value: 2000
+
+
+# ---- Band 5 (levels 50-74): not obtainable yet (no island): no shop, loot table, recipe or
+# dialog gives them until an island of the band does (docs/02).
+- id: wyrmfang_blade
+  kind: weapon
+  sprite: weapons/wyrmfang_blade
+  name: item.wyrmfang_blade.name
+  description: item.wyrmfang_blade.desc
+  weight: 3600
+  tradeable: true
+  weapon: { type: sword, attack: 36, defense: 18, hands: 1 }
+  requires: { level: 50 }
+  value: 5000
+
+- id: wyrmbone_axe
+  kind: weapon
+  sprite: weapons/embersteel_axe
+  name: item.wyrmbone_axe.name
+  description: item.wyrmbone_axe.desc
+  weight: 5200
+  tradeable: true
+  weapon: { type: axe, attack: 38, defense: 11, hands: 1 }
+  requires: { level: 50 }
+  value: 5000
+
+- id: wyrmbone_maul
+  kind: weapon
+  sprite: weapons/embersteel_mace
+  name: item.wyrmbone_maul.name
+  description: item.wyrmbone_maul.desc
+  weight: 5400
+  tradeable: true
+  weapon: { type: club, attack: 37, defense: 14, hands: 1 }
+  requires: { level: 50 }
+  value: 5000
+
+- id: wyrmsinew_bow
+  kind: weapon
+  sprite: weapons/embersteel_longbow
+  name: item.wyrmsinew_bow.name
+  description: item.wyrmsinew_bow.desc
+  weight: 3600
+  tradeable: true
+  weapon: { type: distance, attack: 22, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 50, vocations: [ranger] }
+  value: 5000
+
+- id: wyrmsinew_crossbow
+  kind: weapon
+  sprite: weapons/embersteel_crossbow
+  name: item.wyrmsinew_crossbow.name
+  description: item.wyrmsinew_crossbow.desc
+  weight: 4000
+  tradeable: true
+  weapon: { type: distance, attack: 18, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 50, vocations: [ranger] }
+  value: 4500
+
+- id: wyrmhorn_wand
+  kind: weapon
+  sprite: weapons/obsidian_wand
+  name: item.wyrmhorn_wand.name
+  description: item.wyrmhorn_wand.desc
+  weight: 1600
+  tradeable: true
+  weapon: { type: wand, attack: 39, range: 4, element: energy, hands: 1 }
+  requires: { level: 50, vocations: [arcanist] }
+  value: 5000
+
+- id: glacierheart_staff
+  kind: weapon
+  sprite: weapons/blackfrost_staff
+  name: item.glacierheart_staff.name
+  description: item.glacierheart_staff.desc
+  weight: 1800
+  tradeable: true
+  weapon: { type: wand, attack: 39, range: 4, element: ice, hands: 1 }
+  requires: { level: 50, vocations: [druid] }
+  value: 5000
+
+
+# ---- Band 6 (levels 75-100+): not obtainable yet, like band 5.
+- id: tidesteel_sword
+  kind: weapon
+  sprite: weapons/embersteel_sabre
+  name: item.tidesteel_sword.name
+  description: item.tidesteel_sword.desc
+  weight: 3750
+  tradeable: true
+  weapon: { type: sword, attack: 43, defense: 22, hands: 1 }
+  requires: { level: 75 }
+  value: 12000
+
+- id: tidesteel_axe
+  kind: weapon
+  sprite: weapons/bearded_axe
+  name: item.tidesteel_axe.name
+  description: item.tidesteel_axe.desc
+  weight: 5500
+  tradeable: true
+  weapon: { type: axe, attack: 45, defense: 13, hands: 1 }
+  requires: { level: 75 }
+  value: 12000
+
+- id: tidesteel_mace
+  kind: weapon
+  sprite: weapons/embersteel_mace
+  name: item.tidesteel_mace.name
+  description: item.tidesteel_mace.desc
+  weight: 5800
+  tradeable: true
+  weapon: { type: club, attack: 44, defense: 17, hands: 1 }
+  requires: { level: 75 }
+  value: 12000
+
+- id: drownwood_bow
+  kind: weapon
+  sprite: weapons/thornwood_longbow
+  name: item.drownwood_bow.name
+  description: item.drownwood_bow.desc
+  weight: 3900
+  tradeable: true
+  weapon: { type: distance, attack: 27, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 75, vocations: [ranger] }
+  value: 12000
+
+- id: tidesteel_crossbow
+  kind: weapon
+  sprite: weapons/embersteel_crossbow
+  name: item.tidesteel_crossbow.name
+  description: item.tidesteel_crossbow.desc
+  weight: 4400
+  tradeable: true
+  weapon: { type: distance, attack: 23, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 75, vocations: [ranger] }
+  value: 10800
+
+- id: pearlstorm_wand
+  kind: weapon
+  sprite: weapons/stormglass_wand
+  name: item.pearlstorm_wand.name
+  description: item.pearlstorm_wand.desc
+  weight: 1700
+  tradeable: true
+  weapon: { type: wand, attack: 48, range: 4, element: energy, hands: 1 }
+  requires: { level: 75, vocations: [arcanist] }
+  value: 12000
+
+- id: deepfrost_staff
+  kind: weapon
+  sprite: weapons/hoarfrost_staff
+  name: item.deepfrost_staff.name
+  description: item.deepfrost_staff.desc
+  weight: 1900
+  tradeable: true
+  weapon: { type: wand, attack: 48, range: 4, element: ice, hands: 1 }
+  requires: { level: 75, vocations: [druid] }
+  value: 12000
+
+# ---- Retired (lote 11): out of the catalog, of every shop, loot table and recipe, but still
+# defined so the characters that have one keep it (and its old numbers); an NPC still buys
+# it. `retired: true` makes `make validate` refuse any source of it (docs/06).
 - id: driftwood_club
   kind: weapon
   sprite: weapons/driftwood_club
@@ -27,121 +469,10 @@
   weight: 2300
   tradeable: true
   weapon: { type: club, attack: 6, defense: 4, hands: 1 }
+  requires: { level: 1 }
   value: 5
+  retired: true
 
-# Isla del Puerto (levels 1-15). Melee attack grows ~+4 per tier: starter (1), tier 2 (5), tier 3 (8-10).
-- id: rusty_cutlass
-  kind: weapon
-  sprite: weapons/rusty_cutlass
-  name: item.rusty_cutlass.name
-  description: item.rusty_cutlass.desc
-  weight: 3000
-  tradeable: true
-  weapon: { type: sword, attack: 10, defense: 7, hands: 1 }
-  value: 25
-
-- id: boarding_saber
-  kind: weapon
-  sprite: weapons/boarding_saber
-  name: item.boarding_saber.name
-  description: item.boarding_saber.desc
-  weight: 3400
-  tradeable: true
-  weapon: { type: sword, attack: 19, defense: 11, hands: 1 }
-  requires: { level: 10 }
-  value: 400
-
-- id: bearded_axe
-  kind: weapon
-  sprite: weapons/bearded_axe
-  name: item.bearded_axe.name
-  description: item.bearded_axe.desc
-  weight: 5200
-  tradeable: true
-  weapon: { type: axe, attack: 19, defense: 8, hands: 1 }
-  requires: { level: 10 }
-  value: 420
-
-- id: belaying_pin
-  kind: weapon
-  sprite: weapons/belaying_pin
-  name: item.belaying_pin.name
-  description: item.belaying_pin.desc
-  weight: 2200
-  tradeable: true
-  weapon: { type: club, attack: 10, defense: 5, hands: 1 }
-  value: 20
-
-- id: spiked_cudgel
-  kind: weapon
-  sprite: weapons/spiked_cudgel
-  name: item.spiked_cudgel.name
-  description: item.spiked_cudgel.desc
-  weight: 4800
-  tradeable: true
-  weapon: { type: club, attack: 15, defense: 7, hands: 1 }
-  requires: { level: 6 }
-  value: 140
-
-- id: coral_wand
-  kind: weapon
-  sprite: weapons/coral_wand
-  name: item.coral_wand.name
-  description: item.coral_wand.desc
-  weight: 1500
-  tradeable: true
-  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
-  requires: { level: 6, vocations: [arcanist] }
-  value: 300
-
-# Ranger and druid (T3.1). A bow shoots one arrow of its weapon.ammo per round from the
-# ammo slot: attack = bow + arrow, trained and scaled by distance. A staff is the druid's
-# wand: same rules as coral_wand.
-- id: short_bow
-  kind: weapon
-  sprite: weapons/short_bow
-  name: item.short_bow.name
-  description: item.short_bow.desc
-  weight: 2450
-  tradeable: true
-  weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
-  requires: { vocations: [ranger] }
-  value: 40
-
-- id: yew_longbow
-  kind: weapon
-  sprite: weapons/yew_longbow
-  name: item.yew_longbow.name
-  description: item.yew_longbow.desc
-  weight: 3350
-  tradeable: true
-  weapon: { type: distance, attack: 7, range: 6, hands: 2, ammo: arrow }
-  requires: { level: 8, vocations: [ranger] }
-  value: 380
-
-- id: sapling_staff
-  kind: weapon
-  sprite: weapons/sapling_staff
-  name: item.sapling_staff.name
-  description: item.sapling_staff.desc
-  weight: 1350
-  tradeable: true
-  weapon: { type: wand, attack: 8, range: 4, element: earth, hands: 1 }
-  requires: { vocations: [druid] }
-  value: 40
-
-- id: rimewood_staff
-  kind: weapon
-  sprite: weapons/rimewood_staff
-  name: item.rimewood_staff.name
-  description: item.rimewood_staff.desc
-  weight: 1550
-  tradeable: true
-  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
-  requires: { level: 6, vocations: [druid] }
-  value: 300
-
-# Smithed at an anvil (T3.4): a little better than the shop's sword of the same tier.
 - id: forged_shortsword
   kind: weapon
   sprite: weapons/forged_shortsword
@@ -152,8 +483,8 @@
   weapon: { type: sword, attack: 14, defense: 8, hands: 1 }
   requires: { level: 6 }
   value: 150
+  retired: true
 
-# Isla del Bosque weapons (T3.6). Our own numbers.
 - id: thornwood_blade
   kind: weapon
   sprite: weapons/thornwood_blade
@@ -164,165 +495,4 @@
   weapon: { type: sword, attack: 23, defense: 13, hands: 1 }
   requires: { level: 16 }
   value: 850
-
-# Isla Volcánica weapons (T5.5, levels 30-50): embersteel smithed at the anvil. Melee
-# attack keeps the ~+4 per tier of Puerto and Bosque. Our own numbers.
-- id: embersteel_sabre
-  kind: weapon
-  sprite: weapons/embersteel_sabre
-  name: item.embersteel_sabre.name
-  description: item.embersteel_sabre.desc
-  weight: 3500
-  tradeable: true
-  weapon: { type: sword, attack: 27, defense: 15, hands: 1 }
-  requires: { level: 30 }
-  value: 1900
-
-- id: embersteel_axe
-  kind: weapon
-  sprite: weapons/embersteel_axe
-  name: item.embersteel_axe.name
-  description: item.embersteel_axe.desc
-  weight: 5600
-  tradeable: true
-  weapon: { type: axe, attack: 28, defense: 11, hands: 1 }
-  requires: { level: 32 }
-  value: 2000
-
-- id: wyrmfang_blade
-  kind: weapon
-  sprite: weapons/wyrmfang_blade
-  name: item.wyrmfang_blade.name
-  description: item.wyrmfang_blade.desc
-  weight: 3700
-  tradeable: true
-  weapon: { type: sword, attack: 31, defense: 17, hands: 1 }
-  requires: { level: 45 }
-  value: 4200
-
-# Content audit (2026-11): the club, bow and wand lines reach the Isla Volcánica (M3), the
-# ranger gets one-handed crossbows that leave the left hand to a shield (M4: a crossbow
-# shoots bolts, a little less attack than a bow of its tier) and the arcanist a starting
-# wand (m5). Our own numbers: each tier keeps the ~+4-5 attack of the melee lines.
-- id: spark_wand
-  kind: weapon
-  sprite: weapons/spark_wand
-  name: item.spark_wand.name
-  description: item.spark_wand.desc
-  weight: 1200
-  tradeable: true
-  weapon: { type: wand, attack: 8, range: 4, element: energy, hands: 1 }
-  requires: { vocations: [arcanist] }
-  value: 40
-
-# Isla del Bosque (levels 12-25): the tannery, the forest druid, smugglers' loot and elm.
-- id: elmroot_maul
-  kind: weapon
-  sprite: weapons/elmroot_maul
-  name: item.elmroot_maul.name
-  description: item.elmroot_maul.desc
-  weight: 5400
-  tradeable: true
-  weapon: { type: club, attack: 23, defense: 9, hands: 1 }
-  requires: { level: 16 }
-  value: 820
-
-- id: thornwood_longbow
-  kind: weapon
-  sprite: weapons/thornwood_longbow
-  name: item.thornwood_longbow.name
-  description: item.thornwood_longbow.desc
-  weight: 3500
-  tradeable: true
-  weapon: { type: distance, attack: 12, range: 6, hands: 2, ammo: arrow }
-  requires: { level: 16, vocations: [ranger] }
-  value: 880
-
-- id: smuggler_crossbow
-  kind: weapon
-  sprite: weapons/smuggler_crossbow
-  name: item.smuggler_crossbow.name
-  description: item.smuggler_crossbow.desc
-  weight: 3200
-  tradeable: true
-  weapon: { type: distance, attack: 7, range: 5, hands: 1, ammo: bolt }
-  requires: { level: 12, vocations: [ranger] }
-  value: 420
-
-- id: stormglass_wand
-  kind: weapon
-  sprite: weapons/stormglass_wand
-  name: item.stormglass_wand.name
-  description: item.stormglass_wand.desc
-  weight: 1400
-  tradeable: true
-  weapon: { type: wand, attack: 21, range: 4, element: energy, hands: 1 }
-  requires: { level: 16, vocations: [arcanist] }
-  value: 880
-
-- id: hoarfrost_staff
-  kind: weapon
-  sprite: weapons/hoarfrost_staff
-  name: item.hoarfrost_staff.name
-  description: item.hoarfrost_staff.desc
-  weight: 1600
-  tradeable: true
-  weapon: { type: wand, attack: 21, range: 4, element: ice, hands: 1 }
-  requires: { level: 16, vocations: [druid] }
-  value: 880
-
-# Isla Volcánica (levels 30-50): Brasal's smithy (embersteel) and temple, delvers' loot.
-- id: embersteel_mace
-  kind: weapon
-  sprite: weapons/embersteel_mace
-  name: item.embersteel_mace.name
-  description: item.embersteel_mace.desc
-  weight: 5800
-  tradeable: true
-  weapon: { type: club, attack: 28, defense: 12, hands: 1 }
-  requires: { level: 32 }
-  value: 2000
-
-- id: embersteel_longbow
-  kind: weapon
-  sprite: weapons/embersteel_longbow
-  name: item.embersteel_longbow.name
-  description: item.embersteel_longbow.desc
-  weight: 3800
-  tradeable: true
-  weapon: { type: distance, attack: 17, range: 6, hands: 2, ammo: arrow }
-  requires: { level: 32, vocations: [ranger] }
-  value: 2100
-
-- id: embersteel_crossbow
-  kind: weapon
-  sprite: weapons/embersteel_crossbow
-  name: item.embersteel_crossbow.name
-  description: item.embersteel_crossbow.desc
-  weight: 4200
-  tradeable: true
-  weapon: { type: distance, attack: 13, range: 5, hands: 1, ammo: bolt }
-  requires: { level: 34, vocations: [ranger] }
-  value: 1900
-
-- id: obsidian_wand
-  kind: weapon
-  sprite: weapons/obsidian_wand
-  name: item.obsidian_wand.name
-  description: item.obsidian_wand.desc
-  weight: 1500
-  tradeable: true
-  weapon: { type: wand, attack: 30, range: 4, element: energy, hands: 1 }
-  requires: { level: 32, vocations: [arcanist] }
-  value: 2100
-
-- id: blackfrost_staff
-  kind: weapon
-  sprite: weapons/blackfrost_staff
-  name: item.blackfrost_staff.name
-  description: item.blackfrost_staff.desc
-  weight: 1700
-  tradeable: true
-  weapon: { type: wand, attack: 30, range: 4, element: ice, hands: 1 }
-  requires: { level: 32, vocations: [druid] }
-  value: 2100
+  retired: true

@@ -61,7 +61,8 @@ dialog:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
 # Content audit (2026-11): the temple keeps what a caster needs on the island: draughts,
-# poultices and the obsidian wand and blackfrost staff of the old forge-priests.
+# poultices and the obsidian wand and blackfrost staff of the old forge-priests; since
+# lote 11 also the band 4 robe and amulet (docs/02 "Catálogo de equipo").
 shop:
   id: still_flame_shop
   sells:
@@ -70,8 +71,12 @@ shop:
     - { item: seaweed_poultice, price: 25 }
     - { item: health_draught, price: 60 }
     - { item: concentrated_health_draught, price: 125 }
-    - { item: obsidian_wand, price: 2600 }
-    - { item: blackfrost_staff, price: 2600 }
+    - { item: obsidian_wand, price: 2500 }
+    - { item: blackfrost_staff, price: 2500 }
+    - { item: ashweave_robe, price: 1500 }
+    - { item: cinder_amulet, price: 2000 }
   buys:
-    - { item: obsidian_wand, price: 690 }
-    - { item: blackfrost_staff, price: 690 }
+    - { item: obsidian_wand, price: 660 }
+    - { item: blackfrost_staff, price: 660 }
+    - { item: ashweave_robe, price: 400 }
+    - { item: cinder_amulet, price: 530 }

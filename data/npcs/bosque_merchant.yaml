@@ -30,29 +30,41 @@ dialog:
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
+# Lote 11 (docs/02 "Catálogo de equipo"): band 3 (weapons, armor, shield) at 1.25 times its
+# value; it buys it at a third, the briar ring and the retired thornwood blade.
 shop:
   id: tannery_shop
   sells:
-    - { item: thornwood_blade, price: 1100 }
+    - { item: boarding_saber, price: 750 }
+    - { item: bearded_axe, price: 750 }
+    - { item: elmroot_maul, price: 750 }
+    - { item: thornwood_longbow, price: 750 }
+    - { item: smuggler_crossbow, price: 680 }
+    - { item: elmwood_shield, price: 560 }
     - { item: stagleather_coat, price: 680 }
-    - { item: stagleather_leggings, price: 190 }
-    - { item: elmwood_shield, price: 470 }
+    - { item: stagleather_hood, price: 300 }
+    - { item: stagleather_leggings, price: 300 }
+    - { item: stagleather_boots, price: 300 }
+    - { item: arrow, price: 2 }
+    - { item: bolt, price: 2 }
     - { item: felling_axe, price: 120 }
     - { item: smithing_hammer, price: 105 }
     - { item: glowcap_broth, price: 40 }
-    - { item: arrow, price: 2 }
-    - { item: elmroot_maul, price: 1000 }
-    - { item: thornwood_longbow, price: 1080 }
-    - { item: smuggler_crossbow, price: 520 }
-    - { item: bolt, price: 2 }
-    - { item: stagleather_hood, price: 230 }
-    - { item: stagleather_boots, price: 220 }
     - { item: mana_draught, price: 22 }
     - { item: health_draught, price: 60 }
   buys:
-    - { item: stagleather_coat, price: 170 }
-    - { item: stagleather_leggings, price: 45 }
-    - { item: elmwood_shield, price: 120 }
+    - { item: boarding_saber, price: 200 }
+    - { item: bearded_axe, price: 200 }
+    - { item: elmroot_maul, price: 200 }
+    - { item: thornwood_longbow, price: 200 }
+    - { item: smuggler_crossbow, price: 180 }
+    - { item: elmwood_shield, price: 150 }
+    - { item: stagleather_coat, price: 180 }
+    - { item: stagleather_hood, price: 80 }
+    - { item: stagleather_leggings, price: 80 }
+    - { item: stagleather_boots, price: 80 }
+    - { item: briar_ring, price: 120 }
+    - { item: thornwood_blade, price: 280 }
     - { item: elm_log, price: 2 }
     - { item: glowcap, price: 2 }
     - { item: stag_antler, price: 9 }
@@ -61,9 +73,3 @@ shop:
     - { item: crawler_chitin, price: 18 }
     - { item: spider_silk, price: 6 }
     - { item: wolf_pelt, price: 5 }
-    - { item: elmroot_maul, price: 270 }
-    - { item: thornwood_longbow, price: 290 }
-    - { item: smuggler_crossbow, price: 140 }
-    - { item: stagleather_hood, price: 60 }
-    - { item: stagleather_boots, price: 55 }
-    - { item: thornwood_blade, price: 280 } # content audit m4: it sells it, now it buys it back
