@@ -136,6 +136,13 @@ type Monster struct {
 	// tile where it stood: until its tick, on that tile and out of m's reach, that player
 	// is beyond its leash.
 	shunned []shun
+	// chaseWay is the rest of the A* way to its target (last step first) that chase
+	// follows from chaseAt while its target stands within one tile of chaseGoal, where it
+	// stood when the way was found: as on the way home (homeWay), the greedy step from the
+	// first tile of a detour would lead straight back to the wall. Its array is reused.
+	chaseWay  []world.Direction
+	chaseAt   world.Pos
+	chaseGoal world.Pos
 	// phase is how many of its kind's phases are on (updatePhase).
 	phase int
 	// master is the monster that summoned m (nil for a monster of a spawn) and summonOf
@@ -169,6 +176,7 @@ type shun struct {
 // found about the way to its old target does not hold for the new one.
 func (m *Monster) setTarget(p *Player) {
 	m.target, m.stuckOn, m.checkAt = p, 0, 0
+	m.chaseWay = m.chaseWay[:0]
 }
 
 // Speed returns the monster's effective speed.
@@ -1004,10 +1012,12 @@ const (
 	chaseBlocked
 )
 
-// chase takes m one step towards its target t within roam when it may (readyAt): the step
-// that most closes in (stepToward) or, with none, the first step of a way around
-// creatures (A*, within the tick's quota); with no way it waits pathRetry before stepping
-// or searching again, as walkHome does.
+// chase takes m one step towards its target t within roam when it may (readyAt): the next
+// step of the way it found (chaseWay, while it stands where that way left it and t within
+// one tile of where t stood then), else the step that most closes in (stepToward) or, with
+// none, the first step of a way around creatures (A*, within the tick's quota), whose rest
+// it keeps; with no way it waits pathRetry before stepping or searching again, as walkHome
+// does.
 //
 // With check (a leash, t out of its reach) it also checks, every pathRetry and whether it
 // steps or not, that a way within roam leads to t around creatures. Only finding one (or
@@ -1040,6 +1050,16 @@ func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSqu
 	if ctx.Tick < m.readyAt {
 		return chaseOn
 	}
+	if n := len(m.chaseWay); n > 0 && m.pos == m.chaseAt && chebyshev(t.pos, m.chaseGoal) <= 1 {
+		d := m.chaseWay[n-1]
+		m.chaseWay = m.chaseWay[:n-1]
+		if to, ok := m.pos.Step(d); ok && roam.has(to) && w.monsterCanEnter(to) {
+			w.stepMonster(ctx, m, d)
+			m.chaseAt = m.pos
+			return chaseOn
+		}
+	}
+	m.chaseWay = m.chaseWay[:0] // none, stale (t moved on, or m fought) or blocked: plan again
 	if d, ok := w.stepToward(m.pos, t.pos, false, roam); ok {
 		w.stepMonster(ctx, m, d)
 		return chaseOn
@@ -1058,7 +1078,14 @@ func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSqu
 		}
 	}
 	if len(way) >= 2 {
+		// It follows the whole way but its last step (onto t) while t stays near where it
+		// stood: from the first tile of a detour the greedy step would lead back to the wall.
+		for i := len(way) - 2; i >= 1; i-- {
+			m.chaseWay = append(m.chaseWay, way[i])
+		}
+		m.chaseGoal = t.pos
 		w.stepMonster(ctx, m, way[0])
+		m.chaseAt = m.pos
 		return chaseOn
 	}
 	m.readyAt = ctx.Tick + w.pathRetry
