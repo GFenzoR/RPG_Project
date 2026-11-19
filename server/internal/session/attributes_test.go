@@ -260,10 +260,11 @@ func TestSavedEquipablesKeepOrRollTheirAttribute(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) { c.Items = testItems() },
 		withAttributes(t))
 	nextChar++
-	c := withPack(nextChar, pos(5, 5), rolled(tunicID, 0, "armor", 1), stack(swordID, 1, 1))
+	// The tunic is refined (the forge, refine.go): the level is kept like the attribute.
+	c := withPack(nextChar, pos(5, 5), rolledAt(tunicID, 0, "armor", 1, 6), stack(swordID, 1, 1))
 	cl, p := h.joinChar(c)
 	tunic, sword := h.w.ItemsForTest(p, "test_tunic"), h.w.ItemsForTest(p, "test_sword")
-	if len(tunic) != 1 || tunic[0].Mods() != mods("armor", 1) || len(sword) != 1 {
+	if len(tunic) != 1 || tunic[0].Mods() != refinedMods("armor", 1, 6) || len(sword) != 1 {
 		t.Fatalf("tunic %v sword %v", tunic, sword)
 	}
 	checkRolled(t, attrPool(t), sword[0].Def(), sword[0].Mods())
@@ -276,7 +277,7 @@ func TestSavedEquipablesKeepOrRollTheirAttribute(t *testing.T) {
 	h.sim.Step()
 	inv := h.saves[len(h.saves)-1].Inventory
 	pack := inv[0].Items
-	if len(pack) != 2 || pack[0].Mods != mods("armor", 1) || pack[1].Mods != sword[0].Mods() {
+	if len(pack) != 2 || pack[0].Mods != refinedMods("armor", 1, 6) || pack[1].Mods != sword[0].Mods() {
 		t.Fatalf("saved %+v", inv)
 	}
 	// The next login reads it back as it was: no new roll.
@@ -300,9 +301,9 @@ func TestMovesKeepTheAttribute(t *testing.T) {
 		withAttributes(t))
 	nextChar++
 	cl, p := h.joinChar(withPack(nextChar, pos(5, 5), rolled(swordID, 0, "sword_skill", 2),
-		rolled(swordID, 1, "attack", 3), stack(bagID, 1, 2)))
+		rolledAt(swordID, 1, "attack", 3, 8), stack(bagID, 1, 2)))
 	win := openPack(t, h, cl)
-	want := mods("attack", 3)
+	want := refinedMods("attack", 3, 8) // refined: the level moves with it too
 	sword := h.w.ItemsForTest(p, "test_sword")[1]
 
 	evs := h.send(cl, moveItem(inContainer(win, 1), swordID, 0, inSlot(slotRight), 1))
@@ -434,18 +435,18 @@ func TestGearRegenerationWithoutTheVocations(t *testing.T) {
 // A trade hands over the very instances: the attribute arrives, both logs name it.
 func TestTradeKeepsTheAttribute(t *testing.T) {
 	h := newMarketHarness(t, withAttributes(t))
-	ca, a := h.trader("Ana", pos(2, 2), rolled(swordID, 0, "life_leech", 2))
+	ca, a := h.trader("Ana", pos(2, 2), rolledAt(swordID, 0, "life_leech", 2, 5))
 	cb, b := h.trader("Beto", pos(3, 2), stack(salveID, 4, 0))
 	h.startTrade(ca, cb, a, b, swordID, salveID)
 	h.send(ca, tradeAccept)
 	h.send(cb, tradeAccept)
 	got := h.w.ItemsForTest(b, "test_sword")
-	if len(got) != 1 || got[0].Mods() != mods("life_leech", 2) || len(h.w.ItemsForTest(a, "test_sword")) != 0 {
+	if len(got) != 1 || got[0].Mods() != refinedMods("life_leech", 2, 5) || len(h.w.ItemsForTest(a, "test_sword")) != 0 {
 		t.Fatalf("Beto got %v", got)
 	}
 	var out, in bool
 	for _, e := range h.economy {
-		if e.Kind == session.EconTrade && e.ItemID == swordID && e.Mods == mods("life_leech", 2) {
+		if e.Kind == session.EconTrade && e.ItemID == swordID && e.Mods == refinedMods("life_leech", 2, 5) {
 			out, in = out || e.Count == -1, in || e.Count == 1
 		}
 	}
@@ -457,43 +458,45 @@ func TestTradeKeepsTheAttribute(t *testing.T) {
 // A sell offer of an equipable is the one instance the seller picked: listed with its
 // attribute, bought as it is; cancelled, it waits in the mailbox as it is.
 func TestMarketSellOfferIsTheInstance(t *testing.T) {
+	// The second sword is refined (the forge): the offer, the listing and the buyer keep
+	// its level too.
 	h := newMarketHarness(t, withAttributes(t))
-	cs, s := h.atBoard("Sela", pos(1, 0), rolled(swordID, 0, "attack", 1), rolled(swordID, 1, "attack", 2),
+	cs, s := h.atBoard("Sela", pos(1, 0), rolled(swordID, 0, "attack", 1), rolledAt(swordID, 1, "attack", 2, 4),
 		stack(coinID, 50, 2))
 	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
 	browse := marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: swordID}}})
 	u := lastMarket(h.send(cs, browse))
-	if len(u.GetOwnedMods()) != 2 || u.GetOwned() != 2 || itemMods(&pb.ItemStack{Mods: u.GetOwnedMods()[1]}) != mods("attack", 2) {
+	if len(u.GetOwnedMods()) != 2 || u.GetOwned() != 2 || itemMods(&pb.ItemStack{Mods: u.GetOwnedMods()[1]}) != refinedMods("attack", 2, 4) {
 		t.Fatalf("owned mods %v", u.GetOwnedMods())
 	}
 	sellOf := func(n uint32, m session.Mods) *pb.ClientMessage {
 		return marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Create{Create: &pb.MarketCreate{
 			Side: pb.MarketSide_MARKET_SIDE_SELL, ItemId: swordID, Amount: n, Price: 30,
-			Mods: &pb.ItemMods{Attribute: m.Attr, Value: int32(m.Value)}}}})
+			Mods: &pb.ItemMods{Attribute: m.Attr, Value: int32(m.Value), Refine: uint32(m.Refine)}}}})
 	}
-	if !hasKey(h.send(cs, sellOf(2, mods("attack", 2))), "market.bad_amount") {
+	if !hasKey(h.send(cs, sellOf(2, refinedMods("attack", 2, 4))), "market.bad_amount") {
 		t.Fatal("two instances in one offer")
 	}
 	if !hasKey(h.send(cs, sellOf(1, mods("attack", 5))), "market.not_enough_items") {
 		t.Fatal("an instance Sela does not have")
 	}
-	if !hasKey(h.send(cs, sellOf(1, mods("attack", 2))), "market.created") {
+	if !hasKey(h.send(cs, sellOf(1, refinedMods("attack", 2, 4))), "market.created") {
 		t.Fatal("not created")
 	}
 	left := h.w.ItemsForTest(s, "test_sword")
 	ids := h.w.MarketOffers(s.CharacterID())
-	if len(left) != 1 || left[0].Mods() != mods("attack", 1) || h.w.MarketOfferModsForTest(ids[0]) != mods("attack", 2) {
+	if len(left) != 1 || left[0].Mods() != mods("attack", 1) || h.w.MarketOfferModsForTest(ids[0]) != refinedMods("attack", 2, 4) {
 		t.Fatalf("left %v, offer %+v", left, h.w.MarketOfferModsForTest(ids[0]))
 	}
-	if tr := h.transfers[len(h.transfers)-1]; tr.Market[0].Offer.Mods != mods("attack", 2) {
+	if tr := h.transfers[len(h.transfers)-1]; tr.Market[0].Offer.Mods != refinedMods("attack", 2, 4) {
 		t.Fatalf("stored offer %+v", tr.Market[0].Offer)
 	}
 	u = lastMarket(h.send(cb, browse))
-	if len(u.GetSells()) != 1 || itemMods(&pb.ItemStack{Mods: u.GetSells()[0].GetMods()}) != mods("attack", 2) {
+	if len(u.GetSells()) != 1 || itemMods(&pb.ItemStack{Mods: u.GetSells()[0].GetMods()}) != refinedMods("attack", 2, 4) {
 		t.Fatalf("listing %v", u.GetSells())
 	}
 	h.send(cb, acceptOffer(ids[0], 1))
-	if got := h.w.ItemsForTest(b, "test_sword"); len(got) != 1 || got[0].Mods() != mods("attack", 2) {
+	if got := h.w.ItemsForTest(b, "test_sword"); len(got) != 1 || got[0].Mods() != refinedMods("attack", 2, 4) {
 		t.Fatalf("Bruno bought %v", got)
 	}
 	// The other one: posted, cancelled, back through the mailbox as it was.
@@ -586,7 +589,7 @@ func TestDeathKeepsTheAttribute(t *testing.T) {
 	c := session.Character{ID: nextChar, AccountID: nextChar, Name: "Doomed", Vocation: "guardian", Level: 20,
 		Experience: testBalance().Experience.TotalFor(20) + 100, Health: 145, Pos: pos(40, 40), HasPos: true,
 		InventoryLoaded: true, // past the novice levels: the equipment drops
-		Inventory:       []session.ItemState{rolled(swordID, int(slotRight), "attack", 2), rolled(tunicID, int(slotArmor), "armor", 1)}}
+		Inventory:       []session.ItemState{rolledAt(swordID, int(slotRight), "attack", 2, 7), rolled(tunicID, int(slotArmor), "armor", 1)}}
 	_, p := h.joinChar(c)
 	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) { h.w.DieForTest(ctx, p) }))
 	h.sim.Step()
@@ -598,7 +601,7 @@ func TestDeathKeepsTheAttribute(t *testing.T) {
 	for _, s := range cs[0].Loot() {
 		got[s.GetItemId()] = itemMods(s)
 	}
-	if got[swordID] != mods("attack", 2) || got[tunicID] != mods("armor", 1) {
+	if got[swordID] != refinedMods("attack", 2, 7) || got[tunicID] != mods("armor", 1) {
 		t.Fatalf("corpse %v", cs[0].Loot())
 	}
 }
@@ -618,8 +621,8 @@ func TestHouseFloorKeepsTheAttribute(t *testing.T) {
 		h.sim.RunTicks(2)
 		return h
 	}
-	h := load(rolled(swordID, 0, "attack", 2))
-	if g := h.w.GroundAt(pos(2, 2)); len(g) != 1 || g[0].Mods() != mods("attack", 2) || len(h.transfers) != 0 {
+	h := load(rolledAt(swordID, 0, "attack", 2, 9))
+	if g := h.w.GroundAt(pos(2, 2)); len(g) != 1 || g[0].Mods() != refinedMods("attack", 2, 9) || len(h.transfers) != 0 {
 		t.Fatalf("loaded %v, %d transfers", g, len(h.transfers))
 	}
 	h = load(stack(swordID, 1, 0))
