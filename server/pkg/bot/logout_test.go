@@ -161,3 +161,29 @@ func TestLogoutLockedUntilTheDeadline(t *testing.T) {
 		}
 	}
 }
+
+// Ending Logout's ctx stops the asking but never drops the connection, also when it ends
+// while the request is being written: coder/websocket closes a connection whose write ctx
+// ends before the write returns. Here it ended before Logout, so every write sees it (the
+// library takes the lock or not at random: 20 tries).
+func TestLogoutEndedCtxKeepsTheConnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i := range 20 {
+		var logouts atomic.Int32
+		b, _ := connected(t, ctx, fakeServer(t, &logouts, func(n int) answer {
+			if n == 1 {
+				return silent
+			}
+			return accept
+		}))
+		ended, end := context.WithCancel(ctx)
+		end()
+		if err := b.Logout(ended); !errors.Is(err, context.Canceled) || errors.Is(err, ErrLogoutLocked) {
+			t.Fatalf("try %d: logout with an ended ctx: %v", i, err)
+		}
+		if err := b.Logout(ctx); err != nil { // the same connection still logs out
+			t.Fatalf("try %d: the connection did not survive: %v", i, err)
+		}
+	}
+}
