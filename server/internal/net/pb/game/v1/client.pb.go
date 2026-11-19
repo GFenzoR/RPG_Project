@@ -356,6 +356,7 @@ type ClientMessage struct {
 	//	*ClientMessage_HouseCommand
 	//	*ClientMessage_EquipCosmetic
 	//	*ClientMessage_UnequipCosmetic
+	//	*ClientMessage_Refine
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -713,6 +714,15 @@ func (x *ClientMessage) GetUnequipCosmetic() *UnequipCosmetic {
 	return nil
 }
 
+func (x *ClientMessage) GetRefine() *Refine {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_Refine); ok {
+			return x.Refine
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -857,6 +867,10 @@ type ClientMessage_UnequipCosmetic struct {
 	UnequipCosmetic *UnequipCosmetic `protobuf:"bytes,35,opt,name=unequip_cosmetic,json=unequipCosmetic,proto3,oneof"`
 }
 
+type ClientMessage_Refine struct {
+	Refine *Refine `protobuf:"bytes,36,opt,name=refine,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -926,6 +940,8 @@ func (*ClientMessage_HouseCommand) isClientMessage_Message() {}
 func (*ClientMessage_EquipCosmetic) isClientMessage_Message() {}
 
 func (*ClientMessage_UnequipCosmetic) isClientMessage_Message() {}
+
+func (*ClientMessage_Refine) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -3733,6 +3749,91 @@ func (x *Craft) GetStation() *Position {
 	return nil
 }
 
+// Refine is one attempt of the forge (docs/02 "Forja") on the item at item (an equipment
+// slot or an open container: never the ground) at the anvil on the tile station. item_id
+// and level are the item and the refine level the client saw: a stale view (another item,
+// another level) is refused, so a repeated click never refines twice. protect spends one
+// protection material in this attempt (only from the first level that can fail; ignored
+// below it). The server checks everything (the station within reach, an equipable that
+// rolls attributes below the top level, not offered in the trade window, the temper
+// stones, the protection and the gold carried, the pace of crafting) and answers with
+// RefineResult, or a system Message (refine.*) when the attempt did not happen.
+type Refine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Station       *Position              `protobuf:"bytes,1,opt,name=station,proto3" json:"station,omitempty"`
+	Item          *ItemLocation          `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
+	Protect       bool                   `protobuf:"varint,5,opt,name=protect,proto3" json:"protect,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Refine) Reset() {
+	*x = Refine{}
+	mi := &file_game_v1_client_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Refine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Refine) ProtoMessage() {}
+
+func (x *Refine) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Refine.ProtoReflect.Descriptor instead.
+func (*Refine) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *Refine) GetStation() *Position {
+	if x != nil {
+		return x.Station
+	}
+	return nil
+}
+
+func (x *Refine) GetItem() *ItemLocation {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+func (x *Refine) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *Refine) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *Refine) GetProtect() bool {
+	if x != nil {
+		return x.Protect
+	}
+	return false
+}
+
 // ReportPlayer reports another player to the staff (T4.1): the report button of the
 // battle list. creature_id must be a player the reporter sees; reason is free text (1 to
 // balance reports.max_reason characters, at most 200). The server attaches the context
@@ -3749,7 +3850,7 @@ type ReportPlayer struct {
 
 func (x *ReportPlayer) Reset() {
 	*x = ReportPlayer{}
-	mi := &file_game_v1_client_proto_msgTypes[49]
+	mi := &file_game_v1_client_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3761,7 +3862,7 @@ func (x *ReportPlayer) String() string {
 func (*ReportPlayer) ProtoMessage() {}
 
 func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[49]
+	mi := &file_game_v1_client_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3774,7 +3875,7 @@ func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportPlayer.ProtoReflect.Descriptor instead.
 func (*ReportPlayer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{49}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ReportPlayer) GetCreatureId() uint32 {
@@ -3802,7 +3903,7 @@ type PresenceAnswer struct {
 
 func (x *PresenceAnswer) Reset() {
 	*x = PresenceAnswer{}
-	mi := &file_game_v1_client_proto_msgTypes[50]
+	mi := &file_game_v1_client_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3814,7 +3915,7 @@ func (x *PresenceAnswer) String() string {
 func (*PresenceAnswer) ProtoMessage() {}
 
 func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[50]
+	mi := &file_game_v1_client_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3827,7 +3928,7 @@ func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresenceAnswer.ProtoReflect.Descriptor instead.
 func (*PresenceAnswer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{50}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *PresenceAnswer) GetCheckId() uint32 {
@@ -3854,7 +3955,7 @@ type TutorialSkip struct {
 
 func (x *TutorialSkip) Reset() {
 	*x = TutorialSkip{}
-	mi := &file_game_v1_client_proto_msgTypes[51]
+	mi := &file_game_v1_client_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3866,7 +3967,7 @@ func (x *TutorialSkip) String() string {
 func (*TutorialSkip) ProtoMessage() {}
 
 func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[51]
+	mi := &file_game_v1_client_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3879,7 +3980,7 @@ func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TutorialSkip.ProtoReflect.Descriptor instead.
 func (*TutorialSkip) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{51}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{52}
 }
 
 // EquipCosmetic puts on a cosmetic the account owns (T5.7, docs/02 "Tienda cosmética").
@@ -3897,7 +3998,7 @@ type EquipCosmetic struct {
 
 func (x *EquipCosmetic) Reset() {
 	*x = EquipCosmetic{}
-	mi := &file_game_v1_client_proto_msgTypes[52]
+	mi := &file_game_v1_client_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3909,7 +4010,7 @@ func (x *EquipCosmetic) String() string {
 func (*EquipCosmetic) ProtoMessage() {}
 
 func (x *EquipCosmetic) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[52]
+	mi := &file_game_v1_client_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3922,7 +4023,7 @@ func (x *EquipCosmetic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipCosmetic.ProtoReflect.Descriptor instead.
 func (*EquipCosmetic) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{52}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *EquipCosmetic) GetCosmeticId() string {
@@ -3943,7 +4044,7 @@ type UnequipCosmetic struct {
 
 func (x *UnequipCosmetic) Reset() {
 	*x = UnequipCosmetic{}
-	mi := &file_game_v1_client_proto_msgTypes[53]
+	mi := &file_game_v1_client_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3955,7 +4056,7 @@ func (x *UnequipCosmetic) String() string {
 func (*UnequipCosmetic) ProtoMessage() {}
 
 func (x *UnequipCosmetic) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[53]
+	mi := &file_game_v1_client_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3968,7 +4069,7 @@ func (x *UnequipCosmetic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnequipCosmetic.ProtoReflect.Descriptor instead.
 func (*UnequipCosmetic) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{53}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *UnequipCosmetic) GetKind() string {
@@ -3982,7 +4083,7 @@ var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xf3\x0e\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\x9e\x0f\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -4022,7 +4123,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x0emarket_command\x18  \x01(\v2\x16.game.v1.MarketCommandH\x00R\rmarketCommand\x12<\n" +
 	"\rhouse_command\x18! \x01(\v2\x15.game.v1.HouseCommandH\x00R\fhouseCommand\x12?\n" +
 	"\x0eequip_cosmetic\x18\" \x01(\v2\x16.game.v1.EquipCosmeticH\x00R\requipCosmetic\x12E\n" +
-	"\x10unequip_cosmetic\x18# \x01(\v2\x18.game.v1.UnequipCosmeticH\x00R\x0funequipCosmeticB\t\n" +
+	"\x10unequip_cosmetic\x18# \x01(\v2\x18.game.v1.UnequipCosmeticH\x00R\x0funequipCosmetic\x12)\n" +
+	"\x06refine\x18$ \x01(\v2\x0f.game.v1.RefineH\x00R\x06refineB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -4191,7 +4293,13 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x06war_id\x18\x05 \x01(\x04R\x05warId\"Q\n" +
 	"\x05Craft\x12\x1b\n" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12+\n" +
-	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation\"G\n" +
+	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation\"\xa9\x01\n" +
+	"\x06Refine\x12+\n" +
+	"\astation\x18\x01 \x01(\v2\x11.game.v1.PositionR\astation\x12)\n" +
+	"\x04item\x18\x02 \x01(\v2\x15.game.v1.ItemLocationR\x04item\x12\x17\n" +
+	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12\x14\n" +
+	"\x05level\x18\x04 \x01(\rR\x05level\x12\x18\n" +
+	"\aprotect\x18\x05 \x01(\bR\aprotect\"G\n" +
 	"\fReportPlayer\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x16\n" +
@@ -4261,7 +4369,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),            // 0: game.v1.FightStance
 	(ChatChannel)(0),            // 1: game.v1.ChatChannel
@@ -4316,17 +4424,18 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*PartyCommand)(nil),        // 50: game.v1.PartyCommand
 	(*GuildCommand)(nil),        // 51: game.v1.GuildCommand
 	(*Craft)(nil),               // 52: game.v1.Craft
-	(*ReportPlayer)(nil),        // 53: game.v1.ReportPlayer
-	(*PresenceAnswer)(nil),      // 54: game.v1.PresenceAnswer
-	(*TutorialSkip)(nil),        // 55: game.v1.TutorialSkip
-	(*EquipCosmetic)(nil),       // 56: game.v1.EquipCosmetic
-	(*UnequipCosmetic)(nil),     // 57: game.v1.UnequipCosmetic
-	(Direction)(0),              // 58: game.v1.Direction
-	(*ActionTarget)(nil),        // 59: game.v1.ActionTarget
-	(*ItemLocation)(nil),        // 60: game.v1.ItemLocation
-	(MarketSide)(0),             // 61: game.v1.MarketSide
-	(*ItemMods)(nil),            // 62: game.v1.ItemMods
-	(*Position)(nil),            // 63: game.v1.Position
+	(*Refine)(nil),              // 53: game.v1.Refine
+	(*ReportPlayer)(nil),        // 54: game.v1.ReportPlayer
+	(*PresenceAnswer)(nil),      // 55: game.v1.PresenceAnswer
+	(*TutorialSkip)(nil),        // 56: game.v1.TutorialSkip
+	(*EquipCosmetic)(nil),       // 57: game.v1.EquipCosmetic
+	(*UnequipCosmetic)(nil),     // 58: game.v1.UnequipCosmetic
+	(Direction)(0),              // 59: game.v1.Direction
+	(*ActionTarget)(nil),        // 60: game.v1.ActionTarget
+	(*ItemLocation)(nil),        // 61: game.v1.ItemLocation
+	(MarketSide)(0),             // 62: game.v1.MarketSide
+	(*ItemMods)(nil),            // 63: game.v1.ItemMods
+	(*Position)(nil),            // 64: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4355,58 +4464,61 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	49, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
 	50, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
 	52, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
-	53, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
-	54, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
-	55, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
+	54, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
+	55, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
+	56, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
 	51, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
 	11, // 30: game.v1.ClientMessage.set_safe_mode:type_name -> game.v1.SetSafeMode
 	24, // 31: game.v1.ClientMessage.market_command:type_name -> game.v1.MarketCommand
 	31, // 32: game.v1.ClientMessage.house_command:type_name -> game.v1.HouseCommand
-	56, // 33: game.v1.ClientMessage.equip_cosmetic:type_name -> game.v1.EquipCosmetic
-	57, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
-	58, // 35: game.v1.Walk.dir:type_name -> game.v1.Direction
-	58, // 36: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	58, // 37: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 38: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	59, // 39: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	60, // 40: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	60, // 41: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	59, // 42: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	60, // 43: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	60, // 44: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	60, // 45: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 46: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	60, // 47: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	60, // 48: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	25, // 49: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
-	26, // 50: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
-	27, // 51: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
-	28, // 52: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
-	29, // 53: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
-	30, // 54: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
-	61, // 55: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
-	62, // 56: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
-	62, // 57: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
-	32, // 58: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 59: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 60: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 61: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 62: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 63: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 64: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 65: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 66: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 67: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 68: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 69: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 70: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 71: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	63, // 72: game.v1.Craft.station:type_name -> game.v1.Position
-	73, // [73:73] is the sub-list for method output_type
-	73, // [73:73] is the sub-list for method input_type
-	73, // [73:73] is the sub-list for extension type_name
-	73, // [73:73] is the sub-list for extension extendee
-	0,  // [0:73] is the sub-list for field type_name
+	57, // 33: game.v1.ClientMessage.equip_cosmetic:type_name -> game.v1.EquipCosmetic
+	58, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
+	53, // 35: game.v1.ClientMessage.refine:type_name -> game.v1.Refine
+	59, // 36: game.v1.Walk.dir:type_name -> game.v1.Direction
+	59, // 37: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	59, // 38: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 39: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	60, // 40: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	61, // 41: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	61, // 42: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	60, // 43: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	61, // 44: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	61, // 45: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	61, // 46: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 47: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	61, // 48: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	61, // 49: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	25, // 50: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
+	26, // 51: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
+	27, // 52: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
+	28, // 53: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
+	29, // 54: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
+	30, // 55: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
+	62, // 56: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
+	63, // 57: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
+	63, // 58: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
+	32, // 59: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	33, // 60: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	34, // 61: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	35, // 62: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	36, // 63: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	37, // 64: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	38, // 65: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	39, // 66: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	40, // 67: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	43, // 68: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 69: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 70: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 71: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 72: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	64, // 73: game.v1.Craft.station:type_name -> game.v1.Position
+	64, // 74: game.v1.Refine.station:type_name -> game.v1.Position
+	61, // 75: game.v1.Refine.item:type_name -> game.v1.ItemLocation
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -4451,6 +4563,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_HouseCommand)(nil),
 		(*ClientMessage_EquipCosmetic)(nil),
 		(*ClientMessage_UnequipCosmetic)(nil),
+		(*ClientMessage_Refine)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[9].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -4484,7 +4597,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   54,
+			NumMessages:   55,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

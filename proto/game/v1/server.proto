@@ -60,6 +60,7 @@ message ServerMessage {
     CreatureCosmetics creature_cosmetics = 41;
     CosmeticsState cosmetics_state = 42;
     CreatureAttack creature_attack = 43;
+    RefineResult refine_result = 44;
   }
 }
 
@@ -881,9 +882,36 @@ message CreatureGuild {
 // station is item_id and sends Craft with pos. owned is how many units of each input of
 // those recipes the player carries in its containers, and tools the tool.use of every
 // tool it carries. Nothing is sent when the player walks away: Craft is checked again.
+// At the forge's station (the anvil, docs/02 "Forja") owned also counts the temper stones
+// and the protection material, and money is the money the player carries (smallest
+// coin) for the cost of a Refine; it comes again after every Refine.
 message StationOpen {
   Position pos = 1;
   uint32 item_id = 2;
   repeated ItemStack owned = 3;
   repeated string tools = 4;
+  uint64 money = 5;
+}
+
+// RefineOutcome is how a forge attempt ended (docs/02 "Forja").
+enum RefineOutcome {
+  REFINE_OUTCOME_UNSPECIFIED = 0;
+  // The item went up one level.
+  REFINE_OUTCOME_SUCCESS = 1;
+  // It failed and the item broke: it is gone.
+  REFINE_OUTCOME_BROKEN = 2;
+  // It failed, the protection material held: the item lost one level instead.
+  REFINE_OUTCOME_PROTECTED = 3;
+}
+
+// RefineResult answers a Refine that happened: what was spent is gone whatever the
+// outcome. item is the instance after it (item_id and mods, the new refine level; unset
+// when it broke) and level its refine level now (0 when it broke). text is the message to
+// show (refine.success, refine.broken, refine.protected), also in the log. Everyone who sees
+// the anvil gets an Effect on it: 8 sparks on a success, 9 a shatter otherwise.
+message RefineResult {
+  RefineOutcome outcome = 1;
+  ItemStack item = 2;
+  uint32 level = 3;
+  LocalizedText text = 4;
 }
