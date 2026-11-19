@@ -374,6 +374,11 @@ func TestBrasalNPCs(t *testing.T) {
 		t.Fatal("no shop")
 	}
 	money := h.w.Money(p)
+	items, err := content.LoadItems(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byNum := items.ByNumeric()
 	for _, o := range shops[0].Offers {
 		if o.BuyPrice == 0 {
 			continue
@@ -386,6 +391,14 @@ func TestBrasalNPCs(t *testing.T) {
 		if h.w.Money(p) != money {
 			t.Fatalf("after item %d: money %d, want %d", o.ItemId, h.w.Money(p), money)
 		}
+		// The band 4 kit and the forge's temper stones are more lines than one pack holds:
+		// each bought piece leaves so the next one is about money, not room.
+		def := byNum[uint16(o.ItemId)]
+		if def == nil {
+			t.Fatalf("item %d not in data/items", o.ItemId)
+		}
+		h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, def.ID, 1) }))
+		h.sim.Step()
 	}
 	pelt := itemNum(t, h, p, "ash_pelt")
 	evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: d.DialogId, ItemId: pelt, Count: 3}}})
