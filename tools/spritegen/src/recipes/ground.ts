@@ -361,9 +361,13 @@ function water(img: Image, seed: number, t: number): void {
 }
 
 const FISH = hex("#10202e");
-/** Water with a shoal: small dark fish circling, and a ring where one breaks the surface. */
-function shoal(img: Image, seed: number, t: number): void {
-  water(img, seed, t);
+/**
+ * Water with a shoal: the very water of ground/water_shallow (same seed, so the two meet
+ * without a seam and need no border, docs/06 "Bordes"), with small dark fish circling and a
+ * ring where one breaks the surface.
+ */
+function shoal(img: Image, _seed: number, t: number): void {
+  water(img, seedOf("ground/water_shallow"), t);
   for (let i = 0; i < 3; i++) {
     const a = 2 * Math.PI * (t + i / 3);
     const x = Math.round(16 + 7 * Math.cos(a));
