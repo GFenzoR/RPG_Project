@@ -21,6 +21,7 @@ import {
 import {
   checkPaths,
   EFFECT_FRAME,
+  MISSILE_ART,
   OUTFIT_FRAME,
   previewSheet,
   RECIPES,
@@ -32,7 +33,7 @@ import {
   UI_SLOT_BOX,
   uiIconBox,
 } from "./index.ts";
-import { EFFECT_FRAMES } from "./recipes/effects.ts";
+import { EFFECT_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { SLOT_MASKS } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
 
@@ -226,6 +227,68 @@ describe("effect strips", () => {
 /** Same colour (alpha ignored: everything is opaque). */
 const same = (a: readonly number[] | undefined, b: readonly number[]): boolean =>
   a !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+describe("missiles", () => {
+  /** The opaque pixels of a sprite as "x,y". */
+  const pixels = (img: Image): Set<string> => {
+    const out = new Set<string>();
+    for (let y = 0; y < img.height; y++)
+      for (let x = 0; x < img.width; x++) if (opaque(img, x, y)) out.add(`${x},${y}`);
+    return out;
+  };
+
+  it("are the arrow and, per element, an orb loop of MISSILE_FRAMES frames and its trail", () => {
+    const expected = ["missiles/arrow/e", "missiles/arrow/se"];
+    for (const el of ORB_ELEMENTS) {
+      for (let f = 0; f < MISSILE_FRAMES; f++) expected.push(`missiles/${el}/${f}`);
+      expected.push(`missiles/${el}/trail`);
+    }
+    expect(recipePaths("missiles/")).toEqual([...expected].sort());
+    for (const p of expected) {
+      expect(RECIPES[p]?.kind, p).toBe("effect");
+      expect(MISSILE_ART.test(p), p).toBe(true);
+    }
+    expect(MISSILE_ART.test("missiles/arrow")).toBe(false);
+    expect(MISSILE_ART.test("effects/fire/0")).toBe(false);
+  });
+
+  it("draw inside the middle 16x16, so a quarter turn keeps them in the sprite", () => {
+    for (const p of recipePaths("missiles/")) {
+      for (const xy of pixels(render(p))) {
+        const [x = 0, y = 0] = xy.split(",").map(Number);
+        expect(x >= 8 && x < 24 && y >= 8 && y < 24, `${p} at ${xy}`).toBe(true);
+      }
+    }
+  });
+
+  it("draw the diagonal arrow as the straight one turned 45 degrees (same length)", () => {
+    const span = (img: Image, along: (x: number, y: number) => number): number => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const xy of pixels(img)) {
+        const [x = 0, y = 0] = xy.split(",").map(Number);
+        lo = Math.min(lo, along(x, y));
+        hi = Math.max(hi, along(x, y));
+      }
+      return hi - lo;
+    };
+    const e = span(render("missiles/arrow/e"), (x) => x);
+    const se = span(render("missiles/arrow/se"), (x, y) => (x + y) / Math.SQRT2);
+    expect(e).toBeGreaterThanOrEqual(14);
+    expect(Math.abs(e - se)).toBeLessThanOrEqual(2);
+  });
+
+  it("animate the orbs: no two frames of a loop are the same picture", () => {
+    for (const el of ORB_ELEMENTS) {
+      const frames = Array.from({ length: MISSILE_FRAMES }, (_, f) =>
+        encodePng(render(`missiles/${el}/${f}`)),
+      );
+      for (let f = 0; f < frames.length; f++)
+        for (let g = f + 1; g < frames.length; g++)
+          expect(frames[f]?.equals(frames[g] ?? Buffer.alloc(0)), `${el} ${f}/${g}`).toBe(false);
+    }
+  });
+});
 
 describe("cast shadow", () => {
   it("falls to the bottom-right from part-way down, only behind the figure", () => {

@@ -77,6 +77,13 @@ export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 
 /**
+ * Missile art, which no data/ file names: missiles/<name>/<frame or part>, such as the orb
+ * frames missiles/fire/0 or the arrow missiles/arrow/se. The client maps each projectile
+ * id to them (client/src/render/effects.ts).
+ */
+export const MISSILE_ART = /^missiles\/([a-z0-9_]+)\/([a-z0-9_]+)$/;
+
+/**
  * Animation frames of a creature sprite (docs/17 ANI-4): <sprite>/<action>_<dir>_<n>, such as
  * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
  * turns them into that sprite's clips.
@@ -99,9 +106,9 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
 
 /**
  * Problems with the recipe set: paths no data/ file uses (and that are neither outfit nor
- * effect frames nor ui icons), ui icons that are not of kind "ui" (or the other way
- * round), and effect strips whose frames are not 0, 1, ... without a gap (the client
- * stops at the first missing frame).
+ * effect frames, missile art nor ui icons), ui icons that are not of kind "ui" (or the
+ * other way round), and effect or missile strips whose frames are not 0, 1, ... without a
+ * gap (the client stops at the first missing frame).
  */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
@@ -115,6 +122,7 @@ export function checkPaths(root: string): string[] {
       !used.has(p) &&
       !OUTFIT_FRAME.test(p) &&
       !EFFECT_FRAME.test(p) &&
+      !MISSILE_ART.test(p) &&
       !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
       !used.has(TILE_PART.exec(p)?.[1] ?? "")
     )
@@ -125,15 +133,19 @@ export function checkPaths(root: string): string[] {
   const strips = new Map<string, number[]>();
   for (const p of recipePaths()) {
     const m = EFFECT_FRAME.exec(p);
-    if (!m) continue;
-    const frames = strips.get(m[1] ?? "") ?? [];
-    frames.push(Number(m[2]));
-    strips.set(m[1] ?? "", frames);
+    const missile = MISSILE_ART.exec(p);
+    const folder = m ? `effects/${m[1] ?? ""}` : missile ? `missiles/${missile[1] ?? ""}` : "";
+    const frame = m ? m[2] : missile?.[2];
+    if (!folder || frame === undefined || !/^[0-9]+$/.test(frame)) continue;
+    if (RECIPES[p]?.kind !== "effect") problems.push(`${p}: must be of kind "effect"`);
+    const frames = strips.get(folder) ?? [];
+    frames.push(Number(frame));
+    strips.set(folder, frames);
   }
-  for (const [name, frames] of strips) {
+  for (const [folder, frames] of strips) {
     frames.sort((a, b) => a - b);
     if (frames.some((f, i) => f !== i))
-      problems.push(`effects/${name}: frames must be 0..${frames.length - 1} without gaps`);
+      problems.push(`${folder}: frames must be 0..${frames.length - 1} without gaps`);
   }
   return problems;
 }

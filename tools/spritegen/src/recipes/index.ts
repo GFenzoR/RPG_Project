@@ -4,7 +4,7 @@ import { engineRecipes } from "../engine/book.ts";
 import { ENGINE_SPECS } from "../engine/specs/index.ts";
 import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
-import { EFFECTS } from "./effects.ts";
+import { EFFECTS, MISSILES } from "./effects.ts";
 import { GROUND } from "./ground.ts";
 import { ITEMS } from "./items.ts";
 import { PORTALS } from "./portals.ts";
@@ -35,6 +35,7 @@ export const RECIPES: RecipeBook = merge(
   ITEMS,
   CREATURES,
   EFFECTS,
+  MISSILES,
   UI,
   engineRecipes(ENGINE_SPECS),
 );
