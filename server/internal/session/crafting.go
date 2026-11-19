@@ -105,6 +105,9 @@ func (w *World) sendStation(p *Player, pos world.Pos, id uint16) {
 			m.Tools = append(m.Tools, t.Use)
 		}
 	})
+	if w.forge != nil && id == w.forgeStation {
+		m.Money = uint64(max(w.money(p), 0)) // the forge's cost (refine.go)
+	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_StationOpen{StationOpen: m}})
 }
 

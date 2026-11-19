@@ -326,6 +326,9 @@ type World struct {
 	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
 	// their recipes, for StationOpen.
 	stations map[uint16][]*content.Item
+	// Forge (refine.go): balance.yaml forge when enabled (nil: off) and its station item.
+	forge        *content.Forge
+	forgeStation uint16
 
 	// Chat (T1.13): balance.yaml chat converted to ticks.
 	chatRefill game.Tick
@@ -625,6 +628,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {
+		return nil, err
+	}
+	if err := w.initForge(); err != nil {
 		return nil, err
 	}
 	if err := w.initTutorial(); err != nil {

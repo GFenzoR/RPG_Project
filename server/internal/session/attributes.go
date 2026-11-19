@@ -134,19 +134,22 @@ type gearBonus struct {
 	protect map[string]int
 }
 
-// wornGear sums the attributes of p's equipment. Only what is worn counts: the backpack
-// and its content do not.
+// wornGear sums the attributes of p's equipment and what their refine levels add (the
+// forge, refine.go). Only what is worn counts: the backpack and its content do not.
 func (w *World) wornGear(p *Player) gearBonus {
 	var g gearBonus
-	if len(w.cfg.Attributes) == 0 {
+	if len(w.cfg.Attributes) == 0 && w.forge == nil {
 		return g
 	}
 	byAttr := map[string]int{}
 	for slot, it := range p.equip {
-		if it == nil || slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) || it.mods.Attr == "" {
+		if it == nil || slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) || it.mods.Zero() {
 			continue
 		}
-		byAttr[it.mods.Attr] += it.mods.Value
+		if it.mods.Attr != "" {
+			byAttr[it.mods.Attr] += it.mods.Value
+		}
+		w.refineGain(&g, byAttr, slot, it) // the forge (refine.go)
 	}
 	for id, v := range byAttr {
 		a := w.cfg.Attributes.ByID(id)
@@ -195,13 +198,13 @@ func (w *World) wornGear(p *Player) gearBonus {
 // applyGear recomputes p.gear and what follows from it: the maximums (health and mana
 // never above them), the armor and the speed. A player in the world is told what changed:
 // its stats and health bar, its speed. The sums are only redone when the worn instances
-// with an attribute changed (Player.gearFrom): spending ammo or a rune's charge does not
+// with mods changed (Player.gearFrom): spending ammo or a rune's charge does not
 // redo them. A path that changes a worn instance's mods in place (the forge) clears
 // gearFrom.
 func (w *World) applyGear(p *Player) {
 	var worn [equipSlots]*Item
 	for slot, it := range p.equip {
-		if it != nil && slot != int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) && it.mods.Attr != "" {
+		if it != nil && slot != int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) && !it.mods.Zero() {
 			worn[slot] = it
 		}
 	}

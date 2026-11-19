@@ -32,6 +32,7 @@ const (
 	EconHouse    = "house"    // houses (T5.4): rent (a sink), transfer price, items sent to the mailbox
 	EconGather   = "gather"   // fishing, mining, woodcutting
 	EconCraft    = "craft"    // crafting inputs out, output in
+	EconForge    = "forge"    // the forge (refine.go): stones, protection and money out; a broken item; each level change of an instance (out with its old mods, in with the new)
 	EconDeath    = "death"    // lost into the remains at death
 	EconGM       = "gm"       // created by a staff command (/item)
 	EconConsume  = "consume"  // eaten, drunk, a rune's last charge, ammo shot
@@ -240,8 +241,10 @@ func (w *World) econLoot(owner *Player, monster string, it *Item) {
 }
 
 // earns reports whether a positive entry of kind is new wealth for the outlier check
-// (buying from an NPC is not: it was paid for).
-func earns(kind string) bool { return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket }
+// (buying from an NPC is not: it was paid for; nor the forge's new level of an instance).
+func earns(kind string) bool {
+	return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket && kind != EconForge
+}
 
 // ground books h moving between p and the ground (sign +1 picked up, -1 dropped). It is
 // not logged: items on the ground stay in the world.
