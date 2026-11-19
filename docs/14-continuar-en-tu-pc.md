@@ -308,8 +308,11 @@ el punto 5:
     - Si se abren todas las ventanas a la vez, algunas se pisan en su lugar de fábrica
       (habilidades y chat a 1280x800): un lugar de fábrica que mire las abiertas sería otro
       paso.
-    - El lugar de fábrica de los contenedores (`15rem` desde arriba) cuenta con el alto de
-      hoy del inventario: la rama `feat/equipment-d2` que lo rehace tiene que ajustarlo.
+    - Los contenedores salen justo debajo del inventario, que `GameView` mide (con la
+      figura y la mochila de `feat/equipment-d2`, unos 500 px): en una pantalla baja
+      (1280x720, 960x700) queda poco lugar debajo y salen cortos, con su cuerpo
+      desplazable. Mirarlo en el E2E final; si molesta, que salgan a la izquierda de la
+      columna del inventario cuando abajo no entran (a 960 px taparían al jugador).
   - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
   - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
     piezas por material que el renderer elige por sus vecinos (también en el editor y en
@@ -663,14 +666,16 @@ el punto 5:
     cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
     la herramienta).
 
-- **Tutorial sobre la ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
+- **Tutorial y ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
   panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
   ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
   Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
   abierta, como hace con el diálogo y la tienda. Con la pantalla completa (A14) cambian
-  los dos lugares, pero por cuenta siguen pisándose: la ayuda (25rem) sale centrada al 8 %
-  del alto y el panel a la izquierda de la columna del inventario, así que a 960x700 tapa
-  la mitad derecha de la barra de la Ayuda, con sus botones. Mirarlo en el
+  los dos lugares y se pisan al revés: las ventanas (`.win-layer`, z 20) van sobre el
+  tutorial (z 5), así que a 960x700 la Ayuda (25rem, centrada al 8 % del alto), el gremio
+  y la apariencia (a la izquierda de la columna del inventario, `right: 16rem`) tapan el
+  panel del tutorial y su "Saltar tutorial". Se cierran con H, G, O o Escape, o se mueven;
+  si molesta, el panel podría correrse debajo de las que salen ahí. Mirarlo en el
   `44-controls-help-960` del E2E final.
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta

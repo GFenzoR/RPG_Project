@@ -1474,9 +1474,14 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   su lugar de fábrica (`windows.css`, `:not([data-placed])`): batalla arriba a la izquierda
   (hasta el 50 % del alto), grupo a su derecha, habilidades debajo (desde el 50 %);
   inventario arriba a la derecha, gremio y apariencia a su izquierda, los contenedores debajo
-  del inventario (`top: 15rem`, el n-ésimo un paso más abajo y a la izquierda: `--nth`, que
-  pone `GameWindow`; nunca más abajo que `100% - 2rem`, así su barra de título se ve aunque
-  haya muchos abiertos en una pantalla baja); el chat abajo a la izquierda pasando la placa; opciones y ayuda al
+  del inventario (`top: var(--containers-top)`: el alto del inventario en sus propios px,
+  que `GameView` mide con un `ResizeObserver` sobre su ventana, `boxRef` de `GameWindow`,
+  y pone en `.win-layer`; `containersTop` de `ui/windows.ts` da 0 con el inventario
+  cerrado o movido, y la columna empieza arriba. Con la figura y la mochila de
+  `feat/equipment-d2` mide unos 500 px: el `15rem` de antes abría cada contenedor sobre la
+  mochila. El n-ésimo va un paso más abajo y a la izquierda: `--nth`, que pone
+  `GameWindow`; nunca más abajo que `100% - 2rem`, así su barra de título se ve aunque haya
+  muchos abiertos en una pantalla baja); el chat abajo a la izquierda pasando la placa; opciones y ayuda al
   medio; el intercambio arriba al centro; diálogo, crafteo, mercado y casa abajo al centro
   sobre la barra, y la tienda a la izquierda del diálogo, los dos sin pisar la columna del
   inventario (`--pair-left`). Movida, `GameWindow` pone `left`/`top` y un `max-height` de
@@ -1498,19 +1503,36 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   - **Qué tapa a qué:** `.win-layer` tiene `z-index: 20` (su propio contexto de
     apilamiento): sobre la barra (15), los avisos, el tutorial y la subida de nivel; bajo
     el chequeo de presencia (21) y la pantalla de muerte (22), que ninguna ventana puede
-    tapar (un chequeo escondido vence y cuenta como fallado). `ui/windows-css.test.ts` lo
-    comprueba leyendo `windows.css`.
+    tapar (un chequeo escondido vence y cuenta como fallado). Las invitaciones de grupo y
+    de gremio (`.invitations`, que también vencen) van a 21: el chat en su lugar de
+    fábrica (x 144–528) llega debajo de ellas, centradas, a 1280 y 960 px; las del gremio
+    con su propia regla de escritorio, 3,5rem más arriba (la de `.invitations` les ganaba
+    por especificidad a `.guild-invitations` y las dos quedaban en el mismo lugar).
+    `ui/windows-css.test.ts` lo comprueba leyendo `windows.css`.
   - **Imán** (`snapPlace`, puro): al arrastrar (y con las flechas del ✥), cada eje va al
     borde más cercano a menos de `SNAP_PX` (10): los de la pantalla, el techo de la barra y
     los de las otras ventanas, de lado (la izquierda de una con la derecha de la otra) o
     alineados (izquierda con izquierda), solo si las dos están cerca en el otro eje. Después
     `clampPlace` la deja entera dentro del área (antes bastaba que se viera la barra).
   - **Al achicar la pantalla** (o subir la escala), un `ResizeObserver` sobre `.win-layer`
-    mete adentro las ventanas movidas que quedaron afuera (`placeWindow`, sin cambiar la
-    pila); lo mismo al cargar un lugar guardado en una pantalla más grande. Se engancha por
-    el ref (`watchedRef` de `ui/window-dom.ts`, `ref={win.layer.set}`), no en un efecto del
-    primer render: la capa solo existe en el layout de escritorio, así que un juego que
-    arranca angosto la monta tarde y cada vuelta de tablet a escritorio monta una nueva.
+    mete adentro las ventanas movidas que quedaron afuera (`pullInside` de `GameView` con
+    `outsiders` de `ui/window-dom.ts`, con tests sobre elementos falsos; `placeWindow`, sin
+    cambiar la pila); lo mismo al cargar un lugar guardado en una pantalla más grande. Se
+    engancha por el ref (`watchedRef` de `ui/window-dom.ts`, `ref={win.layer.set}`), no en
+    un efecto del primer render: la capa solo existe en el layout de escritorio, así que un
+    juego que arranca angosto la monta tarde y cada vuelta de tablet a escritorio monta una
+    nueva. El observador solo ve cambiar el área: una ventana cerrada entonces conservaba
+    su `x` (las habilidades dejadas en x 1600 a 1920 px se abrían invisibles a 1280), así
+    que la misma revisión corre en un `useLayoutEffect` cada vez que cambian las ventanas
+    que se ven (`shownKey` de `ui/windows.ts`: abrir, cerrar, plegar o desplegar; traer al
+    frente no), antes de pintarla. Cada ventana cuenta con el alto de `keptHeight`: el que
+    muestra ahora si es al menos `MIN_SIZE.height` (72; aplastada por su `max-height` se
+    queda donde está, con el cuerpo desplazable, como una lista de batalla que creció) y si
+    no, su alto propio (`naturalHeight`: se levanta el `max-height` para medir y se vuelve
+    a poner), así sube hasta verse entera: medida aplastada, una ventana con el techo por
+    debajo del área nueva medía unos px y se quedaba con la barra de título sobre la barra
+    gótica. Se mide sin la escala de la animación de entrada (`gwin-in` arranca en 0,96:
+    `transformScale` del `transform` computado).
   - **Migración:** una `rpg.windows` v1 o v2 se sigue leyendo; lo que estaba acoplado vuelve a
     su lugar de fábrica (pierde `x`, `y`, `w` y `h`, que eran del dock); lo que flotaba
     conserva todo. Se guarda como v3, con los últimos `MAX_CONTAINER_PLACES` (24)
@@ -1529,8 +1551,9 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     estación que abre con ellos queda encima.
   - Teclado del ✥: flechas mueven 16 px (con imán), Mayús+flechas cambian el tamaño (hasta
     el techo de la barra). Enter y Espacio ya no acoplan nada.
-- **Sobre el mapa**, encima de la barra: los avisos (`.notices`), las invitaciones, el pad y
-  los botones de zoom de una pantalla táctil; el tutorial se corre a la izquierda de la
+- **Sobre el mapa**, encima de la barra: los avisos (`.notices`), las invitaciones (sobre
+  las ventanas, las del gremio más arriba), el pad y los botones de zoom de una pantalla
+  táctil; el tutorial se corre a la izquierda de la
   columna del inventario y la viñeta roja de poca vida termina en la barra.
 - **Vista previa:** escenas `magnet` (ventanas borde con borde), `migrated` (un
   `rpg.windows` v1 con el dock) y `chat` (el chat bajo el mouse) en `make ui-preview`.

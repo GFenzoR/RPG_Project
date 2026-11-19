@@ -215,14 +215,16 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   "Trampas y anti-bot").
 - **Qué dibuja el cliente.** Siempre a escala entera (pixel-perfect). Por defecto, la
   vista más grande que llena la caja del mapa sin dejar parte vacía (la escala entera más
-  chica a la que la ventana de 31x21 cubre la caja), pero nunca menos de las 15x11 de
-  siempre: una pantalla chica (un teléfono, la app de escritorio a 960 px) se queda con la
-  escala de antes. Con el dock de la UI oscura: 1920x1080 muestra unas 24x16 a 2x (la
-  escala de las 15x11 sería 3x: 16x11), 2560x1440 unas 22x14 a 3x y 1280x800 15x12 a 2x,
-  como antes. Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana entera
-  (31x21 a 1x en 1920x1080, 30x21 en 1280x800, donde el dock deja 960 px), con el resto
-  de la caja oscuro; acercando, a 7x5, como antes (`client/CLAUDE.md`, "Zoom del mapa").
-  La elección se recuerda por dispositivo.
+  chica a la que la ventana de 31x21 cubre la caja). En teléfonos y tablets, nunca menos
+  de las 15x11 de siempre: una pantalla chica se queda con la escala de antes. En
+  escritorio el mapa es la pantalla entera sobre la barra de abajo (docs/17 UI-4) y
+  cubrirla manda, aunque muestre menos filas: 1920x1080 muestra 30x15,5 a 2x, 2560x1440
+  26,7x14,1 a 3x, 1280x800 20x11,1 a 2x, 1280x720 20x9,9 a 2x, la app a 960x700 30x19,1 a
+  1x, y una pantalla ultra ancha (21:9) unas 10 filas (2560x1080: 26,7x10,3 a 3x).
+  Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana entera (31x21 a 1x en
+  1920x1080 y 1280x800; a 1280x720, las 19,75 filas que entran), con el resto de la caja
+  oscuro; acercando, a 7x5, como antes (`client/CLAUDE.md`, "Zoom del mapa"). La elección
+  se recuerda por dispositivo.
 - **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
   (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, reportar
   a un jugador y la vida y el maná de los miembros del grupo. Un objetivo a 15 casillas

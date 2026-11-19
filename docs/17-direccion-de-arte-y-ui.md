@@ -1968,10 +1968,15 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   suelta donde sea y recuerda su lugar; a menos de 10 px de un borde de la pantalla, del
   techo de la barra o de un borde de otra ventana (de lado o alineada con él) se pega. Nunca
   queda fuera de la pantalla ni debajo de la barra, tampoco después de achicar la ventana
-  del navegador o subir la escala. Las flechas del ✥ también sienten el imán. Lugares de
-  fábrica: batalla arriba a la izquierda con el grupo a su lado y las habilidades debajo;
-  inventario arriba a la derecha con gremio y apariencia a su lado y los contenedores
-  debajo; el chat abajo a la izquierda; opciones y ayuda al medio; el intercambio arriba al
+  del navegador o subir la escala, ni al abrirla de nuevo si se cerró antes de achicarla:
+  una que queda aplastada a menos de su alto mínimo (72 px; desplegada contra la barra, o
+  con su techo por debajo del área nueva) sube hasta verse entera, y una que todavía
+  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Las flechas
+  del ✥ también sienten el imán. Lugares de fábrica: batalla arriba a la izquierda con el
+  grupo a su lado y las habilidades debajo; inventario arriba a la derecha con gremio y
+  apariencia a su lado y los contenedores justo debajo de él (de lo que mida: con la
+  figura y la mochila, unos 500 px; con el inventario cerrado o movido, desde arriba); el
+  chat abajo a la izquierda; opciones y ayuda al medio; el intercambio arriba al
   centro; diálogo, tienda, crafteo, mercado y casa abajo al centro, sobre la barra (la
   tienda a la izquierda del diálogo, los dos sin pisar la columna del inventario).
   "Restablecer ventanas" las devuelve ahí. Un `rpg.windows` guardado con el dock se sigue
@@ -1979,7 +1984,10 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   Escape cierra la de arriba (la última abierta o tocada); en una pantalla recién abierta
   sigue abriendo Opciones. Ninguna ventana tapa el chequeo de presencia (un chequeo
   escondido vencería y contaría como fallado, docs/02) ni la pantalla de muerte: las dos
-  van por encima de todas; el tutorial, que se pliega y no vence, va por debajo.
+  van por encima de todas, y también las invitaciones de grupo y de gremio (vencen, y el
+  chat en su lugar de fábrica llega debajo de ellas a 1280 y 960 px), las del gremio más
+  arriba que las del grupo; el tutorial, que se pliega y no vence, va por debajo (las
+  ventanas que salen a su lado, como la ayuda, el gremio y la apariencia, lo tapan).
 - **El chat (UI-10)** flota translúcido, como en Ragnarok Online, y se aclara con el mouse
   encima o al escribir; nunca se cierra (se pliega), y sus pestañas Chat y Registro van en
   su barra de título.
@@ -1992,11 +2000,11 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   fuentes: las de UI-3 siguen). No se usó Gemini: con el CSS y estas piezas alcanzó, y el
   navegador del dueño queda libre para los otros lotes. Las reglas de movimiento reducido
   siguen (la ola de los orbes y el latido se detienen).
-- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); el inventario
-  por dentro lo cambia la rama `feat/equipment-d2` (los contenedores salen a `15rem` del
-  techo, contando con el alto de hoy del inventario); un lugar de fábrica que se acomode a
-  las ventanas ya abiertas (hoy, si se abren todas a la vez, algunas se pisan); revisar en
-  el E2E final los clicks del mapa que ahora puedan caer en una ventana flotante.
+- **Queda:** pestañas del chat por canal y su opacidad configurable (UI-10); un lugar de
+  fábrica que se acomode a las ventanas ya abiertas (hoy, si se abren todas a la vez,
+  algunas se pisan; los contenedores ya salen bajo el inventario de `feat/equipment-d2`,
+  midiéndolo); revisar en el E2E final los clicks del mapa que ahora puedan caer en una
+  ventana flotante.
 
 Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
 y se pueden hacer ya.
