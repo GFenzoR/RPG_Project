@@ -328,8 +328,8 @@ func (x *ContainerSlot) GetIndex() uint32 {
 	return 0
 }
 
-// ItemLocation says where an item is: on a map tile, in an equipment slot or inside
-// an open container.
+// ItemLocation says where an item is: on a map tile, in an equipment slot, inside an
+// open container or in a cell of the character's pockets.
 type ItemLocation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Location:
@@ -337,6 +337,7 @@ type ItemLocation struct {
 	//	*ItemLocation_Pos
 	//	*ItemLocation_Slot
 	//	*ItemLocation_Container
+	//	*ItemLocation_Pocket
 	Location      isItemLocation_Location `protobuf_oneof:"location"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -406,6 +407,15 @@ func (x *ItemLocation) GetContainer() *ContainerSlot {
 	return nil
 }
 
+func (x *ItemLocation) GetPocket() uint32 {
+	if x != nil {
+		if x, ok := x.Location.(*ItemLocation_Pocket); ok {
+			return x.Pocket
+		}
+	}
+	return 0
+}
+
 type isItemLocation_Location interface {
 	isItemLocation_Location()
 }
@@ -422,11 +432,20 @@ type ItemLocation_Container struct {
 	Container *ContainerSlot `protobuf:"bytes,3,opt,name=container,proto3,oneof"`
 }
 
+type ItemLocation_Pocket struct {
+	// pocket is a cell of the character's built-in pockets (docs/02 "Bolsillos"), its
+	// index in Inventory.pockets. As a MoveItem destination, a cell holding a container
+	// means "into that container", like a container index.
+	Pocket uint32 `protobuf:"varint,4,opt,name=pocket,proto3,oneof"`
+}
+
 func (*ItemLocation_Pos) isItemLocation_Location() {}
 
 func (*ItemLocation_Slot) isItemLocation_Location() {}
 
 func (*ItemLocation_Container) isItemLocation_Location() {}
+
+func (*ItemLocation_Pocket) isItemLocation_Location() {}
 
 // ActionTarget is what an action points at: a tile or a creature.
 type ActionTarget struct {
@@ -833,11 +852,12 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\x01z\x18\x03 \x01(\rR\x01z\"H\n" +
 	"\rContainerSlot\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\x12\x14\n" +
-	"\x05index\x18\x02 \x01(\rR\x05index\"\xa7\x01\n" +
+	"\x05index\x18\x02 \x01(\rR\x05index\"\xc1\x01\n" +
 	"\fItemLocation\x12%\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionH\x00R\x03pos\x12,\n" +
 	"\x04slot\x18\x02 \x01(\x0e2\x16.game.v1.EquipmentSlotH\x00R\x04slot\x126\n" +
-	"\tcontainer\x18\x03 \x01(\v2\x16.game.v1.ContainerSlotH\x00R\tcontainerB\n" +
+	"\tcontainer\x18\x03 \x01(\v2\x16.game.v1.ContainerSlotH\x00R\tcontainer\x12\x18\n" +
+	"\x06pocket\x18\x04 \x01(\rH\x00R\x06pocketB\n" +
 	"\n" +
 	"\blocation\"b\n" +
 	"\fActionTarget\x12%\n" +
@@ -944,6 +964,7 @@ func file_game_v1_common_proto_init() {
 		(*ItemLocation_Pos)(nil),
 		(*ItemLocation_Slot)(nil),
 		(*ItemLocation_Container)(nil),
+		(*ItemLocation_Pocket)(nil),
 	}
 	file_game_v1_common_proto_msgTypes[3].OneofWrappers = []any{
 		(*ActionTarget_Pos)(nil),

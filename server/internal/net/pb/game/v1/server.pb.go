@@ -3891,10 +3891,16 @@ func (x *EquippedItem) GetItem() *ItemStack {
 	return nil
 }
 
-// Inventory lists the occupied equipment slots; slots not listed are empty.
+// Inventory lists the occupied equipment slots; slots not listed are empty. pockets is
+// what the character's built-in pockets hold (docs/02 "Bolsillos"), cell 0 first and
+// without gaps (like ContainerUpdate.items); pocket_slots is how many cells they have
+// (balance.yaml inventory.pocket_slots). The pockets are part of the character, never an
+// item: they are not a container window and cannot be moved.
 type Inventory struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Slots         []*EquippedItem        `protobuf:"bytes,1,rep,name=slots,proto3" json:"slots,omitempty"`
+	Pockets       []*ItemStack           `protobuf:"bytes,2,rep,name=pockets,proto3" json:"pockets,omitempty"`
+	PocketSlots   uint32                 `protobuf:"varint,3,opt,name=pocket_slots,json=pocketSlots,proto3" json:"pocket_slots,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3934,6 +3940,20 @@ func (x *Inventory) GetSlots() []*EquippedItem {
 		return x.Slots
 	}
 	return nil
+}
+
+func (x *Inventory) GetPockets() []*ItemStack {
+	if x != nil {
+		return x.Pockets
+	}
+	return nil
+}
+
+func (x *Inventory) GetPocketSlots() uint32 {
+	if x != nil {
+		return x.PocketSlots
+	}
+	return 0
 }
 
 // ContainerOpen opens a container window. container_id is session-local and is what
@@ -6809,9 +6829,11 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x06skills\x18\x01 \x03(\v2\x16.game.v1.SkillProgressR\x06skills\"b\n" +
 	"\fEquippedItem\x12*\n" +
 	"\x04slot\x18\x01 \x01(\x0e2\x16.game.v1.EquipmentSlotR\x04slot\x12&\n" +
-	"\x04item\x18\x02 \x01(\v2\x12.game.v1.ItemStackR\x04item\"8\n" +
+	"\x04item\x18\x02 \x01(\v2\x12.game.v1.ItemStackR\x04item\"\x89\x01\n" +
 	"\tInventory\x12+\n" +
-	"\x05slots\x18\x01 \x03(\v2\x15.game.v1.EquippedItemR\x05slots\"\xb0\x01\n" +
+	"\x05slots\x18\x01 \x03(\v2\x15.game.v1.EquippedItemR\x05slots\x12,\n" +
+	"\apockets\x18\x02 \x03(\v2\x12.game.v1.ItemStackR\apockets\x12!\n" +
+	"\fpocket_slots\x18\x03 \x01(\rR\vpocketSlots\"\xb0\x01\n" +
 	"\rContainerOpen\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1a\n" +
@@ -7330,53 +7352,54 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	85,  // 82: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
 	82,  // 83: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
 	48,  // 84: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	82,  // 85: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	82,  // 86: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
-	6,   // 87: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	83,  // 88: game.v1.Message.pos:type_name -> game.v1.Position
-	81,  // 89: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	81,  // 90: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	81,  // 91: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
-	54,  // 92: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
-	57,  // 93: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
-	7,   // 94: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	82,  // 95: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	82,  // 96: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	86,  // 97: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
-	87,  // 98: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
-	82,  // 99: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
-	86,  // 100: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
-	60,  // 101: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
-	60,  // 102: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
-	60,  // 103: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
-	61,  // 104: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
-	62,  // 105: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
-	87,  // 106: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
-	83,  // 107: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	84,  // 108: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
-	8,   // 109: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	81,  // 110: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
-	9,   // 111: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
-	69,  // 112: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
-	10,  // 113: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
-	73,  // 114: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
-	74,  // 115: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
-	75,  // 116: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
-	72,  // 117: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
-	11,  // 118: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
-	10,  // 119: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
-	83,  // 120: game.v1.StationOpen.pos:type_name -> game.v1.Position
-	82,  // 121: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
-	12,  // 122: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
-	82,  // 123: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
-	81,  // 124: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
-	80,  // 125: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
-	13,  // 126: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
-	127, // [127:127] is the sub-list for method output_type
-	127, // [127:127] is the sub-list for method input_type
-	127, // [127:127] is the sub-list for extension type_name
-	127, // [127:127] is the sub-list for extension extendee
-	0,   // [0:127] is the sub-list for field type_name
+	82,  // 85: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
+	82,  // 86: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	82,  // 87: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	6,   // 88: game.v1.Message.kind:type_name -> game.v1.MessageKind
+	83,  // 89: game.v1.Message.pos:type_name -> game.v1.Position
+	81,  // 90: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	81,  // 91: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	81,  // 92: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	54,  // 93: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
+	57,  // 94: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
+	7,   // 95: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
+	82,  // 96: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	82,  // 97: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	86,  // 98: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
+	87,  // 99: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
+	82,  // 100: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
+	86,  // 101: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
+	60,  // 102: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
+	60,  // 103: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
+	60,  // 104: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
+	61,  // 105: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
+	62,  // 106: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
+	87,  // 107: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
+	83,  // 108: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	84,  // 109: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	8,   // 110: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
+	81,  // 111: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	9,   // 112: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
+	69,  // 113: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	10,  // 114: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
+	73,  // 115: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
+	74,  // 116: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
+	75,  // 117: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
+	72,  // 118: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
+	11,  // 119: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
+	10,  // 120: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
+	83,  // 121: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	82,  // 122: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	12,  // 123: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
+	82,  // 124: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
+	81,  // 125: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
+	80,  // 126: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
+	13,  // 127: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
+	128, // [128:128] is the sub-list for method output_type
+	128, // [128:128] is the sub-list for method input_type
+	128, // [128:128] is the sub-list for extension type_name
+	128, // [128:128] is the sub-list for extension extendee
+	0,   // [0:128] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }

@@ -1,0 +1,31 @@
+{
+  "tick": "1400",
+  "events": [
+    {
+      "inventory": {
+        "slots": [
+          {
+            "slot": "EQUIPMENT_SLOT_RIGHT_HAND",
+            "item": {
+              "itemId": 120
+            }
+          }
+        ],
+        "pockets": [
+          {
+            "itemId": 230,
+            "count": 40
+          },
+          {
+            "itemId": 120,
+            "mods": {
+              "attribute": "attack",
+              "value": 2
+            }
+          }
+        ],
+        "pocketSlots": 4
+      }
+    }
+  ]
+}

@@ -455,9 +455,15 @@ message EquippedItem {
   ItemStack item = 2;
 }
 
-// Inventory lists the occupied equipment slots; slots not listed are empty.
+// Inventory lists the occupied equipment slots; slots not listed are empty. pockets is
+// what the character's built-in pockets hold (docs/02 "Bolsillos"), cell 0 first and
+// without gaps (like ContainerUpdate.items); pocket_slots is how many cells they have
+// (balance.yaml inventory.pocket_slots). The pockets are part of the character, never an
+// item: they are not a container window and cannot be moved.
 message Inventory {
   repeated EquippedItem slots = 1;
+  repeated ItemStack pockets = 2;
+  uint32 pocket_slots = 3;
 }
 
 // ContainerOpen opens a container window. container_id is session-local and is what

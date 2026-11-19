@@ -48,13 +48,17 @@ message ContainerSlot {
   uint32 index = 2;
 }
 
-// ItemLocation says where an item is: on a map tile, in an equipment slot or inside
-// an open container.
+// ItemLocation says where an item is: on a map tile, in an equipment slot, inside an
+// open container or in a cell of the character's pockets.
 message ItemLocation {
   oneof location {
     Position pos = 1;
     EquipmentSlot slot = 2;
     ContainerSlot container = 3;
+    // pocket is a cell of the character's built-in pockets (docs/02 "Bolsillos"), its
+    // index in Inventory.pockets. As a MoveItem destination, a cell holding a container
+    // means "into that container", like a container index.
+    uint32 pocket = 4;
   }
 }
 
