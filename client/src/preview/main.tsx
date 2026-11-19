@@ -3,7 +3,7 @@
 // server, Postgres or a character (docs/08). Only built with RPG_UI_PREVIEW=1
 // (vite.config.ts): it never ships.
 //
-//   /preview/?scene=game|status|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|
+//   /preview/?scene=game|status|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|pockets|
 //     trade|chattabs|tutorialhelp|tutorialshop|forge|forgerisk|forgeresult|book|scroll|danger|
 //     death|login|characters&lang=es|en
 //     [&ui=1.25&text=1.15]
@@ -43,6 +43,7 @@ import {
   withItemMenu,
   withManyOptions,
   withLaterChat,
+  withPockets,
   withServerWindows,
   withShop,
   withStatuses,
@@ -226,6 +227,7 @@ function Preview(props: { game: Game }): JSX.Element {
       y: Math.round(window.innerHeight * 0.55),
     });
   if (scene === "inventory") s = withHeld(content, s);
+  if (scene === "pockets") s = withPockets(content, s);
   if (scene === "forge" || scene === "forgerisk") s = withForge(content, s, "pick", now);
   if (scene === "forgeresult") s = withForge(content, s, "result", now);
   if (scene === "book") s = withBook(content, s, "book_lantern_rowers");

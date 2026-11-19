@@ -1,5 +1,5 @@
 // Trade window (T5.3): two columns (own offer, the other's), the confirmations of both, and
-// the tradeable items of the open containers to add. The server checks distance, items,
+// the tradeable items of the open containers and of the pockets to add. The server checks distance, items,
 // room and every change; any change clears both confirmations. No hooks: the tests walk
 // the element tree (Trade.test.ts).
 import type { JSX } from "preact";
@@ -9,6 +9,9 @@ import type { Translate } from "../i18n/i18n.ts";
 import type { TradeItemView, TradeView } from "../state/market.ts";
 import { refinedName } from "../state/forge.ts";
 import { tipMods } from "../state/mods.ts";
+import { locKey } from "../state/items.ts";
+import { pocketOffers } from "../state/pockets.ts";
+import type { Offerable } from "../state/pockets.ts";
 
 interface Props {
   t: Translate;
@@ -101,24 +104,30 @@ function OfferList(
 }
 
 /**
- * The tradeable items of the open containers (the equipped backpack under the figure
- * first, docs/17 UI-5), with their location for TradeOffer.
+ * The tradeable items the player sees, with their location for TradeOffer: the equipped
+ * backpack under the figure first (docs/17 UI-5), then the pockets (docs/02 "Bolsillos"),
+ * then the other open containers.
  */
-function offerable(ui: GameUi, content: ClientContent) {
-  const out: {
-    container: number;
-    index: number;
-    itemId: number;
-    count: number;
-    mods?: ItemMods | undefined;
-  }[] = [];
-  for (const c of ui.backpack ? [ui.backpack, ...ui.containers] : ui.containers) {
+export function offerable(ui: GameUi, content: ClientContent): Offerable[] {
+  const out: Offerable[] = [];
+  const add = (c: GameUi["containers"][number]): void =>
     c.items.forEach((it, index) => {
-      if (content.items[it.itemId]?.tradeable) {
-        out.push({ container: c.id, index, itemId: it.itemId, count: it.count, mods: it.mods });
-      }
+      if (content.items[it.itemId]?.tradeable)
+        out.push({
+          ref: {
+            loc: { kind: "container", id: c.id, index },
+            itemId: it.itemId,
+            stackIndex: index,
+            count: it.count,
+          },
+          itemId: it.itemId,
+          count: it.count,
+          mods: it.mods,
+        });
     });
-  }
+  if (ui.backpack) add(ui.backpack);
+  out.push(...pocketOffers(ui.pockets, content));
+  for (const c of ui.containers) add(c);
   return out;
 }
 
@@ -206,20 +215,13 @@ export function TradeWindow(props: Props): JSX.Element | null {
       ) : (
         <ul class="offerable" data-testid="trade-offerable">
           {items.map((it) => (
-            <li key={`${it.container}-${it.index}`}>
+            <li key={locKey(it.ref.loc)}>
               <ItemLabel {...props} itemId={it.itemId} count={it.count} mods={it.mods} />
               <button
                 type="button"
                 disabled={full}
                 data-trade-add={props.content.items[it.itemId]?.id ?? it.itemId}
-                onClick={() =>
-                  game?.tradeOffer({
-                    loc: { kind: "container", id: it.container, index: it.index },
-                    itemId: it.itemId,
-                    stackIndex: it.index,
-                    count: it.count,
-                  })
-                }
+                onClick={() => game?.tradeOffer(it.ref)}
               >
                 {t("client.trade.offer")}
               </button>

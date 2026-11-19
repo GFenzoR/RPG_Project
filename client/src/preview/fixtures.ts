@@ -128,6 +128,8 @@ export function baseScene(content: ClientContent, now: number): Scene {
       item("cinder_amulet"),
     ],
   };
+  // docs/02 "Bolsillos": the character's four pockets, under the figure (two in use).
+  ui.pockets = { capacity: 4, items: [item("health_draught", 3), item("pruebas_key")] };
   ui.containers = [];
   ui.battle = [
     creature(11, CreatureKind.MONSTER, "", "wolf", 64),
@@ -645,6 +647,27 @@ export function withHeld(content: ClientContent, s: Scene): Scene {
     },
   };
   return { ui, name: "inventory" };
+}
+
+/**
+ * docs/02 "Bolsillos": a character back from a death without blessings, its backpack left in
+ * the corpse: the backpack slot is empty and what it picked up since lies in its four
+ * pockets (coins, a potion, a fish; one cell free). The card of the potion in the pockets.
+ */
+export function withPockets(content: ClientContent, s: Scene): Scene {
+  const item = (id: string, count = 1): ItemView => ({ itemId: itemNumber(content, id), count });
+  const inventory = new Map(s.ui.inventory);
+  inventory.delete(EquipmentSlot.BACKPACK);
+  const ui: GameUi = {
+    ...s.ui,
+    inventory,
+    backpack: undefined,
+    pockets: {
+      capacity: 4,
+      items: [item("copper_coin", 23), item("health_draught"), item("raw_fish", 2)],
+    },
+  };
+  return { ui, name: "pockets" };
 }
 
 /**

@@ -1122,6 +1122,31 @@ kbd {
   padding: 0 0.4rem;
   line-height: 1.2;
 }
+/* The pockets (docs/02 "Bolsillos"): the character's own cells, a row under the figure and
+   above the backpack, framed like the docked backpack but with no close button (they are
+   part of the character). Their columns follow the cells' size (44 px on a touch screen). */
+.inventory .pockets {
+  margin-top: 0.45rem;
+  padding: 0.3rem;
+  background: rgb(9 8 7 / 0.45);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(74 69 64 / 0.55);
+}
+.inventory .pockets header {
+  margin: -0.3rem -0.3rem 0.3rem;
+  padding: 0.15rem 0.45rem;
+  font-family: var(--ui-font-title);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ui-gold-300);
+  background: linear-gradient(#2b241c, #1a1612);
+  border-bottom: 1px solid var(--ui-gold-700);
+}
+.inventory .pockets .cells {
+  grid-template-columns: repeat(var(--pocket-cells, 4), auto);
+  justify-content: center;
+}
 /* The equipped backpack under the figure (docs/17 UI-5): its grid fills the inventory's
    width, as the inventory grid of Diablo II under its paperdoll. */
 .inventory .container.docked {

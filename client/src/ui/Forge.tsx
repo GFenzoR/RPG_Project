@@ -22,6 +22,7 @@ import {
 } from "../state/forge.ts";
 import type { ForgeCandidate, ForgeView, RefineState } from "../state/forge.ts";
 import { tipMods } from "../state/mods.ts";
+import { locKey as placeKey } from "../state/items.ts";
 import type { StationState } from "../state/recipes.ts";
 import { BigIcon } from "./ItemCard.tsx";
 
@@ -256,12 +257,7 @@ export function ForgeBody(p: BodyProps): JSX.Element {
 
 /** A stable key of a candidate's place. */
 export function locKey(c: ForgeCandidate): string {
-  const l = c.loc;
-  return l.kind === "slot"
-    ? `slot:${l.slot}`
-    : l.kind === "container"
-      ? `c:${l.id}:${l.index}`
-      : `p:${l.pos.x},${l.pos.y},${l.pos.z}`;
+  return placeKey(c.loc);
 }
 
 /** The forge tab of the anvil's window: the choice, the toggle and the confirm step. */
@@ -283,7 +279,7 @@ export function ForgePanel(props: {
   // the chosen piece's level, or let it go when it broke.
   const [since, setSince] = useState(0);
   const containers = ui.backpack ? [ui.backpack, ...ui.containers] : ui.containers;
-  const candidates = forgeCandidates(content, ui.inventory, containers);
+  const candidates = forgeCandidates(content, ui.inventory, containers, ui.pockets.items);
   // The chosen piece, as it is now (moved, broken or replaced in its place: none).
   const selected = chosenPiece(candidates, pick, ui.refine, since);
   const smithing = ui.skills.find((s) => s.id === rules.smithingBonus.skill)?.level ?? 0;

@@ -23,6 +23,7 @@ import {
 } from "../state/chat.ts";
 import type { ChatTab } from "../state/chat.ts";
 import type { ChatLine } from "../state/world.ts";
+import { NO_POCKETS } from "../state/pockets.ts";
 import { skullId } from "../state/pvp.ts";
 import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -151,6 +152,7 @@ export function emptyGameUi(): GameUi {
     log: [],
     chat: [],
     inventory: new Map(),
+    pockets: NO_POCKETS,
     containers: [],
     hotkeys: [],
     dialog: undefined,

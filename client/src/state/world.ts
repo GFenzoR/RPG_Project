@@ -54,6 +54,8 @@ import {
 } from "./motion.ts";
 import type { Slide } from "./motion.ts";
 import { movesOnStep } from "./portals.ts";
+import { NO_POCKETS } from "./pockets.ts";
+import type { PocketsState } from "./pockets.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
@@ -519,6 +521,8 @@ export class WorldState implements TileSource {
   house: HouseView | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
+  /** What the character's pockets hold and how many cells they have (Inventory, docs/02 "Bolsillos"). */
+  pockets: PocketsState = NO_POCKETS;
   /** Open container windows, oldest first. */
   containers: ContainerState[] = [];
   /** Which of them is the equipped backpack, shown under the figure (docs/17 UI-5). */
@@ -998,6 +1002,7 @@ export class WorldState implements TileSource {
           msg.value.slots.flatMap((s) => (s.item ? [[s.slot, itemView(s.item)] as const] : [])),
         );
         this.backpack.equipped(this.inventory.get(EquipmentSlot.BACKPACK)?.itemId, this.containers);
+        this.pockets = { capacity: msg.value.pocketSlots, items: msg.value.pockets.map(itemView) };
         break;
       case "containerOpen": {
         const v = msg.value;

@@ -14,13 +14,15 @@ export const formatOz = (grams: number): string => (grams / GRAMS_PER_OZ).toFixe
 export type ItemLoc =
   | { kind: "pos"; pos: Pos }
   | { kind: "slot"; slot: EquipmentSlot }
-  | { kind: "container"; id: number; index: number };
+  | { kind: "container"; id: number; index: number }
+  /** A cell of the character's pockets (docs/02 "Bolsillos", state/pockets.ts). */
+  | { kind: "pocket"; index: number };
 
 /** An item the player points at: where it is, what the client thinks it is, how many. */
 export interface ItemRef {
   loc: ItemLoc;
   itemId: number;
-  /** Index in the tile stack (ground = 0); 0 for slots, the index for containers. */
+  /** Index in the tile stack (ground = 0); 0 for slots, the index for containers and pockets. */
   stackIndex: number;
   /** Units to move (the whole stack; 1 for items that do not stack). */
   count: number;
@@ -33,7 +35,8 @@ export function locationInit(loc: ItemLoc): {
   location:
     | { case: "pos"; value: Pos }
     | { case: "slot"; value: EquipmentSlot }
-    | { case: "container"; value: { containerId: number; index: number } };
+    | { case: "container"; value: { containerId: number; index: number } }
+    | { case: "pocket"; value: number };
 } {
   switch (loc.kind) {
     case "pos":
@@ -42,6 +45,22 @@ export function locationInit(loc: ItemLoc): {
       return { location: { case: "slot", value: loc.slot } };
     case "container":
       return { location: { case: "container", value: { containerId: loc.id, index: loc.index } } };
+    case "pocket":
+      return { location: { case: "pocket", value: loc.index } };
+  }
+}
+
+/** A stable key of a place (a list's key, a candidate's). */
+export function locKey(l: ItemLoc): string {
+  switch (l.kind) {
+    case "slot":
+      return `slot:${l.slot}`;
+    case "container":
+      return `c:${l.id}:${l.index}`;
+    case "pocket":
+      return `pocket:${l.index}`;
+    case "pos":
+      return `p:${l.pos.x},${l.pos.y},${l.pos.z}`;
   }
 }
 

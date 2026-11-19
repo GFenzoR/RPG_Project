@@ -90,19 +90,24 @@ export function maybeCarried(c: ContainerState, inventory: ReadonlyMap<number, I
 }
 
 /**
- * The items the player can refine and sees: the equipment, then the content of each open
- * container it may carry (maybeCarried: the equipped backpack's too). Items in closed
- * containers do not show: the client does not see them.
+ * The items the player can refine and sees: the equipment, its pockets (docs/02
+ * "Bolsillos"), then the content of each open container it may carry (maybeCarried: the
+ * equipped backpack's too). Items in closed containers do not show: the client does not see
+ * them.
  */
 export function forgeCandidates(
   content: ClientContent,
   inventory: ReadonlyMap<number, ItemView>,
   containers: readonly ContainerState[],
+  pockets: readonly ItemView[] = [],
 ): ForgeCandidate[] {
   const out: ForgeCandidate[] = [];
   const takes = (v: ItemView): boolean => refineKind(content.items[v.itemId]) !== undefined;
   for (const [slot, v] of [...inventory.entries()].sort((a, b) => a[0] - b[0]))
     if (takes(v)) out.push({ loc: { kind: "slot", slot }, itemId: v.itemId, mods: v.mods });
+  pockets.forEach((v, index) => {
+    if (takes(v)) out.push({ loc: { kind: "pocket", index }, itemId: v.itemId, mods: v.mods });
+  });
   for (const c of containers)
     if (maybeCarried(c, inventory))
       c.items.forEach((v, index) => {
@@ -151,6 +156,7 @@ export function chosenPiece(
 export function sameLoc(a: ItemLoc, b: ItemLoc): boolean {
   if (a.kind === "slot" && b.kind === "slot") return a.slot === b.slot;
   if (a.kind === "container" && b.kind === "container") return a.id === b.id && a.index === b.index;
+  if (a.kind === "pocket" && b.kind === "pocket") return a.index === b.index;
   if (a.kind === "pos" && b.kind === "pos")
     return a.pos.x === b.pos.x && a.pos.y === b.pos.y && a.pos.z === b.pos.z;
   return false;

@@ -6,6 +6,7 @@ import type { ClientContent, ItemMods } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { ItemRef } from "../state/items.ts";
 import type { MarketView, OfferView, TradeView } from "../state/market.ts";
+import { NO_POCKETS } from "../state/pockets.ts";
 import { TradeWindow } from "./Trade.tsx";
 import { MarketWindow } from "./Market.tsx";
 
@@ -112,6 +113,7 @@ describe("TradeWindow", () => {
     const ui = {
       trade: trade({ invited: true, negotiating: false }),
       containers: [],
+      pockets: NO_POCKETS,
     } as unknown as GameUi;
     const tree = TradeWindow({ t, content, game, ui });
     click(byAttr(tree, "data-testid", "trade-join")[0]);
@@ -123,6 +125,7 @@ describe("TradeWindow", () => {
     const { game, sent } = recorder();
     const ui = {
       trade: trade({ own: [{ itemId: 68, count: 2 }] }),
+      pockets: NO_POCKETS,
       containers: [
         {
           id: 3,
@@ -167,6 +170,7 @@ describe("TradeWindow", () => {
     const ui = {
       trade: trade({}),
       containers: [],
+      pockets: NO_POCKETS,
       backpack: {
         id: 9,
         itemId: 66,
@@ -179,6 +183,34 @@ describe("TradeWindow", () => {
     expect(add.map((b) => b.props["data-trade-add"])).toEqual(["salve"]);
     click(add[0]);
     expect(sent).toEqual([`offer {"kind":"container","id":9,"index":0} 68`]);
+  });
+
+  it("offers the items of the pockets after the backpack's (docs/02 Bolsillos)", () => {
+    const { game, sent } = recorder();
+    const ui = {
+      trade: trade({}),
+      backpack: {
+        id: 9,
+        itemId: 66,
+        capacity: 4,
+        hasParent: false,
+        items: [{ itemId: 68, count: 2 }],
+      },
+      pockets: {
+        capacity: 4,
+        items: [
+          { itemId: 70, count: 1 },
+          { itemId: 60, count: 0 },
+        ],
+      },
+      containers: [
+        { id: 3, itemId: 66, capacity: 4, hasParent: true, items: [{ itemId: 68, count: 1 }] },
+      ],
+    } as unknown as GameUi;
+    const add = byAttr(TradeWindow({ t, content, game, ui }), "data-trade-add");
+    expect(add.map((b) => b.props["data-trade-add"])).toEqual(["salve", "iron_sword", "salve"]);
+    click(add[1]);
+    expect(sent).toEqual([`offer {"kind":"pocket","index":1} 60`]);
   });
 });
 

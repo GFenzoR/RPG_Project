@@ -68,6 +68,7 @@ import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
 import { cuesOf, loopFor, sceneFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
@@ -110,6 +111,8 @@ export interface GameUi {
   log: LogMessage[];
   chat: ChatLine[];
   inventory: Map<EquipmentSlot, ItemView>;
+  /** The character's pockets (docs/02 "Bolsillos"): under the figure, above the backpack. */
+  pockets: PocketsState;
   /**
    * The open containers that have a window of their own: every one but the equipped
    * backpack, which the inventory shows under the figure (`backpack`, docs/17 UI-5).
@@ -258,6 +261,8 @@ export interface ClientTestHooks {
   floatingTexts(ms: number): number;
   /** Equipped items as [slot, item ID, count]. */
   inventory(): { slot: number; itemId: number; count: number }[];
+  /** The pockets (docs/02 "Bolsillos"): how many cells, and each item as [item ID, count]. */
+  pockets(): { capacity: number; items: { itemId: number; count: number }[] };
   /** Open containers with their content. */
   containers(): ContainerState[];
   /** The item id of the book or scroll being read, if any (docs/02 "Libros y cofres"). */
@@ -585,7 +590,7 @@ export class Game {
     this.conn.send({ case: "tradeRequest", value: { creatureId: id } });
   }
 
-  /** Adds an item of an open container to the own trade offer. */
+  /** Adds an item of an open container or of the pockets to the own trade offer. */
   tradeOffer(ref: ItemRef): void {
     this.conn.send({
       case: "tradeOffer",
@@ -1179,6 +1184,7 @@ export class Game {
       if (d["drop"] === "slot") return { kind: "slot", slot: Number(d["slot"]) as EquipmentSlot };
       if (d["drop"] === "container")
         return { kind: "container", id: Number(d["container"]), index: Number(d["index"] ?? 0) };
+      if (d["drop"] === "pocket") return { kind: "pocket", index: Number(d["index"] ?? 0) };
       return undefined;
     }
     if (this.canvas && el === this.canvas.element) {
@@ -1661,6 +1667,7 @@ export class Game {
       log: [...w.log],
       chat: [...w.chat],
       inventory: w.inventory,
+      pockets: w.pockets,
       // docs/17 UI-5: the equipped backpack goes under the figure, not in a window.
       ...this.containersUi(),
       hotkeys: this.hotkeys,
@@ -1912,6 +1919,10 @@ export class Game {
       },
       inventory: () =>
         [...world.inventory].map(([slot, it]) => ({ slot, itemId: it.itemId, count: it.count })),
+      pockets: () => ({
+        capacity: world.pockets.capacity,
+        items: world.pockets.items.map((it) => ({ itemId: it.itemId, count: it.count })),
+      }),
       containers: () => world.containers,
       book: () => this.book?.itemId,
       tile: (x, y, z) => world.tile(x, y, z),

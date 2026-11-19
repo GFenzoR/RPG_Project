@@ -189,6 +189,15 @@ const WINDOWS: Record<string, unknown> = {
       battle: { open: true, collapsed: true },
     },
   },
+  // docs/02 "Bolsillos": the inventory without a backpack, only the pockets.
+  pockets: {
+    v: 3,
+    z: [],
+    win: {
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
+    },
+  },
   // The inventory floating over the map, wider (hud-fullscreen floats every window).
   inventoryfloat: {
     v: 3,
@@ -245,7 +254,7 @@ const WINDOWS: Record<string, unknown> = {
   },
 };
 /** Scenes about the inventory: on a phone or a tablet they open its tab. */
-const INVENTORY_TAB = ["inventory", "tooltip", "tooltipcoin"];
+const INVENTORY_TAB = ["inventory", "pockets", "tooltip", "tooltipcoin"];
 /** Scenes about the quest log: on a phone or a tablet they open its tab. */
 const QUESTS_TAB = ["quests", "questsdone"];
 /** What the mouse is over in a scene's screenshot. */
@@ -254,6 +263,8 @@ const HOVERS: Record<string, string> = {
   tooltipcoin: '[data-container][data-docked] [data-item="copper_coin"]',
   // docs/17 UI-5: a slot that does not take the held sword tints red under the pointer.
   inventory: '[data-testid="slot-left_hand"]',
+  // docs/02 "Bolsillos": the card of the potion in a pocket.
+  pockets: '[data-testid="pocket-1"] [data-tip-item]',
 };
 const SCENES = [
   "game",
@@ -276,6 +287,7 @@ const SCENES = [
   "dialog18",
   "itemmenu",
   "inventory",
+  "pockets",
   "inventoryfloat",
   "tooltip",
   "tooltipcoin",
