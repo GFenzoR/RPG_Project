@@ -1110,7 +1110,7 @@
       "description": "Boat travel (T3.5).",
       "properties": {
         "combat_block_ms": {
-          "description": "A player cannot sail for this long after a monster attacked it, it took damage or it hit a monster.",
+          "description": "A player is in combat for this long after a monster attacked it, it took damage or it hit a monster or a player: it cannot sail nor log out, and a closed connection leaves it in the world until then (docs/02 \"Bloqueo de logout en combate\").",
           "type": "integer",
           "minimum": 0,
           "maximum": 600000

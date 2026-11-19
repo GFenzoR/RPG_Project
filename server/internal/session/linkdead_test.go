@@ -1,0 +1,378 @@
+package session_test
+
+import (
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/sim"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
+)
+
+// The logout block of a fight (docs/02 "Bloqueo de logout en combate", linkdead.go): no
+// Logout within travel.combat_block_ms of fighting a monster, and a connection closed in
+// that time leaves the character in the world link-dead until the fight is over.
+
+// combatBlock is travel.combat_block_ms of data/balance.yaml.
+const combatBlock = 12 * time.Second
+
+// far is a tile out of the wolf's sight and far from the temple (worldtest: its first
+// tile, (0, 0)).
+var far = pos(55, 55)
+
+// fightHarness is a harness on an open 64x64 map with travel.combat_block_ms of 12 s and
+// one wolf at (20, 20) that bites for exactly bite every 2 s and never dies nor flees.
+// With bite 0 it is a passive wolf with no attack at all: only the player fights.
+func fightHarness(t *testing.T, bite int, opts ...option) *harness {
+	t.Helper()
+	def := wolfDef()
+	def.Health, def.Behavior.FleeAtHealthPct, def.Loot = 1_000_000, 0, nil
+	def.Attacks[0].Min, def.Attacks[0].Max = bite, bite
+	if bite == 0 {
+		def.Attacks, def.Behavior.Aggressive = nil, false
+	}
+	m := worldtest.Open(t, 0, 0, 64, 64)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 600)}
+	return newHarness(t, m, append([]option{func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": def}
+		c.Items = testItems()
+		c.Balance.Travel.CombatBlockMs = int(combatBlock / time.Millisecond)
+	}}, opts...)...)
+}
+
+// hunter joins a level-level guardian with full health next to the wolf, carrying a
+// sword, a shield, a tunic and a backpack with 50 coins.
+func (h *harness) hunter(name string, level int) (*fakeClient, *session.Player) {
+	h.t.Helper()
+	nextChar++
+	c := session.Character{ID: nextChar, AccountID: nextChar, Name: name, Vocation: "guardian", Level: level,
+		Experience: testBalance().Experience.TotalFor(level) + 100, Health: 1 << 20, Pos: pos(21, 20), HasPos: true,
+		InventoryLoaded: true, Inventory: []session.ItemState{
+			{ItemID: swordID, Count: 1, Slot: int(slotRight)},
+			{ItemID: shieldID, Count: 1, Slot: int(slotLeft)},
+			{ItemID: tunicID, Count: 1, Slot: int(slotArmor)},
+			{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: []session.ItemState{{ItemID: coinID, Count: 50}}},
+		}}
+	return h.joinChar(c)
+}
+
+// bitten runs until the wolf's bite hurt p, and returns when.
+func (h *harness) bitten(p *session.Player) time.Time {
+	h.t.Helper()
+	h.sim.RunUntil(func() bool { cur, mx := p.Health(); return cur < mx }, sim.MaxSeconds(10))
+	return h.sim.Now()
+}
+
+// away takes p out of the wolf's sight: no more bites.
+func (h *harness) away(p *session.Player) {
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, far) }))
+	h.sim.Step()
+}
+
+// runTo runs the world until since+d.
+func (h *harness) runTo(since time.Time, d time.Duration) {
+	h.t.Helper()
+	if left := since.Add(d).Sub(h.sim.Now()); left > 0 {
+		h.sim.RunFor(left)
+	}
+}
+
+// savesOf returns the snapshots of character id submitted from index from of h.saves on.
+func (h *harness) savesOf(id int64, from int) []session.Snapshot {
+	var out []session.Snapshot
+	for _, s := range h.saves[from:] {
+		if s.CharacterID == id {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Logging out in the middle of a fight is refused: 5 s after a wolf's bite the Logout
+// answers combat.logout_locked and the connection stays; past travel.combat_block_ms it
+// goes as always (LOGGED_OUT, saved).
+func TestLogoutRefusedAfterAMonsterHit(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Hunter", 1)
+	hit := h.bitten(p)
+	h.away(p)
+	h.runTo(hit, 5*time.Second)
+	cl.take()
+	h.input(cl, logout())
+	h.sim.Step()
+	if keys := sysKeys(cl.take()); cl.closed || !slices.Equal(keys, []string{"combat.logout_locked"}) ||
+		h.w.PlayerByCharacter(p.CharacterID()) != p {
+		t.Fatalf("5 s after the bite: closed %v, messages %v", cl.closed, keys)
+	}
+	h.runTo(hit, combatBlock+time.Second)
+	n := len(h.saves)
+	h.input(cl, logout())
+	h.sim.Step()
+	if s := h.savesOf(p.CharacterID(), n); !cl.closed || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT ||
+		h.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final {
+		t.Fatalf("after the block: closed %v (%v), saves %d", cl.closed, cl.reason, len(s))
+	}
+}
+
+// Dealing damage is fighting too: a player who hits a wolf that never bites back cannot
+// log out right after.
+func TestLogoutRefusedAfterHittingAMonster(t *testing.T) {
+	h := fightHarness(t, 0)
+	cl, p := h.hunter("Striker", 1)
+	wolf := onlyMonster(t, h)
+	h.input(cl, setTarget(wolf.ID()))
+	h.sim.RunUntil(func() bool { cur, mx := wolf.Health(); return cur < mx }, sim.MaxSeconds(10))
+	if cur, mx := p.Health(); cur != mx {
+		t.Fatalf("the wolf hurt the player: %d/%d", cur, mx)
+	}
+	h.input(cl, setTarget(0))
+	h.sim.Step()
+	cl.take()
+	h.input(cl, logout())
+	h.sim.Step()
+	if keys := sysKeys(cl.take()); cl.closed || !slices.Contains(keys, "combat.logout_locked") {
+		t.Fatalf("closed %v, messages %v", cl.closed, keys)
+	}
+}
+
+// A connection closed in the middle of a fight leaves the character in the world,
+// link-dead: what its connection still sends is ignored, and it stays until
+// travel.combat_block_ms after its last fight; then it leaves and is saved once.
+func TestLinkDeadUntilTheFightEnds(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Runner", 1)
+	ow, _ := h.join("Watcher", at(57, 55))
+	hit := h.bitten(p)
+	h.away(p)
+	n := len(h.saves)
+	h.sim.Command(h.w.Leave(cl)) // the tab closed
+	h.input(cl, walk(W))         // read before the close, queued after it
+	h.sim.Step()
+	ow.take()
+	h.runTo(hit, combatBlock-time.Second)
+	if h.w.PlayerByCharacter(p.CharacterID()) != p || !p.LinkDead() || p.Pos() != far ||
+		len(h.savesOf(p.CharacterID(), n)) != 0 || cl.closes != 0 {
+		t.Fatalf("before the block ends: in the world %v, link-dead %v, at %v, saves %d, closes %d",
+			h.w.PlayerByCharacter(p.CharacterID()) == p, p.LinkDead(), p.Pos(), len(h.savesOf(p.CharacterID(), n)), cl.closes)
+	}
+	if gone := find(ow.take(), (*pb.ServerMessage).GetCreatureDisappear); len(gone) != 0 {
+		t.Fatalf("the watcher saw it leave early: %v", gone)
+	}
+	h.runTo(hit, combatBlock+time.Second)
+	s := h.savesOf(p.CharacterID(), n)
+	if h.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final || s[0].Pos != far {
+		t.Fatalf("after the block: in the world %v, saves %+v", h.w.PlayerByCharacter(p.CharacterID()) != nil, s)
+	}
+	if gone := find(ow.take(), (*pb.ServerMessage).GetCreatureDisappear); len(gone) != 1 || gone[0].GetId() != p.ID() {
+		t.Fatalf("the watcher did not see it leave: %v", gone)
+	}
+}
+
+// A link-dead character is still the wolf's prey: it keeps biting (each bite renews the
+// block) until the character dies. The death costs what any death costs (experience;
+// equipment and backpack to the corpse) and takes it out of the world with one save, the
+// final one: nothing is lost or doubled between the corpse and that save.
+func TestLinkDeadKilledByAMonster(t *testing.T) {
+	h := fightHarness(t, 40)
+	cl, p := h.hunter("Doomed", 20)
+	xp := p.Experience()
+	h.bitten(p)
+	at := p.Pos()
+	n := len(h.saves)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	wolf := onlyMonster(t, h)
+	h.sim.RunFor(3 * time.Second)
+	if !p.LinkDead() || wolf.TargetID() != p.ID() {
+		t.Fatalf("link-dead %v, the wolf's target %d (player %d)", p.LinkDead(), wolf.TargetID(), p.ID())
+	}
+	h.sim.RunUntil(func() bool { return h.w.PlayerByCharacter(p.CharacterID()) == nil }, sim.MaxSeconds(60))
+	s := h.savesOf(p.CharacterID(), n)
+	if len(s) != 1 || !s[0].Final {
+		t.Fatalf("saves after the leave: %+v", s)
+	}
+	if s[0].Experience >= xp || s[0].Experience != p.Experience() || s[0].Pos != h.w.Map().Islands()[0].Temple {
+		t.Fatalf("saved experience %d (had %d, now %d) at %v", s[0].Experience, xp, p.Experience(), s[0].Pos)
+	}
+	if wolf.TargetID() != 0 || p.LinkDead() {
+		t.Fatalf("the wolf still targets %d, link-dead %v", wolf.TargetID(), p.LinkDead())
+	}
+	// Every item is either in the saved inventory or in the corpse, once.
+	got := map[uint16]int{}
+	var count func([]session.ItemState)
+	count = func(items []session.ItemState) {
+		for _, it := range items {
+			got[it.ItemID] += it.Count
+			count(it.Items)
+		}
+	}
+	count(s[0].Inventory)
+	var inCorpse func([]*session.Item)
+	inCorpse = func(items []*session.Item) {
+		for _, it := range items {
+			got[it.Def().Numeric] += it.Count()
+			inCorpse(it.Items())
+		}
+	}
+	corpses := h.w.CorpsesAt(at)
+	if len(corpses) != 1 {
+		t.Fatalf("%d corpses where it died", len(corpses))
+	}
+	inCorpse(corpses[0].Item.Items())
+	want := map[uint16]int{swordID: 1, shieldID: 1, tunicID: 1, packID: 1, coinID: 50}
+	for id, c := range want {
+		if got[id] != c {
+			t.Errorf("item %d: %d between the save and the corpse, want %d (all: %v)", id, got[id], c, got)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("items %v, want %v", got, want)
+	}
+}
+
+// A new login of a link-dead character takes that same character back (no second one in
+// the world): its position and health in memory, and its fight, so the Logout is still
+// refused until the block ends.
+func TestRelogTakesTheLinkDeadBack(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Return", 1)
+	hit := h.bitten(p)
+	h.away(p)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	h.runTo(hit, 3*time.Second)
+	if !p.LinkDead() {
+		t.Fatal("not link-dead")
+	}
+	hp, _ := p.Health()
+	// The database still has the character where it joined, with full health.
+	cl2 := &fakeClient{}
+	h.sim.Command(h.joinCmd(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Return",
+		Vocation: "guardian", Level: 1, Health: 1 << 20, Pos: pos(21, 20), HasPos: true}, cl2))
+	h.sim.Step()
+	p2 := h.w.PlayerByCharacter(p.CharacterID())
+	if hp2, _ := p2.Health(); p2 == nil || p2 == p || p2.LinkDead() || p2.Pos() != far || hp2 != hp || len(h.w.Players()) != 1 {
+		t.Fatalf("took over: %v, link-dead %v, at %v, %d players", p2 != p, p2 != nil && p2.LinkDead(), p2.Pos(), len(h.w.Players()))
+	}
+	if cl2.closed {
+		t.Fatalf("the new connection closed: %v", cl2.reason)
+	}
+	cl2.take()
+	h.input(cl2, logout())
+	h.sim.Step()
+	if keys := sysKeys(cl2.take()); cl2.closed || !slices.Contains(keys, "combat.logout_locked") {
+		t.Fatalf("the fight did not carry over: closed %v, %v", cl2.closed, keys)
+	}
+	h.runTo(hit, combatBlock+time.Second)
+	h.input(cl2, logout())
+	h.sim.Step()
+	if !cl2.closed || cl2.reason != pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT {
+		t.Fatalf("after the block: closed %v (%v)", cl2.closed, cl2.reason)
+	}
+}
+
+// A death ends the fight: the player wakes at the temple and may log out at once.
+func TestDeathEndsTheLogoutBlock(t *testing.T) {
+	h := fightHarness(t, 60)
+	cl, p := h.hunter("Fallen", 1)
+	h.sim.RunUntil(func() bool { return p.Pos() == h.w.Map().Islands()[0].Temple }, sim.MaxSeconds(30))
+	h.input(cl, logout())
+	h.sim.Step()
+	if !cl.closed || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT {
+		t.Fatalf("after the death: closed %v (%v), messages %v", cl.closed, cl.reason, sysKeys(cl.take()))
+	}
+}
+
+// Staff sanctions are no fight to wait for: a kick takes a player in combat out at once,
+// connected or link-dead, and saves it once. A password reset (the server ends the
+// connection, not staff) leaves it link-dead like a closed tab.
+func TestKickInCombatRemovesAtOnce(t *testing.T) {
+	a := newAdminHarness(t, func(c *session.Config) { c.Balance.Travel.CombatBlockMs = 12000 })
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(2, 2))
+	hurt := func(p *session.Player) {
+		a.sim.Command(ctxFunc(func(ctx *game.TickContext) { a.w.HurtForTest(ctx, p, 1) }))
+		a.sim.Step()
+	}
+	for _, linkDead := range []bool{false, true} {
+		name := map[bool]string{false: "Online", true: "Gone"}[linkDead]
+		cl, p := a.joinAs(name, session.RolePlayer, pos(5, 5))
+		hurt(p)
+		if linkDead {
+			a.sim.Command(a.w.Leave(cl))
+			a.sim.Step()
+			if !p.LinkDead() {
+				t.Fatalf("%s is not link-dead", name)
+			}
+		}
+		n := len(a.saves)
+		if got := a.cmd(gm, "/kick "+name); !slices.Equal(got, []string{"gm.kicked"}) {
+			t.Fatalf("kick %s: %v", name, got)
+		}
+		if s := a.savesOf(p.CharacterID(), n); a.w.PlayerByCharacter(p.CharacterID()) != nil || len(s) != 1 || !s[0].Final ||
+			cl.reason != pb.DisconnectReason_DISCONNECT_REASON_KICKED {
+			t.Fatalf("%s: in the world %v, saves %d, reason %v", name, a.w.PlayerByCharacter(p.CharacterID()) != nil, len(s), cl.reason)
+		}
+	}
+
+	cl, p := a.joinAs("Reset", session.RolePlayer, pos(6, 6))
+	hurt(p)
+	a.sim.Command(a.w.KickAccount(p.CharacterID())) // joinAs: account = character
+	a.sim.Step()
+	if !cl.closed || cl.closes != 1 || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED ||
+		!p.LinkDead() || a.w.PlayerByCharacter(p.CharacterID()) != p {
+		t.Fatalf("reset: closed %v (%d, %v), link-dead %v", cl.closed, cl.closes, cl.reason, p.LinkDead())
+	}
+	a.sim.RunFor(13 * time.Second)
+	if a.w.PlayerByCharacter(p.CharacterID()) != nil || cl.closes != 1 {
+		t.Fatalf("reset: still in the world %v after the block, closes %d", a.w.PlayerByCharacter(p.CharacterID()) != nil, cl.closes)
+	}
+}
+
+// A server shutdown saves a link-dead character with everyone else (SaveAll).
+func TestShutdownSavesLinkDead(t *testing.T) {
+	h := fightHarness(t, 15)
+	cl, p := h.hunter("Sleeper", 1)
+	h.bitten(p)
+	h.away(p)
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	n := len(h.saves)
+	if pending := h.w.SaveAll(); len(pending) != 0 {
+		t.Fatalf("pending %d", len(pending))
+	}
+	if s := h.savesOf(p.CharacterID(), n); !p.LinkDead() || len(s) != 1 || !s[0].Final || s[0].Pos != far {
+		t.Fatalf("link-dead %v, saves %+v", p.LinkDead(), s)
+	}
+}
+
+// A link-dead duelist defeated in the arena by its rival's swing (in the combat system,
+// while it goes over the players: deathSave leaves the removal to the end of the tick)
+// leaves with one save and loses nothing; the rival stays, its target gone.
+func TestLinkDeadArenaDefeat(t *testing.T) {
+	g := newPvP(t, nil, func(c *session.Config) { c.Balance.Travel.CombatBlockMs = 12000 })
+	ca, a := g.fighter("Ana", 0, 45, 45, 30, 0)
+	cb, b := g.fighter("Bea", 0, 46, 45, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+	g.hit(a, b) // an arena hit: no PvP lock, but a fight
+	g.sim.Command(g.w.Leave(cb))
+	g.sim.Step()
+	if !b.LinkDead() {
+		t.Fatal("Bea is not link-dead after an arena hit")
+	}
+	xp := b.Experience()
+	n := len(g.saves)
+	g.do(func(*game.TickContext) { b.SetHealthForTest(1) })
+	g.input(ca, setTarget(b.ID()))
+	g.sim.RunUntil(func() bool { return g.w.PlayerByCharacter(b.CharacterID()) == nil }, sim.MaxSeconds(30))
+	s := g.savesOf(b.CharacterID(), n)
+	if len(s) != 1 || !s[0].Final || s[0].Experience != xp || s[0].Pos == pos(46, 45) {
+		t.Fatalf("Bea's saves %+v (experience %d before)", s, xp)
+	}
+	if g.w.PlayerByCharacter(a.CharacterID()) != a || a.Target() != 0 {
+		t.Fatalf("Ana in the world %v, target %d", g.w.PlayerByCharacter(a.CharacterID()) == a, a.Target())
+	}
+}

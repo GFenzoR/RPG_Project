@@ -175,10 +175,6 @@ func (w *World) listSkulled(p *Player) {
 // pvpLeftWorld forgets p in the PvP lists when it leaves the world.
 func (w *World) pvpLeftWorld(p *Player) {
 	p.ptarget = nil
-	if p.linkDead {
-		p.linkDead = false
-		w.linkDead = slices.DeleteFunc(w.linkDead, func(o *Player) bool { return o == p })
-	}
 	for _, o := range w.players {
 		if o.ptarget == p {
 			o.ptarget = nil // a spell without a target must not reach a gone player
@@ -196,13 +192,6 @@ func (w *World) checkPvP(ctx *game.TickContext) {
 		return
 	}
 	w.pvpNext = ctx.Tick + ticksFor(1000)
-	for i := 0; i < len(w.linkDead); {
-		if p := w.linkDead[i]; !w.pvpLocked(ctx.Tick, p) {
-			w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false) // drops index i
-			continue
-		}
-		i++
-	}
 	for i := 0; i < len(w.skulled); {
 		p := w.skulled[i]
 		w.refreshSkull(p, ctx.Now)
@@ -316,7 +305,8 @@ func (w *World) areaHits(tick game.Tick, a, v *Player) bool {
 	return key == ""
 }
 
-// pvpLocked reports whether p cannot log out now.
+// pvpLocked reports whether p's PvP lock lasts: no logout (logoutBlock, with its own
+// message), and for an attacker no protection zone either.
 func (w *World) pvpLocked(tick game.Tick, p *Player) bool {
 	return tick < p.lockUntil || tick < p.fightUntil
 }
@@ -708,51 +698,10 @@ func (w *World) cmdUnskull(ctx *game.TickContext, p *Player, args []string) bool
 	return true
 }
 
-// ---- link-dead --------------------------------------------------------------------
+// ---- relog ------------------------------------------------------------------------
 
-// linkDeadOnLeave keeps p in the world when its connection closes while its PvP lock
-// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing (Input ignores it)
-// but can still be attacked (which renews the lock) until the lock ends; checkPvP then
-// saves it and takes it out. It reports whether p stays: a player already link-dead stays
-// as it is. A new login of the character takes it over (join).
-func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
-	if p.linkDead {
-		return true
-	}
-	if !w.pvpOn || !w.pvpLocked(tick, p) {
-		return false
-	}
-	p.linkDead = true
-	p.target, p.ptarget = nil, nil
-	p.stopWalk()
-	p.out = p.out[:0]
-	w.dropMarket(p) // T5.3: nobody to refresh its market window for (flushMarket)
-	w.linkDead = append(w.linkDead, p)
-	w.log.Info("pvp link-dead", "character", p.charID)
-	return true
-}
-
-// disconnect closes p's connection with reason because the server ends it (a slow client,
-// a password reset). Under its PvP lock p stays in the world link-dead, as if it had closed
-// the connection itself (Leave): the connection closes now and p leaves when the lock ends.
-// Anyone else leaves the world now (remove). A staff kick or ban, a failed save and a
-// logout do not come here: they take the character out.
-func (w *World) disconnect(ctx *game.TickContext, p *Player, reason pb.DisconnectReason, slow bool) {
-	if !w.linkDeadOnLeave(ctx.Tick, p) {
-		w.remove(ctx, p, reason, slow)
-		return
-	}
-	if !p.dropped {
-		p.dropped = true
-		p.client.Close(reason) // once: remove sends and closes nothing more
-	}
-}
-
-// LinkDead reports whether p lost its connection and stays in the world for its PvP lock.
-func (p *Player) LinkDead() bool { return p.linkDead }
-
-// pvpCarry is what a new login takes over from the player it replaces: the locks and the
-// recent attacks on it (the rest travels in the Character).
+// pvpCarry is what a new login takes over from the player it replaces (carryFight): the
+// locks and the recent attacks on it (the rest travels in the Character).
 func (w *World) pvpCarry(from, to *Player) {
 	to.lockUntil, to.fightUntil = from.lockUntil, from.fightUntil
 	to.hitBy = append(to.hitBy[:0], from.hitBy...)

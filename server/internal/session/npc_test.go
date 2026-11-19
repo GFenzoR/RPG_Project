@@ -307,9 +307,13 @@ func TestChapterOnePlayable(t *testing.T) {
 		t.Fatalf("rewards: +%d coins, +%d xp, flag %d", h.w.Money(p)-money, p.Experience()-xp, p.Storage("flag.forest_route_unlocked"))
 	}
 
-	// Saved with the character.
+	// Saved with the character, once it leaves: fresh from the hunt, its closed connection
+	// leaves it link-dead until travel.combat_block_ms is over (linkdead.go).
 	h.sim.Command(h.w.Leave(cl))
-	h.sim.Step()
+	h.sim.RunFor(13e9)
+	if h.w.PlayerByCharacter(p.CharacterID()) != nil {
+		t.Fatal("still in the world after the fight's block")
+	}
 	last := h.saves[len(h.saves)-1]
 	if !last.Final || last.Storage["quest.ch1_shipwreck"] != int64(quest.Completed) || last.Storage["flag.forest_route_unlocked"] != 1 {
 		t.Fatalf("final snapshot storage %v", last.Storage)

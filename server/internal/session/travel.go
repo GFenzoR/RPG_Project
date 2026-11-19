@@ -214,7 +214,8 @@ func (w *World) pickedRoute(d *openDialog, optionID uint32) *route {
 	return rs[optionID-routeOptionBase-1]
 }
 
-// markFight records that p is in combat now (attacked, hurt or hitting a monster).
+// markFight records that p is in combat now (attacked by a monster, hurt, or hitting a
+// monster or a player).
 func (w *World) markFight(ctx *game.TickContext, p *Player) {
 	if p != nil {
 		p.fightAt = max(ctx.Tick, 1)
@@ -222,7 +223,8 @@ func (w *World) markFight(ctx *game.TickContext, p *Player) {
 }
 
 // inCombat reports whether p fought within balance travel.combat_block_ms, or its PvP
-// lock lasts (T5.2: no sailing, idle kick or presence check in the middle of a fight).
+// lock lasts (T5.2): no sailing, logout (a closed connection leaves it link-dead,
+// linkdead.go), idle kick or presence check in the middle of a fight.
 func (w *World) inCombat(now game.Tick, p *Player) bool {
 	return p.fightAt > 0 && now-p.fightAt < w.fightFor || w.pvpLocked(now, p)
 }

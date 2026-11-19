@@ -209,8 +209,10 @@ pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers,
     max_wars: 3             # pending + active wars of one guild
 
 travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes en barco")
-  # No sailing while in combat: a monster attacked the player, the player took damage or
-  # hit a monster within the last combat_block_ms.
+  # In combat: a monster attacked the player, the player took damage or hit a monster or
+  # a player within the last combat_block_ms. No sailing and no logout then; a connection
+  # closed in combat leaves the character in the world, link-dead, until the fight is over
+  # (docs/02 "Bloqueo de logout en combate").
   combat_block_ms: 12000
   # Arrival taken: nearest free walkable tile at most this far. Portals (stairs, ladders,
   # holes, rope spots, teleports) land with the same radius.

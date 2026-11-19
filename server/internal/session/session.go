@@ -357,7 +357,7 @@ type World struct {
 	aggrDur      time.Duration
 	unjustKeep   time.Duration
 	skulled      []*Player
-	linkDead     []*Player
+	linkDead     []*Player // in the world without a connection, in a fight (linkdead.go)
 	pvpNext      game.Tick
 	pvpBuf       []*Player
 	wars         map[int64]*guildWar

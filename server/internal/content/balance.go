@@ -283,8 +283,9 @@ func (p PvP) check() error {
 
 // Travel holds the boat travel rules (T3.5, docs/02-game-design.md "Viajes en barco").
 type Travel struct {
-	// CombatBlockMs: no sailing this long after a monster attacked the player, the
-	// player took damage or it hit a monster.
+	// CombatBlockMs: how long a player stays in combat after a monster attacked it, it
+	// took damage or it hit a monster or a player: no sailing and no logout (a closed
+	// connection leaves it link-dead, session/linkdead.go).
 	CombatBlockMs int `yaml:"combat_block_ms"`
 	// ArrivalRadius: a taken arrival tile falls back to the nearest free one this far.
 	ArrivalRadius int `yaml:"arrival_radius"`

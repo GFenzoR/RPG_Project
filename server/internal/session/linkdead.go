@@ -1,0 +1,115 @@
+package session
+
+import (
+	"slices"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+)
+
+// The logout block of a fight (docs/02-game-design.md "Bloqueo de logout en combate"): a
+// player in combat (inCombat: it fought a monster or took damage within balance
+// travel.combat_block_ms, or its PvP lock lasts, T5.2) cannot log out, and closing the
+// connection does not take it out of the world either: it stays link-dead until the fight
+// is over. Leaving the game is no way out of a death.
+
+// msgLogoutLocked refuses a Logout in a fight that is not a PvP lock (that one says
+// pvp.logout_locked).
+const msgLogoutLocked = "combat.logout_locked"
+
+// logoutBlock is why p cannot log out now: the message key, or "" when it may.
+func (w *World) logoutBlock(tick game.Tick, p *Player) string {
+	switch {
+	case w.pvpLocked(tick, p):
+		return msgPvPLogoutLocked
+	case w.inCombat(tick, p):
+		return msgLogoutLocked
+	}
+	return ""
+}
+
+// linkDeadOnLeave keeps p in the world when its connection closes while it is in combat
+// (inCombat): link-dead, it does nothing (Input ignores it, its trade is cancelled and its
+// market window closed) but can still be attacked, monsters keep it as their target and
+// its conditions keep ticking (each hit renews the block), until the block ends;
+// checkLinkDead then saves it and takes it out, or a death does (deathSave). It reports
+// whether p stays: a player already link-dead stays as it is. A new login of the character
+// takes it over (join).
+func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
+	if p.linkDead {
+		return true
+	}
+	if !w.inCombat(tick, p) {
+		return false
+	}
+	p.linkDead = true
+	p.target, p.ptarget = nil, nil
+	p.stopWalk()
+	p.out = p.out[:0]
+	w.cancelTrade(p, tradeCancelLeft) // T5.3: "a trade ends if one disconnects" (docs/02)
+	w.dropMarket(p)                   // T5.3: nobody to refresh its market window for (flushMarket)
+	w.linkDead = append(w.linkDead, p)
+	w.log.Info("link-dead", "character", p.charID)
+	return true
+}
+
+// disconnect closes p's connection with reason because the server ends it (a slow client,
+// a password reset). In combat p stays in the world link-dead, as if it had closed the
+// connection itself (Leave): the connection closes now and p leaves when the block ends.
+// Anyone else leaves the world now (remove). A staff kick or ban, a failed save and a
+// logout do not come here: they take the character out.
+func (w *World) disconnect(ctx *game.TickContext, p *Player, reason pb.DisconnectReason, slow bool) {
+	if !w.linkDeadOnLeave(ctx.Tick, p) {
+		w.remove(ctx, p, reason, slow)
+		return
+	}
+	if !p.dropped {
+		p.dropped = true
+		p.client.Close(reason) // once: remove sends and closes nothing more
+	}
+}
+
+// LinkDead reports whether p lost its connection and stays in the world for its fight.
+func (p *Player) LinkDead() bool { return p.linkDead }
+
+// checkLinkDead takes out the link-dead players whose fight is over, or that died
+// (deathSave), saving them (remove). It runs every tick, at the end, over World.linkDead
+// only (usually empty).
+func (w *World) checkLinkDead(ctx *game.TickContext) {
+	for i := 0; i < len(w.linkDead); {
+		if p := w.linkDead[i]; p.diedLinkDead || !w.inCombat(ctx.Tick, p) {
+			w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false) // drops index i
+			continue
+		}
+		i++
+	}
+}
+
+// forgetLinkDead takes p out of World.linkDead when it leaves the world.
+func (w *World) forgetLinkDead(p *Player) {
+	if p.linkDead {
+		p.linkDead = false
+		w.linkDead = slices.DeleteFunc(w.linkDead, func(o *Player) bool { return o == p })
+	}
+}
+
+// deathSave saves p's state right after its death (die, arenaDefeat), at once: a crash
+// cannot undo it. A link-dead player whose death ended its fight (wakeAtTemple; a PvP lock
+// would still hold it) leaves the world instead, at the end of this tick (checkLinkDead:
+// not here, where a fight loop may be going over the players), and its final snapshot is
+// that save: the death is saved once, as anyone's.
+func (w *World) deathSave(ctx *game.TickContext, p *Player) {
+	if p.linkDead && !w.inCombat(ctx.Tick, p) {
+		p.diedLinkDead = true
+		return
+	}
+	w.save(w.snapshot(p, false))
+}
+
+// carryFight is what a new login takes over from the player it replaces (a link-dead one,
+// or one still connected): its fight, so a relog is no way out of the logout block or the
+// boat's combat rule, and its PvP locks (pvpCarry).
+func (w *World) carryFight(from, to *Player) {
+	to.fightAt = from.fightAt
+	w.pvpCarry(from, to)
+}
