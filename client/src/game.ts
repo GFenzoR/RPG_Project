@@ -401,6 +401,11 @@ export class Game {
   private cast: { spellId: string; at: number } | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
   private groundTip: GameUi["groundTip"];
+  /**
+   * The last state given to the UI: a change of the ground card alone (the mouse sweeping
+   * the map) reuses it instead of building it again (publishTip).
+   */
+  private shown: GameUi | undefined;
   /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
   private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
   /** The item dragged with the pointer right now (docs/17 UI-5). */
@@ -994,6 +999,14 @@ export class Game {
   }
 
   /**
+   * A use of the backpack slot still waits for its answer: the inventory shown again
+   * meanwhile does not open the backpack once more (the server would toggle it shut).
+   */
+  backpackWaiting(): boolean {
+    return this.world.backpack.waiting(performance.now());
+  }
+
+  /**
    * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
    * pointer travels a few pixels, and the item moves where it is released. With Shift a
    * click looks at the item and a drag moves part of a stack (docs/17 UI-6: it asks how
@@ -1532,7 +1545,7 @@ export class Game {
     const w = this.world;
     const self = w.self;
     if (w.station && self && !nearStation(w.station, self.pos)) w.station = undefined;
-    this.opts.update({
+    const ui: GameUi = {
       battle: w.battleList(),
       target: w.target,
       stats: w.stats,
@@ -1577,8 +1590,24 @@ export class Game {
         itemId: this.split.ref.itemId,
         count: this.split.ref.count,
       },
-    });
+    };
+    this.shown = ui;
+    this.opts.update(ui);
     this.armPresenceTimer();
+  }
+
+  /**
+   * Only the ground card changed (docs/17 UI-6: it follows the mouse from tile to tile at
+   * once): the last state with the new card, without building the battle list or copying
+   * the log and the chat again on every tile the mouse crosses.
+   */
+  private publishTip(): void {
+    if (!this.shown) {
+      this.publish();
+      return;
+    }
+    this.shown = { ...this.shown, groundTip: this.groundTip };
+    this.opts.update(this.shown);
   }
 
   // ---- sound (T3.7): what each event sounds like is assets/sounds.yaml --------------------
@@ -1948,7 +1977,7 @@ export class Game {
     }
     if (tip === undefined && this.groundTip === undefined) return;
     this.groundTip = tip;
-    this.publish();
+    this.publishTip();
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

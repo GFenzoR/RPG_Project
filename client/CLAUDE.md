@@ -1402,7 +1402,10 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   abierta, llama `Game.openBackpack` (un `UseItem` del slot, como el doble click, pero sin
   pasar por `useItem`: no descarta la runa o la herramienta que el jugador apuntaba). Una vez
   por mochila mientras el inventario está montado (`done`): cerrarla con su × la deja
-  cerrada hasta que el inventario se vuelva a abrir o se equipe otra. Durante el tutorial
+  cerrada hasta que el inventario se vuelva a abrir o se equipe otra. Mientras un uso del
+  slot espera su respuesta (`EquippedBackpack.waiting`, `Game.backpackWaiting`) no manda
+  otro: I dos veces antes del `ContainerOpen` mandaba dos usos y el servidor, que alterna,
+  la dejaba cerrada. Durante el tutorial
   no (su paso `open_backpack` lo enseña; el `TutorialStep` llega en el mismo batch que el
   `Inventory` al entrar). En teléfonos el panel está montado aunque su pestaña no se vea:
   se abre al entrar.
@@ -1428,7 +1431,9 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
 - **Sobre el mapa:** `game-canvas.ts` llama `restTile` en el acto cada vez que cambia la
   casilla bajo el mouse (ya no espera 350 ms quieto); `Game.restTile` suma `tile`, la
   casilla en coordenadas de página (`tileToClient` de ella y de la siguiente), y no publica
-  nada mientras se arrastra. `ItemTooltip` usa `groundAnchor`: la casilla, estirada hacia
+  nada mientras se arrastra. Un cambio solo de la ficha no arma de nuevo el `GameUi`
+  (`publishTip`: el último publicado, `shown`, con el `groundTip` nuevo; sin la lista de
+  batalla ni copias del log y el chat por cada casilla que cruza el mouse). `ItemTooltip` usa `groundAnchor`: la casilla, estirada hacia
   abajo hasta pasar el texto del cursor (`GROUND_HINT_PX`), así colocada abajo no lo tapa.
 - **Para las ventanas flotantes** (rama `feat/hud-fullscreen`): nada del interior depende
   del dock. La figura toma el ancho de la ventana: 2x en los slots grandes desde unos 286

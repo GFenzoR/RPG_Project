@@ -58,6 +58,19 @@ describe("EquippedBackpack (docs/17 UI-5: the backpack under the figure)", () =>
     expect(c.id).toBe(4);
   });
 
+  it("says when a use of the slot still waits for its answer", () => {
+    const b = new EquippedBackpack();
+    expect(b.waiting(0)).toBe(false);
+    b.used(BACKPACK, 0);
+    expect(b.waiting(BACKPACK_ANSWER_MS)).toBe(true);
+    expect(b.waiting(BACKPACK_ANSWER_MS + 1)).toBe(false); // the answer is not coming
+    b.opened(box(4), 10);
+    expect(b.waiting(20)).toBe(false); // answered: opened
+    b.used(BACKPACK, 30);
+    b.closed(4, box(4));
+    expect(b.waiting(40)).toBe(false); // answered: the use closed it
+  });
+
   it("lets the window go when its backpack leaves the slot, and never takes it back", () => {
     const b = new EquippedBackpack();
     b.used(BACKPACK, 0);
@@ -158,5 +171,21 @@ describe("autoOpen (the inventory opens the backpack when it shows)", () => {
       done: undefined,
     });
     expect(autoOpen(input({ equipped: BAG, done: BACKPACK }))).toEqual({ open: true, done: BAG });
+  });
+
+  it("does not send a second use while the first waits for its answer (I pressed twice)", () => {
+    // The inventory shown again before the ContainerOpen came: its `done` starts over, and
+    // another use would make the server toggle the backpack shut.
+    expect(autoOpen(input({ waiting: true }))).toEqual({ open: false, done: undefined });
+    // Its answer docks it: the next run remembers it as done.
+    expect(autoOpen(input({ waiting: false, docked: true }))).toEqual({
+      open: false,
+      done: BACKPACK,
+    });
+    // Closed by hand before, the wait keeps that too.
+    expect(autoOpen(input({ waiting: true, done: BACKPACK }))).toEqual({
+      open: false,
+      done: BACKPACK,
+    });
   });
 });

@@ -30,6 +30,14 @@ export class EquippedBackpack {
   }
 
   /**
+   * A use of the slot is on its way and its answer has not come: another use now would
+   * make the server toggle that backpack shut again (the inventory must not open it twice).
+   */
+  waiting(now: number): boolean {
+    return this.awaiting !== undefined && now <= this.awaiting.until;
+  }
+
+  /**
    * A ContainerOpen: the answer to the use of the slot when it is that item's, without a
    * parent, in time (another window opening meanwhile, a corpse, is not it).
    */
@@ -96,6 +104,11 @@ export interface AutoOpenInput {
   lookalike: boolean;
   /** The backpack this inventory already opened, or found open, since it showed. */
   done: number | undefined;
+  /**
+   * A use of the slot waits for its answer (EquippedBackpack.waiting): the inventory shown
+   * again before it came (I pressed twice) must not send another, which would close it.
+   */
+  waiting?: boolean | undefined;
 }
 
 /**
@@ -107,6 +120,8 @@ export interface AutoOpenInput {
 export function autoOpen(s: AutoOpenInput): { open: boolean; done: number | undefined } {
   if (s.equipped === undefined) return { open: false, done: undefined };
   if (s.done === s.equipped) return { open: false, done: s.done };
+  // Nothing is remembered: the answer docks it (docked), or the next showing tries again.
+  if (s.waiting) return { open: false, done: s.done };
   if (s.docked || s.tutorial || s.lookalike) return { open: false, done: s.equipped };
   return { open: true, done: s.equipped };
 }
