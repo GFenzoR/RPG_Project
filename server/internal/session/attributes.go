@@ -147,13 +147,25 @@ func (w *World) wornGear(p *Player) gearBonus {
 }
 
 // applyGear recomputes p.gear and what follows from it: the maximums (health and mana
-// never above them), the armor and the speed. A player in the world is told: its stats,
-// its health bar to who sees it, its speed.
+// never above them), the armor and the speed. A player in the world is told what changed:
+// its stats and health bar, its speed. The sums are only redone when the worn instances
+// with an attribute changed (Player.gearFrom): spending ammo or a rune's charge does not
+// redo them. A path that changes a worn instance's mods in place (the forge) clears
+// gearFrom.
 func (w *World) applyGear(p *Player) {
-	g := w.wornGear(p)
+	var worn [equipSlots]*Item
+	for slot, it := range p.equip {
+		if it != nil && slot != int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK) && it.mods.Attr != "" {
+			worn[slot] = it
+		}
+	}
+	if worn != p.gearFrom {
+		p.gear, p.gearFrom = w.wornGear(p), worn
+	}
+	g := p.gear
 	before := healthPercent(p.health, p.maxHealth)
+	was := [4]int{p.health, p.mana, p.maxHealth, p.maxMana}
 	stats := p.vocation.AtLevel(p.level)
-	p.gear = g
 	p.maxHealth, p.maxMana = stats.Health+g.health, stats.Mana+g.mana
 	p.health, p.mana = min(p.health, p.maxHealth), min(p.mana, p.maxMana)
 	p.armor += g.armor
@@ -162,9 +174,11 @@ func (w *World) applyGear(p *Player) {
 		return
 	}
 	w.refreshSpeed(holder{p: p})
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	if p.health > 0 {
-		w.healthBar(p, before)
+	if was != [4]int{p.health, p.mana, p.maxHealth, p.maxMana} {
+		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
+		if p.health > 0 {
+			w.healthBar(p, before)
+		}
 	}
 }
 

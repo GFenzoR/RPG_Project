@@ -163,6 +163,8 @@ el punto 5:
   - **Forja y catálogo:** el refinado (`ItemMods.refine`, hoy siempre 0) es la rama
     `feat/item-forge`; el catálogo compacto con `requires.level` en toda armadura es
     `feat/item-catalog` (hasta entonces casi toda armadura tira en la banda de nivel 1).
+    Refinar una pieza puesta cambia sus `mods` sin moverla: la forja tiene que limpiar
+    `Player.gearFrom` y llamar a `equipmentChanged` (server/CLAUDE.md, "Atributos").
     Al juntarlas, correr de nuevo `go test ./internal/sim` y `content/attributes_test.go`:
     las bandas y pesos de `data/attributes.yaml` se afinaron con el catálogo de hoy.
   - **Balance:** para que las metas de docs/02 sigan con los atributos, el bestiario de

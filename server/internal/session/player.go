@@ -91,8 +91,10 @@ type Player struct {
 	equip [equipSlots]*Item
 	armor int
 	// gear is what the attributes of the worn items add up to (attributes.go): already
-	// in maxHealth, maxMana and armor; the rest is read by the formulas.
+	// in maxHealth, maxMana and armor; the rest is read by the formulas. gearFrom are the
+	// worn instances with an attribute it was summed from.
 	gear          gearBonus
+	gearFrom      [equipSlots]*Item
 	open          []openContainer
 	nextContainer uint32
 	nextUse       game.Tick

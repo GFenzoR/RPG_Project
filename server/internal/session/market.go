@@ -1041,9 +1041,9 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 			p.emit(systemMsg(msgMarketNoRoom))
 			return
 		}
-		var mods Mods
+		var given Mods // the instance's, which the buyer gets
 		if inst != nil {
-			mods = inst.mods
+			given = inst.mods
 			w.removeItem(inst)
 			p.questDirty = true
 			w.econInstance(p, EconMarket, "sell", o.CharacterID, inst, -1)
@@ -1053,7 +1053,7 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 		}
 		w.giveMoney(p, total)
 		w.econGoldWith(p, EconMarket, "sell", o.CharacterID, total)
-		ops = append(ops, w.mailItems(o.CharacterID, o.def, units, mods, ctx.Now)...)
+		ops = append(ops, w.mailItems(o.CharacterID, o.def, units, given, ctx.Now)...)
 		p.emit(systemMsg(msgMarketSold, itemParam(o.def, units), num("price", int(total))))
 	}
 	o.Amount -= units

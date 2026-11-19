@@ -242,7 +242,9 @@ server/
   economía, con `econInstance` / `econMade` / `econTaken` (una fila por instancia con sus
   `mods`). Un `ItemState` nuevo lleva `Mods`, y un formato guardado nuevo de items los
   guarda (`store.ItemMods`). Una fórmula nueva que deba sumar un atributo puesto lee
-  `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`); un efecto nuevo necesita su
+  `Player.gear` (lo recalcula `equipmentChanged` → `applyGear`, solo si cambiaron las
+  instancias puestas con atributo, `Player.gearFrom`: un camino que cambie los `mods` de una
+  pieza puesta sin moverla, como la forja, limpia `gearFrom` y llama a `equipmentChanged`); un efecto nuevo necesita su
   `content.Effect*`, su caso en `wornGear` y en el esquema `attributes.schema.json`.
 
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
