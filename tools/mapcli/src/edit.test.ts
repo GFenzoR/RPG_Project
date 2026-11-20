@@ -584,7 +584,7 @@ describe("mapcli patch", () => {
       ok: true,
       merged: [Z7],
     });
-  });
+  }, 90_000); // git sandboxes: over 30 s on native Windows, like the round trip above
 
   it("rejects patches that reach outside the map files", () => {
     const root = sandbox();
@@ -663,7 +663,7 @@ describe("mapcli patch", () => {
         changed: [],
       }),
     ]);
-  });
+  }, 90_000); // git sandboxes: over 30 s on native Windows, like the round trip above
 
   it("writes patch contents in canonical form, never as they come", () => {
     const root = sandbox();
