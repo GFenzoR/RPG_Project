@@ -2,11 +2,12 @@ id: bosque_druid
 name: npc.bosque_druid.name
 sprite: npcs/bosque_druid
 look:
+  sex: female
   body: sturdy
   skin: fair
   hair: long
   hair_color: grey
-  beard: full
+  beard: none
   worn:
     torso: { shape: robe, tint: moss }
     feet: { shape: shoes, tint: tan_leather }

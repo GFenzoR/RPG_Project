@@ -2,6 +2,7 @@ id: volcan_priest
 name: npc.volcan_priest.name
 sprite: npcs/volcan_priest
 look:
+  sex: female
   body: slender
   skin: tan
   hair: long

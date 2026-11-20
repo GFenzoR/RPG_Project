@@ -9,7 +9,7 @@
 - id: citizen
   sprite: outfits/citizen
   frames: 1
-  look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: none }
+  look: { sex: male, body: sturdy, skin: fair, hair: short, hair_color: brown, beard: none }
   clothes:
     torso: { shape: tunic, tint: linen }
     legs: { shape: trousers, tint: brown }
@@ -21,7 +21,7 @@
   sprite: outfits/sailor
   frames: 1
   costume: true
-  look: { body: sturdy, skin: tan, hair: short, hair_color: black, beard: none }
+  look: { sex: male, body: sturdy, skin: tan, hair: short, hair_color: black, beard: none }
   clothes:
     torso: { shape: tunic, tint: white }
     legs: { shape: trousers, tint: navy }
@@ -31,7 +31,7 @@
   sprite: outfits/ranger
   frames: 1
   costume: true
-  look: { body: slender, skin: fair, hair: ponytail, hair_color: auburn, beard: none }
+  look: { sex: female, body: slender, skin: fair, hair: ponytail, hair_color: auburn, beard: none }
   clothes:
     torso: { shape: leather, tint: green }
     legs: { shape: trousers, tint: brown }
@@ -41,7 +41,7 @@
   sprite: outfits/noble
   frames: 1
   costume: true
-  look: { body: sturdy, skin: pale, hair: short, hair_color: blond, beard: none }
+  look: { sex: male, body: sturdy, skin: pale, hair: short, hair_color: blond, beard: none }
   clothes:
     torso: { shape: robe, tint: wine }
     feet: { shape: shoes, tint: black }

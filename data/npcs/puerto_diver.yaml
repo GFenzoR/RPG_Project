@@ -2,6 +2,7 @@ id: puerto_diver
 name: npc.puerto_diver.name
 sprite: npcs/puerto_diver
 look:
+  sex: male
   body: slender
   skin: tan
   hair: curly

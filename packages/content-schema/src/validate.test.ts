@@ -1484,6 +1484,7 @@ describe("validator diagnostics", () => {
       "  armor: { slot: neck, armor: 1 }\n",
       "  armor: { slot: neck, armor: 1 }\n  worn: { shape: circlet, tint: gold }\n",
     );
+    edit("data/npcs/harbor_master.yaml", "  sex: female\n", "  sex: woman\n");
     edit("data/npcs/harbor_master.yaml", "  skin: tan\n", "  skin: tann\n");
     edit("data/npcs/harbor_master.yaml", "legs: { shape: trousers", "legs: { shape: robe");
     edit(
@@ -1500,6 +1501,7 @@ describe("validator diagnostics", () => {
       expect.stringMatching(
         /weapons\.yaml:.*worn\.tint: unknown tint "rost" in data\/looks\.yaml \(did you mean "rust"\?\)/,
       ),
+      expect.stringMatching(/harbor_master\.yaml:.*look\.sex: unknown sex "woman" in data\/looks/),
       expect.stringMatching(
         /harbor_master\.yaml:.*look\.skin: unknown skin "tann" in data\/looks\.yaml \(did you mean "tan"\?\)/,
       ),

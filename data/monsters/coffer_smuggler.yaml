@@ -1,6 +1,7 @@
 id: coffer_smuggler
 name: monster.coffer_smuggler.name
 look:
+  sex: female
   body: slender
   skin: fair
   hair: short

@@ -2,6 +2,7 @@ id: bosque_hunter
 name: npc.bosque_hunter.name
 sprite: npcs/bosque_hunter
 look:
+  sex: male
   body: sturdy
   skin: tan
   hair: short

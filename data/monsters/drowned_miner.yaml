@@ -1,6 +1,7 @@
 id: drowned_miner
 name: monster.drowned_miner.name
 look:
+  sex: male
   body: sturdy
   skin: drowned
   hair: curly

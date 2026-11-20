@@ -1,6 +1,7 @@
 id: obsidian_delver
 name: monster.obsidian_delver.name
 look:
+  sex: male
   body: sturdy
   skin: ashen
   hair: crop

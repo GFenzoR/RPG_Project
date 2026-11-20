@@ -46,11 +46,12 @@
       }
     },
     "look": {
-      "description": "An engine humanoid (docs/17 \"Humanoides del motor\"): body build, skin, hair style and colour, beard (ids of data/looks.yaml) and, for an NPC or a monster, what it wears.",
+      "description": "An engine humanoid (docs/17 \"Humanoides del motor\"): sex, body build, skin, hair style and colour, beard (ids of data/looks.yaml) and, for an NPC or a monster, what it wears.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["body", "skin", "hair", "hair_color", "beard"],
+      "required": ["sex", "body", "skin", "hair", "hair_color", "beard"],
       "properties": {
+        "sex": { "$ref": "#/$defs/id" },
         "body": { "$ref": "#/$defs/id" },
         "skin": { "$ref": "#/$defs/id" },
         "hair": { "$ref": "#/$defs/id" },

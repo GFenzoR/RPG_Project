@@ -2,6 +2,7 @@ id: volcan_hunter
 name: npc.volcan_hunter.name
 sprite: npcs/volcan_hunter
 look:
+  sex: male
   body: sturdy
   skin: brown
   hair: short
