@@ -243,10 +243,13 @@ test.describe.serial("public website", () => {
 
     await page.getByTestId("language").selectOption("en");
     await expect(credits.getByRole("heading", { level: 1 })).toHaveText("Credits");
-    await expect(credits.getByRole("heading", { name: "Derived works" })).toBeVisible();
+    // No LPC sections in English either (the derived works and per-file lists left with them).
+    await expect(credits.getByRole("heading", { name: "Derived works" })).toHaveCount(0);
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/credits");
-    await expect(page.getByTestId("credits-files").locator("li").first()).toBeVisible();
+    await expect(credits.locator("[data-pack=dungeon-crawl] h3")).toContainText("Dungeon Crawl");
+    await expect(page.getByTestId("credits-files")).toHaveCount(0);
+    await expect(fonts.locator('a[data-licence="OFL 1.1"]').first()).toBeVisible();
     // Long links and author lists wrap: the page never scrolls sideways on a phone.
     await fitsWidth(page);
     await shot(page, "site-10-credits-en-375", false);
