@@ -5,6 +5,16 @@
 # draws (a spritegen test keeps them equal); `make validate` checks every look, `worn` and
 # `clothes` of data/ against them.
 
+# A player chooses its body, skin, hair style, hair colour and beard when it creates the
+# character and changes them for free in the Apariencia window (docs/02 "Apariencia"). The
+# order of each list is the one the pickers show, and a character without a look (created
+# before looks existed) gets one picked from its id over these lists (content.DefaultLook):
+# append new choices at the end of a list.
+
+# Every change of a player's look is broadcast to everyone who sees it: a burst of
+# change_burst, then one every change_refill_ms (more are dropped).
+limits: { change_burst: 6, change_refill_ms: 1500 }
+
 # Body types: the same skeleton, two trunks.
 builds: [sturdy, slender]
 

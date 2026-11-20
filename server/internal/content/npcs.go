@@ -16,8 +16,11 @@ type NPC struct {
 	ID     string `yaml:"id"`
 	Name   string `yaml:"name"`
 	Sprite string `yaml:"sprite"`
-	Dialog Dialog `yaml:"dialog"`
-	Shop   *Shop  `yaml:"shop"`
+	// Look is the NPC as an engine humanoid (data/looks.yaml): its body and what it wears,
+	// sent in its Creature. Nil: it is drawn with its sprite.
+	Look   *CreatureLook `yaml:"look"`
+	Dialog Dialog        `yaml:"dialog"`
+	Shop   *Shop         `yaml:"shop"`
 	// DevOnly makes every action of the NPC's dialog dev-only, like Action.DevOnly (the
 	// sandbox instructor, docs/16: her free experience and gold too): make validate
 	// refuses it placed anywhere but on a dev_only island, the server does not start with

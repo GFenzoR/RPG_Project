@@ -5,7 +5,7 @@
   "description": "docs/06 \"Looks\", docs/17 \"Humanoides del motor\": the builds, skin tones, hair styles and colours, beards, worn shapes per slot and material tints the paper doll is drawn with. The layer lists equal what the sprite engine draws (a spritegen test).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["builds", "skins", "hair_styles", "beards", "hair_colors", "shapes", "tints"],
+  "required": ["builds", "skins", "hair_styles", "beards", "hair_colors", "shapes", "tints", "limits"],
   "properties": {
     "builds": { "$ref": "#/$defs/idList" },
     "skins": {
@@ -51,7 +51,17 @@
         "items": { "enum": ["hair", "beard"] }
       }
     },
-    "tints": { "$ref": "#/$defs/colors" }
+    "tints": { "$ref": "#/$defs/colors" },
+    "limits": {
+      "description": "A player's look changes (docs/02 \"Apariencia\"): every one is broadcast to everyone who sees the player, so they go through an anti-flood (a burst, then one every change_refill_ms).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change_burst", "change_refill_ms"],
+      "properties": {
+        "change_burst": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "change_refill_ms": { "type": "integer", "minimum": 100, "maximum": 60000 }
+      }
+    }
   },
   "$defs": {
     "idList": {
