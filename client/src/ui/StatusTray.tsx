@@ -13,7 +13,7 @@ import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import type { Game } from "../game.ts";
 import type { ConditionView } from "../state/world.ts";
-import { nextTrayChange, statusIconStyle, trayEntries } from "../state/status.ts";
+import { nextTrayChange, statusIconStyle, trayEntries, withPartyBonus } from "../state/status.ts";
 import type { TrayEntry } from "../state/status.ts";
 import { motionReduced } from "../state/ui-prefs.ts";
 
@@ -80,8 +80,14 @@ export function StatusTrayView(props: StatusTrayViewProps): JSX.Element {
       <ul class="status-tray" aria-label={t("client.conditions.title")}>
         {props.entries.map((e) => {
           const name = t(`condition.${e.id}.name`);
-          const left = leftText(t, e.seconds);
-          const badge = badgeText(t, e.seconds);
+          const left =
+            e.percent !== undefined
+              ? t("client.status.bonus_percent", { percent: e.percent })
+              : leftText(t, e.seconds);
+          const badge =
+            e.percent !== undefined
+              ? t("client.status.badge_percent", { percent: e.percent })
+              : badgeText(t, e.seconds);
           const style = props.icon(e.id);
           const tip = `status-tip-${e.id}`;
           return (
@@ -133,6 +139,8 @@ export function StatusTrayView(props: StatusTrayViewProps): JSX.Element {
 export function StatusTray(props: {
   t: Translate;
   conditions: readonly ConditionView[];
+  /** The party's shared experience bonus % now (0: no icon). */
+  partyBonus: number;
   game: Pick<Game, "spriteIcon"> | undefined;
   compact: boolean;
 }): JSX.Element {
@@ -140,8 +148,9 @@ export function StatusTray(props: {
   const [open, setOpen] = useState<string | undefined>(undefined);
   const now = performance.now();
   const reduced = typeof document === "undefined" || motionReduced(document.documentElement);
-  const entries = trayEntries(props.conditions, now, reduced);
-  const next = nextTrayChange(props.conditions, now);
+  const conditions = withPartyBonus(props.conditions, props.partyBonus);
+  const entries = trayEntries(conditions, now, reduced);
+  const next = nextTrayChange(conditions, now);
   useEffect(() => {
     if (next === undefined) return undefined;
     // A hair after the second turns, so the new one is written.

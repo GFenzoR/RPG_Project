@@ -21,6 +21,8 @@ export interface PartyMemberView {
 export interface PartyView {
   leaderId: number;
   shared: SharedExperience;
+  /** The shared experience bonus % right now (0 unless shared is ACTIVE). */
+  bonusPercent: number;
   members: PartyMemberView[];
 }
 
@@ -43,6 +45,7 @@ export class PartyState {
     this.party = {
       leaderId: u.leaderId,
       shared: u.shared,
+      bonusPercent: u.shared === SharedExperience.ACTIVE ? u.bonusPercent : 0,
       members: u.members.map((m) => ({
         id: m.creatureId,
         name: m.name,
@@ -86,6 +89,16 @@ export class PartyState {
   isMember(id: number): boolean {
     return this.party?.members.some((m) => m.id === id) ?? false;
   }
+}
+
+/** The party bonus % the player gets now: 0 out of a party or without sharing. */
+export function partyBonus(p: PartyView | undefined): number {
+  return p?.bonusPercent ?? 0;
+}
+
+/** How many members share right now (the ones the player sees qualify). */
+export function sharingCount(p: PartyView | undefined): number {
+  return p?.members.filter((m) => m.sharing).length ?? 0;
 }
 
 /** i18n key of the shared experience indicator. */

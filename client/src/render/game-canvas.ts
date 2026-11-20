@@ -1098,7 +1098,7 @@ export async function createGameCanvas(
 
   // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
   // effects play their atlas frames; drawn while the world state keeps them (it expires them).
-  const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer });
+  const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer, t });
 
   /**
    * ART-8: how many sprite pixels a creature drawn at `p` is raised: the elevation of its

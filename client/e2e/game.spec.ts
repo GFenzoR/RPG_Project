@@ -1737,6 +1737,8 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   browser,
   playwright,
 }) => {
+  // The hunt for the party bonus waits for the wolves, and leaving waits out the fight.
+  test.setTimeout(360_000);
   const password = "e2e-password-1";
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
@@ -1779,6 +1781,10 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
+  // The help line says what a party gives.
+  await expect(leadPage.getByTestId("party-help")).toContainText(
+    "Cazar en grupo da más experiencia",
+  );
   const invite = leadPage
     .getByTestId("battle-list")
     .locator("li", { hasText: mate.name })
@@ -1799,11 +1805,21 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     await expect(panel).toContainText(lead.name);
     await expect(panel).toContainText(mate.name);
     await expect(panel).toContainText("Líder");
-    await expect(panel).toContainText("Experiencia compartida: apagada");
+    // Shared experience is on from the start (docs/02 "Grupos"), but nobody fought yet:
+    // no sharing, no bonus, and the panel says why.
+    await expect(page.getByTestId("party-shared")).toContainText(
+      "Experiencia compartida: activada, sin reparto",
+    );
+    await expect(page.getByTestId("party-bonus")).toHaveCount(0);
+    await expect(page.getByTestId("game-log")).toContainText("El grupo comparte la experiencia");
   }
+  // Only the leader turns it off and on again.
   await expect(matePage.getByTestId("party-share")).toHaveCount(0);
   await leadPage.getByTestId("party-share").click();
-  // On, but nobody fought yet: no sharing, and the panel says why.
+  await expect(matePage.getByTestId("party-shared")).toContainText(
+    "Experiencia compartida: apagada",
+  );
+  await leadPage.getByTestId("party-share").click();
   await expect(matePage.getByTestId("party-shared")).toContainText(
     "Experiencia compartida: activada, sin reparto",
   );
@@ -1822,6 +1838,52 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await leadPage
     .locator('.gwin[data-window="party"]')
     .screenshot({ path: join(shots, "25-party-panel.png") });
+
+  // Both hunt the wolves north of the temple (as in "fight a wolf"): once both fought, the
+  // party shares with its bonus (+5 % for two), the panel says it and who shares, and the
+  // status tray shows the party bonus icon with its percentage.
+  for (const [i, page] of [leadPage, matePage].entries()) {
+    const me = await self(page);
+    if (!me) throw new Error("no own creature");
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: me.x + i,
+      b: me.y - 5,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+    await arrived(page, me.x + i, me.y - 5);
+    await page.getByLabel("Perseguir al objetivo").check();
+  }
+  const bonusShown = async (page: Page): Promise<boolean> => {
+    if ((await page.getByTestId("party-bonus").count()) > 0) return true;
+    // Attack (again) the nearest wolf: one may have died or run off.
+    if (
+      (await page.locator('[data-testid="battle-list"] button[aria-pressed="true"]').count()) === 0
+    ) {
+      const wolf = page.getByTestId("battle-list").getByRole("button", { name: /lobo/ }).first();
+      if (await wolf.isVisible()) await wolf.click({ timeout: 1_000 }).catch(() => undefined);
+    }
+    return false;
+  };
+  await expect
+    .poll(async () => (await bonusShown(leadPage)) && (await bonusShown(matePage)), {
+      timeout: 120_000,
+      intervals: [1_000],
+    })
+    .toBe(true);
+  for (const page of [leadPage, matePage]) {
+    await expect(page.getByTestId("party-bonus")).toContainText(
+      "Bonus de grupo: +5 % de experiencia (2 comparten)",
+    );
+    await expect(page.getByTestId("party-panel").locator(".tag.sharing")).toHaveCount(2);
+    const tray = page.locator('[data-testid="conditions"] [data-condition="party_bonus"]');
+    await expect(tray.first()).toBeVisible();
+    await expect(tray.first().locator(".status-left")).toHaveText("5%");
+  }
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "25b-party-bonus.png") });
+  await shot(leadPage, "25c-party-bonus-tray");
 
   // T4.1: the mate reports the leader from the battle list; the server answers.
   await matePage
@@ -1867,10 +1929,15 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.keyboard.press("Escape");
   await expect(report).toHaveCount(0);
 
-  // Leaving disbands a party of two.
+  // Leaving disbands a party of two: the bonus and its icon go.
   await matePage.getByTestId("party-leave").click();
   await expect(leadPanel).toContainText("No estás en un grupo.");
   await expect(leadPage.getByTestId("game-log")).toContainText("El grupo se disolvió.");
+  await expect(leadPage.locator('[data-condition="party_bonus"]')).toHaveCount(0);
+  for (const page of [leadPage, matePage]) {
+    await page.getByLabel("Perseguir al objetivo").uncheck();
+    await leaveAfterFight(page);
+  }
   await leadPage.close();
   await matePage.close();
 });

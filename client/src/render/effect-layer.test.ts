@@ -3,7 +3,7 @@ import type { Graphics, Sprite } from "pixi.js";
 import { FloatingTextKind } from "@rpg/protocol";
 import type { Atlas } from "@rpg/renderer";
 import { describe, expect, it } from "vitest";
-import { EffectLayer } from "./effect-layer.ts";
+import { EffectLayer, floatingLabel } from "./effect-layer.ts";
 import { ORB_FRAME_MS } from "./effects.ts";
 import {
   EFFECT_CONJURE,
@@ -49,6 +49,31 @@ function setup() {
 
 const cam = { x: 0, y: 0, zoom: 2 };
 const at = (x: number, y: number) => ({ x, y, z: 7 });
+
+describe("floatingLabel", () => {
+  const t = (key: string, params?: Record<string, string | number>): string =>
+    params ? `${key}${JSON.stringify(params)}` : key;
+  const f = (kind: FloatingTextKind, amount: number, bonus?: number) => ({
+    pos: { x: 0, y: 0, z: 7 },
+    kind,
+    amount,
+    ...(bonus === undefined ? {} : { bonus }),
+    start: 0,
+  });
+
+  it("marks the party bonus part of an experience number", () => {
+    expect(floatingLabel(f(FloatingTextKind.EXPERIENCE, 126, 6), t)).toBe(
+      'client.party.xp_bonus{"amount":126,"bonus":6}',
+    );
+  });
+
+  it("writes the plain amount without a bonus, on other kinds or without texts", () => {
+    expect(floatingLabel(f(FloatingTextKind.EXPERIENCE, 120, 0), t)).toBe("120");
+    expect(floatingLabel(f(FloatingTextKind.EXPERIENCE, 120), t)).toBe("120");
+    expect(floatingLabel(f(FloatingTextKind.DAMAGE, 12, 4), t)).toBe("12");
+    expect(floatingLabel(f(FloatingTextKind.EXPERIENCE, 126, 6), undefined)).toBe("126");
+  });
+});
 
 describe("EffectLayer", () => {
   it("plays the atlas frames of an effect over its time, anchored on its tile", () => {

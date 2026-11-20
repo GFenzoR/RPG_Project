@@ -231,6 +231,8 @@ export interface FloatingTextState {
   pos: Pos;
   kind: FloatingTextKind;
   amount: number;
+  /** EXPERIENCE: the part of amount that is the party's shared bonus (0 or absent: none). */
+  bonus?: number;
   start: number;
 }
 
@@ -302,6 +304,8 @@ export interface ConditionView {
    * end (ENDLESS_STATUSES: protection_zone).
    */
   until: number | undefined;
+  /** A percentage the icon writes instead of the time (party_bonus: the bonus %). */
+  percent?: number;
   /** Hits left of a damage condition (0 for the others). */
   ticks: number;
 }
@@ -861,6 +865,7 @@ export class WorldState implements TileSource {
             pos: posOf(msg.value.pos),
             kind: msg.value.kind,
             amount: Number(msg.value.amount),
+            bonus: Number(msg.value.bonus),
             start: now,
           },
           FLOATING_TEXT_MS,

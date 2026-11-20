@@ -676,6 +676,37 @@ const PROTECTION_ZONE: StatusArt = {
   colours: { G: "#e2c47a", L: "#7fb0f0", B: "#2f5fb8", S: "#1c3a78", W: "#fffaf0" },
 };
 
+/** party_bonus: two companions side by side, one in blue and one in gold. */
+const PARTY_BONUS: StatusArt = {
+  rows: [
+    "..............",
+    "...SS....ss...",
+    "..SHHS..shhs..",
+    "..SHHS..shhs..",
+    "...SS....ss...",
+    "..BBBB..GGGG..",
+    ".BBLBBBGGgGGG.",
+    ".BBLBBBGGgGGG.",
+    ".BBLBBBGGgGGG.",
+    ".BBBBBBGGGGGG.",
+    "..BBBB..GGGG..",
+    "..BB.BB.GG.GG.",
+    "..DD.DD.DD.DD.",
+    "..............",
+  ],
+  colours: {
+    S: "#b07a50",
+    H: "#f0c8a0",
+    s: "#a06a40",
+    h: "#e8b888",
+    B: "#2f6fc8",
+    L: "#7fb0f0",
+    G: "#c8962e",
+    g: "#f2d27a",
+    D: "#3a2a1c",
+  },
+};
+
 /** The art of each status tray icon, by condition or status id. */
 export const STATUS_ART: Readonly<Record<string, StatusArt>> = {
   poison: POISON,
@@ -689,6 +720,7 @@ export const STATUS_ART: Readonly<Record<string, StatusArt>> = {
   in_combat: IN_COMBAT,
   pvp_locked: PVP_LOCKED,
   protection_zone: PROTECTION_ZONE,
+  party_bonus: PARTY_BONUS,
 };
 
 export const UI: RecipeBook = {

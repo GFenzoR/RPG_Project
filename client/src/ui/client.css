@@ -2279,6 +2279,20 @@ body.picking-item .map-hint {
   color: var(--muted);
   margin: 0;
 }
+.party .party-bonus {
+  margin: -0.2rem 0 0.4rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b8f0a0;
+  border: 1px solid var(--ui-ok);
+  background: rgb(40 90 30 / 35%);
+}
+.party .party-help {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
 .invitations {
   position: absolute;
   bottom: 4.5rem;

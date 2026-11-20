@@ -6,7 +6,7 @@ import {
   PartyUpdateSchema,
   SharedExperience,
 } from "@rpg/protocol";
-import { PartyState, sharedKey } from "./party.ts";
+import { PartyState, partyBonus, sharedKey, sharingCount } from "./party.ts";
 
 const update = (leaderId: number, ids: number[]) =>
   create(PartyUpdateSchema, {
@@ -24,6 +24,23 @@ const update = (leaderId: number, ids: number[]) =>
   });
 
 describe("PartyState", () => {
+  it("keeps the bonus % only while shared experience is active", () => {
+    const s = new PartyState();
+    const u = update(1, [1, 2]);
+    u.bonusPercent = 5;
+    u.members.forEach((m) => (m.sharing = true));
+    s.update(u);
+    expect(s.party?.bonusPercent).toBe(5);
+    expect(partyBonus(s.party)).toBe(5);
+    expect(sharingCount(s.party)).toBe(2);
+    u.shared = SharedExperience.INACTIVE; // a stale bonus never shows
+    s.update(u);
+    expect(partyBonus(s.party)).toBe(0);
+    s.update(create(PartyUpdateSchema, {}));
+    expect(partyBonus(s.party)).toBe(0);
+    expect(sharingCount(s.party)).toBe(0);
+  });
+
   it("keeps the party until an empty update", () => {
     const s = new PartyState();
     s.update(update(1, [1, 2]));

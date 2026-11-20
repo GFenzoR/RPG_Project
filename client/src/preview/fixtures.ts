@@ -210,6 +210,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
   ui.party = {
     leaderId: 1,
     shared: SharedExperience.ACTIVE,
+    bonusPercent: 5,
     members: [
       {
         id: 1,

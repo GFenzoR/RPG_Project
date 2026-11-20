@@ -31,6 +31,7 @@ import {
   PROJECTILE_MS,
 } from "../state/world.ts";
 import type { FloatingTextState, WorldState } from "../state/world.ts";
+import type { Translate } from "../i18n/i18n.ts";
 
 const COLORS = {
   hit: 0xc01818,
@@ -124,6 +125,16 @@ const textColor = (k: FloatingTextKind): number =>
         ? COLORS.experience
         : COLORS.damage;
 
+/**
+ * What a floating number writes: the amount, and on experience with a party bonus its
+ * bonus part apart ("+120 (+30 grupo)", client.party.xp_bonus).
+ */
+export function floatingLabel(f: FloatingTextState, t: Translate | undefined): string {
+  if (f.kind === FloatingTextKind.EXPERIENCE && (f.bonus ?? 0) > 0 && t)
+    return t("client.party.xp_bonus", { amount: f.amount, bonus: f.bonus ?? 0 });
+  return String(f.amount);
+}
+
 /** A floating number on screen; `seen` is the last frame that drew it. */
 interface FloatingNumber {
   obj: Text;
@@ -145,6 +156,8 @@ export interface EffectLayerOptions {
   effects: Container;
   /** Floating numbers: above names and health bars. */
   texts: Container;
+  /** Writes the party bonus part of an experience number (floatingLabel). */
+  t?: Translate;
 }
 
 export class EffectLayer {
@@ -167,6 +180,7 @@ export class EffectLayer {
   private readonly atlas: Atlas;
   private readonly tileSize: number;
   private readonly texts: Container;
+  private readonly t: Translate | undefined;
   private frame = 0;
 
   constructor(opts: EffectLayerOptions) {
@@ -174,6 +188,7 @@ export class EffectLayer {
     this.atlas = opts.atlas;
     this.tileSize = opts.atlas.tileSize;
     this.texts = opts.texts;
+    this.t = opts.t;
     opts.effects.addChild(this.spriteGroup, this.shapeGroup, this.shotGroup, this.missileGroup);
   }
 
@@ -270,7 +285,7 @@ export class EffectLayer {
 
   private takeText(f: FloatingTextState): Text {
     const fill = textColor(f.kind);
-    const text = String(f.amount);
+    const text = floatingLabel(f, this.t);
     const spare = this.spareTexts.pop();
     if (spare) {
       spare.text = text;

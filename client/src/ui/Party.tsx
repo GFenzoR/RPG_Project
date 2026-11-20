@@ -1,11 +1,12 @@
 // Party panel (T3.3): members with their level and, while in view, health and mana; the
-// leader's actions; the shared experience indicator; and the invitations to answer. The
-// server decides everything: the buttons only send intents.
+// leader's actions; the shared experience indicator with the bonus % and who shares it;
+// a help line on what a party gives; and the invitations to answer. The server decides
+// everything: the buttons only send intents.
 import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { SharedExperience } from "@rpg/protocol";
-import { sharedKey } from "../state/party.ts";
+import { sharedKey, sharingCount } from "../state/party.ts";
 
 const SHARED_OFF = SharedExperience.OFF;
 
@@ -21,12 +22,25 @@ export function PartyPanel(props: {
     <section class="party" data-testid="party-panel" aria-label={t("client.party.title")}>
       <h2>{t("client.party.title")}</h2>
       {!party ? (
-        <p class="empty">{t("client.party.empty")}</p>
+        <>
+          <p class="empty">{t("client.party.empty")}</p>
+          <p class="party-help" data-testid="party-help">
+            {t("client.party.help")}
+          </p>
+        </>
       ) : (
         <>
           <p class={`shared shared-${party.shared}`} data-testid="party-shared">
             {t(sharedKey(party.shared))}
           </p>
+          {party.bonusPercent > 0 && (
+            <p class="party-bonus" data-testid="party-bonus" data-percent={party.bonusPercent}>
+              {t("client.party.bonus", {
+                percent: party.bonusPercent,
+                count: sharingCount(party),
+              })}
+            </p>
+          )}
           <ul>
             {party.members.map((m) => (
               <li key={m.id} data-member={m.id} class={m.inView ? "" : "away"}>
@@ -87,6 +101,9 @@ export function PartyPanel(props: {
               {t("client.party.leave")}
             </button>
           </div>
+          <p class="party-help" data-testid="party-help">
+            {t("client.party.help")}
+          </p>
         </>
       )}
     </section>

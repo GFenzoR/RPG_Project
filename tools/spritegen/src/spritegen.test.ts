@@ -447,10 +447,11 @@ describe("ui icons", () => {
   });
 
   it("draw every status of the tray (docs/17), each its own 14x14 map outlined to 16x16", () => {
-    // The conditions of data/balance.yaml and the statuses of server/internal/session/status.go.
+    // The conditions of data/balance.yaml, the statuses of server/internal/session/status.go
+    // and the party bonus (client/src/state/status.ts withPartyBonus).
     const conditions = conditionIds(readFileSync(resolve(root, "data", "balance.yaml"), "utf8"));
     expect(conditions).toContain("poison");
-    const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone"];
+    const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone", "party_bonus"];
     expect(Object.keys(STATUS_ART).sort()).toEqual([...ids].sort());
     const masks = ids.map((id) => {
       const art = STATUS_ART[id];
