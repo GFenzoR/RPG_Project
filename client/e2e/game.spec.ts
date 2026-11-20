@@ -889,6 +889,21 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   ]);
   await form.getByLabel("Nombre").fill(druidName);
   await select.selectOption({ label: "Druida" });
+  // docs/02 "Apariencia": a look picked on the form, with the live figure beside it.
+  const druidLook = {
+    body: "slender",
+    skin: "olive",
+    hair: "long",
+    hairColor: "red",
+    beard: "none",
+  };
+  const pickers = form.getByTestId("look-pickers");
+  for (const [part, id] of Object.entries(druidLook)) {
+    const choice = pickers.locator(`[data-look="${part}:${id}"]`);
+    await choice.click();
+    await expect(choice).toHaveAttribute("aria-pressed", "true");
+  }
+  await expect(form.getByTestId("look-preview").locator("canvas")).toBeVisible();
   await shot(page, "19-create-druid");
   await form.getByRole("button", { name: "Crear personaje" }).click();
   const list = page.getByTestId("characters");
@@ -898,6 +913,10 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   // Play the druid: its spells fill the bar by level.
   await list.locator("li", { hasText: druidName }).getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  // The server keeps the look it was created with and sends it in its Creature.
+  const ownLook = (name: string): Promise<unknown> =>
+    page.evaluate((n) => window.__rpgClient?.players().find((p) => p.name === n)?.look, name);
+  await expect.poll(() => ownLook(druidName)).toEqual(druidLook);
   const hotbar = page.getByTestId("hotbar");
   await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="frost_lance"]')).toBeVisible();
   await expect(hotbar.locator('[data-hotkey="F2"] [data-spell="verdant_mend"]')).toBeVisible();
@@ -933,6 +952,15 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   const ammo = inventory.getByTestId("slot-ammo");
   await expect(ammo.locator("[data-item=arrow]")).toBeVisible();
   await expect(ammo.locator(".count")).toHaveText("30");
+  // What it shows it wears comes from the server too: the bow in its right hand (89).
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (n) => window.__rpgClient?.players().find((p) => p.name === n)?.equipment.rightHand,
+        rangerName,
+      ),
+    )
+    .toBe(89);
   await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="sure_shot"]')).toBeVisible();
   await inventory.screenshot({ path: join(shots, "22-ranger-inventory.png") });
   await page.getByRole("button", { name: "Salir del juego" }).click();
@@ -2653,6 +2681,14 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
          pos_x = ${x}, pos_y = 1057, pos_z = 7 WHERE name = '${who.name}'`,
     ]);
   }
+  // The prey wields an iron sword (13, data/ids.lock.yaml) in its right hand (slot 5): the
+  // hunter sees it on its figure (docs/05 "Apariencia y equipo visible").
+  psql([
+    databaseUrl,
+    "-c",
+    `INSERT INTO inventory_items (character_id, slot, item_id, count)
+     SELECT id, 5, 13, 1 FROM characters WHERE name = '${prey.name}'`,
+  ]);
   const errors: string[] = [];
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
@@ -2665,6 +2701,15 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   }
   const hunterP = await enter(hunter.email);
   const preyP = await enter(prey.email);
+  // Another player's visible equipment: the hunter's client knows the prey's sword.
+  await expect
+    .poll(() =>
+      hunterP.evaluate(
+        (n) => window.__rpgClient?.players().find((p) => p.name === n)?.equipment.rightHand,
+        prey.name,
+      ),
+    )
+    .toBe(13);
 
   // The safe mode starts on; the hunter turns it off.
   const safe = hunterP.getByTestId("safe-mode");
