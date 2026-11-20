@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -81,8 +82,11 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 			if it != nil {
 				fall(it)
 			}
-			for pockets && len(p.pockets.items) > 0 {
-				fall(p.pockets.items[0])
+			if pockets {
+				// A copy: fall detaches each item from p.pockets.items while this walks it.
+				for _, held := range slices.Clone(p.pockets.items) {
+					fall(held)
+				}
 			}
 		}
 		w.equipmentChanged(p)

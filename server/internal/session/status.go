@@ -88,10 +88,14 @@ func (s statusView) stale(told statusView) bool {
 // count is how many entries s takes in PlayerConditions.
 func (s statusView) count() int {
 	n := 0
-	for _, on := range []bool{s.fight != 0, s.lock != 0, s.zone} {
-		if on {
-			n++
-		}
+	if s.fight != 0 {
+		n++
+	}
+	if s.lock != 0 {
+		n++
+	}
+	if s.zone {
+		n++
 	}
 	return n
 }

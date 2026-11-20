@@ -266,9 +266,12 @@ type World struct {
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
 	tileBuf []int32
 	// stackBuf holds one tile's stack while mapArea builds it (reused between areas).
-	stackBuf   []tileEntry
-	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
-	corpses    map[world.Pos][]*Corpse
+	stackBuf []tileEntry
+	ground   map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
+	corpses  map[world.Pos][]*Corpse
+	// corpseItem is the remains' container. A player's corpse may be a copy of it with
+	// more slots (playerCorpse, death.go): recognise a corpse by Corpse, never by
+	// comparing an item's def with corpseItem.
 	corpseItem *content.Item
 	corpseFor  game.Tick
 	attackFor  game.Tick
