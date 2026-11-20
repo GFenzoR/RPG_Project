@@ -160,6 +160,13 @@ servicio one-shot de migraciones. Antes de reiniciar, `deploy.sh` hace un backup
   deja `house_owners.away_from` en la hora del deploy, así que nadie la pierde por una
   ausencia anterior a la regla, y el tiempo con el servidor apagado no cuenta (docs/02,
   "Casas"). Conviene anunciarlo en las noticias del sitio (`data/news`) al desplegar.
+- **Sexo del personaje (rama `feat/character-sex`, migración 00022):** el look exige `sex`
+  (docs/05). Un cliente anterior al deploy (una pestaña abierta antes o un build de Tauri
+  viejo) manda el look sin él: crear un personaje con look le responde `400 invalid_look`
+  (con el mensaje traducido) y su `SetLook` se descarta sin aviso. No rompe nada del
+  servidor, pero hay que avisar en las noticias que recarguen la página y actualicen el
+  cliente de escritorio. Los personajes ya creados toman su sexo al entrar: hombre si
+  tienen barba y, si no, el que elige `DefaultLook` según su id (docs/02, "Apariencia").
 
 ### Roles de staff (T2.6)
 Los roles (`player`, `gm`, `admin`) se asignan solo desde el servidor, nunca desde el juego.

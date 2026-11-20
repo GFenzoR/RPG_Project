@@ -311,3 +311,31 @@ func TestDataLookSexes(t *testing.T) {
 		}
 	}
 }
+
+// The ids of data/looks.yaml that code names: "none" (the beard of a character without
+// one) and "male" (the sex of a bearded character saved before migration 00022) in
+// looks.go, and "female" (FEMALE, the sex drawn with the women's bodies) and "none"
+// (NO_BEARD) in packages/renderer/src/look.ts and client/src/state/look.ts. Renaming one
+// of them in data/looks.yaml would silently change those rules: this test fails first.
+func TestDataLooksKeepTheIdsCodeNames(t *testing.T) {
+	l, err := content.LoadLooks("../../../data")
+	if err != nil || l == nil {
+		t.Fatalf("looks: %v", err)
+	}
+	has := func(list []string, id string) bool {
+		for _, v := range list {
+			if v == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(l.Beards, "none") {
+		t.Errorf("beards %v lack none", l.Beards)
+	}
+	for _, sex := range []string{"male", "female"} {
+		if !has(l.Sexes, sex) {
+			t.Errorf("sexes %v lack %s", l.Sexes, sex)
+		}
+	}
+}
