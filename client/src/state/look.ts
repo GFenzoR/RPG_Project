@@ -32,7 +32,14 @@ export const NO_EQUIPMENT: Readonly<EquipmentView> = Object.freeze({
 /** The body of a BodyLook; undefined when none came (not a humanoid, or an old server). */
 export function lookView(m: BodyLook | undefined): Look | undefined {
   if (!m || m.body === "") return undefined;
-  return { body: m.body, skin: m.skin, hair: m.hair, hairColor: m.hairColor, beard: m.beard };
+  return {
+    sex: m.sex,
+    body: m.body,
+    skin: m.skin,
+    hair: m.hair,
+    hairColor: m.hairColor,
+    beard: m.beard,
+  };
 }
 
 /** The item ids of a VisibleEquipment (unset: nothing shows). */
@@ -75,6 +82,7 @@ export const sameLook = (a: Look | undefined, b: Look | undefined): boolean =>
   a === b ||
   (!!a &&
     !!b &&
+    a.sex === b.sex &&
     a.body === b.body &&
     a.skin === b.skin &&
     a.hair === b.hair &&
@@ -110,6 +118,7 @@ export function lookViewKeep(prev: Look | undefined, m: BodyLook | undefined): L
   if (!m || m.body === "") return undefined;
   if (
     prev &&
+    prev.sex === m.sex &&
     prev.body === m.body &&
     prev.skin === m.skin &&
     prev.hair === m.hair &&
@@ -172,6 +181,7 @@ export function stableWorn(prev: Worn | undefined, next: Worn): Worn {
 
 /** The choices of a player's look (ClientContent.lookOptions, data/looks.yaml order). */
 export interface LookChoices {
+  sexes: readonly string[];
   builds: readonly string[];
   skins: readonly string[];
   hairStyles: readonly string[];
@@ -182,6 +192,7 @@ export interface LookChoices {
 /** Whether every id of `look` is a player's choice. */
 export function choosable(o: LookChoices, look: Look): boolean {
   return (
+    o.sexes.includes(look.sex) &&
     o.builds.includes(look.body) &&
     o.skins.includes(look.skin) &&
     o.hairStyles.includes(look.hair) &&
@@ -199,6 +210,7 @@ export function startingLook(o: LookChoices, preferred: Look | undefined): Look 
   const pick = (list: readonly string[], want: string | undefined): string =>
     want !== undefined && list.includes(want) ? want : (list[0] ?? "");
   return {
+    sex: pick(o.sexes, preferred?.sex),
     body: pick(o.builds, preferred?.body),
     skin: pick(o.skins, preferred?.skin),
     hair: pick(o.hairStyles, preferred?.hair),
@@ -207,15 +219,35 @@ export function startingLook(o: LookChoices, preferred: Look | undefined): Look 
   };
 }
 
-/** A look picked at random (rand: [0, 1), like Math.random), every part a choice. */
+/** The beard a woman starts with (docs/02 "Apariencia"): none, though every beard is hers too. */
+export const FEMALE = "female";
+export const NO_BEARD = "none";
+
+/**
+ * `look` with its sex changed to `sex`: becoming a woman starts her with no beard (when
+ * "none" is a choice); she may pick one after. Becoming a man keeps the beard.
+ */
+export function withSex(o: LookChoices, look: Look, sex: string): Look {
+  if (sex === look.sex) return look;
+  const beard = sex === FEMALE && o.beards.includes(NO_BEARD) ? NO_BEARD : look.beard;
+  return { ...look, sex, beard };
+}
+
+/**
+ * A look picked at random (rand: [0, 1), like Math.random), every part a choice: the sex
+ * first, and a woman with no beard (withSex).
+ */
 export function randomLook(o: LookChoices, rand: () => number): Look {
   const pick = (list: readonly string[]): string =>
     list[Math.min(list.length - 1, Math.floor(rand() * list.length))] ?? "";
-  return {
+  const sex = pick(o.sexes);
+  const look: Look = {
+    sex,
     body: pick(o.builds),
     skin: pick(o.skins),
     hair: pick(o.hairStyles),
     hairColor: pick(o.hairColors),
     beard: pick(o.beards),
   };
+  return sex === FEMALE && o.beards.includes(NO_BEARD) ? { ...look, beard: NO_BEARD } : look;
 }

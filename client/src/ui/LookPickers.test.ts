@@ -5,7 +5,7 @@ import type { VNode } from "preact";
 import type { Look, LookTables } from "@rpg/renderer/look";
 import type { LookOptions } from "../content-types.ts";
 import { LookPickers } from "./LookPickers.tsx";
-import { choosable, randomLook, startingLook } from "../state/look.ts";
+import { choosable, randomLook, startingLook, withSex } from "../state/look.ts";
 
 const t = (key: string): string => key;
 
@@ -27,6 +27,7 @@ function nodes(n: unknown, out: Node[] = []): Node[] {
 }
 
 const OPTIONS: LookOptions = {
+  sexes: ["male", "female"],
   builds: ["sturdy", "slender"],
   skins: ["pale", "fair", "tan"],
   hairStyles: ["bald", "short", "long"],
@@ -39,6 +40,7 @@ const TABLES: LookTables = {
   tints: {},
 };
 const LOOK: Look = {
+  sex: "male",
   body: "sturdy",
   skin: "fair",
   hair: "short",
@@ -60,6 +62,8 @@ describe("LookPickers (docs/02 Apariencia)", () => {
       onChange: () => {},
     });
     expect(choices(tree).map((v) => v.props["data-look"])).toEqual([
+      "sex:male",
+      "sex:female",
       "body:sturdy",
       "body:slender",
       "skin:pale",
@@ -77,12 +81,17 @@ describe("LookPickers (docs/02 Apariencia)", () => {
       .filter((v) => v.props["aria-pressed"] === true)
       .map((v) => v.props["data-look"]);
     expect(pressed).toEqual([
+      "sex:male",
       "body:sturdy",
       "skin:fair",
       "hair:short",
       "hairColor:black",
       "beard:none",
     ]);
+    // The sex first, by name: "Hombre", "Mujer" (appearance.sex.<id>).
+    expect(nodes(tree).find((v) => v.props["data-look-part"] === "sex")).toBeDefined();
+    expect(choice(tree, "sex:female")?.props.children).toBe("appearance.sex.female");
+    expect(choice(tree, "sex:female")?.props["aria-pressed"]).toBe(false);
     // Styles by name, colours as swatches named for screen readers.
     expect(choice(tree, "hair:long")?.props.children).toBe("appearance.hair.long");
     expect(choice(tree, "skin:tan")?.props["aria-label"]).toBe("appearance.skin.tan");
@@ -108,6 +117,25 @@ describe("LookPickers (docs/02 Apariencia)", () => {
       { ...LOOK, hairColor: "red" },
       { ...LOOK, body: "slender" },
     ]);
+  });
+
+  it("a woman starts with no beard; a man keeps his, and she may pick one after", () => {
+    const sent: Look[] = [];
+    const bearded = { ...LOOK, beard: "full" };
+    const tree = LookPickers({
+      t,
+      options: OPTIONS,
+      tables: TABLES,
+      look: bearded,
+      onChange: (l) => sent.push(l),
+    });
+    (choice(tree, "sex:female")?.props["onClick"] as () => void)();
+    expect(sent).toEqual([{ ...bearded, sex: "female", beard: "none" }]);
+    const her = { ...bearded, sex: "female", beard: "none" };
+    expect(withSex(OPTIONS, her, "male")).toEqual({ ...her, sex: "male" });
+    expect(withSex(OPTIONS, her, "female")).toBe(her);
+    // Every beard stays a choice for her.
+    expect(choosable(OPTIONS, { ...her, beard: "full" })).toBe(true);
   });
 
   it("without the colour tables the swatches are names", () => {
@@ -146,6 +174,7 @@ describe("where the pickers start", () => {
       hair: "bald",
     });
     expect(startingLook(OPTIONS, undefined)).toEqual({
+      sex: "male",
       body: "sturdy",
       skin: "pale",
       hair: "bald",
@@ -162,5 +191,11 @@ describe("where the pickers start", () => {
       expect(choosable(OPTIONS, l)).toBe(true);
     }
     expect(randomLook(OPTIONS, () => 0.999).body).toBe("slender");
+    // It picks a sex too, and a woman with no beard.
+    const her = randomLook(OPTIONS, () => 0.999);
+    expect(her.sex).toBe("female");
+    expect(her.beard).toBe("none");
+    expect(randomLook(OPTIONS, () => 0).sex).toBe("male");
+    expect(choosable(OPTIONS, { ...LOOK, sex: "other" })).toBe(false);
   });
 });

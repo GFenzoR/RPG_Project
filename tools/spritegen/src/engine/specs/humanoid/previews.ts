@@ -49,6 +49,7 @@ export function lookOf(v: unknown): Look {
   const l = isObj(v) ? v : {};
   const s = (k: string): string => (typeof l[k] === "string" ? (l[k] as string) : "");
   return {
+    sex: s("sex"),
     body: s("body"),
     skin: s("skin"),
     hair: s("hair"),

@@ -42,7 +42,14 @@ const CITIZEN: OutfitDef = {
   id: "citizen",
   sprite: "outfits/citizen",
   frames: 1,
-  look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+  look: {
+    sex: "male",
+    body: "sturdy",
+    skin: "fair",
+    hair: "short",
+    hairColor: "brown",
+    beard: "none",
+  },
   clothes: {
     torso: { shape: "tunic", tint: "linen" },
     legs: { shape: "trousers", tint: "brown" },

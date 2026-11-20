@@ -2,6 +2,7 @@ id: bosque_ferryman
 name: npc.bosque_ferryman.name
 sprite: npcs/bosque_ferryman
 look:
+  sex: male
   body: sturdy
   skin: fair
   hair: short

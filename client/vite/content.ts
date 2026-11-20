@@ -627,13 +627,14 @@ export function wornSet(v: unknown): Worn {
 export function lookOf(v: unknown): Look | undefined {
   if (!isObj(v)) return undefined;
   const s = (k: string): string | undefined => (typeof v[k] === "string" ? v[k] : undefined);
+  const sex = s("sex");
   const body = s("body");
   const skin = s("skin");
   const hair = s("hair");
   const hairColor = s("hair_color");
   const beard = s("beard");
-  if (!body || !skin || !hair || !hairColor || !beard) return undefined;
-  return { body, skin, hair, hairColor, beard };
+  if (!sex || !body || !skin || !hair || !hairColor || !beard) return undefined;
+  return { sex, body, skin, hair, hairColor, beard };
 }
 
 /**
@@ -657,6 +658,7 @@ export function loadLookOptions(root: string): LookOptions | undefined {
       )
     : [];
   return {
+    sexes: list(raw["sexes"]),
     builds: list(raw["builds"]),
     skins,
     hairStyles: list(raw["hair_styles"]),

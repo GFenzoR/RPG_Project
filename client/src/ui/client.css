@@ -3649,6 +3649,12 @@ body.picking-item .map-hint {
   background: var(--ui-stone-950);
   border: 1px solid var(--ui-iron-600);
 }
+/* Man or woman, first of the pickers: two large buttons (44 px targets, docs/02). */
+.look-part[data-look-part="sex"] .look-choice {
+  min-height: 44px;
+  min-width: 6.5rem;
+  font-size: 1rem;
+}
 .look-choice.swatch {
   width: 32px;
   min-width: 32px;

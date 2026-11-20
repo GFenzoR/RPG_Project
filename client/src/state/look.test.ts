@@ -20,13 +20,21 @@ const content = { items: {} } as unknown as ClientContent;
 const ev = (m: ServerMessage["message"]): ServerMessage["message"] => m;
 
 const MIRA = {
+  sex: "female",
   body: "slender",
   skin: "olive",
   hair: "ponytail",
   hairColor: "auburn",
   beard: "none",
 };
-const TOM = { body: "sturdy", skin: "deep", hair: "crop", hairColor: "grey", beard: "full" };
+const TOM = {
+  sex: "male",
+  body: "sturdy",
+  skin: "deep",
+  hair: "crop",
+  hairColor: "grey",
+  beard: "full",
+};
 
 describe("a creature's look", () => {
   it("reads the body, the visible equipment and the worn pieces of the protocol", () => {
@@ -50,6 +58,8 @@ describe("a creature's look", () => {
     ).toEqual({ head: { shape: "cap", tint: "wine" }, weapon: { shape: "sword", tint: "rust" } });
     expect(sameLook(MIRA, { ...MIRA })).toBe(true);
     expect(sameLook(MIRA, TOM)).toBe(false);
+    // The sex alone is a different look (a woman's body is drawn).
+    expect(sameLook(MIRA, { ...MIRA, sex: "male" })).toBe(false);
     expect(sameLook(undefined, MIRA)).toBe(false);
   });
 

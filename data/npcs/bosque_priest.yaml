@@ -2,6 +2,7 @@ id: bosque_priest
 name: npc.bosque_priest.name
 sprite: npcs/bosque_priest
 look:
+  sex: male
   body: slender
   skin: brown
   hair: short

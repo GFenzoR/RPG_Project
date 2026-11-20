@@ -9,6 +9,7 @@ import (
 
 const looksYAML = `
 limits: { change_burst: 3, change_refill_ms: 1000 }
+sexes: [male, female]
 builds: [sturdy, slender]
 skins:
   fair: { color: "#ecc4a2" }
@@ -44,16 +45,18 @@ func TestParseLooks(t *testing.T) {
 		t.Fatalf("hair colours %v, limits %+v", l.HairColors, l.Limits)
 	}
 
-	ok := content.Look{Body: "slender", Skin: "tan", Hair: "long", HairColor: "red", Beard: "none"}
+	ok := content.Look{Sex: "female", Body: "slender", Skin: "tan", Hair: "long", HairColor: "red", Beard: "none"}
 	if !l.PlayerLook(ok) {
 		t.Fatalf("%+v refused", ok)
 	}
 	for name, bad := range map[string]content.Look{
-		"a creatures-only skin": {Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "none"},
+		"a creatures-only skin": {Sex: "male", Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "none"},
 		"an unknown build":      {Body: "giant", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
 		"an unknown hair":       {Body: "sturdy", Skin: "fair", Hair: "mohawk", HairColor: "black", Beard: "none"},
 		"an unknown colour":     {Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "blue", Beard: "none"},
 		"an unknown beard":      {Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "goatee"},
+		"an unknown sex":        {Sex: "other", Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
+		"no sex":                {Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
 		"empty":                 {},
 	} {
 		if l.PlayerLook(bad) {
@@ -62,8 +65,16 @@ func TestParseLooks(t *testing.T) {
 	}
 
 	// NPCs and monsters may have the creatures-only skins; what they wear must be drawn.
-	npc := content.CreatureLook{Look: content.Look{Body: "sturdy", Skin: "ashen", Hair: "bald", HairColor: "black", Beard: "full"},
+	npc := content.CreatureLook{Look: content.Look{Sex: "male", Body: "sturdy", Skin: "ashen", Hair: "bald", HairColor: "black", Beard: "full"},
 		Worn: map[string]content.WornPiece{"torso": {Shape: "tunic", Tint: "linen"}, "weapon": {Shape: "sword", Tint: "iron"}}}
+	if err := l.CheckCreature(npc); err != nil {
+		t.Fatal(err)
+	}
+	npc.Sex = ""
+	if l.CheckCreature(npc) == nil {
+		t.Fatal("a creature without a sex accepted")
+	}
+	npc.Sex = "female"
 	if err := l.CheckCreature(npc); err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +118,9 @@ func TestDefaultLook(t *testing.T) {
 		}
 		seen[look] = true
 	}
-	// 2 builds x 2 skins x 3 hairs x 2 colours x 2 beards = 48 looks: 200 ids find most.
-	if len(seen) < 40 {
+	// 2 builds x 2 skins x 3 hairs x 2 colours x (a beardless man or woman, a bearded man)
+	// = 72 looks: 200 ids find most.
+	if len(seen) < 55 {
 		t.Fatalf("200 ids got only %d looks", len(seen))
 	}
 }
@@ -146,5 +158,184 @@ func TestDataLooks(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("no NPC or monster has a look")
+	}
+}
+
+// Adding the sex (migration 00022) changed no existing default: the other fields of
+// DefaultLook over the real data are the ones the code before it picked (computed with
+// that code), and the sex is one of data/looks.yaml.
+func TestDefaultLookStableAcrossTheSex(t *testing.T) {
+	l, err := content.LoadLooks("../../../data")
+	if err != nil || l == nil {
+		t.Fatalf("looks: %v", err)
+	}
+	// The fields before the sex; a default with a beard is a man.
+	before := map[int64]content.Look{
+		1:         {Body: "slender", Skin: "tan", Hair: "topknot", HairColor: "grey", Beard: "short"},
+		2:         {Body: "sturdy", Skin: "deep", Hair: "long", HairColor: "red", Beard: "short"},
+		3:         {Body: "slender", Skin: "brown", Hair: "bald", HairColor: "auburn", Beard: "none"},
+		42:        {Body: "slender", Skin: "pale", Hair: "topknot", HairColor: "red", Beard: "full"},
+		1000:      {Body: "sturdy", Skin: "tan", Hair: "crop", HairColor: "red", Beard: "short"},
+		123456789: {Body: "slender", Skin: "tan", Hair: "bald", HairColor: "red", Beard: "short"},
+	}
+	sexes := map[string]int{}
+	for id, want := range before {
+		got := l.DefaultLook(id)
+		sexes[got.Sex]++
+		want.Sex = got.Sex
+		if want.Beard != "none" {
+			want.Sex = "male"
+		}
+		if got != want {
+			t.Errorf("id %d: %+v, before the sex %+v", id, got, want)
+		}
+		if !l.PlayerLook(got) {
+			t.Errorf("id %d: %+v is not a player's look", id, got)
+		}
+	}
+	// Both sexes come out of the ids (not every character became a man).
+	for id := int64(1); id <= 50; id++ {
+		got := l.DefaultLook(id)
+		sexes[got.Sex]++
+		if got.Sex == "female" && got.Beard != "none" {
+			t.Errorf("id %d: a bearded woman %+v", id, got)
+		}
+	}
+	if sexes["male"] == 0 || sexes["female"] == 0 {
+		t.Fatalf("sexes over 56 ids: %v", sexes)
+	}
+}
+
+// At login a saved look is kept; one saved before the sex keeps its fields and is a man
+// if it wears a beard, else the sex DefaultLook picks from the id; an invalid field is
+// DefaultLook's and the valid ones (the sex first) stay.
+func TestSavedLook(t *testing.T) {
+	l, err := content.ParseLooks([]byte(looksYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	full := content.Look{Sex: "female", Body: "sturdy", Skin: "fair", Hair: "long", HairColor: "red", Beard: "none"}
+	if got := l.SavedLook(7, full); got != full {
+		t.Fatalf("a valid look changed: %+v", got)
+	}
+	old := full
+	old.Sex = ""
+	want := full
+	want.Sex = l.DefaultLook(7).Sex
+	if got := l.SavedLook(7, old); got != want {
+		t.Fatalf("a look saved before the sex: %+v, want %+v", got, want)
+	}
+	if got := l.SavedLook(7, l.SavedLook(7, old)); got != want {
+		t.Fatalf("not stable: %+v", got)
+	}
+	// A bearded man saved before the sex is a man, whatever the id picks.
+	bearded := old
+	bearded.Beard = "full"
+	for id := int64(1); id <= 40; id++ {
+		want := bearded
+		want.Sex = "male"
+		if got := l.SavedLook(id, bearded); got != want {
+			t.Fatalf("id %d: a bearded look saved before the sex: %+v, want %+v", id, got, want)
+		}
+	}
+	// One field out of the lists: only it is the default's; the woman stays a woman.
+	bad := full
+	bad.Hair = "mohawk"
+	want = full
+	want.Hair = l.DefaultLook(7).Hair
+	if got := l.SavedLook(7, bad); got != want {
+		t.Fatalf("an invalid hair: %+v, want %+v", got, want)
+	}
+	creature := full
+	creature.Skin = "ashen" // creatures_only
+	want = full
+	want.Skin = l.DefaultLook(7).Skin
+	if got := l.SavedLook(7, creature); got != want {
+		t.Fatalf("a creatures-only skin: %+v, want %+v", got, want)
+	}
+	// A woman whose beard left the lists gets none, never the default's beard.
+	for id := int64(1); id <= 40; id++ {
+		gone := full
+		gone.Beard = "braided"
+		if got := l.SavedLook(id, gone); got != full {
+			t.Fatalf("id %d: a beard out of the lists: %+v, want %+v", id, got, full)
+		}
+	}
+	if got := l.SavedLook(7, content.Look{}); got != l.DefaultLook(7) {
+		t.Fatalf("no look: %+v, want the default", got)
+	}
+}
+
+// The NPCs and humanoid monsters are the sex their names and texts say (i18n/*/npcs.yaml,
+// monsters.yaml), and no woman of data/ wears a beard.
+func TestDataLookSexes(t *testing.T) {
+	npcs, err := content.LoadNPCs("../../../data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := content.LoadMonsters("../../../data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"harbor_master": "female", "puerto_provisioner": "female", "puerto_priest": "female",
+		"bosque_druid": "female", "bosque_merchant": "female", "volcan_keeper": "female",
+		"volcan_priest": "female", "volcan_ferryman": "female", "pruebas_trainer": "female",
+		"puerto_armorer": "male", "puerto_foreman": "male", "puerto_diver": "male",
+		"bosque_ferryman": "male", "bosque_priest": "male", "bosque_hunter": "male",
+		"volcan_smith": "male", "volcan_hunter": "male", "pruebas_merchant": "male",
+		"pruebas_ferryman":     "male",
+		"monster:wreck_looter": "male", "monster:drowned_miner": "male",
+		"monster:obsidian_delver": "male", "monster:coffer_smuggler": "female",
+	}
+	got := map[string]content.Look{}
+	for id, def := range npcs {
+		if def.Look != nil {
+			got[id] = def.Look.Look
+		}
+	}
+	for id, def := range monsters {
+		if def.Look != nil {
+			got["monster:"+id] = def.Look.Look
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("%d humanoids in data/, %d in this test: add the new one", len(got), len(want))
+	}
+	for id, look := range got {
+		if look.Sex != want[id] {
+			t.Errorf("%s: sex %q, want %q", id, look.Sex, want[id])
+		}
+		if look.Sex == "female" && look.Beard != "none" {
+			t.Errorf("%s: a woman with beard %q", id, look.Beard)
+		}
+	}
+}
+
+// The ids of data/looks.yaml that code names: "none" (the beard of a character without
+// one) and "male" (the sex of a bearded character saved before migration 00022) in
+// looks.go, and "female" (FEMALE, the sex drawn with the women's bodies) and "none"
+// (NO_BEARD) in packages/renderer/src/look.ts and client/src/state/look.ts. Renaming one
+// of them in data/looks.yaml would silently change those rules: this test fails first.
+func TestDataLooksKeepTheIdsCodeNames(t *testing.T) {
+	l, err := content.LoadLooks("../../../data")
+	if err != nil || l == nil {
+		t.Fatalf("looks: %v", err)
+	}
+	has := func(list []string, id string) bool {
+		for _, v := range list {
+			if v == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(l.Beards, "none") {
+		t.Errorf("beards %v lack none", l.Beards)
+	}
+	for _, sex := range []string{"male", "female"} {
+		if !has(l.Sexes, sex) {
+			t.Errorf("sexes %v lack %s", l.Sexes, sex)
+		}
 	}
 }

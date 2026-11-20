@@ -1333,6 +1333,7 @@ pelo, barba y lo que lleva, cada capa en un tono neutro que el cliente tiñe.
 `data/looks.yaml` (esquema `looks`) dice qué hay:
 ```yaml
 limits: { change_burst: 6, change_refill_ms: 1500 }   # anti-flood de SetLook (docs/05)
+sexes: [male, female]                          # hombre o mujer (un cuerpo por sexo y build)
 builds: [sturdy, slender]                      # cuerpos (el mismo esqueleto)
 skins:                                         # tonos de piel
   fair: { color: "#ecc4a2" }
@@ -1367,12 +1368,17 @@ tints: { iron: "#a8aeb6", linen: "#ece2c8" }         # el material de una pieza 
   piernas y pies → `head`, `torso`, `legs` y `feet` (en la mano que sea). Una pieza sin
   `worn` no se dibuja; las joyas no pueden tenerlo. Las 76 piezas del catálogo que se ven lo
   tienen.
-- **Un NPC que es una persona o un monstruo humanoide** lleva `look` (cuerpo, piel, pelo,
+- **`sexes`** (2026-11-20): `male` y `female`, los únicos que el esquema acepta (el motor
+  dibuja un cuerpo de cada uno por build y la ropa de torso de cada uno; lo demás es
+  compartido). Todo `look` de `data/` (NPCs, monstruos, atuendos) lleva `sex`, que debe
+  coincidir con su nombre y sus textos (`TestDataLookSexes` de
+  `server/internal/content/looks_test.go` lista los de hoy; uno nuevo se suma ahí).
+- **Un NPC que es una persona o un monstruo humanoide** lleva `look` (sexo, cuerpo, piel, pelo,
   color de pelo, barba y `worn` por lugar, con formas y tintes, no ids de items: un NPC
   puede vestir algo que no se vende). El `look` manda sobre el `sprite`: el de un NPC
   persona es su retrato quieto (`npcs/<id>`, el del diálogo, que spritegen dibuja de su
   look), y un monstruo humanoide no necesita ninguno. Uno de los dos es obligatorio.
-- **El aspecto de un jugador** (lote 13, docs/02 "Apariencia"): cuerpo, piel, peinado,
+- **El aspecto de un jugador** (lote 13, docs/02 "Apariencia"): sexo, cuerpo, piel, peinado,
   color de pelo y barba, elegidos de estas listas (nunca una piel `creatures_only`) al crear
   el personaje y cuando quiera en la ventana Apariencia. **El orden de cada lista es el de
   los selectores y el del aspecto que el servidor le da a un personaje sin aspecto**

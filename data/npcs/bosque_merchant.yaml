@@ -2,6 +2,7 @@ id: bosque_merchant
 name: npc.bosque_merchant.name
 sprite: npcs/bosque_merchant
 look:
+  sex: female
   body: sturdy
   skin: tan
   hair: curly

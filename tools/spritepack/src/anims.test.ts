@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { layerOver, measureFrames, recolorImage, specColumns } from "./anims.ts";
 import { buildAtlas, legacyFrame } from "./build.ts";
-import { collectSpriteRefs } from "./content.ts";
+import { collectSpriteRefs, lookSprites } from "./content.ts";
 import { createImage, encodePng, fillRect } from "./image.ts";
 import type { Image } from "./image.ts";
 import { parseManifest } from "./manifest.ts";
@@ -402,6 +402,29 @@ describe("buildAtlas with animations", () => {
     expect(page?.["worn/legs_x/idle_s_0"]?.frame).toMatchObject({ w: 1, h: 1 });
     // data/looks.yaml names the layer: it is used, as a sprite field would be.
     expect(collectSpriteRefs(root).map((x) => x.sprite)).toContain("worn/legs_x");
+  });
+
+  it("lists a body and a torso per sex and build, a woman's ending in _female", () => {
+    const layers = lookSprites({
+      sexes: ["male", "female"],
+      builds: ["sturdy", "slender"],
+      hair_styles: ["bald", "long"],
+      beards: ["none", "full"],
+      shapes: { torso: ["robe"], legs: ["trousers"] },
+    });
+    expect(layers).toEqual([
+      "humans/body_sturdy",
+      "humans/body_slender",
+      "humans/body_sturdy_female",
+      "humans/body_slender_female",
+      "humans/hair_long",
+      "humans/beard_full",
+      "worn/torso_robe_sturdy",
+      "worn/torso_robe_slender",
+      "worn/torso_robe_sturdy_female",
+      "worn/torso_robe_slender_female",
+      "worn/legs_trousers",
+    ]);
   });
 
   it("mirrors west frames to the east, anchors on the feet and times the clips (mirror, anchor, ms)", () => {

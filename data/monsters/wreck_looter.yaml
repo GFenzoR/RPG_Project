@@ -1,6 +1,7 @@
 id: wreck_looter
 name: monster.wreck_looter.name
 look:
+  sex: male
   body: sturdy
   skin: tan
   hair: short

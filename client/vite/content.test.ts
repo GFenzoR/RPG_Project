@@ -78,6 +78,7 @@ describe("client content (T0.5)", () => {
     expect(content.monsterSprites["wreck_looter"]).toBeUndefined();
     // A player's choices, in file order, without the creatures-only skins.
     const opts = content.lookOptions;
+    expect(opts?.sexes).toEqual(["male", "female"]);
     expect(opts?.builds).toEqual(["sturdy", "slender"]);
     expect(opts?.skins).toContain("fair");
     expect(opts?.skins).not.toContain("drowned");
@@ -87,6 +88,7 @@ describe("client content (T0.5)", () => {
     expect(opts?.hairColors).toContain("auburn");
     // Every choice has its name in every language (the pickers, ui/LookPickers.tsx).
     const parts: [string, readonly string[]][] = [
+      ["sex", opts?.sexes ?? []],
       ["body", opts?.builds ?? []],
       ["skin", opts?.skins ?? []],
       ["hair", opts?.hairStyles ?? []],
@@ -283,7 +285,14 @@ describe("client content (T0.5)", () => {
       id: "citizen",
       sprite: "outfits/citizen",
       frames: 1,
-      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+      look: {
+        sex: "male",
+        body: "sturdy",
+        skin: "fair",
+        hair: "short",
+        hairColor: "brown",
+        beard: "none",
+      },
       clothes: {
         torso: { shape: "tunic", tint: "linen" },
         legs: { shape: "trousers", tint: "brown" },

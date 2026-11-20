@@ -5,7 +5,14 @@ import type { Look, LookTables } from "@rpg/renderer/look";
 import { clipFrames, drawDoll, pageFrames, previewDraws, turn } from "./look-preview.ts";
 import type { Ctx2D, PreviewAtlas, PreviewFrame } from "./look-preview.ts";
 
-const LOOK: Look = { body: "sturdy", skin: "fair", hair: "short", hairColor: "red", beard: "none" };
+const LOOK: Look = {
+  sex: "male",
+  body: "sturdy",
+  skin: "fair",
+  hair: "short",
+  hairColor: "red",
+  beard: "none",
+};
 const TABLES: LookTables = {
   skins: { fair: 0xecc4a2 },
   hairColors: { red: 0xb8502c },

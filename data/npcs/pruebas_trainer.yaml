@@ -2,11 +2,12 @@ id: pruebas_trainer
 name: npc.pruebas_trainer.name
 sprite: npcs/pruebas_trainer
 look:
+  sex: female
   body: sturdy
   skin: fair
   hair: short
   hair_color: black
-  beard: short
+  beard: none
   worn:
     torso: { shape: mail, tint: iron }
     legs: { shape: trousers, tint: grey }

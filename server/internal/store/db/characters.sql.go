@@ -42,10 +42,10 @@ func (q *Queries) CountCharactersByAccount(ctx context.Context, accountID int64)
 
 const createCharacter = `-- name: CreateCharacter :one
 INSERT INTO characters (account_id, name, vocation, health, mana,
-                        look_body, look_skin, look_hair, look_hair_color, look_beard)
+                        look_body, look_skin, look_hair, look_hair_color, look_beard, look_sex)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9,
-        $10)
+        $10, $11)
 RETURNING id, name, vocation, level
 `
 
@@ -60,6 +60,7 @@ type CreateCharacterParams struct {
 	LookHair      string
 	LookHairColor string
 	LookBeard     string
+	LookSex       string
 }
 
 type CreateCharacterRow struct {
@@ -81,6 +82,7 @@ func (q *Queries) CreateCharacter(ctx context.Context, arg CreateCharacterParams
 		arg.LookHair,
 		arg.LookHairColor,
 		arg.LookBeard,
+		arg.LookSex,
 	)
 	var i CreateCharacterRow
 	err := row.Scan(
@@ -126,7 +128,7 @@ const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
        c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
-       c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard,
+       c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard, c.look_sex,
        (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
@@ -171,6 +173,7 @@ type GetCharacterForPlayRow struct {
 	LookHair       string
 	LookHairColor  string
 	LookBeard      string
+	LookSex        string
 	PremiumSeq     int64
 }
 
@@ -206,6 +209,7 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.LookHair,
 		&i.LookHairColor,
 		&i.LookBeard,
+		&i.LookSex,
 		&i.PremiumSeq,
 	)
 	return i, err
@@ -491,8 +495,9 @@ SET level        = $1,
     look_hair       = $17,
     look_hair_color = $18,
     look_beard      = $19,
-    last_save_at = $20
-WHERE id = $21
+    look_sex        = $20,
+    last_save_at = $21
+WHERE id = $22
 `
 
 type SaveCharacterStateParams struct {
@@ -515,6 +520,7 @@ type SaveCharacterStateParams struct {
 	LookHair      string
 	LookHairColor string
 	LookBeard     string
+	LookSex       string
 	SavedAt       pgtype.Timestamptz
 	ID            int64
 }
@@ -541,6 +547,7 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.LookHair,
 		arg.LookHairColor,
 		arg.LookBeard,
+		arg.LookSex,
 		arg.SavedAt,
 		arg.ID,
 	)

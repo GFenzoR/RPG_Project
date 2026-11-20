@@ -856,7 +856,10 @@ type BodyLook struct {
 	// A hair colour of `hair_colors`: it tints the hair and the beard.
 	HairColor string `protobuf:"bytes,4,opt,name=hair_color,json=hairColor,proto3" json:"hair_color,omitempty"`
 	// A beard of `beards` (none draws nothing).
-	Beard         string `protobuf:"bytes,5,opt,name=beard,proto3" json:"beard,omitempty"`
+	Beard string `protobuf:"bytes,5,opt,name=beard,proto3" json:"beard,omitempty"`
+	// A sex of `sexes` (male, female): the body is drawn per sex and build. Empty from an
+	// old server: the client draws the male body.
+	Sex           string `protobuf:"bytes,6,opt,name=sex,proto3" json:"sex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -926,6 +929,13 @@ func (x *BodyLook) GetBeard() string {
 	return ""
 }
 
+func (x *BodyLook) GetSex() string {
+	if x != nil {
+		return x.Sex
+	}
+	return ""
+}
+
 var File_game_v1_common_proto protoreflect.FileDescriptor
 
 const file_game_v1_common_proto_rawDesc = "" +
@@ -968,14 +978,15 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"content_id\x18\x04 \x01(\tH\x00R\tcontentId\x12(\n" +
 	"\x04item\x18\x05 \x01(\v2\x12.game.v1.ItemStackH\x00R\x04itemB\a\n" +
-	"\x05value\"{\n" +
+	"\x05value\"\x8d\x01\n" +
 	"\bBodyLook\x12\x12\n" +
 	"\x04body\x18\x01 \x01(\tR\x04body\x12\x12\n" +
 	"\x04skin\x18\x02 \x01(\tR\x04skin\x12\x12\n" +
 	"\x04hair\x18\x03 \x01(\tR\x04hair\x12\x1d\n" +
 	"\n" +
 	"hair_color\x18\x04 \x01(\tR\thairColor\x12\x14\n" +
-	"\x05beard\x18\x05 \x01(\tR\x05beard*\xe0\x01\n" +
+	"\x05beard\x18\x05 \x01(\tR\x05beard\x12\x10\n" +
+	"\x03sex\x18\x06 \x01(\tR\x03sex*\xe0\x01\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_NORTH\x10\x01\x12\x18\n" +

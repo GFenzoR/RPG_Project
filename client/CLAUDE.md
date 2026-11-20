@@ -716,7 +716,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   sobre las elecciones de `content.lookOptions` (de `data/looks.yaml`, en orden y sin las
   pieles `creatures_only`: `vite/content.ts` `loadLookOptions`).
 - `ui/LookPickers.tsx` (sin hooks, `ui/LookPickers.test.ts`): un `fieldset` por parte
-  (cuerpo, piel, peinado, color de pelo, barba); los estilos con su nombre
+  (sexo primero, con dos botones de 44 px, "Hombre" y "Mujer"; cuerpo, piel, peinado,
+  color de pelo, barba; elegir "Mujer" deja la barba en `none`, `withSex` de
+  `state/look.ts`); los estilos con su nombre
   (`appearance.<parte>.<id>`, armado en tiempo de ejecución: `make validate` no lo revisa,
   lo revisa `vite/content.test.ts`), los colores como muestras con `aria-label`. Cada botón
   lleva `data-look="<campo>:<id>"` y `aria-pressed`; el elegido no manda nada.

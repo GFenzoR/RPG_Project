@@ -112,7 +112,14 @@ export function baseScene(content: ClientContent, now: number): Scene {
   ]);
   // docs/02 "Apariencia": the character's own body, as the server says, and what its
   // visible slots show (the Apariencia window's figure wears it).
-  ui.look = { body: "sturdy", skin: "tan", hair: "long", hairColor: "dark_brown", beard: "short" };
+  ui.look = {
+    sex: "male",
+    body: "sturdy",
+    skin: "tan",
+    hair: "long",
+    hairColor: "dark_brown",
+    beard: "short",
+  };
   ui.selfEquipment = {
     head: itemNumber(content, "stagleather_hood"),
     torso: itemNumber(content, "stagleather_coat"),

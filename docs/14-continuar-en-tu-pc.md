@@ -100,6 +100,47 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
+  personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
+  equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto
+  tiene `sex` (`male`/`female`, `data/looks.yaml sexes`, `BodyLook.sex` = 6,
+  `characters.look_sex` de la migración 00022), elegido primero ("Hombre / Mujer") al crear
+  y en Personalizar; cuatro cuerpos (sexo x build) sobre las mismas articulaciones, la ropa de
+  torso por cuerpo y el resto compartido; los NPCs y monstruos humanoides tienen el sexo de
+  sus nombres (Maren, Velia e Irene perdieron la barba que tenían); el español al jugador,
+  neutro. Queda:
+  - **Mirarlo en el juego** (la verificación final): `19-create-druid` crea a la druida
+    como **mujer** (el selector "Sexo" con "Mujer" apretado y la figura de ella) y el E2E
+    comprueba que el servidor devuelve `sex: female`; en `20-druid-heal` se la tiene que
+    ver con su cuerpo de mujer (esbelta, hombros angostos, el cinturón en la cintura de la
+    túnica de `citizen`). Los retratos de los diálogos de las mujeres (`npcs/*.png`)
+    cambiaron: `12-npc-dialog` y los diálogos de Maren muestran el nuevo.
+  - **La altura:** la mujer mide lo mismo que el hombre (las articulaciones son compartidas
+    para que cada casco, arma y peinado le quede). Si el dueño la quiere más baja, hace falta
+    un segundo esqueleto y una segunda versión de cada capa compartida (unas 30 capas, el
+    doble de atlas del muñeco); hoy se distingue por hombros, cintura, cadera y ropa.
+  - **Los personajes de antes** reciben al entrar el sexo sin tocar el resto de su aspecto:
+    con barba, hombre; sin barba, el que sale de su id (así que un hombre sin barba puede
+    despertar mujer). Se cambia gratis en Personalizar; un aviso al primer login (no está)
+    sería lo amable. Un aspecto con un campo que salió de `data/looks.yaml` solo cambia ese
+    campo (el sexo elegido se conserva).
+  - **La altura (confirmar con el dueño):** la tarea pedía a la mujer "ligeramente más
+    baja" y mide lo mismo (ver arriba). Es una desviación consciente del pedido: va en la
+    descripción del PR para que el dueño la acepte o pida el segundo esqueleto.
+  - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
+    de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
+    etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
+    `coffer_smuggler` ("contrabandista del cofre") es mujer, así que todo su spawn sale
+    mujer: un spawn no mezcla sexos (decisión de diseño, no un bug).
+  - **Revisar en los screenshots** (`20-druid-heal` y `cli.ts sheet --only humans/`) los
+    pantalones y las grebas sobre la mujer robusta: su cadera (4.0) queda muy cerca del
+    asiento del pantalón (4.15) y el test de encaje solo mide los huecos del hombre.
+  - **El test del español neutro** (`neutral-spanish.test.ts`) también mira las opciones de
+    diálogo del jugador (`*.opt_*`) en primera persona ("Estoy cansado", "Soy nuevo").
+  - **Textos:** hoy ningún texto necesita un `select` de ICU sobre `sex` (todo se pudo
+    decir neutro), así que el servidor no pasa ese parámetro a los diálogos. La noticia
+    "Bienvenidos a Neque's Realm" (plural genérico) quedó como estaba. Un texto nuevo que
+    le hable al jugador se escribe neutro (docs/02 "Apariencia").
 - **Personalización y equipo visible por la red (hecho, rama `feat/character-look`, lote
   13; docs/02 "Apariencia", docs/05 "Apariencia y equipo visible", docs/06 "Looks", docs/07
   "Aspecto y equipo visible"):** cada personaje tiene su aspecto (cuerpo, piel, peinado,
@@ -1087,7 +1128,6 @@ el punto 5:
     oscuro: no se confunden. La puerta sigue siendo un hueco (falta el marco, arriba).
   - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
     (`render/labels.ts` solo los acomoda a zoom 1).
-  - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
   - **401 en consola** al cargar `/play/` y `/shop` sin sesión: es el sondeo de sesión; se
     puede pedir a una ruta que conteste 204 sin sesión.
   - **Dificultad del corral 2 (revisado en el lote 10):** la comida (m4) ya está (`well_fed`,

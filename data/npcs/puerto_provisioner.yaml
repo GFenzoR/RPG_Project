@@ -2,6 +2,7 @@ id: puerto_provisioner
 name: npc.puerto_provisioner.name
 sprite: npcs/puerto_provisioner
 look:
+  sex: female
   body: sturdy
   skin: brown
   hair: short

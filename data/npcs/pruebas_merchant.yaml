@@ -2,6 +2,7 @@ id: pruebas_merchant
 name: npc.pruebas_merchant.name
 sprite: npcs/pruebas_merchant
 look:
+  sex: male
   body: sturdy
   skin: brown
   hair: short

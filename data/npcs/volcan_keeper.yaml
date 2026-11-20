@@ -2,6 +2,7 @@ id: volcan_keeper
 name: npc.volcan_keeper.name
 sprite: npcs/volcan_keeper
 look:
+  sex: female
   body: slender
   skin: deep
   hair: long

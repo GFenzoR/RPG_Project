@@ -6,6 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "sexes",
     "builds",
     "skins",
     "hair_styles",
@@ -16,6 +17,13 @@
     "limits"
   ],
   "properties": {
+    "sexes": {
+      "description": "A man or a woman (docs/02 \"Apariencia\"): the sprite engine draws a body per sex and build.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["male", "female"] }
+    },
     "builds": { "$ref": "#/$defs/idList" },
     "skins": {
       "type": "object",

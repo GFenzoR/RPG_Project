@@ -175,7 +175,30 @@ export function humanoidLineup(
 export const REVIEW_LOOKS: readonly ReviewLook[] = [
   {
     name: "citizen",
-    look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+    look: {
+      sex: "male",
+      body: "sturdy",
+      skin: "fair",
+      hair: "short",
+      hairColor: "brown",
+      beard: "none",
+    },
+    worn: {
+      torso: { shape: "tunic", tint: "linen" },
+      legs: { shape: "trousers", tint: "brown" },
+      feet: { shape: "shoes", tint: "dark_leather" },
+    },
+  },
+  {
+    name: "townswoman",
+    look: {
+      sex: "female",
+      body: "sturdy",
+      skin: "olive",
+      hair: "long",
+      hairColor: "dark_brown",
+      beard: "none",
+    },
     worn: {
       torso: { shape: "tunic", tint: "linen" },
       legs: { shape: "trousers", tint: "brown" },
@@ -184,7 +207,14 @@ export const REVIEW_LOOKS: readonly ReviewLook[] = [
   },
   {
     name: "guardian",
-    look: { body: "sturdy", skin: "brown", hair: "crop", hairColor: "black", beard: "full" },
+    look: {
+      sex: "male",
+      body: "sturdy",
+      skin: "brown",
+      hair: "crop",
+      hairColor: "black",
+      beard: "full",
+    },
     worn: {
       head: { shape: "open_helm", tint: "embersteel" },
       torso: { shape: "plate", tint: "embersteel" },
@@ -196,7 +226,14 @@ export const REVIEW_LOOKS: readonly ReviewLook[] = [
   },
   {
     name: "ranger",
-    look: { body: "slender", skin: "tan", hair: "ponytail", hairColor: "auburn", beard: "none" },
+    look: {
+      sex: "female",
+      body: "slender",
+      skin: "tan",
+      hair: "ponytail",
+      hairColor: "auburn",
+      beard: "none",
+    },
     worn: {
       head: { shape: "hood", tint: "stagleather" },
       torso: { shape: "leather", tint: "stagleather" },
@@ -207,7 +244,14 @@ export const REVIEW_LOOKS: readonly ReviewLook[] = [
   },
   {
     name: "arcanist",
-    look: { body: "slender", skin: "pale", hair: "long", hairColor: "blond", beard: "none" },
+    look: {
+      sex: "female",
+      body: "slender",
+      skin: "pale",
+      hair: "long",
+      hairColor: "blond",
+      beard: "none",
+    },
     worn: {
       torso: { shape: "robe", tint: "dusk" },
       feet: { shape: "shoes", tint: "tar" },
@@ -216,7 +260,14 @@ export const REVIEW_LOOKS: readonly ReviewLook[] = [
   },
   {
     name: "tidesteel",
-    look: { body: "sturdy", skin: "olive", hair: "short", hairColor: "dark_brown", beard: "short" },
+    look: {
+      sex: "male",
+      body: "sturdy",
+      skin: "olive",
+      hair: "short",
+      hairColor: "dark_brown",
+      beard: "short",
+    },
     worn: {
       head: { shape: "full_helm", tint: "tidesteel" },
       torso: { shape: "plate", tint: "tidesteel" },

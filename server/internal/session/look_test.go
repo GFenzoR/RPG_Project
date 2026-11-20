@@ -35,11 +35,11 @@ func withLooks(t testing.TB) option {
 
 func setLook(l content.Look) *pb.ClientMessage {
 	return &pb.ClientMessage{Message: &pb.ClientMessage_SetLook{SetLook: &pb.SetLook{Look: &pb.BodyLook{
-		Body: l.Body, Skin: l.Skin, Hair: l.Hair, HairColor: l.HairColor, Beard: l.Beard}}}}
+		Sex: l.Sex, Body: l.Body, Skin: l.Skin, Hair: l.Hair, HairColor: l.HairColor, Beard: l.Beard}}}}
 }
 
 func lookOf(m *pb.BodyLook) content.Look {
-	return content.Look{Body: m.GetBody(), Skin: m.GetSkin(), Hair: m.GetHair(), HairColor: m.GetHairColor(), Beard: m.GetBeard()}
+	return content.Look{Sex: m.GetSex(), Body: m.GetBody(), Skin: m.GetSkin(), Hair: m.GetHair(), HairColor: m.GetHairColor(), Beard: m.GetBeard()}
 }
 
 // seenCreature is the last Creature of id in evs (FullMapView, MapSlice or CreatureAppear).
@@ -64,8 +64,8 @@ func seenCreature(evs []*pb.ServerMessage, id uint32) *pb.Creature {
 }
 
 var (
-	lookMira = content.Look{Body: "slender", Skin: "olive", Hair: "ponytail", HairColor: "auburn", Beard: "none"}
-	lookTom  = content.Look{Body: "sturdy", Skin: "deep", Hair: "crop", HairColor: "grey", Beard: "full"}
+	lookMira = content.Look{Sex: "female", Body: "slender", Skin: "olive", Hair: "ponytail", HairColor: "auburn", Beard: "none"}
+	lookTom  = content.Look{Sex: "male", Body: "sturdy", Skin: "deep", Hair: "crop", HairColor: "grey", Beard: "full"}
 )
 
 // At login a saved look a player may wear is kept; none, or one that is not a player's
@@ -99,10 +99,24 @@ func TestLookAtLogin(t *testing.T) {
 	nextChar++
 	drowned := session.Character{ID: nextChar, AccountID: nextChar, Name: "Ahogada", Vocation: "guardian", Level: 1,
 		Health: 145, Pos: pos(14, 10), HasPos: true,
-		Look: content.Look{Body: "sturdy", Skin: "drowned", Hair: "short", HairColor: "black", Beard: "none"}}
+		Look: content.Look{Sex: "female", Body: "sturdy", Skin: "drowned", Hair: "short", HairColor: "black", Beard: "none"}}
 	_, pC := h.joinChar(drowned)
-	if want := looks.DefaultLook(drowned.ID); pC.LookForTest() != want {
-		t.Fatalf("a creatures-only skin: got %+v, want the id's %+v", pC.LookForTest(), want)
+	wantC := drowned.Look
+	wantC.Skin = looks.DefaultLook(drowned.ID).Skin
+	if pC.LookForTest() != wantC {
+		t.Fatalf("a creatures-only skin: got %+v, want only the skin of the id's %+v", pC.LookForTest(), wantC)
+	}
+
+	// A look saved before the sex existed (migration 00022: look_sex ''): its fields stay,
+	// and a man with a beard stays a man.
+	nextChar++
+	beforeSex := lookTom
+	beforeSex.Sex = ""
+	_, pD := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Veterano", Vocation: "guardian",
+		Level: 1, Health: 145, Pos: pos(16, 10), HasPos: true, Look: beforeSex})
+	wantD := lookTom
+	if pD.LookForTest() != wantD {
+		t.Fatalf("a look saved before the sex: got %+v, want %+v", pD.LookForTest(), wantD)
 	}
 
 	// The look given at login is saved, so it stays even if data/looks.yaml changes.
@@ -149,8 +163,10 @@ func TestSetLook(t *testing.T) {
 	}
 
 	for name, bad := range map[string]content.Look{
-		"a creatures-only skin": {Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "none"},
-		"an unknown hair":       {Body: "sturdy", Skin: "fair", Hair: "spikes", HairColor: "black", Beard: "none"},
+		"a creatures-only skin": {Sex: "male", Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "none"},
+		"an unknown hair":       {Sex: "male", Body: "sturdy", Skin: "fair", Hair: "spikes", HairColor: "black", Beard: "none"},
+		"no sex":                {Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
+		"an unknown sex":        {Sex: "other", Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
 	} {
 		evs := h.send(clA, setLook(bad))
 		back := find(evs, (*pb.ServerMessage).GetCreatureLook)
@@ -196,6 +212,39 @@ func TestSetLook(t *testing.T) {
 	}
 }
 
+// SetLook of the sex alone (docs/02 "Apariencia"): a man becomes a woman and back, free,
+// and everyone who sees the player is told; the other fields stay as they were.
+func TestSetLookSex(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withLooks(t))
+	nextChar++
+	clA, pA := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Tom", Vocation: "guardian",
+		Level: 1, Health: 145, Pos: pos(10, 10), HasPos: true, Look: lookTom})
+	clB, _ := h.join("Watcher", at(14, 10))
+	clA.take()
+	clB.take()
+
+	woman := lookTom
+	woman.Sex = "female"
+	evs := h.send(clA, setLook(woman))
+	if own := find(evs, (*pb.ServerMessage).GetCreatureLook); pA.LookForTest() != woman || len(own) != 1 ||
+		own[0].GetLook().GetSex() != "female" {
+		t.Fatalf("a change of sex: look %+v, own %v", pA.LookForTest(), own)
+	}
+	if seen := find(clB.take(), (*pb.ServerMessage).GetCreatureLook); len(seen) != 1 || lookOf(seen[0].GetLook()) != woman {
+		t.Fatalf("watcher of a change of sex %v", seen)
+	}
+	h.send(clA, setLook(lookTom))
+	if pA.LookForTest() != lookTom {
+		t.Fatalf("back to a man: %+v", pA.LookForTest())
+	}
+	// Saved with the sex.
+	h.sim.Command(h.w.Leave(clA))
+	h.sim.Step()
+	if last := h.saves[len(h.saves)-1]; last.Look.Sex != "male" {
+		t.Fatalf("saved %+v", last.Look)
+	}
+}
+
 // The SetLook anti-flood (data/looks.yaml limits): exactly a burst of changes in one
 // tick, the rest dropped; one more passes after change_refill_ms, and only one. The
 // changes of a tick go to the watchers in one CreatureLook, with the last one that passed.
@@ -215,7 +264,7 @@ func TestSetLookFlood(t *testing.T) {
 	n := 0
 	next := func() content.Look {
 		n++
-		return content.Look{Body: "sturdy", Skin: "fair", Hair: hairs[n%len(hairs)],
+		return content.Look{Sex: "male", Body: "sturdy", Skin: "fair", Hair: hairs[n%len(hairs)],
 			HairColor: colours[(n/len(hairs))%len(colours)], Beard: "none"}
 	}
 	// broadcast is the looks the watcher was told since the last call.
@@ -439,7 +488,7 @@ func TestCreatureLooksFromData(t *testing.T) {
 	looker.ID = "test_looter"
 	looker.Behavior.Aggressive = false
 	looker.Look = &content.CreatureLook{
-		Look: content.Look{Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "full"},
+		Look: content.Look{Sex: "male", Body: "sturdy", Skin: "ashen", Hair: "short", HairColor: "black", Beard: "full"},
 		Worn: map[string]content.WornPiece{"head": {Shape: "cap", Tint: "wine"}, "weapon": {Shape: "sword", Tint: "rust"}},
 	}
 	h := lookedMonsters(t, []*content.Monster{wolfDef(), looker},

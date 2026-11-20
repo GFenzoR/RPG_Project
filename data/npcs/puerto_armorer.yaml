@@ -2,6 +2,7 @@ id: puerto_armorer
 name: npc.puerto_armorer.name
 sprite: npcs/puerto_armorer
 look:
+  sex: male
   body: sturdy
   skin: fair
   hair: crop

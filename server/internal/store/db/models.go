@@ -104,6 +104,7 @@ type Character struct {
 	LookHair      string
 	LookHairColor string
 	LookBeard     string
+	LookSex       string
 }
 
 type CharacterSkill struct {

@@ -889,8 +889,10 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   ]);
   await form.getByLabel("Nombre").fill(druidName);
   await select.selectOption({ label: "Druida" });
-  // docs/02 "Apariencia": a look picked on the form, with the live figure beside it.
+  // docs/02 "Apariencia": a look picked on the form, with the live figure beside it. The
+  // druid is a woman (the owner, 2026-11-20): "Mujer" is the first picker.
   const druidLook = {
+    sex: "female",
     body: "slender",
     skin: "olive",
     hair: "long",
@@ -904,6 +906,8 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
     await expect(choice).toHaveAttribute("aria-pressed", "true");
   }
   await expect(form.getByTestId("look-preview").locator("canvas")).toBeVisible();
+  await expect(pickers.locator('[data-look-part="sex"] legend')).toHaveText("Sexo");
+  await expect(pickers.locator('[data-look="sex:female"]')).toHaveText("Mujer");
   await shot(page, "19-create-druid");
   await form.getByRole("button", { name: "Crear personaje" }).click();
   const list = page.getByTestId("characters");
@@ -916,6 +920,7 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   // The server keeps the look it was created with and sends it in its Creature.
   const ownLook = (name: string): Promise<unknown> =>
     page.evaluate((n) => window.__rpgClient?.players().find((p) => p.name === n)?.look, name);
+  // The server keeps her sex too (BodyLook.sex = female) and the canvas draws her body.
   await expect.poll(() => ownLook(druidName)).toEqual(druidLook);
   const hotbar = page.getByTestId("hotbar");
   await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="frost_lance"]')).toBeVisible();
@@ -1682,7 +1687,7 @@ test("T3.2: a guardian casts haste: its icon in the status tray, faster speed an
   // for screen readers; the tooltip says what it does.
   await expect(hasted).toBeVisible();
   await expect(hasted).toHaveAttribute("data-kind", "buff");
-  await expect(hasted).toHaveAttribute("aria-label", /^Acelerado, Quedan \d+ s$/);
+  await expect(hasted).toHaveAttribute("aria-label", /^Prisa, Quedan \d+ s$/);
   await expect(hasted.locator(".status-left")).toHaveText(/^\d+$/);
   await expect(hasted.locator(".status-icon")).toHaveCount(1); // its sprite, not the letter
   const tray = await conditions.boundingBox();

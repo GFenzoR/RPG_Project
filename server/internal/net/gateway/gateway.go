@@ -350,7 +350,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Owned:      pc.Owned,
 		Premium:    pc.Premium,
 		PremiumSeq: pc.PremiumSeq,
-		Look: content.Look{Body: pc.Look.Body, Skin: pc.Look.Skin, Hair: pc.Look.Hair, HairColor: pc.Look.HairColor,
+		Look: content.Look{Sex: pc.Look.Sex, Body: pc.Look.Body, Skin: pc.Look.Skin, Hair: pc.Look.Hair, HairColor: pc.Look.HairColor,
 			Beard: pc.Look.Beard},
 	}
 	for _, s := range pc.Skills {

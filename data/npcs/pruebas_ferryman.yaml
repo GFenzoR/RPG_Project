@@ -2,6 +2,7 @@ id: pruebas_ferryman
 name: npc.pruebas_ferryman.name
 sprite: npcs/pruebas_ferryman
 look:
+  sex: male
   body: sturdy
   skin: tan
   hair: curly

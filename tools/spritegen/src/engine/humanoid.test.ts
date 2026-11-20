@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseYaml } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
-import { LAYER_ORDER } from "../../../../packages/renderer/src/look.ts";
+import { LAYER_ORDER, lookLayers } from "../../../../packages/renderer/src/look.ts";
 import type { LayerSlot } from "../../../../packages/renderer/src/look.ts";
 import { recipePaths, recipesAt } from "../index.ts";
 import { box } from "./gates.ts";
@@ -20,6 +20,7 @@ import {
   BEARDS,
   BUILDS,
   HAIR_STYLES,
+  SEXES,
   HUMANOID_LAYERS,
   HUMANOID_PER_TILE,
   HUMANOID_PER_TILE_NS,
@@ -30,6 +31,7 @@ import {
 } from "./specs/humanoid/index.ts";
 import { lookPreviews, lookTables, REPO_ROOT } from "./specs/humanoid/previews.ts";
 import { BODY_PARTS } from "./specs/humanoid/skeleton.ts";
+import type { Build, Sex } from "./specs/humanoid/skeleton.ts";
 import { DIRS, FACING_YAW, PROJECTION, SIZES } from "./style.ts";
 import type { ActionName, Dir } from "./style.ts";
 
@@ -40,9 +42,9 @@ const LOOKS = parseYaml(readFileSync(new URL("data/looks.yaml", ROOT), "utf8")) 
 >;
 const TABLES = lookTables(LOOKS);
 
-const bodyOf = (build: string): SpriteSpec => {
-  const l = HUMANOID_LAYERS.find((x) => x.slot === "body" && x.shape === build);
-  if (!l) throw new Error(build);
+const bodyOf = (build: string, sex: Sex = "male"): SpriteSpec => {
+  const l = HUMANOID_LAYERS.find((x) => x.slot === "body" && x.shape === build && x.sex === sex);
+  if (!l) throw new Error(`${sex} ${build}`);
   return l.spec;
 };
 
@@ -69,24 +71,26 @@ const widthOf = (img: Image): number => {
 };
 
 describe("engine humanoid: proportions (the owner, 2026-11-19)", () => {
-  for (const build of BUILDS)
-    it(`${build}: 36-40 px from the feet to the crown, the head a sixth, shoulders 11-13`, () => {
-      const spec = bodyOf(build);
-      for (const dir of ["s", "w"] as const) {
-        // Without the 1 px outline above and below.
-        const figure = heightOf(renderSpec(spec, { action: "idle", dir, frame: 0 })) - 2;
-        expect(figure, `${build} ${dir}`).toBeGreaterThanOrEqual(36);
-        expect(figure, `${build} ${dir}`).toBeLessThanOrEqual(40);
-        const head = heightOf(partsAlone(spec, ["head"], dir)) - 2;
-        expect(head, `${build} ${dir} head`).toBeGreaterThanOrEqual(6);
-        expect(head, `${build} ${dir} head`).toBeLessThanOrEqual(7);
-        expect(head / figure).toBeGreaterThan(0.14);
-        expect(head / figure).toBeLessThan(0.2);
-      }
-      const shoulders = widthOf(partsAlone(spec, ["torso", "arm_r", "arm_l"], "s")) - 2;
-      expect(shoulders).toBeGreaterThanOrEqual(11);
-      expect(shoulders).toBeLessThanOrEqual(13);
-    });
+  for (const sex of SEXES)
+    for (const build of BUILDS)
+      it(`${sex} ${build}: 36-40 px from the feet to the crown, the head a sixth, shoulders`, () => {
+        const spec = bodyOf(build, sex);
+        for (const dir of ["s", "w"] as const) {
+          // Without the 1 px outline above and below.
+          const figure = heightOf(renderSpec(spec, { action: "idle", dir, frame: 0 })) - 2;
+          expect(figure, `${sex} ${build} ${dir}`).toBeGreaterThanOrEqual(36);
+          expect(figure, `${sex} ${build} ${dir}`).toBeLessThanOrEqual(40);
+          const head = heightOf(partsAlone(spec, ["head"], dir)) - 2;
+          expect(head, `${build} ${dir} head`).toBeGreaterThanOrEqual(6);
+          expect(head, `${build} ${dir} head`).toBeLessThanOrEqual(7);
+          expect(head / figure).toBeGreaterThan(0.14);
+          expect(head / figure).toBeLessThan(0.2);
+        }
+        // A man's shoulders 11-13 px across; a woman's a pixel or two narrower.
+        const shoulders = widthOf(partsAlone(spec, ["torso", "arm_r", "arm_l"], "s")) - 2;
+        expect(shoulders).toBeGreaterThanOrEqual(sex === "male" ? 11 : 10);
+        expect(shoulders).toBeLessThanOrEqual(sex === "male" ? 13 : 12);
+      });
 
   it("the slender build is narrower than the sturdy one, on the same joints", () => {
     const trunk = (b: string): number => widthOf(partsAlone(bodyOf(b), ["torso", "pelvis"], "s"));
@@ -95,6 +99,62 @@ describe("engine humanoid: proportions (the owner, 2026-11-19)", () => {
     const top = (b: string): number => box(partsAlone(bodyOf(b), ["head"], "s"))?.[1] ?? -1;
     expect(top("slender")).toBe(top("sturdy"));
   });
+
+  // The owner, 2026-11-20: a man or a woman, told apart at a glance at the game's scale.
+  for (const build of BUILDS)
+    it(`a ${build} woman reads apart from a ${build} man: narrower shoulders, a waist, wider hips, on the same joints`, () => {
+      const man = bodyOf(build, "male");
+      const woman = bodyOf(build, "female");
+      // The trunk facing south, row by row (pixels across), shoulders to hips.
+      const rows = (spec: SpriteSpec): number[] => {
+        const img = partsAlone(spec, ["torso", "pelvis"], "s");
+        const b = box(img);
+        const out: number[] = [];
+        if (b)
+          for (let y = b[1]; y <= b[3]; y++) {
+            let n = 0;
+            for (let x = 0; x < img.width; x++) if (img.data[(y * img.width + x) * 4 + 3]) n++;
+            out.push(n);
+          }
+        return out;
+      };
+      const his = rows(man);
+      const hers = rows(woman);
+      // The arms hang from the same joints (a shield or a sword fits both), so her
+      // shoulders are the trunk's top: a line well inside his, and never wider arms.
+      const top = (r: number[]): number => r.slice(0, 4).reduce((a, n) => a + n, 0);
+      expect(top(hers), `shoulders ${hers.join(",")} vs ${his.join(",")}`).toBeLessThanOrEqual(
+        top(his) - 4,
+      );
+      const arms = (spec: SpriteSpec): number =>
+        widthOf(partsAlone(spec, ["torso", "arm_r", "arm_l"], "s"));
+      expect(arms(woman), "with the arms").toBeLessThanOrEqual(arms(man));
+      // An hourglass: her hips (the widest row of the lower half) stand out of her waist
+      // (the narrowest row above them) by more than his do, and her waist is narrower.
+      const shape = (r: number[]): { waist: number; hips: number } => {
+        const half = Math.floor(r.length / 2);
+        const hips = Math.max(...r.slice(half));
+        const at = half + r.slice(half).indexOf(hips);
+        return { waist: Math.min(...r.slice(2, at)), hips };
+      };
+      const h = shape(his);
+      const w = shape(hers);
+      expect(w.waist, "waist").toBeLessThan(h.waist);
+      expect(w.hips - w.waist, "hips over waist").toBeGreaterThan(h.hips - h.waist);
+      // Same skeleton: the heads and the feet stand on the same rows, walking too.
+      for (const part of ["head", "foot_r"])
+        for (const frame of [0, 3])
+          expect(box(partsAlone(woman, [part], "w", "walk", frame))?.[3], part).toBe(
+            box(partsAlone(man, [part], "w", "walk", frame))?.[3],
+          );
+      // And the silhouettes differ by more than a few stray pixels, facing south.
+      const a = renderSpec(man, { action: "idle", dir: "s", frame: 0 });
+      const b = renderSpec(woman, { action: "idle", dir: "s", frame: 0 });
+      let differ = 0;
+      for (let i = 0; i < a.width * a.height; i++)
+        if ((a.data[i * 4 + 3] ?? 0) > 0 !== (b.data[i * 4 + 3] ?? 0) > 0) differ++;
+      expect(differ, "silhouette pixels that differ").toBeGreaterThanOrEqual(12);
+    });
 
   it("is smaller than the 46 px LPC person it replaces and fits the humanoid size class", () => {
     expect(SIZES.humanoid.height[1]).toBeLessThan(46);
@@ -287,7 +347,14 @@ describe("engine humanoid: the paper doll", () => {
   const LOOKS_TO_TRY: { name: string; look: Look; worn: Worn }[] = [
     {
       name: "citizen",
-      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+      look: {
+        sex: "male",
+        body: "sturdy",
+        skin: "fair",
+        hair: "short",
+        hairColor: "brown",
+        beard: "none",
+      },
       worn: {
         torso: { shape: "tunic", tint: "linen" },
         legs: { shape: "trousers", tint: "brown" },
@@ -296,7 +363,14 @@ describe("engine humanoid: the paper doll", () => {
     },
     {
       name: "knight",
-      look: { body: "sturdy", skin: "deep", hair: "crop", hairColor: "black", beard: "full" },
+      look: {
+        sex: "male",
+        body: "sturdy",
+        skin: "deep",
+        hair: "crop",
+        hairColor: "black",
+        beard: "full",
+      },
       worn: {
         head: { shape: "full_helm", tint: "steel" },
         torso: { shape: "plate", tint: "steel" },
@@ -308,7 +382,14 @@ describe("engine humanoid: the paper doll", () => {
     },
     {
       name: "druid",
-      look: { body: "slender", skin: "tan", hair: "long", hairColor: "grey", beard: "none" },
+      look: {
+        sex: "female",
+        body: "slender",
+        skin: "tan",
+        hair: "long",
+        hairColor: "grey",
+        beard: "none",
+      },
       worn: {
         head: { shape: "hood", tint: "moss" },
         torso: { shape: "robe", tint: "moss" },
@@ -317,7 +398,14 @@ describe("engine humanoid: the paper doll", () => {
     },
     {
       name: "archer",
-      look: { body: "slender", skin: "olive", hair: "ponytail", hairColor: "red", beard: "none" },
+      look: {
+        sex: "female",
+        body: "slender",
+        skin: "olive",
+        hair: "ponytail",
+        hairColor: "red",
+        beard: "none",
+      },
       worn: {
         torso: { shape: "leather", tint: "stagleather" },
         legs: { shape: "trousers", tint: "green" },
@@ -349,14 +437,16 @@ describe("engine humanoid: the paper doll", () => {
 
   it("draws what data/looks.yaml lists, and nothing else", () => {
     const list = (k: string): string[] => (LOOKS[k] as string[] | undefined) ?? [];
+    expect(list("sexes")).toEqual([...SEXES]);
     expect(list("builds")).toEqual([...BUILDS]);
     expect(list("hair_styles")).toEqual([...HAIR_STYLES]);
     expect(list("beards")).toEqual([...BEARDS]);
     const shapes = LOOKS["shapes"] as Record<string, string[]>;
     for (const [slot, names] of Object.entries(SHAPES))
       expect([...(shapes[slot] ?? [])].sort(), slot).toEqual([...names].sort());
-    // Every layer drawn is one of them (the torso per build).
+    // Every layer drawn is one of them (the body and the torso per sex and build).
     for (const l of HUMANOID_LAYERS) {
+      expect(list("sexes")).toContain(l.sex);
       if (l.slot === "body") expect(list("builds")).toContain(l.shape);
       else if (l.slot === "hair") expect(list("hair_styles")).toContain(l.shape);
       else if (l.slot === "beard") expect(list("beards")).toContain(l.shape);
@@ -378,11 +468,11 @@ describe("engine humanoid: the previews of data/ (previews.ts)", () => {
       write(
         "outfits.yaml",
         "- id: tester\n  sprite: outfits/tester\n" +
-          "  look: { body: slender, skin: tan, hair: crop, hair_color: red, beard: none }\n",
+          "  look: { sex: female, body: slender, skin: tan, hair: crop, hair_color: red, beard: none }\n",
       );
       const guide =
         "id: guide\nsprite: npcs/guide\n" +
-        "look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: full }\n";
+        "look: { sex: male, body: sturdy, skin: fair, hair: short, hair_color: brown, beard: full }\n";
       write("npcs/guide.yaml", guide);
       // An editor's backup beside the NPCs is no NPC: no portrait for it.
       write("npcs/retired.yaml.bak", guide.replace("npcs/guide", "npcs/retired"));
@@ -396,5 +486,98 @@ describe("engine humanoid: the previews of data/ (previews.ts)", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// Every worn layer fits the four bodies (docs/17 "Humanoides del motor"): the shared ones
+// are drawn on the sturdy man, so on another body a pixel the man hid and that body does
+// not cover is a hole in the figure. Few, and only at the trunk's edge.
+/**
+ * The most holes a shared layer may leave in one frame (measured 2026-11-20: none on the
+ * sturdy man, 2 on the slender one, as before the sex; 2 on the sturdy woman and 3 on the
+ * slender one, a hood's or a staff's edge against the trunk).
+ *
+ * It measures one side only: a hole is a pixel where the layer is cut away because the
+ * sturdy man's body covers it there and this body does not. It does not measure this body
+ * showing outside a shared layer (a woman's hip under the trousers): that was checked by
+ * hand (the trouser seat's radius covers both hips) and is left to the screenshots.
+ */
+const MAX_HOLES = 3;
+describe("engine humanoid: the shared layers fit the four bodies", () => {
+  const BODIES: { sex: Sex; build: Build }[] = SEXES.flatMap((sex) =>
+    BUILDS.map((build) => ({ sex, build })),
+  );
+  const shared = HUMANOID_LAYERS.filter((l) => l.slot !== "body" && l.slot !== "torso");
+  for (const { sex, build } of BODIES)
+    it(`${sex} ${build}: the shared layers leave at most a few holes where the man's body hid them`, () => {
+      const body = bodyOf(build, sex);
+      const man = bodyOf("sturdy", "male");
+      let worst = 0;
+      let where = "";
+      for (const l of shared)
+        for (const dir of DIRS)
+          for (const [action, frame] of [
+            ["idle", 0],
+            ["walk", 2],
+            ["attack", 1],
+            ["cast", 1],
+          ] as const) {
+            const piece = layerFrame(l.sprite, action, dir, frame);
+            if (!piece) throw new Error(l.sprite);
+            // What the layer would show over nothing: its parts drawn alone.
+            const whole = renderSpec(
+              {
+                ...l.spec,
+                sprite: "test/whole",
+                layer: { draw: l.parts.map((p) => p.name), occlude: [] },
+              },
+              { action, dir, frame },
+            );
+            const his = renderSpec(man, { action, dir, frame });
+            const hers = renderSpec(body, { action, dir, frame });
+            let holes = 0;
+            for (let i = 0; i < piece.width * piece.height; i++)
+              if (opaque(whole, i) && !opaque(piece, i) && opaque(his, i) && !opaque(hers, i))
+                holes++;
+            if (holes > worst) {
+              worst = holes;
+              where = `${l.sprite} ${action} ${dir} ${frame}`;
+            }
+          }
+      expect(worst, `worst: ${where}`).toBeLessThanOrEqual(MAX_HOLES);
+    });
+});
+
+// Every look a player can pick has its frames: each sex, build, hair style and beard, in
+// every torso shape, in every action and facing the client asks for.
+describe("engine humanoid: every look has its frames", () => {
+  it("draws every layer lookSprites names for every choice of data/looks.yaml", () => {
+    const list = (k: string): string[] => (LOOKS[k] as string[] | undefined) ?? [];
+    const shapes = LOOKS["shapes"] as Record<string, string[]>;
+    const drawn = new Set(HUMANOID_LAYERS.map((l) => l.sprite));
+    let looks = 0;
+    for (const sex of list("sexes"))
+      for (const body of list("builds"))
+        for (const hair of list("hair_styles"))
+          for (const beard of list("beards"))
+            for (const torso of shapes["torso"] ?? []) {
+              const look: Look = { sex, body, skin: "fair", hair, hairColor: "brown", beard };
+              const worn: Worn = { torso: { shape: torso, tint: "linen" } };
+              for (const dir of DIRS) {
+                const layers = lookLayers(look, worn, dir, "walk", 0, TABLES);
+                for (const l of layers) expect(drawn.has(l.sprite), l.sprite).toBe(true);
+              }
+              looks++;
+            }
+    expect(looks).toBe(2 * 2 * 7 * 3 * 5);
+    // And each of those layers has every frame of every clip (84 a layer).
+    for (const l of HUMANOID_LAYERS)
+      for (const [action, a] of Object.entries(l.spec.actions ?? {}))
+        for (const dir of a?.dirs ?? DIRS)
+          for (let f = 0; f < (a?.frames ?? 0); f++)
+            expect(
+              layerFrame(l.sprite, action as ActionName, dir, f),
+              `${l.sprite} ${action} ${dir} ${f}`,
+            ).toBeDefined();
   });
 });

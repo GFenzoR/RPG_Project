@@ -130,13 +130,21 @@ describe('Game.useItem (docs/02 "Libros y cofres")', () => {
 
 describe('Game look draft (docs/02 "Apariencia")', () => {
   const MIRA = {
+    sex: "female",
     body: "slender",
     skin: "olive",
     hair: "ponytail",
     hairColor: "auburn",
     beard: "none",
   };
-  const TOM = { body: "sturdy", skin: "deep", hair: "crop", hairColor: "grey", beard: "full" };
+  const TOM = {
+    sex: "male",
+    body: "sturdy",
+    skin: "deep",
+    hair: "crop",
+    hairColor: "grey",
+    beard: "full",
+  };
   let last: GameUi | undefined;
   let game: InstanceType<typeof Game>;
   const look = (l: typeof MIRA, torso = 0): ServerMessage["message"] => ({

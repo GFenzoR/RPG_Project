@@ -2,6 +2,7 @@ id: volcan_ferryman
 name: npc.volcan_ferryman.name
 sprite: npcs/volcan_ferryman
 look:
+  sex: female
   body: sturdy
   skin: brown
   hair: short

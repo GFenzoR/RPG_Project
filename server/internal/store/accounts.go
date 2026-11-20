@@ -188,6 +188,7 @@ func (s *Store) CreateCharacter(ctx context.Context, c NewCharacter, maxPerAccou
 			LookHair:      c.Look.Hair,
 			LookHairColor: c.Look.HairColor,
 			LookBeard:     c.Look.Beard,
+			LookSex:       c.Look.Sex,
 		})
 		if uniqueViolation(err, charactersNameKey) {
 			return ErrNameTaken

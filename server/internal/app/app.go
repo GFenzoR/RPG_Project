@@ -498,7 +498,7 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
 		Cosmetics: store.Cosmetics{Outfit: s.Cosmetics.Outfit, Color: s.Cosmetics.Color, NameEffect: s.Cosmetics.NameEffect},
-		Look: store.Look{Body: s.Look.Body, Skin: s.Look.Skin, Hair: s.Look.Hair, HairColor: s.Look.HairColor,
+		Look: store.Look{Sex: s.Look.Sex, Body: s.Look.Body, Skin: s.Look.Skin, Hair: s.Look.Hair, HairColor: s.Look.HairColor,
 			Beard: s.Look.Beard},
 		SavedAt: a.cfg.Clock.Now(),
 	}

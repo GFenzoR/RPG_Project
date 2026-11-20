@@ -467,7 +467,7 @@ class Validator {
 
   /**
    * data/looks.yaml (docs/06 "Looks"): every look, worn piece and outfit of data/ names its
-   * build, skin, hair, beard, shape (of the right slot) and tint there. An item's `worn`
+   * sex, build, skin, hair, beard, shape (of the right slot) and tint there. An item's `worn`
    * takes the slot it is equipped in; jewellery is never drawn. A player's outfit uses no
    * creatures_only skin and wears nothing but its clothes.
    */
@@ -479,6 +479,7 @@ class Validator {
       );
     const shapes = isObj(data?.["shapes"]) ? data["shapes"] : {};
     const t = {
+      sexes: ids(data?.["sexes"]),
       builds: ids(data?.["builds"]),
       skins: ids(data?.["skins"]),
       hair: ids(data?.["hair_styles"]),
@@ -522,6 +523,7 @@ class Validator {
         this.error(src, path, `a look needs ${where}`);
         return;
       }
+      known(src, [...path, "sex"], v["sex"], t.sexes, "sex");
       known(src, [...path, "body"], v["body"], t.builds, "build");
       known(src, [...path, "skin"], v["skin"], t.skins, "skin");
       known(src, [...path, "hair"], v["hair"], t.hair, "hair style");
