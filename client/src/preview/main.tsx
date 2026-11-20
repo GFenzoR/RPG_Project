@@ -5,7 +5,7 @@
 //
 //   /preview/?scene=game|status|windows|dialog|shop|dialog18|itemmenu|server|groundtip|inventory|pockets|
 //     trade|chattabs|tutorialhelp|tutorialshop|forge|forgerisk|forgeresult|book|scroll|danger|
-//     death|login|characters&lang=es|en
+//     death|login|characters|appearance&lang=es|en
 //     [&ui=1.25&text=1.15]
 //
 // The windows' state comes from localStorage (rpg.windows), as in the game: the screenshot
@@ -230,6 +230,21 @@ function Preview(props: { game: Game }): JSX.Element {
   if (scene === "pockets") s = withPockets(content, s);
   if (scene === "forge" || scene === "forgerisk") s = withForge(content, s, "pick", now);
   if (scene === "forgeresult") s = withForge(content, s, "result", now);
+  // docs/02 "Apariencia": a look being picked (the auburn ponytail), not saved yet.
+  if (scene === "appearance")
+    s = {
+      ...s,
+      ui: {
+        ...s.ui,
+        lookDraft: {
+          body: "slender",
+          skin: "tan",
+          hair: "ponytail",
+          hairColor: "auburn",
+          beard: "none",
+        },
+      },
+    };
   if (scene === "book") s = withBook(content, s, "book_lantern_rowers");
   if (scene === "scroll") s = withBook(content, s, "scroll_dawn_manifest");
   if (scene === "groundtip")

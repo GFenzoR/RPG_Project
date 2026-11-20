@@ -142,6 +142,17 @@ const WINDOWS: Record<string, unknown> = {
       quests: { open: true, collapsed: false },
     },
   },
+  // docs/02 "Apariencia": the Apariencia window at its factory place with a look being
+  // picked (Personalizar: the figure and the pickers over the cosmetics).
+  appearance: {
+    v: 3,
+    z: ["appearance"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      appearance: { open: true, collapsed: false },
+    },
+  },
   // The tutorial's hint gives way to the help at its factory place (docs/17 UI-5).
   tutorialhelp: {
     v: 3,
@@ -257,6 +268,8 @@ const WINDOWS: Record<string, unknown> = {
 const INVENTORY_TAB = ["inventory", "pockets", "tooltip", "tooltipcoin"];
 /** Scenes about the quest log: on a phone or a tablet they open its tab. */
 const QUESTS_TAB = ["quests", "questsdone"];
+/** Scenes about the Apariencia window: on a phone or a tablet they open its tab. */
+const APPEARANCE_TAB = ["appearance"];
 /** What the mouse is over in a scene's screenshot. */
 const HOVERS: Record<string, string> = {
   tooltip: '[data-testid="slot-right_hand"] [data-tip-item]',
@@ -303,6 +316,7 @@ const SCENES = [
   "death",
   "login",
   "characters",
+  "appearance",
 ];
 
 mkdirSync(shots, { recursive: true });
@@ -367,15 +381,25 @@ try {
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
+      // docs/02 "Apariencia": the live figure walks in place; the shot waits for the atlas.
+      if (scene === "characters" || scene === "appearance") await page.waitForTimeout(600);
       // Phones and tablets: the inventory and quest log scenes show their tab.
-      if (INVENTORY_TAB.includes(scene) || QUESTS_TAB.includes(scene)) {
+      if (
+        INVENTORY_TAB.includes(scene) ||
+        QUESTS_TAB.includes(scene) ||
+        APPEARANCE_TAB.includes(scene)
+      ) {
         // A phone on its side keeps the panel in a drawer: open it first.
         const drawer = page.getByTestId("panel-toggle");
         if (await drawer.isVisible()) {
           await drawer.click();
           await page.waitForTimeout(300);
         }
-        const name = QUESTS_TAB.includes(scene) ? "quests" : "inventory";
+        const name = QUESTS_TAB.includes(scene)
+          ? "quests"
+          : APPEARANCE_TAB.includes(scene)
+            ? "appearance"
+            : "inventory";
         const tab = page.locator(`[data-testid="panel-tabs"] [data-tab="${name}"]`);
         if (await tab.isVisible()) {
           await tab.click();

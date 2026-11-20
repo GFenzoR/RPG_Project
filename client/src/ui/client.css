@@ -3589,6 +3589,120 @@ body.picking-item .map-hint {
   font-weight: 600;
 }
 
+/* A player's look (docs/02 "Apariencia"): the live figure (ui/LookPreview.tsx) and the
+   pickers (ui/LookPickers.tsx), on the creation screen and in the Apariencia window. */
+.look-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+.look-preview canvas {
+  image-rendering: pixelated;
+  background:
+    radial-gradient(ellipse 20% 4% at 50% 95%, rgb(0 0 0 / 0.5), transparent),
+    radial-gradient(circle at 50% 55%, var(--ui-stone-700), var(--ui-stone-950) 70%);
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  box-shadow: inset 0 1px 6px rgb(0 0 0 / 0.7);
+}
+.look-turn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: var(--ui-stone-800);
+  border: 1px solid var(--ui-iron-600);
+}
+.look-pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.look-part {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.look-part legend {
+  padding: 0;
+  margin-bottom: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+.look-names,
+.look-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.look-choice {
+  min-height: 32px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+  background: var(--ui-stone-950);
+  border: 1px solid var(--ui-iron-600);
+}
+.look-choice.swatch {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-color: var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+.look-choice[aria-pressed="true"] {
+  border-color: var(--ui-gold-500);
+  box-shadow: inset 0 0 0 1px var(--ui-gold-500);
+  color: var(--ui-gold-300);
+  cursor: default;
+}
+.look-choice.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--ui-gold-300),
+    inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+.look-random {
+  align-self: flex-start;
+}
+/* The creation screen: the figure beside the pickers, under them on a narrow screen. */
+.create-look {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+}
+.create-look h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.panel.wide:has(.create-look) {
+  max-width: 44rem;
+}
+@media (max-width: 640px) {
+  .create-look {
+    grid-template-columns: 1fr;
+  }
+}
+/* The Apariencia window: the figure over the pickers, the buttons under them. */
+.appearance-customize {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ui-iron-600);
+}
+.appearance-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.appearance-actions button[data-testid="look-apply"] {
+  min-height: 44px;
+}
+
 /* The link to the website's credits (docs/17 A1), in Options. */
 .credits-link {
   color: var(--accent);

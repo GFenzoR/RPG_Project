@@ -13,6 +13,7 @@ import type { Skull, TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { GameUi } from "../game.ts";
 import type { CreatureState, ItemView } from "../state/world.ts";
+import { NO_EQUIPMENT } from "../state/look.ts";
 import { emptyGameUi } from "../ui/GameView.tsx";
 import { itemCard } from "../state/item-card.ts";
 import type { QuestEntryView, QuestLogView } from "../state/quests.ts";
@@ -46,6 +47,10 @@ function creature(
     guild: "",
     skull: 0 as Skull,
     cosmetics: { outfit: "", color: "", nameEffect: "" },
+    look: undefined,
+    equipment: NO_EQUIPMENT,
+    worn: undefined,
+    lookRev: 0,
   } as unknown as CreatureState;
 }
 
@@ -105,6 +110,17 @@ export function baseScene(content: ClientContent, now: number): Scene {
     [EquipmentSlot.RING, item("briar_ring")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
+  // docs/02 "Apariencia": the character's own body, as the server says, and what its
+  // visible slots show (the Apariencia window's figure wears it).
+  ui.look = { body: "sturdy", skin: "tan", hair: "long", hairColor: "dark_brown", beard: "short" };
+  ui.selfEquipment = {
+    head: itemNumber(content, "stagleather_hood"),
+    torso: itemNumber(content, "stagleather_coat"),
+    legs: itemNumber(content, "stagleather_leggings"),
+    feet: itemNumber(content, "stagleather_boots"),
+    leftHand: itemNumber(content, "elmwood_shield"),
+    rightHand: itemNumber(content, "iron_sword"),
+  };
   // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
   ui.backpack = {
     id: 1,

@@ -3,6 +3,7 @@
 // the token in the body, so a script on the page cannot read it. In the desktop app the
 // call goes through Rust (net/desktop.ts), which keeps the token in the OS keyring.
 import { desktopApi, isDesktop } from "./desktop.ts";
+import type { Look } from "@rpg/renderer/look";
 
 export interface Character {
   id: number;
@@ -179,8 +180,25 @@ export const api = {
   logout: (): Promise<void> => call("POST", "/api/auth/logout"),
   characters: async (): Promise<Character[]> =>
     (await call<{ characters: Character[] }>("GET", "/api/characters")).characters,
-  createCharacter: async (name: string, vocation: string): Promise<Character> =>
-    (await call<{ character: Character }>("POST", "/api/characters", { name, vocation })).character,
+  /** look: the body chosen on the creation screen (docs/02 "Apariencia"); the server checks it. */
+  createCharacter: async (name: string, vocation: string, look?: Look): Promise<Character> =>
+    (
+      await call<{ character: Character }>("POST", "/api/characters", {
+        name,
+        vocation,
+        ...(look
+          ? {
+              look: {
+                body: look.body,
+                skin: look.skin,
+                hair: look.hair,
+                hair_color: look.hairColor,
+                beard: look.beard,
+              },
+            }
+          : {}),
+      })
+    ).character,
   play: (characterId: number): Promise<{ session_token: string; expires_at: string }> =>
     call("POST", "/api/play", { character_id: characterId }),
 };
