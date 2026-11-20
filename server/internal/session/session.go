@@ -279,9 +279,12 @@ type World struct {
 	stuckFor  game.Tick
 	shunFor   game.Tick
 
-	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner.
+	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner, and
+	// the largest player corpse made so far (death.go playerCorpse; nil until one needs
+	// more room than CorpseItem has).
 	playerCorpseFor game.Tick
 	corpseOwnerFor  game.Tick
+	playerCorpseDef *content.Item
 
 	// Items (T1.8): definitions by numeric id, the container of new characters and the
 	// inventory rules of balance.yaml.

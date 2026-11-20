@@ -3,6 +3,7 @@ package session
 import (
 	"strings"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/skills"
@@ -52,19 +53,15 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
 	// What the pockets hold falls with the backpack, on its roll, also without a backpack
-	// (pockets.go): the pockets themselves are part of p and stay.
+	// (pockets.go): the pockets themselves are part of p and stay. The corpse has room for
+	// all of it (playerCorpse): nothing falls loose next to it.
 	if w.corpseItem != nil {
-		corpse := &Corpse{Item: newItem(w.corpseItem, 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
+		corpse := &Corpse{Item: newItem(w.playerCorpse(p), 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
 		fall := func(it *Item) {
 			w.econTree(p, EconDeath, "", it, -1)
 			w.detach(it)
-			if len(corpse.Item.items) < w.corpseItem.Slots() {
-				it.parent = corpse.Item
-				corpse.Item.items = append(corpse.Item.items, it)
-			} else {
-				w.drop(it, at)      // never lost (unreserved): only if the corpse had fewer slots than what fell
-				w.holdGround(p, it) // T5.3 fail-safe: reserved like the corpse while p is held
-			}
+			it.parent = corpse.Item
+			corpse.Item.items = append(corpse.Item.items, it)
 			w.closeUnreachable(it)
 		}
 		for slot := 1; slot < equipSlots; slot++ {
@@ -128,6 +125,34 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	p.emit(died)
 	w.diedLinkDeadNotice(p, died)
 	w.deathSave(ctx, p)
+}
+
+// playerCorpse returns the container p's death leaves: CorpseItem, with room for
+// everything that may fall into it (a piece in each equipment slot and whatever the
+// pockets hold, also past inventory.pocket_slots after a balance lowered it). Nothing
+// falls loose next to the corpse, where its owner-only time would not cover it: a
+// murderer or an outlaw may lose everything (docs/02 "Muerte"), ten pieces and four
+// pockets where the monsters' remains have 10 places. A larger one is CorpseItem's
+// definition with more slots (the same numeric id, sprite and name; the container window
+// shows its capacity): a corpse is never saved (houseItems leaves it out), so nothing reads
+// it back with fewer.
+func (w *World) playerCorpse(p *Player) *content.Item {
+	need := equipSlots - 1
+	if p.pockets != nil {
+		need += len(p.pockets.items)
+	}
+	if w.corpseItem.Slots() >= need {
+		return w.corpseItem
+	}
+	if def := w.playerCorpseDef; def != nil && def.Slots() >= need {
+		return def
+	}
+	def := *w.corpseItem
+	def.Container = &struct {
+		Slots int `yaml:"slots"`
+	}{Slots: need}
+	w.playerCorpseDef = &def
+	return w.playerCorpseDef
 }
 
 // wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, its

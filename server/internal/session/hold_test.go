@@ -331,9 +331,11 @@ func TestTaintedOverflowStaysReserved(t *testing.T) {
 	}
 }
 
-// The equipment a held player's corpse cannot hold falls next to it, reserved the same
-// way (death.go): nobody else takes it before the transfer is confirmed.
-func TestHeldDeathOverflowIsReserved(t *testing.T) {
+// A held player's corpse holds everything that falls, also when the monsters' remains
+// have a single place (death.go playerCorpse): nothing lies loose next to it, and what it
+// held stays reserved with the corpse past the owner-only time until the transfer is
+// confirmed.
+func TestHeldDeathDropsNothingLoose(t *testing.T) {
 	h := newMarketHarness(t, func(c *session.Config) {
 		c.Monsters = content.Monsters{} // corpses, no monsters
 		var corpse content.Item
@@ -344,6 +346,7 @@ func TestHeldDeathOverflowIsReserved(t *testing.T) {
 		corpse.Numeric = corpseID
 		c.Items[corpse.ID] = &corpse
 		c.Balance.Death.EquipmentDropPct, c.Balance.Death.BackpackDropPct = 100, 100
+		c.Balance.Death.CorpseOwnerOnlyMs = 500
 	})
 	cs, s := h.atBoard("Sela", pos(1, 1), stack(salveID, 30, 0), stack(coinID, 50, 1))
 	nextChar++
@@ -358,26 +361,29 @@ func TestHeldDeathOverflowIsReserved(t *testing.T) {
 	bought := h.transfers[len(h.transfers)-1].Snapshots[0]
 	h.kill(b)
 
-	// The backpack went into the one-slot corpse; the sword lies next to it.
-	sword := -1
-	for i, it := range h.w.GroundAt(pos(0, 1)) {
-		if it.Def().Numeric == swordID {
-			sword = i + 1 // the ground tile is index 0
-		}
+	// The backpack and the sword went into the corpse, in slot order; only the corpse lies there.
+	corpses := h.w.CorpsesAt(pos(0, 1))
+	if len(corpses) != 1 || len(h.w.GroundAt(pos(0, 1))) != 1 {
+		t.Fatalf("corpses %v, ground %v", corpses, h.w.GroundAt(pos(0, 1)))
 	}
-	if sword < 0 {
-		t.Fatalf("no sword on the ground: %v", h.w.GroundAt(pos(0, 1)))
+	var ids []string
+	for _, it := range corpses[0].Item.Items() {
+		ids = append(ids, it.Def().ID)
+	}
+	if !slices.Equal(ids, []string{"backpack", "test_sword"}) {
+		t.Fatalf("corpse holds %v", ids)
 	}
 	h.sim.RunTicks(20) // past the corpse's owner-only time: the hold is what reserves it
+	other := openCorpseAt(t, h.harness, cc, pos(0, 1))
 	pack := openPack(t, h.harness, cc)
-	take := moveItem(onTile(pos(0, 1)), swordID, uint32(sword), inContainer(pack, 0), 1)
-	if !hasKey(h.send(cc, take), "inventory.not_yours") {
-		t.Fatal("another player took the overflow of a held player's corpse")
+	take := moveItem(inContainer(other, 1), swordID, 0, inContainer(pack, 0), 1)
+	if !hasKey(h.send(cc, take), "death.corpse_not_owner") {
+		t.Fatal("another player took the sword of a held player's corpse")
 	}
 	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
 	h.sim.Step()
-	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 {
-		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || len(corpses[0].Item.Items()) != 1 {
+		t.Fatalf("loot after the ack: %v", systemKeys(evs))
 	}
 }
 

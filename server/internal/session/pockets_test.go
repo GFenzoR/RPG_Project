@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -199,7 +201,9 @@ func TestPocketsAreSaved(t *testing.T) {
 // slot is still worn, and a move from the pockets into a full backpack stays put.
 func TestPickUpGoesToThePocketsWhenTheBackpackIsFull(t *testing.T) {
 	h := pocketHarness(t)
-	cl, p := h.joinChar(withPack(1101, pos(5, 5), stack(swordID, 1, 0), stack(shieldID, 1, 1), stack(tunicID, 1, 2), stack(bagID, 1, 3)))
+	fullBag := stack(bagID, 1, 3)
+	fullBag.Items = []session.ItemState{stack(pebbleID, 1, 0), stack(pebbleID, 1, 1)}
+	cl, p := h.joinChar(withPack(1101, pos(5, 5), stack(swordID, 1, 0), stack(shieldID, 1, 1), stack(tunicID, 1, 2), fullBag))
 	pack := openPack(t, h, cl)
 	h.sim.Command(gameFunc(func() {
 		h.w.DropForTest(h.w.ItemForTest("copper_coin"), 10, pos(6, 5))
@@ -217,10 +221,17 @@ func TestPickUpGoesToThePocketsWhenTheBackpackIsFull(t *testing.T) {
 		len(pocketIDs(p)) != 2 {
 		t.Fatalf("a move from the pockets into a full backpack: %v", pocketIDs(p))
 	}
-	// Into a bag lying in the backpack it never spills: that bag was chosen.
-	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "test_pebble", 2) })) // the pockets are full now
-	h.sim.Step()
+	// Into a full bag lying in the backpack it never spills, though the pockets have room:
+	// that bag was chosen.
 	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_sword"), 1, pos(6, 5)) }))
+	h.sim.Step()
+	cl.take()
+	if !hasKey(h.send(cl, moveItem(onTile(pos(6, 5)), swordID, 1, inContainer(pack, 3), 1)), "inventory.container_full") ||
+		len(h.w.GroundAt(pos(6, 5))) != 1 || len(pocketIDs(p)) != 2 {
+		t.Fatalf("a pickup into a full bag in the backpack: pockets %v", pocketIDs(p))
+	}
+	// With the pockets full too, there is no room at all.
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "test_pebble", 2) })) // the pockets are full now
 	h.sim.Step()
 	cl.take()
 	if !hasKey(h.send(cl, moveItem(onTile(pos(6, 5)), swordID, 1, inSlot(slotBackpack), 1)), "inventory.container_full") ||
@@ -252,6 +263,47 @@ func TestPickUpGoesToThePocketsWhenTheBackpackIsFull(t *testing.T) {
 	}
 }
 
+// A container worn in another slot (a hood that holds things, worn on the head) dropped
+// onto the empty backpack slot goes to the pockets with the nesting rule of any container
+// move: never deeper than the deepest nest a character may carry.
+func TestPocketsKeepTheNestingLimit(t *testing.T) {
+	const hoodID = 230
+	h := pocketHarness(t, func(c *session.Config) {
+		var it content.Item
+		if err := yaml.Unmarshal([]byte("{id: test_hood, kind: container, weight: 200, armor: {slot: head}, container: {slots: 1}}"),
+			&it); err != nil {
+			t.Fatal(err)
+		}
+		it.Numeric = hoodID
+		c.Items[it.ID] = &it
+	})
+	// hood holds bags nested levels deep (the hood's height).
+	hood := func(levels int) session.ItemState {
+		nest := session.ItemState{ItemID: bagID, Count: 1}
+		for range levels - 1 {
+			nest = session.ItemState{ItemID: bagID, Count: 1, Items: []session.ItemState{nest}}
+		}
+		return session.ItemState{ItemID: hoodID, Count: 1, Slot: int(slotHead), Items: []session.ItemState{nest}}
+	}
+	for _, tc := range []struct {
+		levels int
+		key    string
+	}{{7, "inventory.too_deep"}, {6, ""}} {
+		cl, p := h.bare("Hooded", pos(5, 5), hood(tc.levels))
+		cl.take()
+		evs := h.send(cl, moveItem(inSlot(slotHead), hoodID, 0, inSlot(slotBackpack), 1))
+		if tc.key != "" {
+			if !hasKey(evs, tc.key) || len(p.Pockets().Items()) != 0 || p.Equipped(slotHead) == nil {
+				t.Fatalf("a hood %d levels deep into the pockets: %v, pockets %v", tc.levels, systemKeys(evs), pocketIDs(p))
+			}
+			continue
+		}
+		if len(systemKeys(evs)) != 0 || !slices.Equal(pocketIDs(p), []string{"test_hood"}) || p.Equipped(slotHead) != nil {
+			t.Fatalf("a hood %d levels deep into the pockets: %v, pockets %v", tc.levels, systemKeys(evs), pocketIDs(p))
+		}
+	}
+}
+
 // What a character receives (giveItem: a GM, a quest, a dialog, gathering...) goes to
 // the backpack first, then to the pockets, then to the floor; without a backpack, to the
 // pockets.
@@ -277,8 +329,8 @@ func TestGiveFillsTheBackpackThenThePockets(t *testing.T) {
 	}
 }
 
-// Payments read both: coins split between the backpack and the pockets pay together
-// (the backpack's first), and a character with only its pockets buys, and gets the change
+// Payments read both: the coins of the backpack go first, a coin in the pockets pays and
+// is broken for change, and a character with only its pockets buys, and gets the change
 // and what it bought there. Room for the change counts the pockets too.
 func TestPayWithCoinsInThePocketsAndTheBackpack(t *testing.T) {
 	h := newMarketHarness(t, withSilver(t))
@@ -286,14 +338,24 @@ func TestPayWithCoinsInThePocketsAndTheBackpack(t *testing.T) {
 	h.send(cs, createOffer(sell, salveID, 10, 20))
 	id := h.w.MarketOffers(s.CharacterID())[0]
 
-	// 30 copper in the backpack and 40 in the pockets: 4 salves for 80 take every copper and
-	// break the silver (in the pockets) for 90 copper back.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(s, pos(5, 3)) })) // Sela leaves the board
+	h.sim.Step()
+
+	// 30 copper in the backpack and 40 in the pockets: a salve for 20 takes the backpack's.
+	cc, c := h.atBoard("Cora", pos(1, 0), stack(coinID, 30, 0), pocket(coinID, 40, 0))
+	if evs := h.send(cc, acceptOffer(id, 1)); !hasKey(evs, "market.bought") || h.w.Money(c) != 50 ||
+		c.Equipped(slotBackpack).Items()[0].Count() != 10 || !slices.Equal(pocketIDs(c), []string{"copper_coinx40"}) {
+		t.Fatalf("bought: %v, money %d, pockets %v", systemKeys(evs), h.w.Money(c), pocketIDs(c))
+	}
+
+	// 30 copper in the backpack, 40 copper and a silver coin in the pockets: 4 salves for 80
+	// break the silver (the largest coin goes first) for 20 copper back.
 	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 30, 0), pocket(coinID, 40, 0), pocket(silverID, 1, 1))
 	if h.w.Money(b) != 170 {
 		t.Fatalf("money %d, want 170", h.w.Money(b))
 	}
 	if evs := h.send(cb, acceptOffer(id, 4)); !hasKey(evs, "market.bought") || h.w.Money(b) != 90 ||
-		h.w.CountItem(b, "test_salve") != 4 || h.w.CountItem(b, "silver_coin") != 0 {
+		h.w.CountItem(b, "test_salve") != 4 || h.w.CountItem(b, "silver_coin") != 0 || h.w.CountItem(b, "copper_coin") != 90 {
 		t.Fatalf("bought: %v, money %d, salves %d", systemKeys(evs), h.w.Money(b), h.w.CountItem(b, "test_salve"))
 	}
 
@@ -391,32 +453,51 @@ func TestDeathDropsThePocketsWithTheBackpack(t *testing.T) {
 	}
 }
 
-// A corpse with no room left for the pockets' items: they fall at the death's tile, never
-// lost (an outlaw drops everything: ten pieces of equipment and four pockets).
-func TestDeathPocketsOverflowTheCorpse(t *testing.T) {
-	h := deathHarness(t, func(c *session.Config) {
-		c.Balance.Death.EquipmentDropPct = 100
-		c.Items["creature_remains"].Container.Slots = 3
-	})
-	nextChar++
-	_, p := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Spill", Vocation: "guardian", Level: 20,
-		Experience: testBalance().Experience.TotalFor(20), Health: 1, Pos: pos(40, 40), HasPos: true, InventoryLoaded: true,
-		Inventory: []session.ItemState{
-			{ItemID: swordID, Count: 1, Slot: int(slotRight)},
-			{ItemID: packID, Count: 1, Slot: int(slotBackpack)},
-			pocket(coinID, 25, 0), pocket(salveID, 2, 1), pocket(pebbleID, 1, 2),
-		}})
-	h.kill(p)
-	got := corpseItems(h)
-	if !slices.Equal(got, []string{"backpack", "copper_coin", "test_salve"}) {
-		t.Fatalf("corpse holds %v", got)
-	}
-	var ground []string
-	for _, it := range h.w.GroundAt(pos(40, 40)) {
-		ground = append(ground, it.Def().ID)
-	}
-	if !slices.Contains(ground, "test_pebble") || !slices.Contains(ground, "test_sword") {
-		t.Fatalf("what did not fit is not at the death's tile: %v", ground)
+// The corpse holds everything a death drops: an outlaw loses it all, a piece in each of
+// the ten equipment slots and the four pockets, where the monsters' remains have 10
+// places (more pockets after a balance lowered pocket_slots, and fewer places, too).
+// Nothing falls loose at the death's tile, where the corpse's owner-only time would not
+// cover it.
+func TestDeathCorpseHoldsEverything(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		places, pocketed int
+	}{
+		{"ten places", 10, pocketSlots},
+		{"three places, pockets past pocket_slots", 3, pocketSlots + 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := deathHarness(t, func(c *session.Config) {
+				c.Balance.Death.EquipmentDropPct, c.Balance.Death.BackpackDropPct = 100, 100
+				c.Items["creature_remains"].Container.Slots = tc.places
+			})
+			inv := []session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack)}}
+			for slot := 1; slot <= int(slotAmmo); slot++ {
+				if slot != int(slotBackpack) {
+					inv = append(inv, session.ItemState{ItemID: pebbleID, Count: 1, Slot: slot})
+				}
+			}
+			for i := range tc.pocketed {
+				inv = append(inv, pocket(salveID, 1, i))
+			}
+			nextChar++
+			_, p := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Spill", Vocation: "guardian",
+				Level: 20, Experience: testBalance().Experience.TotalFor(20), Health: 1, Pos: pos(40, 40), HasPos: true,
+				InventoryLoaded: true, Inventory: inv})
+			if len(p.Pockets().Items()) != tc.pocketed {
+				t.Fatalf("pockets before the death %v", pocketIDs(p))
+			}
+			h.kill(p)
+			if got := corpseItems(h); len(got) != 10+tc.pocketed {
+				t.Fatalf("corpse holds %d items: %v", len(got), got)
+			}
+			if ground := h.w.GroundAt(pos(40, 40)); len(ground) != 1 || len(h.w.CorpsesAt(pos(40, 40))) != 1 {
+				t.Fatalf("loose at the death's tile: %v", ground)
+			}
+			if len(p.Pockets().Items()) != 0 || p.Equipped(slotBackpack) != nil {
+				t.Fatalf("after the death: pockets %v", pocketIDs(p))
+			}
+		})
 	}
 }
 
@@ -445,6 +526,31 @@ func TestTradeFromAndIntoThePockets(t *testing.T) {
 	}
 	if h.w.CountItem(a, "test_sword") != 1 || len(a.Pockets().Items()) != 0 || len(a.Equipped(slotBackpack).Items()) != 2 {
 		t.Fatalf("Ana: sword %d, pockets %v", h.w.CountItem(a, "test_sword"), pocketIDs(a))
+	}
+}
+
+// Pockets that hold more than pocket_slots (a balance that lowered it) have no room for
+// a trade: what is given away from them frees no cell, so nothing goes in past the limit.
+func TestTradeIntoPocketsPastTheirSlots(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(2, 2), stack(salveID, 3, 0))
+	inv := []session.ItemState{pocket(swordID, 1, 0)}
+	for i := 1; i < pocketSlots+2; i++ {
+		inv = append(inv, pocket(pebbleID, 1, i))
+	}
+	nextChar++
+	cn, n := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Overfull", Vocation: "guardian",
+		Level: 1, Health: 145, HasPos: true, Pos: pos(3, 2), InventoryLoaded: true, Inventory: inv})
+	cn.take()
+	h.send(ca, tradeReq(n.ID(), inContainer(openPack(t, h.harness, ca), 0), salveID))
+	h.send(cn, tradeReq(a.ID(), inPocket(0), swordID))
+	h.send(ca, tradeAccept)
+	u := lastTrade(h.send(cn, tradeAccept))
+	if u.GetState() != pb.TradeState_TRADE_STATE_CANCELLED || u.GetReason() != "trade.cancel.no_room" {
+		t.Fatalf("a trade into pockets past their slots: %v", u)
+	}
+	if len(n.Pockets().Items()) != pocketSlots+2 || h.w.CountItem(n, "test_sword") != 1 || h.w.CountItem(a, "test_salve") != 3 {
+		t.Fatalf("after the trade: Overfull's pockets %v", pocketIDs(n))
 	}
 }
 
@@ -554,8 +660,6 @@ func TestDeathSavesThePocketsEmpty(t *testing.T) {
 		t.Fatalf("death saved with %+v, corpse %v", last.Inventory, corpseItems(h))
 	}
 }
-
-var _ = content.Items{}
 
 // An NPC's shop reads the pockets: a character with only its pockets (after a death)
 // pays with the coins there and gets what it bought there; with full pockets the shop

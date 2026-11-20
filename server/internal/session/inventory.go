@@ -129,6 +129,18 @@ func depth(it *Item) int {
 	return n
 }
 
+// nestRefusal is the key that refuses putting it into the container c (it would hold
+// itself, or nest deeper than maxDepth), or "".
+func nestRefusal(it, c *Item) string {
+	if it.contains(c) {
+		return msgIntoItself
+	}
+	if depth(c)+1+it.height() > maxDepth {
+		return msgTooDeep
+	}
+	return ""
+}
+
 // height is 0 for an item with no content, plus one per level of nested content.
 func (it *Item) height() int {
 	h := 0
@@ -577,6 +589,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			if from.kind == locContainer && from.cont == p.pockets {
 				return // already there
 			}
+			if key := nestRefusal(it, p.pockets); key != "" { // a container worn elsewhere
+				p.emit(systemMsg(key))
+				return
+			}
 			into, ok := p.pocketRoom(it, count)
 			if !ok {
 				p.emit(systemMsg(msgContainerFull))
@@ -612,12 +628,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			p.emit(systemMsg(msgFloorFirst))
 			return
 		}
-		if it.contains(to.cont) {
-			p.emit(systemMsg(msgIntoItself))
-			return
-		}
-		if depth(to.cont)+1+it.height() > maxDepth {
-			p.emit(systemMsg(msgTooDeep))
+		if key := nestRefusal(it, to.cont); key != "" {
+			p.emit(systemMsg(key))
 			return
 		}
 		if from.kind == locContainer && from.cont == to.cont {

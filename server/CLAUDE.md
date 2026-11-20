@@ -309,7 +309,10 @@ server/
   sus chequeos de lugar `room`, `freeCells` y `mergeRoom` (nunca `len(bp.items)`). Un cambio
   en ellos llama a `containerChanged` (manda el `Inventory`, no un `ContainerUpdate`). Se
   guardan como `ItemState.Pocket` (filas `inventory_items.pocket`, migración 00020). La
-  muerte los vacía en el cuerpo con la tirada de la mochila (`dieBy`).
+  muerte los vacía en el cuerpo con la tirada de la mochila (`dieBy`), y el cuerpo de un
+  jugador entra todo lo que cae (`playerCorpse`: nada suelto en la casilla, fuera de la
+  reserva del dueño). Un camino que meta algo en ellos por su cuenta pasa por
+  `nestRefusal` (profundidad) como cualquier contenedor.
 - **Cofres de recompensa** (`session/chest.go`, `content/chests.go`, docs/02 "Libros y
   cofres"): `useChest` va en la cadena de `useItem` antes de `useStation` (como el tablero
   del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila y los bolsillos contando las pilas

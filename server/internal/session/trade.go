@@ -328,7 +328,7 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 			pack := taker.packWithRoom()
 			if pack == nil { // tradeFits: never
 				w.log.Error("trade: no room for a traded item", "character", taker.charID, "item", x.it.def.ID)
-				pack = taker.pockets
+				pack = taker.pockets // never nil in the world (loadInventory): never lost
 			}
 			touched[0] = touched[0] || pack == packs[0]
 			touched[1] = touched[1] || pack != packs[0]
@@ -353,17 +353,27 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 }
 
 // tradeFits reports whether p can take in (into the top level of its backpack and then
-// its pockets, pockets.go) while giving out away.
+// its pockets, pockets.go) while giving out away. What leaves a pack frees a cell only
+// below its capacity: pockets that hold more than inventory.pocket_slots (a balance that
+// lowered it) have no room until they hold fewer.
 func (w *World) tradeFits(p *Player, in, out []tradeItem) bool {
 	if len(in) == 0 {
 		return true
 	}
-	free, weight := p.freeCells(), p.carried()
-	packs := p.packs()
-	for _, x := range out {
-		if x.it.parent != nil && (x.it.parent == packs[0] || x.it.parent == packs[1]) {
-			free++
+	free, weight := 0, p.carried()
+	for _, c := range p.packs() {
+		if c == nil {
+			continue
 		}
+		held := len(c.items)
+		for _, x := range out {
+			if x.it.parent == c {
+				held--
+			}
+		}
+		free += max(c.def.Slots()-held, 0)
+	}
+	for _, x := range out {
 		weight -= x.it.weight()
 	}
 	for _, x := range in {

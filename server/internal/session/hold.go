@@ -15,9 +15,9 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 //   - the corpse it leaves while held is reserved to it (heldGround) until the database
 //     has the transfers the corpse may come from;
 //   - what the server makes fall at its feet (a craft or a reward that does not fit, the
-//     coins of an NPC sale, the equipment a full corpse cannot hold) is reserved to it
-//     outside a house (heldGround), and on a house floor it is written with its snapshot
-//     (houseActor), even when no command of its put it there.
+//     coins of an NPC sale; never what a death drops: the corpse holds all of it) is
+//     reserved to it outside a house (heldGround), and on a house floor it is written
+//     with its snapshot (houseActor), even when no command of its put it there.
 //
 // What leaves a house floor for the public ground is reserved to whoever moved it the
 // same way (leftHouse): the house write that took it out carries the mover's snapshot, so
