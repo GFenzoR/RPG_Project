@@ -977,7 +977,7 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     ]);
     expect(prCheck({ ...fork, author: "boss", headRepo: "boss/game" }).ok).toBe(true);
     expect(prCheck({ ...fork, author: "Boss", headRepo: "Boss/game-fork" }).ok).toBe(true);
-  });
+  }, 180_000); // git sandboxes: over 60 s on native Windows
 
   it("exits early when the branch does not change world/ (S2)", () => {
     const { root, git } = sandbox();
