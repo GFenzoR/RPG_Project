@@ -2569,7 +2569,8 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   principal; el otro cobra solo el share de su propio daño,
   sin bonus. Así un jugador con dos clientes abiertos no se arma un grupo de alts para
   cobrar el bonus, y un personaje con su alt no forma un pozo (es un solo "compartidor").
-  El indicador y la marca "comparte" siguen la misma regla.
+  El indicador y la marca "comparte" siguen la misma regla. Un personaje sin cuenta
+  (`account_id` 0: personajes armados a mano en tests o bots) nunca se agrupa con otro.
   `TestSharedExperienceSameAccountAlts` lo fija.
 - **Anti-carry.** Un personaje alto no puede subir a uno bajo: el bajo queda fuera por
   nivel (condición 3), así que solo cobra el daño que él mismo hizo, y el alto, sin nadie

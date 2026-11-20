@@ -329,7 +329,8 @@ func (w *World) contributed(now game.Tick, p *Player) bool {
 // below it (anti-carry; alts count for the highest level too). Two characters of one
 // account are one sharer: the first in join order that passed the level filter, so a
 // low alt never costs its main the bonus; alts never grow the bonus and the other keeps
-// its own damage share. Fewer than two sharers = no sharing.
+// its own damage share. A character without an account (id 0: hand-built test or bot
+// characters) is never merged with another. Fewer than two sharers = no sharing.
 func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player, dst []*Player) []*Player {
 	near := viewer == nil
 	pc := w.cfg.Balance.Party
@@ -349,7 +350,7 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 		if o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways {
 			continue
 		}
-		if slices.ContainsFunc(dst[:n], func(q *Player) bool { return q.accountID == o.accountID }) {
+		if o.accountID != 0 && sameAccount(dst[:n], o.accountID) {
 			continue
 		}
 		dst[n] = o
@@ -360,6 +361,16 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 		return dst[:0]
 	}
 	return dst[:n]
+}
+
+// sameAccount reports whether one of ps belongs to account acc.
+func sameAccount(ps []*Player, acc int64) bool {
+	for _, q := range ps {
+		if q.accountID == acc {
+			return true
+		}
+	}
+	return false
 }
 
 // shareExperience pays def experience xp of a kill at pos, split by damage (shares).

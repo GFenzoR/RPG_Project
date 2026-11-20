@@ -242,3 +242,31 @@ func TestSharedExperienceSameAccountAlts(t *testing.T) {
 		t.Fatalf("low alt first, indicator %v", up)
 	}
 }
+
+// Characters without an account (id 0: hand-built test or bot characters) are never
+// taken for alts of one another: two of them share the kill with the bonus.
+func TestSharedExperienceNoAccountNotMerged(t *testing.T) {
+	h := partyHarness(t)
+	nextChar++
+	cp, p := h.joinChar(session.Character{ID: nextChar, Name: "Botone",
+		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, Pos: *at(10, 10), HasPos: true})
+	nextChar++
+	cq, q := h.joinChar(session.Character{ID: nextChar, Name: "Bottwo",
+		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, Pos: *at(11, 10), HasPos: true})
+	if p.AccountIDForTest() != 0 || q.AccountIDForTest() != 0 {
+		t.Fatalf("accounts %d %d, want 0 0", p.AccountIDForTest(), q.AccountIDForTest())
+	}
+	h.form(cp, p, member{cq, q})
+	h.do(func(ctx *game.TickContext) {
+		h.w.ContributeForTest(ctx, p)
+		h.w.ContributeForTest(ctx, q)
+	})
+	xp, xq := p.Experience(), q.Experience()
+	h.do(func(ctx *game.TickContext) {
+		h.w.ShareForTest(ctx, pos(11, 10), 1000, session.Share{P: p, Amount: 9}, session.Share{P: q, Amount: 1})
+	})
+	// Pot: 1000 × 1.05 / 2 = 525 each.
+	if dp, dq := p.Experience()-xp, q.Experience()-xq; dp != 525 || dq != 525 {
+		t.Fatalf("no-account pair: %d %d, want 525 525", dp, dq)
+	}
+}
