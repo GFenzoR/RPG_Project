@@ -324,6 +324,20 @@ server/
   (`chests`) lo fija con su item y `make validate` rechaza renombrarlo o reutilizarlo;
   `mapcli validate` exige cada cofre una vez en el mundo y alcanzable. El bloque `book` de
   un item es solo del cliente.
+- **Quests de hito** (`session/sigil.go`, `quest/milestone.go`, docs/02 "Quests de hito"):
+  `initSigils` resuelve al arrancar las placas de cada paso `sigils` (items `sigil` en su
+  cuadrado, contra `requires`) y su destino; `World.sigilAt` (casilla → sala) es lo único
+  que se mira por paso. `move`, `relocate` y `join` llaman a `sigilStep` (marca la sala si
+  el jugador quedó sobre una placa; un camino nuevo que cambie la casilla de un jugador
+  sin pasar por ellos también) y `checkSigils`, en `flushSystem`, evalúa solo las salas
+  marcadas: `quest.Cooperative` decide (vivo, conectado, no staff, la quest en el paso, la
+  vocación, el nivel, el equipo). Todos se mueven juntos o ninguno: las casillas se buscan
+  antes con `searchRings` (área, sin casas ni portales, `arrivalRadius`) y el bloqueo PvP
+  de `portalArrival`; después `relocate` y `CompleteSigils` por cada uno. El diario manda
+  los hitos sin empezar (`OPEN`) con `milestoneInfo`, y `questRecheck` lo marca sucio si
+  cambia la huella de sus marcas (`milestoneMarks`). Los tests con `dataConfig` aparcan el
+  paso `sigils` como un `reach` (`parkReachSteps`); el mapa real lo juega
+  `TestMilestonesOnTheMap`.
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
   acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +

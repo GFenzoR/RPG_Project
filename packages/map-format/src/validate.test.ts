@@ -166,7 +166,7 @@ describe("validateWorld", () => {
   });
 
   it("accepts the repository world (world/islands/testisle)", () => {
-    const r = validateWorld(repo, { content: { ...full, sigils: real.sigils } });
+    const r = validateWorld(repo, { content: { ...full, sigils: real.sigils ?? [] } });
     expect(messages(r)).toEqual([]);
   });
 

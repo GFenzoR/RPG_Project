@@ -142,6 +142,33 @@ el punto 5:
     saber en el cliente en qué zona está el jugador).
   - Las Islas Heladas y la Isla Hundida (docs/02, islas futuras) toman nombre con la misma
     guía cuando se construyan; las salas de la rama de misiones de hitos, también.
+- **Quests de hito (hecho, rama `feat/milestone-quests`, lote 14; el dueño el 2026-11-20:
+  "quests que son hitos [...] necesitas 4 personas o 2 personas"; docs/02 "Quests de
+  hito"):** `milestone: true` con `requires` (nivel, equipo, 1 a 4 personas, una de cada
+  vocación) y un último paso `sigils` de placas del mapa; el servidor mueve juntos a todos
+  a la sala de recompensa cuando todas las placas tienen a alguien que cumple, en el mismo
+  tick. Tres hitos: Thalorn (2, nivel 20, Bosque), Orthavel (1 con el amuleto de asta,
+  25, Bosque) y Morvund (4 vocaciones con la llave de ascua, 35, Volcán, que da la llave
+  de una galería de caza). Queda:
+  - **Mirarlo en el juego:** el E2E "milestones" (`99-milestone-*`) y la escena
+    `questsmilestones` de `make ui-preview`; Orthavel y Morvund solo se juegan en
+    `session/sigil_map_test.go` (cuatro personajes de nivel 35 para un E2E es mucho
+    sembrado).
+  - **Coordinar nombres con `feat/place-names`:** los textos dicen "al noreste de Raigal",
+    "al sur de Raigal" y "la mina del Volcán"; si esa rama renombra Raigal o la isla, hay que
+    cambiar `quest.ms_*.step_*`, los carteles (`text.bosque.thalorn_sign`,
+    `orthavel_sign`, `text.volcan.morvund_sign`) y las ofertas de Olmar, Fenn y el eco.
+  - **El diario lista todos los hitos desde el nivel 1:** hoy son tres; si crecen, mostrar
+    solo los de la banda del personaje (o de su isla).
+  - **El título es solo un texto en el diario:** no se ve sobre el personaje ni en el sitio.
+    Si el dueño lo quiere visible (bajo el nombre, como el gremio), es otro campo de
+    `Creature`.
+  - **Una placa no se ve ocupada desde lejos:** el sprite es el mismo con o sin alguien
+    encima; "Mirar" dice cuántas hay. Un brillo por placa ocupada pediría estado del mapa
+    por tick (no vale hoy).
+  - **El amuleto de asta también se compra** (Velia lo vende a 600): el hito de Orthavel
+    pide llevarlo puesto, no haberlo ganado. Si el dueño quiere que sea solo el de la
+    quest, haría falta un item propio.
 - **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
   personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
   equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto

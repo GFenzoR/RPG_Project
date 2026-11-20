@@ -2459,6 +2459,85 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
   contra `data/` (nivel, pago exacto, sin items, la espera); `TestTaskRewards` exige que
   un solo NPC dé cada tarea (el tablón de un cazador nunca muestra las del otro).
 
+### Quests de hito (lote 14, pedido del dueño del 2026-11-20)
+"Quiero que el juego tenga quests que son hitos, puede ser de nivel [...] o necesidad de
+equipo, necesitas 4 personas o 2 personas." Una **quest de hito** es una prueba que marca
+un antes y un después: pide un nivel, a veces una pieza de equipo y, sobre todo, **varias
+personas a la vez** sobre unas placas del mapa. Solo tomamos la idea (una prueba
+cooperativa de placas); nombres, lugares, textos, números y recompensas son propios.
+
+- **En los datos** (`data/quests/<id>.yaml`, docs/06 "Quest"): `milestone: true`, un
+  `title` (lo que se gana) y `requires`: `level`, `players` (1 a 4), opcionalmente
+  `vocations` (una por jugador: cada placa lleva la marca de una) y `gear` (un item que se
+  lleva encima, o puesto con `equipped: true`, o un arma empuñada de un tipo, `weapon`).
+  Su último paso, y solo ese, es `sigils`: las placas que hay a `radius` casillas
+  (Chebyshev) de un punto y el destino `to`, la **sala de recompensa**. No es repetible.
+- **Antes de empezarla:** el diario de misiones tiene una pestaña **Hitos** con todos
+  ellos, también los que el personaje todavía no tomó, cada uno con sus requisitos y una
+  marca de cumplido o no (nivel, equipo, su vocación entre las pedidas); la cantidad de
+  personas es del grupo, sin marca. Las marcas las calcula el servidor y se mandan de
+  nuevo cuando cambia el nivel o lo que lleva el personaje. La quest la ofrece un NPC
+  desde su nivel (`level_at_least`), como cualquier otra.
+- **Las placas** (items con bloque `sigil`, `data/items/exploration.yaml`, arte del motor
+  de sprites): `sigil_plate` sirve a cualquiera; `sigil_plate_<vocación>` solo a esa
+  vocación. No bloquean ni se levantan. Mirar una dice cuántas de su hito están ocupadas
+  ("2 de 4") y, si tiene, para qué vocación es.
+- **La regla (servidor autoritativo y determinista, `session/sigil.go` y
+  `quest/milestone.go`):** al final de cada tick en que alguien pisó una placa (un paso, un
+  teletransporte o entrar al juego sobre ella), el servidor mira las placas de ese hito.
+  Cuenta una placa con un jugador **vivo, conectado** (un link-dead no cuenta: salir del
+  juego sobre la placa es dejarla) **y que no sea del personal** (un GM nunca cuenta y se lo
+  dice `milestone.staff`). Una persona ocupa una sola casilla, así que nunca dos placas.
+  - Si faltan placas por ocupar, a quienes están se les dice cuántas hay
+    (`milestone.waiting`).
+  - Con todas ocupadas, cada uno tiene que cumplir, en este orden: tener la quest en curso
+    en ese paso, la vocación de su placa, el nivel y el equipo. Quien no cumple oye por
+    qué (`milestone.fail_step`, `fail_vocation`, `fail_level`, `fail_gear`) y los demás
+    quién falta (`milestone.not_ready`); **nadie se mueve**.
+  - Si todos cumplen, el servidor busca una casilla libre para **cada uno** alrededor de
+    `to` (la misma búsqueda por anillos de un portal: `searchRings` con su área, nunca una
+    casa ni la entrada de un portal, a `travel.arrival_radius`) y con el bloqueo PvP de un
+    portal (un atacante bloqueado no entra a una zona de protección desde afuera). Si no
+    hay lugar para todos, nadie se mueve (`milestone.blocked`). Si lo hay, los lleva juntos
+    en el mismo tick, cumple el paso de cada uno (las recompensas de la quest, como
+    cualquier último paso) y les anuncia a todos `milestone.achieved` con los nombres.
+  - **No hace falta un grupo** (decisión del dueño): desconocidos pueden hacerlo juntos.
+    El sistema de grupos no se toca.
+- **Una vez por personaje:** la quest terminada no vuelve a estar en ese paso, así que un
+  veterano ya no cuenta en las placas (no puede "llevar" a otros por segunda vez). La sala
+  de recompensa tiene un cofre que da una vez por personaje (`content.ChestKey`, "Libros y
+  cofres"). Se sale por un teletransporte de un solo sentido (o, si la sala está detrás de
+  una puerta con llave, por esa puerta, que se abre desde adentro); `make validate` exige
+  que desde la sala se llegue a un templo sin llaves ni herramientas.
+- **El logro:** el título (`quest.<id>.title`) se ve en la pestaña de terminadas del
+  diario, y el anuncio a los participantes sale en su chat.
+
+| Hito | Isla | Nivel | Quién | Lo da | Placas | Recompensa |
+|---|---|---|---|---|---|---|
+| `ms_thalorn_oath` "El juramento de Thalorn" | Bosque (cripta bajo las piedras al noreste de Raigal, piso 8) | 20 | 2 personas, cualquier vocación | Hermano Olmar (`bosque_priest`) | 4207,6090 y 4213,6090 | 6600 XP, anillo de zarza, 600 monedas; cofre: 4 de plata, 1 piedra de temple mayor, 3 brebajes de vida. Título "Testigo del Juramento" |
+| `ms_orthavel_vigil` "La vigilia de Orthavel" | Bosque (bajo los robles al sur de Raigal, piso 8) | 25 | 1 persona con el **amuleto de asta puesto** (lo da `tanner_chitin`; Velia también lo vende) | Fenn Zarzal (`bosque_hunter`) | 4178,6125 | 8600 XP, botas de cuero de ciervo, 700 monedas; cofre: 5 de plata, 2 piedras de temple mayores, 3 brebajes de vida. Título "Vigía del Asta" |
+| `ms_morvund_embers` "Las cuatro ascuas de Morvund" | Volcán (cámara al norte de la galería oeste de la mina, piso 8) | 35 | 4 personas, **una de cada vocación**, cada una con la **llave de ascua** (`ch3_gate`) | el eco de la forja (`volcan_forge_echo`) | guardián 3647,5755; arcanista 3657,5755; montaraz 3647,5761; druida 3657,5761 | 19 000 XP, la **llave de Morvund**, un yelmo de acero de ascua, 1300 monedas; cofre: 10 de plata, 3 piedras de temple mayores, 3 brebajes de vida y de maná concentrados. Título "Mano de las Cuatro Ascuas" |
+
+- **La galería de Morvund** (la recompensa de acceso): un coto de caza chico (21x13) detrás
+  de una puerta con llave (`morvund_gate`) en la pared oeste de la cámara, con mineros de
+  obsidiana y gólems de escoria. Solo entra quien lleva la llave de Morvund (no se
+  comercia); quien la pierde le pide otra al eco. Como toda puerta con llave, abierta deja
+  pasar a cualquiera y desde adentro se abre sin llave.
+- **Economía:** cada hito paga como una quest secundaria de su nivel (10–15 % de la
+  experiencia de su banda, el oro entre 4 y 10 minutos de la mejor caza, un equipable de
+  una banda que ya se consigue): `sim/balance_tasks_test.go` (`TestMilestoneRewards`) lo
+  exige. Todos los participantes cobran la recompensa entera.
+- **Nombres:** Thalorn, Orthavel y Morvund son inventados (con aire de Tolkien, ninguno
+  suyo); la otra rama del lote 14 (`feat/place-names`) renombra pueblos y zonas en el
+  mismo estilo.
+- **Tests:** `quest/milestone_test.go` (requisitos, completar juntos, placas a medio
+  ocupar, vocación equivocada, personal, salir del juego, una sola vez),
+  `session/sigil_test.go` (2 y 4 jugadores en un mapa de prueba, el diario con los hitos
+  sin empezar, la mirada a una placa), `session/sigil_map_test.go` (los tres en el mapa
+  real, los cofres y la puerta de la galería), el validador de mapas
+  (`packages/map-format`, "checks milestone plates") y de contenido, y el E2E
+  "milestones" de `e2e/game.spec.ts` (dos desconocidos en Thalorn).
+
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).
   Se habla con click derecho sobre el NPC, a 3 casillas como máximo; alejarse cierra el

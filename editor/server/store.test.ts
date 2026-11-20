@@ -646,7 +646,7 @@ describe("bootstrap", () => {
     // testisle + puerto + bosque + volcan + pruebas chunks, and their spawns/npcs/zones/portals.yaml
     // and houses.yaml (not texts.yaml).
     expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(
-      6 + 43 + 40 + 46 + 11,
+      6 + 43 + 43 + 48 + 11,
     );
     const lists = ["houses", "npcs", "portals", "spawns", "zones"];
     expect(

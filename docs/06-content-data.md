@@ -828,6 +828,47 @@ rewards:
 - El diario de misiones (docs/02 "Diario de misiones", `QuestLog` de docs/05) muestra una
   tarea terminada con el tiempo que falta para volver a tomarla.
 
+### Quests de hito (`milestone`)
+```yaml
+# data/quests/ms_morvund_embers.yaml (docs/02 "Quests de hito")
+id: ms_morvund_embers
+name: quest.ms_morvund_embers.name
+min_level: 35
+milestone: true
+title: quest.ms_morvund_embers.title      # el título que se gana (el diario lo muestra)
+requires:
+  level: 35
+  players: 4                              # 1 a 4, juntos sobre las placas
+  vocations: [guardian, arcanist, ranger, druid]   # opcional: una por jugador
+  gear: { item: ember_key }               # opcional: { item, equipped: true } o { weapon: sword }
+steps:
+  - id: plates
+    description: quest.ms_morvund_embers.step_plates
+    complete_when:
+      sigils: { x: 3652, y: 5758, z: 8, radius: 5, to: { x: 3668, y: 5755, z: 8 } }
+rewards:
+  - { xp: 19000 }
+  - { item: morvund_key }
+  - { item: embersteel_helm }
+  - { gold: 1300 }
+```
+- `milestone: true` va con `title` y `requires`, y ellos solo con él. Un hito no es
+  `repeatable` y su último paso, y solo ese, es `sigils`. `requires.vocations` tiene tantas
+  como `players`; `gear.equipped` va solo con `item`. Lo revisan el esquema, `make
+  validate` (`checkMilestones`) y el servidor al cargar (`content.ParseQuest`).
+- **Las placas** son items con bloque `sigil` (`sigil: {}` para cualquiera, `sigil: {
+  vocation: druid }` para una vocación), `pickupable: false` y sin `blocks_movement`. Las
+  de un paso `sigils` son las que hay en su cuadrado: tantas como `players` y con las
+  vocaciones de `requires.vocations` (o ninguna). `mapcli validate` (`checkSigils`) y el
+  servidor al arrancar (`initSigils`) lo exigen, y también que cada placa sea de un solo
+  hito, que no haya placas sueltas, que se llegue a pie a cada una desde el templo y que
+  `to` sea una casilla caminable de una isla (ni casa, ni puerta con llave, ni entrada de
+  un portal) desde la que se llega a un templo sin llaves ni herramientas. Para la
+  alcanzabilidad, las placas llevan a la sala de recompensa (así su cofre cuenta como
+  alcanzable).
+- Un hito se empieza como cualquier quest (`start_quest`). El diario lo lista antes, con
+  los requisitos (docs/05 `MilestoneInfo`).
+
 ## Hechizo
 ```yaml
 - id: light_heal

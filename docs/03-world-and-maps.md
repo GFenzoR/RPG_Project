@@ -604,6 +604,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
   puertas, antes del chequeo de escape), y los dos lados leen los casos de
   `packages/map-format/src/testdata/arrivals.json`.
+- **Placas de las quests de hito** (docs/02 "Quests de hito", `checkSigils`): las placas
+  (items con bloque `sigil`) de cada paso `sigils` están dentro de su cuadrado, tantas como
+  `requires.players` y con sus vocaciones; ninguna es de dos hitos ni queda suelta; cada
+  una es caminable, no mueve a quien la pisa y se llega a pie desde el templo; el destino
+  `to` es una casilla caminable de una isla fuera de casas, puertas con llave y entradas de
+  portales, y desde su área se llega a un templo sin llaves ni herramientas (el mismo
+  `templeReach` del chequeo de escape). En la alcanzabilidad, pisar una placa lleva al
+  destino: la sala de recompensa (y su cofre) cuenta como alcanzable. El servidor exige
+  lo mismo al arrancar (`initSigils`).
 - **Islas `dev_only`**: como la imagen de producción no las tiene, nada de lo que el
   servidor revisa contra su mapa puede necesitarlas: ninguna ruta de barco sale de una,
   llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
@@ -683,6 +692,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
+  Quests de hito (lote 14, docs/02 "Quests de hito"): las **piedras de Thalorn** (cuatro
+  rocas alrededor de la escalera 4210,6093, cartel `thalorn_sign` en 4212,6093) bajan a
+  la cripta del piso 8 (muro de piedra 4203–4217, 6087–6100) con las dos placas en
+  4207,6090 y 4213,6090; su sala de recompensa, cerrada (4221–4229, 6088–6094, cofre
+  `chest_ms_thalorn`), sale por un teletransporte a 4200,6106. La **vigilia de
+  Orthavel** (escalera 4178,6128 al sur del pueblo, cartel `orthavel_sign` en 4180,6128)
+  baja a una cámara (4173–4183, 6123–6133) con una placa en 4178,6125; su sala
+  (4188–4196, 6122–6128, cofre `chest_ms_orthavel`) sale por un teletransporte a
+  4176,6119.
   Muebles y luces (lote 12): braseros a los lados de las dos puertas del templo,
   estandartes, ventanas y bancos; en la plaza la fuente (4159,6111), dos puestos, faroles y
   un mástil; la curtiduría con estantes, barriles y una mesa; cada casa con una cama y
@@ -719,6 +737,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (3656,5791), una fila de puestos al noreste, faroles, un pozo y un mástil junto al
   muelle; el archivo de Casia con estantes y mesas (el libro de la herrera, sobre una);
   cada casa con una cama y ventanas. La mina tiene 19 antorchas y 7 braseros.
+  Quest de hito (lote 14, docs/02 "Quests de hito"): de la pared norte de la galería oeste
+  de la mina sale un pasillo (3651–3653, 5766–5776; cartel `morvund_sign` en 3655,5778) a
+  la **cámara de las cuatro ascuas de Morvund** (3643–3661, 5751–5765) con una placa por
+  vocación; en su pared oeste la puerta con llave `morvund_gate` (3643,5758) da a la
+  **galería de Morvund** (3621–3642, 5751–5765, mineros y gólems:
+  `volcan_morvund_delvers`, `volcan_morvund_golems`), y al este, cerrada, la sala de
+  recompensa (3664–3672, 5751–5759, cofre `chest_ms_morvund`) sale por un
+  teletransporte a la sala de entrada de la mina (3690,5800). Cuatro antorchas más en las
+  paredes nuevas.
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la

@@ -1068,6 +1068,21 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   servidor): `COOLING` si eso todavía no pasó al mandarla, `DONE` si ya pasó. El
   servidor no avisa cuando vence una espera: el cliente compara `available_at` con su
   reloj corregido por `Welcome.server_time`.
+- **Quests de hito** (docs/02 "Quests de hito"): después de las entradas de siempre llega
+  una por cada hito que el personaje no empezó, con `state` `OPEN` (4). La entrada de un
+  hito (en cualquier estado) trae `milestone` (`MilestoneInfo`): `title` (clave i18n del
+  título), `level` y `level_met`, el equipo (`gear_item`, id numérico, con
+  `gear_equipped`, o `gear_weapon`, un tipo de arma; vacíos si no pide) y `gear_met`,
+  `players`, `vocations` (una por placa, o vacía) y `vocation_met`. Las marcas `*_met` son
+  del propio personaje al mandarlo; el diario sale otra vez cuando cambian (al subir o
+  bajar de nivel, o al cambiar lo que lleva: `questRecheck` compara una huella). Un
+  cliente viejo descarta el estado desconocido.
+- Mensajes de sistema de las placas: `milestone.waiting` (`quest`, `count`, `total`),
+  `milestone.not_ready` (`quest`, `names`), `milestone.fail_step`, `fail_vocation`,
+  `fail_level`, `fail_gear` (`quest`), `milestone.blocked` (`quest`), `milestone.staff`,
+  `milestone.achieved` (`quest`, `names`: los participantes, a cada uno). Mirar una placa
+  agrega `milestone.plates` (`quest`, `count`, `total`) o `milestone.plates_vocation`
+  (con `vocation`). Sin mensajes nuevos de cliente: se camina sobre las placas.
 - Es solo para mostrar: el servidor decide todo con lo guardado (`quest_state`).
   Agregado sin romper nada (campo 45 de `ServerMessage`): un cliente viejo lo ignora.
 
