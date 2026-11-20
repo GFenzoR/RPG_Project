@@ -341,8 +341,8 @@
         "contribution_ms",
         "level_range_pct",
         "level_gap_always",
-        "bonus_pct_per_member",
-        "max_bonus_pct"
+        "shared_by_default",
+        "bonus_pct_by_sharers"
       ],
       "description": "Parties and shared experience (T3.3).",
       "properties": {
@@ -382,17 +382,16 @@
           "minimum": 0,
           "maximum": 100
         },
-        "bonus_pct_per_member": {
-          "description": "Bonus % of the shared pot per sharing member beyond the first.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
+        "shared_by_default": {
+          "description": "A new party starts with shared experience on (the leader can turn it off).",
+          "type": "boolean"
         },
-        "max_bonus_pct": {
-          "description": "Cap of the shared bonus %.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
+        "bonus_pct_by_sharers": {
+          "description": "Bonus % of the shared pot by number of sharers: the first entry for 2, the next for 3...; more sharers than entries take the last one (the cap). Never decreasing (checked by the server).",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 31,
+          "items": { "type": "integer", "minimum": 0, "maximum": 100 }
         }
       }
     },
