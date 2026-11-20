@@ -460,7 +460,9 @@ bordes x 12 piezas x 4 looks y la espuma, 12 piezas x 4 looks x 4 frames, todas 
 atlas ya tenía 3 páginas en la base (2048x2016, 2048x2048 y 2048x1056); la tercera pasa a
 2048x1312: 4,59 MB de PNG en total (+239 KB) y 635 KB de JSON (+88 KB), más 220 KB de
 `atlas.json` (+31 KB). El look de cada pieza se elige al armar el chunk (`lookOf`), como los
-de suelo: ni cuentas ni objetos por frame; la espuma va en la lista plana de tiles animados
+de suelo: ni cuentas ni objetos por frame; las piezas van en el contenedor de suelo de su
+chunk (`flat`), así no entran en el orden de la capa de items que se reordena cuando llega un
+chunk o se mueve una criatura; la espuma va en la lista plana de tiles animados
 (una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 12273 (cada orilla
 natural tiene las suyas, también bajo los muros). Medido contra la base en la misma
 máquina: `FullMapView` en el Farol pasó de 1146 a 1487 bytes (más pilas distintas en la

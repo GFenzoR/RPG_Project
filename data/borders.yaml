@@ -8,7 +8,8 @@
 # Grounds off the ladder (wooden_floor, dock_planks: man-made floors) keep a straight edge.
 # A new ground (snow, ice) is one line here, its twelve items and `make borders`.
 ladder:
-  - ground: lava            # molten: only ever covered (by the crust of cooled lava)
+  - ground: lava            # molten, no fringe of its own: every fringe above covers it (on the
+                            # map only the crust of cooled lava touches it)
   - ground: water_shoal     # the same water as water_shallow, with fish: no edge between them
   - ground: water_shallow
   - ground: wet_sand

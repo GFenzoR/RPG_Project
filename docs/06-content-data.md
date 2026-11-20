@@ -1222,7 +1222,8 @@ shore:                              # la espuma donde un borde llega al agua
   borde propio), `wet_sand`, `sand`, `cooled_lava`, `cinder_path`, `dirt`, `basalt`,
   `stone_floor`, `grass`, `ash`. Así el pasto entra sobre la tierra, la piedra y la arena; la
   ceniza, sobre el basalto, la escoria y la lava enfriada; la costra de lava enfriada, sobre
-  la lava fundida.
+  la lava fundida. La lava no tiene borde propio: todo borde que la toque la cubre (sin
+  `over`, también la ceniza o la arena); en el mapa solo la toca la lava enfriada.
 - **Las piezas** de un borde son 12 items `<pieces>_<pieza>` (en `data/items/borders.yaml`,
   `kind: decoration`, `pickupable: false`, sin bloquear; un nombre por suelo,
   `item.<pieces>.name`). El nombre de la pieza dice dónde está el suelo más alto visto desde
@@ -1232,14 +1233,31 @@ shore:                              # la espuma donde un borde llega al agua
   bordes de los suelos más bajos; también debajo de un muro (una pieza de muro angosta deja
   ver el suelo de su casilla).
 - **La orilla del agua** (`shore`): en una casilla de un suelo de `water` con algún borde, el
-  autoborder pone primero (debajo de los bordes) las piezas `border_surf_<pieza>` con la forma
-  de todos esos bordes juntos: el borde mojado de la tierra, una línea de espuma y otra
-  cortada que rompe en 4 frames. Los suelos de agua no tienen borde entre sí (el bajío es la
-  misma agua con peces). Un suelo de `water` no puede tener `pieces`.
+  autoborder pone primero (debajo de todos los bordes) las piezas `border_surf_<pieza>` de
+  cada borde, con su misma forma: el borde mojado de la tierra, una línea de espuma y otra
+  cortada que rompe en 4 frames. Toda la espuma queda del lado del agua de su borde, y cada
+  borde tapa la espuma de los otros que cae sobre su tierra: así la espuma sigue la orilla
+  de todos los bordes juntos. Con arena al norte y pasto al oeste van `border_surf_n` y
+  `border_surf_w` (no una esquina de adentro que ningún borde dibuja); con arena al norte y
+  una esquina de pasto al noreste, `border_surf_n` y `border_surf_ne` (la espuma rodea el
+  bulto de la esquina). Los suelos de agua no tienen borde entre sí (el bajío es la misma
+  agua con peces). Un suelo de `water` no puede tener `pieces`.
 - **Qué revisa `make validate`:** cada suelo es un item `ground` y está una sola vez; cada
   suelo de `over` está en la escalera y más abajo; `edge` y `over` solo con `pieces`; cada
   borde y la espuma tienen sus 12 items, decoraciones que no bloquean ni se levantan, y
-  ningún juego de piezas es de dos suelos.
+  ningún juego de piezas es de dos suelos. En los mapas (`validateWorld`, docs/03
+  "Validación"), cada casilla tiene exactamente las piezas que da el autoborder con los
+  suelos de sus vecinos, abajo de todo: un suelo pintado sin `mapcli autoborder` (o una
+  escalera cambiada sin volver a correrlo) es un error por chunk, con su primera casilla y
+  el comando que lo arregla. Así `make validate`, el editor, el MCP y el check de PR de
+  mapas lo exigen.
+- **Cómo se dibujan:** spritepack marca `flat` cada sprite de `borders/` (atlas.json
+  `tiles`) y el renderer (`MapView`, `mapcli render`) dibuja esas piezas con los suelos, en
+  el contenedor de suelo del chunk: debajo de las sombras proyectadas, de los items y de las
+  criaturas de todas las casillas (un lobo o el arma de un jugador que pasa a la casilla de
+  al lado no queda bajo el borde de esa casilla). En el cliente, mirar o abrir el menú de
+  una casilla saltea las piezas (`ItemDef.border`, `state/items.ts` `topItem`): una casilla
+  de agua de la orilla se nombra como agua.
 - **El arte** lo dibuja `make borders` (`tools/spritepack/src/gen-borders.ts`) en
   `assets/sprites/borders/<suelo>/<pieza>.png`: cada pieza en 4 looks (`<pieza>/var_<n>`)
   que el renderer elige por casilla con `tileHash` (como los looks de suelo, docs/17 ART-4:

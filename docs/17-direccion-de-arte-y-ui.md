@@ -307,11 +307,18 @@ mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
   borde mojado de la arena mojada (`wet`), el labio iluminado de la costra de lava
   (`crust`) y granos sueltos de ceniza (`drift`). Valor y tono: los del suelo mismo (el test
   exige la banda de ART-6, L\* 20-50, a cada pieza).
-- **El agua:** la espuma (`border_surf_*`) va debajo de los bordes, con la forma de todos
-  ellos juntos: el borde mojado de la tierra (dos tonos de arena mojada), la línea clara de
+- **El agua:** la espuma (`border_surf_*`) va debajo de los bordes, una por borde y con su
+  forma: el borde mojado de la tierra (dos tonos de arena mojada), la línea clara de
   espuma y la cortada que rompe en 4 frames, cada look con sus propios frames
   (`<pieza>/var_<n>/frame_<m>`). Así, donde dos bordes se pisan, la espuma de uno nunca se ve
-  sobre la tierra del otro.
+  sobre la tierra del otro, y la que queda sigue la orilla de todos juntos (antes una
+  esquina de adentro de espuma bajo dos bordes distintos dejaba agua sin espuma entre los
+  bordes y el arco; medido sobre las 6561 vecindades de agua, arena y pasto en sus 4 looks:
+  ningún píxel de orilla sin espuma ni espuma suelta en el agua).
+- **Capas:** las piezas son `flat` (spritepack las marca en `atlas.json`) y se dibujan con
+  los suelos, debajo de las sombras proyectadas, los items y las criaturas: el hocico de un
+  lobo o el arma de un jugador que entra en la casilla de al lado no quedan bajo el borde de
+  esa casilla, y la sombra de un árbol oscurece el borde como al suelo.
 - **Mapas:** `mapcli autoborder` de las cinco islas en sus dos pisos (también las cuevas, con
   tierra y piedra): las piezas pasaron de 6297 a 12273 y el diff es solo de piezas de borde.
 - Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de

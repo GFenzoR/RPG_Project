@@ -61,7 +61,10 @@ Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas
   pieza de `data/borders.yaml`) y apila abajo las que tocan: en el agua primero la espuma,
   después el borde de cada suelo más alto que la toca, de abajo arriba por la escalera; lo
   demás de la pila queda encima (también un muro). Repetirlo no cambia nada. Escalera y nombres de pieza en `06`, "Bordes". El look de cada pieza no va en
-  el mapa: lo elige el renderer.
+  el mapa: lo elige el renderer. `paint_ground`, `fill` y `stamp` no lo corren solos (el
+  editor sí, con el autoborder automático): hasta correrlo, la validación da un error por
+  chunk con bordes desactualizados, que nombra el comando (`mapcli autoborder <isla>
+  --floor Z`).
 - `scatter`: PRNG mulberry32 con `seed`; dos números por casilla en orden de filas, pase lo
   que pase, así una casilla no desplaza el patrón del resto. Solo decora casillas con pila
   vacía y suelo en `on_ground` (cualquiera si se omite).

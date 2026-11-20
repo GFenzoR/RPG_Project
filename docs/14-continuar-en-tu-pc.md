@@ -156,7 +156,15 @@ el punto 5:
     lote suma items, el que apila vuelve a correr `make gen-ids`.
   - **Otra rama que pinte suelos** tiene que terminar con `mapcli autoborder` de lo que
     pintó (con la escalera nueva): las piezas viejas (`border_grass_sand_*`, ...) ya no son
-    items y `make validate` las rechaza en un mapa.
+    items y `make validate` las rechaza en un mapa. Desde la revisión del lote 13
+    `make validate` (y el check de PR de mapas) también rechaza bordes desactualizados: un
+    error por chunk que nombra el `mapcli autoborder` que falta.
+  - **Revisión del lote 13:** las piezas se dibujan con los suelos (`flat` del atlas), bajo
+    las sombras y las criaturas de la casilla de al lado; la espuma va por borde (sigue la
+    orilla real donde se juntan dos suelos; 11 casillas del mundo cambiaron); mirar una
+    casilla saltea las piezas y nombra su suelo. `feat/humanoid-art` y
+    `feat/character-look` tocan el dibujo de criaturas en `packages/renderer/src/map-view.ts`:
+    al apilar, las criaturas siguen en la capa de items (`placeEntity`) y las piezas ya no.
   - **Nieve y hielo (lote 14):** una línea en `ladder`, 12 items, su nombre y `make borders`.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",

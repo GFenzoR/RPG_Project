@@ -75,7 +75,8 @@ filas 3–31 (un chunk real siempre tiene las 32).
   abajo de todo en la pila, nunca bloquean, y el **look** de cada una (4 por pieza, con una
   orilla distinta) lo elige el renderer por casilla: el mapa guarda solo qué pieza va. Al
   pintar suelos a mano (`paint_ground`, scripts de ops) se termina con `autoborder` del
-  área; `mapcli autoborder <isla> --floor Z` sin `--rect` rehace la isla entera.
+  área; `mapcli autoborder <isla> --floor Z` sin `--rect` rehace la isla entera. La
+  validación lo exige: piezas que no son las del autoborder son un error ("Validación").
 
 ## IDs de items
 - Cada item tiene un ID de texto (`oak_tree`) para humanos e IA, y un ID numérico
@@ -483,6 +484,10 @@ crc32        u32 (IEEE) de todos los bytes anteriores
 Implementada una sola vez en `packages/map-format` (`validateWorld`); `mapcli validate`
 y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición del mundo.
 - Archivos en formato canónico (si no: `mapcli fmt`) y conformes a su esquema.
+- **Bordes al día** (lote 13): cada casilla tiene abajo de su pila exactamente las piezas de
+  borde que da `borderPieces` con los suelos de sus vecinos (docs/06 "Bordes"), ni más, ni
+  menos, ni arriba de otro item. Un error por chunk con la primera casilla, lo que tiene, lo
+  que necesita y el `mapcli autoborder` que lo arregla.
 - Todo item, monstruo y NPC referenciado existe en `data/`; claves i18n existen en
   todos los idiomas.
 - Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables:
