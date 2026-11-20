@@ -244,6 +244,7 @@ func (w *World) setLevel(p *Player, level int) {
 	pct := healthPercent(p.health, p.maxHealth)
 	old, now := p.vocation.AtLevel(from), p.vocation.AtLevel(level)
 	p.level = level
+	p.questDirty = true // the milestones' level marks of the quest log (questRecheck)
 	p.maxHealth, p.maxMana, p.capacity = now.Health+p.gear.health, now.Mana+p.gear.mana, now.Capacity
 	p.health = min(max(p.health+now.Health-old.Health, 1), p.maxHealth)
 	p.mana = min(max(p.mana+now.Mana-old.Mana, 0), p.maxMana)

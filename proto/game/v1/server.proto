@@ -1000,10 +1000,14 @@ enum QuestLogState {
   QUEST_LOG_STATE_DONE = 2;
   // COOLING: a repeatable quest done that cannot be taken again until available_at.
   QUEST_LOG_STATE_COOLING = 3;
+  // OPEN: a milestone quest not started yet, listed with its requirements (docs/02
+  // "Quests de hito").
+  QUEST_LOG_STATE_OPEN = 4;
 }
 
 // QuestLog is the character's quest log (docs/05 "Diario de misiones"): one entry per
-// quest it has started or completed, in quest id order. It comes in full at login (empty
+// quest it has started or completed, in quest id order, then every milestone quest it has
+// not started (OPEN). It comes in full at login (empty
 // too) and in the tick of every change of a quest (started, a step done, a kill counted,
 // completed). Nothing comes when a cooldown ends: the client compares available_at with
 // the server clock (Welcome.server_time).
@@ -1032,4 +1036,29 @@ message QuestLogEntry {
   // A completed repeatable quest: when it can be taken again, Unix milliseconds (DONE
   // when that already passed at sending); 0 for any other.
   uint64 available_at = 10;
+  // A milestone quest (docs/02 "Quests de hito"): its requirements, with whether this
+  // character meets each one now; unset for any other quest.
+  MilestoneInfo milestone = 11;
+}
+
+// MilestoneInfo is what a milestone quest asks of every participant, as the quest log
+// shows it. The *_met marks are this character's own, computed when the log is sent (it
+// comes again when its level or what it carries changes).
+message MilestoneInfo {
+  // i18n key of the title the quest gives once done (quest.<id>.title).
+  string title = 1;
+  uint32 level = 2;
+  bool level_met = 3;
+  // The gear: an item (numeric id, worn when gear_equipped) or a wielded weapon of
+  // gear_weapon's type (sword, axe...); both 0/empty when it asks for none.
+  uint32 gear_item = 4;
+  bool gear_equipped = 5;
+  string gear_weapon = 6;
+  bool gear_met = 7;
+  // How many players stand on the plates together, and the vocation of each plate
+  // (data/vocations ids) when the milestone asks for one of each; empty: any.
+  uint32 players = 8;
+  repeated string vocations = 9;
+  // This character's vocation is one of vocations (true when vocations is empty).
+  bool vocation_met = 10;
 }

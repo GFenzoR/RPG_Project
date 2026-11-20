@@ -121,8 +121,9 @@ type Host interface {
 
 // Engine runs the quests of data/quests.
 type Engine struct {
-	quests content.Quests
-	ids    []string // sorted: deterministic order
+	quests     content.Quests
+	ids        []string // sorted: deterministic order
+	milestones []*content.Quest
 }
 
 // NewEngine builds an engine over quests.
@@ -132,6 +133,11 @@ func NewEngine(quests content.Quests) *Engine {
 		e.ids = append(e.ids, id)
 	}
 	sort.Strings(e.ids)
+	for _, id := range e.ids {
+		if q := quests[id]; q.Milestone {
+			e.milestones = append(e.milestones, q)
+		}
+	}
 	return e
 }
 

@@ -25,6 +25,9 @@ const (
 	// door open (docs/02 "Puertas con llave"). Their items are the test's to define.
 	Door     = 12
 	OpenDoor = 13
+	// Plate1 to Plate4 are four map items on grass that block nothing ('1' to '4'), the
+	// sigil plates of the milestone tests (their items are the test's to define).
+	Plate1 = 14
 )
 
 // Speeds is the terrain cost table of the drawings, indexed by item id.
@@ -37,6 +40,7 @@ var Speeds = []uint16{0, 0, 50, 200, 0, 0}
 //	f  water with fish (FishWater)     v  vein (grass + Vein item, blocks movement)
 //	D  closed door (grass + Door item, blocks movement and sight)
 //	d  open door (grass + OpenDoor item)
+//	1-4  grass + item Plate1 + n-1 (blocks nothing)
 //	   (space) no tile
 //
 // The island rect is the smallest sector-aligned rect holding the drawing. Without a T
@@ -121,6 +125,9 @@ func Floors(t testing.TB, ox, oy int, layers ...Layer) *world.Map {
 				case 'd':
 					g = Grass
 					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{OpenDoor}})
+				case '1', '2', '3', '4':
+					g = Grass
+					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Plate1 + uint16(c-'1')}})
 				case ' ':
 					f = world.FlagBlocksMovement
 				default:

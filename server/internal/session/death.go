@@ -99,6 +99,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	p.experience -= lostXP
 	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience, 1); level != p.level {
 		p.level = level
+		p.questDirty = true // the milestones' level marks of the quest log (questRecheck)
 		stats := p.vocation.AtLevel(level)
 		p.maxHealth, p.maxMana, p.capacity = stats.Health+p.gear.health, stats.Mana+p.gear.mana, stats.Capacity
 		p.baseSpeed = max(stats.Speed, 1)

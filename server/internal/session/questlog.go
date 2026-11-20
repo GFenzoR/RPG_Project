@@ -211,7 +211,25 @@ func (w *World) questLog(p *Player) *pb.ServerMessage {
 				e.AvailableAt = uint64(en.AvailableAt) * 1000
 			}
 		}
+		if q.Milestone {
+			e.Milestone = w.milestoneInfo(p, q)
+		}
 		entries = append(entries, e)
+	}
+	// Then every milestone not started: the player sees what it asks before taking it.
+	for _, q := range w.quests.Milestones() {
+		if st, _ := w.quests.State(p.storage, q.ID); st != quest.NotStarted {
+			continue
+		}
+		entries = append(entries, &pb.QuestLogEntry{
+			QuestId:   q.ID,
+			Name:      q.Name,
+			State:     pb.QuestLogState_QUEST_LOG_STATE_OPEN,
+			Milestone: w.milestoneInfo(p, q),
+		})
+	}
+	if len(w.quests.Milestones()) > 0 {
+		p.milestoneMarks = w.milestoneMarks(p)
 	}
 	return &pb.ServerMessage{Message: &pb.ServerMessage_QuestLog{QuestLog: &pb.QuestLog{Entries: entries}}}
 }

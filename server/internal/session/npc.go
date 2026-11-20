@@ -835,6 +835,12 @@ func (w *World) questRecheck(p *Player) {
 	}
 	p.questDirty = false
 	w.quests.Recheck(p.storage, &questHost{w: w, p: p})
+	if len(w.quests.Milestones()) > 0 { // the met marks of the quest log (sigil.go)
+		if m := w.milestoneMarks(p); m != p.milestoneMarks {
+			p.milestoneMarks = m
+			p.questLogDirty = true
+		}
+	}
 }
 
 // ---- dialog effects ----------------------------------------------------------------

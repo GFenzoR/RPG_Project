@@ -341,7 +341,10 @@ type World struct {
 	// scratch for reading a player's current ones.
 	reachAt  map[*content.Reach]*reachPlace
 	reachBuf []*content.Reach
-	coins    []*content.Item // currency items, highest worth first
+	// sigilRooms and sigilAt (plate tile → its room) are the milestones' plates (sigil.go).
+	sigilRooms []*sigilRoom
+	sigilAt    map[world.Pos]*sigilRoom
+	coins      []*content.Item // currency items, highest worth first
 
 	// Gathering (T1.12): harvested tiles (charges left, refill event), the rate limit
 	// and the anti-AFK delay in ticks (0 = off).
@@ -628,6 +631,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initReach(); err != nil {
+		return nil, err
+	}
+	if err := w.initSigils(); err != nil {
 		return nil, err
 	}
 	if err := w.initTravel(); err != nil {
