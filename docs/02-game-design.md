@@ -1444,7 +1444,7 @@ apilan; dicen lo que ya vale. Código: `server/internal/session/status.go`.
 |---|---|---|---|
 | En combate | `in_combat` | el bloqueo de logout ("Bloqueo de logout en combate"): pelea en los últimos `combat_block_ms`, o un bloqueo PvP (atacante o víctima) | hasta que se puede salir del juego |
 | Bloqueo de ataque | `pvp_locked` | el bloqueo PvP del atacante ("PvP", `lock_ms` o `kill_lock_ms`): ni zona de protección ni salir del juego | hasta que vence |
-| Zona de protección | `protection_zone` | parado en una zona `protection` de `zones.yaml` (también una casa): nadie lo ataca y el veneno o el fuego no lo dañan | sin fin: mientras siga ahí |
+| Zona de protección | `protection_zone` | parado en una zona `protection` de `zones.yaml` (también una casa): nadie lo ataca y ningún daño periódico (veneno, fuego, descarga) lo daña | sin fin: mientras siga ahí |
 
 - Un atacante bloqueado ve los dos primeros (el segundo dice además que no puede entrar a
   una zona de protección); la víctima, solo "En combate".

@@ -229,7 +229,7 @@ condition.in_combat.desc: "Todavía no puedes salir del juego ni zarpar. Si cier
 condition.pvp_locked.name: "Bloqueo de ataque"
 condition.pvp_locked.desc: "Atacaste a un jugador: no puedes entrar a una zona de protección ni salir del juego hasta que termine."
 condition.protection_zone.name: "Zona de protección"
-condition.protection_zone.desc: "Aquí nadie puede atacarte y el veneno o el fuego no te hacen daño."
+condition.protection_zone.desc: "Aquí nadie puede atacarte y el veneno, el fuego o la descarga no te hacen daño."
 client.status.badge_seconds: "{seconds}"
 client.status.badge_minutes: "{minutes}m"
 client.status.left_seconds: "Quedan {seconds} s"

@@ -229,7 +229,7 @@ condition.in_combat.desc: "You cannot log out or set sail yet. If you close the 
 condition.pvp_locked.name: "Attack lock"
 condition.pvp_locked.desc: "You attacked a player: you cannot enter a protection zone or log out until it ends."
 condition.protection_zone.name: "Protection zone"
-condition.protection_zone.desc: "Nobody can attack you here, and poison or fire do you no harm."
+condition.protection_zone.desc: "Nobody can attack you here, and poison, fire or shocks do you no harm."
 client.status.badge_seconds: "{seconds}"
 client.status.badge_minutes: "{minutes}m"
 client.status.left_seconds: "{seconds} s left"
