@@ -1479,7 +1479,9 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
       desde que la ventana mide unos 286 px), y los slots vacíos con su silueta a esa
       escala;
     - mientras se arrastra o se elige (toque) un item, los slots que lo aceptan brillan y
-      el que no lo acepta se tiñe de rojo bajo el puntero;
+      el que no lo acepta se tiñe de rojo bajo el puntero; el de la mochila no hace
+      ninguna de las dos con lo que no se lleva en la espalda: lo guarda en la mochila o,
+      sin ella, en los bolsillos (lote 13);
     - la grilla de la **mochila equipada abajo de la figura**, en la misma ventana (como la
       grilla del inventario de Diablo II), abierta sola al abrir el inventario; los
       contenedores de adentro y los del suelo siguen siendo ventanas propias;

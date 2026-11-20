@@ -215,18 +215,22 @@ el punto 5:
     vacío y los cuatro bolsillos vacíos al despertar; la revisión final del lote tiene que
     mirar esas capturas. El resto de los specs no cambió: ninguno dependía de la mochila
     nueva.
-  - **El cuerpo tiene 10 lugares:** un asesino o un proscrito que lo pierde todo (diez
-    piezas y cuatro bolsillos) deja lo que no entra en el suelo de la casilla, reservado
-    como el cuerpo (`TestDeathPocketsOverflowTheCorpse`). Si molesta, se agranda
-    `creature_remains` (lo comparten los monstruos) o el cuerpo de un jugador pasa a ser
-    otro item.
+  - **El cuerpo de un jugador entra todo** (revisión de la rama): con los bolsillos una
+    muerte puede soltar 14 items y los restos tienen 10 lugares; lo que no entraba quedaba
+    suelto en la casilla y el que mató lo levantaba sin esperar `corpse_owner_only_ms`.
+    Ahora el cuerpo de un jugador es `creature_remains` con un lugar por slot de equipo y
+    por item de los bolsillos (`playerCorpse`; `TestDeathCorpseHoldsEverything`,
+    `TestHeldDeathDropsNothingLoose`). El cuerpo de un jugador muestra 14 lugares y el de
+    un monstruo 10: si el dueño prefiere otro sprite o un item propio, es un item nuevo.
   - **Un contenedor en un bolsillo** se abre y se llena a mano, pero lo que se recibe va
     solo al primer nivel de la mochila y de los bolsillos (como antes una bolsa dentro de
     la mochila).
   - **Bajar `inventory.pocket_slots`** no borra lo guardado (se puede sacar, no vuelve a
-    entrar): el esquema lo deja entre 1 y 8, pero conviene no bajarlo nunca.
-  - **Textos:** el aviso del intercambio sin nada que ofrecer sigue diciendo "Abre tu
-    mochila…" aunque los bolsillos se ofrecen siempre; el tutorial no los menciona.
+    entrar, tampoco por un intercambio: `tradeFits` cuenta los lugares de cada contenedor
+    por separado): el esquema lo deja entre 1 y 8, pero conviene no bajarlo nunca.
+  - **Textos (arreglado en la revisión):** el aviso del intercambio sin nada que ofrecer
+    nombra los bolsillos y el paso `open_backpack` del tutorial dice que lo que no entra
+    en la mochila va a ellos.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al

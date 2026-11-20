@@ -1421,10 +1421,13 @@ Valores iniciales (balance.yaml):
   (el hallazgo M5 de la prueba exploratoria, que antes resolvía una mochila gratis: esa
   regla y su ref `new_backpack` del log de economía ya no existen). Los proveedores
   (Puerto y la Isla de Pruebas) venden mochilas (20 de cobre).
-- El cuerpo tiene 10 lugares: si cae más (un asesino o un proscrito pierde todo: diez
-  piezas y cuatro bolsillos), lo que no entra queda en el suelo de la casilla de la
-  muerte, reservado como el cuerpo mientras el personaje espera su guardado; nunca se
-  pierde.
+- El cuerpo de un jugador entra todo lo que cae: tiene los 10 lugares de los restos de
+  los monstruos o, si puede caer más, uno por slot de equipo y uno por cada item de los
+  bolsillos (14 con `pocket_slots` 4; más si los bolsillos guardan más de `pocket_slots`
+  porque se bajó). Un proscrito pierde todo (diez piezas y cuatro bolsillos) y a un
+  asesino puede caerle casi todo (40 % por pieza y la mochila siempre): nada queda suelto
+  en la casilla, donde la reserva del dueño (`corpse_owner_only_ms`) no lo cubriría
+  (`session/death.go` `playerCorpse`; la ventana del cuerpo muestra todos sus lugares).
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
