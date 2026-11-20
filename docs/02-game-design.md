@@ -2667,6 +2667,37 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
   estación al fabricar suenan como recolección genérica.
 
+## Apariencia (lote 13, pedido del dueño del 2026-11-19)
+"Debiéramos tener una ventana de personalización", y que los demás vean lo que lleva cada
+uno. Todo jugador, NPC que es una persona y monstruo humanoide es un humanoide del motor de
+sprites (docs/17 "Humanoides del motor"): un cuerpo y, encima, lo que lleva puesto.
+- **El aspecto del personaje:** cuerpo (robusto o esbelto), piel, peinado, color de pelo
+  (tiñe pelo y barba) y barba, de las elecciones de `data/looks.yaml` (docs/06 "Looks"; las
+  pieles `creatures_only`, la de los ahogados y la ceniza, son solo de NPCs y monstruos).
+  Se elige al **crear el personaje**, con una figura que camina en el lugar y gira con las
+  flechas (y "Al azar"), y se cambia **gratis y cuando se quiera** en la ventana
+  **Apariencia → Personalizar** (tecla O; "Guardar aspecto"). El cambio lo ven al instante
+  todos los que tienen al jugador a la vista. Para que nadie inunde a los demás con
+  cambios, hay un tope (`limits` de `looks.yaml`: 6 seguidos, después 1 cada 1,5 s); lo que
+  pasa se descarta.
+- **Personajes de antes:** el que no tiene aspecto guardado (creado antes del lote 13) o
+  tiene uno que ya no está entre las elecciones recibe al entrar uno elegido de su id
+  (siempre el mismo para el mismo personaje) y lo guarda; lo puede cambiar gratis.
+- **Lo que se ve puesto:** la pieza de cabeza, el torso, las piernas, los pies y lo de cada
+  mano, cada una con su `worn` (forma y material del catálogo); las joyas, la mochila, la
+  munición y lo de adentro de un contenedor nunca se ven. Equiparse, sacarse algo, una pieza
+  que se rompe en la forja, lo que cae al morir o lo que se vende o se intercambia cambian
+  la figura para todos los que la ven. Una capucha tapa el pelo y un yelmo cerrado, el pelo
+  y la barba (`hides`); en la ventana de Apariencia la figura se muestra sin la pieza de
+  cabeza, para ver el peinado que se elige.
+- **El atuendo** (la tienda, T5.7) ya no da el cuerpo, solo la ropa: el de siempre
+  (`citizen`) llena con su ropa el torso, las piernas y los pies vacíos; uno de la tienda
+  tapa esos tres aunque haya armadura, y el casco, el escudo y el arma se siguen viendo.
+- **El ataque de otro jugador** juega el clip de su arma (arco y ballesta disparan, varita y
+  vara conjuran, el resto golpea), porque ahora se sabe qué lleva en la mano.
+- **Solo es aspecto:** ninguna regla del juego lee el cuerpo ni lo que "se ve"; lo que da
+  algo es el equipo puesto, como siempre.
+
 ## Tienda cosmética (T5.7)
 Monetización solo cosmética (`00-vision.md`): lo que se compra cambia cómo te ven, nunca
 lo que puedes hacer. Contenido en `data/cosmetics.yaml` (formato en `06-content-data.md`),

@@ -1311,8 +1311,10 @@ shore:                              # la espuma donde un borde llega al agua
   costume: true             # un atuendo de la tienda: tapa la armadura
   # ...
 ```
-- `look`: el cuerpo con que se dibuja el jugador hasta que llegue su aspecto propio (rama
-  `feat/character-look`); sin `worn` y sin pieles `creatures_only`.
+- `look`: el cuerpo del quieto del atuendo (la vista previa de la tienda) y el punto de
+  partida de los selectores al crear un personaje (el de `citizen`); sin `worn` y sin pieles
+  `creatures_only`. Desde el lote 13 cada personaje tiene su propio aspecto (docs/02
+  "Apariencia"): el atuendo ya no da el cuerpo en el juego, solo la ropa.
 - `clothes`: el atuendo por defecto (`citizen`) los muestra solo donde no hay nada equipado
   (el equipo se ve encima); uno con `costume: true` (los de la tienda) tapa torso, piernas y
   pies aunque haya armadura, y el casco, el escudo y el arma se siguen viendo. El color de
@@ -1330,6 +1332,7 @@ motor de sprites y un muñeco de capas** (docs/17 "Humanoides del motor"): un cu
 pelo, barba y lo que lleva, cada capa en un tono neutro que el cliente tiñe.
 `data/looks.yaml` (esquema `looks`) dice qué hay:
 ```yaml
+limits: { change_burst: 6, change_refill_ms: 1500 }   # anti-flood de SetLook (docs/05)
 builds: [sturdy, slender]                      # cuerpos (el mismo esqueleto)
 skins:                                         # tonos de piel
   fair: { color: "#ecc4a2" }
@@ -1365,10 +1368,23 @@ tints: { iron: "#a8aeb6", linen: "#ece2c8" }         # el material de una pieza 
   puede vestir algo que no se vende). El `look` manda sobre el `sprite`: el de un NPC
   persona es su retrato quieto (`npcs/<id>`, el del diálogo, que spritegen dibuja de su
   look), y un monstruo humanoide no necesita ninguno. Uno de los dos es obligatorio.
-- El servidor no lee `looks.yaml`, `look` ni `worn`: son del cliente (que los recibe en
-  `content.looks`, `npcLooks`, `monsterLooks` e `ItemDef.worn`). `make validate` revisa cada
-  `look`, `worn` y `clothes` de `data/` contra `looks.yaml` (la forma del lugar justo, tintes,
-  pieles, pelo y barbas que existen).
+- **El aspecto de un jugador** (lote 13, docs/02 "Apariencia"): cuerpo, piel, peinado,
+  color de pelo y barba, elegidos de estas listas (nunca una piel `creatures_only`) al crear
+  el personaje y cuando quiera en la ventana Apariencia. **El orden de cada lista es el de
+  los selectores y el del aspecto que el servidor le da a un personaje sin aspecto**
+  (`content.DefaultLook`, del id del personaje): agrega las elecciones nuevas al final. Los
+  nombres de cada elección son i18n (`appearance.body.<id>`, `appearance.skin.<id>`,
+  `appearance.hair.<id>`, `appearance.hair_color.<id>`, `appearance.beard.<id>` en
+  `client.yaml`; `vite/content.test.ts` exige todos en es y en). `limits` acota los cambios
+  (`SetLook`): una ráfaga de `change_burst` y después uno cada `change_refill_ms`.
+- **Quién lee qué:** el servidor (`content.LoadLooks`) valida el aspecto de cada jugador
+  (`PlayerLook`) y, al arrancar, el `look` de cada NPC y monstruo (`CheckCreature`: no arranca
+  con uno que el motor no dibuja), y manda el cuerpo y las piezas en cada `Creature` (docs/05
+  "Apariencia y equipo visible"). El cliente recibe `content.looks` (los colores y lo que
+  tapa una pieza de cabeza), `content.lookOptions` (las elecciones de un jugador, en orden) e
+  `ItemDef.worn`; el aspecto de cada criatura le llega del servidor, no del contenido.
+  `make validate` revisa cada `look`, `worn` y `clothes` de `data/` contra `looks.yaml` (la
+  forma del lugar justo, tintes, pieles, pelo y barbas que existen).
 
 ## Animación de criaturas (docs/17 ANI)
 El `sprite` de un monstruo, un NPC o un outfit sigue siendo una ruta lógica: **cómo se

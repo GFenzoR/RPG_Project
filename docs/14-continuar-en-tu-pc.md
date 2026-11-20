@@ -100,6 +100,36 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Personalización y equipo visible por la red (hecho, rama `feat/character-look`, lote
+  13; docs/02 "Apariencia", docs/05 "Apariencia y equipo visible", docs/06 "Looks", docs/07
+  "Aspecto y equipo visible"):** cada personaje tiene su aspecto (cuerpo, piel, peinado,
+  color de pelo, barba; `characters.look_*`, migración 00021), elegido al crearlo con una
+  figura en vivo y cambiado gratis en Apariencia → Personalizar (`SetLook`, con anti-flood
+  de `data/looks.yaml limits`). Cada `Creature` trae el cuerpo y, de un jugador, los ids de
+  sus slots visibles (de un NPC o un monstruo, sus piezas); `CreatureLook` avisa a quien lo
+  ve cuando cambian (todo pasa por `equipmentChanged`: equipar, sacar, la forja, la muerte).
+  El cliente ya no deduce cuerpos del atuendo ni del contenido. Queda:
+  - **Mirarlo en el juego** (la verificación final del lote): el E2E "T3.1" elige un
+    aspecto en el formulario (`19-create-druid`: los selectores y la figura) y comprueba que
+    el servidor lo devuelve; en `20-druid-heal` se tiene que ver ese aspecto (esbelta,
+    piel oliva, pelo largo pelirrojo) con la ropa del atuendo `citizen`. "T5.2" le da una
+    espada de hierro a la presa y el cliente del cazador la recibe; `50-pvp-aggressor-skull`
+    (desde la presa) muestra al cazador y `49-pvp-no-pvp-refused` (desde el cazador) a la
+    presa con su espada en la mano. Ningún spec abre todavía Apariencia → Personalizar: lo
+    natural es sumarlo al de la tienda (`e2e/shop.spec.ts`, que ya abre la ventana) o a
+    "T5.2", guardar un peinado y ver el `CreatureLook` en el otro cliente.
+  - **Los personajes de antes** reciben al entrar el aspecto que sale de su id
+    (`content.DefaultLook`) y lo guardan; el dueño puede querer avisarles que pueden
+    cambiarlo gratis (un mensaje del tutorial o del sistema al primer login: no está).
+  - **`outfits.yaml look`** solo da el cuerpo del quieto de la tienda y el punto de partida
+    del formulario: la vista previa de un atuendo en `/shop` sigue mostrando ese cuerpo, no
+    el del personaje que lo va a llevar.
+  - **Monstruos y NPCs** mandan su aspecto en cada `Creature` (unos 100 B más por humanoide
+    al aparecer, docs/07); si algún día un monstruo recoge equipo, `CreatureLook` ya sirve
+    (hoy solo se manda para jugadores).
+  - **La figura del formulario y de la ventana** se dibuja con un canvas 2D desde el atlas
+    (`render/look-preview.ts`), no con Pixi: el tinte es el mismo multiply, pero no hay
+    sombra del motor (la elipse es CSS) ni el color de la tienda sobre la ropa.
 - **Humanoides del motor con el equipo a la vista (hecho, rama `feat/humanoid-art`, lote 13;
   docs/17 "Humanoides del motor", docs/06 "Looks", docs/07 "Atlas con los humanoides del
   motor"):** jugadores, NPCs y monstruos humanoides dejaron de ser personajes de LPC: son un
@@ -115,7 +145,7 @@ el punto 5:
   de la pila contra el modelo dibujado como una figura), un muñeco se desvanece entero (al
   aparecer, caer o ser invisible ya no se ven unas capas a través de otras), girar en medio de
   una caminata no hace saltar las piernas, y el ataque a distancia de otro jugador vuelve a
-  disparar (su arma no llega todavía). Queda:
+  disparar. Queda:
   - **Mirarlo en el juego** (la verificación final del lote): el jugador propio con su equipo
     y cambiándolo, un NPC de cada isla, el saqueador y el contrabandista peleando (el ataque
     con su arma), un paso largo en las cuatro direcciones sin pies que patinen ni pausas,
@@ -128,9 +158,8 @@ el punto 5:
     personas que estén a la vista) y `33-bosque-druid` (Velia Musgo, la druida: su `look`
     en el mapa y su retrato quieto en el diálogo). Ninguna de esas captura una caída ni un
     ataque a distancia: eso queda para la prueba a mano.
-  - **Los otros jugadores** se ven con la ropa de su atuendo, sin su equipo ni su aspecto:
-    lo manda la red en `feat/character-look` (que se arma sobre esta rama; el cliente ya
-    tiene `Look` y `wornFromEquipment` para eso).
+  - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
+    jugador se ve con su aspecto y su equipo.
   - **La silueta translúcida** (detrás de un muro, o tapado por otra criatura) muestra solo
     el cuerpo, sin ropa ni arma.
   - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con

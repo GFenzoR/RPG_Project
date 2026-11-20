@@ -466,6 +466,18 @@ server/
   `World.CosmeticsChanged` (con `Seq` = id del ledger). Ninguna regla del juego puede leer
   `Player.cos` (lo vigila `TestCosmeticsDoNotChangeCombat`).
 
+- **Apariencia (`session/look.go`, `content/looks.go`, docs/05 "Apariencia y equipo
+  visible"):** el cuerpo de un jugador (`Player.look`, `characters.look_*`) se valida contra
+  `data/looks.yaml` (`Looks.PlayerLook`) al crear (auth), al entrar (`loadLook`: uno inválido
+  o vacío pasa a `DefaultLook` del id) y en `SetLook` (anti-flood `lookFlood`). Lo que ven los
+  demás de su equipo sale de `equipmentChanged` → `showEquipment`, que compara los ids de los
+  slots visibles (`shownSlots`) y manda `CreatureLook` por `eachWatcher` si cambiaron y el
+  jugador ya está en el mundo: **todo camino que cambie un slot de equipo tiene que terminar
+  en `equipmentChanged`** (ya lo hacen mover, usar, la muerte, la forja, el intercambio, el
+  mercado y las tiendas). `Player.lookMsg`/`equipMsg` y el `creatureLookMsgs` de cada
+  `monsterKind` y NPC se arman una vez y se comparten entre `Creature`s (nunca se modifican
+  después de emitidos). Ninguna regla del juego lee el aspecto.
+
 - **Islas y acciones de desarrollo (Isla de Pruebas, `docs/16`):**
   - Una isla `dev_only` de `world.yaml` solo entra a `world.bin` con `mapcompile -dev`, marcada con el bit dev de la isla (`world.bin` v6, `Map.DevIslands`).
   - `loadWorld` (`cmd/gameserver`) no arranca un mundo con islas dev si `RPG_ENV` es de producción, con la misma lectura que el proveedor de pagos falso.

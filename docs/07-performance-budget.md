@@ -612,6 +612,38 @@ cada 3 s suma ≤ 0,65 KB/s, lejos de los 4 KB/s (la base de `TestCrowdBandwidth
   día, mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo
   con `TestCrowdBandwidth` con tareas activas.
 
+### Aspecto y equipo visible (lote 13, 2026-11-19)
+Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el
+de un jugador, los ids de sus slots visibles (`VisibleEquipment`), y el de un NPC o un
+monstruo, sus piezas (`Worn`, forma y tinte por lugar). Un `CreatureLook` (unos 50 B) va a
+quien conoce al jugador solo cuando cambian el cuerpo (`SetLook`, con el anti-flood de
+`looks.yaml`) o un slot visible: nunca por paso. Medido con `TestCrowdBandwidth` (que corre
+con los datos reales: los bots entran sin aspecto y reciben el de su id) y `go test
+-bench`, antes (`feat/humanoid-art`) y después en la misma sesión, mismo notebook, Windows
+nativo:
+
+| Métrica | Antes | Con el aspecto | Presupuesto |
+|---|---|---|---|
+| Salida por jugador, base 100 (B/s) | 586 | 612 (+4,4 %) | < 4096 |
+| Salida por jugador, stress 300 (B/s) | 1515 | 1629 (+7,5 %) | < 4096 |
+| `BenchmarkCrowdTick` base (µs / asignaciones) | 106 / 321 | 106 / 321 | |
+| `BenchmarkCrowdTick` stress (µs / asignaciones) | 846 / 949 | 879 / 947 | |
+
+- **Sin asignaciones nuevas en el tick:** el `BodyLook` y el `VisibleEquipment` de un
+  jugador se arman cuando cambian (`Player.lookMsg`, `equipMsg`) y cada `Creature` apunta a
+  ellos; los de un NPC o un monstruo, una vez por definición al arrancar. Un mensaje no se
+  toca después de emitido, así que compartirlos es seguro (docs/05, "Vista").
+- **Cuánto pesa:** un jugador con cuerpo y seis piezas suma ~50 B a su `Creature`; un
+  monstruo humanoide con cinco piezas, ~110 B. Solo al aparecer, en un `FullMapView` y en un
+  `MapSlice`: en stress (300 en el pueblo, todos se ven y entran y salen de la vista) eso es
+  el +7,5 %.
+- **Cliente:** la figura se rearma solo cuando sube `CreatureState.lookRev` (un número; antes
+  se comparaba un string de los cosméticos por criatura y por frame). La figura del
+  formulario y de la ventana Apariencia es un canvas 2D de 192x192 (o 144x144) que se
+  redibuja cada 110 ms solo mientras está abierta (con movimiento reducido, nunca), con un
+  canvas de trabajo de 64x64 reutilizado; no carga Pixi ni un atlas nuevo (lee el mismo
+  `/atlas/`, que el juego ya bajó o va a bajar).
+
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
 producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos

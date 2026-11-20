@@ -689,26 +689,59 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `release()`; opaco, sin filtro ni pasada de más). La invisibilidad del propio jugador
   (T3.2) es `CreatureBody.opacity` (0,4), no el alfa de su contenedor: el canvas lo pone
   antes de dibujarlo. Las copias translúcidas siguen `figure.alpha`.
-- `render/look.ts` (puro, con tests): `wornFromEquipment` (lo que muestra el equipo propio:
-  cada pieza con `worn` en su lugar, sin importar la mano), `dressPlayer` (la ropa del
-  atuendo por defecto llena lo vacío; un disfraz, `costume`, tapa torso, piernas y pies),
-  `wornKey` (la clave para rearmar al cambiar el equipo), `mulTint` y `dollSprites` (las
-  capas que apila `dollOf`, con el color de la tienda en la ropa del atuendo).
-- `game-canvas.ts` `personOf`: un jugador usa el `look` de su atuendo (y, el propio, su
-  `Inventory`, guardado por identidad del mapa: `ownEquipment`); un NPC o un monstruo, su
-  `content.npcLooks` / `monsterLooks`. Sin `content.looks` o sin el cuerpo en el atlas, el
-  camino de antes (el sprite del atuendo o del NPC, después el bloque). `drawnLook` del
-  propio suma `wornKey`: equiparse rearma la figura.
+- `render/look.ts` (puro, con tests): `wornFromVisible` (lo que muestran los slots visibles
+  de un jugador, ids que manda el servidor: cada pieza con `worn` en su lugar, sin importar
+  la mano), `dressPlayer` (la ropa del atuendo por defecto llena lo vacío; un disfraz,
+  `costume`, tapa torso, piernas y pies), `wornKey`, `mulTint` y `dollSprites` (las capas
+  que apila `dollOf`, con el color de la tienda en la ropa del atuendo).
+- `game-canvas.ts` `personOf` (rama `feat/character-look`): todo sale del servidor
+  (`CreatureState.look`, `equipment` y `worn`, `state/look.ts`): un jugador lleva los items
+  de sus slots visibles sobre la ropa de su atuendo; un NPC o un monstruo, las piezas de su
+  dato. Sin `look` (una bestia, o un servidor sin `data/looks.yaml`), o sin el cuerpo en el
+  atlas, el camino de antes (el sprite del atuendo o del NPC, después el bloque). El
+  contenido ya no trae `npcLooks` ni `monsterLooks`. La figura se rearma cuando cambia
+  `CreatureState.lookRev` (`drawnLook`, un número: sube con `CreatureLook`,
+  `CreatureCosmetics`, el `CosmeticsState` propio y cada vez que la criatura reaparece).
 - El ataque de un muñeco elige el clip por el arma que lleva (`attackActionOf` →
   `figureAttack` de `render/creature-events.ts` → `attackActionFor`: arco y ballesta
   `shoot`, varita y vara `cast`, un hechizo `cast`, el resto `attack`), si se sabe qué
-  lleva (`CreatureSprite.held`: el look de un NPC o un monstruo, el equipo propio). De otro
-  jugador no se sabe todavía: su ataque juega el clip de su tipo (`attackAction`), así uno a
-  distancia dispara en vez de pegar un puñetazo. Caminar usa `perTileNS` mirando al norte o
+  lleva (`CreatureSprite.held`: lo que tiene en la mano cualquier muñeco, también otro
+  jugador). Un cuerpo que no es muñeco juega el clip de su tipo (`attackAction`). Caminar usa `perTileNS` mirando al norte o
   al sur (la regla de la zancada, `anim.ts`); la fase se cuenta en frames, así girar en
   medio de una caminata no hace saltar las piernas.
-- Hasta que `feat/character-look` mande el aspecto y el equipo de cada jugador, los demás se
-  ven con su atuendo (cuerpo y ropa), sin equipo; esa rama llena su `held`.
+
+## Personalización (rama `feat/character-look`, lote 13; docs/02 "Apariencia")
+- `state/look.ts` (puro, con tests): `lookView`, `equipmentView` y `wornView` leen el
+  `Creature` y el `CreatureLook` del protocolo; `startingLook`, `randomLook` y `choosable`
+  sobre las elecciones de `content.lookOptions` (de `data/looks.yaml`, en orden y sin las
+  pieles `creatures_only`: `vite/content.ts` `loadLookOptions`).
+- `ui/LookPickers.tsx` (sin hooks, `ui/LookPickers.test.ts`): un `fieldset` por parte
+  (cuerpo, piel, peinado, color de pelo, barba); los estilos con su nombre
+  (`appearance.<parte>.<id>`, armado en tiempo de ejecución: `make validate` no lo revisa,
+  lo revisa `vite/content.test.ts`), los colores como muestras con `aria-label`. Cada botón
+  lleva `data-look="<campo>:<id>"` y `aria-pressed`; el elegido no manda nada.
+- `ui/LookPreview.tsx` (con hooks) + `render/look-preview.ts` (puro, con tests): la figura en
+  vivo, sin Pixi. Lee `/atlas/` una vez (`loadPreviewAtlas`, solo los frames `humans/` y
+  `worn/` con su recorte), apila las capas con `lookLayers` y las dibuja en un canvas 2D
+  (`drawDoll`: cada una en un canvas de trabajo, multiply con su tinte y `destination-in`
+  para recortarla) a escala entera, solo la ventana de 48x48 del frame donde se dibuja
+  (`PREVIEW_VIEW`). Camina en el lugar (110 ms por frame; quieto con movimiento reducido) y
+  gira con ‹ › (`turn`, `TURN_ORDER`). Test ids: `look-preview` (o el `testid` que se le
+  pase), `look-turn-left`, `look-turn-right`.
+- **Crear personaje** (`ui/App.tsx` `Characters`): `create-look` con la figura (la ropa de
+  `citizen`), los selectores y "Al azar" (`look-random`); empieza en el cuerpo de `citizen`.
+  `api.createCharacter(name, vocation, look)` manda `look` en snake_case.
+- **Apariencia → Personalizar** (`ui/Appearance.tsx` `Customize`, sin hooks): el borrador
+  vive en el `Game` (`setLookDraft`, `GameUi.lookDraft`); `GameUi.look` y `selfEquipment`
+  son los del servidor. "Guardar aspecto" (`look-apply`) manda `SetLook`
+  (`Game.applyLook`), "Deshacer" (`look-revert`) suelta el borrador; volver a elegir el
+  aspecto que se tiene también. La figura lleva lo que se lleva puesto, menos la pieza de
+  cabeza (taparía el pelo que se elige). Las respuestas del servidor son
+  `appearance.invalid` / `appearance.unavailable` (no `look.*`: esos son de "mirar", rutina
+  que no flota).
+- Hook E2E: `__rpgClient.players()` trae `look` y `equipment` de cada jugador que se ve.
+- Vista previa: escenas `characters` (el formulario con la figura) y `appearance` (la
+  ventana con un borrador sin guardar) de `make ui-preview`.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
@@ -1139,8 +1172,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - Canvas: `render/cosmetics.ts` (puro, con tests) decide el atuendo (`outfitFor`, con
   citizen si no hay), el tinte multiplicado del sprite (`tintFor`) y el estilo del nombre
   (`nameStyleFor`, se mezcla en el `TextStyle`). `outfitReady` se calcula y guarda por
-  atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambia el `lookKey`
-  de un jugador, se tiran sus sprites y se arman de nuevo.
+  atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambian sus
+  cosméticos (`CreatureState.lookRev`), se tiran los sprites de un jugador y se arman de
+  nuevo.
 - Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Es la
   ventana Apariencia de la botonera en escritorio y una pestaña más en teléfonos
   (`appearance` en `PANEL_TABS`). Muestra por tipo lo

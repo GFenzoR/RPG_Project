@@ -46,7 +46,10 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
 ## 2. Cuenta y personaje
 1. En `http://localhost:5173/play/`, "¿No tienes cuenta? Regístrate": cualquier email y una
    contraseña de 8 caracteres o más. Sin SMTP no se verifica nada.
-2. Entra, crea un personaje (nombre y vocación) y pulsa "Jugar".
+2. Entra, crea un personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de
+   pelo y barba, con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar"
+   elige todo) y pulsa "Jugar". El aspecto se cambia después gratis en la ventana
+   Apariencia (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
 3. Despiertas en el templo de la Isla de Pruebas (2095,2086). Aquí no hay tutorial: es
    de Puerto.
 
@@ -297,6 +300,11 @@ cuentas sin rol.
 4. **PvP abierto:** fuera de la arena y de la plaza. Desactiva el modo seguro (botón
    "Modo seguro" del cliente) y ataca: quien ataca sin motivo recibe la marca de agresor.
    `/unskull Nombre` (con una tercera cuenta GM) la quita.
+5. **Lo que ve el otro** (lote 13): con las dos ventanas lado a lado, equipa y saca un arma,
+   un escudo o un casco en una: la otra lo ve en la figura en el acto (también al romper
+   una pieza en el yunque o al morir y soltarla). Cambia el aspecto en Apariencia →
+   Personalizar y guárdalo: la otra lo ve al instante. Un ataque a distancia del otro
+   dispara con su arco o su ballesta; uno con varita o vara, conjura.
 
 ## 7. Apagar todo
 1. `Ctrl+C` en la terminal de `make play` (corta el servidor y Vite).

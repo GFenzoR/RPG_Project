@@ -121,7 +121,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/login` | — | `{email, password, token_in_body?}` | `200 {expires_at, token?}` + cookie |
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
-| `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
+| `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
@@ -133,6 +133,12 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/verify/resend` | token | `{lang?}` | `202`; `409 already_verified`, `404 email_disabled`, `429` |
 | `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
 | `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
+
+`POST /api/characters` acepta `look` (docs/02 "Apariencia", lote 13): `{body, skin, hair,
+hair_color, beard}`, ids de `data/looks.yaml` que un jugador puede elegir (nunca una piel
+`creatures_only`); uno que no lo es responde `400 invalid_look`. Sin `look` (bots,
+clientes viejos, los E2E que crean por la API) el personaje queda sin aspecto guardado y
+el juego le da el que sale de su id al entrar ("Apariencia y equipo visible").
 
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
 cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
@@ -359,7 +365,7 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_disabled` | 403 | Cuenta deshabilitada |
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
-| `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
+| `invalid_name` / `invalid_vocation` / `invalid_look` | 400 | Creación de personaje inválida |
 | `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
@@ -884,6 +890,44 @@ ninguna regla del juego lee los cosméticos.
 - Lo equipado se guarda con el personaje (`characters.outfit`, `outfit_color`,
   `name_effect`) en el siguiente guardado, como todo lo demás; al entrar, lo que la cuenta
   ya no tiene o que salió del catálogo se descarta.
+
+### Apariencia y equipo visible (lote 13, `server/internal/session/look.go`)
+Todo humanoide del motor (jugadores, NPCs que son personas, monstruos humanoides; docs/17
+"Humanoides del motor") se dibuja con un cuerpo (`BodyLook`) y lo que lleva encima. Solo
+cambia lo que se dibuja: ninguna regla del juego lee el aspecto.
+- **`BodyLook{body, skin, hair, hair_color, beard}`** (`common.proto`): ids de
+  `data/looks.yaml` (`builds`, `skins`, `hair_styles`, `hair_colors`, `beards`).
+- **`Creature.look`** (campo 13): el cuerpo de un jugador (el suyo), de un NPC o de un
+  monstruo humanoide (el de su `look` de `data/`). Vacío para una bestia o con un servidor
+  sin `data/looks.yaml`.
+- **`Creature.equipment`** (campo 14, `VisibleEquipment{head, torso, legs, feet,
+  left_hand, right_hand}`): solo jugadores; el id numérico (`data/ids.lock.yaml`) del item
+  de cada slot que se ve en la figura, 0 = vacío. Nunca el amuleto, el anillo, la mochila
+  ni la munición, ni nada de adentro de un contenedor. El cliente dibuja el `worn` de cada
+  item (`data/items`); uno sin `worn` no se ve.
+- **`Creature.worn`** (campo 15, `Worn{head, torso, legs, feet, shield, weapon}` de
+  `WornPiece{shape, tint}`): solo NPCs y monstruos, las piezas de su `look.worn` (no son
+  items). Un mensaje por definición, compartido por cada `Creature` de ella.
+- **`CreatureLook{id, look, equipment}`** (`ServerMessage` 46): cambió el cuerpo o lo que
+  muestra un jugador; los dos campos son el estado entero. Va a quienes lo conocen (él
+  incluido; `eachWatcher`, las reglas de AOI de los demás mensajes de criaturas: un
+  invisible solo a sí mismo) cuando cambia el cuerpo (`SetLook`) o el item de un slot
+  visible: equiparse, sacarse algo, una pieza que se gasta o se rompe en la forja, lo que
+  cae al morir, lo que se vende o se intercambia. Todo pasa por `equipmentChanged`, que
+  compara los ids de los slots visibles con los últimos mandados: mover algo dentro de la
+  mochila o cambiar el anillo no manda nada. Quien entra en la vista después recibe el
+  estado en el `Creature` de su `CreatureAppear`, `FullMapView` o `MapSlice`.
+- **`SetLook{look}`** (`ClientMessage` 37): cambia el cuerpo propio, gratis y en cualquier
+  momento (la ventana Apariencia → Personalizar). Cada id tiene que ser una elección de
+  jugador; si no → `Message` de sistema `appearance.invalid` y un `CreatureLook` solo al
+  jugador con el aspecto que conserva. El mismo aspecto no manda nada. Anti-flood:
+  `limits` de `data/looks.yaml` (ráfaga de 6, después 1 cada 1,5 s); lo que pasa se
+  descarta sin aviso. Sin `data/looks.yaml` en el servidor → `appearance.unavailable`.
+- **Guardado:** `characters.look_*` (migración 00021), con el siguiente guardado, como
+  todo lo demás. Al entrar, un aspecto vacío (los personajes de antes de la migración) o
+  que ya no es una elección de `data/looks.yaml` se reemplaza por el que sale del id del
+  personaje (`content.DefaultLook`: siempre el mismo para el mismo id y las mismas listas)
+  y se guarda así: un cambio posterior de las listas no lo cambia.
 
 ### Reportes de jugadores (T4.1, `server/internal/session/report.go`)
 Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
@@ -1459,6 +1503,7 @@ dice que el servidor los manda.
 | `MarketUpdate` | La ventana del mercado, o su cierre (T5.3) |
 | `HouseUpdate` | La ventana de una casa, o su cierre (T5.4) |
 | `CreatureCosmetics` | Cambiaron los cosméticos equipados de un jugador visible (T5.7) |
+| `CreatureLook` | Cambió el cuerpo o el equipo visible de un jugador que se conoce ("Apariencia y equipo visible") |
 | `CosmeticsState` | Cosméticos de la cuenta, saldo premium y lo equipado (T5.7) |
 | `WalkRejected` | El cliente corrige su predicción: posición, paso rechazado y época nueva de la caminata (`walk_epoch`) |
 | `Pong`, `Disconnect` | |
@@ -1558,3 +1603,7 @@ prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por P
 `FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B). Los eventos de ataque y
 los motivos de A9 suben eso a 532 y 1684 B/s (`07-performance-budget.md`, "Eventos de
 ataque"): un `CreatureAttack` pesa unos 23 B por cliente que lo recibe y un motivo, 2 B.
+El aspecto (lote 13, `07-performance-budget.md` "Aspecto y equipo visible") suma a cada
+`Creature` humanoide unos 35–45 B (`BodyLook`; un monstruo o un NPC, además sus piezas) y
+a uno que lleva equipo unos 10–20 B (`VisibleEquipment`); solo al aparecer o al cambiar,
+nunca por paso.
