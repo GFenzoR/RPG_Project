@@ -1,38 +1,57 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/borders.schema.json",
-  "title": "Autoborder rules (data/borders.yaml)",
-  "description": "When ground 'from' touches ground 'to', the border pieces are stacked on the 'to' tiles. Higher priority rules are drawn on top.",
-  "type": "array",
-  "items": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": ["id", "from", "to", "pieces"],
-    "properties": {
-      "id": { "$ref": "common.schema.json#/$defs/id" },
-      "from": { "$ref": "common.schema.json#/$defs/itemRef" },
-      "to": { "$ref": "common.schema.json#/$defs/itemRef" },
-      "priority": { "type": "integer" },
-      "pieces": {
+  "title": "Ground transitions (data/borders.yaml)",
+  "description": "The ladder of natural grounds, bottom to top. A ground with pieces draws its fringe (its texture with an irregular edge) over every lower ground of the ladder it touches, or only over those in 'over'. Its twelve piece items are <pieces>_<piece>. The shore's surf goes over the fringes on its water grounds.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ladder"],
+  "properties": {
+    "ladder": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["n", "s", "e", "w", "ne", "nw", "se", "sw"],
+        "required": ["ground"],
         "properties": {
-          "n": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "s": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "e": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "w": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "ne": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "nw": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "se": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "sw": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "inner_ne": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "inner_nw": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "inner_se": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "inner_sw": { "$ref": "common.schema.json#/$defs/itemRef" }
+          "ground": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "pieces": {
+            "description": "Prefix of the twelve piece items <pieces>_n, _e, _s, _w, _nw, _ne, _se, _sw, _inner_nw, _inner_ne, _inner_se, _inner_sw.",
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "edge": {
+            "description": "How tools/spritepack gen-borders draws the edge of the fringe (docs/17 ART-4).",
+            "enum": ["plain", "tufts", "pebbles", "clods", "joint", "wet", "crust", "drift"]
+          },
+          "over": {
+            "description": "Only over these lower grounds of the ladder (default: every lower one).",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "common.schema.json#/$defs/itemRef" }
+          },
+          "notes": { "$ref": "common.schema.json#/$defs/notes" }
         }
-      },
-      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+      }
+    },
+    "shore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["water", "pieces"],
+      "properties": {
+        "water": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/itemRef" }
+        },
+        "pieces": {
+          "description": "Prefix of the twelve surf piece items <pieces>_<piece>.",
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "notes": { "$ref": "common.schema.json#/$defs/notes" }
+      }
     }
   }
 }

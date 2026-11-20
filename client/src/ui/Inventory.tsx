@@ -7,14 +7,18 @@
 //
 // Items are dragged with the pointer (Game.pressItem) and dropped on a slot, a container
 // cell or the map; while one is dragged or picked, the slots that take it glow and the
-// others tint red under the pointer (slotAccepts). Shift+click looks at an item and
+// others tint red under the pointer (slotDrop; the backpack slot takes anything, into the
+// backpack or, without one, the pockets). Shift+click looks at an item and
 // shift+drag moves part of a stack (it asks how many where it is dropped). Every other open
 // container is a window of its own on the desktop (ContainerView in a GameWindow); on
 // tablets and phones they stay under the equipment. An empty slot shows what it takes
 // (ui/slots/<slot>, own pixel art). A right click opens an item's menu with its card (or
 // uses it, in the classic controls: Game.itemContextMenu), a double click does its default
 // action (open, use with, eat, equip, use) and hovering shows its card (ui/ItemTooltip.tsx
-// reads data-tip-item). The server validates every move: this UI only shows what it says.
+// reads data-tip-item). Under the figure, above the backpack, the character's own pockets
+// (docs/02 "Bolsillos"): a row of cells that are part of it, never an item, with the same
+// drag and drop, menu and card. The server validates every move: this UI only shows what it
+// says.
 import { EquipmentSlot } from "@rpg/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
@@ -31,10 +35,11 @@ import {
   dollCell,
   dollSize,
   iconScale,
-  slotAccepts,
   slotBox,
+  slotDrop,
 } from "../state/equipment.ts";
 import { formatOz } from "../state/items.ts";
+import { pocketCells, pocketRef } from "../state/pockets.ts";
 import type { ItemRef } from "../state/items.ts";
 import type { ContainerState, ItemView } from "../state/world.ts";
 import { iconStyle } from "./ItemCard.tsx";
@@ -145,7 +150,7 @@ export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX
                 data-drop="slot"
                 data-slot={slot}
                 data-testid={`slot-${key}`}
-                data-accepts={held ? (slotAccepts(heldDef, slot) ? "yes" : "no") : undefined}
+                data-accepts={held ? slotDrop(heldDef, slot) : undefined}
                 // The slot's name while it is empty (its item names itself, and its card shows).
                 title={item ? undefined : t(`client.inventory.slot.${key}`)}
                 style={style}
@@ -170,6 +175,7 @@ export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX
           })}
         </div>
       </div>
+      <PocketsRow t={t} content={content} game={game} ui={ui} />
       {ui.backpack && (
         <ContainerView t={t} content={content} game={game} ui={ui} container={ui.backpack} docked />
       )}
@@ -179,6 +185,53 @@ export function InventoryPanel({ t, content, game, ui, containers }: Props): JSX
           <ContainerView key={c.id} t={t} content={content} game={game} ui={ui} container={c} />
         ))}
     </section>
+  );
+}
+
+/**
+ * The character's pockets (docs/02 "Bolsillos"): a row of its built-in cells under the
+ * figure, above the docked backpack. Each cell is a drop target (`data-drop="pocket"`, the
+ * ItemLocation.pocket of the cell) and its item has the menu, the card and the drag of any
+ * other. Nothing before the first Inventory (no cells).
+ */
+export function PocketsRow(props: {
+  t: Translate;
+  content: ClientContent;
+  game: Game | undefined;
+  ui: GameUi;
+}): JSX.Element | null {
+  const { t, content, game, ui } = props;
+  const cells = pocketCells(ui.pockets);
+  if (cells.length === 0) return null;
+  const title = t("client.inventory.pockets");
+  return (
+    <div class="pockets" data-testid="pockets" role="group" aria-label={title}>
+      <header>
+        <span>{title}</span>
+      </header>
+      <div class="cells" style={{ "--pocket-cells": String(cells.length) }}>
+        {cells.map((item, i) => (
+          <div
+            key={i}
+            class="slot"
+            data-drop="pocket"
+            data-index={i}
+            data-testid={`pocket-${i}`}
+            // An empty cell names itself (its item names itself, and its card shows).
+            title={item ? undefined : t("client.inventory.pocket")}
+          >
+            <ItemCell
+              t={t}
+              content={content}
+              game={game}
+              item={item}
+              picked={ui.picked}
+              itemRef={(it) => pocketRef(it, i)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

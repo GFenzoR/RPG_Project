@@ -14,7 +14,7 @@ func TestPlayToken(t *testing.T) {
 	svc, _, clk := newService(t)
 	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
 	other, _ := svc.Register(ctx, "bob@example.org", "secreto123")
-	c, err := svc.CreateCharacter(ctx, acc, "Mira", "guardian")
+	c, err := svc.CreateCharacter(ctx, acc, "Mira", "guardian", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

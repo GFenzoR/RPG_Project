@@ -46,7 +46,10 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
 ## 2. Cuenta y personaje
 1. En `http://localhost:5173/play/`, "¿No tienes cuenta? Regístrate": cualquier email y una
    contraseña de 8 caracteres o más. Sin SMTP no se verifica nada.
-2. Entra, crea un personaje (nombre y vocación) y pulsa "Jugar".
+2. Entra, crea un personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de
+   pelo y barba, con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar"
+   elige todo) y pulsa "Jugar". El aspecto se cambia después gratis en la ventana
+   Apariencia (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
 3. Despiertas en el templo de la Isla de Pruebas (2095,2086). Aquí no hay tutorial: es
    de Puerto.
 
@@ -100,8 +103,9 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    nivel 10, que deja usar escudo; druida: vara de retoño), ropa (la del kit inicial y,
    desde el nivel 15, la túnica de musgo para todos y el abrigo de cuero de ciervo para
    guardián y montaraz: el catálogo de docs/02), la llave de latón y una mochila
-   de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
-   servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
+   de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver, con
+   lo que llevaban los bolsillos, y ya no te dan otra: ver **Bolsillos**, abajo). Prueba
+   también vender (compra pescado, mineral, troncos,
    lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego. Vende
    también lo de la forja: las tres piedras de temple y el **ámbar de resguardo** (3000;
    en el juego real ningún NPC lo vende: aquí está para probar la forja, punto 4b).
@@ -223,9 +227,19 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    que trae (5 monedas de plata, 2 piedras de temple menores, 2 brebajes de vida y una
    espada de hierro, con su atributo al azar: pasa el mouse por ella); úsalo otra vez: "El cofre está vacío".
    Cada personaje lo abre una vez: para repetirlo, crea otro. Para probar que no da nada
-   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías)
-   y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera lugar y vuelve a
-   usarlo. Los libros y cofres de las islas de verdad están en la tabla de docs/02.
+   sin lugar, llena la mochila antes (las 24 casillas, por ejemplo con piezas de Tobías) y
+   los 4 bolsillos, y úsalo: "No te cabe lo que hay en el cofre", nada en el suelo; libera
+   lugar y vuelve a usarlo. Los libros y cofres de las islas de verdad están en la tabla de
+   docs/02.
+   - **Bolsillos (docs/02 "Bolsillos", lote 13):** bajo la figura del inventario, arriba de
+     la mochila, está la fila **Bolsillos**: cuatro casillas del personaje, que nunca se
+     pierden ni se mueven. Arrastra algo a una, úsalo o míralo desde ahí, véndelo en el
+     mercado u ofrécelo en un intercambio. Con la mochila llena, lo que compras, lo que te
+     dan y lo que arrastras al slot de la mochila va a los bolsillos. Para ver la regla de
+     la muerte: sin bendiciones y desde el nivel 9 (la experiencia de la instructora), muere
+     con algo en los bolsillos; despiertas sin mochila y con los bolsillos vacíos, y todo
+     está en tu cadáver. Con los bolsillos te alcanza para juntar monedas y comprar otra
+     mochila a Tobías.
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. Con un equipo (una espada de hierro), el formulario pide **cuál**
    vender (un selector por atributo) y la oferta sale con su atributo en el listado; una
@@ -286,6 +300,11 @@ cuentas sin rol.
 4. **PvP abierto:** fuera de la arena y de la plaza. Desactiva el modo seguro (botón
    "Modo seguro" del cliente) y ataca: quien ataca sin motivo recibe la marca de agresor.
    `/unskull Nombre` (con una tercera cuenta GM) la quita.
+5. **Lo que ve el otro** (lote 13): con las dos ventanas lado a lado, equipa y saca un arma,
+   un escudo o un casco en una: la otra lo ve en la figura en el acto (también al romper
+   una pieza en el yunque o al morir y soltarla). Cambia el aspecto en Apariencia →
+   Personalizar y guárdalo: la otra lo ve al instante. Un ataque a distancia del otro
+   dispara con su arco o su ballesta; uno con varita o vara, conjura.
 
 ## 7. Apagar todo
 1. `Ctrl+C` en la terminal de `make play` (corta el servidor y Vite).

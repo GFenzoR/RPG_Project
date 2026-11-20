@@ -1,6 +1,16 @@
 id: bosque_merchant
 name: npc.bosque_merchant.name
-sprite: npcs/tanner
+sprite: npcs/bosque_merchant
+look:
+  body: sturdy
+  skin: tan
+  hair: curly
+  hair_color: brown
+  beard: none
+  worn:
+    torso: { shape: leather, tint: hide }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: tar }
 notes: >-
   Tanner and outfitter of Raigal: the forest gear (levels 12-16), elm work and broth, tools
   for the elm grove, and she buys the island's hunting materials at about a third of their

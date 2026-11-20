@@ -8,14 +8,22 @@
 //        with item icons among them, also icons.slots.png (each in an inventory slot at 2x
 //        and 1x and on grass, a row per line of the catalog) and icons.detail.png (at 4x);
 //        with town props among them, also town.floors.png (each on every floor of the towns,
-//        beside an LPC person, at 1x shown 2x)
-import { mkdirSync, writeFileSync } from "node:fs";
+//        beside a person, at 1x shown 2x); with the engine humanoid's layers among
+//        them (humans/, worn/), humanoid.<look>.sheet.png (every frame of a composed look)
+//        and humanoid.lineup.png (the looks at 1x and 2x on the tile grid beside the boar,
+//        the stag and, with --ref FILE.png, a reference person such as the old LPC one)
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { encodePng, scaleImage } from "@rpg/spritepack";
+import { decodePng, encodePng, parseYaml, scaleImage } from "@rpg/spritepack";
 import { engineProblems } from "./engine/check.ts";
 import { contactSheet, floorBoard, iconBoard, reviewLineup } from "./engine/sheet.ts";
 import { ENGINE_SPECS } from "./engine/specs/index.ts";
+import { BOAR } from "./engine/specs/boar.ts";
+import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
+import { lookTables } from "./engine/specs/humanoid/previews.ts";
+import { humanoidLineup, lookSheet, REVIEW_LOOKS } from "./engine/specs/humanoid/review.ts";
+import { STAG } from "./engine/specs/stag.ts";
 import { ICON_ROWS } from "./engine/specs/items/index.ts";
 import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
 import { buildSprites, checkPaths, previewPng, recipePaths } from "./index.ts";
@@ -27,6 +35,7 @@ const { positionals, values } = parseArgs({
     only: { type: "string" },
     out: { type: "string" },
     scale: { type: "string", default: "4" },
+    ref: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -60,7 +69,10 @@ if (command === "build") {
     console.error("sheet needs an integer --scale >= 1 and engine sprites under --only");
     process.exit(2);
   }
+  const layers = new Set(HUMANOID_LAYERS.map((l) => l.sprite));
   for (const spec of specs) {
+    // The paper doll's layers are judged composed (below), not one by one.
+    if (layers.has(spec.sprite)) continue;
     const base = join(out, spec.sprite);
     mkdirSync(dirname(base), { recursive: true });
     writeFileSync(`${base}.sheet.png`, encodePng(contactSheet(spec, scale)));
@@ -78,7 +90,21 @@ if (command === "build") {
     writeFileSync(join(out, "icons.detail.png"), encodePng(iconBoard(root, rows, true)));
     console.log(`spritegen: ${join(out, "icons.slots.png")} and icons.detail.png`);
   }
-  // Town props: every selected one on each floor of the towns, beside an LPC person.
+  // The engine humanoid: composed looks, their sheets and the lineup.
+  if (specs.some((s) => layers.has(s.sprite))) {
+    const tables = lookTables(parseYaml(readFileSync(join(root, "data/looks.yaml"), "utf8")));
+    mkdirSync(out, { recursive: true });
+    for (const look of REVIEW_LOOKS) {
+      const file = join(out, `humanoid.${look.name}.sheet.png`);
+      writeFileSync(file, encodePng(lookSheet(look, tables, scale)));
+      console.log(`spritegen: ${file}`);
+    }
+    const ref = values.ref ? decodePng(readFileSync(resolve(values.ref))) : undefined;
+    const file = join(out, "humanoid.lineup.png");
+    writeFileSync(file, encodePng(humanoidLineup(root, REVIEW_LOOKS, tables, [BOAR, STAG], ref)));
+    console.log(`spritegen: ${file}`);
+  }
+  // Town props: every selected one on each floor of the towns, beside a person.
   const town = TOWN_PROPS.filter((s) => chosen.has(s.sprite));
   if (town.length > 0) {
     const file = join(out, "town.floors.png");

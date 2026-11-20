@@ -44,7 +44,7 @@ const content: ContentIndex = {
   monsters: new Set(),
   npcs: new Set(),
   i18n: new Map(),
-  borders: [],
+  borders: { ladder: [] },
   routes: [],
 };
 

@@ -1,6 +1,15 @@
 id: puerto_priest
 name: npc.puerto_priest.name
-sprite: npcs/priestess
+sprite: npcs/puerto_priest
+look:
+  body: slender
+  skin: pale
+  hair: long
+  hair_color: blond
+  beard: none
+  worn:
+    torso: { shape: robe, tint: white }
+    feet: { shape: shoes, tint: ochre }
 notes: >-
   Temple of the Lantern (respawn point of the island). Sells the five blessings
   (balance.yaml death.max_blessings) for 50 coins plus 20 per level of the buyer each

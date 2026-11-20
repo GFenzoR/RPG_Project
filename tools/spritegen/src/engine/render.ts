@@ -51,6 +51,11 @@ const TONE_INDEX: Record<Tone | "glint", number> = {
   outline: OUTLINE_T,
 };
 
+/** What a part does in a frame of a paper-doll layer (spec.layer). */
+const SKIP = 0;
+const DRAW = 1;
+const OCCLUDE = 2;
+
 /** How far behind the surface a mark may be and still show (px of view depth). */
 const MARK_TOLERANCE = 1.5;
 /** Rays start this far south of the model (any point south of every part works). */
@@ -174,6 +179,13 @@ export function renderSpec(
     dir = ref.dir;
   }
   const transforms = partTransforms(spec, pose, dir);
+  // A paper-doll layer (spec.layer): its own parts give pixels (DRAW); the occluders are cast
+  // and hide what is behind them but stay transparent (OCCLUDE); the rest is left out.
+  const drawn = spec.layer ? new Set(spec.layer.draw) : undefined;
+  const hiders = spec.layer?.occlude ? new Set(spec.layer.occlude) : undefined;
+  const role = spec.parts.map((p) =>
+    !drawn || drawn.has(p.name) ? DRAW : !hiders || hiders.has(p.name) ? OCCLUDE : SKIP,
+  );
 
   const n = w * h;
   const depth = new Float64Array(n).fill(Infinity);
@@ -186,7 +198,7 @@ export function renderSpec(
   // 1. Cast: the nearest surface of every part's shapes at each pixel.
   spec.parts.forEach((part, pi) => {
     const t = transforms[pi];
-    if (!t) return;
+    if (!t || role[pi] === SKIP) return;
     const dLocal = applyT(t.rot, D);
     part.shapes.forEach((shape, si) => {
       const [lo, hi] = shapeBounds(shape);
@@ -227,11 +239,15 @@ export function renderSpec(
     });
   });
 
-  // 2. Shade.
+  // 2. Shade. A layer's depth cue spans its occluders (the body), so every layer of a
+  // figure shades its depth like the body it is drawn on.
+  const occ = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (role[partOf[i] ?? -1] === OCCLUDE) occ[i] = 1;
+  const cueFromOccluders = occ.some((v) => v === 1);
   let dMin = Infinity;
   let dMax = -Infinity;
   for (let i = 0; i < n; i++) {
-    if ((partOf[i] ?? -1) < 0) continue;
+    if ((partOf[i] ?? -1) < 0 || (cueFromOccluders && !occ[i])) continue;
     const d = depth[i] ?? 0;
     if (d < dMin) dMin = d;
     if (d > dMax) dMax = d;
@@ -242,7 +258,7 @@ export function renderSpec(
   const fixed = new Uint8Array(n); // marks and glints: left alone by the cleanup
   for (let i = 0; i < n; i++) {
     const pi = partOf[i] ?? -1;
-    if (pi < 0) continue;
+    if (pi < 0 || occ[i]) continue;
     const part = spec.parts[pi];
     const shape = part?.shapes[shapeOf[i] ?? 0];
     if (!part || !shape) continue;
@@ -304,13 +320,15 @@ export function renderSpec(
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const pi = partOf[i] ?? -1;
-      if (pi < 0 || fixed[i]) continue;
+      if (pi < 0 || occ[i] || fixed[i]) continue;
       const creaseT = spec.parts[pi]?.glow ? glowCreaseT : TONE_INDEX[policy.crease];
       const di = depth[i] ?? 0;
       const near = (j: number, ok: boolean): boolean => {
         if (!ok) return false;
         const pj = partOf[j] ?? -1;
-        return pj >= 0 && pj !== pi && di - (depth[j] ?? 0) > CREASE_DEPTH;
+        // A layer's edge against what it is drawn over (a hem on the legs, a hairline on
+        // the forehead) is a crease at any depth: the layer gets the line, not the body.
+        return pj >= 0 && pj !== pi && (occ[j] === 1 || di - (depth[j] ?? 0) > CREASE_DEPTH);
       };
       if (
         near(i - 1, x > 0) ||
@@ -330,7 +348,7 @@ export function renderSpec(
         const i = y * w + x;
         const t = tone[i] ?? -1;
         if (t <= LIGHT_T || t > DEEP_T || fixed[i] || spec.parts[partOf[i] ?? -1]?.glow) continue;
-        const open = (j: number, ok: boolean): boolean => !ok || (tone[j] ?? -1) < 0;
+        const open = (j: number, ok: boolean): boolean => !ok || ((tone[j] ?? -1) < 0 && !occ[j]);
         if (open(i - 1, x > 0) || open(i - w, y > 0)) rimmed[i] = Math.max(LIGHT_T, t - RIM_LIGHT);
       }
     tone.set(rimmed);
@@ -339,7 +357,7 @@ export function renderSpec(
   // 5. Marks.
   spec.parts.forEach((part, pi) => {
     const t = transforms[pi];
-    if (!t) return;
+    if (!t || role[pi] !== DRAW) return;
     for (const mk of part.marks ?? []) {
       const p = toWorld(t, mk.at);
       const [u, v] = project(p);
@@ -356,6 +374,7 @@ export function renderSpec(
       tone[i] = TONE_INDEX[mk.tone ?? "deep"];
       mat[i] = PALETTE[mk.material ?? part.material];
       fixed[i] = 1;
+      occ[i] = 0;
     }
   });
 
@@ -375,7 +394,7 @@ export function renderSpec(
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if ((tone[i] ?? -1) >= 0) continue;
+      if ((tone[i] ?? -1) >= 0 || occ[i]) continue;
       // Shadow side first: the figure is to the left of or above this pixel.
       const sides: [number, boolean, boolean][] = [
         [i - 1, x > 0, true],

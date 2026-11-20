@@ -1,6 +1,14 @@
 id: drowned_miner
 name: monster.drowned_miner.name
-sprite: creatures/drowned_miner
+look:
+  body: sturdy
+  skin: drowned
+  hair: curly
+  hair_color: grey
+  beard: none
+  worn:
+    torso: { shape: tunic, tint: grey }
+    legs: { shape: trousers, tint: teal }
 health: 145
 experience: 150
 speed: 160

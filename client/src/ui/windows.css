@@ -11,10 +11,10 @@
      it like the windows: --bar-px is what it takes on screen. */
   --bar-h: 88px;
   --bar-px: calc(var(--bar-h) * var(--ui-zoom, 1));
-  /* The column of each orb, and the plaque over the life orb (the chat starts right of
-     it). */
+  /* The column of each orb, and the status tray over the life orb (the chat starts right
+     of it: neither covers the other at their factory places). */
   --orb-col: 112px;
-  --plaque-w: 132px;
+  --tray-w: 132px;
   --shop-cell: 4.5rem;
   --shop-w: calc(6 * var(--shop-cell) + 5 * 0.3rem + 1rem + 4px);
 }
@@ -76,28 +76,13 @@
     0 2px 0 #000;
   pointer-events: none;
 }
-/* A gothic crest over the middle of the band: a pinnacle between two smaller ones. */
-.hud-bar::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -22px;
-  width: 54px;
-  height: 34px;
-  transform: translateX(-50%);
-  background:
-    var(--orn-spire) 50% 0 / 18px 28px no-repeat,
-    var(--orn-spire) 0 12px / 14px 22px no-repeat,
-    var(--orn-spire) 100% 12px / 14px 22px no-repeat;
-  pointer-events: none;
-}
 .bar-centre {
   grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 8px 4px;
+  gap: 3px;
+  padding: 16px 8px 3px;
   /* Two iron pillars with a gold edge between the sockets and the middle. */
   background:
     linear-gradient(
@@ -295,42 +280,92 @@
     0 0 4px #000;
 }
 
-/* ---- The plaque over the life orb: conditions, name, level and experience ------------ */
-.vitals {
+/* ---- The status tray over the life orb (docs/17 "Bandeja de estados") ---------------
+   Left of the chat's factory place, over the orb's socket and its pinnacles; its rows grow
+   upward. The icons and their frames are client.css's (.status-*), at 2x here. A shown
+   tooltip lifts the bar over the windows' layer, so no window hides it. */
+.game[data-ui="windows"] .status-box {
+  --status-scale: 2;
   position: absolute;
   left: 6px;
   bottom: calc(100% + 30px);
+  width: var(--tray-w);
+}
+.game[data-ui="windows"] .status-tray {
+  flex-wrap: wrap-reverse;
+}
+.game[data-ui="windows"] .status-tip {
+  left: 0;
+  bottom: calc(100% + 6px);
+}
+.hud-bar:has(.status:is(:focus-visible, [data-open])) {
+  z-index: 21;
+}
+@media (hover: hover) {
+  .hud-bar:has(.status:hover) {
+    z-index: 21;
+  }
+}
+
+/* ---- The name plate on the experience bar (docs/17 "Placa del nombre") --------------
+   The owner (2026-11-19): name and level in the middle, joined to the experience bar. The
+   plate stands on the bar's iron band, centred, with a pinnacle at each shoulder; the bar
+   carries the percent, and its tooltip the exact experience to the next level. */
+.xp {
+  position: relative;
+  flex: none;
+}
+.nameplate {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 1;
   box-sizing: border-box;
-  width: var(--plaque-w);
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 4px 7px 5px;
-  background: linear-gradient(rgb(23 20 16 / 0.86), rgb(9 8 7 / 0.86));
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.55rem;
+  max-width: min(30rem, calc(100% - 48px));
+  padding: 2px 14px 1px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background:
+    linear-gradient(rgb(255 236 200 / 0.06), transparent 60%), linear-gradient(#2a241d, #15120e);
   border: 1px solid var(--ui-iron-600);
   border-top-color: var(--ui-gold-700);
-  border-radius: var(--ui-radius);
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
   box-shadow:
     0 0 0 1px #000,
-    0 3px 8px rgb(0 0 0 / 0.6);
+    0 -3px 8px rgb(0 0 0 / 0.55);
 }
-/* Small gold corners, like the windows'. */
-.vitals::after {
+/* The tutorial's "stats" highlight (client.css [data-tutorial-active]) is on .xp, the bar's
+   box: the plate stands out of it, so it takes the same outline, pulse and all. */
+.xp[data-tutorial-active] > .nameplate {
+  outline: inherit;
+  outline-offset: inherit;
+}
+/* A pinnacle at each shoulder of the plate. */
+.nameplate::before,
+.nameplate::after {
   content: "";
   position: absolute;
-  inset: -3px;
+  bottom: 0;
+  width: 14px;
+  height: 22px;
+  background: var(--orn-spire) 0 0 / 14px 22px no-repeat;
   pointer-events: none;
-  background:
-    var(--orn-corner-tl) 0 0 / 12px 12px no-repeat,
-    var(--orn-corner-tr) 100% 0 / 12px 12px no-repeat,
-    var(--orn-corner-bl) 0 100% / 12px 12px no-repeat,
-    var(--orn-corner-br) 100% 100% / 12px 12px no-repeat;
 }
-.vitals .conditions {
-  flex-wrap: wrap;
-  margin-bottom: 2px;
+.nameplate::before {
+  right: 100%;
+  margin-right: 1px;
+}
+.nameplate::after {
+  left: 100%;
+  margin-left: 1px;
 }
 .vname {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -341,24 +376,18 @@
   color: var(--ui-gold-300);
   text-shadow: 0 1px 0 #000;
 }
-.vlevel,
-.vxp {
-  font-size: 0.72rem;
-  color: var(--ui-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
 .vlevel {
+  flex: none;
+  font-size: 0.75rem;
   color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 #000;
 }
 /* Experience: a gold bar along the bar's top, filled with transform; a level up flashes. */
 .xpbar {
   position: relative;
   display: block;
-  flex: none;
-  height: 8px;
+  height: 11px;
   overflow: hidden;
   background: var(--ui-stone-950);
   border: 1px solid #0b0907;
@@ -372,6 +401,24 @@
   transform-origin: left center;
   background: linear-gradient(#f0d98e, var(--ui-xp) 50%, #7a5f1f);
   transition: transform var(--ui-dur-slow) var(--ui-ease-out);
+}
+/* The percent, written across the middle of the bar. */
+.xppercent {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff4e0;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  text-shadow:
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 -1px 0 #000;
 }
 .xpbar.flash::after {
   content: "";
@@ -710,7 +757,7 @@ body.dragging-window * {
    Percentages are of the area above the bar. The battle list top left with the party
    beside it and the skills under it; the equipment top right with the guild and the
    appearance (and the quest log) beside it and the containers under it; the chat at the bottom left, past the
-   plaque; the options and the help in the middle; the trade at the top centre; the NPC's
+   status tray; the options and the help in the middle; the trade at the top centre; the NPC's
    and the stations' windows at the bottom centre, just over the bar, the shop left of its
    dialog, the two clear of the equipment's column. Moved, a window keeps its own place
    (GameWindow sets left and top). */
@@ -843,7 +890,7 @@ body.dragging-window * {
 .gwin:not([data-placed])[data-window="chat"] {
   top: auto;
   bottom: 0;
-  left: calc(var(--plaque-w) + 12px);
+  left: calc(var(--tray-w) + 12px);
 }
 .gwin[data-window="chat"]::before {
   content: "";

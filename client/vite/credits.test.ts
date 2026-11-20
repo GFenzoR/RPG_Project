@@ -126,26 +126,27 @@ describe("credits page data (docs/17 A1)", () => {
   it("credits every vendor pack, LPC file, composed sprite and font of the repository", () => {
     const c = loadCredits(root);
     const md = readFileSync(join(root, "assets", "CREDITS.md"), "utf8");
-    expect(c.packs.map((p) => p.pack)).toEqual(expect.arrayContaining(["dungeon-crawl", "ulpc"]));
+    expect(c.packs.map((p) => p.pack)).toEqual(expect.arrayContaining(["dungeon-crawl"]));
     for (const p of c.packs) {
       expect(md).toContain(`assets/vendor/${p.pack}/`);
       expect(p.licences.length, p.pack).toBeGreaterThan(0);
       expect(p.url, p.pack).toMatch(/^https:\/\//);
     }
-    expect(c.packs.find((p) => p.pack === "ulpc")?.perFile).toBe(true);
-    // Every row of LPC's CREDITS.csv is on the page, each under an accepted licence.
-    const csv = readFileSync(join(root, "assets", "vendor", "ulpc", "CREDITS.csv"), "utf8");
-    const rows = csv.split("\n").filter((l) => l.startsWith('"'));
-    const works = new Set(
-      rows.map((l) => (l.slice(1, l.indexOf('"', 1)).match(/^(.*)\//) ?? [])[1]),
-    );
+    // Every row of a per-file pack's CREDITS.csv is on the page, each under an accepted
+    // licence. Since the engine humanoids (docs/17) replaced the LPC characters there is no
+    // such pack, nor any composed sprite: the page leaves those sections out.
+    const works = new Set<string>();
+    for (const p of c.packs.filter((x) => x.perFile)) {
+      const csv = readFileSync(join(root, "assets", "vendor", p.pack, "CREDITS.csv"), "utf8");
+      for (const l of csv.split("\n").filter((x) => x.startsWith('"')))
+        works.add((l.slice(1, l.indexOf('"', 1)).match(/^(.*)\//) ?? [])[1] ?? "");
+    }
     expect(new Set(c.files.flatMap((f) => f.works))).toEqual(works);
     for (const f of c.files) {
       expect(f.authors.length, f.works.join()).toBeGreaterThan(0);
       expect(["OGA-BY 3.0", "CC-BY-SA 3.0"]).toContain(f.licence);
     }
-    const derived = c.derived.flatMap((d) => d.sprites);
-    expect(derived).toEqual(expect.arrayContaining(["outfits/citizen", "npcs/sailor_old"]));
+    expect(c.derived.flatMap((d) => d.sprites)).toEqual([]);
     expect(new Set(c.fonts.map((f) => f.family))).toEqual(new Set(FONTS.map((f) => f.family)));
     // Every row of "Generado con IA" is on the page, and its prompt file is committed.
     const aiRows = markdownTableRows(markdownSection(md, "## Generado con IA")).slice(1);

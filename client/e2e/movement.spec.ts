@@ -103,8 +103,22 @@ async function standing(page: Page): Promise<Tile> {
   await expect
     .poll(
       async () => {
-        const s = await page.evaluate(() => window.__rpgClient?.self());
-        at = s && !s.pending && !s.walking ? { x: s.x, y: s.y, z: s.z } : undefined;
+        const { s, drawn } = await page.evaluate(() => {
+          const c = window.__rpgClient;
+          return { s: c?.self(), drawn: c?.trail(200).at(-1) };
+        });
+        // The model stands still and a frame has drawn it there: `walking` ends at the
+        // step's end time, which can come between two frames, and a trail read before the
+        // next frame (motion) would end a fraction of a tile short of the tile.
+        at =
+          s &&
+          !s.pending &&
+          !s.walking &&
+          drawn &&
+          Math.abs(drawn.x - s.x) < 1e-6 &&
+          Math.abs(drawn.y - s.y) < 1e-6
+            ? { x: s.x, y: s.y, z: s.z }
+            : undefined;
         return at !== undefined;
       },
       { timeout: 20_000 },

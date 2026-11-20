@@ -13,6 +13,7 @@ import type { Skull, TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { GameUi } from "../game.ts";
 import type { CreatureState, ItemView } from "../state/world.ts";
+import { NO_EQUIPMENT } from "../state/look.ts";
 import { emptyGameUi } from "../ui/GameView.tsx";
 import { itemCard } from "../state/item-card.ts";
 import type { QuestEntryView, QuestLogView } from "../state/quests.ts";
@@ -46,6 +47,10 @@ function creature(
     guild: "",
     skull: 0 as Skull,
     cosmetics: { outfit: "", color: "", nameEffect: "" },
+    look: undefined,
+    equipment: NO_EQUIPMENT,
+    worn: undefined,
+    lookRev: 0,
   } as unknown as CreatureState;
 }
 
@@ -105,6 +110,17 @@ export function baseScene(content: ClientContent, now: number): Scene {
     [EquipmentSlot.RING, item("briar_ring")],
     [EquipmentSlot.AMMO, item("arrow", 37)],
   ]);
+  // docs/02 "Apariencia": the character's own body, as the server says, and what its
+  // visible slots show (the Apariencia window's figure wears it).
+  ui.look = { body: "sturdy", skin: "tan", hair: "long", hairColor: "dark_brown", beard: "short" };
+  ui.selfEquipment = {
+    head: itemNumber(content, "stagleather_hood"),
+    torso: itemNumber(content, "stagleather_coat"),
+    legs: itemNumber(content, "stagleather_leggings"),
+    feet: itemNumber(content, "stagleather_boots"),
+    leftHand: itemNumber(content, "elmwood_shield"),
+    rightHand: itemNumber(content, "iron_sword"),
+  };
   // docs/17 UI-5: the equipped backpack, open under the figure (not in a window).
   ui.backpack = {
     id: 1,
@@ -128,6 +144,8 @@ export function baseScene(content: ClientContent, now: number): Scene {
       item("cinder_amulet"),
     ],
   };
+  // docs/02 "Bolsillos": the character's four pockets, under the figure (two in use).
+  ui.pockets = { capacity: 4, items: [item("health_draught", 3), item("pruebas_key")] };
   ui.containers = [];
   ui.battle = [
     creature(11, CreatureKind.MONSTER, "", "wolf", 64),
@@ -240,7 +258,12 @@ export function baseScene(content: ClientContent, now: number): Scene {
     balance: 120,
     equipped: { outfit: "", color: "", nameEffect: "" },
   };
-  ui.conditions = [{ id: "well_fed", until: now + 60_000, ticks: 0 }];
+  // Puerto's temple square is a protection zone; a meal lasts minutes (docs/17 "Bandeja de
+  // estados": the tray over the life orb).
+  ui.conditions = [
+    { id: "well_fed", until: now + 18 * 60_000 + 20_000, ticks: 0 },
+    { id: "protection_zone", until: undefined, ticks: 0 },
+  ];
   ui.quests = questLog(Date.now());
   ui.clockOffset = 0;
   return { ui, name: "base" };
@@ -328,7 +351,8 @@ export function withDanger(s: Scene, now: number): Scene {
   if (ui.stats) ui.stats = { ...ui.stats, health: 74, mana: 20, level: 16, levelPercent: 3 };
   ui.conditions = [
     { id: "poison", until: now + 9000, ticks: 3 },
-    { id: "hasted", until: now + 20_000, ticks: 0 },
+    { id: "in_combat", until: now + 11_500, ticks: 0 },
+    { id: "hasted", until: now + 4200, ticks: 0 },
   ];
   ui.levelUp = { level: 16, at: now };
   ui.log = [
@@ -343,6 +367,27 @@ export function withDanger(s: Scene, now: number): Scene {
     },
   ];
   return { ui, name: "danger" };
+}
+
+/**
+ * The status tray full (docs/17 "Bandeja de estados"): every harm and every help at once,
+ * the burn and the keen eye in their last seconds (flashing), the attack lock for minutes.
+ */
+export function withStatuses(s: Scene, now: number): Scene {
+  const ui = { ...s.ui };
+  ui.conditions = [
+    { id: "well_fed", until: now + 18 * 60_000 + 20_000, ticks: 0 },
+    { id: "poison", until: now + 8800, ticks: 4 },
+    { id: "burning", until: now + 3300, ticks: 1 },
+    { id: "slowed", until: now + 12_000, ticks: 0 },
+    { id: "in_combat", until: now + 11_500, ticks: 0 },
+    { id: "pvp_locked", until: now + 6 * 60_000 + 5000, ticks: 0 },
+    { id: "hasted", until: now + 31_000, ticks: 0 },
+    { id: "invisible", until: now + 80_000, ticks: 0 },
+    { id: "keen_eye", until: now + 2500, ticks: 0 },
+    { id: "shocked", until: now + 5100, ticks: 3 },
+  ];
+  return { ui, name: "status" };
 }
 
 /** Dead: the death screen over the map. */
@@ -618,6 +663,27 @@ export function withHeld(content: ClientContent, s: Scene): Scene {
     },
   };
   return { ui, name: "inventory" };
+}
+
+/**
+ * docs/02 "Bolsillos": a character back from a death without blessings, its backpack left in
+ * the corpse: the backpack slot is empty and what it picked up since lies in its four
+ * pockets (coins, a potion, a fish; one cell free). The card of the potion in the pockets.
+ */
+export function withPockets(content: ClientContent, s: Scene): Scene {
+  const item = (id: string, count = 1): ItemView => ({ itemId: itemNumber(content, id), count });
+  const inventory = new Map(s.ui.inventory);
+  inventory.delete(EquipmentSlot.BACKPACK);
+  const ui: GameUi = {
+    ...s.ui,
+    inventory,
+    backpack: undefined,
+    pockets: {
+      capacity: 4,
+      items: [item("copper_coin", 23), item("health_draught"), item("raw_fish", 2)],
+    },
+  };
+  return { ui, name: "pockets" };
 }
 
 /**

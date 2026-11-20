@@ -402,6 +402,58 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
   });
 
+  it('checks the border ladder: grounds, lower grounds, pieces and the surf (docs/06 "Bordes")', () => {
+    writeFileSync(
+      file("data/borders.yaml"),
+      [
+        "ladder:",
+        "  - { ground: water_shallow }",
+        "  - { ground: water_shoal, pieces: border_sand }",
+        "  - { ground: sand, pieces: border_sand, over: [grass, lava] }",
+        "  - { ground: dirt, edge: clods }",
+        "  - { ground: grass, pieces: border_nothing, edge: tufts }",
+        "  - { ground: sand }",
+        "  - { ground: ash, pieces: border_ash, edge: zigzag }",
+        "shore:",
+        "  water: [water_shallow, water_shoal, dirt]",
+        "  pieces: border_surf",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.includes("borders.yaml"));
+    const has = (text: string): boolean => out.some((m) => m.includes(text));
+    expect(has('pieces "border_sand" are already the ones of the fringe of "water_shoal"')).toBe(
+      true,
+    );
+    expect(has('"grass" is not below "sand"')).toBe(true);
+    expect(has('"lava" is not on the ladder')).toBe(true);
+    expect(has("edge needs pieces")).toBe(true);
+    expect(has("none of the 12 pieces border_nothing_n ... border_nothing_inner_sw")).toBe(true);
+    expect(out.filter((m) => m.includes("border_nothing"))).toHaveLength(1);
+    expect(has('"sand" is already on the ladder')).toBe(true);
+    expect(has("ladder[6].edge: must be one of")).toBe(true); // zigzag is no edge style
+    expect(has('water "water_shoal" cannot have a fringe')).toBe(true);
+    expect(has('"dirt" is not on the ladder')).toBe(false); // it is, as a plain rung
+    // A piece that blocks, and one that can be picked up.
+    edit(
+      "data/items/borders.yaml",
+      "  sprite: borders/ash/n\n",
+      "  sprite: borders/ash/n\n  blocks_movement: true\n",
+    );
+    edit(
+      "data/items/borders.yaml",
+      "  sprite: borders/ash/e\n  name: item.border_ash.name\n  pickupable: false\n",
+      "  sprite: borders/ash/e\n  name: item.border_ash.name\n",
+    );
+    writeFileSync(
+      file("data/borders.yaml"),
+      "ladder:\n  - { ground: sand }\n  - { ground: ash, pieces: border_ash }\n",
+    );
+    const again = messages(root).filter((m) => m.includes("borders.yaml"));
+    expect(again.filter((m) => m.includes('"border_ash_n" must be a decoration'))).toHaveLength(1);
+    expect(again.filter((m) => m.includes('"border_ash_e" must have pickupable'))).toHaveLength(1);
+    expect(again).toHaveLength(2);
+  });
+
   it("checks outfits: ids, sprite folder and frame count (T0.5)", () => {
     writeFileSync(
       file("data/outfits.yaml"),
@@ -747,7 +799,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:49:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:59:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -901,7 +953,7 @@ describe("validator diagnostics", () => {
     );
     writeFileSync(
       file("data/borders.yaml"),
-      "- id: grass_sand\n  from: grass\n  to: rope\n  pieces: { n: grass, s: grass, e: grass, w: grass, ne: grass, nw: grass, se: grass, sw: grass }\n",
+      "ladder:\n  - { ground: rope }\n  - { ground: grass, pieces: border_grass }\n",
     );
     const out = messages(root);
     expect(out.some((m) => m.includes('quest "lost_net" has no step "find_nett"'))).toBe(true);
@@ -1068,7 +1120,7 @@ describe("validator diagnostics", () => {
     // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:46:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:56:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(
@@ -1102,7 +1154,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:117:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:126:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
@@ -1406,12 +1458,57 @@ describe("validator diagnostics", () => {
     );
     edit(
       "data/items/equipment.yaml",
-      "  shield: { defense: 9 }\n  requires: { level: 1 }\n",
-      "  shield: { defense: 9 }\n",
+      "  shield: { defense: 9 }\n  worn: { shape: buckler, tint: weathered }\n  requires: { level: 1 }\n",
+      "  shield: { defense: 9 }\n  worn: { shape: buckler, tint: weathered }\n",
     );
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
       expect.stringMatching(/equipment\.yaml:.*shield "barrel_lid_shield" has no requires\.level/),
       expect.stringMatching(/weapons\.yaml:.*weapon "rusty_cutlass" has no requires\.level/),
+    ]);
+  });
+
+  it("checks every look, worn piece and outfit against data/looks.yaml (docs/06 Looks)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/items/weapons.yaml",
+      "worn: { shape: sword, tint: rust }",
+      "worn: { shape: plate, tint: rust }",
+    );
+    edit(
+      "data/items/weapons.yaml",
+      "worn: { shape: axe, tint: rust }",
+      "worn: { shape: axe, tint: rost }",
+    );
+    edit(
+      "data/items/equipment.yaml",
+      "  armor: { slot: neck, armor: 1 }\n",
+      "  armor: { slot: neck, armor: 1 }\n  worn: { shape: circlet, tint: gold }\n",
+    );
+    edit("data/npcs/harbor_master.yaml", "  skin: tan\n", "  skin: tann\n");
+    edit("data/npcs/harbor_master.yaml", "legs: { shape: trousers", "legs: { shape: robe");
+    edit(
+      "data/outfits.yaml",
+      "skin: fair, hair: short, hair_color: brown",
+      "skin: ashen, hair: short, hair_color: brown",
+    );
+    const out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out).toEqual([
+      expect.stringMatching(
+        /equipment\.yaml:.*worn: only weapons, shields and head, body, legs and feet armour/,
+      ),
+      expect.stringMatching(/weapons\.yaml:.*worn\.shape: unknown weapon shape "plate"/),
+      expect.stringMatching(
+        /weapons\.yaml:.*worn\.tint: unknown tint "rost" in data\/looks\.yaml \(did you mean "rust"\?\)/,
+      ),
+      expect.stringMatching(
+        /harbor_master\.yaml:.*look\.skin: unknown skin "tann" in data\/looks\.yaml \(did you mean "tan"\?\)/,
+      ),
+      expect.stringMatching(
+        /harbor_master\.yaml:.*look\.worn\.legs\.shape: unknown legs shape "robe"/,
+      ),
+      expect.stringMatching(
+        /outfits\.yaml:.*\[0\]\.look\.skin: skin "ashen" is creatures_only: not for a player/,
+      ),
     ]);
   });
 

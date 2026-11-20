@@ -9,6 +9,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
@@ -30,7 +31,7 @@ func (*fakeAccounts) Characters(context.Context, int64) ([]store.Character, erro
 func (*fakeAccounts) IssuePlayToken(context.Context, int64, int64) (auth.Token, error) {
 	return auth.Token{}, nil
 }
-func (*fakeAccounts) CreateCharacter(context.Context, int64, string, string) (store.Character, error) {
+func (*fakeAccounts) CreateCharacter(context.Context, int64, string, string, *content.Look) (store.Character, error) {
 	return store.Character{}, nil
 }
 

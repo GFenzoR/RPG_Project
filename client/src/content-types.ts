@@ -1,4 +1,5 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
+import type { Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
 
 /** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
 export interface AttributeDef {
@@ -51,6 +52,12 @@ export interface ItemDef {
   /** A map door (a `door` block in data/items: open or shut). Absent on any other item. */
   door?: true;
   /**
+   * A border piece of data/borders.yaml (docs/06 "Bordes"): the fringe of a neighbour's
+   * ground drawn on the tile, never its top item (state/items.ts topItem looks past it).
+   * Absent on any other item.
+   */
+  border?: true;
+  /**
    * docs/17 ART-8: sprite pixels it raises what is stacked on it and the creature standing
    * there (a table, a crate). Display only. Absent when it raises nothing.
    */
@@ -92,6 +99,11 @@ export interface ItemDef {
   book?: BookDef;
   /** A reward chest of the map (`chest` block): using it asks the server, which gives once. */
   chest?: true;
+  /**
+   * How the piece shows on the engine humanoid that wears it (data/items `worn`, docs/06
+   * "Looks"): a shape of data/looks.yaml and a tint. Absent: it is not drawn on the figure.
+   */
+  worn?: WornPiece;
 }
 
 /** The `book` block of an item (data/items): i18n keys of i18n/<lang>/books.yaml. */
@@ -121,13 +133,33 @@ export interface WeaponStats {
  */
 export type DialogTopic = "quests" | "trade" | "travel" | "services" | "talk" | "back" | "bye";
 
-/** A player outfit of data/outfits.yaml (T0.5). */
+/**
+ * A player outfit of data/outfits.yaml (docs/06 "Looks"): the body a player is drawn with
+ * until its own look arrives, its clothes, and whether it is a costume (a shop outfit: its
+ * clothes cover the torso, legs and feet even over armour).
+ */
 export interface OutfitDef {
   id: string;
-  /** Sprite folder: its frames are "<sprite>/<n|e|s|w>_<frame>" in the atlas. */
+  /** Sprite folder of the still previews: "<sprite>/<n|e|s|w>_<frame>" in the atlas. */
   sprite: string;
-  /** Frames per facing: 0 = standing, the rest are the walking steps. */
+  /** Preview frames per facing. */
   frames: number;
+  /** Absent in fixtures and old content: the client draws the outfit's sprite instead. */
+  look?: Look;
+  clothes?: Worn;
+  costume?: boolean;
+}
+
+/**
+ * The choices of a player's look (data/looks.yaml, docs/02 "Apariencia"), in file order:
+ * what the pickers offer. Skins only a player may choose (no creatures_only one).
+ */
+export interface LookOptions {
+  builds: string[];
+  skins: string[];
+  hairStyles: string[];
+  hairColors: string[];
+  beards: string[];
 }
 
 /** Kinds of data/cosmetics.yaml (T5.7); "mount" is reserved and not sold yet. */
@@ -300,6 +332,16 @@ export interface IslandRect {
   h: number;
 }
 
+/** balance.yaml experience as the client reads it (vite/content.ts). */
+export interface ExperienceCurve {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  /** The highest level (0 = none known). */
+  maxLevel: number;
+}
+
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
@@ -326,6 +368,17 @@ export interface ClientContent {
   /** data/outfits.yaml in file order (T0.5). Optional so fixtures can leave it out. */
   outfits?: OutfitDef[];
   /**
+   * data/looks.yaml (docs/06 "Looks"): the skin, hair and material tints and what a head
+   * piece hides. Optional so fixtures can leave it out (then no creature is a paper doll).
+   */
+  looks?: LookTables;
+  /**
+   * The choices of a player's look (data/looks.yaml): the pickers of the creation screen
+   * and the Apariencia window. Optional so fixtures can leave it out (then no pickers). The
+   * NPCs' and monsters' looks come from the server in their Creature, not from here.
+   */
+  lookOptions?: LookOptions;
+  /**
    * data/cosmetics.yaml cosmetics in file order (T5.7). Optional so fixtures can leave it
    * out (then every player wears the default look).
    */
@@ -348,6 +401,13 @@ export interface ClientContent {
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
+  /**
+   * balance.yaml experience: the level curve (total experience for level n is
+   * a·n³ + b·n² + c·n + d) and the top level, for the experience bar's tooltip (state/
+   * experience.ts). Optional so fixtures can leave it out (then the tooltip has no "to the
+   * next level").
+   */
+  experience?: ExperienceCurve | undefined;
   /**
    * balance.yaml guild (T5.1): shown in the guild panel and caps its inputs; the server
    * enforces it. Optional so test fixtures can leave it out.

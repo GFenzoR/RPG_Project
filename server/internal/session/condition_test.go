@@ -117,8 +117,9 @@ func TestPoisonHitsUntilItEnds(t *testing.T) {
 		}
 	}
 	evs = cl.take()
-	if ids, ok := lastConditions(evs); !ok || len(ids) != 0 {
-		t.Fatalf("conditions after the last hit = %v (sent %v), want an empty list", ids, ok)
+	// The poison is gone; its hits put the player in combat (status.go): only that is left.
+	if ids, ok := lastConditions(evs); !ok || !slices.Equal(ids, []string{"in_combat"}) {
+		t.Fatalf("conditions after the last hit = %v (sent %v), want only in_combat", ids, ok)
 	}
 	// The observer saw each hit: the earth effect and the number.
 	earth := uint32(session.EffectElementBase + 4)

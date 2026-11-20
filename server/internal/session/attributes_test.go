@@ -295,7 +295,7 @@ func TestStaffItemRolls(t *testing.T) {
 	a := newAdminHarness(t, withAttributes(t))
 	cl, p := a.joinAs("Keeper", session.RoleAdmin, pos(5, 5))
 	a.cmd(cl, "/item test_sword 2")
-	got := a.w.GroundAt(p.Pos()) // no backpack: it lands under the admin
+	got := a.w.ItemsForTest(p, "test_sword") // no backpack: in the admin's pockets
 	if len(got) != 2 {
 		t.Fatalf("/item gave %d swords", len(got))
 	}

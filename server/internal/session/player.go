@@ -90,7 +90,10 @@ type Player struct {
 	// container windows (oldest first), the last window id, the first tick a
 	// consumable can be used again and the first tick p may open or close a door again.
 	equip [equipSlots]*Item
-	armor int
+	// pockets are p's built-in pocket cells (pockets.go): a container that is part of p,
+	// never an item of its equipment.
+	pockets *Item
+	armor   int
 	// gear is what the attributes of the worn items add up to (attributes.go): already
 	// in maxHealth, maxMana and armor; the rest is read by the formulas. gearFrom are the
 	// worn instances with an attribute it was summed from.
@@ -124,6 +127,10 @@ type Player struct {
 	reachFloors   uint16
 	reachStale    bool
 	questLogDirty bool
+	// An Inventory held back (holdInventory): above 0, sendInventory only marks it due,
+	// and the outermost release sends one with the state by then.
+	invHold int
+	invDue  bool
 
 	// Gathering (T1.12): the first tick p can gather again, the tile p has been
 	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet) and its last
@@ -134,10 +141,12 @@ type Player struct {
 	gatherLast  game.Tick
 
 	// Conditions (T3.2): the active ones (few: at most one per condition id), whether
-	// the client's list is stale, and whether p is hidden by invisibility.
+	// the client's list is stale, and whether p is hidden by invisibility. statusTold is
+	// what the client was last told of p's statuses (status.go).
 	conds           []*condition
 	conditionsDirty bool
 	invisible       bool
+	statusTold      statusView
 
 	// Parties (T3.3): the party, what p's client last heard of it, the first tick of its
 	// next periodic update, and the last tick p helped a fight (0 = never).
@@ -253,6 +262,18 @@ type Player struct {
 	premium int64
 	premSeq int64
 	cosTAT  game.Tick
+
+	// Appearance (look.go): the body (a look only: no game rule reads it) and its message,
+	// the item ids of the visible slots and theirs (nil: nothing shows), and the SetLook
+	// anti-flood (GCRA); lookOff: appearance.unavailable was already said (no looks.yaml).
+	look     content.Look
+	lookMsg  *pb.BodyLook
+	shown    shownItems
+	equipMsg *pb.VisibleEquipment
+	lookTAT  game.Tick
+	lookOff  bool
+	// lookDirty: in World.lookDirty, its CreatureLook goes out at the end of the tick.
+	lookDirty bool
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -373,6 +394,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Conditions:  w.conditionStates(p),
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
+		Look:        p.look,
 		Final:       final,
 	}
 }
@@ -478,6 +500,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Conditions = s.Conditions
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
+		c.Look = s.Look
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -525,6 +548,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
 	w.loadCosmetics(p, c)          // before anyone is told about p (Creature.cosmetics)
+	w.loadLook(p, c)               // and Creature.look
 	p.pos = w.houseLogin(p, p.pos) // T5.4: a house it may no longer enter (after the guild)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
@@ -588,6 +612,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.PvP = w.pvpState(p)
 	c.Pos, c.HasPos = p.pos, true
 	c.Cosmetics = p.cos
+	c.Look = p.look
 	if p.premSeq > c.PremiumSeq { // the online player heard of a newer shop change
 		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq
 	}
@@ -861,6 +886,8 @@ func (w *World) creatureMsg(p *Player) *pb.Creature {
 		Guild:         guildName(p),
 		Skull:         p.skull,
 		Cosmetics:     cosmeticsMsg(p.cos),
+		Look:          p.lookMsg,
+		Equipment:     p.equipMsg,
 	}
 }
 

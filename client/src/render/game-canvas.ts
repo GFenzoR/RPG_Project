@@ -23,6 +23,7 @@ import {
 } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
+import type { AttackKind } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
@@ -53,25 +54,37 @@ import {
   tileToScreen,
   VANISH_MS,
 } from "@rpg/renderer";
-import type { AnimState, AtlasIcon, Camera, StepKind, TileArt } from "@rpg/renderer";
+import type {
+  AnimState,
+  AtlasIcon,
+  AttackAction,
+  Camera,
+  Look,
+  StepKind,
+  TileArt,
+  WornSlot,
+} from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
+import type { BodyLayer } from "./creature-body.ts";
+import { dollSprites, dressPlayer, wornFromVisible } from "./look.ts";
+import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import type { ParticleView } from "./particles.ts";
 import {
-  attackAction,
   attackDir,
   attackerOf,
   DepartureFeed,
+  figureAttack,
   isBlowEffect,
   leaveStyle,
   meleeAttacker,
   pushFrom,
 } from "./creature-events.ts";
-import type { Fighter, LeaveStyle } from "./creature-events.ts";
+import type { Fighter, Held, LeaveStyle } from "./creature-events.ts";
 import { devicePixels, followCamera } from "./viewport.ts";
 import {
   WheelZoom,
@@ -105,7 +118,7 @@ import { delta, samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
-import { lookKey, playerLook } from "./cosmetics.ts";
+import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
@@ -340,8 +353,16 @@ interface CreatureSprite {
    * (T0.5; T5.7: the equipped outfit cosmetic, else citizen). Undefined = the coloured block.
    */
   figure: CreatureBody | undefined;
-  /** lookKey of the cosmetics the sprites were built with (T5.7): a change rebuilds them. */
-  drawnLook: string;
+  /**
+   * CreatureState.lookRev the sprites were built with: the cosmetics (T5.7), the body or
+   * the visible equipment changed since, and they are built again.
+   */
+  drawnLook: number;
+  /**
+   * What a paper doll (render/look.ts) holds: its attacks play that weapon's clip.
+   * Undefined for a sprite that is no doll: its attacks play by their kind.
+   */
+  held: Held | undefined;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -457,11 +478,12 @@ export async function createGameCanvas(
   let hiddenShown = 0;
   const showHidden = (box: DrawnBox): void => {
     const s = sprites.get(box.id);
-    if (!s?.figure || s.body.alpha < 1) return;
-    showCopy(s.body, s.figure.sprite);
+    if (!s?.figure || s.figure.opacity < 1) return;
+    showCopy(s.body, s.figure);
   };
-  /** The see-through copy of a body's sprite `fig` (in `body`), from the pool. */
-  const showCopy = (body: Container, fig: Sprite): void => {
+  /** The see-through copy of a body's sprite (`figure.sprite`, in `body`), from the pool. */
+  const showCopy = (body: Container, figure: CreatureBody): void => {
+    const fig = figure.sprite;
     let copy = hiddenPool[hiddenShown];
     if (!copy) {
       copy = new Sprite({
@@ -478,7 +500,7 @@ export async function createGameCanvas(
     copy.position.set(body.x + fig.x, body.y + fig.y);
     copy.scale.copyFrom(fig.scale);
     copy.skew.copyFrom(fig.skew);
-    copy.alpha = HIDDEN_ALPHA * fig.alpha; // a body fading in, falling or shimmering away
+    copy.alpha = HIDDEN_ALPHA * figure.alpha; // a body fading in, falling or shimmering away
     copy.visible = true;
   };
   /**
@@ -493,7 +515,7 @@ export async function createGameCanvas(
     ghostBox.bottom = y + 1;
     ghostBox.top = y - g.figure.lift / T;
     ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
-    if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure.sprite);
+    if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
   };
   view.overlay.addChild(particles.view, hiddenLayer, behindWall);
   const effectLayer = new Container({ label: "effects" });
@@ -674,6 +696,56 @@ export async function createGameCanvas(
   const drawableOutfit = (o: OutfitDef | undefined): OutfitDef | undefined =>
     o && outfitReady(o) ? o : citizen && outfitReady(citizen) ? citizen : undefined;
 
+  // Engine humanoids (docs/17 "Humanoides del motor", render/look.ts): a person is a paper
+  // doll, a body and layers over it (packages/renderer look.ts), when the content has its
+  // look and the atlas its body. A player's outfit without a look, or an atlas without the
+  // layers, falls back to the outfit's sprite, then to the coloured block.
+  const tables = content.looks;
+  /** The paper doll of a look dressed so: the body's clips and every layer's. */
+  const dollOf = (
+    look: Look,
+    dressed: Dressed,
+    outfitTint: number,
+  ): { clips: ClipSet<Texture>; layers: BodyLayer[] } | undefined => {
+    if (!tables) return undefined;
+    const layers: BodyLayer[] = [];
+    let body: ClipSet<Texture> | undefined;
+    for (const { slot, sprite, tint } of dollSprites(look, dressed, tables, outfitTint)) {
+      const clips = cachedClips(sprite, () => spriteClips(sprite, atlas.index.anims, lookup));
+      if (!clips?.meta) {
+        if (slot === "body") return undefined;
+        continue;
+      }
+      if (slot === "body") body = clips;
+      layers.push({ slot, clips, tint });
+    }
+    return body ? { clips: body, layers } : undefined;
+  };
+  const NO_CLOTHES: ReadonlySet<WornSlot> = new Set();
+  /**
+   * A person's look, what it wears and the outfit colour, or undefined (not a person: a
+   * beast, or a server that sends no looks). All of it comes from the server
+   * (CreatureState.look, equipment and worn, docs/05 "Apariencia y equipo visible"): a
+   * player wears the items of its visible slots over its outfit's clothes; an NPC or a
+   * monster, the pieces of its data. What a person holds is what it attacks with.
+   */
+  const personOf = (
+    c: CreatureState,
+    player: { outfit: OutfitDef | undefined; tint: number } | undefined,
+  ): { look: Look; dressed: Dressed; tint: number } | undefined => {
+    const look = c.look;
+    if (!look) return undefined;
+    if (player) {
+      const dressed = dressPlayer(player.outfit, wornFromVisible(c.equipment, content.items));
+      return { look, dressed, tint: player.tint };
+    }
+    const dressed = { worn: c.worn ?? {}, clothes: NO_CLOTHES };
+    return { look, dressed, tint: 0xffffff };
+  };
+  /** The clip an attack of `kind` plays: a paper doll's comes from the weapon it holds. */
+  const attackActionOf = (id: number, kind: AttackKind): AttackAction =>
+    figureAttack(kind, sprites.get(id)?.held);
+
   // Animation (packages/renderer anim.ts): one state per creature, kept while it is in
   // view (a cosmetic change rebuilds the sprites, not the state), and one input and pose
   // reused for every creature, so a frame allocates nothing for it (docs/07).
@@ -742,7 +814,7 @@ export async function createGameCanvas(
         const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
         const [dx, dy] = attackDir(by, target, a.to);
         // Its own clip by kind (the bow, the spell), else the swing (docs/17 ANI-2).
-        startAttack(stateOf(by.id, now), now, dx, dy, attackAction(a.kind));
+        startAttack(stateOf(by.id, now), now, dx, dy, attackActionOf(by.id, a.kind));
       }
     } else newest = Math.max(newest, inferAttacks(now, z));
     for (const f of world.floatingTexts) {
@@ -826,8 +898,9 @@ export async function createGameCanvas(
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
-    const lk = isPlayer ? lookKey(c.cosmetics) : "";
-    // T5.7: equipped cosmetics changed (CreatureCosmetics): build the sprites again.
+    // The cosmetics (T5.7), the body or the visible equipment changed (CreatureCosmetics,
+    // CreatureLook): build the sprites again. A number: no string per creature per frame.
+    const lk = c.lookRev;
     if (s && s.drawnLook !== lk) {
       dropSprite(c.id);
       s = undefined;
@@ -838,9 +911,15 @@ export async function createGameCanvas(
       const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
-      const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
-      const clips = outfitDef ? outfitClips(outfitDef) : creatureClips(c);
-      const figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
+      const person = personOf(c, look);
+      const doll = person && dollOf(person.look, person.dressed, person.tint);
+      let figure: CreatureBody | undefined;
+      if (doll) figure = new CreatureBody(doll.clips, T, 0xffffff, doll.layers);
+      else {
+        const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
+        const clips = outfitDef ? outfitClips(outfitDef) : creatureClips(c);
+        figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
+      }
       if (figure) body.addChild(figure.root);
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
@@ -882,6 +961,7 @@ export async function createGameCanvas(
         drawnSkull: Skull.UNSPECIFIED,
         figure,
         drawnLook: lk,
+        held: doll && person ? { weapon: person.dressed.worn.weapon?.shape } : undefined,
         bar,
         drawnDir: -1,
         drawnHealth: -1,
@@ -922,6 +1002,7 @@ export async function createGameCanvas(
     const s = sprites.get(id);
     if (!s) return;
     view.removeEntity(s.body);
+    s.figure?.release(); // a paper doll's layers go back to the pool
     s.body.destroy({ children: true });
     dropLabels(s);
     sprites.delete(id);
@@ -949,6 +1030,7 @@ export async function createGameCanvas(
     const g = ghosts[i];
     if (!g) return;
     view.removeEntity(g.body);
+    g.figure.release();
     g.body.destroy({ children: true });
     const last = ghosts.pop();
     if (last && last !== g) ghosts[i] = last;
@@ -1069,10 +1151,16 @@ export async function createGameCanvas(
       const raised = raisedBy(p, w, now) / T;
       // Whole device pixels, like the camera (render/viewport.ts): smooth at any zoom.
       s.body.position.set(devicePixels(p.x, T, scale), devicePixels(p.y - raised, T, scale));
-      if (s.figure) animateBody(s.figure, stateOf(c.id, now), c, now);
+      // Only the invisible player itself is sent its creature: see-through (T3.2). A body
+      // fades as one figure (CreatureBody.opacity): the container's alpha would fade a paper
+      // doll layer by layer, the skin showing through the tunic.
+      const see = c.id === world.selfId && world.invisible ? 0.4 : 1;
+      if (s.figure) {
+        s.figure.opacity = see;
+        animateBody(s.figure, stateOf(c.id, now), c, now);
+      }
+      s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
-      // Only the invisible player itself is sent its creature: see-through (T3.2).
-      s.body.alpha = c.id === world.selfId && world.invisible ? 0.4 : 1;
       // While walking, draw on whichever end of the step comes later in row order, so the
       // creature is never hidden under the items of the tile it is entering or leaving.
       const step = w && now < w.start + w.duration ? w : undefined;
@@ -1090,7 +1178,7 @@ export async function createGameCanvas(
         behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
         behindWall.scale.copyFrom(fig.scale);
         behindWall.skew.copyFrom(fig.skew);
-        behindWall.visible = s.body.alpha === 1;
+        behindWall.visible = see === 1;
       }
       // Over the head of a figure taller than its tile (ART-2).
       const head = tileToScreen(cam, p.x + 0.5, p.y - raised - lift / T, T);

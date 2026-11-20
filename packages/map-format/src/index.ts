@@ -14,7 +14,7 @@ export {
   setGround,
   stackAt,
 } from "./chunk.ts";
-export { loadContent, showsPortal } from "./content.ts";
+export { loadContent, readBorders, showsPortal } from "./content.ts";
 export type { ContentIndex, ItemInfo, PortalLook, TeleportInfo } from "./content.ts";
 export {
   DOOR_ROOM_ERRORS,
@@ -59,7 +59,7 @@ export type { SaveResult } from "./save.ts";
 export type {
   ApplyResult,
   AuxList,
-  BorderRule,
+  BorderSet,
   MapOp,
   OpOptions,
   Prefab,

@@ -124,6 +124,8 @@ export function sameLoc(a: ItemLoc, b: ItemLoc): boolean {
       return b.kind === "slot" && a.slot === b.slot;
     case "container":
       return b.kind === "container" && a.id === b.id && a.index === b.index;
+    case "pocket":
+      return b.kind === "pocket" && a.index === b.index;
   }
 }
 

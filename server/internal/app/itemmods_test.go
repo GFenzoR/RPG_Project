@@ -68,3 +68,16 @@ func TestSavedModsOutOfRangeAreBounded(t *testing.T) {
 		}
 	}
 }
+
+// A snapshot's pockets are saved as pockets (docs/02 "Bolsillos", migration 00020), apart
+// from the equipment slot of the same number.
+func TestPocketsConvert(t *testing.T) {
+	in := []session.ItemState{
+		{ItemID: 66, Count: 1, Slot: 3, Items: []session.ItemState{{ItemID: 68, Count: 9}}},
+		{ItemID: 8, Count: 40, Slot: 3, Pocket: true},
+	}
+	out := storeItems(in)
+	if len(out) != 2 || out[0].Pocket || out[0].Items[0].Pocket || !out[1].Pocket || out[1].Slot != 3 {
+		t.Fatalf("to the store: %+v", out)
+	}
+}

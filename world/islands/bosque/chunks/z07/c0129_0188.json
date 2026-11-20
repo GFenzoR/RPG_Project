@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 129, "cy": 188, "z": 7 },
-  "palette": ["water_shallow", "sand", "border_sand_water_se", "border_sand_water_s", "border_sand_water_sw", "border_sand_water_inner_se", "border_sand_water_inner_sw", "border_sand_water_w"],
+  "palette": ["water_shallow", "sand", "border_surf_se", "border_sand_se", "border_surf_s", "border_sand_s", "border_surf_sw", "border_sand_sw", "border_surf_inner_se", "border_sand_inner_se", "border_surf_inner_sw", "border_sand_inner_sw", "border_surf_w", "border_sand_w"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -37,24 +37,24 @@
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0]
   ],
   "items": [
-    { "x": 19, "y": 28, "stack": [2] },
-    { "x": 20, "y": 28, "stack": [3] },
-    { "x": 21, "y": 28, "stack": [3] },
-    { "x": 22, "y": 28, "stack": [3] },
-    { "x": 23, "y": 28, "stack": [4] },
-    { "x": 17, "y": 29, "stack": [2] },
-    { "x": 18, "y": 29, "stack": [3] },
-    { "x": 19, "y": 29, "stack": [5] },
-    { "x": 23, "y": 29, "stack": [6] },
-    { "x": 24, "y": 29, "stack": [3] },
-    { "x": 25, "y": 29, "stack": [4] },
-    { "x": 16, "y": 30, "stack": [2] },
-    { "x": 17, "y": 30, "stack": [5] },
-    { "x": 25, "y": 30, "stack": [7] },
-    { "x": 14, "y": 31, "stack": [2] },
-    { "x": 15, "y": 31, "stack": [3] },
-    { "x": 16, "y": 31, "stack": [5] },
-    { "x": 25, "y": 31, "stack": [6] },
-    { "x": 26, "y": 31, "stack": [4] }
+    { "x": 19, "y": 28, "stack": [2, 3] },
+    { "x": 20, "y": 28, "stack": [4, 5] },
+    { "x": 21, "y": 28, "stack": [4, 5] },
+    { "x": 22, "y": 28, "stack": [4, 5] },
+    { "x": 23, "y": 28, "stack": [6, 7] },
+    { "x": 17, "y": 29, "stack": [2, 3] },
+    { "x": 18, "y": 29, "stack": [4, 5] },
+    { "x": 19, "y": 29, "stack": [8, 9] },
+    { "x": 23, "y": 29, "stack": [10, 11] },
+    { "x": 24, "y": 29, "stack": [4, 5] },
+    { "x": 25, "y": 29, "stack": [6, 7] },
+    { "x": 16, "y": 30, "stack": [2, 3] },
+    { "x": 17, "y": 30, "stack": [8, 9] },
+    { "x": 25, "y": 30, "stack": [12, 13] },
+    { "x": 14, "y": 31, "stack": [2, 3] },
+    { "x": 15, "y": 31, "stack": [4, 5] },
+    { "x": 16, "y": 31, "stack": [8, 9] },
+    { "x": 25, "y": 31, "stack": [10, 11] },
+    { "x": 26, "y": 31, "stack": [6, 7] }
   ]
 }

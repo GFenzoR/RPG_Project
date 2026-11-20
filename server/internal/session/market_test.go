@@ -229,10 +229,10 @@ func TestTradeCancellations(t *testing.T) {
 	t.Run("no room", func(t *testing.T) {
 		h := newMarketHarness(t)
 		ca, a := h.trader("Ana", pos(2, 2), stack(salveID, 3, 0), stack(bagID, 1, 1))
-		cb, b := h.trader("Beto", pos(3, 2), stack(swordID, 1, 0), stack(coinID, 5, 1), stack(shieldID, 1, 2), stack(tunicID, 1, 3))
+		cb, b := h.trader("Beto", pos(3, 2), full(stack(swordID, 1, 0), stack(coinID, 5, 1), stack(shieldID, 1, 2), stack(tunicID, 1, 3))...)
 		h.startTrade(ca, cb, a, b, salveID, swordID)
 		wa := uint32(1)
-		h.send(ca, tradeOffer(inContainer(wa, 1), bagID)) // two in, one out: Beto's full pack overflows
+		h.send(ca, tradeOffer(inContainer(wa, 1), bagID)) // two in, one out: Beto's full pack (and pockets) overflow
 		h.send(ca, tradeAccept)
 		evs := h.send(cb, tradeAccept)
 		if u := lastTrade(evs); u.GetState() != pb.TradeState_TRADE_STATE_CANCELLED || u.GetReason() != "trade.cancel.no_room" {
@@ -840,8 +840,9 @@ func TestMarketWithdrawPartialGold(t *testing.T) {
 			MailHigh: 1,
 		}
 	})
-	// Two free slots: the salves take one, then 100 of the 1000 copper (10 stacks) fit.
-	cs, s := h.atBoard("Sela", pos(1, 0), stack(swordID, 1, 0), stack(bagID, 1, 1))
+	// Two free slots (full pockets): the salves take one, then 100 of the 1000 copper (10
+	// stacks) fit.
+	cs, s := h.atBoard("Sela", pos(1, 0), full(stack(swordID, 1, 0), stack(bagID, 1, 1))...)
 	evs := h.send(cs, withdraw)
 	if !hasKey(evs, "market.withdrawn") || !hasKey(evs, "market.mailbox_room") {
 		t.Fatalf("keys %v", systemKeys(evs))
@@ -989,13 +990,14 @@ func TestTradeWithoutBackpackAndEmpty(t *testing.T) {
 	if !hasKey(h.send(ca, tradeAccept), "trade.empty") {
 		t.Fatal("an empty trade was confirmed")
 	}
-	// Nopack offers nothing and gets nothing: Ana offers her salves, which Nopack cannot
-	// take (no backpack), so the trade is refused cleanly instead of panicking.
+	// Nopack offers nothing: Ana offers her salves, which Nopack (no backpack) takes into
+	// its pockets (docs/02 "Bolsillos").
 	wa := openPack(t, h.harness, ca)
 	h.send(ca, tradeOffer(inContainer(wa, 0), salveID))
 	h.send(ca, tradeAccept)
 	evs := h.send(cn, tradeAccept)
-	if u := lastTrade(evs); u.GetState() != pb.TradeState_TRADE_STATE_CANCELLED || u.GetReason() != "trade.cancel.no_room" {
+	if u := lastTrade(evs); u.GetState() != pb.TradeState_TRADE_STATE_COMPLETED || h.w.CountItem(n, "test_salve") != 3 ||
+		len(n.Pockets().Items()) != 1 {
 		t.Fatalf("got %v", u)
 	}
 	if h.sim.LastStats().Panics != 0 {

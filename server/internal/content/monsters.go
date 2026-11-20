@@ -12,7 +12,10 @@ import (
 
 // Monster is the part of a data/monsters/*.yaml file the server uses (T1.6: melee).
 type Monster struct {
-	ID          string          `yaml:"id"`
+	ID string `yaml:"id"`
+	// Look is a humanoid monster's body and what it wears (data/looks.yaml), sent in its
+	// Creature. Nil: a beast, drawn with its sprite.
+	Look        *CreatureLook   `yaml:"look"`
 	Health      int             `yaml:"health"`
 	Experience  int64           `yaml:"experience"`
 	Speed       int             `yaml:"speed"`

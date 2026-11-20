@@ -15,6 +15,7 @@ import {
   iconScale,
   slotAccepts,
   slotBox,
+  slotDrop,
   wornIn,
 } from "./equipment.ts";
 
@@ -149,6 +150,18 @@ describe("slotAccepts (docs/17 UI-5: the slots that take a held item glow)", () 
     // A sword is not a shield: the left hand refuses it (the server says the same).
     expect(slotAccepts(sword, EquipmentSlot.LEFT_HAND)).toBe(false);
     expect(slotAccepts(shield, EquipmentSlot.LEFT_HAND)).toBe(true);
+  });
+
+  it("lets the backpack slot store anything carried (the backpack, or the pockets without one)", () => {
+    for (const p of DOLL) {
+      const store = p.slot === EquipmentSlot.BACKPACK ? "store" : "no";
+      expect(slotDrop(fish, p.slot)).toBe(store);
+      expect(slotDrop(sword, p.slot)).toBe(p.slot === EquipmentSlot.RIGHT_HAND ? "yes" : store);
+      expect(slotDrop(backpack, p.slot)).toBe(p.slot === EquipmentSlot.BACKPACK ? "yes" : "no");
+      // Nobody carries a corpse: it is refused everywhere, as nothing at all.
+      expect(slotDrop(corpse, p.slot)).toBe("no");
+      expect(slotDrop(undefined, p.slot)).toBe("no");
+    }
   });
 });
 

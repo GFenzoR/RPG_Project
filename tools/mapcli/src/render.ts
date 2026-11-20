@@ -11,13 +11,7 @@ import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format";
 import type { ContentIndex, Rect, World } from "@rpg/map-format";
 import { HOUSE_DOOR_FRAME } from "@rpg/renderer/decorated";
-import {
-  pickVariant,
-  resolveTileArt,
-  stackElevation,
-  tileHash,
-  wallMask,
-} from "@rpg/renderer/tile-art";
+import { lookOf, resolveTileArt, stackElevation, tileHash, wallMask } from "@rpg/renderer/tile-art";
 import type { TileArt, TileMeta } from "@rpg/renderer/tile-art";
 
 /** Largest area side, in tiles. */
@@ -31,7 +25,10 @@ export interface RenderOptions {
   tile?: number;
   /** Zones, spawns, NPCs, portals, signs, temple. Default true. */
   overlays?: boolean;
-  /** Tile grid (only drawn at 16 px per tile or more). Default true. */
+  /**
+   * Tile grid (only drawn at 16 px per tile or more) and the rulers' lines across the map (their
+   * numbers stay). Default true; false to look at the art (borders, looks) without lines.
+   */
   grid?: boolean;
 }
 
@@ -231,18 +228,24 @@ export function renderArea(
     (tileAt(x, y)?.stack ?? []).some((id) => artOf(id)?.joinsWalls === true);
   const x1 = area.x + area.w;
   const y1 = area.y + area.h;
-  // Grounds, then cast shadows, then stacks. Tall sprites of the rows just below the area
-  // (a wall's top, a tree) reach up into it, so those rows are drawn too (clipped).
+  // Grounds with their flat border pieces, then cast shadows, then stacks, as MapView. Tall
+  // sprites of the rows just below the area (a wall's top, a tree) reach up into it, so
+  // those rows are drawn too (clipped).
   for (let y = area.y; y < y1; y++)
     for (let x = area.x; x < x1; x++) {
-      const g = tileAt(x, y)?.ground;
+      const t = tileAt(x, y);
+      const g = t?.ground;
       if (!g) continue;
       const art = artOf(g);
-      const f = art?.variants
-        ? art.variants[pickVariant(tileHash(x, y, floor), art.variants.length, art.weight)]
-        : frameOf(g);
+      const f = art?.variants ? art.variants[lookOf(art, tileHash(x, y, floor), true)] : frameOf(g);
       if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale);
       else rect(img, px(x), py(y), T, T, MISSING);
+      for (const id of t.stack) {
+        const a = artOf(id);
+        if (!a?.flat) continue;
+        const p = a.variants ? a.variants[lookOf(a, tileHash(x, y, floor), false)] : a.base;
+        if (p) drawSprite(img, p, px(x) + T, py(y) + T, scale);
+      }
     }
   /** Where an item's sprite goes: its bottom-right corner (bc: centred on the tile). */
   const rightOf = (x: number, f: Frame, art: TileArt<Frame> | undefined): number =>
@@ -265,12 +268,15 @@ export function renderArea(
       const stack = tileAt(x, y)?.stack ?? [];
       for (const [i, id] of stack.entries()) {
         const art = artOf(id);
+        if (art?.flat) continue; // drawn with the grounds
         const inside = y < y1 && x < x1;
         const f = art?.wall
           ? art.wall[
               wallMask(wallAt(x, y - 1), wallAt(x + 1, y), wallAt(x, y + 1), wallAt(x - 1, y))
             ]
-          : frameOf(id, inside);
+          : art?.variants
+            ? art.variants[lookOf(art, tileHash(x, y, floor), false)]
+            : frameOf(id, inside);
         const raised = Math.round(stackElevation(stack, i, elevationOf) * scale);
         if (f) drawSprite(img, f, rightOf(x, f, art), py(y) + T - raised, scale);
         else if (inside)
@@ -288,12 +294,12 @@ export function renderArea(
   for (let x = area.x; x < x1; x++) {
     if (x % labelEvery !== 0 && x !== area.x) continue;
     drawText(img, String(x), px(x) + 1, 2, 1, RULER);
-    rect(img, px(x), top, 1, area.h * T, [0, 0, 0, 255], 0.35);
+    if (opts.grid !== false) rect(img, px(x), top, 1, area.h * T, [0, 0, 0, 255], 0.35);
   }
   for (let y = area.y; y < y1; y++) {
     if (y % labelEvery !== 0 && y !== area.y) continue;
     drawText(img, String(y), 2, py(y) + 1, 1, RULER);
-    rect(img, left, py(y), area.w * T, 1, [0, 0, 0, 255], 0.35);
+    if (opts.grid !== false) rect(img, left, py(y), area.w * T, 1, [0, 0, 0, 255], 0.35);
   }
 
   const legend: string[] = [];

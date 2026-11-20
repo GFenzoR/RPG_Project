@@ -146,6 +146,10 @@
           "required": ["defense"],
           "properties": { "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" } }
         },
+        "worn": {
+          "description": "How the piece shows on the wearer (docs/06 \"Looks\"): a shape of data/looks.yaml for its slot (weapon, shield, head, torso for body armour, legs, feet) and a tint. Without it the piece is not drawn on the figure (jewellery).",
+          "$ref": "common.schema.json#/$defs/wornPiece"
+        },
         "container": {
           "type": "object",
           "additionalProperties": false,

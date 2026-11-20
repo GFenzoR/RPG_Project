@@ -74,6 +74,9 @@ type Character struct {
 	Owned      []string
 	Premium    int64
 	PremiumSeq int64
+	// Look is the saved body (docs/02 "Apariencia"); one that is empty or not a player's
+	// choice of data/looks.yaml is replaced by the one picked from the id (loadLook).
+	Look content.Look
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -99,6 +102,8 @@ type Snapshot struct {
 	PvP PvPState
 	// Cosmetics are the equipped cosmetics (T5.7).
 	Cosmetics Cosmetics
+	// Look is the character's body (docs/02 "Apariencia").
+	Look content.Look
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -156,6 +161,11 @@ type Config struct {
 	// Cosmetics is the catalog of data/cosmetics.yaml (T5.7). Nil: nothing can be
 	// equipped (EquipCosmetic answers shop.unavailable) and no CosmeticsState is sent.
 	Cosmetics *content.CosmeticShop
+	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a player may choose and
+	// the anti-flood of SetLook. With it every humanoid's Creature carries its look (the
+	// NPCs' and monsters' looks of data/ are checked against it at start). Nil: no look is
+	// sent and SetLook answers appearance.unavailable.
+	Looks *content.Looks
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
@@ -233,6 +243,9 @@ type World struct {
 	publishedRetry atomic.Int32
 	// slow collects players whose Send failed during flush.
 	slow []*Player
+	// lookDirty: the players whose look or visible equipment changed this tick
+	// (look.go lookChanged); flushLooks tells them once each.
+	lookDirty []*Player
 	// diedAway: the death.died message of a character that died link-dead, by character,
 	// for its next login (linkdead.go diedLinkDeadNotice; until a restart).
 	diedAway map[int64]*pb.ServerMessage
@@ -266,9 +279,12 @@ type World struct {
 	// tile in the area (most of the 8 surface floors today) costs no allocation.
 	tileBuf []int32
 	// stackBuf holds one tile's stack while mapArea builds it (reused between areas).
-	stackBuf   []tileEntry
-	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
-	corpses    map[world.Pos][]*Corpse
+	stackBuf []tileEntry
+	ground   map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
+	corpses  map[world.Pos][]*Corpse
+	// corpseItem is the remains' container. A player's corpse may be a copy of it with
+	// more slots (playerCorpse, death.go): recognise a corpse by Corpse, never by
+	// comparing an item's def with corpseItem.
 	corpseItem *content.Item
 	corpseFor  game.Tick
 	attackFor  game.Tick
@@ -279,14 +295,19 @@ type World struct {
 	stuckFor  game.Tick
 	shunFor   game.Tick
 
-	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner.
+	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner, and
+	// the largest player corpse made so far (death.go playerCorpse; nil until one needs
+	// more room than CorpseItem has).
 	playerCorpseFor game.Tick
 	corpseOwnerFor  game.Tick
+	playerCorpseDef *content.Item
 
 	// Items (T1.8): definitions by numeric id, the container of new characters and the
 	// inventory rules of balance.yaml.
 	byNum          map[uint16]*content.Item
 	startContainer *content.Item
+	// pocketsDef is the definition of every player's pockets (pockets.go).
+	pocketsDef *content.Item
 	// rng is Config.Rand: the attribute rolls (attributes.go).
 	rng     *rand.Rand
 	useFor  game.Tick

@@ -146,6 +146,8 @@ func dataConfig(t testing.TB, routes content.BoatRoutes, spawns ...world.Spawn) 
 	parkReachSteps(quests, m)
 	npcs, err := content.LoadNPCs(dir)
 	must(err)
+	looks, err := content.LoadLooks(dir)
+	must(err)
 	dropDialogTeleports(npcs, m)
 	is := m.Islands()[0]
 	is.Spawns = spawns
@@ -157,7 +159,7 @@ func dataConfig(t testing.TB, routes content.BoatRoutes, spawns ...world.Spawn) 
 	}
 	return session.Config{
 		Map: m, Balance: bal, Vocations: vocs, Items: items, Monsters: monsters,
-		NPCs: npcs, Quests: quests, BoatRoutes: routes,
+		NPCs: npcs, Quests: quests, BoatRoutes: routes, Looks: looks,
 		Save: func(session.Snapshot) bool { return true },
 	}
 }

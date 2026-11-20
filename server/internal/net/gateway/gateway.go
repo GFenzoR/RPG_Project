@@ -21,6 +21,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -349,6 +350,8 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Owned:      pc.Owned,
 		Premium:    pc.Premium,
 		PremiumSeq: pc.PremiumSeq,
+		Look: content.Look{Body: pc.Look.Body, Skin: pc.Look.Skin, Hair: pc.Look.Hair, HairColor: pc.Look.HairColor,
+			Beard: pc.Look.Beard},
 	}
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})
@@ -372,7 +375,8 @@ func itemStates(in []store.InventoryItem) []session.ItemState {
 		if it.ItemID <= 0 || it.ItemID > 0xFFFF {
 			continue
 		}
-		s := session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Items: itemStates(it.Items)}
+		s := session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Items: itemStates(it.Items),
+			Pocket: it.Pocket}
 		if m := it.Mods; m != nil {
 			s.Mods = session.Mods{Attr: m.Attribute, Value: m.Value, Refine: m.Refine} // the instance's attribute
 		}

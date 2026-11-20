@@ -219,10 +219,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - La munición se ve en el slot `ammo` con su cantidad (`.count`), como cualquier pila.
 
 ## Notas de T3.2
-- `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones (`ConditionBar` en `ui/GameView.tsx`; en escritorio va en la placa sobre el
-  orbe de vida, arriba del nombre, y en los teléfonos en el encabezado; nombres
-  `condition.<id>.name`).
+- `WorldState.conditions` (de `PlayerConditions`, solo las propias, y desde el lote 13 los
+  estados del servidor; solo la zona de protección, `ENDLESS_STATUSES`, va sin fin, con
+  `until: undefined`: otro id con `remaining_ms` 0 está terminando) alimenta la
+  bandeja de estados (`ui/StatusTray.tsx`, ver "Notas de la bandeja de estados"; nombres
+  `condition.<id>.name`, qué hace `condition.<id>.desc`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -597,16 +598,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
   segunda, así pasos seguidos alternan 1, 2, 1, 2.
 - El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
-  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde docs/17
-  los cuatro atuendos son personajes de LPC: ver "Animación de criaturas". Alpha de
-  invisible, nombre, barras, marca PvP y marco de objetivo no cambian.
+  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde el lote 13
+  un atuendo con `look` es un humanoide del motor (ver "Humanoides del motor"); su quieto
+  compuesto `outfits/<atuendo>/<dir>_0` queda como respaldo. Alpha de invisible, nombre,
+  barras, marca PvP y marco de objetivo no cambian.
 
 ## Animación de criaturas (docs/17 ANI)
 - Todo cuerpo de criatura (monstruo, NPC o el atuendo de un jugador) es un `CreatureBody`
   (`render/creature-body.ts`): la sombra de contacto (solo `shadow: ellipse`) y un sprite
   anclado abajo al centro. Los `br` conservan la esquina de abajo a la derecha en la de su
-  casilla (como `MapView`); los `bc` (personajes de LPC de 64x64) pisan `FEET_LINE` px por
-  encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
+  casilla (como `MapView`); los `bc` (de 64x64: los humanoides del motor y las criaturas
+  animadas) pisan `FEET_LINE` px por encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
   sobre su casilla, de `top` y `foot` de `atlas.json`).
 - `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
   dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
@@ -629,8 +631,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
   donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira), con el
-  clip de su tipo (`attackAction`: `RANGED` → `shoot`, el arco de LPC; `SPELL` → `cast`;
-  `MELEE` → `attack`; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
+  clip de su tipo (`attackAction`: `RANGED` → `shoot`; `SPELL` → `cast`; `MELEE` →
+  `attack`; un muñeco de capas cuyo arma se conoce, por esa arma: `figureAttack`, ver
+  "Humanoides del motor"; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
   `attack` si el sprite no tiene ese clip, y en la embestida si no tiene ninguno); un
   número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
   la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
@@ -666,6 +669,79 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
   exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
   la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
+
+## Humanoides del motor (rama `feat/humanoid-art`, lote 13)
+- Jugadores, NPCs que son personas y monstruos humanoides se dibujan como **muñecos de
+  capas** (docs/17 "Humanoides del motor", docs/06 "Looks"): un `CreatureBody` con un sprite
+  por capa (cuerpo, piernas, pies, torso, pelo, barba, cabeza, escudo, arma), cada una con
+  sus clips (`spriteClips` de su ruta `humans/...` o `worn/...`) y su tinte (un multiply),
+  en la misma pose y frame. El orden por dirección es `LAYER_ORDER` de
+  `packages/renderer/src/look.ts` (puro, con tests: `lookSprites`, `lookLayers`,
+  `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Lo que se lleva en
+  la mano va sobre la ropa en las cuatro direcciones (docs/17 "Humanoides del motor": la
+  oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
+  `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
+  cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el cuerpo).
+- **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
+  (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
+  alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a
+  través de un `AlphaFilter` (uno por cuerpo, creado la primera vez y liberado con
+  `release()`; opaco, sin filtro ni pasada de más). La invisibilidad del propio jugador
+  (T3.2) es `CreatureBody.opacity` (0,4), no el alfa de su contenedor: el canvas lo pone
+  antes de dibujarlo. Las copias translúcidas siguen `figure.alpha`.
+- `render/look.ts` (puro, con tests): `wornFromVisible` (lo que muestran los slots visibles
+  de un jugador, ids que manda el servidor: cada pieza con `worn` en su lugar, sin importar
+  la mano), `dressPlayer` (la ropa del atuendo por defecto llena lo vacío; un disfraz,
+  `costume`, tapa torso, piernas y pies), `wornKey`, `mulTint` y `dollSprites` (las capas
+  que apila `dollOf`, con el color de la tienda en la ropa del atuendo).
+- `game-canvas.ts` `personOf` (rama `feat/character-look`): todo sale del servidor
+  (`CreatureState.look`, `equipment` y `worn`, `state/look.ts`): un jugador lleva los items
+  de sus slots visibles sobre la ropa de su atuendo; un NPC o un monstruo, las piezas de su
+  dato. Sin `look` (una bestia, o un servidor sin `data/looks.yaml`), o sin el cuerpo en el
+  atlas, el camino de antes (el sprite del atuendo o del NPC, después el bloque). El
+  contenido ya no trae `npcLooks` ni `monsterLooks`. La figura se rearma cuando cambia
+  `CreatureState.lookRev` (`drawnLook`, un número: sube con `CreatureLook`,
+  `CreatureCosmetics`, el `CosmeticsState` propio y cada vez que la criatura reaparece).
+- El ataque de un muñeco elige el clip por el arma que lleva (`attackActionOf` →
+  `figureAttack` de `render/creature-events.ts` → `attackActionFor`: arco y ballesta
+  `shoot`, varita y vara `cast`, un hechizo `cast`, el resto `attack`), si se sabe qué
+  lleva (`CreatureSprite.held`: lo que tiene en la mano cualquier muñeco, también otro
+  jugador). Un cuerpo que no es muñeco juega el clip de su tipo (`attackAction`). Caminar usa `perTileNS` mirando al norte o
+  al sur (la regla de la zancada, `anim.ts`); la fase se cuenta en frames, así girar en
+  medio de una caminata no hace saltar las piernas.
+
+## Personalización (rama `feat/character-look`, lote 13; docs/02 "Apariencia")
+- `state/look.ts` (puro, con tests): `lookView`, `equipmentView` y `wornView` leen el
+  `Creature` y el `CreatureLook` del protocolo; `startingLook`, `randomLook` y `choosable`
+  sobre las elecciones de `content.lookOptions` (de `data/looks.yaml`, en orden y sin las
+  pieles `creatures_only`: `vite/content.ts` `loadLookOptions`).
+- `ui/LookPickers.tsx` (sin hooks, `ui/LookPickers.test.ts`): un `fieldset` por parte
+  (cuerpo, piel, peinado, color de pelo, barba); los estilos con su nombre
+  (`appearance.<parte>.<id>`, armado en tiempo de ejecución: `make validate` no lo revisa,
+  lo revisa `vite/content.test.ts`), los colores como muestras con `aria-label`. Cada botón
+  lleva `data-look="<campo>:<id>"` y `aria-pressed`; el elegido no manda nada.
+- `ui/LookPreview.tsx` (con hooks) + `render/look-preview.ts` (puro, con tests): la figura en
+  vivo, sin Pixi. Lee `/atlas/` una vez (`loadPreviewAtlas`, solo los frames `humans/` y
+  `worn/` con su recorte), apila las capas con `lookLayers` y las dibuja en un canvas 2D
+  (`drawDoll`: cada una en un canvas de trabajo, multiply con su tinte y `destination-in`
+  para recortarla) a escala entera, solo la ventana de 48x48 del frame donde se dibuja
+  (`PREVIEW_VIEW`). Camina en el lugar (110 ms por frame; quieto con movimiento reducido) y
+  gira con ‹ › (`turn`, `TURN_ORDER`). Test ids: `look-preview` (o el `testid` que se le
+  pase), `look-turn-left`, `look-turn-right`.
+- **Crear personaje** (`ui/App.tsx` `Characters`): `create-look` con la figura (la ropa de
+  `citizen`), los selectores y "Al azar" (`look-random`); empieza en el cuerpo de `citizen`.
+  `api.createCharacter(name, vocation, look)` manda `look` en snake_case.
+- **Apariencia → Personalizar** (`ui/Appearance.tsx` `Customize`, sin hooks): el borrador
+  vive en el `Game` (`setLookDraft`, `GameUi.lookDraft`); `GameUi.look` y `selfEquipment`
+  son los del servidor. "Guardar aspecto" (`look-apply`) manda `SetLook`
+  (`Game.applyLook`), "Deshacer" (`look-revert`) suelta el borrador; volver a elegir el
+  aspecto que se tiene también. La figura lleva lo que se lleva puesto, menos la pieza de
+  cabeza (taparía el pelo que se elige). Las respuestas del servidor son
+  `appearance.invalid` / `appearance.unavailable` (no `look.*`: esos son de "mirar", rutina
+  que no flota).
+- Hook E2E: `__rpgClient.players()` trae `look` y `equipment` de cada jugador que se ve.
+- Vista previa: escenas `characters` (el formulario con la figura) y `appearance` (la
+  ventana con un borrador sin guardar) de `make ui-preview`.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
@@ -721,6 +797,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El cliente nombra los items por `item.<id>.name`. Un item con un `name` compartido (las
   piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
   compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
+- Las piezas de borde (`ItemDef.border`, las de `data/borders.yaml` que arma
+  `vite/content.ts`) nunca son el item de arriba: `topItem` las saltea, así mirar una
+  casilla de la orilla nombra su suelo y una casilla con solo piezas no ofrece "usar" ni
+  "mover". `MapView` las dibuja con los suelos (`flat` del atlas), bajo las criaturas.
 - E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
   (screenshot `65b-volcan-temple-sign`) y el de NPCs ("talk to NPCs"), que despierta en
   el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
@@ -1092,8 +1172,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - Canvas: `render/cosmetics.ts` (puro, con tests) decide el atuendo (`outfitFor`, con
   citizen si no hay), el tinte multiplicado del sprite (`tintFor`) y el estilo del nombre
   (`nameStyleFor`, se mezcla en el `TextStyle`). `outfitReady` se calcula y guarda por
-  atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambia el `lookKey`
-  de un jugador, se tiran sus sprites y se arman de nuevo.
+  atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambian sus
+  cosméticos (`CreatureState.lookRev`), se tiran los sprites de un jugador y se arman de
+  nuevo.
 - Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Es la
   ventana Apariencia de la botonera en escritorio y una pestaña más en teléfonos
   (`appearance` en `PANEL_TABS`). Muestra por tipo lo
@@ -1243,10 +1324,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (`.win-layer`, la pantalla sobre la barra). En la barra:
   - `ui/Vitals.tsx`: orbes de vida y maná en sus engastes de hierro (se llenan con
     `transform`, el "fantasma" marca lo perdido, el de vida late bajo el 25 %;
-    `orbFill`/`lowHealth` puros), la barra de experiencia (`ExperienceBar`) y, sobre el
-    orbe de vida, una placa con nombre, nivel, experiencia y condiciones (`Vitals`,
-    `data-tutorial="stats"`). Los test ids `health`, `mana`, `level`, `experience` y
-    `conditions` siguen ahí con los mismos textos;
+    `orbFill`/`lowHealth` puros) y la barra de experiencia con la placa del nombre
+    (`ExperienceBar`, `data-tutorial="stats"`; desde el lote 13 la placa de sobre el orbe
+    de vida se fue: ver "Notas de la bandeja de estados");
   - la hotbar (`ui/Hotbar.tsx`, ya no sobre el mapa) y `ui/Toolbar.tsx`: botones con íconos
     propios (`ui/icons.tsx`, pixel art de 16x16 como texto; dos filas de seis a 1x, o una
     fila a 2x desde 1600 px) que abren y cierran las ventanas, el mercado (solo lo cierra:
@@ -1351,8 +1431,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   diálogo, que se angosta a una columna. Los temas vienen de
   `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
   `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
-  `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
-  128 px y el diálogo no entraba en un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
+  `PORTRAIT_PX`): un sprite de 32 px a 2x y el retrato de 64 px de una persona (el quieto
+  del humanoide del motor, `npcs/<npc>`) a 1x (a 2x medía 128 px y el diálogo no entraba en
+  un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
   `[data-topic]`, `shop-search`, `[data-filter]`, `[data-shop-tab]`, `shop-grid`,
   `shop-prev`/`shop-next`, `shop-bar`, `shop-count`, `shop-minus`/`shop-plus`/`shop-max`,
   `shop-total`, `shop-act`. Las reglas de la tienda son puras en `state/shop.ts`
@@ -1484,9 +1565,10 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   cuello más chico sobresale de su borde (`overflow: visible`), píxel por píxel.
 - **Brillo y rojo:** `GameUi.dragging` (el item que se arrastra: `Game.startDrag` lo
   publica y lo borra al soltar, o con un `pointercancel`, sin mover nada) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
-  `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
-  `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
-  `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
+  `data-accepts="yes|no|store"` (`slotDrop`; `slotAccepts`: `wornIn` es el `slotFor` del
+  servidor, con `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada
+  para lo `fixed`; el slot de la mochila guarda lo demás, `store`, sin brillo ni rojo: el
+  servidor lo mete en la mochila o, sin ella, en los bolsillos). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
   captura el puntero, así que el `:hover` sigue al mouse), solo con `@media (hover: hover)`:
   una pantalla táctil deja el `:hover` donde estuvo el último dedo. Nivel, vocación y manos libres
   los sigue diciendo el servidor al soltar.
@@ -1572,6 +1654,25 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   abierta. Un spec nuevo que abra la mochila equipada con un doble click o "Abrir" la
   cierra si ya estaba abierta.
 
+## Notas de los bolsillos (docs/02 "Bolsillos", lote 13, rama `feat/pockets`)
+- `WorldState.pockets` (`PocketsState` de `state/pockets.ts`, puro y con tests:
+  `pocketCells`, `pocketRef`, `pocketOffers`) sale de cada `Inventory` (`pockets`,
+  `pocket_slots`); `GameUi.pockets`. Un bolsillo es `ItemLoc` `{ kind: "pocket", index }`
+  (`locationInit` → `ItemLocation.pocket`, `locKey`, `sameLoc` de `input/actions.ts` y de
+  `state/forge.ts`). No es una ventana de contenedor: nunca tiene `container_id`.
+- `PocketsRow` (`ui/Inventory.tsx`, sin hooks, `ui/Pockets.test.ts`): la fila
+  "Bolsillos" bajo la figura y arriba de la mochila; cada celda es `[data-drop="pocket"]`
+  con `data-index` (`Game.dropTarget`) y su item tiene el menú, la ficha, el arrastre y el
+  doble click de cualquier otro (`ItemCell`). El intercambio ofrece la mochila, después
+  los bolsillos y después las demás ventanas (`offerable` de `ui/Trade.tsx`); la forja,
+  el equipo y después los bolsillos (`forgeCandidates`). El mercado ya los cuenta en el
+  servidor (`owned_mods`).
+- Test ids: `pockets`, `pocket-<n>`. Hook E2E `__rpgClient.pockets()` (`capacity` e
+  `items`). Vista previa: escena `pockets` de `make ui-preview` (sin mochila, como después
+  de una muerte, con la ficha del brebaje del bolsillo); la base lleva dos items en los
+  bolsillos. E2E: "die to a wolf" despierta sin mochila y con los cuatro bolsillos vacíos
+  (`14-respawn`).
+
 ## Notas de la pantalla completa (docs/17 UI-4 y UI-5, rama `feat/hud-fullscreen`)
 El dueño (2026-11-18): el juego a pantalla completa, como Diablo 2 o Ragnarok Online, con
 los menús flotando donde el jugador los acomode; abajo una barra gótica (orbes de vida y
@@ -1591,10 +1692,11 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   interfaz la agranda como a las ventanas), grilla de tres columnas: orbe de vida
   (`--orb-col`, 112 px), el medio (`.bar-centre`: la experiencia arriba y debajo `.bar-row`,
   un pozo con la hotbar y la botonera) y orbe de maná. Los engastes (`.orb-socket`, 106 px)
-  salen 18 px por encima de la barra; la placa (`.vitals`, `--plaque-w` 132 px) va sobre el
-  orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
-  remaches arriba, pilares de hierro con filo dorado a los lados del medio y una cresta de
-  pináculos al centro. La hotbar mide sus slots en sus propios px aunque la barra tenga
+  salen 18 px por encima de la barra; la bandeja de estados (`.status-box`, `--tray-w` 132
+  px; antes la placa `.vitals`) va sobre el orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
+  remaches arriba, pilares de hierro con filo dorado a los lados del medio y, al centro, la
+  placa del nombre con un pináculo en cada hombro (`.nameplate`, desde el lote 13; antes
+  una cresta de pináculos). La hotbar mide sus slots en sus propios px aunque la barra tenga
   `zoom` (`cssZoom` de `ui/Hotbar.tsx`: `getBoundingClientRect` da px de pantalla y
   `clientWidth` y los estilos computados los propios); en la barra no deja margen
   (`margin={0}`) y pagina con sus flechas cuando no entran los 12 (a 960x700, 6).
@@ -1603,7 +1705,7 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   variables `--orn-*` en el `style` de `.game` (CSSOM: la CSP de escritorio no deja
   `<style>` en línea, sí imágenes `data:`). Las esquinas doradas con un granate van en
   `.gwin::after`; los remaches en la banda de la barra y en los engastes; los pináculos en
-  los hombros de cada engaste y en la cresta.
+  los hombros de cada engaste y de la placa del nombre.
 - **Ventanas** (`ui/windows.ts`, versión 3 de `rpg.windows`): sin `dock` ni `order`; todas
   flotan en `.win-layer` (la pantalla sobre la barra: `%` de su CSS es de esa área).
   `placeOf` da `x`/`y` en px de pantalla desde su esquina; sin `x`/`y` la ventana está en
@@ -1795,3 +1897,42 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `quests`) y mira las dos pestañas; después lee el atril del templo y abre su cofre dos
   veces (screenshots `96-sandbox-quests`, `96b-sandbox-quests-finished`, `97-sandbox-book`,
   `98-sandbox-chest`).
+
+## Notas de la bandeja de estados (lote 13, rama `feat/hud-status`)
+Lo que pidió el dueño en la prueba del 2026-11-19: ver los estados del personaje junto al
+chat, y el nombre y el nivel al medio, en la barra de experiencia (docs/17 "Hecho: bandeja
+de estados y placa del nombre").
+- **Estado puro** (`state/status.ts`, con tests): `trayEntries(condiciones, ahora,
+  reducido)` da lo que se dibuja: orden fijo (`STATUS_ORDER`: lo que daña, los bloqueos y
+  la zona, lo que ayuda; un id desconocido al final como ventaja), tipo (`STATUS_KIND`:
+  `buff` o `harm`), segundos redondeados para arriba, sin lo que ya terminó y con `flash`
+  en los últimos `FLASH_MS` (5 s) salvo con movimiento reducido. `nextTrayChange` dice en
+  cuántos ms cambia un segundo escrito (o nada sin fin). `statusIconStyle` corta
+  `STATUS_BOX` (8, 8, 16, 16, el `UI_STATUS_BOX` de spritegen: un test los compara) de
+  `ui/status/<id>` del atlas como variables CSS.
+- **Vista** (`ui/StatusTray.tsx`): `StatusTrayView` sin hooks (`ui/StatusTray.test.ts`
+  recorre su árbol) y `StatusTray`, con un `setTimeout` al próximo segundo y el tooltip
+  que abrió un toque o un click (`data-open`; el mouse y el foco lo abren con CSS). Se
+  cierra con otro en el mismo ícono, con una presión fuera de la bandeja o con Escape
+  (`closesTip`, puro y con tests; el Escape queda `preventDefault`, así no cierra además
+  una ventana ni abre Opciones). Cada ícono es un
+  `li` enfocable con `data-condition`, `data-kind`, `data-flash`, `aria-label` (nombre y
+  tiempo) y su tooltip (`role="tooltip"`, `aria-describedby`); sin sprite, la inicial.
+  Textos: `client.status.*`, `condition.<id>.desc`.
+- **Dónde va:** en escritorio dentro de `HudBar` (prop `tray`), `position: absolute` sobre
+  el orbe de vida y a la izquierda del chat (`windows.css`, íconos a 2x, filas que crecen
+  hacia arriba); mientras un tooltip se ve, `.hud-bar:has(...)` sube la barra a `z-index`
+  21, sobre las ventanas. En teléfonos y tablets, en el encabezado (`client.css`, 1,5x):
+  toma el lugar que sobra (`flex: 1 1 0`, al menos un ícono), lo que no entra baja a una
+  segunda línea recortada y el tooltip cuelga del `.hud` (nada posicionado en el medio,
+  así el recorte de la fila no lo corta).
+- **Placa del nombre** (`ExperienceBar`): nombre y nivel (`client.vitals.level`) sobre la
+  barra (el resaltado `stats` del tutorial está en `.xp`; la placa, que sobresale de su
+  caja, hereda su contorno: `.xp[data-tutorial-active] > .nameplate`), el porcentaje en la barra (`.xppercent`) y en su `title` y `aria-valuetext` la
+  experiencia exacta y lo que falta (`experienceTip`, con `content.experience`, la curva de
+  `balance.yaml` que pasa `vite/content.ts`; `state/experience.ts` es la fórmula del
+  servidor). Test ids: `level` en el nivel, `experience` en la barra, `conditions` en la
+  bandeja.
+- **Vista previa:** escena `status` (y `game`, `danger`) de `make ui-preview`.
+- **E2E:** "T3.2: a guardian casts haste" (`22-haste`, `23-conditions-hud`) y "T5.6: at
+  1280x800 a long name" (la placa).

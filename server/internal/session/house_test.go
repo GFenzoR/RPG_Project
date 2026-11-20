@@ -947,7 +947,7 @@ func TestHouseReleaseMailsFlatAndWithdraws(t *testing.T) {
 			},
 		}
 	})
-	c := withPack(ana, cottageExit)
+	c := withPack(ana, cottageExit, pebbles()...) // full pockets: only the backpack takes what comes out
 	c.Name, c.Level = "Ana", 10
 	cl, a := h.joinChar(c)
 	h.openDoor(cl, cottageDoor)

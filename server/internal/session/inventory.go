@@ -129,6 +129,18 @@ func depth(it *Item) int {
 	return n
 }
 
+// nestRefusal is the key that refuses putting it into the container c (it would hold
+// itself, or nest deeper than maxDepth), or "".
+func nestRefusal(it, c *Item) string {
+	if it.contains(c) {
+		return msgIntoItself
+	}
+	if depth(c)+1+it.height() > maxDepth {
+		return msgTooDeep
+	}
+	return ""
+}
+
 // height is 0 for an item with no content, plus one per level of nested content.
 func (it *Item) height() int {
 	h := 0
@@ -178,14 +190,17 @@ type openContainer struct {
 // ---- saved state ---------------------------------------------------------------
 
 // ItemState is a saved item: its numeric id (data/ids.lock.yaml), stack size, slot
-// (pb.EquipmentSlot for an equipped item, index for an item inside a container), its mods
-// (attribute and refine, attributes.go) and the content of a container.
+// (pb.EquipmentSlot for an equipped item, the cell for an item in the pockets, index for
+// an item inside a container), its mods (attribute and refine, attributes.go) and the
+// content of a container. Pocket marks a top-level item that lies in the pockets
+// (pockets.go), not in an equipment slot.
 type ItemState struct {
 	ItemID uint16
 	Count  int
 	Slot   int
 	Mods   Mods
 	Items  []ItemState
+	Pocket bool
 }
 
 func (it *Item) state(slot int) ItemState {
@@ -196,6 +211,7 @@ func (it *Item) state(slot int) ItemState {
 	return s
 }
 
+// inventoryStates is everything p carries as saved: the equipment, then the pockets.
 func (p *Player) inventoryStates() []ItemState {
 	var out []ItemState
 	for slot, it := range p.equip {
@@ -203,7 +219,7 @@ func (p *Player) inventoryStates() []ItemState {
 			out = append(out, it.state(slot))
 		}
 	}
-	return out
+	return p.pocketStates(out)
 }
 
 // loadItem builds an item from its saved state, with its mods; unknown (retired) items
@@ -228,11 +244,12 @@ func (w *World) loadItem(s ItemState) *Item {
 	return it
 }
 
-// loadInventory equips the saved items of a joining player. A character that never
-// played starts with balance.yaml inventory.start_container.
+// loadInventory equips the saved items of a joining player and fills its pockets. A
+// character that never played starts with balance.yaml inventory.start_container.
 func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
+	w.loadPockets(p, saved)
 	for _, s := range saved {
-		if s.Slot <= 0 || s.Slot >= equipSlots || p.equip[s.Slot] != nil {
+		if s.Pocket || s.Slot <= 0 || s.Slot >= equipSlots || p.equip[s.Slot] != nil {
 			continue
 		}
 		if it := w.loadItem(s); it != nil {
@@ -251,13 +268,16 @@ func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
 
 // ---- weight and equipment effects ----------------------------------------------
 
-// carried is the weight p carries, in grams.
+// carried is the weight p carries, in grams: its equipment and what its pockets hold.
 func (p *Player) carried() int {
 	n := 0
 	for _, it := range p.equip {
 		if it != nil {
 			n += it.weight()
 		}
+	}
+	if p.pockets != nil {
+		n += p.pockets.weight() // the pockets themselves weigh nothing
 	}
 	return n
 }
@@ -274,7 +294,8 @@ func (p *Player) Equipped(slot pb.EquipmentSlot) *Item {
 }
 
 // equipmentChanged recomputes what the equipment gives in combat: the weapon in the
-// right hand, the shield in the left and the armor of every slot.
+// right hand, the shield in the left and the armor of every slot; and what the others see
+// p wear. Every path that changes p's equipment slots calls it.
 func (w *World) equipmentChanged(p *Player) {
 	p.weapon, p.shield, p.armor = nil, nil, 0
 	if it := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_RIGHT_HAND]; it != nil && it.def.Weapon != nil {
@@ -288,7 +309,8 @@ func (w *World) equipmentChanged(p *Player) {
 			p.armor += it.def.Armor.Armor
 		}
 	}
-	w.applyGear(p) // the attributes of what p wears (attributes.go)
+	w.applyGear(p)     // the attributes of what p wears (attributes.go)
+	w.showEquipment(p) // what the others see it wear (look.go)
 }
 
 var armorSlots = map[string]pb.EquipmentSlot{
@@ -354,7 +376,7 @@ const (
 )
 
 // place is a resolved ItemLocation: a tile, an equipment slot of the player, or an
-// open container.
+// open container (the player's pockets too: a container that is never a window).
 type place struct {
 	kind locKind
 	pos  world.Pos
@@ -429,6 +451,12 @@ func (w *World) itemAt(p *Player, loc *pb.ItemLocation, itemID, index uint32) (*
 			return nil, place{}
 		}
 		return c.items[i], place{kind: locContainer, cont: c}
+	case *pb.ItemLocation_Pocket:
+		c := p.pockets
+		if c == nil || l.Pocket >= uint32(len(c.items)) || uint32(c.items[l.Pocket].def.Numeric) != itemID {
+			return nil, place{}
+		}
+		return c.items[l.Pocket], place{kind: locContainer, cont: c}
 	}
 	return nil, place{}
 }
@@ -455,6 +483,15 @@ func (w *World) destination(p *Player, loc *pb.ItemLocation) (place, bool) {
 		}
 		if i := int(l.Container.GetIndex()); i < len(c.items) && c.items[i].def.Container != nil {
 			return place{kind: locContainer, cont: c.items[i]}, true
+		}
+		return place{kind: locContainer, cont: c}, true
+	case *pb.ItemLocation_Pocket:
+		c := p.pockets
+		if c == nil {
+			return place{}, false
+		}
+		if l.Pocket < uint32(len(c.items)) && c.items[l.Pocket].def.Container != nil {
+			return place{kind: locContainer, cont: c.items[l.Pocket]}, true
 		}
 		return place{kind: locContainer, cont: c}, true
 	}
@@ -550,6 +587,22 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		if from.kind == locSlot && from.slot == to.slot {
 			return
 		}
+		if p.intoBackpack(it, to) { // no backpack: it goes to the pockets (pockets.go)
+			if from.kind == locContainer && from.cont == p.pockets {
+				return // already there
+			}
+			if key := nestRefusal(it, p.pockets); key != "" { // a container worn elsewhere
+				p.emit(systemMsg(key))
+				return
+			}
+			into, ok := p.pocketRoom(it, count)
+			if !ok {
+				p.emit(systemMsg(msgContainerFull))
+				return
+			}
+			to, merge = place{kind: locContainer, cont: p.pockets}, into
+			break
+		}
 		if key, params := w.canEquip(p, it.def, to.slot); key != "" {
 			p.emit(systemMsg(key, params...))
 			return
@@ -577,12 +630,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			p.emit(systemMsg(msgFloorFirst))
 			return
 		}
-		if it.contains(to.cont) {
-			p.emit(systemMsg(msgIntoItself))
-			return
-		}
-		if depth(to.cont)+1+it.height() > maxDepth {
-			p.emit(systemMsg(msgTooDeep))
+		if key := nestRefusal(it, to.cont); key != "" {
+			p.emit(systemMsg(key))
 			return
 		}
 		if from.kind == locContainer && from.cont == to.cont {
@@ -590,8 +639,16 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 		merge = mergeTarget(to.cont.items, it, count)
 		if merge == nil && len(to.cont.items) >= to.cont.def.Slots() {
-			p.emit(systemMsg(msgContainerFull))
-			return
+			// A full backpack: a pickup goes on to the pockets (pockets.go).
+			ok := false
+			if p.intoBackpack(it, to) && (from.kind != locContainer || from.cont != p.pockets) {
+				merge, ok = p.pocketRoom(it, count)
+			}
+			if !ok {
+				p.emit(systemMsg(msgContainerFull))
+				return
+			}
+			to.cont = p.pockets
 		}
 	}
 
@@ -639,8 +696,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	// T5.3 fail-safe: something p carries goes where no save has it (hold.go gaveAway).
 	gave := it.carriedBy() == p && w.publicGround(to)
 
-	// Run it: take the units out of their place and put them in the new one.
+	// Run it: take the units out of their place and put them in the new one (one
+	// Inventory for both ends: the pockets or a slot on each side).
 	before := p.carried()
+	release := w.holdInventory(p)
 	moving := it
 	if count < it.count {
 		it.count -= count
@@ -660,6 +719,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		w.attach(p, moving, to)
 		w.changedPlace(p, to)
 	}
+	release()
 	if leaving {
 		w.leftHouse(p, landed.root())
 	}
@@ -796,19 +856,47 @@ func (w *World) changedPlace(p *Player, pl place) {
 	}
 }
 
+// sendInventory sends p its equipment and what its pockets hold, or marks it due while a
+// holdInventory is open.
 func (w *World) sendInventory(p *Player) {
 	p.questDirty = true
+	if p.invHold > 0 {
+		p.invDue = true
+		return
+	}
 	inv := &pb.Inventory{}
 	for slot, it := range p.equip {
 		if it != nil {
 			inv.Slots = append(inv.Slots, &pb.EquippedItem{Slot: pb.EquipmentSlot(slot), Item: it.stack()})
 		}
 	}
+	if pk := p.pockets; pk != nil {
+		inv.Pockets, inv.PocketSlots = pk.stacks(), uint32(pk.def.Slots())
+	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Inventory{Inventory: inv}})
 }
 
-// containerChanged sends the content of c to everyone who has it open.
+// holdInventory holds p's Inventory back until the returned release runs: one change that
+// touches the equipment or the pockets more than once (a move from the pockets to a slot,
+// a give of several stacks) sends one Inventory, with the state at the release, instead
+// of one per place. Holds nest; only the outermost release sends.
+func (w *World) holdInventory(p *Player) (release func()) {
+	p.invHold++
+	return func() {
+		if p.invHold--; p.invHold == 0 && p.invDue {
+			p.invDue = false
+			w.sendInventory(p)
+		}
+	}
+}
+
+// containerChanged sends the content of c to everyone who has it open; what the pockets
+// hold goes to their player in its Inventory.
 func (w *World) containerChanged(c *Item) {
+	if isPockets(c) {
+		w.sendInventory(c.owner)
+		return
+	}
 	if r := c.root(); r.owner != nil {
 		r.owner.questDirty = true
 	} else if r.onGround {
@@ -1135,6 +1223,7 @@ func (w *World) initItems() error {
 		w.maxOpen = 16
 	}
 	w.useFor = ticksFor(max(inv.UseCooldownMs, 1))
+	w.initPockets()
 	if inv.StartContainer != "" {
 		def := w.cfg.Items[inv.StartContainer]
 		if def == nil || def.Container == nil {

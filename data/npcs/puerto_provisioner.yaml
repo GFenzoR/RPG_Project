@@ -1,6 +1,16 @@
 id: puerto_provisioner
 name: npc.puerto_provisioner.name
-sprite: npcs/merchant
+sprite: npcs/puerto_provisioner
+look:
+  body: sturdy
+  skin: brown
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    torso: { shape: tunic, tint: ochre }
+    legs: { shape: trousers, tint: black }
+    feet: { shape: shoes, tint: tan_leather }
 notes: >-
   Tools, food, poultices and a spare backpack (a death above level 8 takes the worn one);
   buys hunting materials from the island's monsters at about a third of their value. No

@@ -320,15 +320,26 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 	}
 	for s := range 2 {
 		giver, taker := t.p[s], t.p[1-s]
-		bp := taker.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-		if len(t.offer[s]) == 0 || bp == nil { // tradeFits: nil only when nothing comes
-			continue
-		}
+		// Into the taker's backpack, and what does not fit there into its pockets
+		// (pockets.go; tradeFits counted both).
+		packs := taker.packs()
+		var touched [2]bool
 		for _, x := range t.offer[s] {
-			w.attach(taker, x.it, place{kind: locContainer, cont: bp})
+			pack := taker.packWithRoom()
+			if pack == nil { // tradeFits: never
+				w.log.Error("trade: no room for a traded item", "character", taker.charID, "item", x.it.def.ID)
+				pack = taker.pockets // never nil in the world (loadInventory): never lost
+			}
+			touched[0] = touched[0] || pack == packs[0]
+			touched[1] = touched[1] || pack != packs[0]
+			w.attach(taker, x.it, place{kind: locContainer, cont: pack})
 			w.econInstance(taker, EconTrade, "trade", giver.charID, x.it, 1)
 		}
-		w.containerChanged(bp)
+		for i, c := range packs {
+			if touched[i] && c != nil {
+				w.containerChanged(c)
+			}
+		}
 	}
 	for _, p := range t.p {
 		p.questDirty = true
@@ -341,27 +352,34 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 	w.endTrade(t, pb.TradeState_TRADE_STATE_COMPLETED, "")
 }
 
-// tradeFits reports whether p can take in (into its backpack's top level) while giving
-// out away.
+// tradeFits reports whether p can take in (into the top level of its backpack and then
+// its pockets, pockets.go) while giving out away. What leaves a pack frees a cell only
+// below its capacity: pockets that hold more than inventory.pocket_slots (a balance that
+// lowered it) have no room until they hold fewer.
 func (w *World) tradeFits(p *Player, in, out []tradeItem) bool {
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	if len(in) == 0 {
 		return true
 	}
-	if bp == nil || bp.def.Container == nil {
-		return false
-	}
-	used, weight := len(bp.items), p.carried()
-	for _, x := range out {
-		if x.it.parent == bp {
-			used--
+	free, weight := 0, p.carried()
+	for _, c := range p.packs() {
+		if c == nil {
+			continue
 		}
+		held := len(c.items)
+		for _, x := range out {
+			if x.it.parent == c {
+				held--
+			}
+		}
+		free += max(c.def.Slots()-held, 0)
+	}
+	for _, x := range out {
 		weight -= x.it.weight()
 	}
 	for _, x := range in {
 		weight += x.it.weight()
 	}
-	return used+len(in) <= bp.def.Slots() && weight <= p.capacity
+	return len(in) <= free && weight <= p.capacity
 }
 
 func (w *World) sendTrade(t *trade, reason string) {

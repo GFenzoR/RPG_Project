@@ -486,7 +486,8 @@
         "max_open_containers",
         "use_cooldown_ms",
         "door_cooldown_ms",
-        "reach"
+        "reach",
+        "pocket_slots"
       ],
       "properties": {
         "start_container": {
@@ -508,6 +509,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 6
+        },
+        "pocket_slots": {
+          "description": "Cells of the pockets every character has built in (docs/02 \"Bolsillos\"): part of the character, never an item, never lost. Never lower it: saved pockets keep their items, but a cell over the number cannot take one again.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
         }
       }
     },

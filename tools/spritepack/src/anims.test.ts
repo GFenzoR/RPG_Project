@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { layerOver, measureFrames, recolorImage, specColumns } from "./anims.ts";
 import { buildAtlas, legacyFrame } from "./build.ts";
+import { collectSpriteRefs } from "./content.ts";
 import { createImage, encodePng, fillRect } from "./image.ts";
 import type { Image } from "./image.ts";
 import { parseManifest } from "./manifest.ts";
@@ -359,6 +360,50 @@ describe("buildAtlas with animations", () => {
     expect(page?.["creatures/ghost"]).toEqual(page?.["creatures/ghost/idle_s_0"]);
   });
 
+  it("packs paper-doll frames cropped (trim) and sets the walk's frames per tile (per_tile, per_tile_ns)", () => {
+    // A 64x64 layer whose frames hold a 4x6 mark: packed as 4x6, placed as 64x64.
+    const frame = (x: number): Buffer => {
+      const img = createImage(64, 64);
+      fillRect(img, x, 40, 4, 6, GREY);
+      return encodePng(img);
+    };
+    for (const d of ["n", "e", "s", "w"])
+      for (const n of [0, 1, 2, 3])
+        put(`assets/sprites/worn/legs_x/walk_${d}_${n}.png`, frame(20 + n));
+    // An empty frame (a layer all behind the body) still is a frame.
+    put("assets/sprites/worn/legs_x/idle_s_0.png", encodePng(createImage(64, 64)));
+    put(
+      "assets/sprites.yaml",
+      "sprites: {}\nanimations:\n  worn/legs_x: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86 }\n",
+    );
+    put("data/looks.yaml", "shapes: { legs: [x] }\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.anims["worn/legs_x"]?.actions.walk).toEqual({
+      frames: 4,
+      ms: 0,
+      perTile: 8,
+      perTileNS: 13.86,
+      dirs: ["n", "e", "s", "w"],
+    });
+    const page = r.atlas?.pages[0]?.json.frames;
+    const img = r.atlas?.pages[0]?.image;
+    const f = page?.["worn/legs_x/walk_w_2"];
+    if (!f || !img) throw new Error("no frame");
+    expect(f.trimmed).toBe(true);
+    expect(f.frame).toMatchObject({ w: 4, h: 6 });
+    expect(f.spriteSourceSize).toEqual({ x: 22, y: 40, w: 4, h: 6 });
+    expect(f.sourceSize).toEqual({ w: 64, h: 64 });
+    expect(pixel(img, f.frame.x, f.frame.y)).toEqual([128, 128, 128, 255]);
+    expect(page?.["worn/legs_x/idle_s_0"]).toMatchObject({
+      trimmed: true,
+      sourceSize: { w: 64, h: 64 },
+    });
+    expect(page?.["worn/legs_x/idle_s_0"]?.frame).toMatchObject({ w: 1, h: 1 });
+    // data/looks.yaml names the layer: it is used, as a sprite field would be.
+    expect(collectSpriteRefs(root).map((x) => x.sprite)).toContain("worn/legs_x");
+  });
+
   it("mirrors west frames to the east, anchors on the feet and times the clips (mirror, anchor, ms)", () => {
     // A 64x64 creature drawn facing south, north and west, as the Gemini monsters: a grey
     // body with a red snout on its left, so a mirrored frame has the snout on its right.
@@ -432,7 +477,7 @@ animations:
     put("data/monsters/b.yaml", "id: b\nsprite: creatures/toad\n");
     const r = buildAtlas(root, { strict: true });
     expect(errors(r)).toEqual([
-      "assets/sprites.yaml:3 creatures/still: mirror, anchor and ms need frames from files (assets/sprites/creatures/still/<action>_<dir>_<n>.png)",
+      "assets/sprites.yaml:3 creatures/still: mirror, anchor, ms, per_tile, per_tile_ns and trim need frames from files (assets/sprites/creatures/still/<action>_<dir>_<n>.png)",
       "assets/sprites.yaml:4 creatures/toad: ms.idle but no idle frames",
     ]);
   });

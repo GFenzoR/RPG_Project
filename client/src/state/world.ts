@@ -36,6 +36,7 @@ import type {
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
+import type { Look, Worn } from "@rpg/renderer/look";
 import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
@@ -54,10 +55,23 @@ import {
 } from "./motion.ts";
 import type { Slide } from "./motion.ts";
 import { movesOnStep } from "./portals.ts";
+import { NO_POCKETS } from "./pockets.ts";
+import type { PocketsState } from "./pockets.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import { questLogFrom } from "./quests.ts";
+import {
+  equipmentView,
+  equipmentViewKeep,
+  lookView,
+  lookViewKeep,
+  sameEquipment,
+  sameLook,
+  sameWorn,
+  wornViewKeep,
+} from "./look.ts";
+import type { EquipmentView } from "./look.ts";
 import type { QuestLogView } from "./quests.ts";
 import { heavyHit } from "../render/shake.ts";
 import { houseFrom } from "./house.ts";
@@ -121,6 +135,22 @@ export interface CreatureState {
   skull: Skull;
   /** A player's equipped cosmetics (T5.7): content ids, "" = default look. Looks only. */
   cosmetics: CosmeticsView;
+  /**
+   * The body of an engine humanoid (docs/05 "Apariencia y equipo visible"): a player's,
+   * an NPC's or a humanoid monster's; undefined for a beast (or an old server).
+   */
+  look: Look | undefined;
+  /** A player's visible slots: item ids (Creature.equipment, CreatureLook). */
+  equipment: EquipmentView;
+  /** What an NPC or a humanoid monster wears (its data's pieces, which are no items). */
+  worn: Worn | undefined;
+  /**
+   * Takes a new value whenever the look, the visible equipment or the cosmetics change,
+   * and when the creature appears again: the canvas builds its figure again when it
+   * differs. The values come from one counter of the WorldState, so a creature sent again
+   * after a FullMapView never repeats the value its sprite was drawn with.
+   */
+  lookRev: number;
 }
 
 /** Equipped cosmetics by slot (protocol Cosmetics); "" = the default look of that kind. */
@@ -142,6 +172,17 @@ const cosmeticsView = (c: Cosmetics | undefined): CosmeticsView => ({
   color: c?.color ?? "",
   nameEffect: c?.nameEffect ?? "",
 });
+
+/** Whether the canvas draws a and b with the same figure (kind, sprite, body, dress). */
+const sameFigure = (a: CreatureState, b: CreatureState): boolean =>
+  a.kind === b.kind &&
+  a.contentId === b.contentId &&
+  sameLook(a.look, b.look) &&
+  sameEquipment(a.equipment, b.equipment) &&
+  sameWorn(a.worn, b.worn) &&
+  a.cosmetics.outfit === b.cosmetics.outfit &&
+  a.cosmetics.color === b.cosmetics.color &&
+  a.cosmetics.nameEffect === b.cosmetics.nameEffect;
 
 /** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
 export interface EffectState {
@@ -239,13 +280,28 @@ export interface SkillState {
   percent: number;
 }
 
+/**
+ * The statuses with no end (docs/05 "Condiciones"): their remaining_ms is always 0, which
+ * only for them means "no end"; any other id with 0 left is ending now.
+ */
+export const ENDLESS_STATUSES: ReadonlySet<string> = new Set(["protection_zone"]);
+
 /** The last death (death.died), for the death screen. */
-/** One of the player's own active conditions (PlayerConditions, T3.2). */
+/**
+ * One of the player's own active conditions (PlayerConditions, T3.2), or a status the
+ * server adds to them (in_combat, pvp_locked, protection_zone: docs/05 "Condiciones").
+ */
 export interface ConditionView {
-  /** balance.yaml conditions id: poison, hasted... (name: condition.<id>.name). */
+  /**
+   * balance.yaml conditions id (poison, hasted...) or a status id (name:
+   * condition.<id>.name, what it does: condition.<id>.desc).
+   */
   id: string;
-  /** performance.now() at which it ends (or its last hit lands). */
-  until: number;
+  /**
+   * performance.now() at which it ends (or its last hit lands); undefined for one with no
+   * end (ENDLESS_STATUSES: protection_zone).
+   */
+  until: number | undefined;
   /** Hits left of a damage condition (0 for the others). */
   ticks: number;
 }
@@ -408,6 +464,8 @@ export class WorldState implements TileSource {
   predicted: PredictedStep[] = [];
   /** The seq of the last Walk predicted (docs/05 "Caminar"): one more for each. */
   private walkSeq = 0;
+  /** The last lookRev handed out: every new one is greater (CreatureState.lookRev). */
+  private lookSeq = 0;
   /** Welcome.max_queued_steps: how many own steps may wait for the server. */
   private maxQueued = 0;
   /**
@@ -504,6 +562,8 @@ export class WorldState implements TileSource {
   house: HouseView | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
+  /** What the character's pockets hold and how many cells they have (Inventory, docs/02 "Bolsillos"). */
+  pockets: PocketsState = NO_POCKETS;
   /** Open container windows, oldest first. */
   containers: ContainerState[] = [];
   /** Which of them is the equipped backpack, shown under the figure (docs/17 UI-5). */
@@ -732,7 +792,19 @@ export class WorldState implements TileSource {
       }
       case "creatureCosmetics": {
         const c = this.creatures.get(msg.value.id);
-        if (c) c.cosmetics = cosmeticsView(msg.value.cosmetics);
+        if (c) {
+          c.cosmetics = cosmeticsView(msg.value.cosmetics);
+          c.lookRev = ++this.lookSeq;
+        }
+        break;
+      }
+      case "creatureLook": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) {
+          c.look = lookView(msg.value.look);
+          c.equipment = equipmentView(msg.value.equipment);
+          c.lookRev = ++this.lookSeq;
+        }
         break;
       }
       case "cosmeticsState": {
@@ -743,7 +815,10 @@ export class WorldState implements TileSource {
           equipped,
         };
         const s = this.self;
-        if (s) s.cosmetics = { ...equipped };
+        if (s) {
+          s.cosmetics = { ...equipped };
+          s.lookRev = ++this.lookSeq;
+        }
         break;
       }
       case "tutorialStep":
@@ -764,7 +839,7 @@ export class WorldState implements TileSource {
       case "playerConditions":
         this.conditions = msg.value.conditions.map((c) => ({
           id: c.conditionId,
-          until: now + c.remainingMs,
+          until: ENDLESS_STATUSES.has(c.conditionId) ? undefined : now + c.remainingMs,
           ticks: c.ticks,
         }));
         break;
@@ -983,6 +1058,7 @@ export class WorldState implements TileSource {
           msg.value.slots.flatMap((s) => (s.item ? [[s.slot, itemView(s.item)] as const] : [])),
         );
         this.backpack.equipped(this.inventory.get(EquipmentSlot.BACKPACK)?.itemId, this.containers);
+        this.pockets = { capacity: msg.value.pocketSlots, items: msg.value.pockets.map(itemView) };
         break;
       case "containerOpen": {
         const v = msg.value;
@@ -1082,7 +1158,16 @@ export class WorldState implements TileSource {
       guild: c.guild,
       skull: c.skull,
       cosmetics: cosmeticsView(c.cosmetics),
+      // The same objects while unchanged: no garbage per creature on every floor change.
+      look: lookViewKeep(prev?.look, c.look),
+      equipment: equipmentViewKeep(prev?.equipment, c.equipment),
+      worn: wornViewKeep(prev?.worn, c.worn),
+      lookRev: prev ? prev.lookRev : ++this.lookSeq,
     });
+    // Built again only when what the figure is drawn from changed: a FullMapView or a
+    // MapSlice (a teleport, another floor) sends every creature in view again.
+    const next = this.creatures.get(c.id);
+    if (prev && next && !sameFigure(prev, next)) next.lookRev = ++this.lookSeq;
   }
 
   /**

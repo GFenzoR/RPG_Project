@@ -142,6 +142,17 @@ const WINDOWS: Record<string, unknown> = {
       quests: { open: true, collapsed: false },
     },
   },
+  // docs/02 "Apariencia": the Apariencia window at its factory place with a look being
+  // picked (Personalizar: the figure and the pickers over the cosmetics).
+  appearance: {
+    v: 3,
+    z: ["appearance"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      appearance: { open: true, collapsed: false },
+    },
+  },
   // The tutorial's hint gives way to the help at its factory place (docs/17 UI-5).
   tutorialhelp: {
     v: 3,
@@ -182,6 +193,15 @@ const WINDOWS: Record<string, unknown> = {
   },
   // docs/17 UI-5: the inventory open, an item held over it.
   inventory: {
+    v: 3,
+    z: [],
+    win: {
+      inventory: { open: true, collapsed: false },
+      battle: { open: true, collapsed: true },
+    },
+  },
+  // docs/02 "Bolsillos": the inventory without a backpack, only the pockets.
+  pockets: {
     v: 3,
     z: [],
     win: {
@@ -245,18 +265,23 @@ const WINDOWS: Record<string, unknown> = {
   },
 };
 /** Scenes about the inventory: on a phone or a tablet they open its tab. */
-const INVENTORY_TAB = ["inventory", "tooltip", "tooltipcoin"];
+const INVENTORY_TAB = ["inventory", "pockets", "tooltip", "tooltipcoin"];
 /** Scenes about the quest log: on a phone or a tablet they open its tab. */
 const QUESTS_TAB = ["quests", "questsdone"];
+/** Scenes about the Apariencia window: on a phone or a tablet they open its tab. */
+const APPEARANCE_TAB = ["appearance"];
 /** What the mouse is over in a scene's screenshot. */
 const HOVERS: Record<string, string> = {
   tooltip: '[data-testid="slot-right_hand"] [data-tip-item]',
   tooltipcoin: '[data-container][data-docked] [data-item="copper_coin"]',
   // docs/17 UI-5: a slot that does not take the held sword tints red under the pointer.
   inventory: '[data-testid="slot-left_hand"]',
+  // docs/02 "Bolsillos": the card of the potion in a pocket.
+  pockets: '[data-testid="pocket-1"] [data-tip-item]',
 };
 const SCENES = [
   "game",
+  "status",
   "allwindows",
   "trade",
   "chattabs",
@@ -275,6 +300,7 @@ const SCENES = [
   "dialog18",
   "itemmenu",
   "inventory",
+  "pockets",
   "inventoryfloat",
   "tooltip",
   "tooltipcoin",
@@ -290,6 +316,7 @@ const SCENES = [
   "death",
   "login",
   "characters",
+  "appearance",
 ];
 
 mkdirSync(shots, { recursive: true });
@@ -354,15 +381,25 @@ try {
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
+      // docs/02 "Apariencia": the live figure walks in place; the shot waits for the atlas.
+      if (scene === "characters" || scene === "appearance") await page.waitForTimeout(600);
       // Phones and tablets: the inventory and quest log scenes show their tab.
-      if (INVENTORY_TAB.includes(scene) || QUESTS_TAB.includes(scene)) {
+      if (
+        INVENTORY_TAB.includes(scene) ||
+        QUESTS_TAB.includes(scene) ||
+        APPEARANCE_TAB.includes(scene)
+      ) {
         // A phone on its side keeps the panel in a drawer: open it first.
         const drawer = page.getByTestId("panel-toggle");
         if (await drawer.isVisible()) {
           await drawer.click();
           await page.waitForTimeout(300);
         }
-        const name = QUESTS_TAB.includes(scene) ? "quests" : "inventory";
+        const name = QUESTS_TAB.includes(scene)
+          ? "quests"
+          : APPEARANCE_TAB.includes(scene)
+            ? "appearance"
+            : "inventory";
         const tab = page.locator(`[data-testid="panel-tabs"] [data-tab="${name}"]`);
         if (await tab.isVisible()) {
           await tab.click();
@@ -423,6 +460,17 @@ try {
         await page.waitForTimeout(1200);
         await page.mouse.move(1, 1);
         await page.waitForTimeout(300);
+      }
+      if (scene === "status") {
+        // docs/17 "Bandeja de estados": ten conditions and statuses at once (two of them in
+        // their last seconds, flashing), with the poison's tooltip opened as a tap does it
+        // (also on phones, which have no hover).
+        const poison = page.locator('[data-testid="conditions"] [data-condition="poison"]');
+        if (await poison.isVisible()) {
+          await poison.click();
+          await page.mouse.move(1, 1);
+          await page.waitForTimeout(200);
+        }
       }
       if (scene === "chat") {
         // docs/17 UI-10: the chat floats translucent; under the pointer it turns clear.

@@ -1,6 +1,17 @@
 id: volcan_smith
 name: npc.volcan_smith.name
-sprite: npcs/smith_volcanic
+sprite: npcs/volcan_smith
+look:
+  body: sturdy
+  skin: deep
+  hair: crop
+  hair_color: black
+  beard: full
+  worn:
+    torso: { shape: leather, tint: dark_leather }
+    legs: { shape: trousers, tint: black }
+    feet: { shape: boots, tint: tar }
+    weapon: { shape: mace, tint: iron }
 notes: >-
   Smith of Brasal: sells the first embersteel pieces (levels 30-34), smithing tools and elm
   logs, and buys the island's materials at about a third of their value. Chapter 3 part 1

@@ -41,17 +41,25 @@ func (q *Queries) CountCharactersByAccount(ctx context.Context, accountID int64)
 }
 
 const createCharacter = `-- name: CreateCharacter :one
-INSERT INTO characters (account_id, name, vocation, health, mana)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO characters (account_id, name, vocation, health, mana,
+                        look_body, look_skin, look_hair, look_hair_color, look_beard)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9,
+        $10)
 RETURNING id, name, vocation, level
 `
 
 type CreateCharacterParams struct {
-	AccountID int64
-	Name      string
-	Vocation  string
-	Health    int32
-	Mana      int32
+	AccountID     int64
+	Name          string
+	Vocation      string
+	Health        int32
+	Mana          int32
+	LookBody      string
+	LookSkin      string
+	LookHair      string
+	LookHairColor string
+	LookBeard     string
 }
 
 type CreateCharacterRow struct {
@@ -68,6 +76,11 @@ func (q *Queries) CreateCharacter(ctx context.Context, arg CreateCharacterParams
 		arg.Vocation,
 		arg.Health,
 		arg.Mana,
+		arg.LookBody,
+		arg.LookSkin,
+		arg.LookHair,
+		arg.LookHairColor,
+		arg.LookBeard,
 	)
 	var i CreateCharacterRow
 	err := row.Scan(
@@ -113,6 +126,7 @@ const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
        c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
+       c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard,
        (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
@@ -152,6 +166,11 @@ type GetCharacterForPlayRow struct {
 	OutfitColor    string
 	NameEffect     string
 	PremiumBalance int64
+	LookBody       string
+	LookSkin       string
+	LookHair       string
+	LookHairColor  string
+	LookBeard      string
 	PremiumSeq     int64
 }
 
@@ -182,16 +201,21 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.OutfitColor,
 		&i.NameEffect,
 		&i.PremiumBalance,
+		&i.LookBody,
+		&i.LookSkin,
+		&i.LookHair,
+		&i.LookHairColor,
+		&i.LookBeard,
 		&i.PremiumSeq,
 	)
 	return i, err
 }
 
 const getCharacterInventory = `-- name: GetCharacterInventory :many
-SELECT id, container_id, slot, item_id, count, attributes
+SELECT id, container_id, slot, item_id, count, attributes, pocket
 FROM inventory_items
 WHERE character_id = $1
-ORDER BY container_id NULLS FIRST, slot
+ORDER BY container_id NULLS FIRST, pocket, slot
 `
 
 type GetCharacterInventoryRow struct {
@@ -201,9 +225,11 @@ type GetCharacterInventoryRow struct {
 	ItemID      int32
 	Count       int32
 	Attributes  []byte
+	Pocket      bool
 }
 
-// Every item of a character; the server rebuilds the tree from container_id.
+// Every item of a character; the server rebuilds the tree from container_id. Top-level
+// rows are the equipment and then the pockets' cells (pocket, migration 00020).
 func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error) {
 	rows, err := q.db.Query(ctx, getCharacterInventory, characterID)
 	if err != nil {
@@ -220,6 +246,7 @@ func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) 
 			&i.ItemID,
 			&i.Count,
 			&i.Attributes,
+			&i.Pocket,
 		); err != nil {
 			return nil, err
 		}
@@ -331,9 +358,9 @@ func (q *Queries) GetCharacterUnjustKills(ctx context.Context, arg GetCharacterU
 }
 
 const insertInventoryItem = `-- name: InsertInventoryItem :one
-INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes)
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count, attributes, pocket)
 VALUES ($1, $2, $3, $4, $5,
-        $6)
+        $6, $7)
 RETURNING id
 `
 
@@ -344,6 +371,7 @@ type InsertInventoryItemParams struct {
 	ItemID      int32
 	Count       int32
 	Attributes  []byte
+	Pocket      bool
 }
 
 func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error) {
@@ -354,6 +382,7 @@ func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryIt
 		arg.ItemID,
 		arg.Count,
 		arg.Attributes,
+		arg.Pocket,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -457,27 +486,37 @@ SET level        = $1,
     outfit       = $12,
     outfit_color = $13,
     name_effect  = $14,
-    last_save_at = $15
-WHERE id = $16
+    look_body       = $15,
+    look_skin       = $16,
+    look_hair       = $17,
+    look_hair_color = $18,
+    look_beard      = $19,
+    last_save_at = $20
+WHERE id = $21
 `
 
 type SaveCharacterStateParams struct {
-	Level       int32
-	Experience  int64
-	Health      int32
-	Mana        int32
-	PosX        pgtype.Int4
-	PosY        pgtype.Int4
-	PosZ        pgtype.Int2
-	Conditions  []byte
-	Skull       int16
-	SkullUntil  pgtype.Timestamptz
-	PvpKills    int32
-	Outfit      string
-	OutfitColor string
-	NameEffect  string
-	SavedAt     pgtype.Timestamptz
-	ID          int64
+	Level         int32
+	Experience    int64
+	Health        int32
+	Mana          int32
+	PosX          pgtype.Int4
+	PosY          pgtype.Int4
+	PosZ          pgtype.Int2
+	Conditions    []byte
+	Skull         int16
+	SkullUntil    pgtype.Timestamptz
+	PvpKills      int32
+	Outfit        string
+	OutfitColor   string
+	NameEffect    string
+	LookBody      string
+	LookSkin      string
+	LookHair      string
+	LookHairColor string
+	LookBeard     string
+	SavedAt       pgtype.Timestamptz
+	ID            int64
 }
 
 // Written by the persistence goroutine from an immutable snapshot of the game loop.
@@ -497,6 +536,11 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.Outfit,
 		arg.OutfitColor,
 		arg.NameEffect,
+		arg.LookBody,
+		arg.LookSkin,
+		arg.LookHair,
+		arg.LookHairColor,
+		arg.LookBeard,
 		arg.SavedAt,
 		arg.ID,
 	)

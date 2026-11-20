@@ -17,6 +17,12 @@ import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
 import { loadCameraShake } from "../state/ui-prefs.ts";
 import type { GameSettings } from "./GameView.tsx";
+import { LookPickers } from "./LookPickers.tsx";
+import { LookPreview } from "./LookPreview.tsx";
+import { randomLook, startingLook } from "../state/look.ts";
+import { dressPlayer } from "../render/look.ts";
+import { outfitFor } from "../render/cosmetics.ts";
+import type { Look } from "@rpg/renderer/look";
 
 type Screen =
   | { name: "loading" }
@@ -259,6 +265,14 @@ function Characters(props: {
   const [list, setList] = useState<Character[] | undefined>(undefined);
   const [name, setName] = useState("");
   const [vocation, setVocation] = useState(content.vocations[0] ?? "");
+  // The look (docs/02 "Apariencia"): it starts from the default outfit's body, and a new
+  // character wears the default outfit's clothes (it starts with no equipment).
+  const lookOptions = content.lookOptions;
+  const plain = outfitFor(undefined, content);
+  const [look, setLook] = useState<Look | undefined>(() =>
+    lookOptions ? startingLook(lookOptions, plain?.look) : undefined,
+  );
+  const [clothes] = useState(() => dressPlayer(plain, {}).worn);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -288,7 +302,7 @@ function Characters(props: {
     setBusy(true);
     setError(undefined);
     try {
-      const c = await api.createCharacter(name.trim(), vocation);
+      const c = await api.createCharacter(name.trim(), vocation, look);
       setList((l) => [...(l ?? []), c]);
       setName("");
     } catch (err) {
@@ -363,6 +377,20 @@ function Characters(props: {
             ))}
           </select>
         </label>
+        {lookOptions && look && (
+          <div class="create-look" data-testid="create-look">
+            <h3>{t("client.characters.look")}</h3>
+            <LookPreview t={t} look={look} worn={clothes} tables={content.looks} />
+            <LookPickers
+              t={t}
+              options={lookOptions}
+              tables={content.looks}
+              look={look}
+              onChange={setLook}
+              onRandom={() => setLook(randomLook(lookOptions, Math.random))}
+            />
+          </div>
+        )}
         <button type="submit" disabled={busy}>
           {t("client.characters.create")}
         </button>

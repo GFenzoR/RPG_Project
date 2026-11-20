@@ -14,13 +14,15 @@ export const formatOz = (grams: number): string => (grams / GRAMS_PER_OZ).toFixe
 export type ItemLoc =
   | { kind: "pos"; pos: Pos }
   | { kind: "slot"; slot: EquipmentSlot }
-  | { kind: "container"; id: number; index: number };
+  | { kind: "container"; id: number; index: number }
+  /** A cell of the character's pockets (docs/02 "Bolsillos", state/pockets.ts). */
+  | { kind: "pocket"; index: number };
 
 /** An item the player points at: where it is, what the client thinks it is, how many. */
 export interface ItemRef {
   loc: ItemLoc;
   itemId: number;
-  /** Index in the tile stack (ground = 0); 0 for slots, the index for containers. */
+  /** Index in the tile stack (ground = 0); 0 for slots, the index for containers and pockets. */
   stackIndex: number;
   /** Units to move (the whole stack; 1 for items that do not stack). */
   count: number;
@@ -33,7 +35,8 @@ export function locationInit(loc: ItemLoc): {
   location:
     | { case: "pos"; value: Pos }
     | { case: "slot"; value: EquipmentSlot }
-    | { case: "container"; value: { containerId: number; index: number } };
+    | { case: "container"; value: { containerId: number; index: number } }
+    | { case: "pocket"; value: number };
 } {
   switch (loc.kind) {
     case "pos":
@@ -42,6 +45,22 @@ export function locationInit(loc: ItemLoc): {
       return { location: { case: "slot", value: loc.slot } };
     case "container":
       return { location: { case: "container", value: { containerId: loc.id, index: loc.index } } };
+    case "pocket":
+      return { location: { case: "pocket", value: loc.index } };
+  }
+}
+
+/** A stable key of a place (a list's key, a candidate's). */
+export function locKey(l: ItemLoc): string {
+  switch (l.kind) {
+    case "slot":
+      return `slot:${l.slot}`;
+    case "container":
+      return `c:${l.id}:${l.index}`;
+    case "pocket":
+      return `pocket:${l.index}`;
+    case "pos":
+      return `p:${l.pos.x},${l.pos.y},${l.pos.z}`;
   }
 }
 
@@ -84,7 +103,9 @@ export function menuItem(world: WorldState, x: number, y: number, z: number): It
 
 /**
  * The top item of a known tile. With `withGround` false (use, move) a tile with only its
- * ground gives undefined; looking accepts the ground.
+ * ground gives undefined; looking accepts the ground. Border pieces (the fringe of a
+ * neighbour's ground, always at the bottom of the stack) are part of the ground's look, not
+ * items: a tile with only them is its ground, named as such when looked at.
  */
 export function topItem(
   world: WorldState,
@@ -95,7 +116,8 @@ export function topItem(
 ): ItemRef | undefined {
   const t = world.tile(x, y, z);
   if (!t || t.length === 0) return undefined;
-  const i = t.length - 1;
+  let i = t.length - 1;
+  while (i > 0 && world.item(t[i] ?? 0)?.border) i--;
   if (i === 0 && !withGround) return undefined;
   const count = world.tileCounts(x, y, z)?.[i] ?? 0;
   const mods = world.tileMods(x, y, z)?.[i];

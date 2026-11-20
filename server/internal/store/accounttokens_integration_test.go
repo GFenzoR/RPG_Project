@@ -61,7 +61,7 @@ func TestAccountTokensWithPostgres(t *testing.T) {
 	}
 
 	// Reset: every session (account and play) goes; the new password works.
-	if _, err := svc.CreateCharacter(ctx, id, "Anabel", "guardian"); err != nil {
+	if _, err := svc.CreateCharacter(ctx, id, "Anabel", "guardian", nil); err != nil {
 		t.Fatal(err)
 	}
 	tok, _ := svc.Login(ctx, "ana@example.org", "secreto123")

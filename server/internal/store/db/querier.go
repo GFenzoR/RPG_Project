@@ -95,7 +95,8 @@ type Querier interface {
 	// Loads what the game server needs to put a character in the world, with its account's
 	// role. A banned account's characters are not found (T2.6).
 	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
-	// Every item of a character; the server rebuilds the tree from container_id.
+	// Every item of a character; the server rebuilds the tree from container_id. Top-level
+	// rows are the equipment and then the pockets' cells (pocket, migration 00020).
 	GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error)
 	// Quest progress and flags ("storage values"); a missing key is 0.
 	GetCharacterQuestState(ctx context.Context, characterID int64) ([]GetCharacterQuestStateRow, error)

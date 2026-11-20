@@ -41,7 +41,7 @@ filas 3–31 (un chunk real siempre tiene las 32).
 {
   "format": 1,
   "chunk": { "cx": 100, "cy": 200, "z": 7 },
-  "palette": ["grass", "sand", "water_shallow", "border_grass_sand_n", "oak_tree"],
+  "palette": ["grass", "sand", "water_shallow", "border_grass_n", "oak_tree"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2],
@@ -66,8 +66,17 @@ filas 3–31 (un chunk real siempre tiene las 32).
 - Nombre de archivo: `chunks/zNN/cXXXX_YYYY.json` (piso con 2 dígitos, `cx`/`cy` con 4);
   debe coincidir con el campo `chunk`.
 - Los **bordes** (transición pasto→arena, etc.) se guardan explícitos en la pila. El
-  editor y `mapcli` los generan con reglas de `data/borders.yaml` (autoborder), así el
-  servidor no calcula nada en runtime.
+  editor y `mapcli` los generan con la escalera de suelos de `data/borders.yaml`
+  (autoborder; formato en `06-content-data.md`, "Bordes"), así el servidor no calcula nada
+  en runtime. Desde el lote 13 cada suelo natural tiene su borde, que se dibuja sobre los
+  suelos más bajos que toca (el pasto sobre la tierra, la piedra y la arena; la tierra
+  sobre la arena; la ceniza sobre el basalto y la escoria...), con la espuma debajo cuando
+  da al agua; los pisos de madera y los muelles quedan con el borde recto. Las piezas van
+  abajo de todo en la pila, nunca bloquean, y el **look** de cada una (4 por pieza, con una
+  orilla distinta) lo elige el renderer por casilla: el mapa guarda solo qué pieza va. Al
+  pintar suelos a mano (`paint_ground`, scripts de ops) se termina con `autoborder` del
+  área; `mapcli autoborder <isla> --floor Z` sin `--rect` rehace la isla entera. La
+  validación lo exige: piezas que no son las del autoborder son un error ("Validación").
 
 ## IDs de items
 - Cada item tiene un ID de texto (`oak_tree`) para humanos e IA, y un ID numérico
@@ -475,6 +484,10 @@ crc32        u32 (IEEE) de todos los bytes anteriores
 Implementada una sola vez en `packages/map-format` (`validateWorld`); `mapcli validate`
 y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición del mundo.
 - Archivos en formato canónico (si no: `mapcli fmt`) y conformes a su esquema.
+- **Bordes al día** (lote 13): cada casilla tiene abajo de su pila exactamente las piezas de
+  borde que da `borderPieces` con los suelos de sus vecinos (docs/06 "Bordes"), ni más, ni
+  menos, ni arriba de otro item. Un error por chunk con la primera casilla, lo que tiene, lo
+  que necesita y el `mapcli autoborder` que lo arregla.
 - Todo item, monstruo y NPC referenciado existe en `data/`; claves i18n existen en
   todos los idiomas.
 - Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables:
@@ -714,10 +727,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   enfriada sobre la ceniza; la ladera y el cráter
   son de lava enfriada (`cooled_lava`) con seis pozos de lava fundida (`lava`, no
   caminable) siempre rodeados de costra, fuera de los spawns y sin tapar vetas de ascua.
-  La playa sigue siendo arena (`ash_sand`, `cooled_lava_sand`), también entre la lava
-  enfriada y el mar en la costa sur. Las losas de basalto de la plaza y el final de los
-  caminos de escoria en la ladera y el cráter tienen el borde recto a propósito (un
-  empedrado y un camino que termina), como la piedra de los pueblos. Se pintó con un script de
+  La playa sigue siendo arena (la ceniza y la lava enfriada entran sobre ella con su borde),
+  también entre la lava enfriada y el mar en la costa sur. Las losas de basalto de la plaza
+  y el final de los caminos de escoria tenían el borde recto a propósito; desde el lote 13
+  (escalera de bordes, docs/06 "Bordes") la ceniza entra sobre el basalto, la escoria y la
+  lava enfriada, el basalto sobre la escoria y la piedra del templo sobre el basalto. Se pintó con un script de
   ops (`paint_ground` por celdas, `remove_item` de tres rocas bajo la lava, `place_item`
   de los carteles y `autoborder` de toda la isla) sobre el mapa anterior, sin mover
   spawns, NPCs, portales, zonas ni la casa. Carteles (`texts.yaml` y un item
@@ -749,7 +763,7 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   de troncos (2076–2119 × 2073–2079, abiertos al sendero de y 2080–2081) de débil a fuerte:
   ratas, lobos, jabalíes con una araña, espinosos y un dragoncillo. Al oeste, cantera de
   vetas de hierro, abedules, taller con fragua, yunque y fogón, y un muelle de pesca con
-  agua con peces (nunca junto a la arena: los bordes quedan enteros). Al este, el patio de
+  agua con peces (el bajío es la misma agua que la de al lado, sin borde entre las dos). Al este, el patio de
   portales (2113–2124 × 2088–2100: escalera, trampilla `ladder_down` y agujero) y la bóveda
   de la puerta de práctica (`pruebas_gate` en 2117,2101, llave `pruebas_key`). Al sur, la
   casa `pruebas_house` (prefab `house_wood_medium` en 2085,2108), la arena `pruebas_arena`

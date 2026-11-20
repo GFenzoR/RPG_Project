@@ -1,6 +1,16 @@
 id: puerto_foreman
 name: npc.puerto_foreman.name
-sprite: npcs/miner_old
+sprite: npcs/puerto_foreman
+look:
+  body: sturdy
+  skin: fair
+  hair: crop
+  hair_color: grey
+  beard: full
+  worn:
+    torso: { shape: leather, tint: hide }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: dark_leather }
 notes: >-
   Stands at the old mine entrance (surface). Hands over the bosun's logbook in Chapter 1
   and gives the foreman_ore side quest.

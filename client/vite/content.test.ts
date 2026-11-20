@@ -69,9 +69,45 @@ describe("client content (T0.5)", () => {
     }
   });
 
-  it("exposes each NPC's sprite like the monsters'", () => {
-    expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/ferryman");
+  it("exposes each NPC's sprite like the monsters', and the look choices (docs/06 Looks)", () => {
+    expect(content.npcSprites?.["volcan_forge_echo"]).toBe("npcs/forge_echo");
     expect(content.monsterSprites["bilge_rat"]).toMatch(/\//);
+    // A person is an engine humanoid: its look comes from the server (Creature.look); its
+    // sprite is the still portrait the dialog shows (spritegen draws it from the look).
+    expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/bosque_ferryman");
+    expect(content.monsterSprites["wreck_looter"]).toBeUndefined();
+    // A player's choices, in file order, without the creatures-only skins.
+    const opts = content.lookOptions;
+    expect(opts?.builds).toEqual(["sturdy", "slender"]);
+    expect(opts?.skins).toContain("fair");
+    expect(opts?.skins).not.toContain("drowned");
+    expect(opts?.skins).not.toContain("ashen");
+    expect(opts?.hairStyles[0]).toBe("bald");
+    expect(opts?.beards).toEqual(["none", "short", "full"]);
+    expect(opts?.hairColors).toContain("auburn");
+    // Every choice has its name in every language (the pickers, ui/LookPickers.tsx).
+    const parts: [string, readonly string[]][] = [
+      ["body", opts?.builds ?? []],
+      ["skin", opts?.skins ?? []],
+      ["hair", opts?.hairStyles ?? []],
+      ["hair_color", opts?.hairColors ?? []],
+      ["beard", opts?.beards ?? []],
+    ];
+    for (const lang of ["es", "en"])
+      for (const [part, ids] of parts)
+        for (const id of ids)
+          expect(
+            content.i18n[lang]?.[`appearance.${part}.${id}`],
+            `${lang} ${part} ${id}`,
+          ).toBeTruthy();
+    // The colours of data/looks.yaml as numbers, and what a head piece hides.
+    expect(content.looks?.skins["fair"]).toBe(0xecc4a2);
+    expect(content.looks?.tints["iron"]).toBe(0xa8aeb6);
+    expect(content.looks?.hides?.["full_helm"]).toEqual(["hair", "beard"]);
+    // A piece of the catalog that shows on the figure says how; jewellery does not.
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("iron_sword")?.worn).toEqual({ shape: "sword", tint: "iron" });
+    expect(byId.get("tidestone_ring")?.worn).toBeUndefined();
   });
 
   it("ships item descriptions: the usual item.<id>.desc and a sign's text (T5.5)", () => {
@@ -108,10 +144,23 @@ describe("client content (T0.5)", () => {
     for (const lang of ["es", "en"]) {
       const texts = content.i18n[lang] ?? {};
       expect(texts["item.brasal_dock_sign.name"]).toBe(texts["item.signpost.name"]);
-      expect(texts["item.border_ash_sand_n.name"]).toBe(texts["item.border_ash_sand.name"]);
+      expect(texts["item.border_ash_n.name"]).toBe(texts["item.border_ash.name"]);
       expect(texts["item.brasal_dock_sign.name"]).toBeTruthy();
     }
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
+  });
+
+  it('marks the border pieces of data/borders.yaml, and only those (docs/06 "Bordes")', () => {
+    const marked = Object.values(content.items)
+      .filter((d) => d.border)
+      .map((d) => d.id);
+    // Ten sets of twelve: nine fringes and the surf.
+    expect(marked).toHaveLength(120);
+    for (const id of ["border_grass_n", "border_ash_inner_se", "border_surf_w"])
+      expect(marked).toContain(id);
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    for (const id of ["grass", "water_shallow", "signpost"])
+      expect(byId.get(id)?.border).toBeUndefined();
   });
 
   it("marks the items that show a portal (their portal block), and only those", () => {
@@ -230,7 +279,18 @@ describe("client content (T0.5)", () => {
   });
 
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
-    expect(content.outfits).toContainEqual({ id: "citizen", sprite: "outfits/citizen", frames: 3 });
+    expect(content.outfits).toContainEqual({
+      id: "citizen",
+      sprite: "outfits/citizen",
+      frames: 1,
+      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "none" },
+      clothes: {
+        torso: { shape: "tunic", tint: "linen" },
+        legs: { shape: "trousers", tint: "brown" },
+        feet: { shape: "shoes", tint: "dark_leather" },
+      },
+    });
+    expect(content.outfits?.find((o) => o.id === "sailor")?.costume).toBe(true);
   });
 });
 

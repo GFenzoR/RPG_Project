@@ -100,6 +100,9 @@ type Config struct {
 	// implements ShopStore (Postgres) the catalog is synced to the cosmetics table at
 	// start and /api/shop is served.
 	Cosmetics *content.CosmeticShop
+	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a new character may pick
+	// and the game checks. Nil: no looks (a look sent at creation is ignored).
+	Looks *content.Looks
 	// Payments is the payment provider (payments.FromEnv); nil: GET /api/shop says
 	// enabled: false and nothing can be bought.
 	Payments payments.Provider
@@ -145,7 +148,7 @@ func New(cfg Config) (*App, error) {
 	// OAuth lives in Postgres; fake stores of tests may not implement it.
 	oauthRepo, _ := cfg.Store.(auth.OAuthRepo)
 	authSvc, err := auth.New(auth.Config{
-		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations,
+		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations, Looks: cfg.Looks,
 		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
 		SessionsRevoked: a.sessionsRevoked,
 		Providers:       cfg.Providers,
@@ -300,6 +303,7 @@ func New(cfg Config) (*App, error) {
 			BoatRoutes:     cfg.BoatRoutes,
 			Tutorial:       cfg.Tutorial,
 			Cosmetics:      cfg.Cosmetics,
+			Looks:          cfg.Looks,
 			NPCs:           cfg.NPCs,
 			Quests:         cfg.Quests,
 			Save:           saver.Submit,
@@ -494,7 +498,9 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
 		Cosmetics: store.Cosmetics{Outfit: s.Cosmetics.Outfit, Color: s.Cosmetics.Color, NameEffect: s.Cosmetics.NameEffect},
-		SavedAt:   a.cfg.Clock.Now(),
+		Look: store.Look{Body: s.Look.Body, Skin: s.Look.Skin, Hair: s.Look.Hair, HairColor: s.Look.HairColor,
+			Beard: s.Look.Beard},
+		SavedAt: a.cfg.Clock.Now(),
 	}
 }
 
@@ -519,7 +525,7 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 	var out []store.InventoryItem
 	for _, it := range in {
 		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot,
-			Mods: storeMods(it.Mods), Items: storeItems(it.Items)})
+			Mods: storeMods(it.Mods), Items: storeItems(it.Items), Pocket: it.Pocket})
 	}
 	return out
 }

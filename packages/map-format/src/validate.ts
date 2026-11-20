@@ -19,6 +19,7 @@ import {
 } from "./doors.ts";
 import type { DoorWorld, TempleReach } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
+import { borderItems, borderPieces, hasBorders } from "./ops/borders.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Chunk, Island, Portal, Position, Rect, World } from "./types.ts";
 
@@ -259,6 +260,7 @@ class WorldValidator {
     needWalkable(file, ["temple"], meta.temple, "temple");
 
     this.checkChunks(island, floors);
+    this.checkBorders(island);
 
     const spawnsFile = `${dir}/spawns.yaml`;
     for (const [i, s] of island.spawns.entries()) {
@@ -659,6 +661,68 @@ class WorldValidator {
           }
         }
       }
+    }
+  }
+
+  // ---- borders ------------------------------------------------------------------
+
+  /**
+   * Border pieces (docs/06 "Bordes") are the autoborder's output, never drawn by hand: each
+   * tile's must be exactly what borderPieces gives for its neighbours' grounds now, at the
+   * bottom of its stack. A ground painted without `mapcli autoborder` (or a ladder changed
+   * without rerunning it) leaves them out of date: one error per chunk, at its first tile.
+   */
+  private checkBorders(island: Island): void {
+    const set = this.content.borders;
+    if (!hasBorders(set)) return;
+    const pieces = borderItems(set);
+    const dir = this.dirOf(island);
+    const chunks = [...island.chunks.values()].sort(
+      (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
+    );
+    for (const c of chunks) {
+      const ox = c.cx * CHUNK_SIZE;
+      const oy = c.cy * CHUNK_SIZE;
+      const ground = c.ground;
+      // The chunk's own tiles straight from it; the neighbours' through the tile map.
+      const groundAt = (x: number, y: number): string | null => {
+        const lx = x - ox;
+        const ly = y - oy;
+        return lx >= 0 && ly >= 0 && lx < CHUNK_SIZE && ly < CHUNK_SIZE
+          ? (ground[ly * CHUNK_SIZE + lx] ?? null)
+          : this.tiles.groundAt(x, y, c.z);
+      };
+      /** Whether the 8 neighbours of a tile have its own ground: it borders nothing. */
+      const alone = (x: number, y: number, here: string | null | undefined): boolean => {
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++)
+            if ((dx !== 0 || dy !== 0) && groundAt(x + dx, y + dy) !== here) return false;
+        return true;
+      };
+      const stacks = new Map(c.items.map((s) => [s.y * CHUNK_SIZE + s.x, s.stack]));
+      let stale = 0;
+      let first: { pos: Position; has: string[]; needs: string[] } | undefined;
+      for (let ly = 0; ly < CHUNK_SIZE; ly++)
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          const stack = stacks.get(ly * CHUNK_SIZE + lx) ?? [];
+          const has = stack.filter((id) => pieces.has(id));
+          if (has.length === 0 && alone(ox + lx, oy + ly, ground[ly * CHUNK_SIZE + lx] ?? null))
+            continue;
+          const needs = borderPieces(ox + lx, oy + ly, groundAt, set);
+          const bottom = has.every((id, i) => stack[i] === id);
+          if (bottom && has.length === needs.length && has.every((id, i) => needs[i] === id))
+            continue;
+          stale++;
+          first ??= { pos: { x: ox + lx, y: oy + ly, z: c.z }, has, needs };
+        }
+      if (!first) continue;
+      const list = (ids: string[]): string => (ids.length > 0 ? ids.join(", ") : "none");
+      this.err(
+        chunkFile(dir, c),
+        ["items"],
+        `${stale} tile(s) with border pieces out of date (first at ${formatPos(first.pos)}: has ${list(first.has)}, needs ${list(first.needs)} at the bottom of its stack); run \`mapcli autoborder ${island.meta.id} --floor ${c.z}\``,
+        first.pos,
+      );
     }
   }
 

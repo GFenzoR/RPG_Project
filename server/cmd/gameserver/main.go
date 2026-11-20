@@ -199,6 +199,10 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	looks, err := content.LoadLooks(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	cosmetics, err := content.LoadCosmetics(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -300,6 +304,7 @@ func run(logger *slog.Logger, o options) error {
 		Providers:            providers,
 
 		Cosmetics: cosmetics,
+		Looks:     looks,
 		Payments:  pay,
 	})
 	if err != nil {

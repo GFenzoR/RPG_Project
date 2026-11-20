@@ -2,6 +2,8 @@
 // beyond its one sprite. Pure (no PixiJS), so the client, the map editor (MapView) and the
 // mapcli render pick the same pixels for the same tile:
 // - variants: a ground has alternate looks (<sprite>/var_<n>), picked by a hash of the tile;
+//   so does a border piece (docs/17 ART-4), its looks evenly, and an animated look has its
+//   own frames (<sprite>/var_<n>/frame_<m>: the surf of each shape of shore);
 // - frames: an animated sprite (<sprite>/frame_<n>) plays in step with the world, with a
 //   phase per tile, or as a rare glint per tile;
 // - walls: a wall sprite has 16 pieces (<sprite>/wall_<mask>), one per set of wall
@@ -10,15 +12,20 @@
 // - shadow: <sprite>/shadow, drawn on the shadow layer under the items;
 // - particles: ambient motes the client spawns around it (docs/17 ART-7, A13);
 // - steps: what a step on a ground kicks up, a puff of dust or a ripple (MOV-7);
+// - flat: a decal lying on its tile's ground (every border piece, ART-4), drawn with the
+//   grounds: under the cast shadows, the items and the creatures of every tile;
 // - elevation (data/items, not the atlas): what stands on a table or a crate is drawn
 //   higher (ART-8), stackElevation below.
 // tools/spritepack writes what each sprite has into atlas.json `tiles` (TileMeta).
 
 /** atlas.json `tiles[sprite]` (tools/spritepack): the extra art a map sprite has. */
 export interface TileMeta {
-  /** Alternate looks <sprite>/var_1..var_<variants>; the sprite itself is look 0. */
+  /**
+   * Alternate looks <sprite>/var_1..var_<variants>; the sprite itself is look 0. With frames,
+   * each look n has its own <sprite>/var_<n>/frame_<m>.
+   */
   variants?: number;
-  /** Share of the tiles that show look 0 (default MAIN_WEIGHT). */
+  /** Share of the tiles that show look 0 (default: MAIN_WEIGHT on a ground, even on an item). */
   weight?: number;
   /** Frames of an animated sprite, the sprite itself included: <sprite>/frame_1.. */
   frames?: number;
@@ -40,6 +47,11 @@ export interface TileMeta {
   particles?: ParticleKind;
   /** A ground: what each step on it kicks up (MOV-7). */
   steps?: StepKind;
+  /**
+   * Lies flat on its tile's ground, inside the tile (spritepack sets it on every sprite under
+   * borders/): drawn with the grounds, under the cast shadows, the items and the creatures.
+   */
+  flat?: true;
 }
 
 export type TileSync = "world" | "tile" | "random";
@@ -64,10 +76,12 @@ export interface TileArt<T> {
   base: T;
   /** Every look, the base first. */
   variants?: readonly T[];
-  /** Share of look 0. */
-  weight: number;
+  /** Share of look 0, when the atlas sets one (lookOf has the defaults). */
+  weight?: number;
   /** Every frame, the base first. */
   frames?: readonly T[];
+  /** The frames of each animated look (index 0 is `frames`), the look itself first. */
+  variantFrames?: readonly (readonly T[])[];
   ms: number;
   sync: TileSync;
   /** 1: bottom-right corner on the tile's; 0.5: centred on the tile. */
@@ -81,6 +95,8 @@ export interface TileArt<T> {
   light: number;
   /** Ambient particles around it (ART-7), if any. */
   particles?: ParticleKind;
+  /** A decal on its tile's ground (TileMeta flat): drawn with the grounds. */
+  flat?: true;
 }
 
 /** Share of the tiles that keep a ground's main look (ART-4: about 70 %). */
@@ -99,6 +115,9 @@ export const WALL_W = 8;
 export const WALL_PIECES = 16;
 
 export const variantName = (sprite: string, n: number): string => `${sprite}/var_${n}`;
+/** Frame m of look n of an animated item with looks (n = 0: the sprite's own frames). */
+export const variantFrameName = (sprite: string, n: number, m: number): string =>
+  n === 0 ? tileFrameName(sprite, m) : tileFrameName(variantName(sprite, n), m);
 export const tileFrameName = (sprite: string, n: number): string => `${sprite}/frame_${n}`;
 export const wallName = (sprite: string, mask: number): string => `${sprite}/wall_${mask}`;
 export const shadowName = (sprite: string): string => `${sprite}/shadow`;
@@ -127,6 +146,23 @@ export function pickVariant(hash: number, count: number, weight = MAIN_WEIGHT): 
   if (count <= 1 || hash < weight) return 0;
   const rest = (hash - weight) / (1 - weight);
   return 1 + Math.min(count - 2, Math.floor(rest * (count - 1)));
+}
+
+/**
+ * Which look a tile shows: a ground keeps its main look on a share `weight` of the tiles
+ * (MAIN_WEIGHT unless the atlas says), an item's looks (border pieces) come up evenly, so a
+ * long edge never repeats one shape (docs/17 ART-4). Every item of a tile gets the same look
+ * number: a fringe and the surf over it keep the same shape.
+ */
+export function lookOf(art: TileArt<unknown>, hash: number, ground: boolean): number {
+  const count = art.variants?.length ?? 0;
+  if (count <= 1) return 0;
+  return pickVariant(hash, count, art.weight ?? (ground ? MAIN_WEIGHT : 1 / count));
+}
+
+/** The frames look `look` plays: its own when it has them, else the sprite's. */
+export function framesOfLook<T>(art: TileArt<T>, look: number): readonly T[] | undefined {
+  return art.variantFrames?.[look] ?? art.frames;
 }
 
 /**
@@ -193,14 +229,15 @@ export function resolveTileArt<T>(
   };
   const art: TileArt<T> = {
     base,
-    weight: meta.weight ?? MAIN_WEIGHT,
     ms: meta.ms ?? DEFAULT_FRAME_MS,
     sync: meta.sync ?? "world",
     anchorX: meta.anchor === "bc" ? 0.5 : 1,
     joinsWalls: meta.wall === true || meta.joins === true,
     light: meta.light ?? 0,
   };
+  if (meta.weight !== undefined) art.weight = meta.weight;
   if (meta.particles) art.particles = meta.particles;
+  if (meta.flat) art.flat = true;
   if (meta.variants) {
     const v = list(meta.variants + 1, (n) => variantName(sprite, n));
     if (v.length > 1) art.variants = v;
@@ -208,6 +245,22 @@ export function resolveTileArt<T>(
   if (meta.frames) {
     const f = list(meta.frames, (n) => tileFrameName(sprite, n));
     if (f.length > 1) art.frames = f;
+    // Each look of an animated sprite plays its own frames (a look without them all stays
+    // still: the base frames are of another shape).
+    const looks = art.variants;
+    if (art.frames && looks) {
+      const all: T[][] = [[...art.frames]];
+      for (let v = 1; v < looks.length; v++) {
+        const own: T[] = [looks[v] as T];
+        for (let m = 1; m < meta.frames; m++) {
+          const t = lookup(variantFrameName(sprite, v, m));
+          if (t === undefined) break;
+          own.push(t);
+        }
+        all.push(own.length === art.frames.length ? own : [looks[v] as T]);
+      }
+      art.variantFrames = all;
+    }
   }
   if (meta.wall) {
     const pieces: T[] = [];

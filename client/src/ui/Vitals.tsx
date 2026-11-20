@@ -1,12 +1,14 @@
 // The player's vitals on the desktop game screen (docs/17 UI-4, UI-9), in the gothic bottom
 // bar (ui/HudBar.tsx): a life orb at the bottom left and a mana orb at the bottom right,
-// each set in an iron socket, Diablo-like but our own; the experience bar along the bar;
-// and over the life orb a plaque with the name, the level, the experience and the own
-// conditions. The orbs fill with transform only (windows.css animates it); a lighter
-// "ghost" marks what was just lost and drains after it.
-import type { ComponentChildren, JSX } from "preact";
+// each set in an iron socket, Diablo-like but our own; and in the middle, along the bar's
+// top, the name plate (name and level) over the experience bar. The orbs fill with
+// transform only (windows.css animates it); a lighter "ghost" marks what was just lost and
+// drains after it. The own conditions are in the status tray (ui/StatusTray.tsx).
+import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import type { GameUi } from "../game.ts";
+import type { ExperienceCurve } from "../content-types.ts";
+import { toNextLevel } from "../state/experience.ts";
 
 /** Below this share of health the life orb beats and the map's edge turns red. */
 export const LOW_HEALTH = 0.25;
@@ -53,55 +55,69 @@ export function Orb(props: {
   );
 }
 
-/** The experience to the next level: a gold bar that flashes on a level up. */
-export function ExperienceBar(props: {
-  t: Translate;
-  stats: GameUi["stats"];
-  levelUp: boolean;
-}): JSX.Element {
-  const percent = props.stats ? Math.min(100, Math.max(0, props.stats.levelPercent)) : 0;
-  return (
-    <span
-      class={props.levelUp ? "xpbar flash" : "xpbar"}
-      role="progressbar"
-      aria-label={props.t("client.vitals.experience_bar")}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percent}
-    >
-      <span class="xpfill" style={{ transform: `scaleX(${(percent / 100).toFixed(3)})` }} />
-    </span>
-  );
+/**
+ * The tooltip of the experience bar: the exact experience and what is missing for the next
+ * level (state/experience.ts), or the plain experience without a curve.
+ */
+export function experienceTip(
+  t: Translate,
+  stats: NonNullable<GameUi["stats"]>,
+  curve: ExperienceCurve | undefined,
+): string {
+  const experience = stats.experience;
+  const next = toNextLevel(curve, stats.level, experience);
+  if (next)
+    return t("client.vitals.experience_next", {
+      experience,
+      missing: next.missing,
+      next: next.next,
+    });
+  if (curve) return t("client.vitals.experience_max", { experience });
+  return t("client.game.experience", { experience });
 }
 
 /**
- * The plaque over the life orb: name, level, experience and the conditions above them
- * (the tutorial's "stats" highlight lands here).
+ * The name plate and the experience bar, in the middle of the bottom bar (docs/17 "Placa
+ * del nombre", the owner's wish of 2026-11-19): the name and the level centred over a gold
+ * bar that carries the percent, and the exact experience to the next level as its tooltip.
+ * The bar flashes on a level up; the tutorial's "stats" highlight lands here.
  */
-export function Vitals(props: {
+export function ExperienceBar(props: {
   t: Translate;
   name: string;
   stats: GameUi["stats"];
-  /** The conditions bar (GameView ConditionBar). */
-  children?: ComponentChildren;
+  levelUp: boolean;
+  curve?: ExperienceCurve | undefined;
 }): JSX.Element {
   const { t, stats } = props;
+  const percent = stats ? Math.min(100, Math.max(0, stats.levelPercent)) : 0;
+  const tip = stats ? experienceTip(t, stats, props.curve) : undefined;
   return (
-    <section class="vitals" data-tutorial="stats" aria-label={t("client.vitals.title")}>
-      {props.children}
-      <span class="vname" title={props.name}>
-        {props.name}
+    <div class="xp" data-tutorial="stats" role="group" aria-label={t("client.vitals.title")}>
+      <div class="nameplate">
+        <span class="vname" title={props.name}>
+          {props.name}
+        </span>
+        {stats && (
+          <span class="vlevel" data-testid="level">
+            {t("client.vitals.level", { level: stats.level })}
+          </span>
+        )}
+      </div>
+      <span
+        class={props.levelUp ? "xpbar flash" : "xpbar"}
+        role="progressbar"
+        data-testid="experience"
+        title={tip}
+        aria-label={t("client.vitals.experience_bar")}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-valuetext={tip}
+      >
+        <span class="xpfill" style={{ transform: `scaleX(${(percent / 100).toFixed(3)})` }} />
+        {stats && <span class="xppercent">{t("client.vitals.percent", { percent })}</span>}
       </span>
-      {stats && (
-        <span class="vlevel" data-testid="level">
-          {t("client.game.level", { level: stats.level, percent: stats.levelPercent })}
-        </span>
-      )}
-      {stats && (
-        <span class="vxp" data-testid="experience">
-          {t("client.game.experience", { experience: stats.experience })}
-        </span>
-      )}
-    </section>
+    </div>
   );
 }

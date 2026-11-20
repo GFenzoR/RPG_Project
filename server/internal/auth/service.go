@@ -34,6 +34,7 @@ var (
 	ErrReservedName     = errors.New("auth: reserved character name")
 	ErrNameTaken        = errors.New("auth: character name taken")
 	ErrInvalidVocation  = errors.New("auth: invalid vocation")
+	ErrInvalidLook      = errors.New("auth: invalid look")
 	ErrCharacterLimit   = errors.New("auth: character limit reached")
 	ErrUnknownCharacter = errors.New("auth: character does not exist or is not the account's")
 	// ErrBusy means every password-hashing slot stayed taken for HashWait.
@@ -72,9 +73,12 @@ type Config struct {
 	Vocations content.Vocations
 	// Vocations a new character may pick. Empty = every loaded vocation.
 	PlayableVocations []string
-	AccountTokenTTL   time.Duration // default 30 days
-	MaxCharacters     int           // per account, default 10
-	Hash              HashParams    // default DefaultHashParams
+	// Looks is data/looks.yaml: the body a new character may pick (docs/02
+	// "Apariencia"). Nil: a look sent with a new character is ignored.
+	Looks           *content.Looks
+	AccountTokenTTL time.Duration // default 30 days
+	MaxCharacters   int           // per account, default 10
+	Hash            HashParams    // default DefaultHashParams
 	// Concurrent argon2 computations allowed; bounds memory under a login burst.
 	MaxConcurrentHashes int // default 4
 	// How long a request waits for a hashing slot before failing with ErrBusy.
@@ -118,6 +122,7 @@ type Service struct {
 	repo      Repo
 	clock     clock.Clock
 	playable  map[string]content.Vocation
+	looks     *content.Looks
 	tokenTTL  time.Duration
 	maxChars  int
 	hash      HashParams
@@ -149,6 +154,7 @@ func New(cfg Config) (*Service, error) {
 		repo:     cfg.Repo,
 		clock:    cfg.Clock,
 		playable: map[string]content.Vocation{},
+		looks:    cfg.Looks,
 		tokenTTL: cfg.AccountTokenTTL,
 		maxChars: cfg.MaxCharacters,
 		hash:     cfg.Hash,
@@ -407,9 +413,11 @@ func (s *Service) Characters(ctx context.Context, accountID int64) ([]store.Char
 	return cs, nil
 }
 
-// CreateCharacter validates the name and vocation and creates a level 1 character with
-// the vocation's starting health and mana.
-func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error) {
+// CreateCharacter validates the name, vocation and look and creates a level 1 character
+// with the vocation's starting health and mana. look is the body the player chose (docs/02
+// "Apariencia"), every id one a player may choose of data/looks.yaml; nil (an old client,
+// a bot) leaves it empty and the game picks one from the character's id at its first login.
+func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vocation string, look *content.Look) (store.Character, error) {
 	if err := CharacterNameError(name); err != nil {
 		return store.Character{}, err
 	}
@@ -417,12 +425,20 @@ func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vo
 	if !ok {
 		return store.Character{}, ErrInvalidVocation
 	}
+	var body store.Look
+	if look != nil && s.looks != nil {
+		if !s.looks.PlayerLook(*look) {
+			return store.Character{}, ErrInvalidLook
+		}
+		body = store.Look{Body: look.Body, Skin: look.Skin, Hair: look.Hair, HairColor: look.HairColor, Beard: look.Beard}
+	}
 	c, err := s.repo.CreateCharacter(ctx, store.NewCharacter{
 		AccountID: accountID,
 		Name:      name,
 		Vocation:  v.ID,
 		Health:    v.Start.Health,
 		Mana:      v.Start.Mana,
+		Look:      body,
 	}, s.maxChars)
 	switch {
 	case errors.Is(err, store.ErrNameTaken):

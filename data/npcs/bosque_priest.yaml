@@ -1,6 +1,16 @@
 id: bosque_priest
 name: npc.bosque_priest.name
-sprite: npcs/priest_forest
+sprite: npcs/bosque_priest
+look:
+  body: slender
+  skin: brown
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    head: { shape: hood, tint: green }
+    torso: { shape: robe, tint: white }
+    feet: { shape: shoes, tint: tan_leather }
 notes: >-
   Temple of the Root in Raigal (respawn point of the island). Heals for free and sells the
   same five blessings as the Farol temple (they are the same blessings, so the same

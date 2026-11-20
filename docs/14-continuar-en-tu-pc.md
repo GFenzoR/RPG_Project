@@ -50,7 +50,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
-| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
@@ -86,7 +86,9 @@ el punto 5:
     segura en mente;
   - el check `map-pr` valida el mapa con el `data/` y el `i18n/` de `main`: el contenido
     nuevo va en un PR antes del mapa que lo usa;
-  - el vuelto de los pagos tiene que entrar en la mochila (T5.5);
+  - el vuelto de los pagos tiene que entrar en la mochila o los bolsillos (T5.5, lote 13);
+  - todo camino nuevo que busque, cuente, dé o tome items del jugador pasa por los
+    bolsillos (`eachCarried`, `packs`, `room`, `freeCells`: docs/02 "Bolsillos");
   - nada de textos sin i18n, y nombres, textos y números originales (regla legal);
   - tests que digan lo que prueban y e2e que confirmen la respuesta del servidor, no
     solo el estado local del cliente.
@@ -98,6 +100,166 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Personalización y equipo visible por la red (hecho, rama `feat/character-look`, lote
+  13; docs/02 "Apariencia", docs/05 "Apariencia y equipo visible", docs/06 "Looks", docs/07
+  "Aspecto y equipo visible"):** cada personaje tiene su aspecto (cuerpo, piel, peinado,
+  color de pelo, barba; `characters.look_*`, migración 00021), elegido al crearlo con una
+  figura en vivo y cambiado gratis en Apariencia → Personalizar (`SetLook`, con anti-flood
+  de `data/looks.yaml limits`). Cada `Creature` trae el cuerpo y, de un jugador, los ids de
+  sus slots visibles (de un NPC o un monstruo, sus piezas); `CreatureLook` avisa a quien lo
+  ve cuando cambian (todo pasa por `equipmentChanged`: equipar, sacar, la forja, la muerte).
+  El cliente ya no deduce cuerpos del atuendo ni del contenido. Queda:
+  - **Mirarlo en el juego** (la verificación final del lote): el E2E "T3.1" elige un
+    aspecto en el formulario (`19-create-druid`: los selectores y la figura) y comprueba que
+    el servidor lo devuelve; en `20-druid-heal` se tiene que ver ese aspecto (esbelta,
+    piel oliva, pelo largo pelirrojo) con la ropa del atuendo `citizen`. "T5.2" le da una
+    espada de hierro a la presa y el cliente del cazador la recibe; `50-pvp-aggressor-skull`
+    (desde la presa) muestra al cazador y `49-pvp-no-pvp-refused` (desde el cazador) a la
+    presa con su espada en la mano. Ningún spec abre todavía Apariencia → Personalizar: lo
+    natural es sumarlo al de la tienda (`e2e/shop.spec.ts`, que ya abre la ventana) o a
+    "T5.2", guardar un peinado y ver el `CreatureLook` en el otro cliente.
+  - **Los personajes de antes** reciben al entrar el aspecto que sale de su id
+    (`content.DefaultLook`) y lo guardan; el dueño puede querer avisarles que pueden
+    cambiarlo gratis (un mensaje del tutorial o del sistema al primer login: no está).
+  - **`outfits.yaml look`** solo da el cuerpo del quieto de la tienda y el punto de partida
+    del formulario: la vista previa de un atuendo en `/shop` sigue mostrando ese cuerpo, no
+    el del personaje que lo va a llevar.
+  - **Monstruos y NPCs** mandan su aspecto en cada `Creature` (unos 100 B más por humanoide
+    al aparecer, docs/07); si algún día un monstruo recoge equipo, `CreatureLook` ya sirve
+    (hoy solo se manda para jugadores).
+  - **La figura del formulario y de la ventana** se dibuja con un canvas 2D desde el atlas
+    (`render/look-preview.ts`), no con Pixi: el tinte es el mismo multiply, pero no hay
+    sombra del motor (la elipse es CSS) ni el color de la tienda sobre la ropa.
+- **Humanoides del motor con el equipo a la vista (hecho, rama `feat/humanoid-art`, lote 13;
+  docs/17 "Humanoides del motor", docs/06 "Looks", docs/07 "Atlas con los humanoides del
+  motor"):** jugadores, NPCs y monstruos humanoides dejaron de ser personajes de LPC: son un
+  humanoide del motor de sprites de 36-40 px con proporciones de adulto (dos cuerpos, seis
+  pieles para jugadores, seis peinados, nueve colores de pelo, tres barbas) y un muñeco de
+  capas que muestra lo que llevan (`data/looks.yaml`, `worn` en las 76 piezas que se ven,
+  `look` en los 19 NPCs personas y los 4 monstruos humanoides). El caminar sale de la zancada
+  (un ciclo por casilla, 8 frames; 13,86 al norte y al sur): el pie apoyado no patina. El
+  ataque se juega con el arma (arco y ballesta disparan, varita y vara conjuran). El pack
+  `assets/vendor/ulpc/` salió del repo. Lo que arregló la revisión de la rama: el arma y el
+  escudo van sobre la ropa en las cuatro direcciones (el arco mirando al oeste y la hoja
+  levantada mirando al norte desaparecían bajo el cuerpo; `humanoid.test.ts` mide cada lugar
+  de la pila contra el modelo dibujado como una figura), un muñeco se desvanece entero (al
+  aparecer, caer o ser invisible ya no se ven unas capas a través de otras), girar en medio de
+  una caminata no hace saltar las piernas, y el ataque a distancia de otro jugador vuelve a
+  disparar. Queda:
+  - **Mirarlo en el juego** (la verificación final del lote): el jugador propio con su equipo
+    y cambiándolo, un NPC de cada isla, el saqueador y el contrabandista peleando (el ataque
+    con su arma), un paso largo en las cuatro direcciones sin pies que patinen ni pausas,
+    girar en medio de un paso, y la muerte. El E2E no mide píxeles del muñeco: en el E2E
+    final del lote se miran con Read estas capturas de `client/e2e/screenshots/`:
+    `04-world` (el jugador propio recién entrado: el muñeco del atuendo `citizen`, con lo que
+    tenga equipado, de pie sobre su casilla), `07b-attack-pose` (el golpe del jugador contra
+    el lobo o la embestida del lobo, en medio de la pose: el arma en la mano y sobre la
+    ropa), `31-bosque-temple` (el jugador en el templo de la Isla del Bosque, con las
+    personas que estén a la vista) y `33-bosque-druid` (Velia Musgo, la druida: su `look`
+    en el mapa y su retrato quieto en el diálogo). Ninguna de esas captura una caída ni un
+    ataque a distancia: eso queda para la prueba a mano.
+  - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
+    jugador se ve con su aspecto y su equipo.
+  - **La silueta translúcida** (detrás de un muro, o tapado por otra criatura) muestra solo
+    el cuerpo, sin ropa ni arma.
+  - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
+    la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
+  - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
+    madera distinto): una forma nueva en `layers.ts`, su nombre en `data/looks.yaml` y
+    `make spritegen ONLY=worn/`; un color nuevo es solo una línea de `tints`.
+- **Bordes de suelo (hecho, rama `feat/terrain-borders`, lote 13; docs/06 "Bordes", docs/17
+  ART-4, docs/03 "Formato"):** el dueño, en la prueba del 2026-11-19: "faltan los sprites de
+  transicion, todo tiene cortes demasiado cuadrados". `data/borders.yaml` pasó de 7 reglas
+  de a pares a una escalera de suelos (un borde por suelo natural sobre todo suelo más bajo
+  que toca; madera y muelles siguen rectos), cada pieza con 4 looks que el renderer elige por
+  casilla (`lookOf`), todos con los mismos puntos de cruce en los lados de la casilla, y la
+  espuma debajo de los bordes en el agua. Las cinco islas, en sus dos pisos, pasaron por
+  `mapcli autoborder` (6297 → 12273 piezas; el diff es solo de piezas de borde). Queda:
+  - **E2E (verificación final del lote 13):** mirar las orillas pasto/tierra y pasto/piedra
+    en `32-bosque-plaza`, `04-world` y las capturas del Farol (`12b`, `13`, `14`), la arena
+    con el agua (la espuma rompe debajo de la orilla) y la Isla de Pruebas. El spec del editor
+    (`editor/e2e/editor.spec.ts`, "hito 2") ahora espera `border_grass_n`/`border_grass_s`.
+  - **Puntas de una casilla:** una casilla sola que entra en otro suelo (fin de un camino,
+    ensenada) termina en punta (dos esquinas de adentro). Una pieza propia serían 4 piezas
+    más por suelo.
+  - **Ids:** las 120 piezas nuevas son los números 336–455; las 84 viejas quedan en
+    `retired` de `data/ids.lock.yaml` (`make gen-ids RETIRE=1`, nuevo). Si otra rama del
+    lote suma items, el que apila vuelve a correr `make gen-ids`.
+  - **Otra rama que pinte suelos** tiene que terminar con `mapcli autoborder` de lo que
+    pintó (con la escalera nueva): las piezas viejas (`border_grass_sand_*`, ...) ya no son
+    items y `make validate` las rechaza en un mapa. Desde la revisión del lote 13
+    `make validate` (y el check de PR de mapas) también rechaza bordes desactualizados: un
+    error por chunk que nombra el `mapcli autoborder` que falta.
+  - **Revisión del lote 13:** las piezas se dibujan con los suelos (`flat` del atlas), bajo
+    las sombras y las criaturas de la casilla de al lado; la espuma va por borde (sigue la
+    orilla real donde se juntan dos suelos; 11 casillas del mundo cambiaron); mirar una
+    casilla saltea las piezas y nombra su suelo. `feat/humanoid-art` y
+    `feat/character-look` tocan el dibujo de criaturas en `packages/renderer/src/map-view.ts`:
+    al apilar, las criaturas siguen en la capa de items (`placeEntity`) y las piezas ya no.
+  - **Nieve y hielo (lote 14):** una línea en `ladder`, 12 items, su nombre y `make borders`.
+- **Bandeja de estados y placa del nombre (hecho, rama `feat/hud-status`, lote 13; docs/17
+  "Hecho: bandeja de estados y placa del nombre", docs/02 "Estados del personaje", docs/05
+  "Condiciones"):** un ícono propio por condición y por estado (`in_combat`, `pvp_locked`,
+  `protection_zone`, que el servidor suma a `PlayerConditions`) junto al chat, con marco
+  verde o rojo, segundos, parpadeo y tooltip; el nombre y el nivel sobre la barra de
+  experiencia. Queda:
+  - **Teléfono vertical:** en el encabezado de 390 px entra un solo ícono (el más urgente);
+    los demás no se ven ni hay un "+N" que diga que hay más. Acostado o en una tablet
+    entran los diez. Si molesta, un contador o una segunda fila que solo aparezca con
+    estados (empuja el mapa: la regla de T5.6 es un encabezado de una línea).
+  - **Una ventana movida encima de la bandeja la tapa** (la bandeja va bajo las ventanas,
+    como el mapa); su tooltip no, porque sube la barra sobre ellas mientras se ve. Las
+    habilidades en su lugar de fábrica, muy altas, pueden llegar hasta ahí; no se probó
+    que `defaultPlace` (`ui/windows.ts`) la esquive: no es una ventana.
+  - **"En combate" puede terminar hasta 1 s antes o después** que el bloqueo de verdad: el
+    servidor solo reenvía la lista cuando el fin se movió 1 s (`statusSlack`) y el cliente
+    cuenta lo último que supo. Si un jugador sale justo en ese segundo, el servidor lo
+    rechaza como siempre (`combat.logout_locked`).
+  - **Un estado que no es de PvP** (la zona sin logout de `zones.yaml`, una arena) no tiene
+    ícono: si hace falta, otro id en `status.go`, su texto, su ícono y su lugar en
+    `STATUS_ORDER`.
+  - **E2E (verificación final del lote):** sin correr en la rama. "T3.2: a guardian casts
+    haste" mira el ícono de la aceleración en la bandeja (verde, con segundos y su sprite),
+    que la bandeja quede a la izquierda del chat y sobre la barra, y su tooltip
+    (`22-haste`, con el tooltip abierto); `23-conditions-hud` recorta abajo a la izquierda:
+    la bandeja, el orbe de vida y la placa del nombre sobre la barra de experiencia. "T5.6:
+    at 1280x800 a long name" exige el nombre entero en la placa, centrado sobre la barra.
+  - **Para las otras ramas del lote:** sin campos nuevos en el protocolo (solo comentarios
+    en `server.proto`, con su código generado), sin migraciones ni ids nuevos. Claves
+    nuevas en `i18n/*/client.yaml` (`condition.<id>.desc` de las ocho condiciones, nombre y
+    descripción de los tres estados, `client.status.*`, `client.vitals.level`,
+    `.percent`, `.experience_next`, `.experience_max`) y `client.conditions.left` se fue.
+    `HudBar` cambió `conditions` por `tray` (y `curve`); `windows.css` dejó la cresta del
+    medio y `--plaque-w` es `--tray-w`. En spritegen: `UI_STATUS_BOX`, `STATUS_ART` y
+    `ui/status/*` en `recipes/ui.ts`, y una fila en `assets/CREDITS.md`.
+- **Bolsillos (hecho, rama `feat/pockets`, lote 13; docs/02 "Bolsillos" y "Muerte", docs/05
+  "Bolsillos", docs/06 `inventory.pocket_slots`):** cuatro casillas propias de todo
+  personaje (un contenedor fijo que es parte del personaje, `session/pockets.go`), con lo
+  recibido yendo primero a la mochila y después a ellos, pagos y chequeos que leen los dos,
+  y la muerte sin mochila gratis (lo de los bolsillos cae con la mochila, en su tirada).
+  Protocolo aditivo (`ItemLocation.pocket` 4, `Inventory.pockets` 2 y `pocket_slots` 3) y
+  migración 00020 (`inventory_items.pocket`). Queda:
+  - **E2E sin correr en la rama:** el de la muerte (`die to a wolf`, `13-death` y
+    `14-respawn`) siembra ahora un nivel 10 para que la mochila caiga y comprueba el slot
+    vacío y los cuatro bolsillos vacíos al despertar; la revisión final del lote tiene que
+    mirar esas capturas. El resto de los specs no cambió: ninguno dependía de la mochila
+    nueva.
+  - **El cuerpo de un jugador entra todo** (revisión de la rama): con los bolsillos una
+    muerte puede soltar 14 items y los restos tienen 10 lugares; lo que no entraba quedaba
+    suelto en la casilla y el que mató lo levantaba sin esperar `corpse_owner_only_ms`.
+    Ahora el cuerpo de un jugador es `creature_remains` con un lugar por slot de equipo y
+    por item de los bolsillos (`playerCorpse`; `TestDeathCorpseHoldsEverything`,
+    `TestHeldDeathDropsNothingLoose`). El cuerpo de un jugador muestra 14 lugares y el de
+    un monstruo 10: si el dueño prefiere otro sprite o un item propio, es un item nuevo.
+  - **Un contenedor en un bolsillo** se abre y se llena a mano, pero lo que se recibe va
+    solo al primer nivel de la mochila y de los bolsillos (como antes una bolsa dentro de
+    la mochila).
+  - **Bajar `inventory.pocket_slots`** no borra lo guardado (se puede sacar, no vuelve a
+    entrar, tampoco por un intercambio: `tradeFits` cuenta los lugares de cada contenedor
+    por separado): el esquema lo deja entre 1 y 8, pero conviene no bajarlo nunca.
+  - **Textos (arreglado en la revisión):** el aviso del intercambio sin nada que ofrecer
+    nombra los bolsillos y el paso `open_backpack` del tutorial dice que lo que no entra
+    en la mochila va a ellos.
 - **Motor de quests: llegar a un lugar, tareas repetibles y diario de misiones (hecho, rama
   `feat/quest-engine`, lote 12; docs/02 "Diario de misiones y tareas", docs/06 "Quest",
   docs/05 "Diario de misiones"):** pasos `reach` (una zona o un punto con radio; cuentan al
@@ -761,10 +923,8 @@ el punto 5:
     - **Elevación** (ART-8): hecha para el dibujo (`elevation` en `data/items`; el cajón de
       carga, 8 px). No hay mesas ni barriles en `data/items` todavía, y el cajón bloquea el
       paso: por ahora solo sube lo que se tira encima.
-    - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
-      (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
-      recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
-      islas es `mapcli autoborder`: cambia mapas.
+    - **Bordes que faltaban** (tierra con pasto, pasto con piedra y otros quince pares):
+      hechos en el lote 13 con la escalera de suelos (arriba, "Bordes de suelo").
     - **Partículas de ambiente** (A13): hechas brasas (lava, fragua, fogón, brasero),
       polen junto a los árboles, rocío en la orilla del mar y polvo en las cuevas
       (`client/src/render/particles.ts`); el polvo y las ondas al pisar, después
@@ -909,7 +1069,8 @@ el punto 5:
     ~40 ms antes de que se dibuje su paso. No se nota; se dejó así.
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
-  correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
+  correa de los monstruos, la mochila tras morir (desde el lote 13, los bolsillos en vez de
+  una mochila gratis: docs/02 "Bolsillos"), la hotbar sobre la última fila, la
   puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
   `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
   - **Dividir pilas (m1), a medias.** Desde A4 el menú de una pila (click derecho o toque
@@ -1494,8 +1655,9 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms
   (`client/CLAUDE.md`, "Sprites de efectos"); sin arte, la forma Pixi de antes. Los
   proyectiles y los números flotantes siguen siendo formas y texto de Pixi.
-- **Bordes** (`assets/sprites/borders/`): `gen-borders.ts` recorta la textura del suelo de
-  origen.
+- **Bordes** (`assets/sprites/borders/<suelo>/<pieza>`, 4 looks por pieza, y la espuma
+  `borders/surf/` con sus frames): `make borders` (`gen-borders.ts`) recorta la textura del
+  suelo con orillas propias de cada look (docs/06 "Bordes").
 
 Para cambiar un sprite: otro tile del pack en `sprites.yaml`, o una receta nueva en
 `tools/spritegen/src/recipes/` y `make spritegen ONLY=<ruta>` (estilo y reglas en

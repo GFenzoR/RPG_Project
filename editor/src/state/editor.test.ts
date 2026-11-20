@@ -1,4 +1,4 @@
-import { CHUNK_SIZE } from "@rpg/map-format/ops";
+import { BORDER_PIECES, CHUNK_SIZE, NO_BORDERS } from "@rpg/map-format/ops";
 import type { Chunk, Island, World } from "@rpg/map-format/ops";
 import { describe, expect, it } from "vitest";
 import { screenToTile } from "@rpg/renderer/camera";
@@ -11,7 +11,7 @@ import type {
   SaveResult,
   ValidateResult,
 } from "../io/wire.ts";
-import type { BorderRule, House } from "@rpg/map-format/ops";
+import type { BorderSet, House } from "@rpg/map-format/ops";
 import { tileAt } from "../tools/tools.ts";
 import { ConflictError, EditorController, PartialSaveError, entityProblem } from "./editor.ts";
 import type { Backend, PendingKey } from "./editor.ts";
@@ -55,7 +55,7 @@ const items: PaletteItem[] = [
   { id: "crate", kind: "decoration", sprite: "decor/crate", name: "item.crate.name" },
   { id: "sand", kind: "ground", sprite: "ground/sand", name: "item.sand.name" },
   // Border pieces are real items (data/items), so pasted stacks that carry them are valid.
-  ...["n", "s", "e", "w", "ne", "nw", "se", "sw"].map((n) => ({
+  ...BORDER_PIECES.map((n) => ({
     id: `b_${n}`,
     kind: "decoration",
     sprite: `border/${n}`,
@@ -63,24 +63,10 @@ const items: PaletteItem[] = [
   })),
 ];
 
-const piece = (n: string): string => `b_${n}`;
-const borders: BorderRule[] = [
-  {
-    id: "grass_sand",
-    from: "grass",
-    to: "sand",
-    pieces: {
-      n: piece("n"),
-      s: piece("s"),
-      e: piece("e"),
-      w: piece("w"),
-      ne: piece("ne"),
-      nw: piece("nw"),
-      se: piece("se"),
-      sw: piece("sw"),
-    },
-  },
-];
+// Grass's fringe (pieces b_<piece>) goes over sand.
+const borders: BorderSet = { ladder: [{ ground: "sand" }, { ground: "grass", pieces: "b" }] };
+/** A lone sand tile in grass: its four concave corners. */
+const HOLE = ["b_inner_nw", "b_inner_ne", "b_inner_se", "b_inner_sw"];
 
 class FakeBackend implements Backend {
   saves: FileChange[][] = [];
@@ -116,11 +102,11 @@ class FakeBackend implements Backend {
 }
 
 function editor(
-  opts: { island?: string; backend?: Backend; borders?: BorderRule[] } = {},
+  opts: { island?: string; backend?: Backend; borders?: BorderSet } = {},
 ): EditorController {
   return new EditorController({
     world: world(),
-    borders: opts.borders ?? [],
+    borders: opts.borders ?? NO_BORDERS,
     monsters: ["wolf"],
     npcs: ["harbor_master"],
     items,
@@ -266,8 +252,8 @@ describe("EditorController, hito 2", () => {
     e.setBrushSize(1);
     e.strokeStart(10, 10, false);
     e.strokeEnd();
-    // Sand surrounded by grass gets the four side pieces; its neighbours stay clean.
-    expect(tileAt(e.state.world, 10, 10, 7)?.stack).toEqual(["b_n", "b_e", "b_s", "b_w"]);
+    // Sand surrounded by grass gets the four inner corners; its neighbours stay clean.
+    expect(tileAt(e.state.world, 10, 10, 7)?.stack).toEqual(HOLE);
     expect(tileAt(e.state.world, 11, 10, 7)?.stack).toEqual([]);
     e.undo();
     expect(tileAt(e.state.world, 10, 10, 7)).toEqual({ ground: "grass", stack: [] });
@@ -432,7 +418,7 @@ describe("EditorController, review fixes", () => {
     e.copy();
     e.startPaste();
     e.strokeStart(10, 10, false);
-    expect(tileAt(e.state.world, 10, 10, 7)?.stack).toEqual(["b_n", "b_e", "b_s", "b_w"]);
+    expect(tileAt(e.state.world, 10, 10, 7)?.stack).toEqual(HOLE);
   });
 
   it("fill is one click: moving while pressed does not flood other regions", () => {

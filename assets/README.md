@@ -123,8 +123,8 @@ detalle de cómo los juega el cliente está en `client/CLAUDE.md`, "Animación d
 cuerpo), `shoot` (a distancia), `cast` (conjurar) o `death`, `dir` es `n`, `e`, `s` o `w`, y
 `n` arranca en 0. Hay tres maneras de tenerlos:
 1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
-   (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
-   de LPC (`vendor/ulpc`).
+   (abajo primero), recolorea con `palettes` y corta los frames. Así salían los personajes
+   de LPC (`vendor/ulpc`, hasta el 2026-11-19: los reemplazó el humanoide del motor).
 2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, del motor de spritegen:
    `sprites/creatures/bristleback_boar/walk_s_0.png` a `death_w_4.png`, o las hojas de
    Gemini de "Arte y música hechos con Gemini": `sprites/creatures/wolf/`). spritepack arma
@@ -169,7 +169,8 @@ animations:
   de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
   `baked` (Dungeon Crawl y spritegen la pintan).
 - **Pistas de frames de archivos** (solo sin capas, y solo si el sprite tiene frames en
-  `sprites/<sprite>/`; si no, error):
+  `sprites/<sprite>/`; si no, error; `trim`, `per_tile` y `per_tile_ns` en "Humanoides del
+  motor", abajo):
   - `mirror: true` (ANI-1): en cada acción con frames al oeste y ninguno al este (o al
     revés), spritepack agrega los del otro lado espejados (`<sprite>/walk_e_<n>`, origen
     `file`). Un lado que ya tiene frames nunca se pisa. Para criaturas sin nada en un solo
@@ -201,21 +202,28 @@ animations:
   --scale 2 --out shot.png` muestra la página donde caen los personajes. Mirarlos a 1x y a
   2x con Read, y en el juego (screenshots del E2E).
 
-### Personajes de LPC (`vendor/ulpc`)
-23 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
-en `vendor/ulpc/LICENSE.txt`), copiadas sin tocar con sus rutas: cuerpos (hombre, mujer,
-esqueleto), cabezas (hombre, mujer, anciano), camisa de manga larga, armaduras de cuero, placas
-y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Cada
-capa trae seis hojas (138 archivos): `walk`, `idle`, `slash`, `shoot`, `spellcast` y `hurt`
-(las de disparar y conjurar se sumaron el 2026-11-18, del mismo commit). Solo entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
-sueltos no tienen fila: quedaron afuera). Las hojas base vienen en colores neutros (piel
-clara, tela blanca, pelo naranja): la variedad sale de las paletas propias de `palettes`.
-
-Para un personaje nuevo: elegir capas de esa carpeta (o sumar otras del mismo commit, con su
-fila de `CREDITS.csv` copiada al subconjunto de la carpeta), escribir su entrada en
-`animations` en el orden cuerpo, piernas, pies, torso, cabeza, barba, pelo y sombrero, y
-revisar el preview. El lobo del "RPG Maker MZ LPC Starter Kit" quedó afuera: no trae
-licencia al lado del archivo (docs/17, SRC-2).
+### Humanoides del motor: el muñeco de capas (docs/17 "Humanoides del motor")
+Jugadores, NPCs que son personas y monstruos humanoides son arte propio del motor de
+spritegen (`tools/spritegen/src/engine/specs/humanoid/`): `sprites/humans/body_<cuerpo>`,
+`humans/hair_<peinado>`, `humans/beard_<barba>` y `sprites/worn/<lugar>_<forma>` (el torso
+por cuerpo: `worn/torso_<forma>_<cuerpo>`), con frames `<acción>_<dir>_<n>` de 64x64 en un
+tono neutro que el cliente tiñe (`data/looks.yaml`, docs/06 "Looks"). Cada capa tiene su
+entrada de `animations` con pistas de frames de archivos:
+```yaml
+  humans/body_sturdy: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { ... } }
+  worn/weapon_sword: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { ... } }
+```
+- `shadow: none` en las capas: la sombra de contacto es la del cuerpo.
+- `trim: true`: cada frame va al atlas recortado a su caja opaca (`trimmed`,
+  `spriteSourceSize` y `sourceSize` en el JSON de la página; PixiJS lo ubica como el frame
+  entero); un frame vacío queda de 1x1. Son 3612 frames: enteros serían 3,5 páginas, así
+  ocupan 0,15 (docs/07).
+- `per_tile` y `per_tile_ns`: frames de caminar por casilla (`perTile` y `perTileNS` del
+  clip) al este y al oeste, y al norte y al sur (la regla de la zancada de docs/17).
+- `spritegen check` exige que estas pistas sean las del rig. `data/looks.yaml` nombra cada
+  capa (spritepack la cuenta como usada por `data/`).
+- `sprites/outfits/<atuendo>/<dir>_0.png` y `sprites/npcs/<npc>.png` son quietos compuestos
+  de las capas (la tienda, el retrato del diálogo y el respaldo del cliente).
 
 ## Arte del mapa: looks, frames, muros, sombras y luz (docs/17 ART-3 a ART-7)
 Un sprite que `data/` pone en el mapa (suelo o item) puede tener partes al lado, que
@@ -251,14 +259,19 @@ tiles:
 - `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
   casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
   entrada: 250 ms y `world`.
-- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7).
+- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7 en un suelo; en
+  un item, las piezas de borde, los looks salen parejos).
 - `ms` y `sync` sin frames, `weight` sin looks, piezas de muro incompletas o partes sin su
   sprite son errores de `make sprites`.
 
 spritepack escribe lo que tiene cada sprite en `atlas.json` `tiles` (`TileMeta` de
 `packages/renderer/src/tile-art.ts`, puro y compartido con `mapcli render`). Los bordes de
-orilla (`borders/sand_water_*`) traen 3 frames de espuma que hace `gen-borders`, no
-spritegen.
+piezas de borde (`borders/<suelo>/<pieza>`, 4 looks cada una) y la espuma de la orilla
+(`borders/surf/<pieza>`, con 3 frames más en cada look: `<pieza>/frame_<n>` y
+`<pieza>/var_<n>/frame_<m>`) las hace `make borders` (`gen-borders`), no spritegen. Un look
+de un sprite animado lleva sus propios frames, tantos como el sprite (si no, error de
+`make sprites`). Todo sprite de `borders/` (que no sea una de esas partes) lleva `flat`: el
+renderer lo dibuja con los suelos, bajo las sombras, los items y las criaturas.
 
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada

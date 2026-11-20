@@ -87,7 +87,20 @@ describe("mapcli edit commands", () => {
       root,
     );
     expect(r.code).toBe(0);
-    expect(r.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 0 } });
+    // Sand on grass: its border pieces are out of date until the autoborder (docs/06 "Bordes").
+    expect(r.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 1 } });
+    expect(JSON.stringify(r.json())).toContain("run `mapcli autoborder testisle --floor 7`");
+    const b = mapcli(
+      "autoborder",
+      "testisle",
+      "--floor",
+      "7",
+      "--rect",
+      "1039,1039,5,5",
+      "--root",
+      root,
+    );
+    expect(b.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 0 } });
     expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
   });
 
@@ -340,7 +353,7 @@ describe("mapcli edit commands", () => {
       ok: true,
       validation: { errors: 0 },
     });
-    expect(read(root, Z7)).toContain("border_grass_sand_");
+    expect(read(root, Z7)).toContain("border_grass_");
     writeFileSync(ops, "{");
     expect(mapcli("ops", "apply", ops, "--root", root).code).toBe(2);
   });
@@ -376,7 +389,7 @@ describe("mapcli edit commands", () => {
     );
     expect(r.code).toBe(0);
     expect(r.json().ok).toBe(true);
-    expect(read(root, Z7)).toContain("border_sand_water_");
+    expect(read(root, Z7)).toContain("border_surf_");
     expect(
       mapcli(
         "generate",
@@ -571,7 +584,7 @@ describe("mapcli patch", () => {
       ok: true,
       merged: [Z7],
     });
-  });
+  }, 90_000); // git sandboxes: over 30 s on native Windows, like the round trip above
 
   it("rejects patches that reach outside the map files", () => {
     const root = sandbox();
@@ -650,7 +663,7 @@ describe("mapcli patch", () => {
         changed: [],
       }),
     ]);
-  });
+  }, 90_000); // git sandboxes: over 30 s on native Windows, like the round trip above
 
   it("writes patch contents in canonical form, never as they come", () => {
     const root = sandbox();

@@ -9,46 +9,23 @@ import { loadWorld } from "../io.ts";
 import { chunkKey } from "../types.ts";
 import type { World } from "../types.ts";
 import { formatYaml } from "../yaml.ts";
-import { applyOps, borderPieces, OpError, seededRandom } from "./index.ts";
-import type { BorderRule, MapOp, OpOptions, Prefab } from "./index.ts";
+import { applyOps, borderItems, borderPieces, covers, OpError, seededRandom } from "./index.ts";
+import type { BorderSet, MapOp, OpOptions, Prefab } from "./index.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const content = loadContent(repo);
 
-const RULES: BorderRule[] = [
-  {
-    id: "test_grass_sand",
-    from: "grass",
-    to: "sand",
-    pieces: {
-      n: "gs_n",
-      s: "gs_s",
-      e: "gs_e",
-      w: "gs_w",
-      ne: "gs_ne",
-      nw: "gs_nw",
-      se: "gs_se",
-      sw: "gs_sw",
-    },
-  },
-  {
-    id: "test_sand_water",
-    from: "sand",
-    to: "water_shallow",
-    priority: -1,
-    pieces: {
-      n: "sw_n",
-      s: "sw_s",
-      e: "sw_e",
-      w: "sw_w",
-      ne: "sw_ne",
-      nw: "sw_nw",
-      se: "sw_se",
-      sw: "sw_sw",
-      inner_ne: "sw_inner_ne",
-    },
-  },
-];
+// A small ladder: water, then sand (its fringe sd_*), dirt (dt_*, only over sand), grass
+// (gs_*); the surf sf_* goes over fringes on water. Stone floor is off the ladder.
+const SET: BorderSet = {
+  ladder: [
+    { ground: "water_shallow" },
+    { ground: "sand", pieces: "sd" },
+    { ground: "dirt", pieces: "dt", over: ["sand"] },
+    { ground: "grass", pieces: "gs" },
+  ],
+  shore: { water: ["water_shallow"], pieces: "sf" },
+};
 
 const HUT: Prefab = {
   id: "test_hut",
@@ -61,15 +38,26 @@ const HUT: Prefab = {
 };
 
 const opts: OpOptions = {
-  itemKind: (id) => (/^(gs|sw)_/.test(id) ? "decoration" : content.items.get(id)?.kind),
+  itemKind: (id) => (/^(gs|sd|dt|sf)_/.test(id) ? "decoration" : content.items.get(id)?.kind),
   monsterKnown: (id) => content.monsters.has(id),
   npcKnown: (id) => content.npcs.has(id),
-  borders: RULES,
+  borders: SET,
   prefab: (id) => (id === HUT.id ? HUT : undefined),
 };
 
 function testisle(): World {
   return loadWorld(repo).world;
+}
+
+/** testisle without the border pieces of data/borders.yaml, for the test ladder's own. */
+function bare(): World {
+  const world = testisle();
+  for (const isl of world.islands.values())
+    for (const c of isl.chunks.values())
+      c.items = c.items
+        .map((s) => ({ ...s, stack: s.stack.filter((id) => !id.startsWith("border_")) }))
+        .filter((s) => s.stack.length > 0);
+  return world;
 }
 
 /** Every chunk and auxiliary list in canonical bytes. */
@@ -143,32 +131,48 @@ describe("fill", () => {
 });
 
 describe("autoborder", () => {
-  it("stacks pieces on the 'to' tiles, under what was there, and undoes byte for byte", () => {
+  it("stacks pieces on the lower tiles, under what was there, and undoes byte for byte", () => {
     const area = { x: 1024, y: 1024, w: 64, h: 64 };
-    const w = roundTrip(testisle(), [{ op: "autoborder", floor: 7, rect: area }]);
+    const w = roundTrip(bare(), [{ op: "autoborder", floor: 7, rect: area }]);
     // 1049,1036 is sand with grass to the east (1050 is the first grass of row 1036).
     expect(tile(w, 1048, 1036).stack[0]).toMatch(/^gs_/);
-    // Water touching sand gets sand_water pieces; priority -1 puts them below any other.
-    expect(tile(w, 1050, 1031).stack).toEqual(["sw_s"]);
-    expect(tile(w, 1048, 1031).stack).toEqual(["sw_se"]);
+    // Water touching sand gets the sand's fringe over the surf.
+    expect(tile(w, 1050, 1031).stack).toEqual(["sf_s", "sd_s"]);
+    expect(tile(w, 1048, 1031).stack).toEqual(["sf_se", "sd_se"]);
     // Running it again changes nothing.
     const again = applyOps(w, [{ op: "autoborder", floor: 7, rect: area }], opts);
     expect(again.inverse).toEqual([]);
   });
 
   it("keeps non-border items above the borders", () => {
-    const w = roundTrip(testisle(), [
+    const w = roundTrip(bare(), [
       { op: "paint_ground", floor: 7, rect: { x: 1040, y: 1045, w: 1, h: 1 }, item: "sand" },
       { op: "place_item", pos: { x: 1040, y: 1045, z: 7 }, item: "cargo_crate" },
       { op: "autoborder", floor: 7, rect: { x: 1040, y: 1045, w: 1, h: 1 } },
     ]);
-    expect(tile(w, 1040, 1045).stack).toEqual(["gs_n", "gs_e", "gs_s", "gs_w", "cargo_crate"]);
+    expect(tile(w, 1040, 1045).stack).toEqual([
+      "gs_inner_nw",
+      "gs_inner_ne",
+      "gs_inner_se",
+      "gs_inner_sw",
+      "cargo_crate",
+    ]);
+  });
+
+  it("puts the pieces under a wall too: a thin wall leaves its ground in sight", () => {
+    const w = roundTrip(bare(), [
+      { op: "paint_ground", floor: 7, rect: { x: 1040, y: 1045, w: 2, h: 1 }, item: "sand" },
+      { op: "place_item", pos: { x: 1040, y: 1045, z: 7 }, item: "stone_wall" },
+      { op: "autoborder", floor: 7, rect: { x: 1040, y: 1045, w: 2, h: 1 } },
+    ]);
+    expect(tile(w, 1040, 1045).stack).toEqual(["gs_inner_nw", "gs_inner_sw", "stone_wall"]);
+    expect(tile(w, 1041, 1045).stack).toEqual(["gs_inner_ne", "gs_inner_se"]);
   });
 
   it("removes stale pieces when the ground changed", () => {
     const area = { x: 1040, y: 1040, w: 5, h: 5 };
     const start = applyOps(
-      testisle(),
+      bare(),
       [
         { op: "paint_ground", floor: 7, rect: { x: 1042, y: 1042, w: 1, h: 1 }, item: "sand" },
         { op: "autoborder", floor: 7, rect: area },
@@ -185,7 +189,7 @@ describe("autoborder", () => {
   it("needs the rules", () => {
     expect(() =>
       applyOps(
-        testisle(),
+        bare(),
         [{ op: "autoborder", floor: 7, rect: { x: 1040, y: 1040, w: 2, h: 2 } }],
         {},
       ),
@@ -193,23 +197,104 @@ describe("autoborder", () => {
   });
 });
 
-describe("borderPieces", () => {
-  const map = (rows: string[]) => (x: number, y: number) => {
-    const ch = rows[y]?.[x];
-    return ch === "g" ? "grass" : ch === "s" ? "sand" : ch === "w" ? "water_shallow" : null;
+describe('borderPieces (the ladder, docs/06 "Bordes")', () => {
+  const GROUND: Record<string, string> = {
+    g: "grass",
+    d: "dirt",
+    s: "sand",
+    w: "water_shallow",
+    f: "stone_floor",
   };
-  const rules = [RULES[0] as BorderRule];
-  it("uses sides, diagonal corners and both sides when there is no inner piece", () => {
-    const m = map(["gss", "sss", "ssg"]);
-    expect(borderPieces(1, 1, m, rules)).toEqual(["gs_nw", "gs_se"]);
-    expect(borderPieces(0, 1, m, rules)).toEqual(["gs_n"]);
-    const l = map(["gg", "gs"]);
-    expect(borderPieces(1, 1, l, rules)).toEqual(["gs_n", "gs_w"]);
+  const map = (rows: string[]) => (x: number, y: number) => GROUND[rows[y]?.[x] ?? ""] ?? null;
+  /** The pieces of the middle tile of a 3x3 map. */
+  const mid = (...rows: string[]): string[] => borderPieces(1, 1, map(rows), SET);
+
+  it("puts a side piece where the higher ground is on that side", () => {
+    expect(mid("sgs", "sss", "sss")).toEqual(["gs_n"]);
+    expect(mid("sss", "ssg", "sss")).toEqual(["gs_e"]);
+    expect(mid("sss", "sss", "sgs")).toEqual(["gs_s"]);
+    expect(mid("sss", "gss", "sss")).toEqual(["gs_w"]);
+    // A side covers its two corners: the diagonals next to it add nothing.
+    expect(mid("ggg", "sss", "sss")).toEqual(["gs_n"]);
+    // Two opposite sides are two pieces.
+    expect(mid("sgs", "sss", "sgs")).toEqual(["gs_n", "gs_s"]);
   });
-  it("uses the inner piece when the rule has one", () => {
-    const l = map(["ss", "ws"]);
-    // water at 0,1 with sand n (0,0) and e (1,1) → inner_ne
-    expect(borderPieces(0, 1, l, [RULES[1] as BorderRule])).toEqual(["sw_inner_ne"]);
+
+  it("puts an outer corner where the higher ground is only on the diagonal", () => {
+    expect(mid("gss", "sss", "sss")).toEqual(["gs_nw"]);
+    expect(mid("ssg", "sss", "sss")).toEqual(["gs_ne"]);
+    expect(mid("sss", "sss", "ssg")).toEqual(["gs_se"]);
+    expect(mid("sss", "sss", "gss")).toEqual(["gs_sw"]);
+    expect(mid("gsg", "sss", "gsg")).toEqual(["gs_nw", "gs_ne", "gs_se", "gs_sw"]);
+    // A side and the far diagonals: the side, then the corners its sides do not cover.
+    expect(mid("sgs", "sss", "gsg")).toEqual(["gs_n", "gs_se", "gs_sw"]);
+  });
+
+  it("puts an inner corner where the higher ground is on two adjacent sides", () => {
+    expect(mid("sgs", "gss", "sss")).toEqual(["gs_inner_nw"]);
+    expect(mid("sgs", "ssg", "sss")).toEqual(["gs_inner_ne"]);
+    expect(mid("sss", "ssg", "sgs")).toEqual(["gs_inner_se"]);
+    expect(mid("sss", "gss", "sgs")).toEqual(["gs_inner_sw"]);
+    // Three sides: two inner corners share the middle side.
+    expect(mid("sgs", "gsg", "sss")).toEqual(["gs_inner_nw", "gs_inner_ne"]);
+    // A lone tile: the four inner corners.
+    expect(mid("sgs", "gsg", "sgs")).toEqual([
+      "gs_inner_nw",
+      "gs_inner_ne",
+      "gs_inner_se",
+      "gs_inner_sw",
+    ]);
+  });
+
+  it("stacks the fringes bottom to top by the ladder, one ground at a time", () => {
+    // Sand with dirt to the west and grass to the north: dirt first, grass over it, and the
+    // grass in the far corner is its own small corner.
+    expect(mid("sgs", "dss", "ssg")).toEqual(["dt_w", "gs_n", "gs_se"]);
+    // Grass covers dirt; dirt never covers grass, nor itself.
+    expect(mid("sgs", "ddd", "sss")).toEqual(["gs_n"]);
+    expect(mid("ddd", "dgd", "ddd")).toEqual([]);
+    expect(mid("ddd", "ddd", "ddd")).toEqual([]);
+    // Grass to the north and dirt to the south: the dirt's fringe first, the grass's on top.
+    expect(mid("ggs", "sss", "dds")).toEqual(["dt_s", "gs_n"]);
+  });
+
+  it("honours `over`: dirt's fringe goes on sand, not on water", () => {
+    expect(covers(SET, "dirt", "sand")).toBe(true);
+    expect(covers(SET, "dirt", "water_shallow")).toBe(false);
+    expect(covers(SET, "grass", "water_shallow")).toBe(true);
+    expect(covers(SET, "sand", "grass")).toBe(false);
+    expect(borderPieces(1, 1, map(["wdw", "www", "www"]), SET)).toEqual([]);
+  });
+
+  it("leaves grounds off the ladder straight, both ways", () => {
+    expect(borderPieces(1, 1, map(["fgf", "fff", "fff"]), SET)).toEqual([]);
+    expect(mid("sfs", "sss", "sss")).toEqual([]);
+    expect(covers(SET, "grass", "stone_floor")).toBe(false);
+    // No ground (outside the map) is nothing either.
+    expect(borderPieces(5, 5, map(["s"]), SET)).toEqual([]);
+  });
+
+  it("puts the surf under the fringes on water, one of each fringe's shape", () => {
+    const water = (...rows: string[]) => borderPieces(1, 1, map(rows), SET);
+    expect(water("wsw", "www", "www")).toEqual(["sf_n", "sd_n"]);
+    expect(water("sss", "sww", "www")).toEqual(["sf_inner_nw", "sd_inner_nw"]);
+    // Sand north, grass west: the surf of a north side and of a west side, under the two
+    // fringes (each hides the other's surf on its land), not an inner corner neither draws.
+    expect(water("wsw", "gww", "www")).toEqual(["sf_n", "sf_w", "sd_n", "gs_w"]);
+    // Sand north, a grass corner north-east: the corner's bulge past the sand gets its surf.
+    expect(water("wsg", "www", "www")).toEqual(["sf_n", "sf_ne", "sd_n", "gs_ne"]);
+    // Dirt does not cover water: no fringe and no surf.
+    expect(water("wdw", "www", "www")).toEqual([]);
+    // Open water: nothing.
+    expect(water("www", "www", "www")).toEqual([]);
+  });
+
+  it("lists every piece item of the set, fringes and surf", () => {
+    const items = borderItems(SET);
+    expect(items.size).toBe(4 * 12);
+    for (const id of ["sd_n", "dt_inner_se", "gs_sw", "sf_inner_nw"])
+      expect(items.has(id)).toBe(true);
+    expect(borderItems({ ladder: [{ ground: "sand" }] }).size).toBe(0);
   });
 });
 

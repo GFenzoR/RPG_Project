@@ -1,6 +1,6 @@
 // Content tooling CLI (run with Node >= 22.18, which strips TypeScript types natively).
 //   node packages/content-schema/src/cli.ts validate [--root DIR] [--base-ref REF]
-//   node packages/content-schema/src/cli.ts gen-ids [--root DIR]
+//   node packages/content-schema/src/cli.ts gen-ids [--root DIR] [--retire]
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -13,6 +13,7 @@ const { positionals, values } = parseArgs({
   options: {
     root: { type: "string", default: "." },
     "base-ref": { type: "string", default: process.env["CONTENT_BASE_REF"] ?? "origin/main" },
+    retire: { type: "boolean", default: false },
   },
 });
 const root = resolve(values.root);
@@ -43,14 +44,20 @@ switch (positionals[0]) {
     break;
   }
   case "gen-ids": {
-    const { added, chests } = generateIdsLock(root);
-    const news = [...added, ...chests.map((c) => `chest ${c}`)];
+    const { added, chests, retired } = generateIdsLock(root, { retire: values.retire });
+    const news = [
+      ...added,
+      ...chests.map((c) => `chest ${c}`),
+      ...retired.map((r) => `retired ${r}`),
+    ];
     console.log(
       news.length === 0 ? "ids.lock.yaml: up to date" : `ids.lock.yaml: added ${news.join(", ")}`,
     );
     break;
   }
   default:
-    console.error("usage: cli.ts validate [--root DIR] [--base-ref REF] | gen-ids [--root DIR]");
+    console.error(
+      "usage: cli.ts validate [--root DIR] [--base-ref REF] | gen-ids [--root DIR] [--retire]",
+    );
     process.exitCode = 2;
 }

@@ -5,19 +5,23 @@ import type { VNode } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import { AppearancePanel } from "./Appearance.tsx";
+import { LookPreview } from "./LookPreview.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;
 
 type Node = VNode<Record<string, unknown> & { children?: unknown }>;
 
-/** Expands function components (they have no hooks) so their output is walked too. */
+/**
+ * Expands function components (they have no hooks) so their output is walked too; the
+ * figure (LookPreview, a canvas with state) stays a node.
+ */
 function nodes(n: unknown, out: Node[] = []): Node[] {
   if (Array.isArray(n)) {
     for (const c of n) nodes(c, out);
   } else if (n && typeof n === "object" && "props" in n) {
     const v = n as Node;
-    if (typeof v.type === "function") {
+    if (typeof v.type === "function" && v.type !== LookPreview) {
       nodes((v.type as (p: unknown) => unknown)(v.props), out);
       return out;
     }
@@ -91,5 +95,98 @@ describe("AppearancePanel (T5.7)", () => {
     // Pressing what is already worn sends nothing.
     (choice(tree, "outfit_sailor")?.props["onClick"] as () => void)();
     expect(sent).toEqual(["equip name_frost", "unequip outfit"]);
+  });
+});
+
+describe("AppearancePanel: Personalizar (docs/02 Apariencia)", () => {
+  const MIRA = {
+    body: "slender",
+    skin: "olive",
+    hair: "ponytail",
+    hairColor: "auburn",
+    beard: "none",
+  };
+  const looks = {
+    ...content,
+    lookOptions: {
+      builds: ["sturdy", "slender"],
+      skins: ["fair", "olive"],
+      hairStyles: ["short", "ponytail"],
+      hairColors: ["black", "auburn"],
+      beards: ["none", "full"],
+    },
+    looks: { skins: { fair: 0xecc4a2, olive: 0xbc9068 }, hairColors: {}, tints: {} },
+    items: {
+      60: { id: "iron_sword", worn: { shape: "sword", tint: "iron" }, weapon: { type: "sword" } },
+      61: { id: "stag_hood", worn: { shape: "hood", tint: "hide" }, armor: { slot: "head" } },
+    },
+  } as unknown as ClientContent;
+  const lookUi = (extra: Partial<GameUi>): GameUi =>
+    ({ cosmetics: undefined, look: MIRA, ...extra }) as unknown as GameUi;
+  function lookGame(): { game: Game; sent: string[] } {
+    const sent: string[] = [];
+    const game = {
+      setLookDraft: (l: unknown) => sent.push(`draft ${JSON.stringify(l)}`),
+      applyLook: () => sent.push("apply"),
+    } as unknown as Game;
+    return { game, sent };
+  }
+  const byTestid = (tree: unknown, id: string): Node | undefined =>
+    nodes(tree).find((v) => v.props["data-testid"] === id);
+
+  it("shows nothing without the look choices or a look from the server", () => {
+    expect(
+      byTestid(
+        AppearancePanel({ t, content, game: undefined, ui: lookUi({}) }),
+        "appearance-customize",
+      ),
+    ).toBeUndefined();
+    const noLook = lookUi({ look: undefined });
+    expect(
+      byTestid(
+        AppearancePanel({ t, content: looks, game: undefined, ui: noLook }),
+        "appearance-customize",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("picks into a draft; saving sends it, undoing drops it", () => {
+    const { game, sent } = lookGame();
+    let tree = AppearancePanel({ t, content: looks, game, ui: lookUi({}) });
+    expect(byTestid(tree, "appearance-customize")).toBeDefined();
+    // The figure wears what the character shows (here the sword in its right hand).
+    const withSword = AppearancePanel({
+      t,
+      content: looks,
+      game,
+      ui: lookUi({
+        selfEquipment: { head: 61, torso: 0, legs: 0, feet: 0, leftHand: 0, rightHand: 60 },
+      }),
+    });
+    const figure = nodes(withSword).find((v) => v.type === LookPreview);
+    expect((figure?.props["worn"] as { weapon?: unknown }).weapon).toEqual({
+      shape: "sword",
+      tint: "iron",
+    });
+    expect(figure?.props["look"]).toEqual(MIRA);
+    // Not the hood: it would hide the hair being picked.
+    expect((figure?.props["worn"] as { head?: unknown }).head).toBeUndefined();
+    // Nothing to save yet.
+    expect(byTestid(tree, "look-apply")?.props["disabled"]).toBe(true);
+    const red = nodes(tree).find((v) => v.props["data-look"] === "hairColor:black");
+    (red?.props["onClick"] as () => void)();
+    expect(sent).toEqual([`draft ${JSON.stringify({ ...MIRA, hairColor: "black" })}`]);
+
+    // With a draft: the figure shows it, saving and undoing are on.
+    const draft = { ...MIRA, hairColor: "black" };
+    tree = AppearancePanel({ t, content: looks, game, ui: lookUi({ lookDraft: draft }) });
+    expect(nodes(tree).find((v) => v.type === LookPreview)?.props["look"]).toEqual(draft);
+    expect(byTestid(tree, "look-apply")?.props["disabled"]).toBe(false);
+    (byTestid(tree, "look-apply")?.props["onClick"] as () => void)();
+    (byTestid(tree, "look-revert")?.props["onClick"] as () => void)();
+    // Picking back the look it has drops the draft.
+    const back = nodes(tree).find((v) => v.props["data-look"] === "hairColor:auburn");
+    (back?.props["onClick"] as () => void)();
+    expect(sent.slice(1)).toEqual(["apply", "draft undefined", "draft undefined"]);
   });
 });

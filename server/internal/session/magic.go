@@ -509,12 +509,11 @@ func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal
 	return true
 }
 
-// conjure puts a new def in p's backpack: a rune with all its charges, or count units of
-// a stackable item (T3.1) merged into the stacks already there. Nothing is created unless
-// all of it fits in the backpack and in p's capacity.
+// conjure puts a new def in p's backpack, or else its pockets (pockets.go): a rune with
+// all its charges, or count units of a stackable item (T3.1) merged into the stacks
+// already there. Nothing is created unless all of it fits there and in p's capacity.
 func (w *World) conjure(p *Player, def *content.Item, count int) bool {
-	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	if def == nil || bp == nil || bp.def.Container == nil {
+	if def == nil {
 		p.emit(systemMsg(msgNoRoom))
 		return false
 	}
@@ -533,7 +532,8 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 		w.econItem(p, EconConjure, "", def, count)
 		shown = newItem(def, count).stack()
 	} else {
-		if len(bp.items) >= bp.def.Slots() {
+		pack := p.packWithRoom()
+		if pack == nil {
 			p.emit(systemMsg(msgNoRoom))
 			return false
 		}
@@ -543,8 +543,8 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 			p.emit(systemMsg(msgTooHeavy))
 			return false
 		}
-		w.attach(p, it, place{kind: locContainer, cont: bp})
-		w.containerChanged(bp)
+		w.attach(p, it, place{kind: locContainer, cont: pack})
+		w.containerChanged(pack)
 		w.econMade(p, EconConjure, "", 0, def, 1, []*Item{it})
 		shown = it.stack()
 	}

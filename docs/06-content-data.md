@@ -10,7 +10,7 @@ data/
                         economía, reportes e inactividad)
   vocations.yaml
   ids.lock.yaml         IDs numéricos estables (generado, se commitea)
-  borders.yaml          reglas de autoborder
+  borders.yaml          la escalera de suelos del autoborder ("Bordes")
   items/                un archivo por categoría (ground.yaml, weapons.yaml, ...)
   monsters/             un archivo por monstruo
   npcs/                 un archivo por NPC (diálogo, tienda)
@@ -18,7 +18,9 @@ data/
   spells.yaml
   recipes.yaml          oficios
   boat_routes.yaml      rutas de barco (T3.5)
-  outfits.yaml          outfits del personaje (T0.5)
+  outfits.yaml          outfits del personaje (T0.5): cuerpo, ropa y disfraces
+  looks.yaml            aspecto de los humanoides del motor: cuerpos, pieles, pelo, barbas,
+                        formas que se visten y tintes ("Looks")
   effects.yaml          efectos visuales y proyectiles
   cosmetics.yaml        tienda cosmética: moneda premium, paquetes y cosméticos (T5.7)
 i18n/
@@ -60,7 +62,7 @@ i18n/
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, ningún equipable (`weapon`, `armor`, `shield`) apilable
     (cada uno lleva su atributo, "Atributo"), `count` de loot > 1 solo para items apilables,
-    `min <= max` en ataques, bordes solo entre items `ground`.
+    `min <= max` en ataques, la escalera de bordes solo con items `ground` ("Bordes").
   - `balance.yaml` define todas las skills y cada vocación todos sus factores.
   - i18n: mismas claves y en el mismo archivo para `es` y `en`, mismos `{parámetros}`,
     toda clave usada en `data/` existe; aviso si una clave `item.*`, `monster.*`, ... no se usa.
@@ -88,7 +90,9 @@ items:
 - `make gen-ids` asigna `max + 1` a cada item nuevo y reescribe el archivo ordenado por
   número. Commitea el resultado junto con el item.
 - Solo se agrega: si borras un item su número queda en el lock (aviso "retired id") y
-  nunca se reutiliza. `make validate` compara con la rama base (`origin/main`, o la ref
+  nunca se reutiliza. Si lo borraste a propósito, `make gen-ids RETIRE=1` lo anota en
+  `retired` (lote 13): el número sigue tomado y el aviso no sale; si el item vuelve a
+  `data/items`, `make gen-ids` lo saca de la lista (mientras tanto, `make validate` falla). `make validate` compara con la rama base (`origin/main`, o la ref
   de `CONTENT_BASE_REF`) y falla si un número cambió o desapareció.
 - `chests` (lote 12): `make gen-ids` agrega cada cofre nuevo (bloque `chest` de un item,
   "Libros y cofres" más abajo) con su item, en el orden en que aparecen; no agrega uno
@@ -200,7 +204,10 @@ items:
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
   `reach` (de 1 a 6: el medio alto de la ventana clásica de 15x11 + 1, lo que nota un
   monstruo; la vista ancha de 31x21 no lo estiró, `02-game-design.md` "La vista"; el esquema
-  y `content.MaxReach` lo exigen).
+  y `content.MaxReach` lo exigen) y `pocket_slots` (lote 13: los bolsillos propios de todo
+  personaje, `02-game-design.md` "Bolsillos"; 4, de 1 a 8 por el esquema y
+  `content.MaxPocketSlots`, una fila de la figura del inventario). No lo bajes: lo guardado
+  en un bolsillo que deja de existir se conserva y se puede sacar, pero no vuelve a entrar.
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
@@ -504,7 +511,17 @@ Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 ```yaml
 id: puerto_foreman
 name: npc.puerto_foreman.name
-sprite: npcs/miner_old
+sprite: npcs/puerto_foreman     # su retrato quieto (el del diálogo), dibujado de su look
+look:                           # una persona: humanoide del motor ("Looks")
+  body: sturdy
+  skin: fair
+  hair: crop
+  hair_color: grey
+  beard: full
+  worn:
+    torso: { shape: leather, tint: hide }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: boots, tint: dark_leather }
 dialog:
   start: greet
   nodes:
@@ -893,7 +910,13 @@ conditions:
   siempre. Los ids son el enum `conditionId` de `common.schema.json`; el servidor revisa
   al arrancar que cada fuente nombre una condición de `balance.yaml`.
 - Un monstruo con `behavior.sees_invisible: true` ve (y ataca) a los invisibles.
-- Nombres de la UI: `condition.<id>.name` en `i18n/*/client.yaml`.
+- Textos de la UI (`i18n/*/client.yaml`): `condition.<id>.name` (el nombre) y
+  `condition.<id>.desc` (qué hace, en el tooltip de la bandeja de estados, docs/17). Una
+  condición nueva necesita además su ícono `ui/status/<id>` (`STATUS_ART` de
+  `tools/spritegen/src/recipes/ui.ts`, un test lo exige) y su lugar y tipo en
+  `client/src/state/status.ts` (`STATUS_ORDER`, `STATUS_KIND`).
+- Los ids `in_combat`, `pvp_locked` y `protection_zone` son de los estados que manda el
+  servidor (`02-game-design.md`, "Estados del personaje"): una condición no puede usarlos.
 
 ## Grupos (T3.3)
 Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml → party`
@@ -1180,47 +1203,192 @@ rewards:                         # opcional; al terminar, nunca al saltar
 
 ## Bordes (autoborder)
 ```yaml
-# data/borders.yaml: cuando "from" toca a "to", las piezas se apilan sobre las casillas "to"
-- id: grass_sand
-  from: grass
-  to: sand
-  priority: 10             # mayor prioridad se dibuja encima
-  pieces: { n: border_grass_sand_n, s: ..., e: ..., w: ..., ne: ..., nw: ..., se: ..., sw: ... }
-  # opcionales: inner_ne, inner_nw, inner_se, inner_sw (esquinas cóncavas)
+# data/borders.yaml (esquema borders.schema.json): la escalera de suelos naturales, de abajo
+# arriba. El borde de un suelo (su textura con una orilla irregular) se dibuja sobre cada
+# suelo más bajo de la escalera que toca.
+ladder:
+  - ground: water_shallow           # sin pieces: solo lo cubren
+  - ground: sand
+    pieces: border_sand             # sus 12 items: border_sand_n, ..., border_sand_inner_sw
+    edge: pebbles                   # cómo se dibuja la orilla (gen-borders)
+  - ground: dirt
+    pieces: border_dirt
+    edge: clods
+    over: [sand]                    # opcional: solo sobre estos suelos más bajos
+  - ground: grass
+    pieces: border_grass
+    edge: tufts
+shore:                              # la espuma donde un borde llega al agua
+  water: [water_shallow, water_shoal]
+  pieces: border_surf
 ```
-Cada nombre de pieza dice dónde está el suelo `from` respecto de la casilla `to`:
-`n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa diagonal (ninguno de los
-dos lados vecinos); `inner_*` = en los dos lados vecinos (si falta, se apilan los dos
-lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloquear. Hoy hay
-reglas `grass_sand` y `sand_water`, y las de la Isla Volcánica (T5.5): `ash_sand`,
-`cooled_lava_sand`, `cooled_lava_ash`, `cinder_path_ash` y `cooled_lava_lava` (la costra
-sobre la lava fundida). Su arte lo genera `tools/spritepack/src/gen-borders.ts` en
-`assets/sprites/borders/`: cada pieza recorta el suelo `from` de su arte propio
-(`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
-placeholder, en ese orden (un test verifica que los PNG commiteados son los que produce).
-Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`.
+- **La escalera** (lote 13, `feat/terrain-borders`) reemplaza a las reglas de a pares
+  (`from`/`to`, 12 piezas por par): un juego de piezas por suelo sirve para todos sus pares.
+  El borde de un suelo va sobre cada suelo más bajo de la escalera que lo toca (o solo sobre
+  los de `over`); nunca sobre uno más alto, ni sobre él mismo. Los suelos fuera de la
+  escalera (`wooden_floor`, `dock_planks`: pisos hechos a mano) quedan con el borde recto, de
+  los dos lados. Hoy, de abajo arriba: `lava`, `water_shoal`, `water_shallow` (los tres sin
+  borde propio), `wet_sand`, `sand`, `cooled_lava`, `cinder_path`, `dirt`, `basalt`,
+  `stone_floor`, `grass`, `ash`. Así el pasto entra sobre la tierra, la piedra y la arena; la
+  ceniza, sobre el basalto, la escoria y la lava enfriada; la costra de lava enfriada, sobre
+  la lava fundida. La lava no tiene borde propio: todo borde que la toque la cubre (sin
+  `over`, también la ceniza o la arena); en el mapa solo la toca la lava enfriada.
+- **Las piezas** de un borde son 12 items `<pieces>_<pieza>` (en `data/items/borders.yaml`,
+  `kind: decoration`, `pickupable: false`, sin bloquear; un nombre por suelo,
+  `item.<pieces>.name`). El nombre de la pieza dice dónde está el suelo más alto visto desde
+  la casilla cubierta: `n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa
+  diagonal (esquina de afuera); `inner_*` = en los dos lados vecinos (esquina de adentro, que
+  también cubre su diagonal). Se apilan abajo de todo en la pila de la casilla, primero los
+  bordes de los suelos más bajos; también debajo de un muro (una pieza de muro angosta deja
+  ver el suelo de su casilla).
+- **La orilla del agua** (`shore`): en una casilla de un suelo de `water` con algún borde, el
+  autoborder pone primero (debajo de todos los bordes) las piezas `border_surf_<pieza>` de
+  cada borde, con su misma forma: el borde mojado de la tierra, una línea de espuma y otra
+  cortada que rompe en 4 frames. Toda la espuma queda del lado del agua de su borde, y cada
+  borde tapa la espuma de los otros que cae sobre su tierra: así la espuma sigue la orilla
+  de todos los bordes juntos. Con arena al norte y pasto al oeste van `border_surf_n` y
+  `border_surf_w` (no una esquina de adentro que ningún borde dibuja); con arena al norte y
+  una esquina de pasto al noreste, `border_surf_n` y `border_surf_ne` (la espuma rodea el
+  bulto de la esquina). Los suelos de agua no tienen borde entre sí (el bajío es la misma
+  agua con peces). Un suelo de `water` no puede tener `pieces`.
+- **Qué revisa `make validate`:** cada suelo es un item `ground` y está una sola vez; cada
+  suelo de `over` está en la escalera y más abajo; `edge` y `over` solo con `pieces`; cada
+  borde y la espuma tienen sus 12 items, decoraciones que no bloquean ni se levantan, y
+  ningún juego de piezas es de dos suelos. En los mapas (`validateWorld`, docs/03
+  "Validación"), cada casilla tiene exactamente las piezas que da el autoborder con los
+  suelos de sus vecinos, abajo de todo: un suelo pintado sin `mapcli autoborder` (o una
+  escalera cambiada sin volver a correrlo) es un error por chunk, con su primera casilla y
+  el comando que lo arregla. Así `make validate`, el editor, el MCP y el check de PR de
+  mapas lo exigen.
+- **Cómo se dibujan:** spritepack marca `flat` cada sprite de `borders/` (atlas.json
+  `tiles`) y el renderer (`MapView`, `mapcli render`) dibuja esas piezas con los suelos, en
+  el contenedor de suelo del chunk: debajo de las sombras proyectadas, de los items y de las
+  criaturas de todas las casillas (un lobo o el arma de un jugador que pasa a la casilla de
+  al lado no queda bajo el borde de esa casilla). En el cliente, mirar o abrir el menú de
+  una casilla saltea las piezas (`ItemDef.border`, `state/items.ts` `topItem`): una casilla
+  de agua de la orilla se nombra como agua.
+- **El arte** lo dibuja `make borders` (`tools/spritepack/src/gen-borders.ts`) en
+  `assets/sprites/borders/<suelo>/<pieza>.png`: cada pieza en 4 looks (`<pieza>/var_<n>`)
+  que el renderer elige por casilla con `tileHash` (como los looks de suelo, docs/17 ART-4:
+  el mapa no cambia), el mismo número para todas las piezas de una casilla; la espuma, con
+  sus 4 frames en cada look (`<pieza>/frame_<n>` y `<pieza>/var_<n>/frame_<m>`). La forma de
+  un look de una pieza es la misma en todos los suelos (por eso la espuma sigue la orilla) y
+  **cruza cada lado de la casilla en el mismo punto** (`CROSS` = 10 px desde la esquina del
+  lado del suelo alto), así que cualquier look empalma con cualquier look del vecino; adentro
+  la orilla se dobla con bultos de 1 a 6 px, y dos lados opuestos dejan siempre 10 px libres
+  (un camino de una casilla nunca se cierra). La esquina de adentro es un arco grande (radio
+  22 px desde la esquina de enfrente): una escalera de casillas se lee como una diagonal
+  ondulada. `edge` decide la orilla: `tufts` (matas de pasto sobre el suelo de abajo),
+  `pebbles` (piedritas), `clods` (terrones), `joint` (la junta oscura de una piedra
+  cortada, con alguna esquirla), `wet` (borde mojado), `crust` (el labio iluminado de una
+  costra), `drift` (granos sueltos) o `plain` (solo un poco más oscuro). Las marcas quedan a
+  2 px o más de los lados de la casilla. Cada pieza recorta el suelo de su arte propio
+  (`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
+  placeholder, en ese orden. Un test verifica que los PNG commiteados son los que produce,
+  que no sobra ninguno, el contrato de los lados para cada pieza y look, y la banda de valor
+  de ART-6.
+- **Un suelo nuevo** (nieve, hielo: lote 14) es una línea en `ladder` en su lugar, sus 12
+  items (copiar un bloque de `data/items/borders.yaml`), su nombre en `i18n/*/items.yaml`,
+  `make gen-ids`, `make borders` y `mapcli autoborder` de la isla. Si cambia la receta de un
+  suelo: `make spritegen` y después `make borders`.
+- **Retirados:** las 84 piezas de las reglas de a pares viejas (`border_grass_sand_*`,
+  `border_sand_water_*`, ...) ya no existen; sus números quedan en `retired` de
+  `data/ids.lock.yaml`.
 
 ## Outfits (T0.5)
-`data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.
+`data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador. Desde el
+2026-11-19 es un humanoide del motor ("Looks", abajo; docs/17 "Humanoides del motor").
 ```yaml
 - id: citizen
-  sprite: outfits/citizen   # carpeta de frames
-  frames: 3                 # 0 = parado, 1 y 2 = los dos pasos (máximo 3)
+  sprite: outfits/citizen   # carpeta de las vistas previas quietas: <sprite>/<dir>_0
+  frames: 1
+  look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: none }
+  clothes:                  # torso, piernas y pies del atuendo
+    torso: { shape: tunic, tint: linen }
+    legs: { shape: trousers, tint: brown }
+    feet: { shape: shoes, tint: dark_leather }
+- id: sailor
+  costume: true             # un atuendo de la tienda: tapa la armadura
+  # ...
 ```
-- El `sprite` de un outfit es una carpeta: el atlas tiene `<sprite>/<dir>_<frame>`
-  (`outfits/citizen/s_0`), con `dir` en `n`, `e`, `s`, `w`. spritepack cuenta cada frame
-  como un sprite usado por `data/` (un frame sin arte recibe el placeholder automático,
-  como cualquier sprite).
-- **Desde docs/17 (A12) los cuatro atuendos son personajes animados de LPC:** la entrada
-  `animations` de su `sprite` en `assets/sprites.yaml` arma sus frames (quieto, caminar,
-  atacar y caer, de 64x64) y los nombres `<sprite>/<dir>_<frame>` de arriba pasan a ser
-  alias de esos frames (0 = la pose quieta, 1.. = el ciclo de caminar). `frames` sigue en
-  el esquema y en el servidor; con una animación, el cliente usa la animación
-  (`assets/README.md`, "Sprites animados").
-- Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
-  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, "Animación de
-  criaturas").
-- IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
+- `look`: el cuerpo del quieto del atuendo (la vista previa de la tienda) y el punto de
+  partida de los selectores al crear un personaje (el de `citizen`); sin `worn` y sin pieles
+  `creatures_only`. Desde el lote 13 cada personaje tiene su propio aspecto (docs/02
+  "Apariencia"): el atuendo ya no da el cuerpo en el juego, solo la ropa.
+- `clothes`: el atuendo por defecto (`citizen`) los muestra solo donde no hay nada equipado
+  (el equipo se ve encima); uno con `costume: true` (los de la tienda) tapa torso, piernas y
+  pies aunque haya armadura, y el casco, el escudo y el arma se siguen viendo. El color de
+  la tienda (`outfit_color`) tiñe esa ropa.
+- El `sprite` es una carpeta: `<sprite>/<dir>_0` (`outfits/citizen/s_0`), un quieto por
+  dirección que dibuja spritegen con las capas y los colores de `looks.yaml`: la vista previa
+  de la tienda y el respaldo del cliente. spritepack cuenta cada frame como un sprite usado.
+- Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro (el servidor
+  sigue leyendo solo `id`, `sprite` y `frames`).
+- IDs únicos; `make validate` revisa `look` y `clothes` contra `looks.yaml`.
+
+## Looks (humanoides del motor)
+Jugadores, NPCs que son personas y monstruos humanoides se dibujan con **un humanoide del
+motor de sprites y un muñeco de capas** (docs/17 "Humanoides del motor"): un cuerpo y, encima,
+pelo, barba y lo que lleva, cada capa en un tono neutro que el cliente tiñe.
+`data/looks.yaml` (esquema `looks`) dice qué hay:
+```yaml
+limits: { change_burst: 6, change_refill_ms: 1500 }   # anti-flood de SetLook (docs/05)
+builds: [sturdy, slender]                      # cuerpos (el mismo esqueleto)
+skins:                                         # tonos de piel
+  fair: { color: "#ecc4a2" }
+  drowned: { color: "#a9b89a", creatures_only: true }   # nunca para un jugador
+hair_styles: [bald, short, crop, long, ponytail, topknot, curly]   # bald no dibuja nada
+beards: [none, short, full]                    # none no dibuja nada
+hair_colors: { black: "#2e2a30", brown: "#7a5232" }   # tiñen pelo y barba (hay nueve)
+shapes:                                        # las formas que dibuja el motor, por lugar
+  head: [cap, hood, open_helm, full_helm, circlet]
+  torso: [tunic, robe, leather, mail, plate]
+  legs: [trousers, greaves]
+  feet: [shoes, boots, sabatons]
+  shield: [buckler, round, kite, tower]
+  weapon: [sword, axe, mace, dagger, spear, bow, crossbow, staff, wand]
+hides: { hood: [hair], full_helm: [hair, beard] }   # lo que tapa una pieza de cabeza
+tints: { iron: "#a8aeb6", linen: "#ece2c8" }         # el material de una pieza (multiply)
+```
+- `limits` es una constante de anti-flood fuera de `balance.yaml`: una **excepción
+  aceptada**, como `limits` de `cosmetics.yaml`. Vive junto a lo que limita (el sistema de
+  aspecto entero se apaga sin este archivo) y no es balance de juego: ninguna regla ni
+  fórmula la lee. Toda constante nueva de balance sigue yendo a `balance.yaml`.
+- Las listas son exactamente las capas que dibuja el motor (un test de spritegen las
+  compara); una forma nueva es arte nuevo (`tools/spritegen/src/engine/specs/humanoid/`). Un
+  color nuevo no cuesta atlas: es una línea aquí.
+- **Una pieza del catálogo** dice cómo se ve con `worn` (en `data/items`):
+  ```yaml
+  - id: tidesteel_helm
+    armor: { slot: head, armor: 5 }
+    worn: { shape: full_helm, tint: tidesteel }
+  ```
+  El lugar sale de la pieza: arma → `weapon`, escudo → `shield`, armadura de cabeza, cuerpo,
+  piernas y pies → `head`, `torso`, `legs` y `feet` (en la mano que sea). Una pieza sin
+  `worn` no se dibuja; las joyas no pueden tenerlo. Las 76 piezas del catálogo que se ven lo
+  tienen.
+- **Un NPC que es una persona o un monstruo humanoide** lleva `look` (cuerpo, piel, pelo,
+  color de pelo, barba y `worn` por lugar, con formas y tintes, no ids de items: un NPC
+  puede vestir algo que no se vende). El `look` manda sobre el `sprite`: el de un NPC
+  persona es su retrato quieto (`npcs/<id>`, el del diálogo, que spritegen dibuja de su
+  look), y un monstruo humanoide no necesita ninguno. Uno de los dos es obligatorio.
+- **El aspecto de un jugador** (lote 13, docs/02 "Apariencia"): cuerpo, piel, peinado,
+  color de pelo y barba, elegidos de estas listas (nunca una piel `creatures_only`) al crear
+  el personaje y cuando quiera en la ventana Apariencia. **El orden de cada lista es el de
+  los selectores y el del aspecto que el servidor le da a un personaje sin aspecto**
+  (`content.DefaultLook`, del id del personaje): agrega las elecciones nuevas al final. Los
+  nombres de cada elección son i18n (`appearance.body.<id>`, `appearance.skin.<id>`,
+  `appearance.hair.<id>`, `appearance.hair_color.<id>`, `appearance.beard.<id>` en
+  `client.yaml`; `vite/content.test.ts` exige todos en es y en). `limits` acota los cambios
+  (`SetLook`): una ráfaga de `change_burst` y después uno cada `change_refill_ms`.
+- **Quién lee qué:** el servidor (`content.LoadLooks`) valida el aspecto de cada jugador
+  (`PlayerLook`) y, al arrancar, el `look` de cada NPC y monstruo (`CheckCreature`: no arranca
+  con uno que el motor no dibuja), y manda el cuerpo y las piezas en cada `Creature` (docs/05
+  "Apariencia y equipo visible"). El cliente recibe `content.looks` (los colores y lo que
+  tapa una pieza de cabeza), `content.lookOptions` (las elecciones de un jugador, en orden) e
+  `ItemDef.worn`; el aspecto de cada criatura le llega del servidor, no del contenido.
+  `make validate` revisa cada `look`, `worn` y `clothes` de `data/` contra `looks.yaml` (la
+  forma del lugar justo, tintes, pieles, pelo y barbas que existen).
 
 ## Animación de criaturas (docs/17 ANI)
 El `sprite` de un monstruo, un NPC o un outfit sigue siendo una ruta lógica: **cómo se
@@ -1240,9 +1408,9 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
   respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
   `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
   y `flying: true` (flota y nunca salta).
-- Un monstruo humanoide o un NPC nuevo: su `sprite:` en `data/` y su entrada en
-  `animations` con las capas de `assets/vendor/ulpc/` (o arte propio), revisada con el
-  preview de `assets/README.md`.
+- Un monstruo humanoide o un NPC que es una persona: su `look` ("Looks"), no un sprite
+  animado. Las capas del humanoide son entradas de `animations` con `trim`, `per_tile` y
+  `per_tile_ns` (`assets/README.md`, "Sprites animados").
 
 ## Tienda cosmética (T5.7)
 `data/cosmetics.yaml` (esquema `cosmetics`; reglas de juego en `02-game-design.md`, "Tienda
@@ -1269,9 +1437,8 @@ cosmetics:
 - `cosmetics[].kind`: `outfit`, `outfit_color` o `name_effect` (los valores del `CHECK` de
   `cosmetics.kind`; `mount` queda reservado). Cada tipo lleva solo su campo: `outfit` (id de
   `data/outfits.yaml`), `tint` (`#rrggbb` en minúsculas) o `style`. `price` es en nácar.
-- Un atuendo nuevo: su entrada en `animations` de `assets/sprites.yaml` (capas de LPC y
-  paletas, como `outfits/citizen`), su entrada en `data/outfits.yaml` y después el
-  cosmético que lo vende.
+- Un atuendo nuevo: su entrada en `data/outfits.yaml` (`look`, `clothes` y `costume: true`;
+  sus vistas previas con `make spritegen ONLY=outfits/`) y después el cosmético que lo vende.
 - Textos en `i18n/<idioma>/cosmetics.yaml`, con claves que salen del id (no se escriben en
   el YAML): `cosmetic.<id>.name` y `cosmetic.<id>.desc`, `cosmetic_pack.<id>.name`, y
   `premium.name` / `premium.amount` (`{count}`) para la moneda. El servidor lee

@@ -24,7 +24,7 @@ describe("ids.lock.yaml", () => {
 
   it("is up to date in the repository", () => {
     const before = readFileSync(lockPath(), "utf8");
-    expect(generateIdsLock(root)).toEqual({ added: [], chests: [], text: before });
+    expect(generateIdsLock(root)).toEqual({ added: [], chests: [], retired: [], text: before });
   });
 
   it("appends new items after the highest number and keeps existing ones", () => {
@@ -61,6 +61,31 @@ describe("ids.lock.yaml", () => {
         .map(formatDiagnostic)
         .some((m) => m.startsWith("warning") && m.includes('"old_boat"')),
     ).toBe(true);
+  });
+
+  it("lists items deleted on purpose under retired (RETIRE=1), without the warning", () => {
+    writeFileSync(lockPath(), readFileSync(lockPath(), "utf8") + "  old_boat: 900\n");
+    const warned = (): boolean =>
+      validateContent(root)
+        .diagnostics.map(formatDiagnostic)
+        .some((m) => m.includes('"old_boat"'));
+    expect(generateIdsLock(root).retired).toEqual([]); // only when asked
+    expect(warned()).toBe(true);
+    const { retired, text } = generateIdsLock(root, { retire: true });
+    expect(retired).toEqual(["old_boat"]);
+    const section = text.slice(text.indexOf("\nretired:\n"), text.indexOf("\nitems:"));
+    expect(section).toContain("  - old_boat");
+    expect(text).toContain("  old_boat: 900\n"); // its number stays taken
+    expect(warned()).toBe(false);
+    expect(errors()).toEqual([]);
+    // Back in data/items: make gen-ids takes it off retired; until then it is an error.
+    appendFileSync(
+      join(root, "data/items/misc.yaml"),
+      "\n- id: old_boat\n  kind: decoration\n  sprite: deco/boat\n  name: item.grass.name\n",
+    );
+    expect(errors()).toContainEqual(expect.stringMatching(/"old_boat" is in data\/items again/));
+    expect(generateIdsLock(root).text).not.toContain("  - old_boat");
+    expect(errors()).toEqual([]);
   });
 
   it('locks every reward chest id with its item (docs/02 "Libros y cofres")', () => {

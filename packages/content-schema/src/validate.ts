@@ -102,6 +102,21 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** The twelve pieces of a fringe and of the surf (BORDER_PIECES of @rpg/map-format ops). */
+const BORDER_PIECES = [
+  "n",
+  "e",
+  "s",
+  "w",
+  "nw",
+  "ne",
+  "se",
+  "sw",
+  "inner_nw",
+  "inner_ne",
+  "inner_se",
+  "inner_sw",
+] as const;
 /** The rewards of an item's chest block (docs/02 "Libros y cofres"), with their index. */
 const chestRewards = (item: Obj): { item: string; count: number; index: number }[] => {
   const chest = item["chest"];
@@ -336,6 +351,9 @@ class Validator {
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
     if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
+    const looks = single("looks.yaml", "looks", false);
+    this.checkLooks(looks, outfits);
+
     const tutorial = single("tutorial.yaml", "tutorial", false);
     this.tutorial = tutorial;
     if (tutorial) this.checkTutorial(tutorial, dataDir);
@@ -445,6 +463,119 @@ class Validator {
           this.error(src, [i, "bands", j], "min is greater than max");
       }
     }
+  }
+
+  /**
+   * data/looks.yaml (docs/06 "Looks"): every look, worn piece and outfit of data/ names its
+   * build, skin, hair, beard, shape (of the right slot) and tint there. An item's `worn`
+   * takes the slot it is equipped in; jewellery is never drawn. A player's outfit uses no
+   * creatures_only skin and wears nothing but its clothes.
+   */
+  private checkLooks(looks: SourceFile | undefined, outfits: SourceFile | undefined): void {
+    const data = looks && isObj(looks.data) ? looks.data : undefined;
+    const ids = (v: unknown): Set<string> =>
+      new Set(
+        isObj(v) ? Object.keys(v) : asList(v).filter((x): x is string => typeof x === "string"),
+      );
+    const shapes = isObj(data?.["shapes"]) ? data["shapes"] : {};
+    const t = {
+      builds: ids(data?.["builds"]),
+      skins: ids(data?.["skins"]),
+      hair: ids(data?.["hair_styles"]),
+      hairColors: ids(data?.["hair_colors"]),
+      beards: ids(data?.["beards"]),
+      tints: ids(data?.["tints"]),
+    };
+    const creaturesOnly = new Set(
+      Object.entries(isObj(data?.["skins"]) ? data["skins"] : {})
+        .filter(([, v]) => isObj(v) && v["creatures_only"] === true)
+        .map(([k]) => k),
+    );
+    if (looks && data)
+      for (const shape of Object.keys(isObj(data["hides"]) ? data["hides"] : {}))
+        if (!ids(shapes["head"]).has(shape))
+          this.error(looks, ["hides", shape], `"${shape}" is not a head shape of shapes.head`);
+    const where = "data/looks.yaml";
+    const known = (
+      src: SourceFile,
+      path: PathSegment[],
+      value: unknown,
+      set: Set<string>,
+      what: string,
+    ): void => {
+      if (typeof value !== "string" || set.has(value)) return;
+      const hint = suggest(value, [...set]);
+      this.error(
+        src,
+        path,
+        `unknown ${what} "${value}" in ${where}${hint ? ` (did you mean "${hint}"?)` : ""}`,
+      );
+    };
+    const piece = (src: SourceFile, path: PathSegment[], v: unknown, slot: string): void => {
+      if (!isObj(v)) return;
+      known(src, [...path, "shape"], v["shape"], ids(shapes[slot]), `${slot} shape`);
+      known(src, [...path, "tint"], v["tint"], t.tints, "tint");
+    };
+    const lookOf = (src: SourceFile, path: PathSegment[], v: unknown, player: boolean): void => {
+      if (!isObj(v)) return;
+      if (!data) {
+        this.error(src, path, `a look needs ${where}`);
+        return;
+      }
+      known(src, [...path, "body"], v["body"], t.builds, "build");
+      known(src, [...path, "skin"], v["skin"], t.skins, "skin");
+      known(src, [...path, "hair"], v["hair"], t.hair, "hair style");
+      known(src, [...path, "hair_color"], v["hair_color"], t.hairColors, "hair colour");
+      known(src, [...path, "beard"], v["beard"], t.beards, "beard");
+      if (player && typeof v["skin"] === "string" && creaturesOnly.has(v["skin"]))
+        this.error(
+          src,
+          [...path, "skin"],
+          `skin "${v["skin"]}" is creatures_only: not for a player`,
+        );
+      const worn = v["worn"];
+      if (player && worn !== undefined)
+        this.error(src, [...path, "worn"], "a player's outfit wears its clothes, not worn");
+      for (const [slot, w] of Object.entries(isObj(worn) ? worn : {}))
+        piece(src, [...path, "worn", slot], w, slot);
+    };
+    for (const { item, src, path } of this.items) {
+      const worn = item["worn"];
+      if (worn === undefined) continue;
+      if (!data) {
+        this.error(src, [...path, "worn"], `worn needs ${where}`);
+        continue;
+      }
+      const armor = isObj(item["armor"]) ? item["armor"]["slot"] : undefined;
+      const slot =
+        item["kind"] === "weapon"
+          ? "weapon"
+          : item["kind"] === "shield"
+            ? "shield"
+            : armor === "body"
+              ? "torso"
+              : armor === "head" || armor === "legs" || armor === "feet"
+                ? armor
+                : undefined;
+      if (!slot) {
+        this.error(
+          src,
+          [...path, "worn"],
+          "only weapons, shields and head, body, legs and feet armour are drawn on the figure",
+        );
+        continue;
+      }
+      piece(src, [...path, "worn"], worn, slot);
+    }
+    for (const list of [this.npcs, this.monsters])
+      for (const src of list) if (isObj(src.data)) lookOf(src, ["look"], src.data["look"], false);
+    if (outfits)
+      for (const [i, o] of asList(outfits.data).entries()) {
+        if (!isObj(o)) continue;
+        lookOf(outfits, [i, "look"], o["look"], true);
+        for (const [slot, w] of Object.entries(isObj(o["clothes"]) ? o["clothes"] : {}))
+          piece(outfits, [i, "clothes", slot], w, slot);
+      }
   }
 
   /**
@@ -726,17 +857,90 @@ class Validator {
     }
   }
 
+  /**
+   * data/borders.yaml (docs/06 "Bordes"): the ladder's grounds are ground items, each once;
+   * `over` names lower grounds of the ladder; every fringe and the surf have their twelve
+   * piece items, decorations that never block and cannot be picked up, each set its own.
+   */
   private checkBorders(src: SourceFile): void {
-    for (const [i, rule] of asList(src.data).entries()) {
-      if (!isObj(rule)) continue;
-      for (const side of ["from", "to"]) {
-        const owned = this.index.ids.item.get(String(rule[side]));
-        const def = owned ? this.itemDef(owned) : undefined;
-        if (def && def["kind"] !== "ground") {
-          this.error(src, [i, side], `"${String(rule[side])}" must be a ground item`);
+    if (!isObj(src.data)) return;
+    const ground = (path: PathSegment[], id: unknown): void => {
+      const owned = this.index.ids.item.get(String(id));
+      const def = owned ? this.itemDef(owned) : undefined;
+      if (def && def["kind"] !== "ground")
+        this.error(src, path, `"${String(id)}" must be a ground item`);
+    };
+    const prefixes = new Map<string, string>();
+    const pieces = (path: PathSegment[], prefix: unknown, owner: string): void => {
+      if (typeof prefix !== "string") return;
+      const other = prefixes.get(prefix);
+      if (other !== undefined) {
+        this.error(src, path, `pieces "${prefix}" are already the ones of ${other}`);
+        return;
+      }
+      prefixes.set(prefix, owner);
+      const defs = BORDER_PIECES.map((piece) => {
+        const id = `${prefix}_${piece}`;
+        const owned = this.index.ids.item.get(id);
+        return { id, def: owned ? this.itemDef(owned) : undefined };
+      });
+      if (defs.every((d) => !d.def)) {
+        this.error(
+          src,
+          path,
+          `none of the 12 pieces ${prefix}_n ... ${prefix}_inner_sw is an item of data/items`,
+        );
+        return;
+      }
+      for (const { id, def } of defs) {
+        if (!def) {
+          this.error(src, path, `piece "${id}" is not an item of data/items`);
+          continue;
         }
+        if (def["kind"] !== "decoration" || def["blocks_movement"] === true)
+          this.error(src, path, `piece "${id}" must be a decoration that does not block`);
+        if (def["pickupable"] !== false)
+          this.error(src, path, `piece "${id}" must have pickupable: false`);
+      }
+    };
+    const ladder = asList(src.data["ladder"]);
+    const rank = new Map<string, number>();
+    for (const [i, step] of ladder.entries()) {
+      if (!isObj(step)) continue;
+      const g = String(step["ground"]);
+      ground(["ladder", i, "ground"], g);
+      if (rank.has(g)) this.error(src, ["ladder", i, "ground"], `"${g}" is already on the ladder`);
+      else rank.set(g, i);
+    }
+    for (const [i, step] of ladder.entries()) {
+      if (!isObj(step)) continue;
+      const g = String(step["ground"]);
+      if (step["pieces"] === undefined) {
+        for (const key of ["edge", "over"])
+          if (step[key] !== undefined)
+            this.error(src, ["ladder", i, key], `${key} needs pieces (the ground's fringe)`);
+        continue;
+      }
+      pieces(["ladder", i, "pieces"], step["pieces"], `the fringe of "${g}"`);
+      for (const [j, lower] of asList(step["over"]).entries()) {
+        const r = rank.get(String(lower));
+        if (r === undefined)
+          this.error(src, ["ladder", i, "over", j], `"${String(lower)}" is not on the ladder`);
+        else if (r >= i)
+          this.error(src, ["ladder", i, "over", j], `"${String(lower)}" is not below "${g}"`);
       }
     }
+    const shore = src.data["shore"];
+    if (!isObj(shore)) return;
+    for (const [j, w] of asList(shore["water"]).entries()) {
+      ground(["shore", "water", j], w);
+      const step = ladder[rank.get(String(w)) ?? -1];
+      if (!rank.has(String(w)))
+        this.error(src, ["shore", "water", j], `"${String(w)}" is not on the ladder`);
+      else if (isObj(step) && step["pieces"] !== undefined)
+        this.error(src, ["shore", "water", j], `water "${String(w)}" cannot have a fringe`);
+    }
+    pieces(["shore", "pieces"], shore["pieces"], "the surf");
   }
 
   private itemDef(owned: Owned): Obj | undefined {

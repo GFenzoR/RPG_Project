@@ -497,3 +497,27 @@ secundaria.
   datos. Recompensas medidas contra la caza simulada (`sim/balance_tasks_test.go`; docs/02
   "Quests secundarias", "Tareas" y "Economía"). Lo que queda: docs/14, "Pendientes
   conocidos".
+- [x] **Bordes de suelo que nunca se ven cuadrados (prueba del dueño del 2026-11-19; lote 13,
+  rama `feat/terrain-borders`).** "Todo tiene cortes demasiado cuadrados": `data/borders.yaml`
+  pasó de 7 reglas de a pares a una escalera de suelos (un borde por suelo natural, sobre
+  todo suelo más bajo que toca; madera y muelles rectos), cada pieza con 4 looks de orilla
+  irregular que el renderer elige por casilla con los mismos puntos de cruce en los lados, la
+  orilla propia de cada suelo (matas de pasto, piedritas, terrones, juntas, granos) y la
+  espuma debajo de los bordes en el agua; las cinco islas pasaron por `mapcli autoborder`.
+  docs/06 "Bordes", docs/17 ART-4; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Bandeja de estados y placa del nombre (prueba del dueño del 2026-11-19; lote 13,
+  rama `feat/hud-status`).** Un ícono de pixel art propio por condición y por estado del
+  servidor (`in_combat`, `pvp_locked`, `protection_zone`, nuevos en `PlayerConditions`) en
+  una bandeja junto al chat (en teléfonos, una fila en el encabezado): marco verde o rojo,
+  los segundos que quedan, un parpadeo en los últimos 5 s y un tooltip con qué hace. El
+  nombre y el nivel pasan al medio, sobre la barra de experiencia, con el porcentaje en la
+  barra y lo que falta para el nivel siguiente en su tooltip. docs/17 "Bandeja de estados",
+  docs/02 "Estados del personaje"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Bolsillos (prueba del dueño del 2026-11-19; lote 13, rama `feat/pockets`).** Todo
+  personaje tiene 4 bolsillos propios (`inventory.pocket_slots`), parte de él y nunca un
+  item; la mochila equipada suma sus lugares. Lo que se recibe va primero a la mochila y
+  después a los bolsillos, los pagos y chequeos leen los dos, y la muerte ya no da una
+  mochila gratis: lo de los bolsillos cae con la mochila, en su misma tirada. Protocolo
+  aditivo (`ItemLocation.pocket`, `Inventory.pockets`/`pocket_slots`), migración 00020 y la
+  fila "Bolsillos" bajo la figura del inventario. docs/02 "Bolsillos"; lo que queda:
+  docs/14, "Pendientes conocidos".

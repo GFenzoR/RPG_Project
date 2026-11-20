@@ -186,8 +186,8 @@ reports: ## Print the open player reports with their context: make reports [N=20
 	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin reports -n "$(or $(N),20)"
 
 .PHONY: gen-ids
-gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
-	$(CONTENT_CLI) gen-ids
+gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only; RETIRE=1 lists deleted items as retired)
+	$(CONTENT_CLI) gen-ids $(if $(RETIRE),--retire)
 
 # spritepack runs TypeScript directly, like the content tooling.
 .PHONY: sprites
@@ -227,6 +227,13 @@ sounds: ## Render assets/sounds/** (needs ffmpeg with libopus) and check the siz
 .PHONY: spritegen
 spritegen: ## Draw assets/sprites/** from tools/spritegen recipes (ONLY=decor/ for a path prefix)
 	node --experimental-strip-types tools/spritegen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
+
+# gen-borders draws the ground transitions of data/borders.yaml (each fringe's 12 pieces in 4
+# looks, and the surf in 4 frames) from the grounds' own art. Run it after make spritegen
+# changes a ground, or after a change to data/borders.yaml. docs/06 "Bordes".
+.PHONY: borders
+borders: ## Draw assets/sprites/borders/** from data/borders.yaml and the grounds' art
+	node --experimental-strip-types tools/spritepack/src/gen-borders.ts
 
 .PHONY: pwa-icons
 pwa-icons: ## Draw the PWA placeholder icons into client/public/icons/ (T5.6)

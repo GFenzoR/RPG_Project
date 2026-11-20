@@ -147,7 +147,10 @@ server/
   `KickAccount`) pasa por `disconnect`, que en combate cierra la conexión una vez
   (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
   usarlo salvo que sea una sanción de staff o un guardado que falló. `Input` ignora a un
-  link-dead y un `Leave` de un link-dead no cambia nada. La muerte termina la pelea
+  link-dead y un `Leave` de un link-dead no cambia nada. El cliente ve el bloqueo como el
+  estado `in_combat` (y el del atacante como `pvp_locked`; la zona de protección como
+  `protection_zone`): `session/status.go` los lee del jugador en `sendConditions`, al final
+  de cada tick, sin eventos ni nada guardado (`combatEnd` tiene que seguir a `inCombat`). La muerte termina la pelea
   (`wakeAtTemple` pone `fightAt` en 0) y guarda con `deathSave`: un link-dead sin bloqueo
   PvP no se guarda ahí, sino que sale al final del tick (`Player.diedLinkDead`,
   `checkLinkDead`) y ese es su único guardado. Nunca saques a un jugador del mundo
@@ -295,9 +298,24 @@ server/
   `Forge.CheckItems` al arrancar y por `checkForge` de `make validate`); el yunque cuenta
   esos materiales en su `StationOpen` y manda `money`.
 
+- **Bolsillos** (`session/pockets.go`, docs/02 "Bolsillos", lote 13): `Player.pockets` es un
+  `*Item` contenedor con `owner` p (slot 0) y una definición sin id (`World.pocketsDef`,
+  `inventory.pocket_slots` celdas), fuera de `p.equip`. Nunca se separa ni lo alcanza un
+  cliente (`itemAt` solo da lo que hay en una celda, `ItemLocation.pocket`); lo que lleva es
+  "un item en un contenedor que p carga". Todo camino que **busque o cuente** lo que lleva
+  un jugador pasa por `eachCarried` (que los recorre al final), `carried`, `held` o
+  `keyFor`, nunca por `p.equip` solo; uno que **dé** algo usa `giveItem`/`giveMods` o, si
+  lo pone a mano, `packWithRoom`/`packStack` (la mochila primero, después los bolsillos), y
+  sus chequeos de lugar `room`, `freeCells` y `mergeRoom` (nunca `len(bp.items)`). Un cambio
+  en ellos llama a `containerChanged` (manda el `Inventory`, no un `ContainerUpdate`). Se
+  guardan como `ItemState.Pocket` (filas `inventory_items.pocket`, migración 00020). La
+  muerte los vacía en el cuerpo con la tirada de la mochila (`dieBy`), y el cuerpo de un
+  jugador entra todo lo que cae (`playerCorpse`: nada suelto en la casilla, fuera de la
+  reserva del dueño). Un camino que meta algo en ellos por su cuenta pasa por
+  `nestRefusal` (profundidad) como cualquier contenedor.
 - **Cofres de recompensa** (`session/chest.go`, `content/chests.go`, docs/02 "Libros y
   cofres"): `useChest` va en la cadena de `useItem` antes de `useStation` (como el tablero
-  del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila contando las pilas
+  del mercado). Da todo o nada (`roomForAll`: peso y lugar de la mochila y los bolsillos contando las pilas
   que se suman) y lo marca en el storage (`content.ChestKey`) en el mismo comando que los
   items, así cualquier snapshot tiene los dos o ninguno. Lo que da pasa por `giveItem` (un
   equipable tira su atributo) y `econMade` con `EconChest`. `content.CheckChests` corre al
@@ -447,6 +465,18 @@ server/
   tienda: el login trae lo comprado y el saldo, y el `app` empuja los cambios con
   `World.CosmeticsChanged` (con `Seq` = id del ledger). Ninguna regla del juego puede leer
   `Player.cos` (lo vigila `TestCosmeticsDoNotChangeCombat`).
+
+- **Apariencia (`session/look.go`, `content/looks.go`, docs/05 "Apariencia y equipo
+  visible"):** el cuerpo de un jugador (`Player.look`, `characters.look_*`) se valida contra
+  `data/looks.yaml` (`Looks.PlayerLook`) al crear (auth), al entrar (`loadLook`: uno inválido
+  o vacío pasa a `DefaultLook` del id) y en `SetLook` (anti-flood `lookFlood`). Lo que ven los
+  demás de su equipo sale de `equipmentChanged` → `showEquipment`, que compara los ids de los
+  slots visibles (`shownSlots`) y manda `CreatureLook` por `eachWatcher` si cambiaron y el
+  jugador ya está en el mundo: **todo camino que cambie un slot de equipo tiene que terminar
+  en `equipmentChanged`** (ya lo hacen mover, usar, la muerte, la forja, el intercambio, el
+  mercado y las tiendas). `Player.lookMsg`/`equipMsg` y el `creatureLookMsgs` de cada
+  `monsterKind` y NPC se arman una vez y se comparten entre `Creature`s (nunca se modifican
+  después de emitidos). Ninguna regla del juego lee el aspecto.
 
 - **Islas y acciones de desarrollo (Isla de Pruebas, `docs/16`):**
   - Una isla `dev_only` de `world.yaml` solo entra a `world.bin` con `mapcompile -dev`, marcada con el bit dev de la isla (`world.bin` v6, `Map.DevIslands`).

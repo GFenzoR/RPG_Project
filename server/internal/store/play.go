@@ -48,6 +48,15 @@ type PlayCharacter struct {
 	Premium   int64
 	// PremiumSeq is the id of the account's newest premium_ledger row (0 = none).
 	PremiumSeq int64
+	// Look is the character's body (characters.look_*); empty fields for a character
+	// created before looks existed (the game picks one from its id).
+	Look Look
+}
+
+// Look is the body of a character (characters.look_*, migration 00021): ids of
+// data/looks.yaml, "" = none yet. Values are already validated when they are written.
+type Look struct {
+	Body, Skin, Hair, HairColor, Beard string
 }
 
 // Cosmetics are the equipped cosmetics of a character (characters.outfit, outfit_color,
@@ -89,14 +98,17 @@ type Condition struct {
 }
 
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the
-// equipment slot of a top-level item and the index inside its container otherwise. Mods
-// is the instance's own data (inventory_items.attributes; nil: a plain item).
+// equipment slot of a top-level item (its cell for one in the pockets, Pocket: migration
+// 00020, docs/02 "Bolsillos") and the index inside its container otherwise. Mods is the
+// instance's own data (inventory_items.attributes; nil: a plain item). A saved instance
+// (market_mail_items.item, house_items.item) is never in the pockets.
 type InventoryItem struct {
 	ItemID int             `json:"item_id"`
 	Count  int             `json:"count"`
 	Slot   int             `json:"slot,omitempty"`
 	Mods   *ItemMods       `json:"mods,omitempty"`
 	Items  []InventoryItem `json:"items,omitempty"`
+	Pocket bool            `json:"pocket,omitempty"`
 }
 
 // ItemMods is an item instance's own data (docs/02 "Atributos de items", docs/05
@@ -178,7 +190,9 @@ type CharacterState struct {
 	PvP PvPState
 	// Cosmetics are the equipped cosmetics (T5.7).
 	Cosmetics Cosmetics
-	SavedAt   time.Time
+	// Look is the character's body (docs/02 "Apariencia").
+	Look    Look
+	SavedAt time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -259,7 +273,9 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 		return PlayCharacter{}, fmt.Errorf("account cosmetics: %w", err)
 	}
 	return PlayCharacter{
-		Cosmetics:  Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
+		Cosmetics: Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
+		Look: Look{Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
+			Beard: row.LookBeard},
 		Owned:      owned,
 		Premium:    row.PremiumBalance,
 		PremiumSeq: row.PremiumSeq,
@@ -301,22 +317,27 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		return fmt.Errorf("encode conditions of character %d: %w", c.ID, err)
 	}
 	n, err := q.SaveCharacterState(ctx, db.SaveCharacterStateParams{
-		Conditions:  rawConds,
-		ID:          c.ID,
-		Level:       int32(c.Level),
-		Experience:  c.Experience,
-		Health:      int32(c.Health),
-		Mana:        int32(c.Mana),
-		PosX:        pgtype.Int4{Int32: int32(c.X), Valid: true},
-		PosY:        pgtype.Int4{Int32: int32(c.Y), Valid: true},
-		PosZ:        pgtype.Int2{Int16: int16(c.Z), Valid: true},
-		Skull:       int16(c.PvP.Skull),
-		SkullUntil:  tsOrNull(c.PvP.SkullUntil),
-		PvpKills:    int32(c.PvP.Kills),
-		Outfit:      c.Cosmetics.Outfit,
-		OutfitColor: c.Cosmetics.Color,
-		NameEffect:  c.Cosmetics.NameEffect,
-		SavedAt:     ts(c.SavedAt),
+		Conditions:    rawConds,
+		ID:            c.ID,
+		Level:         int32(c.Level),
+		Experience:    c.Experience,
+		Health:        int32(c.Health),
+		Mana:          int32(c.Mana),
+		PosX:          pgtype.Int4{Int32: int32(c.X), Valid: true},
+		PosY:          pgtype.Int4{Int32: int32(c.Y), Valid: true},
+		PosZ:          pgtype.Int2{Int16: int16(c.Z), Valid: true},
+		Skull:         int16(c.PvP.Skull),
+		SkullUntil:    tsOrNull(c.PvP.SkullUntil),
+		PvpKills:      int32(c.PvP.Kills),
+		Outfit:        c.Cosmetics.Outfit,
+		OutfitColor:   c.Cosmetics.Color,
+		NameEffect:    c.Cosmetics.NameEffect,
+		LookBody:      c.Look.Body,
+		LookSkin:      c.Look.Skin,
+		LookHair:      c.Look.Hair,
+		LookHairColor: c.Look.HairColor,
+		LookBeard:     c.Look.Beard,
+		SavedAt:       ts(c.SavedAt),
 	})
 	if err != nil {
 		return fmt.Errorf("save character %d: %w", c.ID, err)
@@ -369,11 +390,13 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 	return nil
 }
 
-// insertItems inserts items (and, depth first, their content) inside container.
+// insertItems inserts items (and, depth first, their content) inside container. Pocket
+// counts only at the top level (the schema allows no pocket row inside a container).
 func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgtype.Int8, items []InventoryItem) error {
 	for _, it := range items {
 		id, err := q.InsertInventoryItem(ctx, db.InsertInventoryItemParams{CharacterID: charID, ContainerID: container,
-			Slot: int16(it.Slot), ItemID: int32(it.ItemID), Count: int32(it.Count), Attributes: modsJSON(it.Mods)})
+			Slot: int16(it.Slot), ItemID: int32(it.ItemID), Count: int32(it.Count), Attributes: modsJSON(it.Mods),
+			Pocket: it.Pocket && !container.Valid})
 		if err != nil {
 			return err
 		}
@@ -384,8 +407,9 @@ func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgt
 	return nil
 }
 
-// inventoryTree rebuilds the item tree from inventory_items rows (top level first,
-// then by slot), with each row's attributes. Rows whose container is missing are dropped.
+// inventoryTree rebuilds the item tree from inventory_items rows (top level first, the
+// equipment before the pockets, then by slot), with each row's attributes. Rows whose
+// container is missing are dropped.
 func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
 	mods := make(map[int64]*ItemMods, len(rows))
 	for _, r := range rows {
@@ -408,7 +432,7 @@ func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
 		out := make([]InventoryItem, len(rs))
 		for i, r := range rs {
 			out[i] = InventoryItem{ItemID: int(r.ItemID), Count: int(r.Count), Slot: int(r.Slot), Mods: mods[r.ID],
-				Items: build(children[r.ID], depth+1)}
+				Items: build(children[r.ID], depth+1), Pocket: r.Pocket && !r.ContainerID.Valid}
 		}
 		return out
 	}

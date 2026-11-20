@@ -2,23 +2,41 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/outfits.schema.json",
   "title": "Player outfits (data/outfits.yaml)",
-  "description": "T0.5: the looks a player character is drawn with. The client draws the atlas sprite <sprite>/<dir>_<frame> (dir n, e, s or w; frame 0 standing, the others the walking steps).",
+  "description": "docs/06 \"Looks\": the looks a player character is drawn with, as an engine humanoid. The default (citizen) gives the body and the clothes shown where nothing is equipped; a shop outfit (costume) covers the torso, legs and feet even over armour (the helmet, the shield and the weapon still show). The sprite folder holds one still preview per facing (<sprite>/<dir>_0), for the shop and as a fallback.",
   "type": "array",
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "sprite", "frames"],
+    "required": ["id", "sprite", "frames", "look", "clothes"],
     "properties": {
       "id": { "$ref": "common.schema.json#/$defs/id" },
       "sprite": {
-        "description": "Sprite folder of the frames (outfits/citizen).",
+        "description": "Sprite folder of the preview frames (outfits/citizen).",
         "$ref": "common.schema.json#/$defs/sprite"
       },
       "frames": {
-        "description": "Frames per facing: 1 = standing only, 3 = standing and two walking steps.",
+        "description": "Preview frames per facing: 1 (the standing pose, drawn by the sprite engine).",
         "type": "integer",
         "minimum": 1,
         "maximum": 3
+      },
+      "look": {
+        "description": "The body a player with this outfit is drawn with until the character's own look arrives (feat/character-look).",
+        "$ref": "common.schema.json#/$defs/look"
+      },
+      "clothes": {
+        "description": "Torso, legs and feet of the outfit.",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "torso": { "$ref": "common.schema.json#/$defs/wornPiece" },
+          "legs": { "$ref": "common.schema.json#/$defs/wornPiece" },
+          "feet": { "$ref": "common.schema.json#/$defs/wornPiece" }
+        }
+      },
+      "costume": {
+        "description": "A shop outfit: its clothes cover the torso, legs and feet even over armour. Without it the clothes only show where nothing is equipped.",
+        "type": "boolean"
       },
       "notes": { "$ref": "common.schema.json#/$defs/notes" }
     }

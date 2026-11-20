@@ -1,6 +1,17 @@
 id: coffer_smuggler
 name: monster.coffer_smuggler.name
-sprite: creatures/coffer_smuggler
+look:
+  body: slender
+  skin: fair
+  hair: short
+  hair_color: black
+  beard: none
+  worn:
+    head: { shape: hood, tint: grey }
+    torso: { shape: tunic, tint: black }
+    legs: { shape: trousers, tint: black }
+    feet: { shape: boots, tint: tar }
+    weapon: { shape: dagger, tint: iron }
 health: 195
 experience: 175
 speed: 205

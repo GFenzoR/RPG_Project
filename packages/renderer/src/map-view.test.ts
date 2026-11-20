@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Container as PixiContainer } from "pixi.js";
 import { MapView, entityZIndex, itemZIndex } from "./map-view.ts";
 import type { ChunkData, TileSource } from "./map-view.ts";
+import { lookOf, tileHash } from "./tile-art.ts";
 import type { TileArt } from "./tile-art.ts";
 
 const T = 32;
@@ -114,6 +115,9 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
   const water = [named("water/0"), named("water/1"), named("water/2"), named("water/3")];
   const torch = [named("torch/0"), named("torch/1")];
   const tree = named("tree");
+  // A fringe piece with 4 looks, and a surf piece whose 4 looks play 2 frames each.
+  const fringe = [0, 1, 2, 3].map((k) => named(`fringe/${k}`));
+  const surf = [0, 1, 2, 3].map((k) => [named(`surf/${k}/0`), named(`surf/${k}/1`)]);
   const treeShadow = named("tree/shadow");
   const art = (id: string): TileArt<Texture> | undefined => {
     const base = {
@@ -131,6 +135,26 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     if (id === "torch")
       return { ...base, base: torch[0] as Texture, frames: torch, ms: 100, sync: "tile" };
     if (id === "tree") return { ...base, base: tree, anchorX: 0.5, shadow: treeShadow };
+    // Border pieces leave the weight to lookOf: their looks come up evenly.
+    const even = {
+      ms: base.ms,
+      sync: base.sync,
+      anchorX: base.anchorX,
+      joinsWalls: false,
+      light: 0,
+    };
+    if (id === "fringe") return { ...even, base: fringe[0] as Texture, variants: fringe };
+    if (id === "flat_fringe")
+      return { ...even, base: fringe[0] as Texture, variants: fringe, flat: true };
+    if (id === "surf")
+      return {
+        ...even,
+        base: (surf[0] as Texture[])[0] as Texture,
+        variants: surf.map((f) => f[0] as Texture),
+        frames: surf[0] as Texture[],
+        variantFrames: surf,
+        ms: 200,
+      };
     return undefined;
   };
   function artView(chunks: Map<string, ChunkData>): MapView {
@@ -237,6 +261,64 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     // Dropping the chunk forgets its animations.
     v.render({ x: 200, y: 200, zoom: 1 }, size, 500);
     expect(v.animatedCount).toBe(0);
+  });
+
+  it("gives every border piece of a tile one look, evenly over the tiles, the surf its frames", () => {
+    const items = [];
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) items.push({ x, y, stack: ["surf", "fringe"] });
+    const v = artView(new Map([["7/0/0", { ground: ground(), items }]]));
+    v.render(cam, size, 0);
+    const counts = [0, 0, 0, 0];
+    const art0 = art("fringe") as TileArt<Texture>;
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        const k = lookOf(art0, tileHash(x, y, 7), false);
+        counts[k] = (counts[k] ?? 0) + 1;
+        // The surf and the fringe of a tile show the same look (the surf follows its edge).
+        expect(labelAt(v, x, y)).toEqual([`surf/${k}/0`, `fringe/${k}`]);
+      }
+    for (const c of counts) expect(c).toBeGreaterThan(40); // about 64 each of 256
+    // The surf plays the frames of its own look.
+    v.render(cam, size, 250);
+    const k = lookOf(art0, tileHash(5, 9, 7), false);
+    expect(labelAt(v, 5, 9)).toEqual([`surf/${k}/1`, `fringe/${k}`]);
+  });
+
+  it("draws a flat border piece with the grounds, under the creatures, items and shadows", () => {
+    // A wolf on (4, 6) whose sprite reaches over (5, 6), where a fringe lies under a coin;
+    // a tree on (3, 6) whose shadow falls over the fringe too.
+    const chunks = new Map<string, ChunkData>([
+      [
+        "7/0/0",
+        {
+          ground: ground(),
+          items: [
+            { x: 3, y: 6, stack: ["tree"] },
+            { x: 5, y: 6, stack: ["flat_fringe", "coin"] },
+          ],
+        },
+      ],
+    ]);
+    const v = artView(chunks);
+    const wolf = new PixiContainer({ label: "wolf" });
+    v.placeEntity(wolf, 4, 6);
+    v.render(cam, size);
+    // The item layer has the tree, the wolf and the coin: no fringe drawn over the wolf.
+    const labels = itemLayer(v).children.map((s) =>
+      s === wolf ? "wolf" : ((s as Sprite).texture.label ?? ""),
+    );
+    expect(labels).toEqual(["tree", "wolf", "WHITE"]);
+    // The fringe is in its chunk's ground container, after every ground, at its tile.
+    const g = layer(v, 0).children[0] as Container;
+    expect(g.children).toHaveLength(32 * 32 + 1);
+    const piece = g.children[32 * 32] as Sprite;
+    const k = lookOf(art("flat_fringe") as TileArt<Texture>, tileHash(5, 6, 7), false);
+    expect(piece.texture.label).toBe(`fringe/${k}`);
+    expect([piece.x, piece.y]).toEqual([6 * T, 7 * T]);
+    // The ground layer is drawn before the shadows: the tree's shadow darkens the fringe.
+    const world = v.root.children[0] as Container;
+    expect(world.children.indexOf(layer(v, 0))).toBeLessThan(world.children.indexOf(layer(v, 1)));
   });
 
   it("centres a bc sprite on its tile and draws its shadow under the items", () => {

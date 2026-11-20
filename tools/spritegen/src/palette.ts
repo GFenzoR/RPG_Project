@@ -50,6 +50,14 @@ export function material(light: string, base: string, shadow: string, deep: stri
   };
 }
 
+/**
+ * A neutral ramp the client tints at runtime (the humanoid paper doll): a material like any
+ * other for the engine, kept out of the colours tools/gemini/import_art.py snaps art to (it
+ * reads the material(...) calls of this file).
+ */
+export const neutral = (light: string, base: string, shadow: string, deep: string): Material =>
+  material(light, base, shadow, deep);
+
 /** Shades as an array, lightest first: handy for noise textures (pick by index). */
 export function shades(m: Material): [Rgba, Rgba, Rgba, Rgba] {
   return [m.light, m.base, m.shadow, m.deep];
@@ -166,6 +174,24 @@ export const PALETTE = {
   temperBlue: material("#a3b6c8", "#768a9e", "#566678", "#3a4653"),
   paleStone: material("#c8c3b3", "#a19c8d", "#7b776c", "#56534b"),
   amber: material("#ffd27a", "#e8a03a", "#b4661c", "#723c10"),
+  // The engine humanoids' paper doll (engine/specs/humanoid, docs/17 "Humanoides del motor"):
+  // neutral ramps the client tints per layer at runtime (a multiply: skin tone, hair colour,
+  // the material of a worn piece). The light shade leans warm and the dark ones cool, so a
+  // tinted ramp keeps the hue shift of ART-5. One drawing per shape, any colour. They are
+  // `neutral`, not `material`: tools/gemini/import_art.py snaps imported art to the
+  // `material` colours only, never to these greys.
+  /** Skin, tinted by the skin tone. */
+  lookSkin: neutral("#fbf3ea", "#e2d4c8", "#b5a6a3", "#837479"),
+  /** Hair and beard, tinted by the hair colour. */
+  lookHair: neutral("#f6f1ea", "#cfc8c0", "#9d98a0", "#6c6876"),
+  /** Cloth: tunics, robes, trousers, hoods and caps. */
+  lookCloth: neutral("#f4f1ea", "#d3cfc7", "#a4a1a4", "#73727f"),
+  /** Leather and hide: jerkins, boots, quivers, a bow's grip; a little flatter than cloth. */
+  lookLeather: neutral("#ece6dc", "#c9c1b5", "#9a938d", "#6a656d"),
+  /** Metal: helms, mail, plate, blades and shield faces; the most contrast, and a glint. */
+  lookMetal: neutral("#fafaf8", "#c8cacf", "#8d929a", "#5a5f6e"),
+  /** Wood: shafts, staves, bows, shield boards. */
+  lookWood: neutral("#efe8dc", "#cbc0b0", "#9b9088", "#6b6268"),
 } as const satisfies Record<string, Material>;
 
 export type MaterialName = keyof typeof PALETTE;

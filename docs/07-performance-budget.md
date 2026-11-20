@@ -73,6 +73,14 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   igual que antes (545 → 548 µs). Es el juego: el círculo ya no gasta su ronda en un
   jugador en la esquina de su radio, espera y le pega, así hay más golpes, más muertes y
   más vueltas al templo en el benchmark.
+- Estados del personaje (`session/status.go`, lote 13): `sendConditions` mira en cada
+  tick, por jugador, una casilla del mapa (zona de protección) y tres ticks guardados, y
+  solo manda la lista si algo empezó, terminó o un fin se movió 1 s o más (una pelea
+  larga: a lo sumo una lista por segundo). Medido (2026-11-19, i7-13650HX, 3 corridas
+  contra la base): `BenchmarkTickPlayersWalking` igual (100 jugadores ~36 µs, 300 ~163
+  µs, sin asignaciones nuevas); `BenchmarkTickConditions` igual en tiempo (~1,0 ms) y
+  +135 asignaciones y +12 KB por tick: las entradas `in_combat` que viajan en las listas
+  que ya se mandaban (los envenenados están en combate).
 - Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
   mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
   antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada
@@ -426,6 +434,50 @@ siete monstruos que eran un tile de Dungeon Crawl (con sus espejos al este; el c
 96x96) y el jabalí y el ciervo de spritegen, que pasaron de 32x32 a 64x64. A la segunda
 página le quedan 160 px de alto: unos 60 frames de 64x64 más y el atlas pasa a 3 páginas.
 
+**Atlas con los humanoides del motor** (2026-11-19, lote 13, `feat/humanoid-art`; docs/17
+"Humanoides del motor"). Antes, en la base del lote 12: 3 páginas (2048x2016, 2048x2048 y
+2048x1056), 1,75 + 1,79 + 1,03 = 4,57 MB de PNG y 346 + 374 + 375 KB de JSON, más 300 KB de
+`atlas.json` (3110 sprites; ~1730 eran frames de personajes de LPC de 64x64). Después: **2
+páginas** (2048x2032 y 2048x138), 1,99 + 0,37 = 2,36 MB de PNG y 841 + 945 KB de JSON, más
+498 KB de `atlas.json` (5069 sprites): lo que baja el juego pasa de 5,97 a 4,64 MB.
+- El muñeco de capas son 43 capas (2 cuerpos, 6 peinados, 2 barbas, 5 piezas de cabeza, 5 de
+  torso por cuerpo, 2 de piernas, 3 de pies, 4 escudos y 9 armas) de 84 frames cada una
+  (quieto 2, caminar 8, atacar 4, disparar 3 y conjurar 3 en cuatro direcciones, y morir 4 al
+  sur): **3612 frames**. Enteros de 64x64 serían 14,8 Mpx, 3,5 páginas; se empaquetan
+  **recortados** a su caja opaca (`trim: true` en `assets/sprites.yaml`: el frame de la página
+  del atlas lleva `trimmed`, `spriteSourceSize` y `sourceSize` y PixiJS lo ubica como el frame
+  entero): **0,61 Mpx, 0,15 de página**. Un frame vacío (una barba vista de espaldas) es 1x1.
+- Formas y no piezas: cada capa se dibuja una vez en un tono neutro y el cliente la tiñe; las
+  76 piezas del catálogo que se ven son una forma y un tinte (`worn`), sin un píxel propio.
+- Lo que creció es el JSON: 3612 nombres de frame más (las páginas ~1,8 MB, `atlas.json`
+  +200 KB). Pendiente si molesta: nombres más cortos para los frames del muñeco, o un JSON
+  sin espacios.
+- **En el cliente** (`render/creature-body.ts`): una persona es un sprite por capa (hasta 9:
+  cuerpo, piernas, pies, torso, pelo, barba, cabeza, escudo y arma), del mismo atlas, así que
+  se agrupan en el mismo batch. Salen de un pool compartido (`LAYER_POOL`): una criatura que
+  sale de la vista devuelve los suyos (`release`) y la siguiente los reusa; dibujar un frame
+  solo cambia texturas, posiciones y tintes, sin crear objetos ni strings (el orden por
+  dirección está precalculado y se reapila solo al girar). Las texturas de cada capa se
+  indexan una vez por sprite (`render/clips.ts`, el mismo caché de antes).
+- En el repo: 3612 PNG de 64x64 (~1,3 MB), que el test de spritegen compara con el motor
+  (renderizar todas las capas lleva ~3,6 s; el proyecto de tests de spritegen, ~17 s).
+
+**Bordes de suelo** (2026-11-19, lote 13, `feat/terrain-borders`, docs/06 "Bordes"): la
+escalera de suelos cambió las 120 piezas de borde (84 + 36 frames de espuma) por 624: 9
+bordes x 12 piezas x 4 looks y la espuma, 12 piezas x 4 looks x 4 frames, todas de 32x32. El
+atlas ya tenía 3 páginas en la base (2048x2016, 2048x2048 y 2048x1056); la tercera pasa a
+2048x1312: 4,59 MB de PNG en total (+239 KB) y 635 KB de JSON (+88 KB), más 220 KB de
+`atlas.json` (+31 KB). El look de cada pieza se elige al armar el chunk (`lookOf`), como los
+de suelo: ni cuentas ni objetos por frame; las piezas van en el contenedor de suelo de su
+chunk (`flat`), así no entran en el orden de la capa de items que se reordena cuando llega un
+chunk o se mueve una criatura; la espuma va en la lista plana de tiles animados
+(una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 12273 (cada orilla
+natural tiene las suyas, también bajo los muros). Medido contra la base en la misma
+máquina: `FullMapView` en el Farol pasó de 1146 a 1487 bytes (más pilas distintas en la
+paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
+`TestCrowdBandwidth`, de 586 a 599 B/s por jugador en base y de 1515 a 1521 en stress,
+lejos de los 4096.
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
@@ -559,6 +611,40 @@ cada 3 s suma ≤ 0,65 KB/s, lejos de los 4 KB/s (la base de `TestCrowdBandwidth
   empezadas a la vez; a una muerte cada 3 s, un tercio del presupuesto por jugador). Ese
   día, mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo
   con `TestCrowdBandwidth` con tareas activas.
+
+### Aspecto y equipo visible (lote 13, 2026-11-19)
+Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el
+de un jugador, los ids de sus slots visibles (`VisibleEquipment`), y el de un NPC o un
+monstruo, sus piezas (`Worn`, forma y tinte por lugar). Un `CreatureLook` (unos 50 B) va a
+quien conoce al jugador solo cuando cambian el cuerpo (`SetLook`, con el anti-flood de
+`looks.yaml`) o un slot visible: nunca por paso, y uno por jugador y tick como mucho (los
+cambios de un tick se juntan en el flush: mover un arma entre la mano y la mochila sin
+parar cuesta un mensaje por tick a cada vecino, no uno por `MoveItem`). Medido con `TestCrowdBandwidth` (que corre
+con los datos reales: los bots entran sin aspecto y reciben el de su id) y `go test
+-bench`, antes (`feat/humanoid-art`) y después en la misma sesión, mismo notebook, Windows
+nativo:
+
+| Métrica | Antes | Con el aspecto | Presupuesto |
+|---|---|---|---|
+| Salida por jugador, base 100 (B/s) | 586 | 612 (+4,4 %) | < 4096 |
+| Salida por jugador, stress 300 (B/s) | 1515 | 1629 (+7,5 %) | < 4096 |
+| `BenchmarkCrowdTick` base (µs / asignaciones) | 106 / 321 | 106 / 321 | |
+| `BenchmarkCrowdTick` stress (µs / asignaciones) | 846 / 949 | 879 / 947 | |
+
+- **Sin asignaciones nuevas en el tick:** el `BodyLook` y el `VisibleEquipment` de un
+  jugador se arman cuando cambian (`Player.lookMsg`, `equipMsg`) y cada `Creature` apunta a
+  ellos; los de un NPC o un monstruo, una vez por definición al arrancar. Un mensaje no se
+  toca después de emitido, así que compartirlos es seguro (docs/05, "Vista").
+- **Cuánto pesa:** un jugador con cuerpo y seis piezas suma ~50 B a su `Creature`; un
+  monstruo humanoide con cinco piezas, ~110 B. Solo al aparecer, en un `FullMapView` y en un
+  `MapSlice`: en stress (300 en el pueblo, todos se ven y entran y salen de la vista) eso es
+  el +7,5 %.
+- **Cliente:** la figura se rearma solo cuando sube `CreatureState.lookRev` (un número; antes
+  se comparaba un string de los cosméticos por criatura y por frame). La figura del
+  formulario y de la ventana Apariencia es un canvas 2D de 192x192 (o 144x144) que se
+  redibuja cada 110 ms solo mientras está abierta (con movimiento reducido, nunca), con un
+  canvas de trabajo de 64x64 reutilizado; no carga Pixi ni un atlas nuevo (lee el mismo
+  `/atlas/`, que el juego ya bajó o va a bajar).
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

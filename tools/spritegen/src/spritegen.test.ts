@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { encodePng } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import {
   canvas,
   castShadow,
@@ -31,13 +32,23 @@ import {
   UI_ICON,
   UI_ICON_BOX,
   UI_SLOT_BOX,
+  UI_STATUS_BOX,
   uiIconBox,
 } from "./index.ts";
 import { EFFECT_FRAMES, MAX_ORB_FRAMES, MISSILE_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
-import { SLOT_MASKS } from "./recipes/ui.ts";
+import { SLOT_MASKS, STATUS_ART } from "./recipes/ui.ts";
 import { PALETTE } from "./palette.ts";
+import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+
+/** The ids of balance.yaml's conditions, parsed as YAML: any style of entry counts. */
+function conditionIds(balance: string): string[] {
+  const doc: unknown = parse(balance);
+  const conditions =
+    doc && typeof doc === "object" && "conditions" in doc ? doc.conditions : undefined;
+  return conditions && typeof conditions === "object" ? Object.keys(conditions) : [];
+}
 
 function lum(img: Image, x: number, y: number): number {
   const i = (y * img.width + x) * 4;
@@ -81,10 +92,15 @@ describe("draw helpers", () => {
 
 describe("recipes", () => {
   const paths = recipePaths();
+  // A paper-doll layer of the engine humanoids (docs/17 "Humanoides del motor") can be all
+  // hidden by the body in a frame (a beard seen from behind): it may draw nothing.
+  const dollFrame = (p: string): boolean =>
+    HUMANOID_LAYERS.some((l) => l.slot !== "body" && p.startsWith(`${l.sprite}/`));
 
+  // With the engine humanoids' ~3600 frames, the tests over every recipe take seconds.
   it("render the same bytes every time", () => {
     for (const p of paths) expect(encodePng(render(p)).equals(encodePng(render(p))), p).toBe(true);
-  });
+  }, 60_000);
 
   it("have sizes in multiples of 32, only fully opaque or transparent pixels, and draw something", () => {
     for (const p of paths) {
@@ -101,9 +117,9 @@ describe("recipes", () => {
         else if (a !== 0 && partial < 0) partial = a;
       }
       expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
-      expect(opaque, p).toBeGreaterThan(20);
+      if (!dollFrame(p)) expect(opaque, p).toBeGreaterThan(20);
     }
-  }, 30_000);
+  }, 60_000);
 
   it("ground and walls are opaque and tile seamlessly", () => {
     for (const p of paths) {
@@ -166,7 +182,7 @@ describe("recipes", () => {
         `${p}: stale, run make spritegen`,
       ).toBe(true);
     }
-  });
+  }, 60_000);
 
   it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);
@@ -405,6 +421,7 @@ describe("ui icons", () => {
     expect(icons.length).toBeGreaterThan(0);
     expect(uiIconBox("ui/marks/murderer")).toEqual(UI_ICON_BOX);
     expect(uiIconBox("ui/slots/head")).toEqual(UI_SLOT_BOX);
+    expect(uiIconBox("ui/status/poison")).toEqual(UI_STATUS_BOX);
     for (const p of icons) {
       const img = render(p);
       const box = uiIconBox(p);
@@ -427,6 +444,49 @@ describe("ui icons", () => {
       return bits;
     });
     expect(new Set(masks).size).toBe(marks.length);
+  });
+
+  it("draw every status of the tray (docs/17), each its own 14x14 map outlined to 16x16", () => {
+    // The conditions of data/balance.yaml and the statuses of server/internal/session/status.go.
+    const conditions = conditionIds(readFileSync(resolve(root, "data", "balance.yaml"), "utf8"));
+    expect(conditions).toContain("poison");
+    const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone"];
+    expect(Object.keys(STATUS_ART).sort()).toEqual([...ids].sort());
+    const masks = ids.map((id) => {
+      const art = STATUS_ART[id];
+      expect(art?.rows.length, id).toBe(14);
+      for (const r of art?.rows ?? []) {
+        expect(r.length, id).toBe(14);
+        for (const ch of r) if (ch !== ".") expect(art?.colours[ch], `${id} ${ch}`).toBeDefined();
+      }
+      const img = render(`ui/status/${id}`);
+      let bits = "";
+      let on = 0;
+      for (let i = 3; i < img.data.length; i += 4) {
+        bits += img.data[i] ? "1" : "0";
+        if (img.data[i]) on++;
+      }
+      // Fills a good part of its box, to read at 1x in a phone's header.
+      expect(on, id).toBeGreaterThan(70);
+      return bits;
+    });
+    expect(new Set(masks).size).toBe(ids.length);
+  });
+
+  it("read every condition of balance.yaml, a block-style entry too", () => {
+    // A line regex saw only `id: { kind: ... }`: a new condition written as a block had no
+    // icon and neither this test nor status.test.ts's STATUS_ORDER noticed.
+    const yaml = [
+      "combat: { block_ms: 1 }",
+      "conditions:",
+      "  poison: { kind: damage, element: earth }",
+      "  # a comment",
+      "  frozen:",
+      "    kind: speed",
+      "    speed_pct: -20",
+      "skills: {}",
+    ].join("\n");
+    expect(conditionIds(yaml)).toEqual(["poison", "frozen"]);
   });
 
   it("draw every equipment slot (docs/17 UI-5), each its own 20x20 silhouette", () => {

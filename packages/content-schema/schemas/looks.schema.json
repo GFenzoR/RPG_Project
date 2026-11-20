@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/looks.schema.json",
+  "title": "Looks of the engine humanoids (data/looks.yaml)",
+  "description": "docs/06 \"Looks\", docs/17 \"Humanoides del motor\": the builds, skin tones, hair styles and colours, beards, worn shapes per slot and material tints the paper doll is drawn with. The layer lists equal what the sprite engine draws (a spritegen test).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "builds",
+    "skins",
+    "hair_styles",
+    "beards",
+    "hair_colors",
+    "shapes",
+    "tints",
+    "limits"
+  ],
+  "properties": {
+    "builds": { "$ref": "#/$defs/idList" },
+    "skins": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["color"],
+        "properties": {
+          "color": { "$ref": "common.schema.json#/$defs/hexColor" },
+          "creatures_only": {
+            "description": "For NPCs and monsters only, never a player's choice.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "hair_styles": { "$ref": "#/$defs/idList" },
+    "beards": { "$ref": "#/$defs/idList" },
+    "hair_colors": { "$ref": "#/$defs/colors" },
+    "shapes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "torso", "legs", "feet", "shield", "weapon"],
+      "properties": {
+        "head": { "$ref": "#/$defs/idList" },
+        "torso": { "$ref": "#/$defs/idList" },
+        "legs": { "$ref": "#/$defs/idList" },
+        "feet": { "$ref": "#/$defs/idList" },
+        "shield": { "$ref": "#/$defs/idList" },
+        "weapon": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "hides": {
+      "description": "Head shape -> the body layers it covers (hair, beard).",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "enum": ["hair", "beard"] }
+      }
+    },
+    "tints": { "$ref": "#/$defs/colors" },
+    "limits": {
+      "description": "A player's look changes (docs/02 \"Apariencia\"): every one is broadcast to everyone who sees the player, so they go through an anti-flood (a burst, then one every change_refill_ms).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change_burst", "change_refill_ms"],
+      "properties": {
+        "change_burst": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "change_refill_ms": { "type": "integer", "minimum": 100, "maximum": 60000 }
+      }
+    }
+  },
+  "$defs": {
+    "idList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/id" }
+    },
+    "colors": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/hexColor" }
+    }
+  }
+}

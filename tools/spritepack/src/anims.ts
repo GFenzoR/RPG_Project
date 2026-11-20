@@ -58,6 +58,19 @@ export interface AnimEntry {
   anchor?: "br" | "bc";
   /** Frames from files only: ms per frame of idle, attack or death (walk plays by distance). */
   ms?: Partial<Record<AnimAction, number>>;
+  /**
+   * Frames from files only: walk frames per tile walked (default half the walk's frames). An
+   * engine humanoid derives it from its stride (docs/17 "La regla de la zancada").
+   */
+  perTile?: number;
+  /** Frames from files only: walk frames per tile facing north or south (default perTile). */
+  perTileNS?: number;
+  /**
+   * Frames from files only: pack each frame cropped to its opaque box (a trimmed atlas frame:
+   * the client still places it as the whole frame). The paper-doll layers of the engine
+   * humanoids, mostly empty 64x64 frames (docs/07 "Atlas").
+   */
+  trim?: boolean;
 }
 
 /** What atlas.json says about an animated (or hinted) sprite: see AnimMeta in packages/renderer. */
@@ -75,7 +88,10 @@ export interface AnimMeta {
   facing?: "left" | "right";
   flying?: boolean;
   actions: Partial<
-    Record<AnimAction, { frames: number; ms: number; perTile?: number; dirs: AnimDir[] }>
+    Record<
+      AnimAction,
+      { frames: number; ms: number; perTile?: number; perTileNS?: number; dirs: AnimDir[] }
+    >
   >;
 }
 
@@ -171,6 +187,9 @@ const ENTRY_KEYS = new Set([
   "mirror",
   "anchor",
   "ms",
+  "per_tile",
+  "per_tile_ns",
+  "trim",
   "notes",
 ]);
 /** The actions whose frames play by time (walk plays by the distance walked). */
@@ -249,13 +268,15 @@ export function parseAnimEntry(
   return entry;
 }
 
-/** `mirror`, `anchor` and `ms`: hints for frames that come from files (no layers). */
+/** `mirror`, `anchor`, `ms`, `per_tile` and `trim`: hints for frames from files (no layers). */
 function parseFileHints(
   raw: Record<string, unknown>,
   entry: AnimEntry,
   fail: (message: string) => void,
 ): void {
-  const given = ["mirror", "anchor", "ms"].filter((k) => raw[k] !== undefined);
+  const given = ["mirror", "anchor", "ms", "per_tile", "per_tile_ns", "trim"].filter(
+    (k) => raw[k] !== undefined,
+  );
   if (given.length === 0) return;
   if (entry.layers.length > 0 || raw["layers"] !== undefined) {
     fail(`${given.join(", ")}: only for frames from files (an entry without layers)`);
@@ -265,6 +286,23 @@ function parseFileHints(
   if (mirror !== undefined) {
     if (typeof mirror === "boolean") entry.mirror = mirror;
     else fail("mirror must be true or false");
+  }
+  const perTile = raw["per_tile"];
+  if (perTile !== undefined) {
+    if (typeof perTile === "number" && Number.isFinite(perTile) && perTile > 0)
+      entry.perTile = perTile;
+    else fail("per_tile must be a number > 0");
+  }
+  const perTileNS = raw["per_tile_ns"];
+  if (perTileNS !== undefined) {
+    if (typeof perTileNS === "number" && Number.isFinite(perTileNS) && perTileNS > 0)
+      entry.perTileNS = perTileNS;
+    else fail("per_tile_ns must be a number > 0");
+  }
+  const trim = raw["trim"];
+  if (trim !== undefined) {
+    if (typeof trim === "boolean") entry.trim = trim;
+    else fail("trim must be true or false");
   }
   const anchor = raw["anchor"];
   if (anchor !== undefined) {

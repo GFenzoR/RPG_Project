@@ -1,7 +1,7 @@
 # Tutorial guiado de Puerto (T4.2, data/tutorial.yaml). Textos originales.
 tutorial.step.first_steps: "Despiertas en el templo del Farol. Camina {count} pasos con las flechas, WASD o haciendo clic en el suelo."
 tutorial.step.meet_priestess: "La sacerdotisa del templo recibe a quienes llegan del mar. Haz clic derecho sobre ella para hablarle."
-tutorial.step.open_backpack: "Llevas una mochila. Ábrela con doble clic sobre ella en tu equipo, o con clic derecho y «Abrir»."
+tutorial.step.open_backpack: "Llevas una mochila. Ábrela con doble clic sobre ella en tu equipo, o con clic derecho y «Abrir». Lo que no entra en ella va a tus bolsillos, la fila bajo tu figura."
 tutorial.step.pick_target: "En el puerto, al sureste, merodean ratas y gaviotas. Elige una criatura con clic derecho o desde la lista de batalla."
 tutorial.step.first_spell: "Tus hechizos ya están en la barra de abajo: el primero en F1. Con tu objetivo elegido, pulsa F1 o haz clic en esa casilla."
 tutorial.step.first_victory: "Derrota a tu objetivo. Si te hieren, aléjate y espera a recuperarte."

@@ -19,6 +19,8 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readBorders } from "@rpg/map-format";
+import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
@@ -27,6 +29,7 @@ import type {
   AttributeDef,
   ClientContent,
   CosmeticDef,
+  LookOptions,
   DialogTopic,
   ForgeRules,
   NameEffectStyle,
@@ -44,6 +47,10 @@ import type {
   SoundManifest,
   SpellDef,
 } from "../src/content-types.ts";
+import type { LayerSlot, Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
+
+/** The worn slots (packages/renderer look.ts WORN_SLOTS; types only from there at build time). */
+const WORN_SLOTS = ["head", "torso", "legs", "feet", "shield", "weapon"] as const;
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
@@ -99,6 +106,11 @@ export function loadClientContent(root: string): ClientContent {
    * items by item.<id>.name, so that key gets the shared text.
    */
   const sharedNames = new Map<string, string>();
+  /** The border pieces of data/borders.yaml (docs/06 "Bordes"): never a tile's top item. */
+  const bordersFile = join(root, "data", "borders.yaml");
+  const borders = existsSync(bordersFile)
+    ? borderItems(readBorders(readYaml(bordersFile)))
+    : new Set<string>();
   const dir = join(root, "data", "items");
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".yaml"))
@@ -140,6 +152,7 @@ export function loadClientContent(root: string): ClientContent {
         ...(desc !== "" ? { desc } : {}),
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
         ...(isObj(raw["door"]) ? { door: true as const } : {}),
+        ...(borders.has(raw["id"]) ? { border: true as const } : {}),
         ...(typeof raw["elevation"] === "number" && raw["elevation"] > 0
           ? { elevation: raw["elevation"] }
           : {}),
@@ -155,6 +168,8 @@ export function loadClientContent(root: string): ClientContent {
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
+  const xp = isObj(balance) && isObj(balance["experience"]) ? balance["experience"] : {};
+  const curve = isObj(xp["curve"]) ? xp["curve"] : {};
   const i18n: Record<string, Record<string, string>> = {};
   for (const lang of LANGUAGES) {
     const texts: Record<string, string> = {};
@@ -188,8 +203,8 @@ export function loadClientContent(root: string): ClientContent {
     .filter((f) => f.endsWith(".yaml"))
     .sort()) {
     const m = readYaml(join(mdir, file));
-    if (isObj(m) && typeof m["id"] === "string" && typeof m["sprite"] === "string")
-      monsters[m["id"]] = m["sprite"];
+    if (!isObj(m) || typeof m["id"] !== "string") continue;
+    if (typeof m["sprite"] === "string") monsters[m["id"]] = m["sprite"];
   }
   const npcs: Record<string, string> = {};
   const ndir = join(root, "data", "npcs");
@@ -197,10 +212,12 @@ export function loadClientContent(root: string): ClientContent {
     .filter((f) => f.endsWith(".yaml"))
     .sort()) {
     const n = readYaml(join(ndir, file));
-    if (isObj(n) && typeof n["id"] === "string" && typeof n["sprite"] === "string")
-      npcs[n["id"]] = n["sprite"];
+    if (!isObj(n) || typeof n["id"] !== "string") continue;
+    if (typeof n["sprite"] === "string") npcs[n["id"]] = n["sprite"];
   }
   const outfits = loadOutfits(root);
+  const looks = loadLooks(root);
+  const lookOptions = loadLookOptions(root);
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
@@ -279,6 +296,8 @@ export function loadClientContent(root: string): ClientContent {
     dialogTopics: dialogTopics(root).topics,
     npcSprites: npcs,
     outfits,
+    ...(looks ? { looks } : {}),
+    ...(lookOptions ? { lookOptions } : {}),
     cosmetics: loadCosmetics(root),
     vocations,
     spells,
@@ -290,6 +309,13 @@ export function loadClientContent(root: string): ClientContent {
       maxPathTiles: num(mv["max_path_tiles"], 100),
     },
     chat: { maxLength: num(chat["max_length"], 255) },
+    experience: {
+      a: num(curve["a"], 0),
+      b: num(curve["b"], 0),
+      c: num(curve["c"], 0),
+      d: num(curve["d"], 0),
+      maxLevel: num(xp["max_level"], 0),
+    },
     guild: {
       foundCost: num(guild["found_cost"], 0),
       foundMinLevel: num(guild["found_min_level"], 1),
@@ -373,6 +399,8 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
   const n = (v: unknown): number => (typeof v === "number" ? v : 0);
   const s = (v: unknown): string => (typeof v === "string" ? v : "");
   const out: Partial<ItemDef> = {};
+  const worn = wornPiece(raw["worn"]);
+  if (worn) out.worn = worn;
   if (typeof raw["kind"] === "string") out.kind = raw["kind"];
   if (n(raw["weight"]) > 0) out.weight = n(raw["weight"]);
   const w = raw["weapon"];
@@ -577,6 +605,103 @@ export function dialogTopics(root: string): {
 }
 
 /** data/outfits.yaml (T0.5); [] without the file. The site shop previews them (T5.7). */
+/** A data/ worn piece ({shape, tint}), or undefined. */
+export function wornPiece(v: unknown): WornPiece | undefined {
+  return isObj(v) && typeof v["shape"] === "string" && typeof v["tint"] === "string"
+    ? { shape: v["shape"], tint: v["tint"] }
+    : undefined;
+}
+
+/** A data/ worn set (head, torso, legs, feet, shield, weapon -> {shape, tint}). */
+export function wornSet(v: unknown): Worn {
+  const out: Worn = {};
+  if (!isObj(v)) return out;
+  for (const slot of WORN_SLOTS) {
+    const p = wornPiece(v[slot]);
+    if (p) out[slot] = p;
+  }
+  return out;
+}
+
+/** A data/ look (snake_case), or undefined when it is not one. */
+export function lookOf(v: unknown): Look | undefined {
+  if (!isObj(v)) return undefined;
+  const s = (k: string): string | undefined => (typeof v[k] === "string" ? v[k] : undefined);
+  const body = s("body");
+  const skin = s("skin");
+  const hair = s("hair");
+  const hairColor = s("hair_color");
+  const beard = s("beard");
+  if (!body || !skin || !hair || !hairColor || !beard) return undefined;
+  return { body, skin, hair, hairColor, beard };
+}
+
+/**
+ * The choices of a player's look (docs/02 "Apariencia"), in the order of data/looks.yaml:
+ * the pickers of the creation screen and the Apariencia window. Never a creatures_only
+ * skin (the server refuses it too). Undefined without the file.
+ */
+export function loadLookOptions(root: string): LookOptions | undefined {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "looks.yaml"));
+  } catch {
+    return undefined;
+  }
+  if (!isObj(raw)) return undefined;
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const skins = isObj(raw["skins"])
+    ? Object.entries(raw["skins"]).flatMap(([id, d]) =>
+        isObj(d) && d["creatures_only"] === true ? [] : [id],
+      )
+    : [];
+  return {
+    builds: list(raw["builds"]),
+    skins,
+    hairStyles: list(raw["hair_styles"]),
+    hairColors: isObj(raw["hair_colors"]) ? Object.keys(raw["hair_colors"]) : [],
+    beards: list(raw["beards"]),
+  };
+}
+
+/** "#rrggbb" to 0xrrggbb (white when it is not a colour). */
+const hexColor = (v: unknown): number =>
+  typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? parseInt(v.slice(1), 16) : 0xffffff;
+
+/** data/looks.yaml (docs/06 "Looks") as the paper doll's tables; undefined without the file. */
+export function loadLooks(root: string): LookTables | undefined {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "looks.yaml"));
+  } catch {
+    return undefined;
+  }
+  if (!isObj(raw)) return undefined;
+  const colors = (v: unknown): Record<string, number> =>
+    Object.fromEntries(
+      Object.entries(isObj(v) ? v : {}).map(([k, c]) => [k, hexColor(isObj(c) ? c["color"] : c)]),
+    );
+  const hides: Record<string, LayerSlot[]> = {};
+  for (const [shape, list] of Object.entries(isObj(raw["hides"]) ? raw["hides"] : {}))
+    if (Array.isArray(list))
+      hides[shape] = list.filter((x): x is LayerSlot => x === "hair" || x === "beard");
+  return {
+    skins: colors(raw["skins"]),
+    hairColors: colors(raw["hair_colors"]),
+    tints: colors(raw["tints"]),
+    hides,
+  };
+}
+
+/** An outfit's look, clothes and costume flag (docs/06 "Looks"), when it has a look. */
+function outfitLook(o: Record<string, unknown>): Partial<OutfitDef> {
+  const look = lookOf(o["look"]);
+  if (!look) return {};
+  const clothes = wornSet(o["clothes"]);
+  return { look, clothes, ...(o["costume"] === true ? { costume: true } : {}) };
+}
+
 export function loadOutfits(root: string): OutfitDef[] {
   let rawOutfits: unknown;
   try {
@@ -592,6 +717,7 @@ export function loadOutfits(root: string): OutfitDef[] {
                 id: o["id"],
                 sprite: o["sprite"],
                 frames: typeof o["frames"] === "number" ? o["frames"] : 1,
+                ...outfitLook(o),
               },
             ]
           : [],

@@ -2,7 +2,7 @@
 // with their inverse and redone with the inverse of the inverse, comparing houses.yaml of
 // every island byte for byte.
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadWorld } from "../io.ts";
 import type { World } from "../types.ts";
 import { formatYaml } from "../yaml.ts";
@@ -10,6 +10,9 @@ import { applyOps } from "./index.ts";
 import type { AddHouseOp, MapOp } from "./index.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
+// These load and validate the whole world several times: about 3 s on a dev machine, past
+// 5 s while the other projects run beside them (make test runs them all in one process).
+vi.setConfig({ testTimeout: 30_000 });
 
 function loaded(): World {
   return loadWorld(repo).world;

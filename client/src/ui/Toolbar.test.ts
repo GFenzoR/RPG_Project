@@ -7,7 +7,7 @@ import { GameWindow } from "./GameWindow.tsx";
 import type { GameWindowProps } from "./GameWindow.tsx";
 import { TOOLBAR, Toolbar, buttonHint } from "./Toolbar.tsx";
 import { defaultWindows, openWindow } from "./windows.ts";
-import { LOW_HEALTH, lowHealth, orbFill } from "./Vitals.tsx";
+import { LOW_HEALTH, experienceTip, lowHealth, orbFill } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
@@ -221,18 +221,21 @@ describe("HudBar (docs/17 UI-4: the gothic bottom bar)", () => {
     levelPercent: 40,
     experience: 4200,
   } as GameUi["stats"];
+  // balance.yaml's curve: 12n³ - 24n² + 12n (level 8 at 4704).
+  const curve = { a: 12, b: -24, c: 12, d: 0, maxLevel: 1000 };
   const bar = (s: GameUi["stats"], levelUp = false): VNode<Props> =>
     HudBar({
       t,
       name: "Aldric Varn",
       stats: s,
       levelUp,
-      conditions: "conditions",
+      curve,
+      tray: "tray",
       hotbar: "hotbar",
       toolbar: "toolbar",
     }) as VNode<Props>;
-  // HudBar is a plain function: its children are calls of Vitals, Orb and ExperienceBar
-  // (also plain), rendered here to walk their trees.
+  // HudBar is a plain function: its children are calls of Orb and ExperienceBar (also
+  // plain), rendered here to walk their trees.
   const rendered = (v: VNode<Props>): VNode<Props>[] =>
     nodes(v).flatMap((n) =>
       typeof n.type === "function"
@@ -240,21 +243,32 @@ describe("HudBar (docs/17 UI-4: the gothic bottom bar)", () => {
         : [n],
     );
 
-  it("has the orbs at its ends, the plaque over the life orb, and the slots between", () => {
+  it("has the orbs at its ends, the tray, the name plate on the experience bar and the slots", () => {
     const tree = bar(stats);
     expect(tree.props["data-testid"]).toBe("hud-bar");
     expect(tree.props["aria-label"]).toBe("client.hud.bar");
+    expect([tree.props.children].flat()[0]).toBe("tray");
     const all = rendered(tree);
     const byTestid = (id: string): VNode<Props> | undefined =>
       all.find((v) => v.props["data-testid"] === id);
     expect(byTestid("health")?.props.children).toBe('client.game.health{"health":20,"max":100}');
     expect(byTestid("mana")?.props.children).toBe('client.game.mana{"mana":45,"max":60}');
-    expect(byTestid("level")?.props.children).toBe('client.game.level{"level":7,"percent":40}');
-    expect(byTestid("experience")?.props.children).toBe(
-      'client.game.experience{"experience":4200}',
+    // docs/17 "Placa del nombre": name and level over the bar, the percent on it and the
+    // exact experience to the next level in its tooltip; the tutorial's "stats" there.
+    expect(byTestid("level")?.props.children).toBe('client.vitals.level{"level":7}');
+    const plate = all.find((v) => v.props["class"] === "nameplate");
+    expect(nodes(plate as VNode<Props>).some((v) => v.props.children === "Aldric Varn")).toBe(true);
+    const xpBar = byTestid("experience");
+    expect(xpBar?.props["role"]).toBe("progressbar");
+    const tip = 'client.vitals.experience_next{"experience":4200,"missing":504,"next":8}';
+    expect(xpBar?.props["title"]).toBe(tip);
+    expect(xpBar?.props["aria-valuetext"]).toBe(tip);
+    expect(all.find((v) => v.props["class"] === "xppercent")?.props.children).toBe(
+      'client.vitals.percent{"percent":40}',
     );
-    const plaque = all.find((v) => v.props["class"] === "vitals");
-    expect(plaque?.props["data-tutorial"]).toBe("stats");
+    const group = all.find((v) => v.props["class"] === "xp");
+    expect(group?.props["data-tutorial"]).toBe("stats");
+    expect(all.some((v) => v.props["class"] === "vitals")).toBe(false);
     // The orbs: life low (a fifth), mana three quarters full.
     const orbs = all.filter((v) => v.props["class"] === "orb");
     expect(orbs.map((o) => o.props["data-low"])).toEqual(["", undefined]);
@@ -276,6 +290,21 @@ describe("HudBar (docs/17 UI-4: the gothic bottom bar)", () => {
 });
 
 describe("Vitals", () => {
+  it("says what the next level is missing, the top level, or only the experience", () => {
+    const curve = { a: 12, b: -24, c: 12, d: 0, maxLevel: 50 };
+    const at = (level: number, experience: number): NonNullable<GameUi["stats"]> =>
+      ({ level, experience }) as NonNullable<GameUi["stats"]>;
+    expect(experienceTip(t, at(15, 35280), curve)).toBe(
+      'client.vitals.experience_next{"experience":35280,"missing":7920,"next":16}',
+    );
+    expect(experienceTip(t, at(50, 1_500_000), curve)).toBe(
+      'client.vitals.experience_max{"experience":1500000}',
+    );
+    expect(experienceTip(t, at(3, 200), undefined)).toBe(
+      'client.game.experience{"experience":200}',
+    );
+  });
+
   it("fills an orb with the share left, full when the maximum is unknown", () => {
     expect(orbFill(30, 120)).toBe(0.25);
     expect(orbFill(200, 120)).toBe(1);

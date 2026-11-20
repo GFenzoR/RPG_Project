@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 100, "cy": 198, "z": 7 },
-  "palette": ["grass", "sand", "border_grass_sand_w", "border_grass_sand_e", "border_grass_sand_inner_sw", "border_grass_sand_sw", "border_grass_sand_inner_nw", "border_grass_sand_nw", "border_grass_sand_se", "border_grass_sand_inner_se", "border_grass_sand_s", "oak_tree", "birch_tree", "bush", "boulder"],
+  "palette": ["grass", "sand", "border_grass_w", "border_grass_e", "border_grass_inner_sw", "border_grass_sw", "border_grass_inner_nw", "border_grass_nw", "border_grass_se", "border_grass_inner_se", "border_grass_s", "oak_tree", "birch_tree", "bush", "boulder"],
   "ground": [
     [0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1],
     [1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1],

@@ -210,9 +210,9 @@ func TestCraftIntervalAndRoom(t *testing.T) {
 		t.Fatalf("after time_ms: messages %v", systemKeys(evs))
 	}
 
-	// Four full slots and an output that would need a fifth.
+	// Four full slots (and full pockets) and an output that would need one more.
 	h2 := craftHarness(t, worldtest.Map(t, 0, 0, 7, forgeMap...))
-	cl2, p2 := crafter(h2, pos(1, 0), stack(oreID, 2, 0), stack(logID, 1, 1), stack(swordID, 1, 2), stack(shieldID, 1, 3))
+	cl2, p2 := crafter(h2, pos(1, 0), full(stack(oreID, 2, 0), stack(logID, 1, 1), stack(swordID, 1, 2), stack(shieldID, 1, 3))...)
 	if evs := h2.craft(cl2, "ingot", pos(0, 0)); !hasKey(evs, "craft.no_room") || packCount(p2, oreID) != 2 || packCount(p2, logID) != 1 {
 		t.Fatalf("full backpack: messages %v, ore %d, logs %d", systemKeys(evs), packCount(p2, oreID), packCount(p2, logID))
 	}

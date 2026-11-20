@@ -1,18 +1,20 @@
 // Editor state and actions, independent of Preact and PixiJS. The UI renders `state` and
 // calls the actions; the canvas reads the world and the camera from here.
 import {
+  NO_BORDERS,
   OpError,
   applyOps,
   diffWorlds,
   entryAddOp,
   entryRemoveOp,
+  hasBorders,
   houseContains,
   houseNameKey,
   rectContains,
   stableJson,
 } from "@rpg/map-format/ops";
 import type {
-  BorderRule,
+  BorderSet,
   EntityList,
   EraseLayer,
   House,
@@ -210,7 +212,7 @@ export interface EditorOptions {
   loadErrors: WireDiagnostic[];
   /** Hash of each chunk and auxiliary file as loaded (Bootstrap.base). */
   base: Record<string, string>;
-  borders?: BorderRule[];
+  borders?: BorderSet;
   monsters?: string[];
   npcs?: string[];
   /**
@@ -235,7 +237,7 @@ export class EditorController {
   private readonly names: Map<string, Map<string, string>>;
   /** House names changed in the panel and not saved: `${lang} ${key}` → text. */
   private readonly pendingNames = new Map<string, string>();
-  private readonly borders: BorderRule[];
+  private readonly borders: BorderSet;
   private pickCallback: ((pos: Position) => void) | undefined;
   view: ViewSize = { width: 800, height: 600 };
   private centered = false;
@@ -268,7 +270,7 @@ export class EditorController {
     this.backend = opts.backend ?? httpBackend;
     this.base = new Map(Object.entries(opts.base));
     this.baseline = opts.world;
-    this.borders = opts.borders ?? [];
+    this.borders = opts.borders ?? NO_BORDERS;
     this.monsters = opts.monsters ?? [];
     this.npcs = opts.npcs ?? [];
     const names = opts.houseNames ?? {};
@@ -465,7 +467,7 @@ export class EditorController {
     let inverse = r.inverse;
     const touched = [...r.touched];
     const touchedAux = [...r.touchedAux];
-    if (autoborder && this.state.autoborder && this.borders.length > 0) {
+    if (autoborder && this.state.autoborder && hasBorders(this.borders)) {
       const ab = autoborderAfter(world, r.inverse);
       if (ab.length > 0) {
         const b = applyOps(world, ab, opts);
@@ -635,7 +637,7 @@ export class EditorController {
     const ops = pasteOps(this.state.world, clip, x, y, z);
     // Pasted stacks may carry border pieces of the source: recompute the pasted area even
     // where the ground did not change (edit() only covers cells whose ground changed).
-    if (ops.length > 0 && this.state.autoborder && this.borders.length > 0)
+    if (ops.length > 0 && this.state.autoborder && hasBorders(this.borders))
       for (const rect of clipToIslands(this.state.world, { x, y, w: clip.w, h: clip.h }, z))
         ops.push({ op: "autoborder", floor: z, rect });
     if (this.commit("editor.history.paste", ops))

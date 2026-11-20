@@ -11,6 +11,9 @@ import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
 import type { QuestLogView } from "./state/quests.ts";
+import { sameLook } from "./state/look.ts";
+import type { EquipmentView } from "./state/look.ts";
+import type { Look } from "@rpg/renderer/look";
 import {
   ChatChannel,
   CreatureKind,
@@ -68,6 +71,7 @@ import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
 import { cuesOf, loopFor, sceneFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
@@ -110,6 +114,8 @@ export interface GameUi {
   log: LogMessage[];
   chat: ChatLine[];
   inventory: Map<EquipmentSlot, ItemView>;
+  /** The character's pockets (docs/02 "Bolsillos"): under the figure, above the backpack. */
+  pockets: PocketsState;
   /**
    * The open containers that have a window of their own: every one but the equipped
    * backpack, which the inventory shows under the figure (`backpack`, docs/17 UI-5).
@@ -164,6 +170,15 @@ export interface GameUi {
   vocation?: string | undefined;
   /** T5.7: owned cosmetics, premium balance and what is equipped (undefined until sent). */
   cosmetics?: CosmeticsStateView | undefined;
+  /**
+   * The player's own body (docs/02 "Apariencia"), as the server says (its Creature,
+   * CreatureLook); undefined from a server without looks.
+   */
+  look?: Look | undefined;
+  /** The look being chosen in the Apariencia window, not sent yet (Game.setLookDraft). */
+  lookDraft?: Look | undefined;
+  /** The player's own visible equipment (item ids): what the Apariencia figure wears. */
+  selfEquipment?: EquipmentView | undefined;
   /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
   zoom?: ZoomView | undefined;
   /**
@@ -258,6 +273,8 @@ export interface ClientTestHooks {
   floatingTexts(ms: number): number;
   /** Equipped items as [slot, item ID, count]. */
   inventory(): { slot: number; itemId: number; count: number }[];
+  /** The pockets (docs/02 "Bolsillos"): how many cells, and each item as [item ID, count]. */
+  pockets(): { capacity: number; items: { itemId: number; count: number }[] };
   /** Open containers with their content. */
   containers(): ContainerState[];
   /** The item id of the book or scroll being read, if any (docs/02 "Libros y cofres"). */
@@ -296,8 +313,17 @@ export interface ClientTestHooks {
   shop(): ShopState | undefined;
   /** T5.7: the own shop state (CosmeticsState). */
   cosmetics(): CosmeticsStateView | undefined;
-  /** T5.7: players the client sees with their equipped cosmetics. */
-  players(): { id: number; name: string; cosmetics: CosmeticsView }[];
+  /**
+   * T5.7: players the client sees with their equipped cosmetics, and their body and
+   * visible equipment (item ids; docs/05 "Apariencia y equipo visible").
+   */
+  players(): {
+    id: number;
+    name: string;
+    cosmetics: CosmeticsView;
+    look: Look | undefined;
+    equipment: EquipmentView;
+  }[];
 }
 
 /** One creature in a pose (ClientTestHooks.poses): its id, how far in, the clip and its tile. */
@@ -417,6 +443,8 @@ export class Game {
   private itemMenuOpened = false;
   /** The last spell used from the hotbar (its slot flashes, docs/17 UI-9). */
   private cast: { spellId: string; at: number } | undefined;
+  /** The look being picked in the Apariencia window (setLookDraft), not sent yet. */
+  private lookDraft: Look | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
   private groundTip: GameUi["groundTip"];
   /** The book or scroll being read (docs/02 "Libros y cofres"); undefined when closed. */
@@ -459,6 +487,7 @@ export class Game {
           if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
+          if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
@@ -585,7 +614,7 @@ export class Game {
     this.conn.send({ case: "tradeRequest", value: { creatureId: id } });
   }
 
-  /** Adds an item of an open container to the own trade offer. */
+  /** Adds an item of an open container or of the pockets to the own trade offer. */
   tradeOffer(ref: ItemRef): void {
     this.conn.send({
       case: "tradeOffer",
@@ -758,6 +787,35 @@ export class Game {
   /** Goes back to the default look of one kind (outfit, outfit_color, name_effect). */
   unequipCosmetic(kind: string): void {
     this.conn.send({ case: "unequipCosmetic", value: { kind } });
+  }
+
+  /**
+   * The look the Apariencia window shows while the player picks (docs/02 "Apariencia"):
+   * nothing is sent until applyLook. undefined goes back to the one it has.
+   */
+  setLookDraft(look: Look | undefined): void {
+    this.lookDraft = look;
+    this.publish();
+  }
+
+  /**
+   * Sends the look being picked (SetLook): free; the server answers with a CreatureLook to
+   * the player and to everyone who sees it, or appearance.invalid.
+   */
+  applyLook(): void {
+    const draft = this.lookDraft;
+    if (!draft || sameLook(draft, this.world.self?.look)) return;
+    this.conn.send({ case: "setLook", value: { look: { ...draft } } });
+  }
+
+  /**
+   * A CreatureLook came: when it is the player's own and shows the look being picked, the
+   * change went through and the draft is done. Any other (a piece of equipment changed
+   * while picking, a refused look) keeps the draft.
+   */
+  private lookAnswered(id: number): void {
+    if (id !== this.world.selfId || !this.lookDraft) return;
+    if (sameLook(this.lookDraft, this.world.self?.look)) this.lookDraft = undefined;
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
@@ -1179,6 +1237,7 @@ export class Game {
       if (d["drop"] === "slot") return { kind: "slot", slot: Number(d["slot"]) as EquipmentSlot };
       if (d["drop"] === "container")
         return { kind: "container", id: Number(d["container"]), index: Number(d["index"] ?? 0) };
+      if (d["drop"] === "pocket") return { kind: "pocket", index: Number(d["index"] ?? 0) };
       return undefined;
     }
     if (this.canvas && el === this.canvas.element) {
@@ -1661,6 +1720,7 @@ export class Game {
       log: [...w.log],
       chat: [...w.chat],
       inventory: w.inventory,
+      pockets: w.pockets,
       // docs/17 UI-5: the equipped backpack goes under the figure, not in a window.
       ...this.containersUi(),
       hotkeys: this.hotkeys,
@@ -1689,6 +1749,9 @@ export class Game {
       menu: this.menu?.view,
       vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
+      look: w.self?.look,
+      lookDraft: this.lookDraft,
+      selfEquipment: w.self?.equipment,
       zoom: this.zoomView,
       cast: this.cast,
       groundTip: this.groundTip,
@@ -1912,6 +1975,10 @@ export class Game {
       },
       inventory: () =>
         [...world.inventory].map(([slot, it]) => ({ slot, itemId: it.itemId, count: it.count })),
+      pockets: () => ({
+        capacity: world.pockets.capacity,
+        items: world.pockets.items.map((it) => ({ itemId: it.itemId, count: it.count })),
+      }),
       containers: () => world.containers,
       book: () => this.book?.itemId,
       tile: (x, y, z) => world.tile(x, y, z),
@@ -1949,7 +2016,13 @@ export class Game {
       players: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.PLAYER)
-          .map((c) => ({ id: c.id, name: c.name, cosmetics: { ...c.cosmetics } })),
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            cosmetics: { ...c.cosmetics },
+            look: c.look && { ...c.look },
+            equipment: { ...c.equipment },
+          })),
       itemNumber: (id) => {
         const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
         return found ? Number(found[0]) : undefined;

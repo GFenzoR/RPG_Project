@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 112, "cy": 182, "z": 7 },
-  "palette": ["water_shallow", "sand", "border_sand_water_ne", "border_sand_water_n", "border_sand_water_inner_ne"],
+  "palette": ["water_shallow", "sand", "border_surf_ne", "border_sand_ne", "border_surf_n", "border_sand_n", "border_surf_inner_ne", "border_sand_inner_ne"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -37,15 +37,15 @@
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
   ],
   "items": [
-    { "x": 23, "y": 0, "stack": [2] },
-    { "x": 24, "y": 0, "stack": [3] },
-    { "x": 25, "y": 0, "stack": [4] },
-    { "x": 25, "y": 1, "stack": [2] },
-    { "x": 26, "y": 1, "stack": [3] },
-    { "x": 27, "y": 1, "stack": [3] },
-    { "x": 28, "y": 1, "stack": [3] },
-    { "x": 29, "y": 1, "stack": [3] },
-    { "x": 30, "y": 1, "stack": [3] },
-    { "x": 31, "y": 1, "stack": [3] }
+    { "x": 23, "y": 0, "stack": [2, 3] },
+    { "x": 24, "y": 0, "stack": [4, 5] },
+    { "x": 25, "y": 0, "stack": [6, 7] },
+    { "x": 25, "y": 1, "stack": [2, 3] },
+    { "x": 26, "y": 1, "stack": [4, 5] },
+    { "x": 27, "y": 1, "stack": [4, 5] },
+    { "x": 28, "y": 1, "stack": [4, 5] },
+    { "x": 29, "y": 1, "stack": [4, 5] },
+    { "x": 30, "y": 1, "stack": [4, 5] },
+    { "x": 31, "y": 1, "stack": [4, 5] }
   ]
 }

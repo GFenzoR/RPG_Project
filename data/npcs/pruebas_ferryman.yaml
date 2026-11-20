@@ -1,6 +1,16 @@
 id: pruebas_ferryman
 name: npc.pruebas_ferryman.name
-sprite: npcs/sandbox_ferryman
+sprite: npcs/pruebas_ferryman
+look:
+  body: sturdy
+  skin: tan
+  hair: curly
+  hair_color: auburn
+  beard: short
+  worn:
+    torso: { shape: tunic, tint: teal }
+    legs: { shape: trousers, tint: navy }
+    feet: { shape: boots, tint: tar }
 notes: >-
   Ferryman of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): one-way
   trips to the Isla del Puerto, the Isla del Bosque and the Isla Volcánica, landing where

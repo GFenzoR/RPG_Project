@@ -62,8 +62,12 @@ export interface BuildOptions {
 export interface AtlasFrame {
   frame: { x: number; y: number; w: number; h: number };
   rotated: false;
-  trimmed: false;
-  spriteSourceSize: { x: 0; y: 0; w: number; h: number };
+  /**
+   * A trimmed frame (`trim: true` animations): `frame` holds only the opaque box, which sits
+   * at `spriteSourceSize` inside the `sourceSize` frame; PixiJS places it as the whole frame.
+   */
+  trimmed: boolean;
+  spriteSourceSize: { x: number; y: number; w: number; h: number };
   sourceSize: { w: number; h: number };
 }
 
@@ -271,6 +275,8 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     fileFrames.set(m[1], list);
   }
   const hinted = new Map<string, AnimEntry>();
+  /** Frames packed cropped to their opaque box (trim: true). */
+  const trimmedNames = new Set<string>();
   for (const [name, entry] of sortedAnims) if (entry.layers.length === 0) hinted.set(name, entry);
   const bases = [...new Set([...fileFrames.keys(), ...hinted.keys()])].sort();
   for (const name of bases) {
@@ -286,15 +292,18 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       });
       continue;
     }
-    const fileHints = entry && (entry.mirror || entry.anchor || entry.ms);
+    const fileHints =
+      entry &&
+      (entry.mirror || entry.anchor || entry.ms || entry.perTile || entry.perTileNS || entry.trim);
     if (fileHints && !frames) {
       diags.push({
         severity: "error",
         where,
-        message: `${name}: mirror, anchor and ms need frames from files (${SPRITES_DIR}/${name}/<action>_<dir>_<n>.png)`,
+        message: `${name}: mirror, anchor, ms, per_tile, per_tile_ns and trim need frames from files (${SPRITES_DIR}/${name}/<action>_<dir>_<n>.png)`,
       });
       continue;
     }
+    if (frames && entry?.trim) for (const frame of frames.keys()) trimmedNames.add(frame);
     if (frames && entry?.mirror) {
       for (const [frame, image] of mirroredFrames(name, frames)) {
         frames.set(frame, image);
@@ -315,6 +324,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
             message: `${name}: ms.${action} but no ${action} frames`,
           });
       }
+    }
+    if (found && (entry?.perTile !== undefined || entry?.perTileNS !== undefined)) {
+      const walk = found.actions.walk;
+      if (walk) {
+        if (entry.perTile !== undefined) walk.perTile = entry.perTile;
+        if (entry.perTileNS !== undefined) walk.perTileNS = entry.perTileNS;
+      } else
+        diags.push({ severity: "error", where, message: `${name}: per_tile but no walk frames` });
     }
     const m = measureFrames(found?.walk.length ? found.walk : [image]);
     anims[name] = {
@@ -388,10 +405,19 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
 
   // 4. Pack and render.
   const maxSize = opts.maxPageSize ?? DEFAULT_MAX_PAGE;
+  // Trimmed frames go in as their opaque box (at least 1x1: an empty frame stays a frame).
+  const boxes = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const name of trimmedNames) {
+    const r = resolved.get(name);
+    if (r) boxes.set(name, opaqueBox(r.image));
+  }
   let packed;
   try {
     packed = packSprites(
-      [...resolved].map(([name, r]) => ({ name, width: r.image.width, height: r.image.height })),
+      [...resolved].map(([name, r]) => {
+        const b = boxes.get(name);
+        return { name, width: b?.w ?? r.image.width, height: b?.h ?? r.image.height };
+      }),
       maxSize,
     );
   } catch (err) {
@@ -429,13 +455,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     const r = resolved.get(p.name);
     const page = pages[p.page];
     if (!r || !page) continue;
-    blit(r.image, 0, 0, p.width, p.height, page.image, p.x, p.y);
+    const b = boxes.get(p.name);
+    blit(r.image, b?.x ?? 0, b?.y ?? 0, p.width, p.height, page.image, p.x, p.y);
     page.json.frames[p.name] = {
       frame: { x: p.x, y: p.y, w: p.width, h: p.height },
       rotated: false,
-      trimmed: false,
-      spriteSourceSize: { x: 0, y: 0, w: p.width, h: p.height },
-      sourceSize: { w: p.width, h: p.height },
+      trimmed: b !== undefined,
+      spriteSourceSize: { x: b?.x ?? 0, y: b?.y ?? 0, w: p.width, h: p.height },
+      sourceSize: { w: r.image.width, h: r.image.height },
     };
     index.sprites[p.name] = { page: p.page, origin: r.origin };
   }
@@ -453,6 +480,24 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   index.anims = anims;
   index.tiles = tiles;
   return { diagnostics: diags, atlas: { index, pages }, sprites };
+}
+
+/** The opaque box of an image ([x, y, w, h]; a 1x1 corner when it is all transparent). */
+export function opaqueBox(img: Image): { x: number; y: number; w: number; h: number } {
+  let x0 = img.width;
+  let y0 = img.height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < img.height; y++)
+    for (let x = 0; x < img.width; x++)
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) !== 0) {
+        if (x < x0) x0 = x;
+        if (y < y0) y0 = y;
+        if (x > x1) x1 = x;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return { x: 0, y: 0, w: 1, h: 1 };
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
 /** Writes atlas.json + atlas-N.json/png into outDir, removing stale pages. */

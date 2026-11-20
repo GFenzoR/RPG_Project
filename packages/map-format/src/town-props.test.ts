@@ -227,9 +227,12 @@ describe("the furnished towns", () => {
 });
 
 describe("the lit caves", () => {
-  /** A rock wall whose face shows: an open tile south of it (docs/17 ART-3). */
+  /**
+   * A rock wall whose face shows: an open tile south of it (docs/17 ART-3). Border pieces
+   * (docs/06 "Bordes") lie under it.
+   */
   const face = (x: number, y: number, z: number): boolean => {
-    const s = stack(x, y, z);
+    const s = stack(x, y, z).filter((i) => !i.startsWith("border_"));
     const south = tiles.tile(x, y + 1, z);
     return (
       s[0] === "rock_wall" &&

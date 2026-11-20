@@ -149,10 +149,6 @@ export function playerLook(
   };
 }
 
-/** A stable key of the look, to rebuild a creature's sprites only when it changes. */
-export const lookKey = (eq: EquippedCosmetics | undefined): string =>
-  `${eq?.outfit ?? ""}|${eq?.color ?? ""}|${eq?.nameEffect ?? ""}`;
-
 /**
  * The owned cosmetics grouped by kind, in data/cosmetics.yaml order, for the appearance
  * panel. Ids the content does not know (removed from the catalogue) are left out.

@@ -23,6 +23,7 @@ import {
 } from "../state/chat.ts";
 import type { ChatTab } from "../state/chat.ts";
 import type { ChatLine } from "../state/world.ts";
+import { NO_POCKETS } from "../state/pockets.ts";
 import { skullId } from "../state/pvp.ts";
 import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -61,6 +62,7 @@ import { SplitPrompt } from "./SplitPrompt.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
+import { StatusTray } from "./StatusTray.tsx";
 import { ornamentStyle } from "./ornaments.ts";
 import {
   dragWindow,
@@ -150,6 +152,7 @@ export function emptyGameUi(): GameUi {
     log: [],
     chat: [],
     inventory: new Map(),
+    pockets: NO_POCKETS,
     containers: [],
     hotkeys: [],
     dialog: undefined,
@@ -920,7 +923,8 @@ export function GameView(props: GameViewProps): JSX.Element {
             name={props.characterName}
             stats={stats}
             levelUp={levelNotice !== undefined}
-            conditions={<ConditionBar t={t} conditions={ui.conditions} />}
+            curve={props.content.experience}
+            tray={<StatusTray t={t} conditions={ui.conditions} game={game} compact={false} />}
             hotbar={
               props.entered && (
                 <Hotbar t={t} content={props.content} game={game} ui={ui} margin={0} />
@@ -997,7 +1001,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           </span>
         )}
         {!layout.compactHeader && experience}
-        <ConditionBar t={t} conditions={ui.conditions} />
+        <StatusTray t={t} conditions={ui.conditions} game={game} compact={true} />
         {layout.compactHeader ? (
           <>
             {panelToggle}
@@ -1834,18 +1838,6 @@ const skillRank = (id: string): number => {
   return i < 0 ? SKILL_ORDER.length : i;
 };
 
-/** Kind of each condition, for its badge colour (balance.yaml conditions, T3.2). */
-const CONDITION_CLASS: Record<string, string> = {
-  poison: "damage",
-  burning: "damage",
-  shocked: "damage",
-  slowed: "debuff",
-  hasted: "buff",
-  invisible: "buff",
-  keen_eye: "buff",
-  well_fed: "buff",
-};
-
 /**
  * A PvP mark before a name in the battle list (T5.2): its sprite as a CSS background
  * (render/marks.ts markIconStyle), or without it a dot of the mark's colour (client.css).
@@ -1865,33 +1857,6 @@ function MarkIcon(props: {
       title={label}
       aria-label={label}
     />
-  );
-}
-
-/** The player's own conditions as named badges; the tooltip has the time left. */
-function ConditionBar(props: { t: Translate; conditions: GameUi["conditions"] }): JSX.Element {
-  const { t } = props;
-  const now = performance.now();
-  return (
-    <span class="conditions" data-testid="conditions" aria-label={t("client.conditions.title")}>
-      {props.conditions.map((c) => {
-        const name = t(`condition.${c.id}.name`);
-        const left = t("client.conditions.left", {
-          seconds: Math.max(0, Math.ceil((c.until - now) / 1000)),
-        });
-        // The name too: a phone's header may cut the badge to "Sac…".
-        return (
-          <span
-            key={c.id}
-            class={`condition condition-${CONDITION_CLASS[c.id] ?? "buff"}`}
-            data-condition={c.id}
-            title={`${name} · ${left}`}
-          >
-            {name}
-          </span>
-        );
-      })}
-    </span>
   );
 }
 

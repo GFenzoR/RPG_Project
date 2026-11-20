@@ -160,7 +160,7 @@ parte de arriba transparente.
 | Árbol | 64x64, 64x96 o 96x96 | abajo, tronco centrado (ver abajo) | Copa animada por viento (ART-7) |
 | Criatura chica (rata, murciélago) | 32x32 | abajo, centrada | Figura de 16–28 px |
 | Animal mediano (lobo, jabalí, ciervo, sabueso, araña, sapo) | 64x64 | pies centrados en la casilla | A la escala de la persona de LPC (ver "Animales medianos") |
-| Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
+| Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 36–40 px de los pies a la coronilla, la cabeza un sexto ("Humanoides del motor", §3); antes 40–48 px, como LPC |
 | Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
 
 - **Animales medianos** (decidido el 2026-11-18, con la segunda tanda de Gemini): todos
@@ -268,17 +268,62 @@ parte de arriba transparente.
   - los decorativos (matas, piedritas, flores) los esparce el cliente con el mismo hash:
     no se pueden tocar y no pesan en el mapa;
   - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
-- **Bordes** (`gen-borders`): entre todos los pares de suelos que se tocan, con orilla
-  irregular (nunca recta), y en el agua con espuma animada.
+- **Bordes** (`gen-borders`): entre todos los pares de suelos naturales que se tocan, con
+  orilla irregular (nunca recta) que no se repite de casilla en casilla, y en el agua con
+  espuma animada. **Hecho en el lote 13** (abajo).
 
 **Hecho (A10, 2026-11-18):** pasto, tierra, arena y piedra de piso tienen 4 looks y la arena
 mojada 2 (`ground/<suelo>/var_<n>`, recetas en `tools/spritegen/src/recipes/ground.ts`). El
 renderer elige con `tileHash(x, y, z)` y deja el principal en el 70 % (`weight` en
 `tiles`). Los detalles sueltos (flores, matas, piedritas, una raíz, una concha, musgo) van
-en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tiene una
-orilla de tres ondas que se repiten por casilla (nunca recta y sin dientes) y las orillas
-del agua, espuma que rompe en 4 frames (`borders/sand_water_<pieza>/frame_<n>`). Un test de
-spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
+en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tenía una
+orilla de tres ondas que se repetían por casilla (nunca recta y sin dientes; en el lote 13
+se veía regular: ver abajo) y las orillas del agua, espuma que rompe en 4 frames. Un test
+de spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
+
+**Hecho (lote 13, 2026-11-19, `feat/terrain-borders`):** el dueño, jugando la Isla de
+Pruebas: "faltan los sprites de transicion, todo tiene cortes demasiado cuadrados cuando la
+transicion entre pasto y tierra nunca es recta". Había reglas para 7 pares; tierra con
+pasto (1080 lados de casilla), pasto con piedra (399), tierra con arena, pasto con arena
+mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
+- **Una escalera de suelos** (`data/borders.yaml`, docs/06 "Bordes") en vez de reglas de a
+  pares: cada suelo natural tiene un solo juego de piezas (su borde) que va sobre todos los
+  suelos más bajos que toca. De abajo arriba: lava, bajío, agua, arena mojada, arena, lava
+  enfriada, escoria, tierra, basalto, piedra, pasto, ceniza. Los pisos de madera y los
+  muelles siguen rectos (hechos a mano). El bajío usa la misma agua que el agua de al lado
+  (mismo ruido, más los peces), así que no necesita borde. Un suelo nuevo es una línea.
+- **Orillas que nunca se repiten:** cada pieza tiene 4 looks y el renderer elige uno por
+  casilla con `tileHash` (`lookOf` de `packages/renderer` tile-art: parejo entre los cuatro,
+  no 70/30 como los suelos; el mismo para todas las piezas de la casilla). Todos los looks
+  cruzan los lados de la casilla en el mismo punto (10 px de la esquina del lado del suelo
+  alto) y adentro se doblan con su propio perfil: un oleaje suave, dos o tres bultos de 1 a
+  6 px y algún píxel suelto, sin escalones de más de 2 px; las esquinas de adentro son un
+  arco grande, así una costa en escalera se lee como una diagonal ondulada. Lo verifica el
+  test de `gen-borders` (el contrato de los lados para cada pieza y look, y que dos lados
+  opuestos nunca cierren un camino de una casilla).
+- **Cada suelo con su orilla** (`edge`): matas de pasto que se paran sobre la tierra
+  (`tufts`), piedritas grises en la arena (`pebbles`), terrones en la tierra y la escoria
+  (`clods`), la junta oscura de la piedra y el basalto con alguna esquirla (`joint`), el
+  borde mojado de la arena mojada (`wet`), el labio iluminado de la costra de lava
+  (`crust`) y granos sueltos de ceniza (`drift`). Valor y tono: los del suelo mismo (el test
+  exige la banda de ART-6, L\* 20-50, a cada pieza).
+- **El agua:** la espuma (`border_surf_*`) va debajo de los bordes, una por borde y con su
+  forma: el borde mojado de la tierra (dos tonos de arena mojada), la línea clara de
+  espuma y la cortada que rompe en 4 frames, cada look con sus propios frames
+  (`<pieza>/var_<n>/frame_<m>`). Así, donde dos bordes se pisan, la espuma de uno nunca se ve
+  sobre la tierra del otro, y la que queda sigue la orilla de todos juntos (antes una
+  esquina de adentro de espuma bajo dos bordes distintos dejaba agua sin espuma entre los
+  bordes y el arco; medido sobre las 6561 vecindades de agua, arena y pasto en sus 4 looks:
+  ningún píxel de orilla sin espuma ni espuma suelta en el agua).
+- **Capas:** las piezas son `flat` (spritepack las marca en `atlas.json`) y se dibujan con
+  los suelos, debajo de las sombras proyectadas, los items y las criaturas: el hocico de un
+  lobo o el arma de un jugador que entra en la casilla de al lado no quedan bajo el borde de
+  esa casilla, y la sombra de un árbol oscurece el borde como al suelo.
+- **Mapas:** `mapcli autoborder` de las cinco islas en sus dos pisos (también las cuevas, con
+  tierra y piedra): las piezas pasaron de 6297 a 12273 y el diff es solo de piezas de borde.
+- Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de
+  una casilla) termina en punta (dos esquinas de adentro); se lee como un sendero que se
+  afina. Una pieza propia para ese caso serían 4 piezas más por suelo.
 
 ### ART-5 Contorno, sombra y luz
 - **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
@@ -487,10 +532,11 @@ de un sprite con `death` juega su clip y se desvanece.
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
-Con humanoides de LPC (SRC-4), un atuendo es una **pila de capas** (cuerpo, ropa, pelo,
-arma) que se compone en spritegen o en una herramienta de importación, y se guarda como
-frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`tintFor`)
-siguen igual.
+Con humanoides de LPC (SRC-4), un atuendo era una **pila de capas** (cuerpo, ropa, pelo,
+arma) compuesta en spritepack y guardada como frames ya armados en el atlas. Desde el
+2026-11-19 la pila se arma en el cliente: el humanoide del motor es un muñeco de capas en un
+tono neutro que el cliente tiñe y apila por dirección, y el equipo puesto se ve ("Humanoides
+del motor", al final de §3). Los tintes de T5.7 (`tintFor`) tiñen la ropa del atuendo.
 
 ### ANI-7 Lo que falta del servidor
 **Hecho (A9, 2026-11-18;** E2E del lote 7 con las capturas `07b-attack-pose` y
@@ -852,6 +898,141 @@ una playa abierta con el muelle; una muralla ahí cortaría el paso) y queda par
 amurallado de una isla nueva; los props del kit en las islas que vengan; ver la luz de
 las antorchas y los braseros en el juego (el E2E del lote, docs/14).
 
+### Humanoides del motor (hecho, 2026-11-19, rama `feat/humanoid-art`, lote 13)
+Pedido del dueño tras jugar la Isla de Pruebas (2026-11-19): los personajes y los NPCs eran
+*"muy grandes y desproporcionados, tienen la cabeza y el cuerpo gigante"*; *"quiero que sea
+proporcionado y que se vean los items que tiene equipados"*; *"los sprites de ataque tienen
+que ser con el arma que esta utilizando"*; *"el personaje se ve como que esta flotando"*. Las
+criaturas del motor sí le gustaron ("son mas realistas"). Jugadores, NPCs y monstruos
+humanoides eran personajes de LPC (figura de ~46 px con la cabeza enorme) armados por
+spritepack; ahora son **un humanoide del motor** con un muñeco de capas (*paper doll*), en
+`tools/spritegen/src/engine/specs/humanoid/`.
+
+**Proporciones** (`skeleton.ts`; `humanoid.test.ts` las mide): 36-40 px de los pies a la
+coronilla (37-42 con el contorno; la clase `humanoid` de `style.ts`), la cabeza un sexto
+(6-7 px), los hombros de 11 a 13 px, las piernas la mitad del alto y la punta de los dedos a
+media pierna; la misma vista 3/4, la luz y el contorno de las criaturas del motor. Dos
+cuerpos (`sturdy` y `slender`) sobre **el mismo esqueleto**: cambian el torso (pecho,
+cintura, cadera, hombros) y el grosor de los brazos, así una misma capa de casco, arma,
+piernas o botas les sirve a los dos; la ropa del torso se dibuja por cuerpo. Seis tonos de
+piel para jugadores (más dos solo para criaturas: ceniza y ahogado), seis peinados y calvo,
+nueve colores de pelo y tres barbas (ninguna, corta, cerrada): datos de `data/looks.yaml`
+(docs/06 "Looks"). Al lado del jabalí y el ciervo el humanoide queda más chico que la
+persona de LPC: los animales se dibujaron contra esa persona (~25 px por metro) y se dejan
+como están, porque al dueño le gustan.
+
+**Acciones** como el jugador de antes: quieto (2 frames de 500 ms), caminar (8), atacar (4 de
+90 ms: el brazo arriba atrás, el golpe adelante y abajo con medio paso, el seguimiento y la
+vuelta; el brazo izquierdo adelanta el escudo), disparar (3 de 100 ms: el izquierdo sube el
+arco, el derecho tensa hasta la mejilla y suelta), conjurar (3 de 130 ms: los brazos suben y
+empujan) en las cuatro direcciones, y morir (4 de 150 ms: tambalea, se le doblan las
+rodillas, cae de costado) hacia el sur, como antes. Visto de costado se gira 10° a la cámara
+(`views`): se leen la cara, los dos hombros y lo que tiene la mano lejana.
+
+**La regla de la zancada** (lo que hacía flotar al de LPC: abría los pies 18-21 px y el
+preset daba 4 frames por casilla, un paso por casilla de 32 px; el pie apoyado patinaba ~45 %
+de cada paso). Las piernas son de cinemática inversa (`legsTo`): cada frame pone el tobillo
+donde debe estar y deja la cadera tan alta como la pierna apoyada lo permite. Un ciclo por
+casilla: cada pie está apoyado medio ciclo, mientras el cuerpo pasa sobre él media casilla
+(`STRIDE`, 16 px), así el pie se corre hacia atrás exactamente lo que el cuerpo avanza.
+Frames por casilla = frames × 32 / (2 × zancada) = 8 (`walkPerTile`); los frames están medio
+frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2 y −6 px de la
+cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
+unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
+casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
+`AnimActionMeta.perTileNS`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en
+las cuatro direcciones contra el `perTile` del cliente: se queda a 1 px de su punto del suelo.
+La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
+debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. Un paso en diagonal
+(la cara horizontal) sigue con el `perTile` de este y oeste: el pie no patina de lado, sí un
+poco hacia abajo. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
+el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
+`state/world.ts`) y el ciclo sigue sin repetir ni volver (`anim.test.ts`: un frame cada 50 ms
+de un paso de 400 ms da 0..7, 0..3 en dos pasos); solo un hueco real de la red la muestra, con
+el último frame de caminar y no el quieto. **Girar en medio de una caminata** no hace saltar
+las piernas: la fase del ciclo se cuenta en frames (`AnimState.walkPhase`, cada paso suma los
+frames por casilla de su dirección), no en pasos por el ritmo de la dirección de ahora (con 5
+pasos al este, el primero al norte empezaba en el frame 5 en vez del 0).
+
+**El muñeco de capas** (`layers.ts`; el orden y el modelo, en `packages/renderer/src/look.ts`):
+cuerpo → piernas → pies → torso → pelo y barba → cabeza → escudo → arma, cada capa en las
+mismas poses del rig, así sigue cada frame. Cada capa es un spec del motor con `layer`: se
+dibujan sus partes y **el cuerpo las tapa** donde están detrás (`renderSpec`: las partes de
+`occlude` se proyectan sin pintar; el borde de una capa contra el cuerpo lleva el pliegue,
+así se ve el ruedo de la túnica sobre las piernas o la línea del pelo en la frente). Por eso
+el orden solo decide lo que cae fuera del cuerpo, por dirección (`LAYER_ORDER`). **Lo que se
+lleva en la mano va sobre la ropa en las cuatro direcciones**, sea cual sea la mano y haga lo
+que haga el frame: bajo el cuerpo, un arma sostenida delante de él desaparecía (el arco, en
+la mano izquierda, mirando al oeste: tapado entero; la hoja levantada sobre el hombro en el
+impulso del ataque mirando al norte) y su borde perdía píxeles contra el contorno del cuerpo;
+sobre la ropa, una pieza sostenida detrás del cuerpo pinta como mucho unos píxeles del ruedo
+de una túnica larga. El arma va sobre todo; el escudo también, salvo mirando al este (en el
+brazo lejano): sobre el torso y bajo el pelo y lo de la cabeza. Al este el arma (mano cercana)
+va sobre el escudo, al oeste bajo él. El pelo va bajo el torso mirando al sur (lo que cae por
+la espalda) y la barba bajo todo mirando al norte. Una falda (túnica, túnica larga) no deja
+que la atraviesen las piernas (`occlude` sin piernas). `humanoid.test.ts` lo mide contra el
+modelo: dibuja la figura entera como una sola (las partes de la pieza con el cuerpo y la ropa
+de tres aspectos como oclusores, un solo buffer de profundidad: lo que se debe ver de la
+pieza) y la compara con las capas apiladas como el cliente, con la pieza en cada lugar de la
+pila, en todas las formas de arma y escudo y en cada frame de quieto, caminar, atacar,
+disparar y conjurar. Ningún otro lugar puede quedar más de un 10 % más cerca del modelo (los
+buenos difieren unos pocos por ciento de un aspecto a otro; el arma bajo el cuerpo, como
+estaba, costaba de 1,3 a 3,7 veces más al oeste y al norte), y ninguna capa de arriba tapa más de 2 px de un arma
+que el modelo muestra. **Un muñeco se desvanece entero:** Pixi multiplica el alfa de un
+contenedor en cada hijo, así que al aparecer, caer, desvanecerse o ser invisible se veían unas
+capas a través de otras (la piel bajo la túnica); las capas van en un contenedor propio que,
+mientras no es opaco, se dibuja a través de un `AlphaFilter` (`CreatureBody.opacity` para la
+invisibilidad del jugador propio).
+
+**Formas, no piezas** (presupuesto de docs/07): no se dibuja una capa por pieza del catálogo
+sino unas pocas formas por lugar, en un tono neutro (`palette.ts` `look*`, hechos con
+`neutral`, que `tools/gemini/import_art.py` no toma como colores de la paleta) que el cliente
+tiñe (un multiply) con el material de la pieza: cabeza (gorro, capucha, yelmo abierto, yelmo
+cerrado, diadema), torso (túnica, túnica larga, cuero, malla, placas), piernas (pantalón,
+grebas), pies (zapatos, botas, escarpes), escudos (rodela, redondo, de cometa, pavés) y armas
+por clase (espada, hacha, maza, daga, lanza, arco, ballesta, vara, varita). Cada pieza de
+`data/items` dice su `worn: {shape, tint}` (las 76 que se ven: el equipo de las bandas del
+lote 11 y las anteriores; las joyas no); una pieza sin `worn` no se dibuja. La capucha
+esconde el pelo y el yelmo cerrado también la barba (`hides` de `data/looks.yaml`).
+
+**El ataque con el arma en la mano:** el golpe del cuerpo es uno solo y cada clase de arma
+gira su empuñadura por frame (`Grip` de `layers.ts`): la espada sigue el arco del brazo, el
+hacha y la maza cargan más atrás y pegan más abajo, la daga y la lanza quedan horizontales y
+apuntan adelante (una estocada), la vara se levanta derecha y se empuja hacia el objetivo. El
+arco va en la mano izquierda, siempre vertical; la ballesta en la derecha, horizontal al
+disparar. El cliente elige el clip por el arma (`attackActionFor`): arco y ballesta
+disparan, varita y vara conjuran, un hechizo conjura siempre y el resto (o el puño) golpea.
+
+**Atuendos:** el atuendo por defecto (`citizen`) da el cuerpo y la ropa de un jugador hasta
+que llegue su aspecto propio (rama `feat/character-look`), y su ropa se ve solo donde no hay
+nada equipado; los atuendos de la tienda son disfraces (`costume: true`) que tapan torso,
+piernas y pies aunque haya armadura (el casco, el escudo y el arma se siguen viendo). El
+color de la tienda (`outfit_color`) tiñe la ropa del atuendo; el estilo del nombre, igual
+que antes. `outfits/<atuendo>/<dir>_0` es un quieto compuesto (la vista previa de la tienda y
+el respaldo del cliente) y cada NPC que es una persona tiene su retrato quieto `npcs/<npc>`
+(el del diálogo): los arma `previews.ts` de las capas con los colores de `data/looks.yaml`.
+
+**NPCs y monstruos humanoides** tienen su `look` en `data/npcs` y `data/monsters` (cuerpo,
+piel, pelo, barba y lo que llevan): los 19 NPCs que eran de LPC y el saqueador, el
+contrabandista, el minero de obsidiana y el minero ahogado. Las composiciones de LPC, las
+paletas `palettes` de `assets/sprites.yaml` y el pack `assets/vendor/ulpc/` (con sus filas de
+`CREDITS.md` y los textos de `/credits`) salieron: nada los usa. El preset `lpc` de
+spritepack queda (es una capacidad de la herramienta, con sus tests).
+
+**Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts sheet --only humans/
+[--ref persona.png]` escribe `build/spritegen/humanoid.<aspecto>.sheet.png` (cada frame de un
+aspecto compuesto, a 4x) y `humanoid.lineup.png` (los aspectos de `REVIEW_LOOKS` quietos,
+caminando y golpeando, a 1x y a 2x sobre la grilla de casillas, al lado del jabalí, el ciervo
+y la persona de referencia). Lo que se aprendió: una serie completa de un material se lee
+como una estatua (el acero de ascua era marrón y parecía cuero: quedó gris cálido); las armas
+son finas a 1x (la espada mide 13 px, el arco 20).
+
+**Pendiente:** las piezas de un juego de armadura son de un solo tinte (el cinturón de la
+coraza, del mismo color); el arco no se tensa con la mano (la cuerda queda recta); los
+jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo (sus
+ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara); la silueta
+translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo.
+
 ## 4. Sensación de movimiento (MOV)
 
 ### Hecho: A6, primera parte (2026-11-18, rama `feat/movement-feel`)
@@ -1187,9 +1368,9 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
 │                                                                    [Contene-] │
 │[Habilidades]          MAPA a pantalla completa                     [ dores  ] │
 │                    (el jugador al centro, sobre la barra)                    │
-│ ┌placa┐ [Chat translúcido]   [Diálogo / tienda / estación abajo al centro]    │
-│ │nombre│                                                                      │
-│ ╭─────╮════ barra de experiencia ═══════════════════════════════════ ╭─────╮ │
+│ [estados] [Chat translúcido]  [Diálogo / tienda / estación abajo al centro]  │
+│ [▣▣▣]                          ┌ Nombre · Nivel 15 ┐                         │
+│ ╭─────╮════ barra de experiencia ═══════ 62 % ═════════════════════ ╭─────╮ │
 │ │ Vida│ F1 … F12 (hotbar)                       [I][K][B][P][G][O]  │Maná │ │
 │ ╰─────╯                                         [⚙][?][M][Salir]    ╰─────╯ │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -1199,7 +1380,10 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
   salen de la barra, con dos pináculos cada uno; pilares de hierro a los lados del medio y
   una cresta de pináculos al centro. Sobre el orbe de vida, una placa con nombre, nivel,
   experiencia y condiciones. La escala de la interfaz la agranda como a las ventanas; a
-  960 px de ancho entra igual (la hotbar pagina sus slots con flechas).
+  960 px de ancho entra igual (la hotbar pagina sus slots con flechas). **Desde el lote 13**
+  (abajo, "Hecho: bandeja de estados y placa del nombre") la placa se fue: el nombre y el
+  nivel van al medio, sobre la barra de experiencia (la placa del nombre reemplaza a la
+  cresta), y sobre el orbe de vida queda la bandeja de estados.
 - **El mapa** es la pantalla sobre la barra: el jugador queda al centro de esa área y nada
   del mapa se esconde bajo la barra. La vista ajustada siempre la cubre a escala entera
   (tabla de abajo).
@@ -1295,7 +1479,9 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
       desde que la ventana mide unos 286 px), y los slots vacíos con su silueta a esa
       escala;
     - mientras se arrastra o se elige (toque) un item, los slots que lo aceptan brillan y
-      el que no lo acepta se tiñe de rojo bajo el puntero;
+      el que no lo acepta se tiñe de rojo bajo el puntero; el de la mochila no hace
+      ninguna de las dos con lo que no se lleva en la espalda: lo guarda en la mochila o,
+      sin ella, en los bolsillos (lote 13);
     - la grilla de la **mochila equipada abajo de la figura**, en la misma ventana (como la
       grilla del inventario de Diablo II), abierta sola al abrir el inventario; los
       contenedores de adentro y los del suelo siguen siendo ventanas propias;
@@ -1547,7 +1733,7 @@ Por impacto en pantalla y por costo:
 | # | Hoy | Qué va | De dónde | Necesita |
 |---|---|---|---|---|
 | 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
-| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
+| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand`; los bordes de todos los suelos naturales, con 4 looks por pieza (lote 13, ART-4) |
 | 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
 | 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar, disparar, conjurar y caer; disparar y conjurar desde `feat/lpc-actions`, ver "Hecho: disparar, conjurar, desvanecerse, pasos y girar") |
 | 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja, desde el 2026-11-18, del motor de sprites: quieto y caminar en cuatro direcciones, flotando) |
@@ -2285,6 +2471,66 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   con el atlas (2,5 s como mucho); si llega después, vuelve a medir y dibujar
   los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
   ~125 con la negrita de 12 px).
+
+### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
+Lo que dijo el dueño de la prueba del 2026-11-19 (Isla de Pruebas, build del lote 11):
+"cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique
+que tengo activo o que se indiquen los estados que tiene el personaje (envenenado, fuego,
+etc...)" y "me gusta la ventanita que dice el nombre y nivel pero creo que podría verse al
+medio, integrada a la barra de experiencia". Antes, las condiciones eran insignias de texto
+en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vio.
+- **Bandeja de estados** (`client/src/ui/StatusTray.tsx`, estado puro en
+  `client/src/state/status.ts`):
+  - Un ícono por condición propia y por estado del servidor (`in_combat`, `pvp_locked`,
+    `protection_zone`: docs/02 "Estados del personaje", docs/05). El orden es fijo: primero
+    lo que daña (veneno, fuego, eléctrico, ralentizado), después los bloqueos de la pelea y
+    la zona, al final lo que ayuda (acelerado, invisible, puntería, saciado); una condición
+    que el cliente no conoce va al final.
+  - Marco verde (`--ui-ok`) si ayuda y rojo (`--ui-danger`) si daña. Los segundos que
+    quedan van escritos en la esquina del ícono (desde 100 s, minutos: "7m"). Parpadea en
+    sus últimos 5 s (`FLASH_MS`), nunca con movimiento reducido.
+  - El tooltip dice el nombre, si es ventaja o perjuicio, qué hace
+    (`condition.<id>.desc`), los golpes que quedan y el tiempo. Sale con el mouse encima,
+    con el foco del teclado (cada ícono es enfocable) o con un toque o un click, que lo
+    abre y lo cierra (los teléfonos no tienen hover); también lo cierran una presión fuera
+    de la bandeja y Escape.
+  - Un temporizador la redibuja cuando cambia un segundo escrito (`nextTrayChange`): el
+    servidor solo manda la lista cuando algo empieza, cambia o termina.
+  - **Escritorio:** abajo a la izquierda, sobre el orbe de vida y sus pináculos (donde
+    estaba la placa), a la izquierda del lugar de fábrica del chat (`--tray-w`, 132 px: el
+    chat empieza 12 px después). Ninguno tapa al otro. Íconos a 2x (32 px en un marco de
+    36), tres por fila; las filas crecen hacia arriba y la de abajo es la más urgente.
+    Mientras se ve un tooltip, la barra sube sobre la capa de ventanas (`z-index` 21 con
+    `:has`), así ninguna ventana lo tapa; si no, la bandeja va bajo las ventanas como el
+    mapa.
+  - **Teléfonos y tablets:** una fila en el encabezado, que sigue siendo de una línea, con
+    los íconos a 1,5x (24 px) y el tooltip colgando bajo el encabezado. La fila toma el
+    lugar que deja la línea, nunca menos de un ícono; lo que no entra pasa a una segunda
+    línea recortada, así se ven solo íconos enteros, los más urgentes primero. En un
+    teléfono vertical de 390 px entra uno; acostado o en una tablet, los diez.
+  - **Íconos:** pixel art propio de spritegen, `ui/status/<id>`
+    (`tools/spritegen/src/recipes/ui.ts`, `STATUS_ART`): mapas de 14x14 escritos a mano,
+    contorneados a 16x16 dentro de `UI_STATUS_BOX` (8, 8, 16, 16) de un sprite de 32x32.
+    Gota de veneno con burbujas, llama, rayo, caracol, bota alada, ojo tachado, diana con
+    una flecha, muslo asado, espadas cruzadas de acero, candado y escudo azul con cruz.
+    Nada calcado de otros juegos. El atlas suma 11 sprites de 32x32. Sin el sprite (o con
+    un placeholder) la bandeja escribe la inicial del nombre.
+- **Placa del nombre** (`ExperienceBar` de `client/src/ui/Vitals.tsx`):
+  - Nombre y nivel ("Nivel 15") centrados sobre la barra de experiencia, en una placa de
+    piedra con filo dorado parada sobre la banda de hierro, con un pináculo en cada
+    hombro (reemplaza a la cresta del centro).
+  - La barra (11 px) lleva escrito el porcentaje. Su tooltip (`title` y `aria-valuetext`)
+    da la experiencia exacta y lo que falta para el nivel siguiente, con la curva de
+    `balance.yaml experience` (`content.experience`, `client/src/state/experience.ts`, la
+    misma fórmula que `content.Experience.TotalFor`); en el nivel máximo, "nivel máximo".
+  - El orbe de vida queda solo. Los test ids `health`, `mana`, `level` (ahora "Nivel 15") y
+    `experience` (ahora la barra) siguen; `conditions` es la bandeja. El resaltado
+    `stats` del tutorial cae en la placa y la barra (`.xp`; la placa sobresale de su caja
+    y hereda su contorno).
+- **Vista previa:** escena `status` (diez condiciones y estados, dos parpadeando y el
+  tooltip del veneno abierto) en `make ui-preview`; `game` lleva la zona de protección y la
+  comida, y `danger` el veneno, el combate y una aceleración que se acaba. Se revisaron a
+  1920x1080, 1280x800, 960x700, teléfono vertical y horizontal y tablet.
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**

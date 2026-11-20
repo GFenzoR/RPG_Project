@@ -1,6 +1,16 @@
 id: obsidian_delver
 name: monster.obsidian_delver.name
-sprite: creatures/obsidian_delver
+look:
+  body: sturdy
+  skin: ashen
+  hair: crop
+  hair_color: black
+  beard: full
+  worn:
+    torso: { shape: mail, tint: iron }
+    legs: { shape: trousers, tint: grey }
+    feet: { shape: boots, tint: tar }
+    weapon: { shape: axe, tint: iron }
 health: 450
 experience: 300
 speed: 195

@@ -2,6 +2,8 @@
 // the reward chests (docs/02 "Libros y cofres"), each with its item: a chest id is the
 // storage key chest.<id> of every character that opened it.
 // Append-only: a number or a chest id is never changed or reused, even after its item is removed.
+// An item deleted on purpose is listed under `retired` (make gen-ids RETIRE=1): its number
+// stays taken, without the warning a deleted item gives.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -28,6 +30,18 @@ function lockItems(data: unknown): IdsLock {
   const out: IdsLock = {};
   for (const [k, v] of Object.entries(items)) if (typeof v === "number") out[k] = v;
   return out;
+}
+
+/** The comment over the retired items of the lock. */
+const RETIRED_HEADER = `
+# Retired items: deleted from data/items on purpose (make gen-ids RETIRE=1); their numbers
+# under items stay taken forever.
+`;
+
+function lockRetired(data: unknown): string[] {
+  if (typeof data !== "object" || data === null) return [];
+  const list = (data as Record<string, unknown>)["retired"];
+  return Array.isArray(list) ? list.filter((v): v is string => typeof v === "string") : [];
 }
 
 function lockChests(data: unknown): ChestsLock {
@@ -79,12 +93,21 @@ export function checkIdsLock(
   for (const id of itemIds) {
     if (!(id in items)) at(["items"], `item "${id}" has no numeric id; run \`make gen-ids\``);
   }
+  const retired = lockRetired(lock.data);
   for (const id of Object.keys(items)) {
-    if (!defined.has(id))
+    if (!defined.has(id) && !retired.includes(id))
       at(
         ["items", id],
-        `"${id}" is not defined in data/items (retired id; keep it, never reuse the number)`,
+        `"${id}" is not defined in data/items (retired id? keep it, never reuse the number; make gen-ids RETIRE=1 lists it under retired)`,
         "warning",
+      );
+  }
+  for (const [i, id] of retired.entries()) {
+    if (!(id in items)) at(["retired", i], `retired "${id}" has no number under items`);
+    else if (defined.has(id))
+      at(
+        ["retired", i],
+        `"${id}" is in data/items again: run \`make gen-ids\` (it leaves retired)`,
       );
   }
   const locked = lockChests(lock.data);
@@ -169,16 +192,25 @@ function readItems(dataDir: string): { ids: string[]; chests: [string, string][]
 }
 
 /**
- * The lock's text: the chests (if any) in the order they came, then the items by number,
- * last, so that new items keep going at the end of the file.
+ * The lock's text: the retired items (if any) by number, the chests (if any) in the order
+ * they came, then the items by number, last, so that new items and chests keep going at
+ * the end of their lists.
  */
-export function renderIdsLock(items: IdsLock, chests: ChestsLock = {}): string {
+export function renderIdsLock(
+  items: IdsLock,
+  chests: ChestsLock = {},
+  retired: readonly string[] = [],
+): string {
   const lines = Object.entries(items)
     .sort((a, b) => a[1] - b[1])
     .map(([id, num]) => `  ${id}: ${num}`);
   const chestLines = Object.entries(chests).map(([cid, item]) => `  ${cid}: ${item}`);
+  const gone = [...retired]
+    .sort((a, b) => (items[a] ?? 0) - (items[b] ?? 0))
+    .map((id) => `  - ${id}`);
   return (
     HEADER +
+    (gone.length === 0 ? "" : `${RETIRED_HEADER}retired:\n${gone.join("\n")}\n`) +
     (chestLines.length === 0 ? "" : `${CHESTS_HEADER}chests:\n${chestLines.join("\n")}\n`) +
     `items:${lines.length === 0 ? " {}" : `\n${lines.join("\n")}`}\n`
   );
@@ -187,11 +219,17 @@ export function renderIdsLock(items: IdsLock, chests: ChestsLock = {}): string {
 /**
  * Assigns the next free numbers to new items, appends the new chests and rewrites the lock
  * canonically. A chest whose id is locked to another item, or whose item is locked under
- * another chest id, is not added: that is a reuse or a rename, which validate reports.
+ * another chest id, is not added: that is a reuse or a rename, which validate reports. With
+ * `retire`, every locked item no longer in data/items goes under `retired` (deleted on
+ * purpose); an item back in data/items always leaves it.
  */
-export function generateIdsLock(root: string): {
+export function generateIdsLock(
+  root: string,
+  opts: { retire?: boolean } = {},
+): {
   added: string[];
   chests: string[];
+  retired: string[];
   text: string;
 } {
   const dataDir = join(root, "data");
@@ -216,7 +254,16 @@ export function generateIdsLock(root: string): {
     lockedItems.add(item);
     addedChests.push(cid);
   }
-  const text = renderIdsLock(items, chests);
+  const defined = new Set(data.ids);
+  const retired = lockRetired(lock).filter((id) => id in items && !defined.has(id));
+  const newlyRetired: string[] = [];
+  if (opts.retire)
+    for (const id of Object.keys(items))
+      if (!defined.has(id) && !retired.includes(id)) {
+        retired.push(id);
+        newlyRetired.push(id);
+      }
+  const text = renderIdsLock(items, chests, retired);
   writeFileSync(lockPath, text);
-  return { added, chests: addedChests, text };
+  return { added, chests: addedChests, retired: newlyRetired, text };
 }

@@ -97,6 +97,59 @@ describe("clips", () => {
     expect(out.action).toBe("walk");
   });
 
+  it("plays an engine humanoid's walk at its stride: a cycle per tile, longer facing north or south", () => {
+    // tools/spritegen specs/humanoid: 8 frames, 8 per tile; 13.86 facing n or s (the 3/4
+    // view foreshortens the model's depth, not the map's tiles).
+    const HUMAN: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS },
+      },
+    };
+    const east: number[] = [];
+    for (let at = 0; at < 600; at += 50) {
+      const { s, in_, out } = setup();
+      east.push(stepAt(s, HUMAN, in_, out, 400, at).frame);
+    }
+    // A frame every 50 ms of a 400 ms step, across two chained steps: never a repeat
+    // or a jump back, never the idle pose.
+    expect(east).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3]);
+    const { s, in_, out } = setup();
+    stepAt(s, HUMAN, in_, out, 400, 0);
+    in_.dir = "s";
+    in_.now = 200;
+    // Half a tile facing south: 13.86 / 2 frames in.
+    expect(animate(s, HUMAN, in_, out).frame).toBe(6);
+  });
+
+  it("turns mid-walk without the legs jumping: the cycle goes on from the frame drawn", () => {
+    const HUMAN: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.walkMs = 400;
+    const at = (step: number, t: number, dir: "e" | "n"): number => {
+      in_.dir = dir;
+      in_.walkStart = step * 400;
+      in_.now = step * 400 + t * 400;
+      return animate(s, HUMAN, in_, out).frame;
+    };
+    // Five tiles east: a cycle each, the last frame of the fifth is 7.
+    for (let step = 0; step < 5; step++) for (const t of [0, 0.5]) at(step, t, "e");
+    expect(at(4, 0.99, "e")).toBe(7);
+    // The sixth faces north: it starts on frame 0, the one after 7 (counting steps, 5 x
+    // 13.86 put it on frame 5), and plays 13.86 frames over its tile.
+    expect(at(5, 0, "n")).toBe(0);
+    expect(at(5, 0.5, "n")).toBe(6);
+    // And back east: from where the northern step left it (13.86 frames on), not a jump.
+    expect(at(6, 0, "e")).toBe(Math.floor(13.86) % 8);
+  });
+
   it("holds the last walk frame between chained steps, then idles (ANI-3)", () => {
     const { s, in_, out } = setup();
     stepAt(s, LPC, in_, out, 400, 300);

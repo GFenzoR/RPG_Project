@@ -125,6 +125,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.equipCosmetic(ctx, p, m.EquipCosmetic.GetCosmeticId())
 	case *pb.ClientMessage_UnequipCosmetic:
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
+	case *pb.ClientMessage_SetLook:
+		w.setLook(ctx, p, m.SetLook)
 	case *pb.ClientMessage_Logout:
 		// No logout in the middle of a fight (linkdead.go): the PvP lock (T5.2) or
 		// travel.combat_block_ms since p fought a monster or took damage. Closing the
@@ -485,11 +487,12 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushMapNotices(ctx.Tick)
 	w.pruneShopPending(ctx.Tick)
 	w.flushEconomy(ctx)
+	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
 		w.flushQuestLog(p) // after the recheck: its changes are in this one
-		w.sendConditions(p)
+		w.sendConditions(ctx.Tick, p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)
 		}
