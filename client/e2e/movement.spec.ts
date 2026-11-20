@@ -111,7 +111,12 @@ async function standing(page: Page): Promise<Tile> {
         // step's end time, which can come between two frames, and a trail read before the
         // next frame (motion) would end a fraction of a tile short of the tile.
         at =
-          s && !s.pending && !s.walking && drawn && drawn.x === s.x && drawn.y === s.y
+          s &&
+          !s.pending &&
+          !s.walking &&
+          drawn &&
+          Math.abs(drawn.x - s.x) < 1e-6 &&
+          Math.abs(drawn.y - s.y) < 1e-6
             ? { x: s.x, y: s.y, z: s.z }
             : undefined;
         return at !== undefined;

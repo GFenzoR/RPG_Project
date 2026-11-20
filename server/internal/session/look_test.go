@@ -420,8 +420,15 @@ func TestDeathDropShowsInTheLook(t *testing.T) {
 	for _, d := range find(evs, (*pb.ServerMessage).GetCreatureDisappear) {
 		gone = gone || d.GetId() == pA.ID()
 	}
-	if len(looks) == 0 && !gone {
-		t.Fatalf("the watcher of the death got neither a CreatureLook nor a CreatureDisappear: %v", kinds(evs))
+	// The look is flushed at the end of the tick, when the player already woke at the
+	// temple: the watcher of the death sees it disappear and gets no CreatureLook of it.
+	if !gone {
+		t.Fatalf("the watcher of the death got no CreatureDisappear: %v", kinds(evs))
+	}
+	for _, l := range looks {
+		if l.GetId() == pA.ID() {
+			t.Fatalf("the watcher of the death got a CreatureLook of the dead player: %v", l)
+		}
 	}
 }
 
