@@ -15,7 +15,7 @@
   book:
     title: book.book_lantern_rowers.title
     pages: [book.book_lantern_rowers.page_1, book.book_lantern_rowers.page_2, book.book_lantern_rowers.page_3]
-  notes: "Temple of the Lantern, Puerto (3152,6381,7), north-west corner; and the temple of Thimblewick (2099,2084,7)."
+  notes: "Temple of the Lantern, Lanternby (3152,6381,7), north-west corner; and the temple of Thimblewick (2099,2084,7)."
 
 - id: book_root_below
   kind: decoration
@@ -85,7 +85,7 @@
   book:
     title: book.scroll_dawn_manifest.title
     pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
-  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of Thimblewick (2097,2084,7)."
+  notes: "Among the cargo crates of the wreck of the Late Dawn, Velmara (3119,6328,7); and the temple of Thimblewick (2097,2084,7)."
 
 - id: scroll_burnt_oar_log
   kind: decoration
@@ -96,7 +96,7 @@
   book:
     title: book.scroll_burnt_oar_log.title
     pages: [book.scroll_burnt_oar_log.page_1, book.scroll_burnt_oar_log.page_2, book.scroll_burnt_oar_log.page_3]
-  notes: "The smugglers' cave under the east coast of the Bosque, west chamber (4219,6136,8)."
+  notes: "The smugglers' cave under the east coast of Selvaine, west chamber (4219,6136,8)."
 
 - id: scroll_drowned_wall
   kind: decoration
@@ -107,7 +107,7 @@
   book:
     title: book.scroll_drowned_wall.title
     pages: [book.scroll_drowned_wall.page_1, book.scroll_drowned_wall.page_2, book.scroll_drowned_wall.page_3]
-  notes: "The flooded gallery at the far end of the Puerto mine (3194,6287,8), by its chest."
+  notes: "The flooded gallery at the far end of the Velmara mine (3194,6287,8), by its chest."
 
 # ---- Reward chests: using one gives its rewards once per character (storage chest.<id>),
 # or nothing while they do not all fit. Rewards sized to the area's band (docs/02 "Catálogo
@@ -126,7 +126,7 @@
       - { item: lesser_temper_stone, count: 3 }
       - { item: seaweed_poultice, count: 5 }
       - { item: plank_shield, count: 1 } # band 2
-  notes: "Far end of the Puerto mine, in the alcove of the flooded gallery past the drowned miners (3193,6286,8)."
+  notes: "Far end of the Velmara mine, in the alcove of the flooded gallery past the drowned miners (3193,6286,8)."
 
 - id: chest_puerto_grove
   kind: decoration
@@ -142,7 +142,7 @@
       - { item: lesser_temper_stone, count: 2 }
       - { item: seaweed_poultice, count: 3 }
       - { item: sailcloth_cap, count: 1 } # band 1
-  notes: "Under the oaks of the north-west corner of the Puerto forest, off every road (3107,6353,7)."
+  notes: "Under the oaks of the north-west corner of the Velmara forest, off every road (3107,6353,7)."
 
 - id: chest_bosque_cave
   kind: decoration
@@ -158,7 +158,7 @@
       - { item: greater_temper_stone, count: 2 }
       - { item: health_draught, count: 3 }
       - { item: stagleather_hood, count: 1 } # band 3
-  notes: "The crawlers' nest of the smugglers' cave, Bosque, south-east corner (4252,6170,8)."
+  notes: "The crawlers' nest of the smugglers' cave, Selvaine, south-east corner (4252,6170,8)."
 
 - id: chest_volcan_mine
   kind: decoration

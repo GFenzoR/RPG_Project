@@ -304,7 +304,7 @@ npc.volcan_hunter.opt_report_wyrmlings: "I brought wyrmlings down from the crate
 npc.volcan_hunter.wyrmlings_paid: "Eight wyrmlings... and you still smell of smoke. You earned it."
 npc.volcan_hunter.opt_mountain: "Why does Cinderstead pay?"
 npc.volcan_hunter.mountain: "Because since the old forge woke down below, the mountain keeps spawning beasts, and the guard can't keep up. Better to pay those who can hunt than to bury those who can't."
-# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md).
+# Thimblewick (sandbox island, docs/16-probar-el-juego.md).
 npc.pruebas_trainer.name: "Irene Ensayo, instructor"
 npc.pruebas_trainer.greet: "Welcome to Thimblewick, the sandbox isle, {name}. Nothing here is for real: it is for trying things out. What do you need?"
 npc.pruebas_trainer.opt_quest: "Do you have a task for me?"

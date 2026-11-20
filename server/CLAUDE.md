@@ -478,7 +478,7 @@ server/
   `monsterKind` y NPC se arman una vez y se comparten entre `Creature`s (nunca se modifican
   después de emitidos). Ninguna regla del juego lee el aspecto.
 
-- **Islas y acciones de desarrollo (Isla de Pruebas, `docs/16`):**
+- **Islas y acciones de desarrollo (Thimblewick, `docs/16`):**
   - Una isla `dev_only` de `world.yaml` solo entra a `world.bin` con `mapcompile -dev`, marcada con el bit dev de la isla (`world.bin` v6, `Map.DevIslands`).
   - `loadWorld` (`cmd/gameserver`) no arranca un mundo con islas dev si `RPG_ENV` es de producción, con la misma lectura que el proveedor de pagos falso.
   - Las acciones de diálogo de solo desarrollo (`train_skill`, `restore_mana`; lista `DEV_ONLY_ACTIONS` en `packages/content-schema`), y todas las de un NPC con `dev_only: true` (`content.NPC.DevOnly`, la instructora: su oro y experiencia gratis), tienen tres capas:

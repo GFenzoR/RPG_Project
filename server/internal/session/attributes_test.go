@@ -151,7 +151,7 @@ func TestEveryCreatedEquipableRollsOneAttribute(t *testing.T) {
 	}
 }
 
-// An NPC shop sells equipables that roll (the Isla de Pruebas' merchant too) and buys
+// An NPC shop sells equipables that roll (Thimblewick's merchant too) and buys
 // them back at the base price whatever their attribute; a dialog's give_item rolls too
 // (the captain's chapter 1 kit).
 func TestShopAndDialogItemsRoll(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world/compile"
 )
 
-// The walk through the Isla de Pruebas (docs/16-probar-el-juego.md, "Qué probar, en
+// The walk through Thimblewick (docs/16-probar-el-juego.md, "Qué probar, en
 // orden") played as a player would, on the real world compiled with the dev islands and
 // the real content of data/, as make play starts the server: new characters wake up at
 // the sandbox island's temple. Every step goes through client messages (talk, walk, buy,
@@ -863,7 +863,7 @@ func TestSandboxFerry(t *testing.T) {
 		t.Fatal("the character left the world when it died")
 	}
 	if p.Pos() != sbTemple {
-		t.Fatalf("died on the Isla Volcánica: woke up at %v, want the sandbox temple", p.Pos())
+		t.Fatalf("died on Karvask: woke up at %v, want the sandbox temple", p.Pos())
 	}
 }
 

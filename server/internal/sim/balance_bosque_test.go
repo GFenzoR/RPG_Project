@@ -1,6 +1,6 @@
 package sim_test
 
-// Balance check for the Isla del Bosque bestiary (levels 10-30, Chapter 2, T3.6), with the
+// Balance check for the Selvaine bestiary (levels 10-30, Chapter 2, T3.6), with the
 // same Monte Carlo duel as TestPuertoBalance and the catalog's kit (kitFor: band 3, whose
 // weapons Puerto sells from level 10 and whose armor the forest town sells or crafts).
 //

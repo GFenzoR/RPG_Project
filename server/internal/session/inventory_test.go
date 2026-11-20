@@ -321,7 +321,7 @@ func TestUseAndLook(t *testing.T) {
 	}
 }
 
-// A fixed map item (a sign of Brasal, an anvil) is looked at like the ground: its name,
+// A fixed map item (a sign of Cinderstead, an anvil) is looked at like the ground: its name,
 // whose description the client adds (a sign's text), and no weight. A fixed container
 // still tells its slots.
 func TestLookAtFixedItem(t *testing.T) {

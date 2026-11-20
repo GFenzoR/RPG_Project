@@ -26,7 +26,7 @@ item.wolf_pelt.name: "wolf pelt"
 item.wolf_pelt.desc: "A thick grey pelt. Tanners pay for it."
 item.raw_fish.name: "raw fish"
 item.raw_fish.desc: "Fresh out of the water. Better grilled, but it fills you up."
-# Isla del Puerto
+# Velmara
 item.rusty_cutlass.name: "rusty cutlass"
 item.rusty_cutlass.desc: "The rust has not quite dulled its edge."
 item.boarding_saber.name: "boarding saber"
@@ -291,7 +291,7 @@ item.embersteel_shield.name: "embersteel shield"
 item.embersteel_shield.desc: "Embersteel over an elm core, lined with salamander scales."
 item.wyrmscale_mail.name: "wyrmscale mail"
 item.wyrmscale_mail.desc: "Wyrmling scales sewn over embersteel. Light for what it takes."
-# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md).
+# Thimblewick (sandbox island, docs/16-probar-el-juego.md).
 item.pruebas_gate.name: "practice gate"
 item.pruebas_gate.desc: "An oak door with a shiny brass lock. Someone carved into the frame: \"for practising with keys\"."
 item.pruebas_gate_open.name: "open practice gate"

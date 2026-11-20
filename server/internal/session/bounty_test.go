@@ -12,7 +12,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// The hunting tasks of Raigal and Brasal (lote 12, docs/02 "Tareas"): repeatable kill
+// The hunting tasks of Ivernel and Cinderstead (lote 12, docs/02 "Tareas"): repeatable kill
 // quests of data/quests/bounty_*.yaml that the two hunters give from their boards, every
 // 20 hours, played with the content of data/.
 
@@ -37,7 +37,7 @@ func (s *sideQuester) board(hunter string) *pb.DialogOpen {
 	return d
 }
 
-// The crawler task of Raigal with real kills and the real clock: offered from level 22;
+// The crawler task of Ivernel with real kills and the real clock: offered from level 22;
 // the 30th crawler moves it to the report; the hunter pays what data/ says; then the
 // board only shows the wait (and the quest log when it comes back) until 20 hours after
 // the hand-in, when it is offered again and starts over from the hunt with no kill counted.

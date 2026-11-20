@@ -172,6 +172,26 @@ describe("place names", () => {
     }
   });
 
+  it("no content or catalog file keeps a retired name, comments and notes included", () => {
+    // The game text is checked above; this keeps the internal notes and comments of
+    // data/ and i18n/ in step, so the next reader does not learn the old names.
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith(".yaml")) files.push(p);
+      }
+    };
+    walk(join(REPO, "data"));
+    walk(join(REPO, "i18n"));
+    expect(files.length).toBeGreaterThan(20);
+    for (const f of files) {
+      const text = readFileSync(f, "utf8");
+      for (const old of RETIRED) expect(text.includes(old), `${f} still says "${old}"`).toBe(false);
+    }
+  });
+
   it("no place name borrows a Tolkien name or word", () => {
     for (const lang of LANGS) {
       for (const key of placeKeys(lang)) {

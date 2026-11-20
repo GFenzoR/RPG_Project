@@ -12,7 +12,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// chapterTwoHarness is dataHarness with the Raigal NPCs of the Isla del Bosque (T3.6)
+// chapterTwoHarness is dataHarness with the Ivernel NPCs of Selvaine (T3.6)
 // placed next to Puerto's, and spawns of the Chapter 2 monsters.
 func chapterTwoHarness(t *testing.T) *harness {
 	t.Helper()

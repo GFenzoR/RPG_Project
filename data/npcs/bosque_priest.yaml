@@ -14,7 +14,7 @@ look:
     feet: { shape: shoes, tint: tan_leather }
 notes: >-
   Temple of the Root in Ivernel (respawn point of the island). Heals for free and sells the
-  same five blessings as Lanternby temple (they are the same blessings, so the same
+  same five blessings as the Lanternby temple (they are the same blessings, so the same
   price, growing with the level: docs/02 "Muerte").
 dialog:
   start: greet

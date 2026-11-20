@@ -84,7 +84,7 @@ quest.bounty_golems.step_report: "Collect the bounty from Orso Pedernal, in the 
 quest.bounty_wyrmlings.name: "Hunting task: wyrmlings"
 quest.bounty_wyrmlings.step_hunt: "The Cinderstead ledger pays for the wyrmlings that come down from Skarrag crater. Kill 8 ember wyrmlings."
 quest.bounty_wyrmlings.step_report: "Collect the bounty from Orso Pedernal, in the Cinderstead plaza."
-# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md).
+# Thimblewick (sandbox island, docs/16-probar-el-juego.md).
 quest.pruebas_rats.name: "Practice rats"
 quest.pruebas_rats.step_hunt_rats: "Hunt three bilge rats in the first pen of the hunting trail, north of the temple of Thimblewick."
 quest.pruebas_rats.step_report: "Go back to Irene Ensayo, in the temple."

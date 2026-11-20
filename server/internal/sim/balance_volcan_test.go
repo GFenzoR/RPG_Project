@@ -1,8 +1,8 @@
 package sim_test
 
-// Balance check for the Isla Volcánica bestiary (levels 25-60, Chapter 3, T5.5), with the
+// Balance check for the Karvask bestiary (levels 25-60, Chapter 3, T5.5), with the
 // same Monte Carlo duel as TestPuertoBalance and the catalog's kit (kitFor: band 4 from
-// level 30, the embersteel Brasal sells or smiths).
+// level 30, the embersteel Cinderstead sells or smiths).
 //
 // Targets: each common monster lasts 5-15 s and costs 10-40 % of max health at its target
 // level; XP grows with the target level (and beyond Bosque's); hunting the island's best

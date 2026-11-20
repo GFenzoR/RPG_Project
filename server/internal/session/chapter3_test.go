@@ -19,7 +19,7 @@ import (
 // (27–33 × 41–47 inside rock walls), where the warden stands.
 var forgeGate = pos(30, 40)
 
-// chapterThreeHarness is dataHarness with the Brasal NPCs of the Isla Volcánica (T5.5),
+// chapterThreeHarness is dataHarness with the Cinderstead NPCs of Karvask (T5.5),
 // the forest druid (who keeps the ember root), spawns of the Chapter 3 monsters and the
 // forge room with the real forge gate, locked with the ember key (docs/02 "Puertas con
 // llave").
@@ -322,7 +322,7 @@ func TestChapterThreePlayable(t *testing.T) {
 	if s := step("ch3_warden"); s != "return_seal" || h.w.CountItem(p, "forge_seal") != 1 {
 		t.Fatalf("after the warden the step is %q, %d seals", s, h.w.CountItem(p, "forge_seal"))
 	}
-	give("forge_seal", 0) // back to Brasal
+	give("forge_seal", 0) // back to Cinderstead
 	money, xp = h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_warden"))
@@ -341,7 +341,7 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	// Handed in, the seal is done with: another warden gives no more (content audit m9).
 	var warden *session.Monster
-	h.sim.RunUntil(func() bool { // Brasal is out of sight of the forge: it respawns
+	h.sim.RunUntil(func() bool { // Cinderstead is out of sight of the forge: it respawns
 		for _, m := range h.w.Monsters() {
 			if m.Kind() == "slagbound_warden" {
 				warden = m
@@ -364,10 +364,10 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 }
 
-// The Brasal smith sells every line of its shop to a normal pack (paying breaks the big
+// The Cinderstead smith sells every line of its shop to a normal pack (paying breaks the big
 // coins and the change fits) and buys the island's materials; the priest heals and
 // blesses like the other temples; the captain has a travel node.
-func TestBrasalNPCs(t *testing.T) {
+func TestCindersteadNPCs(t *testing.T) {
 	h := chapterThreeHarness(t)
 	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))

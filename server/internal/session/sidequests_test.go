@@ -13,7 +13,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// The side quests of the Isla del Bosque and the Isla Volcánica (lote 12, docs/02
+// The side quests of Selvaine and Karvask (lote 12, docs/02
 // "Quests secundarias"), each played from its offer to its rewards with the content of
 // data/, in the style of chapter2_test.go.
 
@@ -25,7 +25,7 @@ var (
 	craterAt = pos(50, 40)
 )
 
-// sideQuestHarness is dataHarness with the side quests' NPCs of Raigal and Brasal placed in
+// sideQuestHarness is dataHarness with the side quests' NPCs of Ivernel and Cinderstead placed in
 // a row along y = 10 (sideTalk stands two tiles south of one to talk), their reach places
 // moved onto the test map and spawns of the monsters they ask for, as many as a test kills
 // (a watched spawn does not respawn). The attribute pool is on: the equipable rewards roll.

@@ -15,7 +15,7 @@ package sim_test
 //   - casts its best self-heal under half health (the healing group is apart), and under a
 //     third, when it cannot, drinks the biggest health potion the shops of its level sell
 //     that the wound takes whole (the seaweed poultice; the health draught from the Bosque,
-//     level 12; the concentrated one from Brasal, level 30);
+//     level 12; the concentrated one from Cinderstead, level 30);
 //   - regenerates as its vocation, with the server's integer formula and the bonus of
 //     balance.yaml well_fed (content.Regen.Tick): every hunter eats ship's biscuit, and
 //     pays for it, the whole hunt; and drinks mana draughts with the consumable cooldown.
@@ -286,11 +286,11 @@ func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunte
 		h.regenPct = c.RegenPct
 	}
 	h.draught = d.item(t, "mana_draught")
-	if level >= 30 { // Brasal sells the concentrated one: a hunter there carries it
+	if level >= 30 { // Cinderstead sells the concentrated one: a hunter there carries it
 		h.draught = d.item(t, "concentrated_mana_draught")
 	}
 	// Health potions by island, like the mana draughts: the Bosque sells the health
-	// draught (its hunts start at level 11-12), Brasal also the concentrated one.
+	// draught (its hunts start at level 11-12), Cinderstead also the concentrated one.
 	if level >= 30 {
 		h.potions = append(h.potions, d.item(t, "concentrated_health_draught"))
 	}

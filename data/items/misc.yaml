@@ -507,7 +507,7 @@
   notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.
 
 # Mana draughts (content audit M2, 2026-11): the casters' fuel, sold in every town (a
-# small one in Puerto, Bosque and Cinderstead, a concentrated one in Cinderstead). Nobody buys them
+# small one in Lanternby, Ivernel and Cinderstead, a concentrated one in Cinderstead). Nobody buys them
 # back. Our own numbers: about 0.4 copper per point of mana (docs/02 "Economía").
 - id: mana_draught
   kind: consumable
@@ -533,9 +533,9 @@
   consumable: { heal_mp: 125 }
   value: 50
 
-# Health draughts (spell progression, 2026-11): past the Puerto the seaweed poultice (40)
+# Health draughts (spell progression, 2026-11): past Velmara the seaweed poultice (40)
 # no longer keeps up with a body of 300-800 health. Sold like the mana draughts, by island:
-# the small one in the Bosque and in Cinderstead, the concentrated one only in Cinderstead. Nobody
+# the small one in Ivernel and in Cinderstead, the concentrated one only in Cinderstead. Nobody
 # buys them back. Our own numbers: about 0.5 copper per point of health, between the
 # poultice (0.6) and the mana draughts (0.4) (docs/02 "Economía").
 - id: health_draught
