@@ -13,7 +13,7 @@ import (
 // rewards once per character. The character's storage remembers it (content.ChestKey),
 // so the flag and the items are in the same snapshot: a save, a logout or a disconnect in
 // the same tick never keeps one without the other. Nothing is given unless all of it fits
-// (capacity and backpack, as canReceive): the player frees room and uses it again.
+// (capacity, backpack and pockets, as canReceive): the player frees room and uses it again.
 
 const (
 	msgChestFound  = "chest.found"

@@ -253,8 +253,9 @@ func TestSetQuestStepOntoReach(t *testing.T) {
 }
 
 // A step onto stairs inside a reach place does not count: the player never stands on
-// the entrance, it lands below. Its reward, which does not fit, would drop on the stairs.
-// Walking into the place afterwards does count, and the reward lands on that tile.
+// the entrance, it lands below. Its reward, which does not fit (capacity 0: neither the
+// backpack nor the pockets take it), would drop on the stairs. Walking into the place
+// afterwards does count, and the reward lands on that tile.
 func TestReachSkipsPortalEntrances(t *testing.T) {
 	q, err := content.ParseQuest([]byte(`
 id: landing
@@ -268,8 +269,11 @@ rewards:
 		t.Fatal(err)
 	}
 	h := reachHarness(t, func(c *session.Config) { c.Quests = content.Quests{q.ID: q} })
-	cl, p := h.join("Stairs", at(4, 3)) // no backpack: the sword goes to the pockets
-	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "landing") }))
+	cl, p := h.join("Stairs", at(4, 3))
+	h.sim.Command(gameFunc(func() {
+		h.w.SetCapacityForTest(p, 0) // the sword fits nowhere: it goes to the floor
+		h.w.StartQuestForTest(p, "landing")
+	}))
 	h.sim.Step()
 	state := func() quest.State { s, _ := h.w.QuestState(p, "landing"); return s }
 	if state() != quest.InProgress {
@@ -282,8 +286,11 @@ rewards:
 	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(5, 3, 7)) }))
 	h.sim.Step()
 	h.step(cl, NE) // (6,2,7): in the place
-	if p.Pos() != at3(6, 2, 7) || state() != quest.Completed || h.w.CountItem(p, "test_sword") != 1 {
-		t.Fatalf("walked in at %v: quest %v, %d swords carried", p.Pos(), state(), h.w.CountItem(p, "test_sword"))
+	landed := h.w.GroundAt(at3(6, 2, 7))
+	if p.Pos() != at3(6, 2, 7) || state() != quest.Completed || len(landed) != 1 || landed[0].Def().ID != "test_sword" ||
+		h.w.CountItem(p, "test_sword") != 0 || len(h.w.GroundAt(stairsDown)) != 0 {
+		t.Fatalf("walked in at %v: quest %v, %d items on the tile, %d swords carried, %d items on the stairs",
+			p.Pos(), state(), len(landed), h.w.CountItem(p, "test_sword"), len(h.w.GroundAt(stairsDown)))
 	}
 }
 

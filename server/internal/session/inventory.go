@@ -694,8 +694,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	// T5.3 fail-safe: something p carries goes where no save has it (hold.go gaveAway).
 	gave := it.carriedBy() == p && w.publicGround(to)
 
-	// Run it: take the units out of their place and put them in the new one.
+	// Run it: take the units out of their place and put them in the new one (one
+	// Inventory for both ends: the pockets or a slot on each side).
 	before := p.carried()
+	release := w.holdInventory(p)
 	moving := it
 	if count < it.count {
 		it.count -= count
@@ -715,6 +717,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		w.attach(p, moving, to)
 		w.changedPlace(p, to)
 	}
+	release()
 	if leaving {
 		w.leftHouse(p, landed.root())
 	}
@@ -851,9 +854,14 @@ func (w *World) changedPlace(p *Player, pl place) {
 	}
 }
 
-// sendInventory sends p its equipment and what its pockets hold.
+// sendInventory sends p its equipment and what its pockets hold, or marks it due while a
+// holdInventory is open.
 func (w *World) sendInventory(p *Player) {
 	p.questDirty = true
+	if p.invHold > 0 {
+		p.invDue = true
+		return
+	}
 	inv := &pb.Inventory{}
 	for slot, it := range p.equip {
 		if it != nil {
@@ -864,6 +872,20 @@ func (w *World) sendInventory(p *Player) {
 		inv.Pockets, inv.PocketSlots = pk.stacks(), uint32(pk.def.Slots())
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Inventory{Inventory: inv}})
+}
+
+// holdInventory holds p's Inventory back until the returned release runs: one change that
+// touches the equipment or the pockets more than once (a move from the pockets to a slot,
+// a give of several stacks) sends one Inventory, with the state at the release, instead
+// of one per place. Holds nest; only the outermost release sends.
+func (w *World) holdInventory(p *Player) (release func()) {
+	p.invHold++
+	return func() {
+		if p.invHold--; p.invHold == 0 && p.invDue {
+			p.invDue = false
+			w.sendInventory(p)
+		}
+	}
 }
 
 // containerChanged sends the content of c to everyone who has it open; what the pockets

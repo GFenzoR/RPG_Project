@@ -127,6 +127,10 @@ type Player struct {
 	reachFloors   uint16
 	reachStale    bool
 	questLogDirty bool
+	// An Inventory held back (holdInventory): above 0, sendInventory only marks it due,
+	// and the outermost release sends one with the state by then.
+	invHold int
+	invDue  bool
 
 	// Gathering (T1.12): the first tick p can gather again, the tile p has been
 	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet) and its last

@@ -613,6 +613,7 @@ func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 	p.questDirty = true
 	before := p.carried()
 	floor := false
+	release := w.holdInventory(p) // one Inventory for every stack into the pockets
 	for n > 0 {
 		k := min(n, def.StackLimit())
 		if !def.Stackable {
@@ -650,6 +651,7 @@ func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 		}
 		n -= k
 	}
+	release()
 	if floor {
 		p.emit(systemMsg(msgItemOnFloor))
 	}

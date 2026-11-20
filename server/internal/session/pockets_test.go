@@ -329,6 +329,43 @@ func TestGiveFillsTheBackpackThenThePockets(t *testing.T) {
 	}
 }
 
+// What is given joins a stack it can before it takes a cell (docs/02 "Bolsillos"): coins
+// join the stack in the pockets although the backpack has room, and only the rest opens
+// a new stack, in the backpack first.
+func TestGiveJoinsAStackBeforeANewOne(t *testing.T) {
+	h := pocketHarness(t)
+	_, p := h.joinChar(withPack(1104, pos(5, 5), stack(swordID, 1, 0), pocket(coinID, 60, 0)))
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 50) })) // 40 join, 10 are new
+	h.sim.Step()
+	bp := p.Equipped(slotBackpack).Items()
+	if !slices.Equal(pocketIDs(p), []string{"copper_coinx100"}) || len(bp) != 2 || bp[1].Count() != 10 {
+		t.Fatalf("pockets %v, backpack %v", pocketIDs(p), bp)
+	}
+}
+
+// One change sends one Inventory: a move between the pockets and a slot touches both,
+// and a give of several stacks into the pockets touches them once per stack.
+func TestOneInventoryPerChange(t *testing.T) {
+	h := pocketHarness(t)
+	cl, p := h.bare("Tidy", pos(5, 5), pocket(swordID, 1, 0))
+	cl.take()
+	inventories := func(evs []*pb.ServerMessage) []*pb.Inventory { return find(evs, (*pb.ServerMessage).GetInventory) }
+
+	evs := h.send(cl, moveItem(inPocket(0), swordID, 0, inSlot(slotRight), 1))
+	if inv := inventories(evs); p.Equipped(slotRight) == nil || len(inv) != 1 || len(inv[0].GetSlots()) != 1 || len(inv[0].GetPockets()) != 0 {
+		t.Fatalf("pockets to a slot: %v (%v)", inv, systemKeys(evs))
+	}
+	evs = h.send(cl, moveItem(inSlot(slotRight), swordID, 0, inPocket(2), 1))
+	if inv := inventories(evs); p.Equipped(slotRight) != nil || len(inv) != 1 || len(inv[0].GetSlots()) != 0 || len(inv[0].GetPockets()) != 1 {
+		t.Fatalf("a slot to the pockets: %v (%v)", inv, systemKeys(evs))
+	}
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "test_pebble", 3) }))
+	h.sim.Step()
+	if inv := inventories(cl.take()); len(inv) != 1 || len(inv[0].GetPockets()) != 4 {
+		t.Fatalf("three pebbles given: %v", inv)
+	}
+}
+
 // Payments read both: the coins of the backpack go first, a coin in the pockets pays and
 // is broken for change, and a character with only its pockets buys, and gets the change
 // and what it bought there. Room for the change counts the pockets too.
