@@ -28,6 +28,29 @@ const MASCULINE: RegExp[] = [
   ),
 ];
 
+/**
+ * The player's own lines (the dialogue options, keys `*.opt_*`) in the first person with a
+ * masculine word after "estoy", "soy"... ("Estoy cansado", "Soy nuevo"): any word ending in
+ * -o/-os, but a gerund ("Sigo buscando") or a word that is not gendered.
+ */
+const FIRST_PERSON = new RegExp(
+  `${B}(estoy|estaba|soy|era|me siento|me quedé|quedé|sigo|ando|vengo|llego|vuelvo) ([\\p{L}]+)${E}`,
+  "giu",
+);
+const NOT_GENDERED = new Set(["yo", "como", "dentro", "pronto", "tarde", "aquí"]);
+
+function playerSpeaksAsAMan(text: string): boolean {
+  for (const m of text.matchAll(FIRST_PERSON)) {
+    const word = (m[2] ?? "").toLowerCase();
+    if (/os?$/u.test(word) && !/ndos?$/u.test(word) && !NOT_GENDERED.has(word)) return true;
+  }
+  return false;
+}
+
+function isOption(key: string): boolean {
+  return /(^|\.)opt_/u.test(key);
+}
+
 function texts(): Array<{ file: string; key: string; text: string }> {
   const out: Array<{ file: string; key: string; text: string }> = [];
   for (const file of readdirSync(ES).filter((f) => f.endsWith(".yaml"))) {
@@ -51,6 +74,38 @@ describe("Spanish texts for a man or a woman", () => {
       .filter(({ text }) => MASCULINE.some((re) => re.test(text)))
       .map(({ file, key, text }) => `${file} ${key}: ${text}`);
     expect(hits).toEqual([]);
+  });
+
+  it("never let the player speak of itself as a man in a dialogue option", () => {
+    const options = texts().filter(({ key }) => isOption(key));
+    expect(options.length).toBeGreaterThan(20);
+    const hits = options
+      .filter(({ text }) => playerSpeaksAsAMan(text))
+      .map(({ file, key, text }) => `${file} ${key}: ${text}`);
+    expect(hits).toEqual([]);
+  });
+
+  it("catches the first-person forms it is meant to catch", () => {
+    for (const bad of [
+      "Estoy cansado.",
+      "Soy nuevo en la isla.",
+      "Me siento perdido.",
+      "Vengo preparado.",
+    ]) {
+      expect(playerSpeaksAsAMan(bad), bad).toBe(true);
+    }
+    for (const ok of [
+      "Tengo heridas.",
+      "Vengo del naufragio.",
+      "Vengo siguiendo un bote sin bandera.",
+      "Sigo buscando al contramaestre.",
+      "Estoy aquí.",
+      "Soy yo.",
+    ]) {
+      expect(playerSpeaksAsAMan(ok), ok).toBe(false);
+    }
+    expect(isOption("npc.harbor_master.opt_shipwreck")).toBe(true);
+    expect(isOption("npc.harbor_master.greet")).toBe(false);
   });
 
   it("catches the forms it is meant to catch", () => {

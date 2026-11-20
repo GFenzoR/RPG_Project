@@ -119,9 +119,24 @@ el punto 5:
     para que cada casco, arma y peinado le quede). Si el dueño la quiere más baja, hace falta
     un segundo esqueleto y una segunda versión de cada capa compartida (unas 30 capas, el
     doble de atlas del muñeco); hoy se distingue por hombros, cintura, cadera y ropa.
-  - **Los personajes de antes** reciben al entrar el sexo que sale de su id (sin tocar el
-    resto de su aspecto); un hombre con barba puede despertar mujer con barba. Se cambia
-    gratis en Personalizar; un aviso al primer login (no está) sería lo amable.
+  - **Los personajes de antes** reciben al entrar el sexo sin tocar el resto de su aspecto:
+    con barba, hombre; sin barba, el que sale de su id (así que un hombre sin barba puede
+    despertar mujer). Se cambia gratis en Personalizar; un aviso al primer login (no está)
+    sería lo amable. Un aspecto con un campo que salió de `data/looks.yaml` solo cambia ese
+    campo (el sexo elegido se conserva).
+  - **La altura (confirmar con el dueño):** la tarea pedía a la mujer "ligeramente más
+    baja" y mide lo mismo (ver arriba). Es una desviación consciente del pedido: va en la
+    descripción del PR para que el dueño la acepte o pida el segundo esqueleto.
+  - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
+    de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
+    etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
+    `coffer_smuggler` ("contrabandista del cofre") es mujer, así que todo su spawn sale
+    mujer: un spawn no mezcla sexos (decisión de diseño, no un bug).
+  - **Revisar en los screenshots** (`20-druid-heal` y `cli.ts sheet --only humans/`) los
+    pantalones y las grebas sobre la mujer robusta: su cadera (4.0) queda muy cerca del
+    asiento del pantalón (4.15) y el test de encaje solo mide los huecos del hombre.
+  - **El test del español neutro** (`neutral-spanish.test.ts`) también mira las opciones de
+    diálogo del jugador (`*.opt_*`) en primera persona ("Estoy cansado", "Soy nuevo").
   - **Textos:** hoy ningún texto necesita un `select` de ICU sobre `sex` (todo se pudo
     decir neutro), así que el servidor no pasa ese parámetro a los diálogos. La noticia
     "Bienvenidos a Neque's Realm" (plural genérico) quedó como estaba. Un texto nuevo que
@@ -1113,7 +1128,6 @@ el punto 5:
     oscuro: no se confunden. La puerta sigue siendo un hueco (falta el marco, arriba).
   - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
     (`render/labels.ts` solo los acomoda a zoom 1).
-  - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
   - **401 en consola** al cargar `/play/` y `/shop` sin sesión: es el sondeo de sesión; se
     puede pedir a una ruta que conteste 204 sin sesión.
   - **Dificultad del corral 2 (revisado en el lote 10):** la comida (m4) ya está (`well_fed`,

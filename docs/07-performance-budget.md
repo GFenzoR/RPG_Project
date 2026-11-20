@@ -484,7 +484,10 @@ de 84 por capa, recortados como los demás. Medido contra la base (`fix/lote13`)
 misma máquina: sigue en **2 páginas** (2048x2041 y 2048x569; antes 2048x2030 y 2048x399),
 1,88 + 1,14 = 3,02 MB de PNG (+414 KB), 695 + 1644 KB de JSON (+373 KB) y 661 KB de
 `atlas.json` (+113 KB; 6604 sprites, antes 5584). En el cliente no cambia nada por frame:
-una mujer es la misma pila de capas con otras texturas.
+una mujer es la misma pila de capas con otras texturas. La primera página quedó casi
+llena (2041 de 2048 de alto): la próxima capa o forma del muñeco probablemente abra una
+tercera página (un draw call más por cambio de página en el peor caso); conviene medirlo
+en ese PR.
 
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
