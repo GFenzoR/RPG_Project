@@ -40,7 +40,7 @@ func TestCreateCharacterWithLook(t *testing.T) {
 	token := h.login("ana@example.org", "secreto123")
 
 	w := h.do(req{method: "POST", path: "/api/characters", token: token,
-		body: `{"name":"Mira","vocation":"guardian","look":{"body":"slender","skin":"olive","hair":"ponytail","hair_color":"red","beard":"none"}}`})
+		body: `{"name":"Mira","vocation":"guardian","look":{"sex":"female","body":"slender","skin":"olive","hair":"ponytail","hair_color":"red","beard":"none"}}`})
 	expect(t, w, http.StatusCreated, "")
 	var b struct {
 		Character struct {
@@ -50,11 +50,15 @@ func TestCreateCharacterWithLook(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
 		t.Fatal(err)
 	}
-	want := store.Look{Body: "slender", Skin: "olive", Hair: "ponytail", HairColor: "red", Beard: "none"}
+	want := store.Look{Sex: "female", Body: "slender", Skin: "olive", Hair: "ponytail", HairColor: "red", Beard: "none"}
 	if got := repo.CharacterLook(b.Character.ID); got != want {
 		t.Fatalf("stored look %+v, want %+v", got, want)
 	}
 	expect(t, h.do(req{method: "POST", path: "/api/characters", token: token,
-		body: `{"name":"Tomas","vocation":"guardian","look":{"body":"slender","skin":"ashen","hair":"short","hair_color":"red","beard":"none"}}`}),
+		body: `{"name":"Tomas","vocation":"guardian","look":{"sex":"male","body":"slender","skin":"ashen","hair":"short","hair_color":"red","beard":"none"}}`}),
+		http.StatusBadRequest, "invalid_look")
+	// A look without its sex (a client from before it) is not a look a player may choose.
+	expect(t, h.do(req{method: "POST", path: "/api/characters", token: token,
+		body: `{"name":"Tomas","vocation":"guardian","look":{"body":"slender","skin":"olive","hair":"short","hair_color":"red","beard":"none"}}`}),
 		http.StatusBadRequest, "invalid_look")
 }

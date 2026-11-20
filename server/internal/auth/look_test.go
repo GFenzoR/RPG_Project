@@ -32,19 +32,21 @@ func TestCreateCharacterLook(t *testing.T) {
 	}
 	acc, _ := svc.Register(ctx, "look@example.org", "secreto123")
 
-	chosen := content.Look{Body: "slender", Skin: "deep", Hair: "curly", HairColor: "white", Beard: "none"}
+	chosen := content.Look{Sex: "female", Body: "slender", Skin: "deep", Hair: "curly", HairColor: "white", Beard: "none"}
 	c, err := svc.CreateCharacter(ctx, acc, "Lirio", "guardian", &chosen)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := store.Look{Body: "slender", Skin: "deep", Hair: "curly", HairColor: "white", Beard: "none"}
+	want := store.Look{Sex: "female", Body: "slender", Skin: "deep", Hair: "curly", HairColor: "white", Beard: "none"}
 	if got := repo.CharacterLook(c.ID); got != want {
 		t.Fatalf("stored look %+v, want %+v", got, want)
 	}
 
 	for name, bad := range map[string]content.Look{
-		"a creatures-only skin": {Body: "sturdy", Skin: "drowned", Hair: "short", HairColor: "black", Beard: "none"},
-		"an unknown hair":       {Body: "sturdy", Skin: "fair", Hair: "spikes", HairColor: "black", Beard: "none"},
+		"a creatures-only skin": {Sex: "male", Body: "sturdy", Skin: "drowned", Hair: "short", HairColor: "black", Beard: "none"},
+		"an unknown hair":       {Sex: "male", Body: "sturdy", Skin: "fair", Hair: "spikes", HairColor: "black", Beard: "none"},
+		"no sex":                {Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
+		"an unknown sex":        {Sex: "x", Body: "sturdy", Skin: "fair", Hair: "short", HairColor: "black", Beard: "none"},
 		"nothing":               {},
 	} {
 		if _, err := svc.CreateCharacter(ctx, acc, "Otro", "guardian", &bad); !errors.Is(err, auth.ErrInvalidLook) {

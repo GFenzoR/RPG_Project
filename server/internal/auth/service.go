@@ -430,7 +430,7 @@ func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vo
 		if !s.looks.PlayerLook(*look) {
 			return store.Character{}, ErrInvalidLook
 		}
-		body = store.Look{Body: look.Body, Skin: look.Skin, Hair: look.Hair, HairColor: look.HairColor, Beard: look.Beard}
+		body = store.Look{Sex: look.Sex, Body: look.Body, Skin: look.Skin, Hair: look.Hair, HairColor: look.HairColor, Beard: look.Beard}
 	}
 	c, err := s.repo.CreateCharacter(ctx, store.NewCharacter{
 		AccountID: accountID,

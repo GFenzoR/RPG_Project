@@ -53,10 +53,10 @@ type PlayCharacter struct {
 	Look Look
 }
 
-// Look is the body of a character (characters.look_*, migration 00021): ids of
+// Look is the body of a character (characters.look_*, migrations 00021 and 00022): ids of
 // data/looks.yaml, "" = none yet. Values are already validated when they are written.
 type Look struct {
-	Body, Skin, Hair, HairColor, Beard string
+	Sex, Body, Skin, Hair, HairColor, Beard string
 }
 
 // Cosmetics are the equipped cosmetics of a character (characters.outfit, outfit_color,
@@ -274,7 +274,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	}
 	return PlayCharacter{
 		Cosmetics: Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
-		Look: Look{Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
+		Look: Look{Sex: row.LookSex, Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
 			Beard: row.LookBeard},
 		Owned:      owned,
 		Premium:    row.PremiumBalance,
@@ -337,6 +337,7 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		LookHair:      c.Look.Hair,
 		LookHairColor: c.Look.HairColor,
 		LookBeard:     c.Look.Beard,
+		LookSex:       c.Look.Sex,
 		SavedAt:       ts(c.SavedAt),
 	})
 	if err != nil {

@@ -137,4 +137,7 @@ message BodyLook {
   string hair_color = 4;
   // A beard of `beards` (none draws nothing).
   string beard = 5;
+  // A sex of `sexes` (male, female): the body is drawn per sex and build. Empty from an
+  // old server: the client draws the male body.
+  string sex = 6;
 }

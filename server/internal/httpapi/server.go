@@ -437,6 +437,8 @@ type createCharacterRequest struct {
 
 // lookJSON is a character's body: ids of data/looks.yaml.
 type lookJSON struct {
+	// Sex is male or female (data/looks.yaml sexes).
+	Sex       string `json:"sex"`
 	Body      string `json:"body"`
 	Skin      string `json:"skin"`
 	Hair      string `json:"hair"`
@@ -451,7 +453,7 @@ func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID 
 	}
 	var look *content.Look
 	if in.Look != nil {
-		look = &content.Look{Body: in.Look.Body, Skin: in.Look.Skin, Hair: in.Look.Hair,
+		look = &content.Look{Sex: in.Look.Sex, Body: in.Look.Body, Skin: in.Look.Skin, Hair: in.Look.Hair,
 			HairColor: in.Look.HairColor, Beard: in.Look.Beard}
 	}
 	c, err := a.cfg.Auth.CreateCharacter(r.Context(), accountID, in.Name, in.Vocation, look)

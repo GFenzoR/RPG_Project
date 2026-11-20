@@ -20,7 +20,8 @@
             "skin": "tan",
             "hair": "short",
             "hairColor": "black",
-            "beard": "full"
+            "beard": "none",
+            "sex": "female"
           },
           "equipment": {
             "head": 63,
@@ -49,7 +50,8 @@
             "skin": "tan",
             "hair": "short",
             "hairColor": "black",
-            "beard": "none"
+            "beard": "none",
+            "sex": "male"
           },
           "worn": {
             "head": {
@@ -72,7 +74,8 @@
           "skin": "tan",
           "hair": "short",
           "hairColor": "black",
-          "beard": "full"
+          "beard": "none",
+          "sex": "female"
         },
         "equipment": {
           "torso": 64,

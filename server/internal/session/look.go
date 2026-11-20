@@ -38,12 +38,12 @@ type shownItems [len(shownSlots)]uint32
 
 // bodyLookMsg is the protocol form of l.
 func bodyLookMsg(l content.Look) *pb.BodyLook {
-	return &pb.BodyLook{Body: l.Body, Skin: l.Skin, Hair: l.Hair, HairColor: l.HairColor, Beard: l.Beard}
+	return &pb.BodyLook{Sex: l.Sex, Body: l.Body, Skin: l.Skin, Hair: l.Hair, HairColor: l.HairColor, Beard: l.Beard}
 }
 
 // lookFromMsg is the look a client sent (nil fields are empty ids).
 func lookFromMsg(m *pb.BodyLook) content.Look {
-	return content.Look{Body: m.GetBody(), Skin: m.GetSkin(), Hair: m.GetHair(), HairColor: m.GetHairColor(), Beard: m.GetBeard()}
+	return content.Look{Sex: m.GetSex(), Body: m.GetBody(), Skin: m.GetSkin(), Hair: m.GetHair(), HairColor: m.GetHairColor(), Beard: m.GetBeard()}
 }
 
 // equipmentMsg is the protocol form of s; nil when nothing shows.
@@ -85,7 +85,8 @@ func (w *World) creatureLook(c *content.CreatureLook) creatureLookMsgs {
 
 // loadLook sets p's look at login: the saved one if a player may wear it, else the one
 // picked from its id (a character created before looks, or a choice that left
-// data/looks.yaml). The next snapshot saves it.
+// data/looks.yaml); one saved before the sex keeps its other fields and gets the sex
+// picked from its id (content.Looks.SavedLook). The next snapshot saves it.
 func (w *World) loadLook(p *Player, c Character) {
 	l := w.cfg.Looks
 	if l == nil {
@@ -94,10 +95,7 @@ func (w *World) loadLook(p *Player, c Character) {
 		p.look = c.Look
 		return
 	}
-	look := c.Look
-	if !l.PlayerLook(look) {
-		look = l.DefaultLook(c.ID)
-	}
+	look := l.SavedLook(c.ID, c.Look)
 	p.look, p.lookMsg = look, bodyLookMsg(look)
 }
 
