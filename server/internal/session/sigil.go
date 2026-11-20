@@ -56,6 +56,11 @@ func (w *World) initSigils() error {
 	for _, v := range w.cfg.Vocations {
 		vocs[v.ID] = true
 	}
+	for _, id := range slices.Sorted(maps.Keys(w.cfg.Items)) {
+		if def := w.cfg.Items[id]; def.Sigil != nil && (def.CanPickUp() || def.BlocksMovement()) {
+			return fmt.Errorf("session: sigil plate %q needs pickupable: false and must not block movement", id)
+		}
+	}
 	for _, id := range slices.Sorted(maps.Keys(w.cfg.Quests)) {
 		q := w.cfg.Quests[id]
 		i := q.SigilsStep()
