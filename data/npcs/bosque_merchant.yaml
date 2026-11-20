@@ -16,7 +16,9 @@ notes: >-
   Tanner and outfitter of Ivernel: the forest gear (levels 12-16), elm work and broth, tools
   for the elm grove, and she buys the island's hunting materials at about a third of their
   value. Since lote 12 she gives the side quest tanner_chitin (level 25): crawler chitin and
-  thorn heartwood for chitin-stitched leather, for an antler amulet of her own carving.
+  thorn heartwood for chitin-stitched leather, for an antler amulet of her own carving. Since
+  lote 14 she carves another (400 gold) for whoever finished it, lost the amulet and has not
+  yet finished the Orthavel vigil, the milestone that asks for it.
 dialog:
   start: greet
   nodes:
@@ -40,6 +42,23 @@ dialog:
         - text: npc.bosque_merchant.opt_chitin_help
           if: { quest_state: { quest: tanner_chitin, state: in_progress } }
           goto: chitin_help
+        # The antler amulet is the only way into the Orthavel milestone (ms_orthavel_vigil) and
+        # no shop sells it: whoever earned it and lost it (death, a broken refine, a sale)
+        # before finishing the vigil gets another carved, for a price above what the druid
+        # pays for one, so selling and asking again never makes money. One option per state
+        # of the vigil that is not completed.
+        - text: npc.bosque_merchant.opt_amulet_again
+          if:
+            - { quest_state: { quest: tanner_chitin, state: completed } }
+            - { quest_not_started: ms_orthavel_vigil }
+            - { lacks_item: { item: antler_amulet } }
+          goto: amulet_again
+        - text: npc.bosque_merchant.opt_amulet_again
+          if:
+            - { quest_state: { quest: tanner_chitin, state: completed } }
+            - { quest_state: { quest: ms_orthavel_vigil, state: in_progress } }
+            - { lacks_item: { item: antler_amulet } }
+          goto: amulet_again
         - text: npc.bosque_merchant.opt_elm
           goto: elm
         - text: npc.bosque_merchant.opt_gossip
@@ -71,6 +90,21 @@ dialog:
         - { text: dialog.bye, action: close }
     chitin_delivered:
       text: npc.bosque_merchant.chitin_delivered
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    amulet_again:
+      text: npc.bosque_merchant.amulet_again
+      options:
+        - text: npc.bosque_merchant.opt_amulet_pay
+          if: { lacks_item: { item: antler_amulet } }
+          action:
+            - { take_gold: 400 }
+            - { give_item: antler_amulet }
+          goto: amulet_carved
+        - { text: dialog.back, goto: greet }
+    amulet_carved:
+      text: npc.bosque_merchant.amulet_carved
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

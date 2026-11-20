@@ -187,7 +187,12 @@ el punto 5:
     por tick (no vale hoy).
   - **El amuleto de asta ya no se vende** (Velia solo lo compra): el hito de Orthavel
     pide llevarlo puesto y solo lo da `tanner_chitin` (una vez por personaje; se puede
-    comerciar). Quien lo pierde se lo compra a otro jugador.
+    comerciar). Quien lo pierde antes de terminar el hito le pide otro a Gisla por 400
+    monedas (más de los 160 que paga Velia: vender y pedir otro no da ganancia).
+  - **Llaves re-entregables (pendiente, aceptado así por ahora):** el eco de la forja da
+    otra `ember_key` o `morvund_key` a quien terminó su quest y no la tiene; como se pueden
+    tirar al suelo, un veterano puede regalarlas a otros. Cerrarlo pide un cooldown por
+    personaje o quitar la llave en algún momento: decidir con el dueño.
 - **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
   personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
   equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto
