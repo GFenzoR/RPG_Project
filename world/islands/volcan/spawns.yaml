@@ -123,3 +123,17 @@
   monsters:
     - { monster: slag_golem, count: 4 }
   respawn_seconds: 60
+
+- id: volcan_morvund_delvers
+  center: { x: 3634, y: 5758, z: 8 }
+  radius: 5
+  monsters:
+    - { monster: obsidian_delver, count: 4 }
+  respawn_seconds: 60
+
+- id: volcan_morvund_golems
+  center: { x: 3626, y: 5757, z: 8 }
+  radius: 3
+  monsters:
+    - { monster: slag_golem, count: 2 }
+  respawn_seconds: 90

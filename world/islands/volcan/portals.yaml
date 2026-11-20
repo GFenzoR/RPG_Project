@@ -7,3 +7,8 @@
   kind: stairs
   from: { x: 3692, y: 5796, z: 8 }
   to: { x: 3692, y: 5797, z: 7 }
+
+- id: morvund_out
+  kind: teleport
+  from: { x: 3668, y: 5758, z: 8 }
+  to: { x: 3690, y: 5800, z: 8 }

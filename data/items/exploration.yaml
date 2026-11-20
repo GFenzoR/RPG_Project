@@ -191,3 +191,98 @@
       - { item: health_draught, count: 2 }
       - { item: iron_sword, count: 1 } # band 2: it rolls its attribute
   notes: "Temple of Thimblewick, north-east corner (2098,2084,7): to try a chest (docs/16)."
+
+# ---- Milestone quests (docs/02 "Quests de hito"): sigil plates, the map items a player stands
+# on for a milestone's last step (the plates within its sigils square); one marked for a
+# vocation counts only that vocation. They block nothing and nobody picks them up. And the
+# reward chests of their reward rooms (once per character, like every chest).
+- id: sigil_plate
+  kind: decoration
+  sprite: decor/sigil_plate
+  name: item.sigil_plate.name
+  description: item.sigil_plate.desc
+  pickupable: false
+  sigil: {}
+  notes: "Any vocation. The Thalorn crypt (2 plates, 4207/4213,6090,8) and the Orthavel vigil (4178,6125,8), Bosque."
+
+- id: sigil_plate_guardian
+  kind: decoration
+  sprite: decor/sigil_plate_guardian
+  name: item.sigil_plate.name
+  description: item.sigil_plate_guardian.desc
+  pickupable: false
+  sigil: { vocation: guardian }
+  notes: "The Morvund chamber, Volcan mine (3647,5755,8)."
+
+- id: sigil_plate_arcanist
+  kind: decoration
+  sprite: decor/sigil_plate_arcanist
+  name: item.sigil_plate.name
+  description: item.sigil_plate_arcanist.desc
+  pickupable: false
+  sigil: { vocation: arcanist }
+  notes: "The Morvund chamber, Volcan mine (3657,5755,8)."
+
+- id: sigil_plate_ranger
+  kind: decoration
+  sprite: decor/sigil_plate_ranger
+  name: item.sigil_plate.name
+  description: item.sigil_plate_ranger.desc
+  pickupable: false
+  sigil: { vocation: ranger }
+  notes: "The Morvund chamber, Volcan mine (3647,5761,8)."
+
+- id: sigil_plate_druid
+  kind: decoration
+  sprite: decor/sigil_plate_druid
+  name: item.sigil_plate.name
+  description: item.sigil_plate_druid.desc
+  pickupable: false
+  sigil: { vocation: druid }
+  notes: "The Morvund chamber, Volcan mine (3657,5761,8)."
+
+- id: chest_ms_thalorn
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_thalorn
+    rewards:
+      - { item: silver_coin, count: 4 }
+      - { item: greater_temper_stone, count: 1 }
+      - { item: health_draught, count: 3 }
+  notes: "The reward room of the Thalorn crypt, Bosque (4228,6089,8): only the pair that held the plates gets there."
+
+- id: chest_ms_orthavel
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_orthavel
+    rewards:
+      - { item: silver_coin, count: 5 }
+      - { item: greater_temper_stone, count: 2 }
+      - { item: health_draught, count: 3 }
+  notes: "The reward room of the Orthavel vigil, Bosque (4195,6123,8)."
+
+- id: chest_ms_morvund
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_morvund
+    rewards:
+      - { item: silver_coin, count: 10 }
+      - { item: greater_temper_stone, count: 3 }
+      - { item: concentrated_health_draught, count: 3 }
+      - { item: concentrated_mana_draught, count: 3 }
+  notes: "The reward room of the Morvund chamber, Volcan mine (3671,5752,8)."

@@ -12,3 +12,13 @@
   kind: sign
   pos: { x: 4247, y: 6144, z: 7 }
   text: text.bosque.cave_sign
+
+- id: thalorn_sign
+  kind: sign
+  pos: { x: 4212, y: 6093, z: 7 }
+  text: text.bosque.thalorn_sign
+
+- id: orthavel_sign
+  kind: sign
+  pos: { x: 4180, y: 6128, z: 7 }
+  text: text.bosque.orthavel_sign

@@ -495,6 +495,18 @@
   key: forge_gate
   notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
 
+# The key of the Morvund gallery (docs/02 "Quests de hito"): the reward of the milestone
+# ms_morvund_embers; the forge echo shapes another for whoever did it and lost theirs.
+- id: morvund_key
+  kind: material
+  sprite: quest/ember_key
+  name: item.morvund_key.name
+  description: item.morvund_key.desc
+  weight: 300
+  tradeable: false
+  key: morvund_gate
+  notes: Opens and locks the Morvund gallery gate (door key morvund_gate, data/items/doors.yaml). No value, so no NPC buys it.
+
 # Thimblewick (sandbox island, docs/16-probar-el-juego.md): the key of its practice gate.
 - id: pruebas_key
   kind: material

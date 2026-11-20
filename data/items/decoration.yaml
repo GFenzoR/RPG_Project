@@ -583,3 +583,29 @@
   pickupable: false
   blocks_movement: true
   notes: "At the arena entrance."
+
+# Signs of the milestone quests (docs/02 "Quests de hito"), same scheme: the id is the one of
+# the sign in the island's texts.yaml.
+- id: thalorn_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.thalorn_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: orthavel_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.orthavel_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: morvund_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.morvund_sign
+  pickupable: false
+  blocks_movement: true

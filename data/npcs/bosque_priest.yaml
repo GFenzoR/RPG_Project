@@ -29,6 +29,9 @@ dialog:
           goto: healed
         - text: npc.bosque_priest.opt_root
           goto: root
+        - text: npc.bosque_priest.opt_thalorn
+          if: { level_at_least: 20 }
+          goto: thalorn_offer
         - text: dialog.bye
           action: close
     blessings:
@@ -67,6 +70,21 @@ dialog:
         - { text: dialog.bye, action: close }
     root:
       text: npc.bosque_priest.root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    # The milestone ms_thalorn_oath (docs/02 "Quests de hito"): offered from its level (the
+    # quest log shows what it asks before it is taken); taken, the offer only goes back.
+    thalorn_offer:
+      text: npc.bosque_priest.thalorn_offer
+      options:
+        - text: dialog.accept
+          if: { quest_not_started: ms_thalorn_oath }
+          action: { start_quest: ms_thalorn_oath }
+          goto: thalorn_accepted
+        - { text: dialog.back, goto: greet }
+    thalorn_accepted:
+      text: npc.bosque_priest.thalorn_accepted
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

@@ -1,0 +1,23 @@
+id: ms_orthavel_vigil
+name: quest.ms_orthavel_vigil.name
+min_level: 25
+milestone: true
+title: quest.ms_orthavel_vigil.title
+notes: >-
+  Milestone quest (docs/02 "Quests de hito"), Bosque, alone and gear-gated: the vigil under
+  the oaks south of Raigal answers only to whoever wears an antler amulet (the reward of
+  tanner_chitin, Gisla the tanner, from level 25; Velia the druid also sells it). Fenn the huntsman tells of it. One plate;
+  the reward room has its chest and a teleport back to the town.
+requires:
+  level: 25
+  players: 1
+  gear: { item: antler_amulet, equipped: true }
+steps:
+  - id: plate
+    description: quest.ms_orthavel_vigil.step_plate
+    complete_when:
+      sigils: { x: 4178, y: 6125, z: 8, radius: 0, to: { x: 4191, y: 6125, z: 8 } }
+rewards:
+  - { xp: 8600 }
+  - { item: stagleather_boots }
+  - { gold: 700 }

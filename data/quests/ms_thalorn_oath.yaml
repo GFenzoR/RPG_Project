@@ -1,0 +1,23 @@
+id: ms_thalorn_oath
+name: quest.ms_thalorn_oath.name
+min_level: 20
+milestone: true
+title: quest.ms_thalorn_oath.title
+notes: >-
+  Milestone quest (docs/02 "Quests de hito"), Bosque, for two: Brother Olmar of the Temple of the Root tells of the
+  Oath of Thalorn, a shield-bearer and a healer who kept the crypt under the standing stones
+  of the north-east woods together. Its two plates (any vocation) answer only to two people
+  at once; the pair lands in the sealed reward room (its chest, a teleport back to the road
+  of Raigal). The players need not share a party.
+requires:
+  level: 20
+  players: 2
+steps:
+  - id: plates
+    description: quest.ms_thalorn_oath.step_plates
+    complete_when:
+      sigils: { x: 4210, y: 6090, z: 8, radius: 3, to: { x: 4224, y: 6091, z: 8 } }
+rewards:
+  - { xp: 6600 }
+  - { item: briar_ring }
+  - { gold: 600 }

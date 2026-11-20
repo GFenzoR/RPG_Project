@@ -17,3 +17,8 @@
   kind: sign
   pos: { x: 3693, y: 5830, z: 8 }
   text: text.volcan.gate_sign
+
+- id: morvund_sign
+  kind: sign
+  pos: { x: 3655, y: 5778, z: 8 }
+  text: text.volcan.morvund_sign
