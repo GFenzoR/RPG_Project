@@ -272,6 +272,8 @@ type Player struct {
 	equipMsg *pb.VisibleEquipment
 	lookTAT  game.Tick
 	lookOff  bool
+	// lookDirty: in World.lookDirty, its CreatureLook goes out at the end of the tick.
+	lookDirty bool
 }
 
 // Invisible reports whether p is invisible (T3.2).

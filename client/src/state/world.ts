@@ -61,7 +61,16 @@ import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import { questLogFrom } from "./quests.ts";
-import { equipmentView, lookView, sameEquipment, sameLook, sameWorn, wornView } from "./look.ts";
+import {
+  equipmentView,
+  equipmentViewKeep,
+  lookView,
+  lookViewKeep,
+  sameEquipment,
+  sameLook,
+  sameWorn,
+  wornViewKeep,
+} from "./look.ts";
 import type { EquipmentView } from "./look.ts";
 import type { QuestLogView } from "./quests.ts";
 import { heavyHit } from "../render/shake.ts";
@@ -1149,9 +1158,10 @@ export class WorldState implements TileSource {
       guild: c.guild,
       skull: c.skull,
       cosmetics: cosmeticsView(c.cosmetics),
-      look: lookView(c.look),
-      equipment: equipmentView(c.equipment),
-      worn: wornView(c.worn),
+      // The same objects while unchanged: no garbage per creature on every floor change.
+      look: lookViewKeep(prev?.look, c.look),
+      equipment: equipmentViewKeep(prev?.equipment, c.equipment),
+      worn: wornViewKeep(prev?.worn, c.worn),
       lookRev: prev ? prev.lookRev : ++this.lookSeq,
     });
     // Built again only when what the figure is drawn from changed: a FullMapView or a

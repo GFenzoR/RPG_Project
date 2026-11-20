@@ -919,8 +919,13 @@ cambia lo que se dibuja: ninguna regla del juego lee el aspecto.
   visible: equiparse, sacarse algo, una pieza que se gasta o se rompe en la forja, lo que
   cae al morir, lo que se vende o se intercambia. Todo pasa por `equipmentChanged`, que
   compara los ids de los slots visibles con los últimos mandados: mover algo dentro de la
-  mochila o cambiar el anillo no manda nada. Quien entra en la vista después recibe el
-  estado en el `Creature` de su `CreatureAppear`, `FullMapView` o `MapSlice`.
+  mochila o cambiar el anillo no manda nada. Va **uno por jugador y tick como mucho**, al
+  final del tick (`flushLooks`, antes de armar los batches) con el estado de ese momento:
+  un arma que va y vuelve entre la mano y la mochila varias veces en un tick, o un
+  `SetLook` y un cambio de equipo del mismo tick, son un solo `CreatureLook`. Un jugador
+  que en ese tick salió de la vista de otro (una muerte que lo lleva al templo) ya no se
+  lo manda a ese otro. Quien entra en la vista después recibe el estado en el `Creature`
+  de su `CreatureAppear`, `FullMapView` o `MapSlice`.
 - **`SetLook{look}`** (`ClientMessage` 37): cambia el cuerpo propio, gratis y en cualquier
   momento (la ventana Apariencia → Personalizar). Cada id tiene que ser una elección de
   jugador; si no → `Message` de sistema `appearance.invalid` y un `CreatureLook` solo al

@@ -617,7 +617,9 @@ Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.
 de un jugador, los ids de sus slots visibles (`VisibleEquipment`), y el de un NPC o un
 monstruo, sus piezas (`Worn`, forma y tinte por lugar). Un `CreatureLook` (unos 50 B) va a
 quien conoce al jugador solo cuando cambian el cuerpo (`SetLook`, con el anti-flood de
-`looks.yaml`) o un slot visible: nunca por paso. Medido con `TestCrowdBandwidth` (que corre
+`looks.yaml`) o un slot visible: nunca por paso, y uno por jugador y tick como mucho (los
+cambios de un tick se juntan en el flush: mover un arma entre la mano y la mochila sin
+parar cuesta un mensaje por tick a cada vecino, no uno por `MoveItem`). Medido con `TestCrowdBandwidth` (que corre
 con los datos reales: los bots entran sin aspecto y reciben el de su id) y `go test
 -bench`, antes (`feat/humanoid-art`) y después en la misma sesión, mismo notebook, Windows
 nativo:

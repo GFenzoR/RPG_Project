@@ -102,7 +102,7 @@ func (w *World) loadLook(p *Player, c Character) {
 }
 
 // showEquipment works out what p's visible slots show and, if it changed while p is in
-// the world, tells everyone who knows p (CreatureLook). equipmentChanged calls it, so
+// the world, marks p's look to be told (lookChanged). equipmentChanged calls it, so
 // every path that changes p's equipment (equipping, taking off, an item used up or
 // broken at the forge, what falls at a death, a trade or a sale) is covered.
 func (w *World) showEquipment(p *Player) {
@@ -116,14 +116,39 @@ func (w *World) showEquipment(p *Player) {
 		return
 	}
 	p.shown, p.equipMsg = s, equipmentMsg(s)
-	if w.byChar[p.charID] == p {
-		w.lookChanged(p)
-	}
+	w.lookChanged(p)
 }
 
-// lookChanged sends p's look and visible equipment to everyone whose client knows p, p
-// included (an invisible p only to itself).
+// lookChanged marks p's look and visible equipment to be told once at the end of the
+// tick (flushLooks), however many changes the tick had: moving a weapon between the hand
+// and the backpack over and over costs its watchers one CreatureLook a tick, not one a
+// MoveItem, and a SetLook and an equipment change of the same tick go in one message.
+// Before p is in the world (its join) nothing is marked: its Creature carries it.
 func (w *World) lookChanged(p *Player) {
+	if p.lookDirty || w.byChar[p.charID] != p {
+		return
+	}
+	p.lookDirty = true
+	w.lookDirty = append(w.lookDirty, p)
+}
+
+// flushLooks sends each marked player's look and visible equipment to everyone whose
+// client knows it, the player included (an invisible one only to itself). A player that
+// left the world since it was marked is skipped (a relogin is another *Player). Marks
+// made after it runs (later in the same flushSystem) go out with the next tick.
+func (w *World) flushLooks() {
+	for i, p := range w.lookDirty {
+		w.lookDirty[i] = nil
+		p.lookDirty = false
+		if w.byChar[p.charID] == p {
+			w.sendLook(p)
+		}
+	}
+	w.lookDirty = w.lookDirty[:0]
+}
+
+// sendLook sends p's CreatureLook now (flushLooks).
+func (w *World) sendLook(p *Player) {
 	msg := &pb.ServerMessage{Message: &pb.ServerMessage_CreatureLook{CreatureLook: &pb.CreatureLook{
 		Id: p.id, Look: p.lookMsg, Equipment: p.equipMsg,
 	}}}

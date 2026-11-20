@@ -103,6 +103,65 @@ export function sameWorn(a: Worn | undefined, b: Worn | undefined): boolean {
 }
 
 /**
+ * lookView of m, or `prev` when m is the same body: a creature sent again (every
+ * FullMapView or MapSlice) keeps its objects instead of leaving garbage behind.
+ */
+export function lookViewKeep(prev: Look | undefined, m: BodyLook | undefined): Look | undefined {
+  if (!m || m.body === "") return undefined;
+  if (
+    prev &&
+    prev.body === m.body &&
+    prev.skin === m.skin &&
+    prev.hair === m.hair &&
+    prev.hairColor === m.hairColor &&
+    prev.beard === m.beard
+  )
+    return prev;
+  return lookView(m);
+}
+
+/** equipmentView of m, or `prev` when it shows the same items (see lookViewKeep). */
+export function equipmentViewKeep(
+  prev: EquipmentView | undefined,
+  m: VisibleEquipment | undefined,
+): EquipmentView {
+  if (!m) return NO_EQUIPMENT;
+  if (
+    prev &&
+    prev.head === m.head &&
+    prev.torso === m.torso &&
+    prev.legs === m.legs &&
+    prev.feet === m.feet &&
+    prev.leftHand === m.leftHand &&
+    prev.rightHand === m.rightHand
+  )
+    return prev;
+  return equipmentView(m);
+}
+
+const samePieceMsg = (a: WornPiece | undefined, m: WornPieceMsg | undefined): boolean => {
+  const has = !!m && m.shape !== "";
+  if (!a || !has) return !a && !has;
+  return a.shape === m.shape && a.tint === m.tint;
+};
+
+/** wornView of m, or `prev` when it wears the same pieces (see lookViewKeep). */
+export function wornViewKeep(prev: Worn | undefined, m: WornMsg | undefined): Worn | undefined {
+  if (!m) return undefined;
+  if (
+    prev &&
+    samePieceMsg(prev.head, m.head) &&
+    samePieceMsg(prev.torso, m.torso) &&
+    samePieceMsg(prev.legs, m.legs) &&
+    samePieceMsg(prev.feet, m.feet) &&
+    samePieceMsg(prev.shield, m.shield) &&
+    samePieceMsg(prev.weapon, m.weapon)
+  )
+    return prev;
+  return wornView(m);
+}
+
+/**
  * `prev` while it wears the same pieces as `next`, else `next`: a figure built from a new
  * object on every render (the Apariencia window) keeps one reference, so it is drawn
  * again only when what it wears changed.

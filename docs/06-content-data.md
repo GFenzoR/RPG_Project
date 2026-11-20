@@ -1350,6 +1350,10 @@ shapes:                                        # las formas que dibuja el motor,
 hides: { hood: [hair], full_helm: [hair, beard] }   # lo que tapa una pieza de cabeza
 tints: { iron: "#a8aeb6", linen: "#ece2c8" }         # el material de una pieza (multiply)
 ```
+- `limits` es una constante de anti-flood fuera de `balance.yaml`: una **excepción
+  aceptada**, como `limits` de `cosmetics.yaml`. Vive junto a lo que limita (el sistema de
+  aspecto entero se apaga sin este archivo) y no es balance de juego: ninguna regla ni
+  fórmula la lee. Toda constante nueva de balance sigue yendo a `balance.yaml`.
 - Las listas son exactamente las capas que dibuja el motor (un test de spritegen las
   compara); una forma nueva es arte nuevo (`tools/spritegen/src/engine/specs/humanoid/`). Un
   color nuevo no cuesta atlas: es una línea aquí.

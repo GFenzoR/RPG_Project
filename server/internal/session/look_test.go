@@ -197,36 +197,51 @@ func TestSetLook(t *testing.T) {
 }
 
 // The SetLook anti-flood (data/looks.yaml limits): exactly a burst of changes in one
-// tick, the rest dropped; one more passes after change_refill_ms, and only one.
+// tick, the rest dropped; one more passes after change_refill_ms, and only one. The
+// changes of a tick go to the watchers in one CreatureLook, with the last one that passed.
 func TestSetLookFlood(t *testing.T) {
 	lim := testLooks(t).Limits
 	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withLooks(t))
 	nextChar++
-	clA, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Mira", Vocation: "guardian",
+	clA, pA := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Mira", Vocation: "guardian",
 		Level: 1, Health: 145, Pos: pos(10, 10), HasPos: true, Look: lookMira})
 	clB, _ := h.join("Watcher", at(14, 10))
 	clA.take()
 	clB.take()
 
-	cur := lookMira
-	next := func() content.Look { // always a change
-		if cur == lookMira {
-			cur = lookTom
-		} else {
-			cur = lookMira
-		}
-		return cur
+	// Each change a different look, so the one in effect says how many passed.
+	hairs := []string{"bald", "short", "crop", "long", "ponytail", "topknot", "curly"}
+	colours := []string{"black", "brown", "auburn", "grey"}
+	n := 0
+	next := func() content.Look {
+		n++
+		return content.Look{Body: "sturdy", Skin: "fair", Hair: hairs[n%len(hairs)],
+			HairColor: colours[(n/len(hairs))%len(colours)], Beard: "none"}
 	}
-	broadcast := func() int { return len(find(clB.take(), (*pb.ServerMessage).GetCreatureLook)) }
+	// broadcast is the looks the watcher was told since the last call.
+	broadcast := func() []content.Look {
+		var out []content.Look
+		for _, l := range find(clB.take(), (*pb.ServerMessage).GetCreatureLook) {
+			out = append(out, lookOf(l.GetLook()))
+		}
+		return out
+	}
 
-	for range lim.ChangeBurst + 1 {
-		h.input(clA, setLook(next()))
+	var burst content.Look
+	for i := range lim.ChangeBurst + 1 {
+		l := next()
+		if i == lim.ChangeBurst-1 {
+			burst = l // the last one that passes
+		}
+		h.input(clA, setLook(l))
 	}
 	h.sim.Step()
-	if got := broadcast(); got != lim.ChangeBurst {
-		t.Fatalf("%d look changes broadcast in one tick, want the burst %d", got, lim.ChangeBurst)
+	if pA.LookForTest() != burst {
+		t.Fatalf("look %+v after a burst, want the %d-th change %+v", pA.LookForTest(), lim.ChangeBurst, burst)
 	}
-	next() // the dropped change did not apply: back to the look in effect
+	if got := broadcast(); len(got) != 1 || got[0] != burst {
+		t.Fatalf("the watcher was told %v in one tick, want one CreatureLook with %+v", got, burst)
+	}
 
 	refill := (lim.ChangeRefillMs + 49) / 50 // ticks of 50 ms
 	for range refill - 2 {
@@ -234,15 +249,61 @@ func TestSetLookFlood(t *testing.T) {
 	}
 	h.input(clA, setLook(next())) // one tick short of change_refill_ms
 	h.sim.Step()
-	if got := broadcast(); got != 0 {
-		t.Fatalf("%d changes passed before change_refill_ms", got)
+	if pA.LookForTest() != burst {
+		t.Fatalf("a change passed before change_refill_ms: %+v", pA.LookForTest())
 	}
-	next() // dropped
-	h.input(clA, setLook(next()))
-	h.input(clA, setLook(next()))
+	if got := broadcast(); len(got) != 0 {
+		t.Fatalf("%v told before change_refill_ms", got)
+	}
+	first, second := next(), next()
+	h.input(clA, setLook(first))
+	h.input(clA, setLook(second))
 	h.sim.Step()
-	if got := broadcast(); got != 1 {
-		t.Fatalf("%d changes passed after change_refill_ms, want 1", got)
+	if pA.LookForTest() != first {
+		t.Fatalf("look %+v after change_refill_ms, want only the first change %+v", pA.LookForTest(), first)
+	}
+	if got := broadcast(); len(got) != 1 || got[0] != first {
+		t.Fatalf("after change_refill_ms the watcher was told %v, want %+v", got, first)
+	}
+}
+
+// Look changes are told once per player per tick (look.go flushLooks): moving the sword
+// between the hand and the backpack several times in one tick, plus a SetLook, is one
+// CreatureLook with the state at the end of the tick, to the watcher and to the player.
+func TestLookChangesCoalescePerTick(t *testing.T) {
+	h := deathHarness(t, withLooks(t))
+	clA, pA := h.geared("Mira", 20, 0) // sword (right), shield (left), tunic, backpack
+	clB, _ := h.join("Watcher", at(43, 40))
+	pack := openPack(t, h, clA)
+	clA.take()
+	clB.take()
+
+	// Out and back in and out again, and a new body, all in one tick.
+	h.input(clA, moveItem(inSlot(slotRight), swordID, 0, inContainer(pack, 0), 1))
+	h.input(clA, moveItem(inContainer(pack, 0), swordID, 0, inSlot(slotRight), 1))
+	h.input(clA, moveItem(inSlot(slotRight), swordID, 0, inContainer(pack, 0), 1))
+	h.input(clA, setLook(lookTom))
+	h.sim.Step()
+	if pA.Equipped(slotRight) != nil {
+		t.Fatalf("the sword is still in the hand: %v", pA.Equipped(slotRight))
+	}
+	want := [6]uint32{0, tunicID, 0, 0, shieldID, 0}
+	for name, cl := range map[string]*fakeClient{"watcher": clB, "player": clA} {
+		looks := find(cl.take(), (*pb.ServerMessage).GetCreatureLook)
+		if len(looks) != 1 || looks[0].GetId() != pA.ID() || equipmentIDs(looks[0].GetEquipment()) != want ||
+			lookOf(looks[0].GetLook()) != lookTom {
+			t.Fatalf("the %s got %v, want one CreatureLook with %v and %+v", name, looks, want, lookTom)
+		}
+	}
+
+	// Back in the hand and out in one tick: nothing shows changed, but it is told once
+	// (the state of then), never once per move.
+	h.input(clA, moveItem(inContainer(pack, 0), swordID, 0, inSlot(slotRight), 1))
+	h.input(clA, moveItem(inSlot(slotRight), swordID, 0, inContainer(pack, 0), 1))
+	h.sim.Step()
+	if looks := find(clB.take(), (*pb.ServerMessage).GetCreatureLook); len(looks) > 1 ||
+		(len(looks) == 1 && equipmentIDs(looks[0].GetEquipment()) != want) {
+		t.Fatalf("two moves in one tick told %v", looks)
 	}
 }
 
@@ -324,19 +385,43 @@ func TestVisibleEquipment(t *testing.T) {
 	}
 }
 
-// What falls at a death is no longer shown: the watchers of the dead player get a
-// CreatureLook with what it still wears.
+// What falls at a death is no longer shown: the dead player wakes up showing nothing,
+// and a watcher of the death never sees it still wearing what fell (it either gets a
+// CreatureLook showing nothing or, the player gone to its temple, a CreatureDisappear;
+// its CreatureAppear later carries the look of then).
 func TestDeathDropShowsInTheLook(t *testing.T) {
 	h := deathHarness(t, withLooks(t), func(c *session.Config) {
 		c.Balance.Death.EquipmentDropPct, c.Balance.Death.BackpackDropPct = 100, 100
 	})
-	_, pA := h.geared("Mira", 20, 0)
+	clA, pA := h.geared("Mira", 20, 0)
 	clB, _ := h.join("Watcher", at(43, 40))
+	clA.take()
 	clB.take()
 	h.kill(pA)
-	looks := find(clB.take(), (*pb.ServerMessage).GetCreatureLook)
-	if len(looks) != 1 || looks[0].GetId() != pA.ID() || looks[0].GetEquipment() != nil {
-		t.Fatalf("the watcher of the death got %v, want a CreatureLook showing nothing", looks)
+
+	own := clA.take()
+	if got := seenCreature(own, pA.ID()); got == nil || got.GetEquipment() != nil {
+		t.Fatalf("the dead player sees itself with %v, want nothing", got.GetEquipment())
+	}
+	for _, l := range find(own, (*pb.ServerMessage).GetCreatureLook) {
+		if l.GetId() == pA.ID() && l.GetEquipment() != nil {
+			t.Fatalf("the dead player was told it wears %v", l.GetEquipment())
+		}
+	}
+
+	evs := clB.take()
+	looks := find(evs, (*pb.ServerMessage).GetCreatureLook)
+	for _, l := range looks {
+		if l.GetId() == pA.ID() && l.GetEquipment() != nil {
+			t.Fatalf("the watcher of the death was told it wears %v", l.GetEquipment())
+		}
+	}
+	gone := false
+	for _, d := range find(evs, (*pb.ServerMessage).GetCreatureDisappear) {
+		gone = gone || d.GetId() == pA.ID()
+	}
+	if len(looks) == 0 && !gone {
+		t.Fatalf("the watcher of the death got neither a CreatureLook nor a CreatureDisappear: %v", kinds(evs))
 	}
 }
 

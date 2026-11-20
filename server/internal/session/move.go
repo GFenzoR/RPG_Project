@@ -487,6 +487,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushMapNotices(ctx.Tick)
 	w.pruneShopPending(ctx.Tick)
 	w.flushEconomy(ctx)
+	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

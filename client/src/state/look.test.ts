@@ -195,6 +195,59 @@ describe("a creature's look", () => {
     expect(rev(7)).toBeGreaterThan(p1);
   });
 
+  it("keeps the look, equipment and worn objects of a creature sent again unchanged", () => {
+    const w = new WorldState(content);
+    const appear = (creature: Parameters<typeof create<typeof CreatureSchema>>[1]): void =>
+      w.apply(
+        ev({
+          case: "creatureAppear",
+          value: { creature: create(CreatureSchema, creature) } as never,
+        }),
+        0,
+      );
+    const monster = {
+      id: 4000000013,
+      kind: CreatureKind.MONSTER,
+      pos: { x: 5, y: 6, z: 7 },
+      look: create(BodyLookSchema, TOM),
+      worn: create(WornSchema, {
+        weapon: create(WornPieceSchema, { shape: "sword", tint: "rust" }),
+      }),
+    };
+    const player = {
+      id: 7,
+      kind: CreatureKind.PLAYER,
+      pos: { x: 6, y: 6, z: 7 },
+      look: create(BodyLookSchema, MIRA),
+      equipment: create(VisibleEquipmentSchema, { torso: 64 }),
+    };
+    appear(monster);
+    appear(player);
+    const m0 = w.creatures.get(4000000013);
+    const p0 = w.creatures.get(7);
+    appear({ ...monster, pos: { x: 6, y: 7, z: 7 } });
+    appear({ ...player, pos: { x: 7, y: 6, z: 7 } });
+    const m1 = w.creatures.get(4000000013);
+    const p1 = w.creatures.get(7);
+    expect(m1?.look).toBe(m0?.look);
+    expect(m1?.worn).toBe(m0?.worn);
+    expect(p1?.look).toBe(p0?.look);
+    expect(p1?.equipment).toBe(p0?.equipment);
+
+    // A change gives new objects with the new values.
+    appear({
+      ...monster,
+      worn: create(WornSchema, { weapon: create(WornPieceSchema, { shape: "axe", tint: "rust" }) }),
+    });
+    appear({ ...player, equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }) });
+    expect(w.creatures.get(4000000013)?.worn).toEqual({ weapon: { shape: "axe", tint: "rust" } });
+    expect(w.creatures.get(7)?.equipment.rightHand).toBe(60);
+    expect(w.creatures.get(7)?.look).toBe(p0?.look);
+    // A piece that goes away is a change too.
+    appear({ ...monster, worn: create(WornSchema, {}) });
+    expect(w.creatures.get(4000000013)?.worn).toEqual({});
+  });
+
   it("a creature sent again after a FullMapView never repeats the drawn lookRev", () => {
     // Died and lost its gear: the server sends the CreatureLook and then, in the same
     // batch, the FullMapView of the temple with the creature in it again.
