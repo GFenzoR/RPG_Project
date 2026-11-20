@@ -220,7 +220,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.2
 - `WorldState.conditions` (de `PlayerConditions`, solo las propias, y desde el lote 13 los
-  estados del servidor: un `remaining_ms` 0 es `until: undefined`, sin fin) alimenta la
+  estados del servidor; solo la zona de protección, `ENDLESS_STATUSES`, va sin fin, con
+  `until: undefined`: otro id con `remaining_ms` 0 está terminando) alimenta la
   bandeja de estados (`ui/StatusTray.tsx`, ver "Notas de la bandeja de estados"; nombres
   `condition.<id>.name`, qué hace `condition.<id>.desc`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
@@ -1639,8 +1640,9 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   un pozo con la hotbar y la botonera) y orbe de maná. Los engastes (`.orb-socket`, 106 px)
   salen 18 px por encima de la barra; la bandeja de estados (`.status-box`, `--tray-w` 132
   px; antes la placa `.vitals`) va sobre el orbe de vida. Piedra en sillares (un SVG en línea de juntas), una banda de hierro con
-  remaches arriba, pilares de hierro con filo dorado a los lados del medio y una cresta de
-  pináculos al centro. La hotbar mide sus slots en sus propios px aunque la barra tenga
+  remaches arriba, pilares de hierro con filo dorado a los lados del medio y, al centro, la
+  placa del nombre con un pináculo en cada hombro (`.nameplate`, desde el lote 13; antes
+  una cresta de pináculos). La hotbar mide sus slots en sus propios px aunque la barra tenga
   `zoom` (`cssZoom` de `ui/Hotbar.tsx`: `getBoundingClientRect` da px de pantalla y
   `clientWidth` y los estilos computados los propios); en la barra no deja margen
   (`margin={0}`) y pagina con sus flechas cuando no entran los 12 (a 960x700, 6).
@@ -1649,7 +1651,7 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   variables `--orn-*` en el `style` de `.game` (CSSOM: la CSP de escritorio no deja
   `<style>` en línea, sí imágenes `data:`). Las esquinas doradas con un granate van en
   `.gwin::after`; los remaches en la banda de la barra y en los engastes; los pináculos en
-  los hombros de cada engaste y en la cresta.
+  los hombros de cada engaste y de la placa del nombre.
 - **Ventanas** (`ui/windows.ts`, versión 3 de `rpg.windows`): sin `dock` ni `order`; todas
   flotan en `.win-layer` (la pantalla sobre la barra: `%` de su CSS es de esa área).
   `placeOf` da `x`/`y` en px de pantalla desde su esquina; sin `x`/`y` la ventana está en
@@ -1856,7 +1858,10 @@ de estados y placa del nombre").
   `ui/status/<id>` del atlas como variables CSS.
 - **Vista** (`ui/StatusTray.tsx`): `StatusTrayView` sin hooks (`ui/StatusTray.test.ts`
   recorre su árbol) y `StatusTray`, con un `setTimeout` al próximo segundo y el tooltip
-  que abrió un toque (`data-open`; el mouse y el foco lo abren con CSS). Cada ícono es un
+  que abrió un toque o un click (`data-open`; el mouse y el foco lo abren con CSS). Se
+  cierra con otro en el mismo ícono, con una presión fuera de la bandeja o con Escape
+  (`closesTip`, puro y con tests; el Escape queda `preventDefault`, así no cierra además
+  una ventana ni abre Opciones). Cada ícono es un
   `li` enfocable con `data-condition`, `data-kind`, `data-flash`, `aria-label` (nombre y
   tiempo) y su tooltip (`role="tooltip"`, `aria-describedby`); sin sprite, la inicial.
   Textos: `client.status.*`, `condition.<id>.desc`.
@@ -1868,7 +1873,8 @@ de estados y placa del nombre").
   segunda línea recortada y el tooltip cuelga del `.hud` (nada posicionado en el medio,
   así el recorte de la fila no lo corta).
 - **Placa del nombre** (`ExperienceBar`): nombre y nivel (`client.vitals.level`) sobre la
-  barra, el porcentaje en la barra (`.xppercent`) y en su `title` y `aria-valuetext` la
+  barra (el resaltado `stats` del tutorial está en `.xp`; la placa, que sobresale de su
+  caja, hereda su contorno: `.xp[data-tutorial-active] > .nameplate`), el porcentaje en la barra (`.xppercent`) y en su `title` y `aria-valuetext` la
   experiencia exacta y lo que falta (`experienceTip`, con `content.experience`, la curva de
   `balance.yaml` que pasa `vite/content.ts`; `state/experience.ts` es la fórmula del
   servidor). Test ids: `level` en el nivel, `experience` en la barra, `conditions` en la

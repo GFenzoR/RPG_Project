@@ -2489,8 +2489,9 @@ en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vi
     sus últimos 5 s (`FLASH_MS`), nunca con movimiento reducido.
   - El tooltip dice el nombre, si es ventaja o perjuicio, qué hace
     (`condition.<id>.desc`), los golpes que quedan y el tiempo. Sale con el mouse encima,
-    con el foco del teclado (cada ícono es enfocable) o con un toque, que lo abre y lo
-    cierra (los teléfonos no tienen hover).
+    con el foco del teclado (cada ícono es enfocable) o con un toque o un click, que lo
+    abre y lo cierra (los teléfonos no tienen hover); también lo cierran una presión fuera
+    de la bandeja y Escape.
   - Un temporizador la redibuja cuando cambia un segundo escrito (`nextTrayChange`): el
     servidor solo manda la lista cuando algo empieza, cambia o termina.
   - **Escritorio:** abajo a la izquierda, sobre el orbe de vida y sus pináculos (donde
@@ -2522,7 +2523,8 @@ en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vi
     misma fórmula que `content.Experience.TotalFor`); en el nivel máximo, "nivel máximo".
   - El orbe de vida queda solo. Los test ids `health`, `mana`, `level` (ahora "Nivel 15") y
     `experience` (ahora la barra) siguen; `conditions` es la bandeja. El resaltado
-    `stats` del tutorial cae en la placa y la barra (`.xp`).
+    `stats` del tutorial cae en la placa y la barra (`.xp`; la placa sobresale de su caja
+    y hereda su contorno).
 - **Vista previa:** escena `status` (diez condiciones y estados, dos parpadeando y el
   tooltip del veneno abierto) en `make ui-preview`; `game` lleva la zona de protección y la
   comida, y `danger` el veneno, el combate y una aceleración que se acaba. Se revisaron a

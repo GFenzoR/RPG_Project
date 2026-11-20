@@ -569,6 +569,17 @@ describe("conditions (T3.2)", () => {
     ]);
   });
 
+  it("reads remaining_ms 0 as no end only for protection_zone (docs/05)", () => {
+    // Any other id with nothing left is ending now: the tray drops it, it never stays.
+    const w = entered();
+    w.apply(conditions(["poison", 0, 0], ["in_combat", 0, 0], ["protection_zone", 0, 0]), 1000);
+    expect(w.conditions.map((c) => [c.id, c.until])).toEqual([
+      ["poison", 1000],
+      ["in_combat", 1000],
+      ["protection_zone", undefined],
+    ]);
+  });
+
   it("walks at the speed of its PlayerStats (haste)", () => {
     const w = entered();
     const before = w.self?.speed ?? 0;

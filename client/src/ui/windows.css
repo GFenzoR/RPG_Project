@@ -339,6 +339,12 @@
     0 0 0 1px #000,
     0 -3px 8px rgb(0 0 0 / 0.55);
 }
+/* The tutorial's "stats" highlight (client.css [data-tutorial-active]) is on .xp, the bar's
+   box: the plate stands out of it, so it takes the same outline, pulse and all. */
+.xp[data-tutorial-active] > .nameplate {
+  outline: inherit;
+  outline-offset: inherit;
+}
 /* A pinnacle at each shoulder of the plate. */
 .nameplate::before,
 .nameplate::after {

@@ -239,6 +239,12 @@ export interface SkillState {
   percent: number;
 }
 
+/**
+ * The statuses with no end (docs/05 "Condiciones"): their remaining_ms is always 0, which
+ * only for them means "no end"; any other id with 0 left is ending now.
+ */
+export const ENDLESS_STATUSES: ReadonlySet<string> = new Set(["protection_zone"]);
+
 /** The last death (death.died), for the death screen. */
 /**
  * One of the player's own active conditions (PlayerConditions, T3.2), or a status the
@@ -252,7 +258,7 @@ export interface ConditionView {
   id: string;
   /**
    * performance.now() at which it ends (or its last hit lands); undefined for one with no
-   * end (remaining_ms 0: protection_zone).
+   * end (ENDLESS_STATUSES: protection_zone).
    */
   until: number | undefined;
   /** Hits left of a damage condition (0 for the others). */
@@ -773,7 +779,7 @@ export class WorldState implements TileSource {
       case "playerConditions":
         this.conditions = msg.value.conditions.map((c) => ({
           id: c.conditionId,
-          until: c.remainingMs > 0 ? now + c.remainingMs : undefined,
+          until: ENDLESS_STATUSES.has(c.conditionId) ? undefined : now + c.remainingMs,
           ticks: c.ticks,
         }));
         break;

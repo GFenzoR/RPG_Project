@@ -1314,7 +1314,8 @@ Reglas en `02-game-design.md` ("Condiciones").
   entradas con ids que no son de `balance.yaml`: `in_combat` (el bloqueo de logout,
   `remaining_ms` hasta que se puede salir), `pvp_locked` (el bloqueo PvP del atacante,
   hasta que vence) y `protection_zone` (parado en una zona de protección; `remaining_ms` 0
-  = sin fin). `ticks` es 0 en las tres. Es aditivo: un cliente viejo las mostraría como
+  = sin fin, solo en ella: el cliente lo decide por el id, y cualquier otra entrada con 0
+  está terminando). `ticks` es 0 en las tres. Es aditivo: un cliente viejo las mostraría como
   condiciones desconocidas. El servidor las lee del jugador al final de cada tick (una
   consulta al mapa y unas comparaciones por jugador) y manda la lista otra vez cuando una
   empieza o termina, o cuando su fin se movió 1 s o más de lo que el cliente sabe

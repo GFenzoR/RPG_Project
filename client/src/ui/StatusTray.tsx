@@ -6,7 +6,8 @@
 // windows.css); on phones and tablets it is a compact row in the header (client.css).
 //
 // StatusTrayView draws without hooks (ui/StatusTray.test.ts walks its tree); StatusTray
-// keeps the clock that redraws it when a second changes and which tooltip a tap opened.
+// keeps the clock that redraws it when a second changes and which tooltip a tap or a click
+// opened (closed again by another on it, a press outside the tray or Escape: closesTip).
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
@@ -34,6 +35,25 @@ export function leftText(t: Translate, seconds: number | undefined): string {
     minutes: Math.floor(seconds / 60),
     seconds: seconds % 60,
   });
+}
+
+/** The fields of a DOM event closesTip reads (a PointerEvent or a KeyboardEvent). */
+export interface TipEvent {
+  type: string;
+  key?: string | undefined;
+  target: EventTarget | null;
+}
+
+/**
+ * Whether an event closes the tooltip a tap or a click opened: Escape, or a press anywhere
+ * outside the tray (a press on one of its icons toggles them itself). Without it a click
+ * on the desktop left the tooltip open, and the bar over the windows, until the same icon
+ * was clicked again.
+ */
+export function closesTip(e: TipEvent): boolean {
+  if (e.type === "keydown") return e.key === "Escape";
+  const at = e.target as { closest?: (selector: string) => unknown } | null;
+  return !at?.closest?.(".status-box");
 }
 
 export interface StatusTrayViewProps {
@@ -129,6 +149,22 @@ export function StatusTray(props: {
     return () => clearTimeout(timer);
   });
   const shown = open !== undefined && entries.some((e) => e.id === open) ? open : undefined;
+  useEffect(() => {
+    if (shown === undefined) return undefined;
+    const close = (e: Event): void => {
+      if (!closesTip(e as TipEvent)) return;
+      // The Escape that closed it does nothing more: GameView skips a prevented key (it
+      // would close the window on top or open the options too).
+      if (e.type === "keydown") e.preventDefault();
+      setOpen(undefined);
+    };
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", close);
+    };
+  }, [shown]);
   return (
     <StatusTrayView
       t={props.t}

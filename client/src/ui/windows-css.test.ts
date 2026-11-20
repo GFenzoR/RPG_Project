@@ -59,6 +59,16 @@ describe("windows.css", () => {
     expect(body).toMatch(/overflow:\s*clip/);
   });
 
+  it("outlines the name plate with the bar when the tutorial highlights the stats", () => {
+    // data-tutorial="stats" is on .xp, but the plate is absolute and stands out of its box:
+    // the highlight's outline framed the 11 px bar alone (docs/17 "Placa del nombre").
+    const body = rule(windowsCss, ".xp[data-tutorial-active] > .nameplate");
+    expect(body).toMatch(/outline:\s*inherit/);
+    expect(body).toMatch(/outline-offset:\s*inherit/);
+    // What it inherits: client.css's highlight, which pulses the outline's colour.
+    expect(rule(clientCss, "[data-tutorial-active]")).toMatch(/outline:\s*2px solid/);
+  });
+
   it("keeps the guild's invitations above the party's, and both over the windows", () => {
     // Without its own rule on the desktop, the guild's took the party's place (the
     // windowed rule is more specific than .guild-invitations) and covered its buttons.

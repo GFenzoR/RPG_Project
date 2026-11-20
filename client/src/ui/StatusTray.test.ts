@@ -2,7 +2,7 @@
 // element tree without a DOM, like ui/Toolbar.test.ts.
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
-import { StatusTrayView, badgeText, leftText } from "./StatusTray.tsx";
+import { StatusTrayView, badgeText, closesTip, leftText } from "./StatusTray.tsx";
 import type { StatusTrayViewProps } from "./StatusTray.tsx";
 import { trayEntries } from "../state/status.ts";
 
@@ -116,6 +116,24 @@ describe("StatusTrayView", () => {
     const all = view({ entries: [] });
     expect(all[0]?.props["data-count"]).toBe(0);
     expect(all.some((v) => v.props["data-condition"] !== undefined)).toBe(false);
+  });
+});
+
+describe("closing a tooltip a tap or a click opened", () => {
+  // A stand-in for a DOM element: inside the tray or not.
+  const at = (inTray: boolean): EventTarget =>
+    ({ closest: (sel: string) => (inTray && sel === ".status-box" ? {} : null) }) as never;
+
+  it("closes on a press outside the tray, never on one of its icons", () => {
+    expect(closesTip({ type: "pointerdown", target: at(false) })).toBe(true);
+    expect(closesTip({ type: "pointerdown", target: at(true) })).toBe(false);
+    // A press on no element (the document itself) is outside too.
+    expect(closesTip({ type: "pointerdown", target: null })).toBe(true);
+  });
+
+  it("closes on Escape, not on another key", () => {
+    expect(closesTip({ type: "keydown", key: "Escape", target: at(true) })).toBe(true);
+    expect(closesTip({ type: "keydown", key: "a", target: at(false) })).toBe(false);
   });
 });
 
