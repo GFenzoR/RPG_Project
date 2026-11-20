@@ -1000,7 +1000,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
-  // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
+  // Puerto's NPCs live on Velmara (T1.16): this character's residence is Lanternby, so
   // it wakes up at that temple, next to the priestess and the provisioner. Level 9: the
   // temples bless from there on (content audit m8; novices are covered already).
   psql([
@@ -1067,7 +1067,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     return p;
   };
 
-  // The sign of Farol's temple stands by its east doorway (puerto_temple_sign, on the
+  // The sign of Lanternby's temple stands by its east doorway (puerto_temple_sign, on the
   // texts.yaml sign of the same id): in view from the temple, Shift+click reads it.
   const sign = await tileClient(3163, 6384);
   await page.mouse.move(sign.x, sign.y);
@@ -1942,7 +1942,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.close();
 });
 
-test("T3.4: cook a fish at the hearth of Farol from the station window", async ({
+test("T3.4: cook a fish at the hearth of Lanternby from the station window", async ({
   page,
   playwright,
 }) => {
@@ -1972,7 +1972,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
-  // Stand just south of Farol's cooking hearth (3172, 6366: world/islands/puerto), with a
+  // Stand just south of Lanternby's cooking hearth (3172, 6366: world/islands/puerto), with a
   // backpack (48) holding 3 raw fish (10), and cooking 30 so the grilled fish is at its
   // 97% cap (data/recipes.yaml).
   psql([
@@ -2101,13 +2101,13 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   await shot(page, "26-boat-routes");
 
   await route.click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Islote de ensayo");
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Pellwick");
   await shot(page, "27-boat-sailing");
   await expect(dialog).toBeHidden();
   await arrived(page, 1058, 1056);
   const log = page.getByTestId("game-log");
   await expect(log).toContainText("Pagaste 30 monedas.");
-  await expect(log).toContainText("Zarpaste hacia Islote de ensayo.");
+  await expect(log).toContainText("Zarpaste hacia Pellwick.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "28-boat-arrived");
   expect(errors).toEqual([]);
@@ -2152,7 +2152,7 @@ async function enterGame(page: Page, email: string, password: string): Promise<v
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
 }
 
-test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", async ({
+test("T3.6: sail to Selvaine after Chapter 1 and meet its ferryman", async ({
   page,
   playwright,
 }) => {
@@ -2185,34 +2185,32 @@ test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", asyn
   await page.mouse.click(master.x, master.y, { button: "right" });
   const dialog = page.getByTestId("dialog");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await dialog.getByRole("button", { name: "A la Isla del Bosque (80 monedas)." }).click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla del Bosque");
+  await dialog.getByRole("button", { name: "A Selvaine (80 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Selvaine");
   await arrived(page, 4120, 6100);
   await expect(page.getByTestId("game-log")).toContainText("Pagaste 80 monedas.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "29-bosque-dock");
 
-  // The ferryman of Raigal sells the way back.
+  // The ferryman of Ivernel sells the way back.
   const ferryman = await page.evaluate(() => window.__rpgClient?.tileToClient(4122, 6100));
   if (!ferryman) throw new Error("no canvas");
   await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
   await expect(dialog).toContainText("Tavin Rema");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Puerto (60 monedas)." }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Velmara (60 monedas)." })).toBeVisible();
   await shot(page, "30-bosque-ferryman");
   expect(errors).toEqual([]);
 });
 
-test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
+test("T3.6: wake up at the temple of Ivernel and talk to the druid", async ({
   page,
   playwright,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Rooted");
-  // Resident of the Forest Isle with no saved position: wakes up at its temple.
+  // Resident of Selvaine with no saved position: wakes up at its temple.
   psql([
     databaseUrl,
     "-c",
@@ -3183,17 +3181,14 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   expect(errors).toEqual([]);
 });
 
-test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", async ({
-  page,
-  playwright,
-}) => {
+test("T5.5: sail from Selvaine to Karvask and meet its captain", async ({ page, playwright }) => {
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Ashsail");
-  // Level 25 (172800 XP) on Raigal's dock with 200 copper coins (8) in a backpack (48).
+  // Level 25 (172800 XP) on Ivernel's dock with 200 copper coins (8) in a backpack (48).
   // The route asks for level 25 and costs 150.
   psql([
     databaseUrl,
@@ -3214,37 +3209,33 @@ test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", a
   await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
   const dialog = page.getByTestId("dialog");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await dialog.getByRole("button", { name: "A la Isla Volcánica (150 monedas)." }).click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla Volcánica");
+  await dialog.getByRole("button", { name: "A Karvask (150 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Karvask");
   await arrived(page, 3617, 5795);
   await expect(page.getByTestId("game-log")).toContainText("Pagaste 150 monedas.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "63-volcan-dock");
 
-  // The captain of Brasal sells the way back to both islands.
+  // The captain of Cinderstead sells the way back to both islands.
   const captain = await page.evaluate(() => window.__rpgClient?.tileToClient(3615, 5794));
   if (!captain) throw new Error("no canvas");
   await page.mouse.click(captain.x, captain.y, { button: "right" });
   await expect(dialog).toContainText("Nerea Vado");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Bosque (100 monedas)." }),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Puerto (140 monedas)." }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Selvaine (100 monedas)." })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Velmara (140 monedas)." })).toBeVisible();
   await shot(page, "64-volcan-captain");
   expect(errors).toEqual([]);
 });
 
-test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper", async ({
+test("T5.5: wake up at the temple of Cinderstead and start Chapter 3 with the keeper", async ({
   page,
   playwright,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Stoker");
-  // Resident of the Ember Isle at level 30 (302760 XP) who found the ember root in
+  // Resident of Karvask at level 30 (302760 XP) who found the ember root in
   // Chapter 2: the flag, and the root (132) in a backpack (48).
   psql([
     databaseUrl,
@@ -3274,7 +3265,7 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await page.mouse.click(sign.x, sign.y);
   await page.keyboard.up("Shift");
   await expect(page.getByTestId("game-log")).toContainText(
-    "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
+    "Ves: cartel. Templo de la Llama Quieta, en Cinderstead.",
   );
   await shot(page, "65b-volcan-temple-sign");
   // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
@@ -3315,7 +3306,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
 }) => {
   const holder = await newGuardian(playwright, "Llavero");
   const stray = await newGuardian(playwright, "Rezagado");
-  // Residents of the Ember Isle at level 30 (302760 XP) on floor 8 of its mine, just north
+  // Residents of Karvask at level 30 (302760 XP) on floor 8 of its mine, just north
   // of the forge gate (3692,5832; docs/02 "Puertas con llave"), each with a backpack (48):
   // the key holder carries the ember key (142), the stray a coin (8). The stray stands right
   // north of the gate: the client's paths never cut a blocked corner.
@@ -3440,7 +3431,7 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   });
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Minero");
-  // A resident of the Ember Isle at level 30 (302760 XP) on the cinder path two tiles west
+  // A resident of Karvask at level 30 (302760 XP) on the cinder path two tiles west
   // of the mine stairs (3692,5796; docs/03 "Islas actuales"). Below them, floor 8 lands on
   // 3692,5797; the stairs up (3692,5796,8) land on 3692,5797,7, next to the stairs down.
   psql([

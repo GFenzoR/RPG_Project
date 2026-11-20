@@ -281,7 +281,7 @@ describe("look messages", () => {
     "item.copper_coin.name": "copper coin",
     "item.signpost.name": "sign",
     "item.brasal_dock_sign.name": "sign",
-    "text.volcan.dock_sign": "Dock of Brasal.",
+    "text.volcan.dock_sign": "Dock of Cinderstead.",
     "look.item": "You see {items}. It weighs {weight} oz.",
     "look.ground": "You see {items}.",
     "client.log.item_count": "{count} {name}",
@@ -350,7 +350,7 @@ describe("look messages", () => {
   });
 
   it("reads a sign: the description key its data/items entry names, not item.<id>.desc", () => {
-    expect(look("look.ground", 60, 0, 0)).toBe("You see sign. Dock of Brasal.");
+    expect(look("look.ground", 60, 0, 0)).toBe("You see sign. Dock of Cinderstead.");
   });
 
   it("fills a single {item} parameter (gather.got, shop.bought)", () => {
