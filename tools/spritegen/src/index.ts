@@ -17,19 +17,22 @@ import {
 } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { castShadow, composite, rng, seedOf } from "./draw.ts";
-import type { Recipe } from "./recipe.ts";
+import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
-import { RECIPES } from "./recipes/index.ts";
+import { RECIPES, recipesAt } from "./recipes/index.ts";
 
-export { RECIPES } from "./recipes/index.ts";
+export { RECIPES, recipesAt } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
 export { UI_ICON_BOX, UI_SLOT_BOX, uiIconBox } from "./recipe.ts";
 
 export const TILE = 32;
 
-/** Recipe paths in a stable (sorted) order, optionally only those starting with `only`. */
-export function recipePaths(only?: string): string[] {
-  return Object.keys(RECIPES)
+/**
+ * Recipe paths in a stable (sorted) order, optionally only those starting with `only`, of
+ * `book` (the repo's recipes, or recipesAt another root).
+ */
+export function recipePaths(only?: string, book: RecipeBook = RECIPES): string[] {
+  return Object.keys(book)
     .filter((p) => !only || p.startsWith(only))
     .sort();
 }
@@ -46,8 +49,8 @@ export function render(path: string, recipe: Recipe = mustGet(path)): Image {
   return img;
 }
 
-function mustGet(path: string): Recipe {
-  const r = RECIPES[path];
+function mustGet(path: string, book: RecipeBook = RECIPES): Recipe {
+  const r = book[path];
   if (!r) throw new Error(`spritegen: no recipe for ${path}`);
   return r;
 }
@@ -59,8 +62,9 @@ export function spriteFile(root: string, path: string): string {
 
 /** Renders and writes every recipe (or those under `only`); returns path and bytes. */
 export function buildSprites(root: string, only?: string): { path: string; bytes: number }[] {
-  return recipePaths(only).map((path) => {
-    const png = encodePng(render(path));
+  const book = recipesAt(root);
+  return recipePaths(only, book).map((path) => {
+    const png = encodePng(render(path, mustGet(path, book)));
     const file = spriteFile(root, path);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, png);
@@ -119,9 +123,10 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
  */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
+  const book = recipesAt(root);
   const problems: string[] = [];
-  for (const p of recipePaths()) {
-    const ui = RECIPES[p]?.kind === "ui";
+  for (const p of recipePaths(undefined, book)) {
+    const ui = book[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))
       problems.push(`${p}: ui icons are exactly the ui/<group>/<id> paths of kind "ui"`);
     else if (
@@ -138,13 +143,13 @@ export function checkPaths(root: string): string[] {
       );
   }
   const strips = new Map<string, number[]>();
-  for (const p of recipePaths()) {
+  for (const p of recipePaths(undefined, book)) {
     const m = EFFECT_FRAME.exec(p);
     const missile = MISSILE_ART.exec(p);
     const folder = m ? `effects/${m[1] ?? ""}` : missile?.[1] ? `missiles/${missile[1]}` : "";
     const frame = m ? m[2] : missile?.[2];
     if (!folder || frame === undefined || !/^[0-9]+$/.test(frame)) continue;
-    if (RECIPES[p]?.kind !== "effect") problems.push(`${p}: must be of kind "effect"`);
+    if (book[p]?.kind !== "effect") problems.push(`${p}: must be of kind "effect"`);
     const frames = strips.get(folder) ?? [];
     frames.push(Number(frame));
     strips.set(folder, frames);
@@ -183,7 +188,8 @@ function caption(path: string): string {
  */
 export function previewSheet(root: string, paths: string[]): Image {
   const grass = decodePng(readFileSync(join(root, GRASS)));
-  const cells = paths.map((path) => cell(path, grass));
+  const book = recipesAt(root);
+  const cells = paths.map((path) => cell(path, grass, book));
   const cellW = Math.max(96, ...cells.map((c) => c.width)) + 8;
   const cellH = Math.max(...cells.map((c) => c.height), 32) + GLYPH_H + 6;
   const cols = Math.max(1, Math.min(paths.length, Math.floor(640 / cellW)));
@@ -214,8 +220,8 @@ export function previewSheet(root: string, paths: string[]): Image {
   return sheet;
 }
 
-function cell(path: string, grass: Image): Image {
-  const recipe = mustGet(path);
+function cell(path: string, grass: Image, book: RecipeBook): Image {
+  const recipe = mustGet(path, book);
   const sprite = render(path, recipe);
   if (recipe.kind === "ground" || recipe.kind === "wall") {
     const out = createImage(sprite.width * 3, sprite.height * 3);

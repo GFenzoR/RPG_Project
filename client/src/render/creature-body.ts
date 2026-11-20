@@ -11,8 +11,11 @@
 // clips and tint, all in the same pose and frame, stacked in packages/renderer look.ts
 // LAYER_ORDER for the facing (re-stacked only when the facing changes). Its sprites come
 // from a shared pool and go back to it with release(): a creature that leaves the view
-// gives them to the next one.
-import { Container, Graphics, GraphicsContext, Sprite } from "pixi.js";
+// gives them to the next one. They sit in one container that fades as a whole: Pixi
+// multiplies a container's alpha into each child, so a doll fading in, falling or drawn
+// see-through would show the skin through the tunic and the sword through the body; while
+// it is not opaque, the container draws through one AlphaFilter instead.
+import { AlphaFilter, Container, Graphics, GraphicsContext, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import {
   ANIM_DIRS,
@@ -81,6 +84,12 @@ export class SpritePool {
 /** The pool the game's bodies share. */
 export const LAYER_POOL = new SpritePool();
 
+/**
+ * The filter a paper doll fades through (a test passes one that needs no WebGL), at the
+ * canvas's own resolution: the pixels come back as they were, only fainter.
+ */
+export const newFade = (): AlphaFilter => new AlphaFilter({ alpha: 1, resolution: "inherit" });
+
 export class CreatureBody {
   readonly root = new Container({ label: "body" });
   /** The body's sprite (a paper doll's body layer): silhouettes and the behind-wall copy. */
@@ -98,10 +107,22 @@ export class CreatureBody {
   private readonly orders: number[][];
   private stacked: AnimDir | undefined;
   private readonly pool: SpritePool | undefined;
+  /** A paper doll's layers, faded as one figure (`fade`, while not opaque). */
+  private readonly doll: Container | undefined;
+  private fade: AlphaFilter | undefined;
+  private faded = false;
+  /** The alpha it was last drawn with (the pose's times `opacity`). */
+  private drawnAlpha = 1;
+  /**
+   * Multiplies the pose's alpha: the own player drawn see-through while invisible (T3.2).
+   * The caller sets it instead of its container's alpha, which would fade layer by layer.
+   */
+  opacity = 1;
 
   /**
    * `clips` places the drawing (anchor, feet, height): for a paper doll, the body layer's.
-   * `layers`: the paper doll's layers (empty: `clips` is the one sprite).
+   * `layers`: the paper doll's layers (empty: `clips` is the one sprite). `makeFade` makes the
+   * filter it fades through, the first time it is not opaque.
    */
   constructor(
     readonly clips: ClipSet<Texture>,
@@ -109,6 +130,7 @@ export class CreatureBody {
     tint = 0xffffff,
     layers: readonly BodyLayer[] = [],
     pool: SpritePool = LAYER_POOL,
+    private readonly makeFade: () => AlphaFilter = newFade,
   ) {
     const meta = clips.meta;
     const first = clipTexture(clips, "idle", 2, 0);
@@ -128,13 +150,16 @@ export class CreatureBody {
     this.orders = ANIM_DIRS.map((d) => layerOrder(layers, d));
     if (layers.length > 0) {
       this.pool = pool;
+      const doll = new Container({ label: "layers" });
+      this.doll = doll;
+      this.root.addChild(doll);
       for (const l of layers) {
         const s = pool.take();
         s.texture = clipTexture(l.clips, "idle", 2, 0) ?? MISSING_TEXTURE;
         s.position.set(this.baseX, this.baseY);
         s.tint = l.tint;
         this.sprites.push(s);
-        this.root.addChild(s);
+        doll.addChild(s);
       }
       const body = layers.findIndex((l) => l.slot === "body");
       this.sprite = this.sprites[Math.max(0, body)] ?? pool.take();
@@ -161,32 +186,60 @@ export class CreatureBody {
     if (!this.pool) return;
     for (const s of this.sprites) this.pool.give(s);
     this.sprites.length = 0;
+    if (this.doll && this.faded) this.doll.filters = [];
+    this.faded = false;
+    this.fade?.destroy();
+    this.fade = undefined;
   }
 
-  /** Re-stacks the layers for `d`: the shadow stays under them. */
+  /** Re-stacks the layers for `d` (in their own container: the shadow stays under them). */
   private restack(d: AnimDir): void {
+    const doll = this.doll;
+    if (!doll) return;
     const order = this.orders[dirIndex(d)] ?? [];
-    const base = this.shadow ? 1 : 0;
     order.forEach((i, k) => {
       const s = this.sprites[i];
-      if (s && s.parent === this.root) this.root.setChildIndex(s, base + k);
+      if (s && s.parent === doll) doll.setChildIndex(s, k);
     });
     this.stacked = d;
   }
 
+  /** The alpha the body was last drawn with: its see-through copies follow it. */
+  get alpha(): number {
+    return this.drawnAlpha;
+  }
+
+  /** A paper doll's layers as one figure: opaque, or through the fade at `alpha`. */
+  private fadeLayers(alpha: number): void {
+    const doll = this.doll;
+    if (!doll) return;
+    if (alpha >= 1) {
+      if (this.faded) doll.filters = [];
+      this.faded = false;
+      return;
+    }
+    const fade = (this.fade ??= this.makeFade());
+    fade.alpha = alpha;
+    if (!this.faded) doll.filters = [fade];
+    this.faded = true;
+  }
+
   /** Draws `pose` facing `dir` (index in ANIM_DIRS). */
   draw(pose: Pose, dir: number): void {
+    const alpha = pose.alpha * this.opacity;
+    this.drawnAlpha = alpha;
     if (this.sprites.length > 0) {
       this.drawLayers(pose, dir);
+      this.fadeLayers(alpha);
     } else {
       const sp = this.sprite;
       const tex = clipTexture(this.clips, pose.action, dir, pose.frame);
       if (tex && sp.texture !== tex) sp.texture = tex;
-      this.place(sp, pose, this.tint);
+      this.place(sp, pose, this.tint, alpha);
     }
     if (this.shadow) {
       this.shadow.scale.set(pose.shadow * Math.abs(pose.scaleX));
-      this.shadow.alpha = pose.alpha;
+      this.shadow.alpha = alpha;
     }
   }
 
@@ -198,15 +251,16 @@ export class CreatureBody {
       const layer = this.layers[i] as BodyLayer;
       const tex = clipTexture(layer.clips, pose.action, dir, pose.frame);
       if (tex && sp.texture !== tex) sp.texture = tex;
-      this.place(sp, pose, layer.tint);
+      // Opaque: the layers' container fades them as one (fadeLayers).
+      this.place(sp, pose, layer.tint, 1);
     }
   }
 
-  private place(sp: Sprite, pose: Pose, tint: number): void {
+  private place(sp: Sprite, pose: Pose, tint: number, alpha: number): void {
     sp.position.set(this.baseX + pose.x, this.baseY + pose.y);
     sp.scale.set(pose.scaleX, pose.scaleY);
     sp.skew.x = pose.skewX;
-    sp.alpha = pose.alpha;
+    sp.alpha = alpha;
     sp.tint = pose.flash ? FLASH_TINT : pose.shimmer ? SHIMMER_TINT : tint;
   }
 }

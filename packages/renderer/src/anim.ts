@@ -117,8 +117,15 @@ export interface AnimState {
   seed: number;
   /** Start of the step being counted, NaN before the first one. */
   walkStart: number;
-  /** Steps finished before the current one (the walk cycle plays by distance). */
-  steps: number;
+  /**
+   * Walk frames played by the steps finished before the current one (the cycle plays by
+   * distance), kept within the clip. Counted in frames, not steps: a step facing north or
+   * south plays more frames per tile (perTileNS), so turning mid-walk carries on from the
+   * frame drawn instead of jumping to where that many steps would be at the other pace.
+   */
+  walkPhase: number;
+  /** Walk frames per tile of the current step (what it adds to walkPhase when it ends). */
+  walkPer: number;
   /** When the last step ended (ANI-3), -Infinity if it never walked. */
   stepEnd: number;
   /** Walk frame drawn last, held between chained steps. */
@@ -146,7 +153,8 @@ export function newAnimState(id: number, now: number): AnimState {
   return {
     seed: hashId(id),
     walkStart: Number.NaN,
-    steps: 0,
+    walkPhase: 0,
+    walkPer: 0,
     stepEnd: Number.NEGATIVE_INFINITY,
     walkFrame: 0,
     attackAt: Number.NEGATIVE_INFINITY,
@@ -307,7 +315,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   let t: number | undefined;
   if (in_.walkStart !== undefined && in_.walkMs > 0) {
     if (in_.walkStart !== s.walkStart) {
-      if (!Number.isNaN(s.walkStart)) s.steps++;
+      if (!Number.isNaN(s.walkStart)) s.walkPhase += s.walkPer;
       s.walkStart = in_.walkStart;
     }
     const end = in_.walkStart + in_.walkMs;
@@ -397,7 +405,9 @@ function walking(
     if (t !== undefined) {
       const ns = in_.dir === "n" || in_.dir === "s";
       const per = Math.max(1, (ns ? walk.perTileNS : undefined) ?? walk.perTile ?? walk.frames);
-      s.walkFrame = Math.floor((s.steps + t) * per) % walk.frames;
+      s.walkPhase %= walk.frames;
+      s.walkPer = per;
+      s.walkFrame = Math.floor(s.walkPhase + t * per) % walk.frames;
     }
     out.frame = s.walkFrame;
     return;

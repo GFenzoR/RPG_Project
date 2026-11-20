@@ -9,17 +9,8 @@
 //   where nothing is equipped; a shop outfit (a costume) covers the torso, legs and feet even
 //   over armour, and the helmet, the shield and the weapon still show.
 import { EquipmentSlot } from "@rpg/protocol";
-import { lookLayers } from "@rpg/renderer";
-import type {
-  AnimAction,
-  AnimDir,
-  LayerDraw,
-  LayerSlot,
-  Look,
-  LookTables,
-  Worn,
-  WornSlot,
-} from "@rpg/renderer";
+import { lookSprites } from "@rpg/renderer";
+import type { LayerSlot, Look, LookTables, Worn, WornSlot } from "@rpg/renderer";
 import type { ItemDef, OutfitDef } from "../content-types.ts";
 
 /** The equipment slots that show something on the figure. */
@@ -113,26 +104,31 @@ export function mulTint(a: number, b: number): number {
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }
 
-/**
- * The layers of a figure, back to front, for one frame (packages/renderer look.ts
- * lookLayers), with the outfit colour cosmetic (T5.7) over the slots in the outfit's clothes.
- */
-export function figureLayers(
-  look: Look,
-  dressed: Dressed,
-  dir: AnimDir,
-  action: AnimAction,
-  frame: number,
-  tables: LookTables,
-  outfitTint = 0xffffff,
-): LayerDraw[] {
-  const layers = lookLayers(look, dressed.worn, dir, action, frame, tables);
-  if (outfitTint === 0xffffff) return layers;
-  return layers.map((l) =>
-    dressed.clothes.has(l.slot as WornSlot) ? { ...l, tint: mulTint(l.tint, outfitTint) } : l,
-  );
+/** One layer of a figure: its slot, its atlas sprite and its tint (0xrrggbb, a multiply). */
+export interface DollSprite {
+  slot: LayerSlot;
+  sprite: string;
+  tint: number;
 }
 
-/** The slot of a layer is one of the figure's clothes slots. */
-export const isClothes = (slot: LayerSlot): boolean =>
-  slot === "torso" || slot === "legs" || slot === "feet";
+/**
+ * The layers of a figure (packages/renderer look.ts lookSprites), with the outfit colour
+ * cosmetic (T5.7) multiplied into the slots drawn in the outfit's clothes: what the canvas
+ * stacks in a CreatureBody (game-canvas.ts dollOf), in no particular order.
+ */
+export function dollSprites(
+  look: Look,
+  dressed: Dressed,
+  tables: LookTables,
+  outfitTint = 0xffffff,
+): DollSprite[] {
+  const out: DollSprite[] = [];
+  for (const [slot, s] of Object.entries(lookSprites(look, dressed.worn, tables)) as [
+    LayerSlot,
+    { sprite: string; tint: number },
+  ][]) {
+    const clothes = dressed.clothes.has(slot as WornSlot);
+    out.push({ slot, sprite: s.sprite, tint: clothes ? mulTint(s.tint, outfitTint) : s.tint });
+  }
+  return out;
+}

@@ -5,15 +5,21 @@
 // - each NPC that is a person (data/npcs `sprite` with a `look`), facing south: the
 //   dialog's portrait.
 // The client falls back to them when the layers are missing. Data drives them: a changed
-// tint is a stale PNG (the committed-PNG test asks for make spritegen).
+// tint is a stale PNG (the committed-PNG test asks for make spritegen). They read data/ of
+// the repo, or of the root the CLI is given (--root, recipes/index.ts recipesAt).
 import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseYaml } from "@rpg/spritepack";
 import type { Recipe, RecipeBook } from "../../../recipe.ts";
 import type { Look, LookTables, Worn } from "./compose.ts";
 import { composeFrame } from "./compose.ts";
 
-const ROOT = new URL("../../../../../../", import.meta.url);
-const read = (file: string): unknown => parseYaml(readFileSync(new URL(file, ROOT), "utf8"));
+/** The repo this tool lives in: where data/ is unless the CLI says another root. */
+export const REPO_ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
+
+/** A content file: YAML, as tools/spritepack reads data/ (anything else there is not data). */
+const isYaml = (file: string): boolean => /\.ya?ml$/.test(file);
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -68,8 +74,12 @@ const still = (look: Look, worn: Worn, tables: LookTables, dir: "n" | "e" | "s" 
   draw: (img) => img.data.set(composeFrame(look, worn, tables, "idle", dir, 0).data),
 });
 
-/** One recipe per outfit and facing (<sprite>/<dir>_0) and per NPC person (<sprite>). */
-export function lookPreviews(): RecipeBook {
+/**
+ * One recipe per outfit and facing (<sprite>/<dir>_0) and per NPC person (<sprite>), from
+ * data/ under `root`.
+ */
+export function lookPreviews(root: string = REPO_ROOT): RecipeBook {
+  const read = (file: string): unknown => parseYaml(readFileSync(join(root, file), "utf8"));
   const tables = lookTables(read("data/looks.yaml"));
   const outfits = read("data/outfits.yaml");
   const book: RecipeBook = {};
@@ -80,9 +90,9 @@ export function lookPreviews(): RecipeBook {
     for (const dir of ["n", "e", "s", "w"] as const)
       book[`${o["sprite"]}/${dir}_0`] = still(look, worn, tables, dir);
   }
-  const npcs = new URL("data/npcs/", ROOT);
-  for (const file of readdirSync(npcs).sort()) {
-    const n = parseYaml(readFileSync(new URL(file, npcs), "utf8"));
+  const npcs = join(root, "data", "npcs");
+  for (const file of readdirSync(npcs).filter(isYaml).sort()) {
+    const n = parseYaml(readFileSync(join(npcs, file), "utf8"));
     if (!isObj(n) || typeof n["sprite"] !== "string" || !isObj(n["look"])) continue;
     book[n["sprite"]] = still(lookOf(n["look"]), wornOf(n["look"]["worn"]), tables, "s");
   }

@@ -13,6 +13,7 @@
 //     attacker (or back from where it faces).
 import { AttackKind, CreatureKind, DisappearReason } from "@rpg/protocol";
 import type { Direction } from "@rpg/protocol";
+import { attackActionFor } from "@rpg/renderer";
 import type { AttackAction } from "@rpg/renderer";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
@@ -114,13 +115,32 @@ export function attackDir(
 }
 
 /**
- * The clip an attack plays (docs/17 ANI-2): a ranged attack shoots (the LPC bow), a spell
- * casts (spellcast) and a melee blow, or a kind this client does not know, swings.
+ * The clip an attack plays (docs/17 ANI-2): a ranged attack shoots, a spell casts and a
+ * melee blow, or a kind this client does not know, swings.
  */
 export function attackAction(kind: AttackKind): AttackAction {
   if (kind === AttackKind.RANGED) return "shoot";
   if (kind === AttackKind.SPELL) return "cast";
   return "attack";
+}
+
+/** What a paper doll is known to hold: a weapon shape, or none (the bare fist). */
+export interface Held {
+  weapon: string | undefined;
+}
+
+/**
+ * The clip a figure's attack plays. A paper doll whose weapon the client knows (an NPC's
+ * or a monster's look, the own player's equipment) plays its class's clip
+ * (packages/renderer attackActionFor: a bow shoots, a staff casts, a throw without a bow
+ * swings). `held` undefined is a weapon the client does not know (another player, until
+ * feat/character-look sends its equipment) or a sprite that is no doll: the attack's kind
+ * decides (attackAction), so another player's ranged attack still shoots.
+ */
+export function figureAttack(kind: AttackKind, held: Held | undefined): AttackAction {
+  if (!held) return attackAction(kind);
+  const k = kind === AttackKind.SPELL ? "spell" : kind === AttackKind.RANGED ? "ranged" : "melee";
+  return attackActionFor(k, held.weapon);
 }
 
 /** Whether an area of `radius` around `centre` covers `p` (the server's round area). */

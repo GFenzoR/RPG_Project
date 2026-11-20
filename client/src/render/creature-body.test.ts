@@ -1,5 +1,5 @@
-import { Graphics, Texture } from "pixi.js";
-import type { Sprite } from "pixi.js";
+import { Container, Graphics, Texture } from "pixi.js";
+import type { AlphaFilter, Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { FEET_LINE, newPose } from "@rpg/renderer";
 import type { AnimMeta } from "@rpg/renderer";
@@ -99,22 +99,26 @@ describe("CreatureBody as a paper doll (docs/17 Humanoides del motor)", () => {
     pose.frame = 1;
     pose.x = 2;
     doll.draw(pose, 1); // east
-    const sprites = doll.root.children.filter((c) => !(c instanceof Graphics));
+    // The shadow, then the layers in one container.
+    expect(doll.root.children[0]).toBeInstanceOf(Graphics);
+    const layers = doll.root.children[1] as Container;
+    expect(layers).toBeInstanceOf(Container);
+    const sprites = layers.children;
     expect(sprites).toHaveLength(2);
     // Facing east the weapon (right hand, near) goes over the body.
     expect(sprites[0]?.tint).toBe(0xecc4a2);
     expect(sprites[1]?.tint).toBe(0xa8aeb6);
     expect((sprites[1] as Sprite).texture).toBe(weapon.frames.walk?.[1]?.[1]);
     for (const s of sprites) expect(s.position.x).toBe(T / 2 + 2);
-    // Facing west it goes under it: re-stacked once, the shadow still first.
-    doll.draw(pose, 3);
-    const west = doll.root.children;
-    expect(west[0]).toBeInstanceOf(Graphics);
-    expect(west[1]?.tint).toBe(0xa8aeb6);
+    // Facing north too (held in front of the body, away from the camera: the body's own
+    // occlusion is in the weapon's frames): re-stacked once, the shadow still first.
+    doll.draw(pose, 0);
+    expect(doll.root.children[0]).toBeInstanceOf(Graphics);
+    expect(layers.children[1]?.tint).toBe(0xa8aeb6);
     // A flash tints every layer.
     pose.flash = true;
     doll.draw(pose, 3);
-    for (const s of doll.root.children.slice(1)) expect(s.tint).toBe(FLASH_TINT);
+    for (const s of layers.children) expect(s.tint).toBe(FLASH_TINT);
     // Drawing makes no sprite; leaving gives them back for the next creature.
     expect(pool.made).toBe(2);
     doll.release();
@@ -138,8 +142,68 @@ describe("CreatureBody as a paper doll (docs/17 Humanoides del motor)", () => {
       { slot: "shield" as const, clips: c, tint: 3 },
     ];
     expect(layerOrder(layers, "s")).toEqual([1, 2, 0]);
-    expect(layerOrder(layers, "n")).toEqual([0, 2, 1]);
-    expect(layerOrder(layers, "e")).toEqual([2, 1, 0]);
-    expect(layerOrder(layers, "w")).toEqual([0, 1, 2]);
+    expect(layerOrder(layers, "n")).toEqual([1, 0, 2]);
+    expect(layerOrder(layers, "e")).toEqual([1, 2, 0]);
+    expect(layerOrder(layers, "w")).toEqual([1, 0, 2]);
+  });
+
+  it("fades as one figure: the layers stay opaque and their container fades them", () => {
+    const c = layer();
+    // Pixi's AlphaFilter compiles a WebGL program: a stand-in with its alpha.
+    let made = 0;
+    let destroyed = 0;
+    const filter = {
+      alpha: 1,
+      destroy: () => destroyed++,
+    } as unknown as AlphaFilter;
+    const doll = new CreatureBody(
+      c,
+      T,
+      0xffffff,
+      [
+        { slot: "body", clips: c, tint: 1 },
+        { slot: "torso", clips: c, tint: 2 },
+      ],
+      new SpritePool(),
+      () => (made++, filter),
+    );
+    const layers = doll.root.children[1] as Container;
+    const pose = newPose();
+    pose.alpha = 0.5; // appearing, falling or shimmering away
+    doll.draw(pose, 2);
+    // Each layer at 0.5 would show the skin through the tunic.
+    for (const s of layers.children) expect(s.alpha).toBe(1);
+    expect(layers.alpha).toBe(1);
+    expect(layers.filters?.[0]).toBe(filter);
+    expect(filter.alpha).toBe(0.5);
+    expect(doll.alpha).toBe(0.5);
+    // The own player see-through while invisible (T3.2) goes through the same fade.
+    doll.opacity = 0.4;
+    pose.alpha = 1;
+    doll.draw(pose, 2);
+    expect(layers.filters).toHaveLength(1);
+    expect(filter.alpha).toBeCloseTo(0.4);
+    expect(doll.alpha).toBeCloseTo(0.4);
+    // Opaque again: no filter (one less render pass), the layers as they were.
+    doll.opacity = 1;
+    doll.draw(pose, 2);
+    expect(layers.filters ?? []).toHaveLength(0);
+    for (const s of layers.children) expect(s.alpha).toBe(1);
+    // One filter for the body's whole life, freed when it leaves.
+    pose.alpha = 0.3;
+    doll.draw(pose, 2);
+    expect(made).toBe(1);
+    doll.release();
+    expect(destroyed).toBe(1);
+  });
+
+  it("fades a one-sprite body on its sprite, with the opacity the caller sets", () => {
+    const body = new CreatureBody(hero(), T);
+    const pose = newPose();
+    pose.alpha = 0.5;
+    body.opacity = 0.4;
+    body.draw(pose, 2);
+    expect(body.sprite.alpha).toBeCloseTo(0.2);
+    expect(body.alpha).toBeCloseTo(0.2);
   });
 });

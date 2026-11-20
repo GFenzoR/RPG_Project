@@ -2,6 +2,7 @@ import { AttackKind, CreatureKind, Direction, DisappearReason } from "@rpg/proto
 import { describe, expect, it } from "vitest";
 import {
   attackAction,
+  figureAttack,
   attackDir,
   attackerOf,
   faces,
@@ -132,6 +133,21 @@ describe("what the server says", () => {
     expect(attackAction(AttackKind.SPELL)).toBe("cast");
     expect(attackAction(AttackKind.MELEE)).toBe("attack");
     expect(attackAction(AttackKind.UNSPECIFIED)).toBe("attack");
+  });
+
+  it("plays a paper doll's weapon when it is known, the attack's kind when it is not", () => {
+    // Another player: its equipment does not reach this client yet. A ranged attack shoots,
+    // as before the paper dolls, not a punch thrown from afar.
+    expect(figureAttack(AttackKind.RANGED, undefined)).toBe("shoot");
+    expect(figureAttack(AttackKind.SPELL, undefined)).toBe("cast");
+    expect(figureAttack(AttackKind.MELEE, undefined)).toBe("attack");
+    // The own player, an NPC or a monster: the weapon in hand decides.
+    expect(figureAttack(AttackKind.RANGED, { weapon: "bow" })).toBe("shoot");
+    expect(figureAttack(AttackKind.MELEE, { weapon: "staff" })).toBe("cast");
+    expect(figureAttack(AttackKind.SPELL, { weapon: "sword" })).toBe("cast");
+    // A known blade or bare hands throwing: the overhand swing.
+    expect(figureAttack(AttackKind.RANGED, { weapon: "sword" })).toBe("attack");
+    expect(figureAttack(AttackKind.RANGED, { weapon: undefined })).toBe("attack");
   });
 
   it("pushes the victim away from the attacker or the area's centre", () => {

@@ -3,8 +3,8 @@ import { EquipmentSlot } from "@rpg/protocol";
 import type { LookTables } from "@rpg/renderer";
 import type { ItemDef, OutfitDef } from "../content-types.ts";
 import {
+  dollSprites,
   dressPlayer,
-  figureLayers,
   mulTint,
   wornFromEquipment,
   wornKey,
@@ -128,9 +128,20 @@ describe("the figure's equipment", () => {
     const d = dressPlayer(CITIZEN, { weapon: { shape: "sword", tint: "iron" } });
     const look = CITIZEN.look;
     if (!look) throw new Error("look");
-    const layers = figureLayers(look, d, "s", "idle", 0, tables, 0xff8080);
-    expect(layers.find((l) => l.slot === "torso")?.tint).toBe(mulTint(0xece2c8, 0xff8080));
+    // What the canvas stacks (game-canvas.ts dollOf).
+    const layers = dollSprites(look, d, tables, 0xff8080);
+    expect(layers.find((l) => l.slot === "torso")).toEqual({
+      slot: "torso",
+      sprite: "worn/torso_tunic_sturdy",
+      tint: mulTint(0xece2c8, 0xff8080),
+    });
     expect(layers.find((l) => l.slot === "weapon")?.tint).toBe(0xa8aeb6);
     expect(layers.find((l) => l.slot === "body")?.tint).toBe(0xecc4a2);
+    // Armour over the outfit's clothes is not the outfit's: the colour leaves it alone.
+    const armoured = dressPlayer(CITIZEN, { torso: { shape: "plate", tint: "iron" } });
+    const plate = dollSprites(look, armoured, tables, 0xff8080).find((l) => l.slot === "torso");
+    expect(plate?.tint).toBe(0xa8aeb6);
+    // Without a colour cosmetic every layer keeps its own.
+    expect(dollSprites(look, d, tables).find((l) => l.slot === "torso")?.tint).toBe(0xece2c8);
   });
 });

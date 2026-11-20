@@ -32,14 +32,15 @@ describe("lookLayers", () => {
   it("stacks the paper doll back to front for each facing", () => {
     const slots = (dir: "n" | "e" | "s" | "w"): string[] =>
       lookLayers(LOOK, WORN, dir, "idle", 0, TABLES).map((l) => l.slot);
-    // South: everything held comes toward the camera, over the body.
+    // What is held goes over the clothes in every facing: the body's occlusion is in its
+    // frames (a bow facing west, a blade raised facing north, both in front of the body).
     expect(slots("s")).toEqual(["body", "hair", "torso", "beard", "shield", "weapon"]);
-    // North: both hands are in front of the body, away from the camera: under it.
-    expect(slots("n")).toEqual(["weapon", "shield", "beard", "body", "torso", "hair"]);
-    // East: the right hand (weapon) is near, the left (shield) far.
-    expect(slots("e")).toEqual(["shield", "body", "torso", "hair", "beard", "weapon"]);
-    // West: the other way round.
-    expect(slots("w")).toEqual(["weapon", "body", "torso", "hair", "beard", "shield"]);
+    expect(slots("n")).toEqual(["beard", "body", "torso", "hair", "weapon", "shield"]);
+    expect(slots("w")).toEqual(["body", "torso", "hair", "beard", "weapon", "shield"]);
+    // East the shield, on the far arm, goes under the hair; the weapon over all.
+    expect(slots("e")).toEqual(["body", "torso", "shield", "hair", "beard", "weapon"]);
+    for (const dir of ["n", "e", "s", "w"] as const)
+      expect(slots(dir).indexOf("weapon"), dir).toBeGreaterThan(slots(dir).indexOf("torso"));
   });
 
   it("names every frame <sprite>/<action>_<dir>_<n> and tints each layer by its colour", () => {

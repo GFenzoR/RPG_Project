@@ -107,11 +107,25 @@ el punto 5:
   `look` en los 19 NPCs personas y los 4 monstruos humanoides). El caminar sale de la zancada
   (un ciclo por casilla, 8 frames; 13,86 al norte y al sur): el pie apoyado no patina. El
   ataque se juega con el arma (arco y ballesta disparan, varita y vara conjuran). El pack
-  `assets/vendor/ulpc/` salió del repo. Queda:
+  `assets/vendor/ulpc/` salió del repo. Lo que arregló la revisión de la rama: el arma y el
+  escudo van sobre la ropa en las cuatro direcciones (el arco mirando al oeste y la hoja
+  levantada mirando al norte desaparecían bajo el cuerpo; `humanoid.test.ts` mide cada lugar
+  de la pila contra el modelo dibujado como una figura), un muñeco se desvanece entero (al
+  aparecer, caer o ser invisible ya no se ven unas capas a través de otras), girar en medio de
+  una caminata no hace saltar las piernas, y el ataque a distancia de otro jugador vuelve a
+  disparar (su arma no llega todavía). Queda:
   - **Mirarlo en el juego** (la verificación final del lote): el jugador propio con su equipo
     y cambiándolo, un NPC de cada isla, el saqueador y el contrabandista peleando (el ataque
-    con su arma), un paso largo en las cuatro direcciones sin pies que patinen ni pausas, y
-    la muerte. El E2E no mide píxeles del muñeco.
+    con su arma), un paso largo en las cuatro direcciones sin pies que patinen ni pausas,
+    girar en medio de un paso, y la muerte. El E2E no mide píxeles del muñeco: en el E2E
+    final del lote se miran con Read estas capturas de `client/e2e/screenshots/`:
+    `04-world` (el jugador propio recién entrado: el muñeco del atuendo `citizen`, con lo que
+    tenga equipado, de pie sobre su casilla), `07b-attack-pose` (el golpe del jugador contra
+    el lobo o la embestida del lobo, en medio de la pose: el arma en la mano y sobre la
+    ropa), `31-bosque-temple` (el jugador en el templo de la Isla del Bosque, con las
+    personas que estén a la vista) y `33-bosque-druid` (Velia Musgo, la druida: su `look`
+    en el mapa y su retrato quieto en el diálogo). Ninguna de esas captura una caída ni un
+    ataque a distancia: eso queda para la prueba a mano.
   - **Los otros jugadores** se ven con la ropa de su atuendo, sin su equipo ni su aspecto:
     lo manda la red en `feat/character-look` (que se arma sobre esta rama; el cliente ya
     tiene `Look` y `wornFromEquipment` para eso).

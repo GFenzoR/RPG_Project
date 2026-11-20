@@ -451,13 +451,6 @@ class Validator {
   }
 
   /**
-   * data/cosmetics.yaml (T5.7): unique ids (packs and cosmetics apart), each cosmetic only
-   * carries the field of its kind, an outfit names a look of data/outfits.yaml other than
-   * the free default, no two colours share a tint, and the texts exist: cosmetic.<id>.name
-   * and .desc, cosmetic_pack.<id>.name and premium.name / premium.amount. No pack is worth
-   * more than limits.daily_premium (it could never be bought).
-   */
-  /**
    * data/looks.yaml (docs/06 "Looks"): every look, worn piece and outfit of data/ names its
    * build, skin, hair, beard, shape (of the right slot) and tint there. An item's `worn`
    * takes the slot it is equipped in; jewellery is never drawn. A player's outfit uses no
@@ -570,6 +563,13 @@ class Validator {
       }
   }
 
+  /**
+   * data/cosmetics.yaml (T5.7): unique ids (packs and cosmetics apart), each cosmetic only
+   * carries the field of its kind, an outfit names a look of data/outfits.yaml other than
+   * the free default, no two colours share a tint, and the texts exist: cosmetic.<id>.name
+   * and .desc, cosmetic_pack.<id>.name and premium.name / premium.amount. No pack is worth
+   * more than limits.daily_premium (it could never be bought).
+   */
   private checkCosmetics(src: SourceFile, outfits: SourceFile | undefined): void {
     if (!isObj(src.data)) return;
     const key = (value: string, path: PathSegment[]): void => {

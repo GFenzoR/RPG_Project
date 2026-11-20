@@ -406,11 +406,14 @@ cuerpo tapa lo que está detrás; el borde de la capa contra él lleva el pliegu
 `perTileNS` (frames de caminar por casilla, de la zancada) y `trim`. `compose.ts` apila las
 capas teñidas como el cliente (`LAYER_ORDER` de `packages/renderer/src/look.ts`), para las
 hojas y los tests; `previews.ts` arma los quietos de los atuendos y los retratos de los NPCs
-(lee `data/`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
+(lee los YAML de `data/` del repo, o de `--root`: `recipesAt(root)` de `recipes/index.ts`,
+que usan `build`, `check` y `preview`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
 pasa solo las de imagen (paleta, alfa, tramado salvo en piezas finas, borde), y
 `humanoid.test.ts` juzga la figura compuesta (proporciones, el pie apoyado contra el
-`perTile` del cliente en las cuatro direcciones, el orden por dirección contra el rig, varios
-aspectos de pie sobre la fila del suelo y `data/looks.yaml` igual a las capas). Una forma
+`perTile` del cliente en las cuatro direcciones, el lugar de cada arma y escudo en la pila
+contra el modelo dibujado como una sola figura, `measureHeld`, varios aspectos de pie sobre
+la fila del suelo y `data/looks.yaml` igual a las capas). Un arma o un escudo nuevo entra solo
+en esa medida: si su lugar en `LAYER_ORDER` deja de ser el mejor (más de un 10 %), falla. Una forma
 nueva: su constructor en `layers.ts`, su nombre en `data/looks.yaml`, su entrada en
 `assets/sprites.yaml` (las mismas pistas que las demás capas), `make spritegen ONLY=worn/`,
 `make sprites STRICT=1` y `cli.ts sheet --only humans/ [--ref persona.png]`
@@ -443,14 +446,15 @@ oscuro y la runa, un cian saturado); y cuidado con la banda de valor en los dos 
 <prefijo>] [--out DIR] [--scale N]` escribe `build/spritegen/<sprite>.sheet.png` (todos los
 frames a Nx, por defecto 4, en una grilla: una fila por acción y dirección) y
 `<sprite>.lineup.png` (a 1x, escalado 3x, como lo pone el cliente sobre su suelo, al lado
-del lobo de Gemini y de una persona de LPC si el atlas está armado; un ícono, además, en un
+del lobo de Gemini y de una persona, el quieto de `outfits/citizen` (el humanoide del
+motor), si están; un ícono, además, en un
 slot del inventario a 1x y a 2x). Con íconos entre los elegidos escribe también
 `icons.slots.png` (cada uno en el slot a 2x, a 1x y sobre una casilla de pasto, una fila
 por línea del catálogo) e `icons.detail.png` (a 4x); con props del kit de pueblo,
-`town.floors.png` (cada uno sobre cada suelo de los pueblos, `TOWN_FLOORS`, al lado de una
-persona de LPC, a 1x mostrado a 2x). Mirar los dos con Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
+`town.floors.png` (cada uno sobre cada suelo de los pueblos, `TOWN_FLOORS`, al lado del
+quieto de `outfits/citizen`, a 1x mostrado a 2x). Mirar los dos con Read; si reemplaza un sprite, compararlo con el viejo en el juego y quedarse con el que se
 lea mejor. Un prop de una casilla se compara sobre cada suelo donde está, al lado de una
-persona de LPC, a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
+persona (el quieto de `outfits/citizen`), a 1x: lo que decide es el contraste con ese suelo y una lectura limpia, no
 el detalle. Lo que aprendió la revisión del 2026-11-18: pocas piezas y un material cálido
 (el primer cajón del motor, con un marco gris y vetas en el frente, se perdía sobre las
 tablas del muelle; el que quedó es de madera clara con la tapa lisa); textura baja

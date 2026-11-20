@@ -27,17 +27,23 @@ export const WORN_SLOTS: readonly WornSlot[] = [
 /**
  * Draw order per facing, back to front. The body hides what is behind it inside each layer
  * (spritegen draws every layer with the body as occluder), so the order only has to settle
- * what lies outside the body: facing east the shield on the far (left) arm goes under the
- * body and the weapon in the near (right) hand over everything; facing west the other way
- * round; facing north both hands are in front of the body, away from the camera; facing
- * south both come toward it. The hair goes under the torso facing south (what hangs down
- * the back) and over it the other ways; the beard goes under everything facing north.
+ * what lies outside the body. A held piece goes over the clothes in every facing, whichever
+ * hand holds it and whatever the frame does with it: under the body, a weapon held in front
+ * of it disappeared (a bow facing west, a blade raised facing north) and its edge lost the
+ * body's outline; over the clothes, a piece held behind the body paints over at most a few
+ * pixels of a robe's skirt. The weapon goes over everything; so does the shield, but facing
+ * east (on the far arm) it goes under the hair and the head piece. Facing east the weapon
+ * in the near hand goes over the shield, facing west under it. spritegen's
+ * humanoid.test.ts measures each held layer against the model (the figure drawn as one) in
+ * every place of the stack: no other place is more than 10 % closer to it. The hair goes
+ * under the torso facing south (what hangs down the back) and over it the other ways; the
+ * beard goes under everything facing north.
  */
 export const LAYER_ORDER: Readonly<Record<AnimDir, readonly LayerSlot[]>> = {
   s: ["body", "legs", "feet", "hair", "torso", "beard", "head", "shield", "weapon"],
-  n: ["weapon", "shield", "beard", "body", "legs", "feet", "torso", "hair", "head"],
-  e: ["shield", "body", "legs", "feet", "torso", "hair", "beard", "head", "weapon"],
-  w: ["weapon", "body", "legs", "feet", "torso", "hair", "beard", "head", "shield"],
+  n: ["beard", "body", "legs", "feet", "torso", "hair", "head", "weapon", "shield"],
+  e: ["body", "legs", "feet", "torso", "shield", "hair", "beard", "head", "weapon"],
+  w: ["body", "legs", "feet", "torso", "hair", "beard", "head", "weapon", "shield"],
 };
 
 /** The body: build, skin tone, hair style and colour, beard (ids of data/looks.yaml). */

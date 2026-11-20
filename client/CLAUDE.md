@@ -597,16 +597,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
   segunda, así pasos seguidos alternan 1, 2, 1, 2.
 - El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
-  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde docs/17
-  los cuatro atuendos son personajes de LPC: ver "Animación de criaturas". Alpha de
-  invisible, nombre, barras, marca PvP y marco de objetivo no cambian.
+  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde el lote 13
+  un atuendo con `look` es un humanoide del motor (ver "Humanoides del motor"); su quieto
+  compuesto `outfits/<atuendo>/<dir>_0` queda como respaldo. Alpha de invisible, nombre,
+  barras, marca PvP y marco de objetivo no cambian.
 
 ## Animación de criaturas (docs/17 ANI)
 - Todo cuerpo de criatura (monstruo, NPC o el atuendo de un jugador) es un `CreatureBody`
   (`render/creature-body.ts`): la sombra de contacto (solo `shadow: ellipse`) y un sprite
   anclado abajo al centro. Los `br` conservan la esquina de abajo a la derecha en la de su
-  casilla (como `MapView`); los `bc` (personajes de LPC de 64x64) pisan `FEET_LINE` px por
-  encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
+  casilla (como `MapView`); los `bc` (de 64x64: los humanoides del motor y las criaturas
+  animadas) pisan `FEET_LINE` px por encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
   sobre su casilla, de `top` y `foot` de `atlas.json`).
 - `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
   dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
@@ -629,8 +630,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
   donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira), con el
-  clip de su tipo (`attackAction`: `RANGED` → `shoot`, el arco de LPC; `SPELL` → `cast`;
-  `MELEE` → `attack`; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
+  clip de su tipo (`attackAction`: `RANGED` → `shoot`; `SPELL` → `cast`; `MELEE` →
+  `attack`; un muñeco de capas cuyo arma se conoce, por esa arma: `figureAttack`, ver
+  "Humanoides del motor"; `startAttack` con la acción, y `attackClip` de `anim.ts` cae en
   `attack` si el sprite no tiene ese clip, y en la embestida si no tiene ninguno); un
   número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
   la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
@@ -674,26 +676,38 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   sus clips (`spriteClips` de su ruta `humans/...` o `worn/...`) y su tinte (un multiply),
   en la misma pose y frame. El orden por dirección es `LAYER_ORDER` de
   `packages/renderer/src/look.ts` (puro, con tests: `lookSprites`, `lookLayers`,
-  `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Los sprites salen de
-  `LAYER_POOL` y vuelven con `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea
-  objetos. La capa del cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el
-  cuerpo).
+  `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Lo que se lleva en
+  la mano va sobre la ropa en las cuatro direcciones (docs/17 "Humanoides del motor": la
+  oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
+  `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
+  cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el cuerpo).
+- **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
+  (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
+  alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a
+  través de un `AlphaFilter` (uno por cuerpo, creado la primera vez y liberado con
+  `release()`; opaco, sin filtro ni pasada de más). La invisibilidad del propio jugador
+  (T3.2) es `CreatureBody.opacity` (0,4), no el alfa de su contenedor: el canvas lo pone
+  antes de dibujarlo. Las copias translúcidas siguen `figure.alpha`.
 - `render/look.ts` (puro, con tests): `wornFromEquipment` (lo que muestra el equipo propio:
   cada pieza con `worn` en su lugar, sin importar la mano), `dressPlayer` (la ropa del
   atuendo por defecto llena lo vacío; un disfraz, `costume`, tapa torso, piernas y pies),
-  `wornKey` (la clave para rearmar al cambiar el equipo), `mulTint` y `figureLayers` (el
-  color de la tienda tiñe la ropa del atuendo).
+  `wornKey` (la clave para rearmar al cambiar el equipo), `mulTint` y `dollSprites` (las
+  capas que apila `dollOf`, con el color de la tienda en la ropa del atuendo).
 - `game-canvas.ts` `personOf`: un jugador usa el `look` de su atuendo (y, el propio, su
   `Inventory`, guardado por identidad del mapa: `ownEquipment`); un NPC o un monstruo, su
   `content.npcLooks` / `monsterLooks`. Sin `content.looks` o sin el cuerpo en el atlas, el
   camino de antes (el sprite del atuendo o del NPC, después el bloque). `drawnLook` del
   propio suma `wornKey`: equiparse rearma la figura.
 - El ataque de un muñeco elige el clip por el arma que lleva (`attackActionOf` →
-  `attackActionFor`: arco y ballesta `shoot`, varita y vara `cast`, un hechizo `cast`, el
-  resto `attack`). Caminar usa `perTileNS` mirando al norte o al sur (la regla de la
-  zancada, `anim.ts`).
+  `figureAttack` de `render/creature-events.ts` → `attackActionFor`: arco y ballesta
+  `shoot`, varita y vara `cast`, un hechizo `cast`, el resto `attack`), si se sabe qué
+  lleva (`CreatureSprite.held`: el look de un NPC o un monstruo, el equipo propio). De otro
+  jugador no se sabe todavía: su ataque juega el clip de su tipo (`attackAction`), así uno a
+  distancia dispara en vez de pegar un puñetazo. Caminar usa `perTileNS` mirando al norte o
+  al sur (la regla de la zancada, `anim.ts`); la fase se cuenta en frames, así girar en
+  medio de una caminata no hace saltar las piernas.
 - Hasta que `feat/character-look` mande el aspecto y el equipo de cada jugador, los demás se
-  ven con su atuendo (cuerpo y ropa), sin equipo.
+  ven con su atuendo (cuerpo y ropa), sin equipo; esa rama llena su `held`.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–16, docs/05) tiene una tira de frames
@@ -1379,8 +1393,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   diálogo, que se angosta a una columna. Los temas vienen de
   `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
   `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
-  `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
-  128 px y el diálogo no entraba en un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
+  `PORTRAIT_PX`): un sprite de 32 px a 2x y el retrato de 64 px de una persona (el quieto
+  del humanoide del motor, `npcs/<npc>`) a 1x (a 2x medía 128 px y el diálogo no entraba en
+  un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
   `[data-topic]`, `shop-search`, `[data-filter]`, `[data-shop-tab]`, `shop-grid`,
   `shop-prev`/`shop-next`, `shop-bar`, `shop-count`, `shop-minus`/`shop-plus`/`shop-max`,
   `shop-total`, `shop-act`. Las reglas de la tienda son puras en `state/shop.ts`

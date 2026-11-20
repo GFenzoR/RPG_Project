@@ -904,7 +904,10 @@ poco hacia abajo. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pas
 el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
 `state/world.ts`) y el ciclo sigue sin repetir ni volver (`anim.test.ts`: un frame cada 50 ms
 de un paso de 400 ms da 0..7, 0..3 en dos pasos); solo un hueco real de la red la muestra, con
-el último frame de caminar y no el quieto.
+el último frame de caminar y no el quieto. **Girar en medio de una caminata** no hace saltar
+las piernas: la fase del ciclo se cuenta en frames (`AnimState.walkPhase`, cada paso suma los
+frames por casilla de su dirección), no en pasos por el ritmo de la dirección de ahora (con 5
+pasos al este, el primero al norte empezaba en el frame 5 en vez del 0).
 
 **El muñeco de capas** (`layers.ts`; el orden y el modelo, en `packages/renderer/src/look.ts`):
 cuerpo → piernas → pies → torso → pelo y barba → cabeza → escudo → arma, cada capa en las
@@ -912,14 +915,29 @@ mismas poses del rig, así sigue cada frame. Cada capa es un spec del motor con 
 dibujan sus partes y **el cuerpo las tapa** donde están detrás (`renderSpec`: las partes de
 `occlude` se proyectan sin pintar; el borde de una capa contra el cuerpo lleva el pliegue,
 así se ve el ruedo de la túnica sobre las piernas o la línea del pelo en la frente). Por eso
-el orden solo decide lo que cae fuera del cuerpo, por dirección (`LAYER_ORDER`): mirando al
-este el escudo (brazo izquierdo, lejos) va bajo el cuerpo y el arma (mano derecha, cerca)
-sobre todo; al oeste al revés; al norte los dos van adelante del personaje, lejos de la
-cámara (bajo el cuerpo); al sur los dos hacia la cámara. El pelo va bajo el torso mirando al
-sur (lo que cae por la espalda) y la barba bajo todo mirando al norte. Una falda (túnica,
-túnica larga) no deja que la atraviesen las piernas (`occlude` sin piernas).
-`humanoid.test.ts` comprueba que la tabla coincide con el rig (la hoja de la espada y la cara
-del escudo detrás o delante del torso en cada dirección).
+el orden solo decide lo que cae fuera del cuerpo, por dirección (`LAYER_ORDER`). **Lo que se
+lleva en la mano va sobre la ropa en las cuatro direcciones**, sea cual sea la mano y haga lo
+que haga el frame: bajo el cuerpo, un arma sostenida delante de él desaparecía (el arco, en
+la mano izquierda, mirando al oeste: tapado entero; la hoja levantada sobre el hombro en el
+impulso del ataque mirando al norte) y su borde perdía píxeles contra el contorno del cuerpo;
+sobre la ropa, una pieza sostenida detrás del cuerpo pinta como mucho unos píxeles del ruedo
+de una túnica larga. El arma va sobre todo; el escudo también, salvo mirando al este (en el
+brazo lejano): sobre el torso y bajo el pelo y lo de la cabeza. Al este el arma (mano cercana)
+va sobre el escudo, al oeste bajo él. El pelo va bajo el torso mirando al sur (lo que cae por
+la espalda) y la barba bajo todo mirando al norte. Una falda (túnica, túnica larga) no deja
+que la atraviesen las piernas (`occlude` sin piernas). `humanoid.test.ts` lo mide contra el
+modelo: dibuja la figura entera como una sola (las partes de la pieza con el cuerpo y la ropa
+de tres aspectos como oclusores, un solo buffer de profundidad: lo que se debe ver de la
+pieza) y la compara con las capas apiladas como el cliente, con la pieza en cada lugar de la
+pila, en todas las formas de arma y escudo y en cada frame de quieto, caminar, atacar,
+disparar y conjurar. Ningún otro lugar puede quedar más de un 10 % más cerca del modelo (los
+buenos difieren unos pocos por ciento de un aspecto a otro; el arma bajo el cuerpo, como
+estaba, costaba de 1,3 a 3,7 veces más al oeste y al norte), y ninguna capa de arriba tapa más de 2 px de un arma
+que el modelo muestra. **Un muñeco se desvanece entero:** Pixi multiplica el alfa de un
+contenedor en cada hijo, así que al aparecer, caer, desvanecerse o ser invisible se veían unas
+capas a través de otras (la piel bajo la túnica); las capas van en un contenedor propio que,
+mientras no es opaco, se dibuja a través de un `AlphaFilter` (`CreatureBody.opacity` para la
+invisibilidad del jugador propio).
 
 **Formas, no piezas** (presupuesto de docs/07): no se dibuja una capa por pieza del catálogo
 sino unas pocas formas por lugar, en un tono neutro (`palette.ts` `look*`, hechos con
@@ -966,10 +984,9 @@ son finas a 1x (la espada mide 13 px, el arco 20).
 
 **Pendiente:** las piezas de un juego de armadura son de un solo tinte (el cinturón de la
 coraza, del mismo color); el arco no se tensa con la mano (la cuerda queda recta); los
-jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo; la
-silueta translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo; mirar en
-el juego el cambio de dirección en medio de un paso (el frame salta entre el `perTile` y el
-`perTileNS`).
+jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo (sus
+ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara); la silueta
+translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo.
 
 ## 4. Sensación de movimiento (MOV)
 

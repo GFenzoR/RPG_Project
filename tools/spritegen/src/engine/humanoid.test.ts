@@ -1,18 +1,20 @@
 // The engine humanoid (docs/17 "Humanoides del motor"): proportions, the planted foot of the
-// walk against the client's frames per tile, the paper doll's order per facing against the
-// rig, the composed figure on the ground, and data/looks.yaml against the layers drawn.
-import { readFileSync } from "node:fs";
+// walk against the client's frames per tile, the held pieces' places in the stack against the
+// model drawn as one figure, the composed figure on the ground, and data/looks.yaml against
+// the layers drawn.
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseYaml } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { LAYER_ORDER } from "../../../../packages/renderer/src/look.ts";
 import type { LayerSlot } from "../../../../packages/renderer/src/look.ts";
+import { recipePaths, recipesAt } from "../index.ts";
 import { box } from "./gates.ts";
-import { toWorld } from "./math.ts";
 import { renderSpec } from "./render.ts";
-import { partTransforms, poseAt } from "./rig.ts";
 import type { SpriteSpec } from "./spec.ts";
-import { composeFrame } from "./specs/humanoid/compose.ts";
+import { composeFrame, layerFrame } from "./specs/humanoid/compose.ts";
 import type { Look, Worn } from "./specs/humanoid/compose.ts";
 import {
   BEARDS,
@@ -26,9 +28,10 @@ import {
   WALK_FRAMES,
   walkPerTile,
 } from "./specs/humanoid/index.ts";
-import { lookTables } from "./specs/humanoid/previews.ts";
+import { lookPreviews, lookTables, REPO_ROOT } from "./specs/humanoid/previews.ts";
+import { BODY_PARTS } from "./specs/humanoid/skeleton.ts";
 import { DIRS, FACING_YAW, PROJECTION, SIZES } from "./style.ts";
-import type { Dir } from "./style.ts";
+import type { ActionName, Dir } from "./style.ts";
 
 const ROOT = new URL("../../../../", import.meta.url);
 const LOOKS = parseYaml(readFileSync(new URL("data/looks.yaml", ROOT), "utf8")) as Record<
@@ -154,36 +157,133 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
   });
 });
 
-describe("engine humanoid: the paper doll", () => {
-  it("stacks each held layer behind the body exactly when the rig holds it behind", () => {
-    // Where a held piece is, standing (world y: + is away from the camera): the sword's
-    // blade 6 px down from the fist, the shield's face in front of its arm.
-    const pointOf = (sprite: string, local: [number, number, number], dir: Dir): number => {
-      const l = HUMANOID_LAYERS.find((x) => x.sprite === sprite);
-      const idle = l?.spec.actions?.idle;
-      if (!l || !idle) throw new Error(sprite);
-      const t = partTransforms(l.spec, poseAt(idle, 0, true), dir);
-      const at = (name: string, p: [number, number, number]): number => {
-        const tr = t[l.spec.parts.findIndex((x) => x.name === name)];
-        if (!tr) throw new Error(name);
-        return toWorld(tr, p)[1];
-      };
-      return at(l.parts[0]?.name ?? "", local) - at("torso", [0, 0, 4]);
-    };
-    for (const dir of DIRS) {
-      const order = LAYER_ORDER[dir];
-      const behind = (slot: LayerSlot): boolean => order.indexOf(slot) < order.indexOf("body");
-      expect(behind("weapon"), `${dir} weapon`).toBe(
-        pointOf("worn/weapon_sword", [0, 0, -6], dir) > 0,
-      );
-      expect(behind("shield"), `${dir} shield`).toBe(
-        pointOf("worn/shield_round", [0, -1.5, 0], dir) > 0,
-      );
+// The held pieces against the model: the figure drawn as one (the held piece's parts with
+// the body and the clothes as occluders, one depth buffer) shows exactly the pixels of the
+// piece a viewer should see. The client stacks layers instead (LAYER_ORDER), each with only
+// the body baked in as occluder; a held piece in a place of the stack shows its pixels
+// that no layer above it covers.
+const layerBySprite = (sprite: string): (typeof HUMANOID_LAYERS)[number] => {
+  const l = HUMANOID_LAYERS.find((x) => x.sprite === sprite);
+  if (!l) throw new Error(sprite);
+  return l;
+};
+/** Close clothes and hair; a robe and a hood; plate and a full helm. */
+const HELD_ON: Record<string, string[]> = {
+  citizen: [
+    "worn/torso_tunic_sturdy",
+    "worn/legs_trousers",
+    "worn/feet_shoes",
+    "humans/hair_short",
+  ],
+  druid: ["worn/torso_robe_sturdy", "worn/head_hood"],
+  knight: [
+    "worn/torso_plate_sturdy",
+    "worn/legs_greaves",
+    "worn/feet_sabatons",
+    "worn/head_full_helm",
+  ],
+};
+const HELD_CLIPS: ActionName[] = ["idle", "walk", "attack", "shoot", "cast"];
+const opaque = (img: Image | undefined, i: number): boolean => (img?.data[i * 4 + 3] ?? 0) > 0;
+
+interface HeldMeasure {
+  /** Where the held slot is in the stack (LAYER_ORDER), among the look's layers. */
+  place: number;
+  /** Per place in the stack (0 = under everything), the pixels that differ from the model. */
+  errors: number[];
+  /** The most pixels the model shows of the piece that the stack covers, in one frame. */
+  hidden: number;
+}
+
+/** One held layer (`sprite`) worn over a look's `clothes`, facing `dir`, every frame. */
+function measureHeld(sprite: string, clothes: string[], dir: Dir): HeldMeasure {
+  const held = layerBySprite(sprite);
+  const worn = clothes.map(layerBySprite);
+  const model: SpriteSpec = {
+    ...held.spec,
+    sprite: "test/held",
+    parts: [...held.spec.parts, ...worn.flatMap((l) => l.parts)],
+    layer: {
+      draw: held.parts.map((p) => p.name),
+      occlude: [...BODY_PARTS, ...worn.flatMap((l) => l.parts.map((p) => p.name))],
+    },
+  };
+  // The look's layers back to front without the held one, and the held one's place.
+  const order = LAYER_ORDER[dir];
+  const below = [layerBySprite("humans/body_sturdy"), ...worn].sort(
+    (a, b) => order.indexOf(a.slot as LayerSlot) - order.indexOf(b.slot as LayerSlot),
+  );
+  const place = below.filter(
+    (l) => order.indexOf(l.slot as LayerSlot) < order.indexOf(held.slot as LayerSlot),
+  ).length;
+  const errors = new Array<number>(below.length + 1).fill(0);
+  let hidden = 0;
+  for (const action of HELD_CLIPS)
+    for (let f = 0; f < (held.spec.actions?.[action]?.frames ?? 0); f++) {
+      const truth = renderSpec(model, { action, dir, frame: f });
+      const piece = layerFrame(sprite, action, dir, f);
+      const stack = below.map((l) => layerFrame(l.sprite, action, dir, f));
+      if (!piece) throw new Error(`${sprite} ${action} ${dir} ${f}`);
+      let covered = 0;
+      for (let i = 0; i < piece.width * piece.height; i++) {
+        const shown = opaque(truth, i);
+        // The topmost layer of the look over this pixel: the piece shows above it.
+        let top = -1;
+        for (let k = stack.length - 1; k >= 0 && top < 0; k--) if (opaque(stack[k], i)) top = k;
+        const has = opaque(piece, i);
+        for (let p = 0; p < errors.length; p++)
+          if ((has && p > top) !== shown) errors[p] = (errors[p] ?? 0) + 1;
+        if (shown && has && place <= top) covered++;
+      }
+      hidden = Math.max(hidden, covered);
     }
+  return { place, errors, hidden };
+}
+
+describe("engine humanoid: the held pieces in the stack (LAYER_ORDER)", () => {
+  const HELD: Record<"weapon" | "shield", readonly string[]> = {
+    weapon: SHAPES.weapon.map((s) => `worn/weapon_${s}`),
+    shield: SHAPES.shield.map((s) => `worn/shield_${s}`),
+  };
+  for (const dir of DIRS)
+    it(`facing ${dir}: each held piece where the stack shows it closest to the model`, () => {
+      for (const [slot, sprites] of Object.entries(HELD))
+        for (const [look, clothes] of Object.entries(HELD_ON)) {
+          let place = -1;
+          let errors: number[] = [];
+          for (const sprite of sprites) {
+            const m = measureHeld(sprite, clothes, dir);
+            place = m.place;
+            errors = m.errors.map((e, p) => e + (errors[p] ?? 0));
+            // Nothing in front of the body disappears under it or under the clothes (the
+            // bow facing west, a blade raised facing north): a pixel or two of seam at most.
+            if (slot === "weapon")
+              expect(m.hidden, `${sprite} on the ${look} facing ${dir}`).toBeLessThanOrEqual(2);
+          }
+          // Over every shape of the slot and every frame, no other place in the stack draws
+          // the piece more than 10 % closer to the model. The good places differ by a few
+          // per cent from look to look; the weapon under the body facing west or north, as
+          // it was, cost 1.3 to 3.7 times as much.
+          const best = Math.min(...errors);
+          expect(
+            errors[place],
+            `${slot} on the ${look} facing ${dir}: ${errors.join("/")}`,
+          ).toBeLessThanOrEqual(best * 1.1);
+        }
+    });
+
+  it("holds the bow in the left hand and every other weapon in the right", () => {
+    // What the stack has to cover in both hands (the left one is near facing west).
+    for (const shape of SHAPES.weapon)
+      expect(layerBySprite(`worn/weapon_${shape}`).grip?.hand, shape).toBe(
+        shape === "bow" ? "l" : "r",
+      );
     // Built facing west (FACING_YAW): the right hand is north, behind, facing west.
     expect(FACING_YAW.w).toBe(0);
   });
+});
 
+describe("engine humanoid: the paper doll", () => {
   const LOOKS_TO_TRY: { name: string; look: Look; worn: Worn }[] = [
     {
       name: "citizen",
@@ -264,5 +364,37 @@ describe("engine humanoid: the paper doll", () => {
     }
     // What a head piece hides is the client's rule, as data.
     expect((LOOKS["hides"] as Record<string, string[]>)["full_helm"]).toEqual(["hair", "beard"]);
+  });
+});
+
+describe("engine humanoid: the previews of data/ (previews.ts)", () => {
+  it("reads data/ under the root it is given (the CLI's --root), and only its YAML", () => {
+    const root = mkdtempSync(join(tmpdir(), "spritegen-looks-"));
+    try {
+      mkdirSync(join(root, "data", "npcs"), { recursive: true });
+      const write = (file: string, text: string): void =>
+        writeFileSync(join(root, "data", file), text);
+      write("looks.yaml", readFileSync(new URL("data/looks.yaml", ROOT), "utf8"));
+      write(
+        "outfits.yaml",
+        "- id: tester\n  sprite: outfits/tester\n" +
+          "  look: { body: slender, skin: tan, hair: crop, hair_color: red, beard: none }\n",
+      );
+      const guide =
+        "id: guide\nsprite: npcs/guide\n" +
+        "look: { body: sturdy, skin: fair, hair: short, hair_color: brown, beard: full }\n";
+      write("npcs/guide.yaml", guide);
+      // An editor's backup beside the NPCs is no NPC: no portrait for it.
+      write("npcs/retired.yaml.bak", guide.replace("npcs/guide", "npcs/retired"));
+      const outfit = ["n", "e", "s", "w"].map((d) => `outfits/tester/${d}_0`);
+      expect(Object.keys(lookPreviews(root)).sort()).toEqual([...outfit, "npcs/guide"].sort());
+      // The CLI builds and checks that root's recipes, not the repo's previews.
+      const paths = recipePaths(undefined, recipesAt(root));
+      expect(paths).toEqual(expect.arrayContaining([...outfit, "npcs/guide"]));
+      expect(paths).not.toContain("outfits/citizen/s_0");
+      expect(recipePaths(undefined, recipesAt(REPO_ROOT))).toContain("outfits/citizen/s_0");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
