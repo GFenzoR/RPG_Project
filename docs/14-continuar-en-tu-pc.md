@@ -117,8 +117,10 @@ el punto 5:
     número flotante con "(+N grupo)" solo lo cubren los tests (vitest y Go): en el E2E no
     se espera a matar un lobo.
   - **Cazar en fila rinde menos que solo:** la simulación (`TestPartyPaceVsSolo`) muestra
-    que si el grupo entero le pega al mismo monstruo fácil, cada uno gana 61–69 % de lo
-    de cazar solo de a dos y ~30 % de a seis (caminar, juntar y descansar no se acortan).
+    que si el grupo entero le pega al mismo monstruo fácil, cada uno gana 61–67 % de lo
+    de cazar solo de a dos y 25–33 % de a seis (caminar, juntar y descansar no se acortan).
+    En las presas de 6–8 de experiencia (rata, gaviota) el reparto en enteros se come casi
+    todo el bonus (6 × 1,05 / 2 = 3 cada uno).
     El +20 % del dueño solo compensa si cada uno pelea su presa o si el grupo caza
     monstruos que solo no puede. Si el dueño quiere que el grupo rinda más que solo en
     cualquier caza, hace falta otra palanca (spawns más grandes, monstruos de grupo, o un

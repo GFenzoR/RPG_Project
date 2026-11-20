@@ -16,10 +16,9 @@ func TestPartyBonusSteps(t *testing.T) {
 	if !p.SharedByDefault {
 		t.Error("shared experience is not on by default")
 	}
-	want := map[int]int{0: 0, 1: 0, 2: 5, 3: 10, 4: 15, 5: 20, 6: 20, 50: 20}
-	for n, pct := range want {
-		if got := p.BonusPct(n); got != pct {
-			t.Errorf("BonusPct(%d) = %d, want %d", n, got, pct)
+	for _, c := range []struct{ n, pct int }{{0, 0}, {1, 0}, {2, 5}, {3, 10}, {4, 15}, {5, 20}, {6, 20}, {50, 20}} {
+		if got := p.BonusPct(c.n); got != c.pct {
+			t.Errorf("BonusPct(%d) = %d, want %d", c.n, got, c.pct)
 		}
 	}
 	if p.MaxBonusPct() != 20 {
@@ -44,6 +43,29 @@ func TestPartyBonusCheck(t *testing.T) {
 		bad.BonusPctBySharers = steps
 		if bad.check() == nil {
 			t.Errorf("%s: %v accepted", name, steps)
+		}
+	}
+}
+
+// SharedEach is the whole formula of a shared kill: pot × (100 + bonus) / 100 / n each,
+// the bonus part apart; nothing below two sharers or for an empty pot.
+func TestPartySharedEach(t *testing.T) {
+	p := Party{BonusPctBySharers: []int{5, 10, 15, 20}}
+	for _, c := range []struct {
+		pot         int64
+		n           int
+		each, extra int64
+	}{
+		{900, 2, 472, 22},
+		{1200, 3, 440, 40},
+		{1200, 6, 240, 40},
+		{1200, 9, 160, 27},
+		{1000, 1, 0, 0},
+		{0, 3, 0, 0},
+		{-5, 3, 0, 0},
+	} {
+		if each, extra := p.SharedEach(c.pot, c.n); each != c.each || extra != c.extra {
+			t.Errorf("SharedEach(%d, %d) = %d %d, want %d %d", c.pot, c.n, each, extra, c.each, c.extra)
 		}
 	}
 }

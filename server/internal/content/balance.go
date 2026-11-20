@@ -147,6 +147,17 @@ func (p Party) BonusPct(n int) int {
 	return p.BonusPctBySharers[min(n-2, len(p.BonusPctBySharers)-1)]
 }
 
+// SharedEach splits a shared pot of xp among n sharers: each gets pot × (100 + bonus) /
+// 100 / n, and extra is the bonus part of it (each minus an even split of the pot). It
+// is the whole formula of a shared kill (session.shareExperience) and of the party sim.
+func (p Party) SharedEach(pot int64, n int) (each, extra int64) {
+	if pot <= 0 || n < 2 {
+		return 0, 0
+	}
+	each = pot * int64(100+p.BonusPct(n)) / 100 / int64(n)
+	return each, each - pot/int64(n)
+}
+
 // MaxBonusPct is the highest bonus % of the shared pot: the last step.
 func (p Party) MaxBonusPct() int { return p.BonusPct(p.MaxMembers) }
 

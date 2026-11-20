@@ -326,9 +326,10 @@ func (w *World) contributed(now game.Tick, p *Player) bool {
 // ones that qualify wherever they are, among those viewer sees: the indicator). A member
 // shares if it is active, close enough (near) and its level is at least level_range_pct %
 // of the highest of the members that are active and close, or at most level_gap_always
-// below it (anti-carry). Two characters of one account are one sharer (the first in join
-// order): alts never grow the bonus; the other keeps its own damage share. Fewer than two
-// sharers = no sharing.
+// below it (anti-carry; alts count for the highest level too). Two characters of one
+// account are one sharer: the first in join order that passed the level filter, so a
+// low alt never costs its main the bonus; alts never grow the bonus and the other keeps
+// its own damage share. Fewer than two sharers = no sharing.
 func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player, dst []*Player) []*Player {
 	near := viewer == nil
 	pc := w.cfg.Balance.Party
@@ -338,19 +339,27 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 		if !near && o != viewer && !viewer.Knows(o.id) {
 			continue
 		}
-		if w.contributed(now, o) && o.health > 0 && (!near || o.pos.Z == pos.Z && chebyshev(o.pos, pos) <= pc.ShareDistance) &&
-			!slices.ContainsFunc(dst, func(q *Player) bool { return q.accountID == o.accountID }) {
+		if w.contributed(now, o) && o.health > 0 && (!near || o.pos.Z == pos.Z && chebyshev(o.pos, pos) <= pc.ShareDistance) {
 			dst = append(dst, o)
 			top = max(top, o.level)
 		}
 	}
-	dst = slices.DeleteFunc(dst, func(o *Player) bool {
-		return o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways
-	})
-	if len(dst) < 2 {
+	n := 0
+	for _, o := range dst {
+		if o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways {
+			continue
+		}
+		if slices.ContainsFunc(dst[:n], func(q *Player) bool { return q.accountID == o.accountID }) {
+			continue
+		}
+		dst[n] = o
+		n++
+	}
+	clear(dst[n:])
+	if n < 2 {
 		return dst[:0]
 	}
-	return dst
+	return dst[:n]
 }
 
 // shareExperience pays def experience xp of a kill at pos, split by damage (shares).
@@ -406,12 +415,8 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 	}
 	pc := w.cfg.Balance.Party
 	for _, pt := range pots {
-		n := int64(len(pt.sharers))
-		if pt.xp <= 0 || n < 2 {
-			continue
-		}
-		each := pt.xp * int64(100+pc.BonusPct(int(n))) / 100 / n
-		extra := each - pt.xp/n // the bonus part, shown apart on the floating number
+		// extra is the bonus part, shown apart on the floating number.
+		each, extra := pc.SharedEach(pt.xp, len(pt.sharers))
 		for _, o := range pt.sharers {
 			if each > 0 {
 				w.gainExperienceBonus(o, each, extra)

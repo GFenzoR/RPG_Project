@@ -206,4 +206,39 @@ func TestSharedExperienceSameAccountAlts(t *testing.T) {
 			t.Fatal("the alt is marked as sharing")
 		}
 	}
+
+	// A low alt first in join order never costs its main the bonus: the level filter
+	// (alts included) runs before one sharer per account is picked, so the account's
+	// sharer is its first character in level range, not its first character.
+	h = partyHarness(t)
+	nextChar++
+	ownAccount := nextChar + 1000
+	cl, low := h.joinChar(session.Character{ID: nextChar, AccountID: ownAccount, Name: "Low",
+		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, Pos: *at(10, 10), HasPos: true})
+	nextChar++
+	cm, main := h.joinChar(session.Character{ID: nextChar, AccountID: ownAccount, Name: "Main",
+		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, Pos: *at(11, 10), HasPos: true})
+	cf, friend := h.join("Friend", at(12, 10))
+	h.form(cl, low, member{cm, main}, member{cf, friend})
+	h.do(func(ctx *game.TickContext) {
+		h.w.SetLevelForTest(low, 10)
+		h.w.SetLevelForTest(main, 50)
+		h.w.SetLevelForTest(friend, 45)
+		for _, p := range []*session.Player{low, main, friend} {
+			h.w.ContributeForTest(ctx, p)
+		}
+	})
+	xl, xm, xf := low.Experience(), main.Experience(), friend.Experience()
+	h.do(func(ctx *game.TickContext) {
+		h.w.ShareForTest(ctx, pos(11, 10), 1000, session.Share{P: low, Amount: 1}, session.Share{P: main, Amount: 5},
+			session.Share{P: friend, Amount: 4})
+	})
+	// Pot: 500 + 400 = 900 × 1.05 / 2 = 472 each; the alt keeps its own 100.
+	if dl, dm, df := low.Experience()-xl, main.Experience()-xm, friend.Experience()-xf; dl != 100 || dm != 472 || df != 472 {
+		t.Fatalf("low alt first: %d %d %d, want 100 472 472", dl, dm, df)
+	}
+	h.sim.RunTicks(20)
+	if up := lastParty(cf.take()); up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE || up.GetBonusPercent() != 5 {
+		t.Fatalf("low alt first, indicator %v", up)
+	}
 }

@@ -2461,17 +2461,26 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   **Cuánto rinde** (`server/internal/sim/balance_party_test.go`, `TestPartyPaceVsSolo`,
   bestiario de Puerto a su nivel objetivo, `DEBUG_BALANCE=1` imprime la tabla):
   - *Mismas presas:* si cada miembro mata lo que mataría solo (el grupo tira de varios
-    monstruos a la vez y cada uno pelea el suyo), cada uno gana exactamente lo de cazar
-    solo × (1 + bonus): +5 % de a dos, +10 % de a tres, +15 % de a cuatro, +20 % de cinco
-    en adelante. Ej. lobo a nivel 4: 4340 xp/h solo, 4557 de a dos, 5208 de a cinco.
+    monstruos a la vez y cada uno pelea el suyo), cada uno gana lo de cazar solo × (1 +
+    bonus): +5 % de a dos, +10 % de a tres, +15 % de a cuatro, +20 % de cinco en adelante,
+    menos el redondeo hacia abajo del reparto (menos de 1 punto por presa). Ej. lobo (28)
+    a nivel 4: 4340 xp/h solo, 4495 de a dos, 5115 de a cinco. En las presas de 6–8 de
+    experiencia (rata de sentina, gaviota ladrona) ese redondeo se come casi todo el bonus.
+    El test pasa por la fórmula real del reparto (`content.Party.SharedEach`, la misma que
+    paga `shareExperience`).
   - *Foco en un monstruo:* si todo el grupo le pega al mismo (la pelea dura 1/n, pero
     caminar, juntar el loot y descansar siguen igual), cada miembro gana bastante menos que
-    solo (61–69 % de a dos, 26–33 % de a seis, según el monstruo). El bonus no compensa
+    solo (61–67 % de a dos, 25–33 % de a seis, según el monstruo; el test exige un piso
+    por tamaño de grupo, 55 % de a dos a 22 % de a seis, en monstruos de 20 o más de
+    experiencia). El bonus no compensa
     cazar en fila presas fáciles: paga cazar monstruos más duros o abrirse y tirar de
     varios. Ver "Pendientes" en docs/14.
 - **Una cuenta, un miembro que comparte (anti-alts).** Dos personajes de la misma cuenta
   (el `account_id` que la sesión ya tiene) cuentan como **uno** al compartir: comparte el
-  primero en orden de entrada al grupo y el otro cobra solo el share de su propio daño,
+  primero en orden de entrada al grupo **que califica** (el filtro de nivel corre antes,
+  sobre todos, alts incluidos, y el alt más alto también fija el nivel tope del
+  anti-carry), así que un alt bajo que entró primero no le quita el bonus a su personaje
+  principal; el otro cobra solo el share de su propio daño,
   sin bonus. Así un jugador con dos clientes abiertos no se arma un grupo de alts para
   cobrar el bonus, y un personaje con su alt no forma un pozo (es un solo "compartidor").
   El indicador y la marca "comparte" siguen la misma regla.
