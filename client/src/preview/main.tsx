@@ -237,6 +237,7 @@ function Preview(props: { game: Game }): JSX.Element {
       ui: {
         ...s.ui,
         lookDraft: {
+          sex: "female",
           body: "slender",
           skin: "tan",
           hair: "ponytail",

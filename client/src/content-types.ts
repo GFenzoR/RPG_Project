@@ -155,6 +155,8 @@ export interface OutfitDef {
  * what the pickers offer. Skins only a player may choose (no creatures_only one).
  */
 export interface LookOptions {
+  /** male, female: drawn per sex (the first of the pickers). */
+  sexes: string[];
   builds: string[];
   skins: string[];
   hairStyles: string[];

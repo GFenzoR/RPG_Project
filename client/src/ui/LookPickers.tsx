@@ -1,5 +1,5 @@
-// The pickers of a player's look (docs/02 "Apariencia"): body, skin, hair style, hair
-// colour and beard, the choices of data/looks.yaml in file order (ClientContent.lookOptions).
+// The pickers of a player's look (docs/02 "Apariencia"): sex (man or woman, first), body,
+// skin, hair style, hair colour and beard, the choices of data/looks.yaml in file order (ClientContent.lookOptions).
 // The creation screen and the Apariencia window use them with the live figure
 // (ui/LookPreview.tsx). No hooks: the look is the caller's (ui/LookPickers.test.ts walks the
 // tree without a DOM). Every name is i18n: appearance.<part>.<id>.
@@ -7,6 +7,7 @@ import type { JSX } from "preact";
 import type { Look, LookTables } from "@rpg/renderer/look";
 import type { LookOptions } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { withSex } from "../state/look.ts";
 
 /**
  * A part of the look: its field, its list of choices, the i18n segment of its names
@@ -22,6 +23,7 @@ interface Part {
 }
 
 export const LOOK_PARTS: readonly Part[] = [
+  { field: "sex", list: (o) => o.sexes, key: "sex", label: "client.look.sex" },
   { field: "body", list: (o) => o.builds, key: "body", label: "client.look.body" },
   {
     field: "skin",
@@ -77,7 +79,13 @@ export function LookPickers(props: {
                     data-look={`${part.field}:${id}`}
                     style={color === undefined ? undefined : { background: css(color) }}
                     onClick={() => {
-                      if (!pressed) props.onChange({ ...look, [part.field]: id });
+                      if (pressed) return;
+                      // A woman starts with no beard (state/look.ts withSex).
+                      props.onChange(
+                        part.field === "sex"
+                          ? withSex(props.options, look, id)
+                          : { ...look, [part.field]: id },
+                      );
                     }}
                   >
                     {color === undefined ? name : null}

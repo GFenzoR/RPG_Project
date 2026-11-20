@@ -100,6 +100,7 @@ describe("AppearancePanel (T5.7)", () => {
 
 describe("AppearancePanel: Personalizar (docs/02 Apariencia)", () => {
   const MIRA = {
+    sex: "female",
     body: "slender",
     skin: "olive",
     hair: "ponytail",
@@ -109,6 +110,7 @@ describe("AppearancePanel: Personalizar (docs/02 Apariencia)", () => {
   const looks = {
     ...content,
     lookOptions: {
+      sexes: ["male", "female"],
       builds: ["sturdy", "slender"],
       skins: ["fair", "olive"],
       hairStyles: ["short", "ponytail"],

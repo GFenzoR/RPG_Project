@@ -189,6 +189,7 @@ export const api = {
         ...(look
           ? {
               look: {
+                sex: look.sex,
                 body: look.body,
                 skin: look.skin,
                 hair: look.hair,
