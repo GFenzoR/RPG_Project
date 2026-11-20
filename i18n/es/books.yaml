@@ -9,30 +9,30 @@ book.book_lantern_rowers.page_1: "Esto cuentan los primeros del Farol, y así lo
 book.book_lantern_rowers.page_2: "Al tercer día, cuando ya no quedaba agua dulce, vieron una luz baja sobre el agua, quieta, que no se movía con las olas. Remaron hacia ella toda la noche. Al amanecer la luz se había ido, y delante tenían la playa de esta isla."
 book.book_lantern_rowers.page_3: "Nadie supo nunca quién la encendió. Por eso el Farol arde en este templo y no se apaga: para que nadie más se pierda en el mar. Y por eso no hay falta peor que encender una luz para engañar a un barco."
 
-# Templo de la Raíz, Raigal.
+# Templo de la Raíz, Ivernel.
 book.book_root_below.title: "Lo que sostiene la raíz"
-book.book_root_below.page_1: "Antes de Raigal estaba el bosque, y antes del bosque, el árbol. Los que llegaron del mar no encontraron templos ni caminos: solo raíces tan gruesas como una casa, que bajaban más hondo que cualquier pozo."
-book.book_root_below.page_2: "Los primeros druidas aprendieron a escuchar la tierra con la mano sobre la raíz. Dicen que la tierra recuerda todo lo que pasa sobre ella, y que a veces se queja de cosas que le trajeron de lejos. En el Farol miran al mar; aquí miramos hacia abajo."
+book.book_root_below.page_1: "Antes de Ivernel estaba el bosque, y antes del bosque, el árbol. Los que llegaron del mar no encontraron templos ni caminos: solo raíces tan gruesas como una casa, que bajaban más hondo que cualquier pozo."
+book.book_root_below.page_2: "Los primeros druidas aprendieron a escuchar la tierra con la mano sobre la raíz. Dicen que la tierra recuerda todo lo que pasa sobre ella, y que a veces se queja de cosas que le trajeron de lejos. En Lanternby miran al mar; aquí miramos hacia abajo."
 book.book_root_below.page_3: "Plantamos dos olmos por cada uno que talamos. No le rezamos a nadie con nombre: le pedimos al árbol que siga sosteniendo la isla cuando nosotros ya no estemos."
 
-# Templo de la Llama Quieta, Brasal.
+# Templo de la Llama Quieta, Cinderstead.
 book.book_still_flame.title: "La Llama Quieta"
-book.book_still_flame.page_1: "La montaña ardía antes de que existiera Brasal. Los que vinieron a trabajar a sus pies aprendieron dos cosas: que el fuego da de comer, y que el fuego que se mueve mata."
+book.book_still_flame.page_1: "La montaña ardía antes de que existiera Cinderstead. Los que vinieron a trabajar a sus pies aprendieron dos cosas: que el fuego da de comer, y que el fuego que se mueve mata."
 book.book_still_flame.page_2: "Por eso la llama de este altar no tiembla. La cuidamos al abrigo del viento y le pedimos lo mismo a la montaña: que su fuego se quede donde está. Cuando la montaña respira, encendemos una vela más."
 book.book_still_flame.page_3: "Rezamos también por los que bajan a buscar el fuego bajo la piedra. Hay fuegos que fueron de otros, y no todos quieren volver a manos nuevas."
 
-# El archivo de Casia, Brasal.
+# El archivo de Casia, Cinderstead.
 book.book_forge_register.title: "Registro de la forja, tomo tercero"
-book.book_forge_register.page_1: "Copia hecha en Brasal de lo que se salvó de los registros viejos. Las páginas originales se quemaron; lo que sigue lo dictaron de memoria los hijos de los últimos fogoneros."
-book.book_forge_register.page_2: "La forja grande estaba bajo la montaña, y no era de Brasal: Brasal era de la forja. El pueblo nació para darle carbón, mineral y brazos. Las piezas que salían de ella llevaban su marca, y las puertas que llevaban a ella se cerraban con llaves de piedra templada."
+book.book_forge_register.page_1: "Copia hecha en Cinderstead de lo que se salvó de los registros viejos. Las páginas originales se quemaron; lo que sigue lo dictaron de memoria los hijos de los últimos fogoneros."
+book.book_forge_register.page_2: "La forja grande estaba bajo la montaña, y no era de Cinderstead: Cinderstead era de la forja. El pueblo nació para darle carbón, mineral y brazos. Las piezas que salían de ella llevaban su marca, y las puertas que llevaban a ella se cerraban con llaves de piedra templada."
 book.book_forge_register.page_3: "La noche en que el mar se tragó el imperio, la forja se apagó. O eso anotaron. Más abajo, con otra tinta, alguien escribió: «No se apagó. Se fue». Nadie firmó esa línea."
 
-book.book_smith_notes.title: "Apuntes de una herrera de Brasal"
-book.book_smith_notes.page_1: "Para quien herede el yunque. El mineral de ascua no se trabaja como el hierro: solo se ablanda al rojo blanco y se raja si se enfría de golpe. Tres partes de mineral, un lingote de hierro para darle cuerpo y un tronco de olmo del Bosque para que el fuego arda parejo."
+book.book_smith_notes.title: "Apuntes de una herrera de Cinderstead"
+book.book_smith_notes.page_1: "Para quien herede el yunque. El mineral de ascua no se trabaja como el hierro: solo se ablanda al rojo blanco y se raja si se enfría de golpe. Tres partes de mineral, un lingote de hierro para darle cuerpo y un tronco de olmo de Selvaine para que el fuego arda parejo."
 book.book_smith_notes.page_2: "Las marcas viejas de la forja no son adorno. Mi madre me enseñó a reconocerlas, como su madre a ella: la llama dentro del aro es la marca de la forja grande, la que se ponía en las llaves de sus puertas. Si alguna vez ves esa marca en algo, no lo vendas."
 book.book_smith_notes.page_3: "Un consejo más: no subas una pieza más allá de lo que aguanta. Hasta el cuarto temple el acero obedece; después, cada golpe es una apuesta, y el yunque no devuelve lo que rompe."
 
-# El atril de Velia, Raigal.
+# El atril de Velia, Ivernel.
 book.book_trail_notebook.title: "Cuaderno de rastros"
 book.book_trail_notebook.page_1: "El farol de rastreo arde con hongo lumbre. Su luz no muestra lo que hay, sino lo que pasó: pisadas de ayer, una rama que alguien apartó, el peso que alguien arrastró. Se consume rápido; hay que leer deprisa."
 book.book_trail_notebook.page_2: "Desde la luna pasada la tierra del este se queja. No es un animal ni un incendio: es algo viejo que no es de aquí, y que la tierra no quiere. Las raíces se apartan de ello como de una piedra caliente."
@@ -40,12 +40,12 @@ book.book_trail_notebook.page_3: "Lo anoto para no olvidarlo: lo que trajeron de
 
 # El naufragio del Alba Tardía, Puerto.
 book.scroll_dawn_manifest.title: "Manifiesto del Alba Tardía"
-book.scroll_dawn_manifest.page_1: "Alba Tardía, del Farol a la Isla del Bosque. Carga: veinte sacos de sal, doce rollos de cuerda, barriles de agua y un cofre sellado, sin remitente ni destinatario. El cofre se paga al triple, por adelantado, y no se abre."
+book.scroll_dawn_manifest.page_1: "Alba Tardía, de Lanternby a Selvaine. Carga: veinte sacos de sal, doce rollos de cuerda, barriles de agua y un cofre sellado, sin remitente ni destinatario. El cofre se paga al triple, por adelantado, y no se abre."
 book.scroll_dawn_manifest.page_2: "Nota del contramaestre, E. Sall: el que pagó el cofre no dio su nombre. Las monedas eran viejas y gastadas, con un sello que no conozco. Pidió que zarpáramos de noche y que siguiéramos la luz de las rocas del norte para entrar. El farol de la punta no está en esas rocas."
 
 # La cueva de los contrabandistas, Bosque.
 book.scroll_burnt_oar_log.title: "Bitácora del remo quemado"
-book.scroll_burnt_oar_log.page_1: "Tercera noche. El farol de las rocas hizo su trabajo y el barco del Farol se partió en el arrecife. Los de la playa sacaron el cofre antes que nadie. Cruzamos al Bosque en el bote sin bandera, como se acordó."
+book.scroll_burnt_oar_log.page_1: "Tercera noche. El farol de las rocas hizo su trabajo y el barco de Lanternby se partió en el arrecife. Los de la playa de Saltwrack sacaron el cofre antes que nadie. Cruzamos a Selvaine en el bote sin bandera, como se acordó."
 book.scroll_burnt_oar_log.page_2: "El cofre calienta las manos aunque esté cerrado. Lo bajamos a la cueva de la costa hasta que vengan a buscarlo: los reptantes no dejan pasar a nadie, y eso nos sirve. Cada carga se anota en las tarjas, con la marca del remo."
 book.scroll_burnt_oar_log.page_3: "El que paga no viene a la isla. Manda decir que el cofre va a la montaña que humea, donde otros ya están cavando. Paga con monedas viejas. Mientras pague, no pregunto."
 

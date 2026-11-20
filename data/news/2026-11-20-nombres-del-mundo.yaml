@@ -1,0 +1,26 @@
+# News post (T4.3, docs/06-content-data.md "Noticias"). Body: minimal Markdown subset.
+date: "2026-11-20"
+title:
+  es: "Las islas tienen nombre"
+  en: "The islands have names"
+body:
+  es: |
+    Las islas, los pueblos y los cazaderos dejaron de llamarse por lo que son y ahora
+    tienen nombre propio.
+
+    - **Velmara** es la isla donde empieza todo personaje nuevo; su pueblo es **Lanternby**,
+      donde arde el Farol.
+    - **Selvaine** es la isla del bosque, con el pueblo de **Ivernel** entre los olmos.
+    - **Karvask** es la isla del volcán, con el pueblo de **Cinderstead** al pie de la montaña.
+
+    Las misiones, los carteles y los barqueros ya usan los nombres nuevos. ¡Buen viaje!
+  en: |
+    The islands, towns and hunting grounds are no longer named after what they are: now
+    they have names of their own.
+
+    - **Velmara** is the island where every new character starts; its town is **Lanternby**,
+      where the Lantern burns.
+    - **Selvaine** is the forest island, with the town of **Ivernel** among the elms.
+    - **Karvask** is the volcanic island, with the town of **Cinderstead** at the foot of the mountain.
+
+    Quests, signs and ferrymen already use the new names. Safe travels!
