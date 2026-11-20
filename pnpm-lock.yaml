@@ -191,6 +191,10 @@ importers:
       '@rpg/spritepack':
         specifier: workspace:*
         version: link:../spritepack
+    devDependencies:
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   tools/spritepack:
     dependencies:

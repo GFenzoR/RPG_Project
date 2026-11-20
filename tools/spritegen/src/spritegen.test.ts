@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { encodePng } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import {
   canvas,
   castShadow,
@@ -40,6 +41,14 @@ import { PALETTE } from "./palette.ts";
 import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+
+/** The ids of balance.yaml's conditions, parsed as YAML: any style of entry counts. */
+function conditionIds(balance: string): string[] {
+  const doc: unknown = parse(balance);
+  const conditions =
+    doc && typeof doc === "object" && "conditions" in doc ? doc.conditions : undefined;
+  return conditions && typeof conditions === "object" ? Object.keys(conditions) : [];
+}
 
 function lum(img: Image, x: number, y: number): number {
   const i = (y * img.width + x) * 4;
@@ -439,11 +448,8 @@ describe("ui icons", () => {
 
   it("draw every status of the tray (docs/17), each its own 14x14 map outlined to 16x16", () => {
     // The conditions of data/balance.yaml and the statuses of server/internal/session/status.go.
-    const balance = readFileSync(resolve(root, "data", "balance.yaml"), "utf8");
-    const conditions = [...balance.matchAll(/^ {2}([a-z_]+):\s*\{\s*kind:/gm)].map(
-      (m) => m[1] ?? "",
-    );
-    expect(conditions.length).toBeGreaterThan(0);
+    const conditions = conditionIds(readFileSync(resolve(root, "data", "balance.yaml"), "utf8"));
+    expect(conditions).toContain("poison");
     const ids = [...conditions, "in_combat", "pvp_locked", "protection_zone"];
     expect(Object.keys(STATUS_ART).sort()).toEqual([...ids].sort());
     const masks = ids.map((id) => {
@@ -465,6 +471,22 @@ describe("ui icons", () => {
       return bits;
     });
     expect(new Set(masks).size).toBe(ids.length);
+  });
+
+  it("read every condition of balance.yaml, a block-style entry too", () => {
+    // A line regex saw only `id: { kind: ... }`: a new condition written as a block had no
+    // icon and neither this test nor status.test.ts's STATUS_ORDER noticed.
+    const yaml = [
+      "combat: { block_ms: 1 }",
+      "conditions:",
+      "  poison: { kind: damage, element: earth }",
+      "  # a comment",
+      "  frozen:",
+      "    kind: speed",
+      "    speed_pct: -20",
+      "skills: {}",
+    ].join("\n");
+    expect(conditionIds(yaml)).toEqual(["poison", "frozen"]);
   });
 
   it("draw every equipment slot (docs/17 UI-5), each its own 20x20 silhouette", () => {
