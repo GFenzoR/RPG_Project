@@ -100,6 +100,32 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
+  2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
+  experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía
+  (T3.3) pero el reparto estaba apagado por defecto y el bonus (6 % por miembro hasta 24 %)
+  no se veía en ningún lado. Ahora la experiencia compartida se prende al formar el grupo,
+  el bonus es por escalones de `balance.yaml party.bonus_pct_by_sharers` (+5/+10/+15/+20 %
+  con 2/3/4/5+ que comparten, tope 20 %), dos personajes de una cuenta cuentan como uno, y
+  se ve en la ventana de grupo ("Bonus de grupo: +X % (N comparten)" y una línea de ayuda),
+  en la bandeja de estados (ícono `party_bonus` con el %) y en el número flotante de
+  experiencia ("126 (+6 grupo)"). Queda:
+  - **Mirarlo en el juego** (la verificación final): el E2E de T3.3 pone a los dos a cazar
+    lobos al norte del templo de la Isla de Pruebas hasta que aparece el bonus; revisar
+    `25b-party-bonus` (la ventana con "+5 %" y las dos marcas "Comparte") y
+    `25c-party-bonus-tray` (el ícono de los dos compañeros con "5%" en la bandeja). El
+    número flotante con "(+N grupo)" solo lo cubren los tests (vitest y Go): en el E2E no
+    se espera a matar un lobo.
+  - **Cazar en fila rinde menos que solo:** la simulación (`TestPartyPaceVsSolo`) muestra
+    que si el grupo entero le pega al mismo monstruo fácil, cada uno gana 61–69 % de lo
+    de cazar solo de a dos y ~30 % de a seis (caminar, juntar y descansar no se acortan).
+    El +20 % del dueño solo compensa si cada uno pelea su presa o si el grupo caza
+    monstruos que solo no puede. Si el dueño quiere que el grupo rinda más que solo en
+    cualquier caza, hace falta otra palanca (spawns más grandes, monstruos de grupo, o un
+    bonus mayor): es una decisión de diseño, no un bug.
+  - **El alt que no comparte** sigue en el grupo y cobra su propio daño (sin bonus): no se
+    le avisa por qué no tiene la marca "Comparte". Un texto en la ventana ("otro personaje
+    de tu cuenta ya comparte") sería lo amable; no está.
 - **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
   personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
   equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto

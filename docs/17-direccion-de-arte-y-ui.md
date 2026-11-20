@@ -2507,10 +2507,12 @@ en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vi
 - **Bandeja de estados** (`client/src/ui/StatusTray.tsx`, estado puro en
   `client/src/state/status.ts`):
   - Un ícono por condición propia y por estado del servidor (`in_combat`, `pvp_locked`,
-    `protection_zone`: docs/02 "Estados del personaje", docs/05). El orden es fijo: primero
+    `protection_zone`: docs/02 "Estados del personaje", docs/05), más el bonus de grupo
+    (`party_bonus`, dos compañeros, con el porcentaje escrito en vez del tiempo: lo arma el
+    cliente con el `PartyUpdate`, docs/02 "Grupos"). El orden es fijo: primero
     lo que daña (veneno, fuego, eléctrico, ralentizado), después los bloqueos de la pelea y
-    la zona, al final lo que ayuda (acelerado, invisible, puntería, saciado); una condición
-    que el cliente no conoce va al final.
+    la zona, al final lo que ayuda (bonus de grupo, acelerado, invisible, puntería,
+    saciado); una condición que el cliente no conoce va al final.
   - Marco verde (`--ui-ok`) si ayuda y rojo (`--ui-danger`) si daña. Los segundos que
     quedan van escritos en la esquina del ícono (desde 100 s, minutos: "7m"). Parpadea en
     sus últimos 5 s (`FLASH_MS`), nunca con movimiento reducido.

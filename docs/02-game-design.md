@@ -2412,18 +2412,22 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   invita (el invitado recibe su nombre). El invitado acepta o
   rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
   `max_members` (6) miembros contando al líder.
-- **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y prende o
-  apaga la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
+- **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y apaga (o
+  vuelve a prender) la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
   anti-flood del chat (cada cambio se anuncia a todos). Un grupo que queda con un solo miembro se disuelve.
 - **Desconexión:** salir del mundo (logout, conexión caída, cliente lento, reloguear en
   otro lado, expulsión de staff) es salir del grupo. Si era el líder, el liderazgo pasa al
   miembro más antiguo. Sus invitaciones (enviadas y recibidas) se borran. Los grupos **no
   se guardan**: tras un reinicio o un relogueo hay que volver a formarlo. Morir no saca a
   nadie del grupo.
-- **Experiencia compartida** (apagada al formar el grupo). Al morir un monstruo, sus
-  shares de daño (incluido el de las condiciones de T3.2) se reparten como siempre,
-  salvo los de los miembros de un grupo con la experiencia compartida prendida que
-  **comparten** esa muerte. Comparte un miembro que cumple las tres condiciones:
+- **Experiencia compartida: prendida al formar el grupo** (`shared_by_default: true`,
+  decisión del dueño 2026-11-20: estar en grupo con otro jugador tiene que dar más
+  experiencia sin tener que descubrir un botón). Al formarse, los dos primeros miembros
+  leen "El grupo comparte la experiencia..." en el log; el líder puede apagarla y volver a
+  prenderla. Al morir un monstruo, sus shares de daño (incluido el de las condiciones de
+  T3.2) se reparten como siempre, salvo los de los miembros de un grupo con la experiencia
+  compartida prendida que **comparten** esa muerte. Comparte un miembro que cumple las
+  tres condiciones:
   1. **Cerca:** en el piso del monstruo y a `share_distance` (24) casillas o menos de donde
      murió (Chebyshev). Vivo.
   2. **Contribuyó** en los últimos `contribution_ms` (75 s): hizo daño a un monstruo,
@@ -2431,13 +2435,47 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   3. **Nivel:** al menos `level_range_pct` (70 %) del nivel más alto entre los que cumplen
      1 y 2, o a lo sumo `level_gap_always` (3) niveles por debajo.
 
-  Si comparten dos o más, los shares de daño de los que comparten forman un pozo que crece
-  `bonus_pct_per_member` (6 %) por cada uno después del primero, hasta `max_bonus_pct`
-  (24 %), y se divide en partes iguales entre ellos (también a quien no le pegó, como un
-  sanador). Los miembros que no comparten cobran su propio share. Si comparte uno solo, no
-  hay pozo: cada uno cobra lo suyo. El share de quien salió del mundo (logout o relogueo)
-  se pierde: cuenta en el total pero no lo cobra nadie, así que terminar el monstruo de
-  otro no da su experiencia. Quests: cuenta la muerte quien le hizo daño, como antes.
+  Si comparten dos o más, los shares de daño de los que comparten forman un **pozo** que
+  crece con el **bonus de grupo** y se divide en partes iguales entre ellos (también a
+  quien no le pegó, como un sanador). Los miembros que no comparten cobran su propio share.
+  Si comparte uno solo, no hay pozo: cada uno cobra lo suyo. El share de quien salió del
+  mundo (logout o relogueo) se pierde: cuenta en el total pero no lo cobra nadie, así que
+  terminar el monstruo de otro no da su experiencia. Quests: cuenta la muerte quien le
+  hizo daño, como antes.
+- **Bonus de grupo** (`bonus_pct_by_sharers`, decidido por el dueño: hasta +20 %). Solo
+  importa **cuántos** comparten, no sus vocaciones:
+
+  | Comparten | Bonus del pozo |
+  |---|---|
+  | 2 | +5 % |
+  | 3 | +10 % |
+  | 4 | +15 % |
+  | 5 o más (hasta `max_members`, 6) | +20 % (tope) |
+
+  La lista empieza en 2; más miembros que escalones toman el último, que es el tope. Cada
+  uno cobra `pozo × (100 + bonus) / 100 / n` (enteros, redondeo hacia abajo). Ejemplo: dos
+  matan un monstruo de 240 entre los dos → 240 × 1,05 / 2 = 126 cada uno, de los que 6 son
+  el bonus. El chequeo de `make validate` y del arranque exige de 1 a `max_members - 1`
+  escalones, cada uno de 0 a 100 y nunca menor que el anterior.
+
+  **Cuánto rinde** (`server/internal/sim/balance_party_test.go`, `TestPartyPaceVsSolo`,
+  bestiario de Puerto a su nivel objetivo, `DEBUG_BALANCE=1` imprime la tabla):
+  - *Mismas presas:* si cada miembro mata lo que mataría solo (el grupo tira de varios
+    monstruos a la vez y cada uno pelea el suyo), cada uno gana exactamente lo de cazar
+    solo × (1 + bonus): +5 % de a dos, +10 % de a tres, +15 % de a cuatro, +20 % de cinco
+    en adelante. Ej. lobo a nivel 4: 4340 xp/h solo, 4557 de a dos, 5208 de a cinco.
+  - *Foco en un monstruo:* si todo el grupo le pega al mismo (la pelea dura 1/n, pero
+    caminar, juntar el loot y descansar siguen igual), cada miembro gana bastante menos que
+    solo (61–69 % de a dos, 26–33 % de a seis, según el monstruo). El bonus no compensa
+    cazar en fila presas fáciles: paga cazar monstruos más duros o abrirse y tirar de
+    varios. Ver "Pendientes" en docs/14.
+- **Una cuenta, un miembro que comparte (anti-alts).** Dos personajes de la misma cuenta
+  (el `account_id` que la sesión ya tiene) cuentan como **uno** al compartir: comparte el
+  primero en orden de entrada al grupo y el otro cobra solo el share de su propio daño,
+  sin bonus. Así un jugador con dos clientes abiertos no se arma un grupo de alts para
+  cobrar el bonus, y un personaje con su alt no forma un pozo (es un solo "compartidor").
+  El indicador y la marca "comparte" siguen la misma regla.
+  `TestSharedExperienceSameAccountAlts` lo fija.
 - **Anti-carry.** Un personaje alto no puede subir a uno bajo: el bajo queda fuera por
   nivel (condición 3), así que solo cobra el daño que él mismo hizo, y el alto, sin nadie
   más que comparta, cobra lo suyo sin bonus. Estar al lado sin hacer nada tampoco alcanza
@@ -2447,7 +2485,18 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
 - **Indicador:** apagada, activa o inactiva. Cada miembro lo calcula solo con los miembros
   que ve (él incluido): activa si al menos dos de ellos cumplen 2 y 3 ahora mismo. Así ni
   el indicador ni la marca "comparte" delatan que un miembro lejos murió o está peleando.
-  La distancia se evalúa en cada muerte, no en el indicador.
+  La distancia se evalúa en cada muerte, no en el indicador. Mientras está activa, el
+  `PartyUpdate` lleva el bonus de los que comparten (`bonus_percent`).
+- **Qué ve el jugador** (lo que el dueño no veía antes):
+  - la ventana de grupo dice "Bonus de grupo: +10 % de experiencia (3 comparten)" mientras
+    el reparto está activo, con la marca "Comparte" en cada miembro que comparte, y una
+    línea de ayuda que explica qué da un grupo (también sin grupo);
+  - la bandeja de estados muestra el ícono `party_bonus` (dos compañeros) con el
+    porcentaje escrito ("10%") mientras el bonus está activo; lo arma el cliente con el
+    `PartyUpdate`, no viaja en `PlayerConditions`;
+  - el número flotante de experiencia de una muerte compartida marca la parte del bonus:
+    "126 (+6 grupo)". Esa parte solo la ven el que la cobra y los miembros de su grupo; un
+    extraño al lado ve solo "126".
 - **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
   viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
   mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está

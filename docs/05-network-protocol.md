@@ -621,7 +621,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `corpse` en `data/monsters`, o `creature_remains`; dura `combat.monster_corpse_ms`;
   es un contenedor con el botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
-  se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
+  se reparte según el daño de los que siguen conectados; con un grupo que comparte, a cada
+  miembro que comparte, ver "Grupos": `FloatingText.bonus` es la parte del bonus de grupo)
+  y, al que más daño hizo,
   `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
   parámetro `item` por pila del botín (el cliente los junta en `{items}`), o
   `combat.loot_none` si no hubo botín.
@@ -1082,12 +1084,22 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   - `LEAVE`; `KICK` y `PASS_LEADER` (`creature_id` = otro miembro, solo el líder);
     `SHARE_ON` / `SHARE_OFF` (solo el líder). `PASS_LEADER` y un `SHARE_*` que cambia algo
     cuentan para el anti-flood del chat (`chat.flood`, `chat.muted`).
-- **`PartyUpdate{leader_id, shared, members[]}`**: el grupo completo, en orden de
-  llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros, líder,
-  experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia lo que
-  el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
+- **`PartyUpdate{leader_id, shared, members[], bonus_percent}`**: el grupo completo, en
+  orden de llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros,
+  líder, experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia
+  lo que el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
   `OFF`, `ACTIVE` (dos o más de los miembros que el jugador ve, él incluido, califican) o
-  `INACTIVE`.
+  `INACTIVE`; un grupo nuevo empieza con la experiencia compartida prendida
+  (`party.shared_by_default`), así que su primer `PartyUpdate` dice `INACTIVE`.
+  `bonus_percent` (campo 4, agregado sin romper nada): el bonus de grupo de los que
+  comparten ahora (`bonus_pct_by_sharers` según cuántos miembros tienen `sharing`; dos
+  personajes de una cuenta cuentan como uno), 0 salvo con `ACTIVE`. El cliente lo muestra
+  en la ventana de grupo y como el estado `party_bonus` de la bandeja (lo arma el cliente:
+  no viaja en `PlayerConditions`).
+- **`FloatingText.bonus`** (campo 4, agregado sin romper nada; solo `EXPERIENCE`): la parte
+  de `amount` que es el bonus de grupo de una muerte compartida (`amount` ya la incluye).
+  Lo reciben el que la cobra y los miembros de su grupo; cualquier otro que mira recibe 0.
+  El cliente escribe `client.party.xp_bonus` ("126 (+6 grupo)").
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
   mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
   `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
@@ -1100,7 +1112,9 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   (`name`), `party.leave_first`, `party.full`, `party.not_leader`, `party.none`,
   `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
-  `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`.
+  `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`,
+  `party.shared_default` (al formarse un grupo con la experiencia compartida prendida: lo
+  oyen los dos primeros miembros).
 
 ### PvP (T5.2, `server/internal/session/pvp.go` y `guildwar.go`)
 Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.

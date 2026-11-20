@@ -521,3 +521,11 @@ secundaria.
   aditivo (`ItemLocation.pocket`, `Inventory.pockets`/`pocket_slots`), migración 00020 y la
   fila "Bolsillos" bajo la figura del inventario. docs/02 "Bolsillos"; lo que queda:
   docs/14, "Pendientes conocidos".
+- [x] **Bonus de grupo (el dueño el 2026-11-20; lote 14, rama `feat/party-bonus`).** "Estar
+  en party con otro jugador te da beneficios de experiencia": la experiencia compartida de
+  T3.3 se prende al formar el grupo, el bonus pasa a escalones de `balance.yaml`
+  (+5/+10/+15/+20 % con 2/3/4/5+ que comparten), dos personajes de una cuenta cuentan como
+  uno, y se ve en la ventana de grupo, en la bandeja de estados (`party_bonus`) y en el
+  número flotante de experiencia ("+N grupo"). Protocolo aditivo
+  (`PartyUpdate.bonus_percent`, `FloatingText.bonus`) y una simulación de ritmo en grupo
+  contra solo. docs/02 "Grupos"; lo que queda: docs/14, "Pendientes conocidos".

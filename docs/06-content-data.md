@@ -916,7 +916,8 @@ conditions:
   `tools/spritegen/src/recipes/ui.ts`, un test lo exige) y su lugar y tipo en
   `client/src/state/status.ts` (`STATUS_ORDER`, `STATUS_KIND`).
 - Los ids `in_combat`, `pvp_locked` y `protection_zone` son de los estados que manda el
-  servidor (`02-game-design.md`, "Estados del personaje"): una condición no puede usarlos.
+  servidor (`02-game-design.md`, "Estados del personaje"), y `party_bonus` el del bonus de
+  grupo que arma el cliente ("Grupos"): una condición no puede usarlos.
 
 ## Grupos (T3.3)
 Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml → party`
@@ -931,8 +932,11 @@ party:
   contribution_ms: 75000    # ventana de "contribuyó hace poco"
   level_range_pct: 70       # nivel mínimo, en % del más alto que comparte (anti-carry)
   level_gap_always: 3       # o a lo sumo estos niveles por debajo
-  bonus_pct_per_member: 6   # bonus del pozo por cada miembro que comparte después del primero
-  max_bonus_pct: 24         # tope del bonus
+  shared_by_default: true   # un grupo nuevo empieza compartiendo (el líder puede apagarla)
+  bonus_pct_by_sharers: [5, 10, 15, 20]  # bonus del pozo con 2, 3, 4 y 5+ que comparten;
+                            # más que escalones toman el último (el tope). Solo cuenta
+                            # cuántos (dos personajes de una cuenta son uno). De 1 a
+                            # max_members - 1 escalones, 0..100, nunca decrecientes
 ```
 - Textos de la UI: `client.party.*` y los mensajes del servidor `party.*` en
   `i18n/*/client.yaml`. El nombre de la isla de un miembro fuera de vista es
