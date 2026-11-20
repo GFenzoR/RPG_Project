@@ -2,7 +2,7 @@
 // server and `make validate` all call validateWorld, so they agree on what is an error.
 import { chunkFileName, floorDir } from "./chunk.ts";
 import { isSignItem, loadContent, routesFile, showsPortal } from "./content.ts";
-import type { ContentIndex, ItemInfo } from "./content.ts";
+import type { ContentIndex, ItemInfo, SigilInfo } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
@@ -179,6 +179,7 @@ class WorldValidator {
     this.checkDevIslands();
     this.checkDoors();
     this.checkArrivals();
+    this.checkSigils();
     this.checkPrefabs();
   }
 
@@ -1222,6 +1223,123 @@ class WorldValidator {
       );
   }
 
+  private plateCache: Map<string, PlacedPlate> | undefined;
+
+  /** Every sigil plate placed in the world, by tile. */
+  private plates(): Map<string, PlacedPlate> {
+    if (this.plateCache) return this.plateCache;
+    const out = new Map<string, PlacedPlate>();
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      for (const { c, s, pos } of placedItems(island))
+        for (const id of s.stack) {
+          const vocation = this.content.items.get(id)?.sigil;
+          if (vocation !== undefined)
+            out.set(formatPos(pos), { pos, vocation, id, file: chunkFile(dir, c) });
+        }
+    }
+    this.plateCache = out;
+    return out;
+  }
+
+  /** The plates within a sigils step's square, in row order. */
+  private platesOf(s: SigilInfo): Position[] {
+    const out: Position[] = [];
+    for (const p of this.plates().values())
+      if (
+        p.pos.z === s.at.z &&
+        Math.max(Math.abs(p.pos.x - s.at.x), Math.abs(p.pos.y - s.at.y)) <= s.radius
+      )
+        out.push(p.pos);
+    return out.sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+
+  /**
+   * Milestone plates (docs/02 "Quests de hito", the server's initSigils): each sigils step
+   * has as many plates within its square as requires.players, with the vocations it lists
+   * (or none), on walkable tiles; a plate belongs to one milestone, and none lies outside
+   * every milestone. The reward room (`to`) is a walkable tile of an island outside houses,
+   * locked doors and portal entrances, and from it a player reaches a temple without keys
+   * or tools (templeReach: on foot, stairs, ladders, holes, teleports, out of a room
+   * through its door): whoever lands there must be able to leave. That the plates are
+   * reached on foot is checkReachability's, which also counts the reward room as reached
+   * from them.
+   */
+  private checkSigils(): void {
+    const owner = new Map<string, string>();
+    const houses = new Set<string>();
+    for (const island of this.world.islands.values())
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
+    const steps = new Set<string>();
+    for (const p of this.escapeWorld().portals ?? [])
+      if (ON_STEP_KINDS.has(p.kind)) steps.add(formatPos(p.from));
+    let reach: TempleReach | undefined;
+    for (const s of this.content.sigils ?? []) {
+      const path: PathSegment[] = ["steps", s.step, "complete_when", "sigils"];
+      const plates = this.platesOf(s);
+      const what = `milestone "${s.quest}"`;
+      if (plates.length !== s.players)
+        this.err(
+          s.file,
+          path,
+          `${what}: ${plates.length} sigil plates within radius ${s.radius} of ${formatPos(s.at)}, requires.players is ${s.players}`,
+          s.at,
+        );
+      const got = plates.map((p) => this.plates().get(formatPos(p))?.vocation ?? "").sort();
+      const want = (s.vocations.length > 0 ? [...s.vocations] : plates.map(() => "")).sort();
+      if (plates.length === s.players && got.join(",") !== want.join(","))
+        this.err(
+          s.file,
+          path,
+          `${what}: its plates are marked [${got.join(", ")}], requires.vocations is [${s.vocations.join(", ")}]`,
+          s.at,
+        );
+      for (const p of plates) {
+        const k = formatPos(p);
+        const other = owner.get(k);
+        if (other !== undefined && other !== s.quest)
+          this.err(
+            s.file,
+            path,
+            `${what}: the plate at ${k} is also one of milestone "${other}"`,
+            p,
+          );
+        owner.set(k, s.quest);
+        if (!isWalkable(this.tiles.tileAt(p), this.content))
+          this.err(s.file, path, `${what}: the plate at ${k} is not a walkable tile`, p);
+      }
+      const to = s.to;
+      const tile = this.tiles.tileAt(to);
+      const at = `${what}: its reward room at ${formatPos(to)}`;
+      if (!this.islandAt(to) || !isWalkable(tile, this.content))
+        this.err(s.file, [...path, "to"], `${at} is not a walkable tile of an island`, to);
+      else if (houses.has(formatPos(to)))
+        this.err(s.file, [...path, "to"], `${at} lies in a house`, to);
+      else if (hasLockedDoor(tile, this.content) || steps.has(formatPos(to)))
+        this.err(s.file, [...path, "to"], `${at} lies on a locked door or a portal entrance`, to);
+      else {
+        reach ??= templeReach(this.tiles, this.content, this.escapeWorld());
+        if (!reach.escapes.has(reach.areaOf(to)))
+          this.err(
+            s.file,
+            [...path, "to"],
+            `${at}: no temple is reached from there without keys or tools (on foot, stairs, ladders, holes, teleports, out of a room through its door): whoever lands there is stuck`,
+            to,
+          );
+      }
+    }
+    for (const [k, p] of this.plates())
+      if (!owner.has(k))
+        this.err(
+          p.file,
+          ["items"],
+          `sigil plate "${p.id}" at ${k} belongs to no milestone's sigils step`,
+          p.pos,
+        );
+  }
+
   /** The island whose rect holds p, or undefined. */
   private islandAt(p: Position): Island | undefined {
     return [...this.world.islands.values()].find((i) => rectContains(i.meta.rect, p.x, p.y));
@@ -1319,6 +1437,10 @@ class WorldValidator {
     const meta = island.meta;
     if (!isWalkable(this.tiles.tileAt(meta.temple), this.content)) return; // already reported
     const portals = this.portalMoves();
+    // A milestone's plates lead to its reward room (the server moves the group there).
+    const sigilTo = new Map<string, Position>();
+    for (const s of this.content.sigils ?? [])
+      for (const p of this.platesOf(s)) sigilTo.set(formatPos(p), s.to);
     const reached = new Set<string>();
     const queue: Position[] = [meta.temple];
     reached.add(formatPos(meta.temple));
@@ -1326,6 +1448,8 @@ class WorldValidator {
       const p = queue.pop() as Position;
       const moves = portals.get(formatPos(p));
       const next: Position[] = [...(moves?.to ?? [])];
+      const reward = sigilTo.get(formatPos(p));
+      if (reward) next.push(reward);
       // Off stairs only to their destination (the temple itself is where one starts).
       if (!moves?.onStep || p === meta.temple)
         for (let dy = -1; dy <= 1; dy++)
@@ -1384,6 +1508,18 @@ class WorldValidator {
             ["items"],
             `chest "${id}" cannot be opened: no tile next to it is reached on foot from the temple`,
             pos,
+          );
+    for (const s of this.content.sigils ?? [])
+      for (const p of this.platesOf(s))
+        if (
+          rectContains(meta.rect, p.x, p.y) &&
+          (!reached.has(formatPos(p)) || portals.get(formatPos(p))?.onStep === true)
+        )
+          this.err(
+            s.file,
+            ["steps", s.step, "complete_when", "sigils"],
+            `sigil plate of milestone "${s.quest}" at ${formatPos(p)} is not reached on foot from the temple (or moves whoever steps on it): the milestone could never be done`,
+            p,
           );
     this.warnUnreachableAreas(island, reached, portals);
     this.checkReachPlaces(island, reached, portals);
@@ -1523,6 +1659,14 @@ function chunkFile(dir: string, c: Chunk): string {
  * Every item stack of the island's chunks (by floor, then chunk row and column) with its
  * chunk and world position.
  */
+/** A sigil plate placed on the map (checkSigils). */
+interface PlacedPlate {
+  pos: Position;
+  vocation: string;
+  id: string;
+  file: string;
+}
+
 function placedItems(island: Island): { c: Chunk; s: Chunk["items"][number]; pos: Position }[] {
   const out: { c: Chunk; s: Chunk["items"][number]; pos: Position }[] = [];
   const chunks = [...island.chunks.values()].sort(

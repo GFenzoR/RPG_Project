@@ -109,6 +109,9 @@ describe("ids.lock.yaml", { timeout: 30_000 }, () => {
       "bosque_cave",
       "volcan_mine",
       "pruebas",
+      "ms_thalorn",
+      "ms_orthavel",
+      "ms_morvund",
     ]);
     expect(text).toBe(before);
     expect(errors()).toEqual([]);

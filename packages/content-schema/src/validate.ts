@@ -226,6 +226,7 @@ class Validator {
     this.checkEquipLevels();
     this.checkForge();
     this.checkChests();
+    this.checkMilestones();
     this.checkQuestDrops();
     this.checkSummons();
     this.checkI18n();
@@ -1806,6 +1807,60 @@ class Validator {
    * protection (the warding amber: only monsters drop it). That a reward exists is the
    * schema's itemRef; that it is not retired, checkRetiredItems'.
    */
+  /**
+   * Milestone quests (docs/02 "Quests de hito"), the rules the schema cannot say (the
+   * server's content.ParseQuest says the same): requires and title go with milestone: true
+   * and it with them; a milestone is not repeatable and its last step, only that one, is a
+   * sigils step; requires.vocations lists one per player; gear.equipped goes with an item.
+   * A sigil plate is a map item nobody picks up that blocks nothing. The plates themselves
+   * are mapcli validate's (packages/map-format, checkSigils).
+   */
+  private checkMilestones(): void {
+    for (const src of this.quests) {
+      const q = src.data;
+      if (!isObj(q)) continue;
+      const steps = asList(q["steps"]);
+      const sigils = steps.flatMap((s, i) =>
+        isObj(s) && isObj(s["complete_when"]) && isObj(s["complete_when"]["sigils"]) ? [i] : [],
+      );
+      const req = q["requires"];
+      if (q["milestone"] !== true) {
+        if (req !== undefined || q["title"] !== undefined)
+          this.error(src, [], "requires and title belong to a milestone quest (milestone: true)");
+        for (const i of sigils)
+          this.error(
+            src,
+            ["steps", i, "complete_when", "sigils"],
+            "a sigils step belongs to a milestone quest (milestone: true)",
+          );
+        continue;
+      }
+      if (!isObj(req)) this.error(src, [], "a milestone needs requires");
+      if (typeof q["title"] !== "string") this.error(src, [], "a milestone needs a title");
+      if (q["repeatable"] !== undefined)
+        this.error(src, ["repeatable"], "a milestone is done once: it cannot be repeatable");
+      if (sigils.length !== 1 || sigils[0] !== steps.length - 1)
+        this.error(src, ["steps"], "a milestone needs exactly one sigils step, its last");
+      if (!isObj(req)) continue;
+      const vocations = asList(req["vocations"]);
+      if (req["vocations"] !== undefined && vocations.length !== req["players"])
+        this.error(
+          src,
+          ["requires", "vocations"],
+          "requires.vocations lists one vocation per player (as many as requires.players)",
+        );
+    }
+    for (const { item, src, path } of this.items) {
+      if (!isObj(item["sigil"])) continue;
+      if (item["pickupable"] !== false || item["blocks_movement"] === true)
+        this.error(
+          src,
+          [...path, "sigil"],
+          `sigil plate "${String(item["id"])}" needs pickupable: false and must not block movement (a player stands on it)`,
+        );
+    }
+  }
+
   private checkChests(): void {
     const byId = new Map<string, Obj>();
     for (const { item } of this.items) {

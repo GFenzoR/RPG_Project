@@ -49,6 +49,11 @@ export interface ItemInfo {
    * a tile next to it, so one of those must be reached.
    */
   chest?: string;
+  /**
+   * A sigil plate of a milestone quest (its `sigil` block, docs/02 "Quests de hito"): the
+   * vocation it is marked for, "" for any. A player stands on it: it must be reached.
+   */
+  sigil?: string;
 }
 
 /** What a portal item shows: a kind of portals.yaml and, optionally, the way it leads. */
@@ -104,6 +109,29 @@ export interface ContentIndex {
    * without them.
    */
   reaches?: ReachInfo[];
+  /**
+   * The sigils steps of the milestone quests of data/quests (docs/02 "Quests de hito"):
+   * their plates and the reward room they move players to. Missing when the index was
+   * built without them.
+   */
+  sigils?: SigilInfo[];
+}
+
+/**
+ * A milestone's sigils step: the quest, its file (relative to the repository root, for
+ * diagnostics), the step's index, the square of its plates (radius around `at`), the
+ * reward room it moves players to, how many players and which vocations (one per player,
+ * or none).
+ */
+export interface SigilInfo {
+  quest: string;
+  file: string;
+  step: number;
+  at: { x: number; y: number; z: number };
+  radius: number;
+  to: { x: number; y: number; z: number };
+  players: number;
+  vocations: string[];
 }
 
 /**
@@ -211,6 +239,8 @@ export function loadContent(root: string): ContentIndex {
       }
       const chest = raw["chest"];
       if (isObj(chest) && typeof chest["id"] === "string") info.chest = chest["id"];
+      const sigil = raw["sigil"];
+      if (isObj(sigil)) info.sigil = typeof sigil["vocation"] === "string" ? sigil["vocation"] : "";
       items.set(info.id, info);
     }
   }
@@ -257,10 +287,45 @@ export function loadContent(root: string): ContentIndex {
     routes,
     teleports: loadTeleports(root),
     reaches: loadReaches(root),
+    sigils: loadSigils(root),
     ...(Number.isInteger(radius) && (radius as number) >= 0
       ? { arrivalRadius: radius as number }
       : {}),
   };
+}
+
+/** The sigils steps of the milestone quests of data/quests (well-formed ones). */
+function loadSigils(root: string): SigilInfo[] {
+  const out: SigilInfo[] = [];
+  for (const file of yamlFiles(join(root, "data", "quests"))) {
+    const rel = `data/quests/${file.replace(/^.*[\\/]/, "")}`;
+    const q = readYaml(file);
+    const quest = isObj(q) ? q["id"] : undefined;
+    if (!isObj(q) || typeof quest !== "string" || !Array.isArray(q["steps"])) continue;
+    const req = isObj(q["requires"]) ? q["requires"] : {};
+    const players = Number.isInteger(req["players"]) ? (req["players"] as number) : 0;
+    const vocations = Array.isArray(req["vocations"])
+      ? req["vocations"].filter((v): v is string => typeof v === "string")
+      : [];
+    for (const [step, s] of q["steps"].entries()) {
+      const when = isObj(s) ? s["complete_when"] : undefined;
+      const sig = isObj(when) ? when["sigils"] : undefined;
+      const to = isObj(sig) ? sig["to"] : undefined;
+      if (!isObj(sig) || !isPos(sig) || !isPos(to)) continue;
+      const radius = (sig as Record<string, unknown>)["radius"];
+      out.push({
+        quest,
+        file: rel,
+        step,
+        at: { x: sig.x, y: sig.y, z: sig.z },
+        radius: Number.isInteger(radius) && (radius as number) >= 0 ? (radius as number) : 0,
+        to: { x: to.x, y: to.y, z: to.z },
+        players,
+        vocations,
+      });
+    }
+  }
+  return out;
 }
 
 /** The reach steps of the quests of data/quests (well-formed ones). */
