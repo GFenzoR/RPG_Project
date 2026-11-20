@@ -102,6 +102,15 @@ export function sameWorn(a: Worn | undefined, b: Worn | undefined): boolean {
   return slots.every((s) => samePiece(a[s], b[s]));
 }
 
+/**
+ * `prev` while it wears the same pieces as `next`, else `next`: a figure built from a new
+ * object on every render (the Apariencia window) keeps one reference, so it is drawn
+ * again only when what it wears changed.
+ */
+export function stableWorn(prev: Worn | undefined, next: Worn): Worn {
+  return prev && sameWorn(prev, next) ? prev : next;
+}
+
 /** The choices of a player's look (ClientContent.lookOptions, data/looks.yaml order). */
 export interface LookChoices {
   builds: readonly string[];

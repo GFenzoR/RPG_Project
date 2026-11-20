@@ -137,11 +137,15 @@ func (w *World) lookChanged(p *Player) {
 
 // setLook handles SetLook: a body a player may choose (data/looks.yaml), free. An invalid
 // one is refused with appearance.invalid and p gets its look back; too many changes in a row
-// are dropped (lookFlood).
+// are dropped (lookFlood). Without data/looks.yaml it is unavailable, said once a session:
+// a client sending SetLook over and over gets no answer for each one.
 func (w *World) setLook(ctx *game.TickContext, p *Player, m *pb.SetLook) {
 	l := w.cfg.Looks
 	if l == nil {
-		p.emit(systemMsg(msgLookUnavailable))
+		if !p.lookOff {
+			p.lookOff = true
+			p.emit(systemMsg(msgLookUnavailable))
+		}
 		return
 	}
 	if !w.lookFlood(ctx, p) {

@@ -136,8 +136,10 @@ export interface CreatureState {
   /** What an NPC or a humanoid monster wears (its data's pieces, which are no items). */
   worn: Worn | undefined;
   /**
-   * Grows whenever the look, the visible equipment or the cosmetics change (and when the
-   * creature appears again): the canvas builds its figure again when it differs.
+   * Takes a new value whenever the look, the visible equipment or the cosmetics change,
+   * and when the creature appears again: the canvas builds its figure again when it
+   * differs. The values come from one counter of the WorldState, so a creature sent again
+   * after a FullMapView never repeats the value its sprite was drawn with.
    */
   lookRev: number;
 }
@@ -453,6 +455,8 @@ export class WorldState implements TileSource {
   predicted: PredictedStep[] = [];
   /** The seq of the last Walk predicted (docs/05 "Caminar"): one more for each. */
   private walkSeq = 0;
+  /** The last lookRev handed out: every new one is greater (CreatureState.lookRev). */
+  private lookSeq = 0;
   /** Welcome.max_queued_steps: how many own steps may wait for the server. */
   private maxQueued = 0;
   /**
@@ -781,7 +785,7 @@ export class WorldState implements TileSource {
         const c = this.creatures.get(msg.value.id);
         if (c) {
           c.cosmetics = cosmeticsView(msg.value.cosmetics);
-          c.lookRev++;
+          c.lookRev = ++this.lookSeq;
         }
         break;
       }
@@ -790,7 +794,7 @@ export class WorldState implements TileSource {
         if (c) {
           c.look = lookView(msg.value.look);
           c.equipment = equipmentView(msg.value.equipment);
-          c.lookRev++;
+          c.lookRev = ++this.lookSeq;
         }
         break;
       }
@@ -804,7 +808,7 @@ export class WorldState implements TileSource {
         const s = this.self;
         if (s) {
           s.cosmetics = { ...equipped };
-          s.lookRev++;
+          s.lookRev = ++this.lookSeq;
         }
         break;
       }
@@ -1148,12 +1152,12 @@ export class WorldState implements TileSource {
       look: lookView(c.look),
       equipment: equipmentView(c.equipment),
       worn: wornView(c.worn),
-      lookRev: prev ? prev.lookRev : 0,
+      lookRev: prev ? prev.lookRev : ++this.lookSeq,
     });
     // Built again only when what the figure is drawn from changed: a FullMapView or a
     // MapSlice (a teleport, another floor) sends every creature in view again.
     const next = this.creatures.get(c.id);
-    if (prev && next && !sameFigure(prev, next)) next.lookRev = prev.lookRev + 1;
+    if (prev && next && !sameFigure(prev, next)) next.lookRev = ++this.lookSeq;
   }
 
   /**

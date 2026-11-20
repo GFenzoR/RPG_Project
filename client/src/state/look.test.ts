@@ -4,6 +4,7 @@ import {
   CreatureKind,
   CreatureLookSchema,
   CreatureSchema,
+  MapAreaSchema,
   VisibleEquipmentSchema,
   WornPieceSchema,
   WornSchema,
@@ -12,7 +13,7 @@ import {
 import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
-import { NO_EQUIPMENT, equipmentView, lookView, sameLook, wornView } from "./look.ts";
+import { NO_EQUIPMENT, equipmentView, lookView, sameLook, stableWorn, wornView } from "./look.ts";
 import { WorldState } from "./world.ts";
 
 const content = { items: {} } as unknown as ClientContent;
@@ -50,6 +51,15 @@ describe("a creature's look", () => {
     expect(sameLook(MIRA, { ...MIRA })).toBe(true);
     expect(sameLook(MIRA, TOM)).toBe(false);
     expect(sameLook(undefined, MIRA)).toBe(false);
+  });
+
+  it("keeps one worn object while the pieces are the same (no redraw per render)", () => {
+    const first = { weapon: { shape: "sword", tint: "rust" } };
+    const again = { weapon: { shape: "sword", tint: "rust" } };
+    expect(stableWorn(undefined, first)).toBe(first);
+    expect(stableWorn(first, again)).toBe(first);
+    const other = { weapon: { shape: "axe", tint: "rust" } };
+    expect(stableWorn(first, other)).toBe(other);
   });
 
   it("keeps a creature's look and equipment and follows CreatureLook", () => {
@@ -174,12 +184,54 @@ describe("a creature's look", () => {
     // Something it is drawn from changed: built again.
     appear({ ...monster, worn: create(WornSchema, {}) });
     appear({ ...player, equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }) });
-    expect([rev(4000000013), rev(7)]).toEqual([(m0 ?? 0) + 1, (p0 ?? 0) + 1]);
+    const [m1, p1] = [rev(4000000013) ?? 0, rev(7) ?? 0];
+    expect(m1).toBeGreaterThan(m0 ?? 0);
+    expect(p1).toBeGreaterThan(p0 ?? 0);
     appear({
       ...player,
       equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }),
       look: create(BodyLookSchema, TOM),
     });
-    expect(rev(7)).toBe((p0 ?? 0) + 2);
+    expect(rev(7)).toBeGreaterThan(p1);
+  });
+
+  it("a creature sent again after a FullMapView never repeats the drawn lookRev", () => {
+    // Died and lost its gear: the server sends the CreatureLook and then, in the same
+    // batch, the FullMapView of the temple with the creature in it again.
+    const w = new WorldState(content);
+    const player = {
+      id: 7,
+      kind: CreatureKind.PLAYER,
+      pos: { x: 6, y: 6, z: 7 },
+      look: create(BodyLookSchema, MIRA),
+      equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }),
+    };
+    w.apply(
+      ev({ case: "creatureAppear", value: { creature: create(CreatureSchema, player) } as never }),
+      0,
+    );
+    const drawn = w.creatures.get(7)?.lookRev; // what the canvas built the figure with
+    w.apply(
+      ev({
+        case: "creatureLook",
+        value: create(CreatureLookSchema, { id: 7, look: create(BodyLookSchema, MIRA) }),
+      }),
+      10,
+    );
+    w.apply(
+      ev({
+        case: "fullMapView",
+        value: {
+          walkEpoch: 1,
+          area: create(MapAreaSchema, {
+            creatures: [create(CreatureSchema, { ...player, equipment: undefined })],
+          }),
+        } as never,
+      }),
+      10,
+    );
+    const c = w.creatures.get(7);
+    expect(c?.equipment).toEqual(NO_EQUIPMENT);
+    expect(c?.lookRev).not.toBe(drawn);
   });
 });

@@ -15,6 +15,7 @@ import {
   previewDraws,
   turn,
 } from "../render/look-preview.ts";
+import { stableWorn } from "../state/look.ts";
 import type { PreviewAtlas } from "../render/look-preview.ts";
 
 /** The engine humanoids' frames are 64x64 (docs/17 "Humanoides del motor"). */
@@ -46,6 +47,10 @@ export function LookPreview(props: {
   const images = useRef(new Map<string, HTMLImageElement>());
   // The canvas each layer is tinted on (one frame), made once.
   const scratchRef = useRef<HTMLCanvasElement | undefined>(undefined);
+  // The same pieces in a new object (a parent that builds it on each render) draw nothing.
+  const wornRef = useRef<Worn | undefined>(undefined);
+  const worn = stableWorn(wornRef.current, props.worn);
+  wornRef.current = worn;
 
   useEffect(() => {
     let live = true;
@@ -72,7 +77,7 @@ export function LookPreview(props: {
     const still = reducedMotion();
     const action = still ? "idle" : "walk";
     const frame = tick % clipFrames(atlas, props.look, action);
-    const draws = previewDraws(atlas, props.look, props.worn, dir, action, frame, props.tables);
+    const draws = previewDraws(atlas, props.look, worn, dir, action, frame, props.tables);
     let scratch = scratchRef.current;
     if (!scratch) {
       scratch = document.createElement("canvas");
@@ -94,7 +99,7 @@ export function LookPreview(props: {
       return img.complete && img.naturalWidth > 0 ? img : undefined;
     };
     drawDoll(ctx, { ctx: sctx, canvas: scratch }, draws, image, scale, el.width, el.height);
-  }, [atlas, tick, dir, scale, props.look, props.worn, props.tables]);
+  }, [atlas, tick, dir, scale, props.look, worn, props.tables]);
 
   return (
     <div class="look-preview" data-testid={props.testid ?? "look-preview"} data-dir={dir}>

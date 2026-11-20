@@ -265,12 +265,13 @@ type Player struct {
 
 	// Appearance (look.go): the body (a look only: no game rule reads it) and its message,
 	// the item ids of the visible slots and theirs (nil: nothing shows), and the SetLook
-	// anti-flood (GCRA).
+	// anti-flood (GCRA); lookOff: appearance.unavailable was already said (no looks.yaml).
 	look     content.Look
 	lookMsg  *pb.BodyLook
 	shown    shownItems
 	equipMsg *pb.VisibleEquipment
 	lookTAT  game.Tick
+	lookOff  bool
 }
 
 // Invisible reports whether p is invisible (T3.2).

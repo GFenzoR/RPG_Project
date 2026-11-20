@@ -139,6 +139,10 @@ hair_color, beard}`, ids de `data/looks.yaml` que un jugador puede elegir (nunca
 `creatures_only`); uno que no lo es responde `400 invalid_look`. Sin `look` (bots,
 clientes viejos, los E2E que crean por la API) el personaje queda sin aspecto guardado y
 el juego le da el que sale de su id al entrar ("Apariencia y equipo visible").
+Un servidor sin `data/looks.yaml` ignora el `look` (crea el personaje sin aspecto
+guardado). Si el contenido del cliente sí trae `lookOptions`, la pantalla de creación
+muestra los selectores pero lo elegido se pierde: es una configuración inconsistente
+(servidor y cliente deben usar el mismo `data/`), no un caso que el juego cubra.
 
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
 cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
@@ -922,7 +926,8 @@ cambia lo que se dibuja: ninguna regla del juego lee el aspecto.
   jugador; si no → `Message` de sistema `appearance.invalid` y un `CreatureLook` solo al
   jugador con el aspecto que conserva. El mismo aspecto no manda nada. Anti-flood:
   `limits` de `data/looks.yaml` (ráfaga de 6, después 1 cada 1,5 s); lo que pasa se
-  descarta sin aviso. Sin `data/looks.yaml` en el servidor → `appearance.unavailable`.
+  descarta sin aviso. Sin `data/looks.yaml` en el servidor → `appearance.unavailable`,
+  una sola vez por sesión (los `SetLook` siguientes se ignoran sin respuesta).
 - **Guardado:** `characters.look_*` (migración 00021), con el siguiente guardado, como
   todo lo demás. Al entrar, un aspecto vacío (los personajes de antes de la migración) o
   que ya no es una elección de `data/looks.yaml` se reemplaza por el que sale del id del

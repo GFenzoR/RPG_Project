@@ -174,6 +174,12 @@ func TestSetLook(t *testing.T) {
 	if evs := h2.send(cl, setLook(lookMira)); !hasKey(evs, "appearance.unavailable") {
 		t.Fatalf("SetLook without looks: %v", kinds(evs))
 	}
+	// Said once: a flood of SetLook gets no answer for each one.
+	for range 3 {
+		if evs := h2.send(cl, setLook(lookMira)); hasKey(evs, "appearance.unavailable") {
+			t.Fatalf("appearance.unavailable said again: %v", kinds(evs))
+		}
+	}
 
 	// A saved look survives a server without data/looks.yaml: it is not sent, but the
 	// next snapshot keeps it.
