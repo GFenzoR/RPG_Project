@@ -24,8 +24,8 @@ import {
 
 export { layerDefs, layerSprite, SHAPES, HAIR_STYLES, BEARDS } from "./layers.ts";
 export type { LayerDef, LayerSlot } from "./layers.ts";
-export { BUILDS, STRIDE, WALK_FRAMES, walkPerTile } from "./skeleton.ts";
-export type { Build } from "./skeleton.ts";
+export { BUILDS, SEXES, STRIDE, TRUNKS, WALK_FRAMES, walkPerTile } from "./skeleton.ts";
+export type { Build, Sex } from "./skeleton.ts";
 
 /**
  * A side view turned this much toward the camera (degrees): the face, both shoulders and
@@ -77,7 +77,7 @@ function actionsFor(def: LayerDef): Partial<Record<ActionName, ActionSpec>> {
 
 /** The spec of one layer. */
 export function layerSpec(def: LayerDef): SpriteSpec {
-  const body = bodyParts(def.build);
+  const body = bodyParts(def.build, def.sex);
   return {
     sprite: def.sprite,
     size: "humanoid",

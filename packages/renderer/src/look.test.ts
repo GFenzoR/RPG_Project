@@ -16,6 +16,7 @@ const TABLES: LookTables = {
   hides: { hood: ["hair"], full_helm: ["hair", "beard"] },
 };
 const LOOK: Look = {
+  sex: "male",
   body: "sturdy",
   skin: "fair",
   hair: "short",
@@ -93,6 +94,25 @@ describe("lookLayers", () => {
     expect(layerSprite("hair", "long", "sturdy")).toBe("humans/hair_long");
     expect(layerSprite("torso", "plate", "slender")).toBe("worn/torso_plate_slender");
     expect(layerSprite("feet", "boots", "slender")).toBe("worn/feet_boots");
+    // A woman's body and torso are her own; the rest is shared.
+    expect(layerSprite("body", "sturdy", "sturdy", "female")).toBe("humans/body_sturdy_female");
+    expect(layerSprite("torso", "robe", "slender", "female")).toBe(
+      "worn/torso_robe_slender_female",
+    );
+    expect(layerSprite("hair", "long", "slender", "female")).toBe("humans/hair_long");
+    expect(layerSprite("weapon", "bow", "slender", "female")).toBe("worn/weapon_bow");
+    expect(layerSprite("body", "sturdy", "sturdy", "male")).toBe("humans/body_sturdy");
+  });
+
+  it("draws a woman's body and torso, and a man's for an unknown sex", () => {
+    const her = lookSprites({ ...LOOK, sex: "female", beard: "none" }, WORN, TABLES);
+    expect(her.body?.sprite).toBe("humans/body_sturdy_female");
+    expect(her.torso?.sprite).toBe("worn/torso_tunic_sturdy_female");
+    expect(her.weapon?.sprite).toBe("worn/weapon_sword");
+    expect(her.beard).toBeUndefined();
+    const odd = lookSprites({ ...LOOK, sex: "" }, WORN, TABLES);
+    expect(odd.body?.sprite).toBe("humans/body_sturdy");
+    expect(odd.torso?.sprite).toBe("worn/torso_tunic_sturdy");
   });
 });
 

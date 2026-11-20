@@ -74,6 +74,8 @@ animations:
   # (docs/07); ms: the rig's (spritegen check fails if any of this differs from its spec).
   humans/body_sturdy: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   humans/body_slender: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/body_sturdy_female: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  humans/body_slender_female: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   humans/hair_short: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   humans/hair_crop: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   humans/hair_long: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
@@ -89,14 +91,24 @@ animations:
   worn/head_circlet: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_tunic_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_tunic_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_tunic_sturdy_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_tunic_slender_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_robe_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_robe_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_robe_sturdy_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_robe_slender_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_leather_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_leather_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_leather_sturdy_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_leather_slender_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_mail_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_mail_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_mail_sturdy_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_mail_slender_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_plate_sturdy: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/torso_plate_slender: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_plate_sturdy_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
+  worn/torso_plate_slender_female: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/legs_trousers: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/legs_greaves: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/feet_shoes: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }

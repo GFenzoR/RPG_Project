@@ -3,7 +3,7 @@
 // the client's CreatureBody stacks one pooled sprite per layer from this, and spritegen
 // composes its review sheets with the same order (tools/spritegen engine/specs/humanoid).
 //
-// A look is the body (build, skin, hair, hair colour, beard) and the visible equipment: one
+// A look is the body (sex, build, skin, hair, hair colour, beard) and the visible equipment: one
 // worn piece per slot, each a shape the sprite engine drew (data/looks.yaml `shapes`) and a
 // tint (data/looks.yaml `tints`). Layers are drawn in a neutral ramp and tinted at runtime
 // (a multiply), so a piece of the catalog costs no atlas space of its own (docs/07).
@@ -46,8 +46,10 @@ export const LAYER_ORDER: Readonly<Record<AnimDir, readonly LayerSlot[]>> = {
   w: ["body", "legs", "feet", "torso", "hair", "beard", "head", "weapon", "shield"],
 };
 
-/** The body: build, skin tone, hair style and colour, beard (ids of data/looks.yaml). */
+/** The body: sex, build, skin tone, hair style and colour, beard (ids of data/looks.yaml). */
 export interface Look {
+  /** male or female: the body and the torso clothes are drawn per sex (unknown: male). */
+  sex: string;
   body: string;
   skin: string;
   hair: string;
@@ -92,11 +94,19 @@ export interface LayerDraw {
 export const actionDir = (action: AnimAction, dir: AnimDir): AnimDir =>
   action === "death" ? "s" : dir;
 
-/** The atlas path of a layer: humans/... for the body's own, worn/... for the pieces. */
-export function layerSprite(slot: LayerSlot, shape: string, build: string): string {
-  if (slot === "body") return `humans/body_${shape}`;
+/** The sex whose body is drawn _female (data/looks.yaml sexes); any other draws a man's. */
+export const FEMALE = "female";
+
+/**
+ * The atlas path of a layer: humans/... for the body's own, worn/... for the pieces. The
+ * body and the torso are drawn per sex and build (a woman's end in _female); every other
+ * layer fits the four bodies.
+ */
+export function layerSprite(slot: LayerSlot, shape: string, build: string, sex = ""): string {
+  const her = sex === FEMALE ? "_female" : "";
+  if (slot === "body") return `humans/body_${shape}${her}`;
   if (slot === "hair" || slot === "beard") return `humans/${slot}_${shape}`;
-  if (slot === "torso") return `worn/torso_${shape}_${build}`;
+  if (slot === "torso") return `worn/torso_${shape}_${build}${her}`;
   return `worn/${slot}_${shape}`;
 }
 
@@ -115,7 +125,11 @@ export function lookSprites(
 ): Partial<Record<LayerSlot, { sprite: string; tint: number }>> {
   const out: Partial<Record<LayerSlot, { sprite: string; tint: number }>> = {};
   const build = look.body;
-  out.body = { sprite: layerSprite("body", build, build), tint: tables.skins[look.skin] ?? WHITE };
+  const sex = look.sex;
+  out.body = {
+    sprite: layerSprite("body", build, build, sex),
+    tint: tables.skins[look.skin] ?? WHITE,
+  };
   const hidden = new Set<LayerSlot>(worn.head ? (tables.hides?.[worn.head.shape] ?? []) : []);
   const hair = tables.hairColors[look.hairColor] ?? WHITE;
   if (look.hair !== NO_HAIR && !hidden.has("hair"))
@@ -126,7 +140,7 @@ export function lookSprites(
     const piece = worn[slot];
     if (!piece) continue;
     out[slot] = {
-      sprite: layerSprite(slot, piece.shape, build),
+      sprite: layerSprite(slot, piece.shape, build, sex),
       tint: tables.tints[piece.tint] ?? WHITE,
     };
   }

@@ -8,10 +8,132 @@
 // half the height, the fingertips at mid-thigh. Both builds share every joint, so one
 // drawing of a helmet, a sword or a pair of boots fits both; they differ in the trunk (chest,
 // waist, hips) and the thickness of the limbs, and the torso clothes are drawn per build.
-import type { JointPose, KeySpec, PartSpec } from "../../spec.ts";
+//
+// A man or a woman (the owner, 2026-11-20: "el personaje principal puede ser hombre o
+// mujer"): the same skeleton again, every joint where it is, so every worn layer but the
+// torso fits the four bodies. The woman's trunk has narrower shoulders, a waist and a hip
+// line wider than it, a chest suggested by two soft swells, slimmer limbs and neck and a
+// smaller, rounder jaw; her torso clothes are drawn on her body (layers.ts). Her height
+// is the man's: the joints are shared, and a shorter skeleton would ask for a second
+// drawing of every helmet, weapon, boot and hair style.
+import type { JointPose, KeySpec, PartSpec, ShapeSpec } from "../../spec.ts";
 
 export type Build = "sturdy" | "slender";
 export const BUILDS: readonly Build[] = ["sturdy", "slender"];
+export type Sex = "male" | "female";
+export const SEXES: readonly Sex[] = ["male", "female"];
+
+type V3 = [number, number, number];
+
+/**
+ * The trunk and limbs of a body (px): radii of the belly (the waist), the chest, the
+ * shoulders' line (its half width and thickness), the hips, the limbs and the neck. The
+ * torso clothes fit these (layers.ts trunkShell).
+ */
+export interface Trunk {
+  belly: V3;
+  chest: V3;
+  shoulderY: number;
+  shoulder: number;
+  /** The pelvis' half width and half depth. */
+  hips: number;
+  hipsX: number;
+  /** Upper arm and forearm radii (at the shoulder and at the elbow). */
+  arm: number;
+  arm2: number;
+  fore: number;
+  fore2: number;
+  thigh: number;
+  thigh2: number;
+  shin: number;
+  neck: number;
+  /** A woman's chest: two soft swells at the front (none for a man). */
+  bust?: { center: V3; radii: V3 };
+}
+
+export const TRUNKS: Readonly<Record<Sex, Readonly<Record<Build, Trunk>>>> = {
+  male: {
+    sturdy: {
+      belly: [2.3, 3.5, 2.8],
+      chest: [2.8, 4.6, 3.0],
+      shoulderY: 3.8,
+      shoulder: 1.5,
+      hips: 3.8,
+      hipsX: 2.5,
+      arm: 1.4,
+      arm2: 1.2,
+      fore: 1.2,
+      fore2: 1.0,
+      thigh: 2.0,
+      thigh2: 1.55,
+      shin: 1.45,
+      neck: 1.25,
+    },
+    slender: {
+      belly: [2.3, 2.9, 2.8],
+      chest: [2.6, 4.1, 3.0],
+      shoulderY: 3.0,
+      shoulder: 1.2,
+      hips: 3.4,
+      hipsX: 2.5,
+      arm: 1.2,
+      arm2: 1.05,
+      fore: 1.05,
+      fore2: 0.9,
+      thigh: 1.8,
+      thigh2: 1.45,
+      shin: 1.35,
+      neck: 1.1,
+    },
+  },
+  female: {
+    sturdy: {
+      belly: [2.1, 2.4, 2.6],
+      chest: [2.5, 3.7, 2.7],
+      shoulderY: 2.9,
+      shoulder: 1.2,
+      hips: 4.0,
+      hipsX: 2.7,
+      arm: 1.2,
+      arm2: 1.05,
+      fore: 1.05,
+      fore2: 0.88,
+      thigh: 2.0,
+      thigh2: 1.5,
+      shin: 1.38,
+      neck: 1.05,
+      bust: { center: [-1.95, 1.2, 5.0], radii: [1.2, 1.2, 1.0] },
+    },
+    slender: {
+      belly: [2.0, 2.1, 2.6],
+      chest: [2.3, 3.3, 2.7],
+      shoulderY: 2.5,
+      shoulder: 1.05,
+      hips: 3.65,
+      hipsX: 2.6,
+      arm: 1.08,
+      arm2: 0.95,
+      fore: 0.95,
+      fore2: 0.82,
+      thigh: 1.85,
+      thigh2: 1.42,
+      shin: 1.3,
+      neck: 0.98,
+      bust: { center: [-1.8, 1.1, 5.0], radii: [1.1, 1.1, 0.95] },
+    },
+  },
+};
+
+/** A woman's chest swells, `by` px out from the skin (none for a man). */
+export function bustShapes(t: Trunk, by: number): ShapeSpec[] {
+  if (!t.bust) return [];
+  const [x, y, z] = t.bust.center;
+  const r: V3 = [t.bust.radii[0] + by, t.bust.radii[1] + by, t.bust.radii[2] + by];
+  return [
+    { type: "ellipsoid", center: [x, y, z], radii: r },
+    { type: "ellipsoid", center: [x, -y, z], radii: r },
+  ];
+}
 
 /** Joint heights and lengths (px), the same for both builds. */
 export const BONES = {
@@ -69,9 +191,10 @@ export const LEG_PARTS: readonly BodyPart[] = [
   "foot_l",
 ];
 
-/** The bare body of a build: skin (tinted at runtime), eyes, nothing worn. */
-export function bodyParts(build: Build): PartSpec[] {
-  const s = build === "sturdy";
+/** The bare body of a sex and build: skin (tinted at runtime), eyes, nothing worn. */
+export function bodyParts(build: Build, sex: Sex = "male"): PartSpec[] {
+  const t = TRUNKS[sex][build];
+  const female = sex === "female";
   const arm = (side: 1 | -1): PartSpec[] => {
     const k = side === 1 ? "r" : "l";
     return [
@@ -87,8 +210,8 @@ export function bodyParts(build: Build): PartSpec[] {
             type: "capsule",
             a: [0, 0, 0],
             b: [0, 0, -BONES.upperArm],
-            radius: s ? 1.4 : 1.2,
-            radius2: s ? 1.2 : 1.05,
+            radius: t.arm,
+            radius2: t.arm2,
           },
         ],
       },
@@ -103,8 +226,8 @@ export function bodyParts(build: Build): PartSpec[] {
             type: "capsule",
             a: [0, 0, 0],
             b: [0, 0, -BONES.forearm],
-            radius: s ? 1.2 : 1.05,
-            radius2: s ? 1.0 : 0.9,
+            radius: t.fore,
+            radius2: t.fore2,
           },
         ],
       },
@@ -113,7 +236,13 @@ export function bodyParts(build: Build): PartSpec[] {
         parent: `forearm_${k}`,
         at: [0, 0, -BONES.forearm],
         material: "lookSkin",
-        shapes: [{ type: "ellipsoid", center: [0, 0, -0.9], radii: [1.1, 0.9, 1.25] }],
+        shapes: [
+          {
+            type: "ellipsoid",
+            center: [0, 0, -0.9],
+            radii: female ? [1.0, 0.82, 1.15] : [1.1, 0.9, 1.25],
+          },
+        ],
       },
     ];
   };
@@ -130,8 +259,8 @@ export function bodyParts(build: Build): PartSpec[] {
             type: "capsule",
             a: [0, 0, 0],
             b: [0, 0, -BONES.thigh],
-            radius: s ? 2.0 : 1.8,
-            radius2: s ? 1.55 : 1.45,
+            radius: t.thigh,
+            radius2: t.thigh2,
           },
         ],
       },
@@ -145,8 +274,8 @@ export function bodyParts(build: Build): PartSpec[] {
             type: "capsule",
             a: [0, 0, 0],
             b: [0, 0, -BONES.shin],
-            radius: s ? 1.45 : 1.35,
-            radius2: 1.1,
+            radius: t.shin,
+            radius2: female ? 1.02 : 1.1,
           },
         ],
       },
@@ -167,7 +296,7 @@ export function bodyParts(build: Build): PartSpec[] {
       name: "pelvis",
       at: [0, 0, BONES.hip],
       material: "lookSkin",
-      shapes: [{ type: "ellipsoid", center: [0, 0, 0.6], radii: [2.5, s ? 3.8 : 3.4, 2.3] }],
+      shapes: [{ type: "ellipsoid", center: [0, 0, 0.6], radii: [t.hipsX, t.hips, 2.3] }],
     },
     {
       name: "torso",
@@ -175,16 +304,17 @@ export function bodyParts(build: Build): PartSpec[] {
       at: [0, 0, BONES.waist],
       material: "lookSkin",
       shapes: [
-        // The belly and the waist, narrower on the slender build.
-        { type: "ellipsoid", center: [0, 0, 2.0], radii: [2.3, s ? 3.5 : 2.9, 2.8] },
+        // The belly and the waist, narrower on the slender build (and on a woman).
+        { type: "ellipsoid", center: [0, 0, 2.0], radii: t.belly },
         // The chest, and the shoulders' line across it.
-        { type: "ellipsoid", center: [-0.2, 0, 5.2], radii: [s ? 2.8 : 2.6, s ? 4.6 : 4.1, 3.0] },
+        { type: "ellipsoid", center: [-0.2, 0, 5.2], radii: t.chest },
         {
           type: "capsule",
-          a: [0, s ? -3.8 : -3.0, BONES.shoulderZ],
-          b: [0, s ? 3.8 : 3.0, BONES.shoulderZ],
-          radius: s ? 1.5 : 1.2,
+          a: [0, -t.shoulderY, BONES.shoulderZ],
+          b: [0, t.shoulderY, BONES.shoulderZ],
+          radius: t.shoulder,
         },
+        ...bustShapes(t, 0),
       ],
     },
     {
@@ -192,7 +322,7 @@ export function bodyParts(build: Build): PartSpec[] {
       parent: "torso",
       at: [-0.2, 0, BONES.neckZ],
       material: "lookSkin",
-      shapes: [{ type: "capsule", a: [0, 0, -0.6], b: [-0.2, 0, 1.6], radius: s ? 1.25 : 1.1 }],
+      shapes: [{ type: "capsule", a: [0, 0, -0.6], b: [-0.2, 0, 1.6], radius: t.neck }],
     },
     {
       name: "head",
@@ -200,10 +330,22 @@ export function bodyParts(build: Build): PartSpec[] {
       at: [-0.2, 0, BONES.headZ],
       material: "lookSkin",
       shapes: [
-        // The skull, the jaw and chin, the nose and the ears.
-        { type: "ellipsoid", center: [-0.2, 0, 3.2], radii: [3.0, 2.75, 2.95] },
-        { type: "ellipsoid", center: [-1.1, 0, 1.5], radii: [2.0, 2.05, 1.4] },
-        { type: "ellipsoid", center: [-3.1, 0, 2.4], radii: [0.6, 0.45, 0.7], bias: 0.08 },
+        // The skull, the jaw and chin, the nose and the ears. A woman's jaw is smaller and
+        // rounder, her nose a little smaller.
+        {
+          type: "ellipsoid",
+          center: [-0.2, 0, 3.2],
+          radii: female ? [2.95, 2.7, 2.9] : [3.0, 2.75, 2.95],
+        },
+        female
+          ? { type: "ellipsoid", center: [-1.0, 0, 1.75], radii: [1.8, 1.75, 1.3] }
+          : { type: "ellipsoid", center: [-1.1, 0, 1.5], radii: [2.0, 2.05, 1.4] },
+        {
+          type: "ellipsoid",
+          center: female ? [-3.0, 0, 2.45] : [-3.1, 0, 2.4],
+          radii: female ? [0.5, 0.38, 0.55] : [0.6, 0.45, 0.7],
+          bias: 0.08,
+        },
         { type: "ellipsoid", center: [0, 2.7, 2.6], radii: [0.7, 0.5, 0.9] },
         { type: "ellipsoid", center: [0, -2.7, 2.6], radii: [0.7, 0.5, 0.9] },
       ],

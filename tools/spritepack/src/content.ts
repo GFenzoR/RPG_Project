@@ -43,8 +43,9 @@ export const LOOKS_FILE = "data/looks.yaml";
 
 /**
  * The paper-doll layers data/looks.yaml names (docs/17 "Humanoides del motor"): a body per
- * build, a layer per hair style and beard (bald and none draw nothing), a worn shape per
- * slot, the torso per build. The same paths as packages/renderer look.ts layerSprite.
+ * sex and build, a layer per hair style and beard (bald and none draw nothing), a worn
+ * shape per slot, the torso per sex and build (a woman's end in _female). The same paths
+ * as packages/renderer look.ts layerSprite.
  */
 export function lookSprites(looks: unknown): string[] {
   if (typeof looks !== "object" || looks === null) return [];
@@ -52,14 +53,19 @@ export function lookSprites(looks: unknown): string[] {
   const list = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   const builds = list(l["builds"]);
-  const out: string[] = builds.map((b) => `humans/body_${b}`);
+  // A man's paths have no suffix (they predate the sex); a woman's end in _female.
+  const sexes = list(l["sexes"]).map((s) => (s === "female" ? "_female" : ""));
+  if (sexes.length === 0) sexes.push("");
+  const out: string[] = sexes.flatMap((her) => builds.map((b) => `humans/body_${b}${her}`));
   for (const h of list(l["hair_styles"])) if (h !== "bald") out.push(`humans/hair_${h}`);
   for (const b of list(l["beards"])) if (b !== "none") out.push(`humans/beard_${b}`);
   const shapes = l["shapes"];
   if (typeof shapes === "object" && shapes !== null)
     for (const [slot, names] of Object.entries(shapes as Record<string, unknown>))
       for (const shape of list(names)) {
-        if (slot === "torso") for (const b of builds) out.push(`worn/torso_${shape}_${b}`);
+        if (slot === "torso")
+          for (const her of sexes)
+            for (const b of builds) out.push(`worn/torso_${shape}_${b}${her}`);
         else out.push(`worn/${slot}_${shape}`);
       }
   return out;

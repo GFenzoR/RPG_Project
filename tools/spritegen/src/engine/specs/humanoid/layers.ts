@@ -6,7 +6,7 @@
 //
 //   hair (6 styles; bald draws nothing) and beard (2; none draws nothing): on the head;
 //   head: cap, hood, open helm, full helm, circlet;
-//   torso: tunic, robe, leather, mail, plate, drawn per build (they fit the trunk);
+//   torso: tunic, robe, leather, mail, plate, drawn per sex and build (they fit the trunk);
 //   legs: trousers, greaves; feet: shoes, boots, sabatons;
 //   shield (left forearm): buckler, round, kite, tower;
 //   weapon (right hand; the bow in the left): sword, axe, mace, dagger, spear, bow,
@@ -15,8 +15,8 @@ import type { MaterialName } from "../../../palette.ts";
 import type { JointPose, PartSpec, ShapeSpec, TextureSpec } from "../../spec.ts";
 import type { ActionName } from "../../style.ts";
 import type { Vec3 } from "../../math.ts";
-import { BODY_PARTS, BONES, LEG_PARTS } from "./skeleton.ts";
-import type { BodyPart, Build } from "./skeleton.ts";
+import { BODY_PARTS, BONES, BUILDS, bustShapes, LEG_PARTS, SEXES, TRUNKS } from "./skeleton.ts";
+import type { BodyPart, Build, Sex } from "./skeleton.ts";
 
 export type LayerSlot =
   "body" | "hair" | "beard" | "head" | "torso" | "legs" | "feet" | "shield" | "weapon";
@@ -40,8 +40,9 @@ export interface LayerDef {
   shape: string;
   /** Its atlas path. */
   sprite: string;
-  /** The body it is drawn on (its occluders); shared layers fit both builds. */
+  /** The body it is drawn on (its occluders); shared layers fit the four bodies. */
   build: Build;
+  sex: Sex;
   /** Its parts (none for the body itself), hung from the body's parts. */
   parts: PartSpec[];
   /** The body parts that hide it (default: all of them). */
@@ -81,50 +82,35 @@ const part = (
   extra: Partial<PartSpec> = {},
 ): PartSpec => ({ name, parent, material, shapes, ...extra });
 
-/** The torso's measures per build (skeleton.ts bodyParts), for clothes that fit it. */
-const TRUNK = {
-  sturdy: {
-    belly: [2.3, 3.5, 2.8] as V,
-    chest: [2.8, 4.6, 3.0] as V,
-    shoulderY: 3.8,
-    shoulder: 1.5,
-    arm: 1.4,
-    fore: 1.2,
-    hips: 3.8,
-  },
-  slender: {
-    belly: [2.3, 2.9, 2.8] as V,
-    chest: [2.6, 4.1, 3.0] as V,
-    shoulderY: 3.0,
-    shoulder: 1.2,
-    arm: 1.2,
-    fore: 1.05,
-    hips: 3.4,
-  },
-} as const;
+/** The body a garment fits (skeleton.ts TRUNKS). */
+interface Body {
+  build: Build;
+  sex: Sex;
+}
 
-/** The trunk a garment covers, `by` px out from the skin. */
-function trunkShell(build: Build, by: number): ShapeSpec[] {
-  const t = TRUNK[build];
+/** The trunk a garment covers, `by` px out from the skin (a woman's chest included). */
+function trunkShell(body: Body, by: number): ShapeSpec[] {
+  const t = TRUNKS[body.sex][body.build];
   const add = (r: V): V => [r[0] + by, r[1] + by, r[2] + by];
   return [
     ell([0, 0, 2.0], add(t.belly)),
     ell([-0.2, 0, 5.2], add(t.chest)),
     cap([0, -t.shoulderY, BONES.shoulderZ], [0, t.shoulderY, BONES.shoulderZ], t.shoulder + by),
+    ...bustShapes(t, by),
   ];
 }
 
 /** Sleeves on both arms: on the upper arm down `upper` px and on the forearm `fore` px. */
 function sleeves(
   prefix: string,
-  build: Build,
+  body: Body,
   material: MaterialName,
   by: number,
   upper: number,
   fore = 0,
   extra: Partial<PartSpec> = {},
 ): PartSpec[] {
-  const t = TRUNK[build];
+  const t = TRUNKS[body.sex][body.build];
   const out: PartSpec[] = [];
   for (const k of ["r", "l"] as const) {
     out.push(
@@ -245,14 +231,28 @@ const HEAD: Record<
 
 // ---- Torso clothes -----------------------------------------------------------------------
 
-function torsoParts(shape: string, build: Build): PartSpec[] {
+function torsoParts(shape: string, body: Body): PartSpec[] {
   const p = `${shape}`;
-  const hips = TRUNK[build].hips;
-  /** A belt round the top of the skirt (skirt radii rx, ry), a little proud of it. */
+  const trunk = TRUNKS[body.sex][body.build];
+  const hips = trunk.hips;
+  const female = body.sex === "female";
+  /**
+   * A belt round the top of the skirt (skirt radii rx, ry), a little proud of it. A
+   * woman's is cinched at her waist instead, over the narrowest of the trunk: it draws her
+   * waist on every garment.
+   */
   const belt = (rx: number, ry: number, material: MaterialName = "lookLeather"): PartSpec =>
-    part(`${p}_belt`, "pelvis", material, [ell([0, 0, 1.2], [rx + 0.35, ry + 0.35, 0.55])], {
-      bias: -0.25,
-    });
+    female
+      ? part(
+          `${p}_belt`,
+          "torso",
+          material,
+          [ell([0, 0, 1.4], [trunk.belly[0] + 0.85, trunk.belly[1] + 0.85, 0.5])],
+          { bias: -0.25 },
+        )
+      : part(`${p}_belt`, "pelvis", material, [ell([0, 0, 1.2], [rx + 0.35, ry + 0.35, 0.55])], {
+          bias: -0.25,
+        });
   /** A skirt from the belt down to z = bottom (pelvis frame), flaring by `flare` px. */
   const skirt = (
     material: MaterialName,
@@ -274,42 +274,43 @@ function torsoParts(shape: string, build: Build): PartSpec[] {
   switch (shape) {
     case "tunic":
       return [
-        part(`${p}_body`, "torso", "lookCloth", trunkShell(build, 0.45)),
-        skirt("lookCloth", 2.9, hips + 0.5, -4.6, 0.35),
+        part(`${p}_body`, "torso", "lookCloth", trunkShell(body, 0.45)),
+        // A woman's tunic falls a little longer and flares more (a short dress).
+        skirt("lookCloth", 2.9, hips + 0.5, female ? -5.6 : -4.6, female ? 0.65 : 0.35),
         belt(2.9, hips + 0.5),
-        ...sleeves(p, build, "lookCloth", 0.4, 2.8),
+        ...sleeves(p, body, "lookCloth", 0.4, 2.8),
       ];
     case "robe":
       return [
-        part(`${p}_body`, "torso", "lookCloth", trunkShell(build, 0.5)),
+        part(`${p}_body`, "torso", "lookCloth", trunkShell(body, 0.5)),
         part(`${p}_skirt`, "pelvis", "lookCloth", [
           tube(2.95, hips + 0.6, -6, 1.4),
           tube(3.5, hips + 1.2, -15.9, -5.8),
         ]),
         belt(2.95, hips + 0.6, "lookCloth"),
-        ...sleeves(p, build, "lookCloth", 0.5, 6, BONES.forearm - 0.4),
+        ...sleeves(p, body, "lookCloth", 0.5, 6, BONES.forearm - 0.4),
       ];
     case "leather":
       return [
-        part(`${p}_body`, "torso", "lookLeather", trunkShell(build, 0.55)),
+        part(`${p}_body`, "torso", "lookLeather", trunkShell(body, 0.55)),
         skirt("lookLeather", 2.95, hips + 0.6, -3.6, 0.3),
         belt(2.95, hips + 0.6),
-        ...sleeves(p, build, "lookLeather", 0.55, 2.2),
+        ...sleeves(p, body, "lookLeather", 0.55, 2.2),
         part(`${p}_pad_r`, "arm_r", "lookLeather", [ell([0, 0.2, -0.2], [1.9, 1.9, 1.3])]),
         part(`${p}_pad_l`, "arm_l", "lookLeather", [ell([0, -0.2, -0.2], [1.9, 1.9, 1.3])]),
       ];
     case "mail": {
       const rings: Partial<PartSpec> = { texture: { amount: 0.16, cell: [0.8, 0.8, 0.8] } };
       return [
-        part(`${p}_body`, "torso", "lookMetal", trunkShell(build, 0.5), rings),
+        part(`${p}_body`, "torso", "lookMetal", trunkShell(body, 0.5), rings),
         skirt("lookMetal", 3.0, hips + 0.6, -5.2, 0.35, rings),
         belt(3.0, hips + 0.6),
-        ...sleeves(p, build, "lookMetal", 0.5, BONES.upperArm, 1.2, rings),
+        ...sleeves(p, body, "lookMetal", 0.5, BONES.upperArm, 1.2, rings),
       ];
     }
     case "plate":
       return [
-        part(`${p}_body`, "torso", "lookMetal", trunkShell(build, 0.75), { shiny: true }),
+        part(`${p}_body`, "torso", "lookMetal", trunkShell(body, 0.75), { shiny: true }),
         skirt("lookMetal", 3.1, hips + 0.75, -3.4, 0.3, { shiny: true }),
         belt(3.1, hips + 0.75),
         part(`${p}_pauldron_r`, "arm_r", "lookMetal", [ell([0, 0.3, -0.4], [2.3, 2.2, 1.7])], {
@@ -318,7 +319,7 @@ function torsoParts(shape: string, build: Build): PartSpec[] {
         part(`${p}_pauldron_l`, "arm_l", "lookMetal", [ell([0, -0.3, -0.4], [2.3, 2.2, 1.7])], {
           shiny: true,
         }),
-        ...sleeves(p, build, "lookMetal", 0.45, 0, BONES.forearm - 0.6, { shiny: true }),
+        ...sleeves(p, body, "lookMetal", 0.45, 0, BONES.forearm - 0.6, { shiny: true }),
       ];
   }
   throw new Error(`no torso shape ${shape}`);
@@ -775,25 +776,39 @@ export const SHAPES = {
   weapon: Object.keys(WEAPONS),
 } as const;
 
-/** The atlas path of a layer (the client builds the same: packages/renderer look.ts). */
-export function layerSprite(slot: LayerSlot, shape: string, build?: Build): string {
-  if (slot === "body") return `humans/body_${shape}`;
+/**
+ * The atlas path of a layer (the client builds the same: packages/renderer look.ts). The
+ * body and the torso are drawn per body: a man's keep the paths they had, a woman's end in
+ * _female.
+ */
+export function layerSprite(slot: LayerSlot, shape: string, build?: Build, sex?: Sex): string {
+  const her = sex === "female" ? "_female" : "";
+  if (slot === "body") return `humans/body_${shape}${her}`;
   if (slot === "hair" || slot === "beard") return `humans/${slot}_${shape}`;
-  if (slot === "torso") return `worn/torso_${shape}_${build ?? "sturdy"}`;
+  if (slot === "torso") return `worn/torso_${shape}_${build ?? "sturdy"}${her}`;
   return `worn/${slot}_${shape}`;
 }
 
 /** Every layer the engine draws, in a stable order. */
 export function layerDefs(): LayerDef[] {
   const out: LayerDef[] = [];
-  for (const build of ["sturdy", "slender"] as const)
-    out.push({ slot: "body", shape: build, sprite: layerSprite("body", build), build, parts: [] });
+  for (const sex of SEXES)
+    for (const build of BUILDS)
+      out.push({
+        slot: "body",
+        shape: build,
+        sprite: layerSprite("body", build, build, sex),
+        build,
+        sex,
+        parts: [],
+      });
   for (const [style, shapes] of Object.entries(HAIR))
     out.push({
       slot: "hair",
       shape: style,
       sprite: layerSprite("hair", style),
       build: "sturdy",
+      sex: "male",
       parts: [part(`hair_${style}`, "head", "lookHair", shapes, { texture: HAIR_TEXTURE })],
     });
   for (const [b, shapes] of Object.entries(BEARD))
@@ -802,6 +817,7 @@ export function layerDefs(): LayerDef[] {
       shape: b,
       sprite: layerSprite("beard", b),
       build: "sturdy",
+      sex: "male",
       parts: [part(`beard_${b}`, "head", "lookHair", shapes, { texture: HAIR_TEXTURE })],
     });
   for (const [shape, h] of Object.entries(HEAD))
@@ -810,6 +826,7 @@ export function layerDefs(): LayerDef[] {
       shape,
       sprite: layerSprite("head", shape),
       build: "sturdy",
+      sex: "male",
       parts: [
         part(`head_${shape}`, "head", h.material, h.shapes, {
           ...(h.shiny ? { shiny: true } : {}),
@@ -818,22 +835,25 @@ export function layerDefs(): LayerDef[] {
       ],
     });
   for (const shape of SHAPES.torso)
-    for (const build of ["sturdy", "slender"] as const)
-      out.push({
-        slot: "torso",
-        shape,
-        sprite: layerSprite("torso", shape, build),
-        build,
-        parts: torsoParts(shape, build),
-        // A skirt hides the legs: they never pierce it.
-        occlude: BODY_PARTS.filter((p) => !LEG_PARTS.includes(p)),
-      });
+    for (const sex of SEXES)
+      for (const build of BUILDS)
+        out.push({
+          slot: "torso",
+          shape,
+          sprite: layerSprite("torso", shape, build, sex),
+          build,
+          sex,
+          parts: torsoParts(shape, { build, sex }),
+          // A skirt hides the legs: they never pierce it.
+          occlude: BODY_PARTS.filter((p) => !LEG_PARTS.includes(p)),
+        });
   for (const shape of SHAPES.legs)
     out.push({
       slot: "legs",
       shape,
       sprite: layerSprite("legs", shape),
       build: "sturdy",
+      sex: "male",
       parts: legParts(shape),
     });
   for (const shape of SHAPES.feet)
@@ -842,6 +862,7 @@ export function layerDefs(): LayerDef[] {
       shape,
       sprite: layerSprite("feet", shape),
       build: "sturdy",
+      sex: "male",
       parts: feetParts(shape),
     });
   for (const shape of SHAPES.shield)
@@ -850,6 +871,7 @@ export function layerDefs(): LayerDef[] {
       shape,
       sprite: layerSprite("shield", shape),
       build: "sturdy",
+      sex: "male",
       parts: shieldParts(shape),
     });
   for (const [shape, w] of Object.entries(WEAPONS))
@@ -858,6 +880,7 @@ export function layerDefs(): LayerDef[] {
       shape,
       sprite: layerSprite("weapon", shape),
       build: "sturdy",
+      sex: "male",
       parts: w.parts(`grip_${shape}`),
       grip: w.grip,
     });
