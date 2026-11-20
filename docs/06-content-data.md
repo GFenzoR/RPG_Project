@@ -854,14 +854,15 @@ rewards:
 ```
 - `milestone: true` va con `title` y `requires`, y ellos solo con él. Un hito no es
   `repeatable` y su último paso, y solo ese, es `sigils`. `requires.vocations` tiene tantas
-  como `players`; `gear.equipped` va solo con `item`. Lo revisan el esquema, `make
+  como `players` (para cualquier vocación se omite: una lista vacía es un error); `gear.equipped` va solo con `item`. Lo revisan el esquema, `make
   validate` (`checkMilestones`) y el servidor al cargar (`content.ParseQuest`).
 - **Las placas** son items con bloque `sigil` (`sigil: {}` para cualquiera, `sigil: {
   vocation: druid }` para una vocación), `pickupable: false` y sin `blocks_movement`. Las
   de un paso `sigils` son las que hay en su cuadrado: tantas como `players` y con las
   vocaciones de `requires.vocations` (o ninguna). `mapcli validate` (`checkSigils`) y el
   servidor al arrancar (`initSigils`) lo exigen, y también que cada placa sea de un solo
-  hito, que no haya placas sueltas, que se llegue a pie a cada una desde el templo y que
+  hito, que no haya placas sueltas ni dos en una casilla, que ninguna esté en una casa ni
+  sobre la entrada de una escalera, un agujero o un teletransporte, que se llegue a pie a cada una desde el templo y que
   `to` sea una casilla caminable de una isla (ni casa, ni puerta con llave, ni entrada de
   un portal) desde la que se llega a un templo sin llaves ni herramientas. Para la
   alcanzabilidad, las placas llevan a la sala de recompensa (así su cofre cuenta como

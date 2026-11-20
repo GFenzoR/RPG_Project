@@ -82,7 +82,13 @@ func sigilHarness(t *testing.T) *harness {
 // sigilHarnessOn is sigilHarness on m (sigilMap's plates, another reward room).
 func sigilHarnessOn(t *testing.T, m *world.Map) *harness {
 	t.Helper()
-	return newHarness(t, m, func(c *session.Config) {
+	return newHarness(t, m, sigilConfig(t))
+}
+
+// sigilConfig puts the plate items, the four vocations and the two milestones in a config.
+func sigilConfig(t *testing.T) option {
+	t.Helper()
+	return func(c *session.Config) {
 		items := testItems()
 		// The pair's plates are 1 and 2 with no vocation; the four's are 1 to 4 with one
 		// each. Plate items are shared, so the pair room's 1 and 2 are the guardian's and
@@ -108,7 +114,24 @@ func sigilHarnessOn(t *testing.T, m *world.Map) *harness {
 			qs[q.ID] = q
 		}
 		c.Quests = qs
-	})
+	}
+}
+
+// A plate outside every milestone's square does nothing: the server refuses to start, as
+// make validate refuses the map (checkSigils in packages/map-format).
+func TestMilestoneStrayPlateRefused(t *testing.T) {
+	rows := slices.Clone(sigilMap)
+	rows[0] = "T..............1...."
+	cfg := session.Config{Map: worldtest.Map(t, 0, 0, 7, rows...), Balance: testBalance(), Vocations: testVocations,
+		Save: func(session.Snapshot) bool { return true }}
+	sigilConfig(t)(&cfg)
+	if _, err := session.New(cfg); err == nil || !strings.Contains(err.Error(), "belongs to no milestone") {
+		t.Fatalf("a stray plate: %v", err)
+	}
+	cfg.Map = worldtest.Map(t, 0, 0, 7, sigilMap...)
+	if _, err := session.New(cfg); err != nil {
+		t.Fatalf("the plates of the test map: %v", err)
+	}
 }
 
 // hero joins a character of vocation voc and level lvl at p, with a tunic in its pack
@@ -238,6 +261,14 @@ func TestMilestoneSomeoneNotReady(t *testing.T) {
 	if questState(h, a, "pair") != quest.Completed || questState(h, b, "pair") != quest.Completed {
 		t.Fatalf("after taking it: %v %v", questState(h, a, "pair"), questState(h, b, "pair"))
 	}
+	// A veteran (the milestone done) may not either: nobody carries others through twice.
+	cv, v := hero(h, "Vet", "guardian", 40, pos(2, 3), true, "")
+	h.sim.Command(gameFunc(func() { h.w.MarkQuestCompletedForTest(v, "pair") }))
+	h.sim.Step()
+	cv.take()
+	if evs := h.step(cv, N); v.Pos() != pos(2, 3) || !hasKey(evs, "milestone.fail_step") {
+		t.Fatalf("veteran at %v: %v", v.Pos(), systemKeys(evs))
+	}
 }
 
 // Level and gear: a character under the level, or without the item, fails too.
@@ -287,6 +318,26 @@ func TestMilestoneStaffAndLogout(t *testing.T) {
 	evs = h.step(cb, N)
 	if b.Pos() != pos(4, 2) || !hasKey(evs, "milestone.waiting") || questState(h, b, "pair") != quest.InProgress {
 		t.Fatalf("after the logout: %v %v", b.Pos(), systemKeys(evs))
+	}
+}
+
+// A room still waiting tells only who just stepped on: someone stepping on and off a
+// plate does not fill the chat of the ones already waiting.
+func TestMilestoneWaitingToldOnce(t *testing.T) {
+	h := sigilHarness(t)
+	ca, a := hero(h, "Aldra", "guardian", 31, pos(2, 7), false, "four")
+	cb, b := hero(h, "Brune", "arcanist", 31, pos(4, 7), false, "four")
+	if evs := h.step(ca, N); a.Pos() != pos(2, 6) || !hasKey(evs, "milestone.waiting") {
+		t.Fatalf("on the plate at %v: %v", a.Pos(), systemKeys(evs))
+	}
+	for range 3 {
+		if evs := h.step(cb, N); b.Pos() != pos(4, 6) || !hasKey(evs, "milestone.waiting") {
+			t.Fatalf("Brune on her plate at %v: %v", b.Pos(), systemKeys(evs))
+		}
+		h.step(cb, S)
+		if evs := ca.take(); hasKey(evs, "milestone.waiting") {
+			t.Fatal("Aldra told again when Brune stepped on")
+		}
 	}
 }
 

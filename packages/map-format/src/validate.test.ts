@@ -695,6 +695,58 @@ describe("validateWorld", () => {
     );
   });
 
+  it("refuses plates the server refuses: two on a tile, in a house, on a portal entrance", () => {
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 20, y: 5, z: 7, w: 3, h: 2 }],
+        doors: [{ x: 21, y: 6, z: 7 }],
+        exit: { x: 21, y: 7, z: 7 },
+      },
+    ];
+    pushItem(top, 20, 8, "sigil_plate");
+    pushItem(top, 20, 8, "sigil_plate");
+    pushItem(top, 20, 5, "sigil_plate");
+    pushItem(top, 10, 10, "sigil_plate"); // the entrance of the stairs mini_down
+    const one = (
+      quest: string,
+      at: { x: number; y: number; z: number },
+      players = 1,
+    ): SigilInfo => ({
+      quest,
+      file: `data/quests/${quest}.yaml`,
+      step: 0,
+      at,
+      radius: 0,
+      to: { x: 12, y: 12, z: 8 },
+      players,
+      vocations: [],
+    });
+    const m = messages(
+      check(i, undefined, [], {
+        ...content,
+        sigils: [
+          one("ms_twice", { x: 20, y: 8, z: 7 }, 2),
+          one("ms_house", { x: 20, y: 5, z: 7 }),
+          one("ms_stairs", { x: 10, y: 10, z: 7 }),
+        ],
+      }),
+    );
+    expect(m).toContainEqual(expect.stringContaining('milestone "ms_twice": two plates on 20,8,7'));
+    expect(m).toContainEqual(
+      expect.stringContaining('milestone "ms_house": the plate at 20,5,7 lies in a house'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining(
+        'milestone "ms_stairs": the plate at 10,10,7 lies on the entrance of stairs, a hole or a teleport',
+      ),
+    );
+  });
+
   it("reports what cannot be reached from the temple", () => {
     const i = mini();
     const c = must(i.chunks.get(chunkKey(7, 0, 0)));

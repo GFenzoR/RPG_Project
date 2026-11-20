@@ -583,3 +583,9 @@ func (w *World) StartQuestForTest(p *Player, id string) bool {
 
 // AccountIDForTest is p's account id.
 func (p *Player) AccountIDForTest() int64 { return p.accountID }
+
+// MarkQuestCompletedForTest stores quest id as completed for p, as finishing its last
+// step leaves it (tests only, loop goroutine; no rewards).
+func (w *World) MarkQuestCompletedForTest(p *Player, id string) {
+	p.storage.Set("quest."+id, 2) // quest.Completed
+}

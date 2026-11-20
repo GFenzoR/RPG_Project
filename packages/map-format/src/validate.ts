@@ -1223,19 +1223,21 @@ class WorldValidator {
       );
   }
 
-  private plateCache: Map<string, PlacedPlate> | undefined;
+  private plateCache: PlacedPlate[] | undefined;
 
-  /** Every sigil plate placed in the world, by tile. */
-  private plates(): Map<string, PlacedPlate> {
+  /**
+   * Every sigil plate placed in the world, two on one tile twice (the server counts each
+   * item of a stack: checkSigils refuses them).
+   */
+  private plates(): PlacedPlate[] {
     if (this.plateCache) return this.plateCache;
-    const out = new Map<string, PlacedPlate>();
+    const out: PlacedPlate[] = [];
     for (const island of this.world.islands.values()) {
       const dir = this.dirOf(island);
       for (const { c, s, pos } of placedItems(island))
         for (const id of s.stack) {
           const vocation = this.content.items.get(id)?.sigil;
-          if (vocation !== undefined)
-            out.set(formatPos(pos), { pos, vocation, id, file: chunkFile(dir, c) });
+          if (vocation !== undefined) out.push({ pos, vocation, id, file: chunkFile(dir, c) });
         }
     }
     this.plateCache = out;
@@ -1243,21 +1245,22 @@ class WorldValidator {
   }
 
   /** The plates within a sigils step's square, in row order. */
-  private platesOf(s: SigilInfo): Position[] {
-    const out: Position[] = [];
-    for (const p of this.plates().values())
+  private platesOf(s: SigilInfo): PlacedPlate[] {
+    const out: PlacedPlate[] = [];
+    for (const p of this.plates())
       if (
         p.pos.z === s.at.z &&
         Math.max(Math.abs(p.pos.x - s.at.x), Math.abs(p.pos.y - s.at.y)) <= s.radius
       )
-        out.push(p.pos);
-    return out.sort((a, b) => a.y - b.y || a.x - b.x);
+        out.push(p);
+    return out.sort((a, b) => a.pos.y - b.pos.y || a.pos.x - b.pos.x);
   }
 
   /**
    * Milestone plates (docs/02 "Quests de hito", the server's initSigils): each sigils step
    * has as many plates within its square as requires.players, with the vocations it lists
-   * (or none), on walkable tiles; a plate belongs to one milestone, and none lies outside
+   * (or none), one per tile, on walkable tiles outside houses and the entrances of stairs,
+   * holes and teleports (a player stands on it); a plate belongs to one milestone, and none lies outside
    * every milestone. The reward room (`to`) is a walkable tile of an island outside houses,
    * locked doors and portal entrances, and from it a player reaches a temple without keys
    * or tools (templeReach: on foot, stairs, ladders, holes, teleports, out of a room
@@ -1287,7 +1290,7 @@ class WorldValidator {
           `${what}: ${plates.length} sigil plates within radius ${s.radius} of ${formatPos(s.at)}, requires.players is ${s.players}`,
           s.at,
         );
-      const got = plates.map((p) => this.plates().get(formatPos(p))?.vocation ?? "").sort();
+      const got = plates.map((p) => p.vocation).sort();
       const want = (s.vocations.length > 0 ? [...s.vocations] : plates.map(() => "")).sort();
       if (plates.length === s.players && got.join(",") !== want.join(","))
         this.err(
@@ -1296,8 +1299,11 @@ class WorldValidator {
           `${what}: its plates are marked [${got.join(", ")}], requires.vocations is [${s.vocations.join(", ")}]`,
           s.at,
         );
-      for (const p of plates) {
+      const seen = new Set<string>();
+      for (const { pos: p } of plates) {
         const k = formatPos(p);
+        if (seen.has(k)) this.err(s.file, path, `${what}: two plates on ${k}`, p);
+        seen.add(k);
         const other = owner.get(k);
         if (other !== undefined && other !== s.quest)
           this.err(
@@ -1309,6 +1315,15 @@ class WorldValidator {
         owner.set(k, s.quest);
         if (!isWalkable(this.tiles.tileAt(p), this.content))
           this.err(s.file, path, `${what}: the plate at ${k} is not a walkable tile`, p);
+        else if (houses.has(k))
+          this.err(s.file, path, `${what}: the plate at ${k} lies in a house`, p);
+        else if (steps.has(k))
+          this.err(
+            s.file,
+            path,
+            `${what}: the plate at ${k} lies on the entrance of stairs, a hole or a teleport`,
+            p,
+          );
       }
       const to = s.to;
       const tile = this.tiles.tileAt(to);
@@ -1330,7 +1345,8 @@ class WorldValidator {
           );
       }
     }
-    for (const [k, p] of this.plates())
+    for (const p of this.plates()) {
+      const k = formatPos(p.pos);
       if (!owner.has(k))
         this.err(
           p.file,
@@ -1338,6 +1354,7 @@ class WorldValidator {
           `sigil plate "${p.id}" at ${k} belongs to no milestone's sigils step`,
           p.pos,
         );
+    }
   }
 
   /** The island whose rect holds p, or undefined. */
@@ -1440,7 +1457,7 @@ class WorldValidator {
     // A milestone's plates lead to its reward room (the server moves the group there).
     const sigilTo = new Map<string, Position>();
     for (const s of this.content.sigils ?? [])
-      for (const p of this.platesOf(s)) sigilTo.set(formatPos(p), s.to);
+      for (const { pos } of this.platesOf(s)) sigilTo.set(formatPos(pos), s.to);
     const reached = new Set<string>();
     const queue: Position[] = [meta.temple];
     reached.add(formatPos(meta.temple));
@@ -1510,7 +1527,7 @@ class WorldValidator {
             pos,
           );
     for (const s of this.content.sigils ?? [])
-      for (const p of this.platesOf(s))
+      for (const { pos: p } of this.platesOf(s))
         if (
           rectContains(meta.rect, p.x, p.y) &&
           (!reached.has(formatPos(p)) || portals.get(formatPos(p))?.onStep === true)

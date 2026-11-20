@@ -290,8 +290,10 @@ func (q *Quest) checkMilestone() string {
 		return "requires.level must be at least 1"
 	case r.Players < 1 || r.Players > MaxMilestonePlayers:
 		return fmt.Sprintf("requires.players must be 1 to %d", MaxMilestonePlayers)
-	case len(r.Vocations) != 0 && len(r.Vocations) != r.Players:
-		return "requires.vocations lists one vocation per player, or none"
+	case r.Vocations != nil && len(r.Vocations) != r.Players:
+		// An empty list (vocations: []) is refused as make validate does: any vocation is
+		// said by leaving the field out.
+		return "requires.vocations lists one vocation per player, or is left out"
 	case r.Gear != nil && (r.Gear.Item == "") == (r.Gear.Weapon == ""):
 		return "requires.gear takes an item or a weapon type, not both"
 	case r.Gear != nil && r.Gear.Equipped && r.Gear.Item == "":

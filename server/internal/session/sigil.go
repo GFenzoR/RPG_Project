@@ -45,12 +45,17 @@ type sigilRoom struct {
 	vocations []string // per plate; "" = any
 	to        world.Pos
 	dirty     bool
+	// arrived are the players whose step, login or change marked the room since the last
+	// evaluation: a room still waiting tells only them (nobody else's chat fills up when
+	// someone steps on and off a plate).
+	arrived []*Player
 }
 
 // initSigils resolves every sigils step: the plates within its radius (the static items
 // with a sigil block), as many as the milestone's players, with the vocations it lists (or
 // none), on walkable tiles nobody is moved off; the destination a walkable tile of an
-// island, no house, no portal entrance. A plate belongs to one milestone only. Anything
+// island, no house, no portal entrance. A plate belongs to one milestone only, and every
+// plate on the map to one. Anything
 // else refuses to start; make validate checks the same (packages/map-format, checkSigils).
 func (w *World) initSigils() error {
 	w.sigilAt = map[world.Pos]*sigilRoom{}
@@ -108,6 +113,31 @@ func (w *World) initSigils() error {
 			w.sigilAt[p] = room
 		}
 	}
+	return w.checkStrayPlates()
+}
+
+// checkStrayPlates refuses a sigil plate on the map that belongs to no milestone (outside
+// every sigils square): it would do nothing, as make validate says too.
+func (w *World) checkStrayPlates() error {
+	for _, is := range w.m.Islands() {
+		for _, sec := range is.Sectors() {
+			for _, st := range sec.Stacks {
+				for _, num := range st.Items {
+					if def := w.byNum[num]; def == nil || def.Sigil == nil {
+						continue
+					}
+					p := world.Pos{
+						X: sec.CX*world.SectorSize + st.Index%world.SectorSize,
+						Y: sec.CY*world.SectorSize + st.Index/world.SectorSize,
+						Z: sec.Z,
+					}
+					if w.sigilAt[p] == nil {
+						return fmt.Errorf("session: sigil plate on %d,%d,%d belongs to no milestone (outside every sigils step's radius)", p.X, p.Y, p.Z)
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -148,6 +178,7 @@ func (w *World) sigilStep(p *Player) {
 	}
 	if r := w.sigilAt[p.pos]; r != nil {
 		r.dirty = true
+		r.arrived = append(r.arrived, p)
 		p.sigilMet = w.sigilMarks(p, r)
 	}
 }
@@ -180,6 +211,7 @@ func (w *World) sigilRecheck(p *Player) {
 		if m := w.sigilMarks(p, r); m != p.sigilMet {
 			p.sigilMet = m
 			r.dirty = true
+			r.arrived = append(r.arrived, p)
 		}
 	}
 }
@@ -262,6 +294,8 @@ func (w *World) checkSigils(ctx *game.TickContext) {
 		if r.dirty {
 			r.dirty = false
 			w.evalSigils(ctx, r)
+			clear(r.arrived)
+			r.arrived = r.arrived[:0]
 		}
 	}
 }
@@ -276,13 +310,16 @@ func (w *World) evalSigils(ctx *game.TickContext, r *sigilRoom) {
 		case p == nil:
 		case cs[i].Counts():
 			on = append(on, p)
-		case cs[i].Staff:
+		case cs[i].Staff && slices.Contains(r.arrived, p):
 			p.emit(systemMsg(msgMilestoneStaff))
 		}
 	}
 	qp := &pb.TextParam{Name: "quest", Value: &pb.TextParam_ContentId{ContentId: r.quest.ID}}
 	if !o.Full {
 		for _, p := range on {
+			if !slices.Contains(r.arrived, p) {
+				continue // told when it stepped on; a count that is not full yet is no news
+			}
 			p.emit(systemMsg(msgMilestoneWaiting, qp, num("count", o.Occupied), num("total", len(r.plates))))
 		}
 		return

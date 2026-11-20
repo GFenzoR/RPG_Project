@@ -51,6 +51,7 @@ func TestMilestoneParse(t *testing.T) {
 		"no title":             strings.Replace(milestoneYAML, "title: t\n", "", 1),
 		"too many players":     strings.Replace(milestoneYAML, "players: 2", "players: 5", 1),
 		"vocations count":      strings.Replace(milestoneYAML, "[guardian, druid]", "[guardian]", 1),
+		"empty vocations":      strings.Replace(milestoneYAML, "[guardian, druid]", "[]", 1),
 		"repeatable":           strings.Replace(milestoneYAML, "milestone: true", "milestone: true\nrepeatable: { cooldown_hours: 1 }", 1),
 		"gear item and weapon": strings.Replace(milestoneYAML, "{ item: lantern }", "{ item: lantern, weapon: sword }", 1),
 		"equipped weapon":      strings.Replace(milestoneYAML, "{ item: lantern }", "{ weapon: sword, equipped: true }", 1),
