@@ -921,6 +921,31 @@ nueve colores de pelo y tres barbas (ninguna, corta, cerrada): datos de `data/lo
 persona de LPC: los animales se dibujaron contra esa persona (~25 px por metro) y se dejan
 como están, porque al dueño le gustan.
 
+**Hombre o mujer** (2026-11-20, rama `feat/character-sex`; el dueño: "ojo el personaje
+principal puede ser hombre o mujer"): el sexo es una elección aparte del cuerpo, así que hay
+**cuatro cuerpos** (`TRUNKS` de `skeleton.ts`, por sexo y build) sobre **las mismas
+articulaciones**. La mujer: hombros más angostos y caídos (la línea del hombro del tronco 1,5
+a 2 px más adentro; los brazos cuelgan de la misma articulación, así un escudo o una espada
+le quedan igual), cintura más fina y la línea de la cadera más ancha que ella (un reloj de
+arena a 1x: el tronco de frente va 10, 8, 6, 10 px de los hombros a la cadera, el del
+hombre 12, 10, 8, 10), un pecho sugerido por dos ondulaciones suaves que se notan en uno o
+dos píxeles de perfil, brazos, piernas y cuello un poco más finos, la mandíbula más chica y
+redonda y la nariz menor; nada sexualizado. **Misma altura**: un esqueleto más bajo pediría
+otra versión de cada casco, arma, bota y peinado. Lo que más la distingue en el juego es la
+ropa del torso, que se dibuja sobre su cuerpo (`worn/torso_<forma>_<cuerpo>_female`): el
+cinturón ciñe la cintura en vez de ir sobre la cadera y la túnica cae un poco más larga y más
+abierta (un vestido corto). El resto de las capas (pelo, barba, cabeza, piernas, pies,
+escudos, armas) es compartido: se dibujan con el hombre robusto de oclusor, y en otro cuerpo
+un píxel que el hombre tapaba y ese cuerpo no cubre es un hueco; `humanoid.test.ts` acota
+los huecos a 3 px por frame (hoy: 0 en el hombre robusto, 2 en el esbelto y en la mujer
+robusta, 3 en la esbelta, en el borde de una capucha o una vara). Los sprites del hombre no
+cambiaron (mismas rutas y frames); los de la mujer suman 12 capas (2 cuerpos y 10 torsos,
+1008 frames). Atlas (docs/07): sigue en 2 páginas, la segunda pasa de 2048x399 a 2048x569;
++414 KB de PNG, +373 KB de JSON de páginas y +113 KB de `atlas.json`. Tests: proporciones
+de los cuatro cuerpos, la silueta de ella distinta de la de él con la cabeza y los pies en
+las mismas filas, los huecos de las capas compartidas y que cada combinación de sexo, cuerpo,
+peinado, barba y torso tiene sus capas con todos sus frames.
+
 **Acciones** como el jugador de antes: quieto (2 frames de 500 ms), caminar (8), atacar (4 de
 90 ms: el brazo arriba atrás, el golpe adelante y abajo con medio paso, el seguimiento y la
 vuelta; el brazo izquierdo adelanta el escudo), disparar (3 de 100 ms: el izquierdo sube el

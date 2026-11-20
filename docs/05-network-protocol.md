@@ -134,8 +134,8 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
 | `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
 
-`POST /api/characters` acepta `look` (docs/02 "Apariencia", lote 13): `{body, skin, hair,
-hair_color, beard}`, ids de `data/looks.yaml` que un jugador puede elegir (nunca una piel
+`POST /api/characters` acepta `look` (docs/02 "Apariencia", lote 13): `{sex, body, skin, hair,
+hair_color, beard}` (`sex`, `male` o `female`, desde el 2026-11-20; sin él el look no es válido), ids de `data/looks.yaml` que un jugador puede elegir (nunca una piel
 `creatures_only`); uno que no lo es responde `400 invalid_look`. Sin `look` (bots,
 clientes viejos, los E2E que crean por la API) el personaje queda sin aspecto guardado y
 el juego le da el que sale de su id al entrar ("Apariencia y equipo visible").
@@ -899,8 +899,13 @@ ninguna regla del juego lee los cosméticos.
 Todo humanoide del motor (jugadores, NPCs que son personas, monstruos humanoides; docs/17
 "Humanoides del motor") se dibuja con un cuerpo (`BodyLook`) y lo que lleva encima. Solo
 cambia lo que se dibuja: ninguna regla del juego lee el aspecto.
-- **`BodyLook{body, skin, hair, hair_color, beard}`** (`common.proto`): ids de
-  `data/looks.yaml` (`builds`, `skins`, `hair_styles`, `hair_colors`, `beards`).
+- **`BodyLook{body, skin, hair, hair_color, beard, sex}`** (`common.proto`): ids de
+  `data/looks.yaml` (`builds`, `skins`, `hair_styles`, `hair_colors`, `beards`, `sexes`).
+  `sex` (campo 6, agregado el 2026-11-20) es `male` o `female`: el cliente dibuja el cuerpo
+  y la ropa de torso de ese sexo; vacío (un servidor anterior) dibuja el del hombre.
+  `SetLook` y la creación lo exigen (`PlayerLook`). Se guarda en `characters.look_sex`
+  (migración 00022); un personaje guardado antes lo recibe al entrar, del id, sin cambiar
+  el resto de su aspecto.
 - **`Creature.look`** (campo 13): el cuerpo de un jugador (el suyo), de un NPC o de un
   monstruo humanoide (el de su `look` de `data/`). Vacío para una bestia o con un servidor
   sin `data/looks.yaml`.

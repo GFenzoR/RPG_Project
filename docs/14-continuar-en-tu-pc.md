@@ -100,6 +100,32 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
+  personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
+  equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto
+  tiene `sex` (`male`/`female`, `data/looks.yaml sexes`, `BodyLook.sex` = 6,
+  `characters.look_sex` de la migración 00022), elegido primero ("Hombre / Mujer") al crear
+  y en Personalizar; cuatro cuerpos (sexo x build) sobre las mismas articulaciones, la ropa de
+  torso por cuerpo y el resto compartido; los NPCs y monstruos humanoides tienen el sexo de
+  sus nombres (Maren, Velia e Irene perdieron la barba que tenían); el español al jugador,
+  neutro. Queda:
+  - **Mirarlo en el juego** (la verificación final): `19-create-druid` crea a la druida
+    como **mujer** (el selector "Sexo" con "Mujer" apretado y la figura de ella) y el E2E
+    comprueba que el servidor devuelve `sex: female`; en `20-druid-heal` se la tiene que
+    ver con su cuerpo de mujer (esbelta, hombros angostos, el cinturón en la cintura de la
+    túnica de `citizen`). Los retratos de los diálogos de las mujeres (`npcs/*.png`)
+    cambiaron: `12-npc-dialog` y los diálogos de Maren muestran el nuevo.
+  - **La altura:** la mujer mide lo mismo que el hombre (las articulaciones son compartidas
+    para que cada casco, arma y peinado le quede). Si el dueño la quiere más baja, hace falta
+    un segundo esqueleto y una segunda versión de cada capa compartida (unas 30 capas, el
+    doble de atlas del muñeco); hoy se distingue por hombros, cintura, cadera y ropa.
+  - **Los personajes de antes** reciben al entrar el sexo que sale de su id (sin tocar el
+    resto de su aspecto); un hombre con barba puede despertar mujer con barba. Se cambia
+    gratis en Personalizar; un aviso al primer login (no está) sería lo amable.
+  - **Textos:** hoy ningún texto necesita un `select` de ICU sobre `sex` (todo se pudo
+    decir neutro), así que el servidor no pasa ese parámetro a los diálogos. La noticia
+    "Bienvenidos a Neque's Realm" (plural genérico) quedó como estaba. Un texto nuevo que
+    le hable al jugador se escribe neutro (docs/02 "Apariencia").
 - **Personalización y equipo visible por la red (hecho, rama `feat/character-look`, lote
   13; docs/02 "Apariencia", docs/05 "Apariencia y equipo visible", docs/06 "Looks", docs/07
   "Aspecto y equipo visible"):** cada personaje tiene su aspecto (cuerpo, piel, peinado,

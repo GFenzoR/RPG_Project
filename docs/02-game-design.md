@@ -2671,7 +2671,19 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
 "Debiéramos tener una ventana de personalización", y que los demás vean lo que lleva cada
 uno. Todo jugador, NPC que es una persona y monstruo humanoide es un humanoide del motor de
 sprites (docs/17 "Humanoides del motor"): un cuerpo y, encima, lo que lleva puesto.
-- **El aspecto del personaje:** cuerpo (robusto o esbelto), piel, peinado, color de pelo
+- **Hombre o mujer** (pedido del dueño del 2026-11-20: "ojo el personaje principal puede ser
+  hombre o mujer"): es lo primero que se elige (dos botones, "Hombre" y "Mujer"), y se
+  cambia gratis como el resto. Es una elección aparte del cuerpo: robusto o esbelto valen
+  para los dos, así que hay cuatro cuerpos. La mujer se distingue a la escala del juego por
+  los hombros más angostos y caídos, la cintura y la línea de la cadera, un pecho apenas
+  sugerido y la mandíbula más chica, sin sexualizar; su ropa de torso tiene el cinturón en
+  la cintura y la túnica un poco más larga. Tiene la misma altura que el hombre: el
+  esqueleto es el mismo, para que cascos, armas, botas y peinados le queden a los cuatro
+  cuerpos (docs/17 "Humanoides del motor"). Todos los peinados y barbas sirven para los dos;
+  al elegir "Mujer" la barba vuelve a "Sin barba" (se puede elegir otra después), y "Al
+  azar" elige el sexo y, para una mujer, sin barba. Los NPCs y monstruos humanoides tienen
+  el sexo que dicen sus nombres y textos.
+- **El aspecto del personaje:** sexo, cuerpo (robusto o esbelto), piel, peinado, color de pelo
   (tiñe pelo y barba) y barba, de las elecciones de `data/looks.yaml` (docs/06 "Looks"; las
   pieles `creatures_only`, la de los ahogados y la ceniza, son solo de NPCs y monstruos).
   Se elige al **crear el personaje**, con una figura que camina en el lugar y gira con las
@@ -2682,7 +2694,15 @@ sprites (docs/17 "Humanoides del motor"): un cuerpo y, encima, lo que lleva pues
   pasa se descarta.
 - **Personajes de antes:** el que no tiene aspecto guardado (creado antes del lote 13) o
   tiene uno que ya no está entre las elecciones recibe al entrar uno elegido de su id
-  (siempre el mismo para el mismo personaje) y lo guarda; lo puede cambiar gratis.
+  (siempre el mismo para el mismo personaje) y lo guarda; lo puede cambiar gratis. Uno
+  guardado antes del sexo (migración 00022) conserva todo su aspecto y recibe el sexo que
+  sale de su id (`content.Looks.SavedLook`); el resto de lo que sale del id no cambió.
+- **Textos al jugador:** el español que le habla al jugador no da por hecho que es un hombre
+  (nada de "bienvenido", "listo" o "entero" dirigidos a él): se escribe neutro cuando suena
+  natural ("Ya pisas tierra firme", "Vuelve con vida", "Tengo heridas"; los estados son
+  sustantivos: Veneno, Prisa, Saciedad). Si algún texto nuevo no se puede decir neutro, se
+  usa un `select` de ICU sobre un parámetro `sex` (hoy ninguno lo necesita). El inglés no
+  cambia.
 - **Lo que se ve puesto:** la pieza de cabeza, el torso, las piernas, los pies y lo de cada
   mano, cada una con su `worn` (forma y material del catálogo); las joyas, la mochila, la
   munición y lo de adentro de un contenedor nunca se ven. Equiparse, sacarse algo, una pieza

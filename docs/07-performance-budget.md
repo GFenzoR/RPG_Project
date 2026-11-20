@@ -478,6 +478,14 @@ paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
 `TestCrowdBandwidth`, de 586 a 599 B/s por jugador en base y de 1515 a 1521 en stress,
 lejos de los 4096.
 
+**Hombre o mujer** (2026-11-20, `feat/character-sex`; docs/17 "Humanoides del motor"): 12
+capas más del muñeco (los dos cuerpos de mujer y sus cinco torsos por cuerpo), 1008 frames
+de 84 por capa, recortados como los demás. Medido contra la base (`fix/lote13`) en la
+misma máquina: sigue en **2 páginas** (2048x2041 y 2048x569; antes 2048x2030 y 2048x399),
+1,88 + 1,14 = 3,02 MB de PNG (+414 KB), 695 + 1644 KB de JSON (+373 KB) y 661 KB de
+`atlas.json` (+113 KB; 6604 sprites, antes 5584). En el cliente no cambia nada por frame:
+una mujer es la misma pila de capas con otras texturas.
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
