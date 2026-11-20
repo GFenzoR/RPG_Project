@@ -294,7 +294,8 @@ func (p *Player) Equipped(slot pb.EquipmentSlot) *Item {
 }
 
 // equipmentChanged recomputes what the equipment gives in combat: the weapon in the
-// right hand, the shield in the left and the armor of every slot.
+// right hand, the shield in the left and the armor of every slot; and what the others see
+// p wear. Every path that changes p's equipment slots calls it.
 func (w *World) equipmentChanged(p *Player) {
 	p.weapon, p.shield, p.armor = nil, nil, 0
 	if it := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_RIGHT_HAND]; it != nil && it.def.Weapon != nil {
@@ -308,7 +309,8 @@ func (w *World) equipmentChanged(p *Player) {
 			p.armor += it.def.Armor.Armor
 		}
 	}
-	w.applyGear(p) // the attributes of what p wears (attributes.go)
+	w.applyGear(p)     // the attributes of what p wears (attributes.go)
+	w.showEquipment(p) // what the others see it wear (look.go)
 }
 
 var armorSlots = map[string]pb.EquipmentSlot{

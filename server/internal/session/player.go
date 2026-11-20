@@ -262,6 +262,15 @@ type Player struct {
 	premium int64
 	premSeq int64
 	cosTAT  game.Tick
+
+	// Appearance (look.go): the body (a look only: no game rule reads it) and its message,
+	// the item ids of the visible slots and theirs (nil: nothing shows), and the SetLook
+	// anti-flood (GCRA).
+	look     content.Look
+	lookMsg  *pb.BodyLook
+	shown    shownItems
+	equipMsg *pb.VisibleEquipment
+	lookTAT  game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -382,6 +391,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Conditions:  w.conditionStates(p),
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
+		Look:        p.look,
 		Final:       final,
 	}
 }
@@ -487,6 +497,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Conditions = s.Conditions
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
+		c.Look = s.Look
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -534,6 +545,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
 	w.loadCosmetics(p, c)          // before anyone is told about p (Creature.cosmetics)
+	w.loadLook(p, c)               // and Creature.look
 	p.pos = w.houseLogin(p, p.pos) // T5.4: a house it may no longer enter (after the guild)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
@@ -597,6 +609,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.PvP = w.pvpState(p)
 	c.Pos, c.HasPos = p.pos, true
 	c.Cosmetics = p.cos
+	c.Look = p.look
 	if p.premSeq > c.PremiumSeq { // the online player heard of a newer shop change
 		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq
 	}
@@ -870,6 +883,8 @@ func (w *World) creatureMsg(p *Player) *pb.Creature {
 		Guild:         guildName(p),
 		Skull:         p.skull,
 		Cosmetics:     cosmeticsMsg(p.cos),
+		Look:          p.lookMsg,
+		Equipment:     p.equipMsg,
 	}
 }
 

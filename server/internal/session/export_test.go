@@ -347,6 +347,9 @@ func (w *World) ItemForTest(id string) *content.Item { return w.cfg.Items[id] }
 // CosmeticsForTest returns what p has equipped (T5.7).
 func (p *Player) CosmeticsForTest() Cosmetics { return p.cos }
 
+// LookForTest returns p's body (look.go).
+func (p *Player) LookForTest() content.Look { return p.look }
+
 // Walkable reports whether the map lets a creature stand on p (tests only).
 func (w *World) Walkable(p world.Pos) bool { return w.m.Walkable(p) }
 

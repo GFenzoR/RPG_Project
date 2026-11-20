@@ -125,6 +125,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.equipCosmetic(ctx, p, m.EquipCosmetic.GetCosmeticId())
 	case *pb.ClientMessage_UnequipCosmetic:
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
+	case *pb.ClientMessage_SetLook:
+		w.setLook(ctx, p, m.SetLook)
 	case *pb.ClientMessage_Logout:
 		// No logout in the middle of a fight (linkdead.go): the PvP lock (T5.2) or
 		// travel.combat_block_ms since p fought a monster or took damage. Closing the

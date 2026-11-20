@@ -77,6 +77,8 @@ type monsterKind struct {
 	self bool
 	// corpse is the container its remains are: its own `corpse`, or CorpseItem.
 	corpse *content.Item
+	// look is a humanoid's body and what it wears (look.go), shared by its Creatures.
+	look creatureLookMsgs
 }
 
 // kindAttack is one attack of a monster kind.
@@ -289,6 +291,13 @@ func (w *World) initCombat() error {
 			Armor: def.Armor, Defense: def.Defense, PhysicalResistance: def.Resistances["physical"],
 		}}
 		k.corpse = corpse
+		if def.Look != nil && w.cfg.Looks != nil {
+			// make validate refuses it too (packages/content-schema checkLooks).
+			if err := w.cfg.Looks.CheckCreature(*def.Look); err != nil {
+				return fmt.Errorf("session: monster %q: %w", id, err)
+			}
+			k.look = w.creatureLook(def.Look)
+		}
 		if def.Corpse != "" {
 			it := w.cfg.Items[def.Corpse]
 			// The rule of the content validator (packages/content-schema validate.ts).
@@ -468,6 +477,8 @@ func (w *World) monsterMsg(m *Monster) *pb.Creature {
 		Dir:           dirMsg(m.dir),
 		HealthPercent: healthPercent(m.health, m.maxHealth),
 		Speed:         uint32(m.speed),
+		Look:          m.kind.look.look,
+		Worn:          m.kind.look.worn,
 	}
 }
 

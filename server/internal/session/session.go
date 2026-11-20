@@ -74,6 +74,9 @@ type Character struct {
 	Owned      []string
 	Premium    int64
 	PremiumSeq int64
+	// Look is the saved body (docs/02 "Apariencia"); one that is empty or not a player's
+	// choice of data/looks.yaml is replaced by the one picked from the id (loadLook).
+	Look content.Look
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -99,6 +102,8 @@ type Snapshot struct {
 	PvP PvPState
 	// Cosmetics are the equipped cosmetics (T5.7).
 	Cosmetics Cosmetics
+	// Look is the character's body (docs/02 "Apariencia").
+	Look content.Look
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -156,6 +161,11 @@ type Config struct {
 	// Cosmetics is the catalog of data/cosmetics.yaml (T5.7). Nil: nothing can be
 	// equipped (EquipCosmetic answers shop.unavailable) and no CosmeticsState is sent.
 	Cosmetics *content.CosmeticShop
+	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a player may choose and
+	// the anti-flood of SetLook. With it every humanoid's Creature carries its look (the
+	// NPCs' and monsters' looks of data/ are checked against it at start). Nil: no look is
+	// sent and SetLook answers look.unavailable.
+	Looks *content.Looks
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.

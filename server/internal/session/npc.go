@@ -54,6 +54,8 @@ type NPC struct {
 	// dev: the NPC stands on a dev-only island (world.Island.Dev), the only place where
 	// its dev-only dialog actions run.
 	dev bool
+	// look is its body and what it wears (look.go), shared by its Creatures.
+	look creatureLookMsgs
 }
 
 // ID returns the NPC's creature id.
@@ -132,6 +134,13 @@ func (w *World) initNPCs() error {
 			}
 			w.nextID++
 			n := &NPC{id: w.nextID, def: def, pos: pl.Pos, dev: is.Dev}
+			if def.Look != nil && w.cfg.Looks != nil {
+				// make validate refuses it too (packages/content-schema checkLooks).
+				if err := w.cfg.Looks.CheckCreature(*def.Look); err != nil {
+					return fmt.Errorf("session: npc %q: %w", def.ID, err)
+				}
+				n.look = w.creatureLook(def.Look)
+			}
 			if s := def.Shop; s != nil {
 				byItem := map[string]int{}
 				line := func(item string) *shopLine {
@@ -189,6 +198,8 @@ func (w *World) npcMsg(n *NPC) *pb.Creature {
 		Pos:           posMsg(n.pos),
 		Dir:           dirMsg(world.South),
 		HealthPercent: 100,
+		Look:          n.look.look,
+		Worn:          n.look.worn,
 	}
 }
 
