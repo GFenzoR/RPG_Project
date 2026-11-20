@@ -673,14 +673,17 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `ContainerUpdate.items`), y `Inventory.pocket_slots` (campo 3) cuántos tiene
   (`inventory.pocket_slots`, 4). Llegan en cada `Inventory`; un cambio en los bolsillos
   manda el `Inventory` entero (nunca un `ContainerUpdate`: los bolsillos no son una ventana
-  y no tienen `container_id`). Se los nombra con `ItemLocation.pocket` en `MoveItem`,
-  `UseItem`, `UseItemOn`, `LookAt`, `TradeOffer`/`TradeRequest` y `Refine`, con
-  `stack_index` = el índice; un índice sin item, o con otro item, es
-  `inventory.not_possible`. Un `MoveItem` a un bolsillo con un contenedor lo mete adentro.
-  Un `MoveItem` al slot de mochila o a la ventana de la mochila equipada (su primer nivel)
-  que no tiene lugar, o al slot de mochila vacío de algo que no es una mochila, lo deja en
-  los bolsillos; sin lugar ahí tampoco, `inventory.container_full`. Los bolsillos mismos
-  no tienen ningún `ItemLocation`: nada los mueve. Un cliente viejo ignora los campos y
+  y no tienen `container_id`). Un cambio que toca el equipo o los bolsillos más de una vez
+  (un `MoveItem` entre un bolsillo y un slot, lo que se recibe en varias pilas) manda un
+  solo `Inventory`, con el estado final. Se los nombra con `ItemLocation.pocket` en
+  `MoveItem`, `UseItem`, `UseItemOn`, `LookAt`, `TradeOffer`/`TradeRequest` y `Refine`:
+  el índice es el de `ItemLocation.pocket` y el servidor ignora `stack_index` (el cliente
+  repite ahí el índice); un índice sin item, o con otro item, es `inventory.not_possible`.
+  Un `MoveItem` a un bolsillo con un contenedor lo mete adentro. Un `MoveItem` al slot de
+  mochila o a la ventana de la mochila equipada (su primer nivel) que no tiene lugar, o al
+  slot de mochila vacío de algo que no es una mochila, lo deja en los bolsillos; sin lugar
+  ahí tampoco, `inventory.container_full`. Los bolsillos mismos no tienen ningún
+  `ItemLocation`: nada los mueve. Un cliente viejo ignora los campos y
   no ve lo que llevan.
 - **Contenedores:** `UseItem` sobre un contenedor lo abre (`ContainerOpen` con un
   `container_id` nuevo de la sesión, `capacity` = lugares, `has_parent` si está dentro de

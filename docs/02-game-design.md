@@ -741,11 +741,13 @@ slots"*. Código: `server/internal/session/pockets.go`.
   sus lugares a los de los bolsillos.
 - **Adónde va lo que se recibe:** compras, resultados de oficios, recompensas de quests,
   diálogos, cofres y tareas, el buzón del mercado, un intercambio, lo conjurado, el vuelto
-  de un pago, los items de quest de un monstruo y lo que da un GM van **primero a la
-  mochila (su primer nivel) y después a los bolsillos**; lo que no entra cae a los pies
-  como antes (o se rechaza donde se rechazaba: tienda, cofre, mercado, intercambio,
-  conjurar, oficios). Las cuentas de lugar (`room`, `canPay`, `roomForAll`, `tradeFits`,
-  `canReceiveMoney`) suman los dos.
+  de un pago, los items de quest de un monstruo y lo que da un GM se suman primero a las
+  pilas iguales que ya se llevan (la de la mochila antes que la de los bolsillos: unas
+  monedas se juntan con las de un bolsillo aunque la mochila tenga lugar); lo que queda
+  abre una pila nueva **primero en la mochila (su primer nivel) y después en los
+  bolsillos**; lo que no entra cae a los pies como antes (o se rechaza donde se rechazaba:
+  tienda, cofre, mercado, intercambio, conjurar, oficios). Las cuentas de lugar (`room`,
+  `canPay`, `roomForAll`, `tradeFits`, `canReceiveMoney`) suman los dos.
 - **Levantar:** soltar algo sobre el slot de la mochila o en su ventana con la mochila
   llena lo deja en los bolsillos; sin mochila, soltar algo que no es una mochila sobre su
   slot vacío también. Una mochila soltada ahí se equipa. Soltarlo en un bolsillo
