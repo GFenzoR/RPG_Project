@@ -139,6 +139,19 @@ describe("client content (T0.5)", () => {
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
   });
 
+  it('marks the border pieces of data/borders.yaml, and only those (docs/06 "Bordes")', () => {
+    const marked = Object.values(content.items)
+      .filter((d) => d.border)
+      .map((d) => d.id);
+    // Ten sets of twelve: nine fringes and the surf.
+    expect(marked).toHaveLength(120);
+    for (const id of ["border_grass_n", "border_ash_inner_se", "border_surf_w"])
+      expect(marked).toContain(id);
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    for (const id of ["grass", "water_shallow", "signpost"])
+      expect(byId.get(id)?.border).toBeUndefined();
+  });
+
   it("marks the items that show a portal (their portal block), and only those", () => {
     const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
     for (const id of [

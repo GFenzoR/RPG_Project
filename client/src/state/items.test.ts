@@ -50,6 +50,8 @@ const content: ClientContent = {
     48: def("backpack", { slots: 24 }),
     60: def("brasal_dock_sign", { blocks: true, desc: "text.volcan.dock_sign" }),
     218: def("ladder_up", { portal: true }),
+    336: def("border_surf_n", { border: true }),
+    337: def("border_sand_n", { border: true }),
   },
   monsterSprites: {},
   vocations: [],
@@ -237,6 +239,28 @@ describe("inventory state", () => {
     expect(menuItem(w, 5, 6, 7)).toMatchObject({ itemId: 20, stackIndex: 1 });
     tile([{ itemId: 1 }]);
     expect(menuItem(w, 5, 6, 7)).toBeUndefined();
+  });
+
+  it('looks past border pieces: a tile with only them is its ground (docs/06 "Bordes")', () => {
+    const w = new WorldState(content);
+    const tile = (items: { itemId: number; count?: number }[]): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: create(TileUpdateSchema, { pos: { x: 5, y: 6, z: 7 }, tile: { items } }),
+        },
+        0,
+      );
+    // Water by the sand (here grass stands for the ground): the surf and the sand's fringe.
+    tile([{ itemId: 1 }, { itemId: 336 }, { itemId: 337 }]);
+    expect(topItem(w, 5, 6, 7, true)).toMatchObject({ itemId: 1, stackIndex: 0 });
+    expect(topItem(w, 5, 6, 7, false)).toBeUndefined();
+    expect(menuItem(w, 5, 6, 7)).toBeUndefined();
+    expect(tileUse(w, 5, 6, 7, "never")).toBeUndefined();
+    // Coins dropped there are its top item, at their own index.
+    tile([{ itemId: 1 }, { itemId: 336 }, { itemId: 337 }, { itemId: 8, count: 3 }]);
+    expect(topItem(w, 5, 6, 7, false)).toMatchObject({ itemId: 8, stackIndex: 3, count: 3 });
+    expect(menuItem(w, 5, 6, 7)).toMatchObject({ itemId: 8, stackIndex: 3 });
   });
 
   it("builds protocol locations", () => {

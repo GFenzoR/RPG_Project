@@ -84,7 +84,9 @@ export function menuItem(world: WorldState, x: number, y: number, z: number): It
 
 /**
  * The top item of a known tile. With `withGround` false (use, move) a tile with only its
- * ground gives undefined; looking accepts the ground.
+ * ground gives undefined; looking accepts the ground. Border pieces (the fringe of a
+ * neighbour's ground, always at the bottom of the stack) are part of the ground's look, not
+ * items: a tile with only them is its ground, named as such when looked at.
  */
 export function topItem(
   world: WorldState,
@@ -95,7 +97,8 @@ export function topItem(
 ): ItemRef | undefined {
   const t = world.tile(x, y, z);
   if (!t || t.length === 0) return undefined;
-  const i = t.length - 1;
+  let i = t.length - 1;
+  while (i > 0 && world.item(t[i] ?? 0)?.border) i--;
   if (i === 0 && !withGround) return undefined;
   const count = world.tileCounts(x, y, z)?.[i] ?? 0;
   const mods = world.tileMods(x, y, z)?.[i];

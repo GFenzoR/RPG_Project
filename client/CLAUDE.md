@@ -763,6 +763,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El cliente nombra los items por `item.<id>.name`. Un item con un `name` compartido (las
   piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
   compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
+- Las piezas de borde (`ItemDef.border`, las de `data/borders.yaml` que arma
+  `vite/content.ts`) nunca son el item de arriba: `topItem` las saltea, así mirar una
+  casilla de la orilla nombra su suelo y una casilla con solo piezas no ofrece "usar" ni
+  "mover". `MapView` las dibuja con los suelos (`flat` del atlas), bajo las criaturas.
 - E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
   (screenshot `65b-volcan-temple-sign`) y el de NPCs ("talk to NPCs"), que despierta en
   el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot

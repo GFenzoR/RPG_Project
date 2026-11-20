@@ -19,6 +19,8 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readBorders } from "@rpg/map-format";
+import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
@@ -104,6 +106,11 @@ export function loadClientContent(root: string): ClientContent {
    * items by item.<id>.name, so that key gets the shared text.
    */
   const sharedNames = new Map<string, string>();
+  /** The border pieces of data/borders.yaml (docs/06 "Bordes"): never a tile's top item. */
+  const bordersFile = join(root, "data", "borders.yaml");
+  const borders = existsSync(bordersFile)
+    ? borderItems(readBorders(readYaml(bordersFile)))
+    : new Set<string>();
   const dir = join(root, "data", "items");
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".yaml"))
@@ -145,6 +152,7 @@ export function loadClientContent(root: string): ClientContent {
         ...(desc !== "" ? { desc } : {}),
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
         ...(isObj(raw["door"]) ? { door: true as const } : {}),
+        ...(borders.has(raw["id"]) ? { border: true as const } : {}),
         ...(typeof raw["elevation"] === "number" && raw["elevation"] > 0
           ? { elevation: raw["elevation"] }
           : {}),
