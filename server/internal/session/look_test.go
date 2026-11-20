@@ -1,9 +1,11 @@
 package session_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -112,7 +114,7 @@ func TestLookAtLogin(t *testing.T) {
 }
 
 // SetLook: free, any time; everyone who sees the player gets a CreatureLook. An invalid
-// look is refused (look.invalid, the player gets its look back); too many changes in a row
+// look is refused (appearance.invalid, the player gets its look back); too many changes in a row
 // are dropped; without data/looks.yaml it is unavailable.
 func TestSetLook(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 48, 32), withLooks(t))
@@ -152,7 +154,7 @@ func TestSetLook(t *testing.T) {
 	} {
 		evs := h.send(clA, setLook(bad))
 		back := find(evs, (*pb.ServerMessage).GetCreatureLook)
-		if !hasKey(evs, "look.invalid") || len(back) != 1 || lookOf(back[0].GetLook()) != lookTom {
+		if !hasKey(evs, "appearance.invalid") || len(back) != 1 || lookOf(back[0].GetLook()) != lookTom {
 			t.Errorf("%s: %v", name, kinds(evs))
 		}
 		if pA.LookForTest() != lookTom {
@@ -183,7 +185,7 @@ func TestSetLook(t *testing.T) {
 	if seen := seenCreature(cl.take(), p.ID()); seen.GetLook() != nil {
 		t.Fatalf("a look without data/looks.yaml: %v", seen.GetLook())
 	}
-	if evs := h2.send(cl, setLook(lookMira)); !hasKey(evs, "look.unavailable") {
+	if evs := h2.send(cl, setLook(lookMira)); !hasKey(evs, "appearance.unavailable") {
 		t.Fatalf("SetLook without looks: %v", kinds(evs))
 	}
 }
@@ -361,7 +363,6 @@ func TestNPCLooksFromData(t *testing.T) {
 	}
 }
 
-
 // A wielded piece that breaks at the forge is no longer shown: the watchers get a
 // CreatureLook with an empty hand.
 func TestForgeBreakShowsInTheLook(t *testing.T) {
@@ -378,5 +379,24 @@ func TestForgeBreakShowsInTheLook(t *testing.T) {
 	looks := find(clB.take(), (*pb.ServerMessage).GetCreatureLook)
 	if len(looks) != 1 || looks[0].GetId() != p.ID() || looks[0].GetEquipment().GetRightHand() != 0 {
 		t.Fatalf("the watcher got %v after the sword broke", looks)
+	}
+}
+
+// The answers of SetLook have their text in every language (i18n/).
+func TestLookMessagesTranslated(t *testing.T) {
+	for _, lang := range []string{"es", "en"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "i18n", lang, "client.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts := map[string]string{}
+		if err := yaml.Unmarshal(raw, &texts); err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range []string{"appearance.invalid", "appearance.unavailable"} {
+			if texts[k] == "" {
+				t.Errorf("%s: %s has no text", lang, k)
+			}
+		}
 	}
 }

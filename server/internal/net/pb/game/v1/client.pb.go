@@ -4103,7 +4103,7 @@ func (x *UnequipCosmetic) GetKind() string {
 // SetLook changes the character's body (docs/02 "Apariencia"): free, any time, from the
 // Apariencia window. Every id must be one a player may choose (data/looks.yaml; never a
 // creatures_only skin). The server answers with CreatureLook to the player and to everyone
-// who sees it; an invalid look gets the system message look.invalid and a CreatureLook
+// who sees it; an invalid look gets the system message appearance.invalid and a CreatureLook
 // with the look it keeps. Too many changes in a row (data/looks.yaml limits) are dropped.
 type SetLook struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

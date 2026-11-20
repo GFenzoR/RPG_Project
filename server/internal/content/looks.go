@@ -79,7 +79,7 @@ type looksFile struct {
 }
 
 // LoadLooks reads <dataDir>/looks.yaml. No file means no looks (nil, nil): no creature
-// is sent a look and SetLook answers look.unavailable.
+// is sent a look and SetLook answers appearance.unavailable.
 func LoadLooks(dataDir string) (*Looks, error) {
 	raw, err := os.ReadFile(filepath.Join(dataDir, "looks.yaml"))
 	if errors.Is(err, fs.ErrNotExist) {

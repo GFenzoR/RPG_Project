@@ -17,8 +17,8 @@ import (
 
 // Message keys of SetLook.
 const (
-	msgLookInvalid     = "look.invalid"
-	msgLookUnavailable = "look.unavailable"
+	msgLookInvalid     = "appearance.invalid"
+	msgLookUnavailable = "appearance.unavailable"
 )
 
 // shownSlots are the equipment slots that show on the figure, in VisibleEquipment order:
@@ -133,7 +133,7 @@ func (w *World) lookChanged(p *Player) {
 }
 
 // setLook handles SetLook: a body a player may choose (data/looks.yaml), free. An invalid
-// one is refused with look.invalid and p gets its look back; too many changes in a row
+// one is refused with appearance.invalid and p gets its look back; too many changes in a row
 // are dropped (lookFlood).
 func (w *World) setLook(ctx *game.TickContext, p *Player, m *pb.SetLook) {
 	l := w.cfg.Looks

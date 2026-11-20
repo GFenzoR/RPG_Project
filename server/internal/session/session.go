@@ -164,7 +164,7 @@ type Config struct {
 	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a player may choose and
 	// the anti-flood of SetLook. With it every humanoid's Creature carries its look (the
 	// NPCs' and monsters' looks of data/ are checked against it at start). Nil: no look is
-	// sent and SetLook answers look.unavailable.
+	// sent and SetLook answers appearance.unavailable.
 	Looks *content.Looks
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
