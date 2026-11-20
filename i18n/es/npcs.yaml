@@ -76,7 +76,7 @@ npc.puerto_foreman.ore_accepted: "Baja con cuidado y no te acerques al agua más
 npc.puerto_foreman.opt_ore_progress: "¿Dónde encuentro el mineral?"
 npc.puerto_foreman.ore_hint: "En las galerías de abajo. Los escarabajos de mena lo llevan en la panza y los mineros ahogados en los bolsillos. Cinco trozos, ni uno menos."
 npc.puerto_foreman.opt_ore_deliver: "Te traigo el mineral de hierro."
-npc.puerto_foreman.ore_delivered: "Buen hierro, de las vetas viejas. Bastian se va a poner contento. El pico es tuyo: con él podrás sacar mineral tú mismo."
+npc.puerto_foreman.ore_delivered: "Buen hierro, de las vetas viejas. Bastian se va a poner contento. El pico es tuyo: con él podrás sacar mineral por tu cuenta."
 
 # Old diver: Corvo.
 npc.puerto_diver.name: "Corvo, el buzo"
@@ -197,7 +197,7 @@ npc.volcan_priest.name: "Madre Oriela"
 npc.volcan_priest.greet: "Te doy la bienvenida al templo de la Llama Quieta, {name}. Aquí ni la montaña te puede hacer daño."
 npc.volcan_priest.opt_blessings: "Quiero una bendición."
 npc.volcan_priest.blessings: "Las cinco luces de siempre, las mismas del Farol y de Raigal: 50 monedas más 20 por cada nivel, desde el nivel 9."
-npc.volcan_priest.blessed: "Hecho. Que ninguna chispa te encuentre desprevenido."
+npc.volcan_priest.blessed: "Hecho. Que ninguna chispa te tome por sorpresa."
 npc.volcan_priest.opt_more: "Quiero otra."
 npc.volcan_priest.opt_heal: "Tengo heridas."
 npc.volcan_priest.healed: "Ya está. Las quemaduras se curan; el descuido no."

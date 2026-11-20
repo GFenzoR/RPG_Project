@@ -698,7 +698,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   come y gasta una unidad, con `inventory.use_cooldown_ms` entre usos. Comer (auditoría
   de contenido m2) suma su `food_ms` a la condición `well_fed` (regeneración más fuerte,
   ver "Skills" y "Condiciones"), hasta su `max_ms` (20 min): la comida que solo alimenta
-  y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Estás lleno"); la
+  y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Tienes el estómago lleno"); la
   que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
   herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el

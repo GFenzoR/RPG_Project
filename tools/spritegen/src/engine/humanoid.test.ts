@@ -496,6 +496,11 @@ describe("engine humanoid: the previews of data/ (previews.ts)", () => {
  * The most holes a shared layer may leave in one frame (measured 2026-11-20: none on the
  * sturdy man, 2 on the slender one, as before the sex; 2 on the sturdy woman and 3 on the
  * slender one, a hood's or a staff's edge against the trunk).
+ *
+ * It measures one side only: a hole is a pixel where the layer is cut away because the
+ * sturdy man's body covers it there and this body does not. It does not measure this body
+ * showing outside a shared layer (a woman's hip under the trousers): that was checked by
+ * hand (the trouser seat's radius covers both hips) and is left to the screenshots.
  */
 const MAX_HOLES = 3;
 describe("engine humanoid: the shared layers fit the four bodies", () => {
@@ -504,7 +509,7 @@ describe("engine humanoid: the shared layers fit the four bodies", () => {
   );
   const shared = HUMANOID_LAYERS.filter((l) => l.slot !== "body" && l.slot !== "torso");
   for (const { sex, build } of BODIES)
-    it(`${sex} ${build}: the shared layers leave at most a few holes per frame`, () => {
+    it(`${sex} ${build}: the shared layers leave at most a few holes where the man's body hid them`, () => {
       const body = bodyOf(build, sex);
       const man = bodyOf("sturdy", "male");
       let worst = 0;
