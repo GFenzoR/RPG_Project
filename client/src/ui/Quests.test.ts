@@ -80,16 +80,17 @@ const byQuest = (all: VNode<Props>[], id: string): VNode<Props> | undefined =>
   all.find((v) => v.props["data-quest"] === id);
 
 describe("quest log window", () => {
-  it("has two tabs with their counts; a tab button asks for its tab", () => {
+  it("has three tabs with their counts; a tab button asks for its tab", () => {
     const { all, picked } = body("active");
     const tabs = all.filter((v) => v.props["data-quest-tab"] !== undefined);
     expect(tabs.map((b) => [b.props["data-quest-tab"], b.props["aria-selected"], text(b)])).toEqual(
       [
         ["active", true, 'client.quests.tab_active{"count":2}'],
+        ["milestones", false, 'client.quests.tab_milestones{"count":0}'],
         ["finished", false, 'client.quests.tab_finished{"count":3}'],
       ],
     );
-    tabs[1]?.props.onClick?.();
+    tabs[2]?.props.onClick?.();
     expect(picked).toEqual(["finished"]);
   });
 
@@ -149,5 +150,48 @@ describe("quest log window", () => {
     expect(cooling(LOG, 10_000)).toBe(true);
     expect(cooling(LOG, 100_000)).toBe(false);
     expect(cooling(undefined, 0)).toBe(false);
+  });
+});
+
+describe('milestones (docs/02 "Quests de hito")', () => {
+  const m = {
+    title: "quest.ms_pair.title",
+    level: 20,
+    levelMet: false,
+    gearItem: 0,
+    gearEquipped: false,
+    gearWeapon: "sword",
+    gearMet: true,
+    players: 2,
+    vocations: [],
+    vocationMet: true,
+  };
+  const log: QuestLogView = {
+    entries: [
+      view({ id: "ms_pair", state: "open", milestone: m }),
+      view({ id: "ms_done", state: "done", milestone: { ...m, title: "quest.ms_done.title" } }),
+    ],
+  };
+
+  it("lists them in their own tab with each requirement and its mark", () => {
+    const { all } = body("milestones", { log });
+    const pair = byQuest(all, "ms_pair");
+    expect(pair).toBeDefined();
+    const reqs = all.filter((v) => v.props["data-req"] !== undefined);
+    expect(reqs.map((v) => [v.props["data-req"], v.props["data-met"]])).toEqual([
+      ["level", "false"],
+      ["gear", "true"],
+      ["players", undefined],
+    ]);
+    expect(text(reqs[0])).toContain('client.quests.req_level{"level":20}');
+    expect(text(reqs[1])).toContain("client.quests.req_weapon");
+    expect(text(reqs[2])).toContain('client.quests.req_players{"count":2}');
+  });
+
+  it("shows the title a done milestone gave in the finished tab", () => {
+    const { all } = body("finished", { log });
+    const done = all.find((v) => v.props["data-testid"] === "quest-title");
+    expect(text(done)).toBe('client.quests.title_earned{"title":"quest.ms_done.title"}');
+    expect(byQuest(all, "ms_pair")).toBeUndefined();
   });
 });

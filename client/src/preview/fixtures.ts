@@ -272,7 +272,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
     { id: "well_fed", until: now + 18 * 60_000 + 20_000, ticks: 0 },
     { id: "protection_zone", until: undefined, ticks: 0 },
   ];
-  ui.quests = questLog(Date.now());
+  ui.quests = questLog(Date.now(), itemNumber(content, "ember_key"));
   ui.clockOffset = 0;
   return { ui, name: "base" };
 }
@@ -280,9 +280,24 @@ export function baseScene(content: ClientContent, now: number): Scene {
 /**
  * The quest log of the preview (docs/02 "Diario de misiones"), at wall clock time `at`:
  * two quests in progress (a kill step 5/8 of chapter 2 and a side quest's item), chapter
- * 1 done, the sandbox task cooling down for 2 h 14 min and a finished task back already.
+ * 1 done, the sandbox task cooling down for 2 h 14 min and a finished task back already;
+ * and three milestones (docs/02 "Quests de hito"): Morvund not started (the level met, the
+ * ember key, numeric id emberKey, missing), Thalorn in progress and Orthavel done (its
+ * title in the finished tab).
  */
-export function questLog(at: number): QuestLogView {
+export function questLog(at: number, emberKey = 0): QuestLogView {
+  const ms = (level: number, levelMet: boolean, players: number) => ({
+    title: "",
+    level,
+    levelMet,
+    gearItem: 0,
+    gearEquipped: false,
+    gearWeapon: "",
+    gearMet: true,
+    players,
+    vocations: [] as string[],
+    vocationMet: true,
+  });
   const entry = (e: Partial<QuestEntryView> & Pick<QuestEntryView, "id">): QuestEntryView => ({
     name: `quest.${e.id}.name`,
     chapter: 0,
@@ -320,6 +335,28 @@ export function questLog(at: number): QuestLogView {
         availableAt: at + (2 * 60 + 14) * 60_000 + 20_000,
       }),
       entry({ id: "diver_locket" }),
+      entry({
+        id: "ms_morvund_embers",
+        state: "open",
+        milestone: {
+          ...ms(35, true, 4),
+          title: "quest.ms_morvund_embers.title",
+          gearItem: emberKey,
+          gearMet: false,
+          vocations: ["guardian", "arcanist", "ranger", "druid"],
+        },
+      }),
+      entry({
+        id: "ms_thalorn_oath",
+        state: "active",
+        stepId: "plates",
+        stepText: "quest.ms_thalorn_oath.step_plates",
+        milestone: { ...ms(20, true, 2), title: "quest.ms_thalorn_oath.title" },
+      }),
+      entry({
+        id: "ms_orthavel_vigil",
+        milestone: { ...ms(25, true, 1), title: "quest.ms_orthavel_vigil.title" },
+      }),
     ],
   };
 }

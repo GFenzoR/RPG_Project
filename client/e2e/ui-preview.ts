@@ -142,6 +142,17 @@ const WINDOWS: Record<string, unknown> = {
       quests: { open: true, collapsed: false },
     },
   },
+  // docs/02 "Quests de hito": the quest log's milestones tab (one not started with a missing
+  // key, one in progress, one done).
+  questsmilestones: {
+    v: 3,
+    z: ["quests"],
+    win: {
+      battle: { open: true, collapsed: false },
+      inventory: { open: true, collapsed: false },
+      quests: { open: true, collapsed: false },
+    },
+  },
   // docs/02 "Apariencia": the Apariencia window at its factory place with a look being
   // picked (Personalizar: the figure and the pickers over the cosmetics).
   appearance: {
@@ -267,7 +278,7 @@ const WINDOWS: Record<string, unknown> = {
 /** Scenes about the inventory: on a phone or a tablet they open its tab. */
 const INVENTORY_TAB = ["inventory", "pockets", "tooltip", "tooltipcoin"];
 /** Scenes about the quest log: on a phone or a tablet they open its tab. */
-const QUESTS_TAB = ["quests", "questsdone"];
+const QUESTS_TAB = ["quests", "questsdone", "questsmilestones"];
 /** Scenes about the Apariencia window: on a phone or a tablet they open its tab. */
 const APPEARANCE_TAB = ["appearance"];
 /** What the mouse is over in a scene's screenshot. */
@@ -307,6 +318,7 @@ const SCENES = [
   "guild",
   "quests",
   "questsdone",
+  "questsmilestones",
   "forge",
   "forgerisk",
   "forgeresult",
@@ -368,6 +380,7 @@ try {
         "guild",
         "quests",
         "questsdone",
+        "questsmilestones",
         "scale",
       ].includes(scene)
         ? "game"
@@ -416,9 +429,11 @@ try {
           await page.waitForTimeout(150);
         }
       }
-      if (scene === "questsdone") {
-        // The quest log's finished tab (in the window, or in the panel's tab on phones).
-        const tab = page.locator('[data-quest-tab="finished"]').first();
+      if (scene === "questsdone" || scene === "questsmilestones") {
+        // The quest log's finished or milestones tab (in the window, or in the panel's tab
+        // on phones).
+        const which = scene === "questsdone" ? "finished" : "milestones";
+        const tab = page.locator(`[data-quest-tab="${which}"]`).first();
         if (await tab.isVisible()) {
           await tab.click();
           await page.waitForTimeout(150);

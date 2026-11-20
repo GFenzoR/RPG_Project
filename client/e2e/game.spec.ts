@@ -3450,6 +3450,82 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   for (const page of [a, b]) await page.close();
 });
 
+test("milestones: two strangers hold the plates of Thalorn together and land in its reward room", async ({
+  browser,
+  playwright,
+}) => {
+  const first = await newGuardian(playwright, "Escudo");
+  const second = await newGuardian(playwright, "Mano");
+  // Two level 20 residents of the Forest Isle (86640 XP; docs/02 "Quests de hito"), not in a
+  // party, in the crypt of Thalorn on floor 8, one tile south of each plate (4207,6090 and
+  // 4213,6090), with ms_thalorn_oath in progress on its plates step (quest_state 1, step 0).
+  const seed = (name: string, x: number): string =>
+    `UPDATE characters SET town = 'bosque', level = 20, experience = 86640,
+       pos_x = ${x}, pos_y = 6091, pos_z = 8 WHERE name = '${name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT id, 'quest.ms_thalorn_oath', 1 FROM characters WHERE name = '${name}';`;
+  psql([databaseUrl, "-c", seed(first.name, 4207) + seed(second.name, 4213)]);
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await enterGame(page, email, first.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(first.email);
+  const b = await enter(second.email);
+  await arrived(a, 4207, 6091);
+  await arrived(b, 4213, 6091);
+  const walkTo = async (page: Page, x: number, y: number): Promise<void> => {
+    const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
+      tx: x,
+      ty: y,
+    });
+    if (!tile) throw new Error("no canvas");
+    await page.mouse.click(tile.x, tile.y);
+  };
+
+  // The quest log lists it among the milestones, with what it asks.
+  await openWindow(a, "quests");
+  await a.locator('[data-quest-tab="milestones"]').click();
+  const entry = a.locator('.quest[data-quest="ms_thalorn_oath"]');
+  await expect(entry).toHaveAttribute("data-state", "active");
+  await expect(entry.getByTestId("quest-reqs")).toContainText("Nivel 20 o más");
+  await shot(a, "99-milestone-quest-log");
+  await closeWindow(a, "quests");
+
+  // One on its plate: the plates wait for the other.
+  await walkTo(a, 4207, 6090);
+  await arrived(a, 4207, 6090);
+  await expect(a.getByTestId("game-log")).toContainText("1 de 2 ocupadas");
+  await shot(a, "99b-milestone-one-plate");
+
+  // The second one steps on the other plate: both land in the reward room, done.
+  await walkTo(b, 4213, 6090);
+  await expect(a.getByTestId("game-log")).toContainText("Hito alcanzado");
+  await expect(b.getByTestId("game-log")).toContainText("Hito alcanzado");
+  for (const page of [a, b])
+    await expect
+      .poll(async () => {
+        const s = await self(page);
+        return s !== undefined && s.x >= 4222 && s.x <= 4228 && s.y >= 6089 && s.y <= 6093;
+      })
+      .toBe(true);
+  await shot(b, "99c-milestone-reward-room");
+
+  // The finished tab shows the title it gave.
+  await openWindow(b, "quests");
+  await b.locator('[data-quest-tab="finished"]').click();
+  await expect(b.getByTestId("quest-title")).toContainText("Testigo del Juramento");
+  await shot(b, "99d-milestone-title");
+
+  expect(errors).toEqual([]);
+  for (const page of [a, b]) await page.close();
+});
+
 test("portals: a path goes round the volcanic mine stairs; down them to floor 8 and back up", async ({
   page,
   playwright,

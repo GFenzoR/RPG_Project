@@ -1893,6 +1893,15 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `toolbar-quests`.
 - Vista previa: escenas `quests` y `questsdone` (la pestaña de terminadas) de
   `make ui-preview`; `allwindows` la abre también.
+- **Quests de hito** (docs/02 "Quests de hito"): `QuestEntryView.milestone`
+  (`MilestoneView`, de `QuestLogEntry.milestone`) y el estado `open` (un hito sin empezar,
+  `QUEST_LOG_STATE_OPEN`). `questTabs` da tres pestañas: `active` (sin hitos),
+  `milestones` (todos los hitos, primero los sin empezar, después en curso y terminados) y
+  `finished` (un hito terminado con su título, `quest-title`). `MilestoneReqs` dibuja cada
+  requisito (`.quest-req[data-req=level|gear|players]`, `data-met`); las marcas son las
+  del propio personaje que manda el servidor. `QuestsPanel` recibe `content` (el nombre del
+  item pedido). Vista previa: escena `questsmilestones`. E2E "milestones" de
+  `e2e/game.spec.ts` (screenshots `99-milestone-*`).
 - E2E: "sandbox: the quest log, a lectern's book and a reward chest that gives once"
   (`e2e/sandbox.spec.ts`) siembra el capítulo 1 en 2/6 lobos y la tarea de práctica en
   espera con `psql`, abre `quests` con `openWindow` (`WindowId` de `e2e/windows.ts` incluye

@@ -540,7 +540,9 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
-  const quests = <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} />;
+  const quests = (
+    <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} content={props.content} />
+  );
   const chat = (
     <ChatPanel
       t={t}
