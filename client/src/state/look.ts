@@ -81,6 +81,27 @@ export const sameLook = (a: Look | undefined, b: Look | undefined): boolean =>
     a.hairColor === b.hairColor &&
     a.beard === b.beard);
 
+/** Whether two players show the same item in every visible slot. */
+export const sameEquipment = (a: EquipmentView, b: EquipmentView): boolean =>
+  a === b ||
+  (a.head === b.head &&
+    a.torso === b.torso &&
+    a.legs === b.legs &&
+    a.feet === b.feet &&
+    a.leftHand === b.leftHand &&
+    a.rightHand === b.rightHand);
+
+const samePiece = (a: WornPiece | undefined, b: WornPiece | undefined): boolean =>
+  a === b || (!!a && !!b && a.shape === b.shape && a.tint === b.tint);
+
+/** Whether two creatures wear the same pieces (an NPC's or monster's). */
+export function sameWorn(a: Worn | undefined, b: Worn | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const slots: WornSlot[] = ["head", "torso", "legs", "feet", "shield", "weapon"];
+  return slots.every((s) => samePiece(a[s], b[s]));
+}
+
 /** The choices of a player's look (ClientContent.lookOptions, data/looks.yaml order). */
 export interface LookChoices {
   builds: readonly string[];

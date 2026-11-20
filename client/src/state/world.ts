@@ -61,7 +61,7 @@ import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import { questLogFrom } from "./quests.ts";
-import { equipmentView, lookView, wornView } from "./look.ts";
+import { equipmentView, lookView, sameEquipment, sameLook, sameWorn, wornView } from "./look.ts";
 import type { EquipmentView } from "./look.ts";
 import type { QuestLogView } from "./quests.ts";
 import { heavyHit } from "../render/shake.ts";
@@ -161,6 +161,17 @@ const cosmeticsView = (c: Cosmetics | undefined): CosmeticsView => ({
   color: c?.color ?? "",
   nameEffect: c?.nameEffect ?? "",
 });
+
+/** Whether the canvas draws a and b with the same figure (kind, sprite, body, dress). */
+const sameFigure = (a: CreatureState, b: CreatureState): boolean =>
+  a.kind === b.kind &&
+  a.contentId === b.contentId &&
+  sameLook(a.look, b.look) &&
+  sameEquipment(a.equipment, b.equipment) &&
+  sameWorn(a.worn, b.worn) &&
+  a.cosmetics.outfit === b.cosmetics.outfit &&
+  a.cosmetics.color === b.cosmetics.color &&
+  a.cosmetics.nameEffect === b.cosmetics.nameEffect;
 
 /** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
 export interface EffectState {
@@ -1137,8 +1148,12 @@ export class WorldState implements TileSource {
       look: lookView(c.look),
       equipment: equipmentView(c.equipment),
       worn: wornView(c.worn),
-      lookRev: prev ? prev.lookRev + 1 : 0,
+      lookRev: prev ? prev.lookRev : 0,
     });
+    // Built again only when what the figure is drawn from changed: a FullMapView or a
+    // MapSlice (a teleport, another floor) sends every creature in view again.
+    const next = this.creatures.get(c.id);
+    if (prev && next && !sameFigure(prev, next)) next.lookRev = prev.lookRev + 1;
   }
 
   /**

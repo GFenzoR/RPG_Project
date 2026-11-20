@@ -89,7 +89,10 @@ func (w *World) creatureLook(c *content.CreatureLook) creatureLookMsgs {
 func (w *World) loadLook(p *Player, c Character) {
 	l := w.cfg.Looks
 	if l == nil {
-		return // no data/looks.yaml: no look is sent
+		// No data/looks.yaml: no look is sent, but the saved one is kept so the next
+		// snapshot does not erase it.
+		p.look = c.Look
+		return
 	}
 	look := c.Look
 	if !l.PlayerLook(look) {

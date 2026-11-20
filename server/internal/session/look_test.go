@@ -165,20 +165,6 @@ func TestSetLook(t *testing.T) {
 		t.Fatalf("a refused look was broadcast: %v", got)
 	}
 
-	// The anti-flood (data/looks.yaml limits): a burst, then the rest of the tick dropped.
-	burst := testLooks(t).Limits.ChangeBurst
-	for i := range burst + 3 {
-		l := lookMira
-		if i%2 == 1 {
-			l = lookTom
-		}
-		h.input(clA, setLook(l))
-	}
-	h.sim.Step()
-	if got := len(find(clB.take(), (*pb.ServerMessage).GetCreatureLook)); got > burst {
-		t.Fatalf("%d look changes broadcast in one tick, the burst is %d", got, burst)
-	}
-
 	// Without data/looks.yaml.
 	h2 := newHarness(t, worldtest.Open(t, 0, 0, 16, 16))
 	cl, p := h2.join("Plain", at(5, 5))
@@ -187,6 +173,70 @@ func TestSetLook(t *testing.T) {
 	}
 	if evs := h2.send(cl, setLook(lookMira)); !hasKey(evs, "appearance.unavailable") {
 		t.Fatalf("SetLook without looks: %v", kinds(evs))
+	}
+
+	// A saved look survives a server without data/looks.yaml: it is not sent, but the
+	// next snapshot keeps it.
+	nextChar++
+	clM, pM := h2.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Mira", Vocation: "guardian",
+		Level: 1, Health: 145, Pos: pos(7, 5), HasPos: true, Look: lookMira})
+	if seen := seenCreature(clM.take(), pM.ID()); seen.GetLook() != nil {
+		t.Fatalf("a look sent without data/looks.yaml: %v", seen.GetLook())
+	}
+	h2.sim.Command(h2.w.Leave(clM))
+	h2.sim.Step()
+	if last := h2.saves[len(h2.saves)-1]; last.CharacterID != pM.CharacterID() || last.Look != lookMira {
+		t.Fatalf("saved %+v, want the look %+v kept", last, lookMira)
+	}
+}
+
+// The SetLook anti-flood (data/looks.yaml limits): exactly a burst of changes in one
+// tick, the rest dropped; one more passes after change_refill_ms, and only one.
+func TestSetLookFlood(t *testing.T) {
+	lim := testLooks(t).Limits
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withLooks(t))
+	nextChar++
+	clA, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Mira", Vocation: "guardian",
+		Level: 1, Health: 145, Pos: pos(10, 10), HasPos: true, Look: lookMira})
+	clB, _ := h.join("Watcher", at(14, 10))
+	clA.take()
+	clB.take()
+
+	cur := lookMira
+	next := func() content.Look { // always a change
+		if cur == lookMira {
+			cur = lookTom
+		} else {
+			cur = lookMira
+		}
+		return cur
+	}
+	broadcast := func() int { return len(find(clB.take(), (*pb.ServerMessage).GetCreatureLook)) }
+
+	for range lim.ChangeBurst + 1 {
+		h.input(clA, setLook(next()))
+	}
+	h.sim.Step()
+	if got := broadcast(); got != lim.ChangeBurst {
+		t.Fatalf("%d look changes broadcast in one tick, want the burst %d", got, lim.ChangeBurst)
+	}
+	next() // the dropped change did not apply: back to the look in effect
+
+	refill := (lim.ChangeRefillMs + 49) / 50 // ticks of 50 ms
+	for range refill - 2 {
+		h.sim.Step()
+	}
+	h.input(clA, setLook(next())) // one tick short of change_refill_ms
+	h.sim.Step()
+	if got := broadcast(); got != 0 {
+		t.Fatalf("%d changes passed before change_refill_ms", got)
+	}
+	next() // dropped
+	h.input(clA, setLook(next()))
+	h.input(clA, setLook(next()))
+	h.sim.Step()
+	if got := broadcast(); got != 1 {
+		t.Fatalf("%d changes passed after change_refill_ms, want 1", got)
 	}
 }
 

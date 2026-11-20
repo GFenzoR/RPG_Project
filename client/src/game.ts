@@ -487,6 +487,7 @@ export class Game {
           if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
+          if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
@@ -799,12 +800,22 @@ export class Game {
 
   /**
    * Sends the look being picked (SetLook): free; the server answers with a CreatureLook to
-   * the player and to everyone who sees it, or look.invalid.
+   * the player and to everyone who sees it, or appearance.invalid.
    */
   applyLook(): void {
     const draft = this.lookDraft;
     if (!draft || sameLook(draft, this.world.self?.look)) return;
     this.conn.send({ case: "setLook", value: { look: { ...draft } } });
+  }
+
+  /**
+   * A CreatureLook came: when it is the player's own and shows the look being picked, the
+   * change went through and the draft is done. Any other (a piece of equipment changed
+   * while picking, a refused look) keeps the draft.
+   */
+  private lookAnswered(id: number): void {
+    if (id !== this.world.selfId || !this.lookDraft) return;
+    if (sameLook(this.lookDraft, this.world.self?.look)) this.lookDraft = undefined;
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */

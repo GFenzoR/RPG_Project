@@ -133,4 +133,53 @@ describe("a creature's look", () => {
     expect(m?.worn).toEqual({ weapon: { shape: "sword", tint: "rust" } });
     expect(m?.equipment).toBe(NO_EQUIPMENT);
   });
+
+  it("builds the figure again only when what it is drawn from changed", () => {
+    const w = new WorldState(content);
+    const appear = (creature: Parameters<typeof create<typeof CreatureSchema>>[1]): void =>
+      w.apply(
+        ev({
+          case: "creatureAppear",
+          value: { creature: create(CreatureSchema, creature) } as never,
+        }),
+        0,
+      );
+    const monster = {
+      id: 4000000013,
+      kind: CreatureKind.MONSTER,
+      contentId: "wreck_looter",
+      pos: { x: 5, y: 6, z: 7 },
+      look: create(BodyLookSchema, TOM),
+      worn: create(WornSchema, {
+        weapon: create(WornPieceSchema, { shape: "sword", tint: "rust" }),
+      }),
+    };
+    const player = {
+      id: 7,
+      kind: CreatureKind.PLAYER,
+      pos: { x: 6, y: 6, z: 7 },
+      look: create(BodyLookSchema, MIRA),
+      equipment: create(VisibleEquipmentSchema, { torso: 64 }),
+    };
+    appear(monster);
+    appear(player);
+    const rev = (id: number): number | undefined => w.creatures.get(id)?.lookRev;
+    const [m0, p0] = [rev(4000000013), rev(7)];
+
+    // Sent again unchanged (a teleport, another floor): the same figure.
+    appear({ ...monster, pos: { x: 6, y: 7, z: 7 } });
+    appear({ ...player, health: 50 } as typeof player);
+    expect([rev(4000000013), rev(7)]).toEqual([m0, p0]);
+
+    // Something it is drawn from changed: built again.
+    appear({ ...monster, worn: create(WornSchema, {}) });
+    appear({ ...player, equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }) });
+    expect([rev(4000000013), rev(7)]).toEqual([(m0 ?? 0) + 1, (p0 ?? 0) + 1]);
+    appear({
+      ...player,
+      equipment: create(VisibleEquipmentSchema, { torso: 64, rightHand: 60 }),
+      look: create(BodyLookSchema, TOM),
+    });
+    expect(rev(7)).toBe((p0 ?? 0) + 2);
+  });
 });
