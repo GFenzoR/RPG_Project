@@ -118,9 +118,9 @@ func TestDefaultLook(t *testing.T) {
 		}
 		seen[look] = true
 	}
-	// 2 sexes x 2 builds x 2 skins x 3 hairs x 2 colours x 2 beards = 96 looks: 200 ids
-	// find most.
-	if len(seen) < 70 {
+	// 2 builds x 2 skins x 3 hairs x 2 colours x (a beardless man or woman, a bearded man)
+	// = 72 looks: 200 ids find most.
+	if len(seen) < 55 {
 		t.Fatalf("200 ids got only %d looks", len(seen))
 	}
 }
@@ -169,6 +169,7 @@ func TestDefaultLookStableAcrossTheSex(t *testing.T) {
 	if err != nil || l == nil {
 		t.Fatalf("looks: %v", err)
 	}
+	// The fields before the sex; a default with a beard is a man.
 	before := map[int64]content.Look{
 		1:         {Body: "slender", Skin: "tan", Hair: "topknot", HairColor: "grey", Beard: "short"},
 		2:         {Body: "sturdy", Skin: "deep", Hair: "long", HairColor: "red", Beard: "short"},
@@ -182,6 +183,9 @@ func TestDefaultLookStableAcrossTheSex(t *testing.T) {
 		got := l.DefaultLook(id)
 		sexes[got.Sex]++
 		want.Sex = got.Sex
+		if want.Beard != "none" {
+			want.Sex = "male"
+		}
 		if got != want {
 			t.Errorf("id %d: %+v, before the sex %+v", id, got, want)
 		}
@@ -191,15 +195,20 @@ func TestDefaultLookStableAcrossTheSex(t *testing.T) {
 	}
 	// Both sexes come out of the ids (not every character became a man).
 	for id := int64(1); id <= 50; id++ {
-		sexes[l.DefaultLook(id).Sex]++
+		got := l.DefaultLook(id)
+		sexes[got.Sex]++
+		if got.Sex == "female" && got.Beard != "none" {
+			t.Errorf("id %d: a bearded woman %+v", id, got)
+		}
 	}
 	if sexes["male"] == 0 || sexes["female"] == 0 {
 		t.Fatalf("sexes over 56 ids: %v", sexes)
 	}
 }
 
-// At login a saved look is kept; one saved before the sex keeps its fields and gets the
-// sex DefaultLook picks from the id; an invalid one is DefaultLook.
+// At login a saved look is kept; one saved before the sex keeps its fields and is a man
+// if it wears a beard, else the sex DefaultLook picks from the id; an invalid field is
+// DefaultLook's and the valid ones (the sex first) stay.
 func TestSavedLook(t *testing.T) {
 	l, err := content.ParseLooks([]byte(looksYAML))
 	if err != nil {
@@ -219,10 +228,38 @@ func TestSavedLook(t *testing.T) {
 	if got := l.SavedLook(7, l.SavedLook(7, old)); got != want {
 		t.Fatalf("not stable: %+v", got)
 	}
-	bad := old
+	// A bearded man saved before the sex is a man, whatever the id picks.
+	bearded := old
+	bearded.Beard = "full"
+	for id := int64(1); id <= 40; id++ {
+		want := bearded
+		want.Sex = "male"
+		if got := l.SavedLook(id, bearded); got != want {
+			t.Fatalf("id %d: a bearded look saved before the sex: %+v, want %+v", id, got, want)
+		}
+	}
+	// One field out of the lists: only it is the default's; the woman stays a woman.
+	bad := full
 	bad.Hair = "mohawk"
-	if got := l.SavedLook(7, bad); got != l.DefaultLook(7) {
-		t.Fatalf("an invalid look: %+v, want the default", got)
+	want = full
+	want.Hair = l.DefaultLook(7).Hair
+	if got := l.SavedLook(7, bad); got != want {
+		t.Fatalf("an invalid hair: %+v, want %+v", got, want)
+	}
+	creature := full
+	creature.Skin = "ashen" // creatures_only
+	want = full
+	want.Skin = l.DefaultLook(7).Skin
+	if got := l.SavedLook(7, creature); got != want {
+		t.Fatalf("a creatures-only skin: %+v, want %+v", got, want)
+	}
+	// A woman whose beard left the lists gets none, never the default's beard.
+	for id := int64(1); id <= 40; id++ {
+		gone := full
+		gone.Beard = "braided"
+		if got := l.SavedLook(id, gone); got != full {
+			t.Fatalf("id %d: a beard out of the lists: %+v, want %+v", id, got, full)
+		}
 	}
 	if got := l.SavedLook(7, content.Look{}); got != l.DefaultLook(7) {
 		t.Fatalf("no look: %+v, want the default", got)

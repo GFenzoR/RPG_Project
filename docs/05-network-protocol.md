@@ -904,8 +904,8 @@ cambia lo que se dibuja: ninguna regla del juego lee el aspecto.
   `sex` (campo 6, agregado el 2026-11-20) es `male` o `female`: el cliente dibuja el cuerpo
   y la ropa de torso de ese sexo; vacío (un servidor anterior) dibuja el del hombre.
   `SetLook` y la creación lo exigen (`PlayerLook`). Se guarda en `characters.look_sex`
-  (migración 00022); un personaje guardado antes lo recibe al entrar, del id, sin cambiar
-  el resto de su aspecto.
+  (migración 00022); un personaje guardado antes lo recibe al entrar sin cambiar el resto
+  de su aspecto: hombre si tiene barba, si no el que sale del id.
 - **`Creature.look`** (campo 13): el cuerpo de un jugador (el suyo), de un NPC o de un
   monstruo humanoide (el de su `look` de `data/`). Vacío para una bestia o con un servidor
   sin `data/looks.yaml`.

@@ -206,7 +206,8 @@ func (l *Looks) CheckCreature(c CreatureLook) error {
 // character's id, always the same for the same id and lists. It is saved with the
 // character's next snapshot, so a later change of the lists does not change it. The sex
 // came later (migration 00022) and is picked last, from what is left of the hash: the
-// other fields are picked as they were before it, so no existing default changed.
+// other fields are picked as they were before it, so no existing default changed. A
+// default with a beard is a man (no character wakes up a bearded woman).
 func (l *Looks) DefaultLook(id int64) Look {
 	h := mix64(uint64(id))
 	pick := func(list []string) string {
@@ -219,26 +220,60 @@ func (l *Looks) DefaultLook(id int64) Look {
 		Body: pick(l.Builds), Skin: pick(l.Skins), Hair: pick(l.HairStyles),
 		HairColor: pick(l.HairColors), Beard: pick(l.Beards),
 	}
-	look.Sex = pick(l.Sexes)
+	look.Sex = l.sexFor(look.Beard, pick(l.Sexes))
 	return look
 }
 
+// noBeard and beardedSex are the ids of data/looks.yaml the sex of a character saved before
+// migration 00022 is told by: a character with a beard other than noBeard is beardedSex.
+const (
+	noBeard    = "none"
+	beardedSex = "male"
+)
+
+// sexFor is the sex of a character with beard whose sex is not known: beardedSex when it
+// wears a beard (and beardedSex is one of the sexes), else picked.
+func (l *Looks) sexFor(beard, picked string) string {
+	if beard != noBeard && slices.Contains(l.Beards, beard) && slices.Contains(l.Sexes, beardedSex) {
+		return beardedSex
+	}
+	return picked
+}
+
 // SavedLook is the look of a character at login from the one saved (characters.look_*):
-// the saved one if a player may wear it; a saved look whose only fault is its sex (empty:
-// every character saved before migration 00022, or a sex that left data/looks.yaml) keeps
-// its other fields and takes the sex DefaultLook picks from the id; anything else is
-// DefaultLook.
+// the saved one if a player may wear it; otherwise every saved field a player may wear is
+// kept and only the others are DefaultLook's. A sex that is not one (empty: every
+// character saved before migration 00022, or a sex that left data/looks.yaml) is male for
+// a character with a beard and DefaultLook's otherwise; a kept woman whose beard left the
+// lists gets none rather than DefaultLook's.
 func (l *Looks) SavedLook(id int64, saved Look) Look {
 	if l.PlayerLook(saved) {
 		return saved
 	}
 	def := l.DefaultLook(id)
-	withSex := saved
-	withSex.Sex = def.Sex
-	if l.PlayerLook(withSex) {
-		return withSex
+	look := saved
+	keep := func(v *string, list []string, d string) {
+		if !slices.Contains(list, *v) {
+			*v = d
+		}
 	}
-	return def
+	keep(&look.Body, l.Builds, def.Body)
+	keep(&look.Skin, l.Skins, def.Skin)
+	keep(&look.Hair, l.HairStyles, def.Hair)
+	keep(&look.HairColor, l.HairColors, def.HairColor)
+	if !slices.Contains(l.Beards, look.Beard) {
+		look.Beard = def.Beard
+		if slices.Contains(l.Sexes, look.Sex) && look.Sex != beardedSex && slices.Contains(l.Beards, noBeard) {
+			look.Beard = noBeard
+		}
+	}
+	if !slices.Contains(l.Sexes, look.Sex) {
+		look.Sex = l.sexFor(look.Beard, def.Sex)
+	}
+	if !l.PlayerLook(look) {
+		return def
+	}
+	return look
 }
 
 // mix64 is splitmix64's finalizer: neighbouring ids get unrelated looks.

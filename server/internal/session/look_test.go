@@ -101,19 +101,20 @@ func TestLookAtLogin(t *testing.T) {
 		Health: 145, Pos: pos(14, 10), HasPos: true,
 		Look: content.Look{Sex: "female", Body: "sturdy", Skin: "drowned", Hair: "short", HairColor: "black", Beard: "none"}}
 	_, pC := h.joinChar(drowned)
-	if want := looks.DefaultLook(drowned.ID); pC.LookForTest() != want {
-		t.Fatalf("a creatures-only skin: got %+v, want the id's %+v", pC.LookForTest(), want)
+	wantC := drowned.Look
+	wantC.Skin = looks.DefaultLook(drowned.ID).Skin
+	if pC.LookForTest() != wantC {
+		t.Fatalf("a creatures-only skin: got %+v, want only the skin of the id's %+v", pC.LookForTest(), wantC)
 	}
 
 	// A look saved before the sex existed (migration 00022: look_sex ''): its fields stay,
-	// the sex is the one picked from the id.
+	// and a man with a beard stays a man.
 	nextChar++
 	beforeSex := lookTom
 	beforeSex.Sex = ""
 	_, pD := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Veterano", Vocation: "guardian",
 		Level: 1, Health: 145, Pos: pos(16, 10), HasPos: true, Look: beforeSex})
 	wantD := lookTom
-	wantD.Sex = looks.DefaultLook(nextChar).Sex
 	if pD.LookForTest() != wantD {
 		t.Fatalf("a look saved before the sex: got %+v, want %+v", pD.LookForTest(), wantD)
 	}

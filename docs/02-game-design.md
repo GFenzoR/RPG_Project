@@ -2694,9 +2694,12 @@ sprites (docs/17 "Humanoides del motor"): un cuerpo y, encima, lo que lleva pues
   pasa se descarta.
 - **Personajes de antes:** el que no tiene aspecto guardado (creado antes del lote 13) o
   tiene uno que ya no está entre las elecciones recibe al entrar uno elegido de su id
-  (siempre el mismo para el mismo personaje) y lo guarda; lo puede cambiar gratis. Uno
-  guardado antes del sexo (migración 00022) conserva todo su aspecto y recibe el sexo que
-  sale de su id (`content.Looks.SavedLook`); el resto de lo que sale del id no cambió.
+  (siempre el mismo para el mismo personaje; con barba, siempre hombre) y lo guarda; lo
+  puede cambiar gratis. De un aspecto guardado solo se reemplaza lo que ya no está entre
+  las elecciones: el resto, y sobre todo el sexo, se conserva (a una mujer cuya barba
+  desapareció le toca sin barba). Uno guardado antes del sexo (migración 00022) conserva
+  todo su aspecto y es hombre si tiene barba; sin barba recibe el sexo que sale de su id
+  (`content.Looks.SavedLook`). El resto de lo que sale del id no cambió.
 - **Textos al jugador:** el español que le habla al jugador no da por hecho que es un hombre
   (nada de "bienvenido", "listo" o "entero" dirigidos a él): se escribe neutro cuando suena
   natural ("Ya pisas tierra firme", "Vuelve con vida", "Tengo heridas"; los estados son
