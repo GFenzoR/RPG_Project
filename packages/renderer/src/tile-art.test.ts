@@ -185,6 +185,11 @@ describe("resolveTileArt", () => {
     expect(resolveTileArt("decor/tree", { anchor: "bc" }, lookup)?.particles).toBeUndefined();
   });
 
+  it("marks a border piece flat, drawn with the grounds (ART-4)", () => {
+    expect(resolveTileArt("borders/surf/n", { flat: true }, lookup)?.flat).toBe(true);
+    expect(resolveTileArt("decor/tree", { anchor: "bc" }, lookup)?.flat).toBeUndefined();
+  });
+
   it("lists variants, frames, wall pieces and the shadow the atlas has", () => {
     const grass = resolveTileArt("ground/grass", { variants: 3 }, lookup);
     // var_3 is missing: the looks stop at the first gap.

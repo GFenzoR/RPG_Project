@@ -228,16 +228,24 @@ export function renderArea(
     (tileAt(x, y)?.stack ?? []).some((id) => artOf(id)?.joinsWalls === true);
   const x1 = area.x + area.w;
   const y1 = area.y + area.h;
-  // Grounds, then cast shadows, then stacks. Tall sprites of the rows just below the area
-  // (a wall's top, a tree) reach up into it, so those rows are drawn too (clipped).
+  // Grounds with their flat border pieces, then cast shadows, then stacks, as MapView. Tall
+  // sprites of the rows just below the area (a wall's top, a tree) reach up into it, so
+  // those rows are drawn too (clipped).
   for (let y = area.y; y < y1; y++)
     for (let x = area.x; x < x1; x++) {
-      const g = tileAt(x, y)?.ground;
+      const t = tileAt(x, y);
+      const g = t?.ground;
       if (!g) continue;
       const art = artOf(g);
       const f = art?.variants ? art.variants[lookOf(art, tileHash(x, y, floor), true)] : frameOf(g);
       if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale);
       else rect(img, px(x), py(y), T, T, MISSING);
+      for (const id of t.stack) {
+        const a = artOf(id);
+        if (!a?.flat) continue;
+        const p = a.variants ? a.variants[lookOf(a, tileHash(x, y, floor), false)] : a.base;
+        if (p) drawSprite(img, p, px(x) + T, py(y) + T, scale);
+      }
     }
   /** Where an item's sprite goes: its bottom-right corner (bc: centred on the tile). */
   const rightOf = (x: number, f: Frame, art: TileArt<Frame> | undefined): number =>
@@ -260,6 +268,7 @@ export function renderArea(
       const stack = tileAt(x, y)?.stack ?? [];
       for (const [i, id] of stack.entries()) {
         const art = artOf(id);
+        if (art?.flat) continue; // drawn with the grounds
         const inside = y < y1 && x < x1;
         const f = art?.wall
           ? art.wall[

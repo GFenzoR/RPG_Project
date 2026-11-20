@@ -487,7 +487,8 @@ Los PNG de bordes de `assets/sprites/borders/` salen de `make borders`
 sprite de un suelo; borra solo los que ya no van): cada suelo de la escalera con borde tiene sus
 12 piezas en 4 looks (`<pieza>/var_<n>`) con la forma compartida por todos los suelos y la
 orilla de su `edge`, y la espuma (`borders/surf/`) sus 4 frames en cada look
-(`<pieza>/var_<n>/frame_<m>`); docs/06 "Bordes". Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+(`<pieza>/var_<n>/frame_<m>`); docs/06 "Bordes". Todo sprite de `borders/` sale en
+`atlas.json` `tiles` con `flat: true`: el renderer lo dibuja con los suelos. Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
 terceros: `assets/README.md`. También arma las animaciones de criaturas (`src/anims.ts`,
 docs/17 ANI): compone capas de un pack con paletas (`palettes`, `animations`), corta los

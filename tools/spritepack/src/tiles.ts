@@ -5,6 +5,8 @@
 //   <sprite>/wall_<m>    the 16 pieces of a wall, one per mask of wall neighbours (N=1,
 //                        E=2, S=4, W=8), all of them;
 //   <sprite>/shadow      its cast shadow, drawn translucent under the items.
+// Every sprite under borders/ (the border pieces, gen-borders) is `flat`: a decal on its
+// tile's ground that the renderer draws with the grounds, under shadows and creatures.
 // spritepack finds them by name (own art or `sprites` entries) and writes what each sprite
 // has into atlas.json `tiles`; the `tiles` section of sprites.yaml adds what names cannot
 // say: the timing of an animation, a centred anchor, that a door joins the walls, the
@@ -34,6 +36,7 @@ export interface TileMeta {
   light?: number;
   particles?: ParticleKind;
   steps?: StepKind;
+  flat?: true;
 }
 
 /** One entry of the `tiles` section of assets/sprites.yaml. */
@@ -54,6 +57,8 @@ export interface TileEntry {
 /** A part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow (same as tile-art.ts). */
 export const TILE_PART = /^(.+)\/(var|frame|wall|shadow)(?:_([0-9]+))?$/;
 export const WALL_PIECES = 16;
+/** The sprites under this directory are flat (TileMeta flat): the border pieces. */
+export const FLAT_DIR = "borders/";
 /** Frame times allowed in sprites.yaml, ms. */
 export const MIN_FRAME_MS = 50;
 export const MAX_FRAME_MS = 5000;
@@ -235,8 +240,21 @@ export function tileMetas(
         message: `an animated sprite's looks need their frames: ${missing} is missing`,
       });
   }
+  // The border pieces lie flat on their tile's ground (the renderer draws them with it).
+  for (const name of all)
+    if (name.startsWith(FLAT_DIR) && !isPart(name)) tiles[name] = { ...tiles[name], flat: true };
   return {
-    tiles: Object.fromEntries(Object.entries(tiles).filter(([base]) => !folded.has(base))),
+    tiles: Object.fromEntries(
+      Object.entries(tiles)
+        .filter(([base]) => !folded.has(base))
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    ),
     problems,
   };
+}
+
+/** Whether a sprite name is a part of another sprite (a look, a frame, a wall piece, a shadow). */
+function isPart(name: string): boolean {
+  const m = TILE_PART.exec(name);
+  return m?.[2] !== undefined && (m[2] === "shadow") === (m[3] === undefined);
 }

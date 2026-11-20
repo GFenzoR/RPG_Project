@@ -410,6 +410,8 @@ describe("buildAtlas", () => {
     // A surf piece: 2 looks, each with its own 2 frames (docs/17 ART-4, ART-7).
     for (const n of ["", "/frame_1", "/var_1", "/var_1/frame_1"])
       put(`assets/sprites/borders/surf/n${n}.png`, tile);
+    // A border piece with no looks: flat all the same, like every sprite under borders/.
+    put("assets/sprites/borders/grass/w.png", tile);
     put(
       "assets/sprites.yaml",
       `sprites: {}
@@ -425,7 +427,9 @@ tiles:
     expect(errors(r)).toEqual([]);
     expect(r.atlas?.index.tiles).toEqual({
       // The look's frames are part of the sprite's entry, not one of their own.
-      "borders/surf/n": { variants: 1, frames: 2 },
+      // Border pieces lie flat on their tile's ground: the renderer draws them with it.
+      "borders/grass/w": { flat: true },
+      "borders/surf/n": { variants: 1, frames: 2, flat: true },
       "decor/tree": { anchor: "bc", shadow: true, particles: "pollen" },
       "doors/gate": { joins: true },
       "ground/grass": { variants: 3, weight: 0.6 },

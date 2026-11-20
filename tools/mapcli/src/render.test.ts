@@ -161,6 +161,39 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 5, 6, 24, 16)).toEqual(at(bare, 5, 6, 24, 16));
   });
 
+  it("draws a flat border piece with the grounds, under shadows and the sprites beside it", () => {
+    const frames = framesOf([
+      ["ground/grass", 32, 32, [0, 80, 0, 255]],
+      ["borders/sand/w", 32, 32, [200, 180, 120, 255]],
+      ["decor/bush", 64, 32, [70, 90, 30, 255]],
+      ["decor/tree", 32, 64, [90, 60, 30, 255]],
+      ["decor/tree/shadow", 64, 32, [0, 0, 0, 255]],
+    ]);
+    frames.tiles = {
+      "borders/sand/w": { flat: true },
+      "decor/tree": { anchor: "bc", shadow: true },
+      "decor/bush": { anchor: "bc" },
+    };
+    // A 64 px bush on (4, 2) reaches over (5, 2); a tree on (4, 6) casts its shadow on (5, 6).
+    const w = world("grass", [
+      { x: 4, y: 2, stack: ["bush"] },
+      { x: 5, y: 2, stack: ["edge"] },
+      { x: 4, y: 6, stack: ["tree"] },
+      { x: 5, y: 6, stack: ["edge"] },
+    ]);
+    const c = content([
+      item("grass", "ground/grass"),
+      item("edge", "borders/sand/w"),
+      item("bush", "decor/bush"),
+      item("tree", "decor/tree"),
+    ]);
+    const img = decodePng(renderArea(w, c, frames, opts).png);
+    expect(at(img, 5, 2, 20, 16)).toEqual([200, 180, 120]);
+    expect(at(img, 5, 2, 12, 16)).toEqual([70, 90, 30]); // the bush over the piece
+    expect(at(img, 5, 6, 24, 16)).toEqual([200, 180, 120]);
+    expect(at(img, 5, 6, 8, 16)[0]).toBeLessThan(200 * 0.8); // the shadow over the piece
+  });
+
   it("draws the frame of a house door on its tile, under what lies there (docs/17 A11)", () => {
     const frames = framesOf([
       ["ground/grass", 32, 32, [0, 80, 0, 255]],

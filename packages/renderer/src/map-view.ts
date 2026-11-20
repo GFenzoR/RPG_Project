@@ -2,7 +2,9 @@
 // them cached. Shared by the game client and the map editor, so it knows nothing about
 // either: no input handling, no game entities, no editing.
 //
-// Draw order (Tibia-like): the ground of every visible tile first, then the cast shadows of
+// Draw order (Tibia-like): the ground of every visible tile first, with the flat border
+// pieces on it (tile art `flat`: they lie inside their tile, so a creature whose sprite
+// reaches over the next tile is never cut by that tile's fringe), then the cast shadows of
 // trees and buildings (translucent), then the item stacks tile by tile in global row-major
 // order (across chunk borders), bottom to top. Items bigger than a tile are anchored at the
 // bottom-right corner of their tile (or centred on it, tile art anchor bc) and extend up,
@@ -442,6 +444,8 @@ export class MapView {
         : false;
     };
     const items: Sprite[] = [];
+    /** Flat border pieces: children of the chunk's ground container, destroyed with it. */
+    const flats: Sprite[] = [];
     const lights: number[] = [];
     let shadows: Container | undefined;
     const elev = this.elevation;
@@ -467,12 +471,19 @@ export class MapView {
         }
         const ax = art?.anchorX ?? 1;
         const sprite = new Sprite({ texture: tex, anchor: { x: ax, y: 1 } });
-        sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
-        sprite.zIndex = itemZIndex(x, y, i);
+        if (art?.flat) {
+          // A border piece lies on its tile's ground, inside the tile: drawn with the grounds
+          // (after all of them, in stack order), under shadows, items and creatures.
+          sprite.position.set((s.x + ax) * T, (s.y + 1) * T - raised);
+          flats.push(sprite);
+        } else {
+          sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
+          sprite.zIndex = itemZIndex(x, y, i);
+          items.push(sprite);
+        }
         if (elev && raised < MAX_ELEVATION)
           raised = Math.min(MAX_ELEVATION, raised + Math.max(0, elev(id)));
         if (art?.particles && emits < 0) emits = PARTICLE_KINDS.indexOf(art.particles);
-        items.push(sprite);
         if (art?.frames) animated.push(animatedOf(sprite, art, tileHash(x, y, z + i), look));
         if (art && art.light > 0) lights.push(x, y, art.light);
         if (art?.shadow) {
@@ -488,6 +499,7 @@ export class MapView {
       }
       if (emits >= 0) emitters.push(x, y, emits);
     }
+    if (flats.length > 0) ground.addChild(...flats);
     this.groundLayer.addChild(ground);
     if (shadows) this.shadowLayer.addChild(shadows);
     if (items.length > 0) this.itemLayer.addChild(...items);

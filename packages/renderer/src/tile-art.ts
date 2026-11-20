@@ -12,6 +12,8 @@
 // - shadow: <sprite>/shadow, drawn on the shadow layer under the items;
 // - particles: ambient motes the client spawns around it (docs/17 ART-7, A13);
 // - steps: what a step on a ground kicks up, a puff of dust or a ripple (MOV-7);
+// - flat: a decal lying on its tile's ground (every border piece, ART-4), drawn with the
+//   grounds: under the cast shadows, the items and the creatures of every tile;
 // - elevation (data/items, not the atlas): what stands on a table or a crate is drawn
 //   higher (ART-8), stackElevation below.
 // tools/spritepack writes what each sprite has into atlas.json `tiles` (TileMeta).
@@ -45,6 +47,11 @@ export interface TileMeta {
   particles?: ParticleKind;
   /** A ground: what each step on it kicks up (MOV-7). */
   steps?: StepKind;
+  /**
+   * Lies flat on its tile's ground, inside the tile (spritepack sets it on every sprite under
+   * borders/): drawn with the grounds, under the cast shadows, the items and the creatures.
+   */
+  flat?: true;
 }
 
 export type TileSync = "world" | "tile" | "random";
@@ -88,6 +95,8 @@ export interface TileArt<T> {
   light: number;
   /** Ambient particles around it (ART-7), if any. */
   particles?: ParticleKind;
+  /** A decal on its tile's ground (TileMeta flat): drawn with the grounds. */
+  flat?: true;
 }
 
 /** Share of the tiles that keep a ground's main look (ART-4: about 70 %). */
@@ -228,6 +237,7 @@ export function resolveTileArt<T>(
   };
   if (meta.weight !== undefined) art.weight = meta.weight;
   if (meta.particles) art.particles = meta.particles;
+  if (meta.flat) art.flat = true;
   if (meta.variants) {
     const v = list(meta.variants + 1, (n) => variantName(sprite, n));
     if (v.length > 1) art.variants = v;

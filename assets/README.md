@@ -270,7 +270,8 @@ piezas de borde (`borders/<suelo>/<pieza>`, 4 looks cada una) y la espuma de la 
 (`borders/surf/<pieza>`, con 3 frames más en cada look: `<pieza>/frame_<n>` y
 `<pieza>/var_<n>/frame_<m>`) las hace `make borders` (`gen-borders`), no spritegen. Un look
 de un sprite animado lleva sus propios frames, tantos como el sprite (si no, error de
-`make sprites`).
+`make sprites`). Todo sprite de `borders/` (que no sea una de esas partes) lleva `flat`: el
+renderer lo dibuja con los suelos, bajo las sombras, los items y las criaturas.
 
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
