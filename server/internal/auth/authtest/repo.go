@@ -19,6 +19,7 @@ type Repo struct {
 	byEmail    map[string]int64
 	sessions   map[string]store.Session
 	characters map[int64][]store.Character
+	looks      map[int64]store.Look
 	names      map[string]bool
 	bans       map[int64]store.Ban
 	verified   map[int64]bool
@@ -38,6 +39,7 @@ func NewRepo() *Repo {
 		accounts:   map[int64]*store.Account{},
 		byEmail:    map[string]int64{},
 		sessions:   map[string]store.Session{},
+		looks:      map[int64]store.Look{},
 		characters: map[int64][]store.Character{},
 		names:      map[string]bool{},
 		bans:       map[int64]store.Ban{},
@@ -172,7 +174,15 @@ func (r *Repo) CreateCharacter(_ context.Context, c store.NewCharacter, maxPerAc
 	r.names[key] = true
 	ch := store.Character{ID: r.id(), Name: c.Name, Vocation: c.Vocation, Level: 1}
 	r.characters[c.AccountID] = append(r.characters[c.AccountID], ch)
+	r.looks[ch.ID] = c.Look
 	return ch, nil
+}
+
+// CharacterLook returns the look a character was created with (test helper).
+func (r *Repo) CharacterLook(id int64) store.Look {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.looks[id]
 }
 
 // CharacterBelongsTo implements auth.Repo.

@@ -23,6 +23,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
@@ -104,7 +105,7 @@ type Accounts interface {
 	Authenticate(ctx context.Context, token string) (int64, error)
 	Logout(ctx context.Context, token string) error
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
-	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
+	CreateCharacter(ctx context.Context, accountID int64, name, vocation string, look *content.Look) (store.Character, error)
 	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
 
 	// Email verification and password reset (T2.1, email.go).
@@ -429,6 +430,18 @@ func (a *api) listCharacters(w http.ResponseWriter, r *http.Request, accountID i
 type createCharacterRequest struct {
 	Name     string `json:"name"`
 	Vocation string `json:"vocation"`
+	// Look is the body chosen on the creation screen (docs/02 "Apariencia"); absent: the
+	// game picks one from the character's id.
+	Look *lookJSON `json:"look"`
+}
+
+// lookJSON is a character's body: ids of data/looks.yaml.
+type lookJSON struct {
+	Body      string `json:"body"`
+	Skin      string `json:"skin"`
+	Hair      string `json:"hair"`
+	HairColor string `json:"hair_color"`
+	Beard     string `json:"beard"`
 }
 
 func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -436,7 +449,12 @@ func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID 
 	if !a.decode(w, r, &in) {
 		return
 	}
-	c, err := a.cfg.Auth.CreateCharacter(r.Context(), accountID, in.Name, in.Vocation)
+	var look *content.Look
+	if in.Look != nil {
+		look = &content.Look{Body: in.Look.Body, Skin: in.Look.Skin, Hair: in.Look.Hair,
+			HairColor: in.Look.HairColor, Beard: in.Look.Beard}
+	}
+	c, err := a.cfg.Auth.CreateCharacter(r.Context(), accountID, in.Name, in.Vocation, look)
 	if err != nil {
 		a.fail(w, r, err)
 		return
@@ -653,6 +671,7 @@ var errorStatus = []struct {
 	{auth.ErrReservedName, http.StatusBadRequest, "reserved_name"},
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},
 	{auth.ErrInvalidVocation, http.StatusBadRequest, "invalid_vocation"},
+	{auth.ErrInvalidLook, http.StatusBadRequest, "invalid_look"},
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},
 	{auth.ErrUnknownCharacter, http.StatusNotFound, "character_not_found"},
 	{auth.ErrBusy, http.StatusServiceUnavailable, "busy"},

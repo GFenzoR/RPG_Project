@@ -225,7 +225,7 @@ func TestRequireVerifiedEmailToPlay(t *testing.T) {
 	ctx := context.Background()
 	svc, repo, _, _ := newMailService(t, func(c *auth.Config) { c.RequireVerifiedEmail = true })
 	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
-	c, err := svc.CreateCharacter(ctx, id, "Ana", "guardian")
+	c, err := svc.CreateCharacter(ctx, id, "Ana", "guardian", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -53,6 +53,8 @@ type NewCharacter struct {
 	Vocation  string
 	Health    int
 	Mana      int
+	// Look is the body chosen at creation (empty: the game picks one from the id).
+	Look Look
 }
 
 // CreateAccount inserts an account. email must already be normalized (lowercase).
@@ -176,11 +178,16 @@ func (s *Store) CreateCharacter(ctx context.Context, c NewCharacter, maxPerAccou
 			return ErrCharacterLimit
 		}
 		row, err := q.CreateCharacter(ctx, db.CreateCharacterParams{
-			AccountID: c.AccountID,
-			Name:      c.Name,
-			Vocation:  c.Vocation,
-			Health:    int32(c.Health),
-			Mana:      int32(c.Mana),
+			AccountID:     c.AccountID,
+			Name:          c.Name,
+			Vocation:      c.Vocation,
+			Health:        int32(c.Health),
+			Mana:          int32(c.Mana),
+			LookBody:      c.Look.Body,
+			LookSkin:      c.Look.Skin,
+			LookHair:      c.Look.Hair,
+			LookHairColor: c.Look.HairColor,
+			LookBeard:     c.Look.Beard,
 		})
 		if uniqueViolation(err, charactersNameKey) {
 			return ErrNameTaken

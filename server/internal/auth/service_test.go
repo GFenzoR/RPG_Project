@@ -158,7 +158,7 @@ func TestCreateCharacter(t *testing.T) {
 	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
 	other, _ := svc.Register(ctx, "bob@example.org", "secreto123")
 
-	c, err := svc.CreateCharacter(ctx, acc, "Mira", "arcanist")
+	c, err := svc.CreateCharacter(ctx, acc, "Mira", "arcanist", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,14 +177,14 @@ func TestCreateCharacter(t *testing.T) {
 		{other, "Mira", "guardian", auth.ErrNameTaken},
 	}
 	for _, ch := range checks {
-		if _, err := svc.CreateCharacter(ctx, ch.account, ch.name, ch.vocation); !errors.Is(err, ch.want) {
+		if _, err := svc.CreateCharacter(ctx, ch.account, ch.name, ch.vocation, nil); !errors.Is(err, ch.want) {
 			t.Errorf("CreateCharacter(%q,%q) = %v, want %v", ch.name, ch.vocation, err, ch.want)
 		}
 	}
-	if _, err := svc.CreateCharacter(ctx, acc, "Old Tom", "guardian"); err != nil {
+	if _, err := svc.CreateCharacter(ctx, acc, "Old Tom", "guardian", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateCharacter(ctx, acc, "Third", "guardian"); !errors.Is(err, auth.ErrCharacterLimit) {
+	if _, err := svc.CreateCharacter(ctx, acc, "Third", "guardian", nil); !errors.Is(err, auth.ErrCharacterLimit) {
 		t.Fatalf("limit: %v", err)
 	}
 	list, err := svc.Characters(ctx, acc)

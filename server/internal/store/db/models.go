@@ -74,31 +74,36 @@ type AuditLog struct {
 }
 
 type Character struct {
-	ID           int64
-	AccountID    int64
-	Name         string
-	Vocation     string
-	Level        int32
-	Experience   int64
-	Health       int32
-	Mana         int32
-	PosX         pgtype.Int4
-	PosY         pgtype.Int4
-	PosZ         pgtype.Int2
-	Town         string
-	Blessings    int16
-	Outfit       string
-	OutfitColors []int32
-	Skull        int16
-	SkullUntil   pgtype.Timestamptz
-	PvpFlags     int32
-	CreatedAt    pgtype.Timestamptz
-	LastLoginAt  pgtype.Timestamptz
-	LastSaveAt   pgtype.Timestamptz
-	Conditions   []byte
-	PvpKills     int32
-	OutfitColor  string
-	NameEffect   string
+	ID            int64
+	AccountID     int64
+	Name          string
+	Vocation      string
+	Level         int32
+	Experience    int64
+	Health        int32
+	Mana          int32
+	PosX          pgtype.Int4
+	PosY          pgtype.Int4
+	PosZ          pgtype.Int2
+	Town          string
+	Blessings     int16
+	Outfit        string
+	OutfitColors  []int32
+	Skull         int16
+	SkullUntil    pgtype.Timestamptz
+	PvpFlags      int32
+	CreatedAt     pgtype.Timestamptz
+	LastLoginAt   pgtype.Timestamptz
+	LastSaveAt    pgtype.Timestamptz
+	Conditions    []byte
+	PvpKills      int32
+	OutfitColor   string
+	NameEffect    string
+	LookBody      string
+	LookSkin      string
+	LookHair      string
+	LookHairColor string
+	LookBeard     string
 }
 
 type CharacterSkill struct {

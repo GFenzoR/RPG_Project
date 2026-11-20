@@ -8,8 +8,11 @@ ORDER BY id;
 SELECT count(*) FROM characters WHERE account_id = sqlc.arg(account_id);
 
 -- name: CreateCharacter :one
-INSERT INTO characters (account_id, name, vocation, health, mana)
-VALUES (sqlc.arg(account_id), sqlc.arg(name), sqlc.arg(vocation), sqlc.arg(health), sqlc.arg(mana))
+INSERT INTO characters (account_id, name, vocation, health, mana,
+                        look_body, look_skin, look_hair, look_hair_color, look_beard)
+VALUES (sqlc.arg(account_id), sqlc.arg(name), sqlc.arg(vocation), sqlc.arg(health), sqlc.arg(mana),
+        sqlc.arg(look_body), sqlc.arg(look_skin), sqlc.arg(look_hair), sqlc.arg(look_hair_color),
+        sqlc.arg(look_beard))
 RETURNING id, name, vocation, level;
 
 -- name: GetCharacterForPlay :one
@@ -18,6 +21,7 @@ RETURNING id, name, vocation, level;
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
        c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
+       c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard,
        (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
@@ -53,6 +57,11 @@ SET level        = sqlc.arg(level),
     outfit       = sqlc.arg(outfit),
     outfit_color = sqlc.arg(outfit_color),
     name_effect  = sqlc.arg(name_effect),
+    look_body       = sqlc.arg(look_body),
+    look_skin       = sqlc.arg(look_skin),
+    look_hair       = sqlc.arg(look_hair),
+    look_hair_color = sqlc.arg(look_hair_color),
+    look_beard      = sqlc.arg(look_beard),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
 
