@@ -178,7 +178,7 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
   varios grupos cacen a la vez. Jabalíes y arañas también en el sur del Bosque; en el
   Volcán, gólems en los campos de lava enfriada del sur y dragoncillos en la ladera oeste
   del cráter y en el campo sureste.
-- **Abedules:** de 5 a 29 (13 en Puerto fuera del Farol, 16 en arboledas del Bosque).
+- **Abedules:** de 5 a 29 (13 en Puerto fuera de Lanternby, 16 en arboledas del Bosque).
   Cada uno da 3 troncos y vuelve a los 6 min: 150 → 870 troncos/h; el test pide 600.
 - **Rendimiento:** 253 monstruos en producción, lejos de los 1024 que mide
   `BenchmarkTickMonsters` (≈ 340 µs), y solo piensan en sectores activos.
@@ -304,7 +304,7 @@ Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=str
   espera al tick (0–50 ms, ~25 ms de media) y la red local. Es el piso de la latencia
   de cualquier comando.
 - **Comportamiento de los bots**: rutas A* sobre `world.bin` hacia su zona (base: 9 zonas
-  de la Isla del Puerto en round robin; stress: todos a 8 casillas o menos del templo y
+  de Velmara en round robin; stress: todos a 8 casillas o menos del templo y
   la plaza). Después reparten su tiempo así:
   - base: vagar 45 %, pelear 25 %, hablar con un NPC 12 %, chat 10 %, nada 8 %;
   - stress (la ciudad es zona de protección, no se pelea): vagar 45 %, hablar con un
@@ -319,7 +319,7 @@ Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=str
 ### Resultados (T1.17, 2026-11-03)
 Sesión cloud de 4 vCPU y 16 GB, con **servidor y bots en la misma máquina** (los bots
 le quitan CPU al servidor: los números del servidor son conservadores). Postgres 16
-local. Mundo: Isla del Puerto + isla de pruebas.
+local. Mundo: Velmara + isla de pruebas.
 
 | Métrica | Presupuesto | Base: 100 bots, 10 min | Stress: 300 bots, 5 min |
 |---|---|---|---|
@@ -473,7 +473,7 @@ chunk (`flat`), así no entran en el orden de la capa de items que se reordena c
 chunk o se mueve una criatura; la espuma va en la lista plana de tiles animados
 (una por casilla de orilla). En los mapas, las piezas pasaron de 6297 a 12273 (cada orilla
 natural tiene las suyas, también bajo los muros). Medido contra la base en la misma
-máquina: `FullMapView` en el Farol pasó de 1146 a 1487 bytes (más pilas distintas en la
+máquina: `FullMapView` en Lanternby pasó de 1146 a 1487 bytes (más pilas distintas en la
 paleta del área; presupuesto < 20 KB) y en la mina volcánica quedó en 858;
 `TestCrowdBandwidth`, de 586 a 599 B/s por jugador en base y de 1515 a 1521 en stress,
 lejos de los 4096.
@@ -520,7 +520,7 @@ tiempos de `go test -bench` (mediana de 3):
 | Tick, stress 300 (µs / asignaciones) | 912 / 1733 | 1020 / 1045 | sin crecimiento |
 | `BenchmarkTickPlayersWalking` 300 (µs / asignaciones) | 140 / 1341 | 177 / 1392 | |
 | `BenchmarkTickMonsters` 100 + 256 (µs / asignaciones) | 250 / 1005 | 237 / 589 | |
-| `FullMapView` en el Farol, superficie (bytes / µs para armarlo) | 352 / 14 | 967 / 42 | < 20 KB |
+| `FullMapView` en Lanternby, superficie (bytes / µs para armarlo) | 352 / 14 | 967 / 42 | < 20 KB |
 | `FullMapView` en la mina volcánica, piso 8 (bytes / µs) | 295 / 6 | 843 / 13 | |
 | Subir y bajar sin parar por la mina (B/s) | 950 | 2262 | < 4096 |
 

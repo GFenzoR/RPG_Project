@@ -351,7 +351,7 @@ Todas son opcionales salvo las dos contraseñas, que se generan solas.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | — (sin emails), `587`, `starttls` | Servidor de correo (paso 8b) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | — (botón apagado) | Login con Google/Discord (paso 8c) |
 | `REQUIRE_VERIFIED_EMAIL` | `false` | `true`: solo cuentas con email confirmado pueden jugar |
-| `RPG_ENV` | `production` | Déjala así en casa: `development` permitiría el proveedor de pagos falso (paso 8d) y un `world.bin` con la Isla de Pruebas (la imagen compila sin ella) |
+| `RPG_ENV` | `production` | Déjala así en casa: `development` permitiría el proveedor de pagos falso (paso 8d) y un `world.bin` con Thimblewick (la imagen compila sin ella) |
 | `PAYMENTS_PROVIDER` | — (tienda apagada) | `mercadopago` en modo prueba; **nunca `fake`** en casa (paso 8d) |
 | `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET`, `PAYMENTS_REF_SECRET_PREVIOUS` | — | Claves de Mercado Pago y secreto de las referencias (`09-deployment-aws.md`, "Tienda y pagos") |
 | `MAILPIT_UI_PORT` | `8025` | Puerto de Mailpit (perfil `mail`, solo `127.0.0.1`) |

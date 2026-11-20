@@ -24,7 +24,7 @@ próximas tareas están en `14-continuar-en-tu-pc.md`.
    make setup        # instala buf, sqlc, goose, golangci-lint, dependencias, y Chromium y WebKit de Playwright
    make db-up        # levanta Postgres en Docker en el puerto 5432
    make dev          # servidor + cliente + editor
-   make play         # o: jugar en la Isla de Pruebas (16-probar-el-juego.md)
+   make play         # o: jugar en Thimblewick (16-probar-el-juego.md)
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
 
@@ -75,7 +75,7 @@ Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
   cada arranque. Para probar desde otro equipo de tu red usa `make home-up`
   (`13-hosting-de-pruebas.md`) o `make dev DEV_HTTP_ADDR=:8080`; con este último, Windows
   vuelve a preguntar en cada compilación.
-- Esos servidores corren con `RPG_ENV=development` (su `world.bin` trae la Isla de Pruebas,
+- Esos servidores corren con `RPG_ENV=development` (su `world.bin` trae Thimblewick,
   ver "Mapa del servidor") **si la base es local** (`DATABASE_URL` en `localhost` o
   `127.0.0.1`). Con una base que no lo es no la imponen (revisión del lote 5): el servidor
   se niega a cargar ese mundo, como en producción, salvo que pongas tú
@@ -95,7 +95,7 @@ cd server && RPG_ENV=development DATABASE_URL=postgres://postgres:postgres@local
 ```
 El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
 (ver "API HTTP" en `05-network-protocol.md`). `RPG_ENV=development` hace falta con el
-`build/world.bin` de `make mapcompile`: trae la Isla de Pruebas (`-dev`) y un servidor en
+`build/world.bin` de `make mapcompile`: trae Thimblewick (`-dev`) y un servidor en
 producción (`RPG_ENV` vacía o `production`) no arranca con un mundo así (ver "Mapa del
 servidor"). `make run-server`, `make dev`, `make play` y `make bots` ya la ponen cuando la
 base es local.
@@ -191,7 +191,7 @@ make run-server   # make mapcompile + gameserver con RPG_WORLD=<repo>/build/worl
 A mano: `make mapcompile` y luego el comando de arriba desde `server/` (por defecto lee
 `../build/world.bin`; otra ruta con `RPG_WORLD` o `-world <ruta>`, y `-world ""` arranca
 sin mundo). Vuelve a compilar el mapa cada vez que cambie `world/` o `data/items/`.
-`make mapcompile` compila con `-dev` (con la Isla de Pruebas, `16-probar-el-juego.md`) y
+`make mapcompile` compila con `-dev` (con Thimblewick, `16-probar-el-juego.md`) y
 `world.bin` lo marca: con `RPG_ENV` vacía o `production` el servidor se niega a cargarlo
 (`world: a development world is refused in production`), igual que con el proveedor de pagos
 falso. En tu PC corre con `RPG_ENV=development` (los `make` de arriba ya lo hacen); para un

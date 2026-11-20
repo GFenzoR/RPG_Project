@@ -444,7 +444,7 @@ debajo (`stackElevation`, tope `MAX_ELEVATION` = 24; las sombras proyectadas no 
 `elevationAt` dice cuánto sube la criatura de esa casilla; el cliente la sube también a
 mitad de paso, entre la altura de las dos casillas. El editor y `mapcli render` leen el
 mismo campo. Lo tienen el cajón de carga, el barril y la mesa (8 px; los dos últimos son
-del kit de props del lote 12): el libro de la herrera del archivo de Brasal está sobre una
+del kit de props del lote 12): el libro de la herrera del archivo de Cinderstead está sobre una
 mesa y se dibuja 8 px más arriba.
 
 ## 3. Animación de criaturas y personajes (ANI)
@@ -702,7 +702,7 @@ persona de LPC). Se miran con Read.
     finas del viejo desaparecían. Es el primer prop animado del motor: con el viento se
     levanta el pie de la nota de abajo a la derecha (`loop`: 4 frames de 180 ms, `sync:
     tile`), así el tablero donde se abre el mercado llama la vista.
-  - **Cartel** (`decor/signpost`, los carteles de Brasal y de la puerta de la mina): dos
+  - **Cartel** (`decor/signpost`, los carteles de Cinderstead y de la puerta de la mina): dos
     tablas con renglones tallados y clavos, en un poste que sube por encima de ellas, en
     madera clara. El viejo, de madera oscura, se perdía sobre la tierra de la mina y el
     basalto.
@@ -745,7 +745,7 @@ mercado ya lo son, lote 12; el estandarte y la antorcha siguen en `recipes/props
 dueño quiere, sumar primitivas si hacen falta (cajas redondeadas; los anillos de los
 íconos de items salieron bien con un aro de cápsulas, sin toro) y
 mirar en el juego el jabalí, el ciervo, el eco de la forja, el yunque y los cajones: el E2E
-del lote 9 (verde) solo los muestra de pasada (los carteles de Brasal se leen claros) y
+del lote 9 (verde) solo los muestra de pasada (los carteles de Cinderstead se leen claros) y
 ningún screenshot los tiene (docs/14).
 
 ### Íconos de items (hecho, 2026-11-19, rama `feat/item-icons`, lote 11)
@@ -825,8 +825,8 @@ el hacha de leñador, el martillo de herrero, la runa y las escaleras. El pack q
 en `assets/vendor/dungeon-crawl/` (se guarda tal como se bajó).
 
 ### Kit de props de pueblo (hecho, 2026-11-19, rama `feat/town-props`, lote 12)
-Auditoría del 2026-11-19 (art.items[0] y [3]): lo primero que ve un jugador nuevo es el
-Farol, y el templo, la plaza, el depósito y las casas tenían el piso vacío; las minas eran
+Auditoría del 2026-11-19 (art.items[0] y [3]): lo primero que ve un jugador nuevo es
+Lanternby, y el templo, la plaza, el depósito y las casas tenían el piso vacío; las minas eran
 salas oscuras donde solo alumbraba el jugador, con arte animado y con luz (antorcha y
 estandarte de pared, brasero, fuente, muros con ventana) que no estaba en ningún mapa.
 
@@ -879,27 +879,27 @@ madera oscura, piedra, tela) que se despegan de los suelos de los pueblos.
   todo spec.
 
 **Dónde está** (con `mapcli ops apply`; reglas en docs/03 "Muebles y luces"):
-- **Templos** de Farol, Raigal y Brasal: braseros a los lados de las puertas, dos
+- **Templos** de Lanternby, Ivernel y Cinderstead: braseros a los lados de las puertas, dos
   estandartes en el muro norte, muros de piedra con ventana, bancos como reclinatorios y
   una mesa de altar.
 - **Plazas:** una fuente en cada una (3170,6387; 4159,6111; 3656,5791), puestos de
-  mercado, faroles, bancos, un mástil con bandera; un pozo en Raigal y en Brasal.
-- **Depósito del Farol, armería, curtiduría de Raigal y archivo de Casia:** estantes,
+  mercado, faroles, bancos, un mástil con bandera; un pozo en Ivernel y en Cinderstead.
+- **Depósito de Lanternby, armería, curtiduría de Ivernel y archivo de Casia:** estantes,
   barriles, sacos, cajones y mesas. El libro cerrado del archivo (`book_smith_notes`) quedó
   sobre una mesa.
 - **Las 13 casas:** una cama (no bloquea) y dos ventanas de madera cada una; jardineras
-  afuera en las del Farol que dan a la calle.
+  afuera en las de Lanternby que dan a la calle.
 - **Minas:** una antorcha de pared cada 7 casillas en las caras de la roca (28 en la de
   Puerto, 8 en la cueva del Bosque, 19 en la del Volcán) y braseros en las salas hondas
   (7, 3 y 7), que las antorchas del muro norte no alcanzan.
 
-**Lo que queda:** la muralla (`rampart_wall`) no encajó en el Farol (el frente de mar es
+**Lo que queda:** la muralla (`rampart_wall`) no encajó en Lanternby (el frente de mar es
 una playa abierta con el muelle; una muralla ahí cortaría el paso) y queda para un pueblo
 amurallado de una isla nueva; los props del kit en las islas que vengan; ver la luz de
 las antorchas y los braseros en el juego (el E2E del lote, docs/14).
 
 ### Humanoides del motor (hecho, 2026-11-19, rama `feat/humanoid-art`, lote 13)
-Pedido del dueño tras jugar la Isla de Pruebas (2026-11-19): los personajes y los NPCs eran
+Pedido del dueño tras jugar Thimblewick (2026-11-19): los personajes y los NPCs eran
 *"muy grandes y desproporcionados, tienen la cabeza y el cuerpo gigante"*; *"quiero que sea
 proporcionado y que se vean los items que tiene equipados"*; *"los sprites de ataque tienen
 que ser con el arma que esta utilizando"*; *"el personaje se ve como que esta flotando"*. Las
@@ -2235,7 +2235,7 @@ los nombres y los textos son nuestros.
 
 ### Hecho: criaturas de Gemini (2026-11-18, rama `feat/gemini-creatures`)
 Siete monstruos que eran un sprite de Dungeon Crawl con la animación de ANI-5 ahora tienen
-frames hechos con el Gemini del dueño (SRC-5): de la Isla del Puerto `wolf`, `bilge_rat`,
+frames hechos con el Gemini del dueño (SRC-5): de Velmara `wolf`, `bilge_rat`,
 `tide_crab`, `gloom_bat` y `moss_spider` (también en el Bosque), y del Bosque `mire_toad`
 y `thornling`. Una hoja por criatura (diez pedidos en total: tres para probar el formato
 con el lobo), cortada con `tools/gemini/import_art.py` y declarada como datos en
@@ -2498,7 +2498,7 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   ~125 con la negrita de 12 px).
 
 ### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
-Lo que dijo el dueño de la prueba del 2026-11-19 (Isla de Pruebas, build del lote 11):
+Lo que dijo el dueño de la prueba del 2026-11-19 (Thimblewick, build del lote 11):
 "cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique
 que tengo activo o que se indiquen los estados que tiene el personaje (envenenado, fuego,
 etc...)" y "me gusta la ventanita que dice el nombre y nivel pero creo que podría verse al

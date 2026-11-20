@@ -1,6 +1,6 @@
-# 16 — Probar el juego en la Isla de Pruebas
+# 16 — Probar el juego en Thimblewick, la isla de pruebas
 
-La **Isla de Pruebas** (`world/islands/pruebas`, 96x96 en 2048,2048; pisos 7 y 8) es un
+**Thimblewick**, la isla de pruebas (`world/islands/pruebas`, 96x96 en 2048,2048; pisos 7 y 8) es un
 sandbox para probar a mano todos los sistemas en pocos minutos: todo queda a unos pasos del
 templo, y en el templo hay una instructora que da experiencia, dinero, entrenamiento (skills,
 nivel mágico y oficios) y curación (vida y maná). No es parte del juego normal (ver "Por
@@ -41,7 +41,7 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
   valores por defecto.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
-  en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a la Isla de Pruebas.
+  en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a Thimblewick.
 
 ## 2. Cuenta y personaje
 1. En `http://localhost:5173/play/`, "¿No tienes cuenta? Regístrate": cualquier email y una
@@ -50,7 +50,7 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
    pelo y barba, con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar"
    elige todo) y pulsa "Jugar". El aspecto se cambia después gratis en la ventana
    Apariencia (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
-3. Despiertas en el templo de la Isla de Pruebas (2095,2086). Aquí no hay tutorial: es
+3. Despiertas en el templo de Thimblewick (2095,2086). Aquí no hay tutorial: es
    de Puerto.
 
 Un personaje nuevo no tiene ciudad, así que despierta (también al morir) en el templo de la
@@ -71,7 +71,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 | Sótano (piso 8) | 2110–2127 × 2088–2106 | Sala de la escalera, sala de la escalera de mano, pozo bajo el agujero con el punto de luz para subir con cuerda (2119,2094,8), cueva de murciélagos al este y el teletransporte (2113,2104,8) que vuelve a la plaza (2095,2094). Cartel en 2124,2088,8 |
 | Casa (sur) | Casa de Prueba, 2086–2091 × 2109–2113 | Puerta en 2088–2089,2114; salida en 2088,2115. Alquiler: 200 de cobre por 7 días |
 | Arena (sureste) | 2102–2112 × 2111–2119 | Zona `pvp`, entrada por el oeste (2101,2114–2116). Cartel en 2099,2113 |
-| Muelle (sur) | 2094–2096 × 2133–2138 | **Remo Vaivén**, barquero (2097,2133): viajes de ida a Puerto, al Bosque y a la Isla Volcánica (20 monedas), donde llegan los barcos de verdad. Cartel en 2093,2132 |
+| Muelle (sur) | 2094–2096 × 2133–2138 | **Remo Vaivén**, barquero (2097,2133): viajes de ida a Puerto, al Bosque y a Karvask (20 monedas), donde llegan los barcos de verdad. Cartel en 2093,2132 |
 
 ## 4. Qué probar, en orden
 1. **Instructora (templo).** Habla con Irene Ensayo (click derecho sobre ella; con el
@@ -136,8 +136,8 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      "Disponible otra vez" e Irene vuelve a ofrecer el encargo: empieza otra vez en "0/3" y
      paga otra vez 200 de experiencia y 50 monedas.
    - **Tareas de caza de verdad** (docs/02 "Tareas"): no están en esta isla. Las dan Fenn
-     Zarzal en Raigal (borde este de la plaza, `/tp 4173 6108 7`; contrabandistas desde el
-     nivel 15, espinosos desde el 18, reptantes desde el 22) y Orso Pedernal en Brasal
+     Zarzal en Ivernel (borde este de la plaza, `/tp 4173 6108 7`; contrabandistas desde el
+     nivel 15, espinosos desde el 18, reptantes desde el 22) y Orso Pedernal en Cinderstead
      (borde norte de la plaza, `/tp 3655 5785 7`; sabuesos desde el 26, gólems desde el 39,
      dragoncillos desde el 48): ve con Remo Vaivén o con `/tp`, sube de nivel con Irene antes
      de salir y pide "¿Qué paga el tablón?" o "¿Qué presas hay en el libro?". Cobrada, la
@@ -145,7 +145,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      entrega con `psql` sobre la base de `make play`: `UPDATE quest_state SET value = value
      - 72000 WHERE character_id = <id> AND key = 'quest.bounty_crawlers.done_at'` (o la que
      sea). Las quests secundarias del lote 12 (docs/02 "Quests secundarias") las dan Tavin y
-     Gisla en Raigal y Nerea, Bram y Madre Oriela en Brasal. La de Tavin (`ferryman_jetty`)
+     Gisla en Ivernel y Nerea, Bram y Madre Oriela en Cinderstead. La de Tavin (`ferryman_jetty`)
      pide además `ch2_roots` (Capítulo 2) completada; sin jugarlo, con el personaje
      fuera del juego: `INSERT INTO quest_state (character_id, key, value) VALUES (<id>,
      'quest.ch2_roots', 2)`.
@@ -176,7 +176,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      direcciones: mientras se acerca, a un salto de caballo (2 y 1) el fuego pasa al lado;
      pegado a él te da siempre. Con dos personajes, el que está en la línea o al lado del
      otro (el espinoso) también se quema. Las
-     invocaciones y la furia del custodio están en la forja de la Isla Volcánica.
+     invocaciones y la furia del custodio están en la forja de Karvask.
    - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
      (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
    - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
@@ -260,7 +260,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 10. **Barco (muelle).** "Quiero viajar" con Remo Vaivén (20 monedas). Es de ida: para volver,
     `/tp` o morir (despiertas en este templo con `make play`). Es un teleport de diálogo, no una
     ruta de barco: las rutas de verdad (con su viaje y su bloqueo de combate) se prueban con los
-    barqueros del Bosque y de la Isla Volcánica, que no piden nada para volver a Puerto.
+    barqueros del Bosque y de Karvask, que no piden nada para volver a Puerto.
 11. **Tienda cosmética.** En `http://localhost:5173/shop`, entra con tu cuenta, compra un
     paquete de nácar (proveedor falso) y un cosmético; en el juego, panel "Apariencia".
 
@@ -350,7 +350,7 @@ con la instructora en una isla sin la marca), `TestDevOnlyActionsNeedADevIsland`
 dev_only islands use dev-only actions" (`packages/content-schema`).
 
 ## Por qué la isla queda fuera del juego
-Decisión: la Isla de Pruebas es una herramienta de desarrollo, no contenido.
+Decisión: Thimblewick es una herramienta de desarrollo, no contenido.
 - **Es `dev_only`** (`world/world.yaml`): `mapcompile` la deja afuera salvo con `-dev`.
   `make mapcompile` (y con él `make dev`, `make play`, `make run-server` y los bots) y el E2E
   la incluyen; la imagen de producción (`deploy/Dockerfile.gameserver`, también la de

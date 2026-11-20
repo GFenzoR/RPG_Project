@@ -1606,7 +1606,7 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ## Límites
 - Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
   sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB
-  (~1 KB en el pueblo del Farol con la vista de 31x21).
+  (~1 KB en el pueblo de Lanternby con la vista de 31x21).
 - Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
 - Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
   y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
@@ -1629,7 +1629,7 @@ de salida, cómodo para una instancia chica.
 Con la vista de 31x21 (`07-performance-budget.md`, "Vista ancha"), los escenarios de la
 prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por Puerto) y
 1676 B/s (300 en el pueblo, donde todos ven a todos); con 15x11 eran 309 y 785. Un
-`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B). Los eventos de ataque y
+`FullMapView` en el pueblo de Lanternby pesa ~1 KB (antes ~350 B). Los eventos de ataque y
 los motivos de A9 suben eso a 532 y 1684 B/s (`07-performance-budget.md`, "Eventos de
 ataque"): un `CreatureAttack` pesa unos 23 B por cliente que lo recibe y un motivo, 2 B.
 El aspecto (lote 13, `07-performance-budget.md` "Aspecto y equipo visible") suma a cada

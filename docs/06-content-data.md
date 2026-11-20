@@ -141,7 +141,7 @@ items:
   compartido `item.signpost.name` y `blocks_movement: true`. El cliente empaqueta
   solo las claves que algún item usa como descripción.
 - **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
-  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
+  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Cinderstead, 100, como la
   piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
@@ -605,7 +605,7 @@ mismo NPC hace fallar el test del cliente (`vite/content.test.ts`): ponle `tag` 
 las dos. Guía de escritura: como mucho 300 caracteres por texto de nodo y textos de opción
 cortos (el botón muestra 2 líneas y el resto va al `title`).
 
-**Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
+**Acciones de desarrollo** (solo la instructora de Thimblewick,
 `16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
 gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs
 de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
@@ -766,7 +766,7 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
     agujero o un teletransporte (`portals.yaml`);
   - `make validate` exige además que el lugar esté en una isla que no sea `dev_only` (el
     servidor de producción no la tiene: su `world.bin` se compila sin islas dev, y un
-    servidor de desarrollo sí acepta zonas de la Isla de Pruebas) y que esa casilla se
+    servidor de desarrollo sí acepta zonas de Thimblewick) y que esa casilla se
     alcance a pie desde el templo de su isla (`mapcli validate`, el mismo recorrido que
     las zonas, con escaleras, agujeros y teletransportes contando donde caen).
 
@@ -786,8 +786,8 @@ quests secundarias `foreman_ore` y `diver_locket`, las del lote 12 (docs/02 "Que
 secundarias": `ferryman_jetty` y `flame_crater` con un `reach` a un punto con radio,
 `flame_crater` que termina en su paso `kill`, `smith_ring` con un `flag_equals` cuyo flag
 pone la opción de otro NPC, `set_flag` de Madre Oriela), las tareas de caza
-`bounty_*` de Raigal y Brasal (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de la
-Isla de Pruebas (`repeatable`, docs/16).
+`bounty_*` de Ivernel y Cinderstead (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de
+Thimblewick (`repeatable`, docs/16).
 
 ### Quests repetibles (tareas)
 ```yaml
@@ -1055,7 +1055,7 @@ trade:
 ```
 - Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
   mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del
-  mercado (`market_board`, en Puerto, en Raigal y en Brasal).
+  mercado (`market_board`, en Puerto, en Ivernel y en Cinderstead).
 - Textos: `trade.*`, `market.*` y `gm.market_*` (servidor), `client.trade.*`,
   `client.market.*` y `client.battle.trade` (cliente) en `i18n/*/client.yaml`.
 
@@ -1117,7 +1117,7 @@ forge:
   arranque del servidor); el yunque, `pickupable: false`; piedras y ámbar, materiales
   apilables (se gastan por unidades). Cada piedra y el ámbar tienen que conseguirse en
   producción (un NPC que los vende o un monstruo que los suelta), y **ningún NPC de una isla
-  que no es `dev_only` vende ni da el ámbar** (con `world/`; el mercader de la Isla de Pruebas
+  que no es `dev_only` vende ni da el ámbar** (con `world/`; el mercader de Thimblewick
   puede). La regla m4 ("Nada lleva a ningún lado") cuenta los materiales de la forja como
   usados: no necesitan comprador.
 - Los materiales son items comunes de `data/items/forge.yaml` (`kind: material`, apilables,
@@ -1146,7 +1146,7 @@ forge:
   `bosque_to_volcan` (Tavin Rema, 150, nivel 25), `volcan_to_bosque` (Nerea Vado, 100) y
   `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. El texto de la
   opción dice destino y precio (`npc.<capitán>.to_*`).
-- Una isla `dev_only` (la Isla de Pruebas, docs/03) no puede tener rutas: el servidor de
+- Una isla `dev_only` (Thimblewick, docs/03) no puede tener rutas: el servidor de
   producción las revisa contra un mapa sin ella. Su barquero (`pruebas_ferryman`) usa
   opciones con `take_gold` y `teleport` a las llegadas de las rutas de verdad.
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
