@@ -4,7 +4,7 @@
 // lower ground of the ladder it touches (or only on those of its `over` list), at the bottom
 // of the stack; lower fringes first, so the higher ground is drawn on top. Grounds off the
 // ladder (wooden floors, docks) keep a straight edge. Where fringes reach a water ground of
-// `shore`, its surf pieces go under them, shaped like all of them together.
+// `shore`, each gets its surf pieces, of its own shape, under all the fringes of the tile.
 // Piece names say where the higher ground is, seen from the covered tile:
 //   n/s/e/w      on that side
 //   ne/nw/se/sw  only on that diagonal (neither adjacent side): a small outer corner
@@ -204,21 +204,18 @@ export function borderPieces(
     near[d] = groundAt(x + dx, y + dy);
   }
   const fringes: string[] = [];
+  const surf: string[] = [];
+  const shore = ix.shore !== undefined && ix.water.has(here) ? ix.shore : undefined;
   for (const f of ix.fringes) {
     if (f.rank <= rank || (f.over && !f.over.has(here))) continue;
-    piecesFor(f.prefix, (d) => near[d] === f.ground, fringes);
+    const is = (d: BorderSide | BorderCorner): boolean => near[d] === f.ground;
+    piecesFor(f.prefix, is, fringes);
+    // Each fringe has its own surf, of its very shape: all of it lies outside the fringe's
+    // edge, and the fringes (over every surf of the tile) hide whatever falls on the land of
+    // another. So the foam follows the real shore, the outline of all the fringes together:
+    // sand on the north and grass on the west give the surf of a north side and of a west
+    // side, not of a concave corner that neither fringe draws.
+    if (shore !== undefined && !ix.water.has(f.ground)) piecesFor(shore, is, surf);
   }
-  if (!ix.shore || !ix.water.has(here) || fringes.length === 0) return fringes;
-  // The surf first, under the fringes: all of it lies outside the edge of its shape, so the
-  // fringes hide whatever of it falls on the land of another fringe of the tile.
-  const surf: string[] = [];
-  piecesFor(
-    ix.shore,
-    (d) => {
-      const g = near[d];
-      return g !== null && !ix.water.has(g) && covers(set, g, here);
-    },
-    surf,
-  );
-  return [...surf, ...fringes];
+  return surf.length > 0 ? [...surf, ...fringes] : fringes;
 }

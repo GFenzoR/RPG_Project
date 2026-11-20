@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 115, "cy": 182, "z": 7 },
-  "palette": ["ash", "cooled_lava", "lava", "sand", "water_shallow", "border_ash_w", "boulder", "border_ash_e", "border_ash_inner_nw", "border_ash_nw", "border_ash_ne", "border_ash_n", "border_ash_se", "border_ash_s", "border_ash_sw", "border_cooled_lava_inner_nw", "border_cooled_lava_inner_ne", "border_ash_inner_sw", "border_cooled_lava_nw", "border_cooled_lava_ne", "border_cooled_lava_inner_sw", "border_cooled_lava_sw", "border_cooled_lava_w", "border_cooled_lava_se", "border_cooled_lava_inner_se", "border_cooled_lava_e", "border_ash_inner_se", "ember_vein", "border_cooled_lava_n", "border_cooled_lava_s", "border_surf_inner_nw", "border_sand_inner_nw", "border_surf_n", "border_sand_n", "border_surf_nw", "border_sand_nw"],
+  "palette": ["ash", "cooled_lava", "lava", "sand", "water_shallow", "border_ash_w", "boulder", "border_ash_e", "border_ash_inner_nw", "border_ash_nw", "border_ash_ne", "border_ash_n", "border_ash_se", "border_ash_s", "border_ash_sw", "border_cooled_lava_inner_nw", "border_cooled_lava_inner_ne", "border_ash_inner_sw", "border_cooled_lava_nw", "border_cooled_lava_ne", "border_cooled_lava_inner_sw", "border_cooled_lava_sw", "border_cooled_lava_w", "border_cooled_lava_se", "border_cooled_lava_inner_se", "border_cooled_lava_e", "border_ash_inner_se", "ember_vein", "border_cooled_lava_n", "border_cooled_lava_s", "border_surf_inner_nw", "border_surf_nw", "border_sand_inner_nw", "border_surf_n", "border_sand_n", "border_sand_nw"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -178,16 +178,16 @@
     { "x": 23, "y": 30, "stack": [16, 5] },
     { "x": 27, "y": 30, "stack": [15] },
     { "x": 28, "y": 30, "stack": [28] },
-    { "x": 29, "y": 30, "stack": [30, 31, 18] },
-    { "x": 30, "y": 30, "stack": [32, 33] },
-    { "x": 31, "y": 30, "stack": [32, 33] },
+    { "x": 29, "y": 30, "stack": [30, 31, 32, 18] },
+    { "x": 30, "y": 30, "stack": [33, 34] },
+    { "x": 31, "y": 30, "stack": [33, 34] },
     { "x": 22, "y": 31, "stack": [8] },
     { "x": 23, "y": 31, "stack": [19, 9] },
     { "x": 24, "y": 31, "stack": [28] },
     { "x": 25, "y": 31, "stack": [28] },
     { "x": 26, "y": 31, "stack": [28] },
-    { "x": 27, "y": 31, "stack": [30, 31, 18] },
-    { "x": 28, "y": 31, "stack": [32, 33] },
-    { "x": 29, "y": 31, "stack": [34, 35] }
+    { "x": 27, "y": 31, "stack": [30, 31, 32, 18] },
+    { "x": 28, "y": 31, "stack": [33, 34] },
+    { "x": 29, "y": 31, "stack": [31, 35] }
   ]
 }

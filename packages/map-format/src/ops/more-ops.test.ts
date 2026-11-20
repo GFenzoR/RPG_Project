@@ -274,11 +274,15 @@ describe('borderPieces (the ladder, docs/06 "Bordes")', () => {
     expect(borderPieces(5, 5, map(["s"]), SET)).toEqual([]);
   });
 
-  it("puts the surf under the fringes on water, shaped by all of them together", () => {
+  it("puts the surf under the fringes on water, one of each fringe's shape", () => {
     const water = (...rows: string[]) => borderPieces(1, 1, map(rows), SET);
     expect(water("wsw", "www", "www")).toEqual(["sf_n", "sd_n"]);
-    // Sand north, grass west: one inner corner of surf under the two fringes.
-    expect(water("wsw", "gww", "www")).toEqual(["sf_inner_nw", "sd_n", "gs_w"]);
+    expect(water("sss", "sww", "www")).toEqual(["sf_inner_nw", "sd_inner_nw"]);
+    // Sand north, grass west: the surf of a north side and of a west side, under the two
+    // fringes (each hides the other's surf on its land), not an inner corner neither draws.
+    expect(water("wsw", "gww", "www")).toEqual(["sf_n", "sf_w", "sd_n", "gs_w"]);
+    // Sand north, a grass corner north-east: the corner's bulge past the sand gets its surf.
+    expect(water("wsg", "www", "www")).toEqual(["sf_n", "sf_ne", "sd_n", "gs_ne"]);
     // Dirt does not cover water: no fringe and no surf.
     expect(water("wdw", "www", "www")).toEqual([]);
     // Open water: nothing.
