@@ -5,7 +5,16 @@
   "description": "docs/06 \"Looks\", docs/17 \"Humanoides del motor\": the builds, skin tones, hair styles and colours, beards, worn shapes per slot and material tints the paper doll is drawn with. The layer lists equal what the sprite engine draws (a spritegen test).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["builds", "skins", "hair_styles", "beards", "hair_colors", "shapes", "tints", "limits"],
+  "required": [
+    "builds",
+    "skins",
+    "hair_styles",
+    "beards",
+    "hair_colors",
+    "shapes",
+    "tints",
+    "limits"
+  ],
   "properties": {
     "builds": { "$ref": "#/$defs/idList" },
     "skins": {
