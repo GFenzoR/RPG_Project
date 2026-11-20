@@ -29,7 +29,7 @@ import type {
   AttributeDef,
   ClientContent,
   CosmeticDef,
-  CreatureLook,
+  LookOptions,
   DialogTopic,
   ForgeRules,
   NameEffectStyle,
@@ -198,7 +198,6 @@ export function loadClientContent(root: string): ClientContent {
     i18n[lang] = texts;
   }
   const monsters: Record<string, string> = {};
-  const monsterLooks: Record<string, CreatureLook> = {};
   const mdir = join(root, "data", "monsters");
   for (const file of readdirSync(mdir)
     .filter((f) => f.endsWith(".yaml"))
@@ -206,11 +205,8 @@ export function loadClientContent(root: string): ClientContent {
     const m = readYaml(join(mdir, file));
     if (!isObj(m) || typeof m["id"] !== "string") continue;
     if (typeof m["sprite"] === "string") monsters[m["id"]] = m["sprite"];
-    const look = creatureLook(m["look"]);
-    if (look) monsterLooks[m["id"]] = look;
   }
   const npcs: Record<string, string> = {};
-  const npcLooks: Record<string, CreatureLook> = {};
   const ndir = join(root, "data", "npcs");
   for (const file of readdirSync(ndir)
     .filter((f) => f.endsWith(".yaml"))
@@ -218,11 +214,10 @@ export function loadClientContent(root: string): ClientContent {
     const n = readYaml(join(ndir, file));
     if (!isObj(n) || typeof n["id"] !== "string") continue;
     if (typeof n["sprite"] === "string") npcs[n["id"]] = n["sprite"];
-    const look = creatureLook(n["look"]);
-    if (look) npcLooks[n["id"]] = look;
   }
   const outfits = loadOutfits(root);
   const looks = loadLooks(root);
+  const lookOptions = loadLookOptions(root);
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
@@ -302,8 +297,7 @@ export function loadClientContent(root: string): ClientContent {
     npcSprites: npcs,
     outfits,
     ...(looks ? { looks } : {}),
-    npcLooks,
-    monsterLooks,
+    ...(lookOptions ? { lookOptions } : {}),
     cosmetics: loadCosmetics(root),
     vocations,
     spells,
@@ -642,10 +636,33 @@ export function lookOf(v: unknown): Look | undefined {
   return { body, skin, hair, hairColor, beard };
 }
 
-/** An NPC's or a monster's `look` block: the body and what it wears. */
-export function creatureLook(v: unknown): CreatureLook | undefined {
-  const look = lookOf(v);
-  return look && isObj(v) ? { look, worn: wornSet(v["worn"]) } : undefined;
+/**
+ * The choices of a player's look (docs/02 "Apariencia"), in the order of data/looks.yaml:
+ * the pickers of the creation screen and the Apariencia window. Never a creatures_only
+ * skin (the server refuses it too). Undefined without the file.
+ */
+export function loadLookOptions(root: string): LookOptions | undefined {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "looks.yaml"));
+  } catch {
+    return undefined;
+  }
+  if (!isObj(raw)) return undefined;
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const skins = isObj(raw["skins"])
+    ? Object.entries(raw["skins"]).flatMap(([id, d]) =>
+        isObj(d) && d["creatures_only"] === true ? [] : [id],
+      )
+    : [];
+  return {
+    builds: list(raw["builds"]),
+    skins,
+    hairStyles: list(raw["hair_styles"]),
+    hairColors: isObj(raw["hair_colors"]) ? Object.keys(raw["hair_colors"]) : [],
+    beards: list(raw["beards"]),
+  };
 }
 
 /** "#rrggbb" to 0xrrggbb (white when it is not a colour). */

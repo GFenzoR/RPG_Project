@@ -1,15 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { EquipmentSlot } from "@rpg/protocol";
 import type { LookTables } from "@rpg/renderer";
 import type { ItemDef, OutfitDef } from "../content-types.ts";
-import {
-  dollSprites,
-  dressPlayer,
-  mulTint,
-  wornFromEquipment,
-  wornKey,
-  wornSlotOf,
-} from "./look.ts";
+import { dollSprites, dressPlayer, mulTint, wornFromVisible, wornKey, wornSlotOf } from "./look.ts";
 
 const item = (id: string, extra: Partial<ItemDef>): ItemDef => ({
   id,
@@ -65,15 +57,16 @@ const SAILOR: OutfitDef = {
 };
 
 describe("the figure's equipment", () => {
-  it("shows each equipped piece with `worn` at its slot, whatever hand it is in", () => {
-    const eq = new Map([
-      [EquipmentSlot.LEFT_HAND, { itemId: 1 }], // the sword in the left hand: still the weapon
-      [EquipmentSlot.RIGHT_HAND, { itemId: 2 }],
-      [EquipmentSlot.ARMOR, { itemId: 3 }],
-      [EquipmentSlot.RING, { itemId: 4 }],
-      [EquipmentSlot.HEAD, { itemId: 6 }], // no worn: nothing on the figure
-    ]);
-    expect(wornFromEquipment(eq, ITEMS)).toEqual({
+  it("shows each visible piece with `worn` at its slot, whatever hand it is in", () => {
+    const eq = {
+      head: 6, // no worn: nothing on the figure
+      torso: 3,
+      legs: 99, // unknown to this client: nothing
+      feet: 0,
+      leftHand: 1, // the sword in the left hand: still the weapon
+      rightHand: 2,
+    };
+    expect(wornFromVisible(eq, ITEMS)).toEqual({
       weapon: { shape: "sword", tint: "iron" },
       shield: { shape: "round", tint: "elm" },
       torso: { shape: "plate", tint: "tidesteel" },

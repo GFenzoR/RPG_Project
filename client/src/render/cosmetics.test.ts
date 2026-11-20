@@ -3,7 +3,6 @@ import type { CosmeticDef, OutfitDef } from "../content-types.ts";
 import {
   cosmeticOf,
   equippedOf,
-  lookKey,
   NAME_EFFECTS,
   nameStyleFor,
   NO_TINT,
@@ -75,8 +74,6 @@ describe("cosmetics (T5.7)", () => {
     expect(look.outfit?.sprite).toBe("outfits/sailor");
     expect(look.tint).toBe(0x7fa8d8);
     expect(look.name.fill).toBe(NAME_EFFECTS.gold.fill);
-    expect(lookKey({ outfit: "a", color: "b", nameEffect: "c" })).toBe("a|b|c");
-    expect(lookKey(undefined)).toBe("||");
   });
 
   it("finds cosmetics by kind and groups what the account owns", () => {

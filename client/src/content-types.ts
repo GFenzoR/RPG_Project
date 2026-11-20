@@ -150,10 +150,16 @@ export interface OutfitDef {
   costume?: boolean;
 }
 
-/** A person (an NPC or a humanoid monster) as an engine humanoid: its body and what it wears. */
-export interface CreatureLook {
-  look: Look;
-  worn: Worn;
+/**
+ * The choices of a player's look (data/looks.yaml, docs/02 "Apariencia"), in file order:
+ * what the pickers offer. Skins only a player may choose (no creatures_only one).
+ */
+export interface LookOptions {
+  builds: string[];
+  skins: string[];
+  hairStyles: string[];
+  hairColors: string[];
+  beards: string[];
 }
 
 /** Kinds of data/cosmetics.yaml (T5.7); "mount" is reserved and not sold yet. */
@@ -366,9 +372,12 @@ export interface ClientContent {
    * piece hides. Optional so fixtures can leave it out (then no creature is a paper doll).
    */
   looks?: LookTables;
-  /** The NPCs (data/npcs id) and monsters (data/monsters id) that are people: their look. */
-  npcLooks?: Record<string, CreatureLook>;
-  monsterLooks?: Record<string, CreatureLook>;
+  /**
+   * The choices of a player's look (data/looks.yaml): the pickers of the creation screen
+   * and the Apariencia window. Optional so fixtures can leave it out (then no pickers). The
+   * NPCs' and monsters' looks come from the server in their Creature, not from here.
+   */
+  lookOptions?: LookOptions;
   /**
    * data/cosmetics.yaml cosmetics in file order (T5.7). Optional so fixtures can leave it
    * out (then every player wears the default look).

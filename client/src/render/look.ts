@@ -2,26 +2,18 @@
 // "Looks"). Pure, no Pixi: game-canvas.ts asks these for every person it builds and stacks
 // the layers of packages/renderer look.ts in a CreatureBody.
 //
-// - An NPC or a humanoid monster: its `look` of data/npcs or data/monsters.
-// - A player: until feat/character-look sends each character's own look, the body of its
-//   outfit (data/outfits.yaml `look`) and, for the own player, what its Inventory has on;
-//   the others are drawn in their outfit's clothes. The default outfit's clothes show only
-//   where nothing is equipped; a shop outfit (a costume) covers the torso, legs and feet even
-//   over armour, and the helmet, the shield and the weapon still show.
-import { EquipmentSlot } from "@rpg/protocol";
+// Everything comes from the server (docs/05 "Apariencia y equipo visible"), in each
+// Creature and CreatureLook (state/look.ts):
+// - An NPC or a humanoid monster: its body and the pieces it wears, of its data.
+// - A player: its own body (chosen at creation, changed in the Apariencia window) and the
+//   items of its visible slots, drawn by their `worn` (data/items), over its outfit's
+//   clothes: the default outfit's clothes show only where nothing is equipped; a shop
+//   outfit (a costume) covers the torso, legs and feet even over armour, and the helmet,
+//   the shield and the weapon still show.
 import { lookSprites } from "@rpg/renderer";
 import type { LayerSlot, Look, LookTables, Worn, WornSlot } from "@rpg/renderer";
 import type { ItemDef, OutfitDef } from "../content-types.ts";
-
-/** The equipment slots that show something on the figure. */
-const SHOWN: readonly EquipmentSlot[] = [
-  EquipmentSlot.HEAD,
-  EquipmentSlot.ARMOR,
-  EquipmentSlot.LEGS,
-  EquipmentSlot.FEET,
-  EquipmentSlot.LEFT_HAND,
-  EquipmentSlot.RIGHT_HAND,
-];
+import type { EquipmentView } from "../state/look.ts";
 
 /** The figure's slot of an equipped item: by what it is, whatever hand it is in. */
 export function wornSlotOf(def: ItemDef): WornSlot | undefined {
@@ -42,18 +34,25 @@ export function wornSlotOf(def: ItemDef): WornSlot | undefined {
 }
 
 /**
- * What the equipment shows (slot -> item id; jewellery, the backpack and the ammo never
- * show): every equipped piece with `worn`, at its figure slot. A piece without `worn`
- * shows nothing.
+ * What a player's visible slots show (the item ids the server sends; jewellery, the
+ * backpack and the ammo are never among them): every piece with `worn`, at its figure
+ * slot, whatever hand holds it. An item without `worn`, or unknown to this client, shows
+ * nothing.
  */
-export function wornFromEquipment(
-  equipment: ReadonlyMap<EquipmentSlot, { itemId: number }>,
+export function wornFromVisible(
+  equipment: EquipmentView,
   items: Readonly<Record<number, ItemDef>>,
 ): Worn {
   const out: Worn = {};
-  for (const slot of SHOWN) {
-    const it = equipment.get(slot);
-    const def = it ? items[it.itemId] : undefined;
+  for (const id of [
+    equipment.head,
+    equipment.torso,
+    equipment.legs,
+    equipment.feet,
+    equipment.leftHand,
+    equipment.rightHand,
+  ]) {
+    const def = id ? items[id] : undefined;
     if (!def?.worn) continue;
     const at = wornSlotOf(def);
     if (at) out[at] = def.worn;

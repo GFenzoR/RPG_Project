@@ -69,26 +69,37 @@ describe("client content (T0.5)", () => {
     }
   });
 
-  it("exposes each NPC's sprite like the monsters', and a person's look (docs/06 Looks)", () => {
+  it("exposes each NPC's sprite like the monsters', and the look choices (docs/06 Looks)", () => {
     expect(content.npcSprites?.["volcan_forge_echo"]).toBe("npcs/forge_echo");
     expect(content.monsterSprites["bilge_rat"]).toMatch(/\//);
-    // A person is an engine humanoid: its look and what it wears; its sprite is the still
-    // portrait the dialog shows (spritegen draws it from the look).
+    // A person is an engine humanoid: its look comes from the server (Creature.look); its
+    // sprite is the still portrait the dialog shows (spritegen draws it from the look).
     expect(content.npcSprites?.["bosque_ferryman"]).toBe("npcs/bosque_ferryman");
-    expect(content.npcLooks?.["bosque_ferryman"]).toEqual({
-      look: { body: "sturdy", skin: "fair", hair: "short", hairColor: "brown", beard: "short" },
-      worn: {
-        head: { shape: "cap", tint: "green" },
-        torso: { shape: "tunic", tint: "linen" },
-        legs: { shape: "trousers", tint: "green" },
-        feet: { shape: "boots", tint: "dark_leather" },
-      },
-    });
-    expect(content.monsterLooks?.["wreck_looter"]?.worn.weapon).toEqual({
-      shape: "sword",
-      tint: "rust",
-    });
     expect(content.monsterSprites["wreck_looter"]).toBeUndefined();
+    // A player's choices, in file order, without the creatures-only skins.
+    const opts = content.lookOptions;
+    expect(opts?.builds).toEqual(["sturdy", "slender"]);
+    expect(opts?.skins).toContain("fair");
+    expect(opts?.skins).not.toContain("drowned");
+    expect(opts?.skins).not.toContain("ashen");
+    expect(opts?.hairStyles[0]).toBe("bald");
+    expect(opts?.beards).toEqual(["none", "short", "full"]);
+    expect(opts?.hairColors).toContain("auburn");
+    // Every choice has its name in every language (the pickers, ui/LookPickers.tsx).
+    const parts: [string, readonly string[]][] = [
+      ["body", opts?.builds ?? []],
+      ["skin", opts?.skins ?? []],
+      ["hair", opts?.hairStyles ?? []],
+      ["hair_color", opts?.hairColors ?? []],
+      ["beard", opts?.beards ?? []],
+    ];
+    for (const lang of ["es", "en"])
+      for (const [part, ids] of parts)
+        for (const id of ids)
+          expect(
+            content.i18n[lang]?.[`appearance.${part}.${id}`],
+            `${lang} ${part} ${id}`,
+          ).toBeTruthy();
     // The colours of data/looks.yaml as numbers, and what a head piece hides.
     expect(content.looks?.skins["fair"]).toBe(0xecc4a2);
     expect(content.looks?.tints["iron"]).toBe(0xa8aeb6);

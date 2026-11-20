@@ -68,7 +68,7 @@ import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 import { CreatureBody } from "./creature-body.ts";
 import type { BodyLayer } from "./creature-body.ts";
-import { dollSprites, dressPlayer, wornFromEquipment, wornKey } from "./look.ts";
+import { dollSprites, dressPlayer, wornFromVisible } from "./look.ts";
 import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
@@ -118,7 +118,7 @@ import { delta, samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
-import { lookKey, playerLook } from "./cosmetics.ts";
+import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
@@ -354,14 +354,13 @@ interface CreatureSprite {
    */
   figure: CreatureBody | undefined;
   /**
-   * lookKey of the cosmetics the sprites were built with (T5.7), and for the own player what
-   * its equipment shows (render/look.ts wornKey): a change rebuilds them.
+   * CreatureState.lookRev the sprites were built with: the cosmetics (T5.7), the body or
+   * the visible equipment changed since, and they are built again.
    */
-  drawnLook: string;
+  drawnLook: number;
   /**
-   * What a paper doll (render/look.ts) is known to hold: its attacks play that weapon's
-   * clip. Undefined for a sprite that is no doll and for another player, whose equipment
-   * this client does not get yet (feat/character-look): its attacks play by their kind.
+   * What a paper doll (render/look.ts) holds: its attacks play that weapon's clip.
+   * Undefined for a sprite that is no doll: its attacks play by their kind.
    */
   held: Held | undefined;
   bar: Graphics;
@@ -722,44 +721,26 @@ export async function createGameCanvas(
     }
     return body ? { clips: body, layers } : undefined;
   };
-  // What the own player's equipment shows, worked out once per Inventory (a new map each).
-  let shownInventory: WorldState["inventory"] | undefined;
-  let ownWorn: Dressed["worn"] = {};
-  let ownWornKey = "";
-  const ownEquipment = (): Dressed["worn"] => {
-    if (world.inventory !== shownInventory) {
-      shownInventory = world.inventory;
-      ownWorn = wornFromEquipment(world.inventory, content.items);
-      ownWornKey = wornKey(ownWorn);
-    }
-    return ownWorn;
-  };
   const NO_CLOTHES: ReadonlySet<WornSlot> = new Set();
   /**
-   * A person's look, what it wears and the outfit colour, or undefined (not a person).
-   * `armed`: what it wears in its hands is what it holds (not another player's outfit).
+   * A person's look, what it wears and the outfit colour, or undefined (not a person: a
+   * beast, or a server that sends no looks). All of it comes from the server
+   * (CreatureState.look, equipment and worn, docs/05 "Apariencia y equipo visible"): a
+   * player wears the items of its visible slots over its outfit's clothes; an NPC or a
+   * monster, the pieces of its data. What a person holds is what it attacks with.
    */
   const personOf = (
     c: CreatureState,
     player: { outfit: OutfitDef | undefined; tint: number } | undefined,
-  ): { look: Look; dressed: Dressed; tint: number; armed: boolean } | undefined => {
+  ): { look: Look; dressed: Dressed; tint: number } | undefined => {
+    const look = c.look;
+    if (!look) return undefined;
     if (player) {
-      const outfit = player.outfit;
-      if (!outfit?.look) return undefined;
-      const own = c.id === world.selfId;
-      const equipped = own ? ownEquipment() : {};
-      const dressed = dressPlayer(outfit, equipped);
-      return { look: outfit.look, dressed, tint: player.tint, armed: own };
+      const dressed = dressPlayer(player.outfit, wornFromVisible(c.equipment, content.items));
+      return { look, dressed, tint: player.tint };
     }
-    const person =
-      c.kind === CreatureKind.NPC
-        ? content.npcLooks?.[c.contentId]
-        : c.kind === CreatureKind.MONSTER
-          ? content.monsterLooks?.[c.contentId]
-          : undefined;
-    if (!person) return undefined;
-    const dressed = { worn: person.worn, clothes: NO_CLOTHES };
-    return { look: person.look, dressed, tint: 0xffffff, armed: true };
+    const dressed = { worn: c.worn ?? {}, clothes: NO_CLOTHES };
+    return { look, dressed, tint: 0xffffff };
   };
   /** The clip an attack of `kind` plays: a paper doll's comes from the weapon it holds. */
   const attackActionOf = (id: number, kind: AttackKind): AttackAction =>
@@ -917,10 +898,9 @@ export async function createGameCanvas(
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
-    const lk = isPlayer
-      ? lookKey(c.cosmetics) + (c.id === world.selfId ? (ownEquipment(), ownWornKey) : "")
-      : "";
-    // T5.7: equipped cosmetics changed (CreatureCosmetics): build the sprites again.
+    // The cosmetics (T5.7), the body or the visible equipment changed (CreatureCosmetics,
+    // CreatureLook): build the sprites again. A number: no string per creature per frame.
+    const lk = c.lookRev;
     if (s && s.drawnLook !== lk) {
       dropSprite(c.id);
       s = undefined;
@@ -981,7 +961,7 @@ export async function createGameCanvas(
         drawnSkull: Skull.UNSPECIFIED,
         figure,
         drawnLook: lk,
-        held: doll && person?.armed ? { weapon: person.dressed.worn.weapon?.shape } : undefined,
+        held: doll && person ? { weapon: person.dressed.worn.weapon?.shape } : undefined,
         bar,
         drawnDir: -1,
         drawnHealth: -1,

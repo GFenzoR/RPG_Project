@@ -36,6 +36,7 @@ import type {
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
+import type { Look, Worn } from "@rpg/renderer/look";
 import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
@@ -60,6 +61,8 @@ import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import { questLogFrom } from "./quests.ts";
+import { equipmentView, lookView, wornView } from "./look.ts";
+import type { EquipmentView } from "./look.ts";
 import type { QuestLogView } from "./quests.ts";
 import { heavyHit } from "../render/shake.ts";
 import { houseFrom } from "./house.ts";
@@ -123,6 +126,20 @@ export interface CreatureState {
   skull: Skull;
   /** A player's equipped cosmetics (T5.7): content ids, "" = default look. Looks only. */
   cosmetics: CosmeticsView;
+  /**
+   * The body of an engine humanoid (docs/05 "Apariencia y equipo visible"): a player's,
+   * an NPC's or a humanoid monster's; undefined for a beast (or an old server).
+   */
+  look: Look | undefined;
+  /** A player's visible slots: item ids (Creature.equipment, CreatureLook). */
+  equipment: EquipmentView;
+  /** What an NPC or a humanoid monster wears (its data's pieces, which are no items). */
+  worn: Worn | undefined;
+  /**
+   * Grows whenever the look, the visible equipment or the cosmetics change (and when the
+   * creature appears again): the canvas builds its figure again when it differs.
+   */
+  lookRev: number;
 }
 
 /** Equipped cosmetics by slot (protocol Cosmetics); "" = the default look of that kind. */
@@ -751,7 +768,19 @@ export class WorldState implements TileSource {
       }
       case "creatureCosmetics": {
         const c = this.creatures.get(msg.value.id);
-        if (c) c.cosmetics = cosmeticsView(msg.value.cosmetics);
+        if (c) {
+          c.cosmetics = cosmeticsView(msg.value.cosmetics);
+          c.lookRev++;
+        }
+        break;
+      }
+      case "creatureLook": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) {
+          c.look = lookView(msg.value.look);
+          c.equipment = equipmentView(msg.value.equipment);
+          c.lookRev++;
+        }
         break;
       }
       case "cosmeticsState": {
@@ -762,7 +791,10 @@ export class WorldState implements TileSource {
           equipped,
         };
         const s = this.self;
-        if (s) s.cosmetics = { ...equipped };
+        if (s) {
+          s.cosmetics = { ...equipped };
+          s.lookRev++;
+        }
         break;
       }
       case "tutorialStep":
@@ -1102,6 +1134,10 @@ export class WorldState implements TileSource {
       guild: c.guild,
       skull: c.skull,
       cosmetics: cosmeticsView(c.cosmetics),
+      look: lookView(c.look),
+      equipment: equipmentView(c.equipment),
+      worn: wornView(c.worn),
+      lookRev: prev ? prev.lookRev + 1 : 0,
     });
   }
 

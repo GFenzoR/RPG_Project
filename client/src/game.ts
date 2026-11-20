@@ -11,6 +11,9 @@ import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
 import type { QuestLogView } from "./state/quests.ts";
+import { sameLook } from "./state/look.ts";
+import type { EquipmentView } from "./state/look.ts";
+import type { Look } from "@rpg/renderer/look";
 import {
   ChatChannel,
   CreatureKind,
@@ -167,6 +170,15 @@ export interface GameUi {
   vocation?: string | undefined;
   /** T5.7: owned cosmetics, premium balance and what is equipped (undefined until sent). */
   cosmetics?: CosmeticsStateView | undefined;
+  /**
+   * The player's own body (docs/02 "Apariencia"), as the server says (its Creature,
+   * CreatureLook); undefined from a server without looks.
+   */
+  look?: Look | undefined;
+  /** The look being chosen in the Apariencia window, not sent yet (Game.setLookDraft). */
+  lookDraft?: Look | undefined;
+  /** The player's own visible equipment (item ids): what the Apariencia figure wears. */
+  selfEquipment?: EquipmentView | undefined;
   /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
   zoom?: ZoomView | undefined;
   /**
@@ -301,8 +313,17 @@ export interface ClientTestHooks {
   shop(): ShopState | undefined;
   /** T5.7: the own shop state (CosmeticsState). */
   cosmetics(): CosmeticsStateView | undefined;
-  /** T5.7: players the client sees with their equipped cosmetics. */
-  players(): { id: number; name: string; cosmetics: CosmeticsView }[];
+  /**
+   * T5.7: players the client sees with their equipped cosmetics, and their body and
+   * visible equipment (item ids; docs/05 "Apariencia y equipo visible").
+   */
+  players(): {
+    id: number;
+    name: string;
+    cosmetics: CosmeticsView;
+    look: Look | undefined;
+    equipment: EquipmentView;
+  }[];
 }
 
 /** One creature in a pose (ClientTestHooks.poses): its id, how far in, the clip and its tile. */
@@ -422,6 +443,8 @@ export class Game {
   private itemMenuOpened = false;
   /** The last spell used from the hotbar (its slot flashes, docs/17 UI-9). */
   private cast: { spellId: string; at: number } | undefined;
+  /** The look being picked in the Apariencia window (setLookDraft), not sent yet. */
+  private lookDraft: Look | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
   private groundTip: GameUi["groundTip"];
   /** The book or scroll being read (docs/02 "Libros y cofres"); undefined when closed. */
@@ -763,6 +786,25 @@ export class Game {
   /** Goes back to the default look of one kind (outfit, outfit_color, name_effect). */
   unequipCosmetic(kind: string): void {
     this.conn.send({ case: "unequipCosmetic", value: { kind } });
+  }
+
+  /**
+   * The look the Apariencia window shows while the player picks (docs/02 "Apariencia"):
+   * nothing is sent until applyLook. undefined goes back to the one it has.
+   */
+  setLookDraft(look: Look | undefined): void {
+    this.lookDraft = look;
+    this.publish();
+  }
+
+  /**
+   * Sends the look being picked (SetLook): free; the server answers with a CreatureLook to
+   * the player and to everyone who sees it, or look.invalid.
+   */
+  applyLook(): void {
+    const draft = this.lookDraft;
+    if (!draft || sameLook(draft, this.world.self?.look)) return;
+    this.conn.send({ case: "setLook", value: { look: { ...draft } } });
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
@@ -1696,6 +1738,9 @@ export class Game {
       menu: this.menu?.view,
       vocation: this.opts.vocation,
       cosmetics: w.cosmetics,
+      look: w.self?.look,
+      lookDraft: this.lookDraft,
+      selfEquipment: w.self?.equipment,
       zoom: this.zoomView,
       cast: this.cast,
       groundTip: this.groundTip,
@@ -1960,7 +2005,13 @@ export class Game {
       players: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.PLAYER)
-          .map((c) => ({ id: c.id, name: c.name, cosmetics: { ...c.cosmetics } })),
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            cosmetics: { ...c.cosmetics },
+            look: c.look && { ...c.look },
+            equipment: { ...c.equipment },
+          })),
       itemNumber: (id) => {
         const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
         return found ? Number(found[0]) : undefined;
