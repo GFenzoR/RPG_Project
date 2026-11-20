@@ -1687,7 +1687,7 @@ test("T3.2: a guardian casts haste: its icon in the status tray, faster speed an
   // for screen readers; the tooltip says what it does.
   await expect(hasted).toBeVisible();
   await expect(hasted).toHaveAttribute("data-kind", "buff");
-  await expect(hasted).toHaveAttribute("aria-label", /^Acelerado, Quedan \d+ s$/);
+  await expect(hasted).toHaveAttribute("aria-label", /^Prisa, Quedan \d+ s$/);
   await expect(hasted.locator(".status-left")).toHaveText(/^\d+$/);
   await expect(hasted.locator(".status-icon")).toHaveCount(1); // its sprite, not the letter
   const tray = await conditions.boundingBox();

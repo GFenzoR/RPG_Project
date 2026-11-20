@@ -620,7 +620,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   | Haste | `hasted` | velocidad +35 %, hasta 45 s; quita `slowed` | refresca | termina |
   | Invisibilidad | `invisible` | no lo ven jugadores ni monstruos, hasta 90 s | refresca | termina |
   | Puntería | `keen_eye` | +7 de distancia en combate, hasta 45 s | refresca | termina |
-  | Saciado | `well_fed` | regeneración de la vocación +100 %, hasta 20 min | suma | sobrevive |
+  | Saciedad | `well_fed` | regeneración de la vocación +100 %, hasta 20 min | suma | sobrevive |
   - **Daño periódico:** cada golpe aplica la resistencia del monstruo a su elemento (100 % o
     más = inmune: la condición no se aplica); la armadura no lo frena. En una zona de
     protección el golpe no hace daño (pero cuenta). Al monstruo, el daño suma a la parte
