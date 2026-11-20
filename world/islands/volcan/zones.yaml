@@ -9,7 +9,7 @@
   floors: [7]
   rects:
     - { x: 3636, y: 5782, w: 32, h: 25 }
-  notes: "Stone plaza, smithy stations and the keeper's archive of Brasal."
+  notes: "Stone plaza, smithy stations and the keeper's archive of Cinderstead."
 
 - id: volcan_dock
   type: no_logout

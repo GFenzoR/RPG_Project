@@ -1,5 +1,5 @@
 // Command bots is the load test (T1.17): headless players (server/pkg/bot) that
-// register, create a character, enter the Isla del Puerto and play: they walk with real
+// register, create a character, enter Velmara and play: they walk with real
 // paths on the map, fight monsters, chat and open NPC dialogs, each under its own rate
 // limit. It reports tick, RAM, CPU, latency, bandwidth and disconnects, compared with
 // docs/07-performance-budget.md.

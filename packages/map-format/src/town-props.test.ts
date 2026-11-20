@@ -1,6 +1,6 @@
 // The furnished towns and the lit caves of lote 12 (docs/17 "Kit de props de pueblo", docs/03
 // "Muebles y luces"): the town prop kit is fixed decoration that blocks only where it should;
-// Farol, Raigal and Brasal have a fountain in their plaza, braziers, banners and windows at
+// Lanternby, Ivernel and Cinderstead have a fountain in their plaza, braziers, banners and windows at
 // their temple, and every rented house a bed and a window that take no tile from its tenant;
 // the mines of Puerto, Bosque and Volcán have a wall torch every 6 to 8 tiles on the faces of
 // their rock walls; and nothing that blocks stands where a player, a test or the server needs
@@ -62,16 +62,16 @@ const KIT: Record<string, { blocks: boolean; elevation?: number }> = {
 
 /** The towns: their island, plaza and temple zones (zones.yaml). */
 const TOWNS = [
-  { name: "Farol", island: "puerto", plaza: "puerto_plaza", temple: "puerto_temple" },
-  { name: "Raigal", island: "bosque", plaza: "bosque_town", temple: "bosque_temple" },
-  { name: "Brasal", island: "volcan", plaza: "volcan_town", temple: "volcan_temple" },
+  { name: "Lanternby", island: "puerto", plaza: "puerto_plaza", temple: "puerto_temple" },
+  { name: "Ivernel", island: "bosque", plaza: "bosque_town", temple: "bosque_temple" },
+  { name: "Cinderstead", island: "volcan", plaza: "volcan_town", temple: "volcan_temple" },
 ] as const;
 
 /**
  * Tiles the end-to-end test walks, clicks or uses in the towns (client/e2e/game.spec.ts):
- * the temple aisle and doorway of Farol, its sign and market board, the hearth, the house
- * of the house test, the harbour; the click path from the temple of Raigal to the druid; the
- * one from the temple of Brasal to the keeper's archive; the ferry landings.
+ * the temple aisle and doorway of Lanternby, its sign and market board, the hearth, the house
+ * of the house test, the harbour; the click path from the temple of Ivernel to the druid; the
+ * one from the temple of Cinderstead to the keeper's archive; the ferry landings.
  */
 const E2E_TILES: readonly (readonly [number, number])[] = [
   ...[3158, 3159, 3160, 3161, 3162].flatMap((x) => [[x, 6385] as const, [x, 6386] as const]),

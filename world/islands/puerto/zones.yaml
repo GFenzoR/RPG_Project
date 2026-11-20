@@ -9,7 +9,7 @@
   floors: [7]
   rects:
     - { x: 3163, y: 6370, w: 11, h: 10 }
-  notes: "Depot building of Farol; the depot item does not exist yet (docs/03)."
+  notes: "Depot building of Lanternby; the depot item does not exist yet (docs/03)."
 
 - id: puerto_plaza
   type: protection

@@ -15,7 +15,7 @@ look:
     feet: { shape: boots, tint: tar }
     weapon: { shape: crossbow, tint: embersteel }
 notes: >-
-  Head of the hunters of Brasal (lote 12): keeps the bounty ledger of the town, three
+  Head of the hunters of Cinderstead (lote 12): keeps the bounty ledger of the town, three
   repeatable tasks (data/quests/bounty_*.yaml): 30 ash hounds from level 26, 20 slag golems
   from 39 and 8 ember wyrmlings from 48, each every 20 hours (docs/02 "Tareas"). He
   stands at the north edge of the plaza (3655,5783), by the path to the ash flats.

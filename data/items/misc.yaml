@@ -58,7 +58,7 @@
   consumable: { food_ms: 60000 }
   value: 2
 
-# ---- Isla del Puerto: food and loot materials ----------------------------------------
+# ---- Velmara: food and loot materials ----------------------------------------
 - id: ship_biscuit
   kind: consumable
   sprite: food/ship_biscuit
@@ -286,7 +286,7 @@
   consumable: { food_ms: 480000, heal_hp: 30 }
   value: 24
 
-# Isla del Bosque (T3.6): loot of its monsters, the elm wood and the Chapter 2 items.
+# Selvaine (T3.6): loot of its monsters, the elm wood and the Chapter 2 items.
 # Our own numbers.
 - id: stag_antler
   kind: material
@@ -388,7 +388,7 @@
   tradeable: false
   notes: Chapter 2 quest item (ch2_coffer), the coffer stolen from the wreck of Chapter 1. Dropped by hollow crawlers in the smugglers' cave; taken by bosque_druid. No value, so no NPC buys it.
 
-# Isla Volcánica (T5.5): loot of its monsters, embersteel and the Chapter 3 items.
+# Karvask (T5.5): loot of its monsters, embersteel and the Chapter 3 items.
 # Our own numbers.
 - id: ash_pelt
   kind: material
@@ -495,7 +495,7 @@
   key: forge_gate
   notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
 
-# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): the key of its practice gate.
+# Thimblewick (sandbox island, docs/16-probar-el-juego.md): the key of its practice gate.
 - id: pruebas_key
   kind: material
   sprite: tools/brass_key
@@ -507,7 +507,7 @@
   notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.
 
 # Mana draughts (content audit M2, 2026-11): the casters' fuel, sold in every town (a
-# small one in Puerto, Bosque and Brasal, a concentrated one in Brasal). Nobody buys them
+# small one in Puerto, Bosque and Cinderstead, a concentrated one in Cinderstead). Nobody buys them
 # back. Our own numbers: about 0.4 copper per point of mana (docs/02 "Economía").
 - id: mana_draught
   kind: consumable
@@ -535,7 +535,7 @@
 
 # Health draughts (spell progression, 2026-11): past the Puerto the seaweed poultice (40)
 # no longer keeps up with a body of 300-800 health. Sold like the mana draughts, by island:
-# the small one in the Bosque and in Brasal, the concentrated one only in Brasal. Nobody
+# the small one in the Bosque and in Cinderstead, the concentrated one only in Cinderstead. Nobody
 # buys them back. Our own numbers: about 0.5 copper per point of health, between the
 # poultice (0.6) and the mana draughts (0.4) (docs/02 "Economía").
 - id: health_draught

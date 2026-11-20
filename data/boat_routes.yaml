@@ -3,7 +3,7 @@
 # captain stands at most 8 tiles from the dock and that the dock and the arrival are
 # walkable tiles of an island in world/.
 
-# Isla del Puerto <-> Isla del Bosque (T3.6). The way out asks for Chapter 1 and level 10
+# Velmara <-> Selvaine (T3.6). The way out asks for Chapter 1 and level 10
 # (Chapter 2 starts at 15); the way back is cheaper and asks for nothing.
 - id: puerto_to_bosque
   captain: harbor_master
@@ -20,7 +20,7 @@
   to: { x: 3201, y: 6432, z: 7 }
   price: 60
 
-# Isla del Bosque <-> Isla Volcánica (T5.5). The way out asks for level 25 (the island's
+# Selvaine <-> Karvask (T5.5). The way out asks for level 25 (the island's
 # lowest hunting band; Chapter 3 starts at 30 with the root of Chapter 2); the way back
 # goes to either island and asks for nothing.
 - id: bosque_to_volcan

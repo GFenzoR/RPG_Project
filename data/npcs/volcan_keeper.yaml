@@ -13,7 +13,7 @@ look:
     legs: { shape: trousers, tint: black }
     feet: { shape: boots, tint: tar }
 notes: >-
-  Keeper of the forge records of Brasal and the quest giver of Chapter 3 (ch3_embers, then
+  Keeper of the forge records of Cinderstead and the quest giver of Chapter 3 (ch3_embers, then
   ch3_gate; ch3_warden is started by volcan_forge_echo and returned here). She only talks
   about the forge to whoever found the ember root in Chapter 2 (ember_root_found).
 dialog:

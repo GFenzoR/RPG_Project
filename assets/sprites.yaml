@@ -21,7 +21,7 @@ sprites:
   currency/gold_coin: { source: vendor/dungeon-crawl/item/gold/03.png }
   materials/wolf_pelt: { source: vendor/dungeon-crawl/item/armour/animal_skin1.png }
 
-  # Items: Isla del Puerto
+  # Items: Velmara
   runes/arc_rune: { source: vendor/dungeon-crawl/item/misc/runes/generic.png }
   # Items: food and materials of T3.1
   food/ship_biscuit: { source: vendor/dungeon-crawl/item/food/bread_ration.png }
@@ -38,7 +38,7 @@ sprites:
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
   food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
 
-  # Items: Isla del Bosque (T3.6)
+  # Items: Selvaine (T3.6)
   quest/sealed_coffer: { source: vendor/dungeon-crawl/item/misc/misc_box.png }
 
   # Creatures
@@ -47,7 +47,7 @@ sprites:
 
   # NPCs: Liberated Pixel Cup characters, in `animations` below.
 
-  # Isla Volcánica (T5.5)
+  # Karvask (T5.5)
   materials/ash_pelt: { source: vendor/dungeon-crawl/item/armour/silver_dragon_scales.png }
   materials/salamander_scale: { source: vendor/dungeon-crawl/item/armour/gold_dragon_hide.png }
   materials/wyrm_scale: { source: vendor/dungeon-crawl/item/armour/shadow_dragon_scales.png }
@@ -154,7 +154,7 @@ animations:
   creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
   creatures/hollow_crawler: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
   creatures/ore_beetle: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, death: 200 } }
-  # Isla Volcánica. The warden, the Chapter 3 boss, is 96x96: a head and a half above a person.
+  # Karvask. The warden, the Chapter 3 boss, is 96x96: a head and a half above a person.
   creatures/ash_hound: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 400, attack: 100, death: 200 } }
   creatures/cinder_salamander: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
   creatures/slag_golem: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 140, death: 240 } }

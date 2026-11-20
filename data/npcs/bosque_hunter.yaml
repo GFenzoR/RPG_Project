@@ -15,7 +15,7 @@ look:
     feet: { shape: boots, tint: dark_leather }
     weapon: { shape: bow, tint: yew }
 notes: >-
-  Huntsman of Raigal (lote 12): keeps the hunt board, the town's standing bounties on what
+  Huntsman of Ivernel (lote 12): keeps the hunt board, the town's standing bounties on what
   threatens the woods, as three repeatable tasks (data/quests/bounty_*.yaml): 25 coffer
   smugglers from level 15, 25 thornlings from 18 and 30 hollow crawlers from 22, each every
   20 hours (docs/02 "Tareas"). He stands at the east edge of the plaza (4173,6106), where

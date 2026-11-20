@@ -23,7 +23,7 @@
   pickupable: false
   door: { closed: forge_gate }
 
-# The practice gate of the Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): a
+# The practice gate of Thimblewick (sandbox island, docs/16-probar-el-juego.md): a
 # locked door to try keys on. Its key, pruebas_key, is sold by the island's provisioner.
 - id: pruebas_gate
   kind: decoration

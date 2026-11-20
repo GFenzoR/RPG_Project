@@ -107,7 +107,7 @@ function flute(freq: number, dur: number, rand: () => number, gain = 0.3): Float
 }
 
 const TRACKS: Record<string, Track> = {
-  // Isla del Puerto: D dorian, a lute and a flute over a walking bass, 96 bpm.
+  // Velmara: D dorian, a lute and a flute over a walking bass, 96 bpm.
   "music/puerto": {
     bpm: 96,
     bars: 16,
@@ -201,7 +201,7 @@ const TRACKS: Record<string, Track> = {
       }
     },
   },
-  // Isla del Bosque: E minor pentatonic flute over pads and a harp, 72 bpm.
+  // Selvaine: E minor pentatonic flute over pads and a harp, 72 bpm.
   "music/bosque": {
     bpm: 72,
     bars: 8,
@@ -321,8 +321,8 @@ const TRACKS: Record<string, Track> = {
       }
     },
   },
-  // Isla Volcánica (T5.5): D phrygian dominant over a low drone, slow drums like the
-  // mountain's pulse and a far anvil from the smithies of Brasal, 66 bpm.
+  // Karvask (T5.5): D phrygian dominant over a low drone, slow drums like the
+  // mountain's pulse and a far anvil from the smithies of Cinderstead, 66 bpm.
   "music/volcan": {
     bpm: 66,
     bars: 8,
@@ -513,7 +513,7 @@ const AMBIENT: Record<
       }
     },
   },
-  // Isla Volcánica (T5.5): the mountain's deep rumble, lava bubbling, crackling rock and
+  // Karvask (T5.5): the mountain's deep rumble, lava bubbling, crackling rock and
   // a vent letting off steam now and then.
   "ambient/volcan": {
     seconds: 16,

@@ -15,7 +15,7 @@
   book:
     title: book.book_lantern_rowers.title
     pages: [book.book_lantern_rowers.page_1, book.book_lantern_rowers.page_2, book.book_lantern_rowers.page_3]
-  notes: "Temple of the Lantern, Puerto (3152,6381,7), north-west corner; and the temple of the Isla de Pruebas (2099,2084,7)."
+  notes: "Temple of the Lantern, Puerto (3152,6381,7), north-west corner; and the temple of Thimblewick (2099,2084,7)."
 
 - id: book_root_below
   kind: decoration
@@ -27,7 +27,7 @@
   book:
     title: book.book_root_below.title
     pages: [book.book_root_below.page_1, book.book_root_below.page_2, book.book_root_below.page_3]
-  notes: "Temple of the Root, Raigal (4148,6101,7), north-west corner."
+  notes: "Temple of the Root, Ivernel (4148,6101,7), north-west corner."
 
 - id: book_still_flame
   kind: decoration
@@ -39,7 +39,7 @@
   book:
     title: book.book_still_flame.title
     pages: [book.book_still_flame.page_1, book.book_still_flame.page_2, book.book_still_flame.page_3]
-  notes: "Temple of the Still Flame, Brasal (3640,5785,7), north-west corner."
+  notes: "Temple of the Still Flame, Cinderstead (3640,5785,7), north-west corner."
 
 - id: book_forge_register
   kind: decoration
@@ -51,7 +51,7 @@
   book:
     title: book.book_forge_register.title
     pages: [book.book_forge_register.page_1, book.book_forge_register.page_2, book.book_forge_register.page_3]
-  notes: "The keeper's archive of Brasal (3660,5796,7), west of the door and of Casia."
+  notes: "The keeper's archive of Cinderstead (3660,5796,7), west of the door and of Casia."
 
 - id: book_smith_notes
   kind: decoration
@@ -62,7 +62,7 @@
   book:
     title: book.book_smith_notes.title
     pages: [book.book_smith_notes.page_1, book.book_smith_notes.page_2, book.book_smith_notes.page_3]
-  notes: "On a table of the keeper's archive of Brasal (3664,5800,7), south-east corner."
+  notes: "On a table of the keeper's archive of Cinderstead (3664,5800,7), south-east corner."
 
 - id: book_trail_notebook
   kind: decoration
@@ -74,7 +74,7 @@
   book:
     title: book.book_trail_notebook.title
     pages: [book.book_trail_notebook.page_1, book.book_trail_notebook.page_2, book.book_trail_notebook.page_3]
-  notes: "Velia's reading stand under the elms of Raigal (4180,6112,7), two tiles east of her."
+  notes: "Velia's reading stand under the elms of Ivernel (4180,6112,7), two tiles east of her."
 
 - id: scroll_dawn_manifest
   kind: decoration
@@ -85,7 +85,7 @@
   book:
     title: book.scroll_dawn_manifest.title
     pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
-  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of the Isla de Pruebas (2097,2084,7)."
+  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of Thimblewick (2097,2084,7)."
 
 - id: scroll_burnt_oar_log
   kind: decoration
@@ -190,4 +190,4 @@
       - { item: lesser_temper_stone, count: 2 }
       - { item: health_draught, count: 2 }
       - { item: iron_sword, count: 1 } # band 2: it rolls its attribute
-  notes: "Temple of the Isla de Pruebas, north-east corner (2098,2084,7): to try a chest (docs/16)."
+  notes: "Temple of Thimblewick, north-east corner (2098,2084,7): to try a chest (docs/16)."

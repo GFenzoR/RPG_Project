@@ -94,7 +94,7 @@
   max_success: 0.9
   xp: 3
 
-# ---- Isla del Bosque (T3.6): elm wood ----------------------------------------------
+# ---- Selvaine (T3.6): elm wood ----------------------------------------------
 - id: smith_elmwood_shield
   craft: smithing
   station: anvil
@@ -120,7 +120,7 @@
   max_success: 0.9
   xp: 3
 
-# ---- Isla Volcánica (T5.5): embersteel, advanced smithing -------------------------------
+# ---- Karvask (T5.5): embersteel, advanced smithing -------------------------------
 # Ember ore needs elm from the forest to burn hot enough: the islands trade with each other.
 - id: smelt_embersteel_ingot
   craft: smithing

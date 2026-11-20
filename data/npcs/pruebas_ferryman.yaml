@@ -13,8 +13,8 @@ look:
     legs: { shape: trousers, tint: navy }
     feet: { shape: boots, tint: tar }
 notes: >-
-  Ferryman of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): one-way
-  trips to the Isla del Puerto, the Isla del Bosque and the Isla Volcánica, landing where
+  Ferryman of Thimblewick, the sandbox island (docs/16-probar-el-juego.md): one-way
+  trips to Velmara, Selvaine and Karvask, landing where
   the real boat routes land. Dialog teleports with a fare, not data/boat_routes.yaml: the
   island is dev-only (world.yaml), and the production server checks every route against a
   map without it, captain included. Nothing comes back: the island stays out of normal play.

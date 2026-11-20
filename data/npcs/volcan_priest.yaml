@@ -13,7 +13,7 @@ look:
     torso: { shape: robe, tint: black }
     feet: { shape: shoes, tint: tar }
 notes: >-
-  Temple of the Still Flame in Brasal (respawn point of the island). Heals for free and sells
+  Temple of the Still Flame in Cinderstead (respawn point of the island). Heals for free and sells
   the same five blessings as the other temples at the same level-based price (docs/02 "Muerte").
   Since lote 12 she gives the side quest flame_crater (level 45): reach the lava lake in the
   crater's heart and thin the wyrmlings' nest (it ends on the last kill), and she quenches

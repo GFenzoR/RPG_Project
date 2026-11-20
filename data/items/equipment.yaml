@@ -5,7 +5,7 @@
 # Amulets and rings (neck and ring slots) carry a small armor and, with the item
 # attributes, their random attribute.
 
-# ---- Band 1 (levels 1-4): the starting kit, Isla del Puerto.
+# ---- Band 1 (levels 1-4): the starting kit, Velmara.
 - id: barrel_lid_shield
   kind: shield
   sprite: shields/barrel_lid_shield
@@ -67,7 +67,7 @@
   value: 10
 
 
-# ---- Band 2 (levels 5-9): Isla del Puerto. No armor: a new piece here makes the island's
+# ---- Band 2 (levels 5-9): Velmara. No armor: a new piece here makes the island's
 # mid hunts too safe (TestPuertoBalance); the plank shield is the step.
 - id: plank_shield
   kind: shield
@@ -82,7 +82,7 @@
   value: 110
 
 
-# ---- Band 3 (levels 10-29): the Isla del Bosque. Armor, shields and jewelry ask for level 15,
+# ---- Band 3 (levels 10-29): Selvaine. Armor, shields and jewelry ask for level 15,
 # not the 10 of the band's weapons: with them at 10 the wreck looters stop hurting.
 - id: elmwood_shield
   kind: shield
@@ -179,7 +179,7 @@
   value: 360
 
 
-# ---- Band 4 (levels 30-49): the Isla Volcánica (Brasal's smithy and temple).
+# ---- Band 4 (levels 30-49): Karvask (Cinderstead's smithy and temple).
 - id: embersteel_shield
   kind: shield
   sprite: shields/embersteel_shield

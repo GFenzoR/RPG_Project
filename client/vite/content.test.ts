@@ -117,7 +117,7 @@ describe("client content (T0.5)", () => {
     expect(byId.get("cooled_lava")?.desc).toBe("item.cooled_lava.desc");
     expect(byId.get("brasal_dock_sign")?.desc).toBe("text.volcan.dock_sign");
     expect(byId.get("ash")?.desc).toBeUndefined();
-    // Every sign of Puerto, Bosque and the Ember Isle has its item (the forge gate's too).
+    // Every sign of Puerto, Bosque and Karvask has its item (the forge gate's too).
     const signs = [
       "volcan.temple",
       "volcan.dock",
@@ -236,7 +236,7 @@ describe("client content (T0.5)", () => {
       expect(def.blocks, `${id} blocks`).toBe(info.blocksMovement);
       if (def.ground) expect(def.walkable, `${id} walkable`).toBe(info.walkable === true);
     }
-    // The temple walls of the Isla de Pruebas (kind: wall, no blocks_movement).
+    // The temple walls of Thimblewick (kind: wall, no blocks_movement).
     expect(byId.get("stone_wall")?.blocks).toBe(true);
     expect(byId.get("wooden_wall")?.blocks).toBe(true);
   });

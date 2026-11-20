@@ -1,7 +1,7 @@
 # Guided tutorial (T4.2): the hints a new character of the starting island sees, in order.
 # Each step waits for a fixed server event (docs/06-content-data.md, "Tutorial"); the
 # server advances it and the client only shows the hint. Original route around the town
-# of Farol: temple -> harbor -> the harbor master's first Chapter 1 quest.
+# of Lanternby: temple -> harbor -> the harbor master's first Chapter 1 quest.
 island: puerto
 notes: >-
   Characters wake up at the temple of the Lantern (3158,6386). The priestess stands next

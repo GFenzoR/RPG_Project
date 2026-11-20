@@ -14,7 +14,7 @@ look:
     feet: { shape: boots, tint: tar }
     weapon: { shape: mace, tint: iron }
 notes: >-
-  Smith of Brasal: sells the first embersteel pieces (levels 30-34), smithing tools and elm
+  Smith of Cinderstead: sells the first embersteel pieces (levels 30-34), smithing tools and elm
   logs, and buys the island's materials at about a third of their value. Chapter 3 part 1
   ends with him: he reads the forge-sign on the ember root. Since lote 12 he gives the side
   quest smith_ring (level 42): five slag cores for an obsidian ring, quenched in the Still

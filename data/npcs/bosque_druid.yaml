@@ -13,7 +13,7 @@ look:
     feet: { shape: shoes, tint: tan_leather }
     weapon: { shape: staff, tint: sapling }
 notes: >-
-  Keeper of the grove of Raigal and the quest giver of Chapter 2 (ch2_roots, then
+  Keeper of the grove of Ivernel and the quest giver of Chapter 2 (ch2_roots, then
   ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level. With
   ember_root_found she hands over the ember root (Chapter 3 key, one at a time) until
   the gate of ch3_gate is open.

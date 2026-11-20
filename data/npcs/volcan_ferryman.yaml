@@ -14,7 +14,7 @@ look:
     legs: { shape: trousers, tint: black }
     feet: { shape: boots, tint: tar }
 notes: >-
-  Captain of the Brasal dock (data/boat_routes.yaml: volcan_to_bosque and
+  Captain of the Cinderstead dock (data/boat_routes.yaml: volcan_to_bosque and
   volcan_to_puerto). Since lote 12 she gives the side quest captain_fenders (level 30):
   thin the salamanders by the porters' path and bring ash-hound pelts for fenders.
 dialog:

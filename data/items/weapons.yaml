@@ -4,7 +4,7 @@
 # weapon.ammo per round from the ammo slot (attack = bow + arrow, T3.1); a crossbow is
 # one-handed and shoots bolts (content audit M4); a staff is the druid's wand.
 
-# ---- Band 1 (levels 1-4): the starting kit, Isla del Puerto.
+# ---- Band 1 (levels 1-4): the starting kit, Velmara.
 - id: rusty_cutlass
   kind: weapon
   sprite: weapons/rusty_cutlass
@@ -78,7 +78,7 @@
   value: 30
 
 
-# ---- Band 2 (levels 5-9): Isla del Puerto. The step Puerto's hunts of levels 5-8 need
+# ---- Band 2 (levels 5-9): Velmara. The step Puerto's hunts of levels 5-8 need
 # (TestPuertoBalance: the crab and the boar outlast 15 s with a band 1 weapon).
 - id: iron_sword
   kind: weapon
@@ -154,7 +154,7 @@
 
 
 # ---- Band 3 (levels 10-29): sold in Puerto from level 10 (the island's last hunts) and in
-# the Isla del Bosque; attack 22 is what the forest's hunts ask for up to level 29.
+# Selvaine; attack 22 is what the forest's hunts ask for up to level 29.
 - id: boarding_saber
   kind: weapon
   sprite: weapons/boarding_saber
@@ -240,7 +240,7 @@
   value: 600
 
 
-# ---- Band 4 (levels 30-49): the Isla Volcánica (Brasal's smithy and temple).
+# ---- Band 4 (levels 30-49): Karvask (Cinderstead's smithy and temple).
 - id: embersteel_sabre
   kind: weapon
   sprite: weapons/embersteel_sabre
