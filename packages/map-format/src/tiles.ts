@@ -20,6 +20,13 @@ export class TileMap {
     return this.chunks.get(chunkKey(z, Math.floor(x / CHUNK_SIZE), Math.floor(y / CHUNK_SIZE)));
   }
 
+  /** The ground of a tile, null where there is none (no chunk, no ground). */
+  groundAt(x: number, y: number, z: number): string | null {
+    if (x < 0 || y < 0) return null;
+    const c = this.chunkAt(x, y, z);
+    return c ? groundAt(c, x % CHUNK_SIZE, y % CHUNK_SIZE) : null;
+  }
+
   tile(x: number, y: number, z: number): Tile | undefined {
     if (x < 0 || y < 0) return undefined;
     const c = this.chunkAt(x, y, z);

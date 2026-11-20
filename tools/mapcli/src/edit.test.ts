@@ -87,7 +87,20 @@ describe("mapcli edit commands", () => {
       root,
     );
     expect(r.code).toBe(0);
-    expect(r.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 0 } });
+    // Sand on grass: its border pieces are out of date until the autoborder (docs/06 "Bordes").
+    expect(r.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 1 } });
+    expect(JSON.stringify(r.json())).toContain("run `mapcli autoborder testisle --floor 7`");
+    const b = mapcli(
+      "autoborder",
+      "testisle",
+      "--floor",
+      "7",
+      "--rect",
+      "1039,1039,5,5",
+      "--root",
+      root,
+    );
+    expect(b.json()).toMatchObject({ ok: true, written: [Z7], validation: { errors: 0 } });
     expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
   });
 

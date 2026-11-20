@@ -410,6 +410,7 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
       root = s.root;
       s.git("checkout", "-qb", "pr");
       s.edit("paint", "puerto", "--floor", "7", "--rect", "3170,6330,2,2", "--ground", "sand");
+      s.edit("autoborder", "puerto", "--floor", "7", "--rect", "3169,6329,4,4");
       // Adding yourself to the maintainers in the PR does not count: base decides.
       writeFileSync(join(root, ".github/MAINTAINERS"), "boss\nsomeone\n");
       s.git("commit", "-qam", "outside");
@@ -967,6 +968,7 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     const { root, git, edit } = sandbox();
     git("checkout", "-qb", "pr");
     edit("paint", "puerto", "--floor", "7", "--rect", "3170,6330,2,2", "--ground", "sand");
+    edit("autoborder", "puerto", "--floor", "7", "--rect", "3169,6329,4,4");
     git("commit", "-qam", "outside");
     const out = tmp("pr-out-");
     const fork = { root, base: "main", head: "pr", out, repo: "boss/game" };

@@ -21,6 +21,7 @@ import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
 import type { ContentIndex, ItemInfo, ReachInfo } from "./content.ts";
 import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
+import { NO_BORDERS, borderPieces } from "./ops/borders.ts";
 
 function must<T>(v: T | undefined): T {
   if (v === undefined) throw new Error("fixture value missing");
@@ -30,7 +31,10 @@ function must<T>(v: T | undefined): T {
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 // The real routes and dialog teleports of data/ point at the real islands, not at these
 // mini worlds: each test that checks them brings its own.
-const content = { ...loadContent(repo), routes: [], teleports: [] };
+const full = { ...loadContent(repo), routes: [], teleports: [] };
+// The mini worlds carry no border pieces: the border check has its own test, with the
+// ladder of data/borders.yaml (full).
+const content = { ...full, borders: NO_BORDERS };
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -115,12 +119,40 @@ function shown(island: Island): Island {
   return out;
 }
 
-function check(island: Island, meta: WorldMeta = worldOf(island), extra: Island[] = []) {
+function check(
+  island: Island,
+  meta: WorldMeta = worldOf(island),
+  extra: Island[] = [],
+  c: ContentIndex = content,
+) {
   const root = mkdtempSync(join(tmpdir(), "map-format-"));
   dirs.push(root);
   writeWorldMeta(root, meta);
   for (const i of [island, ...extra]) writeIsland(root, shown(i));
-  return { root, ...validateWorld(root, { content }) };
+  return { root, ...validateWorld(root, { content: c }) };
+}
+
+/** Puts on every tile of an island the border pieces of the real ladder, like autoborder. */
+function bordered(island: Island): Island {
+  for (const c of island.chunks.values()) {
+    const at = (x: number, y: number): string | null =>
+      x < 0 || y < 0 || x >= CHUNK_SIZE || y >= CHUNK_SIZE ? null : groundAt(c, x, y);
+    const pieces = new Map<string, string[]>();
+    for (let y = 0; y < CHUNK_SIZE; y++)
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const p = borderPieces(x, y, at, full.borders);
+        if (p.length > 0) pieces.set(`${x},${y}`, p);
+      }
+    for (const s of c.items) {
+      s.stack = [...(pieces.get(`${s.x},${s.y}`) ?? []), ...s.stack];
+      pieces.delete(`${s.x},${s.y}`);
+    }
+    for (const [k, p] of pieces) {
+      const [x, y] = k.split(",").map(Number) as [number, number];
+      c.items.push({ x, y, stack: p });
+    }
+  }
+  return island;
 }
 
 const messages = (r: { diagnostics: Parameters<typeof formatDiagnostic>[0][] }): string[] =>
@@ -133,8 +165,45 @@ describe("validateWorld", () => {
   });
 
   it("accepts the repository world (world/islands/testisle)", () => {
-    const r = validateWorld(repo, { content });
+    const r = validateWorld(repo, { content: full });
     expect(messages(r)).toEqual([]);
+  });
+
+  it("wants on every tile the border pieces its neighbours' grounds give now (docs/06)", () => {
+    const stale = (i: Island): string[] =>
+      messages(check(i, worldOf(i), [], full)).filter((m) => m.includes("border pieces"));
+    // Grass by the water ring and around the stone temple tile, no piece anywhere: one error
+    // for the chunk of z7, at its first tile; the dirt of the z8 cave borders nothing.
+    expect(stale(mini())).toEqual([
+      expect.stringMatching(
+        /z07\/c0000_0000\.json.*\(1,1,7\) \d+ tile\(s\) with border pieces out of date \(first at 1,1,7: has none, needs border_surf_se, border_grass_se at the bottom of its stack\); run `mapcli autoborder mini --floor 7`/,
+      ),
+    ]);
+    // What the autoborder leaves passes.
+    expect(stale(bordered(mini()))).toEqual([]);
+    // A ground painted after it, a piece above another item, a piece missing: out of date.
+    const painted = bordered(mini());
+    setGround(must(painted.chunks.get(chunkKey(7, 0, 0))), 8, 8, "sand");
+    expect(stale(painted)).toEqual([
+      expect.stringContaining("1 tile(s) with border pieces out of date (first at 8,8,7: has none"),
+    ]);
+    const above = bordered(mini());
+    const c = must(above.chunks.get(chunkKey(7, 0, 0)));
+    const s = must(c.items.find((t) => t.x === 1 && t.y === 1));
+    s.stack = ["rope", ...s.stack];
+    expect(stale(above)).toEqual([
+      expect.stringContaining(
+        "1 tile(s) with border pieces out of date (first at 1,1,7: has border_surf_se, border_grass_se, needs border_surf_se, border_grass_se at the bottom",
+      ),
+    ]);
+    const missing = bordered(mini());
+    const m = must(missing.chunks.get(chunkKey(7, 0, 0)));
+    m.items = m.items.filter((t) => !(t.x === 16 && t.y === 16));
+    expect(stale(missing)).toEqual([
+      expect.stringContaining("(first at 16,16,7: has none, needs border_grass_inner_nw"),
+    ]);
+    // Without a ladder (no fringe anywhere), nothing is checked.
+    expect(messages(check(mini(), undefined, [], { ...full, borders: NO_BORDERS }))).toEqual([]);
   });
 
   it("accepts a house and checks its rules (T5.4)", () => {
