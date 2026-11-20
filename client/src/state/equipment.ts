@@ -110,6 +110,19 @@ export function slotAccepts(def: ItemDef | undefined, slot: EquipmentSlot): bool
   return wornIn(def) === slot;
 }
 
+/**
+ * What a slot does with a held item, for its `data-accepts`: "yes" wears it (slotAccepts,
+ * it glows), "store" keeps it without wearing it, "no" refuses it (red under the pointer).
+ * The backpack slot stores anything that can be carried: into the worn backpack, or into
+ * the pockets without one (docs/02 "Bolsillos"; session/inventory.go destination and
+ * intoBackpack). The server still decides (a full backpack and full pockets refuse).
+ */
+export function slotDrop(def: ItemDef | undefined, slot: EquipmentSlot): "yes" | "store" | "no" {
+  if (slotAccepts(def, slot)) return "yes";
+  if (slot === EquipmentSlot.BACKPACK && def && !def.fixed) return "store";
+  return "no";
+}
+
 /** How loaded the character is (the bar under the inventory): 0..1 and a level for its colour. */
 export interface Load {
   /** Carried weight over the maximum, 0..1. */

@@ -985,7 +985,9 @@ kbd {
   pointer-events: none;
 }
 /* An item dragged or picked (docs/17 UI-5): the slots that take it glow; one that does not
-   tints red under the pointer (state/equipment.ts slotAccepts; the server still decides).
+   tints red under the pointer (state/equipment.ts slotDrop; the server still decides). The
+   backpack slot stores what it does not wear (data-accepts="store": into the backpack or
+   the pockets), so it neither glows nor tints red.
    Only with a pointer that hovers: a touch screen keeps :hover where the last finger was,
    and a slot tapped earlier stayed red while the picked item waited for its place. */
 .inventory .doll[data-holding] .slot[data-accepts="yes"] {

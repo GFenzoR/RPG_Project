@@ -1531,9 +1531,10 @@ tooltip al estilo Diablo II"). Solo la idea de esos paneles: arte, nombres y tex
   cuello más chico sobresale de su borde (`overflow: visible`), píxel por píxel.
 - **Brillo y rojo:** `GameUi.dragging` (el item que se arrastra: `Game.startDrag` lo
   publica y lo borra al soltar, o con un `pointercancel`, sin mover nada) o `GameUi.picked`; `.doll[data-holding]` y cada slot con
-  `data-accepts="yes|no"` (`slotAccepts`: `wornIn` es el `slotFor` del servidor, con
-  `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada para lo
-  `fixed`). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
+  `data-accepts="yes|no|store"` (`slotDrop`; `slotAccepts`: `wornIn` es el `slotFor` del
+  servidor, con `equipSlot` de `state/item-card.ts` más el contenedor en la espalda, y nada
+  para lo `fixed`; el slot de la mochila guarda lo demás, `store`, sin brillo ni rojo: el
+  servidor lo mete en la mochila o, sin ella, en los bolsillos). El CSS ilumina los `yes` y tiñe de rojo un `no` con `:hover` (un arrastre no
   captura el puntero, así que el `:hover` sigue al mouse), solo con `@media (hover: hover)`:
   una pantalla táctil deja el `:hover` donde estuvo el último dedo. Nivel, vocación y manos libres
   los sigue diciendo el servidor al soltar.
