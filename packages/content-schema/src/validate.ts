@@ -1800,14 +1800,6 @@ class Validator {
   }
 
   /**
-   * Reward chests (docs/02 "Libros y cofres", same rules as content.CheckChests in Go): a
-   * chest is a map item nobody picks up, its chest id is unique, and each reward can go in a
-   * backpack (not pickupable: false, like a wall, a lectern or another chest), comes in a
-   * count from 1 to one stack of its item (1 if it does not stack) and is never the forge's
-   * protection (the warding amber: only monsters drop it). That a reward exists is the
-   * schema's itemRef; that it is not retired, checkRetiredItems'.
-   */
-  /**
    * Milestone quests (docs/02 "Quests de hito"), the rules the schema cannot say (the
    * server's content.ParseQuest says the same): requires and title go with milestone: true
    * and it with them; a milestone is not repeatable and its last step, only that one, is a
@@ -1861,6 +1853,14 @@ class Validator {
     }
   }
 
+  /**
+   * Reward chests (docs/02 "Libros y cofres", same rules as content.CheckChests in Go): a
+   * chest is a map item nobody picks up, its chest id is unique, and each reward can go in a
+   * backpack (not pickupable: false, like a wall, a lectern or another chest), comes in a
+   * count from 1 to one stack of its item (1 if it does not stack) and is never the forge's
+   * protection (the warding amber: only monsters drop it). That a reward exists is the
+   * schema's itemRef; that it is not retired, checkRetiredItems'.
+   */
   private checkChests(): void {
     const byId = new Map<string, Obj>();
     for (const { item } of this.items) {

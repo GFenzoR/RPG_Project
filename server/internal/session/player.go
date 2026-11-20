@@ -129,6 +129,9 @@ type Player struct {
 	questLogDirty bool
 	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
 	milestoneMarks uint64
+	// sigilMet is what it met of the milestone of the plate it stands on when last
+	// checked (sigilMarks): a change marks the room again (sigilRecheck).
+	sigilMet uint8
 	// An Inventory held back (holdInventory): above 0, sendInventory only marks it due,
 	// and the outermost release sends one with the state by then.
 	invHold int

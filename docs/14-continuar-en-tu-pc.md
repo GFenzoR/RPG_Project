@@ -154,10 +154,29 @@ el punto 5:
     `questsmilestones` de `make ui-preview`; Orthavel y Morvund solo se juegan en
     `session/sigil_map_test.go` (cuatro personajes de nivel 35 para un E2E es mucho
     sembrado).
-  - **Coordinar nombres con `feat/place-names`:** los textos dicen "al noreste de Raigal",
-    "al sur de Raigal" y "la mina del Volcán"; si esa rama renombra Raigal o la isla, hay que
-    cambiar `quest.ms_*.step_*`, los carteles (`text.bosque.thalorn_sign`,
-    `orthavel_sign`, `text.volcan.morvund_sign`) y las ofertas de Olmar, Fenn y el eco.
+  - **Coordinar nombres con `feat/place-names`:** esa rama renombra el pueblo del Bosque
+    (Raigal → **Ivernel**) y las islas (Bosque → Selvaine, Volcán → Karvask). Thalorn,
+    Orthavel y Morvund no chocan con ninguno de sus nombres. Al mergear las dos, cambiar
+    "Raigal" por "Ivernel" (y la isla, si se nombra) en `quest.ms_*.step_*`, los carteles
+    (`text.bosque.thalorn_sign`, `orthavel_sign`, `text.volcan.morvund_sign`), las ofertas
+    de Olmar, Fenn y el eco, la descripción de `data/quests/ms_orthavel_vigil.yaml` y la
+    tabla de docs/02 "Quests de hito".
+  - **Riesgos conocidos (revisión del lote 14):**
+    - Solo pisa una placa quien tiene la quest en ese paso, pero alguien que la tiene puede
+      quedarse parado sin cumplir el resto (nivel, equipo, vocación) y trabar a los demás;
+      y uno con bloqueo PvP que cierra el juego sobre la placa queda link-dead sin tope
+      (no cuenta, pero ocupa la casilla hasta que termina el bloqueo). Si pasa en la
+      práctica: echar de la placa a quien no cumple tras unos segundos.
+    - La llave de Morvund se vuelve a pedir al eco con `lacks_item` (igual que la llave de
+      ascua): se puede tirar al suelo, pedir otra y que otro la recoja y entre a la galería
+      sin el hito. Impacto bajo (abierta, la puerta deja pasar a cualquiera); la
+      solución sería un flag "ya se la dieron" más un item que no se tire.
+    - `mapcli validate` no comprueba que a la sala de recompensa no se llegue a pie sin las
+      placas: hoy las tres están cerradas por muros (solo salen por el teletransporte), pero
+      un cambio del mapa lo podría romper sin aviso. Un chequeo posible: el área de `to` no
+      se alcanza desde un templo sin la arista de las placas.
+    - `milestoneMarks` recorre lo que lleva el jugador una vez por hito en cada
+      `questRecheck`: bien con 3 hitos; si crecen, cachear por item.
   - **El diario lista todos los hitos desde el nivel 1:** hoy son tres; si crecen, mostrar
     solo los de la banda del personaje (o de su isla).
   - **El título es solo un texto en el diario:** no se ve sobre el personaje ni en el sitio.
@@ -166,9 +185,9 @@ el punto 5:
   - **Una placa no se ve ocupada desde lejos:** el sprite es el mismo con o sin alguien
     encima; "Mirar" dice cuántas hay. Un brillo por placa ocupada pediría estado del mapa
     por tick (no vale hoy).
-  - **El amuleto de asta también se compra** (Velia lo vende a 600): el hito de Orthavel
-    pide llevarlo puesto, no haberlo ganado. Si el dueño quiere que sea solo el de la
-    quest, haría falta un item propio.
+  - **El amuleto de asta ya no se vende** (Velia solo lo compra): el hito de Orthavel
+    pide llevarlo puesto y solo lo da `tanner_chitin` (una vez por personaje; se puede
+    comerciar). Quien lo pierde se lo compra a otro jugador.
 - **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
   personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
   equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto

@@ -56,7 +56,12 @@
               "type": "object",
               "additionalProperties": false,
               "required": ["weapon"],
-              "properties": { "weapon": { "$ref": "common.schema.json#/$defs/id" } }
+              "properties": {
+                "weapon": {
+                  "description": "A weapon.type of data/items (items.schema.json): one of them in either hand.",
+                  "enum": ["sword", "axe", "club", "distance", "wand"]
+                }
+              }
             }
           ]
         }

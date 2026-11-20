@@ -22,9 +22,12 @@ import (
 // nobody moves.
 //
 // Nothing runs per tick for a room nobody stepped on: a step onto a plate, a relocation
-// onto one or a login on one marks its room (sigilStep), and checkSigils, in the flush,
-// evaluates only the marked ones. One character never holds two plates (one tile each)
-// and leaving the world (logout, link-dead) leaves the plate: it no longer counts.
+// onto one or a login on one marks its room (sigilStep), and so does a change of what a
+// player standing on one meets (sigilRecheck, from questRecheck); checkSigils, in the
+// flush, evaluates only the marked ones. A step onto a plate needs the quest on its
+// sigils step (sigilRefuses), so nobody outside it holds a plate. One character never
+// holds two plates (one tile each) and leaving the world (logout, link-dead) leaves the
+// plate: it no longer counts.
 
 const (
 	msgMilestoneWaiting  = "milestone.waiting"
@@ -138,14 +141,63 @@ func (w *World) checkSigilRoom(r *sigilRoom) error {
 }
 
 // sigilStep marks the room of the plate p now stands on, if any (after a step, a
-// relocation or the login).
+// relocation or the login), and keeps what p meets of it (sigilRecheck).
 func (w *World) sigilStep(p *Player) {
 	if len(w.sigilAt) == 0 {
 		return
 	}
 	if r := w.sigilAt[p.pos]; r != nil {
 		r.dirty = true
+		p.sigilMet = w.sigilMarks(p, r)
 	}
+}
+
+// sigilMarks is what p meets of milestone r right now, as bits: the quest on its sigils
+// step, the level, the gear.
+func (w *World) sigilMarks(p *Player, r *sigilRoom) uint8 {
+	var m uint8
+	if w.quests.OnSigils(p.storage, r.quest.ID) {
+		m |= 1
+	}
+	req := r.quest.Requires // never nil for a milestone (content.checkMilestone)
+	if p.level >= req.Level {
+		m |= 2
+	}
+	if w.hasGear(p, req.Gear) {
+		m |= 4
+	}
+	return m
+}
+
+// sigilRecheck marks again the room of the plate p stands on when what p meets of it
+// changed while standing there (questRecheck: an item put on or taken, a level, a quest
+// step): equipping the missing amulet on the plate is enough, no need to step off and on.
+func (w *World) sigilRecheck(p *Player) {
+	if len(w.sigilAt) == 0 {
+		return
+	}
+	if r := w.sigilAt[p.pos]; r != nil {
+		if m := w.sigilMarks(p, r); m != p.sigilMet {
+			p.sigilMet = m
+			r.dirty = true
+		}
+	}
+}
+
+// sigilRefuses reports whether p may not step onto to because it is a plate of a
+// milestone p is not on the sigils step of (and tells p why): nobody outside the quest
+// holds a plate to keep the ones doing it from completing it. Staff may (it never counts
+// and hears so).
+func (w *World) sigilRefuses(p *Player, to world.Pos) bool {
+	if len(w.sigilAt) == 0 {
+		return false
+	}
+	r := w.sigilAt[to]
+	if r == nil || isStaff(p) || w.quests.OnSigils(p.storage, r.quest.ID) {
+		return false
+	}
+	p.emit(systemMsg(quest.FailStep.Key(), &pb.TextParam{Name: "quest", Value: &pb.TextParam_ContentId{ContentId: r.quest.ID}}))
+	return true
 }
 
 // hasGear reports whether p meets gear (nil: no requirement).
@@ -254,15 +306,32 @@ func (w *World) evalSigils(ctx *game.TickContext, r *sigilRoom) {
 	dest := make([]world.Pos, len(on))
 	taken := map[world.Pos]bool{}
 	skip := world.FlagBlocksMovement | world.FlagPortalStep | world.FlagHouse
+	var locked []*Player
 	for i, p := range on {
 		to, ok := w.searchRings(r.to, w.arrivalRadius, skip, func(q world.Pos) bool { return w.free(q) && !taken[q] })
-		if !ok || ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
+		if !ok {
 			for _, o := range on {
 				o.emit(systemMsg(msgMilestoneBlocked, qp))
 			}
 			return
 		}
+		if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
+			locked = append(locked, p) // portalArrival's rule: no hiding in a protection zone
+		}
 		dest[i], taken[to] = to, true
+	}
+	if len(locked) > 0 {
+		names := make([]string, len(locked))
+		for i, p := range locked {
+			names[i] = p.name
+			p.emit(systemMsg(msgPvPProtLocked))
+		}
+		for _, p := range on {
+			if !slices.Contains(locked, p) {
+				p.emit(systemMsg(msgMilestoneNotReady, qp, textParam("names", strings.Join(names, ", "))))
+			}
+		}
+		return
 	}
 	names := make([]string, len(on))
 	for i, p := range on {

@@ -889,8 +889,9 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
   lugar de la espada corta forjada.
 - **Bosque:** la curtidora vende las armas, el torso pesado, la capucha, las calzas, las
   botas y el escudo de olmo (que también se forja) de la banda 3; la druida Velia, las
-  varitas y varas, la túnica de musgo y el amuleto de asta (y Gisla talla uno como
-  recompensa de `tanner_chitin`). El anillo de zarza es botín raro de espinosos y reptantes
+  varitas y varas y la túnica de musgo. El amuleto de asta no se vende (Velia lo compra):
+  lo talla Gisla como recompensa de `tanner_chitin` y es lo que pide el hito de Orthavel
+  ("Quests de hito"), así que ese filtro no se paga con oro. El anillo de zarza es botín raro de espinosos y reptantes
   huecos.
 - **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
   solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
@@ -2469,7 +2470,8 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
 - **En los datos** (`data/quests/<id>.yaml`, docs/06 "Quest"): `milestone: true`, un
   `title` (lo que se gana) y `requires`: `level`, `players` (1 a 4), opcionalmente
   `vocations` (una por jugador: cada placa lleva la marca de una) y `gear` (un item que se
-  lleva encima, o puesto con `equipped: true`, o un arma empuñada de un tipo, `weapon`).
+  lleva encima, o puesto con `equipped: true`, o un arma empuñada de un tipo, `weapon`:
+  `sword`, `axe`, `club`, `distance` o `wand`, los `weapon.type` de los items).
   Su último paso, y solo ese, es `sigils`: las placas que hay a `radius` casillas
   (Chebyshev) de un punto y el destino `to`, la **sala de recompensa**. No es repetible.
 - **Antes de empezarla:** el diario de misiones tiene una pestaña **Hitos** con todos
@@ -2484,7 +2486,12 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
   ("2 de 4") y, si tiene, para qué vocación es.
 - **La regla (servidor autoritativo y determinista, `session/sigil.go` y
   `quest/milestone.go`):** al final de cada tick en que alguien pisó una placa (un paso, un
-  teletransporte o entrar al juego sobre ella), el servidor mira las placas de ese hito.
+  teletransporte o entrar al juego sobre ella), o en que cambió lo que cumple alguien que
+  ya está parado sobre una (se pone el amuleto, sube de nivel, avanza la quest: no hace
+  falta bajarse y volver a subir), el servidor mira las placas de ese hito. **Solo pisa una
+  placa quien tiene la quest en ese paso** (o alguien del personal): a cualquier otro el
+  paso se le rechaza con `milestone.fail_step`, así nadie ajeno ocupa una placa para
+  trabar a los que la están haciendo.
   Cuenta una placa con un jugador **vivo, conectado** (un link-dead no cuenta: salir del
   juego sobre la placa es dejarla) **y que no sea del personal** (un GM nunca cuenta y se lo
   dice `milestone.staff`). Una persona ocupa una sola casilla, así que nunca dos placas.
@@ -2497,7 +2504,8 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
   - Si todos cumplen, el servidor busca una casilla libre para **cada uno** alrededor de
     `to` (la misma búsqueda por anillos de un portal: `searchRings` con su área, nunca una
     casa ni la entrada de un portal, a `travel.arrival_radius`) y con el bloqueo PvP de un
-    portal (un atacante bloqueado no entra a una zona de protección desde afuera). Si no
+    portal (un atacante bloqueado no entra a una zona de protección desde afuera: oye
+    `pvp.protection_locked` y los demás, con `milestone.not_ready`, a quién esperan). Si no
     hay lugar para todos, nadie se mueve (`milestone.blocked`). Si lo hay, los lleva juntos
     en el mismo tick, cumple el paso de cada uno (las recompensas de la quest, como
     cualquier último paso) y les anuncia a todos `milestone.achieved` con los nombres.
@@ -2515,7 +2523,7 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
 | Hito | Isla | Nivel | Quién | Lo da | Placas | Recompensa |
 |---|---|---|---|---|---|---|
 | `ms_thalorn_oath` "El juramento de Thalorn" | Bosque (cripta bajo las piedras al noreste de Raigal, piso 8) | 20 | 2 personas, cualquier vocación | Hermano Olmar (`bosque_priest`) | 4207,6090 y 4213,6090 | 6600 XP, anillo de zarza, 600 monedas; cofre: 4 de plata, 1 piedra de temple mayor, 3 brebajes de vida. Título "Testigo del Juramento" |
-| `ms_orthavel_vigil` "La vigilia de Orthavel" | Bosque (bajo los robles al sur de Raigal, piso 8) | 25 | 1 persona con el **amuleto de asta puesto** (lo da `tanner_chitin`; Velia también lo vende) | Fenn Zarzal (`bosque_hunter`) | 4178,6125 | 8600 XP, botas de cuero de ciervo, 700 monedas; cofre: 5 de plata, 2 piedras de temple mayores, 3 brebajes de vida. Título "Vigía del Asta" |
+| `ms_orthavel_vigil` "La vigilia de Orthavel" | Bosque (bajo los robles al sur de Raigal, piso 8) | 25 | 1 persona con el **amuleto de asta puesto** (solo lo da `tanner_chitin`; ninguna tienda lo vende) | Fenn Zarzal (`bosque_hunter`) | 4178,6125 | 8600 XP, botas de cuero de ciervo, 700 monedas; cofre: 5 de plata, 2 piedras de temple mayores, 3 brebajes de vida. Título "Vigía del Asta" |
 | `ms_morvund_embers` "Las cuatro ascuas de Morvund" | Volcán (cámara al norte de la galería oeste de la mina, piso 8) | 35 | 4 personas, **una de cada vocación**, cada una con la **llave de ascua** (`ch3_gate`) | el eco de la forja (`volcan_forge_echo`) | guardián 3647,5755; arcanista 3657,5755; montaraz 3647,5761; druida 3657,5761 | 19 000 XP, la **llave de Morvund**, un yelmo de acero de ascua, 1300 monedas; cofre: 10 de plata, 3 piedras de temple mayores, 3 brebajes de vida y de maná concentrados. Título "Mano de las Cuatro Ascuas" |
 
 - **La galería de Morvund** (la recompensa de acceso): un coto de caza chico (21x13) detrás
@@ -2533,7 +2541,9 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
 - **Tests:** `quest/milestone_test.go` (requisitos, completar juntos, placas a medio
   ocupar, vocación equivocada, personal, salir del juego, una sola vez),
   `session/sigil_test.go` (2 y 4 jugadores en un mapa de prueba, el diario con los hitos
-  sin empezar, la mirada a una placa), `session/sigil_map_test.go` (los tres en el mapa
+  sin empezar, la mirada a una placa, el paso rechazado sin la quest, la re-evaluación al
+  ponerse el equipo o subir de nivel sobre la placa, la sala sin lugar, el bloqueo PvP,
+  la muerte y el link-dead en combate sobre una placa), `session/sigil_map_test.go` (los tres en el mapa
   real, los cofres y la puerta de la galería), el validador de mapas
   (`packages/map-format`, "checks milestone plates") y de contenido, y el E2E
   "milestones" de `e2e/game.spec.ts` (dos desconocidos en Thalorn).

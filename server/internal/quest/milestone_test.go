@@ -1,6 +1,8 @@
 package quest
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,12 +58,31 @@ func TestMilestoneParse(t *testing.T) {
 rewards:`, 1),
 		"sigils off a milestone": strings.Replace(strings.Replace(strings.Replace(milestoneYAML, "milestone: true\n", "", 1),
 			"title: t\n", "", 1), "requires:", "x:", 1),
-		"radius": strings.Replace(milestoneYAML, "radius: 2", "radius: 9", 1),
+		"radius":         strings.Replace(milestoneYAML, "radius: 2", "radius: 9", 1),
+		"no such weapon": strings.Replace(milestoneYAML, "{ item: lantern }", "{ weapon: spear }", 1),
 	}
 	for name, raw := range bad {
 		if _, err := content.ParseQuest([]byte(raw)); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+	for _, w := range content.WeaponTypes {
+		if _, err := content.ParseQuest([]byte(strings.Replace(milestoneYAML, "{ item: lantern }", "{ weapon: "+w+" }", 1))); err != nil {
+			t.Errorf("weapon %s: %v", w, err)
+		}
+	}
+}
+
+// content.WeaponTypes are the weapon.type values of the items schema (what make validate
+// checks the items against).
+func TestWeaponTypesMatchTheSchema(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "content-schema", "schemas", "items.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `"type": { "enum": [` + `"` + strings.Join(content.WeaponTypes, `", "`) + `"] }`
+	if !strings.Contains(string(raw), want) {
+		t.Fatalf("items.schema.json has no %s", want)
 	}
 }
 

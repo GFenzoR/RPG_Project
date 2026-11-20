@@ -1655,10 +1655,6 @@ function chunkFile(dir: string, c: Chunk): string {
   return `${dir}/chunks/${floorDir(c.z)}/${chunkFileName(c.cx, c.cy)}`;
 }
 
-/**
- * Every item stack of the island's chunks (by floor, then chunk row and column) with its
- * chunk and world position.
- */
 /** A sigil plate placed on the map (checkSigils). */
 interface PlacedPlate {
   pos: Position;
@@ -1667,6 +1663,10 @@ interface PlacedPlate {
   file: string;
 }
 
+/**
+ * Every item stack of the island's chunks (by floor, then chunk row and column) with its
+ * chunk and world position.
+ */
 function placedItems(island: Island): { c: Chunk; s: Chunk["items"][number]; pos: Position }[] {
   const out: { c: Chunk; s: Chunk["items"][number]; pos: Position }[] = [];
   const chunks = [...island.chunks.values()].sort(

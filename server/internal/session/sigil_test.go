@@ -2,12 +2,15 @@ package session_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -73,7 +76,12 @@ func sigilVocations() content.Vocations {
 
 func sigilHarness(t *testing.T) *harness {
 	t.Helper()
-	m := worldtest.Map(t, 0, 0, 7, sigilMap...)
+	return sigilHarnessOn(t, worldtest.Map(t, 0, 0, 7, sigilMap...))
+}
+
+// sigilHarnessOn is sigilHarness on m (sigilMap's plates, another reward room).
+func sigilHarnessOn(t *testing.T, m *world.Map) *harness {
+	t.Helper()
 	return newHarness(t, m, func(c *session.Config) {
 		items := testItems()
 		// The pair's plates are 1 and 2 with no vocation; the four's are 1 to 4 with one
@@ -209,23 +217,26 @@ func TestMilestoneInTheQuestLog(t *testing.T) {
 	}
 }
 
-// A player without the quest on the step (here, never started) keeps both where they are:
-// it hears why, the other hears who is not ready.
+// A player without the quest on the step (here, never started) may not step onto a plate:
+// it hears why and stays off it, so nobody outside the quest blocks the ones doing it.
 func TestMilestoneSomeoneNotReady(t *testing.T) {
 	h := sigilHarness(t)
 	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
 	cb, b := hero(h, "Brune", "arcanist", 21, pos(4, 3), true, "") // no quest
 	h.step(ca, N)
 	evs := h.step(cb, N)
-	ea := ca.take()
-	if a.Pos() != pos(2, 2) || b.Pos() != pos(4, 2) {
-		t.Fatalf("moved: %v %v", a.Pos(), b.Pos())
-	}
-	if !hasKey(evs, "milestone.fail_step") || !hasKey(ea, "milestone.not_ready") {
-		t.Fatalf("messages %v / %v", systemKeys(evs), systemKeys(ea))
+	if a.Pos() != pos(2, 2) || b.Pos() != pos(4, 3) || !hasKey(evs, "milestone.fail_step") {
+		t.Fatalf("at %v %v: %v", a.Pos(), b.Pos(), systemKeys(evs))
 	}
 	if questState(h, a, "pair") != quest.InProgress {
 		t.Fatal("completed without the other")
+	}
+	// With the quest taken, the same step is allowed and completes it.
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(b, "pair") }))
+	h.sim.Step()
+	h.step(cb, N)
+	if questState(h, a, "pair") != quest.Completed || questState(h, b, "pair") != quest.Completed {
+		t.Fatalf("after taking it: %v %v", questState(h, a, "pair"), questState(h, b, "pair"))
 	}
 }
 
@@ -244,6 +255,9 @@ func TestMilestoneLevelAndGear(t *testing.T) {
 			h.step(ca, N)
 			if evs := h.step(cb, N); !hasKey(evs, c.key) || b.Pos() != pos(4, 2) {
 				t.Fatalf("%v at %v", systemKeys(evs), b.Pos())
+			}
+			if evs := ca.take(); !hasKey(evs, "milestone.not_ready") {
+				t.Fatalf("the other one: %v", systemKeys(evs))
 			}
 		})
 	}
@@ -307,5 +321,123 @@ func TestMilestoneFourVocations(t *testing.T) {
 		if p.Pos().X < 15 || questState(h, p, "four") != quest.Completed {
 			t.Fatalf("player %d at %v, %v", i, p.Pos(), questState(h, p, "four"))
 		}
+	}
+}
+
+// What a player on a plate meets is checked again when it changes there: putting the
+// missing item in the pack, or reaching the level, completes the milestone without
+// stepping off and on.
+func TestMilestoneRecheckOnThePlate(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		lvl   int
+		tunic bool
+		fix   func(h *harness, p *session.Player)
+	}{
+		{"gear", 25, false, func(h *harness, p *session.Player) {
+			h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "test_tunic", 1) }))
+		}},
+		{"level", 12, true, func(h *harness, p *session.Player) {
+			h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, 25) }))
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := sigilHarness(t)
+			ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+			cb, b := hero(h, "Brune", "arcanist", c.lvl, pos(4, 3), c.tunic, "pair")
+			h.step(ca, N)
+			h.step(cb, N)
+			if b.Pos() != pos(4, 2) || questState(h, b, "pair") != quest.InProgress {
+				t.Fatalf("before: at %v", b.Pos())
+			}
+			c.fix(h, b)
+			h.sim.RunFor(time.Second)
+			if questState(h, a, "pair") != quest.Completed || questState(h, b, "pair") != quest.Completed || b.Pos().X < 16 {
+				t.Fatalf("after: %v %v at %v", questState(h, a, "pair"), questState(h, b, "pair"), b.Pos())
+			}
+		})
+	}
+}
+
+// With no free tile around the reward room's point for everyone, nobody moves and all
+// hear it: here the room is one tile, walled in, and someone stands on it.
+func TestMilestoneBlockedRoom(t *testing.T) {
+	rows := slices.Clone(sigilMap)
+	rows[1] = rows[1][:17] + "###"
+	rows[2] = rows[2][:17] + "#.#"
+	rows[3] = rows[3][:17] + "###"
+	h := sigilHarnessOn(t, worldtest.Map(t, 0, 0, 7, rows...))
+	hero(h, "Sentry", "ranger", 5, pos(18, 2), false, "")
+	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+	cb, b := hero(h, "Brune", "arcanist", 21, pos(4, 3), true, "pair")
+	h.step(ca, N)
+	evs := h.step(cb, N)
+	if a.Pos() != pos(2, 2) || b.Pos() != pos(4, 2) || !hasKey(evs, "milestone.blocked") || !hasKey(ca.take(), "milestone.blocked") {
+		t.Fatalf("at %v %v: %v", a.Pos(), b.Pos(), systemKeys(evs))
+	}
+	if questState(h, a, "pair") != quest.InProgress || questState(h, b, "pair") != quest.InProgress {
+		t.Fatal("completed without moving")
+	}
+}
+
+// An attacker under its PvP lock does not go into a protection zone through the plates
+// (portalArrival's rule): it hears its lock, the other one who it waits for, and nobody
+// moves.
+func TestMilestonePvPLockKeepsEveryoneOut(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7, sigilMap...)
+	for y := 0; y < 5; y++ {
+		for x := 15; x < 20; x++ {
+			worldtest.SetTile(t, m, pos(x, y), worldtest.Grass, world.FlagProtection)
+		}
+	}
+	h := sigilHarnessOn(t, m)
+	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+	cb, b := hero(h, "Brune", "arcanist", 21, pos(4, 3), true, "pair")
+	h.step(ca, N)
+	h.sim.Command(gameFunc(func() { h.w.SetAttackLockForTest(a, h.sim.Tick()+1000) }))
+	evs := h.step(cb, N)
+	ea := ca.take()
+	if a.Pos() != pos(2, 2) || b.Pos() != pos(4, 2) || !hasKey(ea, "pvp.protection_locked") ||
+		!hasKey(evs, "milestone.not_ready") || hasKey(evs, "milestone.blocked") {
+		t.Fatalf("at %v %v: %v / %v", a.Pos(), b.Pos(), systemKeys(ea), systemKeys(evs))
+	}
+	if questState(h, a, "pair") != quest.InProgress {
+		t.Fatal("completed under the lock")
+	}
+}
+
+// Dying on a plate leaves it (the temple takes the body back): the next one waits alone.
+func TestMilestoneDeathOnAPlate(t *testing.T) {
+	h := sigilHarness(t)
+	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+	cb, b := hero(h, "Brune", "arcanist", 21, pos(4, 3), true, "pair")
+	h.step(ca, N)
+	h.do(func(ctx *game.TickContext) { h.w.DieForTest(ctx, a) })
+	if a.Pos() == pos(2, 2) {
+		t.Fatal("still on the plate after dying")
+	}
+	evs := h.step(cb, N)
+	if b.Pos() != pos(4, 2) || !hasKey(evs, "milestone.waiting") || questState(h, b, "pair") != quest.InProgress {
+		t.Fatalf("after the death: %v %v", b.Pos(), systemKeys(evs))
+	}
+}
+
+// Closing the game in a fight on a plate leaves the character there, link-dead: it holds
+// the tile but never counts, so the other one waits and nobody is carried.
+func TestMilestoneLinkDeadInAFight(t *testing.T) {
+	h := sigilHarness(t)
+	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+	cb, b := hero(h, "Brune", "arcanist", 21, pos(4, 3), true, "pair")
+	h.step(ca, N)
+	h.sim.Command(gameFunc(func() { h.w.SetPvPLockForTest(a, h.sim.Tick()+game.Tick(10000)) }))
+	h.sim.Command(h.w.Leave(ca))
+	h.sim.Step()
+	if !a.LinkDead() || a.Pos() != pos(2, 2) {
+		t.Fatalf("link-dead %v at %v", a.LinkDead(), a.Pos())
+	}
+	evs := h.step(cb, N)
+	if b.Pos() != pos(4, 2) || !hasKey(evs, "milestone.waiting") || questState(h, a, "pair") != quest.InProgress ||
+		questState(h, b, "pair") != quest.InProgress {
+		t.Fatalf("with a link-dead on a plate: %v %v", b.Pos(), systemKeys(evs))
 	}
 }

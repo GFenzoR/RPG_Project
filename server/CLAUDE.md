@@ -329,9 +329,12 @@ server/
   cuadrado, contra `requires`) y su destino; `World.sigilAt` (casilla → sala) es lo único
   que se mira por paso. `move`, `relocate` y `join` llaman a `sigilStep` (marca la sala si
   el jugador quedó sobre una placa; un camino nuevo que cambie la casilla de un jugador
-  sin pasar por ellos también) y `checkSigils`, en `flushSystem`, evalúa solo las salas
-  marcadas: `quest.Cooperative` decide (vivo, conectado, no staff, la quest en el paso, la
-  vocación, el nivel, el equipo). Todos se mueven juntos o ninguno: las casillas se buscan
+  sin pasar por ellos también), `questRecheck` llama a `sigilRecheck` (la vuelve a marcar
+  si cambió lo que cumple quien está parado encima, `Player.sigilMet`), `move` rechaza el
+  paso a una placa de quien no tiene la quest en ese paso (`sigilRefuses`, salvo el staff)
+  y `checkSigils`, en `flushSystem`, evalúa solo las salas marcadas: `quest.Cooperative`
+  decide (vivo, conectado, no staff, la quest en el paso, la vocación, el nivel, el
+  equipo). Todos se mueven juntos o ninguno: las casillas se buscan
   antes con `searchRings` (área, sin casas ni portales, `arrivalRadius`) y el bloqueo PvP
   de `portalArrival`; después `relocate` y `CompleteSigils` por cada uno. El diario manda
   los hitos sin empezar (`OPEN`) con `milestoneInfo`, y `questRecheck` lo marca sucio si

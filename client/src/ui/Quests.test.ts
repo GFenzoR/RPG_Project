@@ -184,7 +184,9 @@ describe('milestones (docs/02 "Quests de hito")', () => {
       ["players", undefined],
     ]);
     expect(text(reqs[0])).toContain('client.quests.req_level{"level":20}');
-    expect(text(reqs[1])).toContain("client.quests.req_weapon");
+    expect(text(reqs[1])).toContain(
+      'client.quests.req_weapon{"weapon":"client.quests.weapon.sword"}',
+    );
     expect(text(reqs[2])).toContain('client.quests.req_players{"count":2}');
   });
 

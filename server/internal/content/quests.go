@@ -50,6 +50,10 @@ type Gear struct {
 	Weapon   string `yaml:"weapon"`
 }
 
+// WeaponTypes are the weapon.type values of data/items (items.schema.json), the ones a
+// milestone's gear.weapon may ask for.
+var WeaponTypes = []string{"sword", "axe", "club", "distance", "wand"}
+
 // MaxMilestonePlayers bounds a milestone's group, and MaxSigilRadius the square its
 // plates are looked for in (around the sigils point).
 const (
@@ -292,6 +296,8 @@ func (q *Quest) checkMilestone() string {
 		return "requires.gear takes an item or a weapon type, not both"
 	case r.Gear != nil && r.Gear.Equipped && r.Gear.Item == "":
 		return "requires.gear.equipped goes with an item"
+	case r.Gear != nil && r.Gear.Weapon != "" && !slices.Contains(WeaponTypes, r.Gear.Weapon):
+		return fmt.Sprintf("requires.gear.weapon %q is no weapon type (%v)", r.Gear.Weapon, WeaponTypes)
 	}
 	s := q.Steps[q.SigilsStep()].CompleteWhen.Sigils
 	switch {

@@ -66,7 +66,7 @@ function MilestoneReqs(props: {
           item: props.content ? itemName(props.content, t, m.gearItem) : String(m.gearItem),
         })
       : m.gearWeapon !== ""
-        ? t("client.quests.req_weapon", { weapon: t(`skill.${m.gearWeapon}.name`) })
+        ? t("client.quests.req_weapon", { weapon: t(`client.quests.weapon.${m.gearWeapon}`) })
         : "";
   return (
     <ul class="quest-reqs" data-testid="quest-reqs">

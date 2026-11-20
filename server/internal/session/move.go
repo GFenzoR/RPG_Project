@@ -286,6 +286,11 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		p.emit(systemMsg(msgHouseNoAccess))
 		return
 	}
+	if w.sigilRefuses(p, to) {
+		// Milestones: a plate is only for who is doing its quest (sigil.go).
+		w.reject(p, dirMsg(d))
+		return
+	}
 	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
 		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
 		w.reject(p, dirMsg(d))

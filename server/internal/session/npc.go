@@ -840,6 +840,7 @@ func (w *World) questRecheck(p *Player) {
 			p.milestoneMarks = m
 			p.questLogDirty = true
 		}
+		w.sigilRecheck(p) // what p meets of the plate it stands on
 	}
 }
 
