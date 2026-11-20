@@ -28,9 +28,14 @@ const (
 	statusProtection = "protection_zone"
 )
 
-// statusIDs are the ids the statuses take in PlayerConditions: no balance.yaml condition
-// may use one (initConditions).
-var statusIDs = []string{statusInCombat, statusPvPLocked, statusProtection}
+// statusPartyBonus is the id of the party bonus in the client's status tray: the client
+// builds it from PartyUpdate.bonus_percent (it never travels in PlayerConditions), but a
+// condition with its id would clash with it in the tray.
+const statusPartyBonus = "party_bonus"
+
+// statusIDs are the ids the statuses take in PlayerConditions (and the tray's party
+// bonus): no balance.yaml condition may use one (initConditions).
+var statusIDs = []string{statusInCombat, statusPvPLocked, statusProtection, statusPartyBonus}
 
 // statusSlack is how far an end may move before the client is told again: a fight moves
 // the logout block's end at every hit, and this caps it at one message a second. The

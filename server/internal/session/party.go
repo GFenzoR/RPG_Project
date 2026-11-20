@@ -32,6 +32,7 @@ const (
 	msgPartyLeader       = "party.new_leader"
 	msgPartyDisbanded    = "party.disbanded"
 	msgPartySharedOn     = "party.shared_on"
+	msgPartySharedNew    = "party.shared_default"
 	msgPartySharedOff    = "party.shared_off"
 	msgPartyNotAMember   = "party.not_a_member"
 	msgPartyInviteUsage  = "party.invite_usage"
@@ -210,7 +211,7 @@ func (w *World) acceptInvite(ctx *game.TickContext, p *Player, inviter uint32) {
 		l.party = pt
 		w.parties = append(w.parties, pt)
 		if pt.shared {
-			defer w.partyMsg(pt, systemMsg(msgPartySharedOn)) // after "joined": both hear it
+			defer w.partyMsg(pt, systemMsg(msgPartySharedNew)) // after "joined": both hear it
 		}
 	} else if len(pt.members) >= w.cfg.Balance.Party.MaxMembers {
 		p.emit(systemMsg(msgPartyFull))

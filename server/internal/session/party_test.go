@@ -95,7 +95,7 @@ func TestPartyInviteAcceptKickLeaderLeave(t *testing.T) {
 		up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE || up.GetBonusPercent() != 0 {
 		t.Fatalf("leader's update %v", up)
 	}
-	if k := systemKeys(evs0); k["party.joined"] != 1 || k["party.shared_on"] != 1 {
+	if k := systemKeys(evs0); k["party.joined"] != 1 || k["party.shared_default"] != 1 {
 		t.Fatalf("leader heard %v", k)
 	}
 	if h.w.InvitesForTest() != 0 {
