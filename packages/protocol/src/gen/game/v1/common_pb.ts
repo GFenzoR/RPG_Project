@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/common.proto.
  */
 export const file_game_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKjAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SAASEAoGcG9ja2V0GAQgASgNSABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCJMCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDRIfCgRtb2RzGAMgASgLMhEuZ2FtZS52MS5JdGVtTW9kcyI8CghJdGVtTW9kcxIRCglhdHRyaWJ1dGUYASABKAkSDQoFdmFsdWUYAiABKAUSDgoGcmVmaW5lGAMgASgNIkAKDUxvY2FsaXplZFRleHQSCwoDa2V5GAEgASgJEiIKBnBhcmFtcxgCIAMoCzISLmdhbWUudjEuVGV4dFBhcmFtIn4KCVRleHRQYXJhbRIMCgRuYW1lGAEgASgJEg4KBHRleHQYAiABKAlIABIQCgZudW1iZXIYAyABKANIABIUCgpjb250ZW50X2lkGAQgASgJSAASIgoEaXRlbRgFIAEoCzISLmdhbWUudjEuSXRlbVN0YWNrSABCBwoFdmFsdWUq4AEKCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABITCg9ESVJFQ1RJT05fTk9SVEgQARIYChRESVJFQ1RJT05fTk9SVEhfRUFTVBACEhIKDkRJUkVDVElPTl9FQVNUEAMSGAoURElSRUNUSU9OX1NPVVRIX0VBU1QQBBITCg9ESVJFQ1RJT05fU09VVEgQBRIYChRESVJFQ1RJT05fU09VVEhfV0VTVBAGEhIKDkRJUkVDVElPTl9XRVNUEAcSGAoURElSRUNUSU9OX05PUlRIX1dFU1QQCCq5AgoNRXF1aXBtZW50U2xvdBIeChpFUVVJUE1FTlRfU0xPVF9VTlNQRUNJRklFRBAAEhcKE0VRVUlQTUVOVF9TTE9UX0hFQUQQARIXChNFUVVJUE1FTlRfU0xPVF9ORUNLEAISGwoXRVFVSVBNRU5UX1NMT1RfQkFDS1BBQ0sQAxIYChRFUVVJUE1FTlRfU0xPVF9BUk1PUhAEEh0KGUVRVUlQTUVOVF9TTE9UX1JJR0hUX0hBTkQQBRIcChhFUVVJUE1FTlRfU0xPVF9MRUZUX0hBTkQQBhIXChNFUVVJUE1FTlRfU0xPVF9MRUdTEAcSFwoTRVFVSVBNRU5UX1NMT1RfRkVFVBAIEhcKE0VRVUlQTUVOVF9TTE9UX1JJTkcQCRIXChNFUVVJUE1FTlRfU0xPVF9BTU1PEAoqVAoKTWFya2V0U2lkZRIbChdNQVJLRVRfU0lERV9VTlNQRUNJRklFRBAAEhQKEE1BUktFVF9TSURFX1NFTEwQARITCg9NQVJLRVRfU0lERV9CVVkQAkJGWkRnaXRodWIuY29tL0dGZW56b1IvUlBHX1Byb2plY3Qvc2VydmVyL2ludGVybmFsL25ldC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
+  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKjAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SAASEAoGcG9ja2V0GAQgASgNSABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCJMCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDRIfCgRtb2RzGAMgASgLMhEuZ2FtZS52MS5JdGVtTW9kcyI8CghJdGVtTW9kcxIRCglhdHRyaWJ1dGUYASABKAkSDQoFdmFsdWUYAiABKAUSDgoGcmVmaW5lGAMgASgNIkAKDUxvY2FsaXplZFRleHQSCwoDa2V5GAEgASgJEiIKBnBhcmFtcxgCIAMoCzISLmdhbWUudjEuVGV4dFBhcmFtIn4KCVRleHRQYXJhbRIMCgRuYW1lGAEgASgJEg4KBHRleHQYAiABKAlIABIQCgZudW1iZXIYAyABKANIABIUCgpjb250ZW50X2lkGAQgASgJSAASIgoEaXRlbRgFIAEoCzISLmdhbWUudjEuSXRlbVN0YWNrSABCBwoFdmFsdWUiVwoIQm9keUxvb2sSDAoEYm9keRgBIAEoCRIMCgRza2luGAIgASgJEgwKBGhhaXIYAyABKAkSEgoKaGFpcl9jb2xvchgEIAEoCRINCgViZWFyZBgFIAEoCSrgAQoJRGlyZWN0aW9uEhkKFURJUkVDVElPTl9VTlNQRUNJRklFRBAAEhMKD0RJUkVDVElPTl9OT1JUSBABEhgKFERJUkVDVElPTl9OT1JUSF9FQVNUEAISEgoORElSRUNUSU9OX0VBU1QQAxIYChRESVJFQ1RJT05fU09VVEhfRUFTVBAEEhMKD0RJUkVDVElPTl9TT1VUSBAFEhgKFERJUkVDVElPTl9TT1VUSF9XRVNUEAYSEgoORElSRUNUSU9OX1dFU1QQBxIYChRESVJFQ1RJT05fTk9SVEhfV0VTVBAIKrkCCg1FcXVpcG1lbnRTbG90Eh4KGkVRVUlQTUVOVF9TTE9UX1VOU1BFQ0lGSUVEEAASFwoTRVFVSVBNRU5UX1NMT1RfSEVBRBABEhcKE0VRVUlQTUVOVF9TTE9UX05FQ0sQAhIbChdFUVVJUE1FTlRfU0xPVF9CQUNLUEFDSxADEhgKFEVRVUlQTUVOVF9TTE9UX0FSTU9SEAQSHQoZRVFVSVBNRU5UX1NMT1RfUklHSFRfSEFORBAFEhwKGEVRVUlQTUVOVF9TTE9UX0xFRlRfSEFORBAGEhcKE0VRVUlQTUVOVF9TTE9UX0xFR1MQBxIXChNFUVVJUE1FTlRfU0xPVF9GRUVUEAgSFwoTRVFVSVBNRU5UX1NMT1RfUklORxAJEhcKE0VRVUlQTUVOVF9TTE9UX0FNTU8QCipUCgpNYXJrZXRTaWRlEhsKF01BUktFVF9TSURFX1VOU1BFQ0lGSUVEEAASFAoQTUFSS0VUX1NJREVfU0VMTBABEhMKD01BUktFVF9TSURFX0JVWRACQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM");
 
 /**
  * Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
@@ -291,6 +291,58 @@ export type TextParam = Message<"game.v1.TextParam"> & {
  */
 export const TextParamSchema: GenMessage<TextParam> = /*@__PURE__*/
   messageDesc(file_game_v1_common, 7);
+
+/**
+ * BodyLook is the body of an engine humanoid (docs/02 "Apariencia", docs/06 "Looks"): ids
+ * of data/looks.yaml. A player chooses it when it creates the character and changes it
+ * for free with SetLook; an NPC or a humanoid monster has the one of its data (`look`).
+ * An unknown id is drawn untinted (a skin or a colour) or not at all (a hair or a beard).
+ *
+ * @generated from message game.v1.BodyLook
+ */
+export type BodyLook = Message<"game.v1.BodyLook"> & {
+  /**
+   * A build of data/looks.yaml `builds` (sturdy, slender).
+   *
+   * @generated from field: string body = 1;
+   */
+  body: string;
+
+  /**
+   * A skin tone of `skins`; a player never has a creatures_only one.
+   *
+   * @generated from field: string skin = 2;
+   */
+  skin: string;
+
+  /**
+   * A hair style of `hair_styles` (bald draws nothing).
+   *
+   * @generated from field: string hair = 3;
+   */
+  hair: string;
+
+  /**
+   * A hair colour of `hair_colors`: it tints the hair and the beard.
+   *
+   * @generated from field: string hair_color = 4;
+   */
+  hairColor: string;
+
+  /**
+   * A beard of `beards` (none draws nothing).
+   *
+   * @generated from field: string beard = 5;
+   */
+  beard: string;
+};
+
+/**
+ * Describes the message game.v1.BodyLook.
+ * Use `create(BodyLookSchema)` to create a new message.
+ */
+export const BodyLookSchema: GenMessage<BodyLook> = /*@__PURE__*/
+  messageDesc(file_game_v1_common, 8);
 
 /**
  * @generated from enum game.v1.Direction

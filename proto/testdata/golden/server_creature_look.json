@@ -1,0 +1,85 @@
+{
+  "tick": "4100",
+  "events": [
+    {
+      "creatureAppear": {
+        "creature": {
+          "id": 12,
+          "kind": "CREATURE_KIND_PLAYER",
+          "name": "Aldara",
+          "pos": {
+            "x": 993,
+            "y": 995,
+            "z": 7
+          },
+          "dir": "DIRECTION_SOUTH",
+          "healthPercent": 100,
+          "speed": 220,
+          "look": {
+            "body": "sturdy",
+            "skin": "tan",
+            "hair": "short",
+            "hairColor": "black",
+            "beard": "full"
+          },
+          "equipment": {
+            "head": 63,
+            "torso": 64,
+            "rightHand": 60
+          }
+        }
+      }
+    },
+    {
+      "creatureAppear": {
+        "creature": {
+          "id": 4000000013,
+          "kind": "CREATURE_KIND_MONSTER",
+          "contentId": "wreck_looter",
+          "pos": {
+            "x": 995,
+            "y": 996,
+            "z": 7
+          },
+          "dir": "DIRECTION_WEST",
+          "healthPercent": 100,
+          "speed": 200,
+          "look": {
+            "body": "sturdy",
+            "skin": "tan",
+            "hair": "short",
+            "hairColor": "black",
+            "beard": "none"
+          },
+          "worn": {
+            "head": {
+              "shape": "cap",
+              "tint": "wine"
+            },
+            "weapon": {
+              "shape": "sword",
+              "tint": "rust"
+            }
+          }
+        }
+      }
+    },
+    {
+      "creatureLook": {
+        "id": 12,
+        "look": {
+          "body": "sturdy",
+          "skin": "tan",
+          "hair": "short",
+          "hairColor": "black",
+          "beard": "full"
+        },
+        "equipment": {
+          "torso": 64,
+          "leftHand": 61,
+          "rightHand": 60
+        }
+      }
+    }
+  ]
+}

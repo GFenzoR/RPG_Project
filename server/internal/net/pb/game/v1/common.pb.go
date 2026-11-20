@@ -841,6 +841,91 @@ func (*TextParam_ContentId) isTextParam_Value() {}
 
 func (*TextParam_Item) isTextParam_Value() {}
 
+// BodyLook is the body of an engine humanoid (docs/02 "Apariencia", docs/06 "Looks"): ids
+// of data/looks.yaml. A player chooses it when it creates the character and changes it
+// for free with SetLook; an NPC or a humanoid monster has the one of its data (`look`).
+// An unknown id is drawn untinted (a skin or a colour) or not at all (a hair or a beard).
+type BodyLook struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A build of data/looks.yaml `builds` (sturdy, slender).
+	Body string `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
+	// A skin tone of `skins`; a player never has a creatures_only one.
+	Skin string `protobuf:"bytes,2,opt,name=skin,proto3" json:"skin,omitempty"`
+	// A hair style of `hair_styles` (bald draws nothing).
+	Hair string `protobuf:"bytes,3,opt,name=hair,proto3" json:"hair,omitempty"`
+	// A hair colour of `hair_colors`: it tints the hair and the beard.
+	HairColor string `protobuf:"bytes,4,opt,name=hair_color,json=hairColor,proto3" json:"hair_color,omitempty"`
+	// A beard of `beards` (none draws nothing).
+	Beard         string `protobuf:"bytes,5,opt,name=beard,proto3" json:"beard,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BodyLook) Reset() {
+	*x = BodyLook{}
+	mi := &file_game_v1_common_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BodyLook) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BodyLook) ProtoMessage() {}
+
+func (x *BodyLook) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_common_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BodyLook.ProtoReflect.Descriptor instead.
+func (*BodyLook) Descriptor() ([]byte, []int) {
+	return file_game_v1_common_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *BodyLook) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *BodyLook) GetSkin() string {
+	if x != nil {
+		return x.Skin
+	}
+	return ""
+}
+
+func (x *BodyLook) GetHair() string {
+	if x != nil {
+		return x.Hair
+	}
+	return ""
+}
+
+func (x *BodyLook) GetHairColor() string {
+	if x != nil {
+		return x.HairColor
+	}
+	return ""
+}
+
+func (x *BodyLook) GetBeard() string {
+	if x != nil {
+		return x.Beard
+	}
+	return ""
+}
+
 var File_game_v1_common_proto protoreflect.FileDescriptor
 
 const file_game_v1_common_proto_rawDesc = "" +
@@ -883,7 +968,14 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"content_id\x18\x04 \x01(\tH\x00R\tcontentId\x12(\n" +
 	"\x04item\x18\x05 \x01(\v2\x12.game.v1.ItemStackH\x00R\x04itemB\a\n" +
-	"\x05value*\xe0\x01\n" +
+	"\x05value\"{\n" +
+	"\bBodyLook\x12\x12\n" +
+	"\x04body\x18\x01 \x01(\tR\x04body\x12\x12\n" +
+	"\x04skin\x18\x02 \x01(\tR\x04skin\x12\x12\n" +
+	"\x04hair\x18\x03 \x01(\tR\x04hair\x12\x1d\n" +
+	"\n" +
+	"hair_color\x18\x04 \x01(\tR\thairColor\x12\x14\n" +
+	"\x05beard\x18\x05 \x01(\tR\x05beard*\xe0\x01\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_NORTH\x10\x01\x12\x18\n" +
@@ -926,7 +1018,7 @@ func file_game_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_game_v1_common_proto_goTypes = []any{
 	(Direction)(0),        // 0: game.v1.Direction
 	(EquipmentSlot)(0),    // 1: game.v1.EquipmentSlot
@@ -939,6 +1031,7 @@ var file_game_v1_common_proto_goTypes = []any{
 	(*ItemMods)(nil),      // 8: game.v1.ItemMods
 	(*LocalizedText)(nil), // 9: game.v1.LocalizedText
 	(*TextParam)(nil),     // 10: game.v1.TextParam
+	(*BodyLook)(nil),      // 11: game.v1.BodyLook
 }
 var file_game_v1_common_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
@@ -982,7 +1075,7 @@ func file_game_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_common_proto_rawDesc), len(file_game_v1_common_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

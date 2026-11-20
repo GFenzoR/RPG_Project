@@ -62,6 +62,7 @@ message ServerMessage {
     CreatureAttack creature_attack = 43;
     RefineResult refine_result = 44;
     QuestLog quest_log = 45;
+    CreatureLook creature_look = 46;
   }
 }
 
@@ -212,6 +213,57 @@ message Creature {
   // Players: the equipped cosmetics (T5.7); unset or empty fields = default look.
   // CreatureCosmetics changes them.
   Cosmetics cosmetics = 12;
+  // The body of an engine humanoid (docs/02 "Apariencia"): a player's own, an NPC's or a
+  // humanoid monster's of its data. Unset: not a humanoid (a beast), or a server without
+  // data/looks.yaml. CreatureLook changes a player's.
+  BodyLook look = 13;
+  // Players: what they show they wear (docs/05 "Apariencia y equipo visible"). Unset: the
+  // player wears nothing that shows. CreatureLook changes it.
+  VisibleEquipment equipment = 14;
+  // NPCs and humanoid monsters: the pieces they wear, of their data (`look.worn`), which
+  // are no items. Unset for players (their pieces are items: equipment).
+  Worn worn = 15;
+}
+
+// VisibleEquipment is what a player shows it wears (docs/05 "Apariencia y equipo
+// visible"): the numeric item id (data/ids.lock.yaml) of each equipment slot that shows
+// on the figure, 0 = empty. The client draws each item's `worn` piece (data/items). Never
+// the amulet, the ring, the backpack nor the ammo, nor anything inside a container.
+message VisibleEquipment {
+  uint32 head = 1;
+  uint32 torso = 2;
+  uint32 legs = 3;
+  uint32 feet = 4;
+  uint32 left_hand = 5;
+  uint32 right_hand = 6;
+}
+
+// WornPiece is a piece an NPC or a humanoid monster wears that is no item: a shape and a
+// tint of data/looks.yaml (`shapes`, `tints`), as in data/npcs and data/monsters
+// `look.worn`.
+message WornPiece {
+  string shape = 1;
+  string tint = 2;
+}
+
+// Worn is what an NPC or a humanoid monster wears, per slot of the figure; unset = nothing.
+message Worn {
+  WornPiece head = 1;
+  WornPiece torso = 2;
+  WornPiece legs = 3;
+  WornPiece feet = 4;
+  WornPiece shield = 5;
+  WornPiece weapon = 6;
+}
+
+// CreatureLook tells the clients that know player id (the player included) that its body
+// or what it shows it wears changed: after a SetLook, and whenever an item comes into or
+// leaves one of its visible slots (equipping, taking off, an item that breaks at the forge,
+// what falls at a death). Both fields are the whole new state, like Creature's.
+message CreatureLook {
+  uint32 id = 1;
+  BodyLook look = 2;
+  VisibleEquipment equipment = 3;
 }
 
 // Cosmetics are the equipped cosmetics of a player (T5.7): content ids of
