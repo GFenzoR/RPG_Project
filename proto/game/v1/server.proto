@@ -469,6 +469,10 @@ message FloatingText {
   Position pos = 1;
   FloatingTextKind kind = 2;
   uint64 amount = 3;
+  // EXPERIENCE only: the part of amount that is a party's shared experience bonus
+  // (docs/02 "Grupos"). Sent to the player that earned it and to its party's members;
+  // 0 for anyone else and for experience without a bonus.
+  uint64 bonus = 4;
 }
 
 // ---- player -----------------------------------------------------------------
@@ -837,6 +841,10 @@ message PartyUpdate {
   SharedExperience shared = 2;
   // Every member, the player included, in the order they joined.
   repeated PartyMember members = 3;
+  // The shared experience bonus % the sharers get right now (balance.yaml
+  // party.bonus_pct_by_sharers for the members with sharing set): 0 unless shared is
+  // ACTIVE.
+  uint32 bonus_percent = 4;
 }
 
 // PartyMember is what one member sees of another. Information audit (T3.3,

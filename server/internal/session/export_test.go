@@ -580,3 +580,6 @@ func (w *World) MarketOfferModsForTest(id int64) Mods {
 func (w *World) StartQuestForTest(p *Player, id string) bool {
 	return w.quests.Start(p.storage, id, &questHost{w: w, p: p})
 }
+
+// AccountIDForTest is p's account id.
+func (p *Player) AccountIDForTest() int64 { return p.accountID }

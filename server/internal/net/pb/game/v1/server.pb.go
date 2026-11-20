@@ -3886,10 +3886,14 @@ func (x *SpellCooldown) GetGroupCooldownMs() uint32 {
 }
 
 type FloatingText struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
-	Kind          FloatingTextKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=game.v1.FloatingTextKind" json:"kind,omitempty"`
-	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Pos    *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
+	Kind   FloatingTextKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=game.v1.FloatingTextKind" json:"kind,omitempty"`
+	Amount uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	// EXPERIENCE only: the part of amount that is a party's shared experience bonus
+	// (docs/02 "Grupos"). Sent to the player that earned it and to its party's members;
+	// 0 for anyone else and for experience without a bonus.
+	Bonus         uint64 `protobuf:"varint,4,opt,name=bonus,proto3" json:"bonus,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3941,6 +3945,13 @@ func (x *FloatingText) GetKind() FloatingTextKind {
 func (x *FloatingText) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *FloatingText) GetBonus() uint64 {
+	if x != nil {
+		return x.Bonus
 	}
 	return 0
 }
@@ -5928,7 +5939,11 @@ type PartyUpdate struct {
 	LeaderId uint32                 `protobuf:"varint,1,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
 	Shared   SharedExperience       `protobuf:"varint,2,opt,name=shared,proto3,enum=game.v1.SharedExperience" json:"shared,omitempty"`
 	// Every member, the player included, in the order they joined.
-	Members       []*PartyMember `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`
+	Members []*PartyMember `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`
+	// The shared experience bonus % the sharers get right now (balance.yaml
+	// party.bonus_pct_by_sharers for the members with sharing set): 0 unless shared is
+	// ACTIVE.
+	BonusPercent  uint32 `protobuf:"varint,4,opt,name=bonus_percent,json=bonusPercent,proto3" json:"bonus_percent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5982,6 +5997,13 @@ func (x *PartyUpdate) GetMembers() []*PartyMember {
 		return x.Members
 	}
 	return nil
+}
+
+func (x *PartyUpdate) GetBonusPercent() uint32 {
+	if x != nil {
+		return x.BonusPercent
+	}
+	return 0
 }
 
 // PartyMember is what one member sees of another. Information audit (T3.3,
@@ -7165,11 +7187,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\vcooldown_ms\x18\x02 \x01(\rR\n" +
 	"cooldownMs\x12\x14\n" +
 	"\x05group\x18\x03 \x01(\tR\x05group\x12*\n" +
-	"\x11group_cooldown_ms\x18\x04 \x01(\rR\x0fgroupCooldownMs\"z\n" +
+	"\x11group_cooldown_ms\x18\x04 \x01(\rR\x0fgroupCooldownMs\"\x90\x01\n" +
 	"\fFloatingText\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12-\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x19.game.v1.FloatingTextKindR\x04kind\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xb7\x02\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\x12\x14\n" +
+	"\x05bonus\x18\x04 \x01(\x04R\x05bonus\"\xb7\x02\n" +
 	"\vPlayerStats\x12\x16\n" +
 	"\x06health\x18\x01 \x01(\rR\x06health\x12\x1d\n" +
 	"\n" +
@@ -7347,11 +7370,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\n" +
 	"Disconnect\x121\n" +
 	"\x06reason\x18\x01 \x01(\x0e2\x19.game.v1.DisconnectReasonR\x06reason\x120\n" +
-	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage\"\x8d\x01\n" +
+	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage\"\xb2\x01\n" +
 	"\vPartyUpdate\x12\x1b\n" +
 	"\tleader_id\x18\x01 \x01(\rR\bleaderId\x121\n" +
 	"\x06shared\x18\x02 \x01(\x0e2\x19.game.v1.SharedExperienceR\x06shared\x12.\n" +
-	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\"\x89\x02\n" +
+	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\x12#\n" +
+	"\rbonus_percent\x18\x04 \x01(\rR\fbonusPercent\"\x89\x02\n" +
 	"\vPartyMember\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x12\n" +
