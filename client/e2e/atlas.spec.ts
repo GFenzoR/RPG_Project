@@ -47,8 +47,18 @@ async function newGuardian(
   return { email, password };
 }
 
-/** Logs in and presses "Jugar" (the canvas may not come up: the callers wait for it). */
-async function play(page: Page, email: string, password: string): Promise<void> {
+/**
+ * Logs in and presses "Jugar" (the canvas may not come up: the callers wait for it). The
+ * creation form's figure (LookPreview) reads the same atlas on the characters screen: it
+ * is waited for, ready or failed, and `beforePlay` runs just before "Jugar", so a test
+ * counts only the canvas's requests.
+ */
+async function play(
+  page: Page,
+  email: string,
+  password: string,
+  beforePlay: () => void,
+): Promise<void> {
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
@@ -56,6 +66,12 @@ async function play(page: Page, email: string, password: string): Promise<void> 
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
   const playButton = page.getByTestId("characters").getByRole("button", { name: "Jugar" });
   await expect(playButton).toBeVisible();
+  await expect(page.getByTestId("create-look").getByTestId("look-preview")).not.toHaveAttribute(
+    "data-atlas",
+    "loading",
+    { timeout: 20_000 },
+  );
+  beforePlay();
   // Marks this page: a reload would lose it.
   await page.evaluate(() => {
     (window as unknown as { e2eSamePage?: boolean }).e2eSamePage = true;
@@ -117,7 +133,7 @@ test("atlas: a request that fails once is retried and the game starts", async ({
     return n === 1 ? route.abort("connectionrefused") : route.continue();
   });
   const who = await newGuardian(playwright, "Flaky");
-  await play(page, who.email, who.password);
+  await play(page, who.email, who.password, () => hits.clear());
   await page.waitForFunction(() => window.__rpgClient?.ready === true, undefined, {
     timeout: 30_000,
   });
@@ -148,7 +164,9 @@ test("atlas: when it keeps failing, Reintentar starts the map in the same sessio
     return down ? route.abort("connectionrefused") : route.continue();
   });
   const who = await newGuardian(playwright, "Offline");
-  await play(page, who.email, who.password);
+  await play(page, who.email, who.password, () => {
+    requests = 0;
+  });
   // After the 4 attempts (3.5 s of waits) the error shows, with its button.
   const failed = page.getByTestId("load-failed");
   await expect(failed).toBeVisible({ timeout: 20_000 });

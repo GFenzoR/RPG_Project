@@ -109,6 +109,10 @@ body {
   background:
     radial-gradient(ellipse at 50% 35%, rgb(64 44 24 / 0.22), transparent 70%), var(--ui-grain),
     var(--ui-void);
+  /* Fixed to the screen: the body is one screen tall, and a page that scrolls (the
+     creation form with its figure and pickers) showed the next tile of the glow as a
+     hard dark band below the first screen. */
+  background-attachment: fixed;
 }
 h1,
 h2,

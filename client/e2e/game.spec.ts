@@ -2325,6 +2325,14 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // The panel moves from the corner to the game's Options window: it must show what is in
   // use now, not what the page loaded with (no reload this time).
   await page.getByTestId("mute-ambient").check();
+  // Closed first: the creation form's figure and pickers (lote 13) make the page taller
+  // than 800 px, and the scrolled "Jugar" ends up under the corner's open panel.
+  await page
+    .locator(".corner")
+    .getByTestId("options")
+    .getByRole("button", { name: "Cerrar" })
+    .click();
+  await expect(page.getByTestId("options")).toHaveCount(0);
   await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   await page.getByTestId("options-button").click();

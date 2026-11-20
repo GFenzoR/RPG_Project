@@ -43,6 +43,7 @@ export function LookPreview(props: {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [dir, setDir] = useState<AnimDir>("s");
   const [atlas, setAtlas] = useState<PreviewAtlas | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const images = useRef(new Map<string, HTMLImageElement>());
   // The canvas each layer is tinted on (one frame), made once.
@@ -56,7 +57,7 @@ export function LookPreview(props: {
     let live = true;
     loadPreviewAtlas().then(
       (a) => live && setAtlas(a),
-      () => undefined, // no figure: the frame stays empty
+      () => live && setFailed(true), // no figure: the frame stays empty
     );
     return () => {
       live = false;
@@ -102,7 +103,12 @@ export function LookPreview(props: {
   }, [atlas, tick, dir, scale, props.look, worn, props.tables]);
 
   return (
-    <div class="look-preview" data-testid={props.testid ?? "look-preview"} data-dir={dir}>
+    <div
+      class="look-preview"
+      data-testid={props.testid ?? "look-preview"}
+      data-dir={dir}
+      data-atlas={atlas ? "ready" : failed ? "failed" : "loading"}
+    >
       <button
         type="button"
         class="look-turn"
