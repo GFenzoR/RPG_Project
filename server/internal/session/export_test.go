@@ -580,3 +580,12 @@ func (w *World) MarketOfferModsForTest(id int64) Mods {
 func (w *World) StartQuestForTest(p *Player, id string) bool {
 	return w.quests.Start(p.storage, id, &questHost{w: w, p: p})
 }
+
+// AccountIDForTest is p's account id.
+func (p *Player) AccountIDForTest() int64 { return p.accountID }
+
+// MarkQuestCompletedForTest stores quest id as completed for p, as finishing its last
+// step leaves it (tests only, loop goroutine; no rewards).
+func (w *World) MarkQuestCompletedForTest(p *Player, id string) {
+	p.storage.Set("quest."+id, 2) // quest.Completed
+}

@@ -100,8 +100,9 @@ func TestBookCheck(t *testing.T) {
 	}
 }
 
-// The chests and books of data/ (docs/02 "Libros y cofres"): 4 to 6 chests on the real
-// islands plus the sandbox's, none giving the forge's protection, and every book with pages.
+// The chests and books of data/ (docs/02 "Libros y cofres"): 4 to 6 exploration chests on
+// the real islands plus the sandbox's (the reward rooms of the milestones, ids ms_*, apart:
+// docs/02 "Quests de hito"), none giving the forge's protection, and every book with pages.
 func TestDataChestsAndBooks(t *testing.T) {
 	data := filepath.Join("..", "..", "..", "data")
 	items, err := LoadItems(data)
@@ -117,7 +118,7 @@ func TestDataChestsAndBooks(t *testing.T) {
 	}
 	chests, books := 0, 0
 	for _, it := range items {
-		if it.Chest != nil {
+		if it.Chest != nil && !strings.HasPrefix(it.Chest.ID, "ms_") {
 			chests++
 		}
 		if it.Book != nil {

@@ -115,7 +115,7 @@ describe("quest log", () => {
       "b_done",
       "back_task",
     ]);
-    expect(questTabs(undefined, 0)).toEqual({ active: [], finished: [] });
+    expect(questTabs(undefined, 0)).toEqual({ active: [], milestones: [], finished: [] });
   });
 
   it("says a time left in hours and minutes, minutes and seconds, or seconds, rounded up", () => {
@@ -166,5 +166,55 @@ describe("quest log in the world state", () => {
     expect(w.quests?.entries.map((e) => e.id)).toEqual(["ch1_shipwreck"]);
     w.apply({ case: "questLog", value: create(QuestLogSchema, {}) }, 0);
     expect(w.quests).toEqual({ entries: [] });
+  });
+});
+
+describe('milestones in the quest log (docs/02 "Quests de hito")', () => {
+  const ms = (questId: string, state: QuestLogState) =>
+    entry({
+      questId,
+      state,
+      milestone: {
+        title: `quest.${questId}.title`,
+        level: 20,
+        levelMet: true,
+        gearItem: 42,
+        gearEquipped: true,
+        gearMet: false,
+        players: 2,
+        vocations: ["guardian", "druid"],
+        vocationMet: true,
+      },
+    });
+
+  it("reads a milestone's requirements and marks, and lists open ones apart", () => {
+    const log = questLogFrom(
+      create(QuestLogSchema, {
+        entries: [
+          ms("ms_done", QuestLogState.DONE),
+          ms("ms_going", QuestLogState.ACTIVE),
+          entry({ questId: "side", state: QuestLogState.ACTIVE, stepText: "x" }),
+          ms("ms_open", QuestLogState.OPEN),
+        ],
+      }),
+    );
+    const open = log.entries.find((e) => e.id === "ms_open");
+    expect(open?.state).toBe("open");
+    expect(open?.milestone).toEqual({
+      title: "quest.ms_open.title",
+      level: 20,
+      levelMet: true,
+      gearItem: 42,
+      gearEquipped: true,
+      gearWeapon: "",
+      gearMet: false,
+      players: 2,
+      vocations: ["guardian", "druid"],
+      vocationMet: true,
+    });
+    const tabs = questTabs(log, 0);
+    expect(tabs.active.map((e) => e.id)).toEqual(["side"]);
+    expect(tabs.milestones.map((e) => e.id)).toEqual(["ms_open", "ms_going", "ms_done"]);
+    expect(tabs.finished.map((e) => e.id)).toEqual(["ms_done"]);
   });
 });

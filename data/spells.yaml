@@ -225,8 +225,8 @@
   effect: { condition: { id: invisible, duration_ms: 40000 } }
   notes: Hides the caster from players and from most monsters; attacking or casting ends it.
 
-# ---- Mid-game areas (content audit M5, 2026-11): the Isla Volcánica shrugs off fire
-# (70-100) and the Isla del Bosque off earth (20-80), so each caster gets a second area of
+# ---- Mid-game areas (content audit M5, 2026-11): Karvask shrugs off fire
+# (70-100) and Selvaine off earth (20-80), so each caster gets a second area of
 # another element where its first one stops working.
 - id: tempest_ring
   name: spell.tempest_ring.name

@@ -46,7 +46,7 @@
     drops:
       - { item: raw_fish, weight: 1 }
 
-# Harbour grounds (Isla del Puerto).
+# Harbour grounds (Velmara).
 - id: wet_sand
   kind: ground
   sprite: ground/wet_sand
@@ -65,7 +65,7 @@
   name: item.wooden_floor.name
   ground: { walkable: true, speed: 100 }
 
-# Volcanic grounds (Isla Volcánica, T5.5). Each walks like the ground it replaced on the
+# Volcanic grounds (Karvask, T5.5). Each walks like the ground it replaced on the
 # island, so the hunting pace T5.5 was balanced with holds: ash like the dirt of the ash
 # plain, cooled lava and basalt like the stone of the slope, the crater and the plaza. The
 # cinder paths are quicker than the ash they cross. Molten lava cannot be walked, like water.

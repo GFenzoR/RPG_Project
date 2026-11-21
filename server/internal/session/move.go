@@ -86,6 +86,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.lookAt(p, m.LookAt)
 		if pos, ok := posFromMsg(m.LookAt.GetFrom().GetPos()); ok && pos.Z == p.pos.Z && Sees(p.pos, pos) {
 			w.lookHouse(p, pos) // T5.4: whose house a door belongs to
+			w.lookSigil(p, pos) // milestones: how many plates are held
 		}
 	case *pb.ClientMessage_NpcTalk:
 		w.npcTalk(p, m.NpcTalk.GetCreatureId())
@@ -285,6 +286,11 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		p.emit(systemMsg(msgHouseNoAccess))
 		return
 	}
+	if w.sigilRefuses(p, to) {
+		// Milestones: a plate is only for who is doing its quest (sigil.go).
+		w.reject(p, dirMsg(d))
+		return
+	}
 	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
 		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
 		w.reject(p, dirMsg(d))
@@ -380,6 +386,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	// on the entrance, where nobody stands).
 	if !through {
 		w.checkReach(p)
+		w.sigilStep(p)
 	}
 }
 
@@ -441,6 +448,7 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.sendFullView(p)
 	w.appearToObservers(p)
 	w.checkReach(p) // a teleport, a portal, a boat or the temple count for a reach step
+	w.sigilStep(p)
 }
 
 // playerByID returns the online player with creature id, or nil.
@@ -476,6 +484,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushParties(ctx.Tick)
 	w.checkLinkDead(ctx) // the link-dead players whose fight is over leave
 	w.checkPvP(ctx)      // T5.2: before the guilds, so an ended war is in this tick's update
+	w.checkSigils(ctx)   // milestones: who stands on the plates is final for the tick
 	w.checkTrades(ctx)
 	w.checkMarketExpiry(ctx)
 	w.checkHouses(ctx) // T5.4: also flushes this tick's house item changes

@@ -64,6 +64,7 @@ import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 import { StatusTray } from "./StatusTray.tsx";
 import { ornamentStyle } from "./ornaments.ts";
+import { partyBonus } from "../state/party.ts";
 import {
   dragWindow,
   outsiders,
@@ -539,7 +540,9 @@ export function GameView(props: GameViewProps): JSX.Element {
   );
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
-  const quests = <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} />;
+  const quests = (
+    <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} content={props.content} />
+  );
   const chat = (
     <ChatPanel
       t={t}
@@ -924,7 +927,15 @@ export function GameView(props: GameViewProps): JSX.Element {
             stats={stats}
             levelUp={levelNotice !== undefined}
             curve={props.content.experience}
-            tray={<StatusTray t={t} conditions={ui.conditions} game={game} compact={false} />}
+            tray={
+              <StatusTray
+                t={t}
+                conditions={ui.conditions}
+                partyBonus={partyBonus(ui.party)}
+                game={game}
+                compact={false}
+              />
+            }
             hotbar={
               props.entered && (
                 <Hotbar t={t} content={props.content} game={game} ui={ui} margin={0} />
@@ -1001,7 +1012,13 @@ export function GameView(props: GameViewProps): JSX.Element {
           </span>
         )}
         {!layout.compactHeader && experience}
-        <StatusTray t={t} conditions={ui.conditions} game={game} compact={true} />
+        <StatusTray
+          t={t}
+          conditions={ui.conditions}
+          partyBonus={partyBonus(ui.party)}
+          game={game}
+          compact={true}
+        />
         {layout.compactHeader ? (
           <>
             {panelToggle}

@@ -89,7 +89,7 @@ function dockPlanks(img: Image, _rand: Rng, seed: number): void {
   });
 }
 
-// ---- volcanic grounds (Isla Volcánica, T5.5) ---------------------------------------------
+// ---- volcanic grounds (Karvask, T5.5) ---------------------------------------------
 
 const wrap = (v: number): number => ((v % 32) + 32) % 32;
 

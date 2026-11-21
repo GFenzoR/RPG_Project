@@ -13,8 +13,9 @@ export interface QuestEntryView {
   /** The main line's chapter; 0 for a side quest or a task. */
   chapter: number;
   /** active: in progress; done: completed (a task past its cooldown too); cooling: a task
-   * that waits for availableAt. */
-  state: "active" | "done" | "cooling";
+   * that waits for availableAt; open: a milestone not started yet (docs/02 "Quests de
+   * hito"), listed with its requirements. */
+  state: "active" | "done" | "cooling" | "open";
   /** The current step (active): its id and the i18n key of its text. */
   stepId: string;
   stepText: string;
@@ -25,6 +26,25 @@ export interface QuestEntryView {
   repeatable: boolean;
   /** A finished task: when it can be taken again, server Unix ms (0: no cooldown). */
   availableAt: number;
+  /** A milestone quest: what it asks of every participant, and what this character meets. */
+  milestone?: MilestoneView;
+}
+
+/** The requirements of a milestone (docs/05 MilestoneInfo), with this character's marks. */
+export interface MilestoneView {
+  /** i18n key of the title it gives once done. */
+  title: string;
+  level: number;
+  levelMet: boolean;
+  /** The gear: an item (numeric id; worn when gearEquipped) or a weapon type; 0 and "": none. */
+  gearItem: number;
+  gearEquipped: boolean;
+  gearWeapon: string;
+  gearMet: boolean;
+  /** Players on the plates together, and the vocation of each plate (empty: any). */
+  players: number;
+  vocations: string[];
+  vocationMet: boolean;
 }
 
 /** The quest log, in the server's order (quest id). */
@@ -36,6 +56,7 @@ const STATES: Readonly<Partial<Record<QuestLogState, QuestEntryView["state"]>>> 
   [QuestLogState.ACTIVE]: "active",
   [QuestLogState.DONE]: "done",
   [QuestLogState.COOLING]: "cooling",
+  [QuestLogState.OPEN]: "open",
 };
 
 /** The log of a QuestLog: entries of an unknown state (a newer server) are left out. */
@@ -55,6 +76,22 @@ export function questLogFrom(msg: QuestLog): QuestLogView {
       killsNeeded: e.killsNeeded,
       repeatable: e.repeatable,
       availableAt: Number(e.availableAt),
+      ...(e.milestone
+        ? {
+            milestone: {
+              title: e.milestone.title,
+              level: e.milestone.level,
+              levelMet: e.milestone.levelMet,
+              gearItem: e.milestone.gearItem,
+              gearEquipped: e.milestone.gearEquipped,
+              gearWeapon: e.milestone.gearWeapon,
+              gearMet: e.milestone.gearMet,
+              players: e.milestone.players,
+              vocations: [...e.milestone.vocations],
+              vocationMet: e.milestone.vocationMet,
+            },
+          }
+        : {}),
     });
   }
   return { entries };
@@ -77,18 +114,29 @@ function byChapter(a: QuestEntryView, b: QuestEntryView): number {
 }
 
 /**
- * The window's two tabs at serverNow: the quests in progress, and the finished ones; among
- * these the tasks that still cool down come first (the sooner back, the higher), then the
- * rest by chapter.
+ * The window's tabs at serverNow: the quests in progress; the milestones apart (docs/02
+ * "Quests de hito": every one, with its requirements, open ones first, then in progress,
+ * then done); and the finished ones, a done milestone among them with its title. Among the
+ * finished, the tasks that still cool down come first (the sooner back, the higher), then
+ * the rest by chapter.
  */
 export function questTabs(
   log: QuestLogView | undefined,
   serverNow: number,
-): { active: QuestEntryView[]; finished: QuestEntryView[] } {
+): { active: QuestEntryView[]; milestones: QuestEntryView[]; finished: QuestEntryView[] } {
   const entries = log?.entries ?? [];
-  const active = entries.filter((e) => e.state === "active").sort(byChapter);
+  const active = entries.filter((e) => e.state === "active" && !e.milestone).sort(byChapter);
+  const order: Record<QuestEntryView["state"], number> = {
+    open: 0,
+    active: 1,
+    cooling: 2,
+    done: 2,
+  };
+  const milestones = entries
+    .filter((e) => e.milestone)
+    .sort((a, b) => order[a.state] - order[b.state]);
   const finished = entries
-    .filter((e) => e.state !== "active")
+    .filter((e) => e.state === "done" || e.state === "cooling")
     .sort((a, b) => {
       const la = cooldownLeft(a, serverNow);
       const lb = cooldownLeft(b, serverNow);
@@ -96,7 +144,7 @@ export function questTabs(
       if (la > 0) return la - lb;
       return byChapter(a, b);
     });
-  return { active, finished };
+  return { active, milestones, finished };
 }
 
 /**

@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emptyChunk, formatChunk, parseChunk } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { run } from "./index.ts";
 
 // Most of these run mapcli several times over a copy of world/ (and render reads the whole
@@ -55,16 +55,31 @@ function mapcli(...argv: string[]): {
   return { code, out, err, json: () => JSON.parse(out) as Record<string, unknown> };
 }
 
+// Committing ~10k files into a fresh repo takes tens of seconds where every new file is
+// scanned (Windows real-time protection): the copy is committed once per file into a
+// template, and each test gets a local clone of it (a few seconds).
+let template = "";
+beforeAll(() => {
+  template = mkdtempSync(join(tmpdir(), "mapcli-edit-tpl-"));
+  for (const d of ["world", "data", "i18n", "assets"])
+    cpSync(join(repo, d), join(template, d), { recursive: true, filter: usedFiles });
+  const git = (...a: string[]) => execFileSync("git", a, { cwd: template, stdio: "pipe" });
+  git("init", "-q");
+  git("add", "-A");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
+}, 300_000);
+afterAll(() => {
+  if (template) rmSync(template, { recursive: true, force: true });
+});
+
 /** Copy of world/, data/, i18n/ and assets/, committed in a fresh git repo. */
 function sandbox(): string {
   const root = mkdtempSync(join(tmpdir(), "mapcli-edit-"));
   dirs.push(root);
-  for (const d of ["world", "data", "i18n", "assets"])
-    cpSync(join(repo, d), join(root, d), { recursive: true, filter: usedFiles });
-  const git = (...a: string[]) => execFileSync("git", a, { cwd: root, stdio: "pipe" });
-  git("init", "-q");
-  git("add", "-A");
-  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
+  execFileSync("git", ["-c", "core.autocrlf=false", "clone", "-q", "--local", template, root], {
+    stdio: "pipe",
+  });
+  execFileSync("git", ["remote", "remove", "origin"], { cwd: root, stdio: "pipe" });
   return root;
 }
 

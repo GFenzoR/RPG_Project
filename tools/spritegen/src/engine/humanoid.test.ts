@@ -300,7 +300,9 @@ function measureHeld(sprite: string, clothes: string[], dir: Dir): HeldMeasure {
   return { place, errors, hidden };
 }
 
-describe("engine humanoid: the held pieces in the stack (LAYER_ORDER)", () => {
+// Each direction renders every held piece over every look, frame by frame: 3.5-6 s on a
+// dev machine while the whole suite runs, past vitest's 5 s default.
+describe("engine humanoid: the held pieces in the stack (LAYER_ORDER)", { timeout: 30_000 }, () => {
   const HELD: Record<"weapon" | "shield", readonly string[]> = {
     weapon: SHAPES.weapon.map((s) => `worn/weapon_${s}`),
     shield: SHAPES.shield.map((s) => `worn/shield_${s}`),
@@ -550,7 +552,9 @@ describe("engine humanoid: the shared layers fit the four bodies", () => {
 
 // Every look a player can pick has its frames: each sex, build, hair style and beard, in
 // every torso shape, in every action and facing the client asks for.
-describe("engine humanoid: every look has its frames", () => {
+// Renders every layer for every choice of data/looks.yaml: about 4.3 s while the whole
+// suite runs, close to vitest's 5 s default.
+describe("engine humanoid: every look has its frames", { timeout: 30_000 }, () => {
   it("draws every layer lookSprites names for every choice of data/looks.yaml", () => {
     const list = (k: string): string[] => (LOOKS[k] as string[] | undefined) ?? [];
     const shapes = LOOKS["shapes"] as Record<string, string[]>;

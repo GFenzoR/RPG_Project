@@ -818,6 +818,9 @@ const (
 	QuestLogState_QUEST_LOG_STATE_DONE QuestLogState = 2
 	// COOLING: a repeatable quest done that cannot be taken again until available_at.
 	QuestLogState_QUEST_LOG_STATE_COOLING QuestLogState = 3
+	// OPEN: a milestone quest not started yet, listed with its requirements (docs/02
+	// "Quests de hito").
+	QuestLogState_QUEST_LOG_STATE_OPEN QuestLogState = 4
 )
 
 // Enum value maps for QuestLogState.
@@ -827,12 +830,14 @@ var (
 		1: "QUEST_LOG_STATE_ACTIVE",
 		2: "QUEST_LOG_STATE_DONE",
 		3: "QUEST_LOG_STATE_COOLING",
+		4: "QUEST_LOG_STATE_OPEN",
 	}
 	QuestLogState_value = map[string]int32{
 		"QUEST_LOG_STATE_UNSPECIFIED": 0,
 		"QUEST_LOG_STATE_ACTIVE":      1,
 		"QUEST_LOG_STATE_DONE":        2,
 		"QUEST_LOG_STATE_COOLING":     3,
+		"QUEST_LOG_STATE_OPEN":        4,
 	}
 )
 
@@ -3886,10 +3891,14 @@ func (x *SpellCooldown) GetGroupCooldownMs() uint32 {
 }
 
 type FloatingText struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
-	Kind          FloatingTextKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=game.v1.FloatingTextKind" json:"kind,omitempty"`
-	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Pos    *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
+	Kind   FloatingTextKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=game.v1.FloatingTextKind" json:"kind,omitempty"`
+	Amount uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	// EXPERIENCE only: the part of amount that is a party's shared experience bonus
+	// (docs/02 "Grupos"). Sent to the player that earned it and to its party's members;
+	// 0 for anyone else and for experience without a bonus.
+	Bonus         uint64 `protobuf:"varint,4,opt,name=bonus,proto3" json:"bonus,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3941,6 +3950,13 @@ func (x *FloatingText) GetKind() FloatingTextKind {
 func (x *FloatingText) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *FloatingText) GetBonus() uint64 {
+	if x != nil {
+		return x.Bonus
 	}
 	return 0
 }
@@ -5928,7 +5944,11 @@ type PartyUpdate struct {
 	LeaderId uint32                 `protobuf:"varint,1,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
 	Shared   SharedExperience       `protobuf:"varint,2,opt,name=shared,proto3,enum=game.v1.SharedExperience" json:"shared,omitempty"`
 	// Every member, the player included, in the order they joined.
-	Members       []*PartyMember `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`
+	Members []*PartyMember `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`
+	// The shared experience bonus % the sharers get right now (balance.yaml
+	// party.bonus_pct_by_sharers for the members with sharing set): 0 unless shared is
+	// ACTIVE.
+	BonusPercent  uint32 `protobuf:"varint,4,opt,name=bonus_percent,json=bonusPercent,proto3" json:"bonus_percent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5982,6 +6002,13 @@ func (x *PartyUpdate) GetMembers() []*PartyMember {
 		return x.Members
 	}
 	return nil
+}
+
+func (x *PartyUpdate) GetBonusPercent() uint32 {
+	if x != nil {
+		return x.BonusPercent
+	}
+	return 0
 }
 
 // PartyMember is what one member sees of another. Information audit (T3.3,
@@ -6762,7 +6789,8 @@ func (x *RefineResult) GetText() *LocalizedText {
 }
 
 // QuestLog is the character's quest log (docs/05 "Diario de misiones"): one entry per
-// quest it has started or completed, in quest id order. It comes in full at login (empty
+// quest it has started or completed, in quest id order, then every milestone quest it has
+// not started (OPEN). It comes in full at login (empty
 // too) and in the tick of every change of a quest (started, a step done, a kill counted,
 // completed). Nothing comes when a cooldown ends: the client compares available_at with
 // the server clock (Welcome.server_time).
@@ -6831,7 +6859,10 @@ type QuestLogEntry struct {
 	Repeatable bool `protobuf:"varint,9,opt,name=repeatable,proto3" json:"repeatable,omitempty"`
 	// A completed repeatable quest: when it can be taken again, Unix milliseconds (DONE
 	// when that already passed at sending); 0 for any other.
-	AvailableAt   uint64 `protobuf:"varint,10,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
+	AvailableAt uint64 `protobuf:"varint,10,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
+	// A milestone quest (docs/02 "Quests de hito"): its requirements, with whether this
+	// character meets each one now; unset for any other quest.
+	Milestone     *MilestoneInfo `protobuf:"bytes,11,opt,name=milestone,proto3" json:"milestone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6934,6 +6965,138 @@ func (x *QuestLogEntry) GetAvailableAt() uint64 {
 		return x.AvailableAt
 	}
 	return 0
+}
+
+func (x *QuestLogEntry) GetMilestone() *MilestoneInfo {
+	if x != nil {
+		return x.Milestone
+	}
+	return nil
+}
+
+// MilestoneInfo is what a milestone quest asks of every participant, as the quest log
+// shows it. The *_met marks are this character's own, computed when the log is sent (it
+// comes again when its level or what it carries changes).
+type MilestoneInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// i18n key of the title the quest gives once done (quest.<id>.title).
+	Title    string `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Level    uint32 `protobuf:"varint,2,opt,name=level,proto3" json:"level,omitempty"`
+	LevelMet bool   `protobuf:"varint,3,opt,name=level_met,json=levelMet,proto3" json:"level_met,omitempty"`
+	// The gear: an item (numeric id, worn when gear_equipped) or a wielded weapon of
+	// gear_weapon's type (sword, axe...); both 0/empty when it asks for none.
+	GearItem     uint32 `protobuf:"varint,4,opt,name=gear_item,json=gearItem,proto3" json:"gear_item,omitempty"`
+	GearEquipped bool   `protobuf:"varint,5,opt,name=gear_equipped,json=gearEquipped,proto3" json:"gear_equipped,omitempty"`
+	GearWeapon   string `protobuf:"bytes,6,opt,name=gear_weapon,json=gearWeapon,proto3" json:"gear_weapon,omitempty"`
+	GearMet      bool   `protobuf:"varint,7,opt,name=gear_met,json=gearMet,proto3" json:"gear_met,omitempty"`
+	// How many players stand on the plates together, and the vocation of each plate
+	// (data/vocations ids) when the milestone asks for one of each; empty: any.
+	Players   uint32   `protobuf:"varint,8,opt,name=players,proto3" json:"players,omitempty"`
+	Vocations []string `protobuf:"bytes,9,rep,name=vocations,proto3" json:"vocations,omitempty"`
+	// This character's vocation is one of vocations (true when vocations is empty).
+	VocationMet   bool `protobuf:"varint,10,opt,name=vocation_met,json=vocationMet,proto3" json:"vocation_met,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MilestoneInfo) Reset() {
+	*x = MilestoneInfo{}
+	mi := &file_game_v1_server_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MilestoneInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MilestoneInfo) ProtoMessage() {}
+
+func (x *MilestoneInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MilestoneInfo.ProtoReflect.Descriptor instead.
+func (*MilestoneInfo) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *MilestoneInfo) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *MilestoneInfo) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *MilestoneInfo) GetLevelMet() bool {
+	if x != nil {
+		return x.LevelMet
+	}
+	return false
+}
+
+func (x *MilestoneInfo) GetGearItem() uint32 {
+	if x != nil {
+		return x.GearItem
+	}
+	return 0
+}
+
+func (x *MilestoneInfo) GetGearEquipped() bool {
+	if x != nil {
+		return x.GearEquipped
+	}
+	return false
+}
+
+func (x *MilestoneInfo) GetGearWeapon() string {
+	if x != nil {
+		return x.GearWeapon
+	}
+	return ""
+}
+
+func (x *MilestoneInfo) GetGearMet() bool {
+	if x != nil {
+		return x.GearMet
+	}
+	return false
+}
+
+func (x *MilestoneInfo) GetPlayers() uint32 {
+	if x != nil {
+		return x.Players
+	}
+	return 0
+}
+
+func (x *MilestoneInfo) GetVocations() []string {
+	if x != nil {
+		return x.Vocations
+	}
+	return nil
+}
+
+func (x *MilestoneInfo) GetVocationMet() bool {
+	if x != nil {
+		return x.VocationMet
+	}
+	return false
 }
 
 var File_game_v1_server_proto protoreflect.FileDescriptor
@@ -7165,11 +7328,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\vcooldown_ms\x18\x02 \x01(\rR\n" +
 	"cooldownMs\x12\x14\n" +
 	"\x05group\x18\x03 \x01(\tR\x05group\x12*\n" +
-	"\x11group_cooldown_ms\x18\x04 \x01(\rR\x0fgroupCooldownMs\"z\n" +
+	"\x11group_cooldown_ms\x18\x04 \x01(\rR\x0fgroupCooldownMs\"\x90\x01\n" +
 	"\fFloatingText\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12-\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x19.game.v1.FloatingTextKindR\x04kind\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xb7\x02\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\x12\x14\n" +
+	"\x05bonus\x18\x04 \x01(\x04R\x05bonus\"\xb7\x02\n" +
 	"\vPlayerStats\x12\x16\n" +
 	"\x06health\x18\x01 \x01(\rR\x06health\x12\x1d\n" +
 	"\n" +
@@ -7347,11 +7511,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\n" +
 	"Disconnect\x121\n" +
 	"\x06reason\x18\x01 \x01(\x0e2\x19.game.v1.DisconnectReasonR\x06reason\x120\n" +
-	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage\"\x8d\x01\n" +
+	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage\"\xb2\x01\n" +
 	"\vPartyUpdate\x12\x1b\n" +
 	"\tleader_id\x18\x01 \x01(\rR\bleaderId\x121\n" +
 	"\x06shared\x18\x02 \x01(\x0e2\x19.game.v1.SharedExperienceR\x06shared\x12.\n" +
-	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\"\x89\x02\n" +
+	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\x12#\n" +
+	"\rbonus_percent\x18\x04 \x01(\rR\fbonusPercent\"\x89\x02\n" +
 	"\vPartyMember\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x12\n" +
@@ -7419,7 +7584,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x05level\x18\x03 \x01(\rR\x05level\x12*\n" +
 	"\x04text\x18\x04 \x01(\v2\x16.game.v1.LocalizedTextR\x04text\"<\n" +
 	"\bQuestLog\x120\n" +
-	"\aentries\x18\x01 \x03(\v2\x16.game.v1.QuestLogEntryR\aentries\"\xb8\x02\n" +
+	"\aentries\x18\x01 \x03(\v2\x16.game.v1.QuestLogEntryR\aentries\"\xee\x02\n" +
 	"\rQuestLogEntry\x12\x19\n" +
 	"\bquest_id\x18\x01 \x01(\tR\aquestId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -7433,7 +7598,21 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"repeatable\x18\t \x01(\bR\n" +
 	"repeatable\x12!\n" +
 	"\favailable_at\x18\n" +
-	" \x01(\x04R\vavailableAt*\x7f\n" +
+	" \x01(\x04R\vavailableAt\x124\n" +
+	"\tmilestone\x18\v \x01(\v2\x16.game.v1.MilestoneInfoR\tmilestone\"\xb1\x02\n" +
+	"\rMilestoneInfo\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\rR\x05level\x12\x1b\n" +
+	"\tlevel_met\x18\x03 \x01(\bR\blevelMet\x12\x1b\n" +
+	"\tgear_item\x18\x04 \x01(\rR\bgearItem\x12#\n" +
+	"\rgear_equipped\x18\x05 \x01(\bR\fgearEquipped\x12\x1f\n" +
+	"\vgear_weapon\x18\x06 \x01(\tR\n" +
+	"gearWeapon\x12\x19\n" +
+	"\bgear_met\x18\a \x01(\bR\agearMet\x12\x18\n" +
+	"\aplayers\x18\b \x01(\rR\aplayers\x12\x1c\n" +
+	"\tvocations\x18\t \x03(\tR\tvocations\x12!\n" +
+	"\fvocation_met\x18\n" +
+	" \x01(\bR\vvocationMet*\x7f\n" +
 	"\rTutorialState\x12\x1e\n" +
 	"\x1aTUTORIAL_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TUTORIAL_STATE_ACTIVE\x10\x01\x12\x17\n" +
@@ -7520,12 +7699,13 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x1aREFINE_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16REFINE_OUTCOME_SUCCESS\x10\x01\x12\x19\n" +
 	"\x15REFINE_OUTCOME_BROKEN\x10\x02\x12\x1c\n" +
-	"\x18REFINE_OUTCOME_PROTECTED\x10\x03*\x83\x01\n" +
+	"\x18REFINE_OUTCOME_PROTECTED\x10\x03*\x9d\x01\n" +
 	"\rQuestLogState\x12\x1f\n" +
 	"\x1bQUEST_LOG_STATE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16QUEST_LOG_STATE_ACTIVE\x10\x01\x12\x18\n" +
 	"\x14QUEST_LOG_STATE_DONE\x10\x02\x12\x1b\n" +
-	"\x17QUEST_LOG_STATE_COOLING\x10\x03BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x17QUEST_LOG_STATE_COOLING\x10\x03\x12\x18\n" +
+	"\x14QUEST_LOG_STATE_OPEN\x10\x04BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_server_proto_rawDescOnce sync.Once
@@ -7540,7 +7720,7 @@ func file_game_v1_server_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
+var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_game_v1_server_proto_goTypes = []any{
 	(TutorialState)(0),         // 0: game.v1.TutorialState
 	(CreatureKind)(0),          // 1: game.v1.CreatureKind
@@ -7627,14 +7807,15 @@ var file_game_v1_server_proto_goTypes = []any{
 	(*RefineResult)(nil),       // 82: game.v1.RefineResult
 	(*QuestLog)(nil),           // 83: game.v1.QuestLog
 	(*QuestLogEntry)(nil),      // 84: game.v1.QuestLogEntry
-	(*LocalizedText)(nil),      // 85: game.v1.LocalizedText
-	(*ItemStack)(nil),          // 86: game.v1.ItemStack
-	(*Position)(nil),           // 87: game.v1.Position
-	(Direction)(0),             // 88: game.v1.Direction
-	(*BodyLook)(nil),           // 89: game.v1.BodyLook
-	(EquipmentSlot)(0),         // 90: game.v1.EquipmentSlot
-	(MarketSide)(0),            // 91: game.v1.MarketSide
-	(*ItemMods)(nil),           // 92: game.v1.ItemMods
+	(*MilestoneInfo)(nil),      // 85: game.v1.MilestoneInfo
+	(*LocalizedText)(nil),      // 86: game.v1.LocalizedText
+	(*ItemStack)(nil),          // 87: game.v1.ItemStack
+	(*Position)(nil),           // 88: game.v1.Position
+	(Direction)(0),             // 89: game.v1.Direction
+	(*BodyLook)(nil),           // 90: game.v1.BodyLook
+	(EquipmentSlot)(0),         // 91: game.v1.EquipmentSlot
+	(MarketSide)(0),            // 92: game.v1.MarketSide
+	(*ItemMods)(nil),           // 93: game.v1.ItemMods
 }
 var file_game_v1_server_proto_depIdxs = []int32{
 	15,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
@@ -7685,24 +7866,24 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	83,  // 45: game.v1.ServerMessage.quest_log:type_name -> game.v1.QuestLog
 	30,  // 46: game.v1.ServerMessage.creature_look:type_name -> game.v1.CreatureLook
 	0,   // 47: game.v1.TutorialStep.state:type_name -> game.v1.TutorialState
-	85,  // 48: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
-	85,  // 49: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
+	86,  // 48: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
+	86,  // 49: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
 	58,  // 50: game.v1.PresenceCheck.options:type_name -> game.v1.DialogOption
-	86,  // 51: game.v1.Tile.items:type_name -> game.v1.ItemStack
+	87,  // 51: game.v1.Tile.items:type_name -> game.v1.ItemStack
 	19,  // 52: game.v1.MapArea.palette:type_name -> game.v1.Tile
 	20,  // 53: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
 	26,  // 54: game.v1.MapArea.creatures:type_name -> game.v1.Creature
 	21,  // 55: game.v1.FullMapView.area:type_name -> game.v1.MapArea
 	21,  // 56: game.v1.MapSlice.area:type_name -> game.v1.MapArea
-	87,  // 57: game.v1.TileUpdate.pos:type_name -> game.v1.Position
+	88,  // 57: game.v1.TileUpdate.pos:type_name -> game.v1.Position
 	19,  // 58: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
 	1,   // 59: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
-	87,  // 60: game.v1.Creature.pos:type_name -> game.v1.Position
-	88,  // 61: game.v1.Creature.dir:type_name -> game.v1.Direction
+	88,  // 60: game.v1.Creature.pos:type_name -> game.v1.Position
+	89,  // 61: game.v1.Creature.dir:type_name -> game.v1.Direction
 	25,  // 62: game.v1.Creature.outfit:type_name -> game.v1.Outfit
 	2,   // 63: game.v1.Creature.skull:type_name -> game.v1.Skull
 	31,  // 64: game.v1.Creature.cosmetics:type_name -> game.v1.Cosmetics
-	89,  // 65: game.v1.Creature.look:type_name -> game.v1.BodyLook
+	90,  // 65: game.v1.Creature.look:type_name -> game.v1.BodyLook
 	27,  // 66: game.v1.Creature.equipment:type_name -> game.v1.VisibleEquipment
 	29,  // 67: game.v1.Creature.worn:type_name -> game.v1.Worn
 	28,  // 68: game.v1.Worn.head:type_name -> game.v1.WornPiece
@@ -7711,56 +7892,56 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	28,  // 71: game.v1.Worn.feet:type_name -> game.v1.WornPiece
 	28,  // 72: game.v1.Worn.shield:type_name -> game.v1.WornPiece
 	28,  // 73: game.v1.Worn.weapon:type_name -> game.v1.WornPiece
-	89,  // 74: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
+	90,  // 74: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
 	27,  // 75: game.v1.CreatureLook.equipment:type_name -> game.v1.VisibleEquipment
 	31,  // 76: game.v1.CreatureCosmetics.cosmetics:type_name -> game.v1.Cosmetics
 	31,  // 77: game.v1.CosmeticsState.equipped:type_name -> game.v1.Cosmetics
 	2,   // 78: game.v1.CreatureSkull.skull:type_name -> game.v1.Skull
 	26,  // 79: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
 	3,   // 80: game.v1.CreatureDisappear.reason:type_name -> game.v1.DisappearReason
-	87,  // 81: game.v1.CreatureMove.from:type_name -> game.v1.Position
-	87,  // 82: game.v1.CreatureMove.to:type_name -> game.v1.Position
-	88,  // 83: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
+	88,  // 81: game.v1.CreatureMove.from:type_name -> game.v1.Position
+	88,  // 82: game.v1.CreatureMove.to:type_name -> game.v1.Position
+	89,  // 83: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
 	25,  // 84: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
-	87,  // 85: game.v1.Effect.pos:type_name -> game.v1.Position
-	87,  // 86: game.v1.Projectile.from:type_name -> game.v1.Position
-	87,  // 87: game.v1.Projectile.to:type_name -> game.v1.Position
+	88,  // 85: game.v1.Effect.pos:type_name -> game.v1.Position
+	88,  // 86: game.v1.Projectile.from:type_name -> game.v1.Position
+	88,  // 87: game.v1.Projectile.to:type_name -> game.v1.Position
 	4,   // 88: game.v1.CreatureAttack.kind:type_name -> game.v1.AttackKind
-	87,  // 89: game.v1.CreatureAttack.to:type_name -> game.v1.Position
+	88,  // 89: game.v1.CreatureAttack.to:type_name -> game.v1.Position
 	46,  // 90: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
-	87,  // 91: game.v1.FloatingText.pos:type_name -> game.v1.Position
+	88,  // 91: game.v1.FloatingText.pos:type_name -> game.v1.Position
 	5,   // 92: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
 	50,  // 93: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
-	90,  // 94: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
-	86,  // 95: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
+	91,  // 94: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
+	87,  // 95: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
 	52,  // 96: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	86,  // 97: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
-	86,  // 98: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	86,  // 99: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	87,  // 97: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
+	87,  // 98: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	87,  // 99: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
 	6,   // 100: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	87,  // 101: game.v1.Message.pos:type_name -> game.v1.Position
-	85,  // 102: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	85,  // 103: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	85,  // 104: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	88,  // 101: game.v1.Message.pos:type_name -> game.v1.Position
+	86,  // 102: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	86,  // 103: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	86,  // 104: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
 	58,  // 105: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
 	61,  // 106: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
 	7,   // 107: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	86,  // 108: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	86,  // 109: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	91,  // 110: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
-	92,  // 111: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
-	86,  // 112: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
-	91,  // 113: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
+	87,  // 108: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	87,  // 109: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	92,  // 110: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
+	93,  // 111: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
+	87,  // 112: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
+	92,  // 113: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
 	64,  // 114: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
 	64,  // 115: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
 	64,  // 116: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
 	65,  // 117: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
 	66,  // 118: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
-	92,  // 119: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
-	87,  // 120: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	88,  // 121: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	93,  // 119: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
+	88,  // 120: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	89,  // 121: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
 	8,   // 122: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	85,  // 123: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	86,  // 123: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
 	9,   // 124: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
 	73,  // 125: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
 	10,  // 126: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
@@ -7770,18 +7951,19 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	76,  // 130: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
 	11,  // 131: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
 	10,  // 132: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
-	87,  // 133: game.v1.StationOpen.pos:type_name -> game.v1.Position
-	86,  // 134: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	88,  // 133: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	87,  // 134: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
 	12,  // 135: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
-	86,  // 136: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
-	85,  // 137: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
+	87,  // 136: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
+	86,  // 137: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
 	84,  // 138: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
 	13,  // 139: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
-	140, // [140:140] is the sub-list for method output_type
-	140, // [140:140] is the sub-list for method input_type
-	140, // [140:140] is the sub-list for extension type_name
-	140, // [140:140] is the sub-list for extension extendee
-	0,   // [0:140] is the sub-list for field type_name
+	85,  // 140: game.v1.QuestLogEntry.milestone:type_name -> game.v1.MilestoneInfo
+	141, // [141:141] is the sub-list for method output_type
+	141, // [141:141] is the sub-list for method input_type
+	141, // [141:141] is the sub-list for extension type_name
+	141, // [141:141] is the sub-list for extension extendee
+	0,   // [0:141] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
@@ -7848,7 +8030,7 @@ func file_game_v1_server_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_server_proto_rawDesc), len(file_game_v1_server_proto_rawDesc)),
 			NumEnums:      14,
-			NumMessages:   71,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

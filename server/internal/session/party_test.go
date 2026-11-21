@@ -87,9 +87,16 @@ func TestPartyInviteAcceptKickLeaderLeave(t *testing.T) {
 	if !slices.Equal(members, []uint32{a.ID(), b.ID()}) || leader != a.ID() {
 		t.Fatalf("party %v led by %d", members, leader)
 	}
-	up := lastParty(ca.take())
-	if up == nil || up.GetLeaderId() != a.ID() || len(up.GetMembers()) != 2 || up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_OFF {
+	// Shared experience is on from the start (party.shared_by_default), inactive until
+	// both fight.
+	evs0 := ca.take()
+	up := lastParty(evs0)
+	if up == nil || up.GetLeaderId() != a.ID() || len(up.GetMembers()) != 2 ||
+		up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE || up.GetBonusPercent() != 0 {
 		t.Fatalf("leader's update %v", up)
+	}
+	if k := systemKeys(evs0); k["party.joined"] != 1 || k["party.shared_default"] != 1 {
+		t.Fatalf("leader heard %v", k)
 	}
 	if h.w.InvitesForTest() != 0 {
 		t.Fatal("accepted invitation still pending")
@@ -198,8 +205,8 @@ func TestPartyInviteNeedsSight(t *testing.T) {
 	}
 }
 
-// Shared experience splits the pot of the sharers' damage shares equally, plus 6 % per
-// sharer beyond the first; off, far away or idle members get nothing of it.
+// Shared experience splits the pot of the sharers' damage shares equally, plus the bonus
+// of the number of sharers (5 % for two); off, far away or idle members get nothing of it.
 func TestSharedExperience(t *testing.T) {
 	h := partyHarness(t)
 	ca, a := h.join("Ana", at(10, 10))
@@ -217,6 +224,12 @@ func TestSharedExperience(t *testing.T) {
 		h.w.ContributeForTest(ctx, b)
 	}
 
+	// On by default; the leader turns it off.
+	if _, _, on := a.PartyForTest(); !on {
+		t.Fatal("shared experience not on by default")
+	}
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_OFF, 0))
+	h.sim.Step()
 	// Off: by damage, as without a party (Cora is outside and keeps her share).
 	h.do(both)
 	if da, db, dc := gain(func(ctx *game.TickContext) {
@@ -230,7 +243,7 @@ func TestSharedExperience(t *testing.T) {
 	if _, _, on := a.PartyForTest(); !on {
 		t.Fatal("shared experience not on")
 	}
-	// On, both near and active: Ana's 75 of 100 → pot 75 × 1.06 = 79 / 2 = 39 each.
+	// On, both near and active: Ana's 75 of 100 → pot 75 × 1.05 = 78 / 2 = 39 each.
 	if da, db, dc := gain(func(ctx *game.TickContext) {
 		h.w.ShareForTest(ctx, kill, 100, session.Share{P: a, Amount: 30}, session.Share{P: c, Amount: 10})
 	}); da != 39 || db != 39 || dc != 25 {
@@ -254,12 +267,13 @@ func TestSharedExperience(t *testing.T) {
 	if da, db, _ := gain(func(ctx *game.TickContext) {
 		both(ctx)
 		h.w.ShareForTest(ctx, kill, 100, session.Share{P: a, Amount: 30})
-	}); da != 53 || db != 53 {
+	}); da != 52 || db != 52 {
 		t.Fatalf("healer: %d %d", da, db)
 	}
-	// The indicator follows: active while both qualify.
+	// The indicator follows: active while both qualify, with the bonus of two sharers.
 	h.sim.RunTicks(20)
-	if up := lastParty(cb.take()); up == nil || up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE {
+	if up := lastParty(cb.take()); up == nil || up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE ||
+		up.GetBonusPercent() != 5 {
 		t.Fatalf("indicator %v", up)
 	}
 }
@@ -300,8 +314,8 @@ func TestSharedExperienceAntiCarry(t *testing.T) {
 	h.do(func(ctx *game.TickContext) {
 		h.w.ShareForTest(ctx, pos(11, 10), 1000, session.Share{P: a, Amount: 99}, session.Share{P: b, Amount: 1})
 	})
-	if da, db, dc := a.Experience()-xa, b.Experience()-xb, c.Experience()-xc; da != 524 || db != 10 || dc != 524 {
-		t.Fatalf("in range: %d %d %d", da, db, dc) // 990 × 1.06 / 2
+	if da, db, dc := a.Experience()-xa, b.Experience()-xb, c.Experience()-xc; da != 519 || db != 10 || dc != 519 {
+		t.Fatalf("in range: %d %d %d", da, db, dc) // 990 × 1.05 / 2
 	}
 }
 
@@ -317,7 +331,7 @@ func TestSharedExperienceOnKill(t *testing.T) {
 	post := onlyMonster(t, h)
 	h.input(ca, setTarget(post.ID()))
 	h.sim.RunUntil(func() bool { return len(h.w.Monsters()) == 0 }, sim.MaxSeconds(60))
-	// 28 × 1.06 / 2 = 14 each.
+	// 28 × 1.05 / 2 = 14 each.
 	if a.Experience() != 14 || b.Experience() != 14 {
 		t.Fatalf("experience %d %d", a.Experience(), b.Experience())
 	}
@@ -579,9 +593,9 @@ func TestSharedExperienceTwoParties(t *testing.T) {
 	h.do(func(ctx *game.TickContext) {
 		h.w.ShareForTest(ctx, pos(11, 10), 200, session.Share{P: a, Amount: 50}, session.Share{P: c, Amount: 50})
 	})
-	// 100 × 1.06 / 2 = 53 for each member of both parties.
+	// 100 × 1.05 / 2 = 52 for each member of both parties.
 	for i, p := range []*session.Player{a, b, c, d} {
-		if got := p.Experience() - x[i]; got != 53 {
+		if got := p.Experience() - x[i]; got != 52 {
 			t.Fatalf("player %d got %d", i, got)
 		}
 	}

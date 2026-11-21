@@ -7,7 +7,9 @@ import { formatDiagnostic, generateIdsLock, validateContent } from "./index.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 
-describe("ids.lock.yaml", () => {
+// Each test copies data/ and i18n/ and validates the whole content once or twice: up to
+// 5.5 s on a dev machine while the whole suite runs, past vitest's 5 s default.
+describe("ids.lock.yaml", { timeout: 30_000 }, () => {
   let root: string;
   const lockPath = (): string => join(root, "data/ids.lock.yaml");
   const errors = (base?: string): string[] =>
@@ -107,6 +109,9 @@ describe("ids.lock.yaml", () => {
       "bosque_cave",
       "volcan_mine",
       "pruebas",
+      "ms_thalorn",
+      "ms_orthavel",
+      "ms_morvund",
     ]);
     expect(text).toBe(before);
     expect(errors()).toEqual([]);

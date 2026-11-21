@@ -141,7 +141,7 @@ items:
   compartido `item.signpost.name` y `blocks_movement: true`. El cliente empaqueta
   solo las claves que algún item usa como descripción.
 - **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
-  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
+  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Cinderstead, 100, como la
   piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
@@ -605,7 +605,7 @@ mismo NPC hace fallar el test del cliente (`vite/content.test.ts`): ponle `tag` 
 las dos. Guía de escritura: como mucho 300 caracteres por texto de nodo y textos de opción
 cortos (el botón muestra 2 líneas y el resto va al `title`).
 
-**Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
+**Acciones de desarrollo** (solo la instructora de Thimblewick,
 `16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
 gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs
 de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
@@ -766,7 +766,7 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
     agujero o un teletransporte (`portals.yaml`);
   - `make validate` exige además que el lugar esté en una isla que no sea `dev_only` (el
     servidor de producción no la tiene: su `world.bin` se compila sin islas dev, y un
-    servidor de desarrollo sí acepta zonas de la Isla de Pruebas) y que esa casilla se
+    servidor de desarrollo sí acepta zonas de Thimblewick) y que esa casilla se
     alcance a pie desde el templo de su isla (`mapcli validate`, el mismo recorrido que
     las zonas, con escaleras, agujeros y teletransportes contando donde caen).
 
@@ -786,8 +786,8 @@ quests secundarias `foreman_ore` y `diver_locket`, las del lote 12 (docs/02 "Que
 secundarias": `ferryman_jetty` y `flame_crater` con un `reach` a un punto con radio,
 `flame_crater` que termina en su paso `kill`, `smith_ring` con un `flag_equals` cuyo flag
 pone la opción de otro NPC, `set_flag` de Madre Oriela), las tareas de caza
-`bounty_*` de Raigal y Brasal (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de la
-Isla de Pruebas (`repeatable`, docs/16).
+`bounty_*` de Ivernel y Cinderstead (docs/02 "Tareas") y la tarea repetible `pruebas_rats` de
+Thimblewick (`repeatable`, docs/16).
 
 ### Quests repetibles (tareas)
 ```yaml
@@ -827,6 +827,48 @@ rewards:
     lugar), volver al NPC sí vale: así cierra `pruebas_rats`.
 - El diario de misiones (docs/02 "Diario de misiones", `QuestLog` de docs/05) muestra una
   tarea terminada con el tiempo que falta para volver a tomarla.
+
+### Quests de hito (`milestone`)
+```yaml
+# data/quests/ms_morvund_embers.yaml (docs/02 "Quests de hito")
+id: ms_morvund_embers
+name: quest.ms_morvund_embers.name
+min_level: 35
+milestone: true
+title: quest.ms_morvund_embers.title      # el título que se gana (el diario lo muestra)
+requires:
+  level: 35
+  players: 4                              # 1 a 4, juntos sobre las placas
+  vocations: [guardian, arcanist, ranger, druid]   # opcional: una por jugador
+  gear: { item: ember_key }               # opcional: { item, equipped: true } o { weapon: sword }
+steps:
+  - id: plates
+    description: quest.ms_morvund_embers.step_plates
+    complete_when:
+      sigils: { x: 3652, y: 5758, z: 8, radius: 5, to: { x: 3668, y: 5755, z: 8 } }
+rewards:
+  - { xp: 19000 }
+  - { item: morvund_key }
+  - { item: embersteel_helm }
+  - { gold: 1300 }
+```
+- `milestone: true` va con `title` y `requires`, y ellos solo con él. Un hito no es
+  `repeatable` y su último paso, y solo ese, es `sigils`. `requires.vocations` tiene tantas
+  como `players` (para cualquier vocación se omite: una lista vacía es un error); `gear.equipped` va solo con `item`. Lo revisan el esquema, `make
+  validate` (`checkMilestones`) y el servidor al cargar (`content.ParseQuest`).
+- **Las placas** son items con bloque `sigil` (`sigil: {}` para cualquiera, `sigil: {
+  vocation: druid }` para una vocación), `pickupable: false` y sin `blocks_movement`. Las
+  de un paso `sigils` son las que hay en su cuadrado: tantas como `players` y con las
+  vocaciones de `requires.vocations` (o ninguna). `mapcli validate` (`checkSigils`) y el
+  servidor al arrancar (`initSigils`) lo exigen, y también que cada placa sea de un solo
+  hito, que no haya placas sueltas ni dos en una casilla, que ninguna esté en una casa ni
+  sobre la entrada de una escalera, un agujero o un teletransporte, que se llegue a pie a cada una desde el templo y que
+  `to` sea una casilla caminable de una isla (ni casa, ni puerta con llave, ni entrada de
+  un portal) desde la que se llega a un templo sin llaves ni herramientas. Para la
+  alcanzabilidad, las placas llevan a la sala de recompensa (así su cofre cuenta como
+  alcanzable).
+- Un hito se empieza como cualquier quest (`start_quest`). El diario lo lista antes, con
+  los requisitos (docs/05 `MilestoneInfo`).
 
 ## Hechizo
 ```yaml
@@ -916,7 +958,8 @@ conditions:
   `tools/spritegen/src/recipes/ui.ts`, un test lo exige) y su lugar y tipo en
   `client/src/state/status.ts` (`STATUS_ORDER`, `STATUS_KIND`).
 - Los ids `in_combat`, `pvp_locked` y `protection_zone` son de los estados que manda el
-  servidor (`02-game-design.md`, "Estados del personaje"): una condición no puede usarlos.
+  servidor (`02-game-design.md`, "Estados del personaje"), y `party_bonus` el del bonus de
+  grupo que arma el cliente ("Grupos"): una condición no puede usarlos.
 
 ## Grupos (T3.3)
 Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml → party`
@@ -931,8 +974,11 @@ party:
   contribution_ms: 75000    # ventana de "contribuyó hace poco"
   level_range_pct: 70       # nivel mínimo, en % del más alto que comparte (anti-carry)
   level_gap_always: 3       # o a lo sumo estos niveles por debajo
-  bonus_pct_per_member: 6   # bonus del pozo por cada miembro que comparte después del primero
-  max_bonus_pct: 24         # tope del bonus
+  shared_by_default: true   # un grupo nuevo empieza compartiendo (el líder puede apagarla)
+  bonus_pct_by_sharers: [5, 10, 15, 20]  # bonus del pozo con 2, 3, 4 y 5+ que comparten;
+                            # más que escalones toman el último (el tope). Solo cuenta
+                            # cuántos (dos personajes de una cuenta son uno). De 1 a
+                            # max_members - 1 escalones, 0..100, nunca decrecientes
 ```
 - Textos de la UI: `client.party.*` y los mensajes del servidor `party.*` en
   `i18n/*/client.yaml`. El nombre de la isla de un miembro fuera de vista es
@@ -1051,7 +1097,7 @@ trade:
 ```
 - Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
   mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del
-  mercado (`market_board`, en Puerto, en Raigal y en Brasal).
+  mercado (`market_board`, en Puerto, en Ivernel y en Cinderstead).
 - Textos: `trade.*`, `market.*` y `gm.market_*` (servidor), `client.trade.*`,
   `client.market.*` y `client.battle.trade` (cliente) en `i18n/*/client.yaml`.
 
@@ -1113,7 +1159,7 @@ forge:
   arranque del servidor); el yunque, `pickupable: false`; piedras y ámbar, materiales
   apilables (se gastan por unidades). Cada piedra y el ámbar tienen que conseguirse en
   producción (un NPC que los vende o un monstruo que los suelta), y **ningún NPC de una isla
-  que no es `dev_only` vende ni da el ámbar** (con `world/`; el mercader de la Isla de Pruebas
+  que no es `dev_only` vende ni da el ámbar** (con `world/`; el mercader de Thimblewick
   puede). La regla m4 ("Nada lleva a ningún lado") cuenta los materiales de la forja como
   usados: no necesitan comprador.
 - Los materiales son items comunes de `data/items/forge.yaml` (`kind: material`, apilables,
@@ -1142,7 +1188,7 @@ forge:
   `bosque_to_volcan` (Tavin Rema, 150, nivel 25), `volcan_to_bosque` (Nerea Vado, 100) y
   `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. El texto de la
   opción dice destino y precio (`npc.<capitán>.to_*`).
-- Una isla `dev_only` (la Isla de Pruebas, docs/03) no puede tener rutas: el servidor de
+- Una isla `dev_only` (Thimblewick, docs/03) no puede tener rutas: el servidor de
   producción las revisa contra un mapa sin ella. Su barquero (`pruebas_ferryman`) usa
   opciones con `take_gold` y `teleport` a las llegadas de las rutas de verdad.
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por

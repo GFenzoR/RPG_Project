@@ -68,7 +68,7 @@ describe("generated sounds", () => {
     );
   }, 30_000);
 
-  it("the Isla Volcánica plays its own loops, not the cave's and the shore's (T5.5)", () => {
+  it("Karvask plays its own loops, not the cave's and the shore's (T5.5)", () => {
     const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
       music: { islands: Record<string, string>; pools: Record<string, string[]> };
       ambient: { islands: Record<string, string> };

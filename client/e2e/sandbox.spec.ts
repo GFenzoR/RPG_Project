@@ -1,4 +1,4 @@
-// The Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): a character of
+// Thimblewick, the sandbox island (docs/16-probar-el-juego.md): a character of
 // that town wakes up in its temple next to the instructor, and a staff /tp shows the
 // hunting pens, the yard of portals and the cave under it. It runs on the main E2E server
 // (start town testisle): the town set in the database stands for `make play`'s
@@ -182,7 +182,7 @@ test("sandbox island: wake up in its temple, then /tp to the pens, the yard of p
   const item = (id: string): Promise<number | undefined> =>
     page.evaluate((i) => window.__rpgClient?.itemNumber(i), id);
 
-  // The temple of the Isla de Pruebas (world/islands/pruebas/island.yaml), the instructor
+  // The temple of Thimblewick (world/islands/pruebas/island.yaml), the instructor
   // beside it.
   await standsOn(2095, 2086, 7);
   await expect

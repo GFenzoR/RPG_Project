@@ -2,7 +2,7 @@ id: bounty_thornlings
 name: quest.bounty_thornlings.name
 min_level: 18
 notes: >-
-  Bounty task of Raigal (bosque_hunter, lote 12): 25 thornlings (levels 18-22), every 20
+  Bounty task of Ivernel (bosque_hunter, lote 12): 25 thornlings (levels 18-22), every 20
   hours. The reward is about a fifth of what an hour of that hunt gives (xp and loot,
   sim/balance_tasks_test.go; docs/02 "Tareas"); no items.
 repeatable: { cooldown_hours: 20 }

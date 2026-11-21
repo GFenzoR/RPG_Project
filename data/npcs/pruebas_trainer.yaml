@@ -15,7 +15,7 @@ look:
     weapon: { shape: sword, tint: iron }
     shield: { shape: round, tint: oak }
 notes: >-
-  Instructor of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md), in its
+  Instructor of Thimblewick, the sandbox island (docs/16-probar-el-juego.md), in its
   temple: free experience (houses ask for level 12, PvP for level 20), money, healing with
   mana, and training (the combat skills and magic level of the player's vocation, or the
   trades) so every system can be tried by hand in a few minutes, and the short quest

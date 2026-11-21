@@ -10,9 +10,10 @@ import (
 )
 
 // Parties (T3.3, docs/02-game-design.md "Grupos"): a leader invites, the invited player
-// accepts or declines before the invitation expires, and the leader can turn on shared
-// experience. Everything runs on the loop; nothing is persisted: a member that leaves
-// the world (logout, disconnect, re-login) leaves its party.
+// accepts or declines before the invitation expires; a new party shares experience when
+// balance.yaml party.shared_by_default says so, and the leader can turn it off and on.
+// Everything runs on the loop; nothing is persisted: a member that leaves the world
+// (logout, disconnect, re-login) leaves its party.
 const (
 	msgPartyInvited      = "party.invited"
 	msgPartyNotFound     = "party.player_not_found"
@@ -31,6 +32,7 @@ const (
 	msgPartyLeader       = "party.new_leader"
 	msgPartyDisbanded    = "party.disbanded"
 	msgPartySharedOn     = "party.shared_on"
+	msgPartySharedNew    = "party.shared_default"
 	msgPartySharedOff    = "party.shared_off"
 	msgPartyNotAMember   = "party.not_a_member"
 	msgPartyInviteUsage  = "party.invite_usage"
@@ -205,9 +207,12 @@ func (w *World) acceptInvite(ctx *game.TickContext, p *Player, inviter uint32) {
 	}
 	pt := l.party
 	if pt == nil {
-		pt = &party{leader: l, members: []*Player{l}}
+		pt = &party{leader: l, members: []*Player{l}, shared: w.cfg.Balance.Party.SharedByDefault}
 		l.party = pt
 		w.parties = append(w.parties, pt)
+		if pt.shared {
+			defer w.partyMsg(pt, systemMsg(msgPartySharedNew)) // after "joined": both hear it
+		}
 	} else if len(pt.members) >= w.cfg.Balance.Party.MaxMembers {
 		p.emit(systemMsg(msgPartyFull))
 		return
@@ -318,9 +323,14 @@ func (w *World) contributed(now game.Tick, p *Player) bool {
 }
 
 // sharers returns the members of pt that share a kill at pos (or, with near false, the
-// ones that qualify wherever they are, among those viewer sees: the indicator). A member shares if it is active,
-// close enough (near) and its level is at least level_range_pct % of the highest of the
-// members that are active and close, or at most level_gap_always below it (anti-carry). Fewer than two sharers = no sharing.
+// ones that qualify wherever they are, among those viewer sees: the indicator). A member
+// shares if it is active, close enough (near) and its level is at least level_range_pct %
+// of the highest of the members that are active and close, or at most level_gap_always
+// below it (anti-carry; alts count for the highest level too). Two characters of one
+// account are one sharer: the first in join order that passed the level filter, so a
+// low alt never costs its main the bonus; alts never grow the bonus and the other keeps
+// its own damage share. A character without an account (id 0: hand-built test or bot
+// characters) is never merged with another. Fewer than two sharers = no sharing.
 func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player, dst []*Player) []*Player {
 	near := viewer == nil
 	pc := w.cfg.Balance.Party
@@ -335,19 +345,38 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 			top = max(top, o.level)
 		}
 	}
-	dst = slices.DeleteFunc(dst, func(o *Player) bool {
-		return o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways
-	})
-	if len(dst) < 2 {
+	n := 0
+	for _, o := range dst {
+		if o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways {
+			continue
+		}
+		if o.accountID != 0 && sameAccount(dst[:n], o.accountID) {
+			continue
+		}
+		dst[n] = o
+		n++
+	}
+	clear(dst[n:])
+	if n < 2 {
 		return dst[:0]
 	}
-	return dst
+	return dst[:n]
+}
+
+// sameAccount reports whether one of ps belongs to account acc.
+func sameAccount(ps []*Player, acc int64) bool {
+	for _, q := range ps {
+		if q.accountID == acc {
+			return true
+		}
+	}
+	return false
 }
 
 // shareExperience pays def experience xp of a kill at pos, split by damage (shares).
 // The shares of members of a sharing party (party.shared and at least two sharers) go
-// to a pot that grows by the bonus and is split equally among the sharers; every other
-// share pays its owner, as without a party.
+// to a pot that grows by the bonus of its number of sharers (party.bonus_pct_by_sharers)
+// and is split equally among them; every other share pays its owner, as without a party.
 func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares []damageShare) {
 	// Every share counts toward the total, online or not: the share of a player that
 	// left the world (logout, re-login with a new id) is lost, never handed to the rest.
@@ -397,15 +426,11 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 	}
 	pc := w.cfg.Balance.Party
 	for _, pt := range pots {
-		n := int64(len(pt.sharers))
-		if pt.xp <= 0 || n < 2 {
-			continue
-		}
-		bonus := min(int64(pc.BonusPctPerMember)*(n-1), int64(pc.MaxBonusPct))
-		each := pt.xp * (100 + bonus) / 100 / n
+		// extra is the bonus part, shown apart on the floating number.
+		each, extra := pc.SharedEach(pt.xp, len(pt.sharers))
 		for _, o := range pt.sharers {
 			if each > 0 {
-				w.gainExperience(o, each)
+				w.gainExperienceBonus(o, each, extra)
 			}
 		}
 	}
@@ -476,6 +501,9 @@ func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 		return
 	}
 	u := &pb.PartyUpdate{LeaderId: pt.leader.id, Shared: state, Members: make([]*pb.PartyMember, len(pt.members))}
+	if state == pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE {
+		u.BonusPercent = uint32(w.cfg.Balance.Party.BonusPct(sharing))
+	}
 	for i, o := range pt.members {
 		pv := view[i]
 		u.Members[i] = &pb.PartyMember{CreatureId: o.id, Name: o.name, Vocation: o.vocation.ID, Level: uint32(max(o.level, 0)),

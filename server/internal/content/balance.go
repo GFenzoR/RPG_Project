@@ -129,11 +129,37 @@ type Party struct {
 	ContributionMs int `yaml:"contribution_ms"`
 	LevelRangePct  int `yaml:"level_range_pct"`
 	LevelGapAlways int `yaml:"level_gap_always"`
-	// The shared pot grows BonusPctPerMember % per sharing member beyond the first, up
-	// to MaxBonusPct %.
-	BonusPctPerMember int `yaml:"bonus_pct_per_member"`
-	MaxBonusPct       int `yaml:"max_bonus_pct"`
+	// SharedByDefault: a new party starts with shared experience on (the leader can
+	// still turn it off).
+	SharedByDefault bool `yaml:"shared_by_default"`
+	// BonusPctBySharers is the bonus % of the shared pot by the number of sharers: the
+	// first entry is for 2 sharers, the next for 3 and so on; a count past the end takes
+	// the last entry, which is the cap. Only the count matters (distinct accounts: two
+	// characters of one account are one sharer).
+	BonusPctBySharers []int `yaml:"bonus_pct_by_sharers"`
 }
+
+// BonusPct is the bonus % of the shared pot for n sharers (0 below 2).
+func (p Party) BonusPct(n int) int {
+	if n < 2 || len(p.BonusPctBySharers) == 0 {
+		return 0
+	}
+	return p.BonusPctBySharers[min(n-2, len(p.BonusPctBySharers)-1)]
+}
+
+// SharedEach splits a shared pot of xp among n sharers: each gets pot × (100 + bonus) /
+// 100 / n, and extra is the bonus part of it (each minus an even split of the pot). It
+// is the whole formula of a shared kill (session.shareExperience) and of the party sim.
+func (p Party) SharedEach(pot int64, n int) (each, extra int64) {
+	if pot <= 0 || n < 2 {
+		return 0, 0
+	}
+	each = pot * int64(100+p.BonusPct(n)) / 100 / int64(n)
+	return each, each - pot/int64(n)
+}
+
+// MaxBonusPct is the highest bonus % of the shared pot: the last step.
+func (p Party) MaxBonusPct() int { return p.BonusPct(p.MaxMembers) }
 
 func (p Party) check() error {
 	if p.MaxMembers < 2 || p.MaxMembers > 32 {
@@ -145,9 +171,16 @@ func (p Party) check() error {
 	if p.InviteMs <= 0 || p.UpdateMs <= 0 || p.ShareDistance <= 0 || p.ContributionMs <= 0 {
 		return errors.New("party: invite_ms, update_ms, share_distance and contribution_ms must be > 0")
 	}
-	if p.LevelRangePct < 1 || p.LevelRangePct > 100 || p.LevelGapAlways < 0 || p.LevelGapAlways > 100 || p.BonusPctPerMember < 0 || p.BonusPctPerMember > 100 ||
-		p.MaxBonusPct < 0 || p.MaxBonusPct > 100 {
-		return errors.New("party: level_range_pct must be in 1..100, level_gap_always, bonus_pct_per_member and max_bonus_pct in 0..100")
+	if p.LevelRangePct < 1 || p.LevelRangePct > 100 || p.LevelGapAlways < 0 || p.LevelGapAlways > 100 {
+		return errors.New("party: level_range_pct must be in 1..100, level_gap_always in 0..100")
+	}
+	if n := len(p.BonusPctBySharers); n < 1 || n > p.MaxMembers-1 {
+		return fmt.Errorf("party.bonus_pct_by_sharers must have 1..%d steps (2 sharers to max_members)", p.MaxMembers-1)
+	}
+	for i, b := range p.BonusPctBySharers {
+		if b < 0 || b > 100 || i > 0 && b < p.BonusPctBySharers[i-1] {
+			return errors.New("party.bonus_pct_by_sharers: each step in 0..100, never below the one before")
+		}
 	}
 	return nil
 }

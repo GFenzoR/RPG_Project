@@ -803,7 +803,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `vite/content.ts`) nunca son el item de arriba: `topItem` las saltea, así mirar una
   casilla de la orilla nombra su suelo y una casilla con solo piezas no ofrece "usar" ni
   "mover". `MapView` las dibuja con los suelos (`flat` del atlas), bajo las criaturas.
-- E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
+- E2E: el test "T5.5: wake up at the temple of Cinderstead" lee el cartel del templo
   (screenshot `65b-volcan-temple-sign`) y el de NPCs ("talk to NPCs"), que despierta en
   el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
   `12b-puerto-temple-sign`).
@@ -1249,13 +1249,13 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   mapa, `Game.pressTile`), con cualquier movimiento propio y con un `FullMapView`.
   Mientras dura, el camino por click y el mouse mantenido lo rodean: `Steering.plan` no
   pasa por esa casilla al planear desde donde empezó el paso (`refusedStep`).
-- E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
+- E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de Karvask
   sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la
   `stairs_up` de 3692,5796,8) y sube con la flecha arriba a 3692,5797,7 (screenshots
   73–75: la escalera en la superficie, la mina en el piso 8 y de vuelta arriba).
 
-## Notas de la Isla de Pruebas (`make play`, docs/16)
+## Notas de Thimblewick (`make play`, docs/16)
 - La isla es `dev_only`: el servidor principal del E2E compila el mapa con
   `mapcompile -dev` (`playwright.config.ts`); el de Puerto no la necesita.
 - E2E `e2e/sandbox.spec.ts`: corre en el servidor principal (inicio `testisle`). Un guardián
@@ -1893,6 +1893,15 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   `toolbar-quests`.
 - Vista previa: escenas `quests` y `questsdone` (la pestaña de terminadas) de
   `make ui-preview`; `allwindows` la abre también.
+- **Quests de hito** (docs/02 "Quests de hito"): `QuestEntryView.milestone`
+  (`MilestoneView`, de `QuestLogEntry.milestone`) y el estado `open` (un hito sin empezar,
+  `QUEST_LOG_STATE_OPEN`). `questTabs` da tres pestañas: `active` (sin hitos),
+  `milestones` (todos los hitos, primero los sin empezar, después en curso y terminados) y
+  `finished` (un hito terminado con su título, `quest-title`). `MilestoneReqs` dibuja cada
+  requisito (`.quest-req[data-req=level|gear|players]`, `data-met`); las marcas son las
+  del propio personaje que manda el servidor. `QuestsPanel` recibe `content` (el nombre del
+  item pedido). Vista previa: escena `questsmilestones`. E2E "milestones" de
+  `e2e/game.spec.ts` (screenshots `99-milestone-*`).
 - E2E: "sandbox: the quest log, a lectern's book and a reward chest that gives once"
   (`e2e/sandbox.spec.ts`) siembra el capítulo 1 en 2/6 lobos y la tarea de práctica en
   espera con `psql`, abre `quests` con `openWindow` (`WindowId` de `e2e/windows.ts` incluye

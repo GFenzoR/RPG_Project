@@ -7,7 +7,7 @@
   doors:
     - { x: 3649, y: 5802, z: 7 }
   exit: { x: 3649, y: 5803, z: 7 }
-  notes: "Small house on the plaza of Brasal, south of the temple (prefab house_wood_small, T5.4)."
+  notes: "Small house on the plaza of Cinderstead, south of the temple (prefab house_wood_small, T5.4)."
 
 - id: volcan_house_bellows
   name: house.volcan_house_bellows.name
@@ -19,7 +19,7 @@
     - { x: 3640, y: 5803, z: 7 }
     - { x: 3641, y: 5803, z: 7 }
   exit: { x: 3640, y: 5804, z: 7 }
-  notes: "Medium house on the south-west of the plaza of Brasal, next to the Cinder house (prefab house_wood_medium, content audit M6)."
+  notes: "Medium house on the south-west of the plaza of Cinderstead, next to the Cinder house (prefab house_wood_medium, content audit M6)."
 
 - id: volcan_house_flint
   name: house.volcan_house_flint.name

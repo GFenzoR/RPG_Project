@@ -14,7 +14,7 @@ look:
     legs: { shape: trousers, tint: green }
     feet: { shape: boots, tint: dark_leather }
 notes: >-
-  Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
+  Captain of the Ivernel dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
   bosque_to_volcan). Chapter 2 part 1
   ends with him: he saw where the unflagged boat landed. Since lote 12 he gives the side
   quest ferryman_jetty (level 22, once ch2_roots is completed: it follows that boat): the

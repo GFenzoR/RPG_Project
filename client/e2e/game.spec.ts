@@ -237,6 +237,24 @@ async function mapPoint(
   );
 }
 
+/**
+ * Waits until the own creature stands still at most `reach` tiles from (x, y): for a walk
+ * to where wolves roam, one of which can take the clicked tile before the player gets there
+ * (the click's path then stops next to it).
+ */
+async function arrivedNear(page: Page, x: number, y: number, reach: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        if (!s || s.pending || s.walking) return "moving";
+        return Math.max(Math.abs(s.x - x), Math.abs(s.y - y)) <= reach ? "near" : `${s.x},${s.y}`;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe("near");
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -1000,7 +1018,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
-  // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
+  // Puerto's NPCs live on Velmara (T1.16): this character's residence is Lanternby, so
   // it wakes up at that temple, next to the priestess and the provisioner. Level 9: the
   // temples bless from there on (content audit m8; novices are covered already).
   psql([
@@ -1067,7 +1085,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     return p;
   };
 
-  // The sign of Farol's temple stands by its east doorway (puerto_temple_sign, on the
+  // The sign of Lanternby's temple stands by its east doorway (puerto_temple_sign, on the
   // texts.yaml sign of the same id): in view from the temple, Shift+click reads it.
   const sign = await tileClient(3163, 6384);
   await page.mouse.move(sign.x, sign.y);
@@ -1737,6 +1755,8 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   browser,
   playwright,
 }) => {
+  // The hunt for the party bonus waits for the wolves, and leaving waits out the fight.
+  test.setTimeout(360_000);
   const password = "e2e-password-1";
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
@@ -1759,6 +1779,16 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const lead = await account("party-a", "Leader");
   const mate = await account("party-b", "Mate");
   await apiCtx.dispose();
+  // Level 8 guardians (243 health: 145 + 7 × 14, data/vocations.yaml; 4704 experience on
+  // balance.yaml's curve): at level 1 the wolves of the hunt below could kill one before
+  // the bonus showed, and the death screen covered the party window's screenshots.
+  for (const who of [lead, mate])
+    psql([
+      databaseUrl,
+      "-c",
+      `UPDATE characters SET level = 8, experience = 4704, health = 243, mana = 48
+         WHERE name = '${who.name}'`,
+    ]);
 
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
@@ -1779,6 +1809,10 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
+  // The help line says what a party gives.
+  await expect(leadPage.getByTestId("party-help")).toContainText(
+    "Cazar en grupo da más experiencia",
+  );
   const invite = leadPage
     .getByTestId("battle-list")
     .locator("li", { hasText: mate.name })
@@ -1799,11 +1833,21 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     await expect(panel).toContainText(lead.name);
     await expect(panel).toContainText(mate.name);
     await expect(panel).toContainText("Líder");
-    await expect(panel).toContainText("Experiencia compartida: apagada");
+    // Shared experience is on from the start (docs/02 "Grupos"), but nobody fought yet:
+    // no sharing, no bonus, and the panel says why.
+    await expect(page.getByTestId("party-shared")).toContainText(
+      "Experiencia compartida: activada, sin reparto",
+    );
+    await expect(page.getByTestId("party-bonus")).toHaveCount(0);
+    await expect(page.getByTestId("game-log")).toContainText("El grupo comparte la experiencia");
   }
+  // Only the leader turns it off and on again.
   await expect(matePage.getByTestId("party-share")).toHaveCount(0);
   await leadPage.getByTestId("party-share").click();
-  // On, but nobody fought yet: no sharing, and the panel says why.
+  await expect(matePage.getByTestId("party-shared")).toContainText(
+    "Experiencia compartida: apagada",
+  );
+  await leadPage.getByTestId("party-share").click();
   await expect(matePage.getByTestId("party-shared")).toContainText(
     "Experiencia compartida: activada, sin reparto",
   );
@@ -1822,6 +1866,53 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await leadPage
     .locator('.gwin[data-window="party"]')
     .screenshot({ path: join(shots, "25-party-panel.png") });
+
+  // Both hunt the wolves north of the temple (as in "fight a wolf"): once both fought, the
+  // party shares with its bonus (+5 % for two), the panel says it and who shares, and the
+  // status tray shows the party bonus icon with its percentage.
+  for (const [i, page] of [leadPage, matePage].entries()) {
+    const me = await self(page);
+    if (!me) throw new Error("no own creature");
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: me.x + i,
+      b: me.y - 5,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+    // A wolf can take the tile first: next to it is just as good for the hunt.
+    await arrivedNear(page, me.x + i, me.y - 5, 1);
+    await page.getByLabel("Perseguir al objetivo").check();
+  }
+  const bonusShown = async (page: Page): Promise<boolean> => {
+    if ((await page.getByTestId("party-bonus").count()) > 0) return true;
+    // Attack (again) the nearest wolf: one may have died or run off.
+    if (
+      (await page.locator('[data-testid="battle-list"] button[aria-pressed="true"]').count()) === 0
+    ) {
+      const wolf = page.getByTestId("battle-list").getByRole("button", { name: /lobo/ }).first();
+      if (await wolf.isVisible()) await wolf.click({ timeout: 1_000 }).catch(() => undefined);
+    }
+    return false;
+  };
+  await expect
+    .poll(async () => (await bonusShown(leadPage)) && (await bonusShown(matePage)), {
+      timeout: 120_000,
+      intervals: [1_000],
+    })
+    .toBe(true);
+  for (const page of [leadPage, matePage]) {
+    await expect(page.getByTestId("party-bonus")).toContainText(
+      "Bonus de grupo: +5 % de experiencia (2 comparten)",
+    );
+    await expect(page.getByTestId("party-panel").locator(".tag.sharing")).toHaveCount(2);
+    const tray = page.locator('[data-testid="conditions"] [data-condition="party_bonus"]');
+    await expect(tray.first()).toBeVisible();
+    await expect(tray.first().locator(".status-left")).toHaveText("5%");
+  }
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "25b-party-bonus.png") });
+  await shot(leadPage, "25c-party-bonus-tray");
 
   // T4.1: the mate reports the leader from the battle list; the server answers.
   await matePage
@@ -1867,15 +1958,20 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.keyboard.press("Escape");
   await expect(report).toHaveCount(0);
 
-  // Leaving disbands a party of two.
+  // Leaving disbands a party of two: the bonus and its icon go.
   await matePage.getByTestId("party-leave").click();
   await expect(leadPanel).toContainText("No estás en un grupo.");
   await expect(leadPage.getByTestId("game-log")).toContainText("El grupo se disolvió.");
+  await expect(leadPage.locator('[data-condition="party_bonus"]')).toHaveCount(0);
+  for (const page of [leadPage, matePage]) {
+    await page.getByLabel("Perseguir al objetivo").uncheck();
+    await leaveAfterFight(page);
+  }
   await leadPage.close();
   await matePage.close();
 });
 
-test("T3.4: cook a fish at the hearth of Farol from the station window", async ({
+test("T3.4: cook a fish at the hearth of Lanternby from the station window", async ({
   page,
   playwright,
 }) => {
@@ -1905,7 +2001,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
-  // Stand just south of Farol's cooking hearth (3172, 6366: world/islands/puerto), with a
+  // Stand just south of Lanternby's cooking hearth (3172, 6366: world/islands/puerto), with a
   // backpack (48) holding 3 raw fish (10), and cooking 30 so the grilled fish is at its
   // 97% cap (data/recipes.yaml).
   psql([
@@ -2034,13 +2130,13 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   await shot(page, "26-boat-routes");
 
   await route.click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Islote de ensayo");
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Pellwick");
   await shot(page, "27-boat-sailing");
   await expect(dialog).toBeHidden();
   await arrived(page, 1058, 1056);
   const log = page.getByTestId("game-log");
   await expect(log).toContainText("Pagaste 30 monedas.");
-  await expect(log).toContainText("Zarpaste hacia Islote de ensayo.");
+  await expect(log).toContainText("Zarpaste hacia Pellwick.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "28-boat-arrived");
   expect(errors).toEqual([]);
@@ -2085,7 +2181,7 @@ async function enterGame(page: Page, email: string, password: string): Promise<v
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
 }
 
-test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", async ({
+test("T3.6: sail to Selvaine after Chapter 1 and meet its ferryman", async ({
   page,
   playwright,
 }) => {
@@ -2118,34 +2214,32 @@ test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", asyn
   await page.mouse.click(master.x, master.y, { button: "right" });
   const dialog = page.getByTestId("dialog");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await dialog.getByRole("button", { name: "A la Isla del Bosque (80 monedas)." }).click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla del Bosque");
+  await dialog.getByRole("button", { name: "A Selvaine (80 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Selvaine");
   await arrived(page, 4120, 6100);
   await expect(page.getByTestId("game-log")).toContainText("Pagaste 80 monedas.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "29-bosque-dock");
 
-  // The ferryman of Raigal sells the way back.
+  // The ferryman of Ivernel sells the way back.
   const ferryman = await page.evaluate(() => window.__rpgClient?.tileToClient(4122, 6100));
   if (!ferryman) throw new Error("no canvas");
   await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
   await expect(dialog).toContainText("Tavin Rema");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Puerto (60 monedas)." }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Velmara (60 monedas)." })).toBeVisible();
   await shot(page, "30-bosque-ferryman");
   expect(errors).toEqual([]);
 });
 
-test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
+test("T3.6: wake up at the temple of Ivernel and talk to the druid", async ({
   page,
   playwright,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Rooted");
-  // Resident of the Forest Isle with no saved position: wakes up at its temple.
+  // Resident of Selvaine with no saved position: wakes up at its temple.
   psql([
     databaseUrl,
     "-c",
@@ -3116,17 +3210,14 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   expect(errors).toEqual([]);
 });
 
-test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", async ({
-  page,
-  playwright,
-}) => {
+test("T5.5: sail from Selvaine to Karvask and meet its captain", async ({ page, playwright }) => {
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Ashsail");
-  // Level 25 (172800 XP) on Raigal's dock with 200 copper coins (8) in a backpack (48).
+  // Level 25 (172800 XP) on Ivernel's dock with 200 copper coins (8) in a backpack (48).
   // The route asks for level 25 and costs 150.
   psql([
     databaseUrl,
@@ -3147,37 +3238,33 @@ test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", a
   await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
   const dialog = page.getByTestId("dialog");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await dialog.getByRole("button", { name: "A la Isla Volcánica (150 monedas)." }).click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla Volcánica");
+  await dialog.getByRole("button", { name: "A Karvask (150 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Karvask");
   await arrived(page, 3617, 5795);
   await expect(page.getByTestId("game-log")).toContainText("Pagaste 150 monedas.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "63-volcan-dock");
 
-  // The captain of Brasal sells the way back to both islands.
+  // The captain of Cinderstead sells the way back to both islands.
   const captain = await page.evaluate(() => window.__rpgClient?.tileToClient(3615, 5794));
   if (!captain) throw new Error("no canvas");
   await page.mouse.click(captain.x, captain.y, { button: "right" });
   await expect(dialog).toContainText("Nerea Vado");
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Bosque (100 monedas)." }),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "A la Isla del Puerto (140 monedas)." }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Selvaine (100 monedas)." })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "A Velmara (140 monedas)." })).toBeVisible();
   await shot(page, "64-volcan-captain");
   expect(errors).toEqual([]);
 });
 
-test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper", async ({
+test("T5.5: wake up at the temple of Cinderstead and start Chapter 3 with the keeper", async ({
   page,
   playwright,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Stoker");
-  // Resident of the Ember Isle at level 30 (302760 XP) who found the ember root in
+  // Resident of Karvask at level 30 (302760 XP) who found the ember root in
   // Chapter 2: the flag, and the root (132) in a backpack (48).
   psql([
     databaseUrl,
@@ -3207,7 +3294,7 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await page.mouse.click(sign.x, sign.y);
   await page.keyboard.up("Shift");
   await expect(page.getByTestId("game-log")).toContainText(
-    "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
+    "Ves: cartel. Templo de la Llama Quieta, en Cinderstead.",
   );
   await shot(page, "65b-volcan-temple-sign");
   // 5 columns at most: at 1280x800 the inventory floats over the 6th to the east.
@@ -3248,7 +3335,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
 }) => {
   const holder = await newGuardian(playwright, "Llavero");
   const stray = await newGuardian(playwright, "Rezagado");
-  // Residents of the Ember Isle at level 30 (302760 XP) on floor 8 of its mine, just north
+  // Residents of Karvask at level 30 (302760 XP) on floor 8 of its mine, just north
   // of the forge gate (3692,5832; docs/02 "Puertas con llave"), each with a backpack (48):
   // the key holder carries the ember key (142), the stray a coin (8). The stray stands right
   // north of the gate: the client's paths never cut a blocked corner.
@@ -3363,6 +3450,82 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   for (const page of [a, b]) await page.close();
 });
 
+test("milestones: two strangers hold the plates of Thalorn together and land in its reward room", async ({
+  browser,
+  playwright,
+}) => {
+  const first = await newGuardian(playwright, "Escudo");
+  const second = await newGuardian(playwright, "Mano");
+  // Two level 20 residents of the Forest Isle (86640 XP; docs/02 "Quests de hito"), not in a
+  // party, in the crypt of Thalorn on floor 8, one tile south of each plate (4207,6090 and
+  // 4213,6090), with ms_thalorn_oath in progress on its plates step (quest_state 1, step 0).
+  const seed = (name: string, x: number): string =>
+    `UPDATE characters SET town = 'bosque', level = 20, experience = 86640,
+       pos_x = ${x}, pos_y = 6091, pos_z = 8 WHERE name = '${name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT id, 'quest.ms_thalorn_oath', 1 FROM characters WHERE name = '${name}';`;
+  psql([databaseUrl, "-c", seed(first.name, 4207) + seed(second.name, 4213)]);
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await enterGame(page, email, first.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(first.email);
+  const b = await enter(second.email);
+  await arrived(a, 4207, 6091);
+  await arrived(b, 4213, 6091);
+  const walkTo = async (page: Page, x: number, y: number): Promise<void> => {
+    const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
+      tx: x,
+      ty: y,
+    });
+    if (!tile) throw new Error("no canvas");
+    await page.mouse.click(tile.x, tile.y);
+  };
+
+  // The quest log lists it among the milestones, with what it asks.
+  await openWindow(a, "quests");
+  await a.locator('[data-quest-tab="milestones"]').click();
+  const entry = a.locator('.quest[data-quest="ms_thalorn_oath"]');
+  await expect(entry).toHaveAttribute("data-state", "active");
+  await expect(entry.getByTestId("quest-reqs")).toContainText("Nivel 20 o más");
+  await shot(a, "99-milestone-quest-log");
+  await closeWindow(a, "quests");
+
+  // One on its plate: the plates wait for the other.
+  await walkTo(a, 4207, 6090);
+  await arrived(a, 4207, 6090);
+  await expect(a.getByTestId("game-log")).toContainText("1 de 2 ocupadas");
+  await shot(a, "99b-milestone-one-plate");
+
+  // The second one steps on the other plate: both land in the reward room, done.
+  await walkTo(b, 4213, 6090);
+  await expect(a.getByTestId("game-log")).toContainText("Hito alcanzado");
+  await expect(b.getByTestId("game-log")).toContainText("Hito alcanzado");
+  for (const page of [a, b])
+    await expect
+      .poll(async () => {
+        const s = await self(page);
+        return s !== undefined && s.x >= 4222 && s.x <= 4228 && s.y >= 6089 && s.y <= 6093;
+      })
+      .toBe(true);
+  await shot(b, "99c-milestone-reward-room");
+
+  // The finished tab shows the title it gave.
+  await openWindow(b, "quests");
+  await b.locator('[data-quest-tab="finished"]').click();
+  await expect(b.getByTestId("quest-title")).toContainText("Testigo del Juramento");
+  await shot(b, "99d-milestone-title");
+
+  expect(errors).toEqual([]);
+  for (const page of [a, b]) await page.close();
+});
+
 test("portals: a path goes round the volcanic mine stairs; down them to floor 8 and back up", async ({
   page,
   playwright,
@@ -3373,7 +3536,7 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   });
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Minero");
-  // A resident of the Ember Isle at level 30 (302760 XP) on the cinder path two tiles west
+  // A resident of Karvask at level 30 (302760 XP) on the cinder path two tiles west
   // of the mine stairs (3692,5796; docs/03 "Islas actuales"). Below them, floor 8 lands on
   // 3692,5797; the stairs up (3692,5796,8) land on 3692,5797,7, next to the stairs down.
   psql([

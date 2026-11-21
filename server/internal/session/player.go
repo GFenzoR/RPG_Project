@@ -127,6 +127,11 @@ type Player struct {
 	reachFloors   uint16
 	reachStale    bool
 	questLogDirty bool
+	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
+	milestoneMarks uint64
+	// sigilMet is what it met of the milestone of the plate it stands on when last
+	// checked (sigilMarks): a change marks the room again (sigilRecheck).
+	sigilMet uint8
 	// An Inventory held back (holdInventory): above 0, sendInventory only marks it due,
 	// and the outermost release sends one with the state by then.
 	invHold int
@@ -588,6 +593,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	// give the quest's rewards).
 	p.reachStale = true
 	w.checkReach(p)
+	w.sigilStep(p) // logging in on a plate is stepping on it
 	w.guildJoin(p) // T5.1: its GuildUpdate, and the others see it online
 	if w.houseOn {
 		w.houseSeen(ctx.Now, p, true) // content audit M6: the account is not away

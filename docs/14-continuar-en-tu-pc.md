@@ -14,7 +14,7 @@ seguir con Claude Code en tu computador. El entorno local está en
   - PvP con skulls y guerras de gremios;
   - mercado global e intercambio directo;
   - casas;
-  - Isla Volcánica, con el Capítulo 3 y las monedas de plata y oro.
+  - Karvask, con el Capítulo 3 y las monedas de plata y oro.
 - **T5.6** (controles táctiles, layout para pantallas chicas, PWA y Tauri mobile
   preparado) está en el PR #78. Lo 👤: cuentas de las tiendas, firma y
   compilar el APK/IPA (`docs/15-movil.md`).
@@ -34,7 +34,7 @@ seguir con Claude Code en tu computador. El entorno local está en
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
 4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
-   más rápido es `make play`: la Isla de Pruebas tiene todos los sistemas a unos pasos del
+   más rápido es `make play`: Thimblewick tiene todos los sistemas a unos pasos del
    templo y una instructora que da experiencia, entrenamiento, dinero y curación
    (`16-probar-el-juego.md`).
 
@@ -100,6 +100,99 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
+  2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
+  experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía
+  (T3.3) pero el reparto estaba apagado por defecto y el bonus (6 % por miembro hasta 24 %)
+  no se veía en ningún lado. Ahora la experiencia compartida se prende al formar el grupo,
+  el bonus es por escalones de `balance.yaml party.bonus_pct_by_sharers` (+5/+10/+15/+20 %
+  con 2/3/4/5+ que comparten, tope 20 %), dos personajes de una cuenta cuentan como uno, y
+  se ve en la ventana de grupo ("Bonus de grupo: +X % (N comparten)" y una línea de ayuda),
+  en la bandeja de estados (ícono `party_bonus` con el %) y en el número flotante de
+  experiencia ("126 (+6 grupo)"). Queda:
+  - **Mirarlo en el juego** (la verificación final): el E2E de T3.3 pone a los dos a cazar
+    lobos al norte del templo de la Isla de Pruebas hasta que aparece el bonus; revisar
+    `25b-party-bonus` (la ventana con "+5 %" y las dos marcas "Comparte") y
+    `25c-party-bonus-tray` (el ícono de los dos compañeros con "5%" en la bandeja). El
+    número flotante con "(+N grupo)" solo lo cubren los tests (vitest y Go): en el E2E no
+    se espera a matar un lobo.
+  - **Cazar en fila rinde menos que solo:** la simulación (`TestPartyPaceVsSolo`) muestra
+    que si el grupo entero le pega al mismo monstruo fácil, cada uno gana 61–67 % de lo
+    de cazar solo de a dos y 25–33 % de a seis (caminar, juntar y descansar no se acortan).
+    En las presas de 6–8 de experiencia (rata, gaviota) el reparto en enteros se come casi
+    todo el bonus (6 × 1,05 / 2 = 3 cada uno).
+    El +20 % del dueño solo compensa si cada uno pelea su presa o si el grupo caza
+    monstruos que solo no puede. Si el dueño quiere que el grupo rinda más que solo en
+    cualquier caza, hace falta otra palanca (spawns más grandes, monstruos de grupo, o un
+    bonus mayor): es una decisión de diseño, no un bug.
+  - **El alt que no comparte** sigue en el grupo y cobra su propio daño (sin bonus): no se
+    le avisa por qué no tiene la marca "Comparte". Un texto en la ventana ("otro personaje
+    de tu cuenta ya comparte") sería lo amable; no está.
+- **Nombres del mundo (hecho, rama `feat/place-names`; el dueño el 2026-11-20: "quiero que
+  las ciudades y zonas tengan nombres, inspirate en el señor de los anillos"; docs/02
+  "Nombres del mundo"):** las islas son Velmara, Selvaine y Karvask (más Thimblewick y
+  Pellwick, de desarrollo), los pueblos Lanternby, Ivernel y Cinderstead, y cada zona y
+  cazadero tiene nombre propio (claves `island.*`, `town.*`, `zone.*` y `area.*` de
+  `i18n/*/world.yaml`). Inventados con el sabor de la fantasía épica, sin ningún nombre ni
+  palabra de Tolkien (`place-names.test.ts` lo vigila). Queda:
+  - **Que el dueño apruebe la lista** (la tabla de docs/02): cambiar un nombre es cambiar su
+    clave y los textos que lo nombran; el test dice cuáles quedaron con el viejo.
+  - **Mostrar los nombres de zona en el juego:** hoy solo los usan los textos; un aviso al
+    entrar a una zona o el nombre del área bajo el minimapa sería el paso siguiente (pide
+    saber en el cliente en qué zona está el jugador).
+  - Las Islas Heladas y la Isla Hundida (docs/02, islas futuras) toman nombre con la misma
+    guía cuando se construyan; las salas de la rama de misiones de hitos, también.
+- **Quests de hito (hecho, rama `feat/milestone-quests`, lote 14; el dueño el 2026-11-20:
+  "quests que son hitos [...] necesitas 4 personas o 2 personas"; docs/02 "Quests de
+  hito"):** `milestone: true` con `requires` (nivel, equipo, 1 a 4 personas, una de cada
+  vocación) y un último paso `sigils` de placas del mapa; el servidor mueve juntos a todos
+  a la sala de recompensa cuando todas las placas tienen a alguien que cumple, en el mismo
+  tick. Tres hitos: Thalorn (2, nivel 20, Bosque), Orthavel (1 con el amuleto de asta,
+  25, Bosque) y Morvund (4 vocaciones con la llave de ascua, 35, Volcán, que da la llave
+  de una galería de caza). Queda:
+  - **Mirarlo en el juego:** el E2E "milestones" (`99-milestone-*`) y la escena
+    `questsmilestones` de `make ui-preview`; Orthavel y Morvund solo se juegan en
+    `session/sigil_map_test.go` (cuatro personajes de nivel 35 para un E2E es mucho
+    sembrado).
+  - **Coordinar nombres con `feat/place-names`:** esa rama renombra el pueblo del Bosque
+    (Raigal → **Ivernel**) y las islas (Bosque → Selvaine, Volcán → Karvask). Thalorn,
+    Orthavel y Morvund no chocan con ninguno de sus nombres. Al mergear las dos, cambiar
+    "Raigal" por "Ivernel" (y la isla, si se nombra) en `quest.ms_*.step_*`, los carteles
+    (`text.bosque.thalorn_sign`, `orthavel_sign`, `text.volcan.morvund_sign`), las ofertas
+    de Olmar, Fenn y el eco, la descripción de `data/quests/ms_orthavel_vigil.yaml` y la
+    tabla de docs/02 "Quests de hito".
+  - **Riesgos conocidos (revisión del lote 14):**
+    - Solo pisa una placa quien tiene la quest en ese paso, pero alguien que la tiene puede
+      quedarse parado sin cumplir el resto (nivel, equipo, vocación) y trabar a los demás;
+      y uno con bloqueo PvP que cierra el juego sobre la placa queda link-dead sin tope
+      (no cuenta, pero ocupa la casilla hasta que termina el bloqueo). Si pasa en la
+      práctica: echar de la placa a quien no cumple tras unos segundos.
+    - La llave de Morvund se vuelve a pedir al eco con `lacks_item` (igual que la llave de
+      ascua): se puede tirar al suelo, pedir otra y que otro la recoja y entre a la galería
+      sin el hito. Impacto bajo (abierta, la puerta deja pasar a cualquiera); la
+      solución sería un flag "ya se la dieron" más un item que no se tire.
+    - `mapcli validate` no comprueba que a la sala de recompensa no se llegue a pie sin las
+      placas: hoy las tres están cerradas por muros (solo salen por el teletransporte), pero
+      un cambio del mapa lo podría romper sin aviso. Un chequeo posible: el área de `to` no
+      se alcanza desde un templo sin la arista de las placas.
+    - `milestoneMarks` recorre lo que lleva el jugador una vez por hito en cada
+      `questRecheck`: bien con 3 hitos; si crecen, cachear por item.
+  - **El diario lista todos los hitos desde el nivel 1:** hoy son tres; si crecen, mostrar
+    solo los de la banda del personaje (o de su isla).
+  - **El título es solo un texto en el diario:** no se ve sobre el personaje ni en el sitio.
+    Si el dueño lo quiere visible (bajo el nombre, como el gremio), es otro campo de
+    `Creature`.
+  - **Una placa no se ve ocupada desde lejos:** el sprite es el mismo con o sin alguien
+    encima; "Mirar" dice cuántas hay. Un brillo por placa ocupada pediría estado del mapa
+    por tick (no vale hoy).
+  - **El amuleto de asta ya no se vende** (Velia solo lo compra): el hito de Orthavel
+    pide llevarlo puesto y solo lo da `tanner_chitin` (una vez por personaje; se puede
+    comerciar). Quien lo pierde antes de terminar el hito le pide otro a Gisla por 400
+    monedas (más de los 160 que paga Velia: vender y pedir otro no da ganancia).
+  - **Llaves re-entregables (pendiente, aceptado así por ahora):** el eco de la forja da
+    otra `ember_key` o `morvund_key` a quien terminó su quest y no la tiene; como se pueden
+    tirar al suelo, un veterano puede regalarlas a otros. Cerrarlo pide un cooldown por
+    personaje o quitar la llave en algún momento: decidir con el dueño.
 - **Hombre o mujer (hecho, rama `feat/character-sex`; el dueño el 2026-11-20: "ojo el
   personaje principal puede ser hombre o mujer"; docs/02 "Apariencia", docs/05 "Apariencia y
   equipo visible", docs/06 "Looks", docs/17 "Humanoides del motor", docs/07):** el aspecto
@@ -195,7 +288,7 @@ el punto 5:
     `04-world` (el jugador propio recién entrado: el muñeco del atuendo `citizen`, con lo que
     tenga equipado, de pie sobre su casilla), `07b-attack-pose` (el golpe del jugador contra
     el lobo o la embestida del lobo, en medio de la pose: el arma en la mano y sobre la
-    ropa), `31-bosque-temple` (el jugador en el templo de la Isla del Bosque, con las
+    ropa), `31-bosque-temple` (el jugador en el templo de Selvaine, con las
     personas que estén a la vista) y `33-bosque-druid` (Velia Musgo, la druida: su `look`
     en el mapa y su retrato quieto en el diálogo). Ninguna de esas captura una caída ni un
     ataque a distancia: eso queda para la prueba a mano.
@@ -217,8 +310,8 @@ el punto 5:
   espuma debajo de los bordes en el agua. Las cinco islas, en sus dos pisos, pasaron por
   `mapcli autoborder` (6297 → 12273 piezas; el diff es solo de piezas de borde). Queda:
   - **E2E (verificación final del lote 13):** mirar las orillas pasto/tierra y pasto/piedra
-    en `32-bosque-plaza`, `04-world` y las capturas del Farol (`12b`, `13`, `14`), la arena
-    con el agua (la espuma rompe debajo de la orilla) y la Isla de Pruebas. El spec del editor
+    en `32-bosque-plaza`, `04-world` y las capturas de Lanternby (`12b`, `13`, `14`), la arena
+    con el agua (la espuma rompe debajo de la orilla) y Thimblewick. El spec del editor
     (`editor/e2e/editor.spec.ts`, "hito 2") ahora espera `border_grass_n`/`border_grass_s`.
   - **Puntas de una casilla:** una casilla sola que entra en otro suelo (fin de un camino,
     ensenada) termina en punta (dos esquinas de adentro). Una pieza propia serían 4 piezas
@@ -337,7 +430,7 @@ el punto 5:
     (capturas `96-sandbox-quests`, "Activas (1)" con 2/6, y `96b-sandbox-quests-finished`,
     "Disponible otra vez en 2 min 59 s"). Ningún spec acepta todavía una quest en un diálogo
     ni ve contar una muerte en el diario: lo natural es extender "T3.6: wake up at the
-    temple of Raigal and talk to the druid" (`client/e2e/game.spec.ts`, ya siembra
+    temple of Ivernel and talk to the druid" (`client/e2e/game.spec.ts`, ya siembra
     `quest.ch1_shipwreck = 2`) aceptando `ch2_roots`.
   - **El diario no cuenta las veces** que se hizo una tarea ni guarda cuándo se terminó una
     quest que no es repetible: no hay dónde mostrarlo todavía y serían más filas de
@@ -350,20 +443,20 @@ el punto 5:
   "Kit de props de pueblo", docs/03 "Muebles y luces"):** un kit de doce props del motor
   de sprites (barril, mesa, banco, estante, cama, farol, pozo, sacos, red de pesca,
   jardinera, puesto de mercado con toldo que flamea y mástil con bandera que ondea);
-  templos, plazas, depósito, tiendas y las 13 casas del Farol, Raigal y Brasal amueblados;
+  templos, plazas, depósito, tiendas y las 13 casas de Lanternby, Ivernel y Cinderstead amueblados;
   una fuente por plaza, braseros, estandartes y ventanas en los templos; antorchas de
   pared cada 7 casillas y braseros en las minas de Puerto, Bosque y Volcán. Queda:
-  - **E2E (verificación final del lote 12):** el amueblado se ve en las capturas del Farol
+  - **E2E (verificación final del lote 12):** el amueblado se ve en las capturas de Lanternby
     (`12b`, `13`, `14`, `43`: braseros, estandartes, ventanas, bancos, el atril, el mástil y
-    la plaza), de Raigal (`31` a `33`), de Brasal (`65`, `66`: el archivo con estantes y el
+    la plaza), de Ivernel (`31` a `33`), de Cinderstead (`65`, `66`: el archivo con estantes y el
     atril), de la casa (`56` a `59`: cama, ventanas, jardineras; la mochila sigue cayendo
     libre) y del piso 8 (`70-forge-gate-open`: la antorcha junto a la puerta de la forja
-    con su luz). Sin captura: la mina del Farol y la cueva del Bosque, y las antorchas de la
+    con su luz). Sin captura: la mina de Lanternby y la cueva del Bosque, y las antorchas de la
     sala de entrada de la mina del Volcán (y 5787) quedan fuera de `74-volcan-mine-floor-8`.
   - **La luz en el juego:** `mapcli render` muestra el frame 0 sin la capa de luz; que las
     antorchas (radio 3) y los braseros (3,5) se vean en la oscuridad de las minas se mira
-    en el E2E o con `make play` bajando la escalera de la mina del Farol (3176,6322).
-  - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar del Farol es playa
+    en el E2E o con `make play` bajando la escalera de la mina de Lanternby (3176,6322).
+  - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar de Lanternby es playa
     abierta con el muelle; queda para un pueblo amurallado de una isla nueva.
   - **El farol no alumbra en la superficie** (la capa de luz solo dibuja en z ≥ 8 y no hay
     noche): si llega un ciclo de día y noche, ya tiene su `light`.
@@ -381,7 +474,7 @@ el punto 5:
   nueve libros y pergaminos con lore (templos, el archivo de Casia, el atril de Velia, el
   naufragio, la cueva de los contrabandistas y la mina inundada) y cinco cofres que dan una
   vez por personaje (la mina de Puerto, el bosque de Puerto, el nido de la cueva del
-  Bosque, la mina del Volcán pasando los gólems y el templo de la Isla de Pruebas). Queda:
+  Bosque, la mina del Volcán pasando los gólems y el templo de Thimblewick). Queda:
   - **E2E (verificación final del lote 12):** el spec nuevo de `e2e/sandbox.spec.ts` camina
     a 2099,2085, lee el atril con "Leer" (página 1 de 3, pasa a la 2, Escape la cierra,
     `__rpgClient.book()`) y abre el cofre dos veces: `chest.found` con las cuatro
@@ -412,22 +505,22 @@ el punto 5:
   - **Bandas 5 y 6:** sus islas traen sus cofres, al final de sus mazmorras.
 - **Quests secundarias y tareas de caza (hecho, rama `feat/side-quests`, lote 12, sobre
   `feat/quest-engine`; docs/02 "Quests secundarias" y "Tareas"):** cinco quests
-  secundarias con NPCs que ya estaban (Tavin y Gisla en Raigal, 22–28; Nerea, Bram y Madre
-  Oriela en Brasal, 30–33 y 42–48), con pasos `reach` (el embarcadero de los
+  secundarias con NPCs que ya estaban (Tavin y Gisla en Ivernel, 22–28; Nerea, Bram y Madre
+  Oriela en Cinderstead, 30–33 y 42–48), con pasos `reach` (el embarcadero de los
   contrabandistas, el lago de lava del cráter), un `flag_equals` (la brasa de la Llama
   Quieta) y una que termina en su muerte (`flame_crater`, que ahora usa
   `TestHouseRuneKillsAQuestMonsterFromTheStreet`); y seis tareas de caza de 20 horas con
-  dos NPCs nuevos, Fenn Zarzal (Raigal, 4173,6106) y Orso Pedernal (Brasal, 3655,5783), con
+  dos NPCs nuevos, Fenn Zarzal (Ivernel, 4173,6106) y Orso Pedernal (Cinderstead, 3655,5783), con
   sprites de LPC compuestos de capas que ya estaban (`npcs/hunter_forest`, CC-BY-SA;
   `npcs/hunter_volcanic`, OGA-BY). Recompensas medidas contra la caza simulada
   (`sim/balance_tasks_test.go`). Queda:
   - **Las casillas de los dos NPCs nuevos** son de `feat/town-props`, que amuebla los
-    pueblos en paralelo: Fenn en 4173,6106 (pasto al este de la plaza de Raigal) y Orso en
-    3655,5783 (basalto al norte de la plaza de Brasal). Un NPC nunca deja su casilla, pero
+    pueblos en paralelo: Fenn en 4173,6106 (pasto al este de la plaza de Ivernel) y Orso en
+    3655,5783 (basalto al norte de la plaza de Cinderstead). Un NPC nunca deja su casilla, pero
     hay que dejarla libre y caminable, y alcanzable para hablarle (3 casillas). Si al
     juntar las ramas un prop cae ahí, se mueve el NPC (`npcs.yaml`) o el prop.
   - **`TestSandboxPens` es sensible a los ids de criatura:** sumar dos NPCs en el Bosque y el
-    Volcán corre los ids de los monstruos de la Isla de Pruebas, y la arcanista del corral 3
+    Volcán corre los ids de los monstruos de Thimblewick, y la arcanista del corral 3
     se quedaba sin cataplasmas (10) en una tirada peor: ahora lleva 20. Cualquier rama que
     sume NPCs o spawns puede volver a moverlo; el arreglo de fondo sería que la simulación no
     dependa del orden de los ids.
@@ -446,7 +539,7 @@ el punto 5:
   - **E2E (verificación final del lote 12):** Fenn Zarzal se ve con su sprite de LPC y su
     nombre no pisa el de la druida (`32-bosque-plaza`, `33-bosque-druid`); el camino de T3.6
     no choca con él. Ningún spec habla todavía con Fenn ni con Orso ni abre el tablón: lo
-    natural es extender "T3.6: wake up at the temple of Raigal and talk to the druid" con
+    natural es extender "T3.6: wake up at the temple of Ivernel and talk to the druid" con
     Fenn (está a 4 casillas del camino que recorre ese spec) y sacar la captura del tablón.
 - **Íconos de equipo del motor de sprites (hecho, rama `feat/item-icons`, lote 11; docs/17
   "Íconos de items"):** las 78 piezas del catálogo, las 6 retiradas y las dos municiones
@@ -540,7 +633,7 @@ el punto 5:
     `content/attributes_test.go` siguen verdes; con el catálogo hay collares y anillos de
     verdad, así que el camino de las joyas (`JewelGain`, con el tope del atributo) ya se
     usa, y las armaduras con `requires.level` caen en su banda de la forja.
-    `TestBrasalNPCs` saca cada compra del herrero (la banda 4 y las tres piedras son más
+    `TestCindersteadNPCs` saca cada compra del herrero (la banda 4 y las tres piedras son más
     líneas que una mochila).
   - **Los materiales de la forja** se dibujaron con la clase `object` (32x32, abajo a la
     derecha); `feat/item-icons` dibuja el catálogo con la clase de ícono del motor:
@@ -581,7 +674,7 @@ el punto 5:
     mediana por cuenta y día ya amortigua unas pocas ventas caras; sacarlas del voto
     también después de reiniciar pide guardar el refinado en `market_history` (migración
     nueva) y filtrarlo en `LoadMarketSales`.
-  - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Brasal y la
+  - **Islas de las bandas 5 y 6:** la piedra radiante solo la vende el herrero de Cinderstead y la
     suelta el custodio; las islas nuevas (lotes siguientes) traen sus fuentes.
   - **+10 es una leyenda a propósito** (unos 1 900 ámbares de promedio con ámbar en cada
     intento arriesgado): si el dueño lo quiere más alcanzable, subir las chances altas o
@@ -621,7 +714,7 @@ el punto 5:
     la captura retenida como en `shotPose` (`requestAnimationFrame`) mientras vuela la
     flecha, con un hook `__rpgClient` nuevo que diga qué proyectil dibuja el canvas; lo
     mismo con un orbe de hechizo; y los restos frescos de cada familia, matando uno de cada
-    en los corrales de la Isla de Pruebas (`/tp`, como `sandbox.spec.ts`). Lo que sí se
+    en los corrales de Thimblewick (`/tp`, como `sandbox.spec.ts`). Lo que sí se
     ve hoy: los nombres y números en Pixelify Sans (`07-combat`, `47-guild-name-on-map`),
     que hay que mirar a 1x (ver "Pixelify Sans en el canvas" en docs/17: no es píxel
     perfecto a lo ancho).
@@ -744,18 +837,18 @@ el punto 5:
       de los personajes; el eco de la forja en la mina del Volcán (z 8, 3692,5826, sobre la
       tierra), que flote sobre la sombra y se lea al instante como un espíritu de fuego con
       forma de herrero y el martillo en alto, también de costado; el yunque en las
-      herrerías (Isla de Pruebas 2073,2102). La barra y el nombre del ciervo van más arriba
+      herrerías (Thimblewick 2073,2102). La barra y el nombre del ciervo van más arriba
       que antes: `top` sale de su caminar al norte (las astas lejos, ~54 px); los del eco,
-      sobre el martillo alzado. Los props: el tablero del mercado (Isla de Pruebas
+      sobre el martillo alzado. Los props: el tablero del mercado (Thimblewick
       2091,2103; Puerto 3168,6382; Volcán 3660,5790; Bosque 4164,6106), que la nota de abajo
       a la derecha se levante y caiga sin que el tablero salte, y que el mercado se siga
-      abriendo al usarlo; el cartel en Brasal (3641,5793 sobre basalto, 3635,5793 y
+      abriendo al usarlo; el cartel en Cinderstead (3641,5793 sobre basalto, 3635,5793 y
       3691,5794 sobre ceniza) y en la puerta de la forja (z 8, 3693,5830); los cajones en
       los muelles (Puerto 3201,6430, Volcán 3630,5796, Pruebas 2095,2134) y en los
       depósitos de piso de madera (Puerto 3182,6420; Pruebas 2084,2100), y lo que se apoya
       encima de un cajón (`elevation: 8`) sobre la tapa.
       El E2E del lote 9 (verde) los muestra poco: los carteles sobre basalto y ceniza de
-      Brasal se leen claros (`65b-volcan-temple-sign`) y el del templo del Farol también
+      Cinderstead se leen claros (`65b-volcan-temple-sign`) y el del templo del Farol también
       (`12b-puerto-temple-sign`); el tablero de Puerto queda bajo la ventana del mercado
       (`53`–`55`). Ningún screenshot muestra el jabalí, el ciervo, el eco de la forja, el
       yunque ni los cajones: mirarlos a mano con las coordenadas de arriba (`make play`).
@@ -877,7 +970,7 @@ el punto 5:
   - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
     (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
     `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
-    no se desplaza: el E2E de la Isla de Pruebas busca la mochila y pagina.
+    no se desplaza: el E2E de Thimblewick busca la mochila y pagina.
   - **Revisar en el E2E final de la UI:** las ventanas flotantes (gremio, apariencia,
     opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
     cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
@@ -890,7 +983,7 @@ el punto 5:
     - **Revisado en el E2E del lote 9** (verde, 2026-11-18): a 1280x800 el inventario
       flota sobre la 6.ª columna al este del jugador y el chat sobre la 2.ª a la 7.ª al
       oeste y la 3.ª a la 5.ª al sur; cuatro specs hacían click ahí y no caminaban (minar,
-      Raigal, Brasal y el de la Isla de Pruebas): ahora saltan 5 columnas como mucho
+      Ivernel, Cinderstead y el de Thimblewick): ahora saltan 5 columnas como mucho
       (`mapPoint` de `e2e/game.spec.ts`, `clickTile` de `sandbox.spec.ts` falla si una
       ventana tapa la casilla). La página medía 1287 px a 1280 (los pináculos del orbe de
       maná sobresalían 7 px): el cuerpo del juego recorta (`overflow: clip`) y `mobile.spec`
@@ -971,7 +1064,7 @@ el punto 5:
       (`client/src/render/particles.ts`); el polvo y las ondas al pisar, después
       (`steps`, rama `feat/lpc-actions`). Faltan el pasto que se agita, la niebla y las
       gaviotas sobre el mar (ART-7).
-    - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
+    - **Suelos viejos de Karvask:** el basalto de Cinderstead (hexágonos muy
       contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
       lava enfriada ya entran en la banda de valor de ART-6.
     - **Cara exterior de los muros delgados:** el suelo de la casilla del muro se ve a los
@@ -1108,7 +1201,7 @@ el punto 5:
     (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
     desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe
     ~40 ms antes de que se dibuje su paso. No se nota; se dejó así.
-- **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
+- **Prueba exploratoria de Thimblewick (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
   correa de los monstruos, la mochila tras morir (desde el lote 13, los bolsillos en vez de
   una mochila gratis: docs/02 "Bolsillos"), la hotbar sobre la última fila, la
@@ -1172,7 +1265,7 @@ el punto 5:
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el
   nivel 9, nombres de hechizos y pulido de textos; detalle en `02-game-design.md`):
   - M1, M6, m3, m4, m7, m11 y m13 se hicieron en la rama `feat/world-capacity` (capacidad
-    por franja y abedules, casas, defensa del arma, items huérfanos, tablero de Brasal,
+    por franja y abedules, casas, defensa del arma, items huérfanos, tablero de Cinderstead,
     `testisle` dev-only, comisión del mercado; docs/02, docs/07 "Capacidad del mundo" y
     docs/10). De ahí quedó: un aviso por email antes de perder una casa por ausencia, y
     el cliente no muestra la regla en la ventana de la casa (solo el mensaje al entrar);
@@ -1196,15 +1289,15 @@ el punto 5:
   entre el nivel 12 y el 48 (el guardián tiene por fin tres propios; tabla en
   `02-game-design.md` "Hechizos por vocación"), `skill: weapon` en el escalado de un
   hechizo (la skill del arma en la mano, puño sin arma o con varita: `session/magic.go`
-  `scalingSkill`), el brebaje de vida (110, Bosque y Brasal) y el concentrado (250, solo
-  Brasal), y la carrera simulada con el guardián, los brebajes de vida y chequeos de maná,
+  `scalingSkill`), el brebaje de vida (110, Bosque y Cinderstead) y el concentrado (250, solo
+  Cinderstead), y la carrera simulada con el guardián, los brebajes de vida y chequeos de maná,
   nivel mágico y uso de cada hechizo. Tras la revisión de la rama: los roles se miden en
   cada franja del 12 al 49 (la cura del guardián y `steel_whirl` bajaron: el druida cura
   más y el arcanista pega más en área en cada nivel), los golpes del guardián piden nivel
   mágico 1 y 2 (lo que alcanza sin comprar brebajes de maná; la carrera simulada juega
   también a ese guardián) y el test de los brebajes de vida mira que alguien los compre
   de verdad (`02-game-design.md` "Vocaciones" y "Economía"). Queda:
-  - **probarlo a mano** (Isla de Pruebas: el mercader vende los dos brebajes; la
+  - **probarlo a mano** (Thimblewick: el mercader vende los dos brebajes; la
     instructora da la experiencia y, con "El combate", ahora el nivel mágico del último
     hechizo de cada vocación: guardián 2, montaraz 9, magos 30): que los golpes del guardián
     se sientan (radio 1, números de `data/spells.yaml`), que las palabras nuevas se lancen
@@ -1360,7 +1453,7 @@ el punto 5:
     cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
     está en la descarga inicial: cada zona baja el tema que suena y el siguiente. Caben
     unas dos versiones más de cueva; más que eso, subir el tope de la pool o bajar a 32 kbps.
-  - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, la Isla Volcánica, a -14,8 con
+  - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, Karvask, a -14,8 con
     volumen 0,77 para compensar), como los temas de soundgen. Si en el juego se oyen bajos o
     altos, se ajusta `BASE_VOLUME` en `music_import.py` o el canal de música.
   - **Los primeros assets de Gemini son las siete criaturas** (rama
@@ -1418,7 +1511,7 @@ el punto 5:
     propio (`ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`; las escaleras son
     del pack). El mundo real usa escaleras y, en Puerto, un agujero en la playa del
     naufragio y su soga en la mina (`world/islands/puerto/portals.yaml`); faltan escaleras
-    de mano y teletransportes (solo los tiene la Isla de Pruebas, de desarrollo): ponerlos
+    de mano y teletransportes (solo los tiene Thimblewick, de desarrollo): ponerlos
     es diseño de mapa (`build-map-area`; `make validate` y `mapcompile` exigen el item en
     cada entrada). Sin una escalera de mano en el mundo real, Ctrl+click derecho sobre una (usa el item de arriba
     en vez de trepar) y su toque largo (sin "Usar" ni "Mover" para su propio item) solo
@@ -1505,7 +1598,7 @@ el punto 5:
     dragoncillo llega con un punto de vida y el amuleto y las monedas de la recompensa caen
     a los pies de Ana (nivel 60 y sin capacidad: la experiencia, que va primero, no le
     sube el nivel ni, con él, la capacidad).
-- **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
+- **Thimblewick: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:
   - **resuelto:** la instructora subía el **nivel**, no las **skills** ni el **nivel
@@ -1520,7 +1613,7 @@ el punto 5:
   - **resuelto:** "Cúrame" llena también el maná (acción de desarrollo `restore_mana`; la
     `heal` de los sacerdotes no cambió). **Resuelto también:** el juego real ya tiene
     brebajes de maná (`mana_draught` y `concentrated_mana_draught`, `data/items/misc.yaml`)
-    que venden el buzo de Puerto, la druida de Raigal y el sacerdote de Brasal;
+    que venden el buzo de Puerto, la druida de Ivernel y el sacerdote de Cinderstead;
   - **resuelto:** el yunque no tenía receta al alcance de un personaje nuevo (la más baja
     pide herrería 2). "Entréname" → "Los oficios" deja los oficios en 25 y la pesca en 40,
     y el mismo personaje hace un hacha de leñador en el yunque (`TestSandboxTrades`). No se

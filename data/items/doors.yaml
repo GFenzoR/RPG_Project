@@ -23,7 +23,7 @@
   pickupable: false
   door: { closed: forge_gate }
 
-# The practice gate of the Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): a
+# The practice gate of Thimblewick (sandbox island, docs/16-probar-el-juego.md): a
 # locked door to try keys on. Its key, pruebas_key, is sold by the island's provisioner.
 - id: pruebas_gate
   kind: decoration
@@ -51,3 +51,24 @@
   sprite: doors/house_door_frame
   name: item.house_door_frame.name
   pickupable: false
+
+# The gate of the Morvund gallery, off the chamber of the four embers north of the Volcan mine
+# (docs/02 "Quests de hito"): a small hunting gallery for those who did the milestone
+# ms_morvund_embers, which gives its key. Drawn like the forge gate (the same old work).
+- id: morvund_gate
+  kind: decoration
+  sprite: doors/forge_gate
+  name: item.morvund_gate.name
+  description: item.morvund_gate.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+  door: { key: morvund_gate, open: morvund_gate_open }
+
+- id: morvund_gate_open
+  kind: decoration
+  sprite: doors/forge_gate_open
+  name: item.morvund_gate_open.name
+  description: item.morvund_gate_open.desc
+  pickupable: false
+  door: { closed: morvund_gate }

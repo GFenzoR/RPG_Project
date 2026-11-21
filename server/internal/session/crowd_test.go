@@ -33,7 +33,7 @@ type crowdArea struct {
 }
 
 // The areas of tools/bots/cmd/bots/scenario.go (docs/07 "Pruebas de carga"): base spreads
-// the bots over the Isla del Puerto, stress packs them all in the town of Farol.
+// the bots over Velmara, stress packs them all in Lanternby.
 var (
 	crowdTown  = crowdArea{world.Pos{X: 3166, Y: 6386, Z: 7}, 8}
 	crowdAreas = map[string][]crowdArea{
@@ -370,7 +370,7 @@ func BenchmarkCrowdTick(b *testing.B) {
 
 // BenchmarkFullMapView measures the area of a FullMapView (a login, a teleport, every
 // portal) with its monsters and NPCs on the real world: building it and its size. In the
-// town of Farol (on the surface: floors 0-7) and in the volcanic mine (floor 8).
+// town of Lanternby (on the surface: floors 0-7) and in the volcanic mine (floor 8).
 func BenchmarkFullMapView(b *testing.B) {
 	for _, tc := range []struct {
 		name string

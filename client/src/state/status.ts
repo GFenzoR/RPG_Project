@@ -1,6 +1,7 @@
 // The status tray (docs/17 "Bandeja de estados"): the player's own conditions (balance.yaml,
 // T3.2) and the statuses the server adds to PlayerConditions (in_combat, pvp_locked,
-// protection_zone: server/internal/session/status.go), as the tray shows them: in a fixed
+// protection_zone: server/internal/session/status.go) and the party's shared experience
+// bonus (party_bonus, from PartyUpdate: withPartyBonus), as the tray shows them: in a fixed
 // order, each with its kind (a green frame helps, a red one harms), its seconds left and
 // whether it flashes because it is about to end. Pure: the view (ui/StatusTray.tsx) only
 // draws what this says, and a timer asks nextTrayChange when to draw again.
@@ -22,6 +23,7 @@ export const STATUS_ORDER: readonly string[] = [
   "in_combat",
   "pvp_locked",
   "protection_zone",
+  "party_bonus",
   "hasted",
   "invisible",
   "keen_eye",
@@ -37,6 +39,7 @@ export const STATUS_KIND: Readonly<Record<string, StatusKind>> = {
   in_combat: "harm",
   pvp_locked: "harm",
   protection_zone: "buff",
+  party_bonus: "buff",
   hasted: "buff",
   invisible: "buff",
   keen_eye: "buff",
@@ -63,6 +66,8 @@ export interface TrayEntry {
   seconds: number | undefined;
   /** Hits left of a damage condition (0 for the others). */
   ticks: number;
+  /** The percentage it writes instead of the time (party_bonus), undefined for the others. */
+  percent: number | undefined;
   /** In its last FLASH_MS and motion is not reduced. */
   flash: boolean;
 }
@@ -92,11 +97,28 @@ export function trayEntries(
       leftMs,
       seconds: leftMs === undefined ? undefined : Math.ceil(leftMs / 1000),
       ticks: c.ticks,
+      percent: c.percent,
       flash: !reduced && leftMs !== undefined && leftMs <= FLASH_MS,
     });
   });
   // A stable sort: same rank keeps the server's order.
   return out.sort((a, b) => rank(a.id) - rank(b.id));
+}
+
+/** The tray id of the party's shared experience bonus. */
+export const PARTY_BONUS = "party_bonus";
+
+/**
+ * The conditions with the party bonus added while it is active (`percent` > 0, from the
+ * last PartyUpdate): an endless entry that writes its percentage. The server does not send
+ * it in PlayerConditions: the party window's update already says it.
+ */
+export function withPartyBonus(
+  conditions: readonly ConditionView[],
+  percent: number,
+): readonly ConditionView[] {
+  if (percent <= 0) return conditions;
+  return [...conditions, { id: PARTY_BONUS, until: undefined, ticks: 0, percent }];
 }
 
 /**

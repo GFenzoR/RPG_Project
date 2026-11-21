@@ -621,7 +621,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `corpse` en `data/monsters`, o `creature_remains`; dura `combat.monster_corpse_ms`;
   es un contenedor con el botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
-  se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
+  se reparte según el daño de los que siguen conectados; con un grupo que comparte, a cada
+  miembro que comparte, ver "Grupos": `FloatingText.bonus` es la parte del bonus de grupo)
+  y, al que más daño hizo,
   `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
   parámetro `item` por pila del botín (el cliente los junta en `{items}`), o
   `combat.loot_none` si no hubo botín.
@@ -1066,6 +1068,21 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   servidor): `COOLING` si eso todavía no pasó al mandarla, `DONE` si ya pasó. El
   servidor no avisa cuando vence una espera: el cliente compara `available_at` con su
   reloj corregido por `Welcome.server_time`.
+- **Quests de hito** (docs/02 "Quests de hito"): después de las entradas de siempre llega
+  una por cada hito que el personaje no empezó, con `state` `OPEN` (4). La entrada de un
+  hito (en cualquier estado) trae `milestone` (`MilestoneInfo`): `title` (clave i18n del
+  título), `level` y `level_met`, el equipo (`gear_item`, id numérico, con
+  `gear_equipped`, o `gear_weapon`, un tipo de arma; vacíos si no pide) y `gear_met`,
+  `players`, `vocations` (una por placa, o vacía) y `vocation_met`. Las marcas `*_met` son
+  del propio personaje al mandarlo; el diario sale otra vez cuando cambian (al subir o
+  bajar de nivel, o al cambiar lo que lleva: `questRecheck` compara una huella). Un
+  cliente viejo descarta el estado desconocido.
+- Mensajes de sistema de las placas: `milestone.waiting` (`quest`, `count`, `total`),
+  `milestone.not_ready` (`quest`, `names`), `milestone.fail_step`, `fail_vocation`,
+  `fail_level`, `fail_gear` (`quest`), `milestone.blocked` (`quest`), `milestone.staff`,
+  `milestone.achieved` (`quest`, `names`: los participantes, a cada uno). Mirar una placa
+  agrega `milestone.plates` (`quest`, `count`, `total`) o `milestone.plates_vocation`
+  (con `vocation`). Sin mensajes nuevos de cliente: se camina sobre las placas.
 - Es solo para mostrar: el servidor decide todo con lo guardado (`quest_state`).
   Agregado sin romper nada (campo 45 de `ServerMessage`): un cliente viejo lo ignora.
 
@@ -1082,12 +1099,22 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   - `LEAVE`; `KICK` y `PASS_LEADER` (`creature_id` = otro miembro, solo el líder);
     `SHARE_ON` / `SHARE_OFF` (solo el líder). `PASS_LEADER` y un `SHARE_*` que cambia algo
     cuentan para el anti-flood del chat (`chat.flood`, `chat.muted`).
-- **`PartyUpdate{leader_id, shared, members[]}`**: el grupo completo, en orden de
-  llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros, líder,
-  experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia lo que
-  el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
+- **`PartyUpdate{leader_id, shared, members[], bonus_percent}`**: el grupo completo, en
+  orden de llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros,
+  líder, experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia
+  lo que el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
   `OFF`, `ACTIVE` (dos o más de los miembros que el jugador ve, él incluido, califican) o
-  `INACTIVE`.
+  `INACTIVE`; un grupo nuevo empieza con la experiencia compartida prendida
+  (`party.shared_by_default`), así que su primer `PartyUpdate` dice `INACTIVE`.
+  `bonus_percent` (campo 4, agregado sin romper nada): el bonus de grupo de los que
+  comparten ahora (`bonus_pct_by_sharers` según cuántos miembros tienen `sharing`; dos
+  personajes de una cuenta cuentan como uno), 0 salvo con `ACTIVE`. El cliente lo muestra
+  en la ventana de grupo y como el estado `party_bonus` de la bandeja (lo arma el cliente:
+  no viaja en `PlayerConditions`).
+- **`FloatingText.bonus`** (campo 4, agregado sin romper nada; solo `EXPERIENCE`): la parte
+  de `amount` que es el bonus de grupo de una muerte compartida (`amount` ya la incluye).
+  Lo reciben el que la cobra y los miembros de su grupo; cualquier otro que mira recibe 0.
+  El cliente escribe `client.party.xp_bonus` ("126 (+6 grupo)").
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
   mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
   `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
@@ -1100,7 +1127,9 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   (`name`), `party.leave_first`, `party.full`, `party.not_leader`, `party.none`,
   `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
-  `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`.
+  `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`,
+  `party.shared_default` (al formarse un grupo con la experiencia compartida prendida: lo
+  oyen los dos primeros miembros).
 
 ### PvP (T5.2, `server/internal/session/pvp.go` y `guildwar.go`)
 Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
@@ -1592,7 +1621,7 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ## Límites
 - Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
   sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB
-  (~1 KB en el pueblo del Farol con la vista de 31x21).
+  (~1 KB en el pueblo de Lanternby con la vista de 31x21).
 - Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
 - Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
   y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
@@ -1615,7 +1644,7 @@ de salida, cómodo para una instancia chica.
 Con la vista de 31x21 (`07-performance-budget.md`, "Vista ancha"), los escenarios de la
 prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por Puerto) y
 1676 B/s (300 en el pueblo, donde todos ven a todos); con 15x11 eran 309 y 785. Un
-`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B). Los eventos de ataque y
+`FullMapView` en el pueblo de Lanternby pesa ~1 KB (antes ~350 B). Los eventos de ataque y
 los motivos de A9 suben eso a 532 y 1684 B/s (`07-performance-budget.md`, "Eventos de
 ataque"): un `CreatureAttack` pesa unos 23 B por cliente que lo recibe y un motivo, 2 B.
 El aspecto (lote 13, `07-performance-budget.md` "Aspecto y equipo visible") suma a cada

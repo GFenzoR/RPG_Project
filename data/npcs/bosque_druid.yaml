@@ -13,7 +13,7 @@ look:
     feet: { shape: shoes, tint: tan_leather }
     weapon: { shape: staff, tint: sapling }
 notes: >-
-  Keeper of the grove of Raigal and the quest giver of Chapter 2 (ch2_roots, then
+  Keeper of the grove of Ivernel and the quest giver of Chapter 2 (ch2_roots, then
   ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level. With
   ember_root_found she hands over the ember root (Chapter 3 key, one at a time) until
   the gate of ch3_gate is open.
@@ -169,7 +169,8 @@ dialog:
         - { text: dialog.bye, action: close }
 # Content audit (2026-11): the forest's staffs and wands and the mana draught, where a
 # caster looks for them (before, the druid's staffs were only at the Puerto diver's).
-# Lote 11: the band 3 robe and amulet too (docs/02 "Catálogo de equipo").
+# Lote 11: the band 3 robe too (docs/02 "Catálogo de equipo"). Lote 14: the antler amulet
+# is only bought here, never sold: it is the Orthavel milestone's gear (tanner_chitin gives it).
 shop:
   id: grove_shop
   sells:
@@ -178,7 +179,6 @@ shop:
     - { item: hoarfrost_staff, price: 750 }
     - { item: stormglass_wand, price: 750 }
     - { item: mossweave_robe, price: 450 }
-    - { item: antler_amulet, price: 600 }
     - { item: mana_draught, price: 22 }
     - { item: health_draught, price: 60 }
   buys:

@@ -9,7 +9,7 @@
   floors: [7]
   rects:
     - { x: 4152, y: 6099, w: 22, h: 22 }
-  notes: "Plaza, stations and the tannery of Raigal."
+  notes: "Plaza, stations and the tannery of Ivernel."
 
 - id: bosque_dock
   type: no_logout
@@ -29,4 +29,4 @@
   floors: [7]
   rects:
     - { x: 4139, y: 6121, w: 6, h: 5 }
-  notes: "Small PvP arena on the sand south-west of Raigal (T5.2): no skulls, no death penalty."
+  notes: "Small PvP arena on the sand south-west of Ivernel (T5.2): no skulls, no death penalty."

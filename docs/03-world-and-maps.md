@@ -124,7 +124,7 @@ no tiene panel de textos). El servidor no carga `texts.yaml` (lo usan el editor,
 y el validador). Para que un cartel se vea y se lea en el juego, la misma casilla lleva un
 item fijo cuya `description` es esa clave (T5.5: `brasal_temple_sign`, ver
 `06-content-data.md`); mirarlo muestra el texto. Todos los carteles de Puerto, el Bosque,
-la Isla Volcánica y la Isla de Pruebas lo tienen (en Puerto, el Bosque y la Isla de
+Karvask y Thimblewick lo tienen (en Puerto, el Bosque y la Isla de
 Pruebas el item se llama como su entrada de `texts.yaml`, p. ej.
 `puerto_temple_sign`); solo el del templo de `testisle` queda sin item. El
 validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
@@ -157,7 +157,7 @@ Zonas PvP (T5.2, reglas en `02-game-design.md` "PvP"): en `no_pvp` nadie ataca a
 están adentro; fuera de las dos rige el PvP abierto con marcas. Una casilla con
 `protection` sigue sin combate aunque además sea `pvp`. Hoy: toda la isla `puerto` es
 `no_pvp` (`puerto_no_pvp`, pisos 7 y 8: isla inicial y tutorial), la arena
-`bosque_arena` (6x5 de piedra, al suroeste de Raigal) y `testisle_no_pvp` (al oeste del
+`bosque_arena` (6x5 de piedra, al suroeste de Ivernel) y `testisle_no_pvp` (al oeste del
 templo, para el E2E). Una isla nueva cerca del inicio debería pensar si va `no_pvp`.
 
 `portals.yaml` (`kind`: `stairs` | `ladder` | `hole` | `rope_spot` | `teleport` | `boat`;
@@ -338,7 +338,7 @@ quitó en T3.6 (el esquema todavía lo acepta, opcional y vacío, para no romper
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
 para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla, y
-`make play` usa `-start-town pruebas` (la Isla de Pruebas, `16-probar-el-juego.md`).
+`make play` usa `-start-town pruebas` (Thimblewick, `16-probar-el-juego.md`).
 
 ## Compilación
 `server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +
@@ -433,7 +433,7 @@ crc32        u32 (IEEE) de todos los bytes anteriores
   un piso que su isla no lista o con un rectángulo vacío o fuera de la isla. Un
   `world.bin` de la versión 6 no carga: vuelve a compilarlo (`make mapcompile`).
 - La versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
-  marca cada isla `dev_only` que deja entrar (hoy la Isla de Pruebas) y `Map.DevIslands`
+  marca cada isla `dev_only` que deja entrar (hoy Thimblewick) y `Map.DevIslands`
   las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
   él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de
   `cmd/gameserver`, como el proveedor de pagos falso) y solo los NPCs de una isla marcada
@@ -604,6 +604,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
   puertas, antes del chequeo de escape), y los dos lados leen los casos de
   `packages/map-format/src/testdata/arrivals.json`.
+- **Placas de las quests de hito** (docs/02 "Quests de hito", `checkSigils`): las placas
+  (items con bloque `sigil`) de cada paso `sigils` están dentro de su cuadrado, tantas como
+  `requires.players` y con sus vocaciones; ninguna es de dos hitos ni queda suelta; cada
+  una es caminable, no mueve a quien la pisa y se llega a pie desde el templo; el destino
+  `to` es una casilla caminable de una isla fuera de casas, puertas con llave y entradas de
+  portales, y desde su área se llega a un templo sin llaves ni herramientas (el mismo
+  `templeReach` del chequeo de escape). En la alcanzabilidad, pisar una placa lleva al
+  destino: la sala de recompensa (y su cofre) cuenta como alcanzable. El servidor exige
+  lo mismo al arrancar (`initSigils`).
 - **Islas `dev_only`**: como la imagen de producción no las tiene, nada de lo que el
   servidor revisa contra su mapa puede necesitarlas: ninguna ruta de barco sale de una,
   llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
@@ -617,15 +626,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   llegue a todas).
 
 ## Islas actuales
-- `testisle` (64x64, pisos 7–8; "Islote de ensayo"): isla de pruebas de herramientas, tests
+- `testisle` (64x64, pisos 7–8; "Pellwick"): isla de pruebas de herramientas, tests
   y E2E. Es `dev_only` desde la auditoría de contenido m11: la imagen de producción no la
   tiene, y `make mapcompile` (que pasa `-dev`) y el E2E (`-start-town testisle`) sí. Nada de
   producción depende de ella (sus spawns no cuentan para la capacidad del mundo, docs/07).
-  Su nombre en español era "Isla de pruebas", igual al de la Isla de Pruebas (`pruebas`).
+  Su nombre en español era "Isla de pruebas", igual al de Thimblewick (`pruebas`).
   Desde T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
 - `puerto` (192x192 en 3072,6272; pisos 7–8; nivel 1–15; T1.16): forma base con
-  `mapcli generate --recipe island --seed 42 --size 184`, luego ops. Superficie: pueblo del
-  Farol (templo, plaza, depósito, armería, casas y almacén con muros), muelle (prefab
+  `mapcli generate --recipe island --seed 42 --size 184`, luego ops. Superficie: pueblo de
+  Lanternby (templo, plaza, depósito, armería, casas y almacén con muros), muelle (prefab
   `small_dock`) en la bahía sureste, playa del naufragio (NO: saqueadores, cangrejos,
   gaviotas), bosque (O: jabalíes, arañas), campo de lobos (NE). Piso 8: la mina vieja
   (escalera en 3176,6322): murciélagos al oeste, galería de vetas de hierro con escarabajos
@@ -655,13 +664,13 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   6391–6398), con puerta al oeste sobre el camino.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
-  llega a 3201,6432 (la de la Isla Volcánica, `volcan_to_puerto`, a 3201,6431).
+  llega a 3201,6432 (la de Karvask, `volcan_to_puerto`, a 3201,6431).
   Carteles (`texts.yaml` y un item `puerto_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 3163,6384 (afuera de la puerta este), muelle en 3198,6428 (en el
   camino de tierra al muelle) y mina en 3175,6328 (en el camino a la escalera).
 - `bosque` (192x192 en 4096,6016; pisos 7–8; nivel 10–30; T3.6): forma base con
   `mapcli generate --recipe island --seed 23 --size 180` y luego una lista de ops
-  (scatter con semillas 2301–2304, autoborder al final). Superficie: pueblo de **Raigal**
+  (scatter con semillas 2301–2304, autoborder al final). Superficie: pueblo de **Ivernel**
   al oeste (templo de piedra con el sacerdote en 4146–4154, 6100–6108, puerta al sur;
   plaza de tierra con fragua, yunque y fogón; curtiduría de madera al sur de la plaza),
   muelle de tablones al oeste (4115–4127, 6099–6101, con el barquero `bosque_ferryman` en
@@ -683,6 +692,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
+  Quests de hito (lote 14, docs/02 "Quests de hito"): las **piedras de Thalorn** (cuatro
+  rocas alrededor de la escalera 4210,6093, cartel `thalorn_sign` en 4212,6093) bajan a
+  la cripta del piso 8 (muro de piedra 4203–4217, 6087–6100) con las dos placas en
+  4207,6090 y 4213,6090; su sala de recompensa, cerrada (4221–4229, 6088–6094, cofre
+  `chest_ms_thalorn`), sale por un teletransporte a 4200,6106. La **vigilia de
+  Orthavel** (escalera 4178,6128 al sur del pueblo, cartel `orthavel_sign` en 4180,6128)
+  baja a una cámara (4173–4183, 6123–6133) con una placa en 4178,6125; su sala
+  (4188–4196, 6122–6128, cofre `chest_ms_orthavel`) sale por un teletransporte a
+  4176,6119.
   Muebles y luces (lote 12): braseros a los lados de las dos puertas del templo,
   estandartes, ventanas y bancos; en la plaza la fuente (4159,6111), dos puestos, faroles y
   un mástil; la curtiduría con estantes, barriles y una mesa; cada casa con una cama y
@@ -692,7 +710,7 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
   `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
   tierra con `fill`; scatter con semillas 5501–5505, autoborder al final). Superficie:
-  pueblo de **Brasal** al oeste (plaza de piedra 3636–3667, 5782–5806; templo de piedra
+  pueblo de **Cinderstead** al oeste (plaza de piedra 3636–3667, 5782–5806; templo de piedra
   3638–3646, 5784–5792 con la puerta al sur y la sacerdotisa; fragua, yunque y fogón con el
   herrero; el archivo de madera de Casia 3658–3666, 5795–5801, puerta al norte), muelle de
   tablones al oeste (3610–3635, 5794–5796) con la capitana `volcan_ferryman` en 3615,5794:
@@ -712,13 +730,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   prefab `house_wood_small` en 3646,5797, puerta al sur) y, desde la auditoría de
   contenido M6, `volcan_house_bellows` (`house_wood_medium` en 3637,5797, al lado) y
   `volcan_house_flint` (`house_wood_small` en 3669,5788, al este de la plaza y fuera de su
-  zona: su salida da al PvP abierto, como las de Raigal). Tablero del mercado en la plaza,
+  zona: su salida da al PvP abierto, como las de Ivernel). Tablero del mercado en la plaza,
   3660,5790 (m7).
   Muebles y luces (lote 12): braseros a los lados de la puerta del templo (adentro) y en
   las esquinas de su frente, estandartes, ventanas y bancos; en la plaza la fuente
   (3656,5791), una fila de puestos al noreste, faroles, un pozo y un mástil junto al
   muelle; el archivo de Casia con estantes y mesas (el libro de la herrera, sobre una);
   cada casa con una cama y ventanas. La mina tiene 19 antorchas y 7 braseros.
+  Quest de hito (lote 14, docs/02 "Quests de hito"): de la pared norte de la galería oeste
+  de la mina sale un pasillo (3651–3653, 5766–5776; cartel `morvund_sign` en 3655,5778) a
+  la **cámara de las cuatro ascuas de Morvund** (3643–3661, 5751–5765) con una placa por
+  vocación; en su pared oeste la puerta con llave `morvund_gate` (3643,5758) da a la
+  **galería de Morvund** (3621–3642, 5751–5765, mineros y gólems:
+  `volcan_morvund_delvers`, `volcan_morvund_golems`), y al este, cerrada, la sala de
+  recompensa (3664–3672, 5751–5759, cofre `chest_ms_morvund`) sale por un
+  teletransporte a la sala de entrada de la mina (3690,5800). Cuatro antorchas más en las
+  paredes nuevas.
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la
@@ -748,7 +775,7 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   en algún bloque de 2x2 de lava (sin tiras de una casilla, donde la costra pellizcaría) y
   ninguna cae en el cuadrado de un spawn. Al dibujarlos se dejaron además dos casillas
   caminables hacia muros y vetas, una hacia rocas, y ningún hueco encerrado.
-- `pruebas` (96x96 en 2048,2048; pisos 7–8; nivel 1–60): **Isla de Pruebas**, el sandbox
+- `pruebas` (96x96 en 2048,2048; pisos 7–8; nivel 1–60): **Thimblewick**, el sandbox
   para probar el juego a mano (`16-probar-el-juego.md`, `make play`). Fuera del juego normal
   a propósito: es `dev_only` (la imagen de producción no la tiene) y ninguna ruta de barco,
   portal ni diálogo de otra isla llega a ella (lo comprueban `tools/mapcli/src/world.test.ts`
@@ -769,7 +796,7 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   casa `pruebas_house` (prefab `house_wood_medium` en 2085,2108), la arena `pruebas_arena`
   (zona `pvp`, 2102–2112 × 2111–2119, entrada por el oeste) y el muelle (prefab
   `small_dock` en 2093,2133) con el barquero `pruebas_ferryman` (2097,2133), que por 20
-  monedas deja donde llegan los barcos de Puerto, el Bosque y la Isla Volcánica. Piso 8: cueva
+  monedas deja donde llegan los barcos de Puerto, el Bosque y Karvask. Piso 8: cueva
   de tierra y `rock_wall` bajo el patio con la escalera de vuelta, la escalera de mano, el
   pozo bajo el agujero con su `rope_spot` (2119,2094), murciélagos y un teletransporte
   (2113,2104) que vuelve a la plaza (2095,2094). Carteles: uno por sector

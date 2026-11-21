@@ -1,0 +1,26 @@
+id: ms_morvund_embers
+name: quest.ms_morvund_embers.name
+min_level: 35
+milestone: true
+title: quest.ms_morvund_embers.title
+notes: >-
+  Milestone quest (docs/02 "Quests de hito"), Volcan, for four: one of each vocation, each
+  carrying the ember key of ch3_gate. The forge echo tells of the chamber of the four embers
+  north of the mine's west room: four plates marked for the four vocations. The reward room
+  has its chest and a teleport back to the mine; the reward is the key of the Morvund
+  gallery, a small hunting ground behind a locked gate off the chamber.
+requires:
+  level: 35
+  players: 4
+  vocations: [guardian, arcanist, ranger, druid]
+  gear: { item: ember_key }
+steps:
+  - id: plates
+    description: quest.ms_morvund_embers.step_plates
+    complete_when:
+      sigils: { x: 3652, y: 5758, z: 8, radius: 5, to: { x: 3668, y: 5755, z: 8 } }
+rewards:
+  - { xp: 19000 }
+  - { item: morvund_key }
+  - { item: embersteel_helm }
+  - { gold: 1300 }

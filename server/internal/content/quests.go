@@ -23,6 +23,50 @@ type Quest struct {
 	// Repeatable makes it a task (docs/06 "Quest"): once completed it can be started again
 	// after its cooldown, from its first step, and its rewards are given every time.
 	Repeatable *Repeatable `yaml:"repeatable"`
+	// Milestone makes it a milestone quest (docs/02 "Quests de hito"): Requires says what
+	// every participant needs, the quest log shows it before it is started and with Title
+	// once done, and its last step is a sigils step, the cooperative plates of the map.
+	Milestone bool          `yaml:"milestone"`
+	Title     string        `yaml:"title"`
+	Requires  *MilestoneReq `yaml:"requires"`
+}
+
+// MilestoneReq is what a milestone quest asks of each participant: a level, a piece of
+// gear and a group of Players present together on the plates of its sigils step,
+// optionally one of each of Vocations (the plates say which: their sigil.vocation).
+type MilestoneReq struct {
+	Level     int      `yaml:"level"`
+	Players   int      `yaml:"players"`
+	Vocations []string `yaml:"vocations"`
+	Gear      *Gear    `yaml:"gear"`
+}
+
+// Gear is the gear requirement of a milestone: Item carried (anywhere, or worn when
+// Equipped), or a wielded weapon of type Weapon (sword, axe, wand...). Exactly one of
+// Item and Weapon is set.
+type Gear struct {
+	Item     string `yaml:"item"`
+	Equipped bool   `yaml:"equipped"`
+	Weapon   string `yaml:"weapon"`
+}
+
+// WeaponTypes are the weapon.type values of data/items (items.schema.json), the ones a
+// milestone's gear.weapon may ask for.
+var WeaponTypes = []string{"sword", "axe", "club", "distance", "wand"}
+
+// MaxMilestonePlayers bounds a milestone's group, and MaxSigilRadius the square its
+// plates are looked for in (around the sigils point).
+const (
+	MaxMilestonePlayers = 4
+	MaxSigilRadius      = 8
+)
+
+// SigilsStep returns the index of the milestone's sigils step (its last), or -1.
+func (q *Quest) SigilsStep() int {
+	if n := len(q.Steps); n > 0 && q.Steps[n-1].CompleteWhen.Sigils != nil {
+		return n - 1
+	}
+	return -1
 }
 
 // Repeatable is the cooldown of a repeatable quest: the time between completing it and
@@ -54,6 +98,19 @@ type Completion struct {
 	Kill         *Kill         `yaml:"kill"`
 	FlagEquals   *Flag         `yaml:"flag_equals"`
 	Reach        *Reach        `yaml:"reach"`
+	// Sigils is the cooperative plates of a milestone quest (docs/02 "Quests de hito").
+	Sigils *Sigils `yaml:"sigils"`
+}
+
+// Sigils completes a milestone's last step for everyone at once: the sigil plates within
+// Radius (Chebyshev) of X, Y on floor Z, each with a player meeting the requirements on
+// it in the same tick, move all of them to To (the reward room) together.
+type Sigils struct {
+	X      int      `yaml:"x"`
+	Y      int      `yaml:"y"`
+	Z      int      `yaml:"z"`
+	Radius int      `yaml:"radius"`
+	To     Position `yaml:"to"`
 }
 
 // Reach completes a step while the player stands in a place (docs/06 "Quest"): a zone of
@@ -174,7 +231,7 @@ func ParseQuest(raw []byte) (*Quest, error) {
 	for i, s := range q.Steps {
 		c := s.CompleteWhen
 		n := 0
-		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil, c.Reach != nil} {
+		for _, set := range []bool{c.HasItem != nil, c.DialogAction != nil, c.Kill != nil, c.FlagEquals != nil, c.Reach != nil, c.Sigils != nil} {
 			if set {
 				n++
 			}
@@ -195,7 +252,64 @@ func ParseQuest(raw []byte) (*Quest, error) {
 	if r := q.Repeatable; r != nil && !(r.CooldownHours > 0 && r.CooldownHours <= MaxCooldownHours) {
 		return nil, fmt.Errorf("quest %q: repeatable cooldown_hours must be in (0, %d]", q.ID, MaxCooldownHours)
 	}
+	if msg := q.checkMilestone(); msg != "" {
+		return nil, fmt.Errorf("quest %q: %s", q.ID, msg)
+	}
 	return &q, nil
+}
+
+// checkMilestone reports what is wrong with a milestone quest, or with the milestone
+// fields of another one, or "".
+func (q *Quest) checkMilestone() string {
+	sigils := 0
+	for _, s := range q.Steps {
+		if s.CompleteWhen.Sigils != nil {
+			sigils++
+		}
+	}
+	if !q.Milestone {
+		switch {
+		case q.Requires != nil || q.Title != "":
+			return "requires and title belong to a milestone quest (milestone: true)"
+		case sigils > 0:
+			return "a sigils step belongs to a milestone quest (milestone: true)"
+		}
+		return ""
+	}
+	r := q.Requires
+	switch {
+	case r == nil:
+		return "a milestone needs requires"
+	case q.Title == "":
+		return "a milestone needs a title"
+	case q.Repeatable != nil:
+		return "a milestone is done once: it cannot be repeatable"
+	case sigils != 1 || q.SigilsStep() < 0:
+		return "a milestone needs exactly one sigils step, its last"
+	case r.Level < 1:
+		return "requires.level must be at least 1"
+	case r.Players < 1 || r.Players > MaxMilestonePlayers:
+		return fmt.Sprintf("requires.players must be 1 to %d", MaxMilestonePlayers)
+	case r.Vocations != nil && len(r.Vocations) != r.Players:
+		// An empty list (vocations: []) is refused as make validate does: any vocation is
+		// said by leaving the field out.
+		return "requires.vocations lists one vocation per player, or is left out"
+	case r.Gear != nil && (r.Gear.Item == "") == (r.Gear.Weapon == ""):
+		return "requires.gear takes an item or a weapon type, not both"
+	case r.Gear != nil && r.Gear.Equipped && r.Gear.Item == "":
+		return "requires.gear.equipped goes with an item"
+	case r.Gear != nil && r.Gear.Weapon != "" && !slices.Contains(WeaponTypes, r.Gear.Weapon):
+		return fmt.Sprintf("requires.gear.weapon %q is no weapon type (%v)", r.Gear.Weapon, WeaponTypes)
+	}
+	s := q.Steps[q.SigilsStep()].CompleteWhen.Sigils
+	switch {
+	case s.Radius < 0 || s.Radius > MaxSigilRadius:
+		return fmt.Sprintf("sigils radius outside 0..%d", MaxSigilRadius)
+	case s.X < 0 || s.X > 0xFFFF || s.Y < 0 || s.Y > 0xFFFF || s.Z < 0 || s.Z > 15,
+		s.To.X < 0 || s.To.X > 0xFFFF || s.To.Y < 0 || s.To.Y > 0xFFFF || s.To.Z < 0 || s.To.Z > 15:
+		return "sigils point or destination outside the world"
+	}
+	return ""
 }
 
 // CheckRefs checks that what NPCs and quests reference exists: items, quests and
@@ -315,6 +429,11 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 				if n == nil || n.Dialog.Nodes[c.DialogAction.Node] == nil {
 					return fmt.Errorf("%s: unknown dialog node %s/%s", where, c.DialogAction.NPC, c.DialogAction.Node)
 				}
+			}
+		}
+		if r := q.Requires; r != nil && r.Gear != nil && r.Gear.Item != "" {
+			if err := item(where+" requires.gear", r.Gear.Item); err != nil {
+				return err
 			}
 		}
 		for _, r := range q.Rewards {

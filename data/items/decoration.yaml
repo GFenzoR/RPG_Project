@@ -1,4 +1,4 @@
-# Harbour decoration (Isla del Puerto). Fixed in place: not pickupable.
+# Harbour decoration (Velmara). Fixed in place: not pickupable.
 - id: mooring_post
   kind: decoration
   sprite: decor/mooring_post
@@ -376,7 +376,7 @@
   blocks_movement: false
   container: { slots: 10 }
 
-# Choppable tree of the Isla del Bosque (T3.6): sturdier wood than birch. Our own numbers.
+# Choppable tree of Selvaine (T3.6): sturdier wood than birch. Our own numbers.
 - id: elm_tree
   kind: decoration
   sprite: decor/elm_tree
@@ -395,7 +395,7 @@
       - { item: tree_resin, weight: 1, min_level: 4 }
   value: 4
 
-# Ore vein of the Isla Volcánica (T5.5): ember ore for embersteel. Harder than iron, so it
+# Ore vein of Karvask (T5.5): ember ore for embersteel. Harder than iron, so it
 # asks for some mining first. Our own numbers.
 - id: ember_vein
   kind: decoration
@@ -416,7 +416,7 @@
       - { item: iron_ore, weight: 2 }
   value: 4
 
-# Signs of Brasal (Isla Volcánica, T5.5). One item per sign: looking at it shows its
+# Signs of Cinderstead (Karvask, T5.5). One item per sign: looking at it shows its
 # description, which is the text of the sign (the same key as its entry in
 # world/islands/volcan/texts.yaml).
 - id: brasal_temple_sign
@@ -443,7 +443,7 @@
   pickupable: false
   blocks_movement: true
 
-# The sign by the forge gate (Isla Volcánica, mine, floor 8), same scheme as Brasal's.
+# The sign by the forge gate (Karvask, mine, floor 8), same scheme as Cinderstead's.
 - id: volcan_gate_sign
   kind: decoration
   sprite: decor/signpost
@@ -501,7 +501,7 @@
   pickupable: false
   blocks_movement: true
 
-# Signs of the Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): one per sector,
+# Signs of Thimblewick (sandbox island, docs/16-probar-el-juego.md): one per sector,
 # saying what to try there. The id is the one of the sign in world/islands/pruebas/texts.yaml.
 - id: pruebas_temple_sign
   kind: decoration
@@ -583,3 +583,29 @@
   pickupable: false
   blocks_movement: true
   notes: "At the arena entrance."
+
+# Signs of the milestone quests (docs/02 "Quests de hito"), same scheme: the id is the one of
+# the sign in the island's texts.yaml.
+- id: thalorn_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.thalorn_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: orthavel_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.orthavel_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: morvund_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.morvund_sign
+  pickupable: false
+  blocks_movement: true

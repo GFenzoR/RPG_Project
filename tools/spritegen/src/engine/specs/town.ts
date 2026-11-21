@@ -1,6 +1,6 @@
 // The town prop kit (docs/17 "Kit de props de pueblo"; data/items/decoration.yaml, "Town prop
 // kit"): one-tile props in warm materials that furnish the temples, depots, plazas and houses
-// of Farol, Raigal and Brasal. Own designs, drawn as models with the engine's light and
+// of Lanternby, Ivernel and Cinderstead. Own designs, drawn as models with the engine's light and
 // outline; what the review of the first engine props taught holds here too (docs/17 "Motor de
 // sprites"): few pieces, one warm material that stands off the floor, low texture, and the
 // detail (seams, hoops, goods) kept to what still reads at 1x.

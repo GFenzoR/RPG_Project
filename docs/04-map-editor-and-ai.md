@@ -46,7 +46,7 @@ dependencias de Node para que el editor la use en el navegador).
 | `scatter` | `floor`, `rect`, `items[]`, `density`, `seed`, `on_ground[]` | Decoración aleatoria reproducible |
 | `add_spawn` / `remove_spawn` | campos de spawns.yaml | |
 | `add_zone` / `remove_zone` | campos de zones.yaml | |
-| `place_npc` / `remove_npc` | `pos`, `npc` | Un NPC con acciones de diálogo de desarrollo (`train_skill`, `restore_mana`) o marcado `dev_only: true` (la instructora de la Isla de Pruebas) solo va en islas `dev_only`. Esta validación de mapas no lo mira: lo rechazan la de contenido (`make validate`) y el arranque del servidor (`06-content-data.md`, "Diálogos") |
+| `place_npc` / `remove_npc` | `pos`, `npc` | Un NPC con acciones de diálogo de desarrollo (`train_skill`, `restore_mana`) o marcado `dev_only: true` (la instructora de Thimblewick) solo va en islas `dev_only`. Esta validación de mapas no lo mira: lo rechazan la de contenido (`make validate`) y el arranque del servidor (`06-content-data.md`, "Diálogos") |
 | `add_text` / `remove_text` | campos de texts.yaml (`id`, `kind` `sign`/`book`, `pos`, `text`, `notes?`) | Un cartel o libro. No coloca el item del cartel: va aparte con `place_item` (`03-world-and-maps.md`, `texts.yaml`) |
 | `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` y `make mapcompile` fallan (`03-world-and-maps.md`, "Validación") |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |

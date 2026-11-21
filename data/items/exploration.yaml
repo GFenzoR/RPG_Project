@@ -15,7 +15,7 @@
   book:
     title: book.book_lantern_rowers.title
     pages: [book.book_lantern_rowers.page_1, book.book_lantern_rowers.page_2, book.book_lantern_rowers.page_3]
-  notes: "Temple of the Lantern, Puerto (3152,6381,7), north-west corner; and the temple of the Isla de Pruebas (2099,2084,7)."
+  notes: "Temple of the Lantern, Lanternby (3152,6381,7), north-west corner; and the temple of Thimblewick (2099,2084,7)."
 
 - id: book_root_below
   kind: decoration
@@ -27,7 +27,7 @@
   book:
     title: book.book_root_below.title
     pages: [book.book_root_below.page_1, book.book_root_below.page_2, book.book_root_below.page_3]
-  notes: "Temple of the Root, Raigal (4148,6101,7), north-west corner."
+  notes: "Temple of the Root, Ivernel (4148,6101,7), north-west corner."
 
 - id: book_still_flame
   kind: decoration
@@ -39,7 +39,7 @@
   book:
     title: book.book_still_flame.title
     pages: [book.book_still_flame.page_1, book.book_still_flame.page_2, book.book_still_flame.page_3]
-  notes: "Temple of the Still Flame, Brasal (3640,5785,7), north-west corner."
+  notes: "Temple of the Still Flame, Cinderstead (3640,5785,7), north-west corner."
 
 - id: book_forge_register
   kind: decoration
@@ -51,7 +51,7 @@
   book:
     title: book.book_forge_register.title
     pages: [book.book_forge_register.page_1, book.book_forge_register.page_2, book.book_forge_register.page_3]
-  notes: "The keeper's archive of Brasal (3660,5796,7), west of the door and of Casia."
+  notes: "The keeper's archive of Cinderstead (3660,5796,7), west of the door and of Casia."
 
 - id: book_smith_notes
   kind: decoration
@@ -62,7 +62,7 @@
   book:
     title: book.book_smith_notes.title
     pages: [book.book_smith_notes.page_1, book.book_smith_notes.page_2, book.book_smith_notes.page_3]
-  notes: "On a table of the keeper's archive of Brasal (3664,5800,7), south-east corner."
+  notes: "On a table of the keeper's archive of Cinderstead (3664,5800,7), south-east corner."
 
 - id: book_trail_notebook
   kind: decoration
@@ -74,7 +74,7 @@
   book:
     title: book.book_trail_notebook.title
     pages: [book.book_trail_notebook.page_1, book.book_trail_notebook.page_2, book.book_trail_notebook.page_3]
-  notes: "Velia's reading stand under the elms of Raigal (4180,6112,7), two tiles east of her."
+  notes: "Velia's reading stand under the elms of Ivernel (4180,6112,7), two tiles east of her."
 
 - id: scroll_dawn_manifest
   kind: decoration
@@ -85,7 +85,7 @@
   book:
     title: book.scroll_dawn_manifest.title
     pages: [book.scroll_dawn_manifest.page_1, book.scroll_dawn_manifest.page_2]
-  notes: "Among the cargo crates of the wreck of the Late Dawn, Puerto (3119,6328,7); and the temple of the Isla de Pruebas (2097,2084,7)."
+  notes: "Among the cargo crates of the wreck of the Late Dawn, Velmara (3119,6328,7); and the temple of Thimblewick (2097,2084,7)."
 
 - id: scroll_burnt_oar_log
   kind: decoration
@@ -96,7 +96,7 @@
   book:
     title: book.scroll_burnt_oar_log.title
     pages: [book.scroll_burnt_oar_log.page_1, book.scroll_burnt_oar_log.page_2, book.scroll_burnt_oar_log.page_3]
-  notes: "The smugglers' cave under the east coast of the Bosque, west chamber (4219,6136,8)."
+  notes: "The smugglers' cave under the east coast of Selvaine, west chamber (4219,6136,8)."
 
 - id: scroll_drowned_wall
   kind: decoration
@@ -107,7 +107,7 @@
   book:
     title: book.scroll_drowned_wall.title
     pages: [book.scroll_drowned_wall.page_1, book.scroll_drowned_wall.page_2, book.scroll_drowned_wall.page_3]
-  notes: "The flooded gallery at the far end of the Puerto mine (3194,6287,8), by its chest."
+  notes: "The flooded gallery at the far end of the Velmara mine (3194,6287,8), by its chest."
 
 # ---- Reward chests: using one gives its rewards once per character (storage chest.<id>),
 # or nothing while they do not all fit. Rewards sized to the area's band (docs/02 "Catálogo
@@ -126,7 +126,7 @@
       - { item: lesser_temper_stone, count: 3 }
       - { item: seaweed_poultice, count: 5 }
       - { item: plank_shield, count: 1 } # band 2
-  notes: "Far end of the Puerto mine, in the alcove of the flooded gallery past the drowned miners (3193,6286,8)."
+  notes: "Far end of the Velmara mine, in the alcove of the flooded gallery past the drowned miners (3193,6286,8)."
 
 - id: chest_puerto_grove
   kind: decoration
@@ -142,7 +142,7 @@
       - { item: lesser_temper_stone, count: 2 }
       - { item: seaweed_poultice, count: 3 }
       - { item: sailcloth_cap, count: 1 } # band 1
-  notes: "Under the oaks of the north-west corner of the Puerto forest, off every road (3107,6353,7)."
+  notes: "Under the oaks of the north-west corner of the Velmara forest, off every road (3107,6353,7)."
 
 - id: chest_bosque_cave
   kind: decoration
@@ -158,7 +158,7 @@
       - { item: greater_temper_stone, count: 2 }
       - { item: health_draught, count: 3 }
       - { item: stagleather_hood, count: 1 } # band 3
-  notes: "The crawlers' nest of the smugglers' cave, Bosque, south-east corner (4252,6170,8)."
+  notes: "The crawlers' nest of the smugglers' cave, Selvaine, south-east corner (4252,6170,8)."
 
 - id: chest_volcan_mine
   kind: decoration
@@ -190,4 +190,99 @@
       - { item: lesser_temper_stone, count: 2 }
       - { item: health_draught, count: 2 }
       - { item: iron_sword, count: 1 } # band 2: it rolls its attribute
-  notes: "Temple of the Isla de Pruebas, north-east corner (2098,2084,7): to try a chest (docs/16)."
+  notes: "Temple of Thimblewick, north-east corner (2098,2084,7): to try a chest (docs/16)."
+
+# ---- Milestone quests (docs/02 "Quests de hito"): sigil plates, the map items a player stands
+# on for a milestone's last step (the plates within its sigils square); one marked for a
+# vocation counts only that vocation. They block nothing and nobody picks them up. And the
+# reward chests of their reward rooms (once per character, like every chest).
+- id: sigil_plate
+  kind: decoration
+  sprite: decor/sigil_plate
+  name: item.sigil_plate.name
+  description: item.sigil_plate.desc
+  pickupable: false
+  sigil: {}
+  notes: "Any vocation. The Thalorn crypt (2 plates, 4207/4213,6090,8) and the Orthavel vigil (4178,6125,8), Bosque."
+
+- id: sigil_plate_guardian
+  kind: decoration
+  sprite: decor/sigil_plate_guardian
+  name: item.sigil_plate.name
+  description: item.sigil_plate_guardian.desc
+  pickupable: false
+  sigil: { vocation: guardian }
+  notes: "The Morvund chamber, Volcan mine (3647,5755,8)."
+
+- id: sigil_plate_arcanist
+  kind: decoration
+  sprite: decor/sigil_plate_arcanist
+  name: item.sigil_plate.name
+  description: item.sigil_plate_arcanist.desc
+  pickupable: false
+  sigil: { vocation: arcanist }
+  notes: "The Morvund chamber, Volcan mine (3657,5755,8)."
+
+- id: sigil_plate_ranger
+  kind: decoration
+  sprite: decor/sigil_plate_ranger
+  name: item.sigil_plate.name
+  description: item.sigil_plate_ranger.desc
+  pickupable: false
+  sigil: { vocation: ranger }
+  notes: "The Morvund chamber, Volcan mine (3647,5761,8)."
+
+- id: sigil_plate_druid
+  kind: decoration
+  sprite: decor/sigil_plate_druid
+  name: item.sigil_plate.name
+  description: item.sigil_plate_druid.desc
+  pickupable: false
+  sigil: { vocation: druid }
+  notes: "The Morvund chamber, Volcan mine (3657,5761,8)."
+
+- id: chest_ms_thalorn
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_thalorn
+    rewards:
+      - { item: silver_coin, count: 4 }
+      - { item: greater_temper_stone, count: 1 }
+      - { item: health_draught, count: 3 }
+  notes: "The reward room of the Thalorn crypt, Bosque (4228,6089,8): only the pair that held the plates gets there."
+
+- id: chest_ms_orthavel
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_orthavel
+    rewards:
+      - { item: silver_coin, count: 5 }
+      - { item: greater_temper_stone, count: 2 }
+      - { item: health_draught, count: 3 }
+  notes: "The reward room of the Orthavel vigil, Bosque (4195,6123,8)."
+
+- id: chest_ms_morvund
+  kind: decoration
+  sprite: decor/reward_chest
+  name: item.reward_chest.name
+  description: item.reward_chest.desc
+  pickupable: false
+  blocks_movement: true
+  chest:
+    id: ms_morvund
+    rewards:
+      - { item: silver_coin, count: 10 }
+      - { item: greater_temper_stone, count: 3 }
+      - { item: concentrated_health_draught, count: 3 }
+      - { item: concentrated_mana_draught, count: 3 }
+  notes: "The reward room of the Morvund chamber, Volcan mine (3671,5752,8)."

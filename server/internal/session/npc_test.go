@@ -55,8 +55,18 @@ var parkedReach = pos(62, 62)
 // the zones and tiles of the real islands, not of the 64x64 test maps) to parkedReach,
 // which session.New would otherwise refuse (initReach). A test that walks one moves it
 // where it wants (chapterThreeHarness). TestRealWorldStarts runs them on the real map.
+//
+// The sigils step of a milestone (its plates are on the real islands too) becomes such a
+// parked reach step and the quest a plain one: sigil_test.go plays milestones on their own
+// map.
 func parkReachSteps(quests content.Quests, m *world.Map) {
 	for _, q := range quests {
+		if i := q.SigilsStep(); q.Milestone && i >= 0 {
+			r := &content.Reach{}
+			placeReach(r, parkedReach, 0)
+			q.Steps[i].CompleteWhen = content.Completion{Reach: r}
+			q.Milestone, q.Requires, q.Title = false, nil, ""
+		}
 		for i := range q.Steps {
 			r := q.Steps[i].CompleteWhen.Reach
 			if r == nil {

@@ -18,7 +18,7 @@ import { loadContent, showsPortal } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
 import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
-import type { ContentIndex, ItemInfo, ReachInfo } from "./content.ts";
+import type { ContentIndex, ItemInfo, ReachInfo, SigilInfo } from "./content.ts";
 import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
 import { NO_BORDERS, borderPieces } from "./ops/borders.ts";
@@ -29,9 +29,10 @@ function must<T>(v: T | undefined): T {
 }
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
-// The real routes and dialog teleports of data/ point at the real islands, not at these
-// mini worlds: each test that checks them brings its own.
-const full = { ...loadContent(repo), routes: [], teleports: [] };
+// The real routes, dialog teleports and milestone plates of data/ point at the real islands,
+// not at these mini worlds: each test that checks them brings its own.
+const real = loadContent(repo);
+const full = { ...real, routes: [], teleports: [], sigils: [] };
 // The mini worlds carry no border pieces: the border check has its own test, with the
 // ladder of data/borders.yaml (full).
 const content = { ...full, borders: NO_BORDERS };
@@ -165,7 +166,7 @@ describe("validateWorld", () => {
   });
 
   it("accepts the repository world (world/islands/testisle)", () => {
-    const r = validateWorld(repo, { content: full });
+    const r = validateWorld(repo, { content: { ...full, sigils: real.sigils ?? [] } });
     expect(messages(r)).toEqual([]);
   });
 
@@ -644,6 +645,106 @@ describe("validateWorld", () => {
       'error world/islands/mini/chunks/z07/c0000_0000.json items: (25,5,7) chest "chest_puerto_grove" cannot be opened: no tile next to it is reached on foot from the temple',
       'error world/islands/mini/chunks/z07/c0000_0000.json items: (22,10,7) chest "pruebas" ("chest_pruebas") is also at 20,10,7 ("chest_pruebas"): a chest gives once per character, so each one stands once in the world',
     ]);
+  });
+
+  it('checks milestone plates and their reward room (docs/02 "Quests de hito")', () => {
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    pushItem(top, 20, 8, "sigil_plate");
+    pushItem(top, 22, 8, "sigil_plate");
+    // The reward room is the cave on z8 (its stairs lead back up): reached from the plates.
+    const s: SigilInfo = {
+      quest: "ms_test",
+      file: "data/quests/ms_test.yaml",
+      step: 0,
+      at: { x: 21, y: 8, z: 7 },
+      radius: 1,
+      to: { x: 12, y: 12, z: 8 },
+      players: 2,
+      vocations: [],
+    };
+    const run = (sigils: SigilInfo[]): string[] =>
+      messages(check(i, undefined, [], { ...content, sigils }));
+    expect(run([s])).toEqual([]);
+    // Three players for two plates; plates marked for nobody where vocations are asked.
+    expect(run([{ ...s, players: 3 }])).toEqual([
+      'error data/quests/ms_test.yaml steps[0].complete_when.sigils: (21,8,7) milestone "ms_test": 2 sigil plates within radius 1 of 21,8,7, requires.players is 3',
+    ]);
+    expect(run([{ ...s, vocations: ["guardian", "druid"] }])[0]).toContain(
+      "its plates are marked [, ], requires.vocations is [guardian, druid]",
+    );
+    // A reward room nobody leaves: a grass pocket walled by water, no portal out.
+    for (let y = 3; y <= 7; y++)
+      for (let x = 23; x <= 27; x++)
+        setGround(top, x, y, x === 25 && y === 5 ? "grass" : "water_shallow");
+    expect(run([{ ...s, to: { x: 25, y: 5, z: 7 } }])).toEqual([
+      'error data/quests/ms_test.yaml steps[0].complete_when.sigils.to: (25,5,7) milestone "ms_test": its reward room at 25,5,7: no temple is reached from there without keys or tools (on foot, stairs, ladders, holes, teleports, out of a room through its door): whoever lands there is stuck',
+    ]);
+    // A plate of no milestone, and one nobody reaches on foot.
+    pushItem(top, 25, 5, "sigil_plate_druid");
+    const m = run([
+      { ...s, at: { x: 24, y: 6, z: 7 }, radius: 1, players: 1, vocations: ["druid"] },
+    ]);
+    expect(m).toContainEqual(
+      expect.stringContaining('sigil plate "sigil_plate" at 20,8,7 belongs to no milestone'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining(
+        'sigil plate of milestone "ms_test" at 25,5,7 is not reached on foot from the temple',
+      ),
+    );
+  });
+
+  it("refuses plates the server refuses: two on a tile, in a house, on a portal entrance", () => {
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 20, y: 5, z: 7, w: 3, h: 2 }],
+        doors: [{ x: 21, y: 6, z: 7 }],
+        exit: { x: 21, y: 7, z: 7 },
+      },
+    ];
+    pushItem(top, 20, 8, "sigil_plate");
+    pushItem(top, 20, 8, "sigil_plate");
+    pushItem(top, 20, 5, "sigil_plate");
+    pushItem(top, 10, 10, "sigil_plate"); // the entrance of the stairs mini_down
+    const one = (
+      quest: string,
+      at: { x: number; y: number; z: number },
+      players = 1,
+    ): SigilInfo => ({
+      quest,
+      file: `data/quests/${quest}.yaml`,
+      step: 0,
+      at,
+      radius: 0,
+      to: { x: 12, y: 12, z: 8 },
+      players,
+      vocations: [],
+    });
+    const m = messages(
+      check(i, undefined, [], {
+        ...content,
+        sigils: [
+          one("ms_twice", { x: 20, y: 8, z: 7 }, 2),
+          one("ms_house", { x: 20, y: 5, z: 7 }),
+          one("ms_stairs", { x: 10, y: 10, z: 7 }),
+        ],
+      }),
+    );
+    expect(m).toContainEqual(expect.stringContaining('milestone "ms_twice": two plates on 20,8,7'));
+    expect(m).toContainEqual(
+      expect.stringContaining('milestone "ms_house": the plate at 20,5,7 lies in a house'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining(
+        'milestone "ms_stairs": the plate at 10,10,7 lies on the entrance of stairs, a hole or a teleport',
+      ),
+    );
   });
 
   it("reports what cannot be reached from the temple", () => {

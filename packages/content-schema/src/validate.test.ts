@@ -34,6 +34,30 @@ describe("repository content", () => {
     expect(report.diagnostics.map(formatDiagnostic)).toEqual([]);
   });
 
+  it("names every weapon type a milestone may ask for in the client's languages", () => {
+    const schema = JSON.parse(
+      readFileSync(join(REPO, "packages/content-schema/schemas/quest.schema.json"), "utf8"),
+    ) as unknown;
+    const found: string[][] = [];
+    JSON.stringify(schema, (k, v: unknown) => {
+      if (k === "weapon" && v !== null && typeof v === "object" && "enum" in v)
+        found.push((v as { enum: string[] }).enum);
+      return v;
+    });
+    const items = readFileSync(
+      join(REPO, "packages/content-schema/schemas/items.schema.json"),
+      "utf8",
+    );
+    expect(found).toHaveLength(1);
+    for (const w of found[0] ?? []) {
+      expect(items).toContain(`"${w}"`);
+      for (const lang of ["es", "en"])
+        expect(readFileSync(join(REPO, `i18n/${lang}/client.yaml`), "utf8")).toContain(
+          `client.quests.weapon.${w}:`,
+        );
+    }
+  });
+
   it("compiles every schema", () => {
     const set = new SchemaSet();
     const names: SchemaName[] = [
@@ -1400,6 +1424,67 @@ describe("validator diagnostics", () => {
       ]),
     );
     expect(errors).toHaveLength(8);
+  });
+
+  it('checks milestone quests and sigil plates (docs/02 "Quests de hito")', () => {
+    const quest = (id: string, body: string): void =>
+      writeFileSync(
+        file(`data/quests/${id}.yaml`),
+        `id: ${id}
+name: quest.${id}.name
+${body}`,
+      );
+    const sigils =
+      "complete_when: { sigils: { x: 1, y: 1, z: 7, radius: 1, to: { x: 5, y: 5, z: 7 } } }";
+    quest(
+      "test_ms_a",
+      `milestone: true
+requires: { level: 5, players: 2, vocations: [guardian] }
+steps:
+  - { id: s, description: d.d, ${sigils} }
+`,
+    );
+    quest(
+      "test_ms_b",
+      `steps:
+  - { id: s, description: d.d, ${sigils} }
+`,
+    );
+    quest(
+      "test_ms_c",
+      `milestone: true
+title: t.t
+requires: { level: 5, players: 1, gear: { item: no_such_item } }
+steps:
+  - { id: s, description: d.d, ${sigils} }
+  - { id: k, description: d.d, complete_when: { kill: { monster: wolf, count: 1 } } }
+`,
+    );
+    quest(
+      "test_ms_d",
+      `milestone: true
+title: t.t
+requires: { level: 5, players: 1, gear: { weapon: spear } }
+steps:
+  - { id: s, description: d.d, ${sigils} }
+`,
+    );
+    addItem("test_plate", 60000, "sigil: { vocation: guardian }", "blocks_movement: true");
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    // A weapon type that does not exist would never be met.
+    expect(errors.filter((m) => m.includes("test_ms_d.yaml"))).not.toEqual([]);
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/test_ms_a\.yaml.*a milestone needs a title/),
+        expect.stringMatching(/test_ms_a\.yaml.*one vocation per player/),
+        expect.stringMatching(/test_ms_b\.yaml.*sigils step belongs to a milestone quest/),
+        expect.stringMatching(/test_ms_c\.yaml.*exactly one sigils step, its last/),
+        expect.stringMatching(/test_ms_c\.yaml.*no_such_item/),
+        expect.stringMatching(
+          /sigil plate "test_plate" needs pickupable: false and must not block/,
+        ),
+      ]),
+    );
   });
 
   it("counts a chest's rewards as a source of what NPCs buy", () => {

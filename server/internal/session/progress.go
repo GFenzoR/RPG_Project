@@ -214,15 +214,22 @@ func (w *World) skillList(p *Player) []*pb.SkillProgress {
 
 // gainExperience adds xp to p and raises its level along the curve of balance.yaml,
 // with the vocation's stats of each new level.
-func (w *World) gainExperience(p *Player, xp int64) {
+func (w *World) gainExperience(p *Player, xp int64) { w.gainExperienceBonus(p, xp, 0) }
+
+// gainExperienceBonus is gainExperience of xp of which bonus is a party's shared
+// experience bonus: p and the members of its party see that part apart on the floating
+// number (FloatingText.bonus); anyone else sees only the total.
+func (w *World) gainExperienceBonus(p *Player, xp, bonus int64) {
 	p.experience += xp
 	if p.earn != nil && xp > 0 {
 		p.earn.xp += xp // income per hour, for the bot detection (T4.1)
 	}
 	w.eachWatcher(p, func(o *Player) { // not to who cannot see an invisible p (T3.2)
-		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
-			Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp),
-		}}})
+		ft := &pb.FloatingText{Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp)}
+		if bonus > 0 && (o == p || o.party != nil && o.party == p.party) {
+			ft.Bonus = uint64(bonus)
+		}
+		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: ft}})
 	})
 	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience, p.level); level > p.level {
 		w.setLevel(p, level)
@@ -237,6 +244,7 @@ func (w *World) setLevel(p *Player, level int) {
 	pct := healthPercent(p.health, p.maxHealth)
 	old, now := p.vocation.AtLevel(from), p.vocation.AtLevel(level)
 	p.level = level
+	p.questDirty = true // the milestones' level marks of the quest log (questRecheck)
 	p.maxHealth, p.maxMana, p.capacity = now.Health+p.gear.health, now.Mana+p.gear.mana, now.Capacity
 	p.health = min(max(p.health+now.Health-old.Health, 1), p.maxHealth)
 	p.mana = min(max(p.mana+now.Mana-old.Mana, 0), p.maxMana)

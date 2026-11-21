@@ -74,7 +74,7 @@ describe("signs (T5.5)", () => {
   });
 });
 
-describe("molten pools of the Ember Isle", () => {
+describe("molten pools of Karvask", () => {
   const volcan = island("volcan");
   const z = 7;
   const ground = (x: number, y: number): string | null | undefined => tiles.tile(x, y, z)?.ground;
@@ -151,7 +151,7 @@ describe("molten pools of the Ember Isle", () => {
   });
 });
 
-// The Isla de Pruebas (docs/16-probar-el-juego.md): every system within a short walk of the
+// Thimblewick (docs/16-probar-el-juego.md): every system within a short walk of the
 // temple, and no way in from the real islands (only -start-town pruebas or a staff /tp).
 describe("the sandbox island", () => {
   const pruebas = island("pruebas");

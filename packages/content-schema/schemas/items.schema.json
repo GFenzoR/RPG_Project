@@ -266,6 +266,14 @@
             }
           }
         },
+        "sigil": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A sigil plate of a milestone quest (docs/02 \"Quests de hito\"): the plates of a sigils step are the ones within its radius. With a vocation, only that vocation counts on it. The item needs pickupable: false and must not block movement.",
+          "properties": {
+            "vocation": { "$ref": "common.schema.json#/$defs/vocationRef" }
+          }
+        },
         "chest": {
           "type": "object",
           "additionalProperties": false,

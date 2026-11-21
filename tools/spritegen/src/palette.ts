@@ -79,10 +79,10 @@ export const PALETTE = {
   sand: material("#d6c08e", "#b9a271", "#957f55", "#6c5b3c"),
   // Volcanic island (T5.5)
   /** Fine grey volcanic ash: warmer and flatter than rock, and no lighter than a ground may be
-   * (docs/17 ART-6, L* 20-50): the plains of the Isla Volcánica are not the brightest thing on
+   * (docs/17 ART-6, L* 20-50): the plains of Karvask are not the brightest thing on
    * screen. */
   ash: material("#858077", "#706c64", "#5c5852", "#46433f"),
-  /** Dark blue-grey basalt: the hexagonal column tops of the Brasal paving. */
+  /** Dark blue-grey basalt: the hexagonal column tops of the Cinderstead paving. */
   basalt: material("#6d717b", "#545861", "#40434b", "#2d2f36"),
   /** Crushed red-brown scoria: cinder paths. */
   cinder: material("#a3654c", "#7f4a39", "#5d352b", "#3e241e"),

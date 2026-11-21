@@ -487,7 +487,7 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   un hueco (el chequeo es conservador). Usar una herramienta sobre una estación (el
   martillo sobre el yunque) también la abre.
 - Sin vendedores de recetas todavía: se conocen todas; las herramientas (hacha y martillo)
-  las vende el proveedor del Farol.
+  las vende el proveedor de Lanternby.
 
 ### Anti-bot y anti-AFK (desde el inicio)
 - Entrenar contra un objetivo que no responde da progreso reducido tras X minutos.
@@ -572,7 +572,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     valor uniforme en ±`spread`; al monstruo se le aplica `× (1 − resistencia del
     elemento %)` (100 % o más = inmune, negativa = debilidad). Armadura y defensa no frenan
     la magia.
-  - Segunda área de cada mago (auditoría de contenido M5, 2026-11): la Isla Volcánica
+  - Segunda área de cada mago (auditoría de contenido M5, 2026-11): Karvask
     resiste el fuego (70-100) y el Bosque la tierra (20-80), así que el arcanista suma
     `tempest_ring` (energía, radio 2, nivel 28) a `ember_ring` y el druida `rime_burst`
     (hielo, radio 1, nivel 16) a `bramble_burst`.
@@ -711,7 +711,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
   brebaje de maná. En el Bosque las varas, las
   varitas y los brebajes los tiene la druida Velia (opción "¿Qué es este lugar?") y el
-  resto la curtidora; en Brasal, el herrero y el templo (brebajes, cataplasmas, la varita
+  resto la curtidora; en Cinderstead, el herrero y el templo (brebajes, cataplasmas, la varita
   de obsidiana, la vara de escarcha negra, la túnica de ceniza y el amuleto de brasa).
 - **Escalones de equipo:** desde el lote 11 los da el catálogo compacto por bandas, una
   pieza por línea y banda ("Catálogo de equipo", abajo). Antes (auditoría de contenido M3)
@@ -728,7 +728,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (`creature_remains`, que es también el cuerpo de un jugador).
 
 ### Bolsillos (decisión del dueño, 2026-11-19)
-La prueba de la Isla de Pruebas del 2026-11-19 mostró que la muerte deja la mochila en el
+La prueba de Thimblewick del 2026-11-19 mostró que la muerte deja la mochila en el
 cuerpo y que el personaje reaparecía con una mochila nueva gratis (hallazgo M5: sin un
 contenedor no se puede tener ni una moneda). El dueño decidió: *"al no tener contenedor el
 personaje debiese tener 4 slots (los bolsillos) pero si te compras una mochila ganas mas
@@ -778,7 +778,7 @@ nivel (`requires.level`, regla de `make validate`): el de su banda.
 | 1 | 1–4 | 1 | Puerto: el kit inicial |
 | 2 | 5–9 | 5 | Puerto: armas y escudo (sin armadura) |
 | 3 | 10–29 | armas 10; armadura, escudo y joyas 15 | Puerto (armas) y el Bosque |
-| 4 | 30–49 | 30 | Isla Volcánica (Brasal) |
+| 4 | 30–49 | 30 | Karvask (Cinderstead) |
 | 5 | 50–74 | 50 | todavía sin isla |
 | 6 | 75–100+ | 75 | todavía sin isla |
 
@@ -889,8 +889,11 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
   lugar de la espada corta forjada.
 - **Bosque:** la curtidora vende las armas, el torso pesado, la capucha, las calzas, las
   botas y el escudo de olmo (que también se forja) de la banda 3; la druida Velia, las
-  varitas y varas, la túnica de musgo y el amuleto de asta (y Gisla talla uno como
-  recompensa de `tanner_chitin`). El anillo de zarza es botín raro de espinosos y reptantes
+  varitas y varas y la túnica de musgo. El amuleto de asta no se vende (Velia lo compra):
+  lo talla Gisla como recompensa de `tanner_chitin` y es lo que pide el hito de Orthavel
+  ("Quests de hito"), así que ese filtro no se paga con oro. Quien lo pierde (muerte, un
+  refinado que lo rompe, una venta) antes de terminar la vigilia le pide otro a Gisla por
+  400 monedas, más de lo que paga Velia, así que vender y pedir otro nunca da ganancia. El anillo de zarza es botín raro de espinosos y reptantes
   huecos.
 - **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
   solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
@@ -966,7 +969,7 @@ son otras ramas del lote: el refinado vive en los datos de cada instancia (`refi
   rechaza un equipable `stackable`).
 - **Cuándo se tira:** en **cada creación** de un equipable, con la fuente sembrada del loop
   (`session.Config.Rand`, la misma del `game.Loop`): botín de monstruos, compra a un NPC
-  (también la tienda de la Isla de Pruebas), recompensas de quest y de diálogo (el kit del
+  (también la tienda de Thimblewick), recompensas de quest y de diálogo (el kit del
   capítulo 1), oficios, `/item` del staff, la recompensa del tutorial y un botín de quest
   (`each_player`); también un hechizo que conjure o una recolección que dé un equipable
   (ningún dato lo hace todavía). Se elige entre los
@@ -1081,8 +1084,8 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   +10** (`forge.levels`: su largo es el tope). Un +10 no se refina más.
 - **Dónde:** en un **yunque** del mapa (`forge.station: anvil`, la estación de herrería de
   `data/recipes.yaml`), a 1 casilla y en el mismo piso, como las recetas. Usar el yunque abre
-  su ventana con dos pestañas: **Recetas** y **Forja**. Hay uno en cada pueblo (Puerto, Raigal
-  en el Bosque y Brasal en la Isla Volcánica, más el de la mina) y en la Isla de Pruebas: no
+  su ventana con dos pestañas: **Recetas** y **Forja**. Hay uno en cada pueblo (Puerto, Ivernel
+  en el Bosque y Cinderstead en Karvask, más el de la mina) y en Thimblewick: no
   hizo falta agregar ninguno con mapcli. Se eligió el yunque y no un NPC herrero: la estación
   ya es "el lugar del oficio", funciona igual en todos los pueblos y no ata la forja a un
   diálogo; los herreros venden las piedras.
@@ -1156,15 +1159,15 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
 - **Los materiales** (`data/items/forge.yaml`, nombres propios; sprites del motor de sprites):
   - **piedra de temple menor** (items de nivel 1–9; 10 cobre), **mayor** (10–49; 150) y
     **radiante** (50+; 600): las venden los herreros (el armero de Puerto y la curtidora de
-    Raigal la menor y la mayor; el herrero de Brasal las tres) y caen de algunos monstruos (la
+    Ivernel la menor y la mayor; el herrero de Cinderstead las tres) y caen de algunos monstruos (la
     menor, de saqueadores, mineros ahogados y escarabajos de mena; la mayor, de reptantes
     huecos, contrabandistas, excavadores de obsidiana y gólems de escoria; la radiante, del
     custodio de la forja, 30 %, mientras no haya islas de esas bandas). Ningún NPC las compra:
     no hay vuelta de compra y venta.
   - **ámbar de resguardo** (3000 de valor de referencia): **ningún NPC lo vende ni lo da**
-    (regla de `make validate`, salvo el mercader de la Isla de Pruebas, que es solo de
+    (regla de `make validate`, salvo el mercader de Thimblewick, que es solo de
     desarrollo); cae del custodio de la forja (25 %) y, raro, de los monstruos más fuertes de
-    la Isla Volcánica (cría de wyrm 0,5 %; excavador, gólem y salamandra 0,3 %). Se comercia
+    Karvask (cría de wyrm 0,5 %; excavador, gólem y salamandra 0,3 %). Se comercia
     entre jugadores.
 - **Costo esperado** (lo comprueba `content/forge_test.go` `TestForgeExpectedCosts`, a ±5 %),
   en cobre, con el valor de referencia V de cada banda del catálogo compacto y cada pieza rota
@@ -1377,7 +1380,7 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     a un monstruo desde fuera de su correa. Tampoco sirve de muñeco: los golpes de un jugador que
     está fuera de su correa y de su alcance entrenan como contra un objetivo que no
     responde (`skills.afk.factor`).
-  - Por qué: en los corrales de la Isla de Pruebas (radio 2, con una abertura al sendero
+  - Por qué: en los corrales de Thimblewick (radio 2, con una abertura al sendero
     común) los lobos, jabalíes y arañas perseguían al jugador por el sendero y nada los
     devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
     deja salir unas casillas por la abertura y los devuelve; vale para todo el mundo, no
@@ -1391,7 +1394,7 @@ Valores iniciales (balance.yaml):
   **100 %** salvo con bendiciones.
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
-  Las venden los tres templos (la hermana Liora en el Farol, Raigal y Brasal), cada una a
+  Las venden los tres templos (la hermana Liora en Lanternby, Ivernel y Cinderstead), cada una a
   **50 monedas más 20 por nivel** del que la compra (auditoría de contenido M6: el precio
   fijo de 200 no era nada para un nivel alto; nivel 9: 230, nivel 30: 650, nivel 50: 1050),
   y solo desde el nivel 9 (auditoría de contenido m8: hasta el
@@ -1422,7 +1425,7 @@ Valores iniciales (balance.yaml):
   arrastrándola o abriéndolo). Los bolsillos alcanzan para tener monedas y levantar cosas
   (el hallazgo M5 de la prueba exploratoria, que antes resolvía una mochila gratis: esa
   regla y su ref `new_backpack` del log de economía ya no existen). Los proveedores
-  (Puerto y la Isla de Pruebas) venden mochilas (20 de cobre).
+  (Puerto y Thimblewick) venden mochilas (20 de cobre).
 - El cuerpo de un jugador entra todo lo que cae: tiene los 10 lugares de los restos de
   los monstruos o, si puede caer más, uno por slot de equipo y uno por cada item de los
   bolsillos (14 con `pocket_slots` 4; más si los bolsillos guardan más de `pocket_slots`
@@ -1523,12 +1526,12 @@ apilan; dicen lo que ya vale. Código: `server/internal/session/status.go`.
   `each_player`, así deja de caer como basura cuando la quest terminó. Por eso los
   saqueadores sueltan la cabilla (antes el garrote de deriva, que el lote 11 retiró: el
   armero lo sigue comprando, como todo lo retirado), el armero compra el hacha forjada, la
-  piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Brasal la piedra,
+  piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Cinderstead la piedra,
   la curtidora la hoja de espino, y la tarja, el cofre sellado y la carta del minero salen
   solo a quien los necesita.
 - **Brebajes de maná** (auditoría de contenido M2, 2026-11): el combustible de los magos.
   El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
-  templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
+  templo de Cinderstead (24); el concentrado (125, 50 cobre) solo Cinderstead. Nadie los compra de
   vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
   (`sim/balance_vocations_test.go`). Antes de la progresión de hechizos (2026-11) eso lo
   hacía subir más rápido que el guardián, que juntaba más oro. Ahora el guardián también
@@ -1541,8 +1544,8 @@ apilan; dicen lo que ya vale. Código: `server/internal/session/status.go`.
   brebajes: comprarlos es una elección, no un peaje.
 - **Brebajes de vida** (progresión de hechizos, 2026-11): la cataplasma de algas (40 de
   vida, 25 cobre, ~0,6 por punto) servía del nivel 1 al 60. El brebaje de vida (110, 60
-  cobre) lo venden la druida y el mercader del Bosque y el templo de Brasal; el concentrado
-  (250, 125 cobre) solo Brasal: ~0,5 cobre por punto, entre la cataplasma y el maná. Como
+  cobre) lo venden la druida y el mercader del Bosque y el templo de Cinderstead; el concentrado
+  (250, 125 cobre) solo Cinderstead: ~0,5 cobre por punto, entre la cataplasma y el maná. Como
   los de maná, se venden por isla (el Puerto se queda con la cataplasma: un novato no
   compra una cura del doble de su vida) y nadie los compra de vuelta. En la carrera
   simulada, quien baja de un tercio de su vida toma el más grande que no se desperdicia.
@@ -1591,8 +1594,8 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   si a alguno no le entra, se cancela sin mover nada. Lo recibido va a la mochila.
 
 ### Mercado global (T5.3)
-- Se usa en un **tablero del mercado** de cada ciudad (Puerto, Raigal y, desde la
-  auditoría de contenido m7, Brasal), parado junto a
+- Se usa en un **tablero del mercado** de cada ciudad (Puerto, Ivernel y, desde la
+  auditoría de contenido m7, Cinderstead), parado junto a
   él; alejarse cierra la ventana. Es uno solo para todas las islas.
 - **Ofertas de venta:** las unidades salen de la mochila y quedan en depósito. **Ofertas de
   compra:** cantidad × precio sale en monedas y queda en depósito. Cada oferta tiene
@@ -1695,8 +1698,8 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 
 - **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
   una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
-  junto a una puerta. Hoy hay 13 (auditoría de contenido M6: eran 6): seis en el Farol
-  (Puerto), cuatro en Raigal (Bosque) y tres en Brasal (Volcánica), de 21 a 38 casillas.
+  junto a una puerta. Hoy hay 13 (auditoría de contenido M6: eran 6): seis en Lanternby
+  (Puerto), cuatro en Ivernel (Bosque) y tres en Cinderstead (Volcánica), de 21 a 38 casillas.
   **Alquiler por tamaño y pueblo:** casillas × 60 monedas en Puerto, × 90 en el Bosque y
   × 120 en la Volcánica por semana (de 1260 a 3840; antes 500-1000, unos minutos de caza);
   lo vigila `packages/content-schema/src/house-rent.test.ts`. Las casas son **zona de
@@ -1779,15 +1782,101 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 ## Mundo e islas (estructura inicial)
 | Isla | Nivel sugerido | Rol |
 |---|---|---|
-| Isla del Puerto (inicial) | 1–15 | Tutorial, primera ciudad, Capítulo 1 |
-| Isla del Bosque (T3.6) | 10–30 | Druidas, bestias, leñador (olmo), Capítulo 2 |
-| Isla Volcánica (T5.5) | 25–60 | Herrería avanzada (acero de ascua), dragones jóvenes, Capítulo 3; ciudad: Brasal |
+| Velmara (inicial) | 1–15 | Tutorial, primera ciudad (Lanternby), Capítulo 1 |
+| Selvaine (T3.6) | 10–30 | Druidas, bestias, leñador (olmo), Capítulo 2; ciudad: Ivernel |
+| Karvask (T5.5) | 25–60 | Herrería avanzada (acero de ascua), dragones jóvenes, Capítulo 3; ciudad: Cinderstead |
 | Islas Heladas | 40–80 | Hielo, mazmorras profundas |
 | Isla Hundida | 70+ | Ruinas del imperio antiguo, final de la historia actual |
 
 - Viaje entre islas: NPC capitán de barco, cuesta oro, requiere nivel o quest para
   algunas rutas (ver "Viajes en barco").
 - Cada isla tiene superficie (piso 7), subterráneos (8–12) y alturas (6–4).
+
+### Nombres del mundo
+Pedido del dueño (2026-11-20): que las ciudades y zonas tengan nombre propio, con el sabor
+de la fantasía épica clásica. Del género se toma solo el **sabor**; ningún nombre sale de
+una obra ajena (regla legal de `CLAUDE.md`).
+
+**Estilo por región**
+- **Verde y costa** (islas, bosques, caletas): vocales suaves y líquidas (l, r, v, s,
+  n): Velmara, Selvaine, Ivernel, Avelline, Nyssaral, Vaunel.
+- **Minas, forjas, volcán**: consonantes duras y grupos ásperos (k, g, r, sk, kh, br):
+  Karvask, Grakkun, Brakkhal, Skarrag, Hraskel, Vadrek.
+- **Pueblos de gente común**: compuestos llanos de aire inglés, de dos palabras comunes:
+  Lanternby, Cinderstead, Howlmead, Saltwrack, Fernhallow, Gullsand, Marrowdeep, Murlowe,
+  Thimblewick, Pellwick.
+
+**Reglas**
+- Inventar cada nombre. Nunca un nombre, lugar, pueblo, personaje ni palabra de la obra de
+  Tolkien ni de sus lenguas (nada de Rivendell, Gondor, Shire, Moria, Bree, Hobbiton; nada
+  de raíces como -dor, -ost, -ithil, -wen, mithril, mellon, galad, amon, anor, mir, nen,
+  el-/elen-), ni de otro juego o libro. Ante la duda, se cambia.
+- El nombre propio es el mismo en es y en; la parte descriptiva se traduce («Cueva de
+  Marrowdeep» / «Marrowdeep Cave», «Grakkun, la mina vieja» / «Grakkun, the old mine»).
+- Solo cambian los nombres visibles. Los ids (`puerto`, `bosque`, `volcan`, `pruebas`,
+  `testisle`, zonas, casas, quests, NPCs, items `brasal_*_sign`) se quedan como están; en
+  docs y comentarios «Puerto», «el Bosque» y «el Volcán» siguen siendo atajos de esos ids.
+- Las claves: `island.<id>.name`, `town.<isla>.name` (la ciudad de cada isla con casas),
+  `zone.<id de zona>.name` (toda zona de `world/islands/*/zones.yaml`) y
+  `area.<isla>.<área>.name` (cazaderos sin zona que nombran misiones y carteles), en
+  `i18n/*/world.yaml`. `packages/content-schema/src/place-names.test.ts` exige que toda
+  isla, ciudad y zona tenga nombre en los dos idiomas, que ningún texto use los nombres
+  viejos y que ningún nombre caiga en una lista de nombres y raíces de Tolkien.
+- El Farol sigue siendo la fe del templo de Lanternby (en inglés, the Lantern): el pueblo
+  se llama por ella. Las casas conservan sus nombres (ya eran nombres propios: «Casa del
+  Ancla Partida»).
+- Un área nueva (salas de misión, islas futuras como las Islas Heladas o la Isla Hundida,
+  que hoy solo tienen nombre de trabajo) toma nombre con estas reglas y agrega su clave.
+
+**Tabla** (id → nombre es / en; entre paréntesis, el nombre viejo)
+
+| id | es | en |
+|---|---|---|
+| `island.puerto` | Velmara (Isla del Puerto) | Velmara (Harbour Isle) |
+| `island.bosque` | Selvaine (Isla del Bosque) | Selvaine (Forest Isle) |
+| `island.volcan` | Karvask (Isla Volcánica) | Karvask (Ember Isle) |
+| `island.pruebas` | Thimblewick (Isla de Pruebas) | Thimblewick (Sandbox Isle) |
+| `island.testisle` | Pellwick (Islote de ensayo) | Pellwick (Test islet) |
+| `town.puerto` | Lanternby (el Farol) | Lanternby (Farol) |
+| `town.bosque` | Ivernel (Raigal) | Ivernel (Raigal) |
+| `town.volcan` | Cinderstead (Brasal) | Cinderstead (Brasal) |
+| `zone.puerto_temple` | Templo del Farol | Temple of the Lantern |
+| `zone.puerto_depot` | Depósito de Lanternby | Lanternby Depot |
+| `zone.puerto_plaza` | Plaza de Lanternby | Lanternby Square |
+| `zone.puerto_dock` | Muelle de Lanternby (Muelle del Farol) | Lanternby Dock (Farol dock) |
+| `zone.puerto_north_shore_plot` | Playa de Gullsand | Gullsand Beach |
+| `zone.puerto_no_pvp` | Tregua de Velmara | Truce of Velmara |
+| `zone.bosque_temple` | Templo de la Raíz | Temple of the Root |
+| `zone.bosque_town` | Plaza de Ivernel | Ivernel Square |
+| `zone.bosque_dock` | Muelle de Ivernel | Ivernel Dock |
+| `zone.bosque_north_cove_plot` | Caleta de Vaunel | Vaunel Cove |
+| `zone.bosque_arena` | Arena del Cardo | Thistle Arena |
+| `zone.volcan_temple` | Templo de la Llama Quieta | Temple of the Still Flame |
+| `zone.volcan_town` | Plaza de Cinderstead | Cinderstead Square |
+| `zone.volcan_dock` | Muelle de Cinderstead | Cinderstead Dock |
+| `zone.pruebas_town` | Plaza de Thimblewick | Thimblewick Square |
+| `zone.pruebas_arena` | Arena de Thimblewick | Thimblewick Arena |
+| `zone.testisle_temple` | Templo de Pellwick | Temple of Pellwick |
+| `zone.testisle_dock` | Muelle de Pellwick | Pellwick Dock |
+| `zone.testisle_no_pvp` | Patio de la tregua | Truce Yard |
+| `area.puerto.wolf_field` | Howlmead, el campo del norte (campo de lobos) | Howlmead, the north field |
+| `area.puerto.wreck_beach` | Playa de Saltwrack (playa del naufragio) | Saltwrack Beach |
+| `area.puerto.west_forest` | Bosque de Fernhallow (bosque del oeste) | Fernhallow Wood |
+| `area.puerto.mine` | Grakkun, la mina vieja (Mina vieja) | Grakkun, the old mine (Old mine) |
+| `area.bosque.stag_woods` | Bosque de Avelline (bosque de ciervos) | Avelline Wood |
+| `area.bosque.marsh` | Ciénaga de Murlowe (ciénaga del sur) | Murlowe Marsh |
+| `area.bosque.deep_forest` | Nyssaral, el bosque profundo | Nyssaral, the deep forest |
+| `area.bosque.smugglers_camp` | Campamento del Remo Quemado | Burnt Oar Camp |
+| `area.bosque.cave` | Cueva de Marrowdeep (cueva de los contrabandistas) | Marrowdeep Cave |
+| `area.volcan.ash_flats` | Llano de Hraskel (llano de ceniza) | Hraskel Flats (ash flats) |
+| `area.volcan.slope` | Ladera de Vadrek (ladera de lava enfriada) | Vadrek Slope |
+| `area.volcan.crater` | Cráter de Skarrag (el cráter) | Skarrag Crater |
+| `area.volcan.mine` | Mina de Brakkhal (Mina de la Montaña) | Brakkhal Mine (Mountain Mine) |
+| `area.volcan.forge` | La forja antigua | The ancient forge |
+
+Los templos, los atriles y las casas ya tenían nombre propio y no cambian. Los textos de
+misiones, NPCs, libros, carteles y noticias usan estos nombres (el nombre propio y, la
+primera vez en cada texto, lo que es: «Hraskel, el llano de ceniza»).
 
 ### Tutorial (T4.2)
 - **Quién lo ve:** solo un personaje nuevo cuya isla de origen es la del tutorial (Puerto,
@@ -1797,7 +1886,7 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   servidor que hace empezar en otra isla, nadie ve el tutorial. Un
   personaje que existía antes del despliegue ya tiene experiencia o niveles y no lo ve
   nunca. No hay isla de novatos aparte: la vocación se elige al crear el personaje y el
-  tutorial ocurre en el pueblo del Farol.
+  tutorial ocurre en el pueblo de Lanternby.
 - **Recorrido (original):** caminar unos pasos desde el templo del Farol, hablar con la
   sacerdotisa, abrir la mochila, elegir una criatura del puerto como objetivo, lanzar el
   primer hechizo (solo arcanistas y druidas, que tienen uno de nivel 1), derrotarla y
@@ -2078,11 +2167,11 @@ despertar en el templo; docs/06 "Quest"). Una quest puede ser una **tarea repeti
 espera, desde el primer paso, y paga su recompensa cada vez. Es la base de las tareas de
 caza del final del juego (pedirle al jugador que vuelva a un coto cada día). El diario
 muestra cuánto falta para volver a tomarla ("Disponible otra vez en 2 h 15 min") y el NPC
-que la da distingue si está disponible o si todavía espera. Las tareas de caza de Raigal
-y Brasal están en "Tareas" (abajo); la de práctica de la Isla de Pruebas espera tres
+que la da distingue si está disponible o si todavía espera. Las tareas de caza de Ivernel
+y Cinderstead están en "Tareas" (abajo); la de práctica de Thimblewick espera tres
 minutos (docs/16).
 
-**Capítulo 2 "Raíces" (T3.6, Isla del Bosque).** Lo da Velia Musgo, la druida de Raigal,
+**Capítulo 2 "Raíces" (T3.6, Selvaine).** Lo da Velia Musgo, la druida de Ivernel,
 a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 (`data/quests/ch2_*.yaml`, `data/npcs/bosque_druid.yaml`):
 1. `ch2_roots` (nivel 15): matar 8 sapos de ciénaga, juntar 6 hongos lumbre (botín de sapos
@@ -2103,12 +2192,12 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
   hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y las
   armas de la banda 3 (la hoja de espino se retiró en el lote 11; ella la sigue comprando).
 
-**Capítulo 3 "Fuego bajo la piedra" (T5.5, Isla Volcánica).** Lo da Casia Hollín, la
-guardiana de los registros de Brasal, solo a quien tiene el flag `ember_root_found` del
+**Capítulo 3 "Fuego bajo la piedra" (T5.5, Karvask).** Lo da Casia Hollín, la
+guardiana de los registros de Cinderstead, solo a quien tiene el flag `ember_root_found` del
 Capítulo 2. La raíz de piedra es un item (`ember_root`, no comerciable): Velia Musgo la
-entrega en Raigal a quien tiene el flag, una a la vez y hasta abrir la puerta de `ch3_gate`
+entrega en Ivernel a quien tiene el flag, una a la vez y hasta abrir la puerta de `ch3_gate`
 (si se pierde, se pide otra). Casia y el herrero piden la raíz encima; sin ella, Casia
-manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
+manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
 `data/npcs/volcan_*.yaml`):
 1. `ch3_embers` (nivel 30): matar 10 sabuesos de ceniza, juntar 6 escamas de salamandra,
    entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
@@ -2138,7 +2227,7 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si no queda nadie suelta la pelea y
    olvida quién lo hirió: el sello es para los que le hagan daño después
    (`TestQuestDropForgottenWhenTheWardenGivesUp`).
-- **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
+- **Bestiario de Karvask** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
   escoria (41, mucha armadura, inmune al fuego, estalla alrededor) y dragoncillo de ascua (50, cráter,
@@ -2146,7 +2235,7 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
   pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
   es la norma: todos resisten fuego y
-  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,9 h, de
+  el hielo los daña más. Con el equipo de Cinderstead un guardián pasa de 25 a 30 en ~3,9 h, de
   30 a 40 en ~10,1 h y de 40 a 50 en ~15,3 h (el test pide 0,4–1,2 veces el `pace`; con el
   catálogo del lote 11, antes 3,8, 10,4 y 15,2).
 - **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale
@@ -2158,10 +2247,10 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   hoja de colmillo de dragoncillo (herrería 20 y 22) son de la banda 5 desde el lote 11:
   sus recetas vuelven con la isla de esa banda. Bram Tizón vende la banda 4 y compra los
   materiales de la isla a un tercio de su valor.
-- **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Brasal al oeste (templo de la Llama
+- **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Cinderstead al oeste (templo de la Llama
   Quieta, plaza con fragua, yunque y fogón, el archivo de Casia, una casa y, en el borde
   norte de la plaza, Orso Pedernal con el libro de presas: "Tareas"), muelle al oeste con
-  Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se
+  Nerea Vado. Se llega desde Ivernel (`bosque_to_volcan`, nivel 25, 150 monedas) y se
   vuelve al Bosque (100) o al Puerto (140). Sabuesos en el llano de ceniza al norte,
   salamandras en la ladera de piedra al sureste, dragoncillos en el cráter amurallado al
   noreste; la mina (piso 8, escalera al este del pueblo) tiene la galería de los mineros al
@@ -2198,18 +2287,18 @@ los NPCs), igual para todos y sin nada que esconder, como el de un cartel que se
 Mirar desde cualquier casilla a la vista: el cliente no manda nada al leer, así que no hay
 mensaje nuevo ni regla de distancia (un libro se lee desde donde se ve, como un cartel). Un
 libro no se lleva (`pickupable: false`) ni tiene estado: el mismo item puede estar en dos
-lugares (el atril del Farol está también en la Isla de Pruebas).
+lugares (el atril de Lanternby está también en Thimblewick).
 
 Los textos son propios y siguen lo que cuentan los NPCs y los capítulos 1 a 3:
 
 | Libro | Dónde | De qué habla |
 |---|---|---|
 | «Los remeros del Farol» (atril) | Templo del Farol, Puerto (3152,6381,7) | Cómo los sobrevivientes del imperio llegaron remando a una luz que nadie encendió |
-| «Lo que sostiene la raíz» (atril) | Templo de la Raíz, Raigal (4148,6101,7) | El árbol antes que el bosque; los druidas que escuchan la tierra |
-| «La Llama Quieta» (atril) | Templo de la Llama Quieta, Brasal (3640,5785,7) | Por qué la llama del altar no tiembla; los fuegos que fueron de otros |
-| «Registro de la forja, tomo tercero» (atril) | Archivo de Casia, Brasal (3660,5796,7) | Brasal nació para la forja; las llaves de piedra templada; «no se apagó, se fue» |
-| «Apuntes de una herrera de Brasal» (libro) | Archivo de Casia (3664,5800,7) | El acero de ascua, la marca de la forja (la llama en el aro) y hasta dónde aguanta el temple |
-| «Cuaderno de rastros» (atril) | El atril de Velia bajo los olmos de Raigal (4180,6112,7) | El farol de rastreo y lo tibio que llegó del mar |
+| «Lo que sostiene la raíz» (atril) | Templo de la Raíz, Ivernel (4148,6101,7) | El árbol antes que el bosque; los druidas que escuchan la tierra |
+| «La Llama Quieta» (atril) | Templo de la Llama Quieta, Cinderstead (3640,5785,7) | Por qué la llama del altar no tiembla; los fuegos que fueron de otros |
+| «Registro de la forja, tomo tercero» (atril) | Archivo de Casia, Cinderstead (3660,5796,7) | Cinderstead nació para la forja; las llaves de piedra templada; «no se apagó, se fue» |
+| «Apuntes de una herrera de Cinderstead» (libro) | Archivo de Casia (3664,5800,7) | El acero de ascua, la marca de la forja (la llama en el aro) y hasta dónde aguanta el temple |
+| «Cuaderno de rastros» (atril) | El atril de Velia bajo los olmos de Ivernel (4180,6112,7) | El farol de rastreo y lo tibio que llegó del mar |
 | «Manifiesto del Alba Tardía» (pergamino) | Entre los cajones del naufragio, Puerto (3119,6328,7) | La carga y el cofre pagado al triple; la luz falsa de las rocas |
 | «Bitácora del remo quemado» (pergamino) | Cueva de los contrabandistas, Bosque (4219,6136,8) | El cofre bajado a la cueva y el que paga en monedas viejas, para la montaña |
 | «Lo que vimos detrás de la pared» (pergamino) | Galería inundada de la mina, Puerto (3194,6287,8) | La pared tallada, la puerta cerrada desde adentro y el agua |
@@ -2251,7 +2340,7 @@ mismo tick nunca guardan uno sin lo otro. Reglas:
 | `puerto_grove` | Bajo los robles de la esquina noroeste del bosque de Puerto, lejos de los caminos (3107,6353,7) | 1 | 1 de plata, 2 piedras de temple menores, 3 cataplasmas de algas, gorro de lona |
 | `bosque_cave` | Nido de los reptantes de la cueva de los contrabandistas, Bosque (4252,6170,8) | 3 | 6 de plata, 2 piedras de temple mayores, 3 brebajes de vida, capucha de cuero de ciervo |
 | `volcan_mine` | Mina del Volcán, pasando los gólems: esquina noreste de su galería (3734,5782,8) | 4 | 15 de plata, 4 piedras de temple mayores, 3 brebajes de vida concentrados, amuleto de brasa |
-| `pruebas` | Templo de la Isla de Pruebas (2098,2084,7), para probarlo (docs/16) | — | 5 de plata, 2 piedras de temple menores, 2 brebajes de vida, espada de hierro |
+| `pruebas` | Templo de Thimblewick (2098,2084,7), para probarlo (docs/16) | — | 5 de plata, 2 piedras de temple menores, 2 brebajes de vida, espada de hierro |
 
 Cada isla nueva trae los suyos al final de sus mazmorras, con las recompensas de su banda.
 ### Quests secundarias (lote 12)
@@ -2326,10 +2415,10 @@ de la banda siguiente.
 Tareas de caza repetibles (`repeatable`, "Diario de misiones y tareas"): una razón para
 volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
 
-- **Fenn Zarzal, montero** (`bosque_hunter`, en el borde este de la plaza de Raigal,
+- **Fenn Zarzal, montero** (`bosque_hunter`, en el borde este de la plaza de Ivernel,
   4173,6106, donde sale el camino al bosque profundo): el **tablón** del pueblo.
 - **Orso Pedernal, jefe de cazadores** (`volcan_hunter`, en el borde norte de la plaza de
-  Brasal, 3655,5783, junto al camino al llano de ceniza): el **libro de presas**.
+  Cinderstead, 3655,5783, junto al camino al llano de ceniza): el **libro de presas**.
 
 | Tarea | La da | Desde el nivel | Presa | XP | Oro | Una hora de esa caza (simulada) | Parte de la hora |
 |---|---|---|---|---|---|---|---|
@@ -2364,7 +2453,7 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
   que un NPC compre por más que ese oro.
 - **Por qué esas presas:** cada isla tiene una tarea al principio, al medio y al final de
   sus niveles (el Bosque del 15 al 26, el Volcán del 26 al 58). Los contrabandistas siguen
-  volviendo a la costa este después del Capítulo 2, y el libro de Brasal paga por lo que
+  volviendo a la costa este después del Capítulo 2, y el libro de Cinderstead paga por lo que
   baja de la montaña desde que la forja vieja despertó (el comienzo del Capítulo 3: el
   texto lo cuenta, así se entiende sin haberlo jugado).
 - **Tests:** `session/bounty_test.go` juega la de los reptantes con muertes reales y el
@@ -2372,6 +2461,107 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
   vez", la espera de 20 horas al minuto y el segundo turno desde cero) y recorre las seis
   contra `data/` (nivel, pago exacto, sin items, la espera); `TestTaskRewards` exige que
   un solo NPC dé cada tarea (el tablón de un cazador nunca muestra las del otro).
+
+### Quests de hito (lote 14, pedido del dueño del 2026-11-20)
+"Quiero que el juego tenga quests que son hitos, puede ser de nivel [...] o necesidad de
+equipo, necesitas 4 personas o 2 personas." Una **quest de hito** es una prueba que marca
+un antes y un después: pide un nivel, a veces una pieza de equipo y, sobre todo, **varias
+personas a la vez** sobre unas placas del mapa. Solo tomamos la idea (una prueba
+cooperativa de placas); nombres, lugares, textos, números y recompensas son propios.
+
+- **En los datos** (`data/quests/<id>.yaml`, docs/06 "Quest"): `milestone: true`, un
+  `title` (lo que se gana) y `requires`: `level`, `players` (1 a 4), opcionalmente
+  `vocations` (una por jugador: cada placa lleva la marca de una) y `gear` (un item que se
+  lleva encima, o puesto con `equipped: true`, o un arma empuñada de un tipo, `weapon`:
+  `sword`, `axe`, `club`, `distance` o `wand`, los `weapon.type` de los items).
+  Su último paso, y solo ese, es `sigils`: las placas que hay a `radius` casillas
+  (Chebyshev) de un punto y el destino `to`, la **sala de recompensa**. No es repetible.
+- **Antes de empezarla:** el diario de misiones tiene una pestaña **Hitos** con todos
+  ellos, también los que el personaje todavía no tomó, cada uno con sus requisitos y una
+  marca de cumplido o no (nivel, equipo, su vocación entre las pedidas); la cantidad de
+  personas es del grupo, sin marca. Las marcas las calcula el servidor y se mandan de
+  nuevo cuando cambia el nivel o lo que lleva el personaje. La quest la ofrece un NPC
+  desde su nivel (`level_at_least`), como cualquier otra.
+- **Las placas** (items con bloque `sigil`, `data/items/exploration.yaml`, arte del motor
+  de sprites): `sigil_plate` sirve a cualquiera; `sigil_plate_<vocación>` solo a esa
+  vocación. No bloquean ni se levantan. El servidor no arranca, y `make validate` rechaza
+  el mapa, si una placa queda fuera de todo hito, dos en la misma casilla, o una sobre una
+  casilla no caminable, una casa o la entrada de una escalera, un agujero o un
+  teletransporte (las mismas reglas en `initSigils` y `checkSigils`). Mirar una dice cuántas de su hito están ocupadas
+  ("2 de 4") y, si tiene, para qué vocación es.
+- **La regla (servidor autoritativo y determinista, `session/sigil.go` y
+  `quest/milestone.go`):** al final de cada tick en que alguien pisó una placa (un paso, un
+  teletransporte o entrar al juego sobre ella), o en que cambió lo que cumple alguien que
+  ya está parado sobre una (se pone el amuleto, sube de nivel, avanza la quest: no hace
+  falta bajarse y volver a subir), el servidor mira las placas de ese hito. **Solo pisa una
+  placa quien tiene la quest en ese paso** (o alguien del personal): a cualquier otro el
+  paso se le rechaza con `milestone.fail_step`, así nadie ajeno ocupa una placa para
+  trabar a los que la están haciendo.
+  Cuenta una placa con un jugador **vivo, conectado** (un link-dead no cuenta: salir del
+  juego sobre la placa es dejarla; pero sigue parado encima mientras sea link-dead, y uno
+  con bloqueo PvP lo es mientras dure el bloqueo, que no tiene tope: aceptado así) **y que no sea del personal** (un GM nunca cuenta y se lo
+  dice `milestone.staff`). Una persona ocupa una sola casilla, así que nunca dos placas.
+  El rechazo del paso es solo para jugadores: un monstruo puede pararse en una placa (por
+  ejemplo uno de la galería de Morvund si alguien deja `morvund_gate` abierta) y la ocupa
+  hasta que lo maten o se vaya; no traba a nadie para siempre.
+  - Si faltan placas por ocupar, se le dice cuántas hay (`milestone.waiting`) solo a quien
+    acaba de pisar una (o de cambiar lo que cumple sobre ella): los que ya esperan no
+    vuelven a oírlo cada vez que alguien sube y baja de una placa.
+  - Con todas ocupadas, cada uno tiene que cumplir, en este orden: tener la quest en curso
+    en ese paso, la vocación de su placa, el nivel y el equipo. Quien no cumple oye por
+    qué (`milestone.fail_step`, `fail_vocation`, `fail_level`, `fail_gear`) y los demás
+    quién falta (`milestone.not_ready`); **nadie se mueve**.
+  - Si todos cumplen, el servidor busca una casilla libre para **cada uno** alrededor de
+    `to` (la misma búsqueda por anillos de un portal: `searchRings` con su área, nunca una
+    casa ni la entrada de un portal, a `travel.arrival_radius`) y con el bloqueo PvP de un
+    portal (un atacante bloqueado no entra a una zona de protección desde afuera: oye
+    `pvp.protection_locked` y los demás, con `milestone.not_ready`, a quién esperan). Si no
+    hay lugar para todos, nadie se mueve (`milestone.blocked`) y la sala no se vuelve a
+    mirar sola cuando se libera: hay que bajarse de una placa y volver a subir (lo dice el
+    texto, "Prueben de nuevo"). Si lo hay, los lleva juntos
+    en el mismo tick, cumple el paso de cada uno (las recompensas de la quest, como
+    cualquier último paso) y les anuncia a todos `milestone.achieved` con los nombres.
+  - **No hace falta un grupo** (decisión del dueño): desconocidos pueden hacerlo juntos.
+    El sistema de grupos no se toca.
+- **Una vez por personaje:** la quest terminada no vuelve a estar en ese paso, así que un
+  veterano ya no cuenta en las placas (no puede "llevar" a otros por segunda vez). La sala
+  de recompensa tiene un cofre que da una vez por personaje (`content.ChestKey`, "Libros y
+  cofres"). Se sale por un teletransporte de un solo sentido (o, si la sala está detrás de
+  una puerta con llave, por esa puerta, que se abre desde adentro); `make validate` exige
+  que desde la sala se llegue a un templo sin llaves ni herramientas.
+- **El logro:** el título (`quest.<id>.title`) se ve en la pestaña de terminadas del
+  diario, y el anuncio a los participantes sale en su chat. Un hito terminado aparece a
+  propósito en las dos pestañas, Hitos (con todos, hechos o no) y Terminadas.
+
+| Hito | Isla | Nivel | Quién | Lo da | Placas | Recompensa |
+|---|---|---|---|---|---|---|
+| `ms_thalorn_oath` "El juramento de Thalorn" | Bosque (cripta bajo las piedras al noreste de Ivernel, piso 8) | 20 | 2 personas, cualquier vocación | Hermano Olmar (`bosque_priest`) | 4207,6090 y 4213,6090 | 6600 XP, anillo de zarza, 600 monedas; cofre: 4 de plata, 1 piedra de temple mayor, 3 brebajes de vida. Título "Testigo del Juramento" |
+| `ms_orthavel_vigil` "La vigilia de Orthavel" | Bosque (bajo los robles al sur de Ivernel, piso 8) | 25 | 1 persona con el **amuleto de asta puesto** (solo lo da `tanner_chitin`; ninguna tienda lo vende; Gisla talla otro por 400 monedas si se pierde antes de terminar el hito) | Fenn Zarzal (`bosque_hunter`) | 4178,6125 | 8600 XP, botas de cuero de ciervo, 700 monedas; cofre: 5 de plata, 2 piedras de temple mayores, 3 brebajes de vida. Título "Vigía del Asta" |
+| `ms_morvund_embers` "Las cuatro ascuas de Morvund" | Volcán (cámara al norte de la galería oeste de la mina, piso 8) | 35 | 4 personas, **una de cada vocación**, cada una con la **llave de ascua** (`ch3_gate`) | el eco de la forja (`volcan_forge_echo`) | guardián 3647,5755; arcanista 3657,5755; montaraz 3647,5761; druida 3657,5761 | 19 000 XP, la **llave de Morvund**, un yelmo de acero de ascua, 1300 monedas; cofre: 10 de plata, 3 piedras de temple mayores, 3 brebajes de vida y de maná concentrados. Título "Mano de las Cuatro Ascuas" |
+
+- **La galería de Morvund** (la recompensa de acceso): un coto de caza chico (21x13) detrás
+  de una puerta con llave (`morvund_gate`) en la pared oeste de la cámara, con mineros de
+  obsidiana y gólems de escoria. Solo entra quien lleva la llave de Morvund (no se
+  comercia); quien la pierde le pide otra al eco. Como toda puerta con llave, abierta deja
+  pasar a cualquiera y desde adentro se abre sin llave.
+- **Economía:** cada hito paga como una quest secundaria de su nivel (10–15 % de la
+  experiencia de su banda, el oro entre 4 y 10 minutos de la mejor caza, un equipable de
+  una banda que ya se consigue): `sim/balance_tasks_test.go` (`TestMilestoneRewards`) lo
+  exige. Todos los participantes cobran la recompensa entera.
+- **Nombres:** Thalorn, Orthavel y Morvund son inventados (con aire de Tolkien, ninguno
+  suyo); la otra rama del lote 14 (`feat/place-names`) renombra pueblos y zonas en el
+  mismo estilo.
+- **Tests:** `quest/milestone_test.go` (requisitos, completar juntos, placas a medio
+  ocupar, vocación equivocada, personal, salir del juego, una sola vez),
+  `session/sigil_test.go` (2 y 4 jugadores en un mapa de prueba, el diario con los hitos
+  sin empezar, la mirada a una placa, el paso rechazado sin la quest, la re-evaluación al
+  ponerse el equipo o subir de nivel sobre la placa, la sala sin lugar, el bloqueo PvP,
+  la muerte y el link-dead en combate sobre una placa, el veterano rechazado, el aviso de
+  espera solo a quien llega, una placa suelta que no deja arrancar),
+  `session/sidequests_test.go` (Gisla talla otro amuleto de asta), `session/sigil_map_test.go` (los tres en el mapa
+  real, los cofres y la puerta de la galería), el validador de mapas
+  (`packages/map-format`, "checks milestone plates") y de contenido, y el E2E
+  "milestones" de `e2e/game.spec.ts` (dos desconocidos en Thalorn).
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).
@@ -2412,18 +2602,22 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   invita (el invitado recibe su nombre). El invitado acepta o
   rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
   `max_members` (6) miembros contando al líder.
-- **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y prende o
-  apaga la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
+- **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y apaga (o
+  vuelve a prender) la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
   anti-flood del chat (cada cambio se anuncia a todos). Un grupo que queda con un solo miembro se disuelve.
 - **Desconexión:** salir del mundo (logout, conexión caída, cliente lento, reloguear en
   otro lado, expulsión de staff) es salir del grupo. Si era el líder, el liderazgo pasa al
   miembro más antiguo. Sus invitaciones (enviadas y recibidas) se borran. Los grupos **no
   se guardan**: tras un reinicio o un relogueo hay que volver a formarlo. Morir no saca a
   nadie del grupo.
-- **Experiencia compartida** (apagada al formar el grupo). Al morir un monstruo, sus
-  shares de daño (incluido el de las condiciones de T3.2) se reparten como siempre,
-  salvo los de los miembros de un grupo con la experiencia compartida prendida que
-  **comparten** esa muerte. Comparte un miembro que cumple las tres condiciones:
+- **Experiencia compartida: prendida al formar el grupo** (`shared_by_default: true`,
+  decisión del dueño 2026-11-20: estar en grupo con otro jugador tiene que dar más
+  experiencia sin tener que descubrir un botón). Al formarse, los dos primeros miembros
+  leen "El grupo comparte la experiencia..." en el log; el líder puede apagarla y volver a
+  prenderla. Al morir un monstruo, sus shares de daño (incluido el de las condiciones de
+  T3.2) se reparten como siempre, salvo los de los miembros de un grupo con la experiencia
+  compartida prendida que **comparten** esa muerte. Comparte un miembro que cumple las
+  tres condiciones:
   1. **Cerca:** en el piso del monstruo y a `share_distance` (24) casillas o menos de donde
      murió (Chebyshev). Vivo.
   2. **Contribuyó** en los últimos `contribution_ms` (75 s): hizo daño a un monstruo,
@@ -2431,13 +2625,57 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   3. **Nivel:** al menos `level_range_pct` (70 %) del nivel más alto entre los que cumplen
      1 y 2, o a lo sumo `level_gap_always` (3) niveles por debajo.
 
-  Si comparten dos o más, los shares de daño de los que comparten forman un pozo que crece
-  `bonus_pct_per_member` (6 %) por cada uno después del primero, hasta `max_bonus_pct`
-  (24 %), y se divide en partes iguales entre ellos (también a quien no le pegó, como un
-  sanador). Los miembros que no comparten cobran su propio share. Si comparte uno solo, no
-  hay pozo: cada uno cobra lo suyo. El share de quien salió del mundo (logout o relogueo)
-  se pierde: cuenta en el total pero no lo cobra nadie, así que terminar el monstruo de
-  otro no da su experiencia. Quests: cuenta la muerte quien le hizo daño, como antes.
+  Si comparten dos o más, los shares de daño de los que comparten forman un **pozo** que
+  crece con el **bonus de grupo** y se divide en partes iguales entre ellos (también a
+  quien no le pegó, como un sanador). Los miembros que no comparten cobran su propio share.
+  Si comparte uno solo, no hay pozo: cada uno cobra lo suyo. El share de quien salió del
+  mundo (logout o relogueo) se pierde: cuenta en el total pero no lo cobra nadie, así que
+  terminar el monstruo de otro no da su experiencia. Quests: cuenta la muerte quien le
+  hizo daño, como antes.
+- **Bonus de grupo** (`bonus_pct_by_sharers`, decidido por el dueño: hasta +20 %). Solo
+  importa **cuántos** comparten, no sus vocaciones:
+
+  | Comparten | Bonus del pozo |
+  |---|---|
+  | 2 | +5 % |
+  | 3 | +10 % |
+  | 4 | +15 % |
+  | 5 o más (hasta `max_members`, 6) | +20 % (tope) |
+
+  La lista empieza en 2; más miembros que escalones toman el último, que es el tope. Cada
+  uno cobra `pozo × (100 + bonus) / 100 / n` (enteros, redondeo hacia abajo). Ejemplo: dos
+  matan un monstruo de 240 entre los dos → 240 × 1,05 / 2 = 126 cada uno, de los que 6 son
+  el bonus. El chequeo de `make validate` y del arranque exige de 1 a `max_members - 1`
+  escalones, cada uno de 0 a 100 y nunca menor que el anterior.
+
+  **Cuánto rinde** (`server/internal/sim/balance_party_test.go`, `TestPartyPaceVsSolo`,
+  bestiario de Puerto a su nivel objetivo, `DEBUG_BALANCE=1` imprime la tabla):
+  - *Mismas presas:* si cada miembro mata lo que mataría solo (el grupo tira de varios
+    monstruos a la vez y cada uno pelea el suyo), cada uno gana lo de cazar solo × (1 +
+    bonus): +5 % de a dos, +10 % de a tres, +15 % de a cuatro, +20 % de cinco en adelante,
+    menos el redondeo hacia abajo del reparto (menos de 1 punto por presa). Ej. lobo (28)
+    a nivel 4: 4340 xp/h solo, 4495 de a dos, 5115 de a cinco. En las presas de 6–8 de
+    experiencia (rata de sentina, gaviota ladrona) ese redondeo se come casi todo el bonus.
+    El test pasa por la fórmula real del reparto (`content.Party.SharedEach`, la misma que
+    paga `shareExperience`).
+  - *Foco en un monstruo:* si todo el grupo le pega al mismo (la pelea dura 1/n, pero
+    caminar, juntar el loot y descansar siguen igual), cada miembro gana bastante menos que
+    solo (61–67 % de a dos, 25–33 % de a seis, según el monstruo; el test exige un piso
+    por tamaño de grupo, 55 % de a dos a 22 % de a seis, en monstruos de 20 o más de
+    experiencia). El bonus no compensa
+    cazar en fila presas fáciles: paga cazar monstruos más duros o abrirse y tirar de
+    varios. Ver "Pendientes" en docs/14.
+- **Una cuenta, un miembro que comparte (anti-alts).** Dos personajes de la misma cuenta
+  (el `account_id` que la sesión ya tiene) cuentan como **uno** al compartir: comparte el
+  primero en orden de entrada al grupo **que califica** (el filtro de nivel corre antes,
+  sobre todos, alts incluidos, y el alt más alto también fija el nivel tope del
+  anti-carry), así que un alt bajo que entró primero no le quita el bonus a su personaje
+  principal; el otro cobra solo el share de su propio daño,
+  sin bonus. Así un jugador con dos clientes abiertos no se arma un grupo de alts para
+  cobrar el bonus, y un personaje con su alt no forma un pozo (es un solo "compartidor").
+  El indicador y la marca "comparte" siguen la misma regla. Un personaje sin cuenta
+  (`account_id` 0: personajes armados a mano en tests o bots) nunca se agrupa con otro.
+  `TestSharedExperienceSameAccountAlts` lo fija.
 - **Anti-carry.** Un personaje alto no puede subir a uno bajo: el bajo queda fuera por
   nivel (condición 3), así que solo cobra el daño que él mismo hizo, y el alto, sin nadie
   más que comparta, cobra lo suyo sin bonus. Estar al lado sin hacer nada tampoco alcanza
@@ -2447,7 +2685,18 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
 - **Indicador:** apagada, activa o inactiva. Cada miembro lo calcula solo con los miembros
   que ve (él incluido): activa si al menos dos de ellos cumplen 2 y 3 ahora mismo. Así ni
   el indicador ni la marca "comparte" delatan que un miembro lejos murió o está peleando.
-  La distancia se evalúa en cada muerte, no en el indicador.
+  La distancia se evalúa en cada muerte, no en el indicador. Mientras está activa, el
+  `PartyUpdate` lleva el bonus de los que comparten (`bonus_percent`).
+- **Qué ve el jugador** (lo que el dueño no veía antes):
+  - la ventana de grupo dice "Bonus de grupo: +10 % de experiencia (3 comparten)" mientras
+    el reparto está activo, con la marca "Comparte" en cada miembro que comparte, y una
+    línea de ayuda que explica qué da un grupo (también sin grupo);
+  - la bandeja de estados muestra el ícono `party_bonus` (dos compañeros) con el
+    porcentaje escrito ("10%") mientras el bonus está activo; lo arma el cliente con el
+    `PartyUpdate`, no viaja en `PlayerConditions`;
+  - el número flotante de experiencia de una muerte compartida marca la parte del bonus:
+    "126 (+6 grupo)". Esa parte solo la ven el que la cobra y los miembros de su grupo; un
+    extraño al lado ve solo "126".
 - **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
   viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
   mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está
@@ -2617,7 +2866,7 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   diferencia en x. No se oyen los eventos de otro piso. Los sonidos propios (pasos,
   mensajes, UI) no son posicionales.
 - **Ambiente**: un loop por isla (`world/world.yaml`): olas en Puerto, bosque en Bosque y
-  el volcán en la Isla Volcánica; bajo tierra no hay ambiente. Al cambiar de isla hay un
+  el volcán en Karvask; bajo tierra no hay ambiente. Al cambiar de isla hay un
   fundido cruzado (`ambient.fade_ms`).
 - **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
   `sounds.yaml` `music`). Lo que oye el jugador:
@@ -2851,7 +3100,7 @@ apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador
   golpe de un jugador que también está en la arena; cualquier otra muerte (un monstruo,
   un golpe desde afuera, fuera de la arena) es una muerte normal, y los golpes de arena no
   dan crédito de muerte fuera de ella. Un duelo en la arena no da derecho a defensa propia
-  afuera, y perderlo no quita la marca de agresor ni el bloqueo que se traían de afuera. Hay una chica en la arena de Raigal (Isla del Bosque).
+  afuera, y perderlo no quita la marca de agresor ni el bloqueo que se traían de afuera. Hay una chica en la arena de Ivernel (Selvaine).
 - **El resto del mundo:** PvP abierto con marcas.
 - **Nivel:** por debajo de `min_level` (20) no se ataca ni se es atacado por jugadores. Es
   más que la protección de novato (8) a propósito: quien llega a 20 ya salió de Puerto y

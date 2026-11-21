@@ -7,7 +7,7 @@
   doors:
     - { x: 4159, y: 6092, z: 7 }
   exit: { x: 4159, y: 6093, z: 7 }
-  notes: "Small cabin on the beach north of Raigal (prefab house_wood_small, T5.4)."
+  notes: "Small cabin on the beach north of Ivernel (prefab house_wood_small, T5.4)."
 
 - id: bosque_house_resin
   name: house.bosque_house_resin.name
@@ -19,7 +19,7 @@
     - { x: 4168, y: 6092, z: 7 }
     - { x: 4169, y: 6092, z: 7 }
   exit: { x: 4168, y: 6093, z: 7 }
-  notes: "House on the beach north of Raigal (prefab house_wood_medium, T5.4)."
+  notes: "House on the beach north of Ivernel (prefab house_wood_medium, T5.4)."
 
 - id: bosque_house_fern
   name: house.bosque_house_fern.name
@@ -31,7 +31,7 @@
     - { x: 4169, y: 6113, z: 7 }
     - { x: 4170, y: 6113, z: 7 }
   exit: { x: 4169, y: 6112, z: 7 }
-  notes: "Medium house east of the road in Raigal, door to the north (prefab house_wood_medium, content audit M6)."
+  notes: "Medium house east of the road in Ivernel, door to the north (prefab house_wood_medium, content audit M6)."
 
 - id: bosque_house_heron
   name: house.bosque_house_heron.name

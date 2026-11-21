@@ -258,3 +258,62 @@ export const REWARD_CHEST: SpriteSpec = {
     },
   ],
 };
+
+/**
+ * Sigil plates of the milestone quests (docs/02 "Quests de hito"): a round slab of dark
+ * stone set in the floor, a ring cut round its edge and a four-pointed sigil in its middle
+ * inlaid with a material that names who it is for: a soft ember glow for anyone, gold for
+ * the guardian, a pale blue glow for the arcanist, green leaf for the ranger and berry red for
+ * the druid. Flat (a player stands on it), so it reads under a character's feet.
+ */
+function sigilPlate(
+  sprite: string,
+  inlay: "ember" | "gold" | "water" | "foliage" | "berry",
+): SpriteSpec {
+  const glow = inlay === "ember" || inlay === "water";
+  return {
+    sprite,
+    size: "object",
+    figure: { height: [6, 16], width: [20, 30] },
+    seenOn: "ground/stone_floor",
+    parts: [
+      {
+        name: "slab",
+        material: "darkStone",
+        texture: { amount: 0.08, cell: [2, 2, 1] },
+        shapes: [
+          { type: "cylinder", a: [0, 0, 0], b: [0, 0, 1.2], radius: 11 },
+          // The ring cut round its edge.
+          {
+            type: "cylinder",
+            a: [0, 0, 1.2],
+            b: [0, 0, 1.4],
+            radius: 9.6,
+            material: "stone",
+            bias: -0.3,
+          },
+          { type: "cylinder", a: [0, 0, 1.25], b: [0, 0, 1.5], radius: 8.4, bias: -0.1 },
+        ],
+      },
+      {
+        name: "sigil",
+        material: inlay,
+        ...(glow ? { glow: true } : { shiny: inlay === "gold" }),
+        shapes: [
+          // A four-pointed star: two long diamonds across each other, and its eye.
+          { type: "box", min: [-6.5, -0.9, 1.5], max: [6.5, 0.9, 1.9] },
+          { type: "box", min: [-0.9, -6.5, 1.5], max: [0.9, 6.5, 1.9] },
+          { type: "cylinder", a: [0, 0, 1.5], b: [0, 0, 2], radius: 2 },
+        ],
+      },
+    ],
+  };
+}
+
+export const SIGIL_PLATES: readonly SpriteSpec[] = [
+  sigilPlate("decor/sigil_plate", "ember"),
+  sigilPlate("decor/sigil_plate_guardian", "gold"),
+  sigilPlate("decor/sigil_plate_arcanist", "water"),
+  sigilPlate("decor/sigil_plate_ranger", "foliage"),
+  sigilPlate("decor/sigil_plate_druid", "berry"),
+];

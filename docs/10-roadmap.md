@@ -81,7 +81,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   ops de map-format, deshacer/rehacer, validación en vivo, E2E. [T0.4, T0.5]
 - [x] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
   procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14] (#35)
-- [x] **T1.16 Isla del Puerto.** Construir con mapcli/MCP la isla inicial (~192x192):
+- [x] **T1.16 Velmara.** Construir con mapcli/MCP la isla inicial (~192x192):
   ciudad con templo, puerto, tiendas, campo de lobos, cueva con mina y monstruos de
   nivel 5–15, un subsuelo. Validar, renderizar y revisar imágenes. [T1.15, T1.10, T1.12]
   Hecho: `world/islands/puerto` (192x192, pisos 7–8), ver "Islas actuales" en `03`.
@@ -132,8 +132,8 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `data/boat_routes.yaml` (nivel, quest, item o pasaje) ofrecidas por el diálogo del
   capitán, cobro atómico, bloqueo en combate, llegada libre o la más cercana, validación
   de muelles en `make validate`. Pendiente: viajar con el grupo.
-- [x] **T3.6 Isla del Bosque** y Capítulo 2. (PR #54 contenido, PR #55 mapa y rutas)
-  Isla `bosque` con Raigal, muelle, olmos talables, cuatro zonas de caza y cueva en el piso
+- [x] **T3.6 Selvaine** y Capítulo 2. (PR #54 contenido, PR #55 mapa y rutas)
+  Isla `bosque` con Ivernel, muelle, olmos talables, cuatro zonas de caza y cueva en el piso
   8; 5 monstruos, 4 NPCs, recetas de olmo y el Capítulo 2 en dos quests. Pendiente: arte
   real (todo es placeholder), depósito (no hay item), puertas.
 - [x] **T3.7 Sonido y música** (assets libres) con volumen por canal. Motor Web Audio en
@@ -236,7 +236,7 @@ secundaria.
   - Hecha: `session/pvp.go` y `session/guildwar.go` (`balance.yaml pvp`), migración 00014
     (`pvp_kills`, `pvp_unjust_kills`, `guild_wars` con estados y `war_high`),
     `SetSafeMode`, `Creature.skull`/`CreatureSkull`, acciones de guerra en `GuildCommand`
-    y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Raigal,
+    y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Ivernel,
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
     Después: una condición de otro jugador guarda a su autor (personaje) y el recuerdo de
     su ataque en `characters.conditions`, sin migración, y sobrevive al relogueo de
@@ -253,24 +253,24 @@ secundaria.
     cada movimiento es un `Transfer` del Saver que escribe los snapshots y el mercado en
     una transacción), migración 00015 (`market_offers`, buzón de items y de oro,
     `market_history`, `market_id_high`), `MarketCommand`/`MarketUpdate` y los mensajes de
-    trade, `/marketoffers` y `/marketcancel` auditados, tableros en Puerto y Raigal,
+    trade, `/marketoffers` y `/marketcancel` auditados, tableros en Puerto y Ivernel,
     ventanas en el cliente. Pendiente: sprite del tablero, refrescar las ventanas abiertas
     de otros cuando cambia un libro que miran, y ocultar en el momento las ofertas de una
     cuenta suspendida por la herramienta del operador (hoy, desde el próximo arranque).
 - [x] **T5.4 Casas.** Casas del mapa que se alquilan con oro, con lista de invitados y
   puertas; los items dentro persisten entre reinicios. [T5.1]
-  Hecho: `houses.yaml` por isla (5 casas en el Farol y Raigal, `world.bin` v4), alquiler en
+  Hecho: `houses.yaml` por isla (5 casas en Lanternby y Ivernel, `world.bin` v4), alquiler en
   la puerta con renovación desde el buzón del mercado, una casa por cuenta, invitados y
   gremio, transferir y dejar, items del suelo persistentes (`house_owners`, `house_guests`,
   `house_items`) escritos por transfers agrupados por tick, staff `/house*` y `/houses`.
-- [x] **T5.5 Isla Volcánica y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,
+- [x] **T5.5 Karvask y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,
   recetas y la continuación de la historia. 👤 arte si se quiere reemplazar placeholders.
   [T3.6] (PR #73 contenido y monedas de plata y oro; el PR siguiente, mapa y rutas)
-  Hecho: Brasal, muelle con rutas al Bosque y al Puerto, llano de ceniza, ladera, cráter y
+  Hecho: Cinderstead, muelle con rutas al Bosque y al Puerto, llano de ceniza, ladera, cráter y
   la mina del piso 8 con la puerta sellada y la forja antigua; 5 monstruos y un jefe,
   acero de ascua, Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`). Después: suelos
   volcánicos propios (ceniza, basalto, escoria, lava enfriada y lava fundida, con bordes),
-  la superficie repintada, música y ambiente propios y los carteles de Brasal (templo,
+  la superficie repintada, música y ambiente propios y los carteles de Cinderstead (templo,
   muelle y mina, que se leen mirándolos). Fuera de la tarea: puertas con llave (la puerta
   sellada de la mina se abre con la llave de ascua del Capítulo 3, ver
   `02-game-design.md` "Puertas con llave"). Después: el cartel de esa puerta (piso 8,
@@ -336,7 +336,7 @@ secundaria.
   nuevas a `deploy/.env.example` (la sesión no tenía permiso para editarlo).
 
 ## Extras (pedidos fuera de los hitos)
-- [x] **Isla de Pruebas y `make play`.** Isla sandbox `pruebas` (96x96 en 2048,2048, pisos 7
+- [x] **Thimblewick y `make play`.** Isla sandbox `pruebas` (96x96 en 2048,2048, pisos 7
   y 8) para probar todos los sistemas a mano: templo con instructora (experiencia, dinero,
   curación y la misión `pruebas_rats`), proveedor con herramientas, runas, equipo de cada
   vocación y la llave de la puerta de práctica, cinco corrales de caza de débil a fuerte,
@@ -357,7 +357,7 @@ secundaria.
 - [x] **Balance de vocaciones e items (auditoría de contenido, rama `feat/balance-vocations`).**
   Brebajes de maná en las tres ciudades y una carrera simulada del 1 al 50 para arcanista,
   druida y montaraz con presupuesto de maná real (`sim/balance_vocations_test.go`); maza,
-  arco, ballesta, varita y vara hasta la Isla Volcánica, y piezas de cabeza, piernas y pies;
+  arco, ballesta, varita y vara hasta Karvask, y piezas de cabeza, piernas y pies;
   ballestas de una mano para que el montaraz lleve escudo; `tempest_ring` y `rime_burst`
   para las islas que resisten fuego y tierra; la comida regenera (`well_fed`); el sello de
   la forja para cada uno del grupo (botín `each_player`); la cuerda con destino (socavón de
@@ -378,7 +378,7 @@ secundaria.
   13 casas, liberación tras 28 días sin que entre la cuenta del dueño (con aviso al entrar),
   bendiciones de 50 + 20 por nivel; la defensa del arma bloquea con la del escudo; regla
   de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
-  tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
+  tablero del mercado en Cinderstead; `testisle` dev-only y renombrada; comisión del mercado
   con tope de 50 000 y precio de referencia por mediana.
 - [x] **Movimiento fluido (docs/17 A6; ramas `feat/movement-feel` y
   `feat/movement-more`).** Pasos de teclado predichos hasta `max_queued_steps` (4) y
@@ -470,7 +470,7 @@ secundaria.
   `cooling_down`) y el diario de misiones: el mensaje `QuestLog` y la ventana "Misiones"
   (tecla L; pestaña en teléfonos) con el paso actual, las muertes y la espera de una tarea.
   `world.bin` v7 guarda las zonas por id. Como prueba: el paso `reach_gate` de `ch3_gate`
-  y la tarea de práctica de la Isla de Pruebas. Lo que queda: docs/14, "Pendientes
+  y la tarea de práctica de Thimblewick. Lo que queda: docs/14, "Pendientes
   conocidos" (las tareas de caza son de `feat/side-quests`).
 - [x] **Libros y cofres (auditoría del 2026-11-19, game.items[12]; lote 12, rama
   `feat/chests-books`).** Explorar paga: nueve libros y pergaminos con lore propio (el
@@ -485,7 +485,7 @@ secundaria.
   sprites (barril y mesa con elevación, banco, estante, cama, farol con luz, pozo, sacos,
   red de pesca, jardinera, puesto de mercado y mástil con bandera; el toldo, la bandera y
   la llama del farol animados con `sync: tile`), los templos, plazas, depósito, tiendas y
-  casas del Farol, Raigal y Brasal amueblados con `mapcli`, y el arte que no estaba en
+  casas de Lanternby, Ivernel y Cinderstead amueblados con `mapcli`, y el arte que no estaba en
   ningún mapa en su lugar: fuentes, braseros, estandartes, muros con ventana y una
   antorcha de pared cada 7 casillas en las tres minas. docs/17 "Kit de props de pueblo",
   docs/03 "Muebles y luces"; lo que queda: docs/14, "Pendientes conocidos".
@@ -493,7 +493,7 @@ secundaria.
   `feat/side-quests`; auditoría de juego del lote 10).** Cinco quests secundarias para los
   huecos de nivel (22–28 en el Bosque; 30–33 y 42–48 en el Volcán) con NPCs que ya estaban,
   pasos `reach`, `flag_equals` y una que termina en su muerte, y seis tareas de caza de 20
-  horas en Raigal y Brasal con dos NPCs nuevos (Fenn Zarzal y Orso Pedernal), todo en
+  horas en Ivernel y Cinderstead con dos NPCs nuevos (Fenn Zarzal y Orso Pedernal), todo en
   datos. Recompensas medidas contra la caza simulada (`sim/balance_tasks_test.go`; docs/02
   "Quests secundarias", "Tareas" y "Economía"). Lo que queda: docs/14, "Pendientes
   conocidos".
@@ -521,3 +521,22 @@ secundaria.
   aditivo (`ItemLocation.pocket`, `Inventory.pockets`/`pocket_slots`), migración 00020 y la
   fila "Bolsillos" bajo la figura del inventario. docs/02 "Bolsillos"; lo que queda:
   docs/14, "Pendientes conocidos".
+- [x] **Bonus de grupo (el dueño el 2026-11-20; lote 14, rama `feat/party-bonus`).** "Estar
+  en party con otro jugador te da beneficios de experiencia": la experiencia compartida de
+  T3.3 se prende al formar el grupo, el bonus pasa a escalones de `balance.yaml`
+  (+5/+10/+15/+20 % con 2/3/4/5+ que comparten), dos personajes de una cuenta cuentan como
+  uno, y se ve en la ventana de grupo, en la bandeja de estados (`party_bonus`) y en el
+  número flotante de experiencia ("+N grupo"). Protocolo aditivo
+  (`PartyUpdate.bonus_percent`, `FloatingText.bonus`) y una simulación de ritmo en grupo
+  contra solo. docs/02 "Grupos"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Quests de hito (el dueño el 2026-11-20; lote 15, rama `feat/milestone-quests`).**
+  Pruebas cooperativas de placas del sello (`milestone: true`, `requires` con nivel,
+  jugadores, vocaciones y equipo, último paso `sigils`): el servidor mueve juntos a la sala
+  de recompensa a todos los que cumplen en el mismo tick, o a nadie (personal, link-dead,
+  bloqueo PvP y ajenos a la quest no cuentan ni pisan las placas; una vez por personaje,
+  cofre por personaje, salida por teletransporte). Tres hitos: `ms_thalorn_oath` (2,
+  Bosque), `ms_orthavel_vigil` (1 con el amuleto de asta, Bosque) y `ms_morvund_embers` (4
+  vocaciones con la llave de ascua, Volcán, con la galería de Morvund). Pestaña Hitos en el
+  diario (protocolo aditivo `QuestLogEntry.milestone`, `QUEST_LOG_STATE_OPEN`) y las mismas
+  reglas de mapa en el servidor y en `make validate`. docs/02 "Quests de hito"; lo que
+  queda: docs/14, "Pendientes conocidos".

@@ -270,7 +270,7 @@ pero no se puede comprar. Las claves van solo en `deploy/.env` (nunca en el repo
 
 | Variable | Valor |
 |---|---|
-| `RPG_ENV` | `production` (por defecto, también si está vacía). `development` o `test` solo en tu PC: es lo único que permite el proveedor falso y un `world.bin` compilado con `mapcompile -dev` (el de `make mapcompile`, con la Isla de Pruebas: en producción el servidor no arranca con él; la imagen compila sin `-dev`). Nunca en un servidor público |
+| `RPG_ENV` | `production` (por defecto, también si está vacía). `development` o `test` solo en tu PC: es lo único que permite el proveedor falso y un `world.bin` compilado con `mapcompile -dev` (el de `make mapcompile`, con Thimblewick: en producción el servidor no arranca con él; la imagen compila sin `-dev`). Nunca en un servidor público |
 | `PAYMENTS_PROVIDER` | vacío (apagada), `fake` (solo `make dev`/E2E: el pago es instantáneo y gratis; el servidor no arranca con `RPG_ENV=production`) o `mercadopago` |
 | `MP_ACCESS_TOKEN` | Access token de tu aplicación de Mercado Pago. En modo prueba empieza con `TEST-` |
 | `MP_WEBHOOK_SECRET` | "Clave secreta" del webhook de esa aplicación. Solo verifica las notificaciones (`x-signature`) |

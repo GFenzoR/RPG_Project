@@ -13,7 +13,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// The side quests of the Isla del Bosque and the Isla Volcánica (lote 12, docs/02
+// The side quests of Selvaine and Karvask (lote 12, docs/02
 // "Quests secundarias"), each played from its offer to its rewards with the content of
 // data/, in the style of chapter2_test.go.
 
@@ -25,7 +25,7 @@ var (
 	craterAt = pos(50, 40)
 )
 
-// sideQuestHarness is dataHarness with the side quests' NPCs of Raigal and Brasal placed in
+// sideQuestHarness is dataHarness with the side quests' NPCs of Ivernel and Cinderstead placed in
 // a row along y = 10 (sideTalk stands two tiles south of one to talk), their reach places
 // moved onto the test map and spawns of the monsters they ask for, as many as a test kills
 // (a watched spawn does not respawn). The attribute pool is on: the equipable rewards roll.
@@ -300,6 +300,41 @@ func TestTannerChitinSideQuest(t *testing.T) {
 	checkRolled(t, attrPool(t), s.items["antler_amulet"], amulets[0].Mods())
 	if s.offers("bosque_merchant", "npc.bosque_merchant.opt_chitin") || s.offers("bosque_merchant", "npc.bosque_merchant.opt_chitin_help") {
 		t.Fatal("finished quest still offered")
+	}
+
+	// The amulet is the Orthavel milestone's gear and no shop sells it: lost before the
+	// vigil is done (death, a broken refine, a sale), Gisla carves another for a price
+	// above what the druid pays, never while the player still has one.
+	const again = "npc.bosque_merchant.opt_amulet_again"
+	if s.offers("bosque_merchant", again) {
+		t.Fatal("another amulet offered to whoever has one")
+	}
+	s.take("antler_amulet", 1)
+	if !s.offers("bosque_merchant", again) {
+		t.Fatal("no new amulet for whoever lost it before the vigil")
+	}
+	money = h.w.Money(s.p)
+	d, _ = s.say(s.talk("bosque_merchant"), again)
+	if d, _ = s.say(d, "npc.bosque_merchant.opt_amulet_pay"); d.Text.Key != "npc.bosque_merchant.amulet_carved" {
+		t.Fatalf("carving: %s", d.Text.Key)
+	}
+	if h.w.CountItem(s.p, "antler_amulet") != 1 || h.w.Money(s.p) != money-400 {
+		t.Fatalf("carving: %d amulets, paid %d", h.w.CountItem(s.p, "antler_amulet"), money-h.w.Money(s.p))
+	}
+	// While the vigil is in progress it is offered too; once done, never again.
+	s.take("antler_amulet", 1)
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(s.p, "ms_orthavel_vigil") }))
+	h.sim.Step()
+	if !s.offers("bosque_merchant", again) {
+		t.Fatal("no new amulet during the vigil")
+	}
+	h.sim.Command(gameFunc(func() { h.w.MarkQuestCompletedForTest(s.p, "ms_orthavel_vigil") }))
+	h.sim.Step()
+	if st, _ := s.step("ms_orthavel_vigil"); st != quest.Completed {
+		t.Fatalf("vigil %v", st)
+	}
+	if s.offers("bosque_merchant", again) {
+		t.Fatal("another amulet after the vigil")
 	}
 }
 

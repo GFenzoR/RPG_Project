@@ -354,7 +354,7 @@ siempre es una espera que dependía de la velocidad.
   es anterior a su arranque (página ocupada, lo normal en la CI), así que el primer dibujo
   puede llegar uno o más frames después de `__rpgClient.ready`. Antes la cámara recién se
   fijaba en ese dibujo: un `tileToClient` justo después de `ready` daba un punto a 100.000
-  px, fuera del canvas, y el Mayús+click al cartel del Farol ("talk to NPCs", flaky en
+  px, fuera del canvas, y el Mayús+click al cartel de Lanternby ("talk to NPCs", flaky en
   #82) no leía nada (y seleccionaba el nombre del encabezado). Ahora la cámara se fija al
   crear el canvas, y ese test comprueba, en el instante en que se publican los hooks, que
   la casilla propia cae dentro del canvas.

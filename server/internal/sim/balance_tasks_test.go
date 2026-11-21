@@ -238,3 +238,65 @@ func TestSideQuestRewards(t *testing.T) {
 		}
 	}
 }
+
+// milestoneBands is each milestone quest (docs/02 "Quests de hito"): it pays like a side
+// quest of its level (the same rules as TestSideQuestRewards), whatever its group size:
+// every participant gets the whole reward.
+var milestoneBands = map[string]struct {
+	from int
+	hunt string
+}{
+	"ms_thalorn_oath":   {20, "thornling"},
+	"ms_orthavel_vigil": {25, "hollow_crawler"},
+	"ms_morvund_embers": {35, "obsidian_delver"},
+}
+
+func TestMilestoneRewards(t *testing.T) {
+	d := loadData(t)
+	quests, err := content.LoadQuests(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv := d.balance.Experience
+	debug := os.Getenv("DEBUG_BALANCE") != ""
+	for id, q := range quests {
+		if _, ok := milestoneBands[id]; q.Milestone && !ok {
+			t.Errorf("%s: a milestone with no band in milestoneBands", id)
+		}
+	}
+	for id, band := range milestoneBands {
+		q := quests[id]
+		if q == nil || !q.Milestone || q.MinLevel != band.from || q.Requires.Level != band.from {
+			t.Errorf("%s: not a milestone from level %d", id, band.from)
+			continue
+		}
+		xp, gold, items := rewardSums(q)
+		bandXP := float64(cv.TotalFor(band.from+3) - cv.TotalFor(band.from))
+		h := d.hourOf(t, band.hunt)
+		minutes := float64(gold) / h.goldHour * 60
+		if debug {
+			t.Logf("%-18s %2d  %5d xp (%4.1f %%)  %4d gold (%4.1f min of %s)  %v",
+				id, band.from, xp, 100*float64(xp)/bandXP, gold, minutes, band.hunt, items)
+		}
+		if f := float64(xp) / bandXP; f < 0.10 || f > 0.15 {
+			t.Errorf("%s: %d xp is %.1f %% of the experience from %d to %d (want 10-15 %%)", id, xp, 100*f, band.from, band.from+3)
+		}
+		if minutes < 4 || minutes > 10 {
+			t.Errorf("%s: %d gold is %.1f minutes of %s's loot (want 4-10)", id, gold, minutes, band.hunt)
+		}
+		equipables := 0
+		for _, it := range items {
+			def := d.item(t, it)
+			if !content.Rolls(def) {
+				continue
+			}
+			equipables++
+			if def.Retired || def.Requires.Level > band.from {
+				t.Errorf("%s rewards %s (level %d): not a piece of an obtainable band at level %d", id, it, def.Requires.Level, band.from)
+			}
+		}
+		if equipables != 1 {
+			t.Errorf("%s rewards %d equipables (one)", id, equipables)
+		}
+	}
+}

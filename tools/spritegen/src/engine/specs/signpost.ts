@@ -1,4 +1,4 @@
-// The signpost (data/items/decoration.yaml: every `*_sign` of Brasal and the mine): a board of
+// The signpost (data/items/decoration.yaml: every `*_sign` of Cinderstead and the mine): a board of
 // two planks with carved lines, nailed to a post and turned a little toward the path, so its
 // thickness shows. The design spritegen drew by hand (recipes/terrain.ts until 2026-11-18),
 // now a model: the planks and the post have depth, the letters are shallow grooves and the

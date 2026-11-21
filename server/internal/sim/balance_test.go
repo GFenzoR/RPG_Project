@@ -1,6 +1,6 @@
 package sim_test
 
-// Balance check for the Isla del Puerto bestiary (levels 1-15, Chapter 1), ported from
+// Balance check for the Velmara bestiary (levels 1-15, Chapter 1), ported from
 // the provisional TypeScript model (packages/content-schema, T1.5) now that the melee
 // formulas exist (internal/combat, numbers in data/balance.yaml).
 //

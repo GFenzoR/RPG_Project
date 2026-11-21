@@ -12,7 +12,7 @@
   ammo: { type: arrow, attack: 9 }
   value: 1
 
-# Bolts (content audit M4): what a crossbow shoots. Sold by the tannery and Brasal's smithy,
+# Bolts (content audit M4): what a crossbow shoots. Sold by the tannery and Cinderstead's smithy,
 # smithed at the anvil from iron and gull feathers.
 - id: bolt
   kind: ammo

@@ -22,7 +22,7 @@ type scenario struct {
 	fight bool
 }
 
-// Isla del Puerto (world/islands/puerto): new characters appear in the temple of Farol.
+// Velmara (world/islands/puerto): new characters appear in the temple of the Lantern.
 // The areas follow the spawns, NPCs and zones of the island's YAML, all on floor 7.
 var (
 	puertoTown = area{"town", bot.Pos{X: 3166, Y: 6386, Z: 7}, 8}

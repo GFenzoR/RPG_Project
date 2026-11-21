@@ -103,8 +103,16 @@ type Item struct {
 	Book *Book `yaml:"book"`
 	// Chest makes a map item a reward chest: once per character (chests.go, session/chest.go).
 	Chest *Chest `yaml:"chest"`
+	// Sigil makes a map item a sigil plate of a milestone quest (docs/02 "Quests de
+	// hito", session/sigil.go): its vocation, if set, is the only one that counts on it.
+	Sigil *Sigil `yaml:"sigil"`
 	// Numeric is the stable numeric id from data/ids.lock.yaml.
 	Numeric uint16 `yaml:"-"`
+}
+
+// Sigil is the sigil block of a plate.
+type Sigil struct {
+	Vocation string `yaml:"vocation"`
 }
 
 // PortalLook is the portal block of an item: the kind of portals.yaml it shows and, if

@@ -9,6 +9,7 @@ import {
   nextTrayChange,
   statusIconStyle,
   trayEntries,
+  withPartyBonus,
 } from "./status.ts";
 import type { ConditionView } from "./world.ts";
 
@@ -19,6 +20,20 @@ const c = (id: string, until: number | undefined, ticks = 0): ConditionView => (
 });
 
 describe('the status tray (docs/17 "Bandeja de estados")', () => {
+  it("adds the party bonus while it is active: endless, a buff, with its percentage", () => {
+    const list = [c("hasted", 20_000), c("poison", 9000, 3)];
+    expect(withPartyBonus(list, 0)).toBe(list);
+    const entries = trayEntries(withPartyBonus(list, 15), 0, false);
+    expect(entries.map((e) => e.id)).toEqual(["poison", "party_bonus", "hasted"]);
+    const bonus = entries[1];
+    expect(bonus?.kind).toBe("buff");
+    expect(bonus?.percent).toBe(15);
+    expect(bonus?.leftMs).toBeUndefined();
+    expect(bonus?.flash).toBe(false);
+    // It never asks for a redraw by itself.
+    expect(nextTrayChange(withPartyBonus([], 20), 0)).toBeUndefined();
+  });
+
   it("knows every condition and status that has an icon, each with its kind", () => {
     expect([...STATUS_ORDER].sort()).toEqual(Object.keys(STATUS_ART).sort());
     expect(Object.keys(STATUS_KIND).sort()).toEqual([...STATUS_ORDER].sort());

@@ -283,7 +283,7 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	$(MAKE) editor
 
 # The game on the sandbox island (docs/16-probar-el-juego.md): Postgres, the map, the game
-# server with -start-town (new characters wake up on the Isla de Pruebas) and the client,
+# server with -start-town (new characters wake up on Thimblewick) and the client,
 # then the URL to open once both answer. With a local database the server runs as
 # development (DEV_RPG_ENV); the
 # cosmetic shop runs on the fake payment provider only with the server on loopback and a

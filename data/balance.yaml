@@ -116,10 +116,11 @@ party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   contribution_ms: 75000
   level_range_pct: 70
   level_gap_always: 3
-  # The shared pot grows `bonus_pct_per_member` % per sharing member beyond the first,
-  # up to `max_bonus_pct` %.
-  bonus_pct_per_member: 6
-  max_bonus_pct: 24
+  # A new party starts sharing experience (the leader can turn it off).
+  shared_by_default: true
+  # Bonus % of the shared pot by the number of sharers: 2, 3, 4, then 5 or more (the last
+  # step is the cap). Only the count matters; two characters of one account count once.
+  bonus_pct_by_sharers: [5, 10, 15, 20]
 
 guild:                      # T5.1 (docs/02-game-design.md, "Gremios")
   found_cost: 2000          # copper coins paid (and destroyed: a sink) to found a guild

@@ -68,6 +68,29 @@ const tmp = (p: string): string => {
   return d;
 };
 
+// Committing ~10k files into a fresh repo takes tens of seconds where every new file is
+// scanned (Windows real-time protection): the copy is committed once per file into a
+// template, and each sandbox is a local clone of it (a few seconds).
+let template = "";
+beforeAll(() => {
+  template = mkdtempSync(join(tmpdir(), "mapcli-pr-tpl-"));
+  for (const d of ["world", "data", "i18n", "assets"])
+    cpSync(join(repo, d), join(template, d), { recursive: true, filter: usedFiles });
+  mkdirSync(join(template, ".github"));
+  writeFileSync(join(template, ".github/MAINTAINERS"), "# maintainers\n@Boss\n");
+  const git = (...a: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], {
+      cwd: template,
+      stdio: "pipe",
+    });
+  git("init", "-q", "-b", "main");
+  git("add", "-A");
+  git("commit", "-qm", "base");
+}, 300_000);
+afterAll(() => {
+  if (template) rmSync(template, { recursive: true, force: true });
+});
+
 /** Copy of the map, content and assets in a fresh repo; main has the puerto plot and "boss". */
 function sandbox(): {
   root: string;
@@ -75,19 +98,16 @@ function sandbox(): {
   edit: (...a: string[]) => void;
 } {
   const root = tmp("mapcli-pr-");
-  for (const d of ["world", "data", "i18n", "assets"])
-    cpSync(join(repo, d), join(root, d), { recursive: true, filter: usedFiles });
-  mkdirSync(join(root, ".github"));
-  writeFileSync(join(root, ".github/MAINTAINERS"), "# maintainers\n@Boss\n");
+  execFileSync("git", ["-c", "core.autocrlf=false", "clone", "-q", "--local", template, root], {
+    stdio: "pipe",
+  });
   const git = (...a: string[]): string =>
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], {
       cwd: root,
       encoding: "utf8",
       stdio: "pipe",
     });
-  git("init", "-q", "-b", "main");
-  git("add", "-A");
-  git("commit", "-qm", "base");
+  git("remote", "remove", "origin");
   const edit = (...a: string[]): void => {
     let err = "";
     const code = run([...a, "--root", root], { out: () => {}, err: (t) => (err += t) });

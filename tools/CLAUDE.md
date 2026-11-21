@@ -54,7 +54,7 @@ merge propio: si el formato cambia, se cambia en `packages/map-format`.
 
 ## bots (Go)
 `tools/bots` (T1.17): prueba de carga con clientes headless (`server/pkg/bot`) que se
-registran, crean personaje y juegan en la Isla del Puerto: caminan con rutas A* sobre
+registran, crean personaje y juegan en Velmara: caminan con rutas A* sobre
 `build/world.bin` (`bot.Nav`, que rodea escaleras, agujeros y teletransportes: cada bot
 queda en su piso), atacan monstruos, hablan por chat y abren diálogos con NPCs, con su
 propio rate limit (`-min-gap`). Sin ese archivo (`-world`; p. ej. `make bots URL=...`, que

@@ -97,6 +97,9 @@ chests:
   bosque_cave: chest_bosque_cave
   volcan_mine: chest_volcan_mine
   pruebas: chest_pruebas
+  ms_thalorn: chest_ms_thalorn
+  ms_orthavel: chest_ms_orthavel
+  ms_morvund: chest_ms_morvund
 items:
   patched_tunic: 1
   plank_shield: 2
@@ -553,3 +556,17 @@ items:
   border_surf_inner_ne: 453
   border_surf_inner_se: 454
   border_surf_inner_sw: 455
+  morvund_gate: 456
+  morvund_gate_open: 457
+  sigil_plate: 458
+  sigil_plate_guardian: 459
+  sigil_plate_arcanist: 460
+  sigil_plate_ranger: 461
+  sigil_plate_druid: 462
+  chest_ms_thalorn: 463
+  chest_ms_orthavel: 464
+  chest_ms_morvund: 465
+  morvund_key: 466
+  thalorn_sign: 467
+  orthavel_sign: 468
+  morvund_sign: 469

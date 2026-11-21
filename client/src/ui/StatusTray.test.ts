@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import { StatusTrayView, badgeText, closesTip, leftText } from "./StatusTray.tsx";
 import type { StatusTrayViewProps } from "./StatusTray.tsx";
-import { trayEntries } from "../state/status.ts";
+import { trayEntries, withPartyBonus } from "../state/status.ts";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   params ? `${key}${JSON.stringify(params)}` : key;
@@ -110,6 +110,21 @@ describe("StatusTrayView", () => {
     expect(items.map((v) => v.props["data-open"])).toEqual([undefined, undefined, ""]);
     items[0]?.props.onClick?.();
     expect(toggled).toEqual(["poison"]);
+  });
+
+  it("writes the party bonus percentage on its icon and in its tooltip", () => {
+    const all = view({ entries: trayEntries(withPartyBonus([], 20), 0, false) });
+    const bonus = all.find((v) => v.props["data-condition"] === "party_bonus");
+    expect(bonus?.props["data-kind"]).toBe("buff");
+    expect(nodes(bonus).find((v) => v.props["class"] === "status-left")?.props.children).toBe(
+      'client.status.badge_percent{"percent":20}',
+    );
+    expect(nodes(bonus).find((v) => v.props["class"] === "status-time")?.props.children).toBe(
+      'client.status.bonus_percent{"percent":20}',
+    );
+    expect(bonus?.props["aria-label"]).toBe(
+      'condition.party_bonus.name, client.status.bonus_percent{"percent":20}',
+    );
   });
 
   it("is an empty list with nothing to show", () => {

@@ -7,3 +7,33 @@
   kind: stairs
   from: { x: 4248, y: 6146, z: 8 }
   to: { x: 4248, y: 6147, z: 7 }
+
+- id: thalorn_down
+  kind: stairs
+  from: { x: 4210, y: 6093, z: 7 }
+  to: { x: 4210, y: 6098, z: 8 }
+
+- id: thalorn_up
+  kind: stairs
+  from: { x: 4210, y: 6099, z: 8 }
+  to: { x: 4210, y: 6094, z: 7 }
+
+- id: thalorn_out
+  kind: teleport
+  from: { x: 4226, y: 6093, z: 8 }
+  to: { x: 4200, y: 6106, z: 7 }
+
+- id: orthavel_down
+  kind: stairs
+  from: { x: 4178, y: 6128, z: 7 }
+  to: { x: 4178, y: 6131, z: 8 }
+
+- id: orthavel_up
+  kind: stairs
+  from: { x: 4178, y: 6132, z: 8 }
+  to: { x: 4178, y: 6129, z: 7 }
+
+- id: orthavel_out
+  kind: teleport
+  from: { x: 4192, y: 6127, z: 8 }
+  to: { x: 4176, y: 6119, z: 7 }
