@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { MAX_OPS, McpServer } from "./server.ts";
 import type { Response } from "./server.ts";
 
@@ -31,15 +31,31 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function sandbox(): string {
-  const root = mkdtempSync(join(tmpdir(), "mcp-world-"));
-  dirs.push(root);
+// Committing ~10k files into a fresh repo takes tens of seconds where every new file is
+// scanned (Windows real-time protection): the copy is committed once per file into a
+// template, and each test gets a local clone of it (a few seconds).
+let template = "";
+beforeAll(() => {
+  template = mkdtempSync(join(tmpdir(), "mcp-world-tpl-"));
   for (const d of ["world", "data", "i18n", "assets"])
-    cpSync(join(repo, d), join(root, d), { recursive: true, filter: usedFiles });
-  const git = (...a: string[]) => execFileSync("git", a, { cwd: root, stdio: "pipe" });
+    cpSync(join(repo, d), join(template, d), { recursive: true, filter: usedFiles });
+  const git = (...a: string[]) => execFileSync("git", a, { cwd: template, stdio: "pipe" });
   git("init", "-q");
   git("add", "-A");
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
+}, 300_000);
+afterAll(() => {
+  if (template) rmSync(template, { recursive: true, force: true });
+});
+
+/** Copy of world/, data/, i18n/ and assets/, committed in a fresh git repo. */
+function sandbox(): string {
+  const root = mkdtempSync(join(tmpdir(), "mcp-world-"));
+  dirs.push(root);
+  execFileSync("git", ["-c", "core.autocrlf=false", "clone", "-q", "--local", template, root], {
+    stdio: "pipe",
+  });
+  execFileSync("git", ["remote", "remove", "origin"], { cwd: root, stdio: "pipe" });
   return root;
 }
 

@@ -97,7 +97,9 @@ function edit(root: string, ops: MapOp[] = EDITS): { world: World; changes: File
   return { world: r.world, changes };
 }
 
-describe("saveChanges", () => {
+// Each test copies world/ and data/ and runs mapcli over them: up to 3.7 s while the whole
+// suite runs, close to vitest's 5 s default.
+describe("saveChanges", { timeout: 30_000 }, () => {
   it("writes exactly what mapcli fmt writes (fmt --check finds nothing to change)", () => {
     const root = scratch();
     const { world, changes } = edit(root);
@@ -401,7 +403,9 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
   });
 });
 
-describe("saveChanges of houses.yaml and house names (house panel)", () => {
+// Each test copies world/ and data/ and runs mapcli over them: up to 3.7 s while the whole
+// suite runs, close to vitest's 5 s default.
+describe("saveChanges of houses.yaml and house names (house panel)", { timeout: 30_000 }, () => {
   const HOUSES = "world/islands/testisle/houses.yaml";
   const ES = "i18n/es/world.yaml";
   const EN = "i18n/en/world.yaml";
