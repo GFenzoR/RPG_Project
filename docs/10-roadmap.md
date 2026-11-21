@@ -529,3 +529,14 @@ secundaria.
   número flotante de experiencia ("+N grupo"). Protocolo aditivo
   (`PartyUpdate.bonus_percent`, `FloatingText.bonus`) y una simulación de ritmo en grupo
   contra solo. docs/02 "Grupos"; lo que queda: docs/14, "Pendientes conocidos".
+- [x] **Quests de hito (el dueño el 2026-11-20; lote 15, rama `feat/milestone-quests`).**
+  Pruebas cooperativas de placas del sello (`milestone: true`, `requires` con nivel,
+  jugadores, vocaciones y equipo, último paso `sigils`): el servidor mueve juntos a la sala
+  de recompensa a todos los que cumplen en el mismo tick, o a nadie (personal, link-dead,
+  bloqueo PvP y ajenos a la quest no cuentan ni pisan las placas; una vez por personaje,
+  cofre por personaje, salida por teletransporte). Tres hitos: `ms_thalorn_oath` (2,
+  Bosque), `ms_orthavel_vigil` (1 con el amuleto de asta, Bosque) y `ms_morvund_embers` (4
+  vocaciones con la llave de ascua, Volcán, con la galería de Morvund). Pestaña Hitos en el
+  diario (protocolo aditivo `QuestLogEntry.milestone`, `QUEST_LOG_STATE_OPEN`) y las mismas
+  reglas de mapa en el servidor y en `make validate`. docs/02 "Quests de hito"; lo que
+  queda: docs/14, "Pendientes conocidos".
