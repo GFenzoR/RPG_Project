@@ -1779,6 +1779,16 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const lead = await account("party-a", "Leader");
   const mate = await account("party-b", "Mate");
   await apiCtx.dispose();
+  // Level 8 guardians (243 health: 145 + 7 × 14, data/vocations.yaml; 4704 experience on
+  // balance.yaml's curve): at level 1 the wolves of the hunt below could kill one before
+  // the bonus showed, and the death screen covered the party window's screenshots.
+  for (const who of [lead, mate])
+    psql([
+      databaseUrl,
+      "-c",
+      `UPDATE characters SET level = 8, experience = 4704, health = 243, mana = 48
+         WHERE name = '${who.name}'`,
+    ]);
 
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
