@@ -237,6 +237,24 @@ async function mapPoint(
   );
 }
 
+/**
+ * Waits until the own creature stands still at most `reach` tiles from (x, y): for a walk
+ * to where wolves roam, one of which can take the clicked tile before the player gets there
+ * (the click's path then stops next to it).
+ */
+async function arrivedNear(page: Page, x: number, y: number, reach: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        if (!s || s.pending || s.walking) return "moving";
+        return Math.max(Math.abs(s.x - x), Math.abs(s.y - y)) <= reach ? "near" : `${s.x},${s.y}`;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe("near");
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -1851,7 +1869,8 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     });
     if (!p) throw new Error("no canvas");
     await page.mouse.click(p.x, p.y);
-    await arrived(page, me.x + i, me.y - 5);
+    // A wolf can take the tile first: next to it is just as good for the hunt.
+    await arrivedNear(page, me.x + i, me.y - 5, 1);
     await page.getByLabel("Perseguir al objetivo").check();
   }
   const bonusShown = async (page: Page): Promise<boolean> => {
