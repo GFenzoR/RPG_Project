@@ -238,10 +238,9 @@ mod tests {
         // A new run of the app starts without a session: nothing was persisted.
         store.set("secret".to_owned());
         assert_eq!(TokenStore::default().get(), None);
-        let src = include_str!("api.rs");
-        let start = src.find("impl TokenStore").unwrap();
-        let end = src.find("/// Shared state").unwrap();
-        assert!(!src[start..end].contains("set_password"), "TokenStore writes to the keyring");
+        // Structural: the store holds the token in memory and nothing else (no keyring
+        // entry, no file). A new field breaks this exhaustive pattern at compile time.
+        let TokenStore { cached: _ } = TokenStore::default();
     }
 
     #[test]

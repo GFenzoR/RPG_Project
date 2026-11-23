@@ -535,6 +535,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_BANNED)
 		return
 	}
+	if reason, ok := w.revokedLogin(c, ctx.Now); ok {
+		// The account's sessions were revoked after this login spent its play token
+		// (review of lote 17): the revocation's kick could not find it yet.
+		client.Close(reason)
+		return
+	}
 	if w.locked[c.ID] {
 		// T5.3: a trade or market change of the character could not be saved; the database
 		// is behind its last state in memory, which was dropped. Until a restart.

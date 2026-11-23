@@ -410,6 +410,10 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
 	defer g.adm.releaseDB()
+	// Taken before the redeem: a revocation of the account's sessions that commits after
+	// the redeem spent the token has a later time, and the Join refuses this login
+	// (session.Character.RedeemedAt).
+	redeemedAt := g.cfg.Clock.Now()
 	rctx, rcancel := context.WithTimeout(ctx, dbTimeout)
 	accountID, charID, err := g.cfg.Accounts.RedeemPlayToken(rctx, hello.GetSessionToken())
 	rcancel()
@@ -447,7 +451,9 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		}
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 	}
-	return toCharacter(pc), true
+	char := toCharacter(pc)
+	char.RedeemedAt = redeemedAt
+	return char, true
 }
 
 // logQueueFull logs (throttled) a login refused because the loop's lifecycle lane is full.

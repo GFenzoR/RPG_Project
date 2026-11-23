@@ -68,6 +68,8 @@ type stack struct {
 	url      string
 	accounts *fakeAccounts
 	gwClock  *clock.Fake
+	loop     *game.Loop
+	world    *session.World
 	mu       sync.Mutex
 	saves    []session.Snapshot
 }
@@ -116,7 +118,7 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.gw = gw
+	s.gw, s.loop, s.world = gw, loop, w
 	srv := httptest.NewServer(gw)
 	s.url = "ws" + strings.TrimPrefix(srv.URL, "http")
 	t.Cleanup(func() {

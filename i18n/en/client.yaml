@@ -470,7 +470,7 @@ error.email_unverified: "Confirm your email first (check the link we sent you)."
 error.already_verified: "Your email is already confirmed."
 error.email_disabled: "This server does not send emails yet. Ask whoever runs it for help."
 client.login.forgot_desktop: "Forgot your password? Open this in your browser: {url}"
-client.disconnect.password_changed: "The account's password was changed: every session was closed. Sign in with the new one."
+client.disconnect.password_changed: "The account's password was changed and its open games were closed. Sign in again; if asked, use the new one."
 # OAuth (T2.1 2/2). Provider names are brands: not translated.
 client.oauth.continue: "Continue with {provider}"
 client.oauth.provider.google: "Google"

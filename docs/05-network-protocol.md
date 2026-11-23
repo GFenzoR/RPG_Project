@@ -134,7 +134,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
 | `POST /api/auth/logout-all` | token | — | `204` (lote 17): revoca **todas** las sesiones de la cuenta (navegadores, app de escritorio y tokens de juego sin canjear), borra la cookie y saca del juego a sus personajes conectados (`Disconnect{SIGNED_OUT_EVERYWHERE}`) |
 | `POST /api/auth/keepalive` | token | — | `204` (lote 17): latido del cliente mientras juega, para que la sesión no venza por inactividad |
-| `POST /api/account/password` | token | `{current_password, new_password}` | `204` (lote 17): cambia la contraseña; revoca las **demás** sesiones (la de este pedido sigue), los enlaces de reset pendientes y saca del juego a los personajes conectados (`PASSWORD_CHANGED`). `401 invalid_credentials` (contraseña actual mal, cuenta como login fallido), `403 reauth_required`, `400 invalid_password`, `429` |
+| `POST /api/account/password` | token | `{current_password, new_password}` | `204` (lote 17): cambia la contraseña; revoca las **demás** sesiones (la de este pedido sigue), los enlaces de reset pendientes y saca del juego a los personajes conectados (`PASSWORD_CHANGED`), también los de la propia sesión: a propósito, la contraseña cambió para toda la cuenta y el jugador vuelve a entrar desde la lista de personajes. `401 invalid_credentials` (contraseña actual mal, cuenta como login fallido), `403 reauth_required`, `400 invalid_password`, `429` |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
@@ -174,6 +174,11 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   `travel.combat_block_ms` desde su última pelea) pierde la conexión igual, pero queda en
   el mundo link-dead hasta que la pelea termina (02-game-design.md, "Bloqueo de logout en
   combate"). Vale igual para un enlace de `gameserver admin reset-link`.
+- Un login que ya canjeó su token de juego cuando la revocación se confirma (todavía va
+  de camino al `Join`, así que la expulsión no lo encuentra) se rechaza en el `Join` con
+  el mismo motivo (`PASSWORD_CHANGED` o `SIGNED_OUT_EVERYWHERE`): el gateway anota cuándo
+  empezó el canje (`Character.RedeemedAt`) y el loop recuerda por cuenta la última
+  revocación durante `session.RevocationMemory` (5 min).
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
@@ -329,7 +334,7 @@ auth). Pasado el límite responden `429 rate_limited`.
   unauthorized`) y se borra en el acto; el job de limpieza borra las vencidas y las
   inactivas. La cookie es **de sesión del navegador** (sin `Expires` ni `Max-Age`):
   cerrar el navegador olvida el login y recargar la página dentro del mismo navegador lo
-  conserva. La migración 00024 borró las sesiones de 30 días anteriores (todos entran de
+  conserva. La migración 00025 borró las sesiones de 30 días anteriores (todos entran de
   nuevo una vez). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login

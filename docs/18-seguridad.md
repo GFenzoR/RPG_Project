@@ -107,7 +107,14 @@ personaje).
 - **Cambiar la contraseña logueado** (`POST /api/account/password`): exige la actual bajo
   los límites de login fallido; revoca las demás sesiones, los enlaces de reset y
   `claim_email` pendientes y los flujos OAuth, todo en una transacción auditada
-  (`password_changed`); saca del juego a los personajes conectados (`PASSWORD_CHANGED`).
+  (`password_changed`); saca del juego a los personajes conectados (`PASSWORD_CHANGED`),
+  también los de la sesión que la cambió (a propósito). Si la sesión que pide el cambio
+  fue revocada entre la verificación y la transacción (un "cerrar sesión en todos lados"
+  simultáneo), el cambio falla con `401`: la transacción bloquea esa sesión antes de
+  escribir.
+- Revocar (reset, cambio de contraseña, "cerrar sesión en todos lados") también rechaza
+  el login que ya canjeó su token de juego y aún no entró al mundo: el `Join` compara el
+  instante del canje con el de la última revocación de la cuenta (docs/05).
   Una cuenta solo OAuth crea su primera contraseña dentro de los 10 min de su login.
 - OAuth: Authorization Code + PKCE S256, `state` de 256 bits de un solo uso atado al
   navegador por cookie; `id_token` de Google solo RS256 contra JWKS, con `iss`, `aud`,
@@ -303,7 +310,7 @@ Hacer una vez y revisar cada mes.
 
 **Sesiones** (lote 17)
 - [ ] Tras desplegar el lote 17, todos los jugadores entran de nuevo una vez (la migración
-  00024 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
+  00025 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
 - [ ] Ante un reporte de cuenta comprometida: pedir al jugador "Cerrar sesión en todos
   lados" y cambiar la contraseña desde la pantalla de personajes (o mandarle un enlace con
   `gameserver admin reset-link`); revisar `gameserver admin audit` por

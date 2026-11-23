@@ -107,8 +107,7 @@ func TestSessionTouchAtMostOncePerMinute(t *testing.T) {
 func TestPurgeDeletesIdleSessions(t *testing.T) {
 	ctx := context.Background()
 	svc, repo, clk := newSessionService(t, func(c *auth.Config) { c.SessionIdle = 10 * time.Minute })
-	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
-	c, _ := svc.CreateCharacter(ctx, acc, "Mira", "guardian", nil)
+	_, _ = svc.Register(ctx, "ana@example.org", "secreto123")
 	idle, _ := svc.Login(ctx, "ana@example.org", "secreto123")
 	clk.Advance(9 * time.Minute)
 	busy, _ := svc.Login(ctx, "ana@example.org", "secreto123")
@@ -119,17 +118,94 @@ func TestPurgeDeletesIdleSessions(t *testing.T) {
 	if repo.HasSession(sum(idle.Token)) || !repo.HasSession(sum(busy.Token)) {
 		t.Fatal("purge deleted the wrong session")
 	}
-	// Play tokens are not account sessions: the idle purge leaves them to their own TTL.
+}
+
+// Play tokens are not account sessions: the idle purge leaves them to their own TTL, even
+// one unused for longer than the idle timeout (shorter than auth.PlayTokenTTL here).
+func TestPurgeLeavesPlayTokensToTheirTTL(t *testing.T) {
+	ctx := context.Background()
+	const idle = auth.PlayTokenTTL / 2
+	svc, repo, clk := newSessionService(t, func(c *auth.Config) { c.SessionIdle = idle })
+	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
+	c, _ := svc.CreateCharacter(ctx, acc, "Mira", "guardian", nil)
 	play, err := svc.IssuePlayToken(ctx, acc, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clk.Advance(30 * time.Second)
-	if _, err := svc.PurgeExpiredSessions(ctx); err != nil {
-		t.Fatal(err)
+	clk.Advance(idle + time.Second) // idle for longer than the timeout, not expired
+	if n, err := svc.PurgeExpiredSessions(ctx); err != nil || n != 0 {
+		t.Fatalf("purge = %d, %v; want 0", n, err)
 	}
 	if !repo.HasSession(sum(play.Token)) {
 		t.Fatal("the idle purge deleted a play token")
+	}
+}
+
+// failingRepo fails the writes of a session's last use and of an idle session's delete.
+type failingRepo struct{ *authtest.Repo }
+
+func (failingRepo) TouchSession(context.Context, []byte, time.Time) error {
+	return errors.New("database down")
+}
+
+func (failingRepo) DeleteSession(context.Context, []byte) error { return errors.New("database down") }
+
+// A failed refresh of a session's last use does not fail the request of a valid session,
+// and an idle session is refused (401) even when its delete fails (review of lote 17).
+func TestSessionWriteFailuresKeepTheAnswer(t *testing.T) {
+	ctx := context.Background()
+	repo := failingRepo{authtest.NewRepo()}
+	clk := clock.NewFake(time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC))
+	svc, err := auth.New(auth.Config{Repo: repo, Clock: clk, Vocations: testVocations,
+		Hash: auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
+	tok, _ := svc.Login(ctx, "ana@example.org", "secreto123")
+	clk.Advance(auth.SessionTouchEvery)
+	if id, err := svc.Authenticate(ctx, tok.Token); err != nil || id != acc {
+		t.Fatalf("valid session with a failed touch: %d, %v", id, err)
+	}
+	clk.Advance(auth.DefaultSessionIdle)
+	if _, err := svc.Authenticate(ctx, tok.Token); !errors.Is(err, auth.ErrUnauthorized) {
+		t.Fatalf("idle session with a failed delete: %v, want ErrUnauthorized", err)
+	}
+}
+
+// revokingRepo runs a "sign out everywhere" right before the password change's
+// transaction, as a concurrent request would between the check of the current password
+// and the change.
+type revokingRepo struct{ *authtest.Repo }
+
+func (r revokingRepo) ChangePassword(ctx context.Context, accountID int64, hash string, keep []byte, now time.Time) (int64, error) {
+	if _, err := r.RevokeAllSessions(ctx, accountID, now); err != nil {
+		return 0, err
+	}
+	return r.Repo.ChangePassword(ctx, accountID, hash, keep, now)
+}
+
+// A password change whose own session was revoked after it was checked fails and leaves
+// the password as it was (review of lote 17).
+func TestChangePasswordRefusedWhenItsSessionWasRevoked(t *testing.T) {
+	ctx := context.Background()
+	inner := authtest.NewRepo()
+	clk := clock.NewFake(time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC))
+	var kicked []int64
+	svc, err := auth.New(auth.Config{Repo: revokingRepo{inner}, Clock: clk, Vocations: testVocations,
+		Hash:            auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1},
+		SessionsRevoked: func(id int64) { kicked = append(kicked, id) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
+	tok, _ := svc.Login(ctx, "ana@example.org", "secreto123")
+	old := inner.PasswordHash(acc)
+	if err := svc.ChangePassword(ctx, tok.Token, "secreto123", "nuevaclave9"); !errors.Is(err, auth.ErrUnauthorized) {
+		t.Fatalf("change from a revoked session: %v, want ErrUnauthorized", err)
+	}
+	if inner.PasswordHash(acc) != old || len(kicked) != 0 {
+		t.Fatal("a change from a revoked session set the password")
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -124,6 +125,9 @@ type Config struct {
 	// ReservedNames are names a new character may not take (ErrReservedName), compared
 	// ignoring case and spaces: the display names of the NPCs (NPCReservedNames).
 	ReservedNames []string
+	// Log receives the errors a request survives (a failed refresh of a session's last
+	// use). Nil: slog.Default().
+	Log *slog.Logger
 }
 
 // Defaults for Config.
@@ -162,6 +166,7 @@ type Service struct {
 	requireVerified bool
 	revoked         func(accountID int64)
 	signedOut       func(accountID int64)
+	log             *slog.Logger
 	providers       map[string]*oauth.Provider
 	oauthRepo       OAuthRepo
 	verifyTTL       time.Duration
@@ -223,6 +228,10 @@ func New(cfg Config) (*Service, error) {
 	}
 	s.mail, s.requireVerified, s.revoked = cfg.Mail, cfg.RequireVerifiedEmail, cfg.SessionsRevoked
 	s.signedOut = cfg.SignedOutEverywhere
+	s.log = cfg.Log
+	if s.log == nil {
+		s.log = slog.Default()
+	}
 	if s.requireVerified && s.mail == nil {
 		return nil, errors.New("auth: requiring a verified email needs a mailer (SMTP)")
 	}
@@ -453,16 +462,19 @@ func (s *Service) accountSession(ctx context.Context, tokenHash []byte) (store.S
 		seen = sess.CreatedAt
 	}
 	if !now.Before(seen.Add(s.idle)) {
+		// Idle: refused whether or not the delete works (the purge job removes it later).
 		if err := s.repo.DeleteSession(ctx, tokenHash); err != nil {
-			return store.Session{}, fmt.Errorf("authenticate: %w", err)
+			s.log.Warn("auth: delete idle session", "err", err)
 		}
 		return store.Session{}, ErrUnauthorized
 	}
 	if now.Sub(seen) >= SessionTouchEvery {
+		// A failed refresh does not fail a valid session: the next request tries again.
 		if err := s.repo.TouchSession(ctx, tokenHash, now); err != nil {
-			return store.Session{}, fmt.Errorf("authenticate: %w", err)
+			s.log.Warn("auth: refresh session last use", "err", err)
+		} else {
+			sess.LastSeenAt = now
 		}
-		sess.LastSeenAt = now
 	}
 	return sess, nil
 }

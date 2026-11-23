@@ -107,7 +107,7 @@ func TestKickAccountKeepsLockedLinkDead(t *testing.T) {
 	_, b := g.fighter("Bea", 0, 11, 10, 30, 0)
 	g.unsafe(ca)
 	g.hit(a, b)
-	g.sim.Command(g.w.KickAccount(account))
+	g.sim.Command(g.w.KickAccount(account, g.sim.Now()))
 	g.sim.Step()
 	for _, cl := range []*fakeClient{ca, cc} {
 		if !cl.closed || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED || cl.closes != 1 {
@@ -121,14 +121,16 @@ func TestKickAccountKeepsLockedLinkDead(t *testing.T) {
 		t.Fatalf("Ana in the world %v, link-dead %v", g.w.PlayerByCharacter(a.CharacterID()) == a, a.LinkDead())
 	}
 	g.sim.Command(g.w.Leave(ca))
-	g.sim.Command(g.w.KickAccount(account)) // a second reset: her connection is closed already
+	g.sim.Command(g.w.KickAccount(account, g.sim.Now())) // a second reset: her connection is closed already
 	g.sim.Step()
 	if g.w.PlayerByCharacter(a.CharacterID()) != a || ca.closes != 1 {
 		t.Fatalf("after the gateway's Leave and a second reset: in the world %v, closes %d",
 			g.w.PlayerByCharacter(a.CharacterID()) == a, ca.closes)
 	}
 
-	ca2, a2 := g.fighter("Ana", a.CharacterID(), 10, 10, 30, 0, same)
+	// The new login redeemed its play token after the resets (session.Character.RedeemedAt).
+	redeemed := func(c *session.Character) { c.RedeemedAt = g.sim.Now() }
+	ca2, a2 := g.fighter("Ana", a.CharacterID(), 10, 10, 30, 0, same, redeemed)
 	if a2 == a || a2.LinkDead() || ca.closes != 1 {
 		t.Fatalf("took over %v, link-dead %v, old connection closed %d times", a2 != a, a2.LinkDead(), ca.closes)
 	}
@@ -153,7 +155,7 @@ func TestKickAccountOfLinkDead(t *testing.T) {
 	if !a.LinkDead() || ca.closes != 0 {
 		t.Fatalf("link-dead %v, closes %d", a.LinkDead(), ca.closes)
 	}
-	g.sim.Command(g.w.KickAccount(a.CharacterID())) // fighter: account = character
+	g.sim.Command(g.w.KickAccount(a.CharacterID(), g.sim.Now())) // fighter: account = character
 	g.sim.Step()
 	if g.w.PlayerByCharacter(a.CharacterID()) != a || ca.closes != 1 ||
 		ca.reason != pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED {
@@ -172,7 +174,7 @@ func TestPvPUnlockedDisconnectsLeave(t *testing.T) {
 	cs, s := g.fighter("Sol", 0, 10, 10, 30, 0)
 	ck, k := g.fighter("Kai", 0, 20, 20, 30, 0)
 	g.cutSlow(cs)
-	g.sim.Command(g.w.KickAccount(k.CharacterID())) // fighter: account = character
+	g.sim.Command(g.w.KickAccount(k.CharacterID(), g.sim.Now())) // fighter: account = character
 	g.sim.Step()
 	for _, p := range []*session.Player{s, k} {
 		if g.w.PlayerByCharacter(p.CharacterID()) != nil || p.LinkDead() || g.finalSaves(p.CharacterID()) != 1 {

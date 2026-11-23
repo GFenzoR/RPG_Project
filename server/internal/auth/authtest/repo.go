@@ -170,6 +170,9 @@ func (r *Repo) ChangePassword(_ context.Context, accountID int64, passwordHash s
 	if !ok || a.Disabled {
 		return 0, store.ErrNotFound
 	}
+	if s, ok := r.sessions[string(keep)]; !ok || s.AccountID != accountID || s.Kind != store.SessionAccount {
+		return 0, store.ErrNotFound // revoked since the caller checked it
+	}
 	a.PasswordHash = passwordHash
 	for k, t := range r.tokens {
 		if t.AccountID == accountID && (t.Purpose == store.TokenResetPassword || t.Purpose == store.TokenClaimEmail) {

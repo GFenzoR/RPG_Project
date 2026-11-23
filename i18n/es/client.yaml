@@ -470,7 +470,7 @@ error.email_unverified: "Primero confirma tu email (revisa el enlace que te mand
 error.already_verified: "Tu email ya está confirmado."
 error.email_disabled: "Este servidor no envía emails todavía. Pide ayuda a quien lo administra."
 client.login.forgot_desktop: "¿Olvidaste tu contraseña? Ábrelo en tu navegador: {url}"
-client.disconnect.password_changed: "Se cambió la contraseña de la cuenta: se cerraron todas sus sesiones. Entra con la nueva."
+client.disconnect.password_changed: "Se cambió la contraseña de la cuenta y se cerraron sus partidas abiertas. Vuelve a entrar; si te la piden, usa la nueva."
 # OAuth (T2.1 2/2). Los nombres de los proveedores son marcas: no se traducen.
 client.oauth.continue: "Continuar con {provider}"
 client.oauth.provider.google: "Google"

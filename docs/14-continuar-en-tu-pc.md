@@ -130,7 +130,7 @@ el punto 5:
   "Cambiar contraseña" en la pantalla de personajes (`POST /api/auth/logout-all`,
   `POST /api/account/password`) y el latido `POST /api/auth/keepalive` mientras se juega.
   Queda:
-  - Al desplegar, **todos entran de nuevo una vez** (la migración 00024 borra las sesiones
+  - Al desplegar, **todos entran de nuevo una vez** (la migración 00025 borra las sesiones
     viejas): avisarlo.
   - El **test de Rust** de `api.rs` (token solo en memoria) no se corrió en la sesión que lo
     escribió (sin `cargo` en esa PC) y el CI de escritorio solo corre

@@ -104,6 +104,14 @@ func TestSessionIdleRevokeAndChangePassword(t *testing.T) {
 	if _, err := st.ActiveSession(ctx, b1, store.SessionAccount, now); err != nil {
 		t.Fatalf("another account's session was revoked: %v", err)
 	}
+	// A password change from a session revoked meanwhile (review of lote 17) fails and
+	// leaves the password as it was.
+	if _, err := st.ChangePassword(ctx, acc, "$argon2id$late", a1, later); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("change from a revoked session: %v, want ErrNotFound", err)
+	}
+	if a, _ := st.AccountByEmail(ctx, "ana@example.org"); a.PasswordHash != "$argon2id$new" {
+		t.Fatalf("hash %q after a refused change", a.PasswordHash)
+	}
 	audit, err := st.ListAudit(ctx, 10)
 	if err != nil {
 		t.Fatal(err)

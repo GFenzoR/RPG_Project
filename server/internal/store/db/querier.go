@@ -230,6 +230,10 @@ type Querier interface {
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).
 	LockAccountForIdentities(ctx context.Context, id int64) (LockAccountForIdentitiesRow, error)
+	// The account session a password change keeps, locked for the change's transaction: a
+	// "sign out everywhere" that deleted it first makes the change fail; one that comes
+	// after waits for the change and then deletes it too.
+	LockAccountSession(ctx context.Context, arg LockAccountSessionParams) ([]byte, error)
 	// Same as GetShopAccount, locking the account row: every balance change of an account
 	// runs after this in its transaction, so concurrent purchases are serialized.
 	LockShopAccount(ctx context.Context, arg LockShopAccountParams) (LockShopAccountRow, error)

@@ -626,30 +626,70 @@ func (w *World) checkRoles(ctx *game.TickContext) {
 	}
 }
 
+// RevocationMemory is how long the loop remembers a revocation of an account's
+// sessions to refuse the logins already past their play token's redeem: far longer than
+// a handshake takes from the redeem to its Join (two database calls of 5 s at most).
+const RevocationMemory = 5 * time.Minute
+
+// revocation is the latest revocation of an account's sessions: when (after its
+// transaction committed) and the reason a refused login gets.
+type revocation struct {
+	at     time.Time
+	reason pb.DisconnectReason
+}
+
 // KickAccount returns the command that disconnects every online character of the
 // account with PASSWORD_CHANGED (T2.1: a password reset, or lote 17 a password change
-// from the game, revokes every other session, live connections included). Characters are saved as on any logout. One in combat (inCombat:
-// a fight with a monster or a player, or its PvP lock) loses its connection all the same
-// but stays in the world link-dead until the fight is over (disconnect, linkdead.go): a
-// reset is no way out of a fight.
-func (w *World) KickAccount(accountID int64) game.Command {
-	return w.kickAccount(accountID, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED)
+// from the game, revokes every other session, live connections included). at is when
+// the revocation committed: a login whose play token was redeemed before it, still on
+// its way to the Join, is refused too (Character.RedeemedAt). Characters are saved as
+// on any logout. One in combat (inCombat: a fight with a monster or a player, or its
+// PvP lock) loses its connection all the same but stays in the world link-dead until
+// the fight is over (disconnect, linkdead.go): a reset is no way out of a fight.
+func (w *World) KickAccount(accountID int64, at time.Time) game.Command {
+	return w.kickAccount(accountID, at, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED)
 }
 
 // SignOutAccount is KickAccount for "sign out everywhere" (lote 17): the same clean way
 // out (saved, link-dead in a fight), with SIGNED_OUT_EVERYWHERE.
-func (w *World) SignOutAccount(accountID int64) game.Command {
-	return w.kickAccount(accountID, pb.DisconnectReason_DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE)
+func (w *World) SignOutAccount(accountID int64, at time.Time) game.Command {
+	return w.kickAccount(accountID, at, pb.DisconnectReason_DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE)
 }
 
-func (w *World) kickAccount(accountID int64, reason pb.DisconnectReason) game.Command {
+func (w *World) kickAccount(accountID int64, at time.Time, reason pb.DisconnectReason) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
+		for id, r := range w.revoked {
+			if ctx.Now.Sub(r.at) > RevocationMemory {
+				delete(w.revoked, id)
+			}
+		}
+		if r, ok := w.revoked[accountID]; !ok || !at.Before(r.at) {
+			w.revoked[accountID] = revocation{at: at, reason: reason}
+		}
 		for _, o := range append([]*Player(nil), w.players...) {
 			if o.accountID == accountID {
 				w.disconnect(ctx, o, reason, false)
 			}
 		}
 	})
+}
+
+// revokedLogin reports the reason to refuse a login whose play token was redeemed at or
+// before the latest revocation of the account's sessions (false when there is none).
+// Loop goroutine only.
+func (w *World) revokedLogin(c Character, now time.Time) (pb.DisconnectReason, bool) {
+	r, ok := w.revoked[c.AccountID]
+	if !ok {
+		return pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false
+	}
+	if now.Sub(r.at) > RevocationMemory {
+		delete(w.revoked, c.AccountID)
+		return pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false
+	}
+	if c.RedeemedAt.After(r.at) {
+		return pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false
+	}
+	return r.reason, true
 }
 
 // RolesChanged returns the command the admin goroutine enqueues with the current roles

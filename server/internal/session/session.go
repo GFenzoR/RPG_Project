@@ -80,6 +80,10 @@ type Character struct {
 	// Stash is the account stash as this login read it (stash.go, Slot: the cell). It is
 	// used only when the World does not hold the account's stash already.
 	Stash []ItemState
+	// RedeemedAt is when the gateway started redeeming the play token of this login. A
+	// revocation of the account's sessions at or after it (KickAccount, SignOutAccount)
+	// refuses the Join: the token was spent before the revocation could find it.
+	RedeemedAt time.Time
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -386,6 +390,10 @@ type World struct {
 	nextJob    uint64
 	jobs       map[uint64]pendingJob
 	banned     map[int64]time.Time
+	// revoked holds, per account, the latest revocation of its sessions (a password
+	// reset or change, "sign out everywhere") for RevocationMemory: a login whose play
+	// token was redeemed before it is refused at its Join (review of lote 17).
+	revoked map[int64]revocation
 	// nextRoleCheck is the tick of the next check of the online staff's roles.
 	nextRoleCheck game.Tick
 
@@ -639,6 +647,7 @@ func New(cfg Config) (*World, error) {
 		loading:     map[int64]int{},
 		jobs:        map[uint64]pendingJob{},
 		banned:      map[int64]time.Time{},
+		revoked:     map[int64]revocation{},
 		locked:      map[int64]bool{},
 		diedAway:    map[int64]*pb.ServerMessage{},
 		inFlight:    map[int64]uint64{},

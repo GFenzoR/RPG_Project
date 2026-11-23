@@ -171,6 +171,27 @@ func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionPara
 	return i, err
 }
 
+const lockAccountSession = `-- name: LockAccountSession :one
+SELECT token_hash FROM sessions
+WHERE token_hash = $1 AND account_id = $2 AND kind = 'account'
+FOR UPDATE
+`
+
+type LockAccountSessionParams struct {
+	TokenHash []byte
+	AccountID int64
+}
+
+// The account session a password change keeps, locked for the change's transaction: a
+// "sign out everywhere" that deleted it first makes the change fail; one that comes
+// after waits for the change and then deletes it too.
+func (q *Queries) LockAccountSession(ctx context.Context, arg LockAccountSessionParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, lockAccountSession, arg.TokenHash, arg.AccountID)
+	var token_hash []byte
+	err := row.Scan(&token_hash)
+	return token_hash, err
+}
+
 const touchSession = `-- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = $1
 WHERE token_hash = $2 AND last_seen_at < $1

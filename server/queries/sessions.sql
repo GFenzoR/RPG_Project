@@ -54,3 +54,11 @@ DELETE FROM sessions WHERE kind = 'account' AND last_seen_at <= sqlc.arg(before)
 -- Revokes every token of an account but keep (a password change keeps its own session).
 DELETE FROM sessions
 WHERE account_id = sqlc.arg(account_id) AND token_hash <> sqlc.arg(keep);
+
+-- name: LockAccountSession :one
+-- The account session a password change keeps, locked for the change's transaction: a
+-- "sign out everywhere" that deleted it first makes the change fail; one that comes
+-- after waits for the change and then deletes it too.
+SELECT token_hash FROM sessions
+WHERE token_hash = sqlc.arg(token_hash) AND account_id = sqlc.arg(account_id) AND kind = 'account'
+FOR UPDATE;

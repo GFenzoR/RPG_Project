@@ -237,6 +237,11 @@ func (s *Store) ChangePassword(ctx context.Context, accountID int64, passwordHas
 		if acc.DisabledAt.Valid {
 			return ErrNotFound
 		}
+		// The session the change keeps must still exist: a "sign out everywhere" that ran
+		// after the caller checked it revoked it too (review of lote 17).
+		if _, err := q.LockAccountSession(ctx, db.LockAccountSessionParams{TokenHash: keep, AccountID: accountID}); err != nil {
+			return notFound(err)
+		}
 		if err := q.SetPasswordHash(ctx, db.SetPasswordHashParams{
 			PasswordHash: pgtype.Text{String: passwordHash, Valid: true}, ID: accountID,
 		}); err != nil {
