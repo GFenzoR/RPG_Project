@@ -2507,9 +2507,14 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
   - Si faltan placas por ocupar, se le dice cuántas hay (`milestone.waiting`) solo a quien
     acaba de pisar una (o de cambiar lo que cumple sobre ella): los que ya esperan no
     vuelven a oírlo cada vez que alguien sube y baja de una placa.
-  - Con todas ocupadas, cada uno tiene que cumplir, en este orden: tener la quest en curso
-    en ese paso, la vocación de su placa, el nivel y el equipo. Quien no cumple oye por
-    qué (`milestone.fail_step`, `fail_vocation`, `fail_level`, `fail_gear`) y los demás
+  - Con todas ocupadas, cada uno tiene que cumplir, en este orden: **no ser de la misma
+    cuenta que alguien de una placa anterior** (lote 16, anti-alts: un dueño con dos
+    personajes no es un grupo; la primera placa en el orden del mapa cuenta y las
+    siguientes de esa cuenta fallan con `milestone.fail_same_account`; una cuenta
+    desconocida, 0, nunca se junta con otra), tener la quest en curso en ese paso, la
+    vocación de su placa, el nivel y el equipo. Quien no cumple oye por
+    qué (`milestone.fail_same_account`, `fail_step`, `fail_vocation`, `fail_level`,
+    `fail_gear`) y los demás
     quién falta (`milestone.not_ready`); **nadie se mueve**.
   - Si todos cumplen, el servidor busca una casilla libre para **cada uno** alrededor de
     `to` (la misma búsqueda por anillos de un portal: `searchRings` con su área, nunca una
