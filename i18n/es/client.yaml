@@ -480,7 +480,7 @@ client.oauth.desktop: "Para entrar con Google o Discord usa el sitio en tu naveg
 client.oauth.desktop_password: "Si tu cuenta no tiene contraseña, ponle una con «¿Olvidaste tu contraseña?» en el sitio."
 client.oauth.other_origin: "Para entrar con Google o Discord abre el juego en {url}."
 error.unknown_provider: "Ese método de entrada no está disponible en este servidor."
-error.reauth_required: "Para vincular otra forma de entrar, confirma tu contraseña (o vuelve a entrar si tu cuenta no tiene)."
+error.reauth_required: "Para vincular o desvincular una forma de entrar, confirma tu contraseña (o vuelve a entrar si tu cuenta no tiene)."
 error.pending_expired: "Ese intento ya venció. Vuelve a entrar con el proveedor."
 error.identity_taken: "Esa cuenta del proveedor ya está vinculada a otra cuenta del juego."
 error.provider_linked: "Ya tienes una cuenta de ese proveedor vinculada."

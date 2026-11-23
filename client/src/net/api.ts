@@ -235,7 +235,9 @@ export const oauthApi = {
     call("POST", "/api/auth/oauth/pending/confirm", { password }),
   create: (email: string): Promise<{ return: string }> =>
     call("POST", "/api/auth/oauth/pending/create", { email }),
-  unlink: (provider: string): Promise<void> => call("POST", "/api/account/unlink", { provider }),
+  /** Needs the password of an account that has one (or a recent login), like link. */
+  unlink: (provider: string, password: string): Promise<void> =>
+    call("POST", "/api/account/unlink", password ? { provider, password } : { provider }),
 };
 
 /** A map submission of the portal (T4.5, docs/05 "Envío de mapas"). */
