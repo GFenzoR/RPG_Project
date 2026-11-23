@@ -1901,8 +1901,10 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     }
     return false;
   };
+  // Both pages every time (no short-circuit): while the leader waits for the bonus, the
+  // mate must still pick a new wolf when its own dies, or the leader fights alone.
   await expect
-    .poll(async () => (await bonusShown(leadPage)) && (await bonusShown(matePage)), {
+    .poll(async () => [await bonusShown(leadPage), await bonusShown(matePage)].every(Boolean), {
       timeout: 120_000,
       intervals: [1_000],
     })
@@ -3660,10 +3662,6 @@ test("account stash: one character stores fish, the other online one takes it ou
   const errors: string[] = [];
   async function enter(name: string): Promise<Page> {
     const page = await browser.newPage();
-    page.on("console", (m) => {
-      if (m.type() === "error") errors.push(m.text());
-    });
-    page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("/play/?lang=es");
     const form = page.getByTestId("login-form");
     await form.getByLabel("Email").fill(owner.email);
@@ -3675,6 +3673,11 @@ test("account stash: one character stores fish, the other online one takes it ou
       .getByRole("button", { name: "Jugar" })
       .click();
     await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    // The login screen's session check answers 401 before signing in: listen after it.
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
     return page;
   }
   const a = await enter(owner.name);
