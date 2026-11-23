@@ -52,6 +52,8 @@ export interface PlantRule {
   idle: boolean;
   /** Leaves fall from it now and then, and when someone brushes past. */
   leaves: boolean;
+  /** On a tile worn into a path (trail wear) it lies flattened (TRAMPLE_SCALE). */
+  trample: boolean;
 }
 
 export const CRITTER_KINDS = ["bird", "butterfly", "firefly", "fish"] as const;
@@ -113,6 +115,7 @@ export function parseLivingWorldData(surfaces: unknown, plants: unknown): Living
       reaction,
       idle: raw["idle"] === true,
       leaves: raw["leaves"] === true,
+      trample: raw["trample"] === true,
     };
   }
   return out;

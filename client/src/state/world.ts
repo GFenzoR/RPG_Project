@@ -45,6 +45,7 @@ import type { Look, Worn } from "@rpg/renderer/look";
 import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
+import { TrailWearState } from "./trail-wear.ts";
 import { modsOf } from "./mods.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
@@ -588,6 +589,8 @@ export class WorldState implements TileSource {
   /** Owned cosmetics, premium balance and what is equipped (T5.7); undefined until sent. */
   cosmetics: CosmeticsStateView | undefined;
   private readonly chunks = new Map<string, ChunkTiles>();
+  /** The living world's trail wear the server sent (state/trail-wear.ts). */
+  readonly trailWear = new TrailWearState();
   private readonly content: ClientContent;
 
   constructor(content: ClientContent) {
@@ -718,6 +721,7 @@ export class WorldState implements TileSource {
         break;
       case "fullMapView":
         this.chunks.clear();
+        this.trailWear.clear();
         this.creatures.clear();
         this.predicted = [];
         this.walkEpoch = msg.value.walkEpoch;
@@ -728,6 +732,9 @@ export class WorldState implements TileSource {
       case "mapSlice":
         if (msg.value.area) this.applyArea(msg.value.area);
         this.prune();
+        break;
+      case "trailWear":
+        this.trailWear.apply(msg.value);
         break;
       case "tileUpdate": {
         const p = posOf(msg.value.pos);
@@ -1126,6 +1133,7 @@ export class WorldState implements TileSource {
       }
     }
     for (const c of a.creatures) this.addCreature(c);
+    this.trailWear.applyArea(a.x, a.y, a.width, a.height, a.wear);
   }
 
   private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
@@ -1162,6 +1170,12 @@ export class WorldState implements TileSource {
       if (Math.abs(cx - pcx) > KEEP_CHUNKS || Math.abs(cy - pcy) > KEEP_CHUNKS)
         this.chunks.delete(key);
     }
+    this.trailWear.keepInside(
+      (pcx - KEEP_CHUNKS) * CHUNK_TILES,
+      (pcy - KEEP_CHUNKS) * CHUNK_TILES,
+      (pcx + KEEP_CHUNKS + 1) * CHUNK_TILES - 1,
+      (pcy + KEEP_CHUNKS + 1) * CHUNK_TILES - 1,
+    );
   }
 
   private addCreature(c: Creature): void {

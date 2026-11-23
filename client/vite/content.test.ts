@@ -30,7 +30,12 @@ describe("client content (T0.5)", () => {
     const lw = content.livingWorld;
     expect(lw?.surfaces.sand?.footprintMs).toBeGreaterThan(0);
     expect(lw?.surfaces.sand?.wind).toBeGreaterThan(0);
-    expect(lw?.plants["tall_grass"]).toEqual({ reaction: "bend", idle: true, leaves: false });
+    expect(lw?.plants["tall_grass"]).toEqual({
+      reaction: "bend",
+      idle: true,
+      leaves: false,
+      trample: true,
+    });
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
   });
 

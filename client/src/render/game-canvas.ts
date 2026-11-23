@@ -467,6 +467,8 @@ export async function createGameCanvas(
   // The living world's frame, reused (docs/07: a frame allocates nothing for it).
   const livingSelf = { x: 0, y: 0 };
   const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf };
+  /** The trail wear version the living world has (state/trail-wear.ts). */
+  let livingWear = -1;
   const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
   const motionQuery =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
@@ -1162,6 +1164,11 @@ export async function createGameCanvas(
     livingView.z = self.pos.z;
     livingSelf.x = self.pos.x;
     livingSelf.y = self.pos.y;
+    // Trail wear (state/trail-wear.ts): handed over whole, only when it changed.
+    if (living && world.trailWear.version !== livingWear) {
+      livingWear = world.trailWear.version;
+      living.applyWear(world.trailWear.list(), true);
+    }
     living?.onTick(now, livingView);
     drawnBoxes.reset();
 

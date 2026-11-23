@@ -1,6 +1,6 @@
 import { Container } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { createLivingWorld, parseLivingWorldData } from "./index.ts";
+import { createLivingWorld, parseLivingWorldData, TRAMPLE_SCALE } from "./index.ts";
 import type { PlantSprite, Surface } from "./index.ts";
 
 const data = parseLivingWorldData(
@@ -13,7 +13,7 @@ const data = parseLivingWorldData(
   },
   {
     plants: [
-      { item: "tall_grass", reaction: "bend", idle: true },
+      { item: "tall_grass", reaction: "bend", idle: true, trample: true },
       { item: "oak_tree", reaction: "rustle", leaves: true },
     ],
   },
@@ -21,7 +21,7 @@ const data = parseLivingWorldData(
 
 function mount(surface: Surface, reduced = { on: false }) {
   const stage = { ground: new Container(), air: new Container() };
-  const grass: PlantSprite = { x: 5 * 32 + 16, skew: { x: 0 } };
+  const grass: PlantSprite = { x: 5 * 32 + 16, skew: { x: 0 }, scale: { y: 1 } };
   const tree: PlantSprite = { x: 9 * 32 + 16, skew: { x: 0 } };
   const lw = createLivingWorld(stage, () => surface, {
     tileSize: 32,
@@ -88,9 +88,37 @@ describe("createLivingWorld", () => {
     expect(lw.stats()).toMatchObject({ footprints: 0, puffs: 0, leaves: 0, sways: 0 });
     expect(grass.skew.x).toBe(0);
     expect(tree.x).toBe(9 * 32 + 16);
-    expect(stage.ground.children[0]?.visible).toBe(false);
+    const effects = stage.ground.children.find((c) => c.label === "living world: ground");
+    expect(effects?.visible).toBe(false);
     lw.onCreatureStep(step(6), 30);
     lw.onTick(40, view);
     expect(lw.stats().footprints).toBe(0);
+  });
+
+  it("draws the server's trail wear, flattens trampled plants, and keeps both reduced", () => {
+    const reduced = { on: false };
+    const { lw, grass, view, stage } = mount("grass", reduced);
+    const layer = stage.ground.children.find((c) => c.label === "living world: trail wear");
+    const shown = (): number => layer?.children.filter((c) => c.visible).length ?? -1;
+    lw.onTick(0, view);
+    expect(shown()).toBe(0);
+    lw.applyWear([
+      { x: 5, y: 5, z: 7, level: 2 },
+      { x: 6, y: 5, z: 7, level: 3 },
+      { x: 40, y: 40, z: 7, level: 3 }, // out of view
+    ]);
+    lw.onTick(16, view);
+    expect(lw.stats().wear).toBe(3);
+    expect(shown()).toBe(2);
+    expect(grass.scale?.y).toBe(TRAMPLE_SCALE[2]);
+    reduced.on = true;
+    lw.onTick(32, view);
+    expect(shown()).toBe(2);
+    expect(grass.scale?.y).toBe(TRAMPLE_SCALE[2]);
+    reduced.on = false;
+    lw.applyWear([{ x: 6, y: 5, z: 7, level: 1 }], true); // the whole wear: (5, 5) recovered
+    lw.onTick(48, view);
+    expect(shown()).toBe(1);
+    expect(grass.scale?.y).toBe(1);
   });
 });

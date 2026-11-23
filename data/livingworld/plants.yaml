@@ -6,10 +6,11 @@
 #             rustle: a tree shakes a pixel or so
 #   idle      it also sways gently in the wind
 #   leaves    leaves fall from it now and then, and when someone brushes past
+#   trample   on a tile worn into a path (trail wear, wear.yaml) it lies flattened
 plants:
-  - { item: grass_tuft, reaction: bend }
-  - { item: tall_grass, reaction: bend, idle: true }
-  - { item: wildflowers, reaction: bend, idle: true }
+  - { item: grass_tuft, reaction: bend, trample: true }
+  - { item: tall_grass, reaction: bend, idle: true, trample: true }
+  - { item: wildflowers, reaction: bend, idle: true, trample: true }
   - { item: reeds, reaction: bend, idle: true }
   - { item: bush, reaction: bend }
   - { item: flower_box, reaction: bend }

@@ -2,8 +2,9 @@
 // mounts it through createLivingWorld and tells it about steps and frames; everything here is
 // cosmetic and client only, and nothing in it talks to the server.
 //
-//   ground layer  (over the grounds, under shadows, items and creatures): trail wear,
-//                 footprints, water ripples and dust clouds, fish shadows
+//   ground layer  (over the grounds, under shadows, items and creatures): trail wear
+//                 (the server's state: drawn even with reduced effects), footprints,
+//                 water ripples and dust clouds, fish shadows
 //   air layer     (over the map): falling leaves, birds, butterflies, fireflies
 //   plants        the map's own plant sprites get a skew (bend) or a pixel offset (rustle)
 //
@@ -20,8 +21,8 @@ import { seededRandom, tileKey } from "./hash.ts";
 import { LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PuffSim, RUN_STEP_MS } from "./puffs.ts";
 import { idleSway, rustleOffset, SwaySim } from "./sway.ts";
-import { MAX_WEAR_DRAWN, WEAR_ALPHA, WearMap } from "./wear.ts";
-import type { WearTile } from "./wear.ts";
+import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
+import type { WearDraw, WearTile } from "./wear.ts";
 
 export * from "./data.ts";
 export { gust, FootprintSim, MAX_FOOTPRINTS, PRINT_KINDS, stepRotation } from "./footprints.ts";
@@ -30,8 +31,18 @@ export { SwaySim, idleSway, rustleOffset, SWAY_MS, MAX_SWAYS } from "./sway.ts";
 export { PuffSim, MAX_PUFFS, RUN_STEP_MS } from "./puffs.ts";
 export { LeafSim, MAX_LEAVES } from "./leaves.ts";
 export { CritterSim, MAX_CRITTERS, FLEE_TILES } from "./critters.ts";
-export { WearMap, MAX_WEAR_DRAWN } from "./wear.ts";
-export type { WearTile } from "./wear.ts";
+export {
+  WearMap,
+  MAX_WEAR_DRAWN,
+  MAX_WEAR_LEVEL,
+  TRAMPLE_SCALE,
+  WEAR_E,
+  WEAR_N,
+  WEAR_S,
+  WEAR_W,
+  wearSprite,
+} from "./wear.ts";
+export type { WearDraw, WearTile } from "./wear.ts";
 export { footstepEvents, STEP_EVENT } from "./footsteps.ts";
 export { hash01, seededRandom } from "./hash.ts";
 
@@ -50,6 +61,8 @@ export type SurfaceLookup = (x: number, y: number, z: number) => Surface | undef
 export interface PlantSprite {
   x: number;
   skew: { x: number };
+  /** Its scale (a Pixi Sprite's): a trampled plant is drawn flatter. Optional for tests. */
+  scale?: { y: number };
 }
 
 /**
@@ -100,12 +113,16 @@ export interface TickView {
 export interface LivingWorld {
   onCreatureStep(step: CreatureStep, now: number): void;
   onTick(now: number, view: TickView): void;
-  /** Trail wear from the server (livingworld/server through the client's glue). */
-  applyWear(tiles: readonly WearTile[]): void;
+  /**
+   * Trail wear from the server (livingworld/server through the client's glue): each tile's
+   * level, 0 to 3 (0 forgets it). With replace the tiles are the whole wear.
+   */
+  applyWear(tiles: readonly WearTile[], replace?: boolean): void;
   /** The sound events of the own player's step onto `to` (footsteps.ts). */
   footstepEvents(to: { x: number; y: number; z: number }): string[];
   /** Counts for tests and the debug overlay. */
   stats(): {
+    wear: number;
     footprints: number;
     puffs: number;
     leaves: number;
@@ -116,7 +133,18 @@ export interface LivingWorld {
   destroy(): void;
 }
 
-const NO_WEAR: readonly WearTile[] = [];
+/** The tint of a worn tile's plain square when the atlas lacks its overlay. */
+const WEAR_FALLBACK_TINT = 0x4a3c2a;
+
+/** The tiles a frame covers, with a margin: x0, y0, x1, y1 (reused: no list per frame). */
+const tilesBuf: [number, number, number, number] = [0, 0, 0, 0];
+function viewTiles(view: TickView): [number, number, number, number] {
+  tilesBuf[0] = Math.floor(view.x) - 1;
+  tilesBuf[1] = Math.floor(view.y) - 1;
+  tilesBuf[2] = Math.ceil(view.x + view.width) + 1;
+  tilesBuf[3] = Math.ceil(view.y + view.height) + 2;
+  return tilesBuf;
+}
 
 /** A frame longer than this (a hidden tab) advances the effects this much only, ms. */
 export const MAX_FRAME_MS = 100;
@@ -197,11 +225,15 @@ export function createLivingWorld(
     if (!texCache.has(name)) texCache.set(name, options.texture?.(`livingworld/fx/${name}`));
     return texCache.get(name);
   };
+  // Trail wear is the server's state, not an animation: its own layer, under the effects,
+  // stays with reduced effects.
+  const wearLayer = new Container({ label: "living world: trail wear" });
   const ground = new Container({ label: "living world: ground" });
   const air = new Container({ label: "living world: air" });
+  stage.ground.addChild(wearLayer);
   stage.ground.addChild(ground);
   stage.air.addChild(air);
-  const wearPool = new Pool(ground, MAX_WEAR_DRAWN, texture);
+  const wearPool = new Pool(wearLayer, MAX_WEAR_DRAWN, texture);
   const printPool = new Pool(ground, MAX_FOOTPRINTS, texture);
   const puffPool = new Pool(ground, MAX_PUFFS, texture);
   const leafPool = new Pool(air, MAX_LEAVES, texture);
@@ -238,6 +270,53 @@ export function createLivingWorld(
     for (const p of plants) {
       p.sprite.skew.x = 0;
       p.sprite.x = p.baseX;
+    }
+  };
+
+  /** The worn tiles in view, rebuilt only when the wear or the view's tiles changed. */
+  let wearShown: WearDraw[] = [];
+  const wearAt = { version: -1, z: -1, x0: 0, y0: 0, x1: 0, y1: 0 };
+  const wearInView = (z: number, x0: number, y0: number, x1: number, y1: number): WearDraw[] => {
+    const a = wearAt;
+    if (
+      a.version !== wear.version ||
+      a.z !== z ||
+      a.x0 !== x0 ||
+      a.y0 !== y0 ||
+      a.x1 !== x1 ||
+      a.y1 !== y1
+    ) {
+      a.version = wear.version;
+      a.z = z;
+      a.x0 = x0;
+      a.y0 = y0;
+      a.x1 = x1;
+      a.y1 = y1;
+      wearShown = wear.size > 0 ? wear.inView(z, x0, y0, x1, y1) : [];
+    }
+    return wearShown;
+  };
+
+  /** Draws the trail wear and flattens the plants that trample on worn tiles. */
+  const drawWear = (z: number, x0: number, y0: number, x1: number, y1: number): void => {
+    wearPool.begin();
+    for (const t of wearInView(z, x0, y0, x1, y1)) {
+      const name = wearSprite(t.level, t.mask);
+      const art = texture(name) !== undefined;
+      const s = wearPool.next(name, T);
+      if (!s) break;
+      s.position.set((t.x + 0.5) * T, (t.y + 0.5) * T);
+      if (!art) {
+        // No art in the atlas: a plain earth-coloured square, fainter the less worn.
+        s.tint = WEAR_FALLBACK_TINT;
+        s.alpha = 0.15 * t.level;
+      }
+    }
+    wearPool.end();
+    for (const p of plants) {
+      if (!p.rule.trample || !p.sprite.scale) continue;
+      const k = TRAMPLE_SCALE[wear.size > 0 ? wear.level(p.x, p.y, z) : 0] ?? 1;
+      if (p.sprite.scale.y !== k) p.sprite.scale.y = k;
     }
   };
 
@@ -300,6 +379,9 @@ export function createLivingWorld(
         wasReduced = true;
         ground.visible = false;
         air.visible = false;
+        refreshPlants();
+        const [rx0, ry0, rx1, ry1] = viewTiles(view);
+        drawWear(view.z, rx0, ry0, rx1, ry1);
         return;
       }
       wasReduced = false;
@@ -311,10 +393,7 @@ export function createLivingWorld(
       leaves.step(ms);
       sway.prune(now);
       refreshPlants();
-      const x0 = Math.floor(view.x) - 1;
-      const y0 = Math.floor(view.y) - 1;
-      const x1 = Math.ceil(view.x + view.width) + 1;
-      const y1 = Math.ceil(view.y + view.height) + 2;
+      const [x0, y0, x1, y1] = viewTiles(view);
       // Plants: bends from steps, idle sway on tall ones; idle leaves from trees in view.
       let trees = 0;
       for (const p of plants) {
@@ -348,8 +427,8 @@ export function createLivingWorld(
       draw(now, view, x0, y0, x1, y1);
     },
 
-    applyWear(tiles) {
-      wear.apply(tiles);
+    applyWear(tiles, replace = false) {
+      wear.apply(tiles, replace);
     },
 
     footstepEvents(to) {
@@ -358,6 +437,7 @@ export function createLivingWorld(
 
     stats() {
       return {
+        wear: wear.size,
         footprints: prints.count,
         puffs: puffs.puffs.length,
         leaves: leaves.leaves.length,
@@ -369,22 +449,15 @@ export function createLivingWorld(
 
     destroy() {
       settlePlants();
+      for (const p of plants) if (p.sprite.scale) p.sprite.scale.y = 1;
+      wearLayer.destroy({ children: true });
       ground.destroy({ children: true });
       air.destroy({ children: true });
     },
   };
 
   function draw(now: number, view: TickView, x0: number, y0: number, x1: number, y1: number): void {
-    wearPool.begin();
-    // inView makes a list: only when the server marked worn tiles.
-    for (const t of wear.size > 0 ? wear.inView(view.z, x0, y0, x1, y1) : NO_WEAR) {
-      const s = wearPool.next("wear", T);
-      if (!s) break;
-      s.position.set((t.x + 0.5) * T, (t.y + 0.5) * T);
-      s.alpha = WEAR_ALPHA * t.level;
-      s.tint = 0x4a3c2a;
-    }
-    wearPool.end();
+    drawWear(view.z, x0, y0, x1, y1);
     printPool.begin();
     for (const p of prints.prints) {
       const s = printPool.next(`footprint_${p.kind}`, 2);

@@ -8,7 +8,16 @@ import { seededRandom } from "./hash.ts";
 import { LEAF_FALL_MS, LEAF_REST_MS, LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PUFF_MS, PuffSim } from "./puffs.ts";
 import { BEND, idleSway, IDLE, MAX_SWAYS, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
-import { MAX_WEAR_DRAWN, WearMap } from "./wear.ts";
+import {
+  MAX_WEAR_DRAWN,
+  MAX_WEAR_LEVEL,
+  WEAR_E,
+  WEAR_N,
+  WEAR_S,
+  WEAR_W,
+  WearMap,
+  wearSprite,
+} from "./wear.ts";
 
 /** The first element, which the test expects to be there. */
 function first<T>(list: readonly T[]): T {
@@ -58,8 +67,8 @@ describe("data", () => {
     expect(d.surfaces.lava?.footprintMs).toBe(0);
     expect(Object.keys(d.surfaces)).toEqual(["sand", "lava"]);
     expect(d.plants).toEqual({
-      bush: { reaction: "bend", idle: true, leaves: false },
-      oak: { reaction: "rustle", idle: false, leaves: true },
+      bush: { reaction: "bend", idle: true, leaves: false, trample: false },
+      oak: { reaction: "rustle", idle: false, leaves: true, trample: false },
     });
     expect(parseLivingWorldData(undefined, null)).toEqual(EMPTY_DATA);
   });
@@ -254,31 +263,60 @@ describe("critters", () => {
 });
 
 describe("wear and footsteps", () => {
-  it("wear sets, clears and keeps the most worn in view", () => {
+  it("wear keeps levels 1 to 3, forgets 0 and keeps the most worn in view", () => {
     const w = new WearMap();
     w.apply([
-      { x: 1, y: 1, z: 7, level: 0.5 },
-      { x: 2, y: 1, z: 7, level: 3 },
+      { x: 1, y: 1, z: 7, level: 1 },
+      { x: 2, y: 1, z: 7, level: 9 },
+      { x: 3, y: 1, z: 6, level: 2 },
     ]);
+    expect(w.level(2, 1, 7)).toBe(MAX_WEAR_LEVEL);
     expect(
       w
         .inView(7, 0, 0, 5, 5)
         .map((t) => t.level)
         .sort(),
-    ).toEqual([0.5, 1]);
+    ).toEqual([1, 3]);
+    const v = w.version;
+    w.apply([{ x: 1, y: 1, z: 7, level: 1 }]);
+    expect(w.version).toBe(v); // no change, no rebuild of the view list
     w.apply([{ x: 1, y: 1, z: 7, level: 0 }]);
+    expect(w.size).toBe(2);
+    expect(w.version).toBeGreaterThan(v);
+    w.apply([{ x: 5, y: 5, z: 7, level: 2 }], true);
     expect(w.size).toBe(1);
     w.apply(
       Array.from({ length: MAX_WEAR_DRAWN + 10 }, (_, i) => ({
-        x: i,
+        x: i * 2,
         y: 0,
         z: 7,
-        level: i / 1000,
+        level: i < 5 ? 3 : 1,
       })),
     );
     const shown = w.inView(7, 0, 0, 1000, 1000);
     expect(shown.length).toBe(MAX_WEAR_DRAWN);
-    expect(shown[0]?.level).toBe(1);
+    expect(shown.slice(0, 5).every((t) => t.level === 3)).toBe(true);
+  });
+
+  it("wear picks each tile's overlay by its level and its worn neighbours", () => {
+    const w = new WearMap();
+    // A path east-west with a branch north at x = 5, and one lone tile.
+    const path = [3, 4, 5, 6].map((x) => ({ x, y: 5, z: 7, level: 3 }));
+    w.apply([...path, { x: 5, y: 4, z: 7, level: 2 }, { x: 10, y: 10, z: 7, level: 1 }]);
+    const shown = new Map(w.inView(7, 0, 0, 20, 20).map((t) => [`${t.x},${t.y}`, t]));
+    const sprite = (x: number, y: number): string => {
+      const t = shown.get(`${x},${y}`);
+      return t ? wearSprite(t.level, t.mask) : "";
+    };
+    expect(sprite(3, 5)).toBe(`trail_3_${WEAR_E}`);
+    expect(sprite(4, 5)).toBe(`trail_3_${WEAR_E | WEAR_W}`);
+    expect(sprite(5, 5)).toBe(`trail_3_${WEAR_N | WEAR_E | WEAR_W}`);
+    expect(sprite(6, 5)).toBe(`trail_3_${WEAR_W}`);
+    expect(sprite(5, 4)).toBe(`trail_2_${WEAR_S}`);
+    expect(sprite(10, 10)).toBe("trail_1_0");
+    // Another floor's wear joins nothing.
+    w.apply([{ x: 4, y: 4, z: 6, level: 3 }]);
+    expect(w.mask(4, 5, 7)).toBe(WEAR_E | WEAR_W);
   });
 
   it("name the surface's step sound first, then the plain step", () => {

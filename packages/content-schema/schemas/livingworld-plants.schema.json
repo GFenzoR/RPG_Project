@@ -17,7 +17,11 @@
           "item": { "$ref": "common.schema.json#/$defs/itemRef" },
           "reaction": { "enum": ["bend", "rustle"] },
           "idle": { "type": "boolean" },
-          "leaves": { "type": "boolean" }
+          "leaves": { "type": "boolean" },
+          "trample": {
+            "description": "On a tile worn into a path (trail wear) it is drawn flattened.",
+            "type": "boolean"
+          }
         }
       }
     }
