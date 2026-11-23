@@ -336,7 +336,7 @@ auth). Pasado el límite responden `429 rate_limited`.
   recargar la página dentro del mismo navegador conserva el login y, normalmente, cerrar
   el navegador lo olvida. No siempre: Chrome/Edge con "continuar donde lo dejaste" y las
   PWA instaladas restauran las cookies de sesión al reabrir; en ese caso solo lo acotan
-  los 30 min de inactividad y el tope de 12 h. La migración 00024 borró las sesiones de 30 días anteriores (todos entran de
+  los 30 min de inactividad y el tope de 12 h. La migración 00026 borró las sesiones de 30 días anteriores (todos entran de
   nuevo una vez). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login

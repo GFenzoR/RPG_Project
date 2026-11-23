@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// knownGaps lists versions that were never used on purpose. 00024 was the idle-session
+// migration while lote 17 was in review; the account stash (00025) reached development
+// databases first, so the sessions one moved to 00026 and 00024 stays empty: filling it
+// now would be a missing (out-of-order) migration for every database already at 00025.
+var knownGaps = map[int]bool{24: true}
+
 // TestVersionsAreContiguousAndUnique guards against two branches picking the same goose
 // version (goose refuses duplicates and the server would not start) or leaving a gap
 // that a later branch fills behind databases that already moved past it.
@@ -39,8 +45,13 @@ func TestVersionsAreContiguousAndUnique(t *testing.T) {
 		}
 	}
 	for v := 1; v <= maxVersion; v++ {
-		if _, ok := seen[v]; !ok {
+		if _, ok := seen[v]; !ok && !knownGaps[v] {
 			t.Errorf("migration version %05d is missing (versions must be contiguous)", v)
+		}
+	}
+	for v := range knownGaps {
+		if name, ok := seen[v]; ok {
+			t.Errorf("version %05d is a known gap but %q uses it: databases past it would refuse it", v, name)
 		}
 	}
 }

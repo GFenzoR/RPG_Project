@@ -315,7 +315,7 @@ Hacer una vez y revisar cada mes.
 
 **Sesiones** (lote 17)
 - [ ] Tras desplegar el lote 17, todos los jugadores entran de nuevo una vez (la migración
-  00024 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
+  00026 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
 - [ ] Ante un reporte de cuenta comprometida: pedir al jugador "Cerrar sesión en todos
   lados" y cambiar la contraseña desde la pantalla de personajes (o mandarle un enlace con
   `gameserver admin reset-link`); revisar `gameserver admin audit` por

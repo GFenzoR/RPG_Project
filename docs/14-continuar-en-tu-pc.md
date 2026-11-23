@@ -111,10 +111,9 @@ el punto 5:
   - **No se corrió `make e2e` ni `make test-integration`** en la rama: el test e2e "account
     stash" (`client/e2e/game.spec.ts`, screenshots `stash-01-shared` y `stash-02-taken`) y
     `store/stash_integration_test.go` corren al final del lote.
-  - **Migración 00025** (`00025_account_stash.sql`): supone que `00024_session_idle.sql`
-    (rama `feat/auth-sessions`, mismo lote) entra antes. Si el baúl se integra sin ella,
-    queda un hueco en la numeración (goose lo acepta); si entra otra 00025 antes, renumerar
-    esta con `make migrate-new`.
+  - **Migración 00025** (`00025_account_stash.sql`); la de sesiones del mismo lote quedó
+    en la 00026 y la 00024 es un hueco a propósito (`knownGaps` en
+    `migrations/embed_test.go`): no reutilizarla.
   - **Sin baúl en las casas** (el pedido decía "quizás"): un cofre en la casa sería otro item
     con `stash: true`; hoy solo están los de los pueblos.
   - **Mover parte de una pila:** la ventana guarda y saca la pila entera (el protocolo ya
@@ -130,7 +129,7 @@ el punto 5:
   "Cambiar contraseña" en la pantalla de personajes (`POST /api/auth/logout-all`,
   `POST /api/account/password`) y el latido `POST /api/auth/keepalive` mientras se juega.
   Queda:
-  - Al desplegar, **todos entran de nuevo una vez** (la migración 00024 borra las sesiones
+  - Al desplegar, **todos entran de nuevo una vez** (la migración 00026 borra las sesiones
     viejas): avisarlo.
   - Los **tests de Rust** de `api.rs` (token solo en memoria; `signs_out`: un
     "cerrar sesión en todos lados" que falla conserva la sesión) no se corrieron ni se
@@ -143,9 +142,10 @@ el punto 5:
     una sola vez con una marca no secreta en la config.
   - El portal de mapas y `/account` no mandan latido (docs/05): revisar si el formulario
     del portal conserva lo escrito tras un `401` al enviar.
-  - **Migraciones al juntar el lote 17:** esta rama usa la 00024 (`00024_session_idle.sql`)
-    y la del baúl compartido la 00025; `migrations/embed_test.go` falla si hay versiones
-    repetidas o huecos. Comprobarlo en la punta del lote.
+  - **Migraciones del lote 17:** sesiones es la 00026 (`00026_session_idle.sql`), detrás
+    del baúl (00025), porque las bases de desarrollo ya aplicaron la 00025 y goose rechaza
+    una versión menor que falte. La 00024 queda vacía (`knownGaps` en
+    `migrations/embed_test.go`, que falla con versiones repetidas o huecos nuevos).
   - La página `/account` del sitio no tiene todavía los botones de "cerrar sesión en todos
     lados" ni "cambiar contraseña" (solo el juego): sumar `AccountSecurity` ahí si se pide.
   - Sin flags para cambiar las 12 h ni los 30 min (constantes en `auth`).
