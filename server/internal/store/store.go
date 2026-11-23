@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,15 +50,24 @@ type Store struct {
 // an HTTP request (or shutdown) forever. Migrations run on their own connection without it.
 const DefaultStatementTimeout = 10 * time.Second
 
+// DefaultMaxConns is the pool size when DATABASE_URL has no pool_max_conns. pgxpool's
+// own default, max(4, NumCPU), is small on a small instance: the HTTP API, the Saver and
+// the WebSocket handshake share the pool, and a burst of logins must not starve saves.
+const DefaultMaxConns = 16
+
+// hasPoolMaxConns reports whether the database URL (URL or key=value form) sets
+// pool_max_conns: then the operator's value is kept.
+func hasPoolMaxConns(url string) bool {
+	return strings.Contains(url, "pool_max_conns=")
+}
+
 // Open connects to PostgreSQL and checks the connection. Pool queries time out after
-// DefaultStatementTimeout unless the URL sets its own statement_timeout.
+// DefaultStatementTimeout unless the URL sets its own statement_timeout; the pool holds
+// DefaultMaxConns connections unless the URL sets pool_max_conns.
 func Open(ctx context.Context, url string) (*Store, error) {
-	cfg, err := pgxpool.ParseConfig(url)
+	cfg, err := poolConfig(url)
 	if err != nil {
-		return nil, fmt.Errorf("parse postgres url: %w", err)
-	}
-	if _, ok := cfg.ConnConfig.RuntimeParams["statement_timeout"]; !ok {
-		cfg.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(DefaultStatementTimeout.Milliseconds())
+		return nil, err
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -181,4 +191,19 @@ func Permanent(err error) bool {
 	}
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && len(pgErr.Code) == 5 && (pgErr.Code[:2] == "22" || pgErr.Code[:2] == "23")
+}
+
+// poolConfig parses the database URL with the pool defaults of Open.
+func poolConfig(url string) (*pgxpool.Config, error) {
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("parse postgres url: %w", err)
+	}
+	if _, ok := cfg.ConnConfig.RuntimeParams["statement_timeout"]; !ok {
+		cfg.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(DefaultStatementTimeout.Milliseconds())
+	}
+	if !hasPoolMaxConns(url) {
+		cfg.MaxConns = DefaultMaxConns
+	}
+	return cfg, nil
 }
