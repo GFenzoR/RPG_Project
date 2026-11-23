@@ -282,9 +282,8 @@ el punto 5:
     despertar mujer). Se cambia gratis en Personalizar; un aviso al primer login (no está)
     sería lo amable. Un aspecto con un campo que salió de `data/looks.yaml` solo cambia ese
     campo (el sexo elegido se conserva).
-  - **La altura (confirmar con el dueño):** la tarea pedía a la mujer "ligeramente más
-    baja" y mide lo mismo (ver arriba). Es una desviación consciente del pedido: va en la
-    descripción del PR para que el dueño la acepte o pida el segundo esqueleto.
+  - **La altura (decidido):** la tarea pedía a la mujer "ligeramente más baja"; el dueño
+    decidió el 2026-11-20 que mida lo mismo que el hombre (sin segundo esqueleto).
   - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
     de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
     etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
