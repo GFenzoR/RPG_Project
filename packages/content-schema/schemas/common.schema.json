@@ -22,7 +22,7 @@
     },
     "notes": { "description": "Internal comment, never shown to players.", "type": "string" },
     "surface": {
-      "description": "What a ground is made of, for the living world (livingworld/README.md): footprints, plant and water reactions, step dust and footstep sounds. Display only: the server ignores it.",
+      "description": "What a ground is made of, for the living world (livingworld/README.md): footprints, plant and water reactions, step dust and footstep sounds; the server reads it only for trail wear (data/livingworld/wear.yaml).",
       "enum": [
         "sand",
         "wet_sand",

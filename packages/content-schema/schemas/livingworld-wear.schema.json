@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-wear.schema.json",
+  "title": "Living world trail wear (data/livingworld/wear.yaml)",
+  "description": "How grass wears into a path under players' steps and recovers (livingworld/README.md). The server reads it (livingworld/server/trail); the client only draws the levels the server sends.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "surfaces",
+    "player_step",
+    "monster_step",
+    "max",
+    "levels",
+    "decay_every_ms",
+    "decay",
+    "save_every_ms"
+  ],
+  "properties": {
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/surface" }
+    },
+    "player_step": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "monster_step": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "max": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "levels": {
+      "description": "Wear of levels 1 (trampled), 2 (worn) and 3 (bare dirt): ascending, at most max (the server checks the order).",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+    },
+    "decay_every_ms": { "type": "integer", "minimum": 1000 },
+    "decay": { "type": "integer", "minimum": 1 },
+    "save_every_ms": { "type": "integer", "minimum": 10000 }
+  }
+}

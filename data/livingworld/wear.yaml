@@ -1,0 +1,23 @@
+# Trail wear (livingworld/README.md "Desgaste de senderos", docs/02 "Senderos"): grass that
+# many players walk over shows the dirt under it, and recovers when nobody walks there.
+# The server reads this file (livingworld/server/trail); the client only draws the levels
+# the server sends.
+#
+#   surfaces        ground surfaces (data/items ground.surface) that wear
+#   player_step     wear points of one step of a player
+#   monster_step    of a monster (0: monsters leave no trail; NPCs never do)
+#   max             the cap: how long a beaten path takes to recover
+#   levels          the wear of levels 1 (trampled), 2 (worn) and 3 (bare dirt)
+#   decay_every_ms  every this long, each worn tile loses `decay` points
+#   save_every_ms   how often the wear is written to the database
+#
+# The pace: three steps a minute on a tile for three hours make bare dirt; from the cap,
+# grass is back in 20 hours (120 points an hour).
+surfaces: [grass, tall_grass]
+player_step: 4
+monster_step: 0
+max: 2400
+levels: [400, 1000, 1800]
+decay_every_ms: 60000
+decay: 2
+save_every_ms: 300000
