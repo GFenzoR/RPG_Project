@@ -161,7 +161,7 @@ jobs:
       # signature): keyless signature (Sigstore, this workflow's OIDC identity) of the digest
       # just pushed. deploy/deploy.sh verifies it before running the image; the verify step
       # here checks the exact identity deploy.sh trusts for main and vX.Y.Z tags.
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
         if: env.PUSH == 'true'
       - name: sign the image (cosign, keyless)
         if: env.PUSH == 'true'

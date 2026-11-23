@@ -54,7 +54,7 @@ var fuzzRoutes = []struct {
 	{"/api/auth/oauth/discord/link", credPlayer, `{"password":"long-password-1"}`, http.StatusOK},
 	{"/api/auth/oauth/pending/confirm", credPending, `{"password":"long-password-1"}`, http.StatusOK},
 	{"/api/auth/oauth/pending/create", credPending, `{"email":"other@example.org"}`, http.StatusOK},
-	{"/api/account/unlink", credPlayer, `{"provider":"google"}`, http.StatusNotFound},
+	{"/api/account/unlink", credPlayer, `{"provider":"google","password":"long-password-1"}`, http.StatusNotFound},
 	{"/api/auth/verify", credNone, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}`, http.StatusBadRequest},
 	{"/api/auth/password/forgot", credNone, `{"email":"fuzz@example.org"}`, http.StatusNotFound}, // decoded, then email_disabled (no mail here)
 	{"/api/auth/password/reset", credNone, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","password":"long-password-3"}`, http.StatusBadRequest},
