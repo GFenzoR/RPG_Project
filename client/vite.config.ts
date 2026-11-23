@@ -17,7 +17,7 @@ const tauriDevHost = process.env["TAURI_DEV_HOST"];
 // The read-only E2E hooks (window.__rpgClient, window.__rpgAudio; docs/08): in the dev
 // server (Playwright, `make dev`, `make play`) and in a build only with RPG_E2E_HOOKS=1.
 // A production build drops them (lote 16: no helper for bots in what players load);
-// vite/e2e-hooks.test.ts checks it.
+// vite/e2e-hooks.buildtest.ts checks it (make lint).
 const e2eHooks = (command: string): boolean =>
   command === "serve" || process.env["RPG_E2E_HOOKS"] === "1";
 

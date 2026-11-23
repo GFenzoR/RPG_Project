@@ -38,6 +38,7 @@ const (
 	msgSaving         = "inventory.saving"
 	msgNotYours       = "inventory.not_yours"
 	msgFloorFirst     = "inventory.floor_first"
+	msgStreetBag      = "inventory.street_bag"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgFull           = "inventory.full_stomach"
@@ -549,6 +550,12 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	// a pile of its own, or in a pile or container already reserved to p: never in
 	// someone else's (a reservation must not take over a stranger's pile, bag or corpse).
 	leaving := w.itemHouse(it) != nil && w.publicGround(to)
+	// Lote 16: a give-away (see gave below) is reserved to p until the database has p's
+	// snapshot without it (hold.go gaveAway), and a reservation covers the whole pile or
+	// container it lands in. So, like what leaves a house, it lands as a pile of its own or
+	// in one already reserved to p: joining a stranger's pile or bag on the street would
+	// lock the stranger's things to p (and to p alone, as long as p keeps dropping).
+	ownOnly := leaving || (it.carriedBy() == p || w.heldFor(p, it)) && w.publicGround(to)
 
 	// Where the units go: an existing stack they merge into, or a new place.
 	var merge *Item
@@ -569,7 +576,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		// (portal.go fallTo), and from here on it is a drop there. Neither end is a house
 		// tile (world.NewMap), nor is where it lands: leaving stays right.
 		if pt := w.stepPortal(to.pos); pt != nil {
-			at, ok := w.fallTo(p, it, count, pt, leaving)
+			at, ok := w.fallTo(p, it, count, pt, ownOnly)
 			if !ok {
 				p.emit(systemMsg(msgPortalNoRoom))
 				return
@@ -578,7 +585,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 				return // a teleport of one floor back to where it lies
 			}
 		}
-		merge = w.groundMerge(p, it, count, to.pos, leaving)
+		merge = w.groundMerge(p, it, count, to.pos, ownOnly)
 		if merge == nil && len(w.ground[to.pos]) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
 			return
@@ -628,6 +635,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 		if leaving && !w.heldFor(p, to.cont) { // T5.3: see leaving
 			p.emit(systemMsg(msgFloorFirst))
+			return
+		}
+		if ownOnly && !w.heldFor(p, to.cont) { // lote 16: see ownOnly
+			p.emit(systemMsg(msgStreetBag))
 			return
 		}
 		if key := nestRefusal(it, to.cont); key != "" {
@@ -733,16 +744,12 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	}
 	if gave {
 		// Reservable only as a pile of its own or into what is reserved to p already
-		// (hold.go reserveGiven): never a stranger's pile or bag.
+		// (ownOnly): never a stranger's pile or bag. hold.go reserveGiven still checks.
 		var root *Item
 		if r := landed.root(); r.onGround && (merge == nil && to.kind == locGround || w.heldFor(p, r)) {
 			root = r
 		}
-		var at *Item
-		if r := landed.root(); r.onGround {
-			at = r
-		}
-		w.gaveAway(p, root, at)
+		w.gaveAway(p, root, root)
 	}
 	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
 	// gathering or crafting try (earlyTry).
@@ -760,10 +767,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 
 // groundMerge returns the pile of pos that count units of it, dropped there by p, join, or
 // nil (they land as a new pile). T5.3: never a pile reserved to another player, and for
-// what leaves a house (leaving) only one already reserved to p (hold.go).
-func (w *World) groundMerge(p *Player, it *Item, count int, pos world.Pos, leaving bool) *Item {
+// what leaves a house or is a give-away (ownOnly, moveItem) only one already reserved to
+// p (hold.go).
+func (w *World) groundMerge(p *Player, it *Item, count int, pos world.Pos, ownOnly bool) *Item {
 	return mergeTargetIf(w.ground[pos], it, count, func(c *Item) bool {
-		return !w.groundHeld(p, c) && (!leaving || w.heldFor(p, c))
+		return !w.groundHeld(p, c) && (!ownOnly || w.heldFor(p, c))
 	})
 }
 

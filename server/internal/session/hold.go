@@ -171,7 +171,8 @@ const giveSaveEvery = game.Tick(40)
 // (settleGivers) and reserves at to p until its ack (reserveGave). at is the pile or the
 // container lying on the street it landed in; root is the same when it may be reserved to
 // p inside a house write (a pile of its own, or a pile or container already reserved to
-// p), nil otherwise (Player.given, reserveGiven).
+// p), nil otherwise (Player.given, reserveGiven). moveItem lets a give-away land nowhere
+// else (ownOnly: a stranger's pile or bag would be locked to p), so the two are the same.
 func (w *World) gaveAway(p *Player, root, at *Item) {
 	p.given = append(p.given, root)
 	if at != nil {

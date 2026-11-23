@@ -3602,11 +3602,16 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   expect(errors).toEqual([]);
 });
 
-/** The color name (Spanish option text) of a presence swatch, by its hue (lote 16). */
+/** The color name (Spanish option text) of a presence swatch, by its lightness and hue (lote 16). */
 function colorOfSwatch(css: string): string {
+  // server/internal/presence ColorOf: white or black by lightness, else blue or yellow by hue.
   const [r = 0, g = 0, b = 0] = (css.match(/\d+/g) ?? []).slice(0, 3).map((v) => Number(v) / 255);
   const hi = Math.max(r, g, b);
-  const d = hi - Math.min(r, g, b);
+  const lo = Math.min(r, g, b);
+  const light = (hi + lo) / 2;
+  if (light > 0.75) return "blanco";
+  if (light < 0.25) return "negro";
+  const d = hi - lo;
   let h = 0;
   if (d > 0) {
     if (hi === r) h = (((g - b) / d) % 6) * 60;
@@ -3614,12 +3619,6 @@ function colorOfSwatch(css: string): string {
     else h = ((r - g) / d + 4) * 60;
   }
   if (h < 0) h += 360;
-  const bands: [string, number][] = [
-    ["rojo", 0],
-    ["azul", 220],
-    ["verde", 125],
-    ["amarillo", 52],
-  ];
   const dist = (c: number) => Math.min(Math.abs(h - c), 360 - Math.abs(h - c));
-  return bands.reduce((a, x) => (dist(x[1]) < dist(a[1]) ? x : a))[0];
+  return dist(220) < dist(52) ? "azul" : "amarillo";
 }

@@ -716,7 +716,10 @@ personaje** (lo que cuesta un autoguardado), además de los autoguardados de sie
 mismo orden que los transfers en el peor caso. El transfer que sigue no escribe nada más
 si ese guardado ya salió (solo el que espera su ventana). En el loop, cada comando (o
 tick, para lo que el servidor deja caer fuera de un comando) en que algo cae a la calle
-toma un snapshot al terminar, uno solo aunque caigan muchas pilas (`BenchmarkThrowAway`,
+toma un snapshot al terminar si no está dentro de la ventana de 2 s de un guardado
+anterior; dentro de la ventana solo reserva lo tirado (sin snapshot todavía, `hold.go
+settleGave`) y un solo snapshot al cerrar la ventana lo cubre todo. Uno solo por comando
+aunque caigan muchas pilas (`BenchmarkThrowAway`,
 tirar una moneda y levantarla con un cofre de 40 items: ≈ 3 µs y ≈ 8 KB más por tirada,
 11 asignaciones; el agrupado solo ahorra snapshots). Con el rate limit de 30 comandos por
 segundo son a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa que tirar

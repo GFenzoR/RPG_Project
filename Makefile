@@ -108,6 +108,7 @@ test-deploy: ## Tests of deploy/deploy.sh and deploy/backup.sh (stubs, no Docker
 lint-ts:
 	pnpm lint
 	pnpm typecheck
+	pnpm --filter @rpg/client test:build
 
 # Content tooling runs TypeScript directly (Node strips types; the flag is needed < 22.18).
 CONTENT_CLI := node --experimental-strip-types packages/content-schema/src/cli.ts

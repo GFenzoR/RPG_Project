@@ -1071,9 +1071,13 @@ Diseño en `01-architecture.md` ("Detección de bots").
 - **`PresenceCheck{check_id, question, options[], timeout_ms}`**: `question` y cada
   `DialogOption.text` son claves i18n. La pregunta es siempre `presence.question`
   ("elige el color de esta muestra") con un parámetro numérico `swatch`: un color
-  `0xRRGGBB` que el servidor sortea en cada chequeo dentro de la franja de tono del color
-  pedido (`server/internal/presence`); el cliente lo dibuja como una muestra. Las
-  opciones son `presence.option.<color>` (`red`, `blue`, `green`, `yellow`). **Desde el
+  `0xRRGGBB` que el servidor sortea en cada chequeo dentro de la franja del color pedido
+  (`server/internal/presence`); el cliente lo dibuja como una muestra. Las opciones son
+  `presence.option.<color>` (`blue`, `yellow`, `white`, `black`): ningún par depende solo
+  del tono (blanco y negro se leen por la luminosidad; azul y amarillo están en el eje
+  que conserva quien tiene protanopía o deuteranopía), así que un jugador daltónico
+  contesta igual que cualquiera. Hasta la revisión del lote 16 eran rojo, azul, verde y
+  amarillo. **Desde el
   lote 16 ningún texto de la pregunta coincide con una opción**: antes la clave era
   `presence.question.<color>` y un script contestaba comparando sufijos sin mirar nada.
   Clasificar el tono sigue siendo posible para un script (nada que el cliente dibuja es

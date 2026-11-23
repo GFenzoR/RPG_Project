@@ -156,16 +156,28 @@ func TestItemFallFindsRoom(t *testing.T) {
 	if !hasKey(evs, "portal.no_room") || h.w.CountItem(p, "copper_coin") != 10 || len(h.w.GroundAt(landing)) != 20 {
 		t.Fatalf("no room: %v, carried %d", systemKeys(evs), h.w.CountItem(p, "copper_coin"))
 	}
-	// 19 swords and a pile of coins: the coins join the pile.
+	// 19 swords and the thrower's own pile of coins (thrown just before, still reserved to
+	// it): the coins join the pile. A stranger's pile takes none (lote 16: moveItem ownOnly).
 	h = portalHarness(t, 0)
 	cl, p, pack = h.thrower("Thrower", 9523, pos(5, 1), stack(coinID, 10, 0))
+	h.fill(landing, 19)
+	if evs := h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(stairsDown), 5)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("the first throw: %v", systemKeys(evs))
+	}
+	evs = h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(stairsDown), 4))
+	g := h.w.GroundAt(landing)
+	if len(systemKeys(evs)) != 0 || len(g) != 20 || g[19].Count() != 9 || h.w.CountItem(p, "copper_coin") != 1 {
+		t.Fatalf("onto a pile on a full tile: %v, %d items, top %d", systemKeys(evs), len(g), g[19].Count())
+	}
+	h = portalHarness(t, 0)
+	cl, p, pack = h.thrower("Thrower", 9524, pos(5, 1), stack(coinID, 10, 0))
 	h.fill(landing, 19)
 	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 5, landing) }))
 	h.sim.Step()
 	evs = h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(stairsDown), 4))
-	g := h.w.GroundAt(landing)
-	if len(systemKeys(evs)) != 0 || len(g) != 20 || g[19].Count() != 9 || h.w.CountItem(p, "copper_coin") != 6 {
-		t.Fatalf("onto a pile on a full tile: %v, %d items, top %d", systemKeys(evs), len(g), g[19].Count())
+	if g := h.w.GroundAt(landing); !hasKey(evs, "portal.no_room") || len(g) != 20 || g[19].Count() != 5 ||
+		h.w.CountItem(p, "copper_coin") != 10 {
+		t.Fatalf("onto a stranger's pile on a full tile: %v, %d items, top %d", systemKeys(evs), len(g), g[19].Count())
 	}
 	h.checkInvariants()
 }

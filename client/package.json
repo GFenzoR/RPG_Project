@@ -9,6 +9,7 @@
     "build": "vite build --outDir ../build/client --emptyOutDir",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:build": "vitest run --config vitest.build.config.ts",
     "e2e": "playwright test"
   },
   "dependencies": {

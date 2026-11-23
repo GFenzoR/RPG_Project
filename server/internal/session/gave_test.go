@@ -260,18 +260,22 @@ func TestDroppedTransferKeepsWhatWasThrownAway(t *testing.T) {
 	}
 }
 
-// The same with a bag lying on the street: Ana puts her sword in it, Caio carries the bag
-// away and logs out. Ana's next transfer is rejected: her row must not have the sword.
+// The same with a bag lying on the street: Ana throws her own bag there and puts her
+// sword in it (lote 16 review: a stranger's bag on the street takes nothing of hers,
+// TestPutIntoAStrangersStreetBagIsRefused), Caio carries the bag away and logs out. Ana's
+// next transfer is rejected: her row must not have the sword.
 func TestDroppedTransferKeepsWhatWasPutInAStreetBag(t *testing.T) {
 	db := newRowsDB(t)
 	h := newMarketHarness(t, db.wire)
-	ca, a := h.atBoard("Ana", pos(1, 0), stack(swordID, 1, 0), stack(salveID, 30, 1), stack(coinID, 50, 2))
+	ca, a := h.atBoard("Ana", pos(1, 0), stack(swordID, 1, 0), stack(salveID, 30, 1), stack(coinID, 50, 2),
+		stack(bagID, 1, 3))
 	cc, c := h.trader("Caio", pos(1, 1), stack(coinID, 5, 0))
-	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 1)) }))
-	h.sim.Step()
 	db.saveNow(h.harness, ca) // her last written save has the sword
 
 	pack := openPack(t, h.harness, ca)
+	if evs := h.send(ca, moveItem(inContainer(pack, 3), bagID, 0, onTile(pos(2, 1)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws her bag on the street: %v", systemKeys(evs))
+	}
 	h.input(ca, useItem(onTile(pos(2, 1)), bagID, 1))
 	h.sim.Step()
 	opens := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)
@@ -282,6 +286,7 @@ func TestDroppedTransferKeepsWhatWasPutInAStreetBag(t *testing.T) {
 		h.w.CountItem(a, "test_sword") != 0 {
 		t.Fatalf("Ana puts the sword in the bag: %v", systemKeys(evs))
 	}
+	h.sim.RunTicks(45) // the coalesced save of the sword
 	db.sync(h.harness) // the give-away's save is in (lote 16: until then the bag is Ana's)
 	cp := openPack(t, h.harness, cc)
 	if evs := h.send(cc, moveItem(onTile(pos(2, 1)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
@@ -1064,11 +1069,13 @@ func TestGiftAndHouseInOneCommandKeepNothingTwice(t *testing.T) {
 	}
 }
 
-// A give-away into something that cannot be reserved (a stranger's pile on the street) in
-// a command that also changes a house (the gift falls on Ana's house floor): the snapshot
-// of the give-away is written before the house write, as before, and the command is
-// logged as an error (hold.go settleGave). No command does this today.
-func TestGiftIntoAStrangersPileWithAHouseIsLogged(t *testing.T) {
+// A give-away onto a stranger's pile on the street in a command that also changes a house
+// (the gift falls on Ana's house floor). Before the lote 16 review the salves joined the
+// pile, which could not be reserved to Ana: the snapshot of the give-away was written
+// apart and the command logged as an error (hold.go settleGave). Now they land as a pile
+// of their own (moveItem ownOnly): it is reserved to Ana inside the house write
+// (reserveGiven), nothing is written apart and nothing is logged.
+func TestGiftNextToAStrangersPileWithAHouseLandsApart(t *testing.T) {
 	log := &jobLog{}
 	var logged bytes.Buffer
 	h := newHouseHarness(t, log.wire, logTo(&logged))
@@ -1085,18 +1092,16 @@ func TestGiftIntoAStrangersPileWithAHouseIsLogged(t *testing.T) {
 	n := len(log.jobs)
 	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(inContainer(pack, 1), salveID, 0, onTile(pos(2, 5)), 5), "test_bag", 1))
 	h.sim.Step()
-	if g := h.w.GroundAt(pos(2, 5)); len(g) != 1 || len(h.w.GroundAt(cottageDoor)) != 1 {
-		t.Fatalf("the salves did not join the pile (%d piles), or the gift did not fall on the house floor", len(g))
+	if g := h.w.GroundAt(pos(2, 5)); len(g) != 2 || len(h.w.GroundAt(cottageDoor)) != 1 {
+		t.Fatalf("the salves joined the stranger's pile (%d piles), or the gift did not fall on the house floor", len(g))
 	}
-	jobs := log.since(n)
-	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
-		t.Fatalf("the command wrote %d jobs, want the snapshot of the give-away then the house write", len(jobs))
+	for _, j := range log.since(n) {
+		if j.Transfer == nil && j.Snapshot.CharacterID == a.CharacterID() {
+			t.Fatalf("a snapshot of Ana was written apart from the house write: %+v", j.Snapshot)
+		}
 	}
-	if pre := jobs[0].Snapshot; pre.CharacterID != a.CharacterID() || countState(pre.Inventory, salveID) != 0 {
-		t.Fatalf("the snapshot before the house write is not Ana's after the give-away: %+v", pre)
-	}
-	if !strings.Contains(logged.String(), giftAndHouse) {
-		t.Fatalf("a give-away into a stranger's pile with a house change was not logged: %q", logged.String())
+	if strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatalf("a give-away onto its own pile with a house change was logged: %q", logged.String())
 	}
 }
 
@@ -1512,5 +1517,68 @@ func TestThrownItemMovedOnStaysReserved(t *testing.T) {
 	d.writeAll(h.harness)
 	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
 		t.Fatalf("Caio picks the sword up after the acks: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: a throw is reserved to the thrower until its save is acked, and a
+// reservation covers the whole pile it lands in. So a throw never joins a stranger's pile
+// on the street: Ana throws one coin onto Caio's pile of ten, it lands as a pile of its
+// own, and Caio still picks his pile up (Ana's coin stays hers until its save).
+func TestThrowNeverLocksAStrangersPile(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, _ := h.trader("Ana", pos(1, 1), stack(coinID, 5, 0))
+	cc, c := h.trader("Caio", pos(2, 1), stack(swordID, 1, 0))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 10, pos(2, 2)) }))
+	h.sim.Step()
+
+	pack := openPack(t, h.harness, ca)
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(2, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws a coin onto Caio's pile: %v", systemKeys(evs))
+	}
+	g := h.w.GroundAt(pos(2, 2))
+	if len(g) != 2 {
+		t.Fatalf("Ana's coin joined the stranger's pile (%d piles on the tile)", len(g))
+	}
+	his := slices.IndexFunc(g, func(it *session.Item) bool { return it.Count() == 10 })
+	mine := slices.IndexFunc(g, func(it *session.Item) bool { return it.Count() == 1 })
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), coinID, uint32(his+1), inContainer(cp, 0), 10)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "copper_coin") != 10 {
+		t.Fatalf("Caio picks his own pile up: %v", systemKeys(evs))
+	}
+	if mine > his {
+		mine-- // his pile left the tile
+	}
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), coinID, uint32(mine+1), inContainer(cp, 0), 1)); !hasKey(evs, "inventory.not_yours") {
+		t.Fatalf("Caio took Ana's coin before its save: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: nothing of Ana's goes into a bag lying on the street that is not
+// reserved to her (a stranger's, a public one, a corpse past its owner's time): the
+// reservation of the give-away would lock the whole bag to her. She is told to put it on
+// the ground, and Caio still carries the bag away.
+func TestPutIntoAStrangersStreetBagIsRefused(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0))
+	cc, c := h.trader("Caio", pos(2, 1), stack(coinID, 5, 0))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 2)) }))
+	h.sim.Step()
+
+	pack := openPack(t, h.harness, ca)
+	h.input(ca, useItem(onTile(pos(2, 2)), bagID, 1))
+	h.sim.Step()
+	opens := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 || opens[0].GetItemId() != bagID {
+		t.Fatalf("Ana opens the bag on the street: %v", opens)
+	}
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, inContainer(opens[0].GetContainerId(), 0), 1)); !hasKey(evs, "inventory.street_bag") ||
+		h.w.CountItem(a, "test_sword") != 1 {
+		t.Fatalf("Ana put her sword in a stranger's bag on the street: %v", systemKeys(evs))
+	}
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_bag") != 1 {
+		t.Fatalf("Caio carries the bag away: %v", systemKeys(evs))
 	}
 }

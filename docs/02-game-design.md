@@ -524,7 +524,9 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   sospecha que baja solo con el tiempo (media vida de 1 h).
 - Las respuestas son graduales: queda registrado, se avisa a los GM, el juego pide un
   **chequeo de presencia** (una pregunta simple, como "elige el color de esta muestra", con 10 min de
-  juego para contestar y sin interrumpir nada) y, si el puntaje sigue alto después de un
+  juego para contestar y sin interrumpir nada; los colores son azul, amarillo, blanco y
+  negro, que se distinguen sin depender solo del tono, así un jugador daltónico no falla
+  por no ver la diferencia entre rojo y verde) y, si el puntaje sigue alto después de un
   chequeo fallado o una hora después de uno, una suspensión de 24 h. Nunca se pregunta en
   combate, en una zona sin logout ni a quien está ausente, y el plazo no corre mientras uno
   no juega. Un chequeo fallado suma puntos, pero no suspende por sí solo. Acertar no borra

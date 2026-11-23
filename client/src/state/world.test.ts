@@ -675,7 +675,7 @@ describe("presence check after an idle stretch (T4.1)", () => {
     value: {
       checkId: id,
       question: { key: "presence.question", params: [] },
-      options: [{ optionId: 1, text: { key: "presence.option.red", params: [] } }],
+      options: [{ optionId: 1, text: { key: "presence.option.white", params: [] } }],
       timeoutMs,
     } as never,
   });

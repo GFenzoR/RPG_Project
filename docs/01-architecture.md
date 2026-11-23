@@ -430,6 +430,14 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       levanta otro cuando la base ya tiene a quien lo tiró sin eso; si el servidor muere
       antes, como mucho se pierde lo que estaba en el suelo (como en cualquier caída), no
       queda en dos filas.
+    - La reserva cubre la pila o el contenedor entero donde cae lo tirado, así que lo
+      tirado cae como pila propia o en algo ya reservado a quien tira (`moveItem`,
+      `ownOnly`): nunca se suma a la pila de otro en la calle, y en una bolsa o un cadáver
+      ajeno de la calle no se puede meter nada (`inventory.street_bag`, "déjalo en el
+      suelo"). Si no, sumar una moneda a la pila ajena la dejaba entera reservada a quien
+      la sumó, y repitiendo antes de cada acuse, sin plazo (revisión del lote 16). El
+      costo: tirar algo junto a una pila igual ya acusada (aunque sea propia) hace otra
+      pila, y una casilla llena de pilas ajenas no recibe nada tirado.
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un

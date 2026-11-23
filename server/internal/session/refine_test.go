@@ -584,7 +584,10 @@ func TestRefineNotFromTheGround(t *testing.T) {
 		t.Fatalf("ground %v", g)
 	}
 
-	// A bag on the floor, opened, with the sword in it.
+	// A bag on the floor, opened, with the sword in it. The database has the throw first
+	// (lote 16: until then the sword is reserved to the smith and goes into no stranger's
+	// bag on the street).
+	h.sim.Command(h.w.Saved(p.CharacterID(), 1<<62))
 	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 1)) }))
 	h.sim.Step()
 	opens := find(h.send(cl, useItem(onTile(pos(2, 1)), bagID, 1)), (*pb.ServerMessage).GetContainerOpen)
