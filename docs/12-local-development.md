@@ -246,7 +246,8 @@ make monitoring-down   # apaga todo (los volúmenes quedan)
   `deploy/.env`.
 - Para cambiar un umbral, edita `deploy/monitoring/prometheus/rules/alerts.yml` (y su test
   en `prometheus/tests/alerts_test.yml`), corre `make monitoring-check` y recarga:
-  `curl -X POST localhost:9090/-/reload`.
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env kill -s SIGHUP prometheus`
+  (Prometheus ya no acepta `POST /-/reload`: corre sin `--web.enable-lifecycle`).
 - El dashboard es `deploy/monitoring/grafana/dashboards/rpg-overview.json`. Grafana no
   guarda cambios hechos en la UI: exporta el JSON y commitéalo.
 

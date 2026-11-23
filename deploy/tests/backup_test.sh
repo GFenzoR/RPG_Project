@@ -44,6 +44,16 @@ called '^aws s3 cp --only-show-errors --sse AES256 .*/rpg-[0-9TZ]+\.dump s3://bu
 grep -q '^rpg_backup_last_run_success 1$' "$BK/metrics/backup.prom" || fail "metrics"
 if perms_supported; then
 	[[ $(mode_of "$d") == 600 ]] || fail "dump mode $(mode_of "$d"), want 600 (umask 077)"
+	# node-exporter (another user) reads the metrics: the umask of the dumps is not theirs.
+	[[ $(mode_of "$BK/metrics") == 755 ]] || fail "metrics dir mode $(mode_of "$BK/metrics"), want 755"
+	[[ $(mode_of "$BK/metrics/backup.prom") == 644 ]] || fail "backup.prom mode $(mode_of "$BK/metrics/backup.prom"), want 644"
+	[[ $(mode_of "$BK") == 755 ]] || fail "backup dir mode $(mode_of "$BK"), want 755 (traversable)"
+	# A metrics directory an earlier run left private is opened again.
+	chmod 700 "$BK/metrics"
+	chmod 600 "$BK/metrics/backup.prom"
+	run_backup || fail "exit $?: $(cat "$T_DIR/out.log")"
+	[[ $(mode_of "$BK/metrics") == 755 && $(mode_of "$BK/metrics/backup.prom") == 644 ]] ||
+		fail "private metrics kept: $(mode_of "$BK/metrics") $(mode_of "$BK/metrics/backup.prom")"
 fi
 t_end
 

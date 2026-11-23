@@ -126,7 +126,8 @@ const getRoleCandidate = `-- name: GetRoleCandidate :one
 SELECT a.id, a.role, a.created_at, a.email_verified_at, a.last_login_at, a.disabled_at,
        COALESCE((SELECT array_agg(i.provider ORDER BY i.provider)
                  FROM account_identities i
-                 WHERE i.account_id = a.id AND i.email_verified), '{}')::text[] AS verified_providers,
+                 WHERE i.account_id = a.id AND i.email_verified
+                   AND lower(i.email) = a.email), '{}')::text[] AS verified_providers,
        COALESCE((SELECT array_agg(c.name ORDER BY c.created_at, c.id)
                  FROM characters c
                  WHERE c.account_id = a.id), '{}')::text[] AS character_names
@@ -146,7 +147,9 @@ type GetRoleCandidateRow struct {
 }
 
 // What the operator sees before set-role writes (lote 16): who the account with that
-// (normalized) email is, how it proved the email, and its characters.
+// (normalized) email is, how it proved the email, and its characters. A linked identity
+// only proves the account's email when its provider verified that same address: any
+// Google or Discord can be linked to the session's account, whatever email it carries.
 func (q *Queries) GetRoleCandidate(ctx context.Context, email string) (GetRoleCandidateRow, error) {
 	row := q.db.QueryRow(ctx, getRoleCandidate, email)
 	var i GetRoleCandidateRow

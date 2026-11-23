@@ -67,6 +67,12 @@ has deploy/deploy.sh 'COSIGN_REQUIRED' "deploy.sh has no COSIGN_REQUIRED"
 has deploy/deploy.sh 'chmod 600 \.env' "deploy.sh does not keep .env private"
 has .github/workflows/images.yml 'id-token: write' "the image job cannot sign (id-token: write)"
 has .github/workflows/images.yml 'cosign sign --yes "\$IMAGE@\$DIGEST"' "images are not signed by digest"
+# The signature is the image job's last step: an image that fails a later check would
+# otherwise stay signed, and deploy.sh would accept it.
+last_step=$(awk '/^  image:$/ { in_job = 1; next } in_job && /^  [a-z-]+:$/ { in_job = 0 }
+	in_job && /^      - (name|uses):/ { last = $0 } END { print last }' .github/workflows/images.yml)
+[[ $last_step == *"sign the image"* ]] ||
+	err ".github/workflows/images.yml: the signature is not the last step of the image job (last:${last_step#*-})"
 
 ((fail == 0)) || exit 1
 echo "check-hardening: ok"

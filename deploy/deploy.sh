@@ -17,14 +17,19 @@
 # containers run exactly what was verified. With cosign installed each digest must carry the
 # keyless signature of this repository's images workflow (.github/workflows/images.yml);
 # COSIGN_REQUIRED=1 refuses to deploy without cosign. COSIGN_IDENTITY_REGEXP and
-# COSIGN_OIDC_ISSUER override the identity checked (forks).
+# COSIGN_OIDC_ISSUER override the identity checked (forks). These three, IMAGE_REGISTRY and
+# IMAGE_TAG come from the shell first and then from .env, the order compose uses.
+#
+# Every digest is verified before any pin is written: a refused image leaves the previous
+# deploy's pins in .env (and its tag is dropped locally), so a later `compose up` still runs
+# what was verified last time. The identity pins main or a release tag vX.Y.Z: a prerelease
+# tag (v1.2.3-rc1) is signed by the workflow but refused here unless
+# COSIGN_IDENTITY_REGEXP allows it.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 self="$PWD/$(basename "${BASH_SOURCE[0]}")"
 COMPOSE=(docker compose -f docker-compose.yml --env-file .env)
-COSIGN_IDENTITY_REGEXP="${COSIGN_IDENTITY_REGEXP:-^https://github\.com/GFenzoR/RPG_Project/\.github/workflows/images\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$}"
-COSIGN_OIDC_ISSUER="${COSIGN_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 COSIGN="${COSIGN:-cosign}" # the cosign binary (deploy/tests stub it)
 # Service → image name suffix (rpg-project-<suffix>) → the .env variable that pins it.
 PINNED=(gameserver:gameserver:GAMESERVER_IMAGE caddy:web:WEB_IMAGE backup:backup:BACKUP_IMAGE
@@ -45,7 +50,7 @@ for arg in "$@"; do
 	--no-backup) backup=0 ;;
 	--no-pull) pull=0 ;;
 	-h | --help)
-		sed -n '2,20p' "$self"
+		sed -n '2,27p' "$self"
 		exit 0
 		;;
 	-*) die "unknown option $arg" ;;
@@ -75,8 +80,23 @@ protect_env() {
 	fi
 }
 
-# env_get KEY: the value of KEY in .env (empty if unset).
-env_get() { sed -n "s/^$1=//p" .env | tail -n 1; }
+# env_get KEY: the value of KEY in .env (empty if unset), without surrounding quotes.
+env_get() {
+	local v
+	v=$(sed -n "s/^$1=//p" .env | tail -n 1)
+	v=${v%$'\r'}
+	if ((${#v} >= 2)) && [[ ($v == \"*\" || $v == \'*\') ]]; then
+		v=${v:1:${#v}-2}
+	fi
+	printf '%s' "$v"
+}
+
+# setting KEY DEFAULT: KEY from the shell, else from .env, else DEFAULT (compose's order).
+setting() {
+	local v=${!1:-}
+	[[ -n $v ]] || v=$(env_get "$1")
+	printf '%s' "${v:-$2}"
+}
 
 # env_set KEY VALUE: replace or append KEY=VALUE in .env, keeping it private.
 env_set() {
@@ -102,17 +122,24 @@ if [[ -n "$tag" ]]; then
 	[[ "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || die "invalid image tag '$tag'"
 	log "pinning IMAGE_TAG=$tag in .env"
 	env_set IMAGE_TAG "$tag"
+	# compose prefers the shell's IMAGE_TAG: the one given here has to win there too.
+	export IMAGE_TAG="$tag"
 fi
 
-# The digests of the previous deploy go: this run pulls the tag again and pins what it gets.
-for entry in "${PINNED[@]}"; do
-	env_unset "${entry##*:}"
-done
+COSIGN_REQUIRED=$(setting COSIGN_REQUIRED 0)
+COSIGN_IDENTITY_REGEXP=$(setting COSIGN_IDENTITY_REGEXP '^https://github\.com/GFenzoR/RPG_Project/\.github/workflows/images\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$')
+COSIGN_OIDC_ISSUER=$(setting COSIGN_OIDC_ISSUER https://token.actions.githubusercontent.com)
+registry=$(setting IMAGE_REGISTRY ghcr.io/gfenzor)
+image_tag=$(setting IMAGE_TAG latest)
+# compose resolves the images with exactly what gets inspected and pinned below.
+export IMAGE_REGISTRY="$registry" IMAGE_TAG="$image_tag"
 
-registry=$(env_get IMAGE_REGISTRY)
-registry=${registry:-ghcr.io/gfenzor}
-image_tag=$(env_get IMAGE_TAG)
-image_tag=${image_tag:-latest}
+# The pins emptied for the pull only (an empty shell value beats .env and `${VAR:-…}` falls
+# back to the tag): the tag is fetched again while .env keeps the previous deploy's pins.
+UNPINNED=()
+for entry in "${PINNED[@]}"; do
+	UNPINNED+=("${entry##*:}=")
+done
 
 services=(gameserver caddy backup)
 # The map PR worker (T4.5) only runs with the map-pr profile (COMPOSE_PROFILES in .env).
@@ -122,13 +149,22 @@ if "${COMPOSE[@]}" config --services | grep -qx map-pr-worker; then
 	services+=(map-pr-worker)
 fi
 
-# pin_digests: resolve each pulled image to repo@sha256:…, verify it, write the pins.
+# drop_pins: remove every image pin from .env.
+drop_pins() {
+	local entry
+	for entry in "${PINNED[@]}"; do
+		env_unset "${entry##*:}"
+	done
+}
+
+# pin_digests: resolve each pulled image to repo@sha256:…, verify them all, and only then
+# write the pins together. A refusal leaves .env as the previous deploy left it.
 pin_digests() {
 	local entry service suffix var repo ref digest
-	local verify=1
+	local verify=1 pins=()
 	if ! command -v "$COSIGN" >/dev/null 2>&1; then
 		verify=0
-		[[ ${COSIGN_REQUIRED:-0} == 1 ]] && die "COSIGN_REQUIRED=1 but cosign is not installed (docs/09, \"Imágenes firmadas\")"
+		[[ $COSIGN_REQUIRED == 1 ]] && die "COSIGN_REQUIRED=1 but cosign is not installed (docs/09, \"Imágenes firmadas\")"
 		warn "cosign is not installed: image signatures are NOT verified (install it, docs/09)"
 	fi
 	for entry in "${PINNED[@]}"; do
@@ -141,19 +177,30 @@ pin_digests() {
 			die "no registry digest for $ref (was it pulled from $registry?)"
 		if ((verify)); then
 			log "verifying the signature of $digest"
-			"$COSIGN" verify --certificate-identity-regexp "$COSIGN_IDENTITY_REGEXP" \
-				--certificate-oidc-issuer "$COSIGN_OIDC_ISSUER" "$digest" >/dev/null ||
-				die "signature check failed for $digest: not built by $COSIGN_IDENTITY_REGEXP. Not deployed"
+			if ! "$COSIGN" verify --certificate-identity-regexp "$COSIGN_IDENTITY_REGEXP" \
+				--certificate-oidc-issuer "$COSIGN_OIDC_ISSUER" "$digest" >/dev/null; then
+				# The pull moved the local tag to the refused image: drop the tag so nothing
+				# starts it by name (the image itself goes with the next prune).
+				docker image rm "$ref" >/dev/null 2>&1 || true
+				die "signature check failed for $digest: not built by $COSIGN_IDENTITY_REGEXP. Not deployed; the previous pins stay in .env"
+			fi
 		fi
-		env_set "$var" "$digest"
-		log "$service runs $digest"
+		pins+=("$var=$digest")
+	done
+	drop_pins
+	for entry in "${pins[@]}"; do
+		env_set "${entry%%=*}" "${entry#*=}"
+		log "pinned ${entry#*=}"
 	done
 }
 
 if ((pull)); then
 	log "pulling images"
-	"${COMPOSE[@]}" pull --quiet "${services[@]}" postgres
+	env "${UNPINNED[@]}" "${COMPOSE[@]}" pull --quiet "${services[@]}" postgres
 	pin_digests
+else
+	# Local images (testing): run the tags as built, not the previous deploy's digests.
+	drop_pins
 fi
 
 # TODO(admin-commands): announce the restart in game (e.g. 5 and 1 minute warnings) and

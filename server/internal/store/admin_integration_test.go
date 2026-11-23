@@ -239,7 +239,19 @@ func TestRoleCandidate(t *testing.T) {
 	if c, _ := st.RoleCandidate(ctx, "who@example.org"); c.Proven() {
 		t.Fatalf("an identity whose provider did not verify the email proves it: %+v", c)
 	}
-	if err := st.LinkIdentity(ctx, acc, store.ExternalIdentity{Provider: "google", Subject: "g1", Email: "who@example.org", EmailVerified: true}, now); err != nil {
+	// Any Google can be linked to the session's account: one verified for another address
+	// proves nothing about this one.
+	boss, err := st.CreateAccount(ctx, "boss@example.org", "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkIdentity(ctx, boss, store.ExternalIdentity{Provider: "google", Subject: "g2", Email: "attacker@example.net", EmailVerified: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := st.RoleCandidate(ctx, "boss@example.org"); c.Proven() || len(c.VerifiedProviders) != 0 {
+		t.Fatalf("an identity verified for another email proves it: %+v", c)
+	}
+	if err := st.LinkIdentity(ctx, acc, store.ExternalIdentity{Provider: "google", Subject: "g1", Email: "Who@Example.org", EmailVerified: true}, now); err != nil {
 		t.Fatal(err)
 	}
 	if c, _ := st.RoleCandidate(ctx, "who@example.org"); !c.Proven() || len(c.VerifiedProviders) != 1 || c.VerifiedProviders[0] != "google" {

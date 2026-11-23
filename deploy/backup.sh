@@ -72,7 +72,8 @@ backup_once() {
 		exit 2
 		;;
 	esac
-	mkdir -p "$BACKUP_DIR"
+	# The directory itself stays traversable: node-exporter reads metrics/ inside it.
+	(umask 022 && mkdir -p "$BACKUP_DIR")
 	local name file
 	name="rpg-$(date -u +%Y%m%dT%H%M%SZ).dump"
 	file="$BACKUP_DIR/$name"
@@ -128,8 +129,13 @@ write_metrics() {
 	[[ -f "$STAMP_FILE" ]] && last=$(date -u -r "$STAMP_FILE" +%s)
 	newest=$(find "$BACKUP_DIR" -maxdepth 1 \( -name 'rpg-*.dump' -o -name 'rpg-*.dump.age' \) -print 2>/dev/null | sort | tail -n 1)
 	[[ -n "$newest" ]] && size=$(wc -c <"$newest" | tr -d ' ')
-	{
+	# The dumps are owner only (umask 077) but node-exporter reads this as another user
+	# (nobody): the directory and the file are world readable, also when an earlier run left
+	# them private.
+	(
+		umask 022
 		mkdir -p "$METRICS_DIR" &&
+			chmod 755 "$METRICS_DIR" &&
 			cat >"$METRICS_DIR/backup.prom.tmp" <<-PROM &&
 				# HELP rpg_backup_last_run_success 1 if the last backup run succeeded.
 				# TYPE rpg_backup_last_run_success gauge
@@ -147,8 +153,9 @@ write_metrics() {
 				# TYPE rpg_backup_interval_seconds gauge
 				rpg_backup_interval_seconds $BACKUP_INTERVAL_SECONDS
 			PROM
+			chmod 644 "$METRICS_DIR/backup.prom.tmp" &&
 			mv "$METRICS_DIR/backup.prom.tmp" "$METRICS_DIR/backup.prom"
-	} || log "could not write metrics to $METRICS_DIR"
+	) || log "could not write metrics to $METRICS_DIR"
 }
 
 main() {

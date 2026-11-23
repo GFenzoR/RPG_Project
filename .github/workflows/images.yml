@@ -141,7 +141,24 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-      # Lote 16: keyless signature (Sigstore, this workflow's OIDC identity) of the digest
+      # T4.5: the worker runs TypeScript through workspace symlinks; starting it (without a
+      # token it only logs that it is disabled) proves every module resolves in the image.
+      - name: smoke (map-pr-worker starts)
+        if: matrix.image == 'map-pr-worker' && env.PUSH != 'true'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          image=$(head -n1 <<<"$TAGS")
+          # Without a token the service idles until stopped; --once just reports and exits.
+          out=$(docker run --rm --read-only "$image" --once)
+          echo "$out"
+          grep -q 'the map PR worker does not run' <<<"$out"
+          # Merges a built-in patch: the map schemas and the merge load inside the image.
+          docker run --rm --read-only "$image" --self-check
+
+      # Lote 16, the last step of the job (nothing that can still fail comes after a
+      # signature): keyless signature (Sigstore, this workflow's OIDC identity) of the digest
       # just pushed. deploy/deploy.sh verifies it before running the image; the verify step
       # here checks the exact identity deploy.sh trusts for main and vX.Y.Z tags.
       - uses: sigstore/cosign-installer@v3
@@ -159,22 +176,6 @@ jobs:
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/images.yml@${GITHUB_REF}" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "$IMAGE@$DIGEST" > /dev/null
-
-      # T4.5: the worker runs TypeScript through workspace symlinks; starting it (without a
-      # token it only logs that it is disabled) proves every module resolves in the image.
-      - name: smoke (map-pr-worker starts)
-        if: matrix.image == 'map-pr-worker' && env.PUSH != 'true'
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          set -euo pipefail
-          image=$(head -n1 <<<"$TAGS")
-          # Without a token the service idles until stopped; --once just reports and exits.
-          out=$(docker run --rm --read-only "$image" --once)
-          echo "$out"
-          grep -q 'the map PR worker does not run' <<<"$out"
-          # Merges a built-in patch: the map schemas and the merge load inside the image.
-          docker run --rm --read-only "$image" --self-check
 
   # Static checks of deploy/: Dockerfiles, shell scripts and the compose files.
   deploy-lint:

@@ -88,6 +88,29 @@ tests:
             exp_annotations:
               summary: "Last successful backup is 2d 1h 0m 0s old"
               description: "No successful dump in two backup intervals. Check the backup container."
+      - eval_time: 49h
+        alertname: BackupMetricsMissing
+        exp_alerts: []
+
+  - interval: 5m
+    input_series:
+      # Backup metrics for the first 2 h, then gone (backup.prom unreadable).
+      - series: 'rpg_backup_last_run_success{job="node"}'
+        values: "1x24"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: BackupMetricsMissing
+        exp_alerts: []
+      - eval_time: 2h50m
+        alertname: BackupMetricsMissing
+        exp_alerts: []
+      - eval_time: 4h
+        alertname: BackupMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, job: node}
+            exp_annotations:
+              summary: "No database backup metrics"
+              description: "The rpg_backup_* metrics stopped. Check the backup container and the modes of /backups/metrics (755) and backup.prom (644)."
 
   - interval: 1m
     input_series:

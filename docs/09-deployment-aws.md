@@ -97,10 +97,20 @@ Un tag (`v1.2.0`, `latest`) se puede mover; un digest (`@sha256:…`) no. Por es
    `https://github.com/GFenzoR/RPG_Project/.github/workflows/images.yml` en `main` o en un
    tag `vX.Y.Z` (emisor `https://token.actions.githubusercontent.com`). Si la firma no
    está o es de otro, **no despliega** nada.
-3. Escribe los digests en `.env` (`GAMESERVER_IMAGE`, `WEB_IMAGE`, `BACKUP_IMAGE`,
-   `MAP_PR_WORKER_IMAGE`); `docker-compose.yml` los prefiere al tag, así los contenedores
-   corren exactamente lo verificado. Cada `deploy.sh` los vuelve a calcular (no los
-   edites a mano); `--no-pull` los borra para usar imágenes locales.
+3. Solo cuando **todas** pasaron escribe los digests juntos en `.env` (`GAMESERVER_IMAGE`,
+   `WEB_IMAGE`, `BACKUP_IMAGE`, `MAP_PR_WORKER_IMAGE`); `docker-compose.yml` los prefiere
+   al tag, así los contenedores corren exactamente lo verificado. Si una firma falla
+   quedan los digests del despliegue anterior (el pull se hace sin ellos, por tag) y el
+   tag rechazado se borra de las imágenes locales: un `docker compose up` a mano sigue
+   corriendo lo último verificado. Cada `deploy.sh` los vuelve a calcular (no los edites
+   a mano); `--no-pull` los borra para usar imágenes locales.
+
+`COSIGN_REQUIRED`, `COSIGN_IDENTITY_REGEXP`, `COSIGN_OIDC_ISSUER`, `IMAGE_REGISTRY` e
+`IMAGE_TAG` se leen del entorno del shell y, si no están ahí, de `.env` (el mismo orden que
+usa compose; un valor entre comillas en `.env` vale sin ellas). La identidad acepta `main`
+y tags `vX.Y.Z`: un tag de prerelease (`v1.2.3-rc1`) sale firmado pero `deploy.sh` lo
+rechaza, salvo que `COSIGN_IDENTITY_REGEXP` lo permita. La firma es el último paso del job
+de cada imagen: una imagen que falla un chequeo de CI nunca queda firmada.
 
 Instala cosign en el servidor (binario de su release en GitHub, o el paquete de tu
 distribución) y deja `COSIGN_REQUIRED=1` en `.env`: así un servidor sin cosign se niega a
@@ -228,7 +238,9 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserv
 Antes de escribir, `set-role` muestra la cuenta: id, fecha de creación, email verificado
 (o "never"), identidades de Google/Discord con email verificado por el proveedor, último
 login y personajes. **Subir** una cuenta por encima de `player` exige que haya probado
-que su email es suyo (email confirmado o identidad OAuth verificada): cualquiera puede
+que su email es suyo (email confirmado, o una identidad OAuth que el proveedor verificó
+**con ese mismo email**: a una cuenta se le puede vincular cualquier Google o Discord, y
+uno de otra dirección no prueba nada): cualquiera puede
 registrar la dirección de otra persona antes que ella, y sin esto la haríamos staff. Si el
 servidor no tiene SMTP o la persona no puede confirmar, revisa que la cuenta mostrada sea
 la suya (fecha, personajes) y repite con `-allow-unverified` (en local
@@ -375,8 +387,10 @@ dar o quitar moneda, y limpiar la marca de una cuenta tras un contracargo: `/pre
   una regla de lifecycle del bucket.
 - Queda `unhealthy` si pasan dos intervalos sin un backup exitoso.
 - Cada corrida escribe sus métricas (`rpg_backup_*`) en `/backups/metrics/backup.prom`.
-  Con el monitoreo activo alimentan el panel de backups y las alertas `BackupFailed` y
-  `BackupStale`.
+  Con el monitoreo activo alimentan el panel de backups y las alertas `BackupFailed`,
+  `BackupStale` y `BackupMetricsMissing` (las métricas se vieron en la última semana y
+  faltan hace más de 30 min). node-exporter las lee como otro usuario: `metrics/` queda
+  en 755 y `backup.prom` en 644 aunque los dumps sean 600.
 - Los dumps se escriben con `umask 077` (solo su dueño los lee) y la subida a S3 va con
   cifrado del lado del servidor (`--sse AES256`, o `aws:kms` con `BACKUP_S3_SSE`).
 - **Cifrado con age (recomendado en producción):** con `BACKUP_AGE_RECIPIENT=age1…` cada
@@ -730,8 +744,8 @@ en `make lint`/`make test` y en el job `deploy-lint` de `images.yml`.
   dueño del directorio de datos y baja al usuario `postgres`). Gameserver, Caddy, backup,
   el worker de mapas, Prometheus, Alertmanager y node-exporter con raíz de solo lectura.
   El gameserver tiene `mem_limit` (`GAMESERVER_MEM_LIMIT`, 1 GB), `nofile` 65536 y un pool
-  de 16 conexiones a Postgres (`pool_max_conns=16` en su `DATABASE_URL`, igual que el
-  default del código).
+  de 16 conexiones a Postgres (`pool_max_conns=16` en su `DATABASE_URL`; el valor está
+  en la URL a propósito, así no depende del default de pgx ni del que fije el código).
 - **Prometheus** sin `--web.enable-lifecycle` y fuera de la red `edge`: solo está en
   `monitoring` (interna) y en `prometheus-publish`, una red propia que solo sirve para
   publicar `127.0.0.1:9090`.

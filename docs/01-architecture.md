@@ -574,6 +574,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |
 | `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |
+| `BackupMetricsMissing` | critical | las métricas `rpg_backup_*` se vieron en la última semana y faltan hace más de 30 min (durante 30 min) |
 | `HTTPErrorsHigh` | warning | más de 5 % de respuestas 5xx de la API (con algo de tráfico) durante 5 min |
 
 Las alertas se ven siempre en Grafana: en el dashboard (panel "Alertas activas") y en
