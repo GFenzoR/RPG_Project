@@ -11,7 +11,7 @@ set -euo pipefail
 root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$root"
 MIN_GO="1.26"
-MODULES=(server tools/bots tools/launcher deploy/healthcheck)
+MODULES=(server livingworld/server tools/bots tools/launcher deploy/healthcheck)
 fail=0
 err() {
 	echo "check-go-version: $*" >&2

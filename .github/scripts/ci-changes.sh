@@ -20,24 +20,27 @@ declare -A RULES=(
 	# ci.yml
 	# The patch path fixture is shared with server/internal/mappatch (T4.5). The account
 	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
-	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
-	[go-bots]='^(tools/bots|server|proto)/'
+	[go-server]='^((server|livingworld/server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
+	# The living world's Go module (livingworld/README.md): its own tests; the server's job
+	# runs too, since server/ requires it.
+	[go-livingworld]='^livingworld/server/'
+	[go-bots]='^(tools/bots|server|livingworld/server|proto)/'
 	# The launcher's test compares its compose profiles with deploy/home.sh and the Makefile
 	# (the Makefile is in GLOBAL, so it already runs this job), and its project name with
 	# deploy/docker-compose.home.yml.
 	[go-launcher]='^(tools/launcher/|deploy/home\.sh$|deploy/docker-compose\.home\.yml$)'
 	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules, and
 	# tools/mapcli/src/lote.test.ts runs the batch workflow of .claude/workflows.
-	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows|\.claude/workflows)/'
+	[ts]='^(client|livingworld/client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows|\.claude/workflows)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
 	[actionlint]='^\.github/'
-	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
+	[build]='^(client|livingworld/client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
 	# The desktop job compiles Rust: only for the app itself and the client's bridge to it
 	# (a web client build failure already fails `build`), plus the game page the app opens
 	# (client/play/, and the Vite pages config; T4.3).
 	[desktop]='^(apps/desktop/|client/src/net/|client/package\.json$|client/play/|client/vite\.config\.ts$)'
-	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
-	[integration]='^(server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
+	[e2e]='^(client|livingworld|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
+	[integration]='^(server|livingworld/server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
 	# The dev-only Python tools around the owner's Gemini: nothing else reads them. Their
 	# tests read spritegen's palette (import_art snaps to it) and measure the game's music
@@ -47,14 +50,14 @@ declare -A RULES=(
 	# The map PR worker's image runs its TypeScript and these packages as they are (T4.5).
 	[image]='^(deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)|tools/map-pr-worker/|packages/map-format/|packages/content-schema/)'
 	[deploy-lint]='^deploy/'
-	[stack]='^(deploy|server|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
+	[stack]='^(deploy|server|livingworld|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
 	[home-stack]='^deploy/'
 	# Step of deploy-lint (T4.4): promtool/amtool and the dashboards, only for the
 	# monitoring config, the compose file that pins its images, and the Caddy files of
 	# the optional /grafana/ route (check.sh parses them with half-set credentials).
 	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$|Caddyfile$|caddy-routes\.caddy$|caddy-grafana-.*\.caddy$)'
 )
-CI_JOBS=(go-server go-bots go-launcher ts validate actionlint build desktop e2e integration bench gemini)
+CI_JOBS=(go-server go-livingworld go-bots go-launcher ts validate actionlint build desktop e2e integration bench gemini)
 IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
 
 # decide JOB < changed-files: prints true or false.
@@ -83,6 +86,11 @@ self_test() {
 	done
 	# The server: Go, integration, E2E and the stack, not the desktop or the web build.
 	check go-server true server/internal/session/move.go
+	# The living world module (livingworld/README.md): its job, the server's and the bots'.
+	for j in go-livingworld go-server go-bots integration e2e; do check "$j" true livingworld/server/world.go; done
+	check go-livingworld false server/internal/session/move.go
+	for j in ts build e2e; do check "$j" true livingworld/client/src/index.ts; done
+	for j in go-livingworld go-server; do check "$j" false livingworld/client/src/index.ts; done
 	check go-bots true server/pkg/bot/bot.go
 	check integration true server/internal/store/accounts.go
 	check e2e true server/internal/session/move.go

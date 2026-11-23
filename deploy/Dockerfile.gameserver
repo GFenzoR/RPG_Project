@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
 #
 # Game server image: static Go binary + world.bin + data/ + i18n/ on distroless (non-root).
-# Build from the repo root (the context needs server/, world/, data/, i18n/ and deploy/):
+# Build from the repo root (the context needs server/, livingworld/server/, world/, data/,
+# i18n/ and deploy/; server/go.mod requires livingworld/server through a replace):
 #
 #   docker build -f deploy/Dockerfile.gameserver -t rpg-gameserver .
 #   docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile.gameserver .
@@ -21,9 +22,11 @@ ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 WORKDIR /src
 
 COPY server/go.mod server/go.sum server/
+COPY livingworld/server/go.mod livingworld/server/go.sum livingworld/server/
 WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
+COPY livingworld/server/ /src/livingworld/server/
 COPY server/ ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build \

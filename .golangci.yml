@@ -1,4 +1,5 @@
-# golangci-lint v2 configuration, shared by server/ and tools/bots/.
+# golangci-lint v2 configuration, shared by every Go module (server/, livingworld/server/,
+# tools/bots/, tools/launcher/).
 version: "2"
 
 run:

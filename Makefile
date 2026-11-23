@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-GO_MODULES := server tools/bots tools/launcher
+GO_MODULES := server livingworld/server tools/bots tools/launcher
 COMPOSE_DEV := docker compose -f deploy/docker-compose.dev.yml
 # Cloud sessions run Postgres as a VM service; local machines use Docker.
 IS_CLOUD := $(filter true,$(CLAUDE_CODE_REMOTE))
@@ -167,7 +167,7 @@ fuzz: ## Fuzz every target for FUZZTIME (default 30s): make fuzz [FUZZTIME=5m] [
 # checks run in CI (.github/workflows/security.yml). govulncheck only fails on code that
 # actually reaches a vulnerable function; gitleaks is optional locally (CI always runs it).
 GOVULNCHECK_VERSION := v1.9.0
-AUDIT_GO_MODULES := server tools/bots tools/launcher deploy/healthcheck
+AUDIT_GO_MODULES := server livingworld/server tools/bots tools/launcher deploy/healthcheck
 .PHONY: audit
 audit: ## govulncheck (Go modules) + pnpm audit --prod (high) + gitleaks over the history if installed
 	@set -e; for m in $(AUDIT_GO_MODULES); do echo "==> govulncheck ($$m)"; \

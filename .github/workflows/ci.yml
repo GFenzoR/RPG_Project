@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go-server: ${{ steps.f.outputs.go-server }}
+      go-livingworld: ${{ steps.f.outputs.go-livingworld }}
       go-bots: ${{ steps.f.outputs.go-bots }}
       go-launcher: ${{ steps.f.outputs.go-launcher }}
       ts: ${{ steps.f.outputs.ts }}
@@ -58,6 +59,8 @@ jobs:
         include:
           - module: server
             run: ${{ needs.changes.outputs.go-server }}
+          - module: livingworld/server
+            run: ${{ needs.changes.outputs.go-livingworld }}
           - module: tools/bots
             run: ${{ needs.changes.outputs.go-bots }}
           - module: tools/launcher

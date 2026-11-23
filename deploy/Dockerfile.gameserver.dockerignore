@@ -1,6 +1,7 @@
 # Build context is the repo root; only what Dockerfile.gameserver copies is needed.
 *
 !server/
+!livingworld/server/
 !world/
 !data/
 !i18n/
