@@ -136,6 +136,34 @@ mapcompile: ## Compile world/ + data/items into build/world.bin (server map, wit
 test-parity: ## mapcompile vs packages/map-format walkability on every tile
 	cd server && RPG_MAPFORMAT_PARITY=1 go test -count=1 -run TestWalkableParityWithMapFormat ./internal/world/compile/
 
+# Lote 16 (docs/18, docs/08 "Fuzzing"): Go native fuzz targets, as <package dir>:<Fuzz
+# func> under server/. Their seeds already run in make test; this mutates them for FUZZTIME
+# each, one target after another (go test -fuzz takes one target per run). A failure leaves
+# the input in that package's testdata/fuzz/<Func>/: commit it with the fix.
+FUZZ_TARGETS := internal/net/gateway:FuzzClientFrame internal/session:FuzzInputDispatch internal/httpapi:FuzzJSONRoutes
+FUZZTIME ?= 30s
+.PHONY: fuzz
+fuzz: ## Fuzz every target for FUZZTIME (default 30s): make fuzz [FUZZTIME=5m] [FUZZ_TARGETS=pkg:Func]
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; fn=$${t##*:}; echo "==> fuzz $$fn ($$pkg, $(FUZZTIME))"; \
+		(cd server && go test -run '^$$' -fuzz "^$$fn\$$" -fuzztime $(FUZZTIME) ./$$pkg/); \
+	done
+
+# Lote 16 (docs/18): known vulnerabilities in what we ship and leaked secrets. The same
+# checks run in CI (.github/workflows/security.yml). govulncheck only fails on code that
+# actually reaches a vulnerable function; gitleaks is optional locally (CI always runs it).
+GOVULNCHECK_VERSION := v1.9.0
+AUDIT_GO_MODULES := server tools/bots tools/launcher deploy/healthcheck
+.PHONY: audit
+audit: ## govulncheck (Go modules) + pnpm audit --prod (high) + gitleaks over the history if installed
+	@set -e; for m in $(AUDIT_GO_MODULES); do echo "==> govulncheck ($$m)"; \
+		(cd $$m && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...); done
+	@echo "==> pnpm audit --prod --audit-level high"
+	pnpm audit --prod --audit-level high
+	@if command -v gitleaks >/dev/null 2>&1; then echo "==> gitleaks (git history)"; \
+		gitleaks git --config .gitleaks.toml --redact --no-banner .; \
+	else echo "==> gitleaks not installed: skipped (CI runs it; https://github.com/gitleaks/gitleaks)"; fi
+
 # Browser origins allowed on /ws in development: the client's Vite dev and preview servers
 # (also the webview of `make desktop-dev`). RPG_WS_ORIGINS replaces them.
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
