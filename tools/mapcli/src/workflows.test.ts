@@ -114,6 +114,7 @@ describe("workflows", () => {
       "map-pr-comment.yml",
       "map-pr.yml",
       "release-desktop.yml",
+      "security.yml",
     ]);
   });
 
