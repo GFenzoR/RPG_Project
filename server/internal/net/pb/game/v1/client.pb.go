@@ -359,6 +359,7 @@ type ClientMessage struct {
 	//	*ClientMessage_Refine
 	//	*ClientMessage_SetLook
 	//	*ClientMessage_StashCommand
+	//	*ClientMessage_PushObject
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -743,6 +744,15 @@ func (x *ClientMessage) GetStashCommand() *StashCommand {
 	return nil
 }
 
+func (x *ClientMessage) GetPushObject() *PushObject {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_PushObject); ok {
+			return x.PushObject
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -899,6 +909,10 @@ type ClientMessage_StashCommand struct {
 	StashCommand *StashCommand `protobuf:"bytes,38,opt,name=stash_command,json=stashCommand,proto3,oneof"`
 }
 
+type ClientMessage_PushObject struct {
+	PushObject *PushObject `protobuf:"bytes,39,opt,name=push_object,json=pushObject,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -974,6 +988,8 @@ func (*ClientMessage_Refine) isClientMessage_Message() {}
 func (*ClientMessage_SetLook) isClientMessage_Message() {}
 
 func (*ClientMessage_StashCommand) isClientMessage_Message() {}
+
+func (*ClientMessage_PushObject) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -4446,7 +4462,7 @@ var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\x8b\x10\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\x1a\x19game/v1/livingworld.proto\"\xc3\x10\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -4489,7 +4505,9 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x10unequip_cosmetic\x18# \x01(\v2\x18.game.v1.UnequipCosmeticH\x00R\x0funequipCosmetic\x12)\n" +
 	"\x06refine\x18$ \x01(\v2\x0f.game.v1.RefineH\x00R\x06refine\x12-\n" +
 	"\bset_look\x18% \x01(\v2\x10.game.v1.SetLookH\x00R\asetLook\x12<\n" +
-	"\rstash_command\x18& \x01(\v2\x15.game.v1.StashCommandH\x00R\fstashCommandB\t\n" +
+	"\rstash_command\x18& \x01(\v2\x15.game.v1.StashCommandH\x00R\fstashCommand\x126\n" +
+	"\vpush_object\x18' \x01(\v2\x13.game.v1.PushObjectH\x00R\n" +
+	"pushObjectB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -4818,13 +4836,14 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*StashDeposit)(nil),        // 61: game.v1.StashDeposit
 	(*StashWithdraw)(nil),       // 62: game.v1.StashWithdraw
 	(*StashClose)(nil),          // 63: game.v1.StashClose
-	(Direction)(0),              // 64: game.v1.Direction
-	(*ActionTarget)(nil),        // 65: game.v1.ActionTarget
-	(*ItemLocation)(nil),        // 66: game.v1.ItemLocation
-	(MarketSide)(0),             // 67: game.v1.MarketSide
-	(*ItemMods)(nil),            // 68: game.v1.ItemMods
-	(*Position)(nil),            // 69: game.v1.Position
-	(*BodyLook)(nil),            // 70: game.v1.BodyLook
+	(*PushObject)(nil),          // 64: game.v1.PushObject
+	(Direction)(0),              // 65: game.v1.Direction
+	(*ActionTarget)(nil),        // 66: game.v1.ActionTarget
+	(*ItemLocation)(nil),        // 67: game.v1.ItemLocation
+	(MarketSide)(0),             // 68: game.v1.MarketSide
+	(*ItemMods)(nil),            // 69: game.v1.ItemMods
+	(*Position)(nil),            // 70: game.v1.Position
+	(*BodyLook)(nil),            // 71: game.v1.BodyLook
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4865,58 +4884,59 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	53, // 35: game.v1.ClientMessage.refine:type_name -> game.v1.Refine
 	59, // 36: game.v1.ClientMessage.set_look:type_name -> game.v1.SetLook
 	60, // 37: game.v1.ClientMessage.stash_command:type_name -> game.v1.StashCommand
-	64, // 38: game.v1.Walk.dir:type_name -> game.v1.Direction
-	64, // 39: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	64, // 40: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 41: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	65, // 42: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	66, // 43: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	66, // 44: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	65, // 45: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	66, // 46: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	66, // 47: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	66, // 48: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 49: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	66, // 50: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	66, // 51: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	25, // 52: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
-	26, // 53: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
-	27, // 54: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
-	28, // 55: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
-	29, // 56: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
-	30, // 57: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
-	67, // 58: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
-	68, // 59: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
-	68, // 60: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
-	32, // 61: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 62: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 63: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 64: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 65: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 66: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 67: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 68: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 69: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 70: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 71: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 72: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 73: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 74: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	69, // 75: game.v1.Craft.station:type_name -> game.v1.Position
-	69, // 76: game.v1.Refine.station:type_name -> game.v1.Position
-	66, // 77: game.v1.Refine.item:type_name -> game.v1.ItemLocation
-	68, // 78: game.v1.Refine.mods:type_name -> game.v1.ItemMods
-	70, // 79: game.v1.SetLook.look:type_name -> game.v1.BodyLook
-	61, // 80: game.v1.StashCommand.deposit:type_name -> game.v1.StashDeposit
-	62, // 81: game.v1.StashCommand.withdraw:type_name -> game.v1.StashWithdraw
-	63, // 82: game.v1.StashCommand.close:type_name -> game.v1.StashClose
-	66, // 83: game.v1.StashDeposit.from:type_name -> game.v1.ItemLocation
-	68, // 84: game.v1.StashWithdraw.mods:type_name -> game.v1.ItemMods
-	85, // [85:85] is the sub-list for method output_type
-	85, // [85:85] is the sub-list for method input_type
-	85, // [85:85] is the sub-list for extension type_name
-	85, // [85:85] is the sub-list for extension extendee
-	0,  // [0:85] is the sub-list for field type_name
+	64, // 38: game.v1.ClientMessage.push_object:type_name -> game.v1.PushObject
+	65, // 39: game.v1.Walk.dir:type_name -> game.v1.Direction
+	65, // 40: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	65, // 41: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 42: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	66, // 43: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	67, // 44: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	67, // 45: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	66, // 46: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	67, // 47: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	67, // 48: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	67, // 49: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 50: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	67, // 51: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	67, // 52: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	25, // 53: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
+	26, // 54: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
+	27, // 55: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
+	28, // 56: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
+	29, // 57: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
+	30, // 58: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
+	68, // 59: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
+	69, // 60: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
+	69, // 61: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
+	32, // 62: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	33, // 63: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	34, // 64: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	35, // 65: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	36, // 66: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	37, // 67: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	38, // 68: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	39, // 69: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	40, // 70: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	43, // 71: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 72: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 73: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 74: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 75: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	70, // 76: game.v1.Craft.station:type_name -> game.v1.Position
+	70, // 77: game.v1.Refine.station:type_name -> game.v1.Position
+	67, // 78: game.v1.Refine.item:type_name -> game.v1.ItemLocation
+	69, // 79: game.v1.Refine.mods:type_name -> game.v1.ItemMods
+	71, // 80: game.v1.SetLook.look:type_name -> game.v1.BodyLook
+	61, // 81: game.v1.StashCommand.deposit:type_name -> game.v1.StashDeposit
+	62, // 82: game.v1.StashCommand.withdraw:type_name -> game.v1.StashWithdraw
+	63, // 83: game.v1.StashCommand.close:type_name -> game.v1.StashClose
+	67, // 84: game.v1.StashDeposit.from:type_name -> game.v1.ItemLocation
+	69, // 85: game.v1.StashWithdraw.mods:type_name -> game.v1.ItemMods
+	86, // [86:86] is the sub-list for method output_type
+	86, // [86:86] is the sub-list for method input_type
+	86, // [86:86] is the sub-list for extension type_name
+	86, // [86:86] is the sub-list for extension extendee
+	0,  // [0:86] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -4925,6 +4945,7 @@ func file_game_v1_client_proto_init() {
 		return
 	}
 	file_game_v1_common_proto_init()
+	file_game_v1_livingworld_proto_init()
 	file_game_v1_client_proto_msgTypes[0].OneofWrappers = []any{
 		(*ClientMessage_Hello)(nil),
 		(*ClientMessage_Walk)(nil),
@@ -4964,6 +4985,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_Refine)(nil),
 		(*ClientMessage_SetLook)(nil),
 		(*ClientMessage_StashCommand)(nil),
+		(*ClientMessage_PushObject)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[9].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),

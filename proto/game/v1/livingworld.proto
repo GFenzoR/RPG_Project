@@ -2,10 +2,64 @@ syntax = "proto3";
 
 package game.v1;
 
+import "game/v1/common.proto";
+
 option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
 
-// The living world (livingworld/README.md, docs/05 "Mundo vivo"). The file lives with the
-// rest of package game.v1 (buf wants a package's files in its directory).
+// The living world (livingworld/README.md, docs/05 "Mundo vivo"): map objects that break,
+// move or open. Their look always arrives as a TileUpdate (the object is one more item of
+// the tile, above the map's own items and below the loose ones); these messages only add
+// what happened, for the effects and the sounds. The file lives with the rest of package
+// game.v1 (buf wants a package's files in its directory).
+
+// PushObject pushes the object on pos one tile in dir (client → server). The player
+// stands on the tile next to it, on the side opposite dir (a straight push: north, east,
+// south or west), and the tile behind the object must be free. It is the client's answer
+// to a step into a pushable object (its item has `pushable` in the content): the player
+// does not move. The server answers nothing on success but the TileUpdates and a
+// LivingObjectEvent PUSH; a refusal is a system message.
+message PushObject {
+  Position pos = 1;
+  Direction dir = 2;
+}
+
+// LivingObjectKind is what happened to a living object.
+enum LivingObjectKind {
+  LIVING_OBJECT_KIND_UNSPECIFIED = 0;
+  // HIT: it took a strike and still stands (hp_permille is what is left).
+  LIVING_OBJECT_KIND_HIT = 1;
+  // BREAK: it broke (its debris, or nothing, comes in the TileUpdate).
+  LIVING_OBJECT_KIND_BREAK = 2;
+  // RESPAWN: it stands again.
+  LIVING_OBJECT_KIND_RESPAWN = 3;
+  // PUSH: a player pushed it from pos to `to`.
+  LIVING_OBJECT_KIND_PUSH = 4;
+  // GATE_OPEN / GATE_CLOSE: a gate opened or closed (its pressure plates).
+  LIVING_OBJECT_KIND_GATE_OPEN = 5;
+  LIVING_OBJECT_KIND_GATE_CLOSE = 6;
+  // FADE: its debris (item_id) faded away.
+  LIVING_OBJECT_KIND_FADE = 7;
+  // RESET: a pushed object went back from pos to where the map has it (`to`).
+  LIVING_OBJECT_KIND_RESET = 8;
+}
+
+// LivingObjectEvent tells the players who see pos what happened to the object there
+// (server → client). Sent with the TileUpdate of the same change, in the same batch.
+message LivingObjectEvent {
+  LivingObjectKind kind = 1;
+  Position pos = 2;
+  // to: where a pushed or reset object went.
+  Position to = 3;
+  // The item involved: the object (intact, pushed, the gate's new look) or the debris
+  // that faded.
+  uint32 item_id = 4;
+  // effect: the material of the particles (wood, stone, plant, web, clay; may be empty).
+  string effect = 5;
+  // sound: an id of assets/sounds.yaml (may be empty).
+  string sound = 6;
+  // hp_permille: what is left of a hit object, in thousandths.
+  uint32 hp_permille = 7;
+}
 
 // TrailWear is the trail wear of tiles of one floor (server → client): grass worn into a
 // path by players' steps (livingworld/server/trail). Level 0 none, 1 trampled, 2 worn,

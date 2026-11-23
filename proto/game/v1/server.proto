@@ -65,7 +65,7 @@ message ServerMessage {
     QuestLog quest_log = 45;
     CreatureLook creature_look = 46;
     StashUpdate stash_update = 47;
-    // 48 is the living world's LivingObjectEvent (breakables).
+    LivingObjectEvent living_object = 48;
     TrailWear trail_wear = 49;
   }
 }

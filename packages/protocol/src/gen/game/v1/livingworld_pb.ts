@@ -2,15 +2,107 @@
 // @generated from file game/v1/livingworld.proto (package game.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Direction, Position } from "./common_pb.ts";
+import { file_game_v1_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file game/v1/livingworld.proto.
  */
 export const file_game_v1_livingworld: GenFile = /*@__PURE__*/
-  fileDesc("ChlnYW1lL3YxL2xpdmluZ3dvcmxkLnByb3RvEgdnYW1lLnYxIjUKCVRyYWlsV2VhchIJCgF6GAEgASgNEg0KBXRpbGVzGAIgAygNEg4KBmxldmVscxgDIAEoDEJGWkRnaXRodWIuY29tL0dGZW56b1IvUlBHX1Byb2plY3Qvc2VydmVyL2ludGVybmFsL25ldC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
+  fileDesc("ChlnYW1lL3YxL2xpdmluZ3dvcmxkLnByb3RvEgdnYW1lLnYxIk0KClB1c2hPYmplY3QSHgoDcG9zGAEgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIfCgNkaXIYAiABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiLAAQoRTGl2aW5nT2JqZWN0RXZlbnQSJwoEa2luZBgBIAEoDjIZLmdhbWUudjEuTGl2aW5nT2JqZWN0S2luZBIeCgNwb3MYAiABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh0KAnRvGAMgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIPCgdpdGVtX2lkGAQgASgNEg4KBmVmZmVjdBgFIAEoCRINCgVzb3VuZBgGIAEoCRITCgtocF9wZXJtaWxsZRgHIAEoDSI1CglUcmFpbFdlYXISCQoBehgBIAEoDRINCgV0aWxlcxgCIAMoDRIOCgZsZXZlbHMYAyABKAwqrQIKEExpdmluZ09iamVjdEtpbmQSIgoeTElWSU5HX09CSkVDVF9LSU5EX1VOU1BFQ0lGSUVEEAASGgoWTElWSU5HX09CSkVDVF9LSU5EX0hJVBABEhwKGExJVklOR19PQkpFQ1RfS0lORF9CUkVBSxACEh4KGkxJVklOR19PQkpFQ1RfS0lORF9SRVNQQVdOEAMSGwoXTElWSU5HX09CSkVDVF9LSU5EX1BVU0gQBBIgChxMSVZJTkdfT0JKRUNUX0tJTkRfR0FURV9PUEVOEAUSIQodTElWSU5HX09CSkVDVF9LSU5EX0dBVEVfQ0xPU0UQBhIbChdMSVZJTkdfT0JKRUNUX0tJTkRfRkFERRAHEhwKGExJVklOR19PQkpFQ1RfS0lORF9SRVNFVBAIQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
+
+/**
+ * PushObject pushes the object on pos one tile in dir (client → server). The player
+ * stands on the tile next to it, on the side opposite dir (a straight push: north, east,
+ * south or west), and the tile behind the object must be free. It is the client's answer
+ * to a step into a pushable object (its item has `pushable` in the content): the player
+ * does not move. The server answers nothing on success but the TileUpdates and a
+ * LivingObjectEvent PUSH; a refusal is a system message.
+ *
+ * @generated from message game.v1.PushObject
+ */
+export type PushObject = Message<"game.v1.PushObject"> & {
+  /**
+   * @generated from field: game.v1.Position pos = 1;
+   */
+  pos?: Position | undefined;
+
+  /**
+   * @generated from field: game.v1.Direction dir = 2;
+   */
+  dir: Direction;
+};
+
+/**
+ * Describes the message game.v1.PushObject.
+ * Use `create(PushObjectSchema)` to create a new message.
+ */
+export const PushObjectSchema: GenMessage<PushObject> = /*@__PURE__*/
+  messageDesc(file_game_v1_livingworld, 0);
+
+/**
+ * LivingObjectEvent tells the players who see pos what happened to the object there
+ * (server → client). Sent with the TileUpdate of the same change, in the same batch.
+ *
+ * @generated from message game.v1.LivingObjectEvent
+ */
+export type LivingObjectEvent = Message<"game.v1.LivingObjectEvent"> & {
+  /**
+   * @generated from field: game.v1.LivingObjectKind kind = 1;
+   */
+  kind: LivingObjectKind;
+
+  /**
+   * @generated from field: game.v1.Position pos = 2;
+   */
+  pos?: Position | undefined;
+
+  /**
+   * to: where a pushed or reset object went.
+   *
+   * @generated from field: game.v1.Position to = 3;
+   */
+  to?: Position | undefined;
+
+  /**
+   * The item involved: the object (intact, pushed, the gate's new look) or the debris
+   * that faded.
+   *
+   * @generated from field: uint32 item_id = 4;
+   */
+  itemId: number;
+
+  /**
+   * effect: the material of the particles (wood, stone, plant, web, clay; may be empty).
+   *
+   * @generated from field: string effect = 5;
+   */
+  effect: string;
+
+  /**
+   * sound: an id of assets/sounds.yaml (may be empty).
+   *
+   * @generated from field: string sound = 6;
+   */
+  sound: string;
+
+  /**
+   * hp_permille: what is left of a hit object, in thousandths.
+   *
+   * @generated from field: uint32 hp_permille = 7;
+   */
+  hpPermille: number;
+};
+
+/**
+ * Describes the message game.v1.LivingObjectEvent.
+ * Use `create(LivingObjectEventSchema)` to create a new message.
+ */
+export const LivingObjectEventSchema: GenMessage<LivingObjectEvent> = /*@__PURE__*/
+  messageDesc(file_game_v1_livingworld, 1);
 
 /**
  * TrailWear is the trail wear of tiles of one floor (server → client): grass worn into a
@@ -48,5 +140,77 @@ export type TrailWear = Message<"game.v1.TrailWear"> & {
  * Use `create(TrailWearSchema)` to create a new message.
  */
 export const TrailWearSchema: GenMessage<TrailWear> = /*@__PURE__*/
-  messageDesc(file_game_v1_livingworld, 0);
+  messageDesc(file_game_v1_livingworld, 2);
+
+/**
+ * LivingObjectKind is what happened to a living object.
+ *
+ * @generated from enum game.v1.LivingObjectKind
+ */
+export enum LivingObjectKind {
+  /**
+   * @generated from enum value: LIVING_OBJECT_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * HIT: it took a strike and still stands (hp_permille is what is left).
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_HIT = 1;
+   */
+  HIT = 1,
+
+  /**
+   * BREAK: it broke (its debris, or nothing, comes in the TileUpdate).
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_BREAK = 2;
+   */
+  BREAK = 2,
+
+  /**
+   * RESPAWN: it stands again.
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_RESPAWN = 3;
+   */
+  RESPAWN = 3,
+
+  /**
+   * PUSH: a player pushed it from pos to `to`.
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_PUSH = 4;
+   */
+  PUSH = 4,
+
+  /**
+   * GATE_OPEN / GATE_CLOSE: a gate opened or closed (its pressure plates).
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_GATE_OPEN = 5;
+   */
+  GATE_OPEN = 5,
+
+  /**
+   * @generated from enum value: LIVING_OBJECT_KIND_GATE_CLOSE = 6;
+   */
+  GATE_CLOSE = 6,
+
+  /**
+   * FADE: its debris (item_id) faded away.
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_FADE = 7;
+   */
+  FADE = 7,
+
+  /**
+   * RESET: a pushed object went back from pos to where the map has it (`to`).
+   *
+   * @generated from enum value: LIVING_OBJECT_KIND_RESET = 8;
+   */
+  RESET = 8,
+}
+
+/**
+ * Describes the enum game.v1.LivingObjectKind.
+ */
+export const LivingObjectKindSchema: GenEnum<LivingObjectKind> = /*@__PURE__*/
+  enumDesc(file_game_v1_livingworld, 0);
 

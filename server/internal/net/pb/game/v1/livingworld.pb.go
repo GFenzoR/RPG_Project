@@ -21,6 +21,239 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// LivingObjectKind is what happened to a living object.
+type LivingObjectKind int32
+
+const (
+	LivingObjectKind_LIVING_OBJECT_KIND_UNSPECIFIED LivingObjectKind = 0
+	// HIT: it took a strike and still stands (hp_permille is what is left).
+	LivingObjectKind_LIVING_OBJECT_KIND_HIT LivingObjectKind = 1
+	// BREAK: it broke (its debris, or nothing, comes in the TileUpdate).
+	LivingObjectKind_LIVING_OBJECT_KIND_BREAK LivingObjectKind = 2
+	// RESPAWN: it stands again.
+	LivingObjectKind_LIVING_OBJECT_KIND_RESPAWN LivingObjectKind = 3
+	// PUSH: a player pushed it from pos to `to`.
+	LivingObjectKind_LIVING_OBJECT_KIND_PUSH LivingObjectKind = 4
+	// GATE_OPEN / GATE_CLOSE: a gate opened or closed (its pressure plates).
+	LivingObjectKind_LIVING_OBJECT_KIND_GATE_OPEN  LivingObjectKind = 5
+	LivingObjectKind_LIVING_OBJECT_KIND_GATE_CLOSE LivingObjectKind = 6
+	// FADE: its debris (item_id) faded away.
+	LivingObjectKind_LIVING_OBJECT_KIND_FADE LivingObjectKind = 7
+	// RESET: a pushed object went back from pos to where the map has it (`to`).
+	LivingObjectKind_LIVING_OBJECT_KIND_RESET LivingObjectKind = 8
+)
+
+// Enum value maps for LivingObjectKind.
+var (
+	LivingObjectKind_name = map[int32]string{
+		0: "LIVING_OBJECT_KIND_UNSPECIFIED",
+		1: "LIVING_OBJECT_KIND_HIT",
+		2: "LIVING_OBJECT_KIND_BREAK",
+		3: "LIVING_OBJECT_KIND_RESPAWN",
+		4: "LIVING_OBJECT_KIND_PUSH",
+		5: "LIVING_OBJECT_KIND_GATE_OPEN",
+		6: "LIVING_OBJECT_KIND_GATE_CLOSE",
+		7: "LIVING_OBJECT_KIND_FADE",
+		8: "LIVING_OBJECT_KIND_RESET",
+	}
+	LivingObjectKind_value = map[string]int32{
+		"LIVING_OBJECT_KIND_UNSPECIFIED": 0,
+		"LIVING_OBJECT_KIND_HIT":         1,
+		"LIVING_OBJECT_KIND_BREAK":       2,
+		"LIVING_OBJECT_KIND_RESPAWN":     3,
+		"LIVING_OBJECT_KIND_PUSH":        4,
+		"LIVING_OBJECT_KIND_GATE_OPEN":   5,
+		"LIVING_OBJECT_KIND_GATE_CLOSE":  6,
+		"LIVING_OBJECT_KIND_FADE":        7,
+		"LIVING_OBJECT_KIND_RESET":       8,
+	}
+)
+
+func (x LivingObjectKind) Enum() *LivingObjectKind {
+	p := new(LivingObjectKind)
+	*p = x
+	return p
+}
+
+func (x LivingObjectKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LivingObjectKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_livingworld_proto_enumTypes[0].Descriptor()
+}
+
+func (LivingObjectKind) Type() protoreflect.EnumType {
+	return &file_game_v1_livingworld_proto_enumTypes[0]
+}
+
+func (x LivingObjectKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LivingObjectKind.Descriptor instead.
+func (LivingObjectKind) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{0}
+}
+
+// PushObject pushes the object on pos one tile in dir (client → server). The player
+// stands on the tile next to it, on the side opposite dir (a straight push: north, east,
+// south or west), and the tile behind the object must be free. It is the client's answer
+// to a step into a pushable object (its item has `pushable` in the content): the player
+// does not move. The server answers nothing on success but the TileUpdates and a
+// LivingObjectEvent PUSH; a refusal is a system message.
+type PushObject struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
+	Dir           Direction              `protobuf:"varint,2,opt,name=dir,proto3,enum=game.v1.Direction" json:"dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushObject) Reset() {
+	*x = PushObject{}
+	mi := &file_game_v1_livingworld_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushObject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushObject) ProtoMessage() {}
+
+func (x *PushObject) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_livingworld_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushObject.ProtoReflect.Descriptor instead.
+func (*PushObject) Descriptor() ([]byte, []int) {
+	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PushObject) GetPos() *Position {
+	if x != nil {
+		return x.Pos
+	}
+	return nil
+}
+
+func (x *PushObject) GetDir() Direction {
+	if x != nil {
+		return x.Dir
+	}
+	return Direction_DIRECTION_UNSPECIFIED
+}
+
+// LivingObjectEvent tells the players who see pos what happened to the object there
+// (server → client). Sent with the TileUpdate of the same change, in the same batch.
+type LivingObjectEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Kind  LivingObjectKind       `protobuf:"varint,1,opt,name=kind,proto3,enum=game.v1.LivingObjectKind" json:"kind,omitempty"`
+	Pos   *Position              `protobuf:"bytes,2,opt,name=pos,proto3" json:"pos,omitempty"`
+	// to: where a pushed or reset object went.
+	To *Position `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	// The item involved: the object (intact, pushed, the gate's new look) or the debris
+	// that faded.
+	ItemId uint32 `protobuf:"varint,4,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// effect: the material of the particles (wood, stone, plant, web, clay; may be empty).
+	Effect string `protobuf:"bytes,5,opt,name=effect,proto3" json:"effect,omitempty"`
+	// sound: an id of assets/sounds.yaml (may be empty).
+	Sound string `protobuf:"bytes,6,opt,name=sound,proto3" json:"sound,omitempty"`
+	// hp_permille: what is left of a hit object, in thousandths.
+	HpPermille    uint32 `protobuf:"varint,7,opt,name=hp_permille,json=hpPermille,proto3" json:"hp_permille,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LivingObjectEvent) Reset() {
+	*x = LivingObjectEvent{}
+	mi := &file_game_v1_livingworld_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LivingObjectEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LivingObjectEvent) ProtoMessage() {}
+
+func (x *LivingObjectEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_livingworld_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LivingObjectEvent.ProtoReflect.Descriptor instead.
+func (*LivingObjectEvent) Descriptor() ([]byte, []int) {
+	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LivingObjectEvent) GetKind() LivingObjectKind {
+	if x != nil {
+		return x.Kind
+	}
+	return LivingObjectKind_LIVING_OBJECT_KIND_UNSPECIFIED
+}
+
+func (x *LivingObjectEvent) GetPos() *Position {
+	if x != nil {
+		return x.Pos
+	}
+	return nil
+}
+
+func (x *LivingObjectEvent) GetTo() *Position {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *LivingObjectEvent) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *LivingObjectEvent) GetEffect() string {
+	if x != nil {
+		return x.Effect
+	}
+	return ""
+}
+
+func (x *LivingObjectEvent) GetSound() string {
+	if x != nil {
+		return x.Sound
+	}
+	return ""
+}
+
+func (x *LivingObjectEvent) GetHpPermille() uint32 {
+	if x != nil {
+		return x.HpPermille
+	}
+	return 0
+}
+
 // TrailWear is the trail wear of tiles of one floor (server → client): grass worn into a
 // path by players' steps (livingworld/server/trail). Level 0 none, 1 trampled, 2 worn,
 // 3 bare dirt. It travels two ways:
@@ -43,7 +276,7 @@ type TrailWear struct {
 
 func (x *TrailWear) Reset() {
 	*x = TrailWear{}
-	mi := &file_game_v1_livingworld_proto_msgTypes[0]
+	mi := &file_game_v1_livingworld_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +288,7 @@ func (x *TrailWear) String() string {
 func (*TrailWear) ProtoMessage() {}
 
 func (x *TrailWear) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_livingworld_proto_msgTypes[0]
+	mi := &file_game_v1_livingworld_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +301,7 @@ func (x *TrailWear) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrailWear.ProtoReflect.Descriptor instead.
 func (*TrailWear) Descriptor() ([]byte, []int) {
-	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{0}
+	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TrailWear) GetZ() uint32 {
@@ -96,11 +329,34 @@ var File_game_v1_livingworld_proto protoreflect.FileDescriptor
 
 const file_game_v1_livingworld_proto_rawDesc = "" +
 	"\n" +
-	"\x19game/v1/livingworld.proto\x12\agame.v1\"G\n" +
+	"\x19game/v1/livingworld.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"W\n" +
+	"\n" +
+	"PushObject\x12#\n" +
+	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12$\n" +
+	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"\xf2\x01\n" +
+	"\x11LivingObjectEvent\x12-\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x19.game.v1.LivingObjectKindR\x04kind\x12#\n" +
+	"\x03pos\x18\x02 \x01(\v2\x11.game.v1.PositionR\x03pos\x12!\n" +
+	"\x02to\x18\x03 \x01(\v2\x11.game.v1.PositionR\x02to\x12\x17\n" +
+	"\aitem_id\x18\x04 \x01(\rR\x06itemId\x12\x16\n" +
+	"\x06effect\x18\x05 \x01(\tR\x06effect\x12\x14\n" +
+	"\x05sound\x18\x06 \x01(\tR\x05sound\x12\x1f\n" +
+	"\vhp_permille\x18\a \x01(\rR\n" +
+	"hpPermille\"G\n" +
 	"\tTrailWear\x12\f\n" +
 	"\x01z\x18\x01 \x01(\rR\x01z\x12\x14\n" +
 	"\x05tiles\x18\x02 \x03(\rR\x05tiles\x12\x16\n" +
-	"\x06levels\x18\x03 \x01(\fR\x06levelsBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x06levels\x18\x03 \x01(\fR\x06levels*\xad\x02\n" +
+	"\x10LivingObjectKind\x12\"\n" +
+	"\x1eLIVING_OBJECT_KIND_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16LIVING_OBJECT_KIND_HIT\x10\x01\x12\x1c\n" +
+	"\x18LIVING_OBJECT_KIND_BREAK\x10\x02\x12\x1e\n" +
+	"\x1aLIVING_OBJECT_KIND_RESPAWN\x10\x03\x12\x1b\n" +
+	"\x17LIVING_OBJECT_KIND_PUSH\x10\x04\x12 \n" +
+	"\x1cLIVING_OBJECT_KIND_GATE_OPEN\x10\x05\x12!\n" +
+	"\x1dLIVING_OBJECT_KIND_GATE_CLOSE\x10\x06\x12\x1b\n" +
+	"\x17LIVING_OBJECT_KIND_FADE\x10\a\x12\x1c\n" +
+	"\x18LIVING_OBJECT_KIND_RESET\x10\bBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_livingworld_proto_rawDescOnce sync.Once
@@ -114,16 +370,27 @@ func file_game_v1_livingworld_proto_rawDescGZIP() []byte {
 	return file_game_v1_livingworld_proto_rawDescData
 }
 
-var file_game_v1_livingworld_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_game_v1_livingworld_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_game_v1_livingworld_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_game_v1_livingworld_proto_goTypes = []any{
-	(*TrailWear)(nil), // 0: game.v1.TrailWear
+	(LivingObjectKind)(0),     // 0: game.v1.LivingObjectKind
+	(*PushObject)(nil),        // 1: game.v1.PushObject
+	(*LivingObjectEvent)(nil), // 2: game.v1.LivingObjectEvent
+	(*TrailWear)(nil),         // 3: game.v1.TrailWear
+	(*Position)(nil),          // 4: game.v1.Position
+	(Direction)(0),            // 5: game.v1.Direction
 }
 var file_game_v1_livingworld_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	4, // 0: game.v1.PushObject.pos:type_name -> game.v1.Position
+	5, // 1: game.v1.PushObject.dir:type_name -> game.v1.Direction
+	0, // 2: game.v1.LivingObjectEvent.kind:type_name -> game.v1.LivingObjectKind
+	4, // 3: game.v1.LivingObjectEvent.pos:type_name -> game.v1.Position
+	4, // 4: game.v1.LivingObjectEvent.to:type_name -> game.v1.Position
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_livingworld_proto_init() }
@@ -131,18 +398,20 @@ func file_game_v1_livingworld_proto_init() {
 	if File_game_v1_livingworld_proto != nil {
 		return
 	}
+	file_game_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_livingworld_proto_rawDesc), len(file_game_v1_livingworld_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   1,
+			NumEnums:      1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_game_v1_livingworld_proto_goTypes,
 		DependencyIndexes: file_game_v1_livingworld_proto_depIdxs,
+		EnumInfos:         file_game_v1_livingworld_proto_enumTypes,
 		MessageInfos:      file_game_v1_livingworld_proto_msgTypes,
 	}.Build()
 	File_game_v1_livingworld_proto = out.File

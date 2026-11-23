@@ -3,6 +3,7 @@ syntax = "proto3";
 package game.v1;
 
 import "game/v1/common.proto";
+import "game/v1/livingworld.proto";
 
 option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
 
@@ -50,6 +51,7 @@ message ClientMessage {
     Refine refine = 36;
     SetLook set_look = 37;
     StashCommand stash_command = 38;
+    PushObject push_object = 39;
   }
 }
 
