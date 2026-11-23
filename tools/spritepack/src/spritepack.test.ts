@@ -364,6 +364,18 @@ describe("buildAtlas", () => {
     expect(page.json.meta).toMatchObject({ image: "atlas-0.png", related_multi_packs: [] });
   });
 
+  it("packs the living world's own art under livingworld/ (livingworld/README.md)", () => {
+    put("assets/livingworld/sprites/plants/reeds.png", encodePng(solid(32, 32, [0, 128, 0])));
+    put("assets/livingworld/sprites/fx/ripple_0.png", encodePng(solid(32, 32, [255, 255, 255])));
+    put("data/items/x.yaml", "- id: reeds\n  sprite: livingworld/plants/reeds\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.sprites).toEqual({
+      "livingworld/fx/ripple_0": { page: 0, origin: "file" },
+      "livingworld/plants/reeds": { page: 0, origin: "file" },
+    });
+  });
+
   it("treats an outfit's sprite as a folder of frames (T0.5)", () => {
     put(
       "data/outfits.yaml",
