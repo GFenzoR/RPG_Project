@@ -89,7 +89,10 @@ client/
     (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el
     estado del juego no lo tiene.
   - **Créditos en la app de escritorio** (A1): ver "Créditos (docs/17 A1)".
-- Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
+- Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`) y `window.__rpgAudio`
+  (`main.tsx`): solo con `__RPG_E2E_HOOKS__` (servidor de desarrollo o build con
+  `RPG_E2E_HOOKS=1`, `vite.config.ts`); un hook nuevo va dentro de esa guarda
+  (docs/08 "E2E del cliente", lote 16).
 
 ## Atlas: reintentos y "Reintentar"
 - `Atlas.load` (`packages/renderer`) reintenta cada request por su cuenta (`atlas.json`, el

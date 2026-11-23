@@ -3604,7 +3604,7 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
 
 /** The color name (Spanish option text) of a presence swatch, by its hue (lote 16). */
 function colorOfSwatch(css: string): string {
-  const [r, g, b] = (css.match(/\d+/g) ?? []).slice(0, 3).map((v) => Number(v) / 255);
+  const [r = 0, g = 0, b = 0] = (css.match(/\d+/g) ?? []).slice(0, 3).map((v) => Number(v) / 255);
   const hi = Math.max(r, g, b);
   const d = hi - Math.min(r, g, b);
   let h = 0;

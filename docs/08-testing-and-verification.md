@@ -196,6 +196,13 @@ regla de "no empeorar más de 10 %" (ver 07) se comprueba a mano: descargar el a
 subida en el hot path del tick se explica en el PR.
 
 ### E2E del cliente (`client/e2e`)
+**Hooks E2E (`window.__rpgClient`, `window.__rpgAudio`):** de solo lectura, existen solo en
+el servidor de desarrollo de Vite (Playwright, `make dev`, `make play`) y en un build hecho
+con `RPG_E2E_HOOKS=1`. Un build de producción (`pnpm build`, la imagen web del deploy y
+del lanzador de docs/13) no los trae (lote 16: no le damos ayudas a un bot);
+`client/vite/e2e-hooks.test.ts` construye la página del juego y lo comprueba. Un E2E
+contra un build (no contra el Vite de desarrollo) tiene que construirlo con esa variable.
+
 `make e2e` corre también el E2E del cliente: Playwright levanta el servidor Go (compila
 `world/` con `mapcompile` y lo arranca en `:18080` contra `DATABASE_URL`, que debe tener
 Postgres arriba; aplica las migraciones solo) y el Vite del cliente en `:5176`, que hace de

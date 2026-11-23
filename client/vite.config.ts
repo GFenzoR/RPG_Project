@@ -14,8 +14,14 @@ const swVersion = process.env["RPG_BUILD_ID"] ?? Date.now().toString(36);
 // `tauri android dev` / `tauri ios dev` (docs/15-movil.md) set TAURI_DEV_HOST: the device
 // loads the dev server over the LAN, so Vite listens there instead of only on localhost.
 const tauriDevHost = process.env["TAURI_DEV_HOST"];
+// The read-only E2E hooks (window.__rpgClient, window.__rpgAudio; docs/08): in the dev
+// server (Playwright, `make dev`, `make play`) and in a build only with RPG_E2E_HOOKS=1.
+// A production build drops them (lote 16: no helper for bots in what players load);
+// vite/e2e-hooks.test.ts checks it.
+const e2eHooks = (command: string): boolean =>
+  command === "serve" || process.env["RPG_E2E_HOOKS"] === "1";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   // The UI fonts (docs/17 UI-3) are subset to woff2 and served at /fonts/ (vite/fonts.ts).
   plugins: [rpgContent(), rpgFonts(repoRoot())],
   // Two pages (T4.3): the public website at / (index.html: landing, /highscores, /news)
@@ -36,7 +42,10 @@ export default defineConfig({
       },
     },
   },
-  define: { __RPG_SW_VERSION__: JSON.stringify(swVersion) },
+  define: {
+    __RPG_SW_VERSION__: JSON.stringify(swVersion),
+    __RPG_E2E_HOOKS__: JSON.stringify(e2eHooks(command)),
+  },
   oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
   server: {
     port: Number(process.env["CLIENT_PORT"] ?? 5173),
@@ -49,4 +58,4 @@ export default defineConfig({
       "/ws": { target: server.replace(/^http/, "ws"), ws: true },
     },
   },
-});
+}));

@@ -1835,7 +1835,7 @@ export class Game {
     this.conn.close();
     this.canvas?.destroy();
     this.canvas = undefined;
-    delete window.__rpgClient;
+    if (__RPG_E2E_HOOKS__) delete window.__rpgClient;
   }
 
   /**
@@ -1938,8 +1938,12 @@ export class Game {
     });
   }
 
-  /** The read-only E2E hooks, once the canvas is up (`ready`). */
+  /**
+   * The read-only E2E hooks, once the canvas is up (`ready`). Only in the dev server or an
+   * RPG_E2E_HOOKS=1 build (`__RPG_E2E_HOOKS__`): a production build has none of this code.
+   */
   private publishHooks(canvas: GameCanvas): void {
+    if (!__RPG_E2E_HOOKS__) return;
     const world = this.world;
     window.__rpgClient = {
       ready: true,
