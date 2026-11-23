@@ -57,6 +57,10 @@ type Config struct {
 	AccountRateLimit      RateLimit // authed requests per account; DefaultAccountRateLimit
 	AccountWriteRateLimit RateLimit // play and character creation per account; DefaultAccountWriteRateLimit
 	AuthNetRateLimit      RateLimit // rateLimited routes per IPv6 /48 or IPv4 /24; DefaultAuthNetRateLimit
+	TokenNetRateLimit     RateLimit // token lookups per IPv6 /48 or IPv4 /24; DefaultTokenNetRateLimit
+	// DeviceLoginRateLimit: failed logins per known-device cookie before it stops
+	// exempting from the per-email limit; DefaultDeviceLoginRateLimit.
+	DeviceLoginRateLimit RateLimit
 	// NetHashing: password-hashing requests in flight per IPv6 /48 or IPv4 address
 	// (0 = DefaultNetHashing, negative = no cap).
 	NetHashing int
@@ -118,6 +122,9 @@ type Config struct {
 type Accounts interface {
 	Register(ctx context.Context, email, password string) (int64, error)
 	Login(ctx context.Context, email, password string) (auth.Token, error)
+	// LoginStamp changes whenever the password of email's account does ("" if there is
+	// no such account with a password): it signs the known-device cookies.
+	LoginStamp(ctx context.Context, email string) (string, error)
 	Authenticate(ctx context.Context, token string) (int64, error)
 	Logout(ctx context.Context, token string) error
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
@@ -181,14 +188,16 @@ type api struct {
 	shopLimiter *limiter // T5.7: checkouts and purchases per account
 
 	// Lote 16 (abuse.go).
-	tokenLimiter   *limiter // token lookups per client key
-	accountLimiter *limiter // authed requests per account
-	writeLimiter   *limiter // play and character creation per account
-	netLimiter     *limiter // rateLimited routes per network
-	netHashing     *inflight
-	deviceKey      [32]byte
-	healthC        healthCache
-	logs           logSampler
+	tokenLimiter    *limiter // token lookups per client key
+	tokenNetLimiter *limiter // token lookups per network
+	deviceLimiter   *limiter // failed logins per known-device cookie
+	accountLimiter  *limiter // authed requests per account
+	writeLimiter    *limiter // play and character creation per account
+	netLimiter      *limiter // rateLimited routes per network
+	netHashing      *inflight
+	deviceKey       [32]byte
+	healthC         healthCache
+	logs            logSampler
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -221,6 +230,8 @@ func newAPI(cfg Config) (*api, error) {
 	cfg.AccountRateLimit = orDefault(cfg.AccountRateLimit, DefaultAccountRateLimit)
 	cfg.AccountWriteRateLimit = orDefault(cfg.AccountWriteRateLimit, DefaultAccountWriteRateLimit)
 	cfg.AuthNetRateLimit = orDefault(cfg.AuthNetRateLimit, DefaultAuthNetRateLimit)
+	cfg.TokenNetRateLimit = orDefault(cfg.TokenNetRateLimit, DefaultTokenNetRateLimit)
+	cfg.DeviceLoginRateLimit = orDefault(cfg.DeviceLoginRateLimit, DefaultDeviceLoginRateLimit)
 	if cfg.NetHashing == 0 {
 		cfg.NetHashing = DefaultNetHashing
 	}
@@ -293,6 +304,9 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.accountLimiter, cfg.AccountRateLimit, failOpen},
 		{&a.writeLimiter, cfg.AccountWriteRateLimit, failOpen},
 		{&a.netLimiter, cfg.AuthNetRateLimit, failClosed},
+		{&a.tokenNetLimiter, cfg.TokenNetRateLimit, failClosed},
+		// Keys are valid cookies only (signed after a correct password).
+		{&a.deviceLimiter, cfg.DeviceLoginRateLimit, failClosed},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
@@ -411,19 +425,27 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 // refunded unless the password was wrong: only failures count (docs/05). On false the
 // response was written.
 //
-// The pair limit refills slower than the per-email one, so one client key alone can
-// never drain an account's per-email budget (it takes several networks). A browser with
-// a known-device cookie of that email (set here after a correct password) skips the
-// per-email limit: strangers' failures never lock the owner out of their usual device.
+// The pair is keyed by the client's network (IPv4 address, IPv6 /48: one subscriber
+// may own a whole /48) and refills slower than the per-email limit, so one network alone
+// can never drain an account's per-email budget (it takes several). A browser with a
+// known-device cookie of that email and its current password (set here after a correct
+// password) skips the per-email limit while the cookie's own failure budget lasts:
+// strangers' failures never lock the owner out of their usual device, and one copied
+// cookie is no free pass for a guessing run from many addresses.
 func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string, check func() (auth.Token, error)) (auth.Token, bool) {
-	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
+	pairKey := email + "\x00" + a.netKey(r, true) // NUL cannot appear in either part
 	ok, pairRes := a.pairLimiter.allow(pairKey)
 	if !ok {
 		a.tooMany(w, a.cfg.LoginPairRateLimit)
 		return auth.Token{}, false
 	}
 	emailRes := reservation{slot: untracked}
-	if !a.knownDevice(r, email) {
+	deviceRes := reservation{slot: untracked}
+	exempt := false
+	if device := a.knownDevice(r, email); device != "" {
+		exempt, deviceRes = a.deviceLimiter.allow(device)
+	}
+	if !exempt {
 		ok, emailRes = a.emailLimiter.allow(email)
 		if !ok {
 			a.pairLimiter.refund(pairRes)
@@ -436,6 +458,7 @@ func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string,
 		if !spent {
 			a.pairLimiter.refund(pairRes)
 			a.emailLimiter.refund(emailRes)
+			a.deviceLimiter.refund(deviceRes)
 		}
 	}()
 	tok, err := check()
@@ -444,7 +467,7 @@ func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string,
 		a.fail(w, r, err)
 		return auth.Token{}, false
 	}
-	a.setDevice(w, email)
+	a.setDevice(w, r, email)
 	return tok, true
 }
 
@@ -592,8 +615,7 @@ type authedFunc func(http.ResponseWriter, *http.Request, int64)
 // the account's own budget is spent.
 func (a *api) authed(next authedFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if ok, _ := a.tokenLimiter.allow(a.clientKey(r)); !ok {
-			a.tooMany(w, a.cfg.TokenRateLimit)
+		if !a.allowTokenLookup(w, r) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), httpDBTimeout)

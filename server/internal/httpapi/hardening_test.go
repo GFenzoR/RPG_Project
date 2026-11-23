@@ -214,8 +214,9 @@ func TestKnownDeviceSkipsThePerEmailLimit(t *testing.T) {
 }
 
 // Finding 4: the service has 4 password-hashing slots for everyone and the per-IP limit
-// is per /64, so one IPv6 /48 could hold them all. At most one hashing request of a /48
-// runs at once; another network still gets a slot.
+// is per /64, so one IPv6 /48 could hold them all. At most DefaultNetHashing (2: two
+// people behind one NAT log in at once) hashing requests of a /48 run at once; another
+// network still gets a slot.
 func TestOneNetworkCannotHoldTheHashingSlots(t *testing.T) {
 	entered := make(chan struct{}, 100)
 	release := make(chan struct{})
@@ -235,12 +236,14 @@ func TestOneNetworkCannotHoldTheHashingSlots(t *testing.T) {
 		}(i)
 	}
 	timeout := time.After(10 * time.Second) //nolint:forbidigo // a real deadline: a broken cap would block forever
-	select {
-	case <-entered:
-	case <-timeout:
-		t.Fatal("no request reached the password check")
+	for i := 0; i < httpapi.DefaultNetHashing; i++ {
+		select {
+		case <-entered:
+		case <-timeout:
+			t.Fatalf("only %d requests reached the password check", i)
+		}
 	}
-	for i := 0; i < 63; i++ {
+	for i := 0; i < 64-httpapi.DefaultNetHashing; i++ {
 		select {
 		case code := <-results:
 			if code != http.StatusTooManyRequests {
@@ -251,7 +254,7 @@ func TestOneNetworkCannotHoldTheHashingSlots(t *testing.T) {
 			t.Fatalf("%d requests of one /48 are hashing at once", inLogin.Load())
 		}
 	}
-	if n := inLogin.Load(); n != 1 {
+	if n := inLogin.Load(); n != httpapi.DefaultNetHashing {
 		t.Fatalf("%d hashing requests of one /48", n)
 	}
 	// Another network still gets a slot.
@@ -262,7 +265,7 @@ func TestOneNetworkCannotHoldTheHashingSlots(t *testing.T) {
 		t.Fatal("another network got no slot")
 	}
 	close(release)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < httpapi.DefaultNetHashing+1; i++ {
 		if code := <-results; code != http.StatusOK {
 			t.Fatalf("held request: %d", code)
 		}

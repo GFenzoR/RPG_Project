@@ -135,26 +135,30 @@ el punto 5:
 - **API HTTP y cuentas endurecidas (hecho, rama `sec/http-auth-limits`, lote 16; el dueño el
   2026-11-20: "un estándar excelente de ciberseguridad"; docs/05 "Límites de la API"):**
   tokens inventados ya no llegan a Postgres (formato y límite por cliente antes de buscar),
-  límites por cuenta en `play` y crear personaje, por red (/48, /24) y un solo cálculo de
-  contraseña a la vez por red, `/healthz` con el ping guardado 1 s, pool de 16 conexiones,
+  límites por cuenta en `play` y crear personaje, por red (/48, /24; también para las
+  búsquedas de token) y dos cálculos de contraseña a la vez por red, `/healthz` con el ping guardado 1 s, pool de 16 conexiones,
   logs repetidos muestreados, una sola IP ya no puede bloquear el login de una cuenta
-  (par 15/h y cookie de dispositivo conocido), desvincular pide la misma re-autenticación
+  (par 15/h por IPv4 o /48 y cookie de dispositivo conocido, atada a la contraseña y con
+  su propio límite de fallos), desvincular pide la misma re-autenticación
   que vincular, `forgot` le devuelve al dueño del buzón una dirección nunca verificada, y
   los nombres de NPC están reservados. Queda:
-  - **Bloqueo distribuido:** desde 3 o más redes todavía se puede agotar el límite por
+  - **Bloqueo distribuido:** desde 3 o más redes (IPv4 o /48) todavía se puede agotar el límite por
     email; la víctima entra igual desde su navegador de siempre (cookie `rpg_device`),
     pero no desde uno nuevo, la app de escritorio ni los bots. La clave de esa cookie es
     por proceso: un reinicio la olvida. Si molesta, fijar `httpapi.Config.DeviceKey` con
     un secreto del entorno (no hay flag todavía).
-  - **Dos personas tras la misma IPv4** (casa, cibercafé) que entran en el mismo instante:
-    la segunda recibe `429` y reintenta (el cliente lo muestra como "demasiados intentos").
+  - **Tres personas tras la misma IPv4** (casa, cibercafé) que entran en el mismo instante:
+    la tercera recibe `429` y reintenta (el cliente lo muestra como "demasiados intentos").
     Si pasa seguido, esperar el turno en vez de contestar al instante.
+  - **Migración 00023** (`claim_email` en `account_tokens.purpose`): no se probó contra
+    Postgres en esta rama (sin Docker); correr `make test-integration` antes del push.
   - **Tokens de juego:** `play` sigue dejando una fila por pedido hasta la purga de cada
     hora (ahora como mucho 20 y luego 1 cada 3 s por cuenta); borrar los anteriores sin
     usar al emitir uno nuevo queda para otra vez.
   - **Verificar en el E2E final:** login y registro seguidos desde 127.0.0.1 (el arnés usa
     `-auth-rate-burst`, que sube los límites nuevos), `oauth.spec` (desvincular sin
-    contraseña dentro de los 10 min del login), `account.spec` (forgot/reset) y los
+    contraseña dentro de los 10 min del login), `account.spec` (forgot/reset, y que el
+    enlace de verificación siga andando después de un forgot) y los
     `POST /api/characters` y `/api/play` de `game.spec`.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de

@@ -76,7 +76,7 @@ func TestNPCReservedNames(t *testing.T) {
 		"Sister Liora", "forge echo", "Casia Hollín, keeper of records",
 	})
 	want := []string{"Gisla", "Gisla the tanner", "Maren Holt", "Maren", "Holt", "Sister Liora",
-		"Sister", "Liora", "forge echo", "Casia Hollín", "Casia", "Hollín"}
+		"Liora", "forge echo", "Casia Hollín", "Casia", "Hollín"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
@@ -91,18 +91,19 @@ func TestCharacterNamesCannotCopyNPCs(t *testing.T) {
 		Repo: repo, Clock: clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 		Vocations: testVocations, Hash: auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1},
 		MaxCharacters: 10,
-		ReservedNames: auth.NPCReservedNames([]string{"Gisla, la curtidora", "Maren Holt, harbour master"}),
+		ReservedNames: auth.NPCReservedNames([]string{"Gisla, la curtidora", "Maren Holt, harbour master", "Tobías Muestra, proveedor", "Hermana Liora"}),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
-	for _, name := range []string{"Gisla", "Maren Holt", "maren holt", "MarenHolt", "Maren", "Holt"} {
+	// Accents are dropped ("Tobías"), but a title alone ("Hermana") stays free.
+	for _, name := range []string{"Gisla", "Maren Holt", "maren holt", "MarenHolt", "Maren", "Holt", "Tobias", "Tobias Muestra", "Hermana Liora", "Liora"} {
 		if _, err := svc.CreateCharacter(ctx, id, name, "guardian", nil); !errors.Is(err, auth.ErrReservedName) {
 			t.Errorf("%q: %v, want reserved", name, err)
 		}
 	}
-	for _, name := range []string{"Gislar", "Maren Holtz", "Gisla Stone"} {
+	for _, name := range []string{"Gislar", "Maren Holtz", "Gisla Stone", "Hermana"} {
 		if _, err := svc.CreateCharacter(ctx, id, name, "guardian", nil); err != nil {
 			t.Errorf("%q: %v", name, err)
 		}

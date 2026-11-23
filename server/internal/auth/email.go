@@ -205,13 +205,15 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email, lang string) 
 		return nil
 	}
 	// An address nobody ever verified may have been squatted by someone who registered
-	// it without owning the mailbox. Its link is a verify_email token (lifetime of a reset
+	// it without owning the mailbox. Its link is a claim_email token (lifetime of a reset
 	// link): redeeming it on the reset page proves the mailbox, verifies the address and
 	// runs the reset (store.ResetPassword: sessions revoked, unproven identities dropped).
-	// So the mailbox owner takes the address back without the squatter's password.
+	// So the mailbox owner takes the address back without the squatter's password. It is
+	// not a verify_email token: issuing it leaves the registration's verification link
+	// working, and a resent verification email does not kill it either.
 	purpose := store.TokenResetPassword
 	if !p.EmailVerified {
-		purpose = store.TokenVerifyEmail
+		purpose = store.TokenClaimEmail
 	}
 	lang, err = s.accountLang(ctx, p, lang)
 	if err != nil {

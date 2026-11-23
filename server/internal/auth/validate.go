@@ -102,17 +102,37 @@ func CharacterNameError(name string) error {
 	return nil
 }
 
-// nameKey is the form reserved names are compared in: lowercased, without spaces, so
-// "Maren Holt", "maren holt" and "MarenHolt" are one name.
+// nameKey is the form reserved names are compared in: lowercased, without spaces and
+// with the accents of Spanish letters dropped, so "Maren Holt", "maren holt" and
+// "MarenHolt" are one name, and so are the NPC "Tobías" and the character "Tobias"
+// (character names are ASCII only).
 func nameKey(name string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", ""))
+	return accentFold.Replace(strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "")))
+}
+
+// accentFold maps the accented lowercase letters NPC names use to their ASCII letter.
+var accentFold = strings.NewReplacer(
+	"á", "a", "à", "a", "ä", "a", "â", "a",
+	"é", "e", "è", "e", "ë", "e", "ê", "e",
+	"í", "i", "ì", "i", "ï", "i", "î", "i",
+	"ó", "o", "ò", "o", "ö", "o", "ô", "o",
+	"ú", "u", "ù", "u", "ü", "u", "û", "u",
+	"ñ", "n", "ç", "c",
+)
+
+// npcTitles are honorifics of NPC names ("Hermana Liora", "Sister Liora"): the full
+// name stays reserved, but the title alone is not, so a player may still be "Sister".
+var npcTitles = map[string]bool{
+	"sister": true, "brother": true, "mother": true, "father": true,
+	"hermana": true, "hermano": true, "madre": true, "padre": true,
+	"master": true, "maestro": true, "maestra": true,
 }
 
 // NPCReservedNames turns NPC display names ("Maren Holt, jefa del puerto", "Sister
 // Liora", "Gisla the tanner") into the names a character may not take: the name before
 // a comma ("Maren Holt") and each of its capitalized words of at least MinNameLen
-// letters ("Maren", "Holt"; "Sister", "Liora"; "Gisla"). A player cannot then pose as
-// an NPC, in any language its name is shown in.
+// letters ("Maren", "Holt"; "Liora"; "Gisla") but titles (npcTitles: "Sister"). A
+// player cannot then pose as an NPC, in any language its name is shown in.
 func NPCReservedNames(displayNames []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -127,7 +147,7 @@ func NPCReservedNames(displayNames []string) []string {
 		name = strings.TrimSpace(name)
 		add(name)
 		for _, w := range strings.Fields(name) {
-			if r, _ := utf8.DecodeRuneInString(w); unicode.IsUpper(r) && utf8.RuneCountInString(w) >= MinNameLen {
+			if r, _ := utf8.DecodeRuneInString(w); unicode.IsUpper(r) && utf8.RuneCountInString(w) >= MinNameLen && !npcTitles[nameKey(w)] {
 				add(w)
 			}
 		}

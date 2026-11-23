@@ -17,9 +17,11 @@ import (
 // fakeAccounts answers Login with whatever the test sets.
 type fakeAccounts struct {
 	login func() (auth.Token, error)
+	stamp string // LoginStamp of every address ("" = no device cookies)
 }
 
 func (f *fakeAccounts) Login(context.Context, string, string) (auth.Token, error) { return f.login() }
+func (f *fakeAccounts) LoginStamp(context.Context, string) (string, error)        { return f.stamp, nil }
 func (*fakeAccounts) Register(context.Context, string, string) (int64, error)     { return 0, nil }
 func (*fakeAccounts) Authenticate(context.Context, string) (int64, error) {
 	return 0, auth.ErrUnauthorized

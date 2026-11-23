@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,14 +34,23 @@ var (
 	// per network: IPv6 /48 or IPv4 /24 (one subscriber may own a whole /48: per-/64
 	// keys alone are free to rotate).
 	DefaultAuthNetRateLimit = RateLimit{Burst: 40, Every: 1500 * time.Millisecond}
+	// DefaultTokenNetRateLimit: token lookups per network (IPv6 /48 or IPv4 /24), spent
+	// with the per-client one: a /48 holds 65 536 /64s, enough to fill the per-client
+	// table and slip past it.
+	DefaultTokenNetRateLimit = RateLimit{Burst: 300, Every: 100 * time.Millisecond}
+	// DefaultDeviceLoginRateLimit: failed logins per known-device cookie. Past it the
+	// cookie stops exempting from the per-email limit, so one copied cookie cannot carry
+	// a guessing run across many addresses.
+	DefaultDeviceLoginRateLimit = RateLimit{Burst: 10, Every: 6 * time.Minute}
 )
 
 const (
 	// DefaultNetHashing is the number of password-hashing requests (login, register, reset, OAuth
 	// confirm and link with a password) in flight at once per IPv6 /48 or IPv4 address.
 	// The service has few hashing slots for everyone (auth.DefaultMaxConcurrentHashes):
-	// one network may hold at most this many of them.
-	DefaultNetHashing = 1
+	// one network may hold at most this many of them. Two, not one: two people behind
+	// one NAT or CGNAT address often log in at the same time.
+	DefaultNetHashing = 2
 	// httpDBTimeout bounds the database work of the short authenticated routes (the
 	// token lookup, characters, play, account, logout): a slow pool fails them fast
 	// instead of piling requests up.
@@ -71,6 +82,9 @@ func sharedIPScale(cfg *Config) {
 	}
 	if cfg.AuthNetRateLimit == (RateLimit{}) {
 		cfg.AuthNetRateLimit = RateLimit{Burst: burst, Every: DefaultAuthNetRateLimit.Every}
+	}
+	if cfg.TokenNetRateLimit == (RateLimit{}) {
+		cfg.TokenNetRateLimit = RateLimit{Burst: max(burst, DefaultTokenNetRateLimit.Burst), Every: DefaultTokenNetRateLimit.Every}
 	}
 	if cfg.NetHashing == 0 {
 		cfg.NetHashing = -1
@@ -163,14 +177,29 @@ func (a *api) hashing(next http.HandlerFunc) http.HandlerFunc {
 // work by httpDBTimeout.
 func (a *api) tokenLimited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if ok, _ := a.tokenLimiter.allow(a.clientKey(r)); !ok {
-			a.tooMany(w, a.cfg.TokenRateLimit)
+		if !a.allowTokenLookup(w, r) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), httpDBTimeout)
 		defer cancel()
 		next(w, r.WithContext(ctx))
 	}
+}
+
+// allowTokenLookup spends the client's token-lookup budget and its network's (IPv6
+// /48, IPv4 /24; failClosed); on false it answered 429.
+func (a *api) allowTokenLookup(w http.ResponseWriter, r *http.Request) bool {
+	ok, res := a.tokenLimiter.allow(a.clientKey(r))
+	if !ok {
+		a.tooMany(w, a.cfg.TokenRateLimit)
+		return false
+	}
+	if ok, _ := a.tokenNetLimiter.allow(a.netKey(r, false)); !ok {
+		a.tokenLimiter.refund(res)
+		a.tooMany(w, a.cfg.TokenNetRateLimit)
+		return false
+	}
+	return true
 }
 
 // accountLimited spends the account's write budget (play, character creation).
@@ -195,41 +224,66 @@ func shortDBRoute(next authedFunc) authedFunc {
 
 // ---- known devices ------------------------------------------------------------
 
-// deviceValue is the cookie value binding this browser to email until exp: exp (8
-// bytes) and the first 16 bytes of HMAC-SHA256(deviceKey, email, exp), base64url. It
-// does not reveal the email.
-func (a *api) deviceValue(email string, exp int64) string {
+// deviceValue is the cookie value binding this browser to email and its account's
+// current password (stamp, Accounts.LoginStamp) until exp: exp (8 bytes) and the first
+// 16 bytes of HMAC-SHA256(deviceKey, email, stamp, exp), base64url. It does not reveal
+// the email, and a password change (a reset) voids every cookie signed before it.
+func (a *api) deviceValue(email, stamp string, exp int64) string {
 	var b [24]byte
 	binary.BigEndian.PutUint64(b[:8], uint64(exp))
 	m := hmac.New(sha256.New, a.deviceKey[:])
-	m.Write([]byte("device\x00" + email + "\x00"))
+	m.Write([]byte("device"))
+	for _, part := range []string{email, stamp} {
+		var n [4]byte
+		binary.BigEndian.PutUint32(n[:], uint32(len(part)))
+		m.Write(n[:])
+		m.Write([]byte(part))
+	}
 	m.Write(b[:8])
 	copy(b[8:], m.Sum(nil)[:16])
 	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
-// knownDevice reports whether the request carries a valid device cookie for email.
-func (a *api) knownDevice(r *http.Request, email string) bool {
+// knownDevice returns the request's device cookie if it is valid for email and the
+// account's current password ("" otherwise). The stamp is only looked up for a cookie
+// that is well formed and unexpired.
+func (a *api) knownDevice(r *http.Request, email string) string {
 	c, err := r.Cookie(DeviceCookie)
 	if err != nil || len(c.Value) != 32 {
-		return false
+		return ""
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil || len(raw) != 24 {
-		return false
+		return ""
 	}
 	exp := int64(binary.BigEndian.Uint64(raw[:8]))
 	if a.cfg.Clock.Now().Unix() >= exp {
-		return false
+		return ""
 	}
-	return hmac.Equal([]byte(a.deviceValue(email, exp)), []byte(c.Value))
+	stamp, err := a.cfg.Auth.LoginStamp(r.Context(), email)
+	if err != nil || stamp == "" {
+		return ""
+	}
+	if !hmac.Equal([]byte(a.deviceValue(email, stamp, exp)), []byte(c.Value)) {
+		return ""
+	}
+	return c.Value
 }
 
-// setDevice marks this browser as a known device of email.
-func (a *api) setDevice(w http.ResponseWriter, email string) {
+// setDevice marks this browser as a known device of email, signed with the account's
+// current password stamp. Only on the routes the cookie is sent to (devicePath): a
+// login check elsewhere (unlink) could never use it.
+func (a *api) setDevice(w http.ResponseWriter, r *http.Request, email string) {
+	if !strings.HasPrefix(r.URL.Path, devicePath+"/") {
+		return
+	}
+	stamp, err := a.cfg.Auth.LoginStamp(r.Context(), email)
+	if err != nil || stamp == "" {
+		return // no cookie: the login itself worked
+	}
 	exp := a.cfg.Clock.Now().Add(deviceCookieTTL)
 	http.SetCookie(w, &http.Cookie{
-		Name: DeviceCookie, Value: a.deviceValue(email, exp.Unix()), Path: devicePath,
+		Name: DeviceCookie, Value: a.deviceValue(email, stamp, exp.Unix()), Path: devicePath,
 		MaxAge: int(deviceCookieTTL.Seconds()), HttpOnly: true, Secure: a.cfg.CookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
@@ -237,28 +291,52 @@ func (a *api) setDevice(w http.ResponseWriter, email string) {
 
 // ---- /healthz cache --------------------------------------------------------------
 
-// healthCache runs Config.Health at most once per healthCacheTTL; concurrent requests
-// wait for the one ping in flight instead of each taking a pool connection.
+// healthCache runs Config.Health at most once per healthCacheTTL, counted from the end
+// of the ping (a slow database must not leave the result stale on arrival); requests
+// that come while a ping is in flight wait for its result instead of each pinging.
 type healthCache struct {
 	mu   sync.Mutex
 	at   time.Time
 	err  error
 	done bool
+	wait chan struct{} // closed when the ping in flight ends; nil if none
 }
 
 func (a *api) health(ctx context.Context) error {
 	c := &a.healthC
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	now := a.cfg.Clock.Now()
 	if c.done && now.Sub(c.at) < healthCacheTTL && now.Sub(c.at) >= 0 {
+		err := c.err
+		c.mu.Unlock()
+		return err
+	}
+	if w := c.wait; w != nil {
+		c.mu.Unlock()
+		select {
+		case <-w:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
 		return c.err
 	}
+	w := make(chan struct{})
+	c.wait = w
+	c.mu.Unlock()
+	err := errors.New("httpapi: health check panicked")
+	defer func() { // also if Health panics: waiters must not hang
+		c.mu.Lock()
+		c.err, c.at, c.done, c.wait = err, a.cfg.Clock.Now(), true, nil
+		c.mu.Unlock()
+		close(w)
+	}()
 	// Not cancelled with this request: its result is shared with the others for a second.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpDBTimeout)
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpDBTimeout)
 	defer cancel()
-	c.err, c.at, c.done = a.cfg.Health(ctx), now, true
-	return c.err
+	err = a.cfg.Health(pctx)
+	return err
 }
 
 // ---- sampled logs ----------------------------------------------------------------
@@ -272,9 +350,13 @@ type logSampler struct {
 	keys map[string]*sampled
 }
 
-// maxLogKeys bounds the sampler: when full it starts over (a burst of new keys at worst
-// logs each once more).
+// maxLogKeys bounds the sampler. When it is full, keys idle for logSampleEvery are
+// dropped, and a new key that still finds it full is sampled under one shared overflow
+// key: errors with endless distinct texts cannot defeat the sampling.
 const maxLogKeys = 256
+
+// logOverflowKey is the shared key of the keys that found the sampler full.
+const logOverflowKey = "|overflow|"
 
 type sampled struct {
 	last       time.Time
@@ -286,8 +368,18 @@ type sampled struct {
 func (s *logSampler) allow(key string, now time.Time) (bool, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.keys == nil || len(s.keys) >= maxLogKeys {
+	if s.keys == nil {
 		s.keys = map[string]*sampled{}
+	}
+	if _, known := s.keys[key]; !known && len(s.keys) >= maxLogKeys {
+		for k, e := range s.keys {
+			if d := now.Sub(e.last); d >= logSampleEvery || d < 0 {
+				delete(s.keys, k)
+			}
+		}
+		if len(s.keys) >= maxLogKeys {
+			key = logOverflowKey
+		}
 	}
 	e := s.keys[key]
 	if e == nil {

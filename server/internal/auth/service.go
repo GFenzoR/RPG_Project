@@ -7,8 +7,11 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
@@ -326,6 +329,30 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 		return Token{}, ErrAccountDisabled
 	}
 	return s.loginAccount(ctx, acc.ID)
+}
+
+// LoginStamp identifies the account of email and its current password, for the
+// known-device cookies of the HTTP API (lote 16): it changes whenever the password does
+// (a reset, a new hash), so a cookie signed with it dies with the old password. It is
+// "" when no enabled account with a password has email. It reveals nothing of the
+// password hash: a SHA-256 of the account id and the hash, base64url.
+func (s *Service) LoginStamp(ctx context.Context, email string) (string, error) {
+	email, ok := NormalizeEmail(email)
+	if !ok {
+		return "", nil
+	}
+	acc, err := s.repo.AccountByEmail(ctx, email)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("login stamp: %w", err)
+	}
+	if acc.PasswordHash == "" || acc.Disabled {
+		return "", nil
+	}
+	sum := sha256.Sum256([]byte("login-stamp|" + strconv.FormatInt(acc.ID, 10) + "|" + acc.PasswordHash))
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
 // loginAccount issues an account token for an account whose credentials (password or

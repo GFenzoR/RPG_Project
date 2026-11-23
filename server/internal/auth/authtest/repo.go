@@ -313,8 +313,8 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	t, ok := r.consume(hash, store.TokenResetPassword, now)
 	claim := false
 	if !ok {
-		// Like store.ResetPassword: a verify_email token resets and verifies.
-		t, ok = r.consume(hash, store.TokenVerifyEmail, now)
+		// Like store.ResetPassword: a claim_email token resets and verifies.
+		t, ok = r.consume(hash, store.TokenClaimEmail, now)
 		claim = ok
 	}
 	if !ok {
@@ -325,7 +325,7 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	}
 	r.accounts[t.AccountID].PasswordHash = passwordHash
 	for k, old := range r.tokens {
-		if old.AccountID == t.AccountID && (old.Purpose == store.TokenResetPassword || (claim && old.Purpose == store.TokenVerifyEmail)) {
+		if old.AccountID == t.AccountID && (old.Purpose == store.TokenResetPassword || (claim && (old.Purpose == store.TokenVerifyEmail || old.Purpose == store.TokenClaimEmail))) {
 			delete(r.tokens, k)
 		}
 	}

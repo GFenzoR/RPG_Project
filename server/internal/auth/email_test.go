@@ -302,3 +302,87 @@ func TestResetClaimsAnUnverifiedAddress(t *testing.T) {
 		t.Fatalf("second use: %v", err)
 	}
 }
+
+// Lote 16 review: anyone who knows a new account's address could ask for a reset and
+// so kill the registration's verification link (the claim link used to be a
+// verify_email token, which replaced it). The claim link is a purpose of its own: both
+// links keep working, and the claim link does not verify on the /verify page.
+func TestResetRequestKeepsTheVerificationLink(t *testing.T) {
+	ctx := context.Background()
+	svc, _, box, _ := newMailService(t, nil)
+	id, err := svc.Register(ctx, "new@example.org", "secreto123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendVerification(ctx, id, "es"); err != nil {
+		t.Fatal(err)
+	}
+	verify, _ := box.Last()
+	if err := svc.RequestPasswordReset(ctx, "new@example.org", "es"); err != nil {
+		t.Fatal(err)
+	}
+	claim, _ := box.Last()
+	if err := svc.VerifyEmail(ctx, claim.Token()); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("the claim link verified on /verify: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, verify.Token()); err != nil {
+		t.Fatalf("a stranger's reset request killed the verification link: %v", err)
+	}
+	if p, _ := svc.Profile(ctx, id); !p.EmailVerified {
+		t.Fatal("not verified")
+	}
+}
+
+// And a verification email resent by the squatter does not kill the owner's claim link.
+func TestResentVerificationKeepsTheClaimLink(t *testing.T) {
+	ctx := context.Background()
+	svc, _, box, _ := newMailService(t, nil)
+	id, err := svc.Register(ctx, "victim@example.org", "squatter-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequestPasswordReset(ctx, "victim@example.org", "es"); err != nil {
+		t.Fatal(err)
+	}
+	claim, _ := box.Last()
+	if err := svc.SendVerification(ctx, id, "es"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ResetPassword(ctx, claim.Token(), "owner-pass-1"); err != nil {
+		t.Fatalf("a resent verification email killed the claim link: %v", err)
+	}
+	if p, _ := svc.Profile(ctx, id); !p.EmailVerified {
+		t.Fatal("not verified after the claim")
+	}
+}
+
+// Lote 16 review: the known-device cookies are signed with LoginStamp, so it must change
+// with the password (a reset) and be empty for an unknown address.
+func TestLoginStampChangesWithThePassword(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, _, _ := newMailService(t, nil)
+	if _, err := svc.Register(ctx, "ana@example.org", "secreto123"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := svc.LoginStamp(ctx, "Ana@example.org")
+	if err != nil || before == "" {
+		t.Fatalf("%q %v", before, err)
+	}
+	if again, _ := svc.LoginStamp(ctx, "ana@example.org"); again != before {
+		t.Fatal("the stamp is not stable")
+	}
+	link, _, err := auth.IssueResetLink(ctx, repo, time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC), "https://game.example", "ana@example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, _ := strings.Cut(link, "#token=")
+	if err := svc.ResetPassword(ctx, token, "secreto123"); err != nil { // even the same password
+		t.Fatal(err)
+	}
+	if after, _ := svc.LoginStamp(ctx, "ana@example.org"); after == before || after == "" {
+		t.Fatalf("stamp %q after the reset, %q before", after, before)
+	}
+	if none, err := svc.LoginStamp(ctx, "nobody@example.org"); none != "" || err != nil {
+		t.Fatalf("unknown address: %q %v", none, err)
+	}
+}

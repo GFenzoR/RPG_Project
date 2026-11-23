@@ -123,7 +123,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
-| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s: muchos pedidos cuestan un ping por segundo) |
+| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
 | `POST /api/maps/submissions` y demás `/api/maps/...` | token | ver "Envío de mapas" | T4.5 |
@@ -166,12 +166,14 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   email ajeno sin verificarlo. Para que el dueño del buzón la recupere aunque el enlace de
   verificación de 24 h haya vencido, `forgot` también le manda el email de reset a una
   dirección nunca verificada: el enlace (misma página `/reset-password`, vence en 1 h) es un
-  token `verify_email`. Canjearlo en `POST /api/auth/password/reset` prueba el buzón:
+  token `claim_email` (propósito propio: pedirlo no invalida el enlace de verificación del
+  registro, y reenviar la verificación no invalida este; y no sirve en `/verify`).
+  Canjearlo en `POST /api/auth/password/reset` prueba el buzón:
   verifica la dirección (con su fila `email_verified` en `audit_log`) y hace el reset de
   siempre en la misma transacción (cambia la contraseña, revoca todas las sesiones y borra
   las identidades vinculadas que no probaron ese email). Así el dueño del buzón se queda
-  con la cuenta sin la contraseña de quien la registró. Por lo mismo, el enlace de
-  verificación del registro también sirve en esa página (también lo recibe solo el buzón).
+  con la cuenta sin la contraseña de quien la registró. El enlace de verificación del
+  registro no sirve en esa página: solo verifica.
   Mismo `202` uniforme y mismos límites por dirección y por IP.
 - La cola de emails no se traba con una dirección que falla: cada reintento espera fuera
   de la goroutine de envío (30 s, 2 min, 10 min) y después se descarta.
@@ -251,7 +253,7 @@ vinculado, y después lo saca de la URL.
   pide (se vincula desde "Mi cuenta" entrando con el otro proveedor).
 - Todas estas rutas gastan el límite por IP y por red de registro y login, salvo `pending`
   (gasta el de búsquedas de token por cliente). `link`, `pending/confirm` y `unlink`
-  calculan contraseñas: como mucho una a la vez por red ("Límites de la API").
+  calculan contraseñas: como mucho dos a la vez por red ("Límites de la API").
 - Los secretos de cliente salen solo de variables de entorno y no se registran nunca; los
   errores del proveedor se registran por su tipo (estado HTTP, chequeo fallido), nunca con
   un `code` o un token.
@@ -324,8 +326,10 @@ auth). Pasado el límite responden `429 rate_limited`.
   copiar a un NPC (lote 16, `reserved_name`): al arrancar, el servidor junta los nombres de
   `i18n/<idioma>/npcs.yaml` (`npc.<id>.name`) en todos los idiomas, sin lo que va después de
   la coma ("Gisla, la curtidora" → "Gisla"), y reserva el nombre entero y cada palabra con
-  mayúscula de 3 letras o más ("Maren Holt", "Maren", "Holt"; "Hermana Liora" también
-  reserva "Hermana"); se comparan sin mayúsculas ni espacios ("maren holt" también).
+  mayúscula de 3 letras o más ("Maren Holt", "Maren", "Holt"; "Hermana Liora" reserva
+  "Liora", pero no el título "Hermana": tampoco Sister, Brother, Mother, Father, Hermano,
+  Madre, Padre, Master, Maestro ni Maestra); se comparan sin mayúsculas, espacios ni
+  tildes ("maren holt" también; "Tobias" choca con "Tobías").
   `Gislar` vale. La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
@@ -333,10 +337,11 @@ auth). Pasado el límite responden `429 rate_limited`.
 - **Rate limit** → `429 rate_limited` con `Retry-After`:
   - Por IP del cliente (IPv6: por /64): register y login comparten 10 pedidos, luego 1
     cada 6 s. Cuenta todo pedido, también los basura.
-  - Login fallido por par (email, IP): 5, luego 1 cada 4 min (15/h). Estricto, y un
-    atacante desde otras IPs no puede gastarlo por la víctima. Se recarga más lento que el
-    límite por email (30/h): una sola IP (o /64) nunca puede agotar el límite por email de
-    una cuenta (antes, con 1 por minuto, sí podía).
+  - Login fallido por par (email, red: la IPv4 o la /48 de IPv6, porque un abonado puede
+    tener una /48 entera): 5, luego 1 cada 4 min (15/h). Estricto, y un atacante desde
+    otras redes no puede gastarlo por la víctima. Se recarga más lento que el límite por
+    email (30/h): una sola IPv4 o una sola /48 nunca puede agotar el límite por email de
+    una cuenta.
   - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
     solo frena la adivinación repartida en muchas IPs.
   - Un login con email inválido o una contraseña que el registro nunca aceptaría (fuera
@@ -348,11 +353,17 @@ auth). Pasado el límite responden `429 rate_limited`.
     entrar bien nunca gasta.
   - **Dispositivo conocido (lote 16):** un login (o una confirmación de OAuth o un vínculo)
     con la contraseña correcta deja la cookie `rpg_device` (`HttpOnly`, `SameSite=Strict`,
-    `Secure` con HTTPS, `Path=/api/auth`, 90 días): un HMAC del email y su vencimiento con
-    una clave por proceso (`Config.DeviceKey` para fijarla), sin el email a la vista. Un
-    navegador con la cookie de ese email no gasta el límite por email (sí el del par).
+    `Secure` con HTTPS, `Path=/api/auth`, 90 días; `unlink` no la pone, porque vive fuera
+    de ese path): un HMAC del email, de una huella de la cuenta y su contraseña actual
+    (`LoginStamp`: cambia con cada reset) y del vencimiento, con una clave por proceso
+    (`Config.DeviceKey` para fijarla), sin el email a la vista. Un navegador con la cookie
+    de ese email no gasta el límite por email (sí el del par) mientras le dure su propio
+    límite de fallos: 10, luego 1 cada 6 min por cookie; agotado, gasta el límite por
+    email como cualquiera. Así una cookie copiada no sirve para adivinar sin tope desde
+    muchas IPs, y un cambio de contraseña anula todas las cookies anteriores.
   - **Trade-off que queda:** quien conoce el email de alguien puede, sosteniendo más de
-    ~30 fallos por hora desde **varias** redes (con 15/h por par hacen falta al menos 3),
+    ~30 fallos por hora desde **varias** redes (con 15/h por par hacen falta al menos 3
+    IPv4 o 3 /48 de IPv6 distintas),
     agotar el límite por email; mientras siga agotado, la víctima recibe `429` desde
     cualquier navegador sin la cookie de dispositivo (uno nuevo, la app de escritorio, los
     bots). Su navegador de siempre sigue entrando. Un reinicio del servidor olvida los
@@ -390,6 +401,9 @@ auth). Pasado el límite responden `429 rate_limited`.
     token en Postgres. Además un token que no tiene el formato emitido (43 caracteres
     base64url) se rechaza (`401 unauthorized`, o `204` en el logout) sin consultar nada:
     tokens inventados no gastan conexiones del pool.
+  - **Búsquedas de token por red** (IPv6 /48, IPv4 /24, falla cerrado): las mismas rutas
+    gastan además 300, luego 1 cada 100 ms por red: una /48 tiene 65 536 /64, tantas como
+    para llenar la tabla por cliente y pasar sin contar.
   - **Por cuenta**, después de autenticar: cualquier ruta con sesión, 60 y luego 1 cada
     500 ms; `POST /api/play` y `POST /api/characters` juntos, 20 y luego 1 cada 3 s (cada
     token de juego es una fila de `sessions` hasta la purga de cada hora).
@@ -398,17 +412,21 @@ auth). Pasado el límite responden `429 rate_limited`.
     redes de las que tiene un atacante).
   - **Cálculos de contraseña en curso por red** (IPv6 /48, IPv4 por dirección): login,
     register, `password/reset`, `oauth/.../link`, `oauth/pending/confirm` y `unlink`, como
-    mucho 1 a la vez; los demás reciben `429` en el acto (`Retry-After: 1`). Así una red
-    no puede ocupar los 4 cálculos del servidor.
+    mucho 2 a la vez (dos personas detrás de un mismo NAT o CGNAT entran juntas); los
+    demás reciben `429` en el acto (`Retry-After: 1`). Así una red no puede ocupar los 4
+    cálculos del servidor.
   - **Plazos:** la búsqueda del token, la lista de personajes, crear personaje, `play`,
     `GET /api/account`, `logout` y `pending` cortan su trabajo en Postgres a los 3 s.
   - **Arneses en una sola IP** (`-auth-rate-burst N`, E2E, bots, `make play`): una ráfaga
     por IP mayor que la de fábrica sube también a N las ráfagas por cliente de las
-    búsquedas de token y por red, y apaga el tope de cálculos por red. Los límites por
-    cuenta no cambian.
+    búsquedas de token y por red (la de búsquedas de token por red, a N o 300, la mayor),
+    y apaga el tope de cálculos por red. Los límites por cuenta no cambian.
   - **Logs muestreados:** un error que un cliente puede repetir (un `500` de una ruta, un
     webhook de pago con la firma mal) se registra la primera vez y después una línea por
-    minuto con `suppressed`, cuántos se callaron.
+    minuto con `suppressed`, cuántos se callaron. Se guardan hasta 256 claves (ruta y
+    texto del error); con la tabla llena se borran las inactivas y las nuevas que no
+    entran comparten una sola clave, así errores con textos siempre distintos no anulan el
+    muestreo.
   - **Pool de Postgres:** sin `pool_max_conns` en `DATABASE_URL`, 16 conexiones
     (`store.DefaultMaxConns`; el de pgxpool era max(4, CPUs)).
 - **Detrás de Caddy**, `-trust-proxy` toma la IP del último salto de `X-Forwarded-For`

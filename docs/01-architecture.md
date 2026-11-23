@@ -474,7 +474,9 @@ ventana abierta.
   `/reset-password#token=…`): el navegador no lo manda a ningún servidor, así que no queda
   en logs; la página del sitio lo canjea con un `POST`. En la base (`account_tokens`) va
   solo su SHA-256, un uso, vencimiento (24 h verificar, 1 h reset) y un enlace nuevo anula
-  los anteriores del mismo tipo. La búsqueda es por el hash: nunca se compara el secreto.
+  los anteriores del mismo tipo (`verify_email`, `reset_password` y `claim_email`, el
+  reset de una dirección nunca verificada, que además la verifica; migración 00023). La
+  búsqueda es por el hash: nunca se compara el secreto.
 - Reset de contraseña: en una transacción cambia el hash, borra los otros enlaces de reset,
   revoca **todas** las sesiones (cuenta y juego) y escribe `audit_log` (`password_reset`,
   fuente `web`). Verificar escribe `email_verified`. Sin SMTP, el operador genera un enlace

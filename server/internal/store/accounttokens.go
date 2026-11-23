@@ -19,6 +19,10 @@ type TokenPurpose string
 const (
 	TokenVerifyEmail   TokenPurpose = "verify_email"
 	TokenResetPassword TokenPurpose = "reset_password"
+	// TokenClaimEmail is the reset link of an address nobody verified (lote 16): it
+	// resets the password and verifies the address. A purpose of its own, so issuing it
+	// never replaces the registration's verify_email link nor the other way around.
+	TokenClaimEmail TokenPurpose = "claim_email"
 )
 
 // AccountToken is an emailed single-use token. Only the SHA-256 of the token is kept.
@@ -100,8 +104,8 @@ func (s *Store) VerifyEmail(ctx context.Context, tokenHash []byte, now time.Time
 	return id, nil
 }
 
-// ResetPassword consumes a reset_password (or verify_email, which then also verifies
-// the address) token valid at now, sets the new password
+// ResetPassword consumes a reset_password (or claim_email, which then also verifies the
+// address) token valid at now, sets the new password
 // hash, deletes the account's other reset tokens, revokes every session of the account,
 // drops the linked identities that never proved the account's email and audits it, all
 // in one transaction. ErrNotFound if the token is not valid, or its
@@ -114,12 +118,12 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		})
 		claim := false
 		if errors.Is(err, pgx.ErrNoRows) {
-			// A verify_email token works here too: it was emailed to the address, so it
-			// proves the mailbox like a reset link, and the reset of an address nobody
-			// ever verified sends one (auth.RequestPasswordReset). Redeeming it also
-			// verifies the address: the mailbox owner takes back a squatted address.
+			// The reset of an address nobody ever verified sends a claim_email link
+			// (auth.RequestPasswordReset): it proves the mailbox like a reset link, and
+			// redeeming it also verifies the address, so the mailbox owner takes back a
+			// squatted address.
 			row, err = q.ConsumeAccountToken(ctx, db.ConsumeAccountTokenParams{
-				TokenHash: tokenHash, Purpose: string(TokenVerifyEmail), Now: ts(now),
+				TokenHash: tokenHash, Purpose: string(TokenClaimEmail), Now: ts(now),
 			})
 			claim = err == nil
 		}
@@ -144,8 +148,10 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 			return err
 		}
 		if claim {
-			if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(TokenVerifyEmail)}); err != nil {
-				return err
+			for _, p := range []TokenPurpose{TokenVerifyEmail, TokenClaimEmail} {
+				if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(p)}); err != nil {
+					return err
+				}
 			}
 			verified, err := q.MarkEmailVerified(ctx, db.MarkEmailVerifiedParams{At: ts(now), ID: id, Email: row.Email})
 			if err != nil {
