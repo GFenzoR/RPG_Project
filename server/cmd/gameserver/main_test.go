@@ -272,3 +272,18 @@ func TestProvidersFromEnv(t *testing.T) {
 		t.Fatal("half a provider accepted")
 	}
 }
+
+// RPG_DEVICE_KEY keeps the known-device cookies valid across restarts (review of lote
+// 16, minor 1): unset is nil (a random key per process), a short key is refused.
+func TestDeviceKeyFrom(t *testing.T) {
+	if k, err := deviceKeyFrom("  "); err != nil || k != nil {
+		t.Fatalf("unset: %v %v", k, err)
+	}
+	if _, err := deviceKeyFrom("short"); err == nil {
+		t.Fatal("a short key was accepted")
+	}
+	key := strings.Repeat("ab", 32)
+	if k, err := deviceKeyFrom(key + "\n"); err != nil || string(k) != key {
+		t.Fatalf("valid key: %q %v", k, err)
+	}
+}

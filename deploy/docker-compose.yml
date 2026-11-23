@@ -100,6 +100,9 @@ services:
       # in the panel never drops paid payments); _PREVIOUS only while rotating it.
       PAYMENTS_REF_SECRET: ${PAYMENTS_REF_SECRET:-}
       PAYMENTS_REF_SECRET_PREVIOUS: ${PAYMENTS_REF_SECRET_PREVIOUS:-}
+      # Signs the known-device login cookies (docs/05); empty = a random key per start,
+      # so a restart forgets the known devices. At least 32 characters.
+      RPG_DEVICE_KEY: ${RPG_DEVICE_KEY:-}
       # pool_max_conns=16: the store's own default too (keep them equal); Postgres allows 100.
       DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable&pool_max_conns=16
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default

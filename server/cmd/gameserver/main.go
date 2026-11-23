@@ -44,6 +44,7 @@ type options struct {
 	httpAddr     string
 	dataDir      string
 	databaseURL  string
+	deviceKey    string // $RPG_DEVICE_KEY; never a flag (flags show in the process list)
 	migrate      bool
 	cookieSecure bool
 	trustProxy   bool
@@ -125,6 +126,7 @@ func main() {
 		return
 	}
 	o.databaseURL = os.Getenv("DATABASE_URL")
+	o.deviceKey = os.Getenv("RPG_DEVICE_KEY")
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger) // also routes the standard log package through slog
@@ -143,6 +145,13 @@ func run(logger *slog.Logger, o options) error {
 	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
 	if err := checkProductionFlags(logger, env, o); err != nil {
 		return err
+	}
+	deviceKey, err := deviceKeyFrom(o.deviceKey)
+	if err != nil {
+		return err
+	}
+	if deviceKey == nil {
+		logger.Warn("RPG_DEVICE_KEY is not set: known-device cookies last until the next restart")
 	}
 	explicitSeed := o.seed != 0
 	seed, seedHi, err := newSeeds(o.seed, cryptoRand)
@@ -302,6 +311,7 @@ func run(logger *slog.Logger, o options) error {
 		OriginPatterns:   splitList(o.wsOrigins),
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
+		DeviceKey:        deviceKey,
 		StartTown:        o.startTown,
 		MapSubmitLimits:  o.mapSubmit,
 		MapPRWorker:      o.mapPRWorker,
@@ -569,6 +579,23 @@ func i18nDir(o options) string {
 		return o.i18nDir
 	}
 	return filepath.Join(o.dataDir, "..", "i18n")
+}
+
+// minDeviceKeyLen is the shortest RPG_DEVICE_KEY accepted (e.g. openssl rand -hex 32
+// gives 64 characters).
+const minDeviceKeyLen = 32
+
+// deviceKeyFrom checks $RPG_DEVICE_KEY, the secret that signs the known-device cookies
+// so they survive restarts and deploys (docs/09): nil when unset, an error when too short.
+func deviceKeyFrom(v string) ([]byte, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, nil
+	}
+	if len(v) < minDeviceKeyLen {
+		return nil, fmt.Errorf("RPG_DEVICE_KEY has %d characters, want at least %d (openssl rand -hex 32)", len(v), minDeviceKeyLen)
+	}
+	return []byte(v), nil
 }
 
 func authRateLimit(burst int) httpapi.RateLimit {

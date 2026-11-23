@@ -397,12 +397,13 @@ pierden. Si quieres ir a la segura, corre `make home-backup` antes.
 - `make home-reset` borra **todos** los datos para empezar de cero (pide confirmación).
 
 ## Variables (`deploy/.env.home`)
-Todas son opcionales salvo las dos contraseñas, que se generan solas.
+Todas son opcionales salvo las dos contraseñas y la clave de dispositivos, que se generan solas.
 
 | Variable | Default | Para qué |
 |---|---|---|
 | `POSTGRES_PASSWORD` | generada | Contraseña de la base (no se publica fuera de Docker). No la cambies con datos dentro: Postgres guarda la primera |
 | `GRAFANA_ADMIN_PASSWORD` | generada | Login `admin` de Grafana |
+| `RPG_DEVICE_KEY` | generada | Firma las cookies de dispositivo conocido del login (docs/05): con ella fija, reiniciar el servidor no olvida los navegadores conocidos. Un `deploy/.env.home` viejo la recibe sola en el próximo `make home-up` |
 | `SITE_ADDRESS`, `ACME_EMAIL` | `localhost`, `home@example.com` | Las exige el compose de producción; en casa no se usan (Caddy va en HTTP) |
 | `MAP_SUBMIT_MIN_ACCOUNT_AGE` | `0s` (plantilla); `24h` en producción | Antigüedad mínima de la cuenta para enviar mapas |
 | `COOKIE_SECURE` | `true` | `false` solo si juegan por `http://<IP de LAN o Tailscale>` |

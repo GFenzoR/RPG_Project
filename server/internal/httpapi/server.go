@@ -528,6 +528,7 @@ type lookJSON struct {
 func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID int64) {
 	var in createCharacterRequest
 	if !a.decode(w, r, &in) {
+		refundBudgets(r)
 		return
 	}
 	var look *content.Look
@@ -537,10 +538,26 @@ func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID 
 	}
 	c, err := a.cfg.Auth.CreateCharacter(r.Context(), accountID, in.Name, in.Vocation, look)
 	if err != nil {
+		if rejectedCharacter(err) {
+			// Nothing was written: trying names one after another does not spend the
+			// account's write budget (the per-account request budget still bounds it).
+			refundBudgets(r)
+		}
 		a.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]characterJSON{"character": toJSON(c)})
+}
+
+// rejectedCharacter reports whether err rejected the request before any row was written.
+func rejectedCharacter(err error) bool {
+	for _, e := range []error{auth.ErrInvalidName, auth.ErrReservedName, auth.ErrNameTaken,
+		auth.ErrInvalidVocation, auth.ErrInvalidLook, auth.ErrCharacterLimit} {
+		if errors.Is(err, e) {
+			return true
+		}
+	}
+	return false
 }
 
 type playRequest struct {
@@ -571,7 +588,10 @@ func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 		// Public (Caddy routes it): the ping is cached for healthCacheTTL, so a flood of
 		// health checks costs one pool connection per second at most.
 		if err := a.health(r.Context()); err != nil {
-			a.sampledLog(slog.LevelWarn, "healthz: dependency down", "err", err)
+			// A caller that left while waiting for the shared ping is not an outage.
+			if r.Context().Err() == nil {
+				a.sampledLog(slog.LevelWarn, "healthz: dependency down", "err", err)
+			}
 			writeError(w, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
@@ -591,12 +611,13 @@ func (a *api) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 			a.tooMany(w, a.cfg.AuthRateLimit)
 			return
 		}
-		if ok, _ := a.netLimiter.allow(a.netKey(r, false)); !ok {
+		ok, netRes := a.netLimiter.allow(a.netKey(r, false))
+		if !ok {
 			a.limiter.refund(res)
 			a.tooMany(w, a.cfg.AuthNetRateLimit)
 			return
 		}
-		next(w, r)
+		next(w, withRefund(withRefund(r, a.limiter, res), a.netLimiter, netRes))
 	}
 }
 

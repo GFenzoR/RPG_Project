@@ -330,7 +330,11 @@ auth). Pasado el límite responden `429 rate_limited`.
   "Liora", pero no el título "Hermana": tampoco Sister, Brother, Mother, Father, Hermano,
   Madre, Padre, Master, Maestro ni Maestra); se comparan sin mayúsculas, espacios ni
   tildes ("maren holt" también; "Tobias" choca con "Tobías").
-  `Gislar` vale. La vocación debe
+  `Gislar` vale. **Límites conocidos (aceptados):** se compara el nombre completo del
+  personaje, así que "Gisla Tanner", "Sir Maren" u "Holt Maren" pasan (no impide parecerse
+  a un NPC con algo pegado); los apellidos que son palabras comunes quedan reservados solos
+  ("Moss", "Musgo", "Vado", "Ensayo", "Muestra", "Roe", "Pike"); y los personajes creados
+  antes de la reserva con nombre de NPC no se tocan. La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
   ubica en el templo de su ciudad al primer login (T1.4).
@@ -355,8 +359,9 @@ auth). Pasado el límite responden `429 rate_limited`.
     con la contraseña correcta deja la cookie `rpg_device` (`HttpOnly`, `SameSite=Strict`,
     `Secure` con HTTPS, `Path=/api/auth`, 90 días; `unlink` no la pone, porque vive fuera
     de ese path): un HMAC del email, de una huella de la cuenta y su contraseña actual
-    (`LoginStamp`: cambia con cada reset) y del vencimiento, con una clave por proceso
-    (`Config.DeviceKey` para fijarla), sin el email a la vista. Un navegador con la cookie
+    (`LoginStamp`: cambia con cada reset) y del vencimiento, con la clave de
+    `RPG_DEVICE_KEY` (al menos 32 caracteres, p. ej. `openssl rand -hex 32`; sin ella, una
+    clave al azar por proceso y un aviso en el log al arrancar), sin el email a la vista. Un navegador con la cookie
     de ese email no gasta el límite por email (sí el del par) mientras le dure su propio
     límite de fallos: 10, luego 1 cada 6 min por cookie; agotado, gasta el límite por
     email como cualquiera. Así una cookie copiada no sirve para adivinar sin tope desde
@@ -367,7 +372,7 @@ auth). Pasado el límite responden `429 rate_limited`.
     agotar el límite por email; mientras siga agotado, la víctima recibe `429` desde
     cualquier navegador sin la cookie de dispositivo (uno nuevo, la app de escritorio, los
     bots). Su navegador de siempre sigue entrando. Un reinicio del servidor olvida los
-    dispositivos (la clave es por proceso) salvo con `DeviceKey`.
+    dispositivos salvo con `RPG_DEVICE_KEY` fija (docs/09, docs/13).
   - Las tablas de límites tienen tamaño fijo (65 536 casillas en 16 384 grupos de 4;
     cada clave cae en un grupo y lleva una etiqueta, ambos derivados de un HMAC con
     secreto aleatorio por proceso): la memoria está acotada y no se pueden elegir claves
@@ -416,14 +421,30 @@ auth). Pasado el límite responden `429 rate_limited`.
     demás reciben `429` en el acto (`Retry-After: 1`). Así una red no puede ocupar los 4
     cálculos del servidor.
   - **Plazos:** la búsqueda del token, la lista de personajes, crear personaje, `play`,
-    `GET /api/account`, `logout` y `pending` cortan su trabajo en Postgres a los 3 s.
+    `GET /api/account`, `logout`, `pending` y la búsqueda de sesión y perfil antes de
+    comprobar la contraseña en `link` y `unlink` cortan su trabajo en Postgres a los 3 s.
+  - **Devoluciones:** un `429` del tope de cálculos por red devuelve lo que el pedido ya
+    gastó de los límites por IP y por red (quien reintenta detrás de un NAT no quema su
+    ráfaga). Una creación de personaje rechazada sin escribir nada (JSON mal formado,
+    `invalid_name`, `reserved_name`, `name_taken`, `invalid_vocation`, `invalid_look`,
+    `character_limit`) devuelve su ficha del límite de escritura por cuenta; el límite de
+    pedidos por cuenta sigue acotando a quien prueba nombres.
+  - **Riesgo aceptado (CGNAT y móviles):** las operadoras reparten las /64 de muchos
+    abonados dentro de una misma /48 (y muchos clientes IPv4 comparten una /24), así que
+    el tope de 2 cálculos a la vez y la ráfaga de 40 por red pueden dar `429` a usuarios
+    legítimos de la misma operadora en horas pico. A la escala actual el riesgo es bajo;
+    en producción hay que vigilar la tasa de `429` de login y registro y subir los límites
+    (`Config.AuthNetRateLimit`, `Config.NetHashing`) si aparece.
   - **Arneses en una sola IP** (`-auth-rate-burst N`, E2E, bots, `make play`): una ráfaga
     por IP mayor que la de fábrica sube también a N las ráfagas por cliente de las
     búsquedas de token y por red (la de búsquedas de token por red, a N o 300, la mayor),
     y apaga el tope de cálculos por red. Los límites por cuenta no cambian.
   - **Logs muestreados:** un error que un cliente puede repetir (un `500` de una ruta, un
-    webhook de pago con la firma mal) se registra la primera vez y después una línea por
-    minuto con `suppressed`, cuántos se callaron. Se guardan hasta 256 claves (ruta y
+    webhook de pago con la firma mal) se registra la primera vez y después como mucho una
+    línea por minuto con `suppressed`, cuántos se callaron. Ese resumen se escribe cuando
+    el mismo error vuelve a ocurrir pasado el minuto: si la ráfaga termina antes, el
+    conteo de su último minuto no llega al log (no hay vaciado periódico; basta para ver
+    que el error existe y su orden de magnitud). Se guardan hasta 256 claves (ruta y
     texto del error); con la tabla llena se borran las inactivas y las nuevas que no
     entran comparten una sola clave, así errores con textos siempre distintos no anulan el
     muestreo.
@@ -447,7 +468,7 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` / `invalid_look` | 400 | Creación de personaje inválida |
-| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) o es el de un NPC |
+| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) o es el de un NPC (nombre completo, ver abajo) |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |

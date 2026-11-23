@@ -167,6 +167,7 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `ACME_EMAIL` | Contacto para la autoridad de certificados. Obligatorio: Caddy no arranca con el email vacío |
 | `COOKIE_SECURE` | `true` salvo HTTP plano en un host que no sea localhost |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciales internas; contraseña URL-safe (`openssl rand -hex 24`) porque va en `DATABASE_URL` |
+| `RPG_DEVICE_KEY` | Firma las cookies de dispositivo conocido del login (docs/05 "Dispositivo conocido"): con ella fija, un reinicio o un deploy no olvida los navegadores conocidos de cada cuenta. Al menos 32 caracteres (`openssl rand -hex 32`); vacía, una clave al azar por arranque y un aviso en el log. Cambiarla solo anula esas cookies (nadie pierde su sesión) |
 | `BACKUP_RETENTION_DAYS`, `BACKUP_INTERVAL_SECONDS` | Retención local y periodicidad de los dumps |
 | `BACKUP_S3_URI`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Copia a S3 opcional; en EC2 mejor un rol de instancia que claves |
 | `BACKUP_S3_SSE`, `BACKUP_S3_KMS_KEY_ID` | Cifrado del lado de S3 de cada subida: `AES256` (default) o `aws:kms` (con la clave KMS, opcional) |

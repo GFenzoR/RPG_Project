@@ -144,9 +144,14 @@ el punto 5:
   los nombres de NPC están reservados. Queda:
   - **Bloqueo distribuido:** desde 3 o más redes (IPv4 o /48) todavía se puede agotar el límite por
     email; la víctima entra igual desde su navegador de siempre (cookie `rpg_device`),
-    pero no desde uno nuevo, la app de escritorio ni los bots. La clave de esa cookie es
-    por proceso: un reinicio la olvida. Si molesta, fijar `httpapi.Config.DeviceKey` con
-    un secreto del entorno (no hay flag todavía).
+    pero no desde uno nuevo, la app de escritorio ni los bots. La clave de esa cookie sale
+    de `RPG_DEVICE_KEY` (docs/09, docs/13); sin ella es por proceso y un reinicio olvida
+    los dispositivos (el servidor lo avisa en el log al arrancar).
+  - **CGNAT y operadoras móviles:** el tope de 2 cálculos de contraseña y la ráfaga de 40
+    por /48 o /24 pueden dar `429` a abonados legítimos de una misma operadora (riesgo
+    aceptado, docs/05). Vigilar la tasa de `429` de login y registro en producción.
+  - **Nombres de NPC:** la reserva compara el nombre completo ("Sir Maren" pasa) y no
+    renombra personajes viejos (docs/05, aceptado).
   - **Tres personas tras la misma IPv4** (casa, cibercafé) que entran en el mismo instante:
     la tercera recibe `429` y reintenta (el cliente lo muestra como "demasiados intentos").
     Si pasa seguido, esperar el turno en vez de contestar al instante.

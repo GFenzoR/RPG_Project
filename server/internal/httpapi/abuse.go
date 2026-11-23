@@ -164,6 +164,9 @@ func (a *api) hashing(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := a.netKey(r, true)
 		if !a.netHashing.acquire(key) {
+			// Nothing was done: give back what rateLimited spent, so people behind one
+			// NAT who retry do not burn their per-IP burst on these 429s.
+			refundBudgets(r)
 			a.tooMany(w, RateLimit{Burst: 1, Every: time.Second})
 			return
 		}
@@ -202,14 +205,57 @@ func (a *api) allowTokenLookup(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// accountLimited spends the account's write budget (play, character creation).
+// accountLimited spends the account's write budget (play, character creation). The
+// handler may give it back with refundBudgets when nothing was written (a rejected name).
 func (a *api) accountLimited(next authedFunc) authedFunc {
 	return func(w http.ResponseWriter, r *http.Request, accountID int64) {
-		if ok, _ := a.writeLimiter.allow(strconv.FormatInt(accountID, 10)); !ok {
+		ok, res := a.writeLimiter.allow(strconv.FormatInt(accountID, 10))
+		if !ok {
 			a.tooMany(w, a.cfg.AccountWriteRateLimit)
 			return
 		}
-		next(w, r, accountID)
+		next(w, withRefund(r, a.writeLimiter, res), accountID)
+	}
+}
+
+// refunds are the limiter tokens a request spent in middleware that an inner handler
+// may give back (refundBudgets) when the request turned out to cost nothing.
+type refunds struct {
+	mu   sync.Mutex
+	list []refundEntry
+}
+
+type refundEntry struct {
+	l   *limiter
+	res reservation
+}
+
+type refundsKey struct{}
+
+// withRefund records that r spent res of l; it returns r with the record in its context.
+func withRefund(r *http.Request, l *limiter, res reservation) *http.Request {
+	if rf, ok := r.Context().Value(refundsKey{}).(*refunds); ok {
+		rf.mu.Lock()
+		rf.list = append(rf.list, refundEntry{l, res})
+		rf.mu.Unlock()
+		return r
+	}
+	rf := &refunds{list: []refundEntry{{l, res}}}
+	return r.WithContext(context.WithValue(r.Context(), refundsKey{}, rf))
+}
+
+// refundBudgets gives back every token recorded with withRefund for r (at most once).
+func refundBudgets(r *http.Request) {
+	rf, ok := r.Context().Value(refundsKey{}).(*refunds)
+	if !ok {
+		return
+	}
+	rf.mu.Lock()
+	list := rf.list
+	rf.list = nil
+	rf.mu.Unlock()
+	for _, e := range list {
+		e.l.refund(e.res)
 	}
 }
 

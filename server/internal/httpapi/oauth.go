@@ -121,12 +121,15 @@ func (a *api) reauthed(w http.ResponseWriter, r *http.Request, password string, 
 		}
 		return true
 	}
-	id, err := a.cfg.Auth.Authenticate(r.Context(), token)
+	// The lookups before the password check are short: bounded like the authed routes.
+	ctx, cancel := context.WithTimeout(r.Context(), httpDBTimeout)
+	defer cancel()
+	id, err := a.cfg.Auth.Authenticate(ctx, token)
 	if err != nil {
 		a.fail(w, r, err)
 		return false
 	}
-	p, err := a.cfg.Auth.Profile(r.Context(), id)
+	p, err := a.cfg.Auth.Profile(ctx, id)
 	if err != nil {
 		a.fail(w, r, err)
 		return false

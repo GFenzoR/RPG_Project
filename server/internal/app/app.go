@@ -78,6 +78,9 @@ type Config struct {
 	StartTown string
 	// AuthRateLimit overrides httpapi.DefaultAuthRateLimit when non-zero (test harnesses).
 	AuthRateLimit httpapi.RateLimit
+	// DeviceKey signs the known-device cookies (httpapi.Config.DeviceKey; $RPG_DEVICE_KEY).
+	// Empty: a random key per process.
+	DeviceKey []byte
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
 	// Metrics, if set, records the tick, network, persistence and HTTP metrics
@@ -206,6 +209,7 @@ func New(cfg Config) (*App, error) {
 		TrustProxy:   cfg.TrustProxy,
 		// The zero value keeps httpapi.DefaultAuthRateLimit.
 		AuthRateLimit: cfg.AuthRateLimit,
+		DeviceKey:     cfg.DeviceKey,
 		Highscores:    highscores,
 		Guilds:        publicGuilds,
 		Houses:        houses,
