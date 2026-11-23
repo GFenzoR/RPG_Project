@@ -644,6 +644,13 @@ describe("bootstrap", () => {
     expect(b.items.find((i) => i.id === "tall_grass")?.plant).toBe("bend");
     expect(b.items.find((i) => i.id === "oak_tree")?.plant).toBe("rustle");
     expect(b.items.find((i) => i.id === "boulder")?.plant).toBeUndefined();
+    // The living world's objects (livingworld/README.md): how they break, move or open.
+    const living = (id: string) => b.items.find((i) => i.id === id)?.living;
+    expect(living("cracked_rock")).toEqual({ kind: "breakable", by: ["tool:pick"], hp: 30 });
+    expect(living("rock_rubble")).toEqual({ kind: "debris" });
+    expect(living("mossy_boulder")).toEqual({ kind: "pushable" });
+    expect(living("pressure_plate")).toEqual({ kind: "plate", radius: 6 });
+    expect(living("cargo_crate")).toBeUndefined();
     for (const lang of ["es", "en"]) {
       expect(b.i18n[lang]?.["editor.door_locked"]).toContain("{key}");
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();

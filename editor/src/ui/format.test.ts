@@ -11,6 +11,9 @@ const t = translator({
   "editor.surface": "surface {surface}",
   "editor.plant_bend": "bends",
   "editor.plant_rustle": "rustles",
+  "editor.living_breakable": "breaks: {by} ({hp} HP)",
+  "editor.living_pushable": "pushed",
+  "editor.living_plate": "plate {radius}",
 });
 
 const item = (more: Partial<PaletteItem>): PaletteItem => ({
@@ -42,6 +45,14 @@ describe("doorNote", () => {
   it("tells shut doors without a lock and open doors apart", () => {
     expect(doorNote(item({ door: "closed" }), t)).toBe("shut");
     expect(doorNote(item({ door: "open" }), t)).toBe("open");
+  });
+
+  it("says how a living object breaks, moves or opens (livingworld/README.md)", () => {
+    expect(
+      doorNote(item({ living: { kind: "breakable", by: ["melee", "tool:axe"], hp: 20 } }), t),
+    ).toBe("breaks: melee, tool:axe (20 HP)");
+    expect(doorNote(item({ living: { kind: "pushable" } }), t)).toBe("pushed");
+    expect(doorNote(item({ living: { kind: "plate", radius: 6 } }), t)).toBe("plate 6");
   });
 
   it("says nothing of other items or of an unknown one", () => {

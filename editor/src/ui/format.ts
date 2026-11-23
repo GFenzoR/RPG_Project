@@ -20,6 +20,11 @@ export function doorNote(item: PaletteItem | undefined, t: Translate): string | 
   }
   if (item?.door === "open") return t("editor.door_open");
   if (item?.key) return t("editor.key_item", { key: item.key });
+  const l = item?.living;
+  if (l?.kind === "breakable")
+    return t("editor.living_breakable", { by: (l.by ?? []).join(", "), hp: l.hp ?? 0 });
+  if (l?.kind === "plate") return t("editor.living_plate", { radius: l.radius ?? 0 });
+  if (l) return t(`editor.living_${l.kind}`);
   return undefined;
 }
 

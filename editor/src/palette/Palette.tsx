@@ -23,7 +23,8 @@ export function filterItems(
 ): PaletteItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return items.filter((i) => {
-    if (category !== "all" && i.kind !== category) return false;
+    // "living": the living world's objects (livingworld/README.md), whatever their kind.
+    if (category === "living" ? !i.living : category !== "all" && i.kind !== category) return false;
     const hay = `${i.id} ${name(i)}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
@@ -55,7 +56,13 @@ export function Palette({ items, atlas, t, ground, item, onPick }: PaletteProps)
   // Grounds first (the brush is the main tool), then the other kinds alphabetically.
   const kinds = useMemo(() => {
     const set = [...new Set(items.map((i) => i.kind))].sort();
-    return ["all", ...set.filter((k) => k === "ground"), ...set.filter((k) => k !== "ground")];
+    const living = items.some((i) => i.living) ? ["living"] : [];
+    return [
+      "all",
+      ...set.filter((k) => k === "ground"),
+      ...living,
+      ...set.filter((k) => k !== "ground"),
+    ];
   }, [items]);
   const name = (i: PaletteItem): string => t(i.name);
   const shown = filterItems(items, query, category, name);
@@ -85,7 +92,8 @@ export function Palette({ items, atlas, t, ground, item, onPick }: PaletteProps)
         {shown.length === 0 && <li class="empty">{t("editor.no_items")}</li>}
         {shown.map((i) => {
           // Doors and keys say which key id they take or are (docs/02 "Puertas con llave");
-          // grounds their surface and plants how they react (livingworld/README.md).
+          // grounds their surface and plants how they react; living objects how they break,
+          // move or open (livingworld/README.md).
           const note = itemNote(i, t);
           return (
             <li key={i.id}>
