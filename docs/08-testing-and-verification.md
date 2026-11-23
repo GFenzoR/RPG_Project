@@ -86,6 +86,34 @@ Sirve para revisar con Read el tema, el layout y las ventanas en todos los tama�
 - `packages/map-format/testdata/golden/`: chunks de entrada y salida esperada.
 - `proto`: un mensaje de ejemplo serializado en Go se decodifica en TS y viceversa.
 
+## Fuzzing (lote 16)
+Fuzz nativo de Go (`testing.F`) sobre lo que llega de afuera:
+
+| Target | Paquete | Qué prueba |
+|---|---|---|
+| `FuzzClientFrame` | `server/internal/net/gateway` | Un frame cualquiera tras un handshake bueno, por el gateway real: uno malformado (texto, protobuf roto, sin `oneof`) termina en `KICKED`; cualquier otro deja la conexión contestando un `Ping` (`Logout` termina en `LOGGED_OUT`) |
+| `FuzzInputDispatch` | `server/internal/session` | Cualquier `ClientMessage` decodificable contra un mundo con el `data/` real (dos personajes junto a los NPCs del puerto, lobos): ningún panic recuperado por el loop, la economía reconcilia y ningún cliente oye un ataque de una criatura que no conoce. Sus semillas cubren cada `oneof` en cero y en valores extremos (enteros máximos y mínimos, enums fuera de rango, strings largos con bidi) |
+| `FuzzJSONRoutes` | `server/internal/httpapi` | Cualquier cuerpo en cada endpoint JSON (registro, login, personajes, `play`, OAuth start/link/pending, desvincular, verificar y resetear, tienda, webhook, entregas y revisión de mapas) contra fakes: nunca un 500 ni un error que no sea JSON con código |
+
+- **Las semillas corren en `make test`** como tests normales (las de `f.Add` y las de
+  `testdata/fuzz/<Target>/` si las hay); ahí no se muta nada.
+- **`make fuzz`** muta cada target `FUZZTIME` (30 s por defecto) uno tras otro:
+  `make fuzz FUZZTIME=10m` o uno solo con
+  `make fuzz FUZZ_TARGETS=internal/session:FuzzInputDispatch`.
+- Si encuentra algo, Go guarda la entrada en `testdata/fuzz/<Target>/` del paquete: se
+  arregla, se commitea esa entrada (queda como test de regresión) y se nombra en el PR.
+- `FuzzClientFrame` y `FuzzJSONRoutes` arman su servidor por entrada (decenas por segundo);
+  `FuzzInputDispatch`, cientos. Un target nuevo se agrega a `FUZZ_TARGETS` del Makefile y a
+  esta tabla.
+
+## Auditoría de dependencias y secretos (lote 16)
+`make audit` corre govulncheck (fijado en el Makefile) en `server`, `tools/bots`,
+`tools/launcher` y `deploy/healthcheck` (falla solo si nuestro código llega a la función
+vulnerable), `pnpm audit --prod --audit-level high` y gitleaks sobre la historia si está
+instalado (si no, avisa y sigue; la CI lo corre siempre). Lo mismo corre en
+`security.yml`. Un hallazgo se arregla subiendo la versión; si no es alcanzable o no
+aplica, se explica en el PR y en `docs/18-seguridad.md`.
+
 ## CI (GitHub Actions)
 Workflow `ci.yml` en cada PR y en cada push a `main`. Los jobs corren en paralelo y una
 corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pnpm
@@ -128,12 +156,23 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `go (server)`, `go (tools/bots)`, `go (tools/launcher)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
 | `ts` | ESLint + Prettier, `pnpm typecheck`, Vitest | — |
 | `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
-| `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |
+| `actionlint` | lint de `.github/workflows/` (actionlint fijado) y que cada `uses:` sea un commit de 40 hex (`.github/scripts/check-action-pins.sh`, con su autoprueba) | — |
 | `build` | `make build`: bundle de producción del editor y del cliente (`build/client`, con el atlas en `atlas/`) | — |
 | `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor; un reintento por test fallado y 40 min de tope (ver "E2E en la CI") | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
 | `gemini` | `make test-gemini`: los tests de `tools/gemini` (Python 3.12 y Pillow; las herramientas de solo desarrollo que manejan el Gemini del dueño, ver `tools/CLAUDE.md`). Solo corre si cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` o `assets/sounds/music/` (o la CI, el `Makefile`...); los tests con ffmpeg se saltan si el runner no lo tiene | — |
+
+`security.yml` (lote 16, `contents: read`) corre en cada PR, en `main` y cada lunes, sin
+filtro de rutas: `govulncheck` (matriz de los cuatro módulos Go), `pnpm-audit` (`pnpm audit
+--prod --audit-level high`) y `gitleaks` (binario de la release con su SHA-256 verificado,
+sobre toda la historia, con `.gitleaks.toml`). Detalle y checklist en `18-seguridad.md`.
+
+**Acciones fijadas por commit:** todo `uses:` va como `owner/repo@<sha de 40 hex> # vX.Y.Z`
+(un tag se puede mover, un commit no). Para cambiar una versión, resolver el commit con
+`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>` (si el tag es anotado,
+usar la línea `^{}`) y actualizar el comentario; dependabot (`.github/dependabot.yml`) abre
+esos PR cada semana.
 
 Además, dos workflows para los PR de mapas (T2.4, detalle en `04`, "PR de mapas en
 CI"): `map-pr.yml` (`pull_request`, solo lectura; su YAML sale del PR, pero tal como está en la base corre el código de la rama base) corre `mapcli pr-check` y sube los

@@ -727,6 +727,8 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
   capability y `https://github.com` al endpoint.
 
 ## Seguridad operativa
+El modelo de amenazas, todos los controles y la checklist del operador (GitHub, secretos,
+OAuth, backups, actualizaciones, qué mirar en los logs) están en `18-seguridad.md`.
 - Solo puertos 80 y 443 abiertos. SSH restringido a tu IP o con SSM Session Manager.
 - Monitoreo (Grafana, Prometheus, Alertmanager) solo en `127.0.0.1`, por túnel SSH.
 - Postgres sin puerto expuesto (solo red interna de Docker).

@@ -2,6 +2,8 @@
 
 Antes del deploy alpha en AWS (T1.18) conviene poder jugar con amigos usando tu propio
 PC como servidor. Esta guía define qué se puede hostear dónde y cómo lo arma la tarea T1.19.
+Antes de abrirlo a otros, repasa la checklist del operador de `18-seguridad.md` (secretos
+en `deploy/.env.home`, redirect URIs de OAuth, backups, qué mirar en los logs).
 
 ## La forma más fácil: doble clic
 En Windows hay un lanzador: **`NequesRealm-Servidor.exe`**, en la carpeta del proyecto.
@@ -354,6 +356,10 @@ dominio propio, o prueba solo en `http://localhost:8080`.
 3. En la misma página: "Client ID" y "Reset Secret" (se ve una sola vez) →
    `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`. Permisos que pide el juego: `identify` y
    `email` (no hace falta bot ni marcar la app como pública).
+
+Cuidado con estos secretos como con una contraseña (`chmod 600 deploy/.env.home`, nunca en el
+repo ni en un chat; si se filtran, "Reset Secret" en la consola del proveedor):
+`18-seguridad.md`, "Checklist del operador".
 
 Pon los cuatro valores en `deploy/.env.home` (y `PUBLIC_URL` si no es localhost) y
 `make home-up`. Sin ninguno de los dos valores de un proveedor, queda apagado; con uno

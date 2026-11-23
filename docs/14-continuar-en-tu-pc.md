@@ -165,6 +165,27 @@ el punto 5:
     contraseña dentro de los 10 min del login), `account.spec` (forgot/reset, y que el
     enlace de verificación siga andando después de un forgot) y los
     `POST /api/characters` y `/api/play` de `game.spec`.
+- **Documento de seguridad, fuzzing y cadena de suministro (hecho, rama
+  `sec/security-docs`, lote 16, el último ítem de la auditoría; el dueño el 2026-11-20: "un
+  excelente estándar de ciberseguridad"):** `docs/18-seguridad.md` (modelo de amenazas,
+  controles, lo que agregó el lote 16, hallazgos descartados, riesgos aceptados y checklist
+  del operador); fuzz nativo de Go (`make fuzz`, docs/08 "Fuzzing"); cada acción de los
+  workflows fijada a un commit; `security.yml` (govulncheck, `pnpm audit`, gitleaks);
+  `dependabot.yml`; `make audit`. Queda:
+  - **Lo tuyo en GitHub** (la checklist de docs/18): 2FA, protección de `main` con los
+    checks `ci` y `security` requeridos, Dependabot alerts y security updates encendidos.
+  - **El primer `gitleaks` de la CI** recorre toda la historia y no se pudo correr en local
+    (el binario no se instaló en esta PC): si marca algo, rotar el secreto si era real o
+    sumar el caso a `.gitleaks.toml` si es un dato de prueba.
+  - **Al apilar las ramas del lote:** el `sigstore/cosign-installer@v3` que agrega
+    `sec/deploy-hardening` en `images.yml` tiene que quedar fijado como
+    `sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1` (si no,
+    el paso de `actionlint` falla). En esta rama sola govulncheck marca pgx y x/text viejos
+    (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
+  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sesiones de 30
+    días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
+    farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin
+    firma.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía
