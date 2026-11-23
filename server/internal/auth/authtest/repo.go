@@ -311,6 +311,12 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	t, ok := r.consume(hash, store.TokenResetPassword, now)
+	claim := false
+	if !ok {
+		// Like store.ResetPassword: a verify_email token resets and verifies.
+		t, ok = r.consume(hash, store.TokenVerifyEmail, now)
+		claim = ok
+	}
 	if !ok {
 		return 0, store.ErrNotFound
 	}
@@ -319,9 +325,14 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	}
 	r.accounts[t.AccountID].PasswordHash = passwordHash
 	for k, old := range r.tokens {
-		if old.AccountID == t.AccountID && old.Purpose == store.TokenResetPassword {
+		if old.AccountID == t.AccountID && (old.Purpose == store.TokenResetPassword || (claim && old.Purpose == store.TokenVerifyEmail)) {
 			delete(r.tokens, k)
 		}
+	}
+	if claim && !r.verified[t.AccountID] {
+		r.verified[t.AccountID] = true
+		r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: t.AccountID,
+			Action: store.AuditEmailVerified, TargetAccountID: t.AccountID, Result: store.ResultOK})
 	}
 	for k, s := range r.sessions {
 		if s.AccountID == t.AccountID {

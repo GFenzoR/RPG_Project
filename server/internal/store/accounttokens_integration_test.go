@@ -130,3 +130,83 @@ func TestAccountTokensWithPostgres(t *testing.T) {
 		t.Fatal("stored value is not the SHA-256 of the token")
 	}
 }
+
+// Lote 16: A registers with the victim's address and never verifies it; after the 24 h
+// verification link expired, the mailbox owner takes the address back with "forgot your
+// password?" without A's password: verified, A's sessions revoked, audited.
+func TestMailboxOwnerClaimsAnUnverifiedAddress(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.Open(t, "it_store_claim_address", true)
+	clk := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
+	box := &authtest.Mailbox{}
+	svc, err := auth.New(auth.Config{
+		Repo: st, Clock: clk, Vocations: content.Vocations{"guardian": {ID: "guardian"}},
+		Hash: auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1},
+		Mail: box, PublicURL: "https://game.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := svc.Register(ctx, "victim@example.org", "squatter-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendVerification(ctx, id, "es"); err != nil {
+		t.Fatal(err)
+	}
+	verify, _ := box.Last()
+	clk.Advance(auth.DefaultVerifyTokenTTL + time.Minute)
+	if err := svc.VerifyEmail(ctx, verify.Token()); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("expired verification link: %v", err)
+	}
+	squatter, err := svc.Login(ctx, "victim@example.org", "squatter-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.RequestPasswordReset(ctx, "victim@example.org", ""); err != nil {
+		t.Fatal(err)
+	}
+	claim, _ := box.Last()
+	if claim.To != "victim@example.org" || claim.Token() == verify.Token() {
+		t.Fatalf("claim email %+v", claim)
+	}
+	if err := svc.ResetPassword(ctx, claim.Token(), "owner-pass-1"); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	p, err := st.AccountProfile(ctx, id)
+	if err != nil || !p.EmailVerified {
+		t.Fatalf("profile %+v %v", p, err)
+	}
+	if _, err := svc.Authenticate(ctx, squatter.Token); !errors.Is(err, auth.ErrUnauthorized) {
+		t.Fatalf("squatter session survived: %v", err)
+	}
+	if _, err := svc.Login(ctx, "victim@example.org", "squatter-pass"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("squatter password: %v", err)
+	}
+	if _, err := svc.Login(ctx, "victim@example.org", "owner-pass-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ResetPassword(ctx, claim.Token(), "owner-pass-2"); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("reused claim: %v", err)
+	}
+	audit, err := st.ListAudit(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actions []string
+	for _, e := range audit {
+		actions = append(actions, e.Action)
+	}
+	if len(actions) != 2 || actions[0] != store.AuditPasswordReset || actions[1] != store.AuditEmailVerified {
+		t.Fatalf("audit %v", actions)
+	}
+	conn := storetest.Conn(t, "it_store_claim_address")
+	var tokens int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM account_tokens`).Scan(&tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 0 {
+		t.Fatalf("%d tokens left", tokens)
+	}
+}

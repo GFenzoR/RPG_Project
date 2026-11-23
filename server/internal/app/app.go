@@ -103,6 +103,9 @@ type Config struct {
 	// implements ShopStore (Postgres) the catalog is synced to the cosmetics table at
 	// start and /api/shop is served.
 	Cosmetics *content.CosmeticShop
+	// ReservedNames are names new characters may not take (auth.Config.ReservedNames):
+	// the NPCs' names (auth.NPCReservedNames). Nil: only the staff words are reserved.
+	ReservedNames []string
 	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a new character may pick
 	// and the game checks. Nil: no looks (a look sent at creation is ignored).
 	Looks *content.Looks
@@ -156,6 +159,7 @@ func New(cfg Config) (*App, error) {
 		SessionsRevoked: a.sessionsRevoked,
 		Providers:       cfg.Providers,
 		OAuth:           oauthRepo,
+		ReservedNames:   cfg.ReservedNames,
 	})
 	if err != nil {
 		return nil, err

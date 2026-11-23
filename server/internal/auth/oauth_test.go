@@ -285,18 +285,27 @@ func TestLinkNeedsReauthAndUnlinkKeepsOneWayIn(t *testing.T) {
 	if _, err := e.svc.FinishOAuth(ctx, oauth.Discord, q.Get("state"), q.Get("code"), "", st.Binding); !errors.Is(err, auth.ErrIdentityTaken) {
 		t.Fatalf("taken identity: %v", err)
 	}
-	// With a password the identity can go.
-	if err := e.svc.Unlink(ctx, id, oauth.Discord); err != nil {
+	// Unlinking needs the re-authentication of a link (lote 16): the password of an
+	// account that has one, so a stolen session alone cannot drop the owner's identity.
+	if err := e.svc.Unlink(ctx, tok.Token, oauth.Discord, ""); !errors.Is(err, auth.ErrReauthRequired) {
+		t.Fatalf("unlink without the password: %v", err)
+	}
+	if err := e.svc.Unlink(ctx, tok.Token, oauth.Discord, "wrong-pass1"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("unlink with a wrong password: %v", err)
+	}
+	if err := e.svc.Unlink(ctx, tok.Token, oauth.Discord, "secreto123"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.Unlink(ctx, id, oauth.Discord); !errors.Is(err, auth.ErrNotLinked) {
+	if err := e.svc.Unlink(ctx, tok.Token, oauth.Discord, "secreto123"); !errors.Is(err, auth.ErrNotLinked) {
 		t.Fatalf("unlink twice: %v", err)
+	}
+	if ids, _ := e.svc.Identities(ctx, id); len(ids) != 0 {
+		t.Fatalf("identities after unlink %+v", ids)
 	}
 
 	// An OAuth-only account cannot unlink its only identity, and links with a recent login.
 	res, _ = e.login(oauth.Google, oauthtest.User{Subject: "g-solo", Email: "solo@example.org", Verified: true})
-	solo := res.Token.AccountID
-	if err := e.svc.Unlink(ctx, solo, oauth.Google); !errors.Is(err, auth.ErrLastLoginMethod) {
+	if err := e.svc.Unlink(ctx, res.Token.Token, oauth.Google, ""); !errors.Is(err, auth.ErrLastLoginMethod) {
 		t.Fatalf("last method: %v", err)
 	}
 	e.clk.Advance(auth.ReauthWindow + time.Second)
@@ -313,10 +322,15 @@ func TestLinkNeedsReauthAndUnlinkKeepsOneWayIn(t *testing.T) {
 	if _, err := e.svc.FinishOAuth(ctx, oauth.Discord, q.Get("state"), q.Get("code"), "", st.Binding); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.Unlink(ctx, solo, oauth.Google); err != nil {
+	// The old session of an account without a password cannot unlink: only a recent
+	// login can.
+	if err := e.svc.Unlink(ctx, res.Token.Token, oauth.Google, ""); !errors.Is(err, auth.ErrReauthRequired) {
+		t.Fatalf("unlink with an old session: %v", err)
+	}
+	if err := e.svc.Unlink(ctx, fresh.Token.Token, oauth.Google, ""); err != nil {
 		t.Fatalf("a second identity is a way in: %v", err)
 	}
-	if err := e.svc.Unlink(ctx, solo, oauth.Discord); !errors.Is(err, auth.ErrLastLoginMethod) {
+	if err := e.svc.Unlink(ctx, fresh.Token.Token, oauth.Discord, ""); !errors.Is(err, auth.ErrLastLoginMethod) {
 		t.Fatalf("last method again: %v", err)
 	}
 }

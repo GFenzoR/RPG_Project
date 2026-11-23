@@ -205,6 +205,11 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	// New characters may not copy an NPC's name in any language (i18n/<lang>/npcs.yaml).
+	npcNames, err := content.NPCDisplayNames(i18nDir(o))
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	cosmetics, err := content.LoadCosmetics(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -289,6 +294,7 @@ func run(logger *slog.Logger, o options) error {
 		BoatRoutes:       routes,
 		Tutorial:         tutorial,
 		NPCs:             npcs,
+		ReservedNames:    auth.NPCReservedNames(npcNames),
 		Quests:           quests,
 		Map:              m,
 		CookieSecure:     o.cookieSecure,

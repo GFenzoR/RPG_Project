@@ -188,12 +188,10 @@ func TestPasswordResetExpires(t *testing.T) {
 func TestPasswordResetDoesNotTellWhoExists(t *testing.T) {
 	ctx := context.Background()
 	svc, repo, box, _ := newMailService(t, nil)
-	unverified, _ := svc.Register(ctx, "new@example.org", "secreto123")
 	disabled, _ := svc.Register(ctx, "off@example.org", "secreto123")
 	repo.SetVerified(disabled)
 	repo.Disable(disabled)
-	_ = unverified
-	for _, email := range []string{"nobody@example.org", "new@example.org", "off@example.org", "not an email"} {
+	for _, email := range []string{"nobody@example.org", "off@example.org", "not an email"} {
 		if err := svc.RequestPasswordReset(ctx, email, "es"); err != nil {
 			t.Errorf("%s: %v", email, err)
 		}
@@ -253,5 +251,54 @@ func TestIssueResetLinkStoresOnlyTheHash(t *testing.T) {
 	}
 	if _, _, err := auth.IssueResetLink(ctx, repo, now, "https://game.example", "x@example.org"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("unknown email: %v", err)
+	}
+}
+
+// Lote 16: an unverified account can hold any address. After its 24 h verification link
+// expired, the mailbox owner takes the address back with "forgot your password?": the
+// link proves the mailbox, verifies the address and resets the password, without the
+// squatter's password, and the squatter's sessions die.
+func TestResetClaimsAnUnverifiedAddress(t *testing.T) {
+	ctx := context.Background()
+	svc, _, box, clk := newMailService(t, nil)
+	id, err := svc.Register(ctx, "victim@example.org", "squatter-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendVerification(ctx, id, "es"); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(auth.DefaultVerifyTokenTTL + time.Hour) // the verification link expired
+	squatter, err := svc.Login(ctx, "victim@example.org", "squatter-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The mailbox owner asks for a reset: a link goes to the address.
+	if err := svc.RequestPasswordReset(ctx, "victim@example.org", "en"); err != nil {
+		t.Fatal(err)
+	}
+	e, _ := box.Last()
+	if e.Kind != mail.KindReset || e.To != "victim@example.org" || !strings.Contains(e.Link, "/reset-password") {
+		t.Fatalf("email %+v", e)
+	}
+	if err := svc.ResetPassword(ctx, e.Token(), "owner-pass-1"); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if p, _ := svc.Profile(ctx, id); !p.EmailVerified {
+		t.Fatal("the address is not verified after the claim")
+	}
+	if _, err := svc.Authenticate(ctx, squatter.Token); !errors.Is(err, auth.ErrUnauthorized) {
+		t.Fatalf("the squatter's session survived: %v", err)
+	}
+	if _, err := svc.Login(ctx, "victim@example.org", "squatter-pass"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("the squatter's password still works: %v", err)
+	}
+	if _, err := svc.Login(ctx, "victim@example.org", "owner-pass-1"); err != nil {
+		t.Fatalf("the owner cannot log in: %v", err)
+	}
+	// The link works once.
+	if err := svc.ResetPassword(ctx, e.Token(), "owner-pass-2"); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("second use: %v", err)
 	}
 }

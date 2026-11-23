@@ -104,6 +104,9 @@ type Config struct {
 	// OAuth stores the OAuth flows and linked identities. *store.Store implements it.
 	OAuth         OAuthRepo
 	ResetTokenTTL time.Duration // default DefaultResetTokenTTL
+	// ReservedNames are names a new character may not take (ErrReservedName), compared
+	// ignoring case and spaces: the display names of the NPCs (NPCReservedNames).
+	ReservedNames []string
 }
 
 // Defaults for Config.
@@ -140,6 +143,8 @@ type Service struct {
 	oauthRepo       OAuthRepo
 	verifyTTL       time.Duration
 	resetTTL        time.Duration
+	// reserved: nameKey of every Config.ReservedNames entry.
+	reserved map[string]bool
 }
 
 // New validates cfg and builds a Service.
@@ -214,6 +219,12 @@ func New(cfg Config) (*Service, error) {
 	}
 	if s.resetTTL <= 0 {
 		s.resetTTL = DefaultResetTokenTTL
+	}
+	s.reserved = make(map[string]bool, len(cfg.ReservedNames))
+	for _, n := range cfg.ReservedNames {
+		if k := nameKey(n); k != "" {
+			s.reserved[k] = true
+		}
 	}
 	dummy, err := hashPassword("dummy password for timing", s.hash)
 	if err != nil {
@@ -356,9 +367,11 @@ func (s *Service) loginAccount(ctx context.Context, accountID int64) (Token, err
 	return Token{Token: token, AccountID: accountID, ExpiresAt: sess.ExpiresAt}, nil
 }
 
-// Authenticate resolves an account token to its account id.
+// Authenticate resolves an account token to its account id. A token newToken could not
+// have produced (length, alphabet) is refused before any lookup, so junk credentials
+// cost no database work.
 func (s *Service) Authenticate(ctx context.Context, token string) (int64, error) {
-	if token == "" || len(token) > 128 {
+	if !plausibleToken(token) {
 		return 0, ErrUnauthorized
 	}
 	sess, err := s.repo.ActiveSession(ctx, hashToken(token), store.SessionAccount, s.clock.Now())
@@ -371,9 +384,10 @@ func (s *Service) Authenticate(ctx context.Context, token string) (int64, error)
 	return sess.AccountID, nil
 }
 
-// Logout revokes a token. Revoking an unknown token succeeds.
+// Logout revokes a token. Revoking an unknown token succeeds; a malformed one is not
+// looked up.
 func (s *Service) Logout(ctx context.Context, token string) error {
-	if token == "" || len(token) > 128 {
+	if !plausibleToken(token) {
 		return nil
 	}
 	if err := s.repo.DeleteSession(ctx, hashToken(token)); err != nil {
@@ -418,6 +432,10 @@ func (s *Service) Characters(ctx context.Context, accountID int64) ([]store.Char
 // "Apariencia"), every id one a player may choose of data/looks.yaml; nil (an old client,
 // a bot) leaves it empty and the game picks one from the character's id at its first login.
 func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vocation string, look *content.Look) (store.Character, error) {
+	// An NPC's name is refused whatever its capitals or spaces ("maren holt").
+	if s.reserved[nameKey(name)] {
+		return store.Character{}, ErrReservedName
+	}
 	if err := CharacterNameError(name); err != nil {
 		return store.Character{}, err
 	}
@@ -491,7 +509,7 @@ func (s *Service) IssuePlayToken(ctx context.Context, accountID, characterID int
 // RedeemPlayToken consumes a play token and returns its account and character. A token
 // works once: a second use, an expired token or a disabled account give ErrUnauthorized.
 func (s *Service) RedeemPlayToken(ctx context.Context, token string) (accountID, characterID int64, err error) {
-	if token == "" || len(token) > 128 {
+	if !plausibleToken(token) {
 		return 0, 0, ErrUnauthorized
 	}
 	sess, err := s.repo.ConsumeSession(ctx, hashToken(token), store.SessionPlay, s.clock.Now())

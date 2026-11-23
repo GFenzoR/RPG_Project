@@ -126,35 +126,46 @@ func (s *Service) StartLogin(ctx context.Context, provider, returnTo string) (OA
 }
 
 // StartLink begins linking provider to the account of the session token. It needs a
-// recent re-authentication: the account's password, or, for an account without one, a
-// session created less than ReauthWindow ago.
+// recent re-authentication (reauth).
 func (s *Service) StartLink(ctx context.Context, token, provider, password string) (OAuthStart, error) {
 	if _, ok := s.providers[provider]; !ok {
 		return OAuthStart{}, ErrUnknownProvider
 	}
-	if token == "" || len(token) > 128 {
-		return OAuthStart{}, ErrUnauthorized
+	id, err := s.reauth(ctx, token, password)
+	if err != nil {
+		return OAuthStart{}, err
+	}
+	return s.start(ctx, provider, "link", id, hashToken(token), "/account")
+}
+
+// reauth checks the session token and a recent re-authentication: the account's
+// password, or, for an account without one, a session created less than ReauthWindow
+// ago. It returns the account id; ErrReauthRequired if the password is missing or the
+// session too old, ErrInvalidCredentials if the password is wrong.
+func (s *Service) reauth(ctx context.Context, token, password string) (int64, error) {
+	if !plausibleToken(token) {
+		return 0, ErrUnauthorized
 	}
 	now := s.clock.Now()
 	sess, err := s.repo.ActiveSession(ctx, hashToken(token), store.SessionAccount, now)
 	if errors.Is(err, store.ErrNotFound) {
-		return OAuthStart{}, ErrUnauthorized
+		return 0, ErrUnauthorized
 	}
 	if err != nil {
-		return OAuthStart{}, fmt.Errorf("start link: %w", err)
+		return 0, fmt.Errorf("reauth: %w", err)
 	}
 	p, err := s.Profile(ctx, sess.AccountID)
 	if err != nil {
-		return OAuthStart{}, err
+		return 0, err
 	}
 	if p.HasPassword {
 		if err := s.checkPassword(ctx, p.Email, password); err != nil {
-			return OAuthStart{}, err
+			return 0, err
 		}
 	} else if now.Sub(sess.CreatedAt) > ReauthWindow {
-		return OAuthStart{}, ErrReauthRequired
+		return 0, ErrReauthRequired
 	}
-	return s.start(ctx, provider, "link", sess.AccountID, hashToken(token), "/account")
+	return sess.AccountID, nil
 }
 
 // checkPassword verifies the password of the account with email: ErrReauthRequired if it
@@ -380,7 +391,7 @@ type PendingIdentity struct {
 }
 
 func (s *Service) pending(ctx context.Context, token string) (store.OAuthPending, []byte, error) {
-	if token == "" || len(token) > 128 {
+	if !plausibleToken(token) {
 		return store.OAuthPending{}, nil, ErrPendingExpired
 	}
 	hash := hashToken(token)
@@ -469,12 +480,19 @@ func (s *Service) Identities(ctx context.Context, accountID int64) ([]store.Iden
 	return ids, nil
 }
 
-// Unlink removes the account's identity of provider unless it is the last way in.
-func (s *Service) Unlink(ctx context.Context, accountID int64, provider string) error {
+// Unlink removes the identity of provider from the account of the session token unless
+// it is the last way in. Like StartLink it needs a recent re-authentication (reauth):
+// otherwise a stolen session of an account without a password could link the thief's
+// provider and then unlink the owner's.
+func (s *Service) Unlink(ctx context.Context, token, provider, password string) error {
 	if s.oauthRepo == nil {
 		return ErrNotLinked
 	}
-	err := s.oauthRepo.UnlinkIdentity(ctx, accountID, provider, s.clock.Now())
+	accountID, err := s.reauth(ctx, token, password)
+	if err != nil {
+		return err
+	}
+	err = s.oauthRepo.UnlinkIdentity(ctx, accountID, provider, s.clock.Now())
 	switch {
 	case errors.Is(err, store.ErrLastLoginMethod):
 		return ErrLastLoginMethod

@@ -3,6 +3,7 @@ package auth
 import (
 	"net/mail"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -99,4 +100,37 @@ func CharacterNameError(name string) error {
 		}
 	}
 	return nil
+}
+
+// nameKey is the form reserved names are compared in: lowercased, without spaces, so
+// "Maren Holt", "maren holt" and "MarenHolt" are one name.
+func nameKey(name string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", ""))
+}
+
+// NPCReservedNames turns NPC display names ("Maren Holt, jefa del puerto", "Sister
+// Liora", "Gisla the tanner") into the names a character may not take: the name before
+// a comma ("Maren Holt") and each of its capitalized words of at least MinNameLen
+// letters ("Maren", "Holt"; "Sister", "Liora"; "Gisla"). A player cannot then pose as
+// an NPC, in any language its name is shown in.
+func NPCReservedNames(displayNames []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(n string) {
+		if k := nameKey(n); k != "" && !seen[k] {
+			seen[k] = true
+			out = append(out, n)
+		}
+	}
+	for _, d := range displayNames {
+		name, _, _ := strings.Cut(d, ",")
+		name = strings.TrimSpace(name)
+		add(name)
+		for _, w := range strings.Fields(name) {
+			if r, _ := utf8.DecodeRuneInString(w); unicode.IsUpper(r) && utf8.RuneCountInString(w) >= MinNameLen {
+				add(w)
+			}
+		}
+	}
+	return out
 }
