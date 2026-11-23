@@ -333,8 +333,10 @@ auth). Pasado el límite responden `429 rate_limited`.
   no escribir en la base por pedido). Una sesión inactiva se rechaza (`401
   unauthorized`) y se borra en el acto; el job de limpieza borra las vencidas y las
   inactivas. La cookie es **de sesión del navegador** (sin `Expires` ni `Max-Age`):
-  cerrar el navegador olvida el login y recargar la página dentro del mismo navegador lo
-  conserva. La migración 00025 borró las sesiones de 30 días anteriores (todos entran de
+  recargar la página dentro del mismo navegador conserva el login y, normalmente, cerrar
+  el navegador lo olvida. No siempre: Chrome/Edge con "continuar donde lo dejaste" y las
+  PWA instaladas restauran las cookies de sesión al reabrir; en ese caso solo lo acotan
+  los 30 min de inactividad y el tope de 12 h. La migración 00024 borró las sesiones de 30 días anteriores (todos entran de
   nuevo una vez). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
@@ -346,14 +348,18 @@ auth). Pasado el límite responden `429 rate_limited`.
   pide el lado Rust, que lo guarda **solo en memoria** mientras la app está abierta y lo
   quita de la respuesta antes de pasarla al webview (`apps/desktop`, docs/12). Al arrancar,
   la app borra el token que una versión anterior hubiera dejado en el llavero del SO.
-  El cliente (web y escritorio) recuerda solo el **email** del último login
-  (`localStorage` `rpg.lastEmail`) para rellenar el formulario; nunca el token.
+  El cliente (web y escritorio) recuerda solo el **email** del último login **con
+  contraseña** (`localStorage` `rpg.lastEmail`) para rellenar el formulario; nunca el
+  token. Un login con Google o Discord no lo cambia (a propósito: ese email lo decide el
+  proveedor y el formulario no lo usa).
 - **Sesión y juego (lote 17):** una vez canjeado el token de juego (`POST /api/play`, 60 s,
   un uso), la conexión WebSocket es independiente de la sesión HTTP: la inactividad de la
   sesión no corta una partida en curso. Para que la sesión siga viva al volver a la lista
   de personajes, el cliente manda `POST /api/auth/keepalive` cada 5 min mientras juega.
   Tras más de 12 h, o si el cliente no pudo mandar el latido, al salir del juego se pide
-  la contraseña de nuevo. "Cerrar sesión en todos lados", un cambio o reset de
+  la contraseña de nuevo. El portal de mapas y la página `/account` del sitio **no**
+  mandan latido: más de 30 min en ellos sin ningún pedido termina en `401` al enviar
+  (hay que entrar de nuevo). "Cerrar sesión en todos lados", un cambio o reset de
   contraseña y un ban sí cortan las conexiones abiertas (`World.KickAccount` /
   `SignOutAccount`, por el loop, guardando a los personajes como en un logout).
 - **Cambiar la contraseña desde el juego (lote 17):** la contraseña actual se comprueba
@@ -362,7 +368,12 @@ auth). Pasado el límite responden `429 rate_limited`.
   reglas del registro. Una cuenta que solo entra con Google/Discord (sin contraseña) puede
   **crear** su primera contraseña sin `current_password` si su sesión tiene menos de 10
   min (`auth.ReauthWindow`, igual que vincular un proveedor); si no, `403
-  reauth_required` y el cliente le pide volver a entrar con su proveedor.
+  reauth_required` y el cliente le pide volver a entrar con su proveedor. Si el servidor
+  manda emails, todo cambio o creación de contraseña hecho así le avisa a la cuenta
+  (`email.password_changed`, con un enlace a `/forgot-password`); si el aviso no se puede
+  encolar se registra y el cambio sigue hecho. En la app de escritorio, un "cerrar sesión
+  en todos lados" que falla (red o error del servidor) conserva la sesión de este equipo,
+  como la cookie en la web: se ve el error y se puede reintentar.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin

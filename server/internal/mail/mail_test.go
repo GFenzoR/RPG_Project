@@ -378,3 +378,16 @@ func TestQueueSizeBoundsWaitingRetries(t *testing.T) {
 		t.Fatalf("%d retry timers with Size 4", w)
 	}
 }
+
+func TestPasswordChangedEmailRendersInEveryLanguage(t *testing.T) {
+	tpl := testTemplates(t)
+	for _, lang := range []string{"es", "en"} {
+		m, err := tpl.Render(KindPasswordChanged, lang, "a@b.example", "https://x.example/forgot-password?lang="+lang)
+		if err != nil {
+			t.Fatalf("%s: %v", lang, err)
+		}
+		if m.Subject == "" || !strings.Contains(m.Text, "https://x.example/forgot-password?lang="+lang) {
+			t.Fatalf("%s: %+v", lang, m)
+		}
+	}
+}

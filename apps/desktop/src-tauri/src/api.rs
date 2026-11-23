@@ -165,8 +165,8 @@ impl Api {
             req = req.json(body);
         }
         let result = req.send().await;
-        if path == LOGOUT || path == LOGOUT_ALL {
-            // Logged out from this device whatever the server said (it may be unreachable).
+        let reached = result.as_ref().ok().map(|res| res.status().as_u16());
+        if signs_out(path, reached) {
             self.tokens.clear();
         }
         let res = result.map_err(|e| format!("network: {e}"))?;
@@ -183,6 +183,20 @@ impl Api {
             self.tokens.clear();
         }
         Ok(Response { status, body })
+    }
+}
+
+/// Whether a request leaves this device signed out. `status` is None when the request
+/// did not reach the server. A logout signs out whatever the server said (it may be
+/// unreachable). A failed "sign out everywhere" keeps the session, as the website's
+/// cookie does: the page shows the error and the player can try again, instead of being
+/// left signed out here while the other sessions live on. (A 401 is forgotten later, as
+/// for any call.)
+fn signs_out(path: &str, status: Option<u16>) -> bool {
+    match path {
+        LOGOUT => true,
+        LOGOUT_ALL => matches!(status, Some(s) if (200..300).contains(&s)),
+        _ => false,
     }
 }
 
@@ -271,5 +285,16 @@ mod tests {
             None
         );
         assert_eq!(take_token(&mut Value::Null), None);
+    }
+
+    #[test]
+    fn a_failed_sign_out_everywhere_keeps_the_session() {
+        assert!(signs_out(LOGOUT, None));
+        assert!(signs_out(LOGOUT, Some(500)));
+        assert!(signs_out(LOGOUT_ALL, Some(204)));
+        assert!(!signs_out(LOGOUT_ALL, None));
+        assert!(!signs_out(LOGOUT_ALL, Some(500)));
+        assert!(!signs_out(LOGOUT_ALL, Some(429)));
+        assert!(!signs_out("/api/characters", Some(200)));
     }
 }

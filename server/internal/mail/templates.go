@@ -21,9 +21,12 @@ type Kind string
 const (
 	KindVerify Kind = "verify"
 	KindReset  Kind = "reset"
+	// KindPasswordChanged tells the owner a password was changed or set from a signed-in
+	// session (its link is the forgot-password page, to take the account back).
+	KindPasswordChanged Kind = "password_changed"
 )
 
-var kinds = []Kind{KindVerify, KindReset}
+var kinds = []Kind{KindVerify, KindReset, KindPasswordChanged}
 
 // DefaultLang is the language of an account without a stored one.
 const DefaultLang = "es"

@@ -97,8 +97,9 @@ personaje).
 - **Sesiones cortas (lote 17):** el juego nunca guarda el login. La sesión de cuenta dura
   12 h como máximo y vence tras 30 min sin actividad autenticada (`last_seen_at`, refrescado
   como mucho una vez por minuto; la sesión inactiva se borra al rechazarla y el job de
-  limpieza borra el resto). La cookie es de sesión del navegador (sin `Expires`/`Max-Age`)
-  y la app de escritorio guarda el token solo en memoria (borra el que una versión vieja
+  limpieza borra el resto). La cookie es de sesión del navegador (sin `Expires`/`Max-Age`;
+  Chrome/Edge con "continuar donde lo dejaste" y las PWA la restauran al reabrir, y ahí
+  solo la acotan los 30 min / 12 h) y la app de escritorio guarda el token solo en memoria (borra el que una versión vieja
   dejó en el llavero). Solo se recuerda el email para rellenar el login.
 - **"Cerrar sesión en todos lados"** (`POST /api/auth/logout-all`): borra todas las sesiones
   y tokens de juego de la cuenta y sus flujos OAuth en curso en una transacción auditada
@@ -111,7 +112,11 @@ personaje).
   también los de la sesión que la cambió (a propósito). Si la sesión que pide el cambio
   fue revocada entre la verificación y la transacción (un "cerrar sesión en todos lados"
   simultáneo), el cambio falla con `401`: la transacción bloquea esa sesión antes de
-  escribir.
+  escribir. Con mailer, cada cambio o creación de contraseña manda a la cuenta el aviso
+  `email.password_changed` (enlace a `/forgot-password`): una cookie robada que crea o
+  cambia la contraseña deja una credencial que sobrevive a "cerrar sesión en todos lados",
+  y el dueño se entera y la recupera con un reset (que borra todas las sesiones). Sin
+  mailer no hay aviso (riesgo aceptado, como al vincular un proveedor).
 - Revocar (reset, cambio de contraseña, "cerrar sesión en todos lados") también rechaza
   el login que ya canjeó su token de juego y aún no entró al mundo: el `Join` compara el
   instante del canje con el de la última revocación de la cuenta (docs/05).
@@ -310,7 +315,7 @@ Hacer una vez y revisar cada mes.
 
 **Sesiones** (lote 17)
 - [ ] Tras desplegar el lote 17, todos los jugadores entran de nuevo una vez (la migración
-  00025 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
+  00024 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
 - [ ] Ante un reporte de cuenta comprometida: pedir al jugador "Cerrar sesión en todos
   lados" y cambiar la contraseña desde la pantalla de personajes (o mandarle un enlace con
   `gameserver admin reset-link`); revisar `gameserver admin audit` por

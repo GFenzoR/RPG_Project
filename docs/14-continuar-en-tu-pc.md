@@ -130,11 +130,22 @@ el punto 5:
   "Cambiar contraseña" en la pantalla de personajes (`POST /api/auth/logout-all`,
   `POST /api/account/password`) y el latido `POST /api/auth/keepalive` mientras se juega.
   Queda:
-  - Al desplegar, **todos entran de nuevo una vez** (la migración 00025 borra las sesiones
+  - Al desplegar, **todos entran de nuevo una vez** (la migración 00024 borra las sesiones
     viejas): avisarlo.
-  - El **test de Rust** de `api.rs` (token solo en memoria) no se corrió en la sesión que lo
-    escribió (sin `cargo` en esa PC) y el CI de escritorio solo corre
-    `compiled_default_is_valid`: correr `cargo test --lib` en `apps/desktop/src-tauri`.
+  - Los **tests de Rust** de `api.rs` (token solo en memoria; `signs_out`: un
+    "cerrar sesión en todos lados" que falla conserva la sesión) no se corrieron ni se
+    compilaron en la sesión que los escribió (sin `cargo` en esa PC) y el CI de escritorio
+    solo corre `compiled_default_is_valid`: correr `cargo test --lib` en
+    `apps/desktop/src-tauri`.
+  - `forget_saved_token` (borra el token del llavero que dejó una versión vieja) corre en
+    cada arranque, para siempre. En Linux con el llavero bloqueado o en macOS con una
+    entrada de otro binario firmado podría mostrar un aviso del SO: si aparece, hacerlo
+    una sola vez con una marca no secreta en la config.
+  - El portal de mapas y `/account` no mandan latido (docs/05): revisar si el formulario
+    del portal conserva lo escrito tras un `401` al enviar.
+  - **Migraciones al juntar el lote 17:** esta rama usa la 00024 (`00024_session_idle.sql`)
+    y la del baúl compartido la 00025; `migrations/embed_test.go` falla si hay versiones
+    repetidas o huecos. Comprobarlo en la punta del lote.
   - La página `/account` del sitio no tiene todavía los botones de "cerrar sesión en todos
     lados" ni "cambiar contraseña" (solo el juego): sumar `AccountSecurity` ahí si se pide.
   - Sin flags para cambiar las 12 h ni los 30 min (constantes en `auth`).

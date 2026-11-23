@@ -528,6 +528,7 @@ func (s *Service) ChangePassword(ctx context.Context, token, current, newPasswor
 	if s.revoked != nil {
 		s.revoked(accountID)
 	}
+	s.notifyPasswordChanged(ctx, accountID)
 	return nil
 }
 
