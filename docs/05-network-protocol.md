@@ -132,6 +132,9 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/register` | — | `{email, password}` | `201 {account_id}` |
 | `POST /api/auth/login` | — | `{email, password, token_in_body?}` | `200 {expires_at, token?}` + cookie |
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
+| `POST /api/auth/logout-all` | token | — | `204` (lote 17): revoca **todas** las sesiones de la cuenta (navegadores, app de escritorio y tokens de juego sin canjear), borra la cookie y saca del juego a sus personajes conectados (`Disconnect{SIGNED_OUT_EVERYWHERE}`) |
+| `POST /api/auth/keepalive` | token | — | `204` (lote 17): latido del cliente mientras juega, para que la sesión no venza por inactividad |
+| `POST /api/account/password` | token | `{current_password, new_password}` | `204` (lote 17): cambia la contraseña; revoca las **demás** sesiones (la de este pedido sigue), los enlaces de reset pendientes y saca del juego a los personajes conectados (`PASSWORD_CHANGED`). `401 invalid_credentials` (contraseña actual mal, cuenta como login fallido), `403 reauth_required`, `400 invalid_password`, `429` |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
@@ -317,8 +320,17 @@ auth). Pasado el límite responden `429 rate_limited`.
   la cache ni llegan a Postgres. Un cambio del juego, o un gremio nuevo, se ve como mucho
   60 s después.
 
-- **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
-  se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
+- **Token de cuenta:** opaco (32 bytes aleatorios, base64url). En la base se guarda solo
+  su SHA-256 (tabla `sessions`, `kind = 'account'`). **El juego nunca guarda el login
+  (lote 17, decisión del dueño 2026-11-23):** la sesión dura como mucho **12 h**
+  (`expires_at`, absoluto) y vence antes tras **30 min sin actividad autenticada**
+  (`last_seen_at`; cada pedido con sesión lo refresca, como mucho una vez por minuto para
+  no escribir en la base por pedido). Una sesión inactiva se rechaza (`401
+  unauthorized`) y se borra en el acto; el job de limpieza borra las vencidas y las
+  inactivas. La cookie es **de sesión del navegador** (sin `Expires` ni `Max-Age`):
+  cerrar el navegador olvida el login y recargar la página dentro del mismo navegador lo
+  conserva. La migración 00024 borró las sesiones de 30 días anteriores (todos entran de
+  nuevo una vez). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
   para el cliente web. Si hay un `Authorization: Bearer` (el esquema no distingue
@@ -326,8 +338,26 @@ auth). Pasado el límite responden `429 rate_limited`.
   contraseña) se ignora y se usa la cookie. El token solo
   viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
   web no lo pide, así un XSS no puede leerlo de la respuesta. En la app de escritorio lo
-  pide el lado Rust, que lo guarda en el llavero del SO y lo quita de la respuesta antes
-  de pasarla al webview (`apps/desktop`, docs/12).
+  pide el lado Rust, que lo guarda **solo en memoria** mientras la app está abierta y lo
+  quita de la respuesta antes de pasarla al webview (`apps/desktop`, docs/12). Al arrancar,
+  la app borra el token que una versión anterior hubiera dejado en el llavero del SO.
+  El cliente (web y escritorio) recuerda solo el **email** del último login
+  (`localStorage` `rpg.lastEmail`) para rellenar el formulario; nunca el token.
+- **Sesión y juego (lote 17):** una vez canjeado el token de juego (`POST /api/play`, 60 s,
+  un uso), la conexión WebSocket es independiente de la sesión HTTP: la inactividad de la
+  sesión no corta una partida en curso. Para que la sesión siga viva al volver a la lista
+  de personajes, el cliente manda `POST /api/auth/keepalive` cada 5 min mientras juega.
+  Tras más de 12 h, o si el cliente no pudo mandar el latido, al salir del juego se pide
+  la contraseña de nuevo. "Cerrar sesión en todos lados", un cambio o reset de
+  contraseña y un ban sí cortan las conexiones abiertas (`World.KickAccount` /
+  `SignOutAccount`, por el loop, guardando a los personajes como en un logout).
+- **Cambiar la contraseña desde el juego (lote 17):** la contraseña actual se comprueba
+  bajo los mismos límites de login fallido que `/api/auth/login` (por par email+red y por
+  email), así una cookie robada no adivina más rápido que un login. La nueva sigue las
+  reglas del registro. Una cuenta que solo entra con Google/Discord (sin contraseña) puede
+  **crear** su primera contraseña sin `current_password` si su sesión tiene menos de 10
+  min (`auth.ReauthWindow`, igual que vincular un proveedor); si no, `403
+  reauth_required` y el cliente le pide volver a entrar con su proveedor.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin

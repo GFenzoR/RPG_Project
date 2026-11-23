@@ -122,6 +122,22 @@ el punto 5:
   - **Item retirado o desconocido en el baúl:** al cargarse se descarta con un aviso en el
     log (como en el inventario) y la próxima escritura del baúl lo borra de la base.
   - Sin vista previa (`make ui-preview`) de la ventana.
+- **Sesiones sin persistencia (hecho, rama `feat/auth-sessions`, lote 17; decisión del dueño
+  2026-11-23: "el juego nunca guarda el login"; docs/05 "Token de cuenta", docs/18):** la
+  sesión dura 12 h como máximo y vence tras 30 min sin actividad; la cookie es de sesión del
+  navegador; la app de escritorio guarda el token solo en memoria y borra el del llavero al
+  arrancar; el login recuerda solo el email. Nuevos: "Cerrar sesión en todos lados" y
+  "Cambiar contraseña" en la pantalla de personajes (`POST /api/auth/logout-all`,
+  `POST /api/account/password`) y el latido `POST /api/auth/keepalive` mientras se juega.
+  Queda:
+  - Al desplegar, **todos entran de nuevo una vez** (la migración 00024 borra las sesiones
+    viejas): avisarlo.
+  - El **test de Rust** de `api.rs` (token solo en memoria) no se corrió en la sesión que lo
+    escribió (sin `cargo` en esa PC) y el CI de escritorio solo corre
+    `compiled_default_is_valid`: correr `cargo test --lib` en `apps/desktop/src-tauri`.
+  - La página `/account` del sitio no tiene todavía los botones de "cerrar sesión en todos
+    lados" ni "cambiar contraseña" (solo el juego): sumar `AccountSecurity` ahí si se pide.
+  - Sin flags para cambiar las 12 h ni los 30 min (constantes en `auth`).
 - **Seguridad del despliegue y del operador (hecho, rama `sec/deploy-hardening`, lote 16;
   el dueño el 2026-11-20: "un estándar excelente de ciberseguridad"; docs/09 "Imágenes
   firmadas", "Backups y restauración", "Seguridad del despliegue"; docs/13 pasos 3 y 5):**
@@ -212,8 +228,9 @@ el punto 5:
       (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
     - Este documento (docs/14) choca con las cuatro ramas `sec/*`: conservar las entradas
       de todas.
-  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sesiones de 30
-    días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
+  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sin MFA para el
+    staff (las sesiones de 30 días y la falta de "cerrar en todos lados" se resolvieron en
+    el lote 17), recompensas por personaje
     farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin
     firma.
 - **Integridad del juego (hecho, rama `sec/game-integrity`, lote 16; el dueño el

@@ -571,8 +571,9 @@ ventana abierta.
   `audit_log` (fuente `web`, solo el proveedor: nunca el email).
 - Una cuenta tiene varios personajes. Cosméticos pertenecen a la cuenta.
 - Tokens de sesión opacos en Postgres (fácil de revocar); cookie `HttpOnly` en web,
-  almacenamiento seguro en Tauri: el llavero del SO desde Rust, la página nunca lo ve
-  (T2.5, `apps/desktop`; si no hay llavero, solo memoria).
+  en Tauri, solo en la memoria del lado Rust mientras la app está abierta: la página nunca
+  lo ve (T2.5, `apps/desktop`; desde el lote 17 nada en el llavero: el juego nunca guarda
+  el login).
 
 ## Contenido y mapas en el build
 ```

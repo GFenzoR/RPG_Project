@@ -266,7 +266,7 @@ En la pantalla de login de la app abre **"Servidor: …"**, escribe `http://loca
 También puedes editar `config.json` a mano o lanzar la app con `RPG_SERVER_URL=...`
 (ruta y prioridades en `12-local-development.md`). El compose ya permite los orígenes de la
 app en `/ws` y la CSP de la app agrega el servidor elegido; la app no usa cookies (guarda
-el token en el llavero del SO), así que HTTP plano en `localhost` funciona. Usa un nombre
+el token en memoria mientras está abierta), así que HTTP plano en `localhost` funciona. Usa un nombre
 de host o una IPv4: la app rechaza IPv6.
 
 ### 7b. En el teléfono: instalar el juego (PWA)

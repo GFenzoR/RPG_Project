@@ -108,9 +108,10 @@ commitean** (Tauri los trata como código fuente; `gen/schemas` sigue ignorado).
 ### Pendiente de comprobar en un dispositivo 👤
 Nada de esto se compiló: el entorno donde se preparó no tiene Rust ni el NDK. En la
 primera compilación revisa:
-1. **Sesión en Android:** el llavero (`keyring` 3) no tiene backend de Android; la app
-   guarda el token solo en memoria y hay que entrar de nuevo cada vez que se abre. En iOS
-   usa el Keychain. Arreglo futuro: un backend de Android Keystore.
+1. **Sesión:** desde el lote 17 el juego nunca guarda el login en ninguna plataforma: el
+   token vive solo en memoria y hay que entrar de nuevo cada vez que se abre la app (en
+   Android el borrado del token viejo del llavero no hace nada: `keyring` 3 no tiene
+   backend de Android).
 2. **Selector de servidor:** después de "Guardar y reiniciar" la app intenta reiniciarse
    (`AppHandle::restart`). En móvil puede que solo se cierre: ábrela de nuevo y debería
    usar el servidor nuevo.
