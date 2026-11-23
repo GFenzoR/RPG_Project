@@ -35,6 +35,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/payments"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
@@ -55,6 +56,12 @@ type options struct {
 	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
 	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
 	authRateBurst int
+	// wsLimits bounds /ws (gateway.Limits, docs/05 "Límites"); wsLoopbackExempt skips its
+	// per-client limits for loopback clients (default: RPG_ENV development or test).
+	wsLimits         gateway.Limits
+	wsLoopbackExempt bool
+	// maxCharsPerAccount caps the characters of one account online at once (-1 = no cap).
+	maxCharsPerAccount int
 	// metricsAddr serves /metrics on its own internal listener ("" disables it).
 	metricsAddr string
 	// metricsExplicit: -metrics-addr or $RPG_METRICS_ADDR was set, so a failed bind is
@@ -113,6 +120,18 @@ func main() {
 	flag.StringVar(&o.i18nDir, "i18n", "", "directory of the i18n/ catalogs (email templates, shop pack names); default <data>/../i18n")
 	flag.BoolVar(&o.requireVerifiedEmail, "require-verified-email", os.Getenv("RPG_REQUIRE_VERIFIED_EMAIL") == "true", "only accounts with a verified email may play (needs email on); default $RPG_REQUIRE_VERIFIED_EMAIL == true")
 	flag.BoolVar(&o.mapPRWorker, "map-pr-worker", os.Getenv("RPG_MAP_PR_WORKER") == "on", "the map PR worker runs, so approved map submissions become pull requests on their own; default $RPG_MAP_PR_WORKER == on")
+	wsDef := gateway.DefaultLimits
+	flag.IntVar(&o.wsLimits.MaxConnsPerClient, "ws-max-conns-per-ip", wsDef.MaxConnsPerClient, "open /ws connections per client IP (IPv6: per /64; -1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxPendingPerClient, "ws-max-pending-per-ip", wsDef.MaxPendingPerClient, "/ws connections per client IP still in the handshake (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.HandshakeBurst, "ws-handshake-burst", wsDef.HandshakeBurst, "new /ws connections per client IP at once, then one per -ws-handshake-every (-1 = no limit)")
+	flag.DurationVar(&o.wsLimits.HandshakeEvery, "ws-handshake-every", wsDef.HandshakeEvery, "refill interval of the per-IP /ws connection bucket")
+	flag.IntVar(&o.wsLimits.MaxUnauthenticated, "ws-max-unauthenticated", wsDef.MaxUnauthenticated, "/ws connections of everyone still in the handshake (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxHandshakes, "ws-max-handshakes", wsDef.MaxHandshakes, "handshakes reading the database at once (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxPlayers, "max-players", wsDef.MaxPlayers, "players online at once; more get SERVER_FULL (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxQueuedPerConn, "ws-max-queued-per-conn", wsDef.MaxQueuedPerConn, "commands of one connection waiting in the game loop (-1 = no limit)")
+	flag.BoolVar(&o.wsLoopbackExempt, "ws-loopback-exempt", payments.ParseEnv(os.Getenv("RPG_ENV")) != payments.EnvProduction,
+		"skip the per-IP /ws limits for loopback clients (bots, E2E); default true only when $RPG_ENV is development or test")
+	flag.IntVar(&o.maxCharsPerAccount, "max-chars-per-account", session.DefaultMaxCharactersPerAccount, "characters of one account online at once (-1 = no cap)")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
 	flag.Visit(func(f *flag.Flag) {
@@ -243,6 +262,11 @@ func run(logger *slog.Logger, o options) error {
 		provider = pay.Name()
 	}
 	logger.Info("cosmetic shop", "env", string(env), "payments", provider, "catalog", cosmetics != nil)
+	logger.Info("ws limits", "per_ip_open", o.wsLimits.MaxConnsPerClient, "per_ip_pending", o.wsLimits.MaxPendingPerClient,
+		"handshake_burst", o.wsLimits.HandshakeBurst, "handshake_every", o.wsLimits.HandshakeEvery.String(),
+		"unauthenticated", o.wsLimits.MaxUnauthenticated, "handshakes", o.wsLimits.MaxHandshakes,
+		"max_players", o.wsLimits.MaxPlayers, "queued_per_conn", o.wsLimits.MaxQueuedPerConn,
+		"loopback_exempt", o.wsLoopbackExempt, "chars_per_account", o.maxCharsPerAccount)
 	m, err := loadWorld(logger, o.worldPath, env)
 	if err != nil {
 		return err
@@ -312,9 +336,13 @@ func run(logger *slog.Logger, o options) error {
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
 		DeviceKey:        deviceKey,
-		StartTown:        o.startTown,
-		MapSubmitLimits:  o.mapSubmit,
-		MapPRWorker:      o.mapPRWorker,
+		WSLimits:         o.wsLimits,
+		WSExemptLoopback: o.wsLoopbackExempt,
+
+		MaxCharactersPerAccount: o.maxCharsPerAccount,
+		StartTown:               o.startTown,
+		MapSubmitLimits:         o.mapSubmit,
+		MapPRWorker:             o.mapPRWorker,
 
 		Mail:                 sender,
 		PublicURL:            o.publicURL,

@@ -10,7 +10,10 @@
 #
 # Every bot connects from 127.0.0.1, so this test server gets a larger per-IP
 # register/login burst (-auth-rate-burst, the flag meant for local harnesses). Only this
-# local process gets it: production keeps the default limits.
+# local process gets it: production keeps the default limits. For the same reason it skips
+# the per-IP /ws limits for loopback (-ws-loopback-exempt) and lifts the characters per
+# account online (-max-chars-per-account -1): the bots share accounts, 10 per account
+# (docs/05 "Límites"). A server reached with URL= needs those flags too.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -45,7 +48,8 @@ case "$db" in
   *) env_default= ;;
 esac
 RPG_ENV="${RPG_ENV:-$env_default}" PAYMENTS_PROVIDER= DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
-  -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 >"$log" 2>&1 &
+  -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 \
+  -ws-loopback-exempt -max-chars-per-account -1 >"$log" 2>&1 &
 server=$!
 
 # Native Windows (Git Bash, docs/12 "Windows nativo"): bash cannot deliver SIGINT or

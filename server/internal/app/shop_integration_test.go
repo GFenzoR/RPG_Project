@@ -68,7 +68,8 @@ func TestShopEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, err := app.New(app.Config{
-		Store: st, Clock: clock.Real{}, Seed: 1, Vocations: vocations, Balance: balance, Items: items,
+		WSExemptLoopback: true, // every bot dials from loopback
+		Store:            st, Clock: clock.Real{}, Seed: 1, Vocations: vocations, Balance: balance, Items: items,
 		Cosmetics: cosmetics, Payments: fake,
 		Map: worldtest.Map(t, 0, 0, 7, "................", ".......T........", "................"),
 	})

@@ -83,6 +83,15 @@ type Config struct {
 	DeviceKey []byte
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
+	// WSLimits bounds the /ws connections, handshakes and queued commands
+	// (gateway.Limits; zero fields take gateway.DefaultLimits).
+	WSLimits gateway.Limits
+	// WSExemptLoopback skips the per-client /ws limits for loopback clients (development,
+	// bots and E2E on one machine; gateway.Config.ExemptLoopback).
+	WSExemptLoopback bool
+	// MaxCharactersPerAccount caps the characters of one account online at once
+	// (session.Config; 0 = session.DefaultMaxCharactersPerAccount, negative = no cap).
+	MaxCharactersPerAccount int
 	// Metrics, if set, records the tick, network, persistence and HTTP metrics
 	// (internal/metrics). One App per *metrics.Metrics: New registers players_online on it
 	// and fails if that is already registered.
@@ -329,6 +338,8 @@ func New(cfg Config) (*App, error) {
 			Alert:          economyAlert(cfg.Metrics),
 			AutosaveEvery:  cfg.AutosaveEvery,
 			Logger:         cfg.Logger,
+
+			MaxCharactersPerAccount: cfg.MaxCharactersPerAccount,
 		})
 		if err != nil {
 			return nil, err
@@ -371,6 +382,9 @@ func New(cfg Config) (*App, error) {
 			MinClientVersion: cfg.MinClientVersion,
 			OriginPatterns:   cfg.OriginPatterns,
 			Metrics:          gatewayMetrics(cfg.Metrics),
+			TrustProxy:       cfg.TrustProxy,
+			Limits:           cfg.WSLimits,
+			ExemptLoopback:   cfg.WSExemptLoopback,
 		})
 		if err != nil {
 			return nil, err
