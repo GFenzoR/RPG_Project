@@ -88,14 +88,14 @@ func (w *World) portalShown(pt *world.Portal) bool {
 // travel.arrival_radius in the area of the destination (searchRings: never a room behind
 // a locked door nor a pocket sealed by walls) that is walkable, no house tile and no
 // entrance of stairs, a hole or a teleport (nothing lands where it would fall again), with
-// room for them: a pile they join (groundMerge, with leaving as in moveItem) or fewer than
+// room for them: a pile they join (groundMerge, with ownOnly as in moveItem) or fewer than
 // maxGroundItems items. Creatures do not matter: an item lies under them. The flags only
 // spare the area lookup: areaAllows keeps house tiles and portal entrances out already
 // (they are in no area, and a destination is never a house tile: world.NewMap).
-func (w *World) fallTo(p *Player, it *Item, count int, pt *world.Portal, leaving bool) (world.Pos, bool) {
+func (w *World) fallTo(p *Player, it *Item, count int, pt *world.Portal, ownOnly bool) (world.Pos, bool) {
 	skip := world.FlagBlocksMovement | world.FlagPortalStep | world.FlagHouse
 	return w.searchRings(pt.To, w.arrivalRadius, skip, func(q world.Pos) bool {
-		return len(w.ground[q]) < maxGroundItems || w.groundMerge(p, it, count, q, leaving) != nil
+		return len(w.ground[q]) < maxGroundItems || w.groundMerge(p, it, count, q, ownOnly) != nil
 	})
 }
 

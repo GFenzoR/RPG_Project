@@ -176,8 +176,9 @@ func (s *Service) VerifyEmail(ctx context.Context, token string) error {
 	return nil
 }
 
-// RequestPasswordReset emails a reset link if email is an existing, enabled account
-// with a verified email. It returns nil in every other case too, so the answer never
+// RequestPasswordReset emails a reset link if email is an existing, enabled account (a
+// verify-and-reset link if the address was never verified). It returns nil in every
+// other case too, so the answer never
 // tells whether an account exists (the HTTP API answers the same either way). Only
 // real failures (database, full mail queue) are errors, and those are not specific to
 // the address.
@@ -200,17 +201,25 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email, lang string) 
 	if err != nil {
 		return err
 	}
-	// An unverified address may not be the owner's: a reset link would hand the
-	// account to whoever owns the mailbox later. The operator can still issue a link by
-	// hand (gameserver admin reset-link).
-	if p.Disabled || !p.EmailVerified {
+	if p.Disabled {
 		return nil
+	}
+	// An address nobody ever verified may have been squatted by someone who registered
+	// it without owning the mailbox. Its link is a claim_email token (lifetime of a reset
+	// link): redeeming it on the reset page proves the mailbox, verifies the address and
+	// runs the reset (store.ResetPassword: sessions revoked, unproven identities dropped).
+	// So the mailbox owner takes the address back without the squatter's password. It is
+	// not a verify_email token: issuing it leaves the registration's verification link
+	// working, and a resent verification email does not kill it either.
+	purpose := store.TokenResetPassword
+	if !p.EmailVerified {
+		purpose = store.TokenClaimEmail
 	}
 	lang, err = s.accountLang(ctx, p, lang)
 	if err != nil {
 		return err
 	}
-	token, err := s.issue(ctx, p, store.TokenResetPassword, s.resetTTL)
+	token, err := s.issue(ctx, p, purpose, s.resetTTL)
 	if err != nil {
 		return err
 	}

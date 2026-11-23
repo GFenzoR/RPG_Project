@@ -426,24 +426,25 @@ func TestContainerWindowsClose(t *testing.T) {
 	}
 }
 
-// A tile holds at most 20 different runtime items; equal stacks merge anywhere on it.
+// A tile holds at most 20 different runtime items; equal stacks merge anywhere on it
+// (a throw only into a pile reserved to the thrower, lote 16: moveItem ownOnly).
 func TestGroundTileLimit(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) { c.Items = testItems() })
 	cl, _ := h.joinChar(withPack(8700, pos(10, 10), session.ItemState{ItemID: coinID, Count: 5}))
 	h.sim.Command(gameFunc(func() {
-		h.w.DropForTest(testItems()["copper_coin"], 1, pos(10, 11))
 		for range 19 {
 			h.w.DropForTest(testItems()["test_tunic"], 1, pos(10, 11))
 		}
 		h.w.DropForTest(testItems()["test_sword"], 1, pos(11, 10))
 	}))
 	pack := openPack(t, h, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(10, 11)), 1)) // the 20th item
 	h.input(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(10, 11)), 2))
 	h.input(cl, moveItem(onTile(pos(11, 10)), swordID, 1, onTile(pos(10, 11)), 1))
 	h.sim.Step()
 	g := h.w.GroundAt(pos(10, 11))
-	if len(g) != 20 || g[0].Count() != 3 {
-		t.Fatalf("tile holds %d items, coins %d, messages %v", len(g), g[0].Count(), systemKeys(cl.take()))
+	if len(g) != 20 || g[19].Count() != 3 {
+		t.Fatalf("tile holds %d items, coins %d, messages %v", len(g), g[19].Count(), systemKeys(cl.take()))
 	}
 	if evs := cl.take(); !hasKey(evs, "inventory.tile_full") {
 		t.Errorf("messages %v", systemKeys(evs))

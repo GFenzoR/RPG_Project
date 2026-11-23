@@ -62,11 +62,11 @@ type accountJSON struct {
 
 func (a *api) emailRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/auth/config", a.publicLimited(a.authConfig))
-	mux.HandleFunc("GET /api/account", a.authed(a.account))
+	mux.HandleFunc("GET /api/account", a.authed(shortDBRoute(a.account)))
 	mux.HandleFunc("POST /api/auth/verify", a.rateLimited(a.verifyEmail))
 	mux.HandleFunc("POST /api/auth/verify/resend", a.authed(a.resendVerification))
 	mux.HandleFunc("POST /api/auth/password/forgot", a.rateLimited(a.forgotPassword))
-	mux.HandleFunc("POST /api/auth/password/reset", a.rateLimited(a.resetPassword))
+	mux.HandleFunc("POST /api/auth/password/reset", a.rateLimited(a.hashing(a.resetPassword)))
 }
 
 // authConfig tells the website and the game which account features this server has,

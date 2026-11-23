@@ -1559,6 +1559,8 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
       "gm",
       "-note",
       "e2e",
+      // The e2e accounts never confirm their email (lote 16: set-role refuses that).
+      "-allow-unverified",
     ],
     {
       cwd: join(import.meta.dirname, "..", "..", "server"),
@@ -1610,10 +1612,15 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await expect(check).toContainText("Chequeo de presencia");
   await expect(check.getByRole("button")).toHaveCount(4);
   await shot(plPage, "38-presence-check");
+  // The question names no color (lote 16): it shows a swatch, read here by its hue as a
+  // person would; no text of the question matches an option.
   const question = (await check.locator("p").first().textContent()) ?? "";
-  const color = ["rojo", "azul", "verde", "amarillo"].find((c) => question.includes(c));
-  expect(color).toBeDefined();
-  await check.getByRole("button", { name: new RegExp(color ?? "", "i") }).click();
+  expect(["rojo", "azul", "verde", "amarillo"].some((c) => question.includes(c))).toBe(false);
+  const bg = await check
+    .getByTestId("presence-swatch")
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  const color = colorOfSwatch(bg);
+  await check.getByRole("button", { name: new RegExp(color, "i") }).click();
   await expect(check).toHaveCount(0);
   await expect(plPage.getByTestId("game-log")).toContainText("Gracias por responder.");
 
@@ -3594,3 +3601,24 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   await shot(page, "75-volcan-mine-back-up");
   expect(errors).toEqual([]);
 });
+
+/** The color name (Spanish option text) of a presence swatch, by its lightness and hue (lote 16). */
+function colorOfSwatch(css: string): string {
+  // server/internal/presence ColorOf: white or black by lightness, else blue or yellow by hue.
+  const [r = 0, g = 0, b = 0] = (css.match(/\d+/g) ?? []).slice(0, 3).map((v) => Number(v) / 255);
+  const hi = Math.max(r, g, b);
+  const lo = Math.min(r, g, b);
+  const light = (hi + lo) / 2;
+  if (light > 0.75) return "blanco";
+  if (light < 0.25) return "negro";
+  const d = hi - lo;
+  let h = 0;
+  if (d > 0) {
+    if (hi === r) h = (((g - b) / d) % 6) * 60;
+    else if (hi === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  if (h < 0) h += 360;
+  const dist = (c: number) => Math.min(Math.abs(h - c), 360 - Math.abs(h - c));
+  return dist(220) < dist(52) ? "azul" : "amarillo";
+}

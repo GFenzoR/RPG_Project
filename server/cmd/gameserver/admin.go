@@ -18,6 +18,7 @@ import (
 
 // adminStore is what the operator's commands need. *store.Store implements it.
 type adminStore interface {
+	RoleCandidate(ctx context.Context, email string) (store.RoleCandidate, error)
 	SetRole(ctx context.Context, email, role string, audit store.AuditEntry) (int64, string, error)
 	ListAudit(ctx context.Context, n int) ([]store.AuditEntry, error)
 	OpenReports(ctx context.Context, n int) ([]store.Report, error)
@@ -29,10 +30,15 @@ type adminStore interface {
 const adminUsage = `usage: gameserver admin <command> [flags]   (DATABASE_URL must be set)
 
 commands:
-  set-role -email <email> -role player|gm|admin -note <why>
+  set-role -email <email> -role player|gm|admin -note <why> [-allow-unverified]
       Sets an account's role (T2.6), revokes its tokens and records it in the audit log.
       A role taken away reaches the account's online characters within ~5 s; a new or
-      higher role applies from the next login.
+      higher role applies from the next login. It first prints the account (id, created,
+      email verification, verified Google/Discord, last login, characters). Raising an
+      account above player needs a verified email or a verified OAuth identity, so
+      whoever registered someone else's address first cannot be made staff; check the
+      printed account is the right person and pass -allow-unverified to override
+      (exit code 3 when refused for this).
   audit [-n 50]
       Prints the newest audit log entries.
   reset-link -email <email> [-public-url https://example.com]
@@ -66,12 +72,22 @@ func runAdmin(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprint(stderr, adminUsage)
 			return 2
 		}
+		if errors.Is(err, errUnverified) {
+			return exitUnverified
+		}
 		return 1
 	}
 	return 0
 }
 
 var errUsage = errors.New("invalid arguments")
+
+// errUnverified: set-role refused to raise an account that never proved its email.
+var errUnverified = errors.New("refused: this account never proved it owns its email")
+
+// exitUnverified is the exit code for errUnverified, so scripts (deploy/home.sh, the
+// launcher) can show the account and ask before retrying with -allow-unverified.
+const exitUnverified = 3
 
 // adminCommand parses and runs one operator command against the store open returns.
 func adminCommand(ctx context.Context, args []string, open func() (adminStore, error), out io.Writer, operator string, now func() time.Time) error {
@@ -82,6 +98,7 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 		email := fs.String("email", "", "account email")
 		role := fs.String("role", "", "player, gm or admin")
 		note := fs.String("note", "", "why (kept in the audit log)")
+		allowUnverified := fs.Bool("allow-unverified", false, "raise an account without a verified email or OAuth identity")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() > 0 {
 			return errUsage
 		}
@@ -94,6 +111,22 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 			return err
 		}
 		defer st.Close()
+		c, err := st.RoleCandidate(ctx, norm)
+		if errors.Is(err, store.ErrNotFound) {
+			return fmt.Errorf("no account with email %s", norm)
+		}
+		if err != nil {
+			return err
+		}
+		printCandidate(out, norm, c)
+		if store.RoleRank(*role) > store.RoleRank(store.RolePlayer) && !c.Proven() {
+			if !*allowUnverified {
+				return fmt.Errorf("%w: anyone can register an address that is not theirs. Ask the owner to confirm the "+
+					"email (needs SMTP) or link Google/Discord, or, if the account above (created date, characters) "+
+					"is surely theirs, run again with -allow-unverified", errUnverified)
+			}
+			fmt.Fprintln(out, "warning: unverified account raised with -allow-unverified")
+		}
 		id, old, err := st.SetRole(ctx, norm, *role, store.AuditEntry{
 			At:        now(),
 			Source:    store.AuditCLI,
@@ -192,6 +225,33 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown command %q", errUsage, args[0])
+	}
+}
+
+// printCandidate shows who the account behind the email is before set-role writes.
+func printCandidate(out io.Writer, email string, c store.RoleCandidate) {
+	when := func(t time.Time) string {
+		if t.IsZero() {
+			return "never"
+		}
+		return t.UTC().Format(time.RFC3339)
+	}
+	oauth := "none"
+	if len(c.VerifiedProviders) > 0 {
+		oauth = strings.Join(c.VerifiedProviders, ", ")
+	}
+	chars := "none"
+	if len(c.Characters) > 0 {
+		chars = strings.Join(c.Characters, ", ")
+	}
+	fmt.Fprintf(out, "account %d (%s), role %s\n", c.ID, email, c.Role)
+	fmt.Fprintf(out, "  created:         %s\n", when(c.CreatedAt))
+	fmt.Fprintf(out, "  email verified:  %s\n", when(c.EmailVerifiedAt))
+	fmt.Fprintf(out, "  verified OAuth:  %s\n", oauth)
+	fmt.Fprintf(out, "  last login:      %s\n", when(c.LastLoginAt))
+	fmt.Fprintf(out, "  characters:      %s\n", chars)
+	if c.Disabled {
+		fmt.Fprintln(out, "  DISABLED account")
 	}
 }
 

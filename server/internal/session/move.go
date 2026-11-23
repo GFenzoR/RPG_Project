@@ -16,17 +16,17 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		if p == nil || p.linkDead {
 			return // gone, or link-dead: a command its closed connection sent before
 		}
-		w.playerCommand(p, func() { w.input(ctx, p, msg) })
+		w.playerCommand(ctx.Tick, p, func() { w.input(ctx, p, msg) })
 	})
 }
 
 // playerCommand runs run, one command of p that may change a house's items.
-func (w *World) playerCommand(p *Player, run func()) {
+func (w *World) playerCommand(now game.Tick, p *Player, run func()) {
 	// T5.3: a give-away still waiting for its snapshot (one the server made in a command
 	// that is not an Input, as a Join's tutorial reward, or in one that panicked) takes
 	// it now, before this command changes a house: that snapshot never holds what this
 	// command takes out of a house (hold.go settleGivers).
-	w.settleGivers()
+	w.settleGivers(now)
 	w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
 	defer func() { w.cmdPlayer = nil }()
 	run()
@@ -34,7 +34,7 @@ func (w *World) playerCommand(p *Player, run func()) {
 	// later command never adds a half-done operation to that batch.
 	w.flushHouses()
 	// T5.3: the state after what this command gave away, whole (hold.go gaveAway).
-	w.settleGivers()
+	w.settleGivers(now)
 }
 
 func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
@@ -54,7 +54,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		if !ok {
 			return
 		}
-		w.turn(p, d)
+		w.turn(ctx, p, d)
 	case *pb.ClientMessage_SetTarget:
 		w.setTarget(ctx, p, m.SetTarget.GetCreatureId())
 	case *pb.ClientMessage_SetFightMode:
@@ -216,19 +216,74 @@ func (w *World) reject(p *Player, d pb.Direction) {
 	}}})
 }
 
-func (w *World) turn(p *Player, d world.Direction) {
+// Turn anti-flood (lote 16): turning in place is free and every change reaches every
+// observer, so a client spamming Turn would multiply its traffic by the crowd around it.
+// The observers hear a burst of turnBurst changes, then one every turnRefill ticks; the
+// direction itself always changes at once, and the last one held back goes out when the
+// bucket allows it (flushTurns), so what the observers see ends right.
+const (
+	turnBurst  = 6
+	turnRefill = game.Tick(2) // 100 ms at the 50 ms tick
+)
+
+func (w *World) turn(ctx *game.TickContext, p *Player, d world.Direction) {
 	if p.dir == d {
 		return
 	}
 	p.dir = d
-	// One message for p and every observer that knows it, never changed after emit.
-	msg := &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: dirMsg(d)}}}
+	msg := turnMsg(p)
 	p.emit(msg)
+	if !w.turnFlood(ctx.Tick, p) {
+		if !p.turnHeld {
+			p.turnHeld = true
+			w.turnHeld = append(w.turnHeld, p)
+		}
+		return
+	}
+	w.sendTurn(p, msg)
+}
+
+func turnMsg(p *Player) *pb.ServerMessage {
+	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: dirMsg(p.dir)}}}
+}
+
+// sendTurn tells p's direction to every observer that knows p: msg, one message shared
+// by all of them (and p), never changed after emit.
+func (w *World) sendTurn(p *Player, msg *pb.ServerMessage) {
 	w.eachObserver(p, p.pos, func(o *Player) {
-		if o.Knows(p.id) {
+		if o != p && o.Knows(p.id) {
 			o.emit(msg)
 		}
 	})
+}
+
+// turnFlood counts one broadcast turn (GCRA: turnBurst, then one every turnRefill).
+func (w *World) turnFlood(now game.Tick, p *Player) bool {
+	tat := max(p.turnTAT, now)
+	if tat-now > turnRefill*(turnBurst-1) {
+		return false
+	}
+	p.turnTAT = tat + turnRefill
+	return true
+}
+
+// flushTurns sends the held-back last direction of each player whose bucket allows it
+// now; the others wait for a later tick. A player who left is dropped.
+func (w *World) flushTurns(ctx *game.TickContext) {
+	kept := w.turnHeld[:0]
+	for _, p := range w.turnHeld {
+		switch {
+		case w.byChar[p.charID] != p:
+			p.turnHeld = false
+		case w.turnFlood(ctx.Tick, p):
+			p.turnHeld = false
+			w.sendTurn(p, turnMsg(p))
+		default:
+			kept = append(kept, p)
+		}
+	}
+	clear(w.turnHeld[len(kept):])
+	w.turnHeld = kept
 }
 
 // StepTicks returns how many ticks a step onto ground costs at speed:
@@ -496,6 +551,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushMapNotices(ctx.Tick)
 	w.pruneShopPending(ctx.Tick)
 	w.flushEconomy(ctx)
+	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
@@ -517,7 +573,8 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	// T5.3: what the server gave away for players outside their commands this tick (a
 	// quest reward of a kill, a gift of questRecheck above), now that their state is whole.
-	w.settleGivers()
+	w.settleGivers(ctx.Tick)
+	w.flushGiveDue(ctx.Tick) // lote 16: the coalesced give-away saves whose window ended
 	// Removing slow players may have queued CreatureDisappear for others: they go out
 	// with the next tick's batch.
 }

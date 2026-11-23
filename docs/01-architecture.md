@@ -54,6 +54,48 @@ for each tick (50 ms):
 - Si un tick tarda más de 50 ms, se registra y el siguiente arranca de inmediato
   (no se acumula deuda). Métrica `tick_duration_ms`.
 
+### Equidad de la cola (lote 16, `game/fairness.go`)
+La cola de comandos es una sola (8192 lugares, hasta 2048 por tick; el carril de ciclo de
+vida de abajo tiene aparte su propio tope de 2048 por tick, así que un tick ejecuta como
+mucho 4096 comandos entre los dos), así que un solo
+actor que encola lo más rápido que puede la llenaría y el servidor rechazaría los
+comandos de todos los demás, también sus logins. Dos reglas lo impiden, sin tocar quién es
+dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
+- **Cupo por conexión.** Cada conexión encola sus comandos por un `game.Quota`: como mucho
+  `-ws-max-queued-per-conn` (64) suyos esperando en la cola; uno más se descarta en el
+  gateway, antes de la cola, sin aviso al cliente. El contador es un atómico de la
+  conexión: sube al encolar y baja cuando el loop ejecuta el comando (antes de ejecutarlo,
+  así un comando que entra en pánico también libera su lugar). Un cliente honesto manda
+  unos pocos por tick y el loop los vacía en el siguiente. El cupo es al menos la ráfaga
+  del limitador por conexión (60, docs/05 "Límites"): tras un tick lento o una ráfaga de
+  TCP (reenvío después de perder paquetes) un cliente honesto puede entregar de golpe
+  todo lo que el limitador le acepta, y con un cupo menor (antes 16) esos comandos se
+  perdían en silencio (un `Walk` que el cliente deshacía a los 3 s, un "usar" sin
+  respuesta). Lo que pasa de la ráfaga ya lo descarta el limitador, y el exceso sostenido
+  desconecta (`RATE_LIMITED`). Para llenar la cola (8192) hacen falta más de 128
+  conexiones con personaje vaciando su ráfaga a la vez; cada una exige una cuenta (2
+  personajes por cuenta) y el loop vacía 2048 por tick.
+- **Carril de ciclo de vida.** `Join`, `LoginStarted`, `LoginAborted` y `Saved` (el
+  acuse de un guardado) son `game.LifecycleFunc`: van a un carril propio (2048 lugares)
+  que el loop vacía primero en cada tick, con su propio tope. Una cola llena nunca rechaza
+  un login. `LoginStarted` y `Saved` comparten carril a propósito: el orden entre ellos
+  es el que protege el estado sin guardar de un relogueo rápido (`World.LoginStarted`). Si
+  `Saved` fuera por la cola común, un acuse encolado mientras el loop la vacía correría
+  antes que un `LoginStarted` que espera en el carril al tick siguiente, y el `Join`
+  cargaría la fila vieja de la base. Los acuses están acotados por los guardados, así que
+  no llenan el carril.
+- **El `Join` corre antes que todo lo demás de su conexión.** El gateway no lee mensajes
+  del cliente (ni encola su `Leave`) hasta que el `Join` corrió: un `Join` que llega al
+  carril después de vaciarlo podría quedar detrás de un `Leave` de la cola común, que
+  ignoraría al cliente desconocido, y el `Join` metería después un jugador atado a una
+  conexión cerrada.
+- `Leave` sigue en la cola común, detrás de lo que su conexión mandó antes (un ataque
+  mandado justo antes de cerrar todavía cuenta y decide si queda link-dead); solo si la
+  cola común está llena el gateway lo pasa al carril, y ahí puede adelantarse a comandos
+  viejos de esa conexión (que `Input` ignora: el jugador ya no está). El orden dentro de
+  cada carril es FIFO; un `Join` puede adelantarse a comandos comunes de otros encolados
+  antes.
+
 ## El mundo en memoria
 - Posición: `(x uint16, y uint16, z uint8)`. Pisos 0–15, piso 7 = nivel del mar.
 - El mapa se carga completo en memoria al arrancar desde `world.bin` (compilado).
@@ -223,7 +265,8 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
     marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
     transfer), que no es anterior a lo que dieron al suelo público salvo en una caída o
-    con la base caída al apagar (ver "Guardado antes del transfer" más abajo).
+    con la base caída al apagar (ver "Guardado de lo que se suelta al suelo público" más
+    abajo).
   - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
     unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
     un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
@@ -335,25 +378,41 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       casas, suelo, cadáver) están cubiertos, mientras espera por la espera y antes por el
       guardado de abajo; uno nuevo tiene que respetar los dos (server/CLAUDE.md), y las
       alertas de economía (T4.1) siguen como red.
-  - **Guardado antes del transfer (`session/hold.go`, `gaveAway`).** La espera cubre lo
-    que pasa mientras un transfer no está confirmado, pero un marcado vuelve a su
-    **último guardado escrito**, que puede ser anterior. Lo que dio **antes** del
-    transfer sin estar en espera (lo tiró a la calle o a un contenedor de la calle, o el
-    servidor se lo dejó a los pies fuera de una casa: las monedas de una venta a un NPC,
-    una fabricación o una recompensa que no entró) estaría entonces en esa fila y en la
-    de quien lo levantó y se guardó: duplicado. Por eso cuando algo suyo llega al suelo
-    público (`MoveItem` de algo que carga; `holdGround` fuera de una casa, también
-    estando en espera) queda marcado (`gaveAway`) y el loop toma su snapshot **al final de
-    ese comando** (`Input`), o del tick si lo soltó el servidor fuera de un comando (una
-    recompensa de quest por una muerte de monstruo): `settleGivers`, en memoria
-    (`Player.pre`). Ahí su estado está entero: las demás acciones del diálogo, el paso de
+  - **Guardado de lo que se suelta al suelo público (`session/hold.go`, `gaveAway`;
+    lote 16).** La espera cubre lo que pasa mientras un transfer no está confirmado, pero
+    un marcado vuelve a su **último guardado escrito**, que puede ser anterior. Lo que dio
+    sin estar en espera (lo tiró a la calle o a un contenedor de la calle, o el servidor
+    se lo dejó a los pies fuera de una casa: las monedas de una venta a un NPC, una
+    fabricación o una recompensa que no entró) estaría entonces en esa fila y en la de
+    quien lo levantó y se guardó: duplicado. Pasa igual **sin ningún transfer** si el
+    servidor se cae: A tira algo a la calle, B (una cuenta alternativa) lo levanta y sale
+    (su guardado final se escribe enseguida) y el servidor muere antes del próximo
+    autoguardado de A (hasta 5 min): el item queda en las dos filas. Por eso cuando algo
+    suyo llega al suelo público (`MoveItem` de algo que carga; `holdGround` fuera de una
+    casa, también estando en espera) queda marcado (`gaveAway`) y el loop toma su snapshot
+    **al final de ese comando** (`Input`), o del tick si lo soltó el servidor fuera de un
+    comando (una recompensa de quest por una muerte de monstruo): `settleGivers`. Ese
+    snapshot **se encola en el acto**, y la pila o el contenedor de la calle donde cayó
+    queda **reservado** al personaje (`reserveGave`, `heldGround`) con el `Seq` de ese
+    snapshot: nadie más lo toca hasta que la base lo confirma, pase lo que pase después con
+    la cola. Lo prueba `TestCrashAfterAPickUpKeepsTheItemOnce` (una base de prueba que
+    pierde lo no escrito: el item queda en una sola fila). Los guardados se **agrupan por
+    personaje**: el primero sale en el acto y los de los siguientes 2 s
+    (`giveSaveEvery`) quedan reservados enseguida y se guardan juntos al final de esa
+    ventana (`flushGiveDue`) o con cualquier snapshot anterior del personaje (un
+    autoguardado, el final, el de un transfer: todo snapshot renumera esas reservas con su
+    `Seq`). En juego normal la reserva dura uno o dos ticks; con la base caída dura hasta
+    que el guardado entra (el que lo soltó puede volver a levantarlo, nadie más), y con un
+    guardado rechazado para siempre, hasta reiniciar o hasta que el item se pudra. Ahí su
+    estado está entero: las demás acciones del diálogo, el paso de
     quest que completa al llegar al nodo siguiente, las demás pilas del mismo regalo (si
     se tomara cuando cae la primera pila, un marcado podría volver a un estado con la
     quest sin terminar y cobrar dos veces la misma recompensa). Lo que soltó un comando
     que no es un `Input` (la recompensa del tutorial en un `Join`) y sigue pendiente se
     asienta también **al principio** del próximo `Input` (`playerCommand`), antes de que
-    ese comando cambie una casa: así ese snapshot nunca lleva lo que el comando saca de
-    una casa. Su **próximo transfer** lo encola primero (`transferSnapshot`, delante del
+    ese comando cambie una casa (y antes de que otro jugador pueda tocar lo que soltó):
+    así ese snapshot nunca lleva lo que el comando saca de una casa. Un **transfer**
+    encola antes el guardado que espera su ventana (`transferSnapshot`, delante del
     trabajo del transfer): el Saver lo escribe antes, así un transfer descartado o
     saltado no lo devuelve a un guardado anterior a lo que dio. Lo que garantiza eso es el
     asentamiento del principio de cada comando del jugador (asienta a todos los que
@@ -365,9 +424,10 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
       otro trabajo suyo (la espera no lo dejó soltar nada desde entonces).
     - Una sola vez: cualquier snapshot posterior del personaje (un autoguardado, el final
-      al salir o al apagar, el de su muerte, el de un transfer) lo reemplaza, porque ya
-      entra en la cola detrás de lo que dio. Un relogueo, el link-dead y el reinicio no
-      cambian nada: el snapshot final lo reemplaza y el login nuevo arranca sin él.
+      al salir o al apagar, el de su muerte, el de un transfer) cubre lo que espera su
+      ventana, porque ya entra en la cola detrás de lo que dio (y reserva con su `Seq`).
+      Un relogueo, el link-dead y el reinicio no cambian nada: el snapshot final lo cubre
+      y el login nuevo arranca sin él.
     - Se numera al tomarlo, no al encolarlo: su acuse vale solo por lo anterior. No
       termina la espera del transfer que va detrás ni libera lo que sacó de una casa a la
       calle: esa reserva (`leftHouse`) toma el `Seq` del snapshot del personaje en la
@@ -405,21 +465,35 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
       snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
       snapshot pendiente de ese personaje).
-    - Costo: una escritura más solo en el primer transfer de un personaje después de
-      soltar algo al suelo público, y un snapshot en memoria por comando (o tick) en que
-      soltó algo, no por pila (docs/07).
-    - **Límite: una caída no es un transfer.** Con la base caída al apagar, el apagado es
-      una caída (ver arriba): ese snapshot falla con el transfer de atrás (el Saver lo
-      abandona y después marca al personaje por el transfer). Tampoco cubre que la base
-      rechace ese snapshot mismo (`ErrPermanent` en un guardado no marca a nadie). Como en
-      cualquier caída, lo que alguien tiró a la calle y otro levantó puede quedar en las
-      dos filas si el guardado de quien lo levantó entró y el de quien lo tiró no: es el
-      límite general de guardar por personaje con el suelo en memoria (docs/14).
+    - Costo: como mucho una escritura del personaje cada 2 s mientras suelta cosas al
+      suelo público (una por comando o tick en que soltó algo, no por pila, y agrupadas), y
+      ninguna más en el transfer que sigue si ya salió (docs/07).
+    - **Una caída ya no duplica** (lote 16): lo que alguien tiró a la calle solo lo
+      levanta otro cuando la base ya tiene a quien lo tiró sin eso; si el servidor muere
+      antes, como mucho se pierde lo que estaba en el suelo (como en cualquier caída), no
+      queda en dos filas.
+    - Si a un personaje con tiradas esperando su ventana lo marca un transfer descartado
+      (`Tainted`), sale sin snapshot final: esas reservas no se numeran ni se acusan
+      (`flushGiveDue` lo descarta) y lo que tiró queda reservado a él hasta un reinicio o
+      hasta que se degrade. Es el lado seguro (nadie más toma algo que su fila puede
+      tener todavía). Un transfer que el Saver sí escribió pero cuyo callback entra en
+      panic también se marca (`Saver.handle`): raro y del lado seguro.
+    - La ventana de 2 s no se reinicia con un transfer: el guardado que espera sale antes
+      del transfer y la tirada siguiente dentro de la misma ventana se agrupa igual.
+    - La reserva cubre la pila o el contenedor entero donde cae lo tirado, así que lo
+      tirado cae como pila propia o en algo ya reservado a quien tira (`moveItem`,
+      `ownOnly`): nunca se suma a la pila de otro en la calle, y en una bolsa o un cadáver
+      ajeno de la calle no se puede meter nada (`inventory.street_bag`, "déjalo en el
+      suelo"). Si no, sumar una moneda a la pila ajena la dejaba entera reservada a quien
+      la sumó, y repitiendo antes de cada acuse, sin plazo (revisión del lote 16). El
+      costo: tirar algo junto a una pila igual ya acusada (aunque sea propia) hace otra
+      pila, y una casilla llena de pilas ajenas no recibe nada tirado.
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
-  autoguardado), más el guardado de antes de quien soltó algo al suelo público desde su
-  último snapshot (como mucho uno por personaje y transfer); por eso el intercambio no se
+  autoguardado), más el guardado que espera su ventana de quien soltó algo al suelo
+  público (como mucho uno por personaje y transfer; soltar cosas cuesta como mucho un
+  guardado cada 2 s por personaje, lote 16); por eso el intercambio no se
   confirma vacío y tiene anti-flood, y el mercado también (docs/07).
 - La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
   buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
@@ -474,7 +548,9 @@ ventana abierta.
   `/reset-password#token=…`): el navegador no lo manda a ningún servidor, así que no queda
   en logs; la página del sitio lo canjea con un `POST`. En la base (`account_tokens`) va
   solo su SHA-256, un uso, vencimiento (24 h verificar, 1 h reset) y un enlace nuevo anula
-  los anteriores del mismo tipo. La búsqueda es por el hash: nunca se compara el secreto.
+  los anteriores del mismo tipo (`verify_email`, `reset_password` y `claim_email`, el
+  reset de una dirección nunca verificada, que además la verifica; migración 00023). La
+  búsqueda es por el hash: nunca se compara el secreto.
 - Reset de contraseña: en una transacción cambia el hash, borra los otros enlaces de reset,
   revoca **todas** las sesiones (cuenta y juego) y escribe `audit_log` (`password_reset`,
   fuente `web`). Verificar escribe `email_verified`. Sin SMTP, el operador genera un enlace
@@ -574,6 +650,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |
 | `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |
+| `BackupMetricsMissing` | critical | las métricas `rpg_backup_*` se vieron en la última semana y faltan hace más de 30 min (durante 30 min) |
 | `HTTPErrorsHigh` | warning | más de 5 % de respuestas 5xx de la API (con algo de tráfico) durante 5 min |
 
 Las alertas se ven siempre en Grafana: en el dashboard (panel "Alertas activas") y en
@@ -684,6 +761,9 @@ dinero real, se gasta en cosméticos y nada más. Piezas:
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.
+- Topes de conexiones a `/ws` por cliente y en total, de handshakes leyendo la base, de
+  jugadores y de personajes por cuenta (docs/05, "Límites"), y cupo de comandos por
+  conexión en la cola del loop ("Equidad de la cola").
 - Validación de forma de cada mensaje (tamaño máximo, rangos).
 - Nada del cliente se usa sin validar contra el estado del servidor.
 - Secretos por variables de entorno, nunca en el repo.
@@ -937,7 +1017,8 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
      chequeo fallado o uno hecho hace al menos `confirm_ms` (1 h)** con el puntaje todavía
      ahí; si no, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
 - **Chequeo de presencia** (`PresenceCheck`/`PresenceAnswer`): una pregunta simple (elegir
-  un color entre cuatro, textos i18n `presence.*`) en un momento al azar de los próximos
+  entre cuatro nombres de color el de una muestra que cambia de tono en cada chequeo,
+  textos i18n `presence.*`; la pregunta no nombra el color, lote 16) en un momento al azar de los próximos
   `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
   espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
   corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente

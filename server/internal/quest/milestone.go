@@ -9,9 +9,12 @@ import "github.com/GFenzoR/RPG_Project/server/internal/content"
 
 // Candidate is a character standing on a sigil plate, as the session sees it in a tick.
 type Candidate struct {
-	Name     string
-	Level    int
-	Vocation string
+	Name string
+	// AccountID is the character's account (0: unknown, never merged with another). Two
+	// plates held by characters of one account do not make a cooperative group (anti-alts).
+	AccountID int64
+	Level     int
+	Vocation  string
 	// Staff: a staff member never counts (a GM cannot carry anyone through a milestone).
 	Staff bool
 	// Alive: health above 0. Online: connected, not link-dead (logging out on a plate is
@@ -29,6 +32,8 @@ type Failure uint8
 // Failures, in the order they are checked: the first one is what the player hears.
 const (
 	FailNone Failure = iota
+	// FailSameAccount: a character of the same account already holds an earlier plate.
+	FailSameAccount
 	FailStep
 	FailVocation
 	FailLevel
@@ -37,7 +42,7 @@ const (
 
 // Key is the i18n key (client.yaml) of the message that tells the player.
 func (f Failure) Key() string {
-	return [...]string{"", "milestone.fail_step", "milestone.fail_vocation", "milestone.fail_level", "milestone.fail_gear"}[f]
+	return [...]string{"", "milestone.fail_same_account", "milestone.fail_step", "milestone.fail_vocation", "milestone.fail_level", "milestone.fail_gear"}[f]
 }
 
 // Counts reports whether c holds a plate at all: a living, connected, non-staff player.
@@ -62,7 +67,9 @@ func Check(q *content.Quest, plate string, c *Candidate) Failure {
 	return FailNone
 }
 
-// Outcome is what a set of plates does in a tick.
+// Outcome is what a set of plates does in a tick. Once every plate is occupied, a
+// candidate whose account already holds an earlier plate fails with FailSameAccount
+// before any other requirement: one owner with alts is not a group (docs/02).
 type Outcome struct {
 	// Occupied is how many plates hold a candidate that counts (Counts).
 	Occupied int
@@ -92,7 +99,16 @@ func Cooperative(q *content.Quest, plates []string, on []*Candidate) Outcome {
 	o.Full = true
 	o.Fails = make([]Failure, len(plates))
 	o.Done = true
+	seen := make(map[int64]bool, len(on))
 	for i, c := range on {
+		if c.AccountID != 0 && seen[c.AccountID] {
+			o.Fails[i] = FailSameAccount
+			o.Done = false
+			continue
+		}
+		if c.AccountID != 0 {
+			seen[c.AccountID] = true
+		}
 		o.Fails[i] = Check(q, plates[i], c)
 		if o.Fails[i] != FailNone {
 			o.Done = false

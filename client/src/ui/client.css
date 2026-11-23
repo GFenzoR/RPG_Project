@@ -2410,6 +2410,13 @@ body.picking-item .map-hint {
 .presence p {
   margin: 0;
 }
+.presence .presence-swatch {
+  width: 3rem;
+  height: 3rem;
+  align-self: center;
+  border: 2px solid var(--muted);
+  border-radius: 4px;
+}
 .presence .buttons {
   display: flex;
   flex-wrap: wrap;

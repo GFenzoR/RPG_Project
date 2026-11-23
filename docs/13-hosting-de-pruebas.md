@@ -2,6 +2,62 @@
 
 Antes del deploy alpha en AWS (T1.18) conviene poder jugar con amigos usando tu propio
 PC como servidor. Esta guía define qué se puede hostear dónde y cómo lo arma la tarea T1.19.
+Antes de abrirlo a otros, repasa la checklist del operador de `18-seguridad.md` (secretos
+en `deploy/.env.home`, redirect URIs de OAuth, backups, qué mirar en los logs).
+
+## La forma más fácil: doble clic
+En Windows hay un lanzador: **`NequesRealm-Servidor.exe`**, en la carpeta del proyecto.
+Le das doble clic y arranca todo sin escribir comandos.
+
+**Crearlo (una vez, y de nuevo si cambia `tools/launcher/`).** Necesita Go (lo instala
+"Windows nativo" de `12-local-development.md`). En Git Bash, en la carpeta del proyecto:
+```bash
+make launcher            # crea NequesRealm-Servidor.exe en la raíz del repo (git lo ignora)
+make launcher-shortcut   # opcional: un acceso directo "Neque's Realm - Servidor" en el escritorio
+```
+El `.exe` tiene que quedar dentro de la carpeta del proyecto (busca hacia arriba la que
+tiene el `Makefile` y `deploy/home.sh`); el acceso directo apunta ahí. En Linux o macOS,
+`make launcher` deja además `./nequesrealm-servidor` para ese sistema.
+
+**Qué hace al abrirlo:**
+1. Encuentra Git Bash (el de Git para Windows, nunca el `bash.exe` de WSL) y Docker, aunque
+   no estén en el PATH de una ventana abierta con doble clic.
+2. Si Docker no está corriendo, abre Docker Desktop y espera (hasta 3 minutos, con un
+   contador).
+3. Arranca el servidor con lo mismo que `make home-up` (`deploy/home.sh up`; la primera
+   vez crea `deploy/.env.home`). **Reconstruye las imágenes solo si el código cambió**
+   desde el último arranque bueno (otro commit, o cambios sin commitear); si no, arranca
+   en segundos. Lo recuerda en `build/launcher-state.json`. Solo recuerda sus propios
+   arranques: si entre medio corriste `make home-up` en otro commit y volviste al de antes,
+   las imágenes son las de ese otro commit; usa `NequesRealm-Servidor.exe up --rebuild`
+   (o `make home-up`) para reconstruirlas.
+4. Cuando el servidor responde, abre `http://localhost:8080` (o el puerto de
+   `HOME_HTTP_PORT`) en tu navegador y muestra un menú:
+
+| Opción | Qué hace |
+|---|---|
+| 1. Abrir el juego en el navegador | Abre el juego otra vez (`http://localhost:8080/`, o el puerto de `HOME_HTTP_PORT`) |
+| 2. Hacerme admin | Pide tu email y te da el rol `admin` (`make home-admin`). Registra la cuenta antes con **Jugar**; vale desde el próximo login. Si la cuenta no confirmó su email (sin correo configurado, lo normal en casa), muestra cuándo se creó y sus personajes y pregunta si es tuya antes de darle el rol (Enter = no) |
+| 3. Link para invitar amigos | Abre el Quick Tunnel de Cloudflare (`make home-tunnel`) e imprime el link `https://….trycloudflare.com` para compartir. Cambia en cada arranque |
+| 4. Ver los registros | Las últimas líneas de los logs de todos los servicios (en vivo: `make home-logs`) |
+| 5. Enlace para recuperar una contraseña | Pide el email y crea un enlace de un solo uso (`make home-reset-password`); dáselo a esa persona por un canal de confianza |
+| 6. Detener el servidor y salir | Apaga todo como `make home-down` (túnel y monitoreo incluidos; **los datos quedan**) y pregunta si cierras también Docker Desktop y WSL para liberar memoria. Eso detiene **todos** los contenedores de Docker y apaga **todas** las distros de WSL (y las terminales abiertas en ellas): si hay otros contenedores corriendo (por ejemplo el Postgres de `make dev`), los nombra y Enter = no; si no, Enter = sí |
+
+- **Ctrl+C** hace la misma pregunta: detener el servidor (Enter = sí) o salir dejándolo
+  encendido. **Cerrar la ventana** con la X deja el servidor encendido; para apagarlo,
+  abre el lanzador otra vez y elige 6.
+- Si algo falla, la ventana dice qué falló y qué hacer, y espera un Enter antes de cerrarse.
+  Si el arranque falla a medias (un puerto ocupado, un servicio que no queda sano), nombra
+  lo que quedó encendido y pregunta si lo detiene (Enter = sí).
+- **Sin Docker Desktop instalado** lo dice y no sigue: instálalo
+  (`winget install Docker.DockerDesktop` en PowerShell, o desde docker.com), ábrelo una vez
+  hasta que diga *Engine running* (la primera vez pide aceptar la licencia y puede pedir
+  `wsl --install --no-distribution` y reiniciar) y vuelve a abrir el lanzador.
+- **Sin Git para Windows** tampoco sigue: `winget install Git.Git`.
+
+Para scripts y pruebas tiene subcomandos sin preguntas (`--help` los lista):
+`NequesRealm-Servidor.exe up [--rebuild] [--open]`, `down [--stop-docker]` y `status`
+(sale con 0 si el juego responde, 1 si no).
 
 ## Jugar en tu PC en 3 pasos
 1. Instala **Docker** (Docker Desktop en Windows/macOS) y, en Windows, abre la terminal de
@@ -135,6 +191,15 @@ make home-admin EMAIL=amigo@email.com ROLE=gm # moderador: revisa los mapas envi
 ```
 El rol nuevo vale desde el siguiente login del personaje. Queda en el registro de auditoría.
 
+Antes de darlo, el comando muestra la cuenta (fecha de creación, si confirmó el email,
+Google/Discord vinculados, último login y personajes). Para subir a `gm` o `admin` una
+cuenta que nunca confirmó su email (sin SMTP nadie puede) ni vinculó Google/Discord, se
+niega (lote 16): cualquiera pudo registrar tu dirección antes que tú. Revisa que la cuenta
+mostrada sea la tuya y repite con `ALLOW_UNVERIFIED=1`:
+```bash
+ALLOW_UNVERIFIED=1 make home-admin EMAIL=tu@email.com
+```
+
 ### 4. Compartir el link (Quick Tunnel, sin cuenta)
 ```bash
 make home-tunnel
@@ -157,6 +222,13 @@ paso 5.
 WebSockets funcionan sin configurar nada. El token es un secreto: no lo subas al repo
 (`deploy/.env.home` está en `.gitignore`).
 
+6. En el panel de Cloudflare del dominio, *SSL/TLS → Edge Certificates*: activa **Always
+   Use HTTPS** (un `http://juego.tudominio.com` pasa a `https://`) y **HTTP Strict
+   Transport Security (HSTS)** con `max-age` de 6 o 12 meses (sin *include subdomains*
+   salvo que todos tus subdominios tengan HTTPS). Caddy ya manda
+   `Strict-Transport-Security` (lote 16, `Caddyfile.home`), pero el de Cloudflare cubre
+   también lo que responde su borde.
+
 ### 6. Tailscale (alternativa privada)
 Solo entran las personas invitadas a tu red de Tailscale; nada queda público.
 1. Instala Tailscale en tu PC y que cada amigo lo instale en el suyo; invítalos a tu
@@ -170,7 +242,12 @@ Sin `tailscale serve` también funciona por la IP de Tailscale (o de tu LAN) en 
 pon `HOME_BIND=0.0.0.0` (o tu IP `100.x.y.z`) y `COOKIE_SECURE=false` en `deploy/.env.home` y
 repite `make home-up`. Con Tailscale todos los jugadores llegan desde la misma IP vista por
 Caddy, así que comparten el cupo de logins por IP (10 seguidos, luego 1 cada 6 s): de sobra
-para un grupo de amigos.
+para un grupo de amigos. Lo mismo pasa con los límites de `/ws` por IP (`05-network-protocol.md`,
+"Límites"): 32 conexiones abiertas, 4 handshakes a la vez y 5 conexiones nuevas seguidas
+(luego 1 cada 2 s). Ojo: lo que entra por el puerto publicado (tú en `localhost`, la LAN,
+Tailscale) llega a Caddy desde la IP del gateway de Docker, así que todos ellos son un
+solo cliente para esos límites. Si tras un corte se reconectan más de 5 a la vez, los
+demás ven "Se perdió la conexión" y entran al reintentar unos segundos después.
 
 ### 7. App de escritorio contra tu PC
 La app (Tauri, `apps/desktop`) es el mismo juego en una ventana propia. Para conseguirla:
@@ -285,6 +362,10 @@ dominio propio, o prueba solo en `http://localhost:8080`.
    `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`. Permisos que pide el juego: `identify` y
    `email` (no hace falta bot ni marcar la app como pública).
 
+Cuidado con estos secretos como con una contraseña (`chmod 600 deploy/.env.home`, nunca en el
+repo ni en un chat; si se filtran, "Reset Secret" en la consola del proveedor):
+`18-seguridad.md`, "Checklist del operador".
+
 Pon los cuatro valores en `deploy/.env.home` (y `PUBLIC_URL` si no es localhost) y
 `make home-up`. Sin ninguno de los dos valores de un proveedor, queda apagado; con uno
 solo (el ID sin el secreto, o al revés), el servidor **no arranca** y `make home-logs`
@@ -327,12 +408,13 @@ pierden. Si quieres ir a la segura, corre `make home-backup` antes.
 - `make home-reset` borra **todos** los datos para empezar de cero (pide confirmación).
 
 ## Variables (`deploy/.env.home`)
-Todas son opcionales salvo las dos contraseñas, que se generan solas.
+Todas son opcionales salvo las dos contraseñas y la clave de dispositivos, que se generan solas.
 
 | Variable | Default | Para qué |
 |---|---|---|
 | `POSTGRES_PASSWORD` | generada | Contraseña de la base (no se publica fuera de Docker). No la cambies con datos dentro: Postgres guarda la primera |
 | `GRAFANA_ADMIN_PASSWORD` | generada | Login `admin` de Grafana |
+| `RPG_DEVICE_KEY` | generada | Firma las cookies de dispositivo conocido del login (docs/05): con ella fija, reiniciar el servidor no olvida los navegadores conocidos. Un `deploy/.env.home` viejo la recibe sola en el próximo `make home-up` |
 | `SITE_ADDRESS`, `ACME_EMAIL` | `localhost`, `home@example.com` | Las exige el compose de producción; en casa no se usan (Caddy va en HTTP) |
 | `MAP_SUBMIT_MIN_ACCOUNT_AGE` | `0s` (plantilla); `24h` en producción | Antigüedad mínima de la cuenta para enviar mapas |
 | `COOKIE_SECURE` | `true` | `false` solo si juegan por `http://<IP de LAN o Tailscale>` |
@@ -390,7 +472,9 @@ make home-restore FILE=deploy/backups/home-<fecha>.dump # pregunta antes de reem
 detiene el juego, guarda un backup del estado actual (`…-before-restore.dump`), recrea la base desde el archivo y vuelve a levantar todo (con las
 migraciones nuevas, si el backup es más viejo que tu checkout). Si algo falla a mitad,
 imprime el comando para volver al backup de seguridad. Los dumps son formato
-custom de `pg_dump`; cópialos fuera del PC si te importan.
+custom de `pg_dump`; cópialos fuera del PC si te importan. Tienen todas las cuentas
+(emails y hashes de contraseña): no los compartas ni los subas sin cifrar (por ejemplo
+`age -r age1… -o x.dump.age x.dump`, docs/09 "Backups y restauración").
 
 ## Monitoreo en casa (T4.4)
 El mismo profile `monitoring` de producción funciona en casa:
@@ -446,5 +530,7 @@ como `MAP_PR_REPOSITORY`.
 | `make home-tunnel` no imprime URL | Sin salida a internet o Cloudflare limitó Quick Tunnels: mira `make home-logs` y reintenta |
 | El login no mantiene la sesión en `http://` | `COOKIE_SECURE=true` en HTTP plano no-localhost: ponlo en `false` (solo LAN/Tailscale sin serve) |
 | `no account with email` en `make home-admin` | La cuenta todavía no existe: regístrala primero en el sitio |
+| `refused: this account never proved it owns its email` en `make home-admin` | La cuenta no confirmó su email. Mira los datos que imprimió (fecha, personajes): si es tuya, `ALLOW_UNVERIFIED=1 make home-admin EMAIL=…` (paso 3) |
+| `test-only setting refused in production` al arrancar | `deploy/.env.home` tiene una variable de prueba (`GOOGLE_AUTH_URL`, `…_TOKEN_URL`, `…_JWKS_URL`, `…_ISSUER`, `…_API_URL`): bórrala. Solo sirven para el proveedor falso de los tests |
 | El ranking no muestra mi personaje nuevo | Se actualiza cada minuto |
 | `make bots URL=http://localhost:8080` avisa `no map` y `could not read …:9100/metrics` | Esperado con el home stack: los bots caminan al azar y las métricas del servidor no se publican (míralas en Grafana). `make bots` necesita Go instalado |

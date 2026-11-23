@@ -98,6 +98,15 @@ server/
   emite la sesión con `Service.loginAccount`; toda ruta de vuelta pasa por
   `auth.SafeReturn`; el `redirect_uri` sale de `PUBLIC_URL`.
 
+- **Límites de la API (lote 16, `httpapi/abuse.go`, docs/05 "Límites de la API"):** toda
+  ruta con sesión pasa por `authed` (límite de búsquedas de token por cliente **antes** de
+  `Authenticate`, plazo `httpDBTimeout`, límite por cuenta); una que busque un token sin
+  `authed` usa `tokenLimited`. Un handler nuevo que calcule una contraseña va en
+  `rateLimited(hashing(...))`; uno que cree filas por cuenta, en `accountLimited`. Los
+  tokens se validan con `plausibleToken` antes de cualquier consulta (`auth`). Un log que
+  un cliente pueda disparar a voluntad va por `sampledLog` (o `a.fail`, que ya muestrea).
+  Una acción de cuenta sensible re-autentica como `StartLink`/`Unlink` (`Service.reauth`).
+
 - **Gremios (T5.1):** `session/guild.go` + `guild` (puro) + `store/guilds.go` +
   `httpapi/guilds.go`. El loop es dueño de todos los gremios: `app` los carga una vez
   (`GuildStore.LoadGuilds`) antes de arrancar y cada cambio sale como `AdminJob{Kind:
@@ -182,12 +191,13 @@ server/
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
   `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`,
-  y encola antes el snapshot pendiente de `gaveAway`): un camino nuevo que lleve algo de
-  un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho, llamar a
-  `gaveAway` (marca al personaje; `settleGivers` toma su estado al principio y al final
-  de cada comando del jugador, `playerCommand`, y al final del tick, y se escribe antes
-  de su próximo transfer, así un transfer descartado no lo devuelve a un guardado que
-  todavía lo tiene; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
+  y encola antes el guardado de `gaveAway` que espera su ventana): un camino nuevo que
+  lleve algo de un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho,
+  llamar a `gaveAway` con la pila o el contenedor de la calle donde cayó (marca al
+  personaje; `settleGivers` toma su estado al principio y al final de cada comando del
+  jugador, `playerCommand`, y al final del tick, lo encola en el acto o al final de su
+  ventana de 2 s, y lo soltado queda reservado a él hasta el acuse, lote 16: ni un
+  transfer descartado ni una caída lo dejan en dos filas; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
   cambiar una casa corre por `playerCommand`, como `Input`. Ningún transfer puede dejar
   nada en el suelo público en su propio comando (comprueba antes que todo entra:
   `canBuy`, `canReceive`, `moneyThatFits`; `transferSnapshot` lo registra con nivel

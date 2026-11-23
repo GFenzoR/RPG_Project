@@ -16,6 +16,11 @@ Windows, usa la terminal de Ubuntu (WSL2) y clona dentro de ella, no en `/mnt/c`
 3. Abre `http://localhost:8080`, entra con **Jugar**, crea tu cuenta y hazte admin con
    `make home-admin EMAIL=tu@email.com`.
 
+**En Windows, con doble clic:** `make launcher` (una vez, en Git Bash) crea
+`NequesRealm-Servidor.exe` en la carpeta del proyecto. Al abrirlo arranca Docker Desktop si
+hace falta, levanta el servidor, abre el juego y muestra un menú (hacerte admin, link para
+amigos, logs, apagar). Detalle en `docs/13`, "La forma más fácil: doble clic".
+
 `make home-tunnel` te da un link `https://…` para invitar amigos. Guía completa (túneles,
 app de escritorio, backups, actualizar, problemas comunes):
 [`docs/13-hosting-de-pruebas.md`](docs/13-hosting-de-pruebas.md).

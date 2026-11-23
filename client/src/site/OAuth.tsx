@@ -99,44 +99,7 @@ function LoginMethods(props: { t: Translate; account: Account; reload: () => voi
   return (
     <>
       <h2>{t("site.account.methods")}</h2>
-      <ul class="account-methods" data-testid="account-methods">
-        <li>
-          {account.has_password ? t("site.account.password_on") : t("site.account.password_off")}
-        </li>
-        {account.identities.map((i) => (
-          <li key={i.provider} data-testid={`identity-${i.provider}`}>
-            <span>
-              {t("site.account.identity", {
-                provider: providerName(t, i.provider),
-                email: i.email || "—",
-              })}
-            </span>{" "}
-            <button
-              type="button"
-              class="link-button"
-              disabled={busy}
-              data-testid={`unlink-${i.provider}`}
-              onClick={() => {
-                setBusy(true);
-                setError(undefined);
-                oauthApi.unlink(i.provider).then(
-                  () => {
-                    setBusy(false);
-                    props.reload();
-                  },
-                  (e: unknown) => {
-                    setError(codeOf(e));
-                    setBusy(false);
-                  },
-                );
-              }}
-            >
-              {t("site.account.unlink")}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {toLink.length > 0 && (
+      {(account.identities.length > 0 || toLink.length > 0) && (
         <form
           class="maps-form"
           onSubmit={(e) => {
@@ -160,6 +123,47 @@ function LoginMethods(props: { t: Translate; account: Account; reload: () => voi
               />
             </label>
           )}
+        </form>
+      )}
+      <ul class="account-methods" data-testid="account-methods">
+        <li>
+          {account.has_password ? t("site.account.password_on") : t("site.account.password_off")}
+        </li>
+        {account.identities.map((i) => (
+          <li key={i.provider} data-testid={`identity-${i.provider}`}>
+            <span>
+              {t("site.account.identity", {
+                provider: providerName(t, i.provider),
+                email: i.email || "—",
+              })}
+            </span>{" "}
+            <button
+              type="button"
+              class="link-button"
+              disabled={busy}
+              data-testid={`unlink-${i.provider}`}
+              onClick={() => {
+                setBusy(true);
+                setError(undefined);
+                oauthApi.unlink(i.provider, password).then(
+                  () => {
+                    setBusy(false);
+                    props.reload();
+                  },
+                  (e: unknown) => {
+                    setError(codeOf(e));
+                    setBusy(false);
+                  },
+                );
+              }}
+            >
+              {t("site.account.unlink")}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {toLink.length > 0 && (
+        <div class="maps-form">
           <div class="oauth-buttons">
             {toLink.map((p) => (
               <button
@@ -183,7 +187,7 @@ function LoginMethods(props: { t: Translate; account: Account; reload: () => voi
               </button>
             ))}
           </div>
-        </form>
+        </div>
       )}
       {error && <ErrorLine t={t} code={error} />}
     </>

@@ -33,6 +33,10 @@ seguir con Claude Code en tu computador. El entorno local está en
 2. Corre `make setup`, `make db-up` y `make dev`, y abre `http://localhost:5173/` (sitio) y
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
+   Más fácil: `make launcher` una vez y después doble clic en `NequesRealm-Servidor.exe`
+   (en la carpeta del proyecto): arranca Docker y el servidor, abre el juego y trae un
+   menú para hacerte admin, invitar amigos y apagar todo (`13-hosting-de-pruebas.md`,
+   "La forma más fácil: doble clic").
 4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
    más rápido es `make play`: Thimblewick tiene todos los sistemas a unos pasos del
    templo y una instructora que da experiencia, entrenamiento, dinero y curación
@@ -100,6 +104,153 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Seguridad del despliegue y del operador (hecho, rama `sec/deploy-hardening`, lote 16;
+  el dueño el 2026-11-20: "un estándar excelente de ciberseguridad"; docs/09 "Imágenes
+  firmadas", "Backups y restauración", "Seguridad del despliegue"; docs/13 pasos 3 y 5):**
+  Go 1.27.4 en las imágenes y los `go.mod` (con chequeo de que coincidan), pgx/x-text/
+  x-crypto al día y `govulncheck` en cero; imágenes firmadas con cosign y desplegadas por
+  digest verificado; CSP, Permissions-Policy y COOP en el sitio y `/play`; HSTS detrás del
+  túnel; backups con `umask 077`, cifrado de S3 y cifrado opcional con age; contenedores con
+  menos privilegios (Postgres, Caddy, Prometheus sin lifecycle ni red `edge`); `.env` en
+  `600`; `set-role` que no sube cuentas sin email probado; los interruptores de prueba
+  rechazados en producción; la semilla del loop de 128 bits y fuera del log. Queda:
+  - **Instalar cosign en el servidor** y poner `COSIGN_REQUIRED=1` en `deploy/.env` (sin
+    cosign, `deploy.sh` solo avisa). La primera imagen firmada sale con el próximo push a
+    `main` después del merge: las de antes no tienen firma y `deploy.sh` con cosign las
+    rechaza (despliega un tag nuevo).
+  - **El checklist del bucket S3** de docs/09 (Block Public Access, solo TLS, rol con
+    `PutObject` en el prefijo, versioning/Object Lock) y crear la clave age del dueño
+    (`age-keygen` en su PC, la pública en `BACKUP_AGE_RECIPIENT`, `BACKUP_ENCRYPT_REQUIRED=1`).
+  - **`deploy/.env.example`** no se tocó (la sesión no puede leer archivos `.env*`): sumar
+    a mano `COSIGN_REQUIRED=1`, `BACKUP_AGE_RECIPIENT=`, `BACKUP_ENCRYPT_REQUIRED=0`,
+    `BACKUP_S3_SSE=AES256` con los comentarios de la tabla de variables de docs/09.
+  - **El chequeo de la versión de Go en CI** corre en `make lint` y en el job `deploy-lint`
+    (cambios en `deploy/`); un PR que solo sube un `go.mod` no dispara `deploy-lint`. El
+    último ítem del lote 16 (CI) puede sumar `go.mod` a esa regla de
+    `.github/scripts/ci-changes.sh` o correr `make lint-deploy` en `ci.yml`.
+  - **Mirar en el e2e** que el sitio y `/play` detrás de Caddy no registren violaciones de
+    CSP en la consola (el e2e de Vite no pasa por Caddy: lo cubre el job `stack`/`home-stack`
+    con `smoke.sh`; una revisión a mano con las herramientas del navegador sobre
+    `make home-up` es la prueba completa).
+- **API HTTP y cuentas endurecidas (hecho, rama `sec/http-auth-limits`, lote 16; el dueño el
+  2026-11-20: "un estándar excelente de ciberseguridad"; docs/05 "Límites de la API"):**
+  tokens inventados ya no llegan a Postgres (formato y límite por cliente antes de buscar),
+  límites por cuenta en `play` y crear personaje, por red (/48, /24; también para las
+  búsquedas de token) y dos cálculos de contraseña a la vez por red, `/healthz` con el ping guardado 1 s, pool de 16 conexiones,
+  logs repetidos muestreados, una sola IP ya no puede bloquear el login de una cuenta
+  (par 15/h por IPv4 o /48 y cookie de dispositivo conocido, atada a la contraseña y con
+  su propio límite de fallos), desvincular pide la misma re-autenticación
+  que vincular, `forgot` le devuelve al dueño del buzón una dirección nunca verificada, y
+  los nombres de NPC están reservados. Queda:
+  - **Bloqueo distribuido:** desde 3 o más redes (IPv4 o /48) todavía se puede agotar el límite por
+    email; la víctima entra igual desde su navegador de siempre (cookie `rpg_device`),
+    pero no desde uno nuevo, la app de escritorio ni los bots. La clave de esa cookie sale
+    de `RPG_DEVICE_KEY` (docs/09, docs/13); sin ella es por proceso y un reinicio olvida
+    los dispositivos (el servidor lo avisa en el log al arrancar).
+  - **CGNAT y operadoras móviles:** el tope de 2 cálculos de contraseña y la ráfaga de 40
+    por /48 o /24 pueden dar `429` a abonados legítimos de una misma operadora (riesgo
+    aceptado, docs/05). Vigilar la tasa de `429` de login y registro en producción.
+  - **Nombres de NPC:** la reserva compara el nombre completo ("Sir Maren" pasa) y no
+    renombra personajes viejos (docs/05, aceptado).
+  - **Tres personas tras la misma IPv4** (casa, cibercafé) que entran en el mismo instante:
+    la tercera recibe `429` y reintenta (el cliente lo muestra como "demasiados intentos").
+    Si pasa seguido, esperar el turno en vez de contestar al instante.
+  - **Migración 00023** (`claim_email` en `account_tokens.purpose`): no se probó contra
+    Postgres en esta rama (sin Docker); correr `make test-integration` antes del push.
+  - **Tokens de juego:** `play` sigue dejando una fila por pedido hasta la purga de cada
+    hora (ahora como mucho 20 y luego 1 cada 3 s por cuenta); borrar los anteriores sin
+    usar al emitir uno nuevo queda para otra vez.
+  - **Verificar en el E2E final:** login y registro seguidos desde 127.0.0.1 (el arnés usa
+    `-auth-rate-burst`, que sube los límites nuevos), `oauth.spec` (desvincular sin
+    contraseña dentro de los 10 min del login), `account.spec` (forgot/reset, y que el
+    enlace de verificación siga andando después de un forgot) y los
+    `POST /api/characters` y `/api/play` de `game.spec`.
+- **Documento de seguridad, fuzzing y cadena de suministro (hecho, rama
+  `sec/security-docs`, lote 16, el último ítem de la auditoría; el dueño el 2026-11-20: "un
+  excelente estándar de ciberseguridad"):** `docs/18-seguridad.md` (modelo de amenazas,
+  controles, lo que agregó el lote 16, hallazgos descartados, riesgos aceptados y checklist
+  del operador); fuzz nativo de Go (`make fuzz`, docs/08 "Fuzzing"); cada acción de los
+  workflows fijada a un commit; `security.yml` (govulncheck, `pnpm audit`, gitleaks);
+  `dependabot.yml`; `make audit`. Queda:
+  - **Lo tuyo en GitHub** (la checklist de docs/18): 2FA, protección de `main` con los
+    checks `ci` y `security` requeridos (los jobs finales de `ci.yml` y `security.yml`,
+    que esperan a todos los demás; GitHub elige por nombre de job), Dependabot alerts y
+    security updates encendidos.
+  - **gitleaks:** la historia entera (1142 commits) y el árbol pasaron sin hallazgos con
+    gitleaks 8.30.1 el 2026-11-23, después de sumar a `.gitleaks.toml` los nonces de
+    `deploy/smoke.sh` y las claves de quest; los commits propios de las otras cuatro ramas
+    `sec/*` también. Después de mezclar, correr `make audit` con gitleaks instalado; si marca
+    algo, rotar el secreto si era real o sumar ese valor de prueba a las `regexes` (la
+    allowlist es por valor, no por ruta: un secreto real pegado en un test también se
+    reporta).
+  - **Orden de mezcla de las ramas `sec/*`:** no están apiladas (ninguna es ancestro de
+    otra). Mezclar `sec/deploy-hardening` **antes** que esta, o resolver los dos puntos
+    siguientes en la misma mezcla; si no, la CI queda roja:
+    - `images.yml` choca: el `sigstore/cosign-installer@v3` que agrega
+      `sec/deploy-hardening` tiene que quedar fijado como
+      `sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1` (si
+      no, el paso "actions pinned to commit SHAs" de `actionlint` falla).
+    - En esta rama sola, `govulncheck` (job `security`) marca pgx y x/text viejos
+      (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
+    - Este documento (docs/14) choca con las cuatro ramas `sec/*`: conservar las entradas
+      de todas.
+  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sesiones de 30
+    días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
+    farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin
+    firma.
+- **Integridad del juego (hecho, rama `sec/game-integrity`, lote 16; el dueño el
+  2026-11-20: "un estándar excelente de ciberseguridad [...] que los jugadores no puedan
+  modificar sus datos"):** cierra seis hallazgos de la auditoría: (1) duplicación por
+  caída al tirar algo a la calle (reserva hasta el guardado, docs/01) y `recover` con log
+  en el Saver y en los escritores de admin, economía y tienda; (2) los hitos
+  cooperativos ya no se hacen solo con alts (`milestone.fail_same_account`, docs/02
+  "Quests de hito"); (3) anti-flood de `Turn` hacia los observadores (docs/05); (4) la
+  oferta de traspaso de casa no revela si un invisible o alguien del personal está en
+  línea; (5) el chequeo de presencia muestra una muestra de color en vez de nombrar el
+  color (docs/05); (6) los hooks E2E (`__rpgClient`, `__rpgAudio`) ya no salen en el
+  build de producción (docs/08). Queda:
+  - **Mirarlo en el juego:** el E2E de T4.1 (`38-presence-check`: la muestra de color
+    sobre los cuatro botones) y que los E2E que usan `window.__rpgClient` sigan andando
+    contra el Vite de desarrollo.
+  - **Accesibilidad del chequeo de presencia:** una muestra de color sola no sirve a quien
+    no distingue rojo de verde, ni a un lector de pantalla (su etiqueta no dice el color,
+    a propósito). Si llega un reclamo, sumar una forma o un patrón por color.
+  - **Un script sigue pudiendo contestar** el chequeo clasificando el tono (nada que el
+    cliente dibuja es secreto): por eso un acierto nunca limpia la sospecha (docs/01).
+  - **Reserva de lo soltado con la base caída:** dura hasta que vuelve; el que lo soltó
+    puede recogerlo, nadie más. Con muchas tiradas seguidas un compañero espera hasta 2 s
+    para levantar lo que le dejan (la ventana de agrupado).
+- **Topes de `/ws` y equidad de la cola (hecho, rama `sec/ws-gateway-caps`, lote 16, la
+  auditoría de seguridad; docs/05 "Límites", docs/01 "Equidad de la cola"):** conexiones
+  por IP (32 abiertas, por los NAT compartidos; 4 en el handshake, balde de 5 y 1 cada 2 s, HTTP 429), globales
+  (1000 sin login, 32 handshakes leyendo la base, HTTP 503), `-max-players` 500
+  (`SERVER_FULL`), 2 personajes por cuenta en el mundo (`TOO_MANY_CHARACTERS`), tokens con
+  forma de token real antes de la base, `Hello` en 5 s, cupo de 64 comandos por conexión (≥ la ráfaga del limitador) en
+  la cola del loop y un carril propio para los logins. Todo con flags de `gameserver`; el
+  loopback queda exento de los topes por IP solo con `RPG_ENV` de desarrollo o prueba (o
+  `-ws-loopback-exempt`, que pasan el E2E y `make bots`). Los bots van de a 2 por cuenta
+  (`Duoaa Load`, `load-0@pair.bots.local`), así que pasan también contra el stack de
+  producción de CI. Rechazos en `/metrics` (`ws_refused_total`). Queda:
+  - **Mirarlo en el juego** (la verificación final): login, relogueo del mismo personaje,
+    `make bots N=100` y los textos nuevos de desconexión.
+  - **El cliente no explica un 429/503:** el navegador no deja leer el estado HTTP de un
+    WebSocket rechazado, así que se ve "Se perdió la conexión con el servidor." Un
+    `GET` previo a un endpoint de estado podría distinguirlo.
+  - **Los link-dead no cuentan en `-max-players`** (el tope cuenta conexiones); sí en el
+    tope por cuenta. Están acotados por el tope por cuenta y la duración de la pelea.
+  - **`httpapi.clientKey` sigue con su copia de la regla** de la clave del cliente: ahora
+    vive también en `net/clientip`; unificarlas toca `httpapi`, que es de otro ítem del lote.
+  - **Con el mundo lleno, un relogueo del mismo personaje** desde otra conexión recibe
+    `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse). Con el tope
+    por cuenta, en cambio, el relogueo sí toma el control. **Confirmar con el dueño** si
+    con el mundo lleno el relogueo también debe tomar el control.
+  - **Hecho (revisión de cierre del lote 16):** el lugar de `-max-players` se toma después
+    de canjear el token; un token falso de forma válida ya no ocupa lugar mientras espera la
+    base (`TestForgedTokenHoldsNoPlayerSlot`). Si dos logins se disputan el último lugar,
+    el segundo en terminar el canje recibe `SERVER_FULL` con el token ya gastado.
+  - **Todos los turnos de la base ocupados → 503 para cualquier conexión nueva,** también
+    las que todavía no mandaron `Hello` (hasta 5 s por turno). Con 32 turnos no pasa con un
+    grupo de amigos; vigilar `ws_refused_total{reason="server_busy"}`.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía
@@ -217,9 +368,8 @@ el punto 5:
     despertar mujer). Se cambia gratis en Personalizar; un aviso al primer login (no está)
     sería lo amable. Un aspecto con un campo que salió de `data/looks.yaml` solo cambia ese
     campo (el sexo elegido se conserva).
-  - **La altura (confirmar con el dueño):** la tarea pedía a la mujer "ligeramente más
-    baja" y mide lo mismo (ver arriba). Es una desviación consciente del pedido: va en la
-    descripción del PR para que el dueño la acepte o pida el segundo esqueleto.
+  - **La altura (decidido):** la tarea pedía a la mujer "ligeramente más baja"; el dueño
+    decidió el 2026-11-20 que mida lo mismo que el hombre (sin segundo esqueleto).
   - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
     de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
     etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
@@ -1489,18 +1639,14 @@ el punto 5:
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
   mismo libro lo pide (antes, subir `market.push_every_ms`).
-- **Caída con la calle de por medio (límite general, no del comercio):** un transfer
-  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado del
-  final de ese comando (o tick) se escribe antes del transfer (docs/01, "Guardado antes
-  del transfer").
-  Queda el caso de una **caída** (o de la base caída al apagar, que se trata como una):
-  lo que alguien tiró a la calle y otro levantó puede quedar en las dos filas si el
-  guardado de quien lo levantó entró y el de quien lo tiró no. Es el límite de guardar
-  por personaje con el suelo en memoria, igual sin comercio. Lo mismo si la base rechaza
-  el snapshot mismo, no solo el transfer (lo avisa `PersistenceDataLost`). Una salida
-  sería reservar lo que se tira a la calle hasta escribir el estado de quien lo tiró (una
-  escritura por tirada, acotada por jugador, y una demora para levantarlo); hacerlo solo
-  si las alertas de economía lo muestran.
+- **Caída con la calle de por medio (resuelto en el lote 16):** lo que alguien suelta al
+  suelo público queda reservado a quien lo soltó hasta que la base confirma su snapshot
+  sin eso (docs/01, "Guardado de lo que se suelta al suelo público"), así que ni un
+  transfer descartado ni una caída lo dejan en dos filas. El costo: como mucho una
+  escritura cada 2 s por personaje que suelta cosas, y otro jugador espera uno o dos
+  ticks (con la base caída, hasta que vuelva) para levantarlo. Si la base rechaza para
+  siempre ese snapshot (lo avisa `PersistenceDataLost`), lo soltado queda reservado a su
+  dueño hasta reiniciar.
 - **Mundo:**
   - cada cartel cuesta un item y un ID (hoy todos los de Puerto, el Bosque y la Isla
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el

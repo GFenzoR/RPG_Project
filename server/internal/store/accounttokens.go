@@ -2,9 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/store/db"
@@ -17,6 +19,10 @@ type TokenPurpose string
 const (
 	TokenVerifyEmail   TokenPurpose = "verify_email"
 	TokenResetPassword TokenPurpose = "reset_password"
+	// TokenClaimEmail is the reset link of an address nobody verified (lote 16): it
+	// resets the password and verifies the address. A purpose of its own, so issuing it
+	// never replaces the registration's verify_email link nor the other way around.
+	TokenClaimEmail TokenPurpose = "claim_email"
 )
 
 // AccountToken is an emailed single-use token. Only the SHA-256 of the token is kept.
@@ -98,7 +104,8 @@ func (s *Store) VerifyEmail(ctx context.Context, tokenHash []byte, now time.Time
 	return id, nil
 }
 
-// ResetPassword consumes a reset_password token valid at now, sets the new password
+// ResetPassword consumes a reset_password (or claim_email, which then also verifies the
+// address) token valid at now, sets the new password
 // hash, deletes the account's other reset tokens, revokes every session of the account,
 // drops the linked identities that never proved the account's email and audits it, all
 // in one transaction. ErrNotFound if the token is not valid, or its
@@ -109,6 +116,17 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		row, err := q.ConsumeAccountToken(ctx, db.ConsumeAccountTokenParams{
 			TokenHash: tokenHash, Purpose: string(TokenResetPassword), Now: ts(now),
 		})
+		claim := false
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The reset of an address nobody ever verified sends a claim_email link
+			// (auth.RequestPasswordReset): it proves the mailbox like a reset link, and
+			// redeeming it also verifies the address, so the mailbox owner takes back a
+			// squatted address.
+			row, err = q.ConsumeAccountToken(ctx, db.ConsumeAccountTokenParams{
+				TokenHash: tokenHash, Purpose: string(TokenClaimEmail), Now: ts(now),
+			})
+			claim = err == nil
+		}
 		if err != nil {
 			return notFound(err)
 		}
@@ -128,6 +146,25 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		}
 		if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(TokenResetPassword)}); err != nil {
 			return err
+		}
+		if claim {
+			for _, p := range []TokenPurpose{TokenVerifyEmail, TokenClaimEmail} {
+				if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(p)}); err != nil {
+					return err
+				}
+			}
+			verified, err := q.MarkEmailVerified(ctx, db.MarkEmailVerifiedParams{At: ts(now), ID: id, Email: row.Email})
+			if err != nil {
+				return err
+			}
+			if verified > 0 {
+				if err := appendAudit(ctx, q, AuditEntry{
+					At: now, Source: AuditWeb, ActorAccountID: id, ActorName: "account",
+					Action: AuditEmailVerified, TargetAccountID: id, Result: ResultOK,
+				}); err != nil {
+					return err
+				}
+			}
 		}
 		// Links in flight die with the sessions that started them.
 		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: id, Valid: true}); err != nil {

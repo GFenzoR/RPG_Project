@@ -129,13 +129,16 @@ func TestForgotPasswordSameAnswerForEveryone(t *testing.T) {
 	h := newMailHarness(t, nil)
 	verified := h.register("ana@example.org", "es")
 	h.repo.SetVerified(verified)
-	h.register("new@example.org", "es") // unverified: may not reset
+	h.register("new@example.org", "es") // unverified: gets a verify-and-reset link
 	before := len(h.box.Sent())
 
 	h.forgot("nobody@example.org", true)
-	h.forgot("new@example.org", true)
 	if n := len(h.box.Sent()); n != before {
-		t.Fatalf("%d emails for accounts that may not get one", n-before)
+		t.Fatalf("%d emails for an address without an account", n-before)
+	}
+	h.forgot("new@example.org", true)
+	if e, _ := h.box.Last(); len(h.box.Sent()) != before+1 || e.Kind != mail.KindReset || e.To != "new@example.org" {
+		t.Fatalf("unverified address: %d emails, last %+v", len(h.box.Sent())-before, e)
 	}
 	h.forgot("ANA@example.org", true)
 	e, _ := h.box.Last()
@@ -146,8 +149,8 @@ func TestForgotPasswordSameAnswerForEveryone(t *testing.T) {
 	h.forgot("ana@example.org", true)
 	h.forgot("ana@example.org", true)
 	h.forgot("ana@example.org", false)
-	if n := len(h.box.Sent()) - before; n != 3 {
-		t.Fatalf("%d reset emails, want 3", n)
+	if n := len(h.box.Sent()) - before; n != 4 {
+		t.Fatalf("%d reset emails, want 4 (one to new@)", n)
 	}
 	expect(t, h.do(req{method: "POST", path: "/api/auth/password/forgot", body: `{"email":"not-an-email"}`}), http.StatusBadRequest, "invalid_email")
 }

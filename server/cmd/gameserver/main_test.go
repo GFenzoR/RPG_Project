@@ -261,14 +261,29 @@ func TestMetricsLingerOnlyAfterAbandonedWrites(t *testing.T) {
 
 func TestProvidersFromEnv(t *testing.T) {
 	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
-	ps, names, err := providersFromEnv(env(map[string]string{"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}))
+	ps, names, err := providersFromEnv(env(map[string]string{"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}), payments.EnvProduction)
 	if err != nil || len(ps) != 1 || names[0] != "google" {
 		t.Fatalf("%v %v", names, err)
 	}
-	if ps, _, err := providersFromEnv(env(nil)); err != nil || len(ps) != 0 {
+	if ps, _, err := providersFromEnv(env(nil), payments.EnvProduction); err != nil || len(ps) != 0 {
 		t.Fatal("no keys must mean no providers")
 	}
-	if _, _, err := providersFromEnv(env(map[string]string{"DISCORD_CLIENT_ID": "id"})); err == nil {
+	if _, _, err := providersFromEnv(env(map[string]string{"DISCORD_CLIENT_ID": "id"}), payments.EnvProduction); err == nil {
 		t.Fatal("half a provider accepted")
+	}
+}
+
+// RPG_DEVICE_KEY keeps the known-device cookies valid across restarts (review of lote
+// 16, minor 1): unset is nil (a random key per process), a short key is refused.
+func TestDeviceKeyFrom(t *testing.T) {
+	if k, err := deviceKeyFrom("  "); err != nil || k != nil {
+		t.Fatalf("unset: %v %v", k, err)
+	}
+	if _, err := deviceKeyFrom("short"); err == nil {
+		t.Fatal("a short key was accepted")
+	}
+	key := strings.Repeat("ab", 32)
+	if k, err := deviceKeyFrom(key + "\n"); err != nil || string(k) != key {
+		t.Fatalf("valid key: %q %v", k, err)
 	}
 }

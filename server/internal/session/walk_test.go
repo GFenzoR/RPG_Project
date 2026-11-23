@@ -269,3 +269,36 @@ func TestOneBatchPerTick(t *testing.T) {
 		t.Fatal("an idle tick sent a frame")
 	}
 }
+
+// Turn anti-flood (lote 16): 30 alternating Turns in one tick reach each observer at most
+// turnBurst times; the turner's direction is always the last one, and the held-back last
+// direction reaches the observers once the bucket refills, so they end on it too.
+func TestTurnSpamLimited(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32))
+	a, pa := h.join("Ana", at(10, 10))
+	b, _ := h.join("Bob", at(12, 10))
+	c, _ := h.join("Cid", at(10, 12))
+	a.take()
+	b.take()
+	c.take()
+	dirs := []pb.Direction{W, E}
+	for i := range 30 {
+		h.input(a, &pb.ClientMessage{Message: &pb.ClientMessage_Turn{Turn: &pb.Turn{Dir: dirs[i%2]}}})
+	}
+	h.sim.Step()
+	for _, o := range []*fakeClient{b, c} {
+		if n := len(find(o.take(), (*pb.ServerMessage).GetCreatureTurn)); n == 0 || n > 6 {
+			t.Fatalf("observer got %d turns in one tick", n)
+		}
+	}
+	if got := find(a.take(), (*pb.ServerMessage).GetCreatureTurn); len(got) != 30 || got[29].GetDir() != E {
+		t.Fatalf("turner got %d turns", len(got))
+	}
+	h.sim.RunTicks(20)
+	for _, o := range []*fakeClient{b, c} {
+		turns := find(o.take(), (*pb.ServerMessage).GetCreatureTurn)
+		if len(turns) != 1 || turns[0].GetId() != pa.ID() || turns[0].GetDir() != E {
+			t.Fatalf("held-back last direction: %v", turns)
+		}
+	}
+}

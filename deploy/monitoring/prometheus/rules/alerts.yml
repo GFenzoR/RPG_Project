@@ -165,6 +165,19 @@ groups:
           summary: "Last successful backup is {{ $value | humanizeDuration }} old"
           description: "No successful dump in two backup intervals. Check the backup container."
 
+      - alert: BackupMetricsMissing
+        # BackupFailed and BackupStale say nothing once the metrics are gone (e.g.
+        # node-exporter cannot read metrics/backup.prom any more): metrics seen in the last
+        # week and missing for 30 min are an alert of their own. Never seen (the home stack
+        # runs no backup service) is not.
+        expr: time() - max_over_time(timestamp(rpg_backup_last_run_success{job="node"})[7d:5m]) > 1800
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No database backup metrics"
+          description: "The rpg_backup_* metrics stopped. Check the backup container and the modes of /backups/metrics (755) and backup.prom (644)."
+
   - name: rpg-http
     rules:
       - alert: HTTPErrorsHigh

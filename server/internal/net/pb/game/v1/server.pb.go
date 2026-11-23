@@ -526,6 +526,12 @@ const (
 	// Login refused: the character's last trade or market change could not be saved; it
 	// can play again after the server restarts (T5.3).
 	DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED DisconnectReason = 13
+	// Login refused: the server has as many players as it allows (gateway MaxPlayers),
+	// or too many logins are being checked at once. Try again in a few minutes.
+	DisconnectReason_DISCONNECT_REASON_SERVER_FULL DisconnectReason = 14
+	// Login refused: the account already has as many characters online as it may
+	// (session MaxCharactersPerAccount). Logging in the same character again still works.
+	DisconnectReason_DISCONNECT_REASON_TOO_MANY_CHARACTERS DisconnectReason = 15
 )
 
 // Enum value maps for DisconnectReason.
@@ -545,6 +551,8 @@ var (
 		11: "DISCONNECT_REASON_PASSWORD_CHANGED",
 		12: "DISCONNECT_REASON_SAVE_FAILED",
 		13: "DISCONNECT_REASON_CHARACTER_LOCKED",
+		14: "DISCONNECT_REASON_SERVER_FULL",
+		15: "DISCONNECT_REASON_TOO_MANY_CHARACTERS",
 	}
 	DisconnectReason_value = map[string]int32{
 		"DISCONNECT_REASON_UNSPECIFIED":         0,
@@ -561,6 +569,8 @@ var (
 		"DISCONNECT_REASON_PASSWORD_CHANGED":    11,
 		"DISCONNECT_REASON_SAVE_FAILED":         12,
 		"DISCONNECT_REASON_CHARACTER_LOCKED":    13,
+		"DISCONNECT_REASON_SERVER_FULL":         14,
+		"DISCONNECT_REASON_TOO_MANY_CHARACTERS": 15,
 	}
 )
 
@@ -7664,7 +7674,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x15TRADE_STATE_REQUESTED\x10\x01\x12\x1b\n" +
 	"\x17TRADE_STATE_NEGOTIATING\x10\x02\x12\x19\n" +
 	"\x15TRADE_STATE_COMPLETED\x10\x03\x12\x19\n" +
-	"\x15TRADE_STATE_CANCELLED\x10\x04*\x89\x04\n" +
+	"\x15TRADE_STATE_CANCELLED\x10\x04*\xd7\x04\n" +
 	"\x10DisconnectReason\x12!\n" +
 	"\x1dDISCONNECT_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!DISCONNECT_REASON_OUTDATED_CLIENT\x10\x01\x12%\n" +
@@ -7680,7 +7690,9 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x12&\n" +
 	"\"DISCONNECT_REASON_PASSWORD_CHANGED\x10\v\x12!\n" +
 	"\x1dDISCONNECT_REASON_SAVE_FAILED\x10\f\x12&\n" +
-	"\"DISCONNECT_REASON_CHARACTER_LOCKED\x10\r*\x8e\x01\n" +
+	"\"DISCONNECT_REASON_CHARACTER_LOCKED\x10\r\x12!\n" +
+	"\x1dDISCONNECT_REASON_SERVER_FULL\x10\x0e\x12)\n" +
+	"%DISCONNECT_REASON_TOO_MANY_CHARACTERS\x10\x0f*\x8e\x01\n" +
 	"\x10SharedExperience\x12!\n" +
 	"\x1dSHARED_EXPERIENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SHARED_EXPERIENCE_OFF\x10\x01\x12\x1c\n" +

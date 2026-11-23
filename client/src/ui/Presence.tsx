@@ -4,7 +4,8 @@ import type { Translate } from "../i18n/i18n.ts";
 
 /**
  * The presence check (T4.1): a simple question from the server with its options, over
- * the map. It does not block the game (no key is taken), and the server replies the same
+ * the map. The question names no color: it shows a swatch, and the options name colors
+ * (lote 16: no text of the question matches an option). It does not block the game (no key is taken), and the server replies the same
  * whatever the answer.
  */
 export function PresenceCheck(props: {
@@ -25,6 +26,15 @@ export function PresenceCheck(props: {
     >
       <h2 id="presence-title">{t("client.presence.title")}</h2>
       <p>{t(p.question)}</p>
+      {p.swatch && (
+        <div
+          class="presence-swatch"
+          role="img"
+          aria-label={t("client.presence.swatch")}
+          data-testid="presence-swatch"
+          style={{ background: p.swatch }}
+        />
+      )}
       <div class="buttons">
         {p.options.map((o) => (
           <button key={o.id} type="button" onClick={() => props.game?.presenceAnswer(p.id, o.id)}>

@@ -74,12 +74,15 @@ declare global {
     };
   }
 }
-window.__rpgAudio = {
-  unlocked: () => audio.unlocked,
-  history: () => [...audio.history],
-  loops: () => audio.playingLoops(),
-  music: () => audio.musicState(),
-};
+// E2E hook (docs/08): only in the dev server or an RPG_E2E_HOOKS=1 build (vite.config.ts).
+if (__RPG_E2E_HOOKS__) {
+  window.__rpgAudio = {
+    unlocked: () => audio.unlocked,
+    history: () => [...audio.history],
+    loops: () => audio.playingLoops(),
+    music: () => audio.musicState(),
+  };
+}
 
 function readStored(): string | null {
   try {

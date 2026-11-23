@@ -56,10 +56,22 @@ Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 Detalles (T1.4, `server/internal/net/gateway`):
 - **`session_token`** es de un solo uso: el servidor lo borra al canjearlo en el `Hello`
   (tabla `sessions`, `kind = 'play'`). Reconectar exige otro `POST /api/play`.
-- **Hello:** debe ser el primer frame y llegar en 10 s; si no, el servidor cierra.
+- **Hello:** debe ser el primer frame y llegar en 5 s; si no, el servidor cierra.
   Primer frame que no es `Hello`, token inválido, vencido o ya usado, o personaje que
-  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un error de la base durante
-  el handshake → `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un token que no tiene la forma
+  de uno real (exactamente 43 caracteres base64url, 32 bytes sin relleno) se rechaza igual
+  sin llegar a la base. Un error de la base durante el handshake →
+  `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+- **Servidor lleno:** si ya hay `-max-players` conexiones con jugador (o logins con el
+  token ya canjeado), o todos los turnos de la base del handshake siguen ocupados después
+  de esperar el `Hello` (5 s), → `Disconnect{SERVER_FULL}` antes de canjear el token (no
+  se gasta). También si otro login tomó el último lugar mientras se canjeaba este token, o
+  si la cola de logins del loop está llena (en esos dos casos el token ya se gastó). Límites
+  en "Límites".
+- **Personajes por cuenta:** una cuenta tiene como mucho `-max-chars-per-account` (2)
+  personajes en el mundo a la vez, contando los link-dead; uno más →
+  `Disconnect{TOO_MANY_CHARACTERS}`. Entrar con uno que ya está en el mundo no cuenta como
+  otro: lo retoma ("Entrar dos veces").
 - **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
   `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
@@ -123,7 +135,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
-| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
+| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
 | `POST /api/maps/submissions` y demás `/api/maps/...` | token | ver "Envío de mapas" | T4.5 |
@@ -131,7 +143,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/account` | token | — | `200 {email, email_verified, email_enabled}` |
 | `POST /api/auth/verify` | — | `{token}` | `204`; `400 invalid_token` |
 | `POST /api/auth/verify/resend` | token | `{lang?}` | `202`; `409 already_verified`, `404 email_disabled`, `429` |
-| `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
+| `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled`. A una dirección nunca verificada le llega un enlace que la verifica y cambia la contraseña (abajo) |
 | `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
 
 `POST /api/characters` acepta `look` (docs/02 "Apariencia", lote 13): `{sex, body, skin, hair,
@@ -162,6 +174,19 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
+- **Dirección nunca verificada (lote 16):** cualquiera puede registrar una cuenta con un
+  email ajeno sin verificarlo. Para que el dueño del buzón la recupere aunque el enlace de
+  verificación de 24 h haya vencido, `forgot` también le manda el email de reset a una
+  dirección nunca verificada: el enlace (misma página `/reset-password`, vence en 1 h) es un
+  token `claim_email` (propósito propio: pedirlo no invalida el enlace de verificación del
+  registro, y reenviar la verificación no invalida este; y no sirve en `/verify`).
+  Canjearlo en `POST /api/auth/password/reset` prueba el buzón:
+  verifica la dirección (con su fila `email_verified` en `audit_log`) y hace el reset de
+  siempre en la misma transacción (cambia la contraseña, revoca todas las sesiones y borra
+  las identidades vinculadas que no probaron ese email). Así el dueño del buzón se queda
+  con la cuenta sin la contraseña de quien la registró. El enlace de verificación del
+  registro no sirve en esa página: solo verifica.
+  Mismo `202` uniforme y mismos límites por dirección y por IP.
 - La cola de emails no se traba con una dirección que falla: cada reintento espera fuera
   de la goroutine de envío (30 s, 2 min, 10 min) y después se descarta.
 - Al registrarse se manda el email de verificación (si falla la cola, el registro igual
@@ -193,7 +218,7 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 | `GET /api/auth/oauth/pending` | cookie `rpg_oauth_pending` | — | `200 {provider, email}`; `410 pending_expired` |
 | `POST /api/auth/oauth/pending/confirm` | cookie pendiente | `{password}` | `200 {return}` + cookie de sesión |
 | `POST /api/auth/oauth/pending/create` | cookie pendiente | `{email}` | `200 {return}` + cookie de sesión |
-| `POST /api/account/unlink` | token | `{provider}` | `204`; `409 last_login_method`, `404 not_linked` |
+| `POST /api/account/unlink` | token | `{provider, password?}` | `204`; `403 reauth_required`, `401 invalid_credentials`, `409 last_login_method`, `404 not_linked` |
 
 `GET /api/account` suma `has_password` e `identities: [{provider, email, linked_at}]`. La
 página muestra el aviso de `?linked=` solo si es un proveedor conocido que la cuenta tiene
@@ -232,9 +257,15 @@ vinculado, y después lo saca de la URL.
 - **Vincular** exige re-autenticarse: `password` si la cuenta tiene (`403 reauth_required`
   si falta, `401 invalid_credentials` si no coincide, bajo los mismos límites de login
   fallido por email), o una sesión creada hace menos de 10 min si no tiene.
+- **Desvincular** (lote 16) exige la misma re-autenticación que vincular, con los mismos
+  errores: si no, con una sesión robada de una cuenta sin contraseña se podía vincular el
+  proveedor del ladrón y después desvincular el del dueño. "Mi cuenta" muestra el campo
+  de la contraseña cuando hay algo que vincular o desvincular.
 - `GET /api/auth/oauth/pending` dice también `has_password`: sin contraseña la página no la
   pide (se vincula desde "Mi cuenta" entrando con el otro proveedor).
-- Todas estas rutas gastan el límite por IP de registro y login, salvo `pending` y `unlink`.
+- Todas estas rutas gastan el límite por IP y por red de registro y login, salvo `pending`
+  (gasta el de búsquedas de token por cliente). `link`, `pending/confirm` y `unlink`
+  calculan contraseñas: como mucho dos a la vez por red ("Límites de la API").
 - Los secretos de cliente salen solo de variables de entorno y no se registran nunca; los
   errores del proveedor se registran por su tipo (estado HTTP, chequeo fallido), nunca con
   un `code` o un token.
@@ -303,15 +334,30 @@ auth). Pasado el límite responden `429 rate_limited`.
   distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
   espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,
   `staff`, `tutor`, `sistema`/`system` u `oficial`/`official`, o si alguna palabra es
-  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). La vocación debe
+  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). Tampoco puede
+  copiar a un NPC (lote 16, `reserved_name`): al arrancar, el servidor junta los nombres de
+  `i18n/<idioma>/npcs.yaml` (`npc.<id>.name`) en todos los idiomas, sin lo que va después de
+  la coma ("Gisla, la curtidora" → "Gisla"), y reserva el nombre entero y cada palabra con
+  mayúscula de 3 letras o más ("Maren Holt", "Maren", "Holt"; "Hermana Liora" reserva
+  "Liora", pero no el título "Hermana": tampoco Sister, Brother, Mother, Father, Hermano,
+  Madre, Padre, Master, Maestro ni Maestra); se comparan sin mayúsculas, espacios ni
+  tildes ("maren holt" también; "Tobias" choca con "Tobías").
+  `Gislar` vale. **Límites conocidos (aceptados):** se compara el nombre completo del
+  personaje, así que "Gisla Tanner", "Sir Maren" u "Holt Maren" pasan (no impide parecerse
+  a un NPC con algo pegado); los apellidos que son palabras comunes quedan reservados solos
+  ("Moss", "Musgo", "Vado", "Ensayo", "Muestra", "Roe", "Pike"); y los personajes creados
+  antes de la reserva con nombre de NPC no se tocan. La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
   ubica en el templo de su ciudad al primer login (T1.4).
 - **Rate limit** → `429 rate_limited` con `Retry-After`:
   - Por IP del cliente (IPv6: por /64): register y login comparten 10 pedidos, luego 1
     cada 6 s. Cuenta todo pedido, también los basura.
-  - Login fallido por par (email, IP): 5, luego 1 por minuto. Estricto, y un atacante
-    desde otras IPs no puede gastarlo por la víctima.
+  - Login fallido por par (email, red: la IPv4 o la /48 de IPv6, porque un abonado puede
+    tener una /48 entera): 5, luego 1 cada 4 min (15/h). Estricto, y un atacante desde
+    otras redes no puede gastarlo por la víctima. Se recarga más lento que el límite por
+    email (30/h): una sola IPv4 o una sola /48 nunca puede agotar el límite por email de
+    una cuenta.
   - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
     solo frena la adivinación repartida en muchas IPs.
   - Un login con email inválido o una contraseña que el registro nunca aceptaría (fuera
@@ -321,11 +367,24 @@ auth). Pasado el límite responden `429 rate_limited`.
     (así N pedidos simultáneos no pasan con una sola ficha) y la devuelven si el
     resultado no es `invalid_credentials`: solo los intentos **fallidos** cuentan y
     entrar bien nunca gasta.
-  - **Trade-off:** quien conoce el email de alguien puede, sosteniendo ~30 fallos por
-    hora desde IPs distintas, agotar el límite por email; mientras siga agotado, la
-    víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
-    frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
-    límite por email a dispositivos o IPs donde la cuenta ya entró.
+  - **Dispositivo conocido (lote 16):** un login (o una confirmación de OAuth o un vínculo)
+    con la contraseña correcta deja la cookie `rpg_device` (`HttpOnly`, `SameSite=Strict`,
+    `Secure` con HTTPS, `Path=/api/auth`, 90 días; `unlink` no la pone, porque vive fuera
+    de ese path): un HMAC del email, de una huella de la cuenta y su contraseña actual
+    (`LoginStamp`: cambia con cada reset) y del vencimiento, con la clave de
+    `RPG_DEVICE_KEY` (al menos 32 caracteres, p. ej. `openssl rand -hex 32`; sin ella, una
+    clave al azar por proceso y un aviso en el log al arrancar), sin el email a la vista. Un navegador con la cookie
+    de ese email no gasta el límite por email (sí el del par) mientras le dure su propio
+    límite de fallos: 10, luego 1 cada 6 min por cookie; agotado, gasta el límite por
+    email como cualquiera. Así una cookie copiada no sirve para adivinar sin tope desde
+    muchas IPs, y un cambio de contraseña anula todas las cookies anteriores.
+  - **Trade-off que queda:** quien conoce el email de alguien puede, sosteniendo más de
+    ~30 fallos por hora desde **varias** redes (con 15/h por par hacen falta al menos 3
+    IPv4 o 3 /48 de IPv6 distintas),
+    agotar el límite por email; mientras siga agotado, la víctima recibe `429` desde
+    cualquier navegador sin la cookie de dispositivo (uno nuevo, la app de escritorio, los
+    bots). Su navegador de siempre sigue entrando. Un reinicio del servidor olvida los
+    dispositivos salvo con `RPG_DEVICE_KEY` fija (docs/09, docs/13).
   - Las tablas de límites tienen tamaño fijo (65 536 casillas en 16 384 grupos de 4;
     cada clave cae en un grupo y lleva una etiqueta, ambos derivados de un HMAC con
     secreto aleatorio por proceso): la memoria está acotada y no se pueden elegir claves
@@ -352,6 +411,57 @@ auth). Pasado el límite responden `429 rate_limited`.
     protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
     contraseña, que también acota el ritmo de registros (spam de cuentas). Cuando la
     tabla vuelve a llenarse de fichas, las claves nuevas recuperan casilla.
+- **Límites de la API (lote 16, `httpapi/abuse.go`)**, todos `429 rate_limited` con
+  `Retry-After`:
+  - **Búsquedas de token por cliente** (IP o /64): las rutas con sesión, `logout` y
+    `GET /api/auth/oauth/pending` gastan 60, luego 1 cada 500 ms, **antes** de buscar el
+    token en Postgres. Además un token que no tiene el formato emitido (43 caracteres
+    base64url) se rechaza (`401 unauthorized`, o `204` en el logout) sin consultar nada:
+    tokens inventados no gastan conexiones del pool.
+  - **Búsquedas de token por red** (IPv6 /48, IPv4 /24, falla cerrado): las mismas rutas
+    gastan además 300, luego 1 cada 100 ms por red: una /48 tiene 65 536 /64, tantas como
+    para llenar la tabla por cliente y pasar sin contar.
+  - **Por cuenta**, después de autenticar: cualquier ruta con sesión, 60 y luego 1 cada
+    500 ms; `POST /api/play` y `POST /api/characters` juntos, 20 y luego 1 cada 3 s (cada
+    token de juego es una fila de `sessions` hasta la purga de cada hora).
+  - **Por red** (IPv6 /48, IPv4 /24): register, login y las demás rutas que gastan el límite
+    por IP también gastan 40, luego 1 cada 1,5 s (falla cerrado: llenar su tabla pide más
+    redes de las que tiene un atacante).
+  - **Cálculos de contraseña en curso por red** (IPv6 /48, IPv4 por dirección): login,
+    register, `password/reset`, `oauth/.../link`, `oauth/pending/confirm` y `unlink`, como
+    mucho 2 a la vez (dos personas detrás de un mismo NAT o CGNAT entran juntas); los
+    demás reciben `429` en el acto (`Retry-After: 1`). Así una red no puede ocupar los 4
+    cálculos del servidor.
+  - **Plazos:** la búsqueda del token, la lista de personajes, crear personaje, `play`,
+    `GET /api/account`, `logout`, `pending` y la búsqueda de sesión y perfil antes de
+    comprobar la contraseña en `link` y `unlink` cortan su trabajo en Postgres a los 3 s.
+  - **Devoluciones:** un `429` del tope de cálculos por red devuelve lo que el pedido ya
+    gastó de los límites por IP y por red (quien reintenta detrás de un NAT no quema su
+    ráfaga). Una creación de personaje rechazada sin escribir nada (JSON mal formado,
+    `invalid_name`, `reserved_name`, `name_taken`, `invalid_vocation`, `invalid_look`,
+    `character_limit`) devuelve su ficha del límite de escritura por cuenta; el límite de
+    pedidos por cuenta sigue acotando a quien prueba nombres.
+  - **Riesgo aceptado (CGNAT y móviles):** las operadoras reparten las /64 de muchos
+    abonados dentro de una misma /48 (y muchos clientes IPv4 comparten una /24), así que
+    el tope de 2 cálculos a la vez y la ráfaga de 40 por red pueden dar `429` a usuarios
+    legítimos de la misma operadora en horas pico. A la escala actual el riesgo es bajo;
+    en producción hay que vigilar la tasa de `429` de login y registro y subir los límites
+    (`Config.AuthNetRateLimit`, `Config.NetHashing`) si aparece.
+  - **Arneses en una sola IP** (`-auth-rate-burst N`, E2E, bots, `make play`): una ráfaga
+    por IP mayor que la de fábrica sube también a N las ráfagas por cliente de las
+    búsquedas de token y por red (la de búsquedas de token por red, a N o 300, la mayor),
+    y apaga el tope de cálculos por red. Los límites por cuenta no cambian.
+  - **Logs muestreados:** un error que un cliente puede repetir (un `500` de una ruta, un
+    webhook de pago con la firma mal) se registra la primera vez y después como mucho una
+    línea por minuto con `suppressed`, cuántos se callaron. Ese resumen se escribe cuando
+    el mismo error vuelve a ocurrir pasado el minuto: si la ráfaga termina antes, el
+    conteo de su último minuto no llega al log (no hay vaciado periódico; basta para ver
+    que el error existe y su orden de magnitud). Se guardan hasta 256 claves (ruta y
+    texto del error); con la tabla llena se borran las inactivas y las nuevas que no
+    entran comparten una sola clave, así errores con textos siempre distintos no anulan el
+    muestreo.
+  - **Pool de Postgres:** sin `pool_max_conns` en `DATABASE_URL`, 16 conexiones
+    (`store.DefaultMaxConns`; el de pgxpool era max(4, CPUs)).
 - **Detrás de Caddy**, `-trust-proxy` toma la IP del último salto de `X-Forwarded-For`
   (el puerto del servidor no debe quedar expuesto fuera de Caddy).
 - **Cálculos de contraseña** (argon2id, máx. 4 a la vez): si están saturados más de 2 s
@@ -370,11 +480,11 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` / `invalid_look` | 400 | Creación de personaje inválida |
-| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) |
+| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) o es el de un NPC (nombre completo, ver abajo) |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
-| `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
+| `rate_limited` | 429 | Demasiados pedidos: login/registro (por IP, red o email), búsquedas de token, pedidos de la cuenta, u otro cálculo de contraseña de la misma red en curso |
 | `busy` | 503 | Servidor saturado de logins, o el ranking no consiguió turno en Postgres; reintentar más tarde |
 | `invalid_category` / `invalid_vocation` / `invalid_page` | 400 | Filtros de `GET /api/highscores` |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
@@ -592,7 +702,11 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   por tick y cada búsqueda expande como máximo 2 × 1 500; una búsqueda solo arranca si
   cabe el peor caso. Sin cuota, el jugador espera al tick siguiente (no se rechaza).
 - `StopWalk` vacía la cola (el paso en curso termina). `Turn` cambia la dirección y
-  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí).
+  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí). **Anti-flood (lote
+  16):** a los observadores les llega una ráfaga de 6 giros y después uno cada 100 ms
+  (GCRA por jugador, `turnFlood` en `session/move.go`); la dirección cambia siempre al
+  instante y quien gira recibe cada `CreatureTurn` suyo. El último giro retenido sale
+  cuando el cupo se recarga, así que los observadores terminan viendo la dirección real.
 - `Ping` → `Pong` en el batch de ese tick.
 
 ### Combate cuerpo a cuerpo (T1.6, `server/internal/session/combat.go`)
@@ -967,8 +1081,20 @@ Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
 ### Chequeo de presencia (T4.1, `server/internal/session/antibot.go`)
 Diseño en `01-architecture.md` ("Detección de bots").
 - **`PresenceCheck{check_id, question, options[], timeout_ms}`**: `question` y cada
-  `DialogOption.text` son claves i18n (`presence.question.<color>`,
-  `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
+  `DialogOption.text` son claves i18n. La pregunta es siempre `presence.question`
+  ("elige el color de esta muestra") con un parámetro numérico `swatch`: un color
+  `0xRRGGBB` que el servidor sortea en cada chequeo dentro de la franja del color pedido
+  (`server/internal/presence`); el cliente lo dibuja como una muestra. Las opciones son
+  `presence.option.<color>` (`blue`, `yellow`, `white`, `black`): ningún par depende solo
+  del tono (blanco y negro se leen por la luminosidad; azul y amarillo están en el eje
+  que conserva quien tiene protanopía o deuteranopía), así que un jugador daltónico
+  contesta igual que cualquiera. Hasta la revisión del lote 16 eran rojo, azul, verde y
+  amarillo. **Desde el
+  lote 16 ningún texto de la pregunta coincide con una opción**: antes la clave era
+  `presence.question.<color>` y un script contestaba comparando sufijos sin mirar nada.
+  Clasificar el tono sigue siendo posible para un script (nada que el cliente dibuja es
+  secreto), por eso un acierto nunca limpia la sospecha. Los ids de las opciones van del
+  1 al 9 en orden al azar.
   `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
   activo. Con un chequeo pendiente se manda otra vez, con el mismo `check_id` y el tiempo
   que queda, al volver a entrar y al volver a jugar después de estar inactivo. El servidor
@@ -1272,7 +1398,10 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   `size`) o `house.look_owned` (`house`, `name`).
 - `HouseCommand` exige seguir junto a una puerta o dentro de la casa y responde otra
   `HouseUpdate` completa: `rent{}`, `extend{}`, `leave{}`, `guest_add{name}`,
-  `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}`,
+  `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}` (a
+  alguien conectado; un invisible que el dueño no ve o alguien del personal cuenta como
+  desconectado, `house.transfer_bad`, igual que en las invitaciones de gremio y grupo:
+  la oferta no revela quién está en línea, lote 16),
   `transfer_cancel{}`, `transfer_accept{house_id, price}` (lo que vio: si la oferta cambió,
   `house.transfer_changed`), `enter{}` (con acceso, a hasta 3 casillas de una puerta: a una
   casilla libre adentro junto a ella; `house.crowded` si no hay), `exit{}` (de adentro a la
@@ -1632,6 +1761,50 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
   memoria. En combate cierra igual, pero el personaje queda en el mundo link-dead hasta
   que la pelea termina (lo que esa conexión mandó después no se ejecuta).
+- **Conexiones a `/ws` (lote 16, `gateway/admit.go`).** El servidor cuenta por **cliente**:
+  su IPv4, o su /64 en IPv6 (un abonado suele tener un /64 entero); detrás de Caddy, con
+  `-trust-proxy`, la última entrada de `X-Forwarded-For`, la misma regla que el rate
+  limit de la API HTTP (`net/clientip`). Antes de aceptar el WebSocket revisa, en orden:
+
+  | Límite | Flag de `gameserver` | Por defecto | Rechazo |
+  |---|---|---|---|
+  | Conexiones de todos aún en el handshake | `-ws-max-unauthenticated` | 1000 | HTTP 503 |
+  | Handshakes leyendo la base a la vez (canje del token y carga del personaje) | `-ws-max-handshakes` | 32 | HTTP 503 si están todos ocupados; el que ya mandó `Hello` espera hasta 5 s y si no, `SERVER_FULL` |
+  | Conexiones abiertas de un cliente (con jugador o no) | `-ws-max-conns-per-ip` | 32 | HTTP 429 |
+  | Conexiones de un cliente aún en el handshake | `-ws-max-pending-per-ip` | 4 | HTTP 429 |
+  | Conexiones nuevas de un cliente (balde) | `-ws-handshake-burst`, `-ws-handshake-every` | 5 seguidas, después 1 cada 2 s | HTTP 429 |
+  | Jugadores (conexiones con personaje o con el token ya canjeado) | `-max-players` | 500 | `Disconnect{SERVER_FULL}` después del `Hello` |
+  | Personajes de una cuenta en el mundo | `-max-chars-per-account` | 2 | `Disconnect{TOO_MANY_CHARACTERS}` |
+  | Comandos de una conexión esperando en la cola del loop | `-ws-max-queued-per-conn` | 64 (≥ la ráfaga de 60 del limitador) | se descartan (ver docs/01, "Equidad de la cola") |
+
+  Un rechazo HTTP lleva `Retry-After` y nunca llega al `Hello` ni a la base: el navegador
+  solo ve que la conexión falló (el cliente muestra el texto de conexión perdida). Cada
+  rechazo suma en `ws_refused_total{reason}` de `/metrics`: `client_limit` (429),
+  `server_busy` (503) y `server_full` (`SERVER_FULL`).
+  **IP compartida (NAT).** Un "cliente" es una IPv4 pública: detrás de un CGNAT de
+  telefonía móvil, un cibercafé o un colegio, muchos jugadores honestos comparten una. Por
+  eso el tope de conexiones abiertas es holgado (32): cada jugador conectado usa una. Lo
+  que protege la base son los handshakes pendientes (4) y el balde (5 seguidas, luego 1
+  cada 2 s), que sí quedan ajustados: si todo un grupo detrás de la misma IP se reconecta
+  a la vez (un corte de la red), los que pasan del balde reciben 429 y entran reintentando
+  unos segundos después. Con más de 32 jugadores detrás de una IP, el 33.º recibe 429. Un
+  valor de `-1` quita ese límite (solo para pruebas de carga). Con
+  `-ws-loopback-exempt` (por defecto solo si `RPG_ENV` es `development` o `test`) los
+  límites **por cliente** no se aplican a 127.0.0.0/8 ni a `::1`: los bots, el E2E y
+  `make play` corren en la misma máquina; los globales sí. En producción (`RPG_ENV`
+  vacío o `production`) no hay excepción, y detrás de Caddy el cliente es la IP real.
+  Los bots (`tools/bots`) comparten cuenta de a 2, lo que cabe en
+  `-max-chars-per-account` por defecto: corren también contra servidores con los límites
+  de producción (los jobs `stack` y `home-stack` de CI). Contra un servidor con `URL=` en
+  esta máquina hace falta `-ws-loopback-exempt` (y un `-auth-rate-burst` mayor si son
+  muchos bots).
+  Al recibir el `Hello` solo se mira si queda lugar de `-max-players` (así un servidor
+  lleno no gasta tokens ni lee la base); el lugar se toma recién después de canjear el
+  token con éxito. Un `Hello` con un token falso de forma válida no ocupa lugar mientras
+  espera turno de la base ni durante el canje (revisión del lote 16).
+- **Logs acotados:** los comandos descartados de una conexión, los canjes de token y las
+  cargas de personaje que fallan por la base y los logins rechazados por la cola llena se
+  registran una vez por intervalo (10 s) con la cuenta (`count`), no uno por evento.
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
   Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
   `://` se compara con `esquema://host`: el cliente de escritorio usa

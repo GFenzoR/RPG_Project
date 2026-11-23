@@ -18,6 +18,10 @@
 # Environment: BUILD=0 starts the images already built (no `--build`); CONFIRM=yes skips
 # the questions of restore and reset (CI, scripts).
 set -euo pipefail
+# Git Bash (native Windows, docs/12) rewrites arguments that look like POSIX paths when it
+# runs a Windows program: `docker compose exec gameserver /app/gameserver` would reach
+# docker.exe as C:/Program Files/Git/app/gameserver. Elsewhere these variables do nothing.
+export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 ENV_FILE=deploy/.env.home
@@ -185,8 +189,12 @@ cmd_admin() {
 	[[ -n $email ]] || die "usage: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]"
 	case $role in admin | gm | player) ;; *) die "ROLE must be admin, gm or player" ;; esac
 	running gameserver || die "the game is not running: make home-up first"
+	# Lote 16: set-role shows the account and refuses (exit 3) to raise one that never
+	# proved its email; ALLOW_UNVERIFIED=1 overrides once you checked it is yours.
+	local extra=()
+	[[ ${ALLOW_UNVERIFIED:-0} == 1 ]] && extra=(-allow-unverified)
 	compose exec -T gameserver /app/gameserver admin set-role -email "$email" -role "$role" \
-		-note "${NOTE:-make home-admin}"
+		-note "${NOTE:-make home-admin}" ${extra[@]+"${extra[@]}"}
 }
 
 cmd_backup() {

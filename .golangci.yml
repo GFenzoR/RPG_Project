@@ -45,6 +45,10 @@ linters:
       # Load-testing bots measure real latency and are not game logic.
       - path: ^tools/bots/
         linters: [forbidigo]
+      # The home launcher waits for Docker and HTTP in real time (not game logic) and
+      # talks to the owner in Spanish, which misspell reads as misspelt English.
+      - path: ^tools/launcher/
+        linters: [forbidigo, misspell]
 
 formatters:
   enable:

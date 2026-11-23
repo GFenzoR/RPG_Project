@@ -492,3 +492,32 @@ func TestMilestoneLinkDeadInAFight(t *testing.T) {
 		t.Fatalf("with a link-dead on a plate: %v %v", b.Pos(), systemKeys(evs))
 	}
 }
+
+// Anti-alts: an owner with two characters of one account cannot fill both plates; the
+// second plate hears milestone.fail_same_account and nobody moves. Two accounts complete
+// (TestMilestoneTwoPlayers).
+func TestMilestoneSameAccountBlocked(t *testing.T) {
+	h := sigilHarness(t)
+	ca, a := hero(h, "Aldra", "guardian", 22, pos(2, 3), true, "pair")
+	nextChar++
+	c := withPack(nextChar, pos(4, 3), session.ItemState{ItemID: tunicID, Count: 1})
+	c.Name, c.Vocation, c.Level, c.Experience = "AldraAlt", "arcanist", 21, experienceFor(21)
+	c.AccountID = a.AccountIDForTest()
+	cb, b := h.joinChar(c)
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(b, "pair") }))
+	h.sim.Step()
+	cb.take()
+
+	h.step(ca, N)
+	evs := h.step(cb, N)
+	ea := ca.take()
+	if a.Pos().X >= 16 || b.Pos().X >= 16 {
+		t.Fatalf("moved with an alt: %v %v", a.Pos(), b.Pos())
+	}
+	if questState(h, a, "pair") != quest.InProgress || questState(h, b, "pair") != quest.InProgress {
+		t.Fatal("completed with an alt")
+	}
+	if !hasKey(evs, "milestone.fail_same_account") || !hasKey(ea, "milestone.not_ready") {
+		t.Fatalf("told: %v / %v", systemKeys(evs), systemKeys(ea))
+	}
+}

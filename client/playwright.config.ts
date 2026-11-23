@@ -120,11 +120,12 @@ export default defineConfig({
         // -dev: the sandbox island (dev-only) is in the map, for e2e/sandbox.spec.ts.
         "go run ./cmd/mapcompile -root .. -out ../build/world.bin -dev && " +
         // Every test registers and logs in from 127.0.0.1: raise the per-IP auth burst so the
-        // suite does not depend on how fast it runs (production keeps the default).
+        // suite does not depend on how fast it runs (production keeps the default), and
+        // skip the per-IP /ws limits for loopback (-ws-loopback-exempt, docs/05 "Límites").
         // -cookie-secure=false: Playwright's WebKit drops a Secure cookie on http://localhost
         // (Chromium keeps it), so the (webkit) tests could not stay logged in; production and
         // the other servers here keep the flag.
-        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -cookie-secure=false -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
+        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -ws-loopback-exempt -cookie-secure=false -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,
@@ -146,12 +147,13 @@ export default defineConfig({
       // Its own world.bin: both servers compile the map at the same time.
       command:
         "go run ./cmd/mapcompile -root .. -out ../build/world-puerto.bin && " +
-        `go run ./cmd/gameserver -http 127.0.0.1:${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -start-town puerto -metrics-addr ""`,
+        `go run ./cmd/gameserver -http 127.0.0.1:${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -ws-loopback-exempt -start-town puerto -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${puertoServerURL}/healthz`,
       reuseExistingServer: false,
       timeout: 240_000,
-      env: { DATABASE_URL: databaseUrl },
+      // -auth-rate-burst is a test-only switch: a production server refuses it (lote 16).
+      env: { DATABASE_URL: databaseUrl, RPG_ENV: "test" },
       stdout: "pipe",
     },
     {
@@ -184,6 +186,9 @@ export default defineConfig({
       timeout: 240_000,
       env: {
         DATABASE_URL: databaseUrl,
+        // The fake IdP's endpoint overrides and -auth-rate-burst are test-only: a production
+        // server refuses them (lote 16).
+        RPG_ENV: "test",
         PUBLIC_URL: mailClientURL,
         SMTP_HOST: "127.0.0.1",
         SMTP_PORT: String(smtpPort),

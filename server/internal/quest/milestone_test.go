@@ -189,3 +189,26 @@ func TestCompleteSigils(t *testing.T) {
 		t.Fatalf("milestones %v", ms)
 	}
 }
+
+// Anti-alts: two characters of one account do not make a cooperative group. The later
+// plate fails with FailSameAccount before anything else; two accounts still complete, and
+// account 0 (unknown) is never merged with another.
+func TestCooperativeSameAccount(t *testing.T) {
+	q := milestone(t)
+	a, b := ready("guardian"), ready("druid")
+	a.AccountID, b.AccountID = 7, 7
+	b.OnStep = false // the account check comes first
+	o := Cooperative(q, []string{"guardian", "druid"}, []*Candidate{a, b})
+	if !o.Full || o.Done || o.Fails[0] != FailNone || o.Fails[1] != FailSameAccount ||
+		o.Fails[1].Key() != "milestone.fail_same_account" {
+		t.Fatalf("same account: %+v", o)
+	}
+	b.OnStep, b.AccountID = true, 8
+	if o := Cooperative(q, []string{"guardian", "druid"}, []*Candidate{a, b}); !o.Done {
+		t.Fatalf("two accounts: %+v", o)
+	}
+	a.AccountID, b.AccountID = 0, 0
+	if o := Cooperative(q, []string{"guardian", "druid"}, []*Candidate{a, b}); !o.Done {
+		t.Fatalf("unknown accounts merged: %+v", o)
+	}
+}

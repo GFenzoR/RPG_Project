@@ -964,6 +964,11 @@ func (w *World) houseGuest(ctx *game.TickContext, p *Player, h *house, name stri
 
 func (w *World) houseOffer(ctx *game.TickContext, p *Player, h *house, name string, price uint64) {
 	to := w.onlineByName(strings.TrimSpace(name))
+	if to != nil && ((to.invisible && !p.Knows(to.id)) || to.role > RolePlayer) {
+		// Like guild and party invitations: an unseen invisible player or a staff member is
+		// not online for this, so the offer reveals nothing about them (lote 16).
+		to = nil
+	}
 	if to == nil || to == p || price > uint64(content.MaxMarketPrice) {
 		p.emit(systemMsg(msgHouseOfferBad))
 		return

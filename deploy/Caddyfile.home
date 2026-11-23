@@ -18,4 +18,8 @@
 
 :80 {
 	import caddy-routes.caddy
+	# Browsers ignore it on plain http:// (localhost, LAN), but behind the tunnel Cloudflare
+	# serves it over https://, so the player's browser never tries http:// again (lote 16;
+	# docs/13: also turn on "Always Use HTTPS" and HSTS in Cloudflare for a domain).
+	header Strict-Transport-Security "max-age=31536000"
 }

@@ -236,6 +236,7 @@ func TestDroppedTransferKeepsWhatWasThrownAway(t *testing.T) {
 	if evs := h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(2, 1)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Ana throws the sword away: %v", systemKeys(evs))
 	}
+	db.sync(h.harness) // the throw's save is in (lote 16: until then the sword is Ana's)
 	cp := openPack(t, h.harness, cc)
 	if evs := h.send(cc, moveItem(onTile(pos(2, 1)), swordID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
 		h.w.CountItem(c, "test_sword") != 1 {
@@ -259,18 +260,22 @@ func TestDroppedTransferKeepsWhatWasThrownAway(t *testing.T) {
 	}
 }
 
-// The same with a bag lying on the street: Ana puts her sword in it, Caio carries the bag
-// away and logs out. Ana's next transfer is rejected: her row must not have the sword.
+// The same with a bag lying on the street: Ana throws her own bag there and puts her
+// sword in it (lote 16 review: a stranger's bag on the street takes nothing of hers,
+// TestPutIntoAStrangersStreetBagIsRefused), Caio carries the bag away and logs out. Ana's
+// next transfer is rejected: her row must not have the sword.
 func TestDroppedTransferKeepsWhatWasPutInAStreetBag(t *testing.T) {
 	db := newRowsDB(t)
 	h := newMarketHarness(t, db.wire)
-	ca, a := h.atBoard("Ana", pos(1, 0), stack(swordID, 1, 0), stack(salveID, 30, 1), stack(coinID, 50, 2))
+	ca, a := h.atBoard("Ana", pos(1, 0), stack(swordID, 1, 0), stack(salveID, 30, 1), stack(coinID, 50, 2),
+		stack(bagID, 1, 3))
 	cc, c := h.trader("Caio", pos(1, 1), stack(coinID, 5, 0))
-	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 1)) }))
-	h.sim.Step()
 	db.saveNow(h.harness, ca) // her last written save has the sword
 
 	pack := openPack(t, h.harness, ca)
+	if evs := h.send(ca, moveItem(inContainer(pack, 3), bagID, 0, onTile(pos(2, 1)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws her bag on the street: %v", systemKeys(evs))
+	}
 	h.input(ca, useItem(onTile(pos(2, 1)), bagID, 1))
 	h.sim.Step()
 	opens := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)
@@ -281,6 +286,8 @@ func TestDroppedTransferKeepsWhatWasPutInAStreetBag(t *testing.T) {
 		h.w.CountItem(a, "test_sword") != 0 {
 		t.Fatalf("Ana puts the sword in the bag: %v", systemKeys(evs))
 	}
+	h.sim.RunTicks(45) // the coalesced save of the sword
+	db.sync(h.harness) // the give-away's save is in (lote 16: until then the bag is Ana's)
 	cp := openPack(t, h.harness, cc)
 	if evs := h.send(cc, moveItem(onTile(pos(2, 1)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
 		h.w.CountItem(c, "test_sword") != 1 {
@@ -339,6 +346,7 @@ func TestDroppedTransferKeepsTheWholeDialog(t *testing.T) {
 	if st, _ := h.w.QuestState(a, "ch1_shipwreck"); st.String() != "completed" {
 		t.Fatalf("the quest is %v after handing the logbook in", st)
 	}
+	db.sync(h) // the give-away's save is in (lote 16: until then the sword is Ana's)
 	h.input(cc, useItem(inSlot(slotBackpack), backpack, 0))
 	h.sim.Step()
 	cp := find(cc.take(), (*pb.ServerMessage).GetContainerOpen)[0].GetContainerId()
@@ -408,6 +416,7 @@ func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
 	if !messageKeys(evs)["dialog.item_on_floor"] || h.w.CountItem(a, "wolf_pelt") != 0 {
 		t.Fatalf("the sale's coins did not fall: %v", messageKeys(evs))
 	}
+	db.sync(h) // the give-away's save is in (lote 16: until then the coins are Ana's)
 	h.input(cc, useItem(inSlot(slotBackpack), backpack, 0))
 	h.sim.Step()
 	cp := find(cc.take(), (*pb.ServerMessage).GetContainerOpen)[0].GetContainerId()
@@ -464,6 +473,7 @@ func TestDroppedHouseWriteKeepsWhatWasThrownAway(t *testing.T) {
 	if evs := h.send(cl, moveItem(inContainer(pack, 1), salveID, 0, onTile(pos(4, 5)), 5)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Ana throws the salves away: %v", systemKeys(evs))
 	}
+	db.sync(h.harness) // the throw's save is in (lote 16: until then the salves are Ana's)
 	cp := openPack(t, h.harness, cc)
 	if evs := h.send(cc, moveItem(onTile(pos(4, 5)), salveID, 1, inContainer(cp, 0), 5)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Caio picks them up: %v", systemKeys(evs))
@@ -502,6 +512,7 @@ func TestSkippedTransferKeepsWhatThePartnerThrewAway(t *testing.T) {
 	if evs := h.send(cb, moveItem(inContainer(wb, 0), swordID, 0, onTile(pos(3, 2)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Beto throws the sword away: %v", systemKeys(evs))
 	}
+	db.sync(h.harness) // the throw's save is in (lote 16: until then the sword is Beto's)
 	cp := openPack(t, h.harness, cc)
 	if evs := h.send(cc, moveItem(onTile(pos(3, 2)), swordID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Caio picks it up: %v", systemKeys(evs))
@@ -542,12 +553,13 @@ func (l *jobLog) wire(c *session.Config) {
 // since returns the jobs after the first n.
 func (l *jobLog) since(n int) []session.Job { return l.jobs[n:] }
 
-// The cost and the order of the save before a transfer: a transfer of a character that
-// gave nothing away since its last snapshot costs no extra write; after a throw, its next
-// transfer comes right behind one snapshot of the character from the moment of the throw
-// (numbered then, so its ack ends no hold of the transfer), and only once; a later
-// autosave or the logout's final save replaces it.
-func TestSaveBeforeTransferOnlyAfterAThrow(t *testing.T) {
+// The cost and the order of the give-away saves (lote 16): a transfer of a character
+// that gave nothing away costs no extra write; a throw writes one snapshot of the
+// character at once, from the moment of the throw (numbered then, so its ack ends no hold
+// of a later transfer); another throw inside the coalescing window writes nothing at
+// once, and the next transfer comes right behind one snapshot of it; an autosave or the
+// logout's final save covers a throw still waiting in its window.
+func TestGiveAwaySavesAndTransfers(t *testing.T) {
 	log := &jobLog{}
 	h := newMarketHarness(t, log.wire)
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
@@ -565,65 +577,74 @@ func TestSaveBeforeTransferOnlyAfterAThrow(t *testing.T) {
 	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
 	h.sim.Step()
 
-	// Bruno throws his sword away, then buys again: his snapshot of the throw goes first.
+	// Bruno throws his sword away: one snapshot, at once, without it.
 	pack := openPack(t, h.harness, cb)
 	n = len(log.jobs)
 	if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
 	}
-	if len(log.since(n)) != 0 {
-		t.Fatal("throwing something away wrote at once")
-	}
-	h.send(cb, acceptOffer(offer, 1))
 	jobs := log.since(n)
-	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
-		t.Fatalf("a transfer after a throw = %d jobs, want the snapshot then the transfer", len(jobs))
+	if len(jobs) != 1 || jobs[0].Transfer != nil {
+		t.Fatalf("a throw = %d jobs, want its snapshot", len(jobs))
 	}
-	pre, again := jobs[0].Snapshot, jobs0Snapshot(t, jobs[1], b.CharacterID())
-	if pre.CharacterID != b.CharacterID() || pre.Final || pre.Seq <= bought.Seq || pre.Seq >= again.Seq {
-		t.Fatalf("snapshot before the transfer %+v (bought %d, transfer %d)", pre, bought.Seq, again.Seq)
+	pre := jobs[0].Snapshot
+	if pre.CharacterID != b.CharacterID() || pre.Final || pre.Seq <= bought.Seq ||
+		countState(pre.Inventory, swordID) != 0 || countState(pre.Inventory, salveID) != 1 {
+		t.Fatalf("the throw's snapshot %+v is not Bruno's state right after it", pre)
 	}
-	if countState(pre.Inventory, swordID) != 0 || countState(pre.Inventory, salveID) != 1 {
-		t.Fatal("the snapshot before the transfer is not Bruno's state between the throw and the purchase")
+	// A transfer right after: nothing more before it, and the throw's ack ends no hold.
+	n = len(log.jobs)
+	h.send(cb, acceptOffer(offer, 1))
+	if jobs := log.since(n); len(jobs) != 1 || jobs[0].Transfer == nil {
+		t.Fatalf("a transfer after a saved throw = %d jobs", len(jobs))
 	}
+	again := jobs0Snapshot(t, log.jobs[len(log.jobs)-1], b.CharacterID())
 	h.sim.Command(h.w.Saved(b.CharacterID(), pre.Seq))
 	h.sim.Step()
 	if !h.w.InFlightForTest(b.CharacterID()) {
-		t.Fatal("the ack of the snapshot before the transfer ended its hold")
+		t.Fatal("the ack of the throw's snapshot ended the hold of the transfer")
 	}
-
-	// Only once: the next transfer has no snapshot before it.
-	n = len(log.jobs)
-	h.send(cb, acceptOffer(offer, 1))
-	if jobs := log.since(n); len(jobs) != 1 {
-		t.Fatalf("a second transfer wrote %d jobs", len(jobs))
-	}
-	h.sim.Command(h.w.Saved(b.CharacterID(), jobs0Snapshot(t, log.jobs[len(log.jobs)-1], b.CharacterID()).Seq))
+	h.sim.Command(h.w.Saved(b.CharacterID(), again.Seq))
 	h.sim.Step()
 
-	// An autosave after a throw replaces the snapshot of the throw.
+	// Another throw inside the window: nothing at once; the next transfer writes its
+	// snapshot first.
+	n = len(log.jobs)
 	if evs := h.send(cb, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Bruno throws a coin away: %v", systemKeys(evs))
 	}
+	if len(log.since(n)) != 0 {
+		t.Fatal("a throw inside the window wrote at once")
+	}
+	h.send(cb, acceptOffer(offer, 1))
+	jobs = log.since(n)
+	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil ||
+		jobs[0].Snapshot.Seq >= jobs0Snapshot(t, jobs[1], b.CharacterID()).Seq {
+		t.Fatalf("a transfer after a waiting throw = %d jobs, want its snapshot then the transfer", len(jobs))
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), jobs0Snapshot(t, jobs[1], b.CharacterID()).Seq))
+	h.sim.Step()
+
+	// A throw waiting in its window, then an autosave: the window's end writes nothing.
+	h.send(cb, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1))
 	h.sim.Command(h.w.ForceSaveForTest(cb))
 	h.sim.Step()
 	n = len(log.jobs)
-	h.send(cb, acceptOffer(offer, 1))
-	if jobs := log.since(n); len(jobs) != 1 {
-		t.Fatalf("a transfer after an autosave wrote %d jobs", len(jobs))
+	h.sim.RunTicks(60)
+	if jobs := log.since(n); len(jobs) != 0 {
+		t.Fatalf("the window's end after an autosave wrote %d jobs", len(jobs))
 	}
 
-	// The logout's final save replaces it too: nothing else is written for Bruno.
-	h.sim.Command(h.w.Saved(b.CharacterID(), jobs0Snapshot(t, log.jobs[len(log.jobs)-1], b.CharacterID()).Seq))
-	h.sim.Step()
-	if evs := h.send(cb, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
-		t.Fatalf("Bruno throws another coin away: %v", systemKeys(evs))
-	}
+	// The logout's final save covers one too: a throw saved at once, one waiting, the
+	// final save, nothing else.
 	n = len(log.jobs)
+	h.send(cb, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1))
+	h.send(cb, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1))
 	h.sim.Command(h.w.Leave(cb))
 	h.sim.Step()
-	if jobs := log.since(n); len(jobs) != 1 || !jobs[0].Snapshot.Final {
-		t.Fatalf("the logout wrote %d jobs", len(jobs))
+	h.sim.RunTicks(60)
+	if jobs := log.since(n); len(jobs) != 2 || jobs[0].Snapshot.Final || !jobs[1].Snapshot.Final {
+		t.Fatalf("throw, throw, logout wrote %d jobs, want the first throw's and the final save", len(jobs))
 	}
 }
 
@@ -642,6 +663,7 @@ func TestGiftThatFallsKeepsOneSnapshot(t *testing.T) {
 	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
 	h.sim.Step()
 
+	n := len(log.jobs) // lote 16: the gift's snapshot is written at the end of its tick
 	h.sim.Command(gameFunc(func() {
 		h.w.SetCapacityForTest(b, 0)
 		h.w.GiveForTest(b, "test_sword", 5)
@@ -651,7 +673,6 @@ func TestGiftThatFallsKeepsOneSnapshot(t *testing.T) {
 	if n := len(h.w.GroundAt(pos(0, 1))); n != 5 {
 		t.Fatalf("%d swords fell, want 5", n)
 	}
-	n := len(log.jobs)
 	h.send(cb, acceptOffer(offer, 1))
 	jobs := log.since(n)
 	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
@@ -758,13 +779,13 @@ func TestGiftWhileHeldBeforeAnotherTransfer(t *testing.T) {
 	h.send(cb, acceptOffer(offer, 1))
 	first := jobs0Snapshot(t, log.jobs[len(log.jobs)-1], b.CharacterID()) // not acked: Bruno is held
 
+	n := len(log.jobs) // lote 16: the gift's snapshot is written at the end of its tick
 	h.sim.Command(gameFunc(func() {
 		h.w.SetCapacityForTest(b, 0)
 		h.w.GiveForTest(b, "test_sword", 1)
 		h.w.SetCapacityForTest(b, 1_000_000)
 	}))
 	h.sim.Step()
-	n := len(log.jobs)
 	h.send(cb, acceptOffer(offer, 1))
 	jobs := log.since(n)
 	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
@@ -782,13 +803,17 @@ func TestGiftWhileHeldBeforeAnotherTransfer(t *testing.T) {
 	if !h.w.InFlightForTest(b.CharacterID()) {
 		t.Fatal("the ack of the first transfer ended the hold of the second")
 	}
-	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
-		t.Fatalf("pick up after the first transfer's ack: %v", systemKeys(evs))
+	// Lote 16: the gift stays Bruno's until the database has his snapshot without it.
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("the gift was freed before the ack of the snapshot that comes after it")
 	}
 	h.sim.Command(h.w.Saved(b.CharacterID(), pre.Seq))
 	h.sim.Step()
 	if !h.w.InFlightForTest(b.CharacterID()) {
 		t.Fatal("the ack of the snapshot of the gift ended the hold of the second transfer")
+	}
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick up after the gift snapshot's ack: %v", systemKeys(evs))
 	}
 	h.sim.Command(h.w.Saved(b.CharacterID(), second.Seq))
 	h.sim.Step()
@@ -816,10 +841,10 @@ func TestSaveBeforeHouseWriteFreesNothingThatLeftTheHouse(t *testing.T) {
 	}
 	cc, c := h.tenant("Caio", 0, pos(5, 5), stack(coinID, 1, 0))
 
+	n := len(log.jobs) // lote 16: the throw's snapshot is written with the throw
 	if evs := h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(2, 5)), 5)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Ana throws the salves away: %v", systemKeys(evs))
 	}
-	n := len(log.jobs)
 	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), swordID, 1, onTile(pos(4, 5)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Ana takes the sword out: %v", systemKeys(evs))
 	}
@@ -1044,11 +1069,13 @@ func TestGiftAndHouseInOneCommandKeepNothingTwice(t *testing.T) {
 	}
 }
 
-// A give-away into something that cannot be reserved (a stranger's pile on the street) in
-// a command that also changes a house (the gift falls on Ana's house floor): the snapshot
-// of the give-away is written before the house write, as before, and the command is
-// logged as an error (hold.go settleGave). No command does this today.
-func TestGiftIntoAStrangersPileWithAHouseIsLogged(t *testing.T) {
+// A give-away onto a stranger's pile on the street in a command that also changes a house
+// (the gift falls on Ana's house floor). Before the lote 16 review the salves joined the
+// pile, which could not be reserved to Ana: the snapshot of the give-away was written
+// apart and the command logged as an error (hold.go settleGave). Now they land as a pile
+// of their own (moveItem ownOnly): it is reserved to Ana inside the house write
+// (reserveGiven), nothing is written apart and nothing is logged.
+func TestGiftNextToAStrangersPileWithAHouseLandsApart(t *testing.T) {
 	log := &jobLog{}
 	var logged bytes.Buffer
 	h := newHouseHarness(t, log.wire, logTo(&logged))
@@ -1065,18 +1092,16 @@ func TestGiftIntoAStrangersPileWithAHouseIsLogged(t *testing.T) {
 	n := len(log.jobs)
 	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(inContainer(pack, 1), salveID, 0, onTile(pos(2, 5)), 5), "test_bag", 1))
 	h.sim.Step()
-	if g := h.w.GroundAt(pos(2, 5)); len(g) != 1 || len(h.w.GroundAt(cottageDoor)) != 1 {
-		t.Fatalf("the salves did not join the pile (%d piles), or the gift did not fall on the house floor", len(g))
+	if g := h.w.GroundAt(pos(2, 5)); len(g) != 2 || len(h.w.GroundAt(cottageDoor)) != 1 {
+		t.Fatalf("the salves joined the stranger's pile (%d piles), or the gift did not fall on the house floor", len(g))
 	}
-	jobs := log.since(n)
-	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
-		t.Fatalf("the command wrote %d jobs, want the snapshot of the give-away then the house write", len(jobs))
+	for _, j := range log.since(n) {
+		if j.Transfer == nil && j.Snapshot.CharacterID == a.CharacterID() {
+			t.Fatalf("a snapshot of Ana was written apart from the house write: %+v", j.Snapshot)
+		}
 	}
-	if pre := jobs[0].Snapshot; pre.CharacterID != a.CharacterID() || countState(pre.Inventory, salveID) != 0 {
-		t.Fatalf("the snapshot before the house write is not Ana's after the give-away: %+v", pre)
-	}
-	if !strings.Contains(logged.String(), giftAndHouse) {
-		t.Fatalf("a give-away into a stranger's pile with a house change was not logged: %q", logged.String())
+	if strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatalf("a give-away onto its own pile with a house change was logged: %q", logged.String())
 	}
 }
 
@@ -1217,6 +1242,7 @@ func TestSaveBeforeTransferIsFromTheGiftsCommandOrTick(t *testing.T) {
 			pack := openPack(t, h.harness, cb)
 			more := gameFunc(func() { h.w.GiveForTest(b, "copper_coin", 7) })
 
+			n := len(log.jobs) // lote 16: the give-away's snapshot is written when it settles
 			if way == "command" {
 				// The throw, then 7 coins in the same tick.
 				h.input(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1))
@@ -1233,7 +1259,6 @@ func TestSaveBeforeTransferIsFromTheGiftsCommandOrTick(t *testing.T) {
 				h.sim.Step()
 				h.sim.Command(more)
 			}
-			n := len(log.jobs)
 			h.send(cb, acceptOffer(offer, 1))
 			jobs := log.since(n)
 			if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
@@ -1271,12 +1296,11 @@ func TestQueueFullKeepsTheSaveBeforeTheTransferFirst(t *testing.T) {
 	offer := h.w.MarketOffers(s.CharacterID())[0]
 	db.saveNow(h.harness, cb)
 	pack := openPack(t, h.harness, cb)
+	full.Store(true)
+	n := len(db.jobs)
 	if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
 	}
-
-	full.Store(true)
-	n := len(db.jobs)
 	h.send(cb, acceptOffer(offer, 1))
 	if len(db.jobs) != n || h.w.PendingJobs() != 2 {
 		t.Fatalf("with the queue full: %d jobs taken, %d waiting, want 0 and 2", len(db.jobs)-n, h.w.PendingJobs())
@@ -1306,7 +1330,8 @@ func TestShutdownWithTheSaveBeforeATransferPending(t *testing.T) {
 		b     *session.Player
 		offer int64
 	}
-	setup := func(t *testing.T) world {
+	// queued: the queue refuses jobs from before the throw (its snapshot waits in the loop).
+	setup := func(t *testing.T, queued bool) world {
 		var full atomic.Bool
 		db := newRowsDB(t)
 		h := newMarketHarness(t, queueGate(&full), db.wire)
@@ -1315,14 +1340,15 @@ func TestShutdownWithTheSaveBeforeATransferPending(t *testing.T) {
 		h.send(cs, createOffer(sell, salveID, 10, 4))
 		db.saveNow(h.harness, cb)
 		pack := openPack(t, h.harness, cb)
+		full.Store(queued)
 		if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
 			t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
 		}
 		return world{db: db, h: h, full: &full, cb: cb, b: b, offer: h.w.MarketOffers(s.CharacterID())[0]}
 	}
 
-	t.Run("in memory", func(t *testing.T) {
-		g := setup(t)
+	t.Run("submitted", func(t *testing.T) {
+		g := setup(t, false)
 		n := len(g.db.jobs)
 		if pending := g.h.w.SaveAll(); len(pending) != 0 {
 			t.Fatalf("%d jobs pending with the queue free", len(pending))
@@ -1339,8 +1365,7 @@ func TestShutdownWithTheSaveBeforeATransferPending(t *testing.T) {
 	})
 
 	t.Run("in the retry", func(t *testing.T) {
-		g := setup(t)
-		g.full.Store(true)
+		g := setup(t, true)
 		g.h.send(g.cb, acceptOffer(g.offer, 1))
 		pending := g.h.w.SaveAll()
 		if len(pending) != 4 || pending[0].Transfer != nil || pending[0].Snapshot.CharacterID != g.b.CharacterID() ||
@@ -1358,4 +1383,268 @@ func TestShutdownWithTheSaveBeforeATransferPending(t *testing.T) {
 			t.Fatal("Bruno's row is not the snapshot of the throw")
 		}
 	})
+}
+
+// crashDB writes the World's jobs to rows only when the test says so (and acks them,
+// as the app does); a crash drops every job not written yet. The Saver writes in order,
+// so a later job is never written before an earlier one.
+type crashDB struct {
+	log     jobLog
+	written int
+	rows    map[int64]session.Snapshot
+}
+
+func (d *crashDB) writeAll(h *harness) {
+	for _, j := range d.log.jobs[d.written:] {
+		snaps := []session.Snapshot{j.Snapshot}
+		if j.Transfer != nil {
+			snaps = j.Transfer.Snapshots
+		}
+		for _, s := range snaps {
+			d.rows[s.CharacterID] = s
+			h.sim.Command(h.w.Saved(s.CharacterID, s.Seq))
+		}
+	}
+	d.written = len(d.log.jobs)
+	h.sim.Step()
+}
+
+func (d *crashDB) crash() { d.log.jobs = d.log.jobs[:d.written] }
+
+func (d *crashDB) count(id int64, item uint16) int { return countState(d.rows[id].Inventory, item) }
+
+// Lote 16: a crash after a pick-up never leaves an item in two rows. Ana throws her sword
+// on the street; nobody else can take it until the database has Ana's snapshot without
+// it. Then Caio picks it up and logs out (his final save is written at once) and the
+// server dies before Ana's next autosave: the sword is in exactly one row. And if the
+// server dies before Ana's snapshot is written, Caio never had it: one row again. The
+// "written" way is the regression (without the reservation Caio takes the sword at once);
+// "lost" only checks that the refused pick-up left nothing in Caio's rows (his final save
+// queues behind Ana's snapshot, so the crash drops both).
+func TestCrashAfterAPickUpKeepsTheItemOnce(t *testing.T) {
+	for _, way := range []string{"written", "lost"} {
+		t.Run(way, func(t *testing.T) {
+			d := &crashDB{rows: map[int64]session.Snapshot{}}
+			h := newMarketHarness(t, d.log.wire)
+			ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0))
+			cc, c := h.trader("Caio", pos(2, 1), stack(coinID, 5, 0))
+			h.sim.Command(h.w.ForceSaveForTest(ca))
+			h.sim.Command(h.w.ForceSaveForTest(cc))
+			h.sim.Step()
+			d.writeAll(h.harness) // both rows: Ana's has the sword
+
+			pack := openPack(t, h.harness, ca)
+			if evs := h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(2, 2)), 1)); len(systemKeys(evs)) != 0 {
+				t.Fatalf("Ana throws the sword away: %v", systemKeys(evs))
+			}
+			cp := openPack(t, h.harness, cc)
+			take := moveItem(onTile(pos(2, 2)), swordID, 1, inContainer(cp, 0), 1)
+			if !hasKey(h.send(cc, take), "inventory.not_yours") || h.w.CountItem(c, "test_sword") != 0 {
+				t.Fatal("Caio took the sword before the database had Ana without it")
+			}
+			if way == "written" {
+				d.writeAll(h.harness) // Ana's snapshot of the throw is in
+				if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+					t.Fatalf("Caio picks the sword up after the ack: %v", systemKeys(evs))
+				}
+			}
+			h.sim.Command(h.w.Leave(cc))
+			h.sim.Step()
+			if way == "written" {
+				d.writeAll(h.harness) // Caio's final save is in
+			}
+			d.crash() // Ana's next autosave never comes
+			if n := d.count(a.CharacterID(), swordID) + d.count(c.CharacterID(), swordID); n != 1 {
+				t.Fatalf("the database holds the sword %d times (Ana %d, Caio %d)", n,
+					d.count(a.CharacterID(), swordID), d.count(c.CharacterID(), swordID))
+			}
+		})
+	}
+}
+
+// A second throw inside the coalescing window is reserved at once and saved at the
+// window's end: until that save's ack nobody else takes it.
+func TestCoalescedThrowStaysReservedUntilItsSave(t *testing.T) {
+	d := &crashDB{rows: map[int64]session.Snapshot{}}
+	h := newMarketHarness(t, d.log.wire)
+	ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0), stack(salveID, 2, 1))
+	cc, c := h.trader("Caio", pos(2, 1), stack(coinID, 5, 0))
+	pack := openPack(t, h.harness, ca)
+	h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(2, 2)), 1))
+	d.writeAll(h.harness)
+	n := len(d.log.jobs)
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(1, 2)), 2)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(a, "test_salve") != 0 {
+		t.Fatalf("Ana throws the salves away: %v", systemKeys(evs))
+	}
+	if len(d.log.jobs) != n {
+		t.Fatal("the second throw inside the window wrote at once")
+	}
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(1, 2)), salveID, 1, inContainer(cp, 0), 2)
+	if evs := h.send(cc, take); !hasKey(evs, "inventory.not_yours") {
+		t.Fatalf("Caio took the salves before their save: %v", systemKeys(evs))
+	}
+	h.sim.RunTicks(45)
+	if jobs := d.log.since(n); len(jobs) != 1 || jobs[0].Snapshot.CharacterID != a.CharacterID() ||
+		countState(jobs[0].Snapshot.Inventory, salveID) != 0 {
+		t.Fatalf("the window's end wrote %d jobs, want Ana's snapshot without the salves", len(jobs))
+	}
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("Caio took the salves before the ack of their save")
+	}
+	d.writeAll(h.harness)
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_salve") != 2 {
+		t.Fatalf("Caio picks the salves up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// Moving a thrown item on (to the next tile) before its save is acked keeps it reserved:
+// the move does not end the reservation of a give-away.
+func TestThrownItemMovedOnStaysReserved(t *testing.T) {
+	d := &crashDB{rows: map[int64]session.Snapshot{}}
+	h := newMarketHarness(t, d.log.wire)
+	ca, _ := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0))
+	cc, c := h.trader("Caio", pos(2, 1), stack(coinID, 5, 0))
+	pack := openPack(t, h.harness, ca)
+	h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(1, 2)), 1))
+	if evs := h.send(ca, moveItem(onTile(pos(1, 2)), swordID, 1, onTile(pos(2, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana moves the sword on: %v", systemKeys(evs))
+	}
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(2, 2)), swordID, 1, inContainer(cp, 0), 1)
+	if evs := h.send(cc, take); !hasKey(evs, "inventory.not_yours") {
+		t.Fatalf("Caio took the sword moved on before its save: %v", systemKeys(evs))
+	}
+	h.sim.RunTicks(45) // the move's coalesced save
+	d.writeAll(h.harness)
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("Caio picks the sword up after the acks: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: a throw is reserved to the thrower until its save is acked, and a
+// reservation covers the whole pile it lands in. So a throw never joins a stranger's pile
+// on the street: Ana throws one coin onto Caio's pile of ten, it lands as a pile of its
+// own, and Caio still picks his pile up (Ana's coin stays hers until its save).
+func TestThrowNeverLocksAStrangersPile(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, _ := h.trader("Ana", pos(1, 1), stack(coinID, 5, 0))
+	cc, c := h.trader("Caio", pos(2, 1), stack(swordID, 1, 0))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 10, pos(2, 2)) }))
+	h.sim.Step()
+
+	pack := openPack(t, h.harness, ca)
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(2, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws a coin onto Caio's pile: %v", systemKeys(evs))
+	}
+	g := h.w.GroundAt(pos(2, 2))
+	if len(g) != 2 {
+		t.Fatalf("Ana's coin joined the stranger's pile (%d piles on the tile)", len(g))
+	}
+	his := slices.IndexFunc(g, func(it *session.Item) bool { return it.Count() == 10 })
+	mine := slices.IndexFunc(g, func(it *session.Item) bool { return it.Count() == 1 })
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), coinID, uint32(his+1), inContainer(cp, 0), 10)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "copper_coin") != 10 {
+		t.Fatalf("Caio picks his own pile up: %v", systemKeys(evs))
+	}
+	if mine > his {
+		mine-- // his pile left the tile
+	}
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), coinID, uint32(mine+1), inContainer(cp, 0), 1)); !hasKey(evs, "inventory.not_yours") {
+		t.Fatalf("Caio took Ana's coin before its save: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: nothing of Ana's goes into a bag lying on the street that is not
+// reserved to her (a stranger's, a public one, a corpse past its owner's time): the
+// reservation of the give-away would lock the whole bag to her. She is told to put it on
+// the ground, and Caio still carries the bag away.
+func TestPutIntoAStrangersStreetBagIsRefused(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0))
+	cc, c := h.trader("Caio", pos(2, 1), stack(coinID, 5, 0))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_bag"), 1, pos(2, 2)) }))
+	h.sim.Step()
+
+	pack := openPack(t, h.harness, ca)
+	h.input(ca, useItem(onTile(pos(2, 2)), bagID, 1))
+	h.sim.Step()
+	opens := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 || opens[0].GetItemId() != bagID {
+		t.Fatalf("Ana opens the bag on the street: %v", opens)
+	}
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, inContainer(opens[0].GetContainerId(), 0), 1)); !hasKey(evs, "inventory.street_bag") ||
+		h.w.CountItem(a, "test_sword") != 1 {
+		t.Fatalf("Ana put her sword in a stranger's bag on the street: %v", systemKeys(evs))
+	}
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_bag") != 1 {
+		t.Fatalf("Caio carries the bag away: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: a transfer that writes a waiting give-away save first keeps the
+// coalescing window going. A throw right after it, still inside the window opened by the
+// first throw, is coalesced: it does not write at once.
+func TestTransferKeepsTheGiveAwayWindow(t *testing.T) {
+	log := &jobLog{}
+	h := newMarketHarness(t, log.wire)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	offer := h.w.MarketOffers(s.CharacterID())[0]
+	h.sim.RunTicks(100) // well past tick giveSaveEvery: a window restarted at 0 is over
+	pack := openPack(t, h.harness, cb)
+	throw := moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1)
+
+	n := len(log.jobs)
+	for range 2 { // the first is saved at once and opens the window, the second waits
+		if evs := h.send(cb, throw); len(systemKeys(evs)) != 0 {
+			t.Fatalf("Bruno throws a coin: %v", systemKeys(evs))
+		}
+	}
+	if jobs := log.since(n); len(jobs) != 1 {
+		t.Fatalf("two throws wrote %d jobs, want the first one's", len(jobs))
+	}
+	n = len(log.jobs)
+	h.send(cb, acceptOffer(offer, 1)) // the waiting save, then the transfer
+	jobs := log.since(n)
+	if len(jobs) != 2 || jobs[1].Transfer == nil {
+		t.Fatalf("a transfer after a waiting throw = %d jobs", len(jobs))
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), jobs0Snapshot(t, jobs[1], b.CharacterID()).Seq))
+	h.sim.Step() // the hold ends
+	n = len(log.jobs)
+	if evs := h.send(cb, throw); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Bruno throws a coin after the transfer: %v", systemKeys(evs))
+	}
+	if jobs := log.since(n); len(jobs) != 0 {
+		t.Fatalf("a throw inside the window after a transfer wrote %d jobs at once", len(jobs))
+	}
+}
+
+// Lote 16 final review: a coalesced throw the thrower picks back up inside the window
+// leaves giveWait with the next coalesced throw, not only with the window's save.
+func TestCoalescedThrowPickedBackUpLeavesTheWait(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0), stack(salveID, 2, 1), stack(coinID, 5, 2))
+	pack := openPack(t, h.harness, ca)
+	h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(2, 2)), 1)) // saved, opens the window
+	h.send(ca, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(1, 2)), 2)) // coalesced
+	if n := h.w.GiveWaitForTest(a.CharacterID()); n != 1 {
+		t.Fatalf("the coalesced throw waits in %d piles, want 1", n)
+	}
+	if evs := h.send(ca, moveItem(onTile(pos(1, 2)), salveID, 1, inContainer(pack, 0), 2)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(a, "test_salve") != 2 {
+		t.Fatalf("Ana picks her salves back up: %v", systemKeys(evs))
+	}
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(1, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws a coin inside the window: %v", systemKeys(evs))
+	}
+	if n := h.w.GiveWaitForTest(a.CharacterID()); n != 1 {
+		t.Fatalf("giveWait holds %d piles after the salves came back, want the coin's only", n)
+	}
 }

@@ -152,9 +152,11 @@ func defaultRamp(n int) time.Duration {
 	return min(time.Duration(n)*200*time.Millisecond, time.Minute)
 }
 
-// perAccount is how many bots share an account (the server's character limit): fewer
-// logins, which the per-IP login limit would otherwise throttle.
-const perAccount = 10
+// perAccount is how many bots share an account: fewer logins, which the per-IP login
+// limit would otherwise throttle. It must not exceed the server's default cap of
+// characters of one account in the world at once (-max-chars-per-account, 2): the bots
+// also run against production-like servers (the CI stack and tunnel jobs) that keep it.
+const perAccount = 2
 
 // fleet tracks the bots of a run.
 type fleet struct {
@@ -409,11 +411,12 @@ func waitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-// account returns the credentials of account g (bots g*10 .. g*10+9). The domain is
-// new in T1.17, so accounts that the T1.4 bot filled with its own characters
-// ("load-0@bots.local") are never reused and do not hit the character limit.
+// account returns the credentials of account g (bots g*perAccount ..
+// (g+1)*perAccount-1). The domain changes whenever the split changes, so a database
+// that an older split filled ("load-0@bots.local" of T1.4, "load-0@load.bots.local" of 10
+// bots per account) is never reused with characters of other bots in it.
 func account(prefix string, g int) (email, password string) {
-	return fmt.Sprintf("%s-%d@load.bots.local", prefix, g), "bot-password"
+	return fmt.Sprintf("%s-%d@pair.bots.local", prefix, g), "bot-password"
 }
 
 // validPrefix is what -prefix accepts: the second word of every name and the start of
@@ -421,9 +424,12 @@ func account(prefix string, g int) (email, password string) {
 // "load300" would both be "Load").
 var validPrefix = regexp.MustCompile(`^[a-z]{2,12}$`)
 
-// name returns bot i's character name: "Bot" plus i in base 26 ("Botaa", "Botab", ...
-// "Botba"), then the prefix as a second word ("Botaa Load"), so runs with different
+// name returns bot i's character name: "Duo" plus i in base 26 ("Duoaa", "Duoab", ...
+// "Duoba"), then the prefix as a second word ("Duoaa Load"), so runs with different
 // prefixes do not collide on the global names. The prefix must be valid (checkPrefix).
+// Names are global and tied to an account, so the first word changes with the account
+// split (account): the "Botaa Load" of a database that 10 bots per account filled belongs
+// to another account than the one bot 0 uses now.
 func name(prefix string, i int) string {
 	s := []byte{byte('a' + i%26)}
 	i /= 26
@@ -434,7 +440,7 @@ func name(prefix string, i int) string {
 			break
 		}
 	}
-	return "Bot" + string(s) + " " + strings.ToUpper(prefix[:1]) + prefix[1:]
+	return "Duo" + string(s) + " " + strings.ToUpper(prefix[:1]) + prefix[1:]
 }
 
 // The server's reserved name rules (server/internal/auth/validate.go, which tools/bots
@@ -466,7 +472,7 @@ func reservedName(name string) bool {
 }
 
 // checkPrefix rejects a prefix that is not 2-12 lowercase letters or that gives one of
-// the first n bots a name the server refuses ("dev"; "mine" gives "Botad Mine", which
+// the first n bots a name the server refuses ("dev"; "mine" gives "Duoad Mine", which
 // contains "admin").
 func checkPrefix(prefix string, n int) error {
 	if !validPrefix.MatchString(prefix) {

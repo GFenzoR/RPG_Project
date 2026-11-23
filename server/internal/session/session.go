@@ -112,6 +112,10 @@ type Snapshot struct {
 const (
 	// DefaultAutosaveEvery is the autosave interval of an online player (5 minutes).
 	DefaultAutosaveEvery = game.Tick(5 * time.Minute / game.TickDuration)
+	// DefaultMaxCharactersPerAccount is how many characters of one account may be in the
+	// world at once (docs/05 "Límites"; audit lote 16). tools/bots puts at most this many
+	// bots on one account (perAccount, serverCharsPerAccount): keep them in sync.
+	DefaultMaxCharactersPerAccount = 2
 	// DefaultRerouteMaxNodes bounds one reroute search (A* around creatures).
 	DefaultRerouteMaxNodes = 1500
 	// DefaultPathNodesPerTick is the pathfinding quota of one tick, in expanded tiles.
@@ -200,6 +204,11 @@ type Config struct {
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
 	AutosaveEvery game.Tick
+	// MaxCharactersPerAccount caps the characters of one account in the world at once,
+	// link-dead ones included; a login over it is refused with TOO_MANY_CHARACTERS (a
+	// login of a character already online takes it over as always). 0 means
+	// DefaultMaxCharactersPerAccount; negative means no cap (load tests).
+	MaxCharactersPerAccount int
 	// StoreHeartbeat is how often the app tells the loop that the database answers
 	// (World.StoreAlive). Content audit M6: while no mark came for storeDownAfter of them
 	// no house is released for its owner's absence, and that gap is not counted as
@@ -228,6 +237,7 @@ type World struct {
 	published atomic.Int32
 	byClient  map[Client]*Player
 	byChar    map[int64]*Player
+	byAccount map[int64]int // players in the world per account (accountFull)
 	sectors   map[uint64][]*Player
 
 	// unsaved holds the final snapshot of characters that left until the database
@@ -246,6 +256,9 @@ type World struct {
 	// lookDirty: the players whose look or visible equipment changed this tick
 	// (look.go lookChanged); flushLooks tells them once each.
 	lookDirty []*Player
+	// turnHeld: the players whose turn was over the turn limit (move.go turnFlood); their
+	// last direction goes out when their bucket allows it (flushTurns).
+	turnHeld []*Player
 	// diedAway: the death.died message of a character that died link-dead, by character,
 	// for its next login (linkdead.go diedLinkDeadNotice; until a restart).
 	diedAway map[int64]*pb.ServerMessage
@@ -465,6 +478,9 @@ type World struct {
 	// command or tick (Player.gave): settleGivers takes their snapshot for the next
 	// transfer once the command or the tick is over (hold.go gaveAway).
 	givers []*Player
+	// giveDue are the players whose give-away save waits for its coalescing window
+	// (Player.giveWait, hold.go flushGiveDue).
+	giveDue []*Player
 	// saveSeq numbers every snapshot of every character, so a character's numbers grow
 	// across its sessions too: an ack retried late from an earlier session can never pass
 	// for a newer snapshot (World.Saved).
@@ -582,6 +598,9 @@ func New(cfg Config) (*World, error) {
 	if cfg.AutosaveEvery <= 0 {
 		cfg.AutosaveEvery = DefaultAutosaveEvery
 	}
+	if cfg.MaxCharactersPerAccount == 0 {
+		cfg.MaxCharactersPerAccount = DefaultMaxCharactersPerAccount
+	}
 	if cfg.RerouteMaxNodes <= 0 {
 		cfg.RerouteMaxNodes = DefaultRerouteMaxNodes
 	}
@@ -599,6 +618,7 @@ func New(cfg Config) (*World, error) {
 		log:         cfg.Logger,
 		byClient:    map[Client]*Player{},
 		byChar:      map[int64]*Player{},
+		byAccount:   map[int64]int{},
 		sectors:     map[uint64][]*Player{},
 		unsaved:     map[int64]Snapshot{},
 		loading:     map[int64]int{},

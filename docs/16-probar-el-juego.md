@@ -28,6 +28,11 @@ Abre esa URL. El primer arranque tarda (compila el servidor y Vite prepara los m
 algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó vivo),
 `make play` no arranca y lo dice; si el servidor se cae al arrancar, también.
 
+¿Solo quieres jugar el inicio normal, sin terminal? El lanzador de doble clic
+(`NequesRealm-Servidor.exe`, `13-hosting-de-pruebas.md`, "La forma más fácil: doble clic")
+levanta el servidor de casa en `http://localhost:8080` (Puerto con tutorial, sin la isla
+de pruebas).
+
 - `make play` corre además la tienda cosmética con el **proveedor de pagos falso**
   (`RPG_ENV=development`, `PAYMENTS_PROVIDER=fake`): se compra nácar sin dinero real en
   `http://localhost:5173/shop`. Solo lo activa con el servidor en `127.0.0.1` y la base en
@@ -39,6 +44,12 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
   dentro) y `-auth-rate-burst 200` (crear varias cuentas seguidas sin el 429 del límite por
   IP). Son solo de estos dos comandos (`LOCAL_PLAY_FLAGS` del Makefile): producción usa los
   valores por defecto.
+- Una cuenta tiene como mucho 2 personajes en el mundo a la vez (`-max-chars-per-account`,
+  `05-network-protocol.md` "Límites"), también con `make play`: la excepción de loopback
+  (`-ws-loopback-exempt`) no lo cubre. Para probar a mano con una sola cuenta algo de más
+  personajes (una misión de hito de 4 jugadores), súbelo:
+  `make play LOCAL_PLAY_FLAGS="-cookie-secure=false -auth-rate-burst 200 -max-chars-per-account 4"`
+  (`-1` lo quita), o usa una cuenta por cada 2 personajes.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
   en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a Thimblewick.
@@ -268,8 +279,12 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):
 
 ```
-make set-role EMAIL=tu@correo ROLE=admin NOTE="probar en local"
+make set-role EMAIL=tu@correo ROLE=admin NOTE="probar en local" ALLOW_UNVERIFIED=1
 ```
+
+Primero muestra la cuenta (fecha de creación, personajes). `ALLOW_UNVERIFIED=1` hace falta
+porque en local la cuenta no confirmó su email: sin eso se niega a darle un rol de staff
+(lote 16, docs/09 "Roles de staff").
 
 `ROLE=gm` alcanza para `/tp`; `/item` y `/premium` piden `admin`. Sal del juego y vuelve a
 entrar: un rol nuevo vale desde el próximo login. `make audit-log` muestra lo que hizo el

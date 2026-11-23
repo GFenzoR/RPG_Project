@@ -82,7 +82,7 @@ fi
 CGO_ENABLED=$sqlc_cgo install_go_tool sqlc "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION"
 
 # 3. Go module dependencies
-for m in server tools/bots; do
+for m in server tools/bots tools/launcher; do
   log "go mod download ($m)"
   (cd "$m" && go mod download)
 done

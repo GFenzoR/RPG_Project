@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/mail"
 	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
+	"github.com/GFenzoR/RPG_Project/server/internal/payments"
 )
 
 // Mail modes (-mail, T2.1).
@@ -95,9 +97,16 @@ func newSender(m mail.Mailer, i18nDir string, clk clock.Clock, logger *slog.Logg
 
 // providersFromEnv builds the OAuth providers whose client id and secret are set
 // (GOOGLE_CLIENT_ID/SECRET, DISCORD_CLIENT_ID/SECRET; T2.1 2/2). A provider with neither
-// is off (no button); with only one the server refuses to start, naming the missing one. The *_URL and GOOGLE_ISSUER variables only exist
-// for tests against a fake provider. Secrets go to the provider and nowhere else.
-func providersFromEnv(getenv func(string) string) ([]*oauth.Provider, []string, error) {
+// is off (no button); with only one the server refuses to start, naming the missing one. The
+// *_AUTH_URL, *_TOKEN_URL, *_JWKS_URL, *_ISSUER and *_API_URL variables only exist for tests
+// against a fake provider: a production server (env) refuses to start with any of them set,
+// so nobody can point the login at another server. Secrets go to the provider and nowhere
+// else.
+func providersFromEnv(getenv func(string) string, env payments.Env) ([]*oauth.Provider, []string, error) {
+	if set := oauthOverrides(getenv); len(set) > 0 && !devEnv(env) {
+		return nil, nil, fmt.Errorf("%w: %s (endpoint overrides for the fake OAuth provider; only with RPG_ENV=development or test)",
+			errTestOnlyInProduction, strings.Join(set, ", "))
+	}
 	var out []*oauth.Provider
 	var names []string
 	for _, spec := range []struct {

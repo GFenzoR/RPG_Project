@@ -12,11 +12,13 @@
 # Locally: `make monitoring-up`.
 name: rpg
 
+# Lote 16: 10 x 50 MB per container, so a flood of requests cannot rotate the evidence of
+# an attack away in minutes. Ship them off the host for anything longer (docs/09 "Logs").
 x-logging: &logging
   driver: json-file
   options:
-    max-size: "20m"
-    max-file: "5"
+    max-size: "${LOG_MAX_SIZE:-50m}"
+    max-file: "${LOG_MAX_FILE:-10}"
 
 x-build-args: &build-args
   VERSION: ${VERSION:-dev}
@@ -41,10 +43,15 @@ services:
       start_period: 10s
     networks: [internal]
     shm_size: 128m
+    # Lote 16: only what the entrypoint needs to chown the data directory and drop to the
+    # postgres user (su-exec); no new privileges after that.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
     logging: *logging
 
   gameserver:
-    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-gameserver:${IMAGE_TAG:-latest}
+    image: ${GAMESERVER_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-gameserver:${IMAGE_TAG:-latest}}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.gameserver
@@ -93,7 +100,11 @@ services:
       # in the panel never drops paid payments); _PREVIOUS only while rotating it.
       PAYMENTS_REF_SECRET: ${PAYMENTS_REF_SECRET:-}
       PAYMENTS_REF_SECRET_PREVIOUS: ${PAYMENTS_REF_SECRET_PREVIOUS:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
+      # Signs the known-device login cookies (docs/05); empty = a random key per start,
+      # so a restart forgets the known devices. At least 32 characters.
+      RPG_DEVICE_KEY: ${RPG_DEVICE_KEY:-}
+      # pool_max_conns=16: the store's own default too (keep them equal); Postgres allows 100.
+      DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable&pool_max_conns=16
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default
     # true); the healthcheck only passes once the HTTP API is up, after migrating.
     command:
@@ -127,11 +138,18 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Lote 16: a leak or a flood of connections stops at the container, not the host (2 GB
+    # instance: Postgres and Caddy need the rest). One file descriptor per WebSocket.
+    mem_limit: ${GAMESERVER_MEM_LIMIT:-1g}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     networks: [internal, edge, monitoring]
     logging: *logging
 
   caddy:
-    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-web:${IMAGE_TAG:-latest}
+    image: ${WEB_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-web:${IMAGE_TAG:-latest}}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
@@ -170,6 +188,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    # Lote 16: Caddy only writes to its volumes (/data, /config) and /tmp.
+    read_only: true
+    tmpfs: [/tmp]
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]
@@ -177,7 +198,7 @@ services:
     logging: *logging
 
   backup:
-    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-backup:${IMAGE_TAG:-latest}
+    image: ${BACKUP_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-backup:${IMAGE_TAG:-latest}}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backup
@@ -194,6 +215,12 @@ services:
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_S3_URI: ${BACKUP_S3_URI:-}
+      # Lote 16 (docs/09 "Backups"): S3 server-side encryption and age encryption of the
+      # dump itself (public key only; the private key never comes to this server).
+      BACKUP_S3_SSE: ${BACKUP_S3_SSE:-AES256}
+      BACKUP_S3_KMS_KEY_ID: ${BACKUP_S3_KMS_KEY_ID:-}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_ENCRYPT_REQUIRED: ${BACKUP_ENCRYPT_REQUIRED:-0}
       AWS_REGION: ${AWS_REGION:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -215,7 +242,7 @@ services:
   # `up --wait` passes). It refuses to run with the owner's or a maintainer's token. No port: it only reaches Postgres (internal) and the
   # GitHub API (edge). How to create the token: docs/09, "Worker de PR de mapas".
   map-pr-worker:
-    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-map-pr-worker:${IMAGE_TAG:-latest}
+    image: ${MAP_PR_WORKER_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-map-pr-worker:${IMAGE_TAG:-latest}}
     profiles: [map-pr]
     build:
       context: ..
@@ -252,7 +279,8 @@ services:
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
       - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-1GB}
       - --web.listen-address=:9090
-      - --web.enable-lifecycle
+      # No --web.enable-lifecycle (lote 16): /-/reload and /-/quit would be open to every
+      # container that reaches it. Reload rules with: compose kill -s SIGHUP prometheus.
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
@@ -267,9 +295,10 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    # Docker publishes no port of a container that is only on internal networks: edge is
-    # there for the 127.0.0.1 port above.
-    networks: [monitoring, edge]
+    # Docker publishes no port of a container that is only on internal networks:
+    # prometheus-publish (only Prometheus is on it) is there for the 127.0.0.1 port above.
+    # Not edge (lote 16): Caddy, the gameserver and the workers never reach Prometheus.
+    networks: [monitoring, prometheus-publish]
     logging: *logging
 
   alertmanager:
@@ -398,6 +427,8 @@ networks:
   # Scrapes and dashboards (monitoring profile); no route outside the host either.
   monitoring:
     internal: true
+  # Only Prometheus: carries its 127.0.0.1:9090 publish (internal networks publish nothing).
+  prometheus-publish: {}
 
 volumes:
   pgdata:

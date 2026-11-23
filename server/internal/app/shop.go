@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
@@ -61,6 +62,12 @@ func (a *App) shopChanged(accountID int64) {
 		return
 	}
 	go func() {
+		defer func() { // lote 16: a bug here is logged, not a crash of the server
+			if r := recover(); r != nil {
+				a.log.Error("shop: panic while pushing the state to the game", "panic", r, "account", accountID,
+					"stack", string(debug.Stack()))
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), shopReadTimeout)
 		st, err := ss.ShopState(ctx, accountID, a.cfg.Clock.Now())
 		cancel()

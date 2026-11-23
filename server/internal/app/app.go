@@ -40,10 +40,13 @@ type Store interface {
 
 // Config configures an App.
 type Config struct {
-	Store     Store
-	Clock     clock.Clock
-	Logger    *slog.Logger
-	Seed      uint64
+	Store  Store
+	Clock  clock.Clock
+	Logger *slog.Logger
+	Seed   uint64
+	// SeedHi is the second word of the loop's PCG source (0 = Seed again). The gameserver
+	// fills both from crypto/rand unless -seed asks for a replayable run.
+	SeedHi    uint64
 	Vocations content.Vocations
 	Balance   content.Balance
 	// Monsters and Items come from data/ (session.Config); nil runs a world without monsters.
@@ -75,8 +78,20 @@ type Config struct {
 	StartTown string
 	// AuthRateLimit overrides httpapi.DefaultAuthRateLimit when non-zero (test harnesses).
 	AuthRateLimit httpapi.RateLimit
+	// DeviceKey signs the known-device cookies (httpapi.Config.DeviceKey; $RPG_DEVICE_KEY).
+	// Empty: a random key per process.
+	DeviceKey []byte
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
+	// WSLimits bounds the /ws connections, handshakes and queued commands
+	// (gateway.Limits; zero fields take gateway.DefaultLimits).
+	WSLimits gateway.Limits
+	// WSExemptLoopback skips the per-client /ws limits for loopback clients (development,
+	// bots and E2E on one machine; gateway.Config.ExemptLoopback).
+	WSExemptLoopback bool
+	// MaxCharactersPerAccount caps the characters of one account online at once
+	// (session.Config; 0 = session.DefaultMaxCharactersPerAccount, negative = no cap).
+	MaxCharactersPerAccount int
 	// Metrics, if set, records the tick, network, persistence and HTTP metrics
 	// (internal/metrics). One App per *metrics.Metrics: New registers players_online on it
 	// and fails if that is already registered.
@@ -100,6 +115,9 @@ type Config struct {
 	// implements ShopStore (Postgres) the catalog is synced to the cosmetics table at
 	// start and /api/shop is served.
 	Cosmetics *content.CosmeticShop
+	// ReservedNames are names new characters may not take (auth.Config.ReservedNames):
+	// the NPCs' names (auth.NPCReservedNames). Nil: only the staff words are reserved.
+	ReservedNames []string
 	// Looks is data/looks.yaml (docs/02 "Apariencia"): the bodies a new character may pick
 	// and the game checks. Nil: no looks (a look sent at creation is ignored).
 	Looks *content.Looks
@@ -153,6 +171,7 @@ func New(cfg Config) (*App, error) {
 		SessionsRevoked: a.sessionsRevoked,
 		Providers:       cfg.Providers,
 		OAuth:           oauthRepo,
+		ReservedNames:   cfg.ReservedNames,
 	})
 	if err != nil {
 		return nil, err
@@ -199,6 +218,7 @@ func New(cfg Config) (*App, error) {
 		TrustProxy:   cfg.TrustProxy,
 		// The zero value keeps httpapi.DefaultAuthRateLimit.
 		AuthRateLimit: cfg.AuthRateLimit,
+		DeviceKey:     cfg.DeviceKey,
 		Highscores:    highscores,
 		Guilds:        publicGuilds,
 		Houses:        houses,
@@ -225,7 +245,12 @@ func New(cfg Config) (*App, error) {
 
 	var systems []game.System
 	// The loop's seeded source; the World rolls item attributes with it too (session.Config.Rand).
-	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed))
+	// SeedHi 0 = Seed again: the replayable (seed, seed) source of -seed and the tests.
+	seedHi := cfg.SeedHi
+	if seedHi == 0 {
+		seedHi = cfg.Seed
+	}
+	rng := rand.New(rand.NewPCG(cfg.Seed, seedHi))
 	if cfg.Map != nil {
 		ms, _ := cfg.Store.(MarketStore)
 		var writeTransfer func(context.Context, session.Transfer) error
@@ -313,6 +338,8 @@ func New(cfg Config) (*App, error) {
 			Alert:          economyAlert(cfg.Metrics),
 			AutosaveEvery:  cfg.AutosaveEvery,
 			Logger:         cfg.Logger,
+
+			MaxCharactersPerAccount: cfg.MaxCharactersPerAccount,
 		})
 		if err != nil {
 			return nil, err
@@ -355,6 +382,9 @@ func New(cfg Config) (*App, error) {
 			MinClientVersion: cfg.MinClientVersion,
 			OriginPatterns:   cfg.OriginPatterns,
 			Metrics:          gatewayMetrics(cfg.Metrics),
+			TrustProxy:       cfg.TrustProxy,
+			Limits:           cfg.WSLimits,
+			ExemptLoopback:   cfg.WSExemptLoopback,
 		})
 		if err != nil {
 			return nil, err

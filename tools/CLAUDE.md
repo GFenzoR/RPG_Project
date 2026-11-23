@@ -71,6 +71,25 @@ combate cierra la conexión y queda link-dead (`left_link_dead` del reporte, no 
 el ritmo de los perfiles de `server/pkg/bot` (los mismos del test de la detección de bots):
 el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico no.
 
+## launcher (Go)
+`tools/launcher`: el lanzador de doble clic del home stack (`make launcher` →
+`NequesRealm-Servidor.exe` en la raíz, ignorado por git; docs/13 "La forma más fácil: doble
+clic"). Módulo Go propio, solo biblioteca estándar, como `tools/bots` (está en
+`GO_MODULES` y tiene su job `go (tools/launcher)` en la CI). No duplica lógica:
+arranca con `deploy/home.sh up` (`BUILD=0` salvo que cambie el commit o haya cambios sin
+commitear, `build/launcher-state.json`), invita con `deploy/home-tunnel.sh` y apaga con los
+mismos archivos y perfiles de compose que `make home-down` (un test compara
+`homeProfiles` con `HOME_PROFILES` del Makefile y `ALL_PROFILES` de `home.sh`). Lo puro
+(buscar el repo, armar el PATH, elegir el `bash.exe` de Git y nunca el de WSL, decidir el
+rebuild, args de compose, el menú) está en `logic.go` con tests en `logic_test.go`; lo
+que toca procesos, en `launcher.go`, `docker.go` e `interactive.go`. Las preguntas que
+corta Ctrl+C (`prompter`, `interrupts`: la lectura pendiente, el EOF falso de Windows) y
+la pregunta de cerrar Docker y WSL (Enter = no si corren contenedores ajenos a
+`rpg-home`) tienen tests en `interactive_test.go`. La CI también corre
+`GOOS=windows go vet` en este módulo. Los textos al dueño
+van en español neutro (por eso `misspell` no mira esta carpeta). Subcomandos sin
+preguntas: `up [--rebuild] [--open]`, `down [--stop-docker]`, `status`.
+
 ## gemini (Python, solo desarrollo)
 `tools/gemini` maneja la app web de Gemini **en el Chrome del dueño** para pedir arte y
 música, y trae lo que devuelve a nuestra grilla, paleta y formato de audio. Es un port de

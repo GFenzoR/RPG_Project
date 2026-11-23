@@ -25,7 +25,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: tag matches client/package.json and the server URL is https
         env:
           TAG: ${{ github.ref_name }}
@@ -50,12 +50,12 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-      - uses: Swatinem/rust-cache@v2.9.3
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: apps/desktop/src-tauri -> target
           key: release-check
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -90,7 +90,7 @@ jobs:
             args: --target universal-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: system libraries (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -102,17 +102,17 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
           if [ "${{ runner.os }}" = macOS ]; then rustup target add aarch64-apple-darwin x86_64-apple-darwin; fi
-      - uses: Swatinem/rust-cache@v2.9.3
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: apps/desktop/src-tauri -> target
           key: ${{ matrix.name }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: tauri-apps/tauri-action@v1.0.0
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Compiled in as the default server (apps/desktop/src-tauri/src/config.rs).

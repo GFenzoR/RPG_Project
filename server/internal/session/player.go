@@ -171,14 +171,20 @@ type Player struct {
 	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
-	// pre is p's snapshot from the end of the command (or tick) in which it last gave
-	// something away to the public ground (T5.3 fail-safe, hold.go gaveAway). p's next
-	// transfer writes it first, so a dropped transfer never takes p back to a save that
-	// still has it. gave is set from the give-away until that snapshot is taken
-	// (settleGivers). Both are cleared by any later snapshot of p, which is submitted
-	// behind the give-away anyway (snapshot).
-	pre  *Snapshot
+	// gave is set from a give-away to the public ground (T5.3 fail-safe, lote 16, hold.go
+	// gaveAway) until p's snapshot after it is taken: settleGivers submits it at once,
+	// or at the end of its coalescing window (giveNext). Any snapshot of p clears it.
 	gave bool
+	// gaveRoots are where p's give-aways since its last snapshot landed (the pile or the
+	// container lying on the street): the next snapshot of p reserves them to p with its
+	// seq (heldGround), so nobody else takes them before the database has p without them.
+	// giveWait are the ones already reserved while their save waits for giveNext (the
+	// tick the next give-away save may go out: one per giveSaveEvery); giveDue: p is in
+	// World.giveDue.
+	gaveRoots []*Item
+	giveWait  []*Item
+	giveNext  game.Tick
+	giveDue   bool
 	// left are the piles and containers on the public ground that leftHouse reserved to p
 	// since its last transfer snapshot: the house write that took them out numbers their
 	// reservations with p's snapshot in it (hold.go numberLeft). What p gave away in a
@@ -279,6 +285,10 @@ type Player struct {
 	lookOff  bool
 	// lookDirty: in World.lookDirty, its CreatureLook goes out at the end of the tick.
 	lookDirty bool
+	// turnTAT: the Turn broadcast anti-flood (GCRA, move.go turnFlood); turnHeld: in
+	// World.turnHeld, its last direction not told to the observers yet.
+	turnTAT  game.Tick
+	turnHeld bool
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -379,10 +389,11 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
 	w.saveSeq++
-	// T5.3: a snapshot is submitted (a save or a transfer's) behind whatever p gave away
-	// so far: the one kept for p's next transfer (gaveAway) is not needed any more. The one
-	// settleGivers keeps is taken here too, and kept again right after.
-	p.pre, p.gave = nil, false
+	// T5.3 / lote 16: every snapshot is submitted (a save or a transfer's), and it comes
+	// after whatever p gave away so far: what that landed in is reserved to p until the
+	// database acks this snapshot (hold.go reserveGave).
+	w.reserveGave(p, w.saveSeq)
+	p.gave = false
 	clear(p.given)
 	p.given = p.given[:0]
 	return Snapshot{
@@ -410,13 +421,18 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 // character is already online, the old connection is closed (LOGGED_IN_ELSEWHERE) and
 // the new one takes over its in-memory state.
 func (w *World) Join(c Character, client Client) game.Command {
-	return game.CommandFunc(func(ctx *game.TickContext) { w.join(ctx, c, client) })
+	// Lifecycle lane (game/fairness.go): a flooded queue never refuses a login.
+	return game.LifecycleFunc(func(ctx *game.TickContext) { w.join(ctx, c, client) })
 }
 
 // Leave returns the command that removes client's player (connection closed). It is
 // idempotent: a client that already left is ignored. In combat the player stays link-dead
 // instead (linkDeadOnLeave), also when the loop closed the connection itself (disconnect):
 // the gateway's Leave that follows changes nothing.
+//
+// It stays in the shared queue, behind what the connection enqueued before it (an attack
+// sent right before closing still counts); the gateway moves it to the lifecycle lane only
+// when that queue is full (gateway leave).
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
@@ -435,8 +451,11 @@ func (w *World) Leave(client Client) game.Command {
 // freed (T5.3, hold.go). So one ack stands for every earlier one of its character: the
 // app retries only the highest seq per character the full queue refused, and a late
 // ack is harmless.
+//
+// It goes through the lifecycle lane, like LoginStarted: the two must share one FIFO
+// (see LoginStarted). The acks are bounded by the saves, so they cannot flood the lane.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) {
+	return game.LifecycleFunc(func(*game.TickContext) {
 		if s, ok := w.unsaved[characterID]; ok && s.Seq <= seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
 		}
@@ -446,15 +465,18 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 
 // LoginStarted returns the command the gateway enqueues before it reads a character
 // from the database. It must be followed by Join or LoginAborted for the same
-// character. Because the queue is FIFO, an ack of a save that the read may have missed
-// runs after it and keeps the unsaved snapshot for the Join.
+// character. LoginStarted and Saved both go through the lifecycle lane, which is FIFO:
+// the gateway enqueues LoginStarted before it reads, so the ack of a save that the read
+// may have missed is enqueued after it, runs after it and keeps the unsaved snapshot for
+// the Join. (With Saved in the shared queue, an ack enqueued while that queue is being
+// drained would run before a LoginStarted waiting in the lane for the next tick.)
 func (w *World) LoginStarted(characterID int64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) { w.loading[characterID]++ })
+	return game.LifecycleFunc(func(*game.TickContext) { w.loading[characterID]++ })
 }
 
 // LoginAborted returns the command that ends a LoginStarted whose Join never comes.
 func (w *World) LoginAborted(characterID int64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) { w.loginDone(characterID) })
+	return game.LifecycleFunc(func(*game.TickContext) { w.loginDone(characterID) })
 }
 
 func (w *World) loginDone(characterID int64) {
@@ -463,6 +485,16 @@ func (w *World) loginDone(characterID int64) {
 	} else {
 		w.loading[characterID]--
 	}
+}
+
+// accountFull reports whether the account already has Config.MaxCharactersPerAccount
+// characters in the world (link-dead ones included). Loop goroutine only.
+func (w *World) accountFull(accountID int64) bool {
+	limit := w.cfg.MaxCharactersPerAccount
+	if limit < 0 {
+		return false
+	}
+	return w.byAccount[accountID] >= limit // O(1) per Join (review of lote 16)
 }
 
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
@@ -480,6 +512,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		// T5.3: a trade or market change of the character could not be saved; the database
 		// is behind its last state in memory, which was dropped. Until a restart.
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED)
+		return
+	}
+	if w.byChar[c.ID] == nil && w.accountFull(c.AccountID) {
+		// Audit lote 16: one account cannot fill the world with its characters. Taking
+		// over a character already online (below) is not a new one.
+		client.Close(pb.DisconnectReason_DISCONNECT_REASON_TOO_MANY_CHARACTERS)
 		return
 	}
 	voc, ok := w.cfg.Vocations[c.Vocation]
@@ -560,6 +598,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.published.Store(int32(len(w.players)))
 	w.byClient[client] = p
 	w.byChar[c.ID] = p
+	w.byAccount[p.accountID]++
 	w.index(p)
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
@@ -658,6 +697,11 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
 		delete(w.byChar, p.charID)
+	}
+	if n := w.byAccount[p.accountID]; n > 1 {
+		w.byAccount[p.accountID] = n - 1
+	} else {
+		delete(w.byAccount, p.accountID)
 	}
 	i := sort.Search(len(w.players), func(i int) bool { return w.players[i].id >= p.id })
 	w.players = append(w.players[:i], w.players[i+1:]...)

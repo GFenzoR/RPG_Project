@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	"github.com/GFenzoR/RPG_Project/server/internal/net/clientip"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
@@ -34,8 +37,10 @@ const (
 	// DefaultMinClientVersion is the oldest client version the server accepts.
 	DefaultMinClientVersion = "0.1.0"
 	// MaxMessageBytes is the largest client frame (docs/05: 4 KB).
-	MaxMessageBytes  = 4096
-	DefaultHelloWait = 10 * time.Second
+	MaxMessageBytes = 4096
+	// DefaultHelloWait is how long a new connection may take to send its Hello (audit
+	// lote 16: short, so idle sockets do not pile up).
+	DefaultHelloWait = 5 * time.Second
 	// DefaultOutQueue bounds the batches waiting for a connection: 128 ticks ≈ 6.4 s.
 	DefaultOutQueue     = 128
 	DefaultWriteTimeout = 10 * time.Second
@@ -80,6 +85,17 @@ type Config struct {
 	WriteTimeout   time.Duration // default DefaultWriteTimeout
 	// Metrics, if set, counts the connections and the bytes sent (internal/metrics).
 	Metrics Observer
+	// TrustProxy takes the client key from the last X-Forwarded-For entry (behind Caddy),
+	// as the HTTP API does (clientip.Key).
+	TrustProxy bool
+	// Limits bounds the connections, handshakes and queued commands (admit.go); zero
+	// fields take DefaultLimits.
+	Limits Limits
+	// ExemptLoopback skips the per-client limits for loopback clients (a development
+	// server, the bots and the E2E harness on one machine). Never in production.
+	ExemptLoopback bool
+	// LogEvery is the interval of the throttled logs (default DefaultLogEvery).
+	LogEvery time.Duration
 }
 
 // Observer receives network metrics. Its methods are called from connection goroutines.
@@ -87,6 +103,27 @@ type Observer interface {
 	Sent(bytes int)
 	ConnOpened()
 	ConnClosed()
+	// ConnRefused counts a /ws connection refused by the limits (admit.go), by reason:
+	// RefusedClientLimit, RefusedServerBusy or RefusedServerFull.
+	ConnRefused(reason string)
+}
+
+// Reasons of Observer.ConnRefused.
+const (
+	// RefusedClientLimit is an HTTP 429: the client's own limits (connections, pending
+	// handshakes, handshake bucket).
+	RefusedClientLimit = "client_limit"
+	// RefusedServerBusy is an HTTP 503: the server's handshake limits.
+	RefusedServerBusy = "server_busy"
+	// RefusedServerFull is a Disconnect{SERVER_FULL} after the Hello.
+	RefusedServerFull = "server_full"
+)
+
+// refused counts a refused connection (no Metrics: nothing).
+func (g *Gateway) refused(reason string) {
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnRefused(reason)
+	}
 }
 
 // Gateway serves /ws.
@@ -94,6 +131,11 @@ type Gateway struct {
 	cfg    Config
 	minVer version
 	log    *slog.Logger
+
+	adm *admission
+	// Throttled logs (one record per LogEvery with the count): failed redeems and
+	// character loads, logins refused by a full queue.
+	redeemLog, loadLog, queueLog *logEvery
 
 	mu       sync.Mutex
 	conns    map[*conn]struct{}
@@ -129,7 +171,14 @@ func New(cfg Config) (*Gateway, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	return &Gateway{cfg: cfg, minVer: minVer, log: cfg.Logger, conns: map[*conn]struct{}{}, stopCh: make(chan struct{})}, nil
+	if cfg.LogEvery <= 0 {
+		cfg.LogEvery = DefaultLogEvery
+	}
+	cfg.Limits = cfg.Limits.withDefaults()
+	return &Gateway{cfg: cfg, minVer: minVer, log: cfg.Logger, conns: map[*conn]struct{}{}, stopCh: make(chan struct{}),
+		adm:       newAdmission(cfg.Limits),
+		redeemLog: &logEvery{interval: cfg.LogEvery}, loadLog: &logEvery{interval: cfg.LogEvery},
+		queueLog: &logEvery{interval: cfg.LogEvery}}, nil
 }
 
 // Connections returns how many connections are open.
@@ -193,8 +242,23 @@ func (g *Gateway) untrack(c *conn) {
 	g.wg.Done()
 }
 
-// ServeHTTP upgrades the request and runs the connection until it closes.
+// ServeHTTP upgrades the request and runs the connection until it closes. The
+// connection limits (admit.go) are checked first: a refused client gets HTTP 429 (its
+// own limits) or 503 (the server's) and is never upgraded.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	key := clientip.Key(r, g.cfg.TrustProxy)
+	t, status := g.adm.admit(key, g.cfg.ExemptLoopback && clientip.IsLoopback(key), g.cfg.Clock.Now())
+	if t == nil {
+		if status == http.StatusTooManyRequests {
+			g.refused(RefusedClientLimit)
+		} else {
+			g.refused(RefusedServerBusy)
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter(status, g.cfg.Limits)))
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	defer t.close()
 	// http.Server's read and write timeouts would stay on the hijacked connection and
 	// cut it after a few seconds; the gateway bounds reads and writes itself.
 	rc := http.NewResponseController(w)
@@ -205,9 +269,16 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return // Accept already answered the request
 	}
 	ws.SetReadLimit(MaxMessageBytes)
+	quota := g.cfg.Limits.MaxQueuedPerConn
+	if quota < 0 {
+		quota = 1 << 30 // no limit
+	}
 	c := &conn{
 		g:       g,
 		ws:      ws,
+		ticket:  t,
+		quota:   game.NewQuota(quota),
+		drops:   &logEvery{interval: g.cfg.LogEvery},
 		out:     make(chan *pb.ServerBatch, g.cfg.OutQueue),
 		closing: make(chan struct{}),
 		done:    make(chan struct{}),
@@ -225,9 +296,14 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ---- connection -------------------------------------------------------------------
 
 type conn struct {
-	g   *Gateway
-	ws  *websocket.Conn
-	out chan *pb.ServerBatch
+	g      *Gateway
+	ws     *websocket.Conn
+	ticket *ticket
+	// quota bounds this connection's commands waiting in the loop (game.Quota).
+	quota *game.Quota
+	// drops throttles the log of the commands dropped (full queue or quota).
+	drops *logEvery
+	out   chan *pb.ServerBatch
 
 	closeOnce sync.Mutex
 	closed    bool
@@ -263,14 +339,30 @@ func (c *conn) run(ctx context.Context) {
 	if !ok {
 		return
 	}
-	if err := g.cfg.Loop.Enqueue(g.cfg.World.Join(char, c)); err != nil {
-		g.log.Warn("gateway: loop queue full, login refused", "character", char.ID)
+	// The Join goes through the lifecycle lane and the connection's other commands (its
+	// input, its Leave) through the shared queue, which a tick may drain before a Join
+	// that arrived after the lane's drain. So nothing else of this connection is enqueued
+	// until the Join has run: a Leave that ran first would be ignored and the Join would
+	// then put in a player bound to a closed connection.
+	joined := make(chan struct{})
+	join := g.cfg.World.Join(char, c)
+	if err := g.cfg.Loop.Enqueue(game.LifecycleFunc(func(tc *game.TickContext) {
+		defer close(joined) // also when the Join panics (the loop recovers it)
+		join.Execute(tc)
+	})); err != nil {
+		g.logQueueFull(char.ID)
 		c.abortLogin(char.ID)
-		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
+		g.refused(RefusedServerFull)
+		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 		_ = c.ws.Close(websocket.StatusTryAgainLater, "")
 		return
 	}
+	c.ticket.authenticated()
 	go c.writer()
+	select {
+	case <-joined:
+	case <-g.stopCh: // the loop may never run it; leave returns at once too
+	}
 	c.reader(ctx, char.ID)
 	c.leave()
 	c.Close(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
@@ -282,6 +374,9 @@ func (c *conn) run(ctx context.Context) {
 func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	g := c.g
 	refuse := func(reason pb.DisconnectReason) (session.Character, bool) {
+		if reason == pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {
+			g.refused(RefusedServerFull)
+		}
 		_ = g.writeDisconnect(ctx, c.ws, reason)
 		_ = c.ws.Close(websocket.StatusPolicyViolation, "")
 		return session.Character{}, false
@@ -301,6 +396,20 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	if v, ok := parseVersion(hello.GetClientVersion()); !ok || !v.compatible(g.minVer) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT)
 	}
+	if !validToken(hello.GetSessionToken()) {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION) // never reaches the database
+	}
+	if !g.adm.playerRoom() {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL) // never reaches the database
+	}
+	// One of MaxHandshakes database slots, waited for at most HelloWait.
+	sctx, scancel := context.WithTimeout(ctx, g.cfg.HelloWait)
+	gotSlot := g.adm.acquireDB(sctx.Done())
+	scancel()
+	if !gotSlot {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
+	}
+	defer g.adm.releaseDB()
 	rctx, rcancel := context.WithTimeout(ctx, dbTimeout)
 	accountID, charID, err := g.cfg.Accounts.RedeemPlayToken(rctx, hello.GetSessionToken())
 	rcancel()
@@ -308,14 +417,22 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
 	}
 	if err != nil {
-		g.log.Error("gateway: redeem play token", "err", err)
+		if n := g.redeemLog.hit(g.cfg.Clock.Now()); n > 0 {
+			g.log.Error("gateway: redeem play token", "err", err, "count", n)
+		}
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
+	}
+	// The MaxPlayers slot is taken only now: a forged token never holds one while it
+	// waits for a database slot or its redeem. Another login may have taken the last one
+	// meanwhile; this token is spent then, and the client logs in again.
+	if !c.ticket.reservePlayer() {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
 	// Tell the loop a read is in flight before reading, so the ack of a save this read
 	// may miss cannot drop the snapshot the Join will need (see session.LoginStarted).
 	if err := g.cfg.Loop.Enqueue(g.cfg.World.LoginStarted(charID)); err != nil {
-		g.log.Warn("gateway: loop queue full, login refused", "character", charID)
-		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
+		g.logQueueFull(charID)
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
 	pctx, pcancel := context.WithTimeout(ctx, dbTimeout)
 	pc, err := g.cfg.Characters.PlayCharacter(pctx, accountID, charID, g.cfg.Clock.Now())
@@ -325,10 +442,27 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		if errors.Is(err, store.ErrNotFound) {
 			return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
 		}
-		g.log.Error("gateway: load character", "character", charID, "err", err)
+		if n := g.loadLog.hit(g.cfg.Clock.Now()); n > 0 {
+			g.log.Error("gateway: load character", "character", charID, "err", err, "count", n)
+		}
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 	}
 	return toCharacter(pc), true
+}
+
+// logQueueFull logs (throttled) a login refused because the loop's lifecycle lane is full.
+func (g *Gateway) logQueueFull(charID int64) {
+	if n := g.queueLog.hit(g.cfg.Clock.Now()); n > 0 {
+		g.log.Warn("gateway: loop queue full, login refused", "character", charID, "count", n)
+	}
+}
+
+// retryAfter is the Retry-After (seconds) of a refused upgrade.
+func retryAfter(status int, l Limits) int {
+	if status == http.StatusTooManyRequests && l.HandshakeEvery > 0 {
+		return max(int((l.HandshakeEvery+time.Second-1)/time.Second), 1)
+	}
+	return 5
 }
 
 func toCharacter(pc store.PlayCharacter) session.Character {
@@ -389,6 +523,15 @@ func itemStates(in []store.InventoryItem) []session.ItemState {
 // abuses the rate limit or sends something malformed.
 func (c *conn) reader(ctx context.Context, charID int64) {
 	g := c.g
+	defer func() {
+		// A bug here must not take the process down nor skip the Leave (run calls it).
+		if r := recover(); r != nil {
+			g.log.Error("gateway: reader panic", "character", charID, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		}
+		if n := c.drops.flush(); n > 0 {
+			g.log.Warn("gateway: commands dropped", "character", charID, "count", n)
+		}
+	}()
 	lim := newLimiter(g.cfg.RateLimit, g.cfg.Clock.Now())
 	// Reads stop when the writer closes the socket (Close, slow client, shutdown).
 	for {
@@ -413,8 +556,11 @@ func (c *conn) reader(ctx context.Context, charID int64) {
 		if msg.GetHello() != nil {
 			continue
 		}
-		if err := g.cfg.Loop.Enqueue(g.cfg.World.Input(c, msg)); err != nil {
-			g.log.Warn("gateway: loop queue full, command dropped", "character", charID)
+		// Through the connection's quota: one client cannot fill the shared queue.
+		if err := c.quota.Enqueue(g.cfg.Loop, g.cfg.World.Input(c, msg)); err != nil {
+			if n := c.drops.hit(g.cfg.Clock.Now()); n > 0 {
+				g.log.Warn("gateway: commands dropped", "character", charID, "count", n, "err", err)
+			}
 		}
 	}
 }
@@ -426,11 +572,14 @@ func (c *conn) abortLogin(charID int64) { c.mustEnqueue(c.g.cfg.World.LoginAbort
 // stay in the world), so a full queue is retried until it has room or the server stops.
 func (c *conn) leave() { c.mustEnqueue(c.g.cfg.World.Leave(c)) }
 
-// mustEnqueue retries cmd until the queue has room or the server stops.
+// mustEnqueue retries cmd until the queue has room or the server stops. When the shared
+// queue is full it goes through the lifecycle lane instead (game/fairness.go), which
+// may run it before commands this connection queued earlier: only under overload.
 func (c *conn) mustEnqueue(cmd game.Command) {
 	g := c.g
+	life := game.LifecycleFunc(cmd.Execute)
 	for {
-		if g.cfg.Loop.Enqueue(cmd) == nil {
+		if g.cfg.Loop.Enqueue(cmd) == nil || g.cfg.Loop.Enqueue(life) == nil {
 			return
 		}
 		select {
@@ -448,6 +597,14 @@ var bufPool = sync.Pool{New: func() any { b := make([]byte, 0, 4096); return &b 
 func (c *conn) writer() {
 	defer close(c.done)
 	g := c.g
+	defer func() {
+		// A bug here must not take the process down: close the socket, so the reader
+		// fails, leaves and closes as after a write error.
+		if r := recover(); r != nil {
+			g.log.Error("gateway: writer panic", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+			_ = c.ws.CloseNow()
+		}
+	}()
 	ctx := context.Background()
 	for {
 		select {

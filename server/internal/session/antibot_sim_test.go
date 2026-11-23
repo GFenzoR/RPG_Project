@@ -45,9 +45,9 @@ func (b *simBot) tick(h *harness, now game.Tick) {
 	// A human answers a presence check after reading it; a script never does.
 	for _, e := range b.cl.take() {
 		if c := e.GetPresenceCheck(); c != nil && b.prof.Wander {
-			want := strings.TrimPrefix(c.GetQuestion().GetKey(), "presence.question.")
+			want := presenceWant(c)
 			for _, o := range c.GetOptions() {
-				if o.GetText().GetKey() == "presence.option."+want {
+				if o.GetText().GetKey() == want {
 					h.input(b.cl, &pb.ClientMessage{Message: &pb.ClientMessage_PresenceAnswer{
 						PresenceAnswer: &pb.PresenceAnswer{CheckId: c.GetCheckId(), OptionId: o.GetOptionId()}}})
 					b.answered++

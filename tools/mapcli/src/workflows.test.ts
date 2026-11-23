@@ -26,6 +26,8 @@ interface Action {
   runs?: { using?: string; steps?: Step[] };
 }
 interface Job {
+  name?: string;
+  needs?: string | string[];
   if?: string;
   permissions?: unknown;
   secrets?: unknown;
@@ -114,6 +116,7 @@ describe("workflows", () => {
       "map-pr-comment.yml",
       "map-pr.yml",
       "release-desktop.yml",
+      "security.yml",
     ]);
   });
 
@@ -194,6 +197,52 @@ describe("workflows", () => {
     expect(secretRefs(fake("a: ${{\n  secrets.X\n}}"))).toEqual(["secrets.X"]);
     expect(secretRefs(fake("a: ${{ github.event.mysecrets }}"))).toEqual([]);
     expect(secretRefs(fake("# no secrets here, ${{ github.token }}"))).toEqual([]);
+  });
+});
+
+describe('required checks (docs/18 "Checklist del operador")', () => {
+  // Branch protection requires checks by job name: each workflow whose check main
+  // requires has one job named like the workflow that waits for all the others, also
+  // when one fails (if: always()), and fails unless each passed or was skipped.
+  for (const file of ["ci.yml", "security.yml"]) {
+    it(`${file} has a job named like the workflow that needs every other job`, () => {
+      const w = byFile(file);
+      const name = String(w.name);
+      const gate = w.jobs[name];
+      expect(gate, `${file}: no job "${name}"`).toBeDefined();
+      expect(gate?.name).toBe(name);
+      expect(gate?.if).toBe("always()");
+      const others = Object.keys(w.jobs).filter((id) => id !== name);
+      const needs = gate?.needs;
+      expect([...(Array.isArray(needs) ? needs : [needs])].sort()).toEqual(others.sort());
+      const step = gate?.steps?.at(-1);
+      expect(step?.env?.RESULTS).toBe("${{ join(needs.*.result, ' ') }}");
+      expect(step?.run).toMatch(/success \| skipped\) ;;/);
+      expect(step?.run).toContain("exit 1");
+      // No other job takes the name (two checks named "ci" would be ambiguous).
+      for (const id of others) expect(w.jobs[id]?.name, `${file} ${id}`).not.toBe(name);
+    });
+  }
+});
+
+describe('.gitleaks.toml (docs/18 "Secretos en git")', () => {
+  const text = readFileSync(join(repo, ".gitleaks.toml"), "utf8");
+  /** The ''' quoted entries of every `key = [ ... ]` list of the file. */
+  const quoted = (key: string): string[] =>
+    [...text.matchAll(new RegExp(`^${key} = \\[([\\s\\S]*?)^\\]`, "gm"))].flatMap((m) =>
+      [...(m[1] ?? "").matchAll(/'''(.*?)'''/g)].map((q) => q[1] ?? ""),
+    );
+
+  it("exempts no file by path but the fake OAuth provider (a secret pasted in a test is reported)", () => {
+    expect(quoted("paths")).toEqual(["(^|/)server/internal/oauth/oauthtest/"]);
+  });
+
+  it("allows only specific fake values, never a fragment any finding could contain", () => {
+    const regexes = quoted("regexes");
+    expect(regexes.length).toBeGreaterThan(0);
+    // A short fragment ("s3cret", "test") would hide any real secret that contains it.
+    for (const r of regexes)
+      expect(r.replace(/[\\^$[\]().*+?|]/g, "").length, r).toBeGreaterThan(8);
   });
 });
 

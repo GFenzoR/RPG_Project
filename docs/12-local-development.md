@@ -129,7 +129,9 @@ personaje recién creado puede tardar ese minuto en aparecer.
 
 ### Roles de staff (T2.6)
 Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a entrar:
-`make set-role EMAIL=tu@correo ROLE=admin NOTE="dev"`. `make audit-log` muestra el log de
+`make set-role EMAIL=tu@correo ROLE=admin NOTE="dev" ALLOW_UNVERIFIED=1` (sin
+`ALLOW_UNVERIFIED=1` se niega a subir una cuenta que no confirmó su email; con `make dev`
+puedes confirmarlo en Mailpit, docs/09 "Roles de staff"). `make audit-log` muestra el log de
 auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 `02-game-design.md` ("Moderación").
 
@@ -213,8 +215,9 @@ IP), corre los bots y lo apaga. Deja el reporte en `build/loadtest-<escenario>-<
 el log del servidor en `build/loadtest-server.log`. Los bots reusan cuentas y personajes
 del mismo `PREFIX` (por defecto `load`), así que se puede repetir sin limpiar la base.
 `PREFIX` son 2–12 letras minúsculas y pasa a ser la segunda palabra del nombre
-(`Botaa Load`). Se rechazan los prefijos que darían un nombre reservado para staff (`dev`;
-`mine`, porque genera `Botad Mine`, que contiene "admin"). El script falla si algo ya
+(`Duoaa Load`; 2 bots por cuenta, `load-0@pair.bots.local`). Se rechazan los prefijos que
+darían un nombre reservado para staff (`dev`; `mine`, porque genera `Duoad Mine`, que
+contiene "admin"). El script falla si algo ya
 responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta máquina, los
 bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
 En Windows nativo, Git Bash no puede mandarle SIGINT ni SIGTERM a un proceso nativo (solo
@@ -244,7 +247,8 @@ make monitoring-down   # apaga todo (los volúmenes quedan)
   `deploy/.env`.
 - Para cambiar un umbral, edita `deploy/monitoring/prometheus/rules/alerts.yml` (y su test
   en `prometheus/tests/alerts_test.yml`), corre `make monitoring-check` y recarga:
-  `curl -X POST localhost:9090/-/reload`.
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env kill -s SIGHUP prometheus`
+  (Prometheus ya no acepta `POST /-/reload`: corre sin `--web.enable-lifecycle`).
 - El dashboard es `deploy/monitoring/grafana/dashboards/rpg-overview.json`. Grafana no
   guarda cambios hechos en la UI: exporta el JSON y commitéalo.
 

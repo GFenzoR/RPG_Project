@@ -30,6 +30,10 @@ type Config struct {
 	Systems []System
 	// QueueCapacity bounds the command queue (default DefaultQueueCapacity).
 	QueueCapacity int
+	// LifecycleCapacity bounds the lifecycle lane (LifecycleFunc: logins and logouts;
+	// default DefaultLifecycleCapacity). It is drained first every tick, up to
+	// MaxCommandsPerTick of its own.
+	LifecycleCapacity int
 	// MaxCommandsPerTick caps how many commands one tick executes
 	// (default DefaultMaxCommandsPerTick). The rest wait for the next tick.
 	MaxCommandsPerTick int
@@ -63,6 +67,7 @@ type Loop struct {
 	rand     *rand.Rand
 	systems  []System
 	queue    *commandQueue
+	life     *commandQueue // lifecycle lane (fairness.go)
 	sched    *Scheduler
 	maxCmds  int
 	logger   *slog.Logger
@@ -85,9 +90,9 @@ func New(cfg Config) (*Loop, error) {
 	if cfg.Rand == nil {
 		return nil, errors.New("game: Config.Rand is required")
 	}
-	if cfg.QueueCapacity < 0 || cfg.MaxCommandsPerTick < 0 {
-		return nil, fmt.Errorf("game: negative queue limits (capacity %d, per tick %d)",
-			cfg.QueueCapacity, cfg.MaxCommandsPerTick)
+	if cfg.QueueCapacity < 0 || cfg.MaxCommandsPerTick < 0 || cfg.LifecycleCapacity < 0 {
+		return nil, fmt.Errorf("game: negative queue limits (capacity %d, per tick %d, lifecycle %d)",
+			cfg.QueueCapacity, cfg.MaxCommandsPerTick, cfg.LifecycleCapacity)
 	}
 	for i, sys := range cfg.Systems {
 		if sys == nil {
@@ -96,6 +101,9 @@ func New(cfg Config) (*Loop, error) {
 	}
 	if cfg.QueueCapacity == 0 {
 		cfg.QueueCapacity = DefaultQueueCapacity
+	}
+	if cfg.LifecycleCapacity == 0 {
+		cfg.LifecycleCapacity = DefaultLifecycleCapacity
 	}
 	if cfg.MaxCommandsPerTick == 0 {
 		cfg.MaxCommandsPerTick = DefaultMaxCommandsPerTick
@@ -108,6 +116,7 @@ func New(cfg Config) (*Loop, error) {
 		rand:    cfg.Rand,
 		systems: append([]System(nil), cfg.Systems...),
 		queue:   newCommandQueue(cfg.QueueCapacity),
+		life:    newCommandQueue(cfg.LifecycleCapacity),
 		sched:   NewScheduler(),
 		maxCmds: cfg.MaxCommandsPerTick,
 		logger:  cfg.Logger,
@@ -119,10 +128,14 @@ func New(cfg Config) (*Loop, error) {
 }
 
 // Enqueue queues a command for the next tick without blocking. It is safe for concurrent
-// use and returns ErrQueueFull when the queue has no room.
+// use and returns ErrQueueFull when the queue has no room. A LifecycleFunc goes to the
+// lifecycle lane (fairness.go), which a full shared queue does not refuse.
 func (l *Loop) Enqueue(cmd Command) error {
 	if cmd == nil {
 		return errors.New("game: nil command")
+	}
+	if _, ok := cmd.(LifecycleFunc); ok {
+		return l.life.enqueue(cmd)
 	}
 	return l.queue.enqueue(cmd)
 }
@@ -159,14 +172,15 @@ func (l *Loop) Step() TickStats {
 
 	l.panics = 0
 	stats := TickStats{Tick: l.tick}
-	stats.Commands = l.queue.drain(l.maxCmds, l.execCmd)
+	// Logins and logouts first (fairness.go): they never wait behind a flood.
+	stats.Commands = l.life.drain(l.maxCmds, l.execCmd) + l.queue.drain(l.maxCmds, l.execCmd)
 	stats.Events = l.sched.runDue(l.tick, l.execEvent)
 	for _, sys := range l.systems {
 		l.runSystem(sys)
 	}
 
 	stats.Panics = l.panics
-	stats.Pending = l.queue.len()
+	stats.Pending = l.queue.len() + l.life.len()
 	stats.Duration = l.clock.Now().Sub(start)
 	stats.Overrun = stats.Duration > TickDuration
 	if stats.Overrun {
@@ -214,6 +228,9 @@ func (l *Loop) runSystem(sys System) {
 func (l *Loop) reportPanic(r any, kind string, unit any) {
 	l.panics++
 	attrs := []any{"kind", kind, "tick", uint64(l.tick), "panic", fmt.Sprint(r)}
+	if q, ok := unit.(quotaCommand); ok {
+		unit = q.unwrap() // the producer's command, not the quota wrapper
+	}
 	if unit != nil {
 		attrs = append(attrs, "type", fmt.Sprintf("%T", unit))
 	}

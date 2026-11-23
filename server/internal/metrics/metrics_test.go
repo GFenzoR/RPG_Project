@@ -20,6 +20,9 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	m.ConnOpened()
 	m.ConnOpened()
 	m.ConnClosed()
+	m.ConnRefused("client_limit")
+	m.ConnRefused("client_limit")
+	m.ConnRefused("server_full")
 	m.EconomyAlertKinds("mismatch", "log_dropped")
 	m.EconomyAlert("mismatch")
 	m.PersistenceError(WriterCharacter, OutcomeRetry)
@@ -63,6 +66,9 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		"ws_sent_bytes_total 128",
 		"ws_sent_batches_total 2",
 		"ws_connections 1",
+		`ws_refused_total{reason="client_limit"} 2`,
+		`ws_refused_total{reason="server_busy"} 0`,
+		`ws_refused_total{reason="server_full"} 1`,
 		`economy_alerts_total{kind="mismatch"} 1`,
 		`economy_alerts_total{kind="log_dropped"} 0`,
 		`persistence_errors_total{outcome="retry",writer="character"} 2`,
@@ -97,6 +103,7 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 	m.Sent(1)
 	m.ConnOpened()
 	m.ConnClosed()
+	m.ConnRefused("server_busy")
 	m.EconomyAlert("mismatch")
 	m.EconomyAlertKinds("mismatch")
 	m.PersistenceError(WriterAudit, OutcomeRetry)

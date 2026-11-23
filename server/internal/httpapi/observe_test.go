@@ -38,6 +38,7 @@ func TestObserveReportsRouteAndStatus(t *testing.T) {
 		outer.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", path, nil))
 	}
 	healthy = false
+	h.clock.Advance(time.Second) // past the cached ping
 	outer.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/healthz", nil))
 	h.do(req{method: "GET", path: "/elsewhere"}) // without the outer mux
 

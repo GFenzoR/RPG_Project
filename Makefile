@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-GO_MODULES := server tools/bots
+GO_MODULES := server tools/bots tools/launcher
 COMPOSE_DEV := docker compose -f deploy/docker-compose.dev.yml
 # Cloud sessions run Postgres as a VM service; local machines use Docker.
 IS_CLOUD := $(filter true,$(CLAUDE_CODE_REMOTE))
@@ -69,7 +69,7 @@ proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with
 ## ---- quality gates ---------------------------------------------------------
 
 .PHONY: test
-test: test-go test-ts test-parity ## Go + TS tests
+test: test-go test-ts test-parity test-deploy ## Go + TS tests (+ deploy script tests)
 
 .PHONY: test-go
 test-go:
@@ -80,7 +80,7 @@ test-ts:
 	pnpm test $(VITEST_ARGS)
 
 .PHONY: lint
-lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation
+lint: lint-go lint-ts lint-deploy validate ## golangci-lint + eslint/prettier/tsc + deploy checks + content validation
 
 .PHONY: lint-go
 lint-go:
@@ -90,10 +90,25 @@ lint-go:
 		(cd $$m && go vet ./... && golangci-lint run ./...); \
 	done
 
+# Lote 16: static checks of deploy/ that need no Docker daemon (deploy/tests/): the image's
+# Go = the go.mod toolchain, and the hardening of the compose stacks (docker compose config,
+# skipped without the docker CLI), Caddy headers, backups, deploy.sh and image signing.
+.PHONY: lint-deploy
+lint-deploy: ## Deploy checks: Go version match, compose/Caddy/backup/deploy hardening
+	bash deploy/tests/check-go-version.sh
+	bash deploy/tests/check-hardening.sh
+
+# deploy.sh and backup.sh against stub docker, cosign, pg_dump, aws and age.
+.PHONY: test-deploy
+test-deploy: ## Tests of deploy/deploy.sh and deploy/backup.sh (stubs, no Docker)
+	bash deploy/tests/backup_test.sh
+	bash deploy/tests/deploy_test.sh
+
 .PHONY: lint-ts
 lint-ts:
 	pnpm lint
 	pnpm typecheck
+	pnpm --filter @rpg/client test:build
 
 # Content tooling runs TypeScript directly (Node strips types; the flag is needed < 22.18).
 CONTENT_CLI := node --experimental-strip-types packages/content-schema/src/cli.ts
@@ -121,6 +136,34 @@ mapcompile: ## Compile world/ + data/items into build/world.bin (server map, wit
 .PHONY: test-parity
 test-parity: ## mapcompile vs packages/map-format walkability on every tile
 	cd server && RPG_MAPFORMAT_PARITY=1 go test -count=1 -run TestWalkableParityWithMapFormat ./internal/world/compile/
+
+# Lote 16 (docs/18, docs/08 "Fuzzing"): Go native fuzz targets, as <package dir>:<Fuzz
+# func> under server/. Their seeds already run in make test; this mutates them for FUZZTIME
+# each, one target after another (go test -fuzz takes one target per run). A failure leaves
+# the input in that package's testdata/fuzz/<Func>/: commit it with the fix.
+FUZZ_TARGETS := internal/net/gateway:FuzzClientFrame internal/session:FuzzInputDispatch internal/httpapi:FuzzJSONRoutes
+FUZZTIME ?= 30s
+.PHONY: fuzz
+fuzz: ## Fuzz every target for FUZZTIME (default 30s): make fuzz [FUZZTIME=5m] [FUZZ_TARGETS=pkg:Func]
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; fn=$${t##*:}; echo "==> fuzz $$fn ($$pkg, $(FUZZTIME))"; \
+		(cd server && go test -run '^$$' -fuzz "^$$fn\$$" -fuzztime $(FUZZTIME) ./$$pkg/); \
+	done
+
+# Lote 16 (docs/18): known vulnerabilities in what we ship and leaked secrets. The same
+# checks run in CI (.github/workflows/security.yml). govulncheck only fails on code that
+# actually reaches a vulnerable function; gitleaks is optional locally (CI always runs it).
+GOVULNCHECK_VERSION := v1.9.0
+AUDIT_GO_MODULES := server tools/bots tools/launcher deploy/healthcheck
+.PHONY: audit
+audit: ## govulncheck (Go modules) + pnpm audit --prod (high) + gitleaks over the history if installed
+	@set -e; for m in $(AUDIT_GO_MODULES); do echo "==> govulncheck ($$m)"; \
+		(cd $$m && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...); done
+	@echo "==> pnpm audit --prod --audit-level high"
+	pnpm audit --prod --audit-level high
+	@if command -v gitleaks >/dev/null 2>&1; then echo "==> gitleaks (git history)"; \
+		gitleaks git --config .gitleaks.toml --redact --no-banner .; \
+	else echo "==> gitleaks not installed: skipped (CI runs it; https://github.com/gitleaks/gitleaks)"; fi
 
 # Browser origins allowed on /ws in development: the client's Vite dev and preview servers
 # (also the webview of `make desktop-dev`). RPG_WS_ORIGINS replaces them.
@@ -161,8 +204,8 @@ run-server: mapcompile ## Compile the map and run the game server on it (RPG_WOR
 
 # Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
 .PHONY: set-role
-set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" (DATABASE_URL)
-	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)"
+set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" [ALLOW_UNVERIFIED=1] (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)" $(if $(filter 1,$(ALLOW_UNVERIFIED)),-allow-unverified)
 
 .PHONY: reset-link
 reset-link: ## Print a one-use password reset link: make reset-link EMAIL=... [PUBLIC_URL=http://localhost:5173] (DATABASE_URL)
@@ -495,7 +538,7 @@ home-up: home-check-eol ## Build, start and check the game on this PC; prints wh
 	@$(HOME_SH) up
 
 .PHONY: home-admin
-home-admin: ## Give a registered account a role: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]
+home-admin: ## Give a registered account a role: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player] [ALLOW_UNVERIFIED=1]
 	@$(HOME_SH) admin "$(EMAIL)" "$(or $(ROLE),admin)"
 
 .PHONY: home-reset-password
@@ -537,6 +580,30 @@ home-restore: ## Replace the home database with a backup: make home-restore FILE
 .PHONY: home-reset
 home-reset: ## Delete ALL data of the home stack (asks first; CONFIRM=yes skips the question)
 	@$(HOME_SH) reset
+
+## ---- double-click launcher (docs/13, "La forma más fácil: doble clic") ------
+
+# tools/launcher (Go, stdlib only): NequesRealm-Servidor.exe at the repo root starts the
+# home stack through deploy/home.sh, opens the game and shows a menu in Spanish. Built for
+# Windows always; on other systems also ./nequesrealm-servidor for this OS. Git ignores both.
+LAUNCHER_EXE := NequesRealm-Servidor.exe
+
+.PHONY: launcher
+launcher: ## Build NequesRealm-Servidor.exe: double-click it to start the game server on this PC (docs/13)
+	cd tools/launcher && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../../$(LAUNCHER_EXE) .
+ifneq ($(OS),Windows_NT)
+	cd tools/launcher && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ../../nequesrealm-servidor .
+endif
+	@echo "[launcher] built $(LAUNCHER_EXE): double-click it (docs/13-hosting-de-pruebas.md)"
+
+# Only when the owner runs it: a shortcut on the Windows desktop to the launcher.
+.PHONY: launcher-shortcut
+launcher-shortcut: launcher ## Windows: shortcut to NequesRealm-Servidor.exe on the desktop
+ifeq ($(OS),Windows_NT)
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/launcher-shortcut.ps1 -Target "$(CURDIR)/$(LAUNCHER_EXE)"
+else
+	@echo "[launcher-shortcut] only on Windows (Git Bash): on Linux or macOS run ./nequesrealm-servidor"
+endif
 
 ## ---- database ------------------------------------------------------------
 

@@ -29,6 +29,16 @@ grep -qi '<script' <<<"$game" && [[ $game != "$page" ]] || fail "/play/ is not t
 hs=$(curl "${curl_opts[@]}" "$base/highscores")
 [[ $hs == "$page" ]] || fail "/highscores does not fall back to the website page"
 ok "game page (/play/) and website routes"
+
+# Lote 16: the pages carry the Content Security Policy and friends (deploy/caddy-routes.caddy).
+for path in / /play/ /highscores; do
+	headers=$(curl "${curl_opts[@]}" -o /dev/null -D - "$base$path" | tr -d '\r')
+	grep -qi "^content-security-policy: default-src 'self'; script-src 'self';" <<<"$headers" || fail "$path has no CSP"
+	grep -qi "frame-ancestors 'none'" <<<"$headers" || fail "$path CSP lacks frame-ancestors"
+	grep -qi '^permissions-policy: camera=()' <<<"$headers" || fail "$path has no Permissions-Policy"
+	grep -qi '^cross-origin-opener-policy: same-origin' <<<"$headers" || fail "$path has no COOP"
+done
+ok "CSP, Permissions-Policy and COOP on /, /play/ and /highscores"
 status=$(curl "${curl_opts[@]}" "$base/api/status")
 grep -q '"online":true' <<<"$status" || fail "/api/status: $status"
 code=$(curl "${curl_opts[@]}" -o /dev/null -w '%{http_code}' "$base/api/highscores?category=level")

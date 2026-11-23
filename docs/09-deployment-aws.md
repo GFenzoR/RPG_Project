@@ -51,7 +51,7 @@ Las publica `.github/workflows/images.yml` en GitHub Container Registry, para
 |---|---|---|
 | `ghcr.io/gfenzor/rpg-project-gameserver` | binario estático, `world.bin`, `data/`, `i18n/`, usuario no root (65532) | ~7 MB comprimida |
 | `ghcr.io/gfenzor/rpg-project-web` | Caddy 2.11 + `dist/` del cliente | ~25 MB |
-| `ghcr.io/gfenzor/rpg-project-backup` | postgres:16-alpine (pg_dump) + AWS CLI, usuario `postgres` | la más grande (AWS CLI) |
+| `ghcr.io/gfenzor/rpg-project-backup` | postgres:16-alpine (pg_dump) + AWS CLI + age, usuario `postgres` | la más grande (AWS CLI) |
 
 - Go compila en la plataforma del runner (`$BUILDPLATFORM`) y cruza a la de destino: QEMU
   solo se usa para el `apk add` de la imagen de backup.
@@ -78,6 +78,49 @@ Las publica `.github/workflows/images.yml` en GitHub Container Registry, para
   `curl -sI https://<dominio>/sw.js | grep -i -e cache-control -e service-worker-allowed`.
 - En los PR que tocan algo que entra en una imagen, el workflow solo **construye** (sin
   push), así un Dockerfile roto falla en el PR.
+- **Versión de Go (lote 16):** `deploy/Dockerfile.gameserver` compila con
+  `ARG GO_VERSION=1.27.4` y los cuatro `go.mod` (`server`, `tools/bots`, `tools/launcher`,
+  `deploy/healthcheck`) dicen `go 1.26.0` + `toolchain go1.27.4` (lo que usan CI y tu PC).
+  `make lint-deploy` (dentro de `make lint`) falla si el Dockerfile y el toolchain no
+  coinciden: una imagen con un Go sin soporte trae vulnerabilidades de la biblioteca
+  estándar que `govulncheck` sobre los módulos no ve. Al subir Go, cambia las dos cosas.
+
+### Imágenes firmadas (lote 16)
+Un tag (`v1.2.0`, `latest`) se puede mover; un digest (`@sha256:…`) no. Por eso:
+
+1. `images.yml` firma cada digest que publica con **cosign sin claves** (Sigstore: el
+   certificado lo emite la identidad OIDC del propio workflow, `id-token: write`) y
+   verifica la firma en el mismo job.
+2. `deploy.sh` hace pull por tag, resuelve cada imagen del proyecto (gameserver, web,
+   backup y el worker de mapas si su perfil está activo) a `repo@sha256:…` y, si `cosign`
+   está instalado, verifica que la firma sea de
+   `https://github.com/GFenzoR/RPG_Project/.github/workflows/images.yml` en `main` o en un
+   tag `vX.Y.Z` (emisor `https://token.actions.githubusercontent.com`). Si la firma no
+   está o es de otro, **no despliega** nada.
+3. Solo cuando **todas** pasaron escribe los digests juntos en `.env` (`GAMESERVER_IMAGE`,
+   `WEB_IMAGE`, `BACKUP_IMAGE`, `MAP_PR_WORKER_IMAGE`); `docker-compose.yml` los prefiere
+   al tag, así los contenedores corren exactamente lo verificado. Si una firma falla
+   quedan los digests del despliegue anterior (el pull se hace sin ellos, por tag) y el
+   tag rechazado se borra de las imágenes locales: un `docker compose up` a mano sigue
+   corriendo lo último verificado. Cada `deploy.sh` los vuelve a calcular (no los edites
+   a mano); `--no-pull` los borra para usar imágenes locales.
+
+`COSIGN_REQUIRED`, `COSIGN_IDENTITY_REGEXP`, `COSIGN_OIDC_ISSUER`, `IMAGE_REGISTRY` e
+`IMAGE_TAG` se leen del entorno del shell y, si no están ahí, de `.env` (el mismo orden que
+usa compose; un valor entre comillas en `.env` vale sin ellas). La identidad acepta `main`
+y tags `vX.Y.Z`: un tag de prerelease (`v1.2.3-rc1`) sale firmado pero `deploy.sh` lo
+rechaza, salvo que `COSIGN_IDENTITY_REGEXP` lo permita. La firma es el último paso del job
+de cada imagen: una imagen que falla un chequeo de CI nunca queda firmada.
+
+Instala cosign en el servidor (binario de su release en GitHub, o el paquete de tu
+distribución) y deja `COSIGN_REQUIRED=1` en `.env`: así un servidor sin cosign se niega a
+desplegar en vez de avisar y seguir. `COSIGN_IDENTITY_REGEXP` y `COSIGN_OIDC_ISSUER`
+cambian la identidad esperada (solo para un fork). Comprobar a mano:
+```
+cosign verify ghcr.io/gfenzor/rpg-project-gameserver@sha256:<digest> \
+  --certificate-identity-regexp '^https://github\.com/GFenzoR/RPG_Project/\.github/workflows/images\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
 
 Tags:
 | Evento | Tags |
@@ -94,8 +137,9 @@ personal con permiso `read:packages`.
 1. Merge a `main` → CI verde → imágenes `:main` y `:sha-<7>`.
 2. Tag `vX.Y.Z` → `images.yml` publica `:X.Y.Z` y `:latest`. El cliente de escritorio
    tiene su propio tag `desktop-vX.Y.Z` (ver "Cliente de escritorio" abajo).
-3. En el servidor, `./deploy.sh vX.Y.Z`: fija `IMAGE_TAG` en `.env`, hace pull, backup,
-   reinicia el gameserver (aplica migraciones al arrancar) y luego caddy y backup.
+3. En el servidor, `./deploy.sh vX.Y.Z`: fija `IMAGE_TAG` en `.env`, hace pull, fija
+   cada imagen a su digest verificado ("Imágenes firmadas"), backup, reinicia el
+   gameserver (aplica migraciones al arrancar) y luego caddy y backup.
    Objetivo: < 1 minuto fuera de línea (en pruebas locales el gameserver vuelve en ~6 s).
    **Pendiente:** el anuncio de reinicio en el juego y el guardado explícito de jugadores
    (`TODO(admin-commands)` en `deploy.sh`), cuando exista el comando de admin. Hasta
@@ -123,8 +167,15 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `ACME_EMAIL` | Contacto para la autoridad de certificados. Obligatorio: Caddy no arranca con el email vacío |
 | `COOKIE_SECURE` | `true` salvo HTTP plano en un host que no sea localhost |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciales internas; contraseña URL-safe (`openssl rand -hex 24`) porque va en `DATABASE_URL` |
+| `RPG_DEVICE_KEY` | Firma las cookies de dispositivo conocido del login (docs/05 "Dispositivo conocido"): con ella fija, un reinicio o un deploy no olvida los navegadores conocidos de cada cuenta. Al menos 32 caracteres (`openssl rand -hex 32`); vacía, una clave al azar por arranque y un aviso en el log. Cambiarla solo anula esas cookies (nadie pierde su sesión) |
 | `BACKUP_RETENTION_DAYS`, `BACKUP_INTERVAL_SECONDS` | Retención local y periodicidad de los dumps |
 | `BACKUP_S3_URI`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Copia a S3 opcional; en EC2 mejor un rol de instancia que claves |
+| `BACKUP_S3_SSE`, `BACKUP_S3_KMS_KEY_ID` | Cifrado del lado de S3 de cada subida: `AES256` (default) o `aws:kms` (con la clave KMS, opcional) |
+| `BACKUP_AGE_RECIPIENT`, `BACKUP_ENCRYPT_REQUIRED` | Cifrado del dump con [age](https://age-encryption.org): clave(s) pública(s) `age1…` separadas por espacio. `BACKUP_ENCRYPT_REQUIRED=1` = sin clave no se hace ningún dump ("Backups y restauración") |
+| `COSIGN_REQUIRED` | `1` = `deploy.sh` no despliega sin cosign instalado ("Imágenes firmadas"). Recomendado en producción |
+| `GAMESERVER_IMAGE`, `WEB_IMAGE`, `BACKUP_IMAGE`, `MAP_PR_WORKER_IMAGE` | Los escribe `deploy.sh` (digest verificado de cada imagen); no los toques |
+| `GAMESERVER_MEM_LIMIT` | Tope de memoria del gameserver (default `1g`, para una instancia de 2 GB) |
+| `LOG_MAX_SIZE`, `LOG_MAX_FILE` | Logs locales por contenedor (default 10 × 50 MB; "Logs") |
 | `HTTP_PORT`, `HTTPS_PORT` | Puertos del host (solo para pruebas locales) |
 | `COMPOSE_PROFILES` | Perfiles opcionales separados por coma: `monitoring` (T4.4), `map-pr` (worker de PR de mapas, T4.5) |
 | `GITHUB_MAP_PR_TOKEN` | Token del worker de PR de mapas (sección "Worker de PR de mapas"). Vacío = el worker no corre |
@@ -140,7 +191,15 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 1. Instancia con Docker y el plugin compose; security group con 80/443 abiertos (y 443/udp
    para HTTP/3). Registro DNS `A`/`AAAA` del dominio → IP de la instancia.
 2. Copia `deploy/docker-compose.yml`, `deploy/deploy.sh` y `deploy/.env.example` al
-   servidor (no hace falta el repo entero); `cp .env.example .env` y complétalo.
+   servidor (no hace falta el repo entero). `.env` guarda todos los secretos: créalo
+   privado y genera cada secreto al azar, nunca a mano:
+   ```
+   umask 077 && cp .env.example .env && chmod 600 .env
+   openssl rand -hex 32   # uno distinto para POSTGRES_PASSWORD, PAYMENTS_REF_SECRET, MP_WEBHOOK_SECRET...
+   ```
+   `deploy.sh` avisa y lo deja en `600` si lo encuentra legible por otros usuarios (si el
+   servidor lo comparte alguien más, rota los secretos). Instala cosign y pon
+   `COSIGN_REQUIRED=1` ("Imágenes firmadas").
 3. Si las imágenes son privadas: `docker login ghcr.io`.
 4. `./deploy.sh v0.1.0`. Caddy obtiene el certificado en el primer request al dominio.
 5. Comprueba `https://<dominio>/healthz` → `{"status":"ok"}`.
@@ -177,6 +236,17 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserv
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserver \
   /app/gameserver admin audit -n 50
 ```
+Antes de escribir, `set-role` muestra la cuenta: id, fecha de creación, email verificado
+(o "never"), identidades de Google/Discord con email verificado por el proveedor, último
+login y personajes. **Subir** una cuenta por encima de `player` exige que haya probado
+que su email es suyo (email confirmado, o una identidad OAuth que el proveedor verificó
+**con ese mismo email**: a una cuenta se le puede vincular cualquier Google o Discord, y
+uno de otra dirección no prueba nada): cualquiera puede
+registrar la dirección de otra persona antes que ella, y sin esto la haríamos staff. Si el
+servidor no tiene SMTP o la persona no puede confirmar, revisa que la cuenta mostrada sea
+la suya (fecha, personajes) y repite con `-allow-unverified` (en local
+`ALLOW_UNVERIFIED=1`); el rechazo sale con código 3. Bajar un rol nunca lo pide.
+
 En local: `make set-role EMAIL=... ROLE=gm NOTE="..."` y `make audit-log`. El cambio revoca
 los tokens de la cuenta. Si se quita un rol, los personajes conectados de esa cuenta lo
 pierden en unos 5 s, sin reiniciar nada. Un rol nuevo vale desde el próximo login.
@@ -318,11 +388,25 @@ dar o quitar moneda, y limpiar la marca de una cuenta tras un contracargo: `/pre
   una regla de lifecycle del bucket.
 - Queda `unhealthy` si pasan dos intervalos sin un backup exitoso.
 - Cada corrida escribe sus métricas (`rpg_backup_*`) en `/backups/metrics/backup.prom`.
-  Con el monitoreo activo alimentan el panel de backups y las alertas `BackupFailed` y
-  `BackupStale`.
+  Con el monitoreo activo alimentan el panel de backups y las alertas `BackupFailed`,
+  `BackupStale` y `BackupMetricsMissing` (las métricas se vieron en la última semana y
+  faltan hace más de 30 min). node-exporter las lee como otro usuario: `metrics/` queda
+  en 755 y `backup.prom` en 644 aunque los dumps sean 600.
+- Los dumps se escriben con `umask 077` (solo su dueño los lee) y la subida a S3 va con
+  cifrado del lado del servidor (`--sse AES256`, o `aws:kms` con `BACKUP_S3_SSE`).
+- **Cifrado con age (recomendado en producción):** con `BACKUP_AGE_RECIPIENT=age1…` cada
+  dump se cifra antes de guardarse o subirse (`rpg-<fecha>.dump.age`) y el dump en claro
+  nunca queda en disco. La clave **privada** vive fuera del servidor (tu PC, un gestor de
+  contraseñas): quien entre al servidor o al bucket no puede leer los dumps.
+  `BACKUP_ENCRYPT_REQUIRED=1` hace que sin clave no se haga ningún dump (falla y alerta).
+  ```
+  age-keygen -o rpg-backup-key.txt   # en TU PC; la línea "public key: age1…" va a .env
+  ```
 - Backup manual: `docker compose -f docker-compose.yml run --rm backup --once`.
 - Listar y copiar: `docker compose exec backup ls -lh /backups` y
-  `docker compose cp backup:/backups/rpg-<fecha>.dump .`.
+  `docker compose cp backup:/backups/rpg-<fecha>.dump .`. Una copia así queda fuera del
+  volumen: cífrala (`age -r age1… -o x.dump.age x.dump`) o bórrala apenas termines, y
+  nunca la dejes en `/tmp` ni en el home de un usuario compartido.
 - Restaurar (con el gameserver parado):
   ```
   docker compose stop gameserver
@@ -332,6 +416,29 @@ dar o quitar moneda, y limpiar la marca de una cuenta tras un contracargo: `/pre
   ```
   Probado localmente: dump → `pg_restore` en una base nueva → datos presentes.
   Haz una prueba de restauración al mes.
+- **Restaurar un dump cifrado** (`.dump.age`): se descifra en tu PC, con la clave privada,
+  y entra por la entrada estándar; el servidor nunca ve la clave:
+  ```
+  age -d -i rpg-backup-key.txt rpg-<fecha>.dump.age > rpg-<fecha>.dump   # en tu PC
+  scp rpg-<fecha>.dump usuario@<servidor>:   # o, sin archivo en claro en el servidor:
+  age -d -i rpg-backup-key.txt rpg-<fecha>.dump.age | ssh usuario@<servidor> \
+    'cd deploy && docker compose stop gameserver && docker compose exec -T backup \
+       sh -c "pg_restore --clean --if-exists --no-owner -d \"\$PGDATABASE\"" && docker compose start gameserver'
+  ```
+  (con el archivo copiado, restaura como arriba y bórralo después).
+
+**Checklist del bucket S3** (una vez, en la consola de AWS):
+1. **Block Public Access** activado (las cuatro opciones) en el bucket y en la cuenta.
+2. Política del bucket que **niega todo pedido sin TLS**
+   (`"Condition": {"Bool": {"aws:SecureTransport": "false"}}` con `Effect: Deny`).
+3. El rol de la instancia solo puede `s3:PutObject` en el prefijo de los backups
+   (`arn:aws:s3:::<bucket>/rpg/*`): ni `GetObject`, ni `DeleteObject`, ni `ListBucket`.
+   Quien tome el servidor no puede leer ni borrar los backups viejos.
+4. **Versioning** activado y, si puedes, **Object Lock** en modo governance con la misma
+   retención que la regla de lifecycle: un atacante no puede sobrescribir ni borrar los
+   dumps antes de tiempo.
+5. Cifrado por defecto del bucket (SSE-S3 o SSE-KMS) además del `--sse` del script.
+6. Regla de lifecycle para la retención (p. ej. 30 días + versiones viejas a 7 días).
 
 ### Monitoreo (T4.4)
 Stack opcional en el profile `monitoring` del mismo compose. No se levanta con el `up`
@@ -376,8 +483,10 @@ Activarlo en el servidor:
    ```
    El dashboard "Neque's Realm — servidor" es la página de inicio de Grafana.
 5. Si cambias reglas o el dashboard: `make monitoring-check`, copia los archivos y
-   recarga. Prometheus se recarga con `curl -X POST localhost:9090/-/reload` desde el
-   túnel. Grafana relee los dashboards cada minuto.
+   recarga. Prometheus se recarga con
+   `docker compose -f deploy/docker-compose.yml kill -s SIGHUP prometheus` (lote 16: sin
+   `--web.enable-lifecycle`, nadie puede recargarlo ni apagarlo por HTTP). Grafana relee
+   los dashboards cada minuto.
 
 Variables del monitoreo (en `deploy/.env`; ninguna va al repo). Todas tienen un default
 en `docker-compose.yml`; solo `GRAFANA_ADMIN_PASSWORD` hay que definirla:
@@ -618,12 +727,53 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
   capability y `https://github.com` al endpoint.
 
 ## Seguridad operativa
+El modelo de amenazas, todos los controles y la checklist del operador (GitHub, secretos,
+OAuth, backups, actualizaciones, qué mirar en los logs) están en `18-seguridad.md`.
 - Solo puertos 80 y 443 abiertos. SSH restringido a tu IP o con SSM Session Manager.
 - Monitoreo (Grafana, Prometheus, Alertmanager) solo en `127.0.0.1`, por túnel SSH.
 - Postgres sin puerto expuesto (solo red interna de Docker).
-- Secretos (OAuth, clave de sesiones) en `.env` del servidor, nunca en el repo.
-- Backups diarios a S3 y prueba de restauración mensual.
+- Secretos (OAuth, clave de sesiones) en `.env` del servidor (modo `600`), nunca en el repo.
+- Backups diarios a S3 (cifrados con age, bucket según el checklist) y prueba de
+  restauración mensual.
 - Actualizaciones automáticas de seguridad del sistema operativo.
+
+### Seguridad del despliegue (lote 16)
+`make lint-deploy` (`deploy/tests/check-hardening.sh`) y `make test-deploy` (pruebas de
+`deploy.sh` y `backup.sh` con comandos falsos) comprueban todo lo de esta sección; corren
+en `make lint`/`make test` y en el job `deploy-lint` de `images.yml`.
+
+- **Contenedores:** todos con `cap_drop: [ALL]` y `no-new-privileges`. Postgres conserva
+  solo `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID` y `SETUID` (su entrypoint ajusta el
+  dueño del directorio de datos y baja al usuario `postgres`). Gameserver, Caddy, backup,
+  el worker de mapas, Prometheus, Alertmanager y node-exporter con raíz de solo lectura.
+  El gameserver tiene `mem_limit` (`GAMESERVER_MEM_LIMIT`, 1 GB), `nofile` 65536 y un pool
+  de 16 conexiones a Postgres (`pool_max_conns=16` en su `DATABASE_URL`; el valor está
+  en la URL a propósito, así no depende del default de pgx ni del que fije el código).
+- **Prometheus** sin `--web.enable-lifecycle` y fuera de la red `edge`: solo está en
+  `monitoring` (interna) y en `prometheus-publish`, una red propia que solo sirve para
+  publicar `127.0.0.1:9090`.
+- **Cabeceras del sitio y de `/play`** (`caddy-routes.caddy`): la misma Content Security
+  Policy que la app de escritorio (`script-src 'self'`, sin `unsafe-inline` ni `eval`;
+  `connect-src 'self' wss:`; `frame-ancestors 'none'`, `object-src 'none'`,
+  `base-uri 'none'`, `form-action 'self'`), `Permissions-Policy` (sin cámara, micrófono ni
+  ubicación) y `Cross-Origin-Opener-Policy: same-origin`. No van en `/api`, `/ws`,
+  `/healthz` ni Grafana. `deploy/smoke.sh` las comprueba en `/`, `/play/` y `/highscores`.
+  Si el cliente empieza a necesitar algo de otro origen (fuentes, imágenes, un script de
+  pagos), agrégalo aquí y en `tauri.conf.json`, nunca con `unsafe-inline`.
+- **Interruptores solo de prueba:** con `RPG_ENV` de producción (vacío, `production` o
+  cualquier valor desconocido) el gameserver **no arranca** con `-auth-rate-burst` ni con
+  las URL del proveedor OAuth falso (`GOOGLE_/DISCORD_` + `AUTH_URL`, `TOKEN_URL`,
+  `JWKS_URL`, `ISSUER`, `API_URL`). `-cookie-secure=false` solo avisa (en el log, nivel
+  `WARN`, `INSECURE: …`): el hosting en casa lo necesita para jugar por la IP de la LAN.
+  El e2e y `make play` corren con `RPG_ENV=test`/`development`.
+- **Semilla del game loop:** sin `-seed`, las dos palabras del generador (PCG) salen de
+  `crypto/rand` y en producción el log solo dice `seed_source=random`. Con `-seed` (tests,
+  repeticiones) o en development/test, la semilla va al log.
+- **Logs:** cada contenedor guarda 10 archivos de 50 MB (`LOG_MAX_FILE`, `LOG_MAX_SIZE`):
+  un ataque con muchos pedidos no borra en minutos lo que pasó. Para guardarlos más tiempo
+  o fuera del servidor (si alguien entra, puede borrarlos), envíalos afuera: el driver
+  `awslogs` de Docker a CloudWatch Logs (`logging: driver: awslogs` con `awslogs-group`),
+  o Vector/Promtail leyendo `/var/lib/docker/containers`.
 
 ## Cuándo crecer
 - Tick p99 > 25 ms sostenido o CPU > 70 %: subir de instancia.

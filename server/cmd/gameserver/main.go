@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	crand "crypto/rand"
-	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,6 +35,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/payments"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
@@ -46,6 +45,7 @@ type options struct {
 	httpAddr     string
 	dataDir      string
 	databaseURL  string
+	deviceKey    string // $RPG_DEVICE_KEY; never a flag (flags show in the process list)
 	migrate      bool
 	cookieSecure bool
 	trustProxy   bool
@@ -56,6 +56,12 @@ type options struct {
 	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
 	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
 	authRateBurst int
+	// wsLimits bounds /ws (gateway.Limits, docs/05 "Límites"); wsLoopbackExempt skips its
+	// per-client limits for loopback clients (default: RPG_ENV development or test).
+	wsLimits         gateway.Limits
+	wsLoopbackExempt bool
+	// maxCharsPerAccount caps the characters of one account online at once (-1 = no cap).
+	maxCharsPerAccount int
 	// metricsAddr serves /metrics on its own internal listener ("" disables it).
 	metricsAddr string
 	// metricsExplicit: -metrics-addr or $RPG_METRICS_ADDR was set, so a failed bind is
@@ -114,6 +120,18 @@ func main() {
 	flag.StringVar(&o.i18nDir, "i18n", "", "directory of the i18n/ catalogs (email templates, shop pack names); default <data>/../i18n")
 	flag.BoolVar(&o.requireVerifiedEmail, "require-verified-email", os.Getenv("RPG_REQUIRE_VERIFIED_EMAIL") == "true", "only accounts with a verified email may play (needs email on); default $RPG_REQUIRE_VERIFIED_EMAIL == true")
 	flag.BoolVar(&o.mapPRWorker, "map-pr-worker", os.Getenv("RPG_MAP_PR_WORKER") == "on", "the map PR worker runs, so approved map submissions become pull requests on their own; default $RPG_MAP_PR_WORKER == on")
+	wsDef := gateway.DefaultLimits
+	flag.IntVar(&o.wsLimits.MaxConnsPerClient, "ws-max-conns-per-ip", wsDef.MaxConnsPerClient, "open /ws connections per client IP (IPv6: per /64; -1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxPendingPerClient, "ws-max-pending-per-ip", wsDef.MaxPendingPerClient, "/ws connections per client IP still in the handshake (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.HandshakeBurst, "ws-handshake-burst", wsDef.HandshakeBurst, "new /ws connections per client IP at once, then one per -ws-handshake-every (-1 = no limit)")
+	flag.DurationVar(&o.wsLimits.HandshakeEvery, "ws-handshake-every", wsDef.HandshakeEvery, "refill interval of the per-IP /ws connection bucket")
+	flag.IntVar(&o.wsLimits.MaxUnauthenticated, "ws-max-unauthenticated", wsDef.MaxUnauthenticated, "/ws connections of everyone still in the handshake (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxHandshakes, "ws-max-handshakes", wsDef.MaxHandshakes, "handshakes reading the database at once (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxPlayers, "max-players", wsDef.MaxPlayers, "players online at once; more get SERVER_FULL (-1 = no limit)")
+	flag.IntVar(&o.wsLimits.MaxQueuedPerConn, "ws-max-queued-per-conn", wsDef.MaxQueuedPerConn, "commands of one connection waiting in the game loop (-1 = no limit)")
+	flag.BoolVar(&o.wsLoopbackExempt, "ws-loopback-exempt", payments.ParseEnv(os.Getenv("RPG_ENV")) != payments.EnvProduction,
+		"skip the per-IP /ws limits for loopback clients (bots, E2E); default true only when $RPG_ENV is development or test")
+	flag.IntVar(&o.maxCharsPerAccount, "max-chars-per-account", session.DefaultMaxCharactersPerAccount, "characters of one account online at once (-1 = no cap)")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
 	flag.Visit(func(f *flag.Flag) {
@@ -127,6 +145,7 @@ func main() {
 		return
 	}
 	o.databaseURL = os.Getenv("DATABASE_URL")
+	o.deviceKey = os.Getenv("RPG_DEVICE_KEY")
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger) // also routes the standard log package through slog
@@ -140,12 +159,23 @@ func run(logger *slog.Logger, o options) error {
 	if o.databaseURL == "" {
 		return errors.New("DATABASE_URL is not set")
 	}
-	if o.seed == 0 {
-		var b [8]byte
-		if _, err := crand.Read(b[:]); err != nil {
-			return fmt.Errorf("seed: %w", err)
-		}
-		o.seed = binary.LittleEndian.Uint64(b[:])
+	// RPG_ENV says whether this is production (the default): the fake payment provider, a
+	// development world and the test-only switches refuse to start there.
+	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
+	if err := checkProductionFlags(logger, env, o); err != nil {
+		return err
+	}
+	deviceKey, err := deviceKeyFrom(o.deviceKey)
+	if err != nil {
+		return err
+	}
+	if deviceKey == nil {
+		logger.Warn("RPG_DEVICE_KEY is not set: known-device cookies last until the next restart")
+	}
+	explicitSeed := o.seed != 0
+	seed, seedHi, err := newSeeds(o.seed, cryptoRand)
+	if err != nil {
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -203,6 +233,11 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	// New characters may not copy an NPC's name in any language (i18n/<lang>/npcs.yaml).
+	npcNames, err := content.NPCDisplayNames(i18nDir(o))
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	cosmetics, err := content.LoadCosmetics(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -213,9 +248,8 @@ func run(logger *slog.Logger, o options) error {
 			return fmt.Errorf("content: %w", err)
 		}
 	}
-	// T5.7: RPG_ENV says whether this is production (the default); the fake payment
-	// provider refuses to start there, and so does a development world (loadWorld).
-	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
+	// T5.7: the fake payment provider refuses to start in production, and so does a
+	// development world (loadWorld).
 	pay, err := payments.FromEnv(os.Getenv, env, o.publicURL, nil, clk)
 	if err != nil {
 		return err
@@ -228,6 +262,11 @@ func run(logger *slog.Logger, o options) error {
 		provider = pay.Name()
 	}
 	logger.Info("cosmetic shop", "env", string(env), "payments", provider, "catalog", cosmetics != nil)
+	logger.Info("ws limits", "per_ip_open", o.wsLimits.MaxConnsPerClient, "per_ip_pending", o.wsLimits.MaxPendingPerClient,
+		"handshake_burst", o.wsLimits.HandshakeBurst, "handshake_every", o.wsLimits.HandshakeEvery.String(),
+		"unauthenticated", o.wsLimits.MaxUnauthenticated, "handshakes", o.wsLimits.MaxHandshakes,
+		"max_players", o.wsLimits.MaxPlayers, "queued_per_conn", o.wsLimits.MaxQueuedPerConn,
+		"loopback_exempt", o.wsLoopbackExempt, "chars_per_account", o.maxCharsPerAccount)
 	m, err := loadWorld(logger, o.worldPath, env)
 	if err != nil {
 		return err
@@ -261,7 +300,7 @@ func run(logger *slog.Logger, o options) error {
 		go q.Run(ctx)
 	}
 	logger.Info("account emails", "mail", ms.what, "require_verified_email", o.requireVerifiedEmail)
-	providers, providerNames, err := providersFromEnv(os.Getenv)
+	providers, providerNames, err := providersFromEnv(os.Getenv, env)
 	if err != nil {
 		return fmt.Errorf("oauth: %w", err)
 	}
@@ -276,7 +315,8 @@ func run(logger *slog.Logger, o options) error {
 		Store:            st,
 		Clock:            clk,
 		Logger:           logger,
-		Seed:             o.seed,
+		Seed:             seed,
+		SeedHi:           seedHi,
 		Vocations:        vocations,
 		Balance:          balance,
 		Monsters:         monsters,
@@ -287,6 +327,7 @@ func run(logger *slog.Logger, o options) error {
 		BoatRoutes:       routes,
 		Tutorial:         tutorial,
 		NPCs:             npcs,
+		ReservedNames:    auth.NPCReservedNames(npcNames),
 		Quests:           quests,
 		Map:              m,
 		CookieSecure:     o.cookieSecure,
@@ -294,9 +335,14 @@ func run(logger *slog.Logger, o options) error {
 		OriginPatterns:   splitList(o.wsOrigins),
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
-		StartTown:        o.startTown,
-		MapSubmitLimits:  o.mapSubmit,
-		MapPRWorker:      o.mapPRWorker,
+		DeviceKey:        deviceKey,
+		WSLimits:         o.wsLimits,
+		WSExemptLoopback: o.wsLoopbackExempt,
+
+		MaxCharactersPerAccount: o.maxCharsPerAccount,
+		StartTown:               o.startTown,
+		MapSubmitLimits:         o.mapSubmit,
+		MapPRWorker:             o.mapPRWorker,
 
 		Mail:                 sender,
 		PublicURL:            o.publicURL,
@@ -340,7 +386,8 @@ func run(logger *slog.Logger, o options) error {
 
 	logger.Info("gameserver started",
 		"version", buildinfo.Version, "commit", buildinfo.Commit, "http", o.httpAddr,
-		"ws", m != nil, "tick_ms", game.TickDuration.Milliseconds(), "seed", o.seed)
+		"ws", m != nil, "tick_ms", game.TickDuration.Milliseconds())
+	logger.Info("game loop seed", seedLogAttrs(explicitSeed, env, seed, seedHi)...)
 
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()
@@ -560,6 +607,23 @@ func i18nDir(o options) string {
 		return o.i18nDir
 	}
 	return filepath.Join(o.dataDir, "..", "i18n")
+}
+
+// minDeviceKeyLen is the shortest RPG_DEVICE_KEY accepted (e.g. openssl rand -hex 32
+// gives 64 characters).
+const minDeviceKeyLen = 32
+
+// deviceKeyFrom checks $RPG_DEVICE_KEY, the secret that signs the known-device cookies
+// so they survive restarts and deploys (docs/09): nil when unset, an error when too short.
+func deviceKeyFrom(v string) ([]byte, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, nil
+	}
+	if len(v) < minDeviceKeyLen {
+		return nil, fmt.Errorf("RPG_DEVICE_KEY has %d characters, want at least %d (openssl rand -hex 32)", len(v), minDeviceKeyLen)
+	}
+	return []byte(v), nil
 }
 
 func authRateLimit(burst int) httpapi.RateLimit {

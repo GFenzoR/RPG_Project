@@ -43,14 +43,15 @@ func TestBotEntersAndWalks(t *testing.T) {
 	}
 	mets := metrics.New()
 	a, err := app.New(app.Config{
-		Metrics:   mets,
-		Items:     items,
-		Store:     st,
-		Clock:     clock.Real{},
-		Seed:      1,
-		Vocations: vocations,
-		Balance:   balance,
-		Map:       worldtest.Map(t, 0, 0, 7, "................", "................", ".......T........", "................", "................"),
+		WSExemptLoopback: true, // every bot dials from loopback
+		Metrics:          mets,
+		Items:            items,
+		Store:            st,
+		Clock:            clock.Real{},
+		Seed:             1,
+		Vocations:        vocations,
+		Balance:          balance,
+		Map:              worldtest.Map(t, 0, 0, 7, "................", "................", ".......T........", "................", "................"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +246,8 @@ func TestStaffBan(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, err := app.New(app.Config{
-		Store: st, Clock: clock.Real{}, Seed: 1, Vocations: vocations, Balance: balance, Items: items,
+		WSExemptLoopback: true, // every bot dials from loopback
+		Store:            st, Clock: clock.Real{}, Seed: 1, Vocations: vocations, Balance: balance, Items: items,
 		Map: worldtest.Map(t, 0, 0, 7, "................", ".......T........", "................"),
 	})
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -307,7 +308,7 @@ func (a *api) processWebhook(r *http.Request) (int, string) {
 	ev, err := s.Provider.ParseWebhook(r)
 	switch {
 	case errors.Is(err, payments.ErrSignature):
-		a.log.Warn("payments: webhook with an invalid signature", "provider", prov)
+		a.sampledLog(slog.LevelWarn, "payments: webhook with an invalid signature", "provider", prov)
 		return http.StatusUnauthorized, "invalid_signature"
 	case errors.Is(err, payments.ErrUnmatched):
 		return a.unmatched(r.Context(), ev, ev.Unmatched)

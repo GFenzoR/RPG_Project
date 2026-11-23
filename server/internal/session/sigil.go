@@ -264,14 +264,15 @@ func (w *World) hasGear(p *Player, g *content.Gear) bool {
 // candidate is what quest.Cooperative needs to know of p for milestone q.
 func (w *World) candidate(p *Player, q *content.Quest) *quest.Candidate {
 	return &quest.Candidate{
-		Name:     p.name,
-		Level:    p.level,
-		Vocation: p.vocation.ID,
-		Staff:    isStaff(p),
-		Alive:    p.health > 0,
-		Online:   !p.linkDead && w.byClient[p.client] == p,
-		HasGear:  w.hasGear(p, q.Requires.Gear),
-		OnStep:   w.quests.OnSigils(p.storage, q.ID),
+		Name:      p.name,
+		AccountID: p.accountID,
+		Level:     p.level,
+		Vocation:  p.vocation.ID,
+		Staff:     isStaff(p),
+		Alive:     p.health > 0,
+		Online:    !p.linkDead && w.byClient[p.client] == p,
+		HasGear:   w.hasGear(p, q.Requires.Gear),
+		OnStep:    w.quests.OnSigils(p.storage, q.ID),
 	}
 }
 

@@ -51,7 +51,7 @@ jobs:
       stack: ${{ steps.f.outputs.stack }}
       home-stack: ${{ steps.f.outputs.home-stack }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # the base of the diff
       - name: rules self-test
@@ -72,6 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write # push to ghcr.io with GITHUB_TOKEN
+      id-token: write # keyless cosign signature of the pushed digest (lote 16)
     strategy:
       fail-fast: false
       matrix:
@@ -89,20 +90,20 @@ jobs:
       # Pull requests only check that the image builds: amd64, no QEMU emulation.
       PLATFORMS: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: image name
         id: name
         # GHCR repository names must be lowercase.
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rpg-project-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
         if: env.PUSH == 'true'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: log in to ghcr.io
         if: env.PUSH == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -110,7 +111,7 @@ jobs:
 
       - name: tags and labels
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ steps.name.outputs.image }}
           flavor: latest=false
@@ -123,7 +124,8 @@ jobs:
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: build${{ env.PUSH == 'true' && ' and push' || '' }}
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -155,13 +157,33 @@ jobs:
           # Merges a built-in patch: the map schemas and the merge load inside the image.
           docker run --rm --read-only "$image" --self-check
 
+      # Lote 16, the last step of the job (nothing that can still fail comes after a
+      # signature): keyless signature (Sigstore, this workflow's OIDC identity) of the digest
+      # just pushed. deploy/deploy.sh verifies it before running the image; the verify step
+      # here checks the exact identity deploy.sh trusts for main and vX.Y.Z tags.
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        if: env.PUSH == 'true'
+      - name: sign the image (cosign, keyless)
+        if: env.PUSH == 'true'
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ $DIGEST == sha256:* ]] || { echo "no digest from the build: $DIGEST"; exit 1; }
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign verify \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/images.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST" > /dev/null
+
   # Static checks of deploy/: Dockerfiles, shell scripts and the compose files.
   deploy-lint:
     needs: changes
     if: needs.changes.outputs.deploy-lint == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: hadolint
         run: |
           for f in deploy/Dockerfile.*; do
@@ -170,7 +192,11 @@ jobs:
             docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < "$f"
           done
       - name: shellcheck
-        run: shellcheck deploy/*.sh deploy/monitoring/*.sh deploy/monitoring/alertmanager/*.sh
+        run: shellcheck deploy/*.sh deploy/tests/*.sh deploy/monitoring/*.sh deploy/monitoring/alertmanager/*.sh
+      # Lote 16: Go version match, container/Caddy/backup/deploy hardening, and the tests of
+      # deploy.sh (digest pins, signatures) and backup.sh (encryption) with stubs.
+      - name: deploy hardening checks and script tests
+        run: make lint-deploy test-deploy
       - name: docker compose config
         run: |
           printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=example.com\nACME_EMAIL=ops@example.com\n' > "$RUNNER_TEMP/ci.env"
@@ -197,8 +223,8 @@ jobs:
     env:
       COMPOSE: docker compose -f deploy/docker-compose.yml --env-file /tmp/rpg-ci.env
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: tools/bots/go.mod
           cache-dependency-path: tools/bots/go.sum
@@ -237,8 +263,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: tools/bots/go.mod
           cache-dependency-path: tools/bots/go.sum
@@ -265,9 +291,10 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
             -d '{"email":"home-admin@example.com","password":"home-admin-pass-1"}' http://localhost:8080/api/auth/register)
           test "$code" = 201
-          make home-admin EMAIL=home-admin@example.com ROLE=gm
+          # No SMTP in CI: the account never confirms its email (lote 16 refuses that by default).
+          ALLOW_UNVERIFIED=1 make home-admin EMAIL=home-admin@example.com ROLE=gm
           CONFIRM=yes make home-restore FILE="$(find deploy/backups -name 'home-*.dump' | sort | head -n 1)"
-          if make home-admin EMAIL=home-admin@example.com ROLE=gm; then
+          if ALLOW_UNVERIFIED=1 make home-admin EMAIL=home-admin@example.com ROLE=gm; then
             echo "the account registered after the backup survived the restore"; exit 1
           fi
           curl -fsS http://localhost:8080/healthz

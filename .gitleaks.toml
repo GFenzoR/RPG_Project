@@ -1,0 +1,33 @@
+# gitleaks configuration (lote 16, docs/18 "Secretos en git"). The default rules plus an
+# allowlist for the fake credentials that tests, fixtures and local stacks use on purpose.
+# A real secret never goes in the repository: deploy/.env (chmod 600) only.
+# Run: make audit (if gitleaks is installed) and .github/workflows/security.yml.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+# By value, not by path: a real secret pasted into a test is still reported. Each regex
+# matches only a fake value the repository uses on purpose.
+description = "Known test fixtures and fake credentials"
+regexes = [
+  '''bot-password''',
+  '''fake-client-secret''',
+  '''github_pat_test_token''',
+  '''long-password-[0-9]''',
+  '''home-admin-pass-[0-9]''',
+  # Sec-WebSocket-Key nonces of deploy/smoke.sh: RFC 6455's sample ("the sample nonce")
+  # and "smoke-test-key-12", base64.
+  '''^dGhlIHNhbXBsZSBub25jZQ==$''',
+  '''^c21va2UtdGVzdC1rZXktMTI=$''',
+  # Quest storage keys (quest.<id>), named like a key in the session tests.
+  '''^quest\.[a-z0-9_.]+$''',
+]
+
+[[allowlists]]
+# The fake OAuth provider of the tests and cmd/fakeoauth: its keys are generated test
+# material by design.
+description = "Fake OAuth provider"
+paths = [
+  '''(^|/)server/internal/oauth/oauthtest/''',
+]
