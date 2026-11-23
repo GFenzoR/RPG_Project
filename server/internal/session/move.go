@@ -445,6 +445,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	if !through {
 		w.checkReach(p)
 		w.sigilStep(p)
+		w.trailPlayerStep(to) // the living world's trail wear (trailwear.go)
 	}
 }
 
@@ -557,6 +558,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushEconomy(ctx)
 	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
+	w.flushTrail(ctx.Tick)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

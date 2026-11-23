@@ -320,6 +320,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 		}
 		if any {
 			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: slices.Clone(tiles)})
+			w.areaWear(area, x0, y0, x0+wd-1, y0+ht-1, z) // trailwear.go
 		}
 	}
 	w.eachInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(c *Player) {

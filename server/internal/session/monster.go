@@ -1208,6 +1208,7 @@ func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction
 	m.pos, m.dir = to, d
 	w.mindex(m)
 	w.observeMove(nil, m, from, to, posMsg(from), posMsg(to), uint32(ticks.Duration().Milliseconds()))
+	w.trailMonsterStep(to) // the living world's trail wear (trailwear.go)
 }
 
 // removeMonster takes m out of the world: it died (goneDeath), or the server takes it
