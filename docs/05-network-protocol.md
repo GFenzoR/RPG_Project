@@ -1396,6 +1396,8 @@ Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
 - `StashCommand` (oneof):
   - `deposit{from, item_id, count}`: `from` es un slot de equipo, un contenedor abierto que
     el jugador lleva o un bolsillo (nunca el suelo); `count` solo para pilas (1..la pila).
+    Una pila con `mods` o contenido es una sola instancia: entra entera (un `count` menor es
+    `NOT_POSSIBLE`), igual que sale.
   - `withdraw{index, item_id, mods, count}`: `index` es la celda; `item_id` y `mods` son lo
     que el cliente vio ahí (clave de comparación, como en `Refine`): si otro personaje de la
     cuenta lo movió, `CHANGED`. `count` solo para pilas: 0 es `NOT_POSSIBLE` y más que las
@@ -1415,6 +1417,11 @@ Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
   personaje y un `StashOp` (todas las celdas de la cuenta, `account_stash_items`, migración
   00025), en una transacción. El login lee el baúl con el personaje
   (`PlayCharacter.Stash`); el loop lo usa solo si no tiene ya el de esa cuenta en memoria.
+  Si al cargarlo un equipable guardado sin atributo tira uno, el baúl se escribe en el acto
+  (un `Transfer` con el snapshot del que entró): salir y entrar no vuelve a tirarlo. El baúl
+  en memoria no se suelta mientras un login de la cuenta no lo tomó (`join` resta el login
+  de la cuenta recién después de darle el baúl), así que reentrar con el mismo personaje no
+  lo rearma con una lectura vieja.
   `LoginStarted` y `LoginAborted` llevan la cuenta además del personaje (docs/01).
 
 ### Casas (T5.4, `server/internal/session/house.go`)

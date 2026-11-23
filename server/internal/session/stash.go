@@ -79,12 +79,14 @@ func (w *World) initStash() {
 }
 
 // stashJoin gives the joining p its account's stash: the one in memory, or else the one its
-// login read (c.Stash).
-func (w *World) stashJoin(p *Player, c Character) {
+// login read (c.Stash). It reports whether loading that read rolled an attribute (an
+// equipable saved without one): the caller writes the stash at once then.
+func (w *World) stashJoin(p *Player, c Character) bool {
 	if !w.stashOn || w.stashes[p.accountID] != nil {
-		return
+		return false
 	}
 	st := &accountStash{account: p.accountID}
+	rolled := slices.ContainsFunc(c.Stash, w.needsRoll)
 	saved := slices.Clone(c.Stash)
 	slices.SortStableFunc(saved, func(a, b ItemState) int { return a.Slot - b.Slot })
 	for _, s := range saved {
@@ -93,6 +95,7 @@ func (w *World) stashJoin(p *Player, c Character) {
 		}
 	}
 	w.stashes[p.accountID] = st
+	return rolled
 }
 
 // releaseStash forgets the stash of account once the database has all of it and nobody
@@ -294,6 +297,11 @@ func (w *World) stashDeposit(p *Player, st *accountStash, m *pb.StashDeposit) pb
 		if count < 1 || count > it.count {
 			return pb.StashResult_STASH_RESULT_NOT_POSSIBLE
 		}
+		if count < it.count && (!it.mods.Zero() || len(it.items) > 0) {
+			// A stack with mods (or content) is one instance: it goes whole, like it comes
+			// out of the stash (stashWithdraw), never split into two copies of its mods.
+			return pb.StashResult_STASH_RESULT_NOT_POSSIBLE
+		}
 	}
 	merge := mergeTarget(st.items, it, count)
 	if len(st.items) > w.stashSlots || merge == nil && len(st.items) >= w.stashSlots {
@@ -303,8 +311,7 @@ func (w *World) stashDeposit(p *Player, st *accountStash, m *pb.StashDeposit) pb
 	moving := it
 	if count < it.count {
 		it.count -= count
-		moving = newItem(it.def, count)
-		moving.mods = it.mods
+		moving = newItem(it.def, count) // plain units: a stack with mods goes whole (above)
 		w.changed(it)
 		w.econEntry(p, EconStash, "deposit", 0, it.def, -count, it.mods)
 	} else {

@@ -516,11 +516,15 @@ func (w *World) accountFull(accountID int64) bool {
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sched = ctx.Sched
 	w.loginDone(c.ID)
-	w.stashLoginDone(c.AccountID)
+	account := c.AccountID
 	joined := false
 	defer func() {
+		// Only now: until stashJoin ran, this login's read of the stash may be older than
+		// the copy in memory, which must not leave it in between (replacing the character
+		// below removes the account's only player: review of the stash, blocking 1).
+		w.stashLoginDone(account)
 		if !joined {
-			w.releaseStash(c.AccountID) // stash.go: a refused login no longer needs it
+			w.releaseStash(account) // stash.go: a refused login no longer needs it
 		}
 	}()
 	if old := w.byClient[client]; old != nil {
@@ -623,7 +627,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.byChar[c.ID] = p
 	w.byAccount[p.accountID]++
 	joined = true
-	w.stashJoin(p, c) // stash.go: the one in memory, or else the one this login read
+	stashRolled := w.stashJoin(p, c) // stash.go: the one in memory, or else the one this login read
 	w.index(p)
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
@@ -669,6 +673,11 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.scheduleRegen(ctx, p)
 	if rolled {
 		w.save(w.snapshot(p, false))
+	}
+	if stashRolled && !w.readOnly {
+		// Like the inventory above: the stash is written at once with the attributes its
+		// login rolled, so leaving and coming back never rolls them again.
+		w.stashWrite(p, w.stashes[p.accountID])
 	}
 }
 

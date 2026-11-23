@@ -72,3 +72,19 @@ export function stashFrom(u: StashUpdate): {
 
 /** Whether the stash has no free cell (it may still take units into a stack). */
 export const stashFull = (v: StashView): boolean => v.cells.length >= v.capacity;
+
+/**
+ * How many units "Take" asks for: the whole cell, except plain units (a stack without
+ * mods) heavier than the free capacity, which take as many as fit (at least one: the
+ * server answers TOO_HEAVY then). The server checks the weight again; this only avoids
+ * a stack that can never come out from the window.
+ */
+export function stashTakeCount(
+  c: StashCell,
+  item: { stackable?: boolean; weight?: number } | undefined,
+  freeCapacity: number | undefined,
+): number {
+  const weight = item?.weight ?? 0;
+  if (!item?.stackable || c.mods || weight <= 0 || freeCapacity === undefined) return c.count;
+  return Math.max(1, Math.min(c.count, Math.floor(freeCapacity / weight)));
+}

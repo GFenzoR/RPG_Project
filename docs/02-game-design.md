@@ -1726,7 +1726,8 @@ personajes de una cuenta (docs/05 "Límites"). Números en `balance.yaml → sta
   (como el mercado).
 - **Qué conserva:** todo: cantidad, atributo, valor y refinado de un equipable, cargas de
   una runa, contenido de un contenedor. Sacar algo lo pone en la mochila (y si no hay lugar,
-  en los bolsillos); si no entra o pesa demasiado, se queda en el baúl.
+  en los bolsillos); si no entra o pesa demasiado, se queda en el baúl. Una pila simple que
+  pesa más de lo que se puede cargar se saca en partes: la ventana pide las que entran.
 - **Seguro ante caídas:** cada guardar o sacar se escribe en una sola transacción con el
   personaje (docs/01 "Transacciones"): un item está en el baúl o en el personaje, nunca en
   los dos ni en ninguno, pase lo que pase con el servidor. Dos personajes de la cuenta en

@@ -8,7 +8,7 @@ import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { ItemRef } from "../state/items.ts";
 import { NO_POCKETS } from "../state/pockets.ts";
-import { stashFrom, stashResultKey } from "../state/stash.ts";
+import { stashFrom, stashResultKey, stashTakeCount } from "../state/stash.ts";
 import type { StashCell, StashView } from "../state/stash.ts";
 import { StashWindow } from "./Stash.tsx";
 
@@ -19,7 +19,7 @@ const content = {
   items: {
     60: { id: "iron_sword", tradeable: true, stackable: false },
     66: { id: "backpack", tradeable: true },
-    68: { id: "salve", tradeable: true, stackable: true },
+    68: { id: "salve", tradeable: true, stackable: true, weight: 100 },
     70: { id: "quest_note", tradeable: false },
   },
   attributes: {},
@@ -137,11 +137,39 @@ describe("StashWindow", () => {
     expect(sent).toEqual(["take 0 68 12", `store {"kind":"container","id":3,"index":0} 68 5`]);
   });
 
+  it("takes as many plain units as the free capacity holds", () => {
+    const { game, sent } = recorder();
+    const stats = { capacity: 750 } as GameUi["stats"];
+    const tree = StashWindow({ t, content, game, ui: ui({ stats }) });
+    for (const b of byAttr(tree, "data-stash-take")) (b.props["onClick"] as () => void)();
+    // 12 salves of 100 g with 750 g free: 7. The sword (with mods) goes whole.
+    expect(sent).toEqual(["take 0 68 7", "take 1 60 0 attack"]);
+  });
+
   it("closes", () => {
     const { game, sent } = recorder();
     const tree = StashWindow({ t, content, game, ui: ui({}) });
     (nodes(tree).find((n) => n.props["class"] === "close")?.props["onClick"] as () => void)();
     expect(sent).toEqual(["close"]);
+  });
+});
+
+describe("stashTakeCount", () => {
+  const cell: StashCell = { index: 0, itemId: 68, count: 12 };
+  it("takes the whole cell when it fits, is not plain units or the capacity is unknown", () => {
+    expect(stashTakeCount(cell, { stackable: true, weight: 100 }, 5000)).toBe(12);
+    expect(stashTakeCount(cell, { stackable: true, weight: 100 }, undefined)).toBe(12);
+    expect(stashTakeCount(cell, { stackable: false, weight: 100 }, 50)).toBe(12);
+    expect(
+      stashTakeCount(
+        { ...cell, mods: { attribute: "armor", value: 1, refine: 0 } },
+        { stackable: true, weight: 100 },
+        50,
+      ),
+    ).toBe(12);
+  });
+  it("takes at least one unit", () => {
+    expect(stashTakeCount(cell, { stackable: true, weight: 100 }, 50)).toBe(1);
   });
 });
 

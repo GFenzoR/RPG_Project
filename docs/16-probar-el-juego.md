@@ -280,7 +280,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
     mochila; la ventana del otro, abierta en el mismo cofre, lo muestra al instante. Sácalo
     con el segundo ("Sacar" o arrastrándolo a "Lo que llevas"). Prueba también: un item de
     quest (no entra), alejarse (se cierra), los dos "Sacar" a la vez sobre el mismo item (uno
-    lo saca, el otro ve "Ese item ya no está…"), y salir y entrar de nuevo (lo guardado
+    lo saca, el otro ve "Eso ya no está como lo viste…"), y salir y entrar de nuevo (lo guardado
     sigue ahí).
 
 ## 5. Hacerse personal (GM o admin)

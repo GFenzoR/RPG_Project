@@ -2,7 +2,8 @@
 // chest of a town. Two lists: the stash's cells (shared by every character of the account)
 // and the tradeable items the player carries in its backpack, pockets and open containers.
 // A click on "Store" or "Take", or dragging an item from one list onto the other, moves the
-// whole stack; the server checks the chest, the item, room and weight and answers with a
+// whole stack (taking plain units heavier than the free capacity takes as many as fit:
+// stashTakeCount); the server checks the chest, the item, room and weight and answers with a
 // fresh StashUpdate (a refusal goes to the log). It reuses the trade window's frame and
 // lists (class "trade"). No hooks: the tests walk the element tree (Stash.test.ts).
 import type { JSX } from "preact";
@@ -10,7 +11,7 @@ import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { locKey } from "../state/items.ts";
-import { stashFull } from "../state/stash.ts";
+import { stashFull, stashTakeCount } from "../state/stash.ts";
 import type { StashCell } from "../state/stash.ts";
 import { ItemLabel, offerable } from "./Trade.tsx";
 
@@ -37,7 +38,8 @@ export function StashWindow(props: Props): JSX.Element | null {
   if (!st) return null;
   const carried = offerable(ui, props.content);
   const full = stashFull(st);
-  const take = (c: StashCell): void => game?.stashWithdraw(c, c.count);
+  const take = (c: StashCell): void =>
+    game?.stashWithdraw(c, stashTakeCount(c, props.content.items[c.itemId], ui.stats?.capacity));
   const onDrop =
     (into: "stash" | "carried") =>
     (e: DragEventLike): void => {
