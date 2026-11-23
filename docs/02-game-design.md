@@ -532,7 +532,10 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   no juega. Un chequeo fallado suma puntos, pero no suspende por sí solo. Acertar no borra
   la sospecha (un programa también puede contestar): el chequeo sirve para avisar. A
   cualquiera le puede tocar un chequeo al azar de vez en cuando, sin consecuencias. El ban lo
-  decide siempre un GM.
+  decide siempre un GM. Limitación conocida: la pregunta es solo visual (la muestra de
+  color no dice su nombre, para que un programa no la lea del texto), así que un jugador
+  ciego con lector de pantalla no puede contestarla; como fallar no suspende por sí solo
+  y el ban lo decide un GM, se acepta por ahora.
 - Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
   macros de teclado legítimas no llega a avisar a los GM con una sola señal (el balance no
   carga si un peso solo lo permitiera). Hace falta un patrón sostenido de varias. En la
@@ -1665,12 +1668,21 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
   lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
-  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Salvo en una caída
-  o con la base caída al apagar (docs/01), ese guardado no es anterior a lo que soltaron
-  al suelo fuera de una casa: si un personaje tiró algo a la calle (o el servidor se lo
-  dejó a los pies) desde su último guardado, su estado del final de esa acción se guarda
-  antes de su próximo intercambio, compra, venta, retiro del buzón o cambio en una casa,
-  sin que se note.
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Ese guardado nunca
+  es anterior a lo que soltaron al suelo fuera de una casa, y desde el lote 16 tampoco
+  en una caída del servidor: cuando un personaje tira algo a la calle (o el servidor se
+  lo deja a los pies), su estado del final de esa acción se guarda en el acto, o, si ya
+  tiró algo en los últimos 2 s, junto con lo demás al cerrar esa ventana de 2 s (o
+  antes, con su próximo intercambio, compra, venta, retiro del buzón o cambio en una
+  casa), sin que se note. Hasta que la base confirma ese guardado, lo tirado queda
+  **reservado** a quien lo tiró: él puede volver a tomarlo, y otro jugador recibe "Eso es
+  de otro jugador por ahora." (`inventory.not_yours`) durante como mucho esos 2 s más lo
+  que tarde la escritura (normalmente unos ticks). Así ni una caída ni un intercambio
+  descartado dejan un item en dos personajes. Para que la reserva nunca se quede con lo
+  de otro, en la calle nada entra en una bolsa o un cadáver ajeno (`inventory.street_bag`:
+  "En la calle solo puedes guardarlo en algo que acabas de soltar tú: déjalo en el
+  suelo."), y lo tirado no se suma a una pila igual ya confirmada, aunque sea propia:
+  forma una pila aparte, así que una casilla se llena antes (`inventory.tile_full`).
   Para que nada de lo que recibieron llegue a otro antes del aviso, después de cada
   intercambio, compra, venta, retiro del buzón o cambio en una casa el personaje queda
   **en espera** hasta que la base confirma ese guardado (normalmente uno o dos ticks):

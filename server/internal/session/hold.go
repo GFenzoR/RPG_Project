@@ -133,7 +133,10 @@ func (w *World) transferSnapshot(p *Player) Snapshot {
 	}
 	w.settleGave(p, 0, true)
 	if len(p.giveWait) > 0 {
-		w.saveGave(p, 0) // its coalesced save goes first, as if its window had ended
+		// Its coalesced save goes first, as if its window had ended. The window itself
+		// stays: the next give-away inside it is still coalesced (giveNext is a tick, and
+		// a transfer has none at hand to restart it from).
+		w.save(w.snapshot(p, false))
 	}
 	s := w.snapshot(p, false)
 	w.inFlight[p.charID] = s.Seq
@@ -204,7 +207,8 @@ func (w *World) settleGivers(now game.Tick) {
 }
 
 // settleGave settles p's give-away since its last snapshot: p's snapshot is submitted now
-// (saveGave) or, inside the coalescing window of an earlier one (unless force), what it
+// (saveGave) or, inside the coalescing window of an earlier one (unless force: a
+// transfer's, which neither waits for the window nor restarts it), what it
 // landed in is reserved to p right away and saved at the window's end (flushGiveDue). A
 // house p changed is written first, with p's snapshot (flushHouses), which already comes
 // after the give-away and reserves it: then there is nothing left to do. Inside that
@@ -224,7 +228,11 @@ func (w *World) settleGave(p *Player, now game.Tick, force bool) {
 		}
 		w.log.Error("session: a command gave something away and changed a house", "character", p.charID)
 	}
-	if force || now >= p.giveNext {
+	if force {
+		w.save(w.snapshot(p, false)) // a transfer's: its window, if any, goes on
+		return
+	}
+	if now >= p.giveNext {
 		w.saveGave(p, now)
 		return
 	}
@@ -291,7 +299,11 @@ func (w *World) reserveGave(p *Player, seq uint64) {
 
 // flushGiveDue submits the coalesced give-away saves whose window ended by now (end of
 // tick, flushSystem). One that another snapshot already numbered, or whose player left
-// (its final snapshot did), needs none.
+// (its final snapshot did), needs none. A character taken out by a dropped transfer
+// (Tainted) leaves without a final snapshot: its coalesced reservations (noSeq) are never
+// numbered nor acked, so what it threw in its last window stays reserved to it until a
+// restart or until it decays. That is the safe side (nobody else gets an item its database
+// row may still hold), noted in docs/01.
 func (w *World) flushGiveDue(now game.Tick) {
 	if len(w.giveDue) == 0 {
 		return
@@ -345,6 +357,9 @@ func (w *World) reserveGiven(p *Player) bool {
 // and, written in order, every transfer of id before it. The hold ends if seq covers the
 // last transfer; every reservation seq covers is anybody's again, also while newer
 // transfers keep id held (and after a taint: a late ack is still a write that went in).
+// It walks all of heldGround: one entry per pile thrown in the last couple of seconds (or
+// held by a transfer), so a few hundred at most with a full server; index it by character
+// if that ever shows in the tick profile (docs/07).
 func (w *World) confirmed(id int64, seq uint64) {
 	if h, ok := w.inFlight[id]; ok && seq >= h {
 		delete(w.inFlight, id)

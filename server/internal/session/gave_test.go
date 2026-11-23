@@ -1417,7 +1417,10 @@ func (d *crashDB) count(id int64, item uint16) int { return countState(d.rows[id
 // on the street; nobody else can take it until the database has Ana's snapshot without
 // it. Then Caio picks it up and logs out (his final save is written at once) and the
 // server dies before Ana's next autosave: the sword is in exactly one row. And if the
-// server dies before Ana's snapshot is written, Caio never had it: one row again.
+// server dies before Ana's snapshot is written, Caio never had it: one row again. The
+// "written" way is the regression (without the reservation Caio takes the sword at once);
+// "lost" only checks that the refused pick-up left nothing in Caio's rows (his final save
+// queues behind Ana's snapshot, so the crash drops both).
 func TestCrashAfterAPickUpKeepsTheItemOnce(t *testing.T) {
 	for _, way := range []string{"written", "lost"} {
 		t.Run(way, func(t *testing.T) {
@@ -1580,5 +1583,45 @@ func TestPutIntoAStrangersStreetBagIsRefused(t *testing.T) {
 	if evs := h.send(cc, moveItem(onTile(pos(2, 2)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
 		h.w.CountItem(c, "test_bag") != 1 {
 		t.Fatalf("Caio carries the bag away: %v", systemKeys(evs))
+	}
+}
+
+// Lote 16 review: a transfer that writes a waiting give-away save first keeps the
+// coalescing window going. A throw right after it, still inside the window opened by the
+// first throw, is coalesced: it does not write at once.
+func TestTransferKeepsTheGiveAwayWindow(t *testing.T) {
+	log := &jobLog{}
+	h := newMarketHarness(t, log.wire)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	offer := h.w.MarketOffers(s.CharacterID())[0]
+	h.sim.RunTicks(100) // well past tick giveSaveEvery: a window restarted at 0 is over
+	pack := openPack(t, h.harness, cb)
+	throw := moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(0, 2)), 1)
+
+	n := len(log.jobs)
+	for range 2 { // the first is saved at once and opens the window, the second waits
+		if evs := h.send(cb, throw); len(systemKeys(evs)) != 0 {
+			t.Fatalf("Bruno throws a coin: %v", systemKeys(evs))
+		}
+	}
+	if jobs := log.since(n); len(jobs) != 1 {
+		t.Fatalf("two throws wrote %d jobs, want the first one's", len(jobs))
+	}
+	n = len(log.jobs)
+	h.send(cb, acceptOffer(offer, 1)) // the waiting save, then the transfer
+	jobs := log.since(n)
+	if len(jobs) != 2 || jobs[1].Transfer == nil {
+		t.Fatalf("a transfer after a waiting throw = %d jobs", len(jobs))
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), jobs0Snapshot(t, jobs[1], b.CharacterID()).Seq))
+	h.sim.Step() // the hold ends
+	n = len(log.jobs)
+	if evs := h.send(cb, throw); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Bruno throws a coin after the transfer: %v", systemKeys(evs))
+	}
+	if jobs := log.since(n); len(jobs) != 0 {
+		t.Fatalf("a throw inside the window after a transfer wrote %d jobs at once", len(jobs))
 	}
 }

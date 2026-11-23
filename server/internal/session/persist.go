@@ -174,7 +174,9 @@ func (s *Saver) run() {
 // stack and the job is dropped as rejected, so the goroutine keeps the queue going instead
 // of taking the server down (lote 16): a dropped transfer taints its characters, as a
 // rejected one does, and a dropped snapshot is not acked (the next one of its character
-// replaces it).
+// replaces it). A panic after the transfer was written (in the saved callback, say)
+// taints it all the same: rare, and on the safe side (its characters are kept out until a
+// restart although the database has it; nothing is lost or written twice).
 func (s *Saver) handle(j Job) {
 	defer func() {
 		if r := recover(); r != nil {

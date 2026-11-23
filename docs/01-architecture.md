@@ -430,6 +430,14 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       levanta otro cuando la base ya tiene a quien lo tiró sin eso; si el servidor muere
       antes, como mucho se pierde lo que estaba en el suelo (como en cualquier caída), no
       queda en dos filas.
+    - Si a un personaje con tiradas esperando su ventana lo marca un transfer descartado
+      (`Tainted`), sale sin snapshot final: esas reservas no se numeran ni se acusan
+      (`flushGiveDue` lo descarta) y lo que tiró queda reservado a él hasta un reinicio o
+      hasta que se degrade. Es el lado seguro (nadie más toma algo que su fila puede
+      tener todavía). Un transfer que el Saver sí escribió pero cuyo callback entra en
+      panic también se marca (`Saver.handle`): raro y del lado seguro.
+    - La ventana de 2 s no se reinicia con un transfer: el guardado que espera sale antes
+      del transfer y la tirada siguiente dentro de la misma ventana se agrupa igual.
     - La reserva cubre la pila o el contenedor entero donde cae lo tirado, así que lo
       tirado cae como pila propia o en algo ya reservado a quien tira (`moveItem`,
       `ownOnly`): nunca se suma a la pila de otro en la calle, y en una bolsa o un cadáver
