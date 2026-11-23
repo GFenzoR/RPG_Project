@@ -13,3 +13,8 @@ email.reset.expires: "The link works once and expires in 1 hour. Changing it sig
 email.reset.ignore: "If you did not ask for it, ignore this message: your password stays the same."
 email.footer: "This message was sent automatically by Neque's Realm server. Do not reply to this address."
 email.link_hint: "If the button does not work, copy this link into your browser:"
+email.password_changed.subject: "Your Neque's Realm password changed"
+email.password_changed.intro: "Hi. The password of the Neque's Realm account with this email was just changed (or set) from a signed-in session. The other sessions were signed out."
+email.password_changed.action: "It wasn't me: recover my account"
+email.password_changed.expires: "If it wasn't you, ask for a link to choose another password: using it signs out every session, including the one that changed it."
+email.password_changed.ignore: "If it was you, there is nothing to do."

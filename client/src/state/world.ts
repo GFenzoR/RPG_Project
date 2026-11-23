@@ -83,6 +83,8 @@ import { houseFrom } from "./house.ts";
 import type { HouseView } from "./house.ts";
 import { applyMarket, tradeFrom } from "./market.ts";
 import type { MarketView, TradeView } from "./market.ts";
+import { stashFrom } from "./stash.ts";
+import type { StashView } from "./stash.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 import { CLASSIC_VIEW, serverView } from "./view.ts";
@@ -569,6 +571,8 @@ export class WorldState implements TileSource {
   market: MarketView | undefined;
   /** The house window (T5.4), until closed or the player walks away from the door. */
   house: HouseView | undefined;
+  /** The account stash window (docs/02 "Baúl de la cuenta"), until closed or walked away. */
+  stash: StashView | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
   /** What the character's pockets hold and how many cells they have (Inventory, docs/02 "Bolsillos"). */
@@ -935,6 +939,15 @@ export class WorldState implements TileSource {
       case "houseUpdate":
         this.house = houseFrom(msg.value);
         break;
+      case "stashUpdate": {
+        const r = stashFrom(msg.value);
+        this.stash = r.view;
+        if (r.refused) {
+          this.log.push({ key: r.refused, params: [], at: now });
+          if (this.log.length > LOG_SIZE) this.log.shift();
+        }
+        break;
+      }
       case "shopOpen": {
         const v = msg.value;
         this.shop = {

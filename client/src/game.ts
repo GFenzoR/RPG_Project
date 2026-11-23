@@ -79,6 +79,7 @@ import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
 import type { GuildInvitationView, GuildView } from "./state/guild.ts";
 import type { MarketView, TradeView } from "./state/market.ts";
+import type { StashCell, StashView } from "./state/stash.ts";
 import { doorKey } from "./state/house.ts";
 import type { HouseView } from "./state/house.ts";
 import type {
@@ -134,6 +135,8 @@ export interface GameUi {
   refine: RefineState | undefined;
   /** The trade and market windows (T5.3). */
   trade: TradeView | undefined;
+  /** The account stash window (docs/02 "Baúl de la cuenta"). */
+  stash: StashView | undefined;
   market: MarketView | undefined;
   /** The house window (T5.4). */
   house: HouseView | undefined;
@@ -757,6 +760,48 @@ export class Game {
     if (!this.world.house) return;
     this.world.house = undefined;
     this.conn.send({ case: "houseCommand", value: { action: { case: "close", value: {} } } });
+    this.publish();
+  }
+
+  // ---- account stash (docs/02 "Baúl de la cuenta"): the server checks the chest, the item,
+  // room and weight, and answers every move with a StashUpdate ----
+
+  /** Puts count units of a carried item (an open container or the pockets) in the stash. */
+  stashDeposit(ref: ItemRef, count: number): void {
+    this.conn.send({
+      case: "stashCommand",
+      value: {
+        action: {
+          case: "deposit",
+          value: { from: locationInit(ref.loc), itemId: ref.itemId, count },
+        },
+      },
+    });
+  }
+
+  /** Takes count units of a stash cell (as the window shows it) into the backpack. */
+  stashWithdraw(cell: StashCell, count: number): void {
+    this.conn.send({
+      case: "stashCommand",
+      value: {
+        action: {
+          case: "withdraw",
+          value: {
+            index: cell.index,
+            itemId: cell.itemId,
+            count,
+            ...(cell.mods ? { mods: cell.mods } : {}),
+          },
+        },
+      },
+    });
+  }
+
+  /** Closes the stash window (the server forgets it too). */
+  stashClose(): void {
+    if (!this.world.stash) return;
+    this.world.stash = undefined;
+    this.conn.send({ case: "stashCommand", value: { action: { case: "close", value: {} } } });
     this.publish();
   }
 
@@ -1731,6 +1776,7 @@ export class Game {
       trade: w.trade,
       market: w.market,
       house: w.house,
+      stash: w.stash,
       book: this.book,
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),

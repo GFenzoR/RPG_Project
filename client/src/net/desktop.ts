@@ -1,7 +1,7 @@
 // Desktop app (apps/desktop, Tauri 2). The page is served from tauri://localhost (or
 // http://tauri.localhost on Windows), not from the game server, so:
 // - the HTTP API goes through the app's `api` command: Rust adds the account token, which
-//   lives in the OS keyring and never reaches this page;
+//   lives in the app's memory for this run only (lote 17) and never reaches this page;
 // - the WebSocket goes straight to the server the app was configured with (`server_info`).
 // In a browser none of this runs: same-origin fetch with the HttpOnly cookie, as before.
 import { invoke, isTauri } from "@tauri-apps/api/core";

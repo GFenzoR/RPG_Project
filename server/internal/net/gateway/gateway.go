@@ -351,7 +351,7 @@ func (c *conn) run(ctx context.Context) {
 		join.Execute(tc)
 	})); err != nil {
 		g.logQueueFull(char.ID)
-		c.abortLogin(char.ID)
+		c.abortLogin(char.ID, char.AccountID)
 		g.refused(RefusedServerFull)
 		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 		_ = c.ws.Close(websocket.StatusTryAgainLater, "")
@@ -410,6 +410,10 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
 	defer g.adm.releaseDB()
+	// Taken before the redeem: a revocation of the account's sessions that commits after
+	// the redeem spent the token has a later time, and the Join refuses this login
+	// (session.Character.RedeemedAt).
+	redeemedAt := g.cfg.Clock.Now()
 	rctx, rcancel := context.WithTimeout(ctx, dbTimeout)
 	accountID, charID, err := g.cfg.Accounts.RedeemPlayToken(rctx, hello.GetSessionToken())
 	rcancel()
@@ -430,7 +434,7 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	}
 	// Tell the loop a read is in flight before reading, so the ack of a save this read
 	// may miss cannot drop the snapshot the Join will need (see session.LoginStarted).
-	if err := g.cfg.Loop.Enqueue(g.cfg.World.LoginStarted(charID)); err != nil {
+	if err := g.cfg.Loop.Enqueue(g.cfg.World.LoginStarted(charID, accountID)); err != nil {
 		g.logQueueFull(charID)
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
@@ -438,7 +442,7 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	pc, err := g.cfg.Characters.PlayCharacter(pctx, accountID, charID, g.cfg.Clock.Now())
 	pcancel()
 	if err != nil {
-		c.abortLogin(charID)
+		c.abortLogin(charID, accountID)
 		if errors.Is(err, store.ErrNotFound) {
 			return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
 		}
@@ -447,7 +451,9 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		}
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 	}
-	return toCharacter(pc), true
+	char := toCharacter(pc)
+	char.RedeemedAt = redeemedAt
+	return char, true
 }
 
 // logQueueFull logs (throttled) a login refused because the loop's lifecycle lane is full.
@@ -495,6 +501,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 			Author: k.Author, AuthorHit: k.AuthorHit, AuthorUnjust: k.AuthorUnjust, SavedAt: k.SavedAt})
 	}
 	c.Inventory = itemStates(pc.Inventory)
+	c.Stash = itemStates(pc.Stash) // used only if the account's stash is not in the world yet
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {
 		c.HasPos = true
 		c.Pos = world.Pos{X: uint16(pc.X), Y: uint16(pc.Y), Z: uint8(pc.Z)}
@@ -566,7 +573,9 @@ func (c *conn) reader(ctx context.Context, charID int64) {
 }
 
 // abortLogin ends a LoginStarted whose Join will not be enqueued.
-func (c *conn) abortLogin(charID int64) { c.mustEnqueue(c.g.cfg.World.LoginAborted(charID)) }
+func (c *conn) abortLogin(charID, accountID int64) {
+	c.mustEnqueue(c.g.cfg.World.LoginAborted(charID, accountID))
+}
 
 // leave tells the loop the connection is gone. It must not be lost (the player would
 // stay in the world), so a full queue is retried until it has room or the server stops.

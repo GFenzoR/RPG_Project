@@ -6,7 +6,8 @@ Lee `docs/12-local-development.md` ("Cliente de escritorio") y `docs/09-deployme
 - Envuelve `build/client` (el build web): **no** pongas lógica de juego ni UI aquí. Lo que
   cambia en la app vive en `client/src/net/desktop.ts` (detecta Tauri con `isTauri()`).
 - Rust (`src-tauri/src`): `config.rs` elige el servidor, `api.rs` llama a la API HTTP con el
-  token en el llavero del SO (nunca lo devuelve al webview), `lib.rs` arma la CSP con el
+  token solo en memoria (lote 17: nunca en disco ni en el llavero, y nunca lo devuelve al
+  webview; al arrancar borra el que dejó una versión vieja en el llavero), `lib.rs` arma la CSP con el
   origen WS del servidor elegido y registra los comandos `server_info` y `api`.
 - Seguridad: comandos deny-by-default (`build.rs` declara el manifiesto) y la capability
   `default` solo concede esos dos; sin plugins de shell/fs; sin acceso IPC remoto.

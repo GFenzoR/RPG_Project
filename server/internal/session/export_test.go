@@ -13,6 +13,9 @@ func (m *Monster) SetHealth(h int) { m.health = h }
 // EquipForTest gives p a weapon and a shield until equipment exists (T1.8).
 func (p *Player) EquipForTest(weapon, shield *content.Item) { p.weapon, p.shield = weapon, shield }
 
+// WeaponForTest is the weapon p fights with (what equipmentChanged last read; tests only).
+func (p *Player) WeaponForTest() *content.Item { return p.weapon }
+
 // Level returns p's level (tests only).
 func (w *World) Level(p *Player) int { return p.level }
 

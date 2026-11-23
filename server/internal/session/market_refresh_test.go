@@ -377,7 +377,7 @@ func TestMarketForgetsLinkDeadWindows(t *testing.T) {
 				cb.full = true
 				h.input(cb, browse(salveID)) // its answer does not fit
 			case "password reset":
-				h.sim.Command(h.w.KickAccount(b.CharacterID())) // withPack: account = character
+				h.sim.Command(h.w.KickAccount(b.CharacterID(), h.sim.Now())) // withPack: account = character
 			}
 			h.sim.Step()
 			if !b.LinkDead() || h.w.MarketViewers(salveID) != 0 || h.w.PlayerByCharacter(b.CharacterID()) != b {

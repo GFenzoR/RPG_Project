@@ -193,9 +193,7 @@ func (a *api) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Every session of the account is gone, this browser's included.
-	c := a.cookie("", time.Unix(0, 0))
-	c.MaxAge = -1
-	http.SetCookie(w, c)
+	a.clearSession(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 

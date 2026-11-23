@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -54,6 +55,11 @@ type Repo interface {
 	ActiveSession(ctx context.Context, tokenHash []byte, kind store.SessionKind, now time.Time) (store.Session, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	DeleteExpiredSessions(ctx context.Context, now time.Time) (int64, error)
+	// Lote 17: idle timeout, "sign out everywhere" and password change.
+	TouchSession(ctx context.Context, tokenHash []byte, now time.Time) error
+	DeleteIdleSessions(ctx context.Context, before time.Time) (int64, error)
+	RevokeAllSessions(ctx context.Context, accountID int64, now time.Time) (int64, error)
+	ChangePassword(ctx context.Context, accountID int64, passwordHash string, keep []byte, now time.Time) (int64, error)
 	ListCharacters(ctx context.Context, accountID int64) ([]store.Character, error)
 	CreateCharacter(ctx context.Context, c store.NewCharacter, maxPerAccount int) (store.Character, error)
 	CharacterBelongsTo(ctx context.Context, accountID, characterID int64) (bool, error)
@@ -78,10 +84,15 @@ type Config struct {
 	PlayableVocations []string
 	// Looks is data/looks.yaml: the body a new character may pick (docs/02
 	// "Apariencia"). Nil: a look sent with a new character is ignored.
-	Looks           *content.Looks
-	AccountTokenTTL time.Duration // default 30 days
-	MaxCharacters   int           // per account, default 10
-	Hash            HashParams    // default DefaultHashParams
+	Looks *content.Looks
+	// AccountTokenTTL is the absolute lifetime of an account session (login); default
+	// DefaultAccountTokenTTL. SessionIdle ends it earlier after that long without
+	// authenticated activity; default DefaultSessionIdle (lote 17: the game never keeps
+	// the login).
+	AccountTokenTTL time.Duration
+	SessionIdle     time.Duration
+	MaxCharacters   int        // per account, default 10
+	Hash            HashParams // default DefaultHashParams
 	// Concurrent argon2 computations allowed; bounds memory under a login burst.
 	MaxConcurrentHashes int // default 4
 	// How long a request waits for a hashing slot before failing with ErrBusy.
@@ -100,7 +111,11 @@ type Config struct {
 	// session, so the game can also disconnect its online characters. Optional; it must
 	// not block (the app hands it to the game loop from its own goroutine).
 	SessionsRevoked func(accountID int64)
-	VerifyTokenTTL  time.Duration // default DefaultVerifyTokenTTL
+	// SignedOutEverywhere is told the account id after "sign out everywhere" revoked every
+	// stored session (lote 17), so the game disconnects its online characters. Optional;
+	// it must not block, like SessionsRevoked.
+	SignedOutEverywhere func(accountID int64)
+	VerifyTokenTTL      time.Duration // default DefaultVerifyTokenTTL
 	// Providers are the configured OAuth providers (T2.1 2/2); they need OAuth and
 	// PublicURL (the redirect_uri is PublicURL + /api/auth/oauth/<name>/callback).
 	Providers []*oauth.Provider
@@ -110,11 +125,18 @@ type Config struct {
 	// ReservedNames are names a new character may not take (ErrReservedName), compared
 	// ignoring case and spaces: the display names of the NPCs (NPCReservedNames).
 	ReservedNames []string
+	// Log receives the errors a request survives (a failed refresh of a session's last
+	// use). Nil: slog.Default().
+	Log *slog.Logger
 }
 
 // Defaults for Config.
 const (
-	DefaultAccountTokenTTL     = 30 * 24 * time.Hour
+	DefaultAccountTokenTTL = 12 * time.Hour
+	DefaultSessionIdle     = 30 * time.Minute
+	// SessionTouchEvery: an authenticated request refreshes its session's last use at
+	// most this often, so the idle timeout slides without a database write per request.
+	SessionTouchEvery          = time.Minute
 	DefaultMaxCharacters       = 10
 	DefaultMaxConcurrentHashes = 4
 	DefaultHashWait            = 2 * time.Second
@@ -130,6 +152,7 @@ type Service struct {
 	playable  map[string]content.Vocation
 	looks     *content.Looks
 	tokenTTL  time.Duration
+	idle      time.Duration
 	maxChars  int
 	hash      HashParams
 	hashSlots chan struct{}
@@ -142,6 +165,8 @@ type Service struct {
 	publicURL       string
 	requireVerified bool
 	revoked         func(accountID int64)
+	signedOut       func(accountID int64)
+	log             *slog.Logger
 	providers       map[string]*oauth.Provider
 	oauthRepo       OAuthRepo
 	verifyTTL       time.Duration
@@ -164,6 +189,7 @@ func New(cfg Config) (*Service, error) {
 		playable: map[string]content.Vocation{},
 		looks:    cfg.Looks,
 		tokenTTL: cfg.AccountTokenTTL,
+		idle:     cfg.SessionIdle,
 		maxChars: cfg.MaxCharacters,
 		hash:     cfg.Hash,
 	}
@@ -182,6 +208,9 @@ func New(cfg Config) (*Service, error) {
 	if s.tokenTTL <= 0 {
 		s.tokenTTL = DefaultAccountTokenTTL
 	}
+	if s.idle <= 0 {
+		s.idle = DefaultSessionIdle
+	}
 	if s.maxChars <= 0 {
 		s.maxChars = DefaultMaxCharacters
 	}
@@ -198,6 +227,11 @@ func New(cfg Config) (*Service, error) {
 		s.hashWait = DefaultHashWait
 	}
 	s.mail, s.requireVerified, s.revoked = cfg.Mail, cfg.RequireVerifiedEmail, cfg.SessionsRevoked
+	s.signedOut = cfg.SignedOutEverywhere
+	s.log = cfg.Log
+	if s.log == nil {
+		s.log = slog.Default()
+	}
 	if s.requireVerified && s.mail == nil {
 		return nil, errors.New("auth: requiring a verified email needs a mailer (SMTP)")
 	}
@@ -382,11 +416,12 @@ func (s *Service) loginAccount(ctx context.Context, accountID int64) (Token, err
 		return Token{}, err
 	}
 	sess := store.Session{
-		TokenHash: hash,
-		AccountID: accountID,
-		Kind:      store.SessionAccount,
-		CreatedAt: now,
-		ExpiresAt: now.Add(s.tokenTTL),
+		TokenHash:  hash,
+		AccountID:  accountID,
+		Kind:       store.SessionAccount,
+		CreatedAt:  now,
+		LastSeenAt: now,
+		ExpiresAt:  now.Add(s.tokenTTL),
 	}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
@@ -401,14 +436,100 @@ func (s *Service) Authenticate(ctx context.Context, token string) (int64, error)
 	if !plausibleToken(token) {
 		return 0, ErrUnauthorized
 	}
-	sess, err := s.repo.ActiveSession(ctx, hashToken(token), store.SessionAccount, s.clock.Now())
-	if errors.Is(err, store.ErrNotFound) {
-		return 0, ErrUnauthorized
-	}
+	sess, err := s.accountSession(ctx, hashToken(token))
 	if err != nil {
-		return 0, fmt.Errorf("authenticate: %w", err)
+		return 0, err
 	}
 	return sess.AccountID, nil
+}
+
+// accountSession returns the account session of tokenHash if it is active: not expired
+// (absolute TTL), not idle for SessionIdle (lote 17), account enabled and not banned.
+// An idle session is deleted on the spot; an active one gets its last use refreshed
+// when that is SessionTouchEvery old or more (the idle timeout slides).
+// ErrUnauthorized otherwise.
+func (s *Service) accountSession(ctx context.Context, tokenHash []byte) (store.Session, error) {
+	now := s.clock.Now()
+	sess, err := s.repo.ActiveSession(ctx, tokenHash, store.SessionAccount, now)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Session{}, ErrUnauthorized
+	}
+	if err != nil {
+		return store.Session{}, fmt.Errorf("authenticate: %w", err)
+	}
+	seen := sess.LastSeenAt
+	if seen.IsZero() {
+		seen = sess.CreatedAt
+	}
+	if !now.Before(seen.Add(s.idle)) {
+		// Idle: refused whether or not the delete works (the purge job removes it later).
+		if err := s.repo.DeleteSession(ctx, tokenHash); err != nil {
+			s.log.Warn("auth: delete idle session", "err", err)
+		}
+		return store.Session{}, ErrUnauthorized
+	}
+	if now.Sub(seen) >= SessionTouchEvery {
+		// A failed refresh does not fail a valid session: the next request tries again.
+		if err := s.repo.TouchSession(ctx, tokenHash, now); err != nil {
+			s.log.Warn("auth: refresh session last use", "err", err)
+		} else {
+			sess.LastSeenAt = now
+		}
+	}
+	return sess, nil
+}
+
+// SignOutEverywhere revokes every session of the account (lote 17): the account tokens
+// of every browser and desktop app, pending play tokens and OAuth flows in flight. Then
+// it has the game disconnect the account's online characters (Config.SignedOutEverywhere).
+func (s *Service) SignOutEverywhere(ctx context.Context, accountID int64) error {
+	if _, err := s.repo.RevokeAllSessions(ctx, accountID, s.clock.Now()); err != nil {
+		return fmt.Errorf("sign out everywhere: %w", err)
+	}
+	if s.signedOut != nil {
+		s.signedOut(accountID)
+	}
+	return nil
+}
+
+// ChangePassword sets a new password from a signed-in session (lote 17). It needs the
+// current password, checked like a login (ErrInvalidCredentials when wrong, which the
+// HTTP API counts under the failed-login limits), or, for an account that signs in only
+// with a provider and has no password yet, a login less than ReauthWindow old
+// (ErrReauthRequired otherwise): then it creates the account's first password. The new
+// password follows the registration rules (ErrInvalidPassword). On success every other
+// session of the account is revoked (the one of token stays), pending reset links die
+// and the online characters of the account are disconnected (Config.SessionsRevoked),
+// as after a reset.
+func (s *Service) ChangePassword(ctx context.Context, token, current, newPassword string) error {
+	if !ValidPassword(newPassword) {
+		return ErrInvalidPassword
+	}
+	accountID, err := s.reauth(ctx, token, current)
+	if err != nil {
+		return err
+	}
+	var hash string
+	err = s.withHashSlot(ctx, func() error {
+		var err error
+		hash, err = hashPassword(newPassword, s.hash)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.ChangePassword(ctx, accountID, hash, hashToken(token), s.clock.Now())
+	if errors.Is(err, store.ErrNotFound) {
+		return ErrUnauthorized
+	}
+	if err != nil {
+		return fmt.Errorf("change password: %w", err)
+	}
+	if s.revoked != nil {
+		s.revoked(accountID)
+	}
+	s.notifyPasswordChanged(ctx, accountID)
+	return nil
 }
 
 // Logout revokes a token. Revoking an unknown token succeeds; a malformed one is not
@@ -423,14 +544,19 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
-// PurgeExpiredSessions deletes expired sessions and emailed link tokens and returns
-// how many it removed.
+// PurgeExpiredSessions deletes expired and idle sessions and emailed link tokens and
+// returns how many it removed.
 func (s *Service) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 	now := s.clock.Now()
 	n, err := s.repo.DeleteExpiredSessions(ctx, now)
 	if err != nil {
 		return 0, fmt.Errorf("purge sessions: %w", err)
 	}
+	idle, err := s.repo.DeleteIdleSessions(ctx, now.Add(-s.idle))
+	if err != nil {
+		return n, fmt.Errorf("purge idle sessions: %w", err)
+	}
+	n += idle
 	m, err := s.repo.DeleteExpiredAccountTokens(ctx, now)
 	if err != nil {
 		return n, fmt.Errorf("purge account tokens: %w", err)

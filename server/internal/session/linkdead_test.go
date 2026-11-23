@@ -366,7 +366,7 @@ func TestSanctionInCombatRemovesAtOnce(t *testing.T) {
 
 	cl, p := a.joinAs("Reset", session.RolePlayer, pos(6, 6))
 	hurt(p)
-	a.sim.Command(a.w.KickAccount(p.CharacterID())) // joinAs: account = character
+	a.sim.Command(a.w.KickAccount(p.CharacterID(), a.sim.Now())) // joinAs: account = character
 	a.sim.Step()
 	if !cl.closed || cl.closes != 1 || cl.reason != pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED ||
 		!p.LinkDead() || a.w.PlayerByCharacter(p.CharacterID()) != p {

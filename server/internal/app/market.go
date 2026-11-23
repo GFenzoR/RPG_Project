@@ -102,6 +102,9 @@ func (a *App) writeTransfer(ctx context.Context, t session.Transfer) error {
 	for _, op := range t.Houses {
 		st.Houses = append(st.Houses, storeHouseOp(op))
 	}
+	for _, op := range t.Stash {
+		st.Stash = append(st.Stash, store.StashOp{AccountID: op.Account, Items: storeItems(op.Items)})
+	}
 	err := ms.SaveTransfer(ctx, st)
 	switch {
 	case errors.Is(err, store.ErrNotFound):

@@ -172,7 +172,9 @@ type Transfer struct {
 	ID        uint64
 	Snapshots []Snapshot
 	// Houses are the house changes (T5.4), applied before the market changes.
-	Houses    []HouseOp
+	Houses []HouseOp
+	// Stash are the account stash changes (stash.go), applied after the houses.
+	Stash     []StashOp
 	Market    []MarketOp
 	OfferHigh int64
 	MailHigh  int64
@@ -1398,6 +1400,7 @@ func (w *World) Tainted(ids []int64) game.Command {
 			w.log.Error("market: a transfer was not stored; market and trades are read-only until a restart")
 		}
 		w.readOnly = true
+		w.closeEveryStash() // stash.go: no deposit or withdrawal until a restart
 		for len(w.trades) > 0 {
 			w.endTrade(w.trades[0], pb.TradeState_TRADE_STATE_CANCELLED, tradeCancelReadOnly)
 		}

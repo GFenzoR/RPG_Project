@@ -1901,8 +1901,10 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     }
     return false;
   };
+  // Both pages every time (no short-circuit): while the leader waits for the bonus, the
+  // mate must still pick a new wolf when its own dies, or the leader fights alone.
   await expect
-    .poll(async () => (await bonusShown(leadPage)) && (await bonusShown(matePage)), {
+    .poll(async () => [await bonusShown(leadPage), await bonusShown(matePage)].every(Boolean), {
       timeout: 120_000,
       intervals: [1_000],
     })
@@ -3622,3 +3624,169 @@ function colorOfSwatch(css: string): string {
   const dist = (c: number) => Math.min(Math.abs(h - c), 360 - Math.abs(h - c));
   return dist(220) < dist(52) ? "azul" : "amarillo";
 }
+
+test("account stash: one character stores fish, the other online one takes it out", async ({
+  browser,
+  playwright,
+}) => {
+  // One account, two characters (docs/02 "Baúl de la cuenta"): the second is made with the
+  // same token. Both stand by Puerto's stash chest (3170, 6382, next to the market board).
+  const owner = await newGuardian(playwright, "Baulero");
+  const alt = `Baulera ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email: owner.email, password: owner.password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name: alt, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  const seed = (name: string, x: number, y: number, items: string): string =>
+    `UPDATE characters SET town = 'puerto', pos_x = ${x}, pos_y = ${y}, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
+  psql([
+    databaseUrl,
+    "-c",
+    seed(owner.name, 3171, 6381, "(0, 10, 20)") + seed(alt, 3171, 6383, "(0, 8, 5)"),
+  ]);
+  const errors: string[] = [];
+  async function enter(name: string): Promise<Page> {
+    const page = await browser.newPage();
+    await page.goto("/play/?lang=es");
+    const form = page.getByTestId("login-form");
+    await form.getByLabel("Email").fill(owner.email);
+    await form.getByLabel("Contraseña").fill(owner.password);
+    await form.getByRole("button", { name: "Entrar", exact: true }).click();
+    await page
+      .getByTestId("characters")
+      .locator("li", { hasText: name })
+      .getByRole("button", { name: "Jugar" })
+      .click();
+    await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    // The login screen's session check answers 401 before signing in: listen after it.
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(owner.name);
+  const b = await enter(alt);
+  await arrived(a, 3171, 6381);
+  await arrived(b, 3171, 6383);
+  for (const page of [a, b]) {
+    const docked = page
+      .getByTestId("inventory")
+      .locator('[data-container-item="backpack"][data-docked]');
+    if ((await docked.count()) === 0)
+      await page
+        .getByTestId("inventory")
+        .getByTestId("slot-backpack")
+        .locator("[data-item]")
+        .dblclick();
+    await expect(docked).toBeVisible();
+  }
+  const open = async (page: Page): Promise<void> => {
+    const chest = await page.evaluate(() => window.__rpgClient?.tileToClient(3170, 6382));
+    if (!chest) throw new Error("no canvas");
+    await useAt(page, chest.x, chest.y);
+    await expect(page.getByTestId("stash")).toBeVisible();
+  };
+  await open(a);
+  await open(b);
+  const sa = a.getByTestId("stash");
+  const sb = b.getByTestId("stash");
+  await sa.locator("[data-stash-store=raw_fish]").click();
+  // The other character's window follows at once.
+  await expect(sb.getByTestId("stash-cells")).toContainText("20");
+  await shot(b, "stash-01-shared");
+  await sb.locator("[data-stash-take]").first().click();
+  await expect(sa.getByTestId("stash-cells")).toContainText("El baúl está vacío.");
+  await expect(
+    b.getByTestId("inventory").locator('[data-container-item="backpack"] [data-item="raw_fish"]'),
+  ).toBeVisible();
+  await shot(b, "stash-02-taken");
+  expect(errors).toEqual([]);
+});
+
+// Lote 17 (docs/05 "Token de cuenta"): the characters screen's "Cuenta y seguridad" panel.
+// A password change takes the account's other session out of the game; "sign out
+// everywhere" ends this one too and the login comes back with only the email filled in;
+// the new password then works.
+test("account security: change password, sign out everywhere, email prefill", async ({
+  page,
+  browser,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password } = await newGuardian(playwright, "Secure");
+  const newPassword = "e2e-password-2";
+
+  // Another browser in the game with the same account.
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await enterGame(otherPage, email, password);
+
+  await page.goto("/play/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByTestId("characters")).toBeVisible();
+
+  const panel = page.getByTestId("account-security");
+  await panel.getByText("Cuenta y seguridad").click();
+  const form = panel.getByTestId("change-password");
+  await expect(form).toBeVisible();
+  await panel.scrollIntoViewIfNeeded();
+  await shot(page, "03c-account-security");
+
+  // A wrong current password is refused and changes nothing.
+  await form.getByLabel("Contraseña actual").fill("not-the-password");
+  await form.getByLabel("Contraseña nueva").fill(newPassword);
+  await form.getByRole("button", { name: "Cambiar contraseña" }).click();
+  await expect(panel.getByRole("alert")).toHaveText("La contraseña actual no es correcta.");
+  errors.length = 0; // the refused change answers 401, which the browser logs: expected
+
+  await form.getByLabel("Contraseña actual").fill(password);
+  await form.getByLabel("Contraseña nueva").fill(newPassword);
+  await form.getByRole("button", { name: "Cambiar contraseña" }).click();
+  await expect(panel.getByTestId("password-changed")).toBeVisible();
+  // The other session's character left the game with PASSWORD_CHANGED.
+  await expect(otherPage.getByTestId("login-form")).toBeVisible({ timeout: 20_000 });
+  await expect(otherPage.getByText("Se cambió la contraseña de la cuenta")).toBeVisible();
+  await other.close();
+  await shot(page, "03d-password-changed");
+
+  // This session survived the change; "sign out everywhere" ends it as well.
+  await panel.getByTestId("logout-all-button").click();
+  await panel.getByTestId("logout-all-confirm").click();
+  await expect(loginForm).toBeVisible();
+  await expect(loginForm.getByLabel("Email")).toHaveValue(email);
+  await expect(loginForm.getByLabel("Contraseña")).toHaveValue("");
+  await shot(page, "03e-login-prefill");
+
+  // The old password no longer works; the new one does.
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("Email o contraseña incorrectos.");
+  errors.length = 0; // the refused login's 401: expected
+  await loginForm.getByLabel("Contraseña").fill(newPassword);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByTestId("characters")).toBeVisible();
+  expect(errors).toEqual([]);
+});

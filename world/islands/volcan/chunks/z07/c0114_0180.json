@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 114, "cy": 180, "z": 7 },
-  "palette": ["ash", "cooled_lava", "cinder_path", "basalt", "wooden_floor", "boulder", "pine_tree", "border_ash_inner_nw", "border_ash_n", "border_ash_inner_ne", "border_ash_nw", "border_ash_ne", "border_ash_w", "border_ash_e", "border_ash_inner_sw", "border_ash_sw", "border_ash_se", "border_ash_inner_se", "border_ash_s", "bush", "border_basalt_s", "smelting_forge", "anvil", "cooking_hearth", "market_stall", "sacks", "barrel", "wooden_wall", "bed", "market_board", "fountain", "lamp_post"],
+  "palette": ["ash", "cooled_lava", "cinder_path", "basalt", "wooden_floor", "boulder", "pine_tree", "border_ash_inner_nw", "border_ash_n", "border_ash_inner_ne", "border_ash_nw", "border_ash_ne", "border_ash_w", "border_ash_e", "border_ash_inner_sw", "border_ash_sw", "border_ash_se", "border_ash_inner_se", "border_ash_s", "bush", "border_basalt_s", "smelting_forge", "anvil", "cooking_hearth", "market_stall", "sacks", "barrel", "wooden_wall", "bed", "market_board", "stash_chest", "fountain", "lamp_post"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -154,11 +154,12 @@
     { "x": 26, "y": 29, "stack": [28] },
     { "x": 27, "y": 29, "stack": [27] },
     { "x": 12, "y": 30, "stack": [29] },
+    { "x": 14, "y": 30, "stack": [30] },
     { "x": 19, "y": 30, "stack": [13] },
     { "x": 21, "y": 30, "stack": [27] },
     { "x": 27, "y": 30, "stack": [27] },
-    { "x": 8, "y": 31, "stack": [30] },
-    { "x": 18, "y": 31, "stack": [31] },
+    { "x": 8, "y": 31, "stack": [31] },
+    { "x": 18, "y": 31, "stack": [32] },
     { "x": 19, "y": 31, "stack": [13] },
     { "x": 21, "y": 31, "stack": [27] },
     { "x": 27, "y": 31, "stack": [27] }

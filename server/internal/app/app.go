@@ -168,10 +168,12 @@ func New(cfg Config) (*App, error) {
 	authSvc, err := auth.New(auth.Config{
 		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations, Looks: cfg.Looks,
 		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
-		SessionsRevoked: a.sessionsRevoked,
-		Providers:       cfg.Providers,
-		OAuth:           oauthRepo,
-		ReservedNames:   cfg.ReservedNames,
+		SessionsRevoked:     a.sessionsRevoked,
+		SignedOutEverywhere: a.signedOutEverywhere,
+		Providers:           cfg.Providers,
+		OAuth:               oauthRepo,
+		ReservedNames:       cfg.ReservedNames,
+		Log:                 a.log,
 	})
 	if err != nil {
 		return nil, err
@@ -588,12 +590,23 @@ func (a *App) adminDone(r session.AdminResult) { a.enqueueRetry(a.World.AdminDon
 
 // sessionsRevoked disconnects the online characters of an account whose password was
 // reset (T2.1). Like a ban it must not be lost, so a full queue is retried, in its own
-// goroutine: the HTTP handler that reset the password does not wait for the loop.
+// goroutine: the HTTP handler that reset the password does not wait for the loop. The
+// time is taken here, after the revocation committed: a login that redeemed its play
+// token before it is refused at its Join (session.Character.RedeemedAt).
 func (a *App) sessionsRevoked(accountID int64) {
 	if a.World == nil {
 		return
 	}
-	go a.enqueueRetry(a.World.KickAccount(accountID))
+	go a.enqueueRetry(a.World.KickAccount(accountID, a.cfg.Clock.Now()))
+}
+
+// signedOutEverywhere disconnects the online characters of an account that used "sign
+// out everywhere" (lote 17), like sessionsRevoked: retried, never blocking the handler.
+func (a *App) signedOutEverywhere(accountID int64) {
+	if a.World == nil {
+		return
+	}
+	go a.enqueueRetry(a.World.SignOutAccount(accountID, a.cfg.Clock.Now()))
 }
 
 // mapSubmitted tells the online GMs about a new map submission (T4.5) through the loop:

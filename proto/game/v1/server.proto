@@ -63,6 +63,7 @@ message ServerMessage {
     RefineResult refine_result = 44;
     QuestLog quest_log = 45;
     CreatureLook creature_look = 46;
+    StashUpdate stash_update = 47;
   }
 }
 
@@ -816,6 +817,9 @@ enum DisconnectReason {
   // Login refused: the account already has as many characters online as it may
   // (session MaxCharactersPerAccount). Logging in the same character again still works.
   DISCONNECT_REASON_TOO_MANY_CHARACTERS = 15;
+  // The account used "sign out everywhere" (lote 17): every session of the account
+  // ended, the game ones too. Sign in again.
+  DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE = 16;
 }
 
 message Disconnect {
@@ -1067,4 +1071,49 @@ message MilestoneInfo {
   repeated string vocations = 9;
   // This character's vocation is one of vocations (true when vocations is empty).
   bool vocation_met = 10;
+}
+
+// StashResult is what became of the last StashCommand (or of the UseItem that opened the
+// window). OK for a move that happened and for every update that answers nobody's action
+// (the other character of the account moved something, the window opened).
+enum StashResult {
+  STASH_RESULT_UNSPECIFIED = 0;
+  STASH_RESULT_OK = 1;
+  // FULL: no free cell in the stash (and no stack with room for the units).
+  STASH_RESULT_FULL = 2;
+  // NO_ROOM: the backpack and the pockets have no room for it.
+  STASH_RESULT_NO_ROOM = 3;
+  // TOO_HEAVY: it weighs more than the free capacity.
+  STASH_RESULT_TOO_HEAVY = 4;
+  // TOO_FAR: not next to the stash chest (the window closes).
+  STASH_RESULT_TOO_FAR = 5;
+  // CHANGED: the cell no longer holds the item the client saw.
+  STASH_RESULT_CHANGED = 6;
+  // NOT_ALLOWED: the item cannot be stashed (not tradeable, offered in the trade window,
+  // the pockets themselves).
+  STASH_RESULT_NOT_ALLOWED = 7;
+  // TOO_FAST: the anti-flood limit (balance stash.action_*).
+  STASH_RESULT_TOO_FAST = 8;
+  // UNAVAILABLE: the stash is off or read-only (a transfer could not be stored), or the
+  // account is staff.
+  STASH_RESULT_UNAVAILABLE = 9;
+  // NOT_POSSIBLE: a bad request (an item the player does not carry, a bad count).
+  STASH_RESULT_NOT_POSSIBLE = 10;
+  // IN_COMBAT: the player's PvP lock (docs/02 "PvP"): nothing goes in or out mid-fight.
+  STASH_RESULT_IN_COMBAT = 11;
+}
+
+// StashUpdate is the account stash window (docs/02 "Baúl de la cuenta"). It is sent when
+// the window opens (UseItem on a stash chest), after every action of the player, after
+// every change made by another character of the account that has it open too, and with
+// open = false when it closes (walked away, StashClose, read-only). items are the cells in
+// order (index = StashWithdraw.index); there may be more than capacity after the limit was
+// lowered (nothing is lost; nothing goes in until there is room). chest is the stash chest
+// the window belongs to.
+message StashUpdate {
+  bool open = 1;
+  uint32 capacity = 2;
+  repeated ItemStack items = 3;
+  StashResult result = 4;
+  Position chest = 5;
 }

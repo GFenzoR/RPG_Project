@@ -52,6 +52,13 @@ lee lo que ya recibió (todo lo que el cliente dibuja es público para quien lo 
 - Intercambio todo-o-nada con las mismas instancias, revalidado en cada aceptar y cada tick;
   transfers idempotentes en una transacción; libro de economía que se reconcilia cada tick
   en los tests (`economy mismatch`).
+- Baúl de la cuenta (`session/stash.go`): una sola copia por cuenta en el loop mientras un
+  personaje de la cuenta está en línea (o un login suyo lee la base, o su última escritura
+  no se confirmó), así dos personajes conectados a la vez nunca sacan el mismo item. Cada
+  movimiento es un transfer (personaje + baúl entero, una transacción) y deja al personaje
+  en espera (`heldDrop`) hasta el acuse; un transfer descartado marca el baúl en el Saver
+  (lo que lo toque después no se escribe y marca a su personaje) y el mundo queda en solo
+  lectura. Solo items comerciables: un item de quest no pasa entre personajes.
 - `Input` ignora enums y oneofs desconocidos.
 
 ### Anti-flood dentro del juego
@@ -87,6 +94,33 @@ personaje).
   Cookie `rpg_session` `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api`; el login web
   nunca devuelve el token en el cuerpo.
 - Ban, cambio de rol y reseteo de contraseña borran todas las sesiones.
+- **Sesiones cortas (lote 17):** el juego nunca guarda el login. La sesión de cuenta dura
+  12 h como máximo y vence tras 30 min sin actividad autenticada (`last_seen_at`, refrescado
+  como mucho una vez por minuto; la sesión inactiva se borra al rechazarla y el job de
+  limpieza borra el resto). La cookie es de sesión del navegador (sin `Expires`/`Max-Age`;
+  Chrome/Edge con "continuar donde lo dejaste" y las PWA la restauran al reabrir, y ahí
+  solo la acotan los 30 min / 12 h) y la app de escritorio guarda el token solo en memoria (borra el que una versión vieja
+  dejó en el llavero). Solo se recuerda el email para rellenar el login.
+- **"Cerrar sesión en todos lados"** (`POST /api/auth/logout-all`): borra todas las sesiones
+  y tokens de juego de la cuenta y sus flujos OAuth en curso en una transacción auditada
+  (`sessions_revoked`), y saca del juego a sus personajes por el loop
+  (`SIGNED_OUT_EVERYWHERE`, guardados como en un logout).
+- **Cambiar la contraseña logueado** (`POST /api/account/password`): exige la actual bajo
+  los límites de login fallido; revoca las demás sesiones, los enlaces de reset y
+  `claim_email` pendientes y los flujos OAuth, todo en una transacción auditada
+  (`password_changed`); saca del juego a los personajes conectados (`PASSWORD_CHANGED`),
+  también los de la sesión que la cambió (a propósito). Si la sesión que pide el cambio
+  fue revocada entre la verificación y la transacción (un "cerrar sesión en todos lados"
+  simultáneo), el cambio falla con `401`: la transacción bloquea esa sesión antes de
+  escribir. Con mailer, cada cambio o creación de contraseña manda a la cuenta el aviso
+  `email.password_changed` (enlace a `/forgot-password`): una cookie robada que crea o
+  cambia la contraseña deja una credencial que sobrevive a "cerrar sesión en todos lados",
+  y el dueño se entera y la recupera con un reset (que borra todas las sesiones). Sin
+  mailer no hay aviso (riesgo aceptado, como al vincular un proveedor).
+- Revocar (reset, cambio de contraseña, "cerrar sesión en todos lados") también rechaza
+  el login que ya canjeó su token de juego y aún no entró al mundo: el `Join` compara el
+  instante del canje con el de la última revocación de la cuenta (docs/05).
+  Una cuenta solo OAuth crea su primera contraseña dentro de los 10 min de su login.
 - OAuth: Authorization Code + PKCE S256, `state` de 256 bits de un solo uso atado al
   navegador por cookie; `id_token` de Google solo RS256 contra JWKS, con `iss`, `aud`,
   `exp/iat` y `nonce`; redirecciones solo a una lista fija (`auth.SafeReturn`). Nunca se
@@ -123,7 +157,8 @@ personaje).
 
 ### App de escritorio (Tauri)
 CSP estricta sin `unsafe-eval`; solo 3 comandos IPC propios (sin plugins de fs ni shell); el
-token de la cuenta vive en el llavero del sistema y nunca llega al webview; el proxy de la
+token de la cuenta vive solo en la memoria del proceso Rust mientras la app está abierta
+(lote 17; nada en disco ni en el llavero) y nunca llega al webview; el proxy de la
 API solo acepta `GET/POST /api/...` validado por segmento y no sigue redirecciones; URL de
 servidor `https` salvo host privado.
 
@@ -217,10 +252,15 @@ Cinco ramas, cada una con sus tests y su doc:
   cuenta y sus personajes. Es la contracara buscada contra el squatting de direcciones
   ajenas; quien quiere conservar su cuenta verifica su email (una dirección verificada ya no se
   puede reclamar así).
-- **Sesiones de 30 días** sin expiración por inactividad, sin "cerrar sesión en todos lados"
-  (salvo resetear la contraseña), sin "cambiar contraseña" estando logueado y **sin MFA para
-  el staff**. Mitigación: el staff es poco y sus roles solo se dan por CLI; los comandos
-  quedan auditados.
+- **Sin MFA para el staff.** Mitigación: el staff es poco y sus roles solo se dan por CLI;
+  los comandos quedan auditados. (Las sesiones de 30 días, la falta de "cerrar sesión en
+  todos lados" y de "cambiar contraseña" logueado se resolvieron en el lote 17.)
+- **Una partida abierta no depende de la sesión HTTP** (lote 17): canjeado el token de
+  juego, la conexión sigue aunque la sesión venza por inactividad o por sus 12 h. Solo
+  "cerrar sesión en todos lados", un cambio/reset de contraseña o un ban la cortan. Es a
+  propósito: cortar a alguien a mitad de una pelea por no tocar la lista de personajes
+  sería peor, y un ladrón de cookie no gana nada con eso (necesita la cookie viva para
+  pedir un token de juego nuevo).
 - **Recompensas por personaje farmeables con alts** (cofres, oro y espada del capítulo 1, oro
   del tutorial): cada personaje nuevo las cobra. Son pocas y chicas; el libro de economía
   marca los extremos. Atarlas a la cuenta queda para cuando la economía lo pida.
@@ -272,6 +312,17 @@ Hacer una vez y revisar cada mes.
 - [ ] Actualizaciones automáticas de seguridad del sistema operativo.
 - [ ] Imágenes nuevas desde CI (firmadas) con `deploy.sh`; nunca compilar en el servidor.
 - [ ] `make audit` antes de cada release; el job `security` en verde.
+
+**Sesiones** (lote 17)
+- [ ] Tras desplegar el lote 17, todos los jugadores entran de nuevo una vez (la migración
+  00026 borra las sesiones de 30 días). Avisarlo en el anuncio de la versión.
+- [ ] Ante un reporte de cuenta comprometida: pedir al jugador "Cerrar sesión en todos
+  lados" y cambiar la contraseña desde la pantalla de personajes (o mandarle un enlace con
+  `gameserver admin reset-link`); revisar `gameserver admin audit` por
+  `sessions_revoked` / `password_changed`.
+- [ ] Revisar que los valores por defecto (12 h absolutas, 30 min de inactividad) sigan
+  siendo los de `auth.DefaultAccountTokenTTL` y `auth.DefaultSessionIdle`; no hay flag
+  para cambiarlos.
 
 **Logs** (qué mirar, al menos una vez por semana)
 - [ ] `audit_log`: cambios de rol, bans, comandos de staff, descargas de parches. Un cambio

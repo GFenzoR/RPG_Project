@@ -171,6 +171,12 @@ trade:                      # T5.3: the trade window between two adjacent player
   action_burst: 6           # anti-flood: 6 trade actions at once, then one every 300 ms
   action_refill_ms: 300     # (a completed trade writes both characters)
 
+stash:                      # docs/02 "Baúl de la cuenta": one chest per account, shared by its characters
+  enabled: true
+  slots: 30                 # items (stacks, instances or containers with their content)
+  action_burst: 8           # anti-flood: 8 moves at once, then one every 250 ms
+  action_refill_ms: 250     # (each move writes the character and the stash in one transaction)
+
 forge:                      # refine +1..+10 at an anvil (docs/02-game-design.md, "Forja"). Own numbers.
   enabled: true             # false: the anvil only crafts
   station: anvil            # the map item that refines (within 1 tile, like crafting)

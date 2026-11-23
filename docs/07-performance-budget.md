@@ -781,3 +781,16 @@ ventanas una vez; otra marca después no vuelve a mandar nada.
   decenas). El barrido de alquiler es una vez por segundo, de a lo sumo 32 casas, y el de
   intrusos recorre los jugadores conectados mirando un bit. Nada lee la base en el loop.
 - **Arranque:** `LoadHouses` lee tres tablas chicas (dueños, invitados, items) una vez.
+
+### Baúl de la cuenta (lote 17)
+- **Costo conocido por movimiento:** cada guardar o sacar es un `Transfer` que borra y
+  reinserta todas las celdas del baúl de la cuenta (`account_stash_items`, hasta `slots`
+  = 30 filas, cada una con un contenedor entero en JSONB): dos sentencias (un `DELETE` y
+  un `INSERT` de todas las celdas con arreglos paralelos y `unnest`) en la misma
+  transacción que el snapshot del personaje, sea cual sea el tamaño del baúl. El
+  anti-flood del baúl (`stash.action_burst`, `action_refill_ms` 250) lo deja en ~4 por
+  segundo por personaje sostenido, y también cuenta los comandos sin la ventana abierta.
+  Es del orden de un transfer de casa y queda lejos del techo del Saver; si un día pesa,
+  se puede pasar a escribir solo las celdas que cambiaron.
+- **En el tick:** abrir y mover recorre las celdas del baúl (≤ 30) y nada más; ninguna
+  lectura de la base en el loop (el baúl llega con el login).

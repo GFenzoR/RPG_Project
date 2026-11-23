@@ -132,6 +132,9 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/register` | — | `{email, password}` | `201 {account_id}` |
 | `POST /api/auth/login` | — | `{email, password, token_in_body?}` | `200 {expires_at, token?}` + cookie |
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
+| `POST /api/auth/logout-all` | token | — | `204` (lote 17): revoca **todas** las sesiones de la cuenta (navegadores, app de escritorio y tokens de juego sin canjear), borra la cookie y saca del juego a sus personajes conectados (`Disconnect{SIGNED_OUT_EVERYWHERE}`) |
+| `POST /api/auth/keepalive` | token | — | `204` (lote 17): latido del cliente mientras juega, para que la sesión no venza por inactividad |
+| `POST /api/account/password` | token | `{current_password, new_password}` | `204` (lote 17): cambia la contraseña; revoca las **demás** sesiones (la de este pedido sigue), los enlaces de reset pendientes y saca del juego a los personajes conectados (`PASSWORD_CHANGED`), también los de la propia sesión: a propósito, la contraseña cambió para toda la cuenta y el jugador vuelve a entrar desde la lista de personajes. `401 invalid_credentials` (contraseña actual mal, cuenta como login fallido), `403 reauth_required`, `400 invalid_password`, `429` |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
@@ -171,6 +174,11 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   `travel.combat_block_ms` desde su última pelea) pierde la conexión igual, pero queda en
   el mundo link-dead hasta que la pelea termina (02-game-design.md, "Bloqueo de logout en
   combate"). Vale igual para un enlace de `gameserver admin reset-link`.
+- Un login que ya canjeó su token de juego cuando la revocación se confirma (todavía va
+  de camino al `Join`, así que la expulsión no lo encuentra) se rechaza en el `Join` con
+  el mismo motivo (`PASSWORD_CHANGED` o `SIGNED_OUT_EVERYWHERE`): el gateway anota cuándo
+  empezó el canje (`Character.RedeemedAt`) y el loop recuerda por cuenta la última
+  revocación durante `session.RevocationMemory` (5 min).
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
@@ -317,8 +325,19 @@ auth). Pasado el límite responden `429 rate_limited`.
   la cache ni llegan a Postgres. Un cambio del juego, o un gremio nuevo, se ve como mucho
   60 s después.
 
-- **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
-  se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
+- **Token de cuenta:** opaco (32 bytes aleatorios, base64url). En la base se guarda solo
+  su SHA-256 (tabla `sessions`, `kind = 'account'`). **El juego nunca guarda el login
+  (lote 17, decisión del dueño 2026-11-23):** la sesión dura como mucho **12 h**
+  (`expires_at`, absoluto) y vence antes tras **30 min sin actividad autenticada**
+  (`last_seen_at`; cada pedido con sesión lo refresca, como mucho una vez por minuto para
+  no escribir en la base por pedido). Una sesión inactiva se rechaza (`401
+  unauthorized`) y se borra en el acto; el job de limpieza borra las vencidas y las
+  inactivas. La cookie es **de sesión del navegador** (sin `Expires` ni `Max-Age`):
+  recargar la página dentro del mismo navegador conserva el login y, normalmente, cerrar
+  el navegador lo olvida. No siempre: Chrome/Edge con "continuar donde lo dejaste" y las
+  PWA instaladas restauran las cookies de sesión al reabrir; en ese caso solo lo acotan
+  los 30 min de inactividad y el tope de 12 h. La migración 00026 borró las sesiones de 30 días anteriores (todos entran de
+  nuevo una vez). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
   para el cliente web. Si hay un `Authorization: Bearer` (el esquema no distingue
@@ -326,8 +345,35 @@ auth). Pasado el límite responden `429 rate_limited`.
   contraseña) se ignora y se usa la cookie. El token solo
   viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
   web no lo pide, así un XSS no puede leerlo de la respuesta. En la app de escritorio lo
-  pide el lado Rust, que lo guarda en el llavero del SO y lo quita de la respuesta antes
-  de pasarla al webview (`apps/desktop`, docs/12).
+  pide el lado Rust, que lo guarda **solo en memoria** mientras la app está abierta y lo
+  quita de la respuesta antes de pasarla al webview (`apps/desktop`, docs/12). Al arrancar,
+  la app borra el token que una versión anterior hubiera dejado en el llavero del SO.
+  El cliente (web y escritorio) recuerda solo el **email** del último login **con
+  contraseña** (`localStorage` `rpg.lastEmail`) para rellenar el formulario; nunca el
+  token. Un login con Google o Discord no lo cambia (a propósito: ese email lo decide el
+  proveedor y el formulario no lo usa).
+- **Sesión y juego (lote 17):** una vez canjeado el token de juego (`POST /api/play`, 60 s,
+  un uso), la conexión WebSocket es independiente de la sesión HTTP: la inactividad de la
+  sesión no corta una partida en curso. Para que la sesión siga viva al volver a la lista
+  de personajes, el cliente manda `POST /api/auth/keepalive` cada 5 min mientras juega.
+  Tras más de 12 h, o si el cliente no pudo mandar el latido, al salir del juego se pide
+  la contraseña de nuevo. El portal de mapas y la página `/account` del sitio **no**
+  mandan latido: más de 30 min en ellos sin ningún pedido termina en `401` al enviar
+  (hay que entrar de nuevo). "Cerrar sesión en todos lados", un cambio o reset de
+  contraseña y un ban sí cortan las conexiones abiertas (`World.KickAccount` /
+  `SignOutAccount`, por el loop, guardando a los personajes como en un logout).
+- **Cambiar la contraseña desde el juego (lote 17):** la contraseña actual se comprueba
+  bajo los mismos límites de login fallido que `/api/auth/login` (por par email+red y por
+  email), así una cookie robada no adivina más rápido que un login. La nueva sigue las
+  reglas del registro. Una cuenta que solo entra con Google/Discord (sin contraseña) puede
+  **crear** su primera contraseña sin `current_password` si su sesión tiene menos de 10
+  min (`auth.ReauthWindow`, igual que vincular un proveedor); si no, `403
+  reauth_required` y el cliente le pide volver a entrar con su proveedor. Si el servidor
+  manda emails, todo cambio o creación de contraseña hecho así le avisa a la cuenta
+  (`email.password_changed`, con un enlace a `/forgot-password`); si el aviso no se puede
+  encolar se registra y el cambio sigue hecho. En la app de escritorio, un "cerrar sesión
+  en todos lados" que falla (red o error del servidor) conserva la sesión de este equipo,
+  como la cookie en la web: se ve el error y se puede reintentar.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
@@ -1386,6 +1432,44 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   (una mochila ajena, un cadáver) responde `inventory.floor_first`. El cadáver que el
   personaje deja mientras espera también queda reservado para él hasta la confirmación;
   uno de antes de la espera no.
+
+### Baúl de la cuenta (`server/internal/session/stash.go`)
+Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
+- **Abrir:** `UseItem` sobre un item del mapa con `stash: true` (`stash_chest`) a 1 casilla;
+  el servidor contesta `StashUpdate{open: true, capacity, items, chest, result: OK}`. Sin
+  baúl (apagado, sin transfers, mundo en solo lectura, staff) `result: UNAVAILABLE`; lejos,
+  `TOO_FAR` (con `open: false`).
+- `StashCommand` (oneof):
+  - `deposit{from, item_id, count}`: `from` es un slot de equipo, un contenedor abierto que
+    el jugador lleva o un bolsillo (nunca el suelo); `count` solo para pilas (1..la pila).
+    Una pila con `mods` o contenido es una sola instancia: entra entera (un `count` menor es
+    `NOT_POSSIBLE`), igual que sale.
+  - `withdraw{index, item_id, mods, count}`: `index` es la celda; `item_id` y `mods` son lo
+    que el cliente vio ahí (clave de comparación, como en `Refine`): si otro personaje de la
+    cuenta lo movió, `CHANGED`. `count` solo para pilas: 0 es `NOT_POSSIBLE` y más que las
+    unidades que quedan es `CHANGED` (otro personaje sacó parte). Solo una pila sin `mods`
+    ni contenido se divide; una pila con `mods` sale entera (el `count` solo tiene que caber
+    en ella). Va a la mochila y después a los bolsillos.
+  - `close{}`: cierra (contesta `StashUpdate{open: false}`).
+- Toda acción contesta un `StashUpdate` entero con su `result` (`StashResult`): `OK`,
+  `FULL`, `NO_ROOM`, `TOO_HEAVY`, `TOO_FAR` (y cierra), `CHANGED`, `NOT_ALLOWED` (no
+  comerciable, ofrecido en un intercambio), `TOO_FAST` (anti-flood), `UNAVAILABLE`,
+  `NOT_POSSIBLE` (también un `deposit` o `withdraw` sin la ventana abierta: sin `chest`, y
+  bajo el mismo anti-flood, que pasada la ráfaga los descarta sin contestar), `IN_COMBAT`
+  (bloqueo PvP). El cliente muestra la clave
+  `client.stash.result.<código>` en el log. Un cambio hecho por otro personaje de la cuenta
+  con la ventana abierta le llega como `StashUpdate` con `OK`. Moverse lejos del cofre manda
+  `StashUpdate{open: false}`; un mundo que pasa a solo lectura (`Tainted`) cierra todas.
+- **Persistencia:** cada movimiento que se hizo sale como un `Transfer` con el snapshot del
+  personaje y un `StashOp` (todas las celdas de la cuenta, `account_stash_items`, migración
+  00025), en una transacción. El login lee el baúl con el personaje
+  (`PlayCharacter.Stash`); el loop lo usa solo si no tiene ya el de esa cuenta en memoria.
+  Si al cargarlo un equipable guardado sin atributo tira uno, el baúl se escribe en el acto
+  (un `Transfer` con el snapshot del que entró): salir y entrar no vuelve a tirarlo. El baúl
+  en memoria no se suelta mientras un login de la cuenta no lo tomó (`join` resta el login
+  de la cuenta recién después de darle el baúl), así que reentrar con el mismo personaje no
+  lo rearma con una lectura vieja.
+  `LoginStarted` y `LoginAborted` llevan la cuenta además del personaje (docs/01).
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.

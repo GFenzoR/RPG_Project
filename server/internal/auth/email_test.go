@@ -386,3 +386,43 @@ func TestLoginStampChangesWithThePassword(t *testing.T) {
 		t.Fatalf("unknown address: %q %v", none, err)
 	}
 }
+
+// A password changed (or set) from a signed-in session is mailed to the account: a thief
+// with a stolen session gets a credential that survives "sign out everywhere", and the
+// owner has to hear of it. A mail failure does not undo the change.
+func TestChangePasswordEmailsTheAccount(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, box, _ := newMailService(t, nil)
+	id, err := svc.Register(ctx, "ana@example.org", "secreto123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.SetVerified(id)
+	tok, err := svc.Login(ctx, "ana@example.org", "secreto123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(box.Sent())
+	if err := svc.ChangePassword(ctx, tok.Token, "wrongpass1", "nuevaclave9"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("wrong password: %v", err)
+	}
+	if len(box.Sent()) != before {
+		t.Fatal("a refused change sent an email")
+	}
+	if err := svc.ChangePassword(ctx, tok.Token, "secreto123", "nuevaclave9"); err != nil {
+		t.Fatal(err)
+	}
+	e, ok := box.Last()
+	if !ok || len(box.Sent()) != before+1 || e.Kind != mail.KindPasswordChanged || e.To != "ana@example.org" ||
+		e.Link != "https://game.example/forgot-password?lang=es" {
+		t.Fatalf("email %+v (sent %d, before %d)", e, len(box.Sent()), before)
+	}
+
+	box.Err = mail.ErrQueueFull
+	if err := svc.ChangePassword(ctx, tok.Token, "nuevaclave9", "otraclave77"); err != nil {
+		t.Fatalf("a full mail queue failed a done change: %v", err)
+	}
+	if _, err := svc.Login(ctx, "ana@example.org", "otraclave77"); err != nil {
+		t.Fatalf("the change did not stick: %v", err)
+	}
+}

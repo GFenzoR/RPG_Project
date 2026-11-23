@@ -152,7 +152,7 @@ export function SiteLogin(props: {
 }
 
 /** The portal's own menu (submit, mine and, for staff, the queue), who is signed in and
- *  the way out: the website's login sets the same 30-day cookie as the game. */
+ *  the way out: the website's login sets the same session cookie as the game. */
 function MapsNav(
   props: MapsProps & {
     current: string;

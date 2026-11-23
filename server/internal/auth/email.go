@@ -314,3 +314,28 @@ func IssueResetLink(ctx context.Context, repo ResetLinkRepo, now time.Time, publ
 	}
 	return link(base, "reset-password", p.Locale, token), p, nil
 }
+
+// notifyPasswordChanged emails the account that its password was changed or set, so an
+// owner whose session was stolen learns of a credential that survives "sign out
+// everywhere". The change already happened: a failure is logged, not returned.
+func (s *Service) notifyPasswordChanged(ctx context.Context, accountID int64) {
+	if s.mail == nil {
+		return
+	}
+	p, err := s.Profile(ctx, accountID)
+	if err != nil || p.Email == "" {
+		if err != nil {
+			s.log.Warn("password changed email: profile", "account", accountID, "err", err)
+		}
+		return
+	}
+	lang, err := s.accountLang(ctx, p, "")
+	if err != nil {
+		s.log.Warn("password changed email: language", "account", accountID, "err", err)
+		return
+	}
+	page := s.publicURL + "/forgot-password?lang=" + url.QueryEscape(lang)
+	if err := s.mail.Send(mail.KindPasswordChanged, p.Email, lang, page); err != nil {
+		s.log.Warn("password changed email", "account", accountID, "err", err)
+	}
+}

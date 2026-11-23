@@ -81,9 +81,9 @@ func TestSchemaConstraints(t *testing.T) {
 
 	// A play token can only name a character of its own account.
 	mustFail("play token for another account's character",
-		"INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at) VALUES (sha256('x'), $1, 'play', $2, now(), now() + interval '1 minute')",
+		"INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, last_seen_at, expires_at) VALUES (sha256('x'), $1, 'play', $2, now(), now(), now() + interval '1 minute')",
 		acc, otherCh.ID)
-	mustExec("INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at) VALUES (sha256('y'), $1, 'play', $2, now(), now() + interval '1 minute')",
+	mustExec("INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, last_seen_at, expires_at) VALUES (sha256('y'), $1, 'play', $2, now(), now(), now() + interval '1 minute')",
 		acc, ch.ID)
 	mustFail("too many outfit colors", "UPDATE characters SET outfit_colors = '{1,2,3,4,5,6,7,8,9}' WHERE id = $1", ch.ID)
 

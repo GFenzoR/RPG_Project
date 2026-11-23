@@ -26,6 +26,8 @@ type Item struct {
 	Pickupable *bool `yaml:"pickupable"`
 	// MarketBoard: using this map item opens the global market (T5.3).
 	MarketBoard bool `yaml:"market_board"`
+	// Stash: using this map item opens the account stash (docs/02 "Baúl de la cuenta").
+	Stash bool `yaml:"stash"`
 	// BlocksMove and BlocksView are blocks_movement and blocks_sight as written (nil =
 	// the default of the kind); BlocksMovement and BlocksSight apply the rule.
 	BlocksMove *bool `yaml:"blocks_movement"`

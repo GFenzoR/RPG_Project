@@ -533,6 +533,11 @@ describe("which server windows show", () => {
       "container-bag",
     ]);
   });
+  it("shows the account stash next to a dialog or a trade", () => {
+    expect(
+      serverWindows({ ...none, dialog: true, trade: true, stash: true }, ["container-bag"]),
+    ).toEqual(["dialog", "trade", "stash", "container-bag"]);
+  });
 
   it('shows the reading window whatever else is open (docs/02 "Libros y cofres")', () => {
     expect(serverWindows({ ...none, book: true }, [])).toEqual(["book"]);

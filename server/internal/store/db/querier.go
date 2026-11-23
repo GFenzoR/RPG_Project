@@ -43,6 +43,7 @@ type Querier interface {
 	DeleteAccountOAuthStates(ctx context.Context, accountID pgtype.Int8) error
 	// Revokes every token of an account (ban).
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
+	DeleteAccountStash(ctx context.Context, accountID int64) error
 	// Drops every token of one purpose of an account (a new link replaces the old ones).
 	DeleteAccountTokens(ctx context.Context, arg DeleteAccountTokensParams) error
 	DeleteCharacterGuildInvites(ctx context.Context, characterID int64) error
@@ -65,11 +66,15 @@ type Querier interface {
 	DeleteHouseItems(ctx context.Context, houseID string) error
 	DeleteHouseOwner(ctx context.Context, arg DeleteHouseOwnerParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
+	// Account sessions without authenticated activity since before (lote 17 idle timeout).
+	DeleteIdleSessions(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMailItemParams) (int64, error)
 	// Closes an offer that has exactly units left (no row otherwise: the loop and the
 	// database disagree, and the whole transfer fails).
 	DeleteMarketOffer(ctx context.Context, arg DeleteMarketOfferParams) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
+	// Revokes every token of an account but keep (a password change keeps its own session).
+	DeleteOtherAccountSessions(ctx context.Context, arg DeleteOtherAccountSessionsParams) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// After a password reset (the mailbox owner is in control): identities that never proved
 	// the account's email go, so one linked by whoever squatted the address cannot stay.
@@ -139,6 +144,8 @@ type Querier interface {
 	// them and is listed first). Neither query sorts every character.
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAccountCosmetic(ctx context.Context, arg InsertAccountCosmeticParams) (int64, error)
+	// Every cell of a stash in one statement (parallel arrays, cell i at index i).
+	InsertAccountStashItems(ctx context.Context, arg InsertAccountStashItemsParams) error
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error
@@ -192,6 +199,8 @@ type Querier interface {
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
+	// Account stash (migration 00025, docs/02 "Baúl de la cuenta").
+	LoadAccountStash(ctx context.Context, accountID int64) ([]LoadAccountStashRow, error)
 	LoadHouseGuests(ctx context.Context) ([]LoadHouseGuestsRow, error)
 	LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, error)
 	// Player houses (T5.4). The loop owns them in memory: these queries load them at start and
@@ -221,6 +230,10 @@ type Querier interface {
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).
 	LockAccountForIdentities(ctx context.Context, id int64) (LockAccountForIdentitiesRow, error)
+	// The account session a password change keeps, locked for the change's transaction: a
+	// "sign out everywhere" that deleted it first makes the change fail; one that comes
+	// after waits for the change and then deletes it too.
+	LockAccountSession(ctx context.Context, arg LockAccountSessionParams) ([]byte, error)
 	// Same as GetShopAccount, locking the account row: every balance change of an account
 	// runs after this in its transaction, so concurrent purchases are serialized.
 	LockShopAccount(ctx context.Context, arg LockShopAccountParams) (LockShopAccountRow, error)
@@ -287,6 +300,8 @@ type Querier interface {
 	TakeMarketMailGold(ctx context.Context, arg TakeMarketMailGoldParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
+	// Records authenticated activity (the idle timeout slides). Never moves backwards.
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Cosmetic shop and premium currency (T5.7, migration 00017).
 	// Syncs one entry of data/cosmetics.yaml at startup.
 	UpsertCosmetic(ctx context.Context, arg UpsertCosmeticParams) error

@@ -1023,7 +1023,8 @@ func (w *World) forgetContainers(p *Player) {
 // map open and close (door.go), ladders are climbed (portal.go), reward chests give
 // their rewards once (chest.go).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
-	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.usePortal(ctx, p, m) ||
+	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStash(ctx, p, m) ||
+		w.usePortal(ctx, p, m) ||
 		w.useChest(ctx, p, m) || w.useStation(p, m) {
 		return
 	}

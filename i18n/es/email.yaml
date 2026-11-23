@@ -1,4 +1,4 @@
-# Emails de la cuenta (T2.1): verificación de email y cambio de contraseña. Los manda el
+# Emails de la cuenta (T2.1): verificación de email, cambio de contraseña y aviso de contraseña cambiada (lote 17). Los manda el
 # servidor (server/internal/mail) en texto plano y en un HTML simple. Mismas claves y
 # {parámetros} que i18n/en/email.yaml. {link} va solo, nunca dentro de una frase.
 email.verify.subject: "Confirma tu email en Neque's Realm"
@@ -13,3 +13,8 @@ email.reset.expires: "El enlace sirve una sola vez y vence en 1 hora. Al cambiar
 email.reset.ignore: "Si no lo pediste, ignora este mensaje: tu contraseña sigue igual."
 email.footer: "Este mensaje lo envió automáticamente el servidor de Neque's Realm. No respondas a esta dirección."
 email.link_hint: "Si el botón no funciona, copia este enlace en tu navegador:"
+email.password_changed.subject: "Tu contraseña de Neque's Realm cambió"
+email.password_changed.intro: "Hola. Se acaba de cambiar (o crear) la contraseña de la cuenta de Neque's Realm con este email, desde una sesión abierta. Las demás sesiones se cerraron."
+email.password_changed.action: "No fui yo: recuperar mi cuenta"
+email.password_changed.expires: "Si no fuiste tú, pide un enlace para elegir otra contraseña: al usarlo se cierran todas las sesiones, también la de quien la cambió."
+email.password_changed.ignore: "Si fuiste tú, no tienes que hacer nada."

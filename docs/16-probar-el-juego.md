@@ -274,6 +274,14 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
     barqueros del Bosque y de Karvask, que no piden nada para volver a Puerto.
 11. **Tienda cosmética.** En `http://localhost:5173/shop`, entra con tu cuenta, compra un
     paquete de nácar (proveedor falso) y un cosmético; en el juego, panel "Apariencia".
+12. **Baúl de la cuenta (plaza, junto al tablero del mercado).** Crea un segundo personaje en
+    la misma cuenta y entra con los dos (dos ventanas del navegador, la misma cuenta). Con el
+    primero, click derecho en el cofre (2090,2102) y "Guardar" algo comerciable de la
+    mochila; la ventana del otro, abierta en el mismo cofre, lo muestra al instante. Sácalo
+    con el segundo ("Sacar" o arrastrándolo a "Lo que llevas"). Prueba también: un item de
+    quest (no entra), alejarse (se cierra), los dos "Sacar" a la vez sobre el mismo item (uno
+    lo saca, el otro ve "Eso ya no está como lo viste…"), y salir y entrar de nuevo (lo guardado
+    sigue ahí).
 
 ## 5. Hacerse personal (GM o admin)
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):

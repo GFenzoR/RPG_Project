@@ -1,7 +1,8 @@
 //! The game server's HTTP API (docs/05-network-protocol.md, "API HTTP"), called from Rust
-//! so the 30-day account token never reaches the webview: the page sends method, path and
-//! body; this side adds `Authorization: Bearer`, asks login for `token_in_body`, keeps
-//! the token in the OS keyring and strips it from the response.
+//! so the account token never reaches the webview: the page sends method, path and body;
+//! this side adds `Authorization: Bearer`, asks login for `token_in_body`, keeps the token
+//! in memory for this run of the app only and strips it from the response. The game never
+//! keeps the login (lote 17): every start asks for the password again.
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -13,6 +14,7 @@ use crate::config::Server;
 
 const LOGIN: &str = "/api/auth/login";
 const LOGOUT: &str = "/api/auth/logout";
+const LOGOUT_ALL: &str = "/api/auth/logout-all";
 /// Same limit as the server's request body (4 KiB).
 const MAX_BODY: usize = 4096;
 
@@ -70,67 +72,43 @@ pub fn take_token(body: &mut Value) -> Option<String> {
     }
 }
 
-/// Where the account token lives: the OS keyring (Keychain, Credential Manager, Secret
-/// Service), with a copy in memory. When there is no keyring (e.g. Linux without a Secret
-/// Service, common on WSL2) it stays only in memory and the player logs in again on the
-/// next start.
+/// Where the account token lives: in memory, for this run of the app only (lote 17: the
+/// game never keeps the login). Nothing is written to disk or to the OS keyring.
+#[derive(Default)]
 pub struct TokenStore {
-    entry: Option<keyring::Entry>,
     cached: Mutex<Option<String>>,
 }
 
 const KEYRING_SERVICE: &str = "dev.rpgproject.client";
 const KEYRING_USER: &str = "account-token";
 
-impl TokenStore {
-    pub fn open(server: &Server) -> Self {
-        // One entry per server, so a home test server never sees the production token.
-        let user = format!("{KEYRING_USER}@{}", server.origin());
-        let (entry, cached) = match keyring::Entry::new(KEYRING_SERVICE, &user) {
-            Ok(e) => match e.get_password() {
-                Ok(t) => (Some(e), Some(t)),
-                Err(keyring::Error::NoEntry) => (Some(e), None),
-                // No usable keyring (no Secret Service, locked, denied): stop using it.
-                Err(err) => {
-                    eprintln!("[desktop] OS keyring unavailable ({err}); the session lives in memory only");
-                    (None, None)
-                }
-            },
-            Err(e) => {
-                eprintln!(
-                    "[desktop] OS keyring unavailable ({e}); the session lives in memory only"
-                );
-                (None, None)
-            }
-        };
-        Self {
-            entry,
-            cached: Mutex::new(cached),
+/// Deletes the token an older version of the app kept in the OS keyring for this server
+/// (migration, lote 17). No keyring, or no entry: nothing to do.
+pub fn forget_saved_token(server: &Server) {
+    let user = format!("{KEYRING_USER}@{}", server.origin());
+    match keyring::Entry::new(KEYRING_SERVICE, &user).and_then(|e| e.delete_credential()) {
+        Ok(()) => {
+            eprintln!("[desktop] removed the session an older version saved in the OS keyring")
+        }
+        Err(keyring::Error::NoEntry) => {}
+        Err(err) => {
+            eprintln!("[desktop] cannot check the OS keyring for an old session ({err})")
         }
     }
+}
 
+impl TokenStore {
     fn get(&self) -> Option<String> {
         self.cached.lock().ok()?.clone()
     }
 
     fn set(&self, token: String) {
-        if let Some(e) = &self.entry {
-            if let Err(err) = e.set_password(&token) {
-                eprintln!("[desktop] cannot save to the keyring ({err}); the session lives in memory only");
-            }
-        }
         if let Ok(mut c) = self.cached.lock() {
             *c = Some(token);
         }
     }
 
     fn clear(&self) {
-        if let Some(e) = &self.entry {
-            match e.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => {}
-                Err(err) => eprintln!("[desktop] cannot delete from the keyring ({err})"),
-            }
-        }
         if let Ok(mut c) = self.cached.lock() {
             *c = None;
         }
@@ -154,7 +132,8 @@ impl Api {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| format!("http client: {e}"))?;
-        let tokens = TokenStore::open(&server);
+        forget_saved_token(&server);
+        let tokens = TokenStore::default();
         Ok(Self {
             server,
             http,
@@ -186,8 +165,8 @@ impl Api {
             req = req.json(body);
         }
         let result = req.send().await;
-        if path == LOGOUT {
-            // Logged out from this device whatever the server said (it may be unreachable).
+        let reached = result.as_ref().ok().map(|res| res.status().as_u16());
+        if signs_out(path, reached) {
             self.tokens.clear();
         }
         let res = result.map_err(|e| format!("network: {e}"))?;
@@ -204,6 +183,20 @@ impl Api {
             self.tokens.clear();
         }
         Ok(Response { status, body })
+    }
+}
+
+/// Whether a request leaves this device signed out. `status` is None when the request
+/// did not reach the server. A logout signs out whatever the server said (it may be
+/// unreachable). A failed "sign out everywhere" keeps the session, as the website's
+/// cookie does: the page shows the error and the player can try again, instead of being
+/// left signed out here while the other sessions live on. (A 401 is forgotten later, as
+/// for any call.)
+fn signs_out(path: &str, status: Option<u16>) -> bool {
+    match path {
+        LOGOUT => true,
+        LOGOUT_ALL => matches!(status, Some(s) if (200..300).contains(&s)),
+        _ => false,
     }
 }
 
@@ -249,6 +242,34 @@ mod tests {
     }
 
     #[test]
+    fn the_token_lives_in_memory_only() {
+        let store = TokenStore::default();
+        assert_eq!(store.get(), None);
+        store.set("secret".to_owned());
+        assert_eq!(store.get().as_deref(), Some("secret"));
+        store.clear();
+        assert_eq!(store.get(), None);
+        // A new run of the app starts without a session: nothing was persisted.
+        store.set("secret".to_owned());
+        assert_eq!(TokenStore::default().get(), None);
+        // Structural: the store holds the token in memory and nothing else (no keyring
+        // entry, no file). A new field breaks this exhaustive pattern at compile time.
+        let TokenStore { cached: _ } = TokenStore::default();
+    }
+
+    #[test]
+    fn allows_the_account_calls_of_lote_17() {
+        check_request("POST", LOGOUT_ALL, None).unwrap();
+        check_request("POST", "/api/auth/keepalive", None).unwrap();
+        check_request(
+            "POST",
+            "/api/account/password",
+            Some(&json!({"current_password": "a", "new_password": "b"})),
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn login_asks_for_the_token_and_hides_it() {
         assert_eq!(
             login_body(Some(
@@ -264,5 +285,16 @@ mod tests {
             None
         );
         assert_eq!(take_token(&mut Value::Null), None);
+    }
+
+    #[test]
+    fn a_failed_sign_out_everywhere_keeps_the_session() {
+        assert!(signs_out(LOGOUT, None));
+        assert!(signs_out(LOGOUT, Some(500)));
+        assert!(signs_out(LOGOUT_ALL, Some(204)));
+        assert!(!signs_out(LOGOUT_ALL, None));
+        assert!(!signs_out(LOGOUT_ALL, Some(500)));
+        assert!(!signs_out(LOGOUT_ALL, Some(429)));
+        assert!(!signs_out("/api/characters", Some(200)));
     }
 }

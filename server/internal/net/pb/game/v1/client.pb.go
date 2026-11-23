@@ -358,6 +358,7 @@ type ClientMessage struct {
 	//	*ClientMessage_UnequipCosmetic
 	//	*ClientMessage_Refine
 	//	*ClientMessage_SetLook
+	//	*ClientMessage_StashCommand
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -733,6 +734,15 @@ func (x *ClientMessage) GetSetLook() *SetLook {
 	return nil
 }
 
+func (x *ClientMessage) GetStashCommand() *StashCommand {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_StashCommand); ok {
+			return x.StashCommand
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -885,6 +895,10 @@ type ClientMessage_SetLook struct {
 	SetLook *SetLook `protobuf:"bytes,37,opt,name=set_look,json=setLook,proto3,oneof"`
 }
 
+type ClientMessage_StashCommand struct {
+	StashCommand *StashCommand `protobuf:"bytes,38,opt,name=stash_command,json=stashCommand,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -958,6 +972,8 @@ func (*ClientMessage_UnequipCosmetic) isClientMessage_Message() {}
 func (*ClientMessage_Refine) isClientMessage_Message() {}
 
 func (*ClientMessage_SetLook) isClientMessage_Message() {}
+
+func (*ClientMessage_StashCommand) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -4149,11 +4165,288 @@ func (x *SetLook) GetLook() *BodyLook {
 	return nil
 }
 
+// StashCommand is one action of the account stash window (docs/02 "Baúl de la cuenta"):
+// the chest shared by every character of the account. The player must stand next to the
+// stash chest it opened the window at (UseItem on it). Every action is checked in the game
+// loop, which owns the one copy of the stash while a character of the account is online,
+// and answered with a StashUpdate (its result says whether it happened).
+type StashCommand struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Action:
+	//
+	//	*StashCommand_Deposit
+	//	*StashCommand_Withdraw
+	//	*StashCommand_Close
+	Action        isStashCommand_Action `protobuf_oneof:"action"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StashCommand) Reset() {
+	*x = StashCommand{}
+	mi := &file_game_v1_client_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StashCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StashCommand) ProtoMessage() {}
+
+func (x *StashCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StashCommand.ProtoReflect.Descriptor instead.
+func (*StashCommand) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *StashCommand) GetAction() isStashCommand_Action {
+	if x != nil {
+		return x.Action
+	}
+	return nil
+}
+
+func (x *StashCommand) GetDeposit() *StashDeposit {
+	if x != nil {
+		if x, ok := x.Action.(*StashCommand_Deposit); ok {
+			return x.Deposit
+		}
+	}
+	return nil
+}
+
+func (x *StashCommand) GetWithdraw() *StashWithdraw {
+	if x != nil {
+		if x, ok := x.Action.(*StashCommand_Withdraw); ok {
+			return x.Withdraw
+		}
+	}
+	return nil
+}
+
+func (x *StashCommand) GetClose() *StashClose {
+	if x != nil {
+		if x, ok := x.Action.(*StashCommand_Close); ok {
+			return x.Close
+		}
+	}
+	return nil
+}
+
+type isStashCommand_Action interface {
+	isStashCommand_Action()
+}
+
+type StashCommand_Deposit struct {
+	Deposit *StashDeposit `protobuf:"bytes,1,opt,name=deposit,proto3,oneof"`
+}
+
+type StashCommand_Withdraw struct {
+	Withdraw *StashWithdraw `protobuf:"bytes,2,opt,name=withdraw,proto3,oneof"`
+}
+
+type StashCommand_Close struct {
+	Close *StashClose `protobuf:"bytes,3,opt,name=close,proto3,oneof"`
+}
+
+func (*StashCommand_Deposit) isStashCommand_Action() {}
+
+func (*StashCommand_Withdraw) isStashCommand_Action() {}
+
+func (*StashCommand_Close) isStashCommand_Action() {}
+
+// StashDeposit puts count units of the item at from (carried by the player: an equipment
+// slot, an open container it carries or a pocket cell; never the ground) in the stash: a
+// stack joins a stack of the stash with room for all of it, anything else takes a free
+// cell. count is ignored for items that do not stack (the whole instance goes, a
+// container with its content). Only tradeable items go in (a container: with tradeable
+// content).
+type StashDeposit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	From          *ItemLocation          `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StashDeposit) Reset() {
+	*x = StashDeposit{}
+	mi := &file_game_v1_client_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StashDeposit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StashDeposit) ProtoMessage() {}
+
+func (x *StashDeposit) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StashDeposit.ProtoReflect.Descriptor instead.
+func (*StashDeposit) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *StashDeposit) GetFrom() *ItemLocation {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *StashDeposit) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *StashDeposit) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// StashWithdraw takes count units of the stash cell index into the backpack (or else the
+// pockets). item_id and mods are the item the client saw there: a stale view (another
+// character of the account moved it meanwhile) is refused with STASH_RESULT_CHANGED.
+type StashWithdraw struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Index         uint32                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Mods          *ItemMods              `protobuf:"bytes,3,opt,name=mods,proto3" json:"mods,omitempty"`
+	Count         uint32                 `protobuf:"varint,4,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StashWithdraw) Reset() {
+	*x = StashWithdraw{}
+	mi := &file_game_v1_client_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StashWithdraw) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StashWithdraw) ProtoMessage() {}
+
+func (x *StashWithdraw) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StashWithdraw.ProtoReflect.Descriptor instead.
+func (*StashWithdraw) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *StashWithdraw) GetIndex() uint32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *StashWithdraw) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *StashWithdraw) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
+}
+
+func (x *StashWithdraw) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// StashClose closes the window.
+type StashClose struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StashClose) Reset() {
+	*x = StashClose{}
+	mi := &file_game_v1_client_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StashClose) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StashClose) ProtoMessage() {}
+
+func (x *StashClose) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StashClose.ProtoReflect.Descriptor instead.
+func (*StashClose) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{59}
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xcd\x0f\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\x8b\x10\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -4195,7 +4488,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x0eequip_cosmetic\x18\" \x01(\v2\x16.game.v1.EquipCosmeticH\x00R\requipCosmetic\x12E\n" +
 	"\x10unequip_cosmetic\x18# \x01(\v2\x18.game.v1.UnequipCosmeticH\x00R\x0funequipCosmetic\x12)\n" +
 	"\x06refine\x18$ \x01(\v2\x0f.game.v1.RefineH\x00R\x06refine\x12-\n" +
-	"\bset_look\x18% \x01(\v2\x10.game.v1.SetLookH\x00R\asetLookB\t\n" +
+	"\bset_look\x18% \x01(\v2\x10.game.v1.SetLookH\x00R\asetLook\x12<\n" +
+	"\rstash_command\x18& \x01(\v2\x15.game.v1.StashCommandH\x00R\fstashCommandB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -4385,7 +4679,23 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x0fUnequipCosmetic\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\"0\n" +
 	"\aSetLook\x12%\n" +
-	"\x04look\x18\x01 \x01(\v2\x11.game.v1.BodyLookR\x04look*~\n" +
+	"\x04look\x18\x01 \x01(\v2\x11.game.v1.BodyLookR\x04look\"\xae\x01\n" +
+	"\fStashCommand\x121\n" +
+	"\adeposit\x18\x01 \x01(\v2\x15.game.v1.StashDepositH\x00R\adeposit\x124\n" +
+	"\bwithdraw\x18\x02 \x01(\v2\x16.game.v1.StashWithdrawH\x00R\bwithdraw\x12+\n" +
+	"\x05close\x18\x03 \x01(\v2\x13.game.v1.StashCloseH\x00R\x05closeB\b\n" +
+	"\x06action\"h\n" +
+	"\fStashDeposit\x12)\n" +
+	"\x04from\x18\x01 \x01(\v2\x15.game.v1.ItemLocationR\x04from\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\"{\n" +
+	"\rStashWithdraw\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\rR\x05index\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12%\n" +
+	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\x12\x14\n" +
+	"\x05count\x18\x04 \x01(\rR\x05count\"\f\n" +
+	"\n" +
+	"StashClose*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -4442,7 +4752,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),            // 0: game.v1.FightStance
 	(ChatChannel)(0),            // 1: game.v1.ChatChannel
@@ -4504,13 +4814,17 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*EquipCosmetic)(nil),       // 57: game.v1.EquipCosmetic
 	(*UnequipCosmetic)(nil),     // 58: game.v1.UnequipCosmetic
 	(*SetLook)(nil),             // 59: game.v1.SetLook
-	(Direction)(0),              // 60: game.v1.Direction
-	(*ActionTarget)(nil),        // 61: game.v1.ActionTarget
-	(*ItemLocation)(nil),        // 62: game.v1.ItemLocation
-	(MarketSide)(0),             // 63: game.v1.MarketSide
-	(*ItemMods)(nil),            // 64: game.v1.ItemMods
-	(*Position)(nil),            // 65: game.v1.Position
-	(*BodyLook)(nil),            // 66: game.v1.BodyLook
+	(*StashCommand)(nil),        // 60: game.v1.StashCommand
+	(*StashDeposit)(nil),        // 61: game.v1.StashDeposit
+	(*StashWithdraw)(nil),       // 62: game.v1.StashWithdraw
+	(*StashClose)(nil),          // 63: game.v1.StashClose
+	(Direction)(0),              // 64: game.v1.Direction
+	(*ActionTarget)(nil),        // 65: game.v1.ActionTarget
+	(*ItemLocation)(nil),        // 66: game.v1.ItemLocation
+	(MarketSide)(0),             // 67: game.v1.MarketSide
+	(*ItemMods)(nil),            // 68: game.v1.ItemMods
+	(*Position)(nil),            // 69: game.v1.Position
+	(*BodyLook)(nil),            // 70: game.v1.BodyLook
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4550,53 +4864,59 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	58, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
 	53, // 35: game.v1.ClientMessage.refine:type_name -> game.v1.Refine
 	59, // 36: game.v1.ClientMessage.set_look:type_name -> game.v1.SetLook
-	60, // 37: game.v1.Walk.dir:type_name -> game.v1.Direction
-	60, // 38: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	60, // 39: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 40: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	61, // 41: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	62, // 42: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	62, // 43: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	61, // 44: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	62, // 45: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	62, // 46: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	62, // 47: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 48: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	62, // 49: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	62, // 50: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	25, // 51: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
-	26, // 52: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
-	27, // 53: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
-	28, // 54: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
-	29, // 55: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
-	30, // 56: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
-	63, // 57: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
-	64, // 58: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
-	64, // 59: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
-	32, // 60: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 61: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 62: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 63: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 64: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 65: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 66: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 67: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 68: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 69: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 70: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 71: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 72: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 73: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	65, // 74: game.v1.Craft.station:type_name -> game.v1.Position
-	65, // 75: game.v1.Refine.station:type_name -> game.v1.Position
-	62, // 76: game.v1.Refine.item:type_name -> game.v1.ItemLocation
-	64, // 77: game.v1.Refine.mods:type_name -> game.v1.ItemMods
-	66, // 78: game.v1.SetLook.look:type_name -> game.v1.BodyLook
-	79, // [79:79] is the sub-list for method output_type
-	79, // [79:79] is the sub-list for method input_type
-	79, // [79:79] is the sub-list for extension type_name
-	79, // [79:79] is the sub-list for extension extendee
-	0,  // [0:79] is the sub-list for field type_name
+	60, // 37: game.v1.ClientMessage.stash_command:type_name -> game.v1.StashCommand
+	64, // 38: game.v1.Walk.dir:type_name -> game.v1.Direction
+	64, // 39: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	64, // 40: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 41: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	65, // 42: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	66, // 43: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	66, // 44: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	65, // 45: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	66, // 46: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	66, // 47: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	66, // 48: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 49: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	66, // 50: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	66, // 51: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	25, // 52: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
+	26, // 53: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
+	27, // 54: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
+	28, // 55: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
+	29, // 56: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
+	30, // 57: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
+	67, // 58: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
+	68, // 59: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
+	68, // 60: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
+	32, // 61: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	33, // 62: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	34, // 63: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	35, // 64: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	36, // 65: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	37, // 66: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	38, // 67: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	39, // 68: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	40, // 69: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	43, // 70: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 71: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 72: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 73: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 74: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	69, // 75: game.v1.Craft.station:type_name -> game.v1.Position
+	69, // 76: game.v1.Refine.station:type_name -> game.v1.Position
+	66, // 77: game.v1.Refine.item:type_name -> game.v1.ItemLocation
+	68, // 78: game.v1.Refine.mods:type_name -> game.v1.ItemMods
+	70, // 79: game.v1.SetLook.look:type_name -> game.v1.BodyLook
+	61, // 80: game.v1.StashCommand.deposit:type_name -> game.v1.StashDeposit
+	62, // 81: game.v1.StashCommand.withdraw:type_name -> game.v1.StashWithdraw
+	63, // 82: game.v1.StashCommand.close:type_name -> game.v1.StashClose
+	66, // 83: game.v1.StashDeposit.from:type_name -> game.v1.ItemLocation
+	68, // 84: game.v1.StashWithdraw.mods:type_name -> game.v1.ItemMods
+	85, // [85:85] is the sub-list for method output_type
+	85, // [85:85] is the sub-list for method input_type
+	85, // [85:85] is the sub-list for extension type_name
+	85, // [85:85] is the sub-list for extension extendee
+	0,  // [0:85] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -4643,6 +4963,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_UnequipCosmetic)(nil),
 		(*ClientMessage_Refine)(nil),
 		(*ClientMessage_SetLook)(nil),
+		(*ClientMessage_StashCommand)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[9].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -4670,13 +4991,18 @@ func file_game_v1_client_proto_init() {
 		(*HouseCommand_Enter)(nil),
 		(*HouseCommand_Exit)(nil),
 	}
+	file_game_v1_client_proto_msgTypes[56].OneofWrappers = []any{
+		(*StashCommand_Deposit)(nil),
+		(*StashCommand_Withdraw)(nil),
+		(*StashCommand_Close)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   56,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

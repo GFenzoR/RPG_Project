@@ -46,6 +46,10 @@ func (*fakeAccounts) SendVerification(context.Context, int64, string) error     
 func (*fakeAccounts) VerifyEmail(context.Context, string) error                  { return nil }
 func (*fakeAccounts) RequestPasswordReset(context.Context, string, string) error { return nil }
 func (*fakeAccounts) ResetPassword(context.Context, string, string) error        { return nil }
+func (*fakeAccounts) SignOutEverywhere(context.Context, int64) error             { return nil }
+func (*fakeAccounts) ChangePassword(context.Context, string, string, string) error {
+	return nil
+}
 
 func (*fakeAccounts) Providers() []string { return nil }
 func (*fakeAccounts) PublicURL() string   { return "" }

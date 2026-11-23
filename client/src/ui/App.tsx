@@ -9,10 +9,11 @@ import { Game } from "../game.ts";
 import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import type { Translate } from "../i18n/i18n.ts";
-import { ApiError, api } from "../net/api.ts";
+import { ApiError, accountApi, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
-import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
+import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
+import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
 import { loadCameraShake } from "../state/ui-prefs.ts";
@@ -44,6 +45,9 @@ export interface AppProps {
   /** The desktop game's Options window (docs/17 UI-5): language, sound, controls. */
   settings?: GameSettings | undefined;
 }
+
+/** Heartbeat of the HTTP session while playing: well under the server's 30 min idle timeout. */
+const KEEPALIVE_MS = 5 * 60 * 1000;
 
 /** Translated text of an API error code (error.<code>), or a generic message. */
 function errorText(t: Translate, e: unknown): string {
@@ -181,7 +185,8 @@ function AuthForm(props: {
   onSwitch(): void;
 }): JSX.Element {
   const { t, mode } = props;
-  const [email, setEmail] = useState("");
+  // Lote 17: the game never keeps the login; only the last email is remembered.
+  const [email, setEmail] = useState(() => (mode === "login" ? loadLastEmail(safeStorage()) : ""));
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -193,6 +198,7 @@ function AuthForm(props: {
     try {
       if (mode === "register") await api.register(email, password, props.lang);
       await api.login(email, password);
+      saveLastEmail(email, safeStorage());
       props.onDone();
     } catch (err) {
       setError(errorText(t, err));
@@ -400,6 +406,7 @@ function Characters(props: {
           {error}
         </p>
       )}
+      <AccountSecurity t={t} onSignedOut={props.onLoggedOut} />
       <button type="button" class="link" onClick={() => void logout()}>
         {t("client.characters.logout")}
       </button>
@@ -455,7 +462,15 @@ function GameScreen(props: {
       update: setUi,
     });
     game.current = g;
-    return () => g.destroy();
+    // Lote 17: the game connection does not touch the HTTP session, so a heartbeat keeps
+    // it from going idle while playing (the character list needs it afterwards).
+    const keepalive = window.setInterval(() => {
+      accountApi.keepalive().catch(() => undefined);
+    }, KEEPALIVE_MS);
+    return () => {
+      window.clearInterval(keepalive);
+      g.destroy();
+    };
     // One Game per session token.
   }, [props.sessionToken]);
 

@@ -104,6 +104,52 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Baúl de la cuenta (hecho, rama `feat/shared-stash`, lote 17; el dueño el 2026-11-23:
+  "un baúl compartido por todos los personajes de la cuenta"; docs/02 "Baúl de la cuenta",
+  docs/01, docs/05):** un cofre junto al tablero de cada pueblo, 30 celdas, solo items
+  comerciables, cada movimiento en una transacción con el personaje. Queda:
+  - **Migración 00025** (`00025_account_stash.sql`); la de sesiones del mismo lote quedó
+    en la 00026 y la 00024 es un hueco a propósito (`knownGaps` en
+    `migrations/embed_test.go`): no reutilizarla.
+  - **Sin baúl en las casas** (el pedido decía "quizás"): un cofre en la casa sería otro item
+    con `stash: true`; hoy solo están los de los pueblos.
+  - **Mover parte de una pila:** la ventana guarda y saca la pila entera (el protocolo ya
+    acepta `count`); falta un selector de cantidad como "Mover parte…".
+  - **Item retirado o desconocido en el baúl:** al cargarse se descarta con un aviso en el
+    log (como en el inventario) y la próxima escritura del baúl lo borra de la base.
+  - Sin vista previa (`make ui-preview`) de la ventana.
+- **Sesiones sin persistencia (hecho, rama `feat/auth-sessions`, lote 17; decisión del dueño
+  2026-11-23: "el juego nunca guarda el login"; docs/05 "Token de cuenta", docs/18):** la
+  sesión dura 12 h como máximo y vence tras 30 min sin actividad; la cookie es de sesión del
+  navegador; la app de escritorio guarda el token solo en memoria y borra el del llavero al
+  arrancar; el login recuerda solo el email. Nuevos: "Cerrar sesión en todos lados" y
+  "Cambiar contraseña" en la pantalla de personajes (`POST /api/auth/logout-all`,
+  `POST /api/account/password`) y el latido `POST /api/auth/keepalive` mientras se juega.
+  Queda:
+  - Al desplegar, **todos entran de nuevo una vez** (la migración 00026 borra las sesiones
+    viejas): avisarlo.
+  - E2E "account security" (`client/e2e/game.spec.ts`, screenshots `03c` a `03e`): cambiar
+    la contraseña saca del juego a la otra sesión, "cerrar sesión en todos lados" vuelve al
+    login con solo el email y la contraseña nueva entra. `make test-integration` y
+    `make e2e` pasaron en la punta del lote (`lote17/final`).
+  - Los **tests de Rust** de `api.rs` (token solo en memoria; `signs_out`: un
+    "cerrar sesión en todos lados" que falla conserva la sesión) no se corrieron ni se
+    compilaron en la sesión que los escribió (sin `cargo` en esa PC) y el CI de escritorio
+    solo corre `compiled_default_is_valid`: correr `cargo test --lib` en
+    `apps/desktop/src-tauri`.
+  - `forget_saved_token` (borra el token del llavero que dejó una versión vieja) corre en
+    cada arranque, para siempre. En Linux con el llavero bloqueado o en macOS con una
+    entrada de otro binario firmado podría mostrar un aviso del SO: si aparece, hacerlo
+    una sola vez con una marca no secreta en la config.
+  - El portal de mapas y `/account` no mandan latido (docs/05): revisar si el formulario
+    del portal conserva lo escrito tras un `401` al enviar.
+  - **Migraciones del lote 17:** sesiones es la 00026 (`00026_session_idle.sql`), detrás
+    del baúl (00025), porque las bases de desarrollo ya aplicaron la 00025 y goose rechaza
+    una versión menor que falte. La 00024 queda vacía (`knownGaps` en
+    `migrations/embed_test.go`, que falla con versiones repetidas o huecos nuevos).
+  - La página `/account` del sitio no tiene todavía los botones de "cerrar sesión en todos
+    lados" ni "cambiar contraseña" (solo el juego): sumar `AccountSecurity` ahí si se pide.
+  - Sin flags para cambiar las 12 h ni los 30 min (constantes en `auth`).
 - **Seguridad del despliegue y del operador (hecho, rama `sec/deploy-hardening`, lote 16;
   el dueño el 2026-11-20: "un estándar excelente de ciberseguridad"; docs/09 "Imágenes
   firmadas", "Backups y restauración", "Seguridad del despliegue"; docs/13 pasos 3 y 5):**
@@ -194,8 +240,9 @@ el punto 5:
       (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
     - Este documento (docs/14) choca con las cuatro ramas `sec/*`: conservar las entradas
       de todas.
-  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sesiones de 30
-    días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
+  - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sin MFA para el
+    staff (las sesiones de 30 días y la falta de "cerrar en todos lados" se resolvieron en
+    el lote 17), recompensas por personaje
     farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin
     firma.
 - **Integridad del juego (hecho, rama `sec/game-integrity`, lote 16; el dueño el

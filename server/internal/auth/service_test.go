@@ -134,7 +134,14 @@ func TestTokenExpiryUsesInjectedClock(t *testing.T) {
 	_, _ = svc.Register(ctx, "ana@example.org", "secreto123")
 	tok, _ := svc.Login(ctx, "ana@example.org", "secreto123")
 
-	clk.Advance(59 * time.Minute)
+	// Used every 20 minutes, it never goes idle (lote 17), but the absolute TTL still ends it.
+	for range 2 {
+		clk.Advance(20 * time.Minute)
+		if _, err := svc.Authenticate(ctx, tok.Token); err != nil {
+			t.Fatalf("at %v: %v", clk.Now(), err)
+		}
+	}
+	clk.Advance(19 * time.Minute)
 	if _, err := svc.Authenticate(ctx, tok.Token); err != nil {
 		t.Fatalf("before expiry: %v", err)
 	}

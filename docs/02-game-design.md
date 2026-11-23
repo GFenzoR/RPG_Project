@@ -1705,6 +1705,37 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).
 
+## Baúl de la cuenta (decisión del dueño, 2026-11-23)
+Un baúl por **cuenta**, compartido por todos sus personajes: lo que uno guarda, otro de la
+misma cuenta lo saca, en cualquier pueblo. Las recompensas siguen siendo por personaje (no
+cambia nada de quests, cofres ni hitos) y siguen pudiendo estar en línea a la vez dos
+personajes de una cuenta (docs/05 "Límites"). Números en `balance.yaml → stash` (docs/06).
+- **Dónde:** un cofre `stash_chest` junto al tablero del mercado de cada pueblo (Puerto,
+  Bosque, Karvask y Thimblewick). Se abre con click derecho (o "Usar") **al lado** del
+  cofre (1 casilla, como una estación); alejarse cierra la ventana. Por ahora no hay baúl en
+  las casas.
+- **Lugar:** `slots` celdas (30). Cada celda es una pila, una instancia o un contenedor con
+  todo lo que lleva adentro. Una pila que se guarda se suma a una pila igual del baúl que
+  tenga lugar para todas las unidades; si no, ocupa una celda libre. Con el baúl lleno solo
+  entran unidades a una pila que ya tiene. Si un día baja `slots`, nada se pierde: mientras
+  tenga más celdas que `slots` no entra nada, ni siquiera unidades a una pila que ya tiene;
+  se puede sacar hasta volver a `slots`.
+- **Qué entra:** solo lo `tradeable` (un contenedor, solo si todo lo de adentro también lo
+  es): un item de quest nunca pasa de un personaje a otro de la cuenta. No entra lo ofrecido
+  en un intercambio abierto ni nada durante el bloqueo PvP. El personal del juego no lo usa
+  (como el mercado).
+- **Qué conserva:** todo: cantidad, atributo, valor y refinado de un equipable, cargas de
+  una runa, contenido de un contenedor. Sacar algo lo pone en la mochila (y si no hay lugar,
+  en los bolsillos); si no entra o pesa demasiado, se queda en el baúl. Una pila simple que
+  pesa más de lo que se puede cargar se saca en partes: la ventana pide las que entran.
+- **Seguro ante caídas:** cada guardar o sacar se escribe en una sola transacción con el
+  personaje (docs/01 "Transacciones"): un item está en el baúl o en el personaje, nunca en
+  los dos ni en ninguno, pase lo que pase con el servidor. Dos personajes de la cuenta en
+  línea ven el mismo baúl en vivo; si los dos piden el mismo item a la vez, uno lo saca y al
+  otro se le dice que ya no está. Tras sacar algo, el personaje no puede tirarlo a la calle
+  hasta que el guardado se confirma (normalmente un tick o dos).
+- Anti-flood propio (`action_burst` / `action_refill_ms`): cada movimiento es una escritura.
+
 ## Casas (T5.4)
 Mecánica conocida del género (casas del mapa que se alquilan); reglas, números, nombres y
 textos propios. Números en `balance.yaml → houses` (docs/06); cada casa (casillas, puertas,

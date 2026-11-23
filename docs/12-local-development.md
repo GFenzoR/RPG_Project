@@ -255,7 +255,8 @@ make monitoring-down   # apaga todo (los volúmenes quedan)
 ## Cliente de escritorio (Tauri 2, T2.5)
 `apps/desktop/` envuelve el build web del cliente (`build/client`) en un webview de Tauri 2;
 no duplica código del cliente. Lo único propio está en Rust (`apps/desktop/src-tauri/src`):
-elegir el servidor y llamar a la API HTTP guardando el token de cuenta en el llavero del SO.
+elegir el servidor y llamar a la API HTTP con el token de cuenta guardado solo en memoria
+mientras la app está abierta (lote 17: el juego nunca guarda el login).
 
 ### Dependencias del sistema (una vez)
 Rust estable (`rustup`, la versión mínima está en `Cargo.toml`) más:
@@ -266,9 +267,10 @@ Rust estable (`rustup`, la versión mínima está en `Cargo.toml`) más:
 | Windows (nativo) | Visual Studio Build Tools con "Desktop development with C++" y WebView2 (viene con Windows 10/11) |
 
 En **WSL2** la ventana se abre con WSLg (Windows 11 o Windows 10 21H2+); si no tienes
-WSLg, compila desde Windows nativo. El llavero de Linux es el Secret Service
-(gnome-keyring, KWallet): en WSL2 normalmente no hay, y la app guarda la sesión solo en
-memoria (hay que entrar de nuevo al abrirla).
+WSLg, compila desde Windows nativo. La app ya no usa el llavero del SO para la sesión
+(lote 17): al abrirla siempre pide la contraseña; solo intenta borrar, al arrancar, el
+token que una versión anterior hubiera dejado ahí (sin Secret Service, como en WSL2, no
+hay nada que borrar).
 
 ### Comandos
 ```bash
@@ -320,9 +322,10 @@ no tiene consola donde verlo.
 
 ### Qué hace distinto el cliente en la app
 - La API HTTP va por el comando `api` de Rust (`client/src/net/desktop.ts`), que agrega
-  `Authorization: Bearer`, pide `token_in_body` al hacer login y guarda el token en el
-  llavero (Keychain, Credential Manager, Secret Service): **la página nunca ve el token**.
-  Un 401 o el logout lo borran. Hay una entrada por servidor.
+  `Authorization: Bearer`, pide `token_in_body` al hacer login y guarda el token **solo en
+  memoria** hasta cerrar la app (lote 17): **la página nunca ve el token**. Un 401, el
+  logout o "cerrar sesión en todos lados" lo borran. El formulario de login recuerda solo
+  el email (`localStorage` del webview).
 - El WebSocket va directo a `wss://<servidor>/ws`. El origen del webview es
   `tauri://localhost` (macOS/Linux) o `http://tauri.localhost` (Windows): el servidor debe
   permitirlos en `-ws-origins`/`RPG_WS_ORIGINS` (el compose de producción ya lo hace).

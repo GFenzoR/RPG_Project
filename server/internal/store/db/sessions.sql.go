@@ -48,9 +48,9 @@ func (q *Queries) ConsumeSession(ctx context.Context, arg ConsumeSessionParams) 
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at)
+INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, last_seen_at, expires_at)
 VALUES ($1, $2, $3,
-        $4, $5, $6)
+        $4, $5, $5, $6)
 `
 
 type CreateSessionParams struct {
@@ -86,6 +86,38 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, now pgtype.Timestam
 	return result.RowsAffected(), nil
 }
 
+const deleteIdleSessions = `-- name: DeleteIdleSessions :execrows
+DELETE FROM sessions WHERE kind = 'account' AND last_seen_at <= $1
+`
+
+// Account sessions without authenticated activity since before (lote 17 idle timeout).
+func (q *Queries) DeleteIdleSessions(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteIdleSessions, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteOtherAccountSessions = `-- name: DeleteOtherAccountSessions :execrows
+DELETE FROM sessions
+WHERE account_id = $1 AND token_hash <> $2
+`
+
+type DeleteOtherAccountSessionsParams struct {
+	AccountID int64
+	Keep      []byte
+}
+
+// Revokes every token of an account but keep (a password change keeps its own session).
+func (q *Queries) DeleteOtherAccountSessions(ctx context.Context, arg DeleteOtherAccountSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOtherAccountSessions, arg.AccountID, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = $1
 `
@@ -96,7 +128,7 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
 }
 
 const getActiveSession = `-- name: GetActiveSession :one
-SELECT s.account_id, s.character_id, s.created_at, s.expires_at
+SELECT s.account_id, s.character_id, s.created_at, s.last_seen_at, s.expires_at
 FROM sessions s
 JOIN accounts a ON a.id = s.account_id
 WHERE s.token_hash = $1
@@ -120,6 +152,7 @@ type GetActiveSessionRow struct {
 	AccountID   int64
 	CharacterID pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
 }
 
@@ -132,7 +165,45 @@ func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionPara
 		&i.AccountID,
 		&i.CharacterID,
 		&i.CreatedAt,
+		&i.LastSeenAt,
 		&i.ExpiresAt,
 	)
 	return i, err
+}
+
+const lockAccountSession = `-- name: LockAccountSession :one
+SELECT token_hash FROM sessions
+WHERE token_hash = $1 AND account_id = $2 AND kind = 'account'
+FOR UPDATE
+`
+
+type LockAccountSessionParams struct {
+	TokenHash []byte
+	AccountID int64
+}
+
+// The account session a password change keeps, locked for the change's transaction: a
+// "sign out everywhere" that deleted it first makes the change fail; one that comes
+// after waits for the change and then deletes it too.
+func (q *Queries) LockAccountSession(ctx context.Context, arg LockAccountSessionParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, lockAccountSession, arg.TokenHash, arg.AccountID)
+	var token_hash []byte
+	err := row.Scan(&token_hash)
+	return token_hash, err
+}
+
+const touchSession = `-- name: TouchSession :exec
+UPDATE sessions SET last_seen_at = $1
+WHERE token_hash = $2 AND last_seen_at < $1
+`
+
+type TouchSessionParams struct {
+	Now       pgtype.Timestamptz
+	TokenHash []byte
+}
+
+// Records authenticated activity (the idle timeout slides). Never moves backwards.
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
+	_, err := q.db.Exec(ctx, touchSession, arg.Now, arg.TokenHash)
+	return err
 }
