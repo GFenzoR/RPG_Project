@@ -129,7 +129,9 @@ personaje recién creado puede tardar ese minuto en aparecer.
 
 ### Roles de staff (T2.6)
 Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a entrar:
-`make set-role EMAIL=tu@correo ROLE=admin NOTE="dev"`. `make audit-log` muestra el log de
+`make set-role EMAIL=tu@correo ROLE=admin NOTE="dev" ALLOW_UNVERIFIED=1` (sin
+`ALLOW_UNVERIFIED=1` se niega a subir una cuenta que no confirmó su email; con `make dev`
+puedes confirmarlo en Mailpit, docs/09 "Roles de staff"). `make audit-log` muestra el log de
 auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 `02-game-design.md` ("Moderación").
 

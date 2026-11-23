@@ -273,8 +273,12 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):
 
 ```
-make set-role EMAIL=tu@correo ROLE=admin NOTE="probar en local"
+make set-role EMAIL=tu@correo ROLE=admin NOTE="probar en local" ALLOW_UNVERIFIED=1
 ```
+
+Primero muestra la cuenta (fecha de creación, personajes). `ALLOW_UNVERIFIED=1` hace falta
+porque en local la cuenta no confirmó su email: sin eso se niega a darle un rol de staff
+(lote 16, docs/09 "Roles de staff").
 
 `ROLE=gm` alcanza para `/tp`; `/item` y `/premium` piden `admin`. Sal del juego y vuelve a
 entrar: un rol nuevo vale desde el próximo login. `make audit-log` muestra lo que hizo el

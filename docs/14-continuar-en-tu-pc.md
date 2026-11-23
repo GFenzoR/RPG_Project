@@ -104,6 +104,34 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Seguridad del despliegue y del operador (hecho, rama `sec/deploy-hardening`, lote 16;
+  el dueño el 2026-11-20: "un estándar excelente de ciberseguridad"; docs/09 "Imágenes
+  firmadas", "Backups y restauración", "Seguridad del despliegue"; docs/13 pasos 3 y 5):**
+  Go 1.27.4 en las imágenes y los `go.mod` (con chequeo de que coincidan), pgx/x-text/
+  x-crypto al día y `govulncheck` en cero; imágenes firmadas con cosign y desplegadas por
+  digest verificado; CSP, Permissions-Policy y COOP en el sitio y `/play`; HSTS detrás del
+  túnel; backups con `umask 077`, cifrado de S3 y cifrado opcional con age; contenedores con
+  menos privilegios (Postgres, Caddy, Prometheus sin lifecycle ni red `edge`); `.env` en
+  `600`; `set-role` que no sube cuentas sin email probado; los interruptores de prueba
+  rechazados en producción; la semilla del loop de 128 bits y fuera del log. Queda:
+  - **Instalar cosign en el servidor** y poner `COSIGN_REQUIRED=1` en `deploy/.env` (sin
+    cosign, `deploy.sh` solo avisa). La primera imagen firmada sale con el próximo push a
+    `main` después del merge: las de antes no tienen firma y `deploy.sh` con cosign las
+    rechaza (despliega un tag nuevo).
+  - **El checklist del bucket S3** de docs/09 (Block Public Access, solo TLS, rol con
+    `PutObject` en el prefijo, versioning/Object Lock) y crear la clave age del dueño
+    (`age-keygen` en su PC, la pública en `BACKUP_AGE_RECIPIENT`, `BACKUP_ENCRYPT_REQUIRED=1`).
+  - **`deploy/.env.example`** no se tocó (la sesión no puede leer archivos `.env*`): sumar
+    a mano `COSIGN_REQUIRED=1`, `BACKUP_AGE_RECIPIENT=`, `BACKUP_ENCRYPT_REQUIRED=0`,
+    `BACKUP_S3_SSE=AES256` con los comentarios de la tabla de variables de docs/09.
+  - **El chequeo de la versión de Go en CI** corre en `make lint` y en el job `deploy-lint`
+    (cambios en `deploy/`); un PR que solo sube un `go.mod` no dispara `deploy-lint`. El
+    último ítem del lote 16 (CI) puede sumar `go.mod` a esa regla de
+    `.github/scripts/ci-changes.sh` o correr `make lint-deploy` en `ci.yml`.
+  - **Mirar en el e2e** que el sitio y `/play` detrás de Caddy no registren violaciones de
+    CSP en la consola (el e2e de Vite no pasa por Caddy: lo cubre el job `stack`/`home-stack`
+    con `smoke.sh`; una revisión a mano con las herramientas del navegador sobre
+    `make home-up` es la prueba completa).
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía

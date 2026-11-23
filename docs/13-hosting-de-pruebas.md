@@ -35,7 +35,7 @@ tiene el `Makefile` y `deploy/home.sh`); el acceso directo apunta ahí. En Linux
 | Opción | Qué hace |
 |---|---|
 | 1. Abrir el juego en el navegador | Abre el juego otra vez (`http://localhost:8080/`, o el puerto de `HOME_HTTP_PORT`) |
-| 2. Hacerme admin | Pide tu email y te da el rol `admin` (`make home-admin`). Registra la cuenta antes con **Jugar**; vale desde el próximo login |
+| 2. Hacerme admin | Pide tu email y te da el rol `admin` (`make home-admin`). Registra la cuenta antes con **Jugar**; vale desde el próximo login. Si la cuenta no confirmó su email (sin correo configurado, lo normal en casa), muestra cuándo se creó y sus personajes y pregunta si es tuya antes de darle el rol (Enter = no) |
 | 3. Link para invitar amigos | Abre el Quick Tunnel de Cloudflare (`make home-tunnel`) e imprime el link `https://….trycloudflare.com` para compartir. Cambia en cada arranque |
 | 4. Ver los registros | Las últimas líneas de los logs de todos los servicios (en vivo: `make home-logs`) |
 | 5. Enlace para recuperar una contraseña | Pide el email y crea un enlace de un solo uso (`make home-reset-password`); dáselo a esa persona por un canal de confianza |
@@ -189,6 +189,15 @@ make home-admin EMAIL=amigo@email.com ROLE=gm # moderador: revisa los mapas envi
 ```
 El rol nuevo vale desde el siguiente login del personaje. Queda en el registro de auditoría.
 
+Antes de darlo, el comando muestra la cuenta (fecha de creación, si confirmó el email,
+Google/Discord vinculados, último login y personajes). Para subir a `gm` o `admin` una
+cuenta que nunca confirmó su email (sin SMTP nadie puede) ni vinculó Google/Discord, se
+niega (lote 16): cualquiera pudo registrar tu dirección antes que tú. Revisa que la cuenta
+mostrada sea la tuya y repite con `ALLOW_UNVERIFIED=1`:
+```bash
+ALLOW_UNVERIFIED=1 make home-admin EMAIL=tu@email.com
+```
+
 ### 4. Compartir el link (Quick Tunnel, sin cuenta)
 ```bash
 make home-tunnel
@@ -210,6 +219,13 @@ paso 5.
 
 WebSockets funcionan sin configurar nada. El token es un secreto: no lo subas al repo
 (`deploy/.env.home` está en `.gitignore`).
+
+6. En el panel de Cloudflare del dominio, *SSL/TLS → Edge Certificates*: activa **Always
+   Use HTTPS** (un `http://juego.tudominio.com` pasa a `https://`) y **HTTP Strict
+   Transport Security (HSTS)** con `max-age` de 6 o 12 meses (sin *include subdomains*
+   salvo que todos tus subdominios tengan HTTPS). Caddy ya manda
+   `Strict-Transport-Security` (lote 16, `Caddyfile.home`), pero el de Cloudflare cubre
+   también lo que responde su borde.
 
 ### 6. Tailscale (alternativa privada)
 Solo entran las personas invitadas a tu red de Tailscale; nada queda público.
@@ -444,7 +460,9 @@ make home-restore FILE=deploy/backups/home-<fecha>.dump # pregunta antes de reem
 detiene el juego, guarda un backup del estado actual (`…-before-restore.dump`), recrea la base desde el archivo y vuelve a levantar todo (con las
 migraciones nuevas, si el backup es más viejo que tu checkout). Si algo falla a mitad,
 imprime el comando para volver al backup de seguridad. Los dumps son formato
-custom de `pg_dump`; cópialos fuera del PC si te importan.
+custom de `pg_dump`; cópialos fuera del PC si te importan. Tienen todas las cuentas
+(emails y hashes de contraseña): no los compartas ni los subas sin cifrar (por ejemplo
+`age -r age1… -o x.dump.age x.dump`, docs/09 "Backups y restauración").
 
 ## Monitoreo en casa (T4.4)
 El mismo profile `monitoring` de producción funciona en casa:
@@ -500,5 +518,7 @@ como `MAP_PR_REPOSITORY`.
 | `make home-tunnel` no imprime URL | Sin salida a internet o Cloudflare limitó Quick Tunnels: mira `make home-logs` y reintenta |
 | El login no mantiene la sesión en `http://` | `COOKIE_SECURE=true` en HTTP plano no-localhost: ponlo en `false` (solo LAN/Tailscale sin serve) |
 | `no account with email` en `make home-admin` | La cuenta todavía no existe: regístrala primero en el sitio |
+| `refused: this account never proved it owns its email` en `make home-admin` | La cuenta no confirmó su email. Mira los datos que imprimió (fecha, personajes): si es tuya, `ALLOW_UNVERIFIED=1 make home-admin EMAIL=…` (paso 3) |
+| `test-only setting refused in production` al arrancar | `deploy/.env.home` tiene una variable de prueba (`GOOGLE_AUTH_URL`, `…_TOKEN_URL`, `…_JWKS_URL`, `…_ISSUER`, `…_API_URL`): bórrala. Solo sirven para el proveedor falso de los tests |
 | El ranking no muestra mi personaje nuevo | Se actualiza cada minuto |
 | `make bots URL=http://localhost:8080` avisa `no map` y `could not read …:9100/metrics` | Esperado con el home stack: los bots caminan al azar y las métricas del servidor no se publican (míralas en Grafana). `make bots` necesita Go instalado |
