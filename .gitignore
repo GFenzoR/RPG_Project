@@ -10,6 +10,9 @@ apps/desktop/e2e/screenshots/
 
 # Go
 server/bin/
+# The home launcher (make launcher)
+/NequesRealm-Servidor.exe
+/nequesrealm-servidor
 tools/bots/bin/
 *.test
 *.prof

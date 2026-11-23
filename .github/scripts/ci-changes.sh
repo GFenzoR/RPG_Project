@@ -22,6 +22,8 @@ declare -A RULES=(
 	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
 	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	[go-bots]='^(tools/bots|server|proto)/'
+	# The launcher's test compares its compose profiles with deploy/home.sh (and the Makefile).
+	[go-launcher]='^(tools/launcher/|deploy/home\.sh$)'
 	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules, and
 	# tools/mapcli/src/lote.test.ts runs the batch workflow of .claude/workflows.
 	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows|\.claude/workflows)/'
@@ -50,7 +52,7 @@ declare -A RULES=(
 	# the optional /grafana/ route (check.sh parses them with half-set credentials).
 	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$|Caddyfile$|caddy-routes\.caddy$|caddy-grafana-.*\.caddy$)'
 )
-CI_JOBS=(go-server go-bots ts validate actionlint build desktop e2e integration bench gemini)
+CI_JOBS=(go-server go-bots go-launcher ts validate actionlint build desktop e2e integration bench gemini)
 IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
 
 # decide JOB < changed-files: prints true or false.
@@ -147,6 +149,11 @@ self_test() {
 	check go-bots true tools/bots/cmd/bots/main.go
 	check stack true tools/bots/cmd/bots/main.go
 	check go-server false tools/bots/cmd/bots/main.go
+	# The home launcher: its own Go job, also when deploy/home.sh changes.
+	check go-launcher true tools/launcher/logic.go
+	check go-launcher true deploy/home.sh
+	check go-launcher false deploy/home-tunnel.sh server/cmd/gameserver/main.go
+	check go-server false tools/launcher/logic.go
 	# Sound (T3.7): the .ogg files and sounds.yaml are client assets (validated, bundled, played
 	# in the E2E); soundgen itself only has unit tests (it needs ffmpeg, which CI never runs).
 	for j in ts validate build e2e stack; do check "$j" true assets/sounds.yaml assets/sounds/music/puerto.ogg; done

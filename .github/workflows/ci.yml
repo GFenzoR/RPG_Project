@@ -22,6 +22,7 @@ jobs:
     outputs:
       go-server: ${{ steps.f.outputs.go-server }}
       go-bots: ${{ steps.f.outputs.go-bots }}
+      go-launcher: ${{ steps.f.outputs.go-launcher }}
       ts: ${{ steps.f.outputs.ts }}
       validate: ${{ steps.f.outputs.validate }}
       actionlint: ${{ steps.f.outputs.actionlint }}
@@ -45,7 +46,7 @@ jobs:
           HEAD: ${{ github.sha }}
         run: .github/scripts/ci-changes.sh ci
 
-  # One matrix job so the check names stay "go (server)" and "go (tools/bots)"; a module
+  # One matrix job so the check names stay "go (server)", "go (tools/bots)" and "go (tools/launcher)"; a module
   # with no changes passes at once (a job-level `if` cannot read the matrix).
   go:
     name: go (${{ matrix.module }})
@@ -59,6 +60,8 @@ jobs:
             run: ${{ needs.changes.outputs.go-server }}
           - module: tools/bots
             run: ${{ needs.changes.outputs.go-bots }}
+          - module: tools/launcher
+            run: ${{ needs.changes.outputs.go-launcher }}
     steps:
       - name: nothing to check
         if: matrix.run != 'true'

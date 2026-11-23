@@ -125,7 +125,7 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 
 | Job | Qué corre | Artefactos |
 |---|---|---|
-| `go (server)`, `go (tools/bots)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
+| `go (server)`, `go (tools/bots)`, `go (tools/launcher)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
 | `ts` | ESLint + Prettier, `pnpm typecheck`, Vitest | — |
 | `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
 | `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |

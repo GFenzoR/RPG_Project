@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-GO_MODULES := server tools/bots
+GO_MODULES := server tools/bots tools/launcher
 COMPOSE_DEV := docker compose -f deploy/docker-compose.dev.yml
 # Cloud sessions run Postgres as a VM service; local machines use Docker.
 IS_CLOUD := $(filter true,$(CLAUDE_CODE_REMOTE))
@@ -537,6 +537,30 @@ home-restore: ## Replace the home database with a backup: make home-restore FILE
 .PHONY: home-reset
 home-reset: ## Delete ALL data of the home stack (asks first; CONFIRM=yes skips the question)
 	@$(HOME_SH) reset
+
+## ---- double-click launcher (docs/13, "La forma más fácil: doble clic") ------
+
+# tools/launcher (Go, stdlib only): NequesRealm-Servidor.exe at the repo root starts the
+# home stack through deploy/home.sh, opens the game and shows a menu in Spanish. Built for
+# Windows always; on other systems also ./nequesrealm-servidor for this OS. Git ignores both.
+LAUNCHER_EXE := NequesRealm-Servidor.exe
+
+.PHONY: launcher
+launcher: ## Build NequesRealm-Servidor.exe: double-click it to start the game server on this PC (docs/13)
+	cd tools/launcher && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../../$(LAUNCHER_EXE) .
+ifneq ($(OS),Windows_NT)
+	cd tools/launcher && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ../../nequesrealm-servidor .
+endif
+	@echo "[launcher] built $(LAUNCHER_EXE): double-click it (docs/13, \"La forma más fácil: doble clic\")"
+
+# Only when the owner runs it: a shortcut on the Windows desktop to the launcher.
+.PHONY: launcher-shortcut
+launcher-shortcut: launcher ## Windows: shortcut to NequesRealm-Servidor.exe on the desktop
+ifeq ($(OS),Windows_NT)
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/launcher-shortcut.ps1 -Target "$(CURDIR)/$(LAUNCHER_EXE)"
+else
+	@echo "[launcher-shortcut] only on Windows (Git Bash): on Linux or macOS run ./nequesrealm-servidor"
+endif
 
 ## ---- database ------------------------------------------------------------
 
