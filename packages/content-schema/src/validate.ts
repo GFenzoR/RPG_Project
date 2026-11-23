@@ -2522,7 +2522,7 @@ class Validator {
         };
         const sound = (path: PathSegment[], v: unknown): void => {
           if (typeof v === "string" && sounds && !sounds.has(v))
-            this.error(src, path, `unknown sound "${v}" (assets/sounds.yaml)`);
+            this.error(src, path, `sound "${v}" is not declared in the sounds manifest`);
         };
         const b = e["breakable"];
         if (isObj(b)) {

@@ -672,7 +672,7 @@ describe("validator diagnostics", () => {
     expect(has('item "weathered_crate" already has an entry')).toBe(true);
     expect(has("must be one of")).toBe(true); // by: kick
     expect(has('debris "mossy_boulder" must not block movement')).toBe(true);
-    expect(has('unknown sound "nope"')).toBe(true);
+    expect(has('sound "nope" is not declared')).toBe(true);
     expect(has('the open gate "portcullis_closed" must not block movement')).toBe(true);
     expect(has("must NOT have more than 2 properties")).toBe(true); // two behaviours
     expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("livingworld"))).toEqual(
