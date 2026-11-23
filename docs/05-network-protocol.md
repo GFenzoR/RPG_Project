@@ -123,7 +123,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
-| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
+| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s: muchos pedidos cuestan un ping por segundo) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
 | `POST /api/maps/submissions` y demás `/api/maps/...` | token | ver "Envío de mapas" | T4.5 |
@@ -131,7 +131,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/account` | token | — | `200 {email, email_verified, email_enabled}` |
 | `POST /api/auth/verify` | — | `{token}` | `204`; `400 invalid_token` |
 | `POST /api/auth/verify/resend` | token | `{lang?}` | `202`; `409 already_verified`, `404 email_disabled`, `429` |
-| `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
+| `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled`. A una dirección nunca verificada le llega un enlace que la verifica y cambia la contraseña (abajo) |
 | `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
 
 `POST /api/characters` acepta `look` (docs/02 "Apariencia", lote 13): `{sex, body, skin, hair,
@@ -162,6 +162,17 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
+- **Dirección nunca verificada (lote 16):** cualquiera puede registrar una cuenta con un
+  email ajeno sin verificarlo. Para que el dueño del buzón la recupere aunque el enlace de
+  verificación de 24 h haya vencido, `forgot` también le manda el email de reset a una
+  dirección nunca verificada: el enlace (misma página `/reset-password`, vence en 1 h) es un
+  token `verify_email`. Canjearlo en `POST /api/auth/password/reset` prueba el buzón:
+  verifica la dirección (con su fila `email_verified` en `audit_log`) y hace el reset de
+  siempre en la misma transacción (cambia la contraseña, revoca todas las sesiones y borra
+  las identidades vinculadas que no probaron ese email). Así el dueño del buzón se queda
+  con la cuenta sin la contraseña de quien la registró. Por lo mismo, el enlace de
+  verificación del registro también sirve en esa página (también lo recibe solo el buzón).
+  Mismo `202` uniforme y mismos límites por dirección y por IP.
 - La cola de emails no se traba con una dirección que falla: cada reintento espera fuera
   de la goroutine de envío (30 s, 2 min, 10 min) y después se descarta.
 - Al registrarse se manda el email de verificación (si falla la cola, el registro igual
@@ -193,7 +204,7 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 | `GET /api/auth/oauth/pending` | cookie `rpg_oauth_pending` | — | `200 {provider, email}`; `410 pending_expired` |
 | `POST /api/auth/oauth/pending/confirm` | cookie pendiente | `{password}` | `200 {return}` + cookie de sesión |
 | `POST /api/auth/oauth/pending/create` | cookie pendiente | `{email}` | `200 {return}` + cookie de sesión |
-| `POST /api/account/unlink` | token | `{provider}` | `204`; `409 last_login_method`, `404 not_linked` |
+| `POST /api/account/unlink` | token | `{provider, password?}` | `204`; `403 reauth_required`, `401 invalid_credentials`, `409 last_login_method`, `404 not_linked` |
 
 `GET /api/account` suma `has_password` e `identities: [{provider, email, linked_at}]`. La
 página muestra el aviso de `?linked=` solo si es un proveedor conocido que la cuenta tiene
@@ -232,9 +243,15 @@ vinculado, y después lo saca de la URL.
 - **Vincular** exige re-autenticarse: `password` si la cuenta tiene (`403 reauth_required`
   si falta, `401 invalid_credentials` si no coincide, bajo los mismos límites de login
   fallido por email), o una sesión creada hace menos de 10 min si no tiene.
+- **Desvincular** (lote 16) exige la misma re-autenticación que vincular, con los mismos
+  errores: si no, con una sesión robada de una cuenta sin contraseña se podía vincular el
+  proveedor del ladrón y después desvincular el del dueño. "Mi cuenta" muestra el campo
+  de la contraseña cuando hay algo que vincular o desvincular.
 - `GET /api/auth/oauth/pending` dice también `has_password`: sin contraseña la página no la
   pide (se vincula desde "Mi cuenta" entrando con el otro proveedor).
-- Todas estas rutas gastan el límite por IP de registro y login, salvo `pending` y `unlink`.
+- Todas estas rutas gastan el límite por IP y por red de registro y login, salvo `pending`
+  (gasta el de búsquedas de token por cliente). `link`, `pending/confirm` y `unlink`
+  calculan contraseñas: como mucho una a la vez por red ("Límites de la API").
 - Los secretos de cliente salen solo de variables de entorno y no se registran nunca; los
   errores del proveedor se registran por su tipo (estado HTTP, chequeo fallido), nunca con
   un `code` o un token.
@@ -303,15 +320,23 @@ auth). Pasado el límite responden `429 rate_limited`.
   distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
   espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,
   `staff`, `tutor`, `sistema`/`system` u `oficial`/`official`, o si alguna palabra es
-  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). La vocación debe
+  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). Tampoco puede
+  copiar a un NPC (lote 16, `reserved_name`): al arrancar, el servidor junta los nombres de
+  `i18n/<idioma>/npcs.yaml` (`npc.<id>.name`) en todos los idiomas, sin lo que va después de
+  la coma ("Gisla, la curtidora" → "Gisla"), y reserva el nombre entero y cada palabra con
+  mayúscula de 3 letras o más ("Maren Holt", "Maren", "Holt"; "Hermana Liora" también
+  reserva "Hermana"); se comparan sin mayúsculas ni espacios ("maren holt" también).
+  `Gislar` vale. La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
   ubica en el templo de su ciudad al primer login (T1.4).
 - **Rate limit** → `429 rate_limited` con `Retry-After`:
   - Por IP del cliente (IPv6: por /64): register y login comparten 10 pedidos, luego 1
     cada 6 s. Cuenta todo pedido, también los basura.
-  - Login fallido por par (email, IP): 5, luego 1 por minuto. Estricto, y un atacante
-    desde otras IPs no puede gastarlo por la víctima.
+  - Login fallido por par (email, IP): 5, luego 1 cada 4 min (15/h). Estricto, y un
+    atacante desde otras IPs no puede gastarlo por la víctima. Se recarga más lento que el
+    límite por email (30/h): una sola IP (o /64) nunca puede agotar el límite por email de
+    una cuenta (antes, con 1 por minuto, sí podía).
   - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
     solo frena la adivinación repartida en muchas IPs.
   - Un login con email inválido o una contraseña que el registro nunca aceptaría (fuera
@@ -321,11 +346,17 @@ auth). Pasado el límite responden `429 rate_limited`.
     (así N pedidos simultáneos no pasan con una sola ficha) y la devuelven si el
     resultado no es `invalid_credentials`: solo los intentos **fallidos** cuentan y
     entrar bien nunca gasta.
-  - **Trade-off:** quien conoce el email de alguien puede, sosteniendo ~30 fallos por
-    hora desde IPs distintas, agotar el límite por email; mientras siga agotado, la
-    víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
-    frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
-    límite por email a dispositivos o IPs donde la cuenta ya entró.
+  - **Dispositivo conocido (lote 16):** un login (o una confirmación de OAuth o un vínculo)
+    con la contraseña correcta deja la cookie `rpg_device` (`HttpOnly`, `SameSite=Strict`,
+    `Secure` con HTTPS, `Path=/api/auth`, 90 días): un HMAC del email y su vencimiento con
+    una clave por proceso (`Config.DeviceKey` para fijarla), sin el email a la vista. Un
+    navegador con la cookie de ese email no gasta el límite por email (sí el del par).
+  - **Trade-off que queda:** quien conoce el email de alguien puede, sosteniendo más de
+    ~30 fallos por hora desde **varias** redes (con 15/h por par hacen falta al menos 3),
+    agotar el límite por email; mientras siga agotado, la víctima recibe `429` desde
+    cualquier navegador sin la cookie de dispositivo (uno nuevo, la app de escritorio, los
+    bots). Su navegador de siempre sigue entrando. Un reinicio del servidor olvida los
+    dispositivos (la clave es por proceso) salvo con `DeviceKey`.
   - Las tablas de límites tienen tamaño fijo (65 536 casillas en 16 384 grupos de 4;
     cada clave cae en un grupo y lleva una etiqueta, ambos derivados de un HMAC con
     secreto aleatorio por proceso): la memoria está acotada y no se pueden elegir claves
@@ -352,6 +383,34 @@ auth). Pasado el límite responden `429 rate_limited`.
     protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
     contraseña, que también acota el ritmo de registros (spam de cuentas). Cuando la
     tabla vuelve a llenarse de fichas, las claves nuevas recuperan casilla.
+- **Límites de la API (lote 16, `httpapi/abuse.go`)**, todos `429 rate_limited` con
+  `Retry-After`:
+  - **Búsquedas de token por cliente** (IP o /64): las rutas con sesión, `logout` y
+    `GET /api/auth/oauth/pending` gastan 60, luego 1 cada 500 ms, **antes** de buscar el
+    token en Postgres. Además un token que no tiene el formato emitido (43 caracteres
+    base64url) se rechaza (`401 unauthorized`, o `204` en el logout) sin consultar nada:
+    tokens inventados no gastan conexiones del pool.
+  - **Por cuenta**, después de autenticar: cualquier ruta con sesión, 60 y luego 1 cada
+    500 ms; `POST /api/play` y `POST /api/characters` juntos, 20 y luego 1 cada 3 s (cada
+    token de juego es una fila de `sessions` hasta la purga de cada hora).
+  - **Por red** (IPv6 /48, IPv4 /24): register, login y las demás rutas que gastan el límite
+    por IP también gastan 40, luego 1 cada 1,5 s (falla cerrado: llenar su tabla pide más
+    redes de las que tiene un atacante).
+  - **Cálculos de contraseña en curso por red** (IPv6 /48, IPv4 por dirección): login,
+    register, `password/reset`, `oauth/.../link`, `oauth/pending/confirm` y `unlink`, como
+    mucho 1 a la vez; los demás reciben `429` en el acto (`Retry-After: 1`). Así una red
+    no puede ocupar los 4 cálculos del servidor.
+  - **Plazos:** la búsqueda del token, la lista de personajes, crear personaje, `play`,
+    `GET /api/account`, `logout` y `pending` cortan su trabajo en Postgres a los 3 s.
+  - **Arneses en una sola IP** (`-auth-rate-burst N`, E2E, bots, `make play`): una ráfaga
+    por IP mayor que la de fábrica sube también a N las ráfagas por cliente de las
+    búsquedas de token y por red, y apaga el tope de cálculos por red. Los límites por
+    cuenta no cambian.
+  - **Logs muestreados:** un error que un cliente puede repetir (un `500` de una ruta, un
+    webhook de pago con la firma mal) se registra la primera vez y después una línea por
+    minuto con `suppressed`, cuántos se callaron.
+  - **Pool de Postgres:** sin `pool_max_conns` en `DATABASE_URL`, 16 conexiones
+    (`store.DefaultMaxConns`; el de pgxpool era max(4, CPUs)).
 - **Detrás de Caddy**, `-trust-proxy` toma la IP del último salto de `X-Forwarded-For`
   (el puerto del servidor no debe quedar expuesto fuera de Caddy).
 - **Cálculos de contraseña** (argon2id, máx. 4 a la vez): si están saturados más de 2 s
@@ -370,11 +429,11 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` / `invalid_look` | 400 | Creación de personaje inválida |
-| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) |
+| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) o es el de un NPC |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
-| `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
+| `rate_limited` | 429 | Demasiados pedidos: login/registro (por IP, red o email), búsquedas de token, pedidos de la cuenta, u otro cálculo de contraseña de la misma red en curso |
 | `busy` | 503 | Servidor saturado de logins, o el ranking no consiguió turno en Postgres; reintentar más tarde |
 | `invalid_category` / `invalid_vocation` / `invalid_page` | 400 | Filtros de `GET /api/highscores` |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
