@@ -1374,7 +1374,10 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   `size`) o `house.look_owned` (`house`, `name`).
 - `HouseCommand` exige seguir junto a una puerta o dentro de la casa y responde otra
   `HouseUpdate` completa: `rent{}`, `extend{}`, `leave{}`, `guest_add{name}`,
-  `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}`,
+  `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}` (a
+  alguien conectado; un invisible que el dueño no ve o alguien del personal cuenta como
+  desconectado, `house.transfer_bad`, igual que en las invitaciones de gremio y grupo:
+  la oferta no revela quién está en línea, lote 16),
   `transfer_cancel{}`, `transfer_accept{house_id, price}` (lo que vio: si la oferta cambió,
   `house.transfer_changed`), `enter{}` (con acceso, a hasta 3 casillas de una puerta: a una
   casilla libre adentro junto a ella; `house.crowded` si no hay), `exit{}` (de adentro a la

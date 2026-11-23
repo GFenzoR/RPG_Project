@@ -1067,3 +1067,39 @@ func TestFarHouseDoorAndBoardSayNothing(t *testing.T) {
 		}
 	}
 }
+
+// A transfer offer must not tell whether someone is online when the owner cannot know it
+// (lote 16): an invisible player it does not see, or a staff member, is "nobody"
+// (house.transfer_bad) and hears nothing; a visible normal player still gets it.
+func TestHouseOfferHidesInvisibleAndStaff(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, _ := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	cb, b := h.tenant("Beto", 0, pos(4, 5))
+	cg, g := h.tenant("Gema", 0, pos(5, 5))
+	h.sim.Command(gameFunc(func() {
+		h.w.SetInvisibleForTest(b, true)
+		h.w.SetRoleForTest(g, session.RoleGM)
+	}))
+	h.sim.Step()
+	cb.take()
+	cg.take()
+	for _, c := range []struct {
+		name string
+		cl   *fakeClient
+	}{{"Beto", cb}, {"Gema", cg}} {
+		if evs := h.send(cl, houseCmd(&pb.HouseTransferOffer{Name: c.name, Price: 10})); !hasKey(evs, "house.transfer_bad") {
+			t.Fatalf("offer to %s: %v", c.name, systemKeys(evs))
+		}
+		if hasKey(c.cl.take(), "house.transfer_for_you") {
+			t.Fatalf("%s was told", c.name)
+		}
+	}
+	h.sim.Command(gameFunc(func() { h.w.SetInvisibleForTest(b, false) }))
+	h.sim.Step()
+	cb.take()
+	if evs := h.send(cl, houseCmd(&pb.HouseTransferOffer{Name: "Beto", Price: 10})); !hasKey(evs, "house.transfer_offered") ||
+		!hasKey(cb.take(), "house.transfer_for_you") {
+		t.Fatalf("offer to a visible player: %v", systemKeys(evs))
+	}
+}
