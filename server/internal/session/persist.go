@@ -87,6 +87,11 @@ type Saver struct {
 	// an item a tainted character left on a house floor reaches nobody's save. Guarded
 	// by mu.
 	taintedHouses map[string]bool
+	// taintedStashes are the accounts whose stash a dropped transfer replaced (stash.go):
+	// no later transfer writes it (the stash in memory has what that transfer moved), so
+	// what a tainted character put in it reaches nobody's save through the other
+	// characters of the account. Guarded by mu.
+	taintedStashes map[int64]bool
 	// crashed: a transfer failed while shutting down. Nothing after it is written, of any
 	// character, as if the process had crashed right there (the items of that transfer
 	// may already have moved on to others in the loop). Guarded by mu.
@@ -108,7 +113,7 @@ func NewSaver(cfg SaverConfig) (*Saver, error) {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Saver{cfg: cfg, ch: make(chan Job, cfg.Queue), done: make(chan struct{}), stop: make(chan struct{}),
-		tainted: map[int64]bool{}, taintedHouses: map[string]bool{}}, nil
+		tainted: map[int64]bool{}, taintedHouses: map[string]bool{}, taintedStashes: map[int64]bool{}}, nil
 }
 
 // Submit queues s without blocking. It returns false if the queue is full or the saver
@@ -203,8 +208,9 @@ func (s *Saver) handle(j Job) {
 // characters are tainted: no later job that touches one of them is written in this
 // process, and a skipped transfer taints its other characters too (a fixed point: a trade
 // with a tainted character must not reach the database through its partner's next save).
-// The houses whose items such a transfer replaced are tainted the same way: a later
-// transfer that writes their items is skipped and taints its characters (an item a
+// The houses whose items such a transfer replaced, and the account stashes it replaced,
+// are tainted the same way: a later transfer that writes their items is skipped and
+// taints its characters (an item a
 // tainted character dropped on a house floor must not reach the database through the
 // guest who picks it up). The World is told (SaverConfig.Tainted): it takes those
 // characters out of the world and turns the market, the houses and the trade window
@@ -236,8 +242,20 @@ func jobHouses(j Job) []string {
 	return out
 }
 
+// jobStashes returns the accounts whose stash j replaces (StashOp).
+func jobStashes(j Job) []int64 {
+	if j.Transfer == nil {
+		return nil
+	}
+	out := make([]int64, 0, len(j.Transfer.Stash))
+	for _, op := range j.Transfer.Stash {
+		out = append(out, op.Account)
+	}
+	return out
+}
+
 // Tainted reports whether j touches a tainted character or writes the items of a
-// tainted house.
+// tainted house or stash.
 func (s *Saver) Tainted(j Job) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -248,6 +266,11 @@ func (s *Saver) Tainted(j Job) bool {
 	}
 	for _, h := range jobHouses(j) {
 		if s.taintedHouses[h] {
+			return true
+		}
+	}
+	for _, a := range jobStashes(j) {
+		if s.taintedStashes[a] {
 			return true
 		}
 	}
@@ -267,6 +290,9 @@ func (s *Saver) taint(j Job) {
 	}
 	for _, h := range jobHouses(j) {
 		s.taintedHouses[h] = true
+	}
+	for _, a := range jobStashes(j) {
+		s.taintedStashes[a] = true
 	}
 	s.mu.Unlock()
 	// A dropped market-only transfer (expiry, cancel) taints nobody, but the market in

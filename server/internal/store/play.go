@@ -51,6 +51,10 @@ type PlayCharacter struct {
 	// Look is the character's body (characters.look_*); empty fields for a character
 	// created before looks existed (the game picks one from its id).
 	Look Look
+	// Stash is the account's stash (account_stash_items, docs/02 "Baúl de la cuenta"),
+	// cells in order (Slot: the cell). The game uses it only when no character of the
+	// account is in the world already (it owns the stash then).
+	Stash []InventoryItem
 }
 
 // Look is the body of a character (characters.look_*, migrations 00021 and 00022): ids of
@@ -272,7 +276,12 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("account cosmetics: %w", err)
 	}
+	stash, err := loadStash(ctx, s.q, accountID)
+	if err != nil {
+		return PlayCharacter{}, err
+	}
 	return PlayCharacter{
+		Stash:     stash,
 		Cosmetics: Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
 		Look: Look{Sex: row.LookSex, Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
 			Beard: row.LookBeard},

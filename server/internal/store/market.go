@@ -118,13 +118,16 @@ type Transfer struct {
 	Characters []CharacterState
 	// Houses are the house changes (T5.4), applied after the snapshots and before the
 	// market changes.
-	Houses              []HouseOp
+	Houses []HouseOp
+	// Stash are the account stash changes (docs/02 "Baúl de la cuenta"), applied after
+	// the house changes.
+	Stash               []StashOp
 	Market              []MarketOp
 	OfferHigh, MailHigh int64
 }
 
 // transferHook, when set (tests), runs inside the transaction after step n (0: after
-// the snapshots and the house changes, i: after market change i); an error aborts the
+// the snapshots, the house and the stash changes, i: after market change i); an error aborts the
 // transaction.
 var transferHook func(step int) error
 
@@ -157,6 +160,11 @@ func (s *Store) SaveTransfer(ctx context.Context, t Transfer) error {
 		for i, op := range t.Houses {
 			if err := applyHouseOp(ctx, q, op); err != nil {
 				return fmt.Errorf("house change %d (kind %d, %s): %w", i, op.Kind, op.House, err)
+			}
+		}
+		for _, op := range t.Stash {
+			if err := applyStashOp(ctx, q, op); err != nil {
+				return err
 			}
 		}
 		if transferHook != nil {

@@ -29,6 +29,7 @@ const (
 	EconTravel   = "travel"   // boat fare and ticket
 	EconTrade    = "trade"    // trade window between two players (T5.3): items out and in
 	EconMarket   = "market"   // global market (T5.3): deposits, fills, withdrawals; ref fee = the posting fee (a sink)
+	EconStash    = "stash"    // the account stash (stash.go): ref deposit (out) or withdraw (in); the item stays the account's
 	EconHouse    = "house"    // houses (T5.4): rent (a sink), transfer price, items sent to the mailbox
 	EconGather   = "gather"   // fishing, mining, woodcutting
 	EconCraft    = "craft"    // crafting inputs out, output in
@@ -250,7 +251,7 @@ func (w *World) econLoot(owner *Player, monster string, it *Item) {
 // earns reports whether a positive entry of kind is new wealth for the outlier check
 // (buying from an NPC is not: it was paid for; nor the forge's new level of an instance).
 func earns(kind string) bool {
-	return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket && kind != EconForge
+	return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket && kind != EconForge && kind != EconStash
 }
 
 // ground books h moving between p and the ground (sign +1 picked up, -1 dropped). It is

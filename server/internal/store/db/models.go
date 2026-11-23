@@ -49,6 +49,13 @@ type AccountIdentity struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type AccountStashItem struct {
+	AccountID int64
+	Slot      int16
+	ItemID    int32
+	Item      []byte
+}
+
 type AccountToken struct {
 	TokenHash []byte
 	AccountID int64

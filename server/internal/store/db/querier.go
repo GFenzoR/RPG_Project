@@ -43,6 +43,7 @@ type Querier interface {
 	DeleteAccountOAuthStates(ctx context.Context, accountID pgtype.Int8) error
 	// Revokes every token of an account (ban).
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
+	DeleteAccountStash(ctx context.Context, accountID int64) error
 	// Drops every token of one purpose of an account (a new link replaces the old ones).
 	DeleteAccountTokens(ctx context.Context, arg DeleteAccountTokensParams) error
 	DeleteCharacterGuildInvites(ctx context.Context, characterID int64) error
@@ -139,6 +140,7 @@ type Querier interface {
 	// them and is listed first). Neither query sorts every character.
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAccountCosmetic(ctx context.Context, arg InsertAccountCosmeticParams) (int64, error)
+	InsertAccountStashItem(ctx context.Context, arg InsertAccountStashItemParams) error
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error
@@ -192,6 +194,8 @@ type Querier interface {
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
+	// Account stash (migration 00024, docs/02 "Baúl de la cuenta").
+	LoadAccountStash(ctx context.Context, accountID int64) ([]LoadAccountStashRow, error)
 	LoadHouseGuests(ctx context.Context) ([]LoadHouseGuestsRow, error)
 	LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, error)
 	// Player houses (T5.4). The loop owns them in memory: these queries load them at start and

@@ -77,6 +77,9 @@ type Character struct {
 	// Look is the saved body (docs/02 "Apariencia"); one that is empty or not a player's
 	// choice of data/looks.yaml is replaced by the one picked from the id (loadLook).
 	Look content.Look
+	// Stash is the account stash as this login read it (stash.go, Slot: the cell). It is
+	// used only when the World does not hold the account's stash already.
+	Stash []ItemState
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -566,6 +569,18 @@ type World struct {
 	idleWarnFor game.Tick
 	idleBuf     []*Player
 
+	// Account stash (stash.go): balance stash (stashOn = enabled with Config.Transfer), its
+	// anti-flood in ticks, the stashes in memory by account, the stash whose last write
+	// waits for the ack of a character's snapshot (by character), and the logins of each
+	// account reading the database.
+	stashOn     bool
+	stashSlots  int
+	stashRefill game.Tick
+	stashBurst  game.Tick
+	stashes     map[int64]*accountStash
+	stashPend   map[int64]*accountStash
+	loadingAcc  map[int64]int
+
 	// Cosmetic shop (T5.7, cosmetics.go): shop updates for accounts with nobody online
 	// (for a login in flight) and the tick of their next prune.
 	shopPending map[int64]pendingShop
@@ -672,6 +687,7 @@ func New(cfg Config) (*World, error) {
 	}
 	w.initMarket()
 	w.initTrade()
+	w.initStash()
 	w.initHouses()
 	if err := w.initConditions(); err != nil {
 		return nil, err

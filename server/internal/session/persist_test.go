@@ -352,7 +352,7 @@ func TestAckDuringLoginKeepsUnsaved(t *testing.T) {
 	final := h.saves[len(h.saves)-1]
 	stale := session.Character{ID: p.CharacterID(), Name: "Ana", Vocation: "guardian", Level: 1, Health: 145, HasPos: true, Pos: pos(5, 5)}
 
-	h.sim.Command(h.w.LoginStarted(stale.ID))              // gateway, before reading the row
+	h.sim.Command(h.w.LoginStarted(stale.ID, stale.AccountID))              // gateway, before reading the row
 	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq)) // the save commits and acks
 	h.sim.Step()
 	_, again := h.joinChar(stale) // Join with the row read before the commit
@@ -364,8 +364,8 @@ func TestAckDuringLoginKeepsUnsaved(t *testing.T) {
 	h.sim.Command(h.w.Leave(lookup(h, again)))
 	h.sim.Step()
 	final = h.saves[len(h.saves)-1]
-	h.sim.Command(h.w.LoginStarted(stale.ID))
-	h.sim.Command(h.w.LoginAborted(stale.ID))
+	h.sim.Command(h.w.LoginStarted(stale.ID, stale.AccountID))
+	h.sim.Command(h.w.LoginAborted(stale.ID, stale.AccountID))
 	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq))
 	h.sim.Step()
 	_, third := h.joinChar(stale)
@@ -393,7 +393,7 @@ func TestAckEnqueuedMidDrainAfterLoginStartedKeepsUnsaved(t *testing.T) {
 	// A shared-queue command stands for "the drain in progress": both enqueues land
 	// while it runs, in the order of the race.
 	h.sim.Command(game.CommandFunc(func(*game.TickContext) {
-		if err := loop.Enqueue(h.w.LoginStarted(stale.ID)); err != nil {
+		if err := loop.Enqueue(h.w.LoginStarted(stale.ID, stale.AccountID)); err != nil {
 			t.Error(err)
 		}
 		if err := loop.Enqueue(h.w.Saved(final.CharacterID, final.Seq)); err != nil {

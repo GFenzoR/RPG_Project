@@ -169,6 +169,11 @@ type Player struct {
 	house *houseView
 	hsTAT game.Tick
 	trade *trade
+	// stash is the account stash window p has open at the chest stashAt (stash.go), and
+	// stashTAT its anti-flood (GCRA).
+	stash    *accountStash
+	stashAt  world.Pos
+	stashTAT game.Tick
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
 	// gave is set from a give-away to the public ground (T5.3 fail-safe, lote 16, hold.go
@@ -460,6 +465,7 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 			delete(w.unsaved, characterID)
 		}
 		w.confirmed(characterID, seq)
+		w.stashSaved(characterID, seq)
 	})
 }
 
@@ -470,13 +476,23 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 // may have missed is enqueued after it, runs after it and keeps the unsaved snapshot for
 // the Join. (With Saved in the shared queue, an ack enqueued while that queue is being
 // drained would run before a LoginStarted waiting in the lane for the next tick.)
-func (w *World) LoginStarted(characterID int64) game.Command {
-	return game.LifecycleFunc(func(*game.TickContext) { w.loading[characterID]++ })
+//
+// accountID is the character's account: while a login of it reads, the World keeps the
+// account's stash in memory (stash.go), since the read may have missed a write of it.
+func (w *World) LoginStarted(characterID, accountID int64) game.Command {
+	return game.LifecycleFunc(func(*game.TickContext) {
+		w.loading[characterID]++
+		w.stashLoginStarted(accountID)
+	})
 }
 
 // LoginAborted returns the command that ends a LoginStarted whose Join never comes.
-func (w *World) LoginAborted(characterID int64) game.Command {
-	return game.LifecycleFunc(func(*game.TickContext) { w.loginDone(characterID) })
+func (w *World) LoginAborted(characterID, accountID int64) game.Command {
+	return game.LifecycleFunc(func(*game.TickContext) {
+		w.loginDone(characterID)
+		w.stashLoginDone(accountID)
+		w.releaseStash(accountID)
+	})
 }
 
 func (w *World) loginDone(characterID int64) {
@@ -500,6 +516,13 @@ func (w *World) accountFull(accountID int64) bool {
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sched = ctx.Sched
 	w.loginDone(c.ID)
+	w.stashLoginDone(c.AccountID)
+	joined := false
+	defer func() {
+		if !joined {
+			w.releaseStash(c.AccountID) // stash.go: a refused login no longer needs it
+		}
+	}()
 	if old := w.byClient[client]; old != nil {
 		return // one character per connection
 	}
@@ -599,6 +622,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.byClient[client] = p
 	w.byChar[c.ID] = p
 	w.byAccount[p.accountID]++
+	joined = true
+	w.stashJoin(p, c) // stash.go: the one in memory, or else the one this login read
 	w.index(p)
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
@@ -689,6 +714,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
 	w.dropMarket(p)
+	w.closeStash(p, false)
 	p.house = nil
 	if w.houseOn {
 		w.houseSeen(ctx.Now, p, false) // M6: away counts from the last time it left
@@ -721,6 +747,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.clearConditions(ctx, holder{p: p}, true)
 	w.unsaved[p.charID] = s
 	w.save(s)
+	w.releaseStash(p.accountID) // stash.go: kept until its last write is acked
 	if p.dropped {
 		p.out = nil // T5.2: its connection was closed when it went link-dead (disconnect)
 		return

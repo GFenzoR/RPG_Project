@@ -120,6 +120,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.tradeCancel(p)
 	case *pb.ClientMessage_MarketCommand:
 		w.marketCommand(ctx, p, m.MarketCommand)
+	case *pb.ClientMessage_StashCommand:
+		w.stashCommand(ctx, p, m.StashCommand)
 	case *pb.ClientMessage_HouseCommand:
 		w.houseCommand(ctx, p, m.HouseCommand)
 	case *pb.ClientMessage_EquipCosmetic:
@@ -431,6 +433,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	w.checkContainers(p)
 	w.checkDialog(p)
 	w.checkMarket(p)
+	w.checkStash(p)
 	w.checkHouseView(p)
 	if !through {
 		w.stepView(p, to, d)
@@ -499,6 +502,7 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.checkContainers(p)
 	w.checkDialog(p)
 	w.checkMarket(p)
+	w.checkStash(p)
 	w.checkHouseView(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
