@@ -317,3 +317,61 @@ export const SIGIL_PLATES: readonly SpriteSpec[] = [
   sigilPlate("decor/sigil_plate_ranger", "foliage"),
   sigilPlate("decor/sigil_plate_druid", "berry"),
 ];
+
+/**
+ * The account stash (data/items/decoration.yaml `stash_chest`, docs/02 "Baúl de la cuenta"):
+ * a squat strongbox of dark planks under a flat lid, wider and lower than the reward chest so
+ * the two never read alike, held by three iron bands, with iron corners at the foot and a
+ * square silver lock plate. A stash stands in every town: it reads as heavy and safe, not as
+ * loot.
+ */
+const SW = 11.5; // half width (x)
+const SD = 7; // half depth (y)
+const SH = 9; // height of the box (z)
+
+export const STASH_CHEST: SpriteSpec = {
+  sprite: "decor/stash_chest",
+  size: "object",
+  figure: { height: [14, 26], width: [22, 30] },
+  seenOn: "ground/stone_floor",
+  parts: [
+    {
+      name: "box",
+      material: "darkWood",
+      bias: 0.05,
+      texture: { amount: 0.12, cell: [5, 1, 1.4] },
+      shapes: [{ type: "box", min: [-SW, -SD, 0], max: [SW, SD, SH] }],
+    },
+    {
+      name: "lid",
+      material: "wood",
+      bias: -0.05,
+      texture: { amount: 0.1, cell: [5, 1.2, 1] },
+      shapes: [
+        // A flat lid a little wider than the box, over a dark lip.
+        { type: "box", min: [-SW - 0.5, -SD - 0.5, SH], max: [SW + 0.5, SD + 0.5, SH + 2.2] },
+        { type: "box", min: [-SW - 0.5, -SD - 0.5, SH - 0.8], max: [SW + 0.5, SD + 0.5, SH], material: "darkWood" },
+      ],
+    },
+    {
+      name: "bands",
+      material: "darkIron",
+      shapes: [
+        // Three bands over the lid and down the front.
+        { type: "box", min: [-8.2, -SD - 0.7, 0], max: [-6.8, SD + 0.7, SH + 2.6] },
+        { type: "box", min: [6.8, -SD - 0.7, 0], max: [8.2, SD + 0.7, SH + 2.6] },
+        { type: "box", min: [-SW - 0.7, -0.7, 0], max: [SW + 0.7, 0.7, SH + 2.6] },
+        // Iron corners at the foot.
+        { type: "box", min: [-SW - 0.6, -SD - 0.6, 0], max: [-SW + 1.8, -SD + 1.8, 2.4] },
+        { type: "box", min: [SW - 1.8, -SD - 0.6, 0], max: [SW + 0.6, -SD + 1.8, 2.4] },
+      ],
+    },
+    {
+      name: "lock",
+      material: "silver",
+      shiny: true,
+      shapes: [{ type: "box", min: [-2, -SD - 0.9, 4], max: [2, -SD + 0.2, 8.4] }],
+      marks: [{ at: [0, -SD - 0.95, 5.6], material: "darkIron", tone: "deep" }],
+    },
+  ],
+};
