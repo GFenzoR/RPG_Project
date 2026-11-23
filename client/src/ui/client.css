@@ -4142,3 +4142,17 @@ button.credits-link {
 .game:not([data-layout="desktop"]) .dialog-option .otext {
   -webkit-line-clamp: 3;
 }
+
+/* ---- Account stash (docs/02 "Baúl de la cuenta"): the trade window's frame and lists
+   (class "trade stash"), its hint and the lists that take a dragged item ---- */
+.stash .hint {
+  margin: 0.2rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.stash .drop {
+  min-height: 2rem;
+}
+.stash li button {
+  margin-left: auto;
+}

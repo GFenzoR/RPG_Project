@@ -87,7 +87,10 @@ export interface ItemDef {
   requires?: { level: number; vocations: string[] };
   /** `pickupable: false`: a map fixture nobody carries (a station, a board). */
   fixed?: true;
-  /** `market_board: true` (T5.3): using it opens the global market. */
+  /**
+   * `market_board: true` (T5.3) or `stash: true` (docs/02 "Baúl de la cuenta"): using it
+   * opens the global market or the account stash.
+   */
   board?: true;
   /** `quest: true` (docs/17 UI-6): a quest item, named in the quest colour. */
   quest?: true;

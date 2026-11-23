@@ -3622,3 +3622,96 @@ function colorOfSwatch(css: string): string {
   const dist = (c: number) => Math.min(Math.abs(h - c), 360 - Math.abs(h - c));
   return dist(220) < dist(52) ? "azul" : "amarillo";
 }
+
+test("account stash: one character stores fish, the other online one takes it out", async ({
+  browser,
+  playwright,
+}) => {
+  // One account, two characters (docs/02 "Baúl de la cuenta"): the second is made with the
+  // same token. Both stand by Puerto's stash chest (3170, 6382, next to the market board).
+  const owner = await newGuardian(playwright, "Baulero");
+  const alt = `Baulera ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email: owner.email, password: owner.password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name: alt, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  const seed = (name: string, x: number, y: number, items: string): string =>
+    `UPDATE characters SET town = 'puerto', pos_x = ${x}, pos_y = ${y}, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
+  psql([
+    databaseUrl,
+    "-c",
+    seed(owner.name, 3171, 6381, "(0, 10, 20)") + seed(alt, 3171, 6383, "(0, 8, 5)"),
+  ]);
+  const errors: string[] = [];
+  async function enter(name: string): Promise<Page> {
+    const page = await browser.newPage();
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/play/?lang=es");
+    const form = page.getByTestId("login-form");
+    await form.getByLabel("Email").fill(owner.email);
+    await form.getByLabel("Contraseña").fill(owner.password);
+    await form.getByRole("button", { name: "Entrar", exact: true }).click();
+    await page
+      .getByTestId("characters")
+      .locator("li", { hasText: name })
+      .getByRole("button", { name: "Jugar" })
+      .click();
+    await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    return page;
+  }
+  const a = await enter(owner.name);
+  const b = await enter(alt);
+  await arrived(a, 3171, 6381);
+  await arrived(b, 3171, 6383);
+  for (const page of [a, b]) {
+    const docked = page
+      .getByTestId("inventory")
+      .locator('[data-container-item="backpack"][data-docked]');
+    if ((await docked.count()) === 0)
+      await page
+        .getByTestId("inventory")
+        .getByTestId("slot-backpack")
+        .locator("[data-item]")
+        .dblclick();
+    await expect(docked).toBeVisible();
+  }
+  const open = async (page: Page): Promise<void> => {
+    const chest = await page.evaluate(() => window.__rpgClient?.tileToClient(3170, 6382));
+    if (!chest) throw new Error("no canvas");
+    await useAt(page, chest.x, chest.y);
+    await expect(page.getByTestId("stash")).toBeVisible();
+  };
+  await open(a);
+  await open(b);
+  const sa = a.getByTestId("stash");
+  const sb = b.getByTestId("stash");
+  await sa.locator("[data-stash-store=raw_fish]").click();
+  // The other character's window follows at once.
+  await expect(sb.getByTestId("stash-cells")).toContainText("20");
+  await shot(b, "stash-01-shared");
+  await sb.locator("[data-stash-take]").first().click();
+  await expect(sa.getByTestId("stash-cells")).toContainText("El baúl está vacío.");
+  await expect(
+    b.getByTestId("inventory").locator('[data-container-item="backpack"] [data-item="raw_fish"]'),
+  ).toBeVisible();
+  await shot(b, "stash-02-taken");
+  expect(errors).toEqual([]);
+});

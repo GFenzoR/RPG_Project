@@ -435,7 +435,8 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
         : [],
     };
   if (raw["pickupable"] === false) out.fixed = true;
-  if (raw["market_board"] === true) out.board = true;
+  // A stash chest (docs/02 "Baúl de la cuenta") is used like a board: it opens a window.
+  if (raw["market_board"] === true || raw["stash"] === true) out.board = true;
   if (raw["quest"] === true) out.quest = true;
   const b = raw["book"];
   if (isObj(b) && typeof b["title"] === "string" && Array.isArray(b["pages"]))

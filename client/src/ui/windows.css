@@ -841,7 +841,8 @@ body.dragging-window * {
   --gwin-w: 27rem;
 }
 .gwin[data-window="house"],
-.gwin[data-window="trade"] {
+.gwin[data-window="trade"],
+.gwin[data-window="stash"] {
   --gwin-w: 22rem;
 }
 /* The reading window (docs/02 "Libros y cofres"): in the middle, a little above, like the

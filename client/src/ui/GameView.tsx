@@ -36,6 +36,7 @@ import { DialogBox, DialogWindow, ShopWindow } from "./Dialog.tsx";
 import { CraftingWindow, stationTitle } from "./Crafting.tsx";
 import { BookWindow, bookTitle } from "./Book.tsx";
 import { TradeWindow } from "./Trade.tsx";
+import { StashWindow } from "./Stash.tsx";
 import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
@@ -161,6 +162,7 @@ export function emptyGameUi(): GameUi {
     station: undefined,
     refine: undefined,
     trade: undefined,
+    stash: undefined,
     market: undefined,
     house: undefined,
     presence: undefined,
@@ -253,6 +255,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             market: ui.market !== undefined,
             house: ui.house !== undefined,
             trade: ui.trade !== undefined,
+            stash: ui.stash !== undefined,
             book: ui.book !== undefined,
           },
           [...ckeys.values()],
@@ -269,6 +272,7 @@ export function GameView(props: GameViewProps): JSX.Element {
     else if (id === "market") game?.marketClose();
     else if (id === "house") game?.houseClose();
     else if (id === "trade") game?.tradeCancel();
+    else if (id === "stash") game?.stashClose();
     else if (id === "book") game?.closeBook();
     else
       for (const [cid, key] of ckeys)
@@ -661,6 +665,9 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && !windowed && (
         <TradeWindow t={t} content={props.content} game={game} ui={ui} />
       )}
+      {props.entered && !windowed && !ui.trade && (
+        <StashWindow t={t} content={props.content} game={game} ui={ui} />
+      )}
       {props.entered && !windowed && ui.book && (
         <BookWindow key={ui.book.at} t={t} content={props.content} game={game} ui={ui} />
       )}
@@ -701,7 +708,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         windows={
           windowed
             ? shownKey(win.state)
-            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade, ui.book]
+            : [ui.dialog, ui.shop, ui.station, ui.market, ui.house, ui.trade, ui.stash, ui.book]
                 .map((w) => (w ? "1" : "0"))
                 .join("")
         }
@@ -828,6 +835,16 @@ export function GameView(props: GameViewProps): JSX.Element {
                 body: <TradeWindow {...common} />,
                 testid: "trade",
                 closeLabel: t("client.trade.cancel"),
+              }
+            : undefined;
+        case "stash":
+          return ui.stash
+            ? {
+                title: t("client.stash.title"),
+                icon: "inventory",
+                body: <StashWindow {...common} />,
+                testid: "stash",
+                closeLabel: t("client.stash.close"),
               }
             : undefined;
         case "book":

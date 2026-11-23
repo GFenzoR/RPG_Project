@@ -41,6 +41,7 @@ export const SERVER_WINDOWS = [
   "market",
   "house",
   "trade",
+  "stash",
   "book",
 ] as const;
 export type ServerWindowId = (typeof SERVER_WINDOWS)[number];
@@ -359,6 +360,8 @@ export interface ServerOpen {
   market: boolean;
   house: boolean;
   trade: boolean;
+  /** The account stash (docs/02 "Baúl de la cuenta"). */
+  stash?: boolean | undefined;
   /** A book or scroll being read (state/book.ts). */
   book?: boolean | undefined;
 }
@@ -376,6 +379,7 @@ export function serverWindows(o: ServerOpen, containers: readonly ContainerKey[]
   if (!o.dialog && o.market) out.push("market");
   if (!o.dialog && !o.market && o.house) out.push("house");
   if (o.trade) out.push("trade");
+  if (o.stash) out.push("stash");
   if (o.book) out.push("book");
   return [...out, ...containers];
 }
