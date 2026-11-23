@@ -77,6 +77,7 @@ describe("repository content", () => {
       "outfits",
       "cosmetics",
       "sounds",
+      "livingworld",
       "i18n",
       "ids-lock",
     ];
@@ -644,6 +645,39 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('date "2026-01-04" must match'))).toBe(true);
     expect(out.some((m) => m.includes("2026-01-05-no-en.yaml") && m.includes("title"))).toBe(true);
     expect(out.some((m) => m.includes("Bad_Name.yaml") && m.includes("file names"))).toBe(true);
+  });
+
+  it("checks data/livingworld: never walls nor doors, blocking rules, sounds (livingworld/README.md)", () => {
+    mkdirSync(file("assets"), { recursive: true });
+    writeFileSync(file("assets/sounds.yaml"), "format: 1\nsounds: {}\n");
+    writeFileSync(
+      file("data/livingworld/bad.yaml"),
+      [
+        "- item: rock_wall",
+        "  breakable: { hp: 5, by: [melee], becomes: none }",
+        "- item: weathered_crate",
+        "  pushable: {}",
+        "- item: cracked_rock",
+        "  breakable: { hp: 5, by: [kick], becomes: mossy_boulder, sound: nope }",
+        "- item: pressure_plate",
+        "  breakable: { hp: 1, by: [melee], becomes: none }",
+        "  plate: { radius: 3 }",
+        "- item: thick_bush",
+        "  gate: { open: portcullis_closed }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.includes("livingworld"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('"rock_wall" is a wall')).toBe(true);
+    expect(has('item "weathered_crate" already has an entry')).toBe(true);
+    expect(has("must be one of")).toBe(true); // by: kick
+    expect(has('debris "mossy_boulder" must not block movement')).toBe(true);
+    expect(has('unknown sound "nope"')).toBe(true);
+    expect(has('the open gate "portcullis_closed" must not block movement')).toBe(true);
+    expect(has("must NOT have more than 2 properties")).toBe(true); // two behaviours
+    expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("livingworld"))).toEqual(
+      [],
+    );
   });
 
   it("checks assets/sounds.yaml: files, credits, references and islands (T3.7)", () => {

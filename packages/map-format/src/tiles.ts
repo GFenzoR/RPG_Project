@@ -50,14 +50,15 @@ export function isWalkable(tile: Tile | undefined, content: ContentIndex): boole
 
 /**
  * A creature can get through here once its doors are open: like isWalkable, but a door
- * that blocks movement (shut) does not count (docs/02 "Puertas con llave"). Reachability
- * uses it; standing rules (spawns, NPCs, arrivals) keep isWalkable.
+ * that blocks movement (shut) does not count (docs/02 "Puertas con llave"), nor does a
+ * living object anyone breaks without a tool (thorny vines, a crate: livingworld/README.md).
+ * Reachability uses it; standing rules (spawns, NPCs, arrivals) keep isWalkable.
  */
 export function isPassable(tile: Tile | undefined, content: ContentIndex): boolean {
   if (!tile?.ground) return false;
   if (content.items.get(tile.ground)?.walkable !== true) return false;
   return tile.stack.every((id) => {
     const info = content.items.get(id);
-    return info?.blocksMovement !== true || info.door === true;
+    return info?.blocksMovement !== true || info.door === true || info.breaksFreely === true;
   });
 }

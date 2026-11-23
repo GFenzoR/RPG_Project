@@ -54,6 +54,18 @@ export interface ItemInfo {
    * vocation it is marked for, "" for any. A player stands on it: it must be reached.
    */
   sigil?: string;
+  /**
+   * What it is in the living world (data/livingworld, livingworld/README.md): a breakable
+   * object or its debris, a pushable object, a gate (closed or open) or a pressure plate.
+   * The map validator keeps the objects off protection zones, houses, doors and walls.
+   */
+  living?: "breakable" | "debris" | "pushable" | "gate" | "plate";
+  /**
+   * A breakable object anyone breaks without a tool (by melee, any_attack or fire): the
+   * reachability check walks through it, like a door. One that needs a tool, a pushable
+   * object and a gate still block it (they are never a guaranteed way).
+   */
+  breaksFreely?: true;
 }
 
 /** What a portal item shows: a kind of portals.yaml and, optionally, the way it leads. */
@@ -244,6 +256,7 @@ export function loadContent(root: string): ContentIndex {
       items.set(info.id, info);
     }
   }
+  addLiving(root, items);
   for (const [open, closed] of closedOf) {
     const lock = items.get(closed)?.lock;
     const info = items.get(open);
@@ -405,4 +418,38 @@ export function readBorders(raw: unknown): BorderSet {
   if (isObj(shore) && isStrings(shore["water"]) && typeof shore["pieces"] === "string")
     set.shore = { water: shore["water"], pieces: shore["pieces"] };
   return set;
+}
+
+/** Marks the items of data/livingworld/*.yaml (well-formed entries; content-schema checks the rest). */
+function addLiving(root: string, items: Map<string, ItemInfo>): void {
+  const mark = (id: unknown, living: NonNullable<ItemInfo["living"]>): ItemInfo | undefined => {
+    const info = typeof id === "string" ? items.get(id) : undefined;
+    if (info) info.living = living;
+    return info;
+  };
+  for (const file of yamlFiles(join(root, "data", "livingworld"))) {
+    const list = readYaml(file);
+    if (!Array.isArray(list)) continue;
+    for (const e of list) {
+      if (!isObj(e)) continue;
+      const b = e["breakable"];
+      if (isObj(b)) {
+        const info = mark(e["item"], "breakable");
+        const by = b["by"];
+        if (
+          info &&
+          Array.isArray(by) &&
+          by.some((m) => m === "melee" || m === "any_attack" || m === "fire")
+        )
+          info.breaksFreely = true;
+        if (b["becomes"] !== "none") mark(b["becomes"], "debris");
+      }
+      if (isObj(e["pushable"])) mark(e["item"], "pushable");
+      if (isObj(e["gate"])) {
+        mark(e["item"], "gate");
+        mark(e["gate"]["open"], "gate");
+      }
+      if (isObj(e["plate"])) mark(e["item"], "plate");
+    }
+  }
 }

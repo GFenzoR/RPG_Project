@@ -180,6 +180,7 @@ class WorldValidator {
     this.checkDoors();
     this.checkArrivals();
     this.checkSigils();
+    this.checkLiving();
     this.checkPrefabs();
   }
 
@@ -1221,6 +1222,49 @@ class WorldValidator {
         t.to,
         true,
       );
+  }
+
+  /**
+   * The living world's objects (livingworld/README.md): never in a protection zone or a
+   * house, never on a tile with a door, a wall or a portal entrance, on walkable ground,
+   * and one object (breakable, pushable or gate) per tile. The server leaves any other one
+   * as a plain map item; this check keeps the map honest about it.
+   */
+  private checkLiving(): void {
+    const portals = this.portalMoves();
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      const owner = new Set<string>();
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) owner.add(formatPos({ x, y, z: r.z }));
+      const protects = (p: Position): boolean =>
+        island.zones.some(
+          (z) =>
+            z.type === "protection" &&
+            z.floors.includes(p.z) &&
+            z.rects.some((r) => rectContains(r, p.x, p.y)),
+        );
+      for (const { c, s, pos } of placedItems(island)) {
+        const infos = s.stack.map((id) => this.content.items.get(id));
+        const objects = infos.filter(
+          (i) => i?.living === "breakable" || i?.living === "pushable" || i?.living === "gate",
+        );
+        if (objects.length === 0 && !infos.some((i) => i?.living === "plate")) continue;
+        const file = chunkFile(dir, c);
+        const say = (what: string): void =>
+          this.err(file, ["items"], `living world object at ${formatPos(pos)}: ${what}`, pos);
+        if (protects(pos)) say("not in a protection zone (it never breaks nor moves there)");
+        if (owner.has(formatPos(pos))) say("not inside a house");
+        if (infos.some((i) => i?.door === true)) say("not on a door's tile");
+        if (infos.some((i) => i?.kind === "wall")) say("not on a wall's tile");
+        if (portals.has(formatPos(pos))) say("not on a portal's entrance");
+        if (objects.length > 1) say("one object per tile");
+        const ground = this.tiles.tileAt(pos)?.ground;
+        if (!ground || this.content.items.get(ground)?.walkable !== true)
+          say("needs walkable ground");
+      }
+    }
   }
 
   private plateCache: PlacedPlate[] | undefined;

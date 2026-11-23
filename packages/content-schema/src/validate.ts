@@ -2478,7 +2478,8 @@ class Validator {
   private checkLivingWorld(): void {
     if (this.living.length === 0) return;
     const items = new Map<string, Obj>();
-    for (const { item } of this.items) if (typeof item["id"] === "string") items.set(item["id"], item);
+    for (const { item } of this.items)
+      if (typeof item["id"] === "string") items.set(item["id"], item);
     const blocks = (it: Obj): boolean =>
       it["blocks_movement"] === true || (it["kind"] === "wall" && it["blocks_movement"] !== false);
     const soundsAbs = join(this.root, "assets", "sounds.yaml");
@@ -2495,7 +2496,8 @@ class Validator {
         if (!isObj(e) || typeof e["item"] !== "string") continue;
         const id = e["item"];
         const first = seen.get(id);
-        if (first !== undefined) this.error(src, [i, "item"], `item "${id}" already has an entry (${first})`);
+        if (first !== undefined)
+          this.error(src, [i, "item"], `item "${id}" already has an entry (${first})`);
         else seen.set(id, `${src.file} entry ${i}`);
         const structure = (path: PathSegment[], ref: string): void => {
           const it = items.get(ref);
@@ -2525,7 +2527,8 @@ class Validator {
         const b = e["breakable"];
         if (isObj(b)) {
           mustBlock("breakable object");
-          if (b["becomes"] !== "none") walkable([i, "breakable", "becomes"], b["becomes"], "debris");
+          if (b["becomes"] !== "none")
+            walkable([i, "breakable", "becomes"], b["becomes"], "debris");
           sound([i, "breakable", "sound"], b["sound"]);
           sound([i, "breakable", "hit_sound"], b["hit_sound"]);
           const debris = typeof b["debris_seconds"] === "number" ? b["debris_seconds"] : 20;
