@@ -58,7 +58,7 @@ func TestQuotaGivesBackWhenTheQueueRefuses(t *testing.T) {
 func TestQuotaPanickingCommandFreesItsPlace(t *testing.T) {
 	l, _ := newTestLoop(t, Config{})
 	q := NewQuota(1)
-	if err := q.Enqueue(l, CommandFunc(func(*TickContext) { panic("boom") })); err != nil {
+	if err := q.Enqueue(l, CommandFunc(crash)); err != nil {
 		t.Fatal(err)
 	}
 	if s := l.Step(); s.Panics != 1 {

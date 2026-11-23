@@ -252,8 +252,8 @@ type recordCounter struct {
 }
 
 func (h *recordCounter) Enabled(context.Context, slog.Level) bool { return true }
-func (h *recordCounter) WithAttrs([]slog.Attr) slog.Handler      { return h }
-func (h *recordCounter) WithGroup(string) slog.Handler           { return h }
+func (h *recordCounter) WithAttrs([]slog.Attr) slog.Handler       { return h }
+func (h *recordCounter) WithGroup(string) slog.Handler            { return h }
 func (h *recordCounter) Handle(_ context.Context, r slog.Record) error {
 	if r.Message != h.msg {
 		return nil
