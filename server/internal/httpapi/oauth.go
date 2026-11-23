@@ -186,7 +186,7 @@ func (a *api) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	switch res.Kind {
 	case "login":
-		http.SetCookie(w, a.cookie(res.Token.Token, res.Token.ExpiresAt))
+		http.SetCookie(w, a.cookie(res.Token.Token))
 		redirect(w, auth.SafeReturn(res.ReturnTo))
 	case "linked":
 		redirect(w, "/account?linked="+url.QueryEscape(provider))
@@ -263,7 +263,7 @@ func (a *api) pendingCreate(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) finishPending(w http.ResponseWriter, tok auth.Token, ret string) {
 	a.clearOAuthCookie(w, PendingCookie, http.SameSiteStrictMode)
-	http.SetCookie(w, a.cookie(tok.Token, tok.ExpiresAt))
+	http.SetCookie(w, a.cookie(tok.Token))
 	writeJSON(w, http.StatusOK, map[string]string{"return": auth.SafeReturn(ret)})
 }
 

@@ -31,6 +31,8 @@ type Repo struct {
 	// Audit holds the audit entries the store would have written (VerifyEmail,
 	// ResetPassword).
 	Audit []store.AuditEntry
+	// Touches counts the TouchSession calls that moved a session's last use.
+	Touches int
 }
 
 // NewRepo returns an empty Repo.
@@ -106,8 +108,97 @@ func (r *Repo) TouchLogin(context.Context, int64, time.Time) error { return nil 
 func (r *Repo) CreateSession(_ context.Context, s store.Session) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if s.LastSeenAt.IsZero() {
+		s.LastSeenAt = s.CreatedAt // like the store: last_seen_at starts at created_at
+	}
 	r.sessions[string(s.TokenHash)] = s
 	return nil
+}
+
+// TouchSession implements auth.Repo.
+func (r *Repo) TouchSession(_ context.Context, hash []byte, now time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s, ok := r.sessions[string(hash)]; ok && s.LastSeenAt.Before(now) {
+		s.LastSeenAt = now
+		r.sessions[string(hash)] = s
+		r.Touches++
+	}
+	return nil
+}
+
+// DeleteIdleSessions implements auth.Repo.
+func (r *Repo) DeleteIdleSessions(_ context.Context, before time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var n int64
+	for k, s := range r.sessions {
+		if s.Kind == store.SessionAccount && !s.LastSeenAt.After(before) {
+			delete(r.sessions, k)
+			n++
+		}
+	}
+	return n, nil
+}
+
+// RevokeAllSessions implements auth.Repo.
+func (r *Repo) RevokeAllSessions(_ context.Context, accountID int64, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var n int64
+	for k, s := range r.sessions {
+		if s.AccountID == accountID {
+			delete(r.sessions, k)
+			n++
+		}
+	}
+	for k, st := range r.states {
+		if st.AccountID == accountID {
+			delete(r.states, k)
+		}
+	}
+	r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: accountID,
+		Action: store.AuditSessionsRevoked, TargetAccountID: accountID, Result: store.ResultOK})
+	return n, nil
+}
+
+// ChangePassword implements auth.Repo.
+func (r *Repo) ChangePassword(_ context.Context, accountID int64, passwordHash string, keep []byte, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a, ok := r.accounts[accountID]
+	if !ok || a.Disabled {
+		return 0, store.ErrNotFound
+	}
+	a.PasswordHash = passwordHash
+	for k, t := range r.tokens {
+		if t.AccountID == accountID && (t.Purpose == store.TokenResetPassword || t.Purpose == store.TokenClaimEmail) {
+			delete(r.tokens, k)
+		}
+	}
+	for k, st := range r.states {
+		if st.AccountID == accountID {
+			delete(r.states, k)
+		}
+	}
+	var n int64
+	for k, s := range r.sessions {
+		if s.AccountID == accountID && k != string(keep) {
+			delete(r.sessions, k)
+			n++
+		}
+	}
+	r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: accountID,
+		Action: store.AuditPasswordChanged, TargetAccountID: accountID, Result: store.ResultOK})
+	return n, nil
+}
+
+// HasSession reports whether a session with the hash of token is stored (test helper).
+func (r *Repo) HasSession(hash []byte) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.sessions[string(hash)]
+	return ok
 }
 
 // ActiveSession implements auth.Repo.

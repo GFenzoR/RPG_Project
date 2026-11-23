@@ -627,16 +627,26 @@ func (w *World) checkRoles(ctx *game.TickContext) {
 }
 
 // KickAccount returns the command that disconnects every online character of the
-// account with PASSWORD_CHANGED (T2.1: a password reset revokes every session, live
-// connections included). Characters are saved as on any logout. One in combat (inCombat:
+// account with PASSWORD_CHANGED (T2.1: a password reset, or lote 17 a password change
+// from the game, revokes every other session, live connections included). Characters are saved as on any logout. One in combat (inCombat:
 // a fight with a monster or a player, or its PvP lock) loses its connection all the same
 // but stays in the world link-dead until the fight is over (disconnect, linkdead.go): a
 // reset is no way out of a fight.
 func (w *World) KickAccount(accountID int64) game.Command {
+	return w.kickAccount(accountID, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED)
+}
+
+// SignOutAccount is KickAccount for "sign out everywhere" (lote 17): the same clean way
+// out (saved, link-dead in a fight), with SIGNED_OUT_EVERYWHERE.
+func (w *World) SignOutAccount(accountID int64) game.Command {
+	return w.kickAccount(accountID, pb.DisconnectReason_DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE)
+}
+
+func (w *World) kickAccount(accountID int64, reason pb.DisconnectReason) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		for _, o := range append([]*Player(nil), w.players...) {
 			if o.accountID == accountID {
-				w.disconnect(ctx, o, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED, false)
+				w.disconnect(ctx, o, reason, false)
 			}
 		}
 	})

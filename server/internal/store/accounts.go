@@ -35,7 +35,10 @@ type Session struct {
 	Kind        SessionKind
 	CharacterID int64 // 0 unless Kind is SessionPlay
 	CreatedAt   time.Time
-	ExpiresAt   time.Time
+	// LastSeenAt is the last authenticated activity of an account session (lote 17 idle
+	// timeout); CreateSession stores CreatedAt.
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
 }
 
 // Character is the summary shown in the character list.
@@ -127,8 +130,28 @@ func (s *Store) ActiveSession(ctx context.Context, tokenHash []byte, kind Sessio
 		Kind:        kind,
 		CharacterID: row.CharacterID.Int64,
 		CreatedAt:   row.CreatedAt.Time,
+		LastSeenAt:  row.LastSeenAt.Time,
 		ExpiresAt:   row.ExpiresAt.Time,
 	}, nil
+}
+
+// TouchSession records authenticated activity of a session at now (the idle timeout
+// slides). It never moves last_seen_at backwards; a missing session is not an error.
+func (s *Store) TouchSession(ctx context.Context, tokenHash []byte, now time.Time) error {
+	if err := s.q.TouchSession(ctx, db.TouchSessionParams{TokenHash: tokenHash, Now: ts(now)}); err != nil {
+		return fmt.Errorf("touch session: %w", err)
+	}
+	return nil
+}
+
+// DeleteIdleSessions removes the account sessions whose last activity is at or before
+// before (lote 17 idle timeout) and returns how many.
+func (s *Store) DeleteIdleSessions(ctx context.Context, before time.Time) (int64, error) {
+	n, err := s.q.DeleteIdleSessions(ctx, ts(before))
+	if err != nil {
+		return 0, fmt.Errorf("delete idle sessions: %w", err)
+	}
+	return n, nil
 }
 
 // DeleteSession revokes a session. Deleting a missing session is not an error.

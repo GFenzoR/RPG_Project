@@ -388,4 +388,5 @@ type Session struct {
 	CharacterID pgtype.Int8
 	CreatedAt   pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
 }

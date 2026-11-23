@@ -147,12 +147,9 @@ func (s *Service) reauth(ctx context.Context, token, password string) (int64, er
 		return 0, ErrUnauthorized
 	}
 	now := s.clock.Now()
-	sess, err := s.repo.ActiveSession(ctx, hashToken(token), store.SessionAccount, now)
-	if errors.Is(err, store.ErrNotFound) {
-		return 0, ErrUnauthorized
-	}
+	sess, err := s.accountSession(ctx, hashToken(token))
 	if err != nil {
-		return 0, fmt.Errorf("reauth: %w", err)
+		return 0, err
 	}
 	p, err := s.Profile(ctx, sess.AccountID)
 	if err != nil {
@@ -284,8 +281,8 @@ func (s *Service) finishLink(ctx context.Context, st store.OAuthState, ext store
 	res := OAuthResult{Kind: "linked", ReturnTo: st.ReturnTo}
 	// The session that passed the re-authentication must still be active and the
 	// account's: a logout, a password reset or a ban in between cancels the link.
-	sess, err := s.repo.ActiveSession(ctx, st.SessionHash, store.SessionAccount, s.clock.Now())
-	if errors.Is(err, store.ErrNotFound) || (err == nil && sess.AccountID != st.AccountID) {
+	sess, err := s.accountSession(ctx, st.SessionHash)
+	if errors.Is(err, ErrUnauthorized) || (err == nil && sess.AccountID != st.AccountID) {
 		return OAuthResult{}, ErrOAuthState
 	}
 	if err != nil {

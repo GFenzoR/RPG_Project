@@ -66,11 +66,15 @@ type Querier interface {
 	DeleteHouseItems(ctx context.Context, houseID string) error
 	DeleteHouseOwner(ctx context.Context, arg DeleteHouseOwnerParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
+	// Account sessions without authenticated activity since before (lote 17 idle timeout).
+	DeleteIdleSessions(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMailItemParams) (int64, error)
 	// Closes an offer that has exactly units left (no row otherwise: the loop and the
 	// database disagree, and the whole transfer fails).
 	DeleteMarketOffer(ctx context.Context, arg DeleteMarketOfferParams) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
+	// Revokes every token of an account but keep (a password change keeps its own session).
+	DeleteOtherAccountSessions(ctx context.Context, arg DeleteOtherAccountSessionsParams) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// After a password reset (the mailbox owner is in control): identities that never proved
 	// the account's email go, so one linked by whoever squatted the address cannot stay.
@@ -292,6 +296,8 @@ type Querier interface {
 	TakeMarketMailGold(ctx context.Context, arg TakeMarketMailGoldParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
+	// Records authenticated activity (the idle timeout slides). Never moves backwards.
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Cosmetic shop and premium currency (T5.7, migration 00017).
 	// Syncs one entry of data/cosmetics.yaml at startup.
 	UpsertCosmetic(ctx context.Context, arg UpsertCosmeticParams) error

@@ -168,10 +168,11 @@ func New(cfg Config) (*App, error) {
 	authSvc, err := auth.New(auth.Config{
 		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations, Looks: cfg.Looks,
 		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
-		SessionsRevoked: a.sessionsRevoked,
-		Providers:       cfg.Providers,
-		OAuth:           oauthRepo,
-		ReservedNames:   cfg.ReservedNames,
+		SessionsRevoked:     a.sessionsRevoked,
+		SignedOutEverywhere: a.signedOutEverywhere,
+		Providers:           cfg.Providers,
+		OAuth:               oauthRepo,
+		ReservedNames:       cfg.ReservedNames,
 	})
 	if err != nil {
 		return nil, err
@@ -594,6 +595,15 @@ func (a *App) sessionsRevoked(accountID int64) {
 		return
 	}
 	go a.enqueueRetry(a.World.KickAccount(accountID))
+}
+
+// signedOutEverywhere disconnects the online characters of an account that used "sign
+// out everywhere" (lote 17), like sessionsRevoked: retried, never blocking the handler.
+func (a *App) signedOutEverywhere(accountID int64) {
+	if a.World == nil {
+		return
+	}
+	go a.enqueueRetry(a.World.SignOutAccount(accountID))
 }
 
 // mapSubmitted tells the online GMs about a new map submission (T4.5) through the loop:

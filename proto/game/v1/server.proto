@@ -817,6 +817,9 @@ enum DisconnectReason {
   // Login refused: the account already has as many characters online as it may
   // (session MaxCharactersPerAccount). Logging in the same character again still works.
   DISCONNECT_REASON_TOO_MANY_CHARACTERS = 15;
+  // The account used "sign out everywhere" (lote 17): every session of the account
+  // ended, the game ones too. Sign in again.
+  DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE = 16;
 }
 
 message Disconnect {

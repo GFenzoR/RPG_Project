@@ -29,7 +29,9 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
-// SessionCookie holds the account token for web clients (HttpOnly, SameSite=Strict).
+// SessionCookie holds the account token for web clients (HttpOnly, SameSite=Strict). It
+// is a browser-session cookie (no Expires/Max-Age, lote 17): closing the browser forgets
+// the login, a reload keeps it while the server-side session lives.
 const SessionCookie = "rpg_session"
 
 const maxBodyBytes = 4 << 10
@@ -130,6 +132,9 @@ type Accounts interface {
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
 	CreateCharacter(ctx context.Context, accountID int64, name, vocation string, look *content.Look) (store.Character, error)
 	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
+	// Lote 17: "sign out everywhere" and a password change from the game.
+	SignOutEverywhere(ctx context.Context, accountID int64) error
+	ChangePassword(ctx context.Context, token, current, newPassword string) error
 
 	// Email verification and password reset (T2.1, email.go).
 	EmailEnabled() bool
@@ -324,6 +329,9 @@ func (a *api) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/auth/register", a.rateLimited(a.hashing(a.register)))
 	mux.HandleFunc("POST /api/auth/login", a.rateLimited(a.hashing(a.login)))
 	mux.HandleFunc("POST /api/auth/logout", a.tokenLimited(a.logout))
+	mux.HandleFunc("POST /api/auth/logout-all", a.authed(a.accountLimited(shortDBRoute(a.logoutAll))))
+	mux.HandleFunc("POST /api/auth/keepalive", a.authed(a.keepalive))
+	mux.HandleFunc("POST /api/account/password", a.rateLimited(a.hashing(a.changePassword)))
 	mux.HandleFunc("GET /api/characters", a.authed(shortDBRoute(a.listCharacters)))
 	mux.HandleFunc("POST /api/characters", a.authed(a.accountLimited(shortDBRoute(a.createCharacter))))
 	mux.HandleFunc("POST /api/play", a.authed(a.accountLimited(shortDBRoute(a.play))))
@@ -411,7 +419,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	http.SetCookie(w, a.cookie(tok.Token, tok.ExpiresAt))
+	http.SetCookie(w, a.cookie(tok.Token))
 	resp := loginResponse{ExpiresAt: tok.ExpiresAt.UTC()}
 	if in.TokenInBody {
 		resp.Token = tok.Token
@@ -476,10 +484,53 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	c := a.cookie("", time.Unix(0, 0))
-	c.MaxAge = -1
-	http.SetCookie(w, c)
+	a.clearSession(w)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// logoutAll is "sign out everywhere" (lote 17): every session of the account ends, this
+// one included (its cookie is cleared), and its online characters leave the game.
+func (a *api) logoutAll(w http.ResponseWriter, r *http.Request, accountID int64) {
+	if err := a.cfg.Auth.SignOutEverywhere(r.Context(), accountID); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	a.clearSession(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// keepalive is the client's heartbeat while it plays (lote 17): the game connection does
+// not touch the HTTP session, so without it an hour in the game would leave the session
+// idle and the character list would ask for the password again. authed already refreshed
+// the session's last use.
+func (a *api) keepalive(w http.ResponseWriter, _ *http.Request, _ int64) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type changePasswordRequest struct {
+	// Current is the account's password; empty for an account that only signs in with a
+	// provider (allowed within auth.ReauthWindow of its login).
+	Current  string `json:"current_password"`
+	Password string `json:"new_password"`
+}
+
+// changePassword sets a new password (lote 17). The current password is checked under the
+// failed-login limits of /api/auth/login (reauthed), so a stolen session cookie cannot
+// guess it faster than a login could. Every other session ends; this one stays.
+func (a *api) changePassword(w http.ResponseWriter, r *http.Request) {
+	var in changePasswordRequest
+	if !a.decode(w, r, &in) {
+		return
+	}
+	if !auth.ValidPassword(in.Password) {
+		a.fail(w, r, auth.ErrInvalidPassword) // before any lookup or hash
+		return
+	}
+	if a.reauthed(w, r, in.Current, func(token string) error {
+		return a.cfg.Auth.ChangePassword(r.Context(), token, in.Current, in.Password)
+	}) {
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 type characterJSON struct {
@@ -753,16 +804,26 @@ func (a *api) clientHost(r *http.Request) string {
 	return host
 }
 
-func (a *api) cookie(value string, expires time.Time) *http.Cookie {
+// cookie is the session cookie with the account token: a browser-session cookie (no
+// Expires, no Max-Age; lote 17), so the browser forgets it when it closes. The server
+// side still ends the session after its absolute TTL or idle timeout.
+func (a *api) cookie(value string) *http.Cookie {
 	return &http.Cookie{
 		Name:     SessionCookie,
 		Value:    value,
 		Path:     "/api",
-		Expires:  expires,
 		HttpOnly: true,
 		Secure:   a.cfg.CookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	}
+}
+
+// clearSession deletes the session cookie in the browser.
+func (a *api) clearSession(w http.ResponseWriter) {
+	c := a.cookie("")
+	c.Expires = time.Unix(0, 0)
+	c.MaxAge = -1
+	http.SetCookie(w, c)
 }
 
 // ---- encoding ------------------------------------------------------------------

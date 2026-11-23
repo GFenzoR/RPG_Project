@@ -51,6 +51,9 @@ const (
 	AuditEmailVerified  = "email_verified"
 	AuditPasswordReset  = "password_reset"
 	AuditResetLinkIssue = "reset_link_issued"
+	// Lote 17: "sign out everywhere" and a password change from the game.
+	AuditSessionsRevoked = "sessions_revoked"
+	AuditPasswordChanged = "password_changed"
 )
 
 // ReplaceAccountToken deletes the account's tokens of t.Purpose and stores t, in one
@@ -191,6 +194,76 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		return 0, fmt.Errorf("reset password: %w", err)
 	}
 	return id, nil
+}
+
+// RevokeAllSessions deletes every session of the account (account tokens of every device
+// and pending play tokens) and its OAuth flows in flight, and audits it, in one
+// transaction (lote 17, "sign out everywhere"). It returns how many sessions it deleted.
+func (s *Store) RevokeAllSessions(ctx context.Context, accountID int64, now time.Time) (int64, error) {
+	var n int64
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: accountID, Valid: true}); err != nil {
+			return err
+		}
+		var err error
+		n, err = q.DeleteAccountSessions(ctx, accountID)
+		if err != nil {
+			return err
+		}
+		return appendAudit(ctx, q, AuditEntry{
+			At: now, Source: AuditWeb, ActorAccountID: accountID, ActorName: "account",
+			Action: AuditSessionsRevoked, TargetAccountID: accountID,
+			Args: map[string]string{"sessions_revoked": fmt.Sprint(n)}, Result: ResultOK,
+		})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("revoke all sessions: %w", err)
+	}
+	return n, nil
+}
+
+// ChangePassword sets the password hash of an account whose current password (or recent
+// login) was already checked, and in the same transaction deletes every other session of
+// the account (keep is the hash of the session that asked, which stays), its pending
+// reset and claim links and its OAuth flows in flight, and audits it (lote 17). It
+// returns how many sessions it revoked; ErrNotFound if the account is gone or disabled.
+func (s *Store) ChangePassword(ctx context.Context, accountID int64, passwordHash string, keep []byte, now time.Time) (int64, error) {
+	var n int64
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		acc, err := q.GetAccountProfile(ctx, accountID)
+		if err != nil {
+			return notFound(err)
+		}
+		if acc.DisabledAt.Valid {
+			return ErrNotFound
+		}
+		if err := q.SetPasswordHash(ctx, db.SetPasswordHashParams{
+			PasswordHash: pgtype.Text{String: passwordHash, Valid: true}, ID: accountID,
+		}); err != nil {
+			return err
+		}
+		for _, p := range []TokenPurpose{TokenResetPassword, TokenClaimEmail} {
+			if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: accountID, Purpose: string(p)}); err != nil {
+				return err
+			}
+		}
+		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: accountID, Valid: true}); err != nil {
+			return err
+		}
+		n, err = q.DeleteOtherAccountSessions(ctx, db.DeleteOtherAccountSessionsParams{AccountID: accountID, Keep: keep})
+		if err != nil {
+			return err
+		}
+		return appendAudit(ctx, q, AuditEntry{
+			At: now, Source: AuditWeb, ActorAccountID: accountID, ActorName: "account",
+			Action: AuditPasswordChanged, TargetAccountID: accountID,
+			Args: map[string]string{"sessions_revoked": fmt.Sprint(n)}, Result: ResultOK,
+		})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("change password: %w", err)
+	}
+	return n, nil
 }
 
 // DeleteExpiredAccountTokens removes tokens expired at now and returns how many.

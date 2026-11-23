@@ -39,3 +39,31 @@ func TestKickAccountDisconnectsEveryCharacter(t *testing.T) {
 		t.Fatalf("saves %v", saved)
 	}
 }
+
+// "Sign out everywhere" (lote 17) takes the account's characters out the same way, saved,
+// with its own reason.
+func TestSignOutAccountDisconnectsEveryCharacter(t *testing.T) {
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, ".....", ".....", "....."))
+	const account = 900
+	a, _ := h.joinChar(session.Character{ID: 901, AccountID: account, Name: "Alfa", Vocation: "guardian", Level: 1, Health: 145})
+	other, _ := h.joinChar(session.Character{ID: 903, AccountID: 901, Name: "Gamma", Vocation: "guardian", Level: 1, Health: 145})
+
+	h.sim.Command(h.w.SignOutAccount(account))
+	h.sim.Step()
+	if !a.closed || a.reason != pb.DisconnectReason_DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE {
+		t.Fatalf("closed %v reason %v", a.closed, a.reason)
+	}
+	if h.w.PlayerByCharacter(901) != nil {
+		t.Fatal("the signed-out character is still in the world")
+	}
+	if other.closed || h.w.PlayerByCharacter(903) == nil {
+		t.Fatal("another account was signed out")
+	}
+	saved := false
+	for _, s := range h.saves {
+		saved = saved || s.CharacterID == 901
+	}
+	if !saved {
+		t.Fatal("the signed-out character was not saved")
+	}
+}
