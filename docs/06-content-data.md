@@ -1124,6 +1124,15 @@ trade:
   (`05-network-protocol.md`).
 - Textos: `craft.*` (mensajes del servidor) y `client.craft.*` en `i18n/*/client.yaml`.
 
+## Baúl de la cuenta (`balance.yaml → stash`)
+El baúl compartido por los personajes de una cuenta (`02-game-design.md` "Baúl de la
+cuenta"). Esquema en `balance.schema.json`; sin bloque, o con `enabled: false`, apagado.
+- `slots` (1..200): celdas del baúl. `action_burst` y `action_refill_ms` (1..60000): el
+  anti-flood de guardar y sacar (cada uno es una transacción en la base).
+- El cofre es un item de mapa con `stash: true` (`data/items/decoration.yaml`,
+  `stash_chest`; `pickupable: false`). Los textos de la ventana son `client.stash.*` en
+  `i18n/*/client.yaml`.
+
 ## Forja (`balance.yaml → forge`)
 El refinado +1..+10 de un equipable en un yunque (`02-game-design.md` "Forja"). Esquema en
 `balance.schema.json`; el servidor (`content/forge.go`) revisa además las reglas de abajo. Sin

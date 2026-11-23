@@ -587,6 +587,32 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 - `packages/content-schema`: JSON Schemas de `data/` y tipos TS generados.
 - `packages/renderer`: dibujo de tiles e items con Pixi, compartido por cliente y editor.
 
+### Baúl de la cuenta (`session/stash.go`)
+El baúl es de la **cuenta** y la pueden usar dos personajes en línea a la vez, pero el loop
+no lee la base. Por eso hay **una sola copia en memoria** por cuenta, dueña el loop:
+- **Carga:** cada login lee el baúl con el personaje (`PlayCharacter.Stash`, fuera del
+  loop). `join` lo usa solo si el loop no tiene ya el de esa cuenta (`stashJoin`); si lo
+  tiene, lo leído se ignora: puede ser anterior a una escritura que sigue en la cola.
+- **Se suelta** (`releaseStash`) solo cuando no queda ningún personaje de la cuenta en el
+  mundo, ningún login de la cuenta está leyendo la base (`loadingAcc`: `LoginStarted` y
+  `LoginAborted` llevan la cuenta; `LoginStarted` va al carril del ciclo de vida, el mismo
+  FIFO que `Saved`, así un acuse que la lectura pudo no ver llega después) y la última
+  escritura del baúl está confirmada (`pendChar`/`pendSeq`: el acuse de ese snapshot o de
+  uno posterior del mismo personaje cubre las anteriores, porque el Saver escribe en orden).
+  Un baúl cuya escritura se descartó nunca se confirma: queda en memoria hasta reiniciar.
+- **Cada movimiento es un transfer:** `stashWrite` vacía las casas, numera, y manda el
+  snapshot del personaje (`transferSnapshot`: lo deja en espera, `heldDrop`, hasta el acuse)
+  con un `StashOp` (todas las celdas de la cuenta) en un `Transfer`;
+  `store.SaveTransfer` lo escribe en la misma transacción (`account_stash_items`, migración
+  00024). Una caída antes de escribirlo deshace el movimiento en los dos lados; después, lo
+  deja entero en los dos.
+- **Taint:** el Saver marca el baúl de un transfer descartado (`taintedStashes`); un transfer
+  posterior que lo escriba se salta y marca a su personaje (el otro de la cuenta que sacó lo
+  guardado), y el mundo queda en solo lectura, que cierra todas las ventanas del baúl.
+- Los tests de simulación (`session/stash_test.go`) juegan carrera de dos personajes por el
+  mismo item, caídas antes y después de cada escritura (`stashRows`), el login que lee
+  durante una escritura y el taint del Saver.
+
 ## Observabilidad
 - `/healthz` en la API pública. `/metrics` (Prometheus, `internal/metrics`) va en un
   listener aparte, `-metrics-addr` (por defecto `127.0.0.1:9100`, vacío lo apaga), para

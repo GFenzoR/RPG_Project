@@ -352,8 +352,8 @@ func TestAckDuringLoginKeepsUnsaved(t *testing.T) {
 	final := h.saves[len(h.saves)-1]
 	stale := session.Character{ID: p.CharacterID(), Name: "Ana", Vocation: "guardian", Level: 1, Health: 145, HasPos: true, Pos: pos(5, 5)}
 
-	h.sim.Command(h.w.LoginStarted(stale.ID, stale.AccountID))              // gateway, before reading the row
-	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq)) // the save commits and acks
+	h.sim.Command(h.w.LoginStarted(stale.ID, stale.AccountID)) // gateway, before reading the row
+	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq))     // the save commits and acks
 	h.sim.Step()
 	_, again := h.joinChar(stale) // Join with the row read before the commit
 	if again.Pos() != pos(6, 5) {

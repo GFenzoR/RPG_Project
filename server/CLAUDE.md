@@ -224,6 +224,14 @@ server/
   `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`, como mucho uno
   por ventana cada `market.push_every_ms`).
 
+- **Baúl de la cuenta (`session/stash.go`, `store/stash.go`, docs/01 "Baúl de la cuenta"):**
+  una copia por cuenta en `World.stashes`, cargada con el primer login (`Character.Stash`) y
+  soltada por `releaseStash` (nadie de la cuenta en el mundo, ningún login leyendo,
+  `loadingAcc`, y la última escritura confirmada, `stashPend`). Todo movimiento sale por
+  `stashWrite` (transfer con `transferSnapshot` + `StashOp`, casas vaciadas antes de
+  numerar) y respeta `w.readOnly`; el Saver marca el baúl de un transfer descartado
+  (`taintedStashes`). Lo que entra o sale de un personaje se registra con `EconStash`.
+
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
   mapa (`world.House`, en `world.bin` desde la v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`

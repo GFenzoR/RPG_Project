@@ -104,6 +104,20 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Baúl de la cuenta (hecho, rama `feat/shared-stash`, lote 17; el dueño el 2026-11-23:
+  "un baúl compartido por todos los personajes de la cuenta"; docs/02 "Baúl de la cuenta",
+  docs/01, docs/05):** un cofre junto al tablero de cada pueblo, 30 celdas, solo items
+  comerciables, cada movimiento en una transacción con el personaje. Queda:
+  - **No se corrió `make e2e` ni `make test-integration`** en la rama: el test e2e "account
+    stash" (`client/e2e/game.spec.ts`, screenshots `stash-01-shared` y `stash-02-taken`) y
+    `store/stash_integration_test.go` corren al final del lote.
+  - **Sin baúl en las casas** (el pedido decía "quizás"): un cofre en la casa sería otro item
+    con `stash: true`; hoy solo están los de los pueblos.
+  - **Mover parte de una pila:** la ventana guarda y saca la pila entera (el protocolo ya
+    acepta `count`); falta un selector de cantidad como "Mover parte…".
+  - **Item retirado o desconocido en el baúl:** al cargarse se descarta con un aviso en el
+    log (como en el inventario) y la próxima escritura del baúl lo borra de la base.
+  - Sin vista previa (`make ui-preview`) de la ventana.
 - **Seguridad del despliegue y del operador (hecho, rama `sec/deploy-hardening`, lote 16;
   el dueño el 2026-11-20: "un estándar excelente de ciberseguridad"; docs/09 "Imágenes
   firmadas", "Backups y restauración", "Seguridad del despliegue"; docs/13 pasos 3 y 5):**

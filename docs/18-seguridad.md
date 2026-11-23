@@ -52,6 +52,13 @@ lee lo que ya recibió (todo lo que el cliente dibuja es público para quien lo 
 - Intercambio todo-o-nada con las mismas instancias, revalidado en cada aceptar y cada tick;
   transfers idempotentes en una transacción; libro de economía que se reconcilia cada tick
   en los tests (`economy mismatch`).
+- Baúl de la cuenta (`session/stash.go`): una sola copia por cuenta en el loop mientras un
+  personaje de la cuenta está en línea (o un login suyo lee la base, o su última escritura
+  no se confirmó), así dos personajes conectados a la vez nunca sacan el mismo item. Cada
+  movimiento es un transfer (personaje + baúl entero, una transacción) y deja al personaje
+  en espera (`heldDrop`) hasta el acuse; un transfer descartado marca el baúl en el Saver
+  (lo que lo toque después no se escribe y marca a su personaje) y el mundo queda en solo
+  lectura. Solo items comerciables: un item de quest no pasa entre personajes.
 - `Input` ignora enums y oneofs desconocidos.
 
 ### Anti-flood dentro del juego

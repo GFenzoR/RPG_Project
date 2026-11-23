@@ -1387,6 +1387,32 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   personaje deja mientras espera también queda reservado para él hasta la confirmación;
   uno de antes de la espera no.
 
+### Baúl de la cuenta (`server/internal/session/stash.go`)
+Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
+- **Abrir:** `UseItem` sobre un item del mapa con `stash: true` (`stash_chest`) a 1 casilla;
+  el servidor contesta `StashUpdate{open: true, capacity, items, chest, result: OK}`. Sin
+  baúl (apagado, sin transfers, mundo en solo lectura, staff) `result: UNAVAILABLE`; lejos,
+  `TOO_FAR` (con `open: false`).
+- `StashCommand` (oneof):
+  - `deposit{from, item_id, count}`: `from` es un slot de equipo, un contenedor abierto que
+    el jugador lleva o un bolsillo (nunca el suelo); `count` solo para pilas (1..la pila).
+  - `withdraw{index, item_id, mods, count}`: `index` es la celda; `item_id` y `mods` son lo
+    que el cliente vio ahí (clave de comparación, como en `Refine`): si otro personaje de la
+    cuenta lo movió, `CHANGED`. Va a la mochila y después a los bolsillos.
+  - `close{}`: cierra (contesta `StashUpdate{open: false}`).
+- Toda acción contesta un `StashUpdate` entero con su `result` (`StashResult`): `OK`,
+  `FULL`, `NO_ROOM`, `TOO_HEAVY`, `TOO_FAR` (y cierra), `CHANGED`, `NOT_ALLOWED` (no
+  comerciable, ofrecido en un intercambio), `TOO_FAST` (anti-flood), `UNAVAILABLE`,
+  `NOT_POSSIBLE`, `IN_COMBAT` (bloqueo PvP). El cliente muestra la clave
+  `client.stash.result.<código>` en el log. Un cambio hecho por otro personaje de la cuenta
+  con la ventana abierta le llega como `StashUpdate` con `OK`. Moverse lejos del cofre manda
+  `StashUpdate{open: false}`; un mundo que pasa a solo lectura (`Tainted`) cierra todas.
+- **Persistencia:** cada movimiento que se hizo sale como un `Transfer` con el snapshot del
+  personaje y un `StashOp` (todas las celdas de la cuenta, `account_stash_items`, migración
+  00024), en una transacción. El login lee el baúl con el personaje
+  (`PlayCharacter.Stash`); el loop lo usa solo si no tiene ya el de esa cuenta en memoria.
+  `LoginStarted` y `LoginAborted` llevan la cuenta además del personaje (docs/01).
+
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
 - **Abrir:** `UseItem` sobre una casilla de **puerta** de una casa (cualquier índice de la
