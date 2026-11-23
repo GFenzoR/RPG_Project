@@ -173,15 +173,27 @@ el punto 5:
   workflows fijada a un commit; `security.yml` (govulncheck, `pnpm audit`, gitleaks);
   `dependabot.yml`; `make audit`. Queda:
   - **Lo tuyo en GitHub** (la checklist de docs/18): 2FA, protección de `main` con los
-    checks `ci` y `security` requeridos, Dependabot alerts y security updates encendidos.
-  - **El primer `gitleaks` de la CI** recorre toda la historia y no se pudo correr en local
-    (el binario no se instaló en esta PC): si marca algo, rotar el secreto si era real o
-    sumar el caso a `.gitleaks.toml` si es un dato de prueba.
-  - **Al apilar las ramas del lote:** el `sigstore/cosign-installer@v3` que agrega
-    `sec/deploy-hardening` en `images.yml` tiene que quedar fijado como
-    `sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1` (si no,
-    el paso de `actionlint` falla). En esta rama sola govulncheck marca pgx y x/text viejos
-    (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
+    checks `ci` y `security` requeridos (los jobs finales de `ci.yml` y `security.yml`,
+    que esperan a todos los demás; GitHub elige por nombre de job), Dependabot alerts y
+    security updates encendidos.
+  - **gitleaks:** la historia entera (1142 commits) y el árbol pasaron sin hallazgos con
+    gitleaks 8.30.1 el 2026-11-23, después de sumar a `.gitleaks.toml` los nonces de
+    `deploy/smoke.sh` y las claves de quest; los commits propios de las otras cuatro ramas
+    `sec/*` también. Después de mezclar, correr `make audit` con gitleaks instalado; si marca
+    algo, rotar el secreto si era real o sumar ese valor de prueba a las `regexes` (la
+    allowlist es por valor, no por ruta: un secreto real pegado en un test también se
+    reporta).
+  - **Orden de mezcla de las ramas `sec/*`:** no están apiladas (ninguna es ancestro de
+    otra). Mezclar `sec/deploy-hardening` **antes** que esta, o resolver los dos puntos
+    siguientes en la misma mezcla; si no, la CI queda roja:
+    - `images.yml` choca: el `sigstore/cosign-installer@v3` que agrega
+      `sec/deploy-hardening` tiene que quedar fijado como
+      `sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1` (si
+      no, el paso "actions pinned to commit SHAs" de `actionlint` falla).
+    - En esta rama sola, `govulncheck` (job `security`) marca pgx y x/text viejos
+      (alcanzables solo por `storetest`): los sube `sec/deploy-hardening`.
+    - Este documento (docs/14) choca con las cuatro ramas `sec/*`: conservar las entradas
+      de todas.
   - **Riesgos aceptados** (docs/18): el registro revela si un email existe, sesiones de 30
     días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
     farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin

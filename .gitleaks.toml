@@ -7,6 +7,8 @@
 useDefault = true
 
 [[allowlists]]
+# By value, not by path: a real secret pasted into a test is still reported. Each regex
+# matches only a fake value the repository uses on purpose.
 description = "Known test fixtures and fake credentials"
 regexes = [
   '''bot-password''',
@@ -14,14 +16,18 @@ regexes = [
   '''github_pat_test_token''',
   '''long-password-[0-9]''',
   '''home-admin-pass-[0-9]''',
-  '''s3cret''',
+  # Sec-WebSocket-Key nonces of deploy/smoke.sh: RFC 6455's sample ("the sample nonce")
+  # and "smoke-test-key-12", base64.
+  '''^dGhlIHNhbXBsZSBub25jZQ==$''',
+  '''^c21va2UtdGVzdC1rZXktMTI=$''',
+  # Quest storage keys (quest.<id>), named like a key in the session tests.
+  '''^quest\.[a-z0-9_.]+$''',
 ]
+
+[[allowlists]]
+# The fake OAuth provider of the tests and cmd/fakeoauth: its keys are generated test
+# material by design.
+description = "Fake OAuth provider"
 paths = [
-  '''(^|/)testdata/''',
-  '''_test\.go$''',
-  '''\.test\.tsx?$''',
-  '''(^|/)client/e2e/''',
-  '''(^|/)client/playwright\.config\.ts$''',
   '''(^|/)server/internal/oauth/oauthtest/''',
-  '''(^|/)deploy/tests/''',
 ]

@@ -138,7 +138,13 @@ servidor `https` salvo host privado.
 ### Secretos en git
 Ningún secreto en el repo: van en `deploy/.env` (o `deploy/.env.home`), que git ignora. Las
 credenciales de los tests son falsas a propósito (`bot-password`, `fake-client-secret`) y
-están en la lista blanca de `.gitleaks.toml`.
+están en la lista blanca de `.gitleaks.toml`, que es **por valor, no por ruta**: un secreto
+real pegado en un test o en `testdata/` también se reporta. La única ruta exenta es el
+proveedor OAuth falso (`server/internal/oauth/oauthtest/`). Un valor falso nuevo que
+gitleaks marque se suma como una regex propia (anclada o de 9 caracteres o más:
+`workflows.test.ts` rechaza fragmentos cortos como `s3cret`). La historia entera pasó sin
+hallazgos con gitleaks 8.30.1 el 2026-11-23 (antes de eso marcaba los nonces de
+`Sec-WebSocket-Key` de `deploy/smoke.sh` y una clave de quest de un test).
 
 ### GitHub Actions
 Permisos `contents: read` por defecto y por job solo lo necesario; ningún
@@ -225,9 +231,13 @@ Hacer una vez y revisar cada mes.
 
 **GitHub**
 - [ ] 2FA en la cuenta del dueño y de todo colaborador con escritura.
-- [ ] Protección de la rama `main`: PR obligatorio, checks requeridos (`ci`, `security`,
-  `map-pr/verdict`), sin force push ni borrado, revisión de `CODEOWNERS` (docs/14 "Lo que
-  es tuyo").
+- [ ] Protección de la rama `main`: PR obligatorio, checks requeridos `ci`, `security` y
+  `map-pr/verdict`, sin force push ni borrado, revisión de `CODEOWNERS` (docs/14 "Lo que
+  es tuyo"). GitHub elige los checks por nombre de **job**: `ci` y `security` son los jobs
+  finales de `ci.yml` y `security.yml`, que esperan a todos los demás de su workflow
+  (`if: always()`) y fallan si alguno falló o se canceló (saltado cuenta como aprobado);
+  `map-pr/verdict` es el status que escribe `map-pr-comment.yml`. Aparecen en el buscador
+  de Branch protection después de su primera corrida en un PR.
 - [ ] "Dependabot alerts" y "Dependabot security updates" encendidos (Settings → Code
   security); los PR de `dependabot.yml` se revisan cada semana.
 - [ ] Secret scanning y push protection encendidos si el plan del repo los ofrece.

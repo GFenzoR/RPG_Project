@@ -1,6 +1,10 @@
 package httpapi_test
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,33 +20,104 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
 	"github.com/GFenzoR/RPG_Project/server/internal/oauth/oauthtest"
 	"github.com/GFenzoR/RPG_Project/server/internal/payments"
+	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
-// fuzzRoutes are the JSON endpoints FuzzJSONRoutes posts to; authed ones carry the
-// session token of an account that has one character.
+// fuzzCred is what a fuzzed request carries besides its body, so that it reaches the
+// handler's decoding instead of stopping at the door.
+type fuzzCred int
+
+const (
+	credNone    fuzzCred = iota
+	credPlayer           // the session token of fuzz@example.org (one character)
+	credStaff            // the session token of a gm account (map review)
+	credPending          // the rpg_oauth_pending cookie of a Google sign-in of fuzz@example.org
+	credSigned           // the body signed the way the fake payment provider signs its webhook
+)
+
+// fuzzPaySecret is the fake payment provider's secret in fuzzAPI.
+const fuzzPaySecret = "fuzz-pay-secret"
+
+// fuzzRoutes are the JSON endpoints FuzzJSONRoutes posts to. want is the status of the
+// seed body (TestFuzzSeedsReachTheirHandlers): the credentials get it past the door.
 var fuzzRoutes = []struct {
-	path   string
-	authed bool
-	seed   string // a body the endpoint accepts (or at least parses)
+	path string
+	cred fuzzCred
+	seed string // a body the endpoint accepts (or at least parses)
+	want int
 }{
-	{"/api/auth/register", false, `{"email":"new@example.org","password":"long-password-2"}`},
-	{"/api/auth/login", false, `{"email":"fuzz@example.org","password":"long-password-1","token_in_body":true}`},
-	{"/api/characters", true, `{"name":"Lorien","vocation":"guardian","look":{"body":"human"}}`},
-	{"/api/play", true, `{"character_id":1}`},
-	{"/api/auth/oauth/google/start", false, `{"return":"/play"}`},
-	{"/api/auth/oauth/discord/link", true, `{"return":"/account","password":"long-password-1"}`},
-	{"/api/auth/oauth/pending/confirm", false, `{"password":"long-password-1"}`},
-	{"/api/auth/oauth/pending/create", false, `{}`},
-	{"/api/account/unlink", true, `{"provider":"google","password":"long-password-1"}`},
-	{"/api/auth/verify", false, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}`},
-	{"/api/auth/password/forgot", false, `{"email":"fuzz@example.org"}`},
-	{"/api/auth/password/reset", false, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","password":"long-password-3"}`},
-	{"/api/shop/checkout", true, `{"pack":"pack_small"}`},
-	{"/api/shop/buy", true, `{"cosmetic":"outfit_sailor"}`},
-	{"/api/maps/submissions", true, `{"title":"Muelle","description":"x","character_id":1,"license":"CC-BY-SA-4.0","patch":"{}"}`},
-	{"/api/maps/submissions/1/review", true, `{"decision":"reject","note":"no"}`},
-	{"/api/payments/webhook/fake", false, `{"type":"payment","data":{"id":"1"}}`},
-	{"/api/auth/logout", true, ``},
+	{"/api/auth/register", credNone, `{"email":"new@example.org","password":"long-password-2"}`, http.StatusCreated},
+	{"/api/auth/login", credNone, `{"email":"fuzz@example.org","password":"long-password-1","token_in_body":true}`, http.StatusOK},
+	{"/api/characters", credPlayer, `{"name":"Lorien","vocation":"guardian","look":{"body":"human"}}`, http.StatusCreated},
+	{"/api/play", credPlayer, `{"character_id":2}`, http.StatusOK},
+	{"/api/auth/oauth/google/start", credNone, `{"return":"/play"}`, http.StatusOK},
+	{"/api/auth/oauth/discord/link", credPlayer, `{"password":"long-password-1"}`, http.StatusOK},
+	{"/api/auth/oauth/pending/confirm", credPending, `{"password":"long-password-1"}`, http.StatusOK},
+	{"/api/auth/oauth/pending/create", credPending, `{"email":"other@example.org"}`, http.StatusOK},
+	{"/api/account/unlink", credPlayer, `{"provider":"google"}`, http.StatusNotFound},
+	{"/api/auth/verify", credNone, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}`, http.StatusBadRequest},
+	{"/api/auth/password/forgot", credNone, `{"email":"fuzz@example.org"}`, http.StatusNotFound}, // decoded, then email_disabled (no mail here)
+	{"/api/auth/password/reset", credNone, `{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","password":"long-password-3"}`, http.StatusBadRequest},
+	{"/api/shop/checkout", credPlayer, `{"pack_id":"pack_small"}`, http.StatusOK},
+	{"/api/shop/buy", credPlayer, `{"cosmetic_id":"outfit_sailor"}`, http.StatusConflict},
+	{"/api/maps/submissions", credPlayer, `{"title":"Muelle","description":"x","character_id":1,"license":"CC-BY-SA-4.0","patch":"{}"}`, http.StatusBadRequest},
+	{"/api/maps/submissions/1/review", credStaff, `{"decision":"reject","reason":"no"}`, http.StatusOK},
+	{"/api/payments/webhook/fake", credSigned, "", http.StatusOK}, // seed: fuzzWebhookSeed
+	{"/api/auth/logout", credPlayer, ``, http.StatusNoContent},
+}
+
+// fuzzWebhookSeed is a fake payment notification for a real checkout reference of the
+// player (account 1), which the webhook books.
+func fuzzWebhookSeed(t testing.TB) string {
+	t.Helper()
+	ref, err := payments.SignReference([]byte(fuzzPaySecret), 1, "pack_small")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(payments.FakeNotification{Type: payments.Paid, Reference: ref, AmountMinor: 1990, Currency: "CLP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// fuzzPost sends body to route i of fuzzRoutes with that route's credentials.
+func fuzzPost(env fuzzEnv, i int, body []byte) *httptest.ResponseRecorder {
+	r := fuzzRoutes[i]
+	hr := httptest.NewRequest(http.MethodPost, r.path, strings.NewReader(string(body)))
+	hr.Header.Set("Content-Type", "application/json")
+	switch r.cred {
+	case credNone:
+	case credPlayer:
+		hr.Header.Set("Authorization", "Bearer "+env.player)
+	case credStaff:
+		hr.Header.Set("Authorization", "Bearer "+env.staff)
+	case credPending:
+		hr.AddCookie(&http.Cookie{Name: httpapi.PendingCookie, Value: env.pending})
+	case credSigned:
+		m := hmac.New(sha256.New, []byte(fuzzPaySecret))
+		m.Write(body)
+		hr.Header.Set(payments.FakeSignatureHeader, hex.EncodeToString(m.Sum(nil)))
+	}
+	w := httptest.NewRecorder()
+	env.h.ServeHTTP(w, hr)
+	return w
+}
+
+// TestFuzzSeedsReachTheirHandlers keeps FuzzJSONRoutes honest: each route's seed, with
+// its credentials, gets the status its handler gives a parsed body (not a 401 or 403 at
+// the door), so the mutations of make fuzz exercise the decoding behind it.
+func TestFuzzSeedsReachTheirHandlers(t *testing.T) {
+	for i, r := range fuzzRoutes {
+		env := fuzzAPI(t)
+		body := r.seed
+		if r.cred == credSigned {
+			body = fuzzWebhookSeed(t)
+		}
+		if w := fuzzPost(env, i, []byte(body)); w.Code != r.want {
+			t.Errorf("POST %s seed: status %d, want %d (body %s)", r.path, w.Code, r.want, w.Body.String())
+		}
+	}
 }
 
 // FuzzJSONRoutes (lote 16) posts arbitrary bodies to every JSON endpoint of the API,
@@ -58,21 +133,19 @@ func FuzzJSONRoutes(f *testing.F) {
 		`{"character_id":9223372036854775808}`, `{"return":"//evil.example"}`, `{"return":"javascript:alert(1)"}`,
 		`{"provider":"../../etc"}`, `{"look":{"body":{}}}`, strings.Repeat(" ", 5000)}
 	for i, r := range fuzzRoutes {
-		f.Add(uint8(i), []byte(r.seed))
+		seed := r.seed
+		if r.cred == credSigned {
+			seed = fuzzWebhookSeed(f)
+		}
+		f.Add(uint8(i), []byte(seed))
 		for _, n := range nasty {
 			f.Add(uint8(i), []byte(n))
 		}
 	}
 	f.Fuzz(func(t *testing.T, route uint8, body []byte) {
-		r := fuzzRoutes[int(route)%len(fuzzRoutes)]
-		h, token := fuzzAPI(t)
-		hr := httptest.NewRequest(http.MethodPost, r.path, strings.NewReader(string(body)))
-		hr.Header.Set("Content-Type", "application/json")
-		if r.authed {
-			hr.Header.Set("Authorization", "Bearer "+token)
-		}
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, hr)
+		i := int(route) % len(fuzzRoutes)
+		r := fuzzRoutes[i]
+		w := fuzzPost(fuzzAPI(t), i, body)
 		if w.Code >= 500 && w.Code != http.StatusServiceUnavailable {
 			t.Fatalf("POST %s %q: status %d body %s", r.path, body, w.Code, w.Body.String())
 		}
@@ -87,9 +160,17 @@ func FuzzJSONRoutes(f *testing.F) {
 	})
 }
 
-// fuzzAPI is the API with every optional part wired to fakes and an account
-// (fuzz@example.org, one character) logged in.
-func fuzzAPI(t *testing.T) (http.Handler, string) {
+// fuzzEnv is the API of fuzzAPI and the credentials of its accounts.
+type fuzzEnv struct {
+	h                      http.Handler
+	player, staff, pending string
+}
+
+// fuzzAPI is the API with every optional part wired to fakes and two accounts logged in:
+// fuzz@example.org (a player with one character, who also started a Google sign-in that
+// waits on /oauth/confirm) and gm@example.org (staff), with one pending map submission
+// of the player's.
+func fuzzAPI(t *testing.T) fuzzEnv {
 	t.Helper()
 	clk := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
 	fake := oauthtest.New()
@@ -118,23 +199,45 @@ func fuzzAPI(t *testing.T) (http.Handler, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pay, err := payments.NewFake(payments.EnvTest, "s3cret")
+	pay, err := payments.NewFake(payments.EnvTest, fuzzPaySecret)
 	if err != nil {
 		t.Fatal(err)
 	}
+	subs := newFakeSubmissions()
 	h, err := httpapi.New(httpapi.Config{
 		Auth: svc, Clock: clk, CookieSecure: true,
 		Shop:           &httpapi.Shop{Store: newMemShop(), Catalog: catalog(t), Provider: pay, Changed: func(int64) {}},
-		MapSubmissions: newFakeSubmissions(),
+		MapSubmissions: subs,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	hh := &harness{t: t, h: h, clock: clk}
-	expect(t, hh.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"fuzz@example.org","password":"long-password-1"}`}),
-		http.StatusCreated, "")
+	register := func(email string) int64 {
+		w := hh.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"` + email + `","password":"long-password-1"}`})
+		expect(t, w, http.StatusCreated, "")
+		var b struct {
+			AccountID int64 `json:"account_id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
+			t.Fatal(err)
+		}
+		return b.AccountID
+	}
+	playerID := register("fuzz@example.org")
 	token := hh.login("fuzz@example.org", "long-password-1")
 	expect(t, hh.do(req{method: "POST", path: "/api/characters", token: token, body: `{"name":"Fuzzwick","vocation":"guardian"}`}),
 		http.StatusCreated, "")
-	return h, token
+	subs.roles[register("gm@example.org")] = store.RoleGM
+	staff := hh.login("gm@example.org", "long-password-1")
+	if _, err := subs.CreateMapSubmission(context.Background(), store.NewMapSubmission{
+		At: clk.Now(), AccountID: playerID, CharacterID: 1, Title: "Muelle", License: httpapi.MapLicense, Patch: []byte("{}"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	o := &oauthHarness{t: t, h: h, fake: fake, repo: repo, jar: map[string]string{}}
+	if loc := o.login(oauth.Google, oauthtest.User{Subject: "g-fuzz", Email: "fuzz@example.org", Verified: true}, "/account"); loc != "/oauth/confirm" {
+		t.Fatalf("google sign-in landed on %s", loc)
+	}
+	return fuzzEnv{h: h, player: token, staff: staff, pending: o.jar[httpapi.PendingCookie]}
 }

@@ -359,3 +359,23 @@ jobs:
         with:
           name: bench
           path: reports/bench.txt
+
+  # The one check of this workflow that main's branch protection requires (docs/18
+  # "Checklist del operador"): GitHub requires checks by job name, and the names above
+  # change with the matrix. It fails if any job failed or was cancelled; skipped is fine.
+  ci:
+    name: ci
+    if: always()
+    needs: [changes, go, ts, validate, actionlint, gemini, build, desktop, e2e, integration, bench]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a job this check needs ended $r"; exit 1 ;;
+            esac
+          done

@@ -70,3 +70,22 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" gitleaks
       - name: gitleaks (git history)
         run: '"$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --no-banner -v .'
+
+  # The one check of this workflow that main's branch protection requires (docs/18
+  # "Checklist del operador"); see the `ci` job of ci.yml.
+  security:
+    name: security
+    if: always()
+    needs: [govulncheck, pnpm-audit, gitleaks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a job this check needs ended $r"; exit 1 ;;
+            esac
+          done

@@ -93,7 +93,7 @@ Fuzz nativo de Go (`testing.F`) sobre lo que llega de afuera:
 |---|---|---|
 | `FuzzClientFrame` | `server/internal/net/gateway` | Un frame cualquiera tras un handshake bueno, por el gateway real: uno malformado (texto, protobuf roto, sin `oneof`) termina en `KICKED`; cualquier otro deja la conexión contestando un `Ping` (`Logout` termina en `LOGGED_OUT`) |
 | `FuzzInputDispatch` | `server/internal/session` | Cualquier `ClientMessage` decodificable contra un mundo con el `data/` real (dos personajes junto a los NPCs del puerto, lobos): ningún panic recuperado por el loop, la economía reconcilia y ningún cliente oye un ataque de una criatura que no conoce. Sus semillas cubren cada `oneof` en cero y en valores extremos (enteros máximos y mínimos, enums fuera de rango, strings largos con bidi) |
-| `FuzzJSONRoutes` | `server/internal/httpapi` | Cualquier cuerpo en cada endpoint JSON (registro, login, personajes, `play`, OAuth start/link/pending, desvincular, verificar y resetear, tienda, webhook, entregas y revisión de mapas) contra fakes: nunca un 500 ni un error que no sea JSON con código |
+| `FuzzJSONRoutes` | `server/internal/httpapi` | Cualquier cuerpo en cada endpoint JSON (registro, login, personajes, `play`, OAuth start/link/pending, desvincular, verificar y resetear, tienda, webhook, entregas y revisión de mapas) contra fakes: nunca un 500 ni un error que no sea JSON con código. Cada pedido lleva lo que su ruta pide para pasar la puerta (sesión de jugador, sesión de staff para la revisión, cookie de un login de Google pendiente, firma del proveedor falso en el webhook), y `TestFuzzSeedsReachTheirHandlers` comprueba que cada semilla obtiene la respuesta de su handler y no un 401/403. `password/forgot` no tiene correo en ese armado: decodifica el cuerpo y contesta `email_disabled` |
 
 - **Las semillas corren en `make test`** como tests normales (las de `f.Add` y las de
   `testdata/fuzz/<Target>/` si las hay); ahí no se muta nada.
@@ -161,12 +161,14 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor; un reintento por test fallado y 40 min de tope (ver "E2E en la CI") | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
+| `ci` | Espera a todos los jobs de arriba (`if: always()`) y falla si alguno falló o se canceló; saltado cuenta como aprobado. Es el check que `main` requiere (GitHub los elige por nombre de job; docs/18 "Checklist del operador") | — |
 | `gemini` | `make test-gemini`: los tests de `tools/gemini` (Python 3.12 y Pillow; las herramientas de solo desarrollo que manejan el Gemini del dueño, ver `tools/CLAUDE.md`). Solo corre si cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` o `assets/sounds/music/` (o la CI, el `Makefile`...); los tests con ffmpeg se saltan si el runner no lo tiene | — |
 
 `security.yml` (lote 16, `contents: read`) corre en cada PR, en `main` y cada lunes, sin
 filtro de rutas: `govulncheck` (matriz de los cuatro módulos Go), `pnpm-audit` (`pnpm audit
 --prod --audit-level high`) y `gitleaks` (binario de la release con su SHA-256 verificado,
-sobre toda la historia, con `.gitleaks.toml`). Detalle y checklist en `18-seguridad.md`.
+sobre toda la historia, con `.gitleaks.toml`), y el job final `security`, que espera a
+los tres como `ci` y es el check requerido. Detalle y checklist en `18-seguridad.md`.
 
 **Acciones fijadas por commit:** todo `uses:` va como `owner/repo@<sha de 40 hex> # vX.Y.Z`
 (un tag se puede mover, un commit no). Para cambiar una versión, resolver el commit con
