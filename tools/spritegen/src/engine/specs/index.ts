@@ -7,6 +7,7 @@ import { FORGE_ECHO } from "./forge-echo.ts";
 import { FORGE_MATERIALS } from "./forge-materials.ts";
 import { HUMANOID_SPECS } from "./humanoid/index.ts";
 import { ITEM_ICONS } from "./items/index.ts";
+import { LIVING_WORLD } from "./livingworld.ts";
 import {
   BOOK_CLOSED,
   LECTERN_BOOK,
@@ -39,5 +40,6 @@ export const ENGINE_SPECS: readonly SpriteSpec[] = [
   STASH_CHEST,
   ...SIGIL_PLATES,
   ...TOWN_PROPS,
+  ...LIVING_WORLD,
   ...HUMANOID_SPECS,
 ];
