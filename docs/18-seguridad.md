@@ -211,6 +211,12 @@ Cinco ramas, cada una con sus tests y su doc:
 - **El registro revela si un email existe** (`409 email_taken`), aunque login y `forgot`
   contestan igual. Arreglarlo pide registrar por email (enviar el enlace siempre y crear la
   cuenta al confirmar), que cambia el flujo y necesita SMTP en todos los entornos.
+- **El dueño de un buzón se queda con una cuenta que nunca lo verificó** (`claim_email`,
+  docs/05 "Dirección nunca verificada"): si alguien se registra con un email mal tecleado
+  que es de un tercero y no lo verifica, ese tercero puede pedir el reset y quedarse con la
+  cuenta y sus personajes. Es la contracara buscada contra el squatting de direcciones
+  ajenas; quien quiere conservar su cuenta verifica su email (una dirección verificada ya no se
+  puede reclamar así).
 - **Sesiones de 30 días** sin expiración por inactividad, sin "cerrar sesión en todos lados"
   (salvo resetear la contraseña), sin "cambiar contraseña" estando logueado y **sin MFA para
   el staff**. Mitigación: el staff es poco y sus roles solo se dan por CLI; los comandos

@@ -262,14 +262,16 @@ func (w *World) saveGave(p *Player, now game.Tick) {
 // since its last snapshot (gaveRoots) or that waits for its coalesced save (giveWait),
 // while they still lie on the ground. A reservation of p's with a higher seq keeps it,
 // and one of another character is never taken over (no move gives anything into one:
-// groundHeld). With seq noSeq they wait in giveWait for the snapshot that numbers them.
+// groundHeld). With seq noSeq they wait in giveWait for the snapshot that numbers them;
+// giveWait is rebuilt from scratch then, so one the player took back off the ground
+// inside the window (no longer onGround) leaves it at once.
 func (w *World) reserveGave(p *Player, seq uint64) {
 	if len(p.gaveRoots) == 0 && len(p.giveWait) == 0 {
 		return
 	}
-	var wait []*Item
+	var wait []*Item // a fresh slice: the loop still reads p.giveWait
 	if seq == noSeq {
-		wait = p.giveWait
+		wait = make([]*Item, 0, len(p.gaveRoots)+len(p.giveWait))
 	}
 	for _, rs := range [2][]*Item{p.gaveRoots, p.giveWait} {
 		for _, r := range rs {

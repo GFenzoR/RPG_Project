@@ -1625,3 +1625,26 @@ func TestTransferKeepsTheGiveAwayWindow(t *testing.T) {
 		t.Fatalf("a throw inside the window after a transfer wrote %d jobs at once", len(jobs))
 	}
 }
+
+// Lote 16 final review: a coalesced throw the thrower picks back up inside the window
+// leaves giveWait with the next coalesced throw, not only with the window's save.
+func TestCoalescedThrowPickedBackUpLeavesTheWait(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(1, 1), stack(swordID, 1, 0), stack(salveID, 2, 1), stack(coinID, 5, 2))
+	pack := openPack(t, h.harness, ca)
+	h.send(ca, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(2, 2)), 1)) // saved, opens the window
+	h.send(ca, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(1, 2)), 2)) // coalesced
+	if n := h.w.GiveWaitForTest(a.CharacterID()); n != 1 {
+		t.Fatalf("the coalesced throw waits in %d piles, want 1", n)
+	}
+	if evs := h.send(ca, moveItem(onTile(pos(1, 2)), salveID, 1, inContainer(pack, 0), 2)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(a, "test_salve") != 2 {
+		t.Fatalf("Ana picks her salves back up: %v", systemKeys(evs))
+	}
+	if evs := h.send(ca, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(1, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana throws a coin inside the window: %v", systemKeys(evs))
+	}
+	if n := h.w.GiveWaitForTest(a.CharacterID()); n != 1 {
+		t.Fatalf("giveWait holds %d piles after the salves came back, want the coin's only", n)
+	}
+}

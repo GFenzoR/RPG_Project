@@ -418,6 +418,16 @@ func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] !
 // HeldGroundForTest returns how many ground items are reserved to a held character.
 func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
 
+// GiveWaitForTest returns how many piles of charID's coalesced give-aways wait for its
+// next save (Player.giveWait); -1 if charID is not in the world.
+func (w *World) GiveWaitForTest(charID int64) int {
+	p := w.byChar[charID]
+	if p == nil {
+		return -1
+	}
+	return len(p.giveWait)
+}
+
 // InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
 // item id at its feet (they do not fit), as one command that changes a house and gives
 // something away does (a rune of the house floor used from the street that kills a quest
