@@ -54,6 +54,10 @@ export interface PaletteItem {
   key?: string;
   /** docs/17 ART-8: sprite pixels it raises what is stacked on it (data/items `elevation`). */
   elevation?: number;
+  /** A ground's surface for the living world (data/items `ground.surface`, livingworld/README.md). */
+  surface?: string;
+  /** A plant of data/livingworld/plants.yaml: how it reacts to a step. */
+  plant?: "bend" | "rustle";
 }
 
 /** Same shape as map-format's Diagnostic (that module pulls in Node). */

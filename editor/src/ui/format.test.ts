@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { PaletteItem } from "../io/wire.ts";
 import { translator } from "../i18n.ts";
-import { doorNote } from "./format.ts";
+import { doorNote, itemNote } from "./format.ts";
 
 const t = translator({
   "editor.door_locked": "locked with {key}",
   "editor.door_closed": "shut",
   "editor.door_open": "open",
   "editor.key_item": "key {key}",
+  "editor.surface": "surface {surface}",
+  "editor.plant_bend": "bends",
+  "editor.plant_rustle": "rustles",
 });
 
 const item = (more: Partial<PaletteItem>): PaletteItem => ({
@@ -16,6 +19,16 @@ const item = (more: Partial<PaletteItem>): PaletteItem => ({
   sprite: "x",
   name: "item.x.name",
   ...more,
+});
+
+describe("itemNote", () => {
+  it("names a ground's surface and a plant's reaction (livingworld/README.md)", () => {
+    expect(itemNote(item({ kind: "ground", surface: "sand" }), t)).toBe("surface sand");
+    expect(itemNote(item({ plant: "bend" }), t)).toBe("bends");
+    expect(itemNote(item({ plant: "rustle" }), t)).toBe("rustles");
+    expect(itemNote(item({ door: "open", plant: "bend" }), t)).toBe("open");
+    expect(itemNote(item({}), t)).toBeUndefined();
+  });
 });
 
 describe("doorNote", () => {

@@ -446,6 +446,14 @@ function yamlFiles(dir: string): string[] {
 /** data/items entries with the fields the palette and the renderer need. */
 export function loadPaletteItems(root: string): PaletteItem[] {
   const items: PaletteItem[] = [];
+  // The living world's plants (livingworld/README.md): the palette says which ones react.
+  const plants = new Map<string, "bend" | "rustle">();
+  const plantsFile = join(root, "data", "livingworld", "plants.yaml");
+  const plantList = existsSync(plantsFile) ? readYaml(plantsFile) : undefined;
+  if (isObj(plantList) && Array.isArray(plantList["plants"]))
+    for (const p of plantList["plants"])
+      if (isObj(p) && typeof p["item"] === "string")
+        plants.set(p["item"], p["reaction"] === "rustle" ? "rustle" : "bend");
   for (const file of yamlFiles(join(root, "data", "items"))) {
     const list = readYaml(file);
     if (!Array.isArray(list)) continue;
@@ -467,6 +475,10 @@ export function loadPaletteItems(root: string): PaletteItem[] {
       // ART-8: the canvas raises what is stacked on it, as the game does.
       if (typeof raw["elevation"] === "number" && raw["elevation"] > 0)
         item.elevation = raw["elevation"];
+      const ground = raw["ground"];
+      if (isObj(ground) && typeof ground["surface"] === "string") item.surface = ground["surface"];
+      const plant = plants.get(raw["id"]);
+      if (plant) item.plant = plant;
       items.push(item);
     }
   }

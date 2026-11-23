@@ -3,7 +3,7 @@ import { useMemo, useState } from "preact/hooks";
 import type { Atlas } from "@rpg/renderer";
 import type { Translate } from "../i18n.ts";
 import type { PaletteItem } from "../io/wire.ts";
-import { doorNote } from "../ui/format.ts";
+import { itemNote } from "../ui/format.ts";
 
 export interface PaletteProps {
   items: PaletteItem[];
@@ -84,8 +84,9 @@ export function Palette({ items, atlas, t, ground, item, onPick }: PaletteProps)
       <ul class="items">
         {shown.length === 0 && <li class="empty">{t("editor.no_items")}</li>}
         {shown.map((i) => {
-          // Doors and keys say which key id they take or are (docs/02 "Puertas con llave").
-          const note = doorNote(i, t);
+          // Doors and keys say which key id they take or are (docs/02 "Puertas con llave");
+          // grounds their surface and plants how they react (livingworld/README.md).
+          const note = itemNote(i, t);
           return (
             <li key={i.id}>
               <button
