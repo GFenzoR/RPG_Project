@@ -40,21 +40,28 @@ func loadStash(ctx context.Context, q *db.Queries, accountID int64) ([]Inventory
 	return out, nil
 }
 
-// applyStashOp writes op inside a transfer's transaction.
+// applyStashOp writes op inside a transfer's transaction: one DELETE and one INSERT of
+// every cell, whatever the size of the stash.
 func applyStashOp(ctx context.Context, q *db.Queries, op StashOp) error {
 	if err := q.DeleteAccountStash(ctx, op.AccountID); err != nil {
 		return fmt.Errorf("clear stash of account %d: %w", op.AccountID, err)
 	}
+	if len(op.Items) == 0 {
+		return nil
+	}
+	p := db.InsertAccountStashItemsParams{AccountID: op.AccountID,
+		Slots: make([]int16, len(op.Items)), ItemIds: make([]int32, len(op.Items)),
+		Items: make([][]byte, len(op.Items))}
 	for i, it := range op.Items {
 		it.Slot = 0 // the cell is the row's slot
 		raw, err := json.Marshal(it)
 		if err != nil {
 			return fmt.Errorf("encode stash cell %d of account %d: %w", i, op.AccountID, err)
 		}
-		if err := q.InsertAccountStashItem(ctx, db.InsertAccountStashItemParams{AccountID: op.AccountID,
-			Slot: int16(i), ItemID: int32(it.ItemID), Item: raw}); err != nil {
-			return fmt.Errorf("save stash cell %d of account %d: %w", i, op.AccountID, err)
-		}
+		p.Slots[i], p.ItemIds[i], p.Items[i] = int16(i), int32(it.ItemID), raw
+	}
+	if err := q.InsertAccountStashItems(ctx, p); err != nil {
+		return fmt.Errorf("save stash of account %d: %w", op.AccountID, err)
 	}
 	return nil
 }

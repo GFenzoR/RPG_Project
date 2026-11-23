@@ -676,7 +676,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	if stashRolled && !w.readOnly {
 		// Like the inventory above: the stash is written at once with the attributes its
-		// login rolled, so leaving and coming back never rolls them again.
+		// login rolled, so leaving and coming back never rolls them again. A read-only
+		// World writes nothing: the next login rolls them again, which nobody can tell,
+		// since a read-only World opens no stash window (useStash) to see them.
 		w.stashWrite(p, w.stashes[p.accountID])
 	}
 }

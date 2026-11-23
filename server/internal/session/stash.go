@@ -227,7 +227,13 @@ func (w *World) stashCommand(ctx *game.TickContext, p *Player, m *pb.StashComman
 	}
 	st := p.stash
 	if st == nil { // no window open (closed, or never opened): nothing to act on
-		w.stashAnswer(p, p.stashAt, nil, pb.StashResult_STASH_RESULT_NOT_POSSIBLE)
+		// Still under the anti-flood (a loop of commands without a window gets no answer
+		// past the burst), and the closed window names no chest: there is none.
+		if w.stashFlood(ctx, p) {
+			return
+		}
+		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_StashUpdate{StashUpdate: &pb.StashUpdate{
+			Result: pb.StashResult_STASH_RESULT_NOT_POSSIBLE, Capacity: uint32(w.stashSlots)}}})
 		return
 	}
 	switch {
@@ -240,12 +246,10 @@ func (w *World) stashCommand(ctx *game.TickContext, p *Player, m *pb.StashComman
 		w.stashAnswer(p, p.stashAt, nil, pb.StashResult_STASH_RESULT_TOO_FAR)
 		return
 	}
-	tat := max(p.stashTAT, ctx.Tick)
-	if tat-ctx.Tick > w.stashBurst {
+	if w.stashFlood(ctx, p) {
 		w.stashAnswer(p, p.stashAt, st, pb.StashResult_STASH_RESULT_TOO_FAST)
 		return
 	}
-	p.stashTAT = tat + w.stashRefill
 	if w.pvpLocked(ctx.Tick, p) {
 		w.stashAnswer(p, p.stashAt, st, pb.StashResult_STASH_RESULT_IN_COMBAT)
 		return
@@ -266,6 +270,17 @@ func (w *World) stashCommand(ctx *game.TickContext, p *Player, m *pb.StashComman
 	}
 	w.stashWrite(p, st)
 	w.stashChanged(st, p, r)
+}
+
+// stashFlood is the stash anti-flood (GCRA): it reports whether p is over the burst, and
+// otherwise takes one action from it.
+func (w *World) stashFlood(ctx *game.TickContext, p *Player) bool {
+	tat := max(p.stashTAT, ctx.Tick)
+	if tat-ctx.Tick > w.stashBurst {
+		return true
+	}
+	p.stashTAT = tat + w.stashRefill
+	return false
 }
 
 // stashable reports whether it may go in the stash: tradeable, and a container only with

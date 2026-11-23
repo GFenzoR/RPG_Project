@@ -140,7 +140,8 @@ type Querier interface {
 	// them and is listed first). Neither query sorts every character.
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAccountCosmetic(ctx context.Context, arg InsertAccountCosmeticParams) (int64, error)
-	InsertAccountStashItem(ctx context.Context, arg InsertAccountStashItemParams) error
+	// Every cell of a stash in one statement (parallel arrays, cell i at index i).
+	InsertAccountStashItems(ctx context.Context, arg InsertAccountStashItemsParams) error
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error

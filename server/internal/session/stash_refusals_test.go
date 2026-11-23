@@ -206,3 +206,23 @@ func TestStashWithdrawMoreThanLeftIsChanged(t *testing.T) {
 		t.Fatal("a refused withdrawal moved salves")
 	}
 }
+
+// A command without a window open gets NOT_POSSIBLE with no chest, under the anti-flood:
+// a loop of them gets no answer past the burst.
+func TestStashCommandWithoutWindowIsFlooded(t *testing.T) {
+	h := newStashHarness(t, 30, nil, func(c *session.Config) {
+		c.Balance.Stash.ActionBurst, c.Balance.Stash.ActionRefillMs = 1, 1000
+	})
+	cl, _ := h.account(1, 100, "Ana", pos(1, 1), nil, stack(salveID, 30, 0))
+	pack := openPack(t, h.harness, cl)
+	u := lastStash(h.send(cl, stashDeposit(inContainer(pack, 0), salveID, 1)))
+	if u == nil || u.GetOpen() || u.GetResult() != pb.StashResult_STASH_RESULT_NOT_POSSIBLE || u.GetChest() != nil {
+		t.Fatalf("a deposit without a window: %v", u)
+	}
+	if u := lastStash(h.send(cl, stashDeposit(inContainer(pack, 0), salveID, 1))); u != nil {
+		t.Fatalf("a flood without a window was answered: %v", u)
+	}
+	if h.stashCount(100, salveID) != 0 || len(h.transfers) != 0 {
+		t.Fatal("a command without a window moved salves")
+	}
+}

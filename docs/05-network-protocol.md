@@ -1408,7 +1408,8 @@ Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
 - Toda acción contesta un `StashUpdate` entero con su `result` (`StashResult`): `OK`,
   `FULL`, `NO_ROOM`, `TOO_HEAVY`, `TOO_FAR` (y cierra), `CHANGED`, `NOT_ALLOWED` (no
   comerciable, ofrecido en un intercambio), `TOO_FAST` (anti-flood), `UNAVAILABLE`,
-  `NOT_POSSIBLE` (también un `deposit` o `withdraw` sin la ventana abierta), `IN_COMBAT`
+  `NOT_POSSIBLE` (también un `deposit` o `withdraw` sin la ventana abierta: sin `chest`, y
+  bajo el mismo anti-flood, que pasada la ráfaga los descarta sin contestar), `IN_COMBAT`
   (bloqueo PvP). El cliente muestra la clave
   `client.stash.result.<código>` en el log. Un cambio hecho por otro personaje de la cuenta
   con la ventana abierta le llega como `StashUpdate` con `OK`. Moverse lejos del cofre manda

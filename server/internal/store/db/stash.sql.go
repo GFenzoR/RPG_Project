@@ -18,23 +18,26 @@ func (q *Queries) DeleteAccountStash(ctx context.Context, accountID int64) error
 	return err
 }
 
-const insertAccountStashItem = `-- name: InsertAccountStashItem :exec
-INSERT INTO account_stash_items (account_id, slot, item_id, item) VALUES ($1, $2, $3, $4)
+const insertAccountStashItems = `-- name: InsertAccountStashItems :exec
+INSERT INTO account_stash_items (account_id, slot, item_id, item)
+SELECT $1::bigint, unnest($2::smallint[]),
+       unnest($3::int[]), unnest($4::jsonb[])
 `
 
-type InsertAccountStashItemParams struct {
+type InsertAccountStashItemsParams struct {
 	AccountID int64
-	Slot      int16
-	ItemID    int32
-	Item      []byte
+	Slots     []int16
+	ItemIds   []int32
+	Items     [][]byte
 }
 
-func (q *Queries) InsertAccountStashItem(ctx context.Context, arg InsertAccountStashItemParams) error {
-	_, err := q.db.Exec(ctx, insertAccountStashItem,
+// Every cell of a stash in one statement (parallel arrays, cell i at index i).
+func (q *Queries) InsertAccountStashItems(ctx context.Context, arg InsertAccountStashItemsParams) error {
+	_, err := q.db.Exec(ctx, insertAccountStashItems,
 		arg.AccountID,
-		arg.Slot,
-		arg.ItemID,
-		arg.Item,
+		arg.Slots,
+		arg.ItemIds,
+		arg.Items,
 	)
 	return err
 }
