@@ -69,7 +69,23 @@ proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with
 ## ---- quality gates ---------------------------------------------------------
 
 .PHONY: test
-test: test-go test-ts test-parity test-deploy ## Go + TS tests (+ deploy script tests)
+test: test-go test-ts test-parity test-deploy test-livingworld-boundary ## Go + TS tests (+ deploy script and living world boundary tests)
+
+# The living world (livingworld/README.md): its Go module, its TS package and the boundary
+# check's own tests. make test runs the first two with everything else (GO_MODULES, the
+# vitest projects) and the third through test-livingworld-boundary.
+.PHONY: test-livingworld
+test-livingworld: test-livingworld-boundary ## Go and TS tests of livingworld/ (and its boundary check)
+	cd livingworld/server && go test ./...
+	pnpm --filter @rpg/living-world test $(VITEST_ARGS)
+
+.PHONY: test-livingworld-boundary
+test-livingworld-boundary:
+	bash livingworld/check-boundary_test.sh
+
+.PHONY: lint-livingworld
+lint-livingworld: ## The living world's boundary: what it imports and who imports it (livingworld/README.md)
+	bash livingworld/check-boundary.sh
 
 .PHONY: test-go
 test-go:

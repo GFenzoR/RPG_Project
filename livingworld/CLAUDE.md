@@ -13,6 +13,11 @@ La fuente única es `livingworld/README.md`: léela antes de tocar nada.
   game loop: sin locks, sin I/O, el tiempo es el tick. Guardar y mandar es del pegamento
   de `server/` (`session/trailwear.go`, `app/trailwear.go`).
 - "Animaciones reducidas" apaga todos los efectos (el desgaste, que es estado, se sigue viendo).
+- Objetos del mapa (rompibles, empujables, placas y compuertas): aleatoriedad solo con el
+  `Rand` del loop; muros, puertas, suelos y casas nunca se rompen ni se mueven; nada aparece
+  sobre una criatura o un item suelto; el botín se tira una vez por rotura; su estado es
+  transitorio (no se guarda). Ninguno que pida herramienta, empujable o compuerta es el
+  único camino de una quest.
 - Contenido en `data/livingworld/*.yaml` (un esquema `livingworld-<nombre>.schema.json` por
   archivo), sprites en `assets/livingworld/`, mensajes en `proto/game/v1/livingworld.proto`.
 
