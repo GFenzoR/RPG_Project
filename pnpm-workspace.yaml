@@ -1,6 +1,7 @@
 packages:
   - apps/desktop
   - client
+  - livingworld/client
   - editor
   - packages/*
   # The living world's client effects (livingworld/README.md).

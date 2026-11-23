@@ -25,6 +25,28 @@ import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
 import type { WearDraw, WearTile } from "./wear.ts";
 
 export * from "./data.ts";
+export {
+  BREAK_MS,
+  BURST_COUNT,
+  burst,
+  FADE_MS,
+  ghostAt,
+  MATERIAL_COLORS,
+  materialOf,
+  particleAt,
+  SLIDE_MS,
+} from "./effects.ts";
+export type { Ghost, Material, Particle } from "./effects.ts";
+export { createLivingObjects } from "./objects.ts";
+export type {
+  LivingEvent,
+  LivingEventKind,
+  LivingObjects,
+  LivingObjectsOptions,
+  LivingPos,
+  ObjectSurface,
+  ObjectSurfaceLookup,
+} from "./objects.ts";
 export { gust, FootprintSim, MAX_FOOTPRINTS, PRINT_KINDS, stepRotation } from "./footprints.ts";
 export type { Footprint, PrintKind } from "./footprints.ts";
 export { SwaySim, idleSway, rustleOffset, SWAY_MS, MAX_SWAYS } from "./sway.ts";

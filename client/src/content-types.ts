@@ -58,6 +58,14 @@ export interface ItemDef {
   /** A map door (a `door` block in data/items: open or shut). Absent on any other item. */
   door?: true;
   /**
+   * What it is in the living world (data/livingworld, livingworld/README.md): a breakable
+   * object or its debris, a pushable object (walking into it pushes it), a gate or a
+   * pressure plate. Absent on any other item.
+   */
+  living?: "breakable" | "debris" | "pushable" | "gate" | "plate";
+  /** The material of its particles (data/livingworld `effect`), with `living`. */
+  livingEffect?: string;
+  /**
    * A border piece of data/borders.yaml (docs/06 "Bordes"): the fringe of a neighbour's
    * ground drawn on the tile, never its top item (state/items.ts topItem looks past it).
    * Absent on any other item.

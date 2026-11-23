@@ -2,13 +2,29 @@
 // mounts @rpg/living-world. It turns the client's map and content into what the module asks
 // for (a surface lookup, the map's plant sprites, atlas textures) and the canvas's creatures
 // into steps. Every effect itself lives in livingworld/client.
-import { createLivingWorld, footstepEvents, groundSurfaces } from "@rpg/living-world";
-import type { CreatureStep, LivingWorld, SurfaceLookup } from "@rpg/living-world";
+import {
+  createLivingObjects,
+  createLivingWorld,
+  footstepEvents,
+  groundSurfaces,
+} from "@rpg/living-world";
+import type {
+  CreatureStep,
+  LivingEvent,
+  LivingEventKind,
+  LivingObjects,
+  LivingPos,
+  LivingWorld,
+  SurfaceLookup,
+} from "@rpg/living-world";
+import { LivingObjectKind } from "@rpg/protocol";
+import type { LivingObjectEvent } from "@rpg/protocol";
 import type { Atlas, MapView } from "@rpg/renderer";
-import type { ClientContent } from "../content-types.ts";
+import type { Container, Texture } from "pixi.js";
+import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Pos } from "../state/geometry.ts";
 
-export type { LivingWorld } from "@rpg/living-world";
+export type { LivingObjects, LivingWorld } from "@rpg/living-world";
 
 /** The part of the world state the living world reads: the ground of a tile. */
 export interface TileReader {
@@ -83,3 +99,70 @@ export function printOf(hasLook: boolean, flying: boolean, lift: number): Creatu
 
 /** A beast whose drawing rises more than this (sprite px, CreatureBody.lift) is big. */
 export const BIG_BEAST_PX = 40;
+
+// Map objects that break, move or open (data/livingworld/objects.yaml).
+
+const KINDS: Partial<Record<LivingObjectKind, LivingEventKind>> = {
+  [LivingObjectKind.HIT]: "hit",
+  [LivingObjectKind.BREAK]: "break",
+  [LivingObjectKind.RESPAWN]: "respawn",
+  [LivingObjectKind.PUSH]: "push",
+  [LivingObjectKind.GATE_OPEN]: "gate_open",
+  [LivingObjectKind.GATE_CLOSE]: "gate_close",
+  [LivingObjectKind.FADE]: "fade",
+  [LivingObjectKind.RESET]: "reset",
+};
+
+const posOf = (p: { x: number; y: number; z: number } | undefined): LivingPos =>
+  p ? { x: p.x, y: p.y, z: p.z } : { x: 0, y: 0, z: 0 };
+
+/** The module's event for a LivingObjectEvent, or undefined for an unknown kind. */
+export function livingEvent(m: LivingObjectEvent): LivingEvent | undefined {
+  const kind = KINDS[m.kind];
+  if (!kind) return undefined;
+  return {
+    kind,
+    pos: posOf(m.pos),
+    ...(m.to ? { to: posOf(m.to) } : {}),
+    itemId: m.itemId,
+    effect: m.effect,
+    sound: m.sound,
+    hpPermille: m.hpPermille,
+  };
+}
+
+/** What the canvas gives the living objects. */
+export interface LivingMount {
+  tileSize: number;
+  items: Readonly<Record<number, ItemDef>>;
+  /** The item ids of a known tile (ground first). */
+  tile(x: number, y: number, z: number): readonly number[] | undefined;
+  elevationAt(x: number, y: number): number;
+  texture(sprite: string): Texture | undefined;
+  playSound?(id: string, at: LivingPos): void;
+  reducedMotion(): boolean;
+}
+
+/** Mounts the living objects' effects on `stage` (the map's overlay, world space). */
+export function mountLivingObjects(stage: Container, m: LivingMount): LivingObjects {
+  return createLivingObjects(
+    stage,
+    (x, y, z) => {
+      const debris = m.tile(x, y, z)?.find((id) => m.items[id]?.living === "debris");
+      const effect = debris === undefined ? undefined : (m.items[debris]?.livingEffect ?? "");
+      return {
+        elevation: m.elevationAt(x, y),
+        ...(effect !== undefined ? { debris: effect } : {}),
+      };
+    },
+    {
+      tileSize: m.tileSize,
+      texture: (id) => {
+        const sprite = m.items[id]?.sprite;
+        return sprite ? m.texture(sprite) : undefined;
+      },
+      ...(m.playSound ? { playSound: m.playSound } : {}),
+      reducedMotion: m.reducedMotion,
+    },
+  );
+}

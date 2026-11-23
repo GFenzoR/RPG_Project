@@ -173,6 +173,7 @@ export function loadClientContent(root: string): ClientContent {
       };
     }
   }
+  addLiving(root, items, ids);
   const attributes = loadAttributes(root);
   // The attributes' card lines live in items.yaml (attribute.*): the client takes them too.
   for (const a of Object.values(attributes)) descKeys.add(a.text);
@@ -1079,4 +1080,45 @@ export function rpgContent(): Plugin {
         this.emitFile({ type: "asset", fileName, source: readFileSync(file) });
     },
   };
+}
+
+/**
+ * Marks the items of data/livingworld (livingworld/README.md) with what they are there: the
+ * client pushes a pushable object when the player walks into it, and the living world's
+ * effects crunch debris underfoot.
+ */
+function addLiving(
+  root: string,
+  items: Record<number, ItemDef>,
+  ids: Record<string, unknown>,
+): void {
+  const dir = join(root, "data", "livingworld");
+  if (!existsSync(dir)) return;
+  const mark = (id: unknown, living: NonNullable<ItemDef["living"]>, effect: unknown): void => {
+    const num = typeof id === "string" ? ids[id] : undefined;
+    const item = typeof num === "number" ? items[num] : undefined;
+    if (!item) return;
+    item.living = living;
+    if (typeof effect === "string") item.livingEffect = effect;
+  };
+  for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith(".yaml"))
+    .sort()) {
+    const list = readYaml(join(dir, file));
+    if (!Array.isArray(list)) continue;
+    for (const e of list) {
+      if (!isObj(e)) continue;
+      const b = e["breakable"];
+      if (isObj(b)) {
+        mark(e["item"], "breakable", b["effect"]);
+        if (b["becomes"] !== "none") mark(b["becomes"], "debris", b["effect"]);
+      }
+      if (isObj(e["pushable"])) mark(e["item"], "pushable", e["pushable"]["effect"]);
+      if (isObj(e["gate"])) {
+        mark(e["item"], "gate", undefined);
+        mark(e["gate"]["open"], "gate", undefined);
+      }
+      if (isObj(e["plate"])) mark(e["item"], "plate", undefined);
+    }
+  }
 }

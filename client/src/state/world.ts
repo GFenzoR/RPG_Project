@@ -38,6 +38,7 @@ import type {
   ServerMessage,
   TextParam,
   FloatingTextKind,
+  LivingObjectEvent,
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
@@ -391,6 +392,9 @@ function pushLive<T extends { start: number }>(list: T[], x: T, ms: number): voi
   list.push(x);
 }
 
+/** LivingObjectEvents kept for the canvas at most (a hidden tab draws no frames). */
+const LIVING_QUEUE = 64;
+
 /** Status log length. */
 const LOG_SIZE = 5;
 /** Chat lines kept on screen. */
@@ -559,6 +563,11 @@ export class WorldState implements TileSource {
   attackEvents = false;
   attacks: AttackState[] = [];
   departures: DepartureState[] = [];
+  /**
+   * LivingObjectEvents not drawn yet (livingworld/README.md): the canvas takes them every
+   * frame (takeLiving). At most LIVING_QUEUE wait, the oldest dropped first.
+   */
+  private living: { event: LivingObjectEvent; at: number }[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
@@ -630,6 +639,26 @@ export class WorldState implements TileSource {
       chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
     );
     return c?.counts[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)];
+  }
+
+  /** The LivingObjectEvents that arrived since the last call, oldest first. */
+  takeLiving(): { event: LivingObjectEvent; at: number }[] {
+    const out = this.living;
+    this.living = [];
+    return out;
+  }
+
+  /**
+   * The pushable object a step in `dir` walks into (livingworld/README.md): a straight
+   * step whose tile holds an item with `living: pushable`. The client then sends
+   * PushObject instead of a Walk the server would refuse.
+   */
+  pushableAhead(dir: Direction): Pos | undefined {
+    const s = this.self;
+    if (!s || isDiagonal(dir) || dir === Direction.UNSPECIFIED) return undefined;
+    const to = step(s.pos, dir);
+    const t = this.tile(to.x, to.y, to.z);
+    return t?.some((id) => this.item(id)?.living === "pushable") ? to : undefined;
   }
 
   /** Walkable by what the client knows: known walkable ground and no blocking item. */
@@ -758,6 +787,10 @@ export class WorldState implements TileSource {
         if (c) c.health = msg.value.healthPercent;
         break;
       }
+      case "livingObject":
+        this.living.push({ event: msg.value, at: now });
+        if (this.living.length > LIVING_QUEUE) this.living.shift();
+        break;
       case "effect":
         pushLive(
           this.effects,

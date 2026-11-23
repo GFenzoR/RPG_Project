@@ -564,6 +564,16 @@ export class AudioEngine {
     }
     if (!ids || ids.length === 0) return undefined;
     const id = ids[Math.min(ids.length - 1, Math.floor(this.ports.random() * ids.length))] ?? "";
+    return this.playId(id, at, listener);
+  }
+
+  /**
+   * Plays the sound `id` of sounds.yaml itself (no event: the living world's data names
+   * its sounds, livingworld/README.md), positional like play. Returns id if it starts.
+   */
+  playId(id: string, at?: Pos, listener?: Pos): string | undefined {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== "running") return undefined;
     const def = this.manifest.sounds[id];
     if (!def || def.channel === "music" || def.channel === "ambient") return undefined;
     if (this.level(def.channel) <= 0) return undefined; // muted: do not spend a voice

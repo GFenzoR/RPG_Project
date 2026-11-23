@@ -201,6 +201,18 @@ describe("client content (T0.5)", () => {
     expect(byId.get("backpack")?.portal).toBeUndefined();
   });
 
+  it("marks what each item is in the living world (data/livingworld), and only those", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("weathered_crate")?.living).toBe("breakable");
+    expect(byId.get("weathered_crate")?.livingEffect).toBe("wood");
+    expect(byId.get("weathered_crate_debris")?.living).toBe("debris");
+    expect(byId.get("mossy_boulder")?.living).toBe("pushable");
+    expect(byId.get("portcullis_open")?.living).toBe("gate");
+    expect(byId.get("pressure_plate")?.living).toBe("plate");
+    for (const id of ["barrel", "cargo_crate", "boulder", "grass"])
+      expect(byId.get(id)?.living, id).toBeUndefined();
+  });
+
   it("ships the portals of world/ by their entrance tile, with their kind", () => {
     expect(content.portals?.["3692,5796,7"]).toBe("stairs");
     expect(content.portals?.["3692,5796,8"]).toBe("stairs");

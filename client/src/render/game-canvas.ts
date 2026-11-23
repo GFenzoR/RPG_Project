@@ -124,6 +124,7 @@ import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
+import { livingEvent, mountLivingObjects } from "./living.ts";
 import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
   FIRE_TINT,
@@ -231,6 +232,8 @@ export interface GameCanvasOptions {
   useTile(x: number, y: number, z: number, top: boolean): void;
   /** A tile was shift-clicked (look at its top item). */
   lookTile(x: number, y: number, z: number): void;
+  /** Plays a sound of assets/sounds.yaml by id at a tile (the living world's objects). */
+  playSound?(id: string, at: { x: number; y: number; z: number }): void;
   /**
    * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
    * Shift+right click in both), at page coordinates (cx, cy).
@@ -527,6 +530,16 @@ export async function createGameCanvas(
   // The living world (livingworld/README.md, render/living.ts): footprints on the ground
   // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
   const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
+  // The living objects' effects (render/living.ts): over the map.
+  const livingObjects = mountLivingObjects(view.overlay, {
+    tileSize: T,
+    items: content.items,
+    tile: (x, y, z) => world.tile(x, y, z),
+    elevationAt: (x, y) => view.elevationAt(x, y),
+    texture: (sprite) => atlas.texture(sprite),
+    ...(opts.playSound ? { playSound: opts.playSound } : {}),
+    reducedMotion: () => reducedMotion(),
+  });
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
@@ -814,6 +827,7 @@ export async function createGameCanvas(
         },
         now,
       );
+      if (!flying) livingObjects.onStep(moving.from, moving.to, now);
     }
     return pose.done;
   };
@@ -1170,6 +1184,11 @@ export async function createGameCanvas(
       living.applyWear(world.trailWear.list(), true);
     }
     living?.onTick(now, livingView);
+    for (const { event, at } of world.takeLiving()) {
+      const e = livingEvent(event);
+      if (e) livingObjects.onObjectEvent(e, at);
+    }
+    livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
 
     const seen = new Set<number>();
@@ -1726,6 +1745,7 @@ export async function createGameCanvas(
       effects.destroy();
       lights.destroy();
       living?.destroy();
+      livingObjects.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },
