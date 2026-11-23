@@ -1994,3 +1994,45 @@ func TestSandboxDevOnlyOffTheSandbox(t *testing.T) {
 		t.Fatalf("training off the sandbox ran: magic %d, smithing %d", s.w.Skill(p, "magic").Level, s.w.Skill(p, "smithing").Level)
 	}
 }
+
+// The living world's corner of Thimblewick (docs/16 "Mundo vivo"): the thorny vines that
+// close the garden break with bare hands, and the two boulders pushed onto their plates
+// open the portcullis; the crater of the volcano has its shortcuts too.
+func TestSandboxLivingWorld(t *testing.T) {
+	s := newSandbox(t)
+	vines, gate := pos(2096, 2070), pos(2105, 2068)
+	if s.m.Walkable(vines) || s.m.Walkable(gate) {
+		t.Fatal("the vines and the portcullis start closed")
+	}
+	join := func(id int64, at world.Pos) *fakeClient {
+		cl, _ := s.joinChar(session.Character{ID: id, AccountID: id, Name: fmt.Sprintf("Viva%d", id),
+			Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: at})
+		s.sim.Step()
+		cl.take()
+		return cl
+	}
+	cutter := join(5301, pos(2096, 2071))
+	vinesID := s.num("thorny_vines")
+	for i := 0; i < 20 && !s.m.Walkable(vines); i++ {
+		s.input(cutter, useItem(onTile(vines), vinesID, uint32(s.w.StaticCount(vines)-1)))
+		s.sim.RunTicks(40)
+	}
+	if !s.m.Walkable(vines) {
+		t.Fatalf("the vines did not break: %+v", s.w.LivingObjects())
+	}
+	a := join(5302, pos(2100, 2070))
+	s.input(a, push(pos(2101, 2070), E))
+	s.sim.Step()
+	b := join(5303, pos(2105, 2072))
+	s.input(b, push(pos(2105, 2071), N))
+	s.sim.RunTicks(2)
+	if !s.m.Walkable(gate) {
+		t.Fatalf("both plates are held by boulders: the portcullis must be open (%+v)", s.w.LivingObjects())
+	}
+	// The volcano's crater: a cracked rock and a rotten barricade in its wall.
+	if s.m.Walkable(pos3(3699, 5753, 7)) || s.m.Walkable(pos3(3714, 5746, 7)) {
+		t.Fatal("the crater's shortcuts start closed")
+	}
+}
+
+func pos3(x, y int, z uint8) world.Pos { return world.Pos{X: uint16(x), Y: uint16(y), Z: z} }
