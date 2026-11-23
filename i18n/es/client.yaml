@@ -756,6 +756,8 @@ market.read_only: "El mercado está en solo lectura hasta que reinicie el servid
 client.market.read_only: "El mercado está en solo lectura hasta que reinicie el servidor: puedes mirar ofertas, pero no crear, aceptar, retirar ni cancelar."
 client.disconnect.save_failed: "No se pudo guardar un intercambio de tu personaje. Te desconectamos para no perder nada más; podrás volver cuando reinicie el servidor."
 client.disconnect.character_locked: "Tu personaje no puede entrar hasta que reinicie el servidor: no se pudo guardar su último intercambio."
+client.disconnect.server_full: "El servidor está lleno. Intenta de nuevo en unos minutos."
+client.disconnect.too_many_characters: "Tu cuenta ya tiene el máximo de personajes conectados a la vez. Sal con uno para entrar con otro."
 # Houses (T5.4).
 house.closed: "Las casas están cerradas por ahora."
 house.staff: "El personal del juego no puede tener casa."

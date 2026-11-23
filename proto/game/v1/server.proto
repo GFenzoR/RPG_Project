@@ -810,6 +810,12 @@ enum DisconnectReason {
   // Login refused: the character's last trade or market change could not be saved; it
   // can play again after the server restarts (T5.3).
   DISCONNECT_REASON_CHARACTER_LOCKED = 13;
+  // Login refused: the server has as many players as it allows (gateway MaxPlayers),
+  // or too many logins are being checked at once. Try again in a few minutes.
+  DISCONNECT_REASON_SERVER_FULL = 14;
+  // Login refused: the account already has as many characters online as it may
+  // (session MaxCharactersPerAccount). Logging in the same character again still works.
+  DISCONNECT_REASON_TOO_MANY_CHARACTERS = 15;
 }
 
 message Disconnect {

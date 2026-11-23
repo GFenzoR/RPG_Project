@@ -756,6 +756,8 @@ market.read_only: "The market is read-only until the server restarts: you can lo
 client.market.read_only: "The market is read-only until the server restarts: you can browse offers, but not post, accept, withdraw or cancel."
 client.disconnect.save_failed: "A trade of your character could not be saved. You were disconnected so nothing else is lost; you can come back after the server restarts."
 client.disconnect.character_locked: "Your character cannot enter until the server restarts: its last trade could not be saved."
+client.disconnect.server_full: "The server is full. Try again in a few minutes."
+client.disconnect.too_many_characters: "Your account already has the most characters online at once. Log one out to enter with another."
 # Houses (T5.4).
 house.closed: "Houses are closed for now."
 house.staff: "Game staff cannot have a house."

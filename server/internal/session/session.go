@@ -112,6 +112,9 @@ type Snapshot struct {
 const (
 	// DefaultAutosaveEvery is the autosave interval of an online player (5 minutes).
 	DefaultAutosaveEvery = game.Tick(5 * time.Minute / game.TickDuration)
+	// DefaultMaxCharactersPerAccount is how many characters of one account may be in the
+	// world at once (docs/05 "Límites"; audit lote 16).
+	DefaultMaxCharactersPerAccount = 2
 	// DefaultRerouteMaxNodes bounds one reroute search (A* around creatures).
 	DefaultRerouteMaxNodes = 1500
 	// DefaultPathNodesPerTick is the pathfinding quota of one tick, in expanded tiles.
@@ -200,6 +203,11 @@ type Config struct {
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
 	AutosaveEvery game.Tick
+	// MaxCharactersPerAccount caps the characters of one account in the world at once,
+	// link-dead ones included; a login over it is refused with TOO_MANY_CHARACTERS (a
+	// login of a character already online takes it over as always). 0 means
+	// DefaultMaxCharactersPerAccount; negative means no cap (load tests).
+	MaxCharactersPerAccount int
 	// StoreHeartbeat is how often the app tells the loop that the database answers
 	// (World.StoreAlive). Content audit M6: while no mark came for storeDownAfter of them
 	// no house is released for its owner's absence, and that gap is not counted as
@@ -587,6 +595,9 @@ func New(cfg Config) (*World, error) {
 	}
 	if cfg.AutosaveEvery <= 0 {
 		cfg.AutosaveEvery = DefaultAutosaveEvery
+	}
+	if cfg.MaxCharactersPerAccount == 0 {
+		cfg.MaxCharactersPerAccount = DefaultMaxCharactersPerAccount
 	}
 	if cfg.RerouteMaxNodes <= 0 {
 		cfg.RerouteMaxNodes = DefaultRerouteMaxNodes

@@ -421,13 +421,18 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 // character is already online, the old connection is closed (LOGGED_IN_ELSEWHERE) and
 // the new one takes over its in-memory state.
 func (w *World) Join(c Character, client Client) game.Command {
-	return game.CommandFunc(func(ctx *game.TickContext) { w.join(ctx, c, client) })
+	// Lifecycle lane (game/fairness.go): a flooded queue never refuses a login.
+	return game.LifecycleFunc(func(ctx *game.TickContext) { w.join(ctx, c, client) })
 }
 
 // Leave returns the command that removes client's player (connection closed). It is
 // idempotent: a client that already left is ignored. In combat the player stays link-dead
 // instead (linkDeadOnLeave), also when the loop closed the connection itself (disconnect):
 // the gateway's Leave that follows changes nothing.
+//
+// It stays in the shared queue, behind what the connection enqueued before it (an attack
+// sent right before closing still counts); the gateway moves it to the lifecycle lane only
+// when that queue is full (gateway leave).
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
@@ -460,12 +465,12 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 // character. Because the queue is FIFO, an ack of a save that the read may have missed
 // runs after it and keeps the unsaved snapshot for the Join.
 func (w *World) LoginStarted(characterID int64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) { w.loading[characterID]++ })
+	return game.LifecycleFunc(func(*game.TickContext) { w.loading[characterID]++ })
 }
 
 // LoginAborted returns the command that ends a LoginStarted whose Join never comes.
 func (w *World) LoginAborted(characterID int64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) { w.loginDone(characterID) })
+	return game.LifecycleFunc(func(*game.TickContext) { w.loginDone(characterID) })
 }
 
 func (w *World) loginDone(characterID int64) {
@@ -474,6 +479,22 @@ func (w *World) loginDone(characterID int64) {
 	} else {
 		w.loading[characterID]--
 	}
+}
+
+// accountFull reports whether the account already has Config.MaxCharactersPerAccount
+// characters in the world (link-dead ones included). Loop goroutine only.
+func (w *World) accountFull(accountID int64) bool {
+	limit := w.cfg.MaxCharactersPerAccount
+	if limit < 0 {
+		return false
+	}
+	n := 0
+	for _, p := range w.players {
+		if p.accountID == accountID {
+			n++
+		}
+	}
+	return n >= limit
 }
 
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
@@ -491,6 +512,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		// T5.3: a trade or market change of the character could not be saved; the database
 		// is behind its last state in memory, which was dropped. Until a restart.
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED)
+		return
+	}
+	if w.byChar[c.ID] == nil && w.accountFull(c.AccountID) {
+		// Audit lote 16: one account cannot fill the world with its characters. Taking
+		// over a character already online (below) is not a new one.
+		client.Close(pb.DisconnectReason_DISCONNECT_REASON_TOO_MANY_CHARACTERS)
 		return
 	}
 	voc, ok := w.cfg.Vocations[c.Vocation]
