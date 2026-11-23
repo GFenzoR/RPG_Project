@@ -616,7 +616,10 @@ describe("presence check (T4.1)", () => {
     case: "presenceCheck",
     value: {
       checkId: id,
-      question: { key: "presence.question.yellow", params: [] },
+      question: {
+        key: "presence.question",
+        params: [{ name: "swatch", value: { case: "number", value: 0xd8c22an } }],
+      },
       options: [{ optionId: 1, text: { key: "presence.option.yellow", params: [] } }],
       timeoutMs,
     } as never,
@@ -625,6 +628,7 @@ describe("presence check (T4.1)", () => {
     const w = new WorldState(content);
     w.apply(check(4, 600_000), 1000);
     expect(w.activePresence(500_000)?.id).toBe(4);
+    expect(w.activePresence(500_000)?.swatch).toBe("#d8c22a");
     expect(w.activePresence(601_000 - PRESENCE_GRACE_MS)).toBeUndefined();
     expect(w.presence).toBeUndefined();
   });
@@ -634,6 +638,24 @@ describe("presence check (T4.1)", () => {
     expect(w.activePresence(700_000)).toBeUndefined(); // idle: the server's clock stopped
     w.apply(check(4, 300_000), 700_000); // back: the time left
     expect(w.activePresence(900_000)?.id).toBe(4);
+  });
+  it("shows the swatch only from a valid number param (lote 16)", () => {
+    const w = new WorldState(content);
+    const bad = (value: unknown): ServerMessage["message"] => ({
+      case: "presenceCheck",
+      value: {
+        checkId: 9,
+        question: { key: "presence.question", params: [{ name: "swatch", value }] },
+        options: [],
+        timeoutMs: 600_000,
+      } as never,
+    });
+    w.apply(bad({ case: "text", value: "red" }), 0);
+    expect(w.presence?.swatch).toBeUndefined();
+    w.apply(bad({ case: "number", value: 0x1000000n }), 0);
+    expect(w.presence?.swatch).toBeUndefined();
+    w.apply(bad({ case: "number", value: 0x0000ffn }), 0);
+    expect(w.presence?.swatch).toBe("#0000ff");
   });
   it("ignores a resend of the check it already answered", () => {
     const w = new WorldState(content);
@@ -652,7 +674,7 @@ describe("presence check after an idle stretch (T4.1)", () => {
     case: "presenceCheck",
     value: {
       checkId: id,
-      question: { key: "presence.question.red", params: [] },
+      question: { key: "presence.question", params: [] },
       options: [{ optionId: 1, text: { key: "presence.option.red", params: [] } }],
       timeoutMs,
     } as never,

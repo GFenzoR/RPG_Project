@@ -24,6 +24,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/presence"
 )
 
 // ClientVersion is the version the bot sends in Hello.
@@ -105,12 +106,26 @@ type Dialog struct {
 	Options []uint32
 }
 
-// Presence is a presence check waiting for an answer (T4.1): the question's key and the
-// key of each option, by option id.
+// Presence is a presence check waiting for an answer (T4.1): the question's key, the
+// swatch it shows (0xRRGGBB: the color to pick) and the key of each option, by option id.
 type Presence struct {
 	ID       uint32
 	Question string
+	Swatch   uint32
 	Options  map[uint32]string
+}
+
+// Answer is the option a person picks: the one named after the swatch's color, or 0.
+// A script can do the same (it has to look at the color, not match texts); the server
+// never treats a right answer as proof that nobody is botting (docs/01).
+func (pr *Presence) Answer() uint32 {
+	want := "presence.option." + presence.Colors[presence.ColorOf(pr.Swatch)]
+	for id, key := range pr.Options {
+		if key == want {
+			return id
+		}
+	}
+	return 0
 }
 
 // Bot is one connected player. Its methods are safe for concurrent use.
@@ -395,6 +410,11 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 	case *pb.ServerMessage_PresenceCheck:
 		c := m.PresenceCheck
 		pr := &Presence{ID: c.GetCheckId(), Question: c.GetQuestion().GetKey(), Options: map[uint32]string{}}
+		for _, p := range c.GetQuestion().GetParams() {
+			if p.GetName() == "swatch" {
+				pr.Swatch = uint32(p.GetNumber())
+			}
+		}
 		for _, o := range c.GetOptions() {
 			pr.Options[o.GetOptionId()] = o.GetText().GetKey()
 		}

@@ -1612,10 +1612,15 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await expect(check).toContainText("Chequeo de presencia");
   await expect(check.getByRole("button")).toHaveCount(4);
   await shot(plPage, "38-presence-check");
+  // The question names no color (lote 16): it shows a swatch, read here by its hue as a
+  // person would; no text of the question matches an option.
   const question = (await check.locator("p").first().textContent()) ?? "";
-  const color = ["rojo", "azul", "verde", "amarillo"].find((c) => question.includes(c));
-  expect(color).toBeDefined();
-  await check.getByRole("button", { name: new RegExp(color ?? "", "i") }).click();
+  expect(["rojo", "azul", "verde", "amarillo"].some((c) => question.includes(c))).toBe(false);
+  const bg = await check
+    .getByTestId("presence-swatch")
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  const color = colorOfSwatch(bg);
+  await check.getByRole("button", { name: new RegExp(color, "i") }).click();
   await expect(check).toHaveCount(0);
   await expect(plPage.getByTestId("game-log")).toContainText("Gracias por responder.");
 
@@ -3596,3 +3601,25 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
   await shot(page, "75-volcan-mine-back-up");
   expect(errors).toEqual([]);
 });
+
+/** The color name (Spanish option text) of a presence swatch, by its hue (lote 16). */
+function colorOfSwatch(css: string): string {
+  const [r, g, b] = (css.match(/\d+/g) ?? []).slice(0, 3).map((v) => Number(v) / 255);
+  const hi = Math.max(r, g, b);
+  const d = hi - Math.min(r, g, b);
+  let h = 0;
+  if (d > 0) {
+    if (hi === r) h = (((g - b) / d) % 6) * 60;
+    else if (hi === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  if (h < 0) h += 360;
+  const bands: [string, number][] = [
+    ["rojo", 0],
+    ["azul", 220],
+    ["verde", 125],
+    ["amarillo", 52],
+  ];
+  const dist = (c: number) => Math.min(Math.abs(h - c), 360 - Math.abs(h - c));
+  return bands.reduce((a, x) => (dist(x[1]) < dist(a[1]) ? x : a))[0];
+}

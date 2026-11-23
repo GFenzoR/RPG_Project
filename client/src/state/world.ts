@@ -14,10 +14,15 @@ import type { RefineState } from "./forge.ts";
 /** How long before its time a presence check closes (covers the latency). */
 export const PRESENCE_GRACE_MS = 3000;
 
-/** A presence check (T4.1): the question's i18n key, the options and when it runs out. */
+/**
+ * A presence check (T4.1): the question's i18n key, the swatch it shows (a CSS color,
+ * `#rrggbb`: the color to pick, a new shade on every check, lote 16; undefined if the
+ * server sent none), the options and when it runs out.
+ */
 export interface PresenceState {
   id: number;
   question: string;
+  swatch: string | undefined;
   options: { id: number; key: string }[];
   until: number;
 }
@@ -836,6 +841,7 @@ export class WorldState implements TileSource {
         this.presence = {
           id: msg.value.checkId,
           question: msg.value.question?.key ?? "",
+          swatch: swatchColor(msg.value.question?.params ?? []),
           options: msg.value.options.map((o) => ({ id: o.optionId, key: o.text?.key ?? "" })),
           until: now + msg.value.timeoutMs,
         };
@@ -1565,3 +1571,14 @@ function pruned(w: Walk, now: number): Walk {
 }
 
 export const isPlayer = (c: CreatureState): boolean => c.kind === CreatureKind.PLAYER;
+
+/** The presence check's swatch (param "swatch", 0xRRGGBB) as a CSS color, or undefined. */
+function swatchColor(
+  params: readonly { name: string; value: { case: string | undefined; value?: unknown } }[],
+): string | undefined {
+  const v = params.find((p) => p.name === "swatch")?.value;
+  if (v?.case !== "number") return undefined;
+  const n = Number(v.value);
+  if (!Number.isInteger(n) || n < 0 || n > 0xffffff) return undefined;
+  return `#${n.toString(16).padStart(6, "0")}`;
+}

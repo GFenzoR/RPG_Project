@@ -9,6 +9,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/presence"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -37,9 +38,10 @@ const (
 	antibotActor       = "system:antibot"
 )
 
-// presenceColors are the presence check's questions and answers: the question
-// presence.question.<c> asks for the option presence.option.<c> (i18n).
-var presenceColors = [...]string{"red", "blue", "green", "yellow"}
+// msgPresenceQuestion is the presence check's one question: pick the color of the
+// swatch it carries (param "swatch", 0xRRGGBB; presence.Swatch). Its options are
+// presence.option.<color> of presence.Colors (i18n).
+const msgPresenceQuestion = "presence.question"
 
 // suspect is the bot detection state of one character.
 type suspect struct {
@@ -68,10 +70,10 @@ type suspect struct {
 }
 
 type presenceCheck struct {
-	id       uint32
-	answer   uint32
-	question string
-	options  []*pb.DialogOption
+	id      uint32
+	answer  uint32
+	swatch  uint32 // the color to pick, as 0xRRGGBB (presence.Swatch)
+	options []*pb.DialogOption
 	// left is the time to answer that is left; it only runs while the character is
 	// online and active, so being away is never a failure by itself.
 	left   game.Tick
@@ -297,17 +299,18 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 	if !c.random {
 		s.askedAt, s.deferredFor, s.deferWarned = tick, 0, false
 	}
-	want := presenceColors[ctx.Rand.IntN(len(presenceColors))]
-	c.question = "presence.question." + want
+	// The question names no color: it shows a swatch, a new shade of the wanted color on
+	// every check, so no text of it matches an option (lote 16).
+	want := ctx.Rand.IntN(len(presence.Colors))
+	c.swatch = presence.Swatch(want, ctx.Rand.Float64(), ctx.Rand.Float64(), ctx.Rand.Float64())
 	ids := ctx.Rand.Perm(9) // option ids 1..9 in a random order: the id says nothing
-	for i, k := range ctx.Rand.Perm(len(presenceColors)) {
+	for i, k := range ctx.Rand.Perm(len(presence.Colors)) {
 		id := uint32(ids[i] + 1)
-		color := presenceColors[k]
-		if color == want {
+		if k == want {
 			c.answer = id
 		}
 		c.options = append(c.options, &pb.DialogOption{OptionId: id,
-			Text: &pb.LocalizedText{Key: "presence.option." + color}})
+			Text: &pb.LocalizedText{Key: "presence.option." + presence.Colors[k]}})
 	}
 	s.check = c
 	w.abStats.ChecksSent.Add(1)
@@ -326,7 +329,8 @@ func checkResult(random bool, r string) string {
 func (w *World) sendPresence(p *Player, c *presenceCheck) {
 	c.sent = true
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PresenceCheck{PresenceCheck: &pb.PresenceCheck{
-		CheckId: c.id, Question: &pb.LocalizedText{Key: c.question}, Options: c.options,
+		CheckId: c.id, Question: &pb.LocalizedText{Key: msgPresenceQuestion,
+			Params: []*pb.TextParam{num("swatch", int(c.swatch))}}, Options: c.options,
 		TimeoutMs: uint32(c.left.Duration().Milliseconds()),
 	}}})
 }

@@ -3,6 +3,7 @@ package session_test
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/presence"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -68,8 +70,19 @@ func (a *adminHarness) playFor(cl *fakeClient, d time.Duration) {
 	}
 }
 
+// presenceWant is the option key a person picks: the one named after the color of the
+// question's swatch.
+func presenceWant(c *pb.PresenceCheck) string {
+	for _, p := range c.GetQuestion().GetParams() {
+		if p.GetName() == "swatch" {
+			return "presence.option." + presence.Colors[presence.ColorOf(uint32(p.GetNumber()))]
+		}
+	}
+	return ""
+}
+
 func answer(c *pb.PresenceCheck, right bool) *pb.ClientMessage {
-	want := "presence.option." + c.GetQuestion().GetKey()[len("presence.question."):]
+	want := presenceWant(c)
 	var id uint32
 	for _, o := range c.GetOptions() {
 		if (o.GetText().GetKey() == want) == right {
@@ -537,5 +550,46 @@ func TestAntiBotStatsLevelsDecayOffline(t *testing.T) {
 		if n := st.Suspects[l].Load(); n != 0 {
 			t.Fatalf("48 h offline: level %d = %d", l, n)
 		}
+	}
+}
+
+// The question is solvable by looking, not by matching texts (lote 16): it is one generic
+// key with a swatch number, and no token of it (key parts or params) names an option;
+// a right answer read from the swatch still passes.
+func TestPresenceQuestionNamesNoOption(t *testing.T) {
+	a := antibotHarness(t)
+	pl, _ := a.joinAs("Player", session.RolePlayer, pos(5, 5))
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
+	swatches := map[int64]bool{}
+	for range 6 {
+		if k := a.cmd(gm, "/presence Player"); !slices.Equal(k, []string{"gm.presence_sent"}) {
+			t.Fatalf("GM /presence: %v", k)
+		}
+		c := a.presence(pl)
+		q := c.GetQuestion()
+		if q.GetKey() != "presence.question" || len(q.GetParams()) != 1 || q.GetParams()[0].GetName() != "swatch" ||
+			q.GetParams()[0].GetText() != "" || q.GetParams()[0].GetContentId() != "" {
+			t.Fatalf("question %v", q)
+		}
+		swatches[q.GetParams()[0].GetNumber()] = true
+		tokens := strings.Split(q.GetKey(), ".")
+		for _, o := range c.GetOptions() {
+			for _, tok := range strings.Split(o.GetText().GetKey(), ".") {
+				if tok != "presence" && slices.Contains(tokens, tok) {
+					t.Fatalf("option %q shares %q with the question", o.GetText().GetKey(), tok)
+				}
+			}
+			for _, p := range o.GetText().GetParams() {
+				t.Fatalf("option param %v", p)
+			}
+		}
+		a.input(pl, answer(c, true))
+		a.sim.Step()
+		if got := a.antibotActions(); !slices.Contains(got, "presence_check:random_passed") {
+			t.Fatalf("right answer from the swatch: %v", got)
+		}
+	}
+	if len(swatches) < 5 {
+		t.Fatalf("swatches repeat: %v", swatches)
 	}
 }

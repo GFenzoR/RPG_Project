@@ -1069,8 +1069,16 @@ Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
 ### Chequeo de presencia (T4.1, `server/internal/session/antibot.go`)
 Diseño en `01-architecture.md` ("Detección de bots").
 - **`PresenceCheck{check_id, question, options[], timeout_ms}`**: `question` y cada
-  `DialogOption.text` son claves i18n (`presence.question.<color>`,
-  `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
+  `DialogOption.text` son claves i18n. La pregunta es siempre `presence.question`
+  ("elige el color de esta muestra") con un parámetro numérico `swatch`: un color
+  `0xRRGGBB` que el servidor sortea en cada chequeo dentro de la franja de tono del color
+  pedido (`server/internal/presence`); el cliente lo dibuja como una muestra. Las
+  opciones son `presence.option.<color>` (`red`, `blue`, `green`, `yellow`). **Desde el
+  lote 16 ningún texto de la pregunta coincide con una opción**: antes la clave era
+  `presence.question.<color>` y un script contestaba comparando sufijos sin mirar nada.
+  Clasificar el tono sigue siendo posible para un script (nada que el cliente dibuja es
+  secreto), por eso un acierto nunca limpia la sospecha. Los ids de las opciones van del
+  1 al 9 en orden al azar.
   `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
   activo. Con un chequeo pendiente se manda otra vez, con el mismo `check_id` y el tiempo
   que queda, al volver a entrar y al volver a jugar después de estar inactivo. El servidor

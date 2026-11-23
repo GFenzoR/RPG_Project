@@ -940,7 +940,8 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
      chequeo fallado o uno hecho hace al menos `confirm_ms` (1 h)** con el puntaje todavía
      ahí; si no, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
 - **Chequeo de presencia** (`PresenceCheck`/`PresenceAnswer`): una pregunta simple (elegir
-  un color entre cuatro, textos i18n `presence.*`) en un momento al azar de los próximos
+  entre cuatro nombres de color el de una muestra que cambia de tono en cada chequeo,
+  textos i18n `presence.*`; la pregunta no nombra el color, lote 16) en un momento al azar de los próximos
   `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
   espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
   corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente

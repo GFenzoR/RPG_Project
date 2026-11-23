@@ -1660,4 +1660,5 @@ idle: { kick_after_ms: 900000, warn_before_ms: 60000 } # kick_after_ms 0 lo apag
   `defer_alert_ms` ≥ 60000, `delay_ms`, `fail_points`, `confirm_ms`, `random_per_hour`
   0..1) y `suspend_ms` (hasta 30 días). Qué mide cada señal y por qué
   esos números: `01-architecture.md`, "Detección de bots". Textos del chequeo:
-  `presence.question.<color>` y `presence.option.<color>` en `i18n/*/client.yaml`.
+  `presence.question` (con la muestra de color) y `presence.option.<color>` en
+  `i18n/*/client.yaml`.
