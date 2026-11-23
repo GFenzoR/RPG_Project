@@ -1703,6 +1703,12 @@ func TestSandboxEverythingReachable(t *testing.T) {
 	inside := func(q world.Pos) bool { return is.Rect.Contains(int(q.X), int(q.Y)) }
 	seen := map[world.Pos]bool{is.Temple: true}
 	queue := []world.Pos{is.Temple}
+	// The living world's objects (TestSandboxLivingWorld): vines break, boulders move and the
+	// portcullis opens, so a player gets past each of them.
+	living := map[world.Pos]bool{}
+	for _, o := range s.w.LivingObjects() {
+		living[o.Pos] = true
+	}
 	for len(queue) > 0 {
 		q := queue[0]
 		queue = queue[1:]
@@ -1712,7 +1718,7 @@ func TestSandboxEverythingReachable(t *testing.T) {
 		}
 		for d := range 8 {
 			n, ok := q.Step(world.Direction(d))
-			if !ok || !s.m.Walkable(n) && n != sbVault {
+			if !ok || !s.m.Walkable(n) && n != sbVault && !living[n] {
 				continue
 			}
 			next = append(next, n)
