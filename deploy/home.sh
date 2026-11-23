@@ -18,6 +18,10 @@
 # Environment: BUILD=0 starts the images already built (no `--build`); CONFIRM=yes skips
 # the questions of restore and reset (CI, scripts).
 set -euo pipefail
+# Git Bash (native Windows, docs/12) rewrites arguments that look like POSIX paths when it
+# runs a Windows program: `docker compose exec gameserver /app/gameserver` would reach
+# docker.exe as C:/Program Files/Git/app/gameserver. Elsewhere these variables do nothing.
+export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 ENV_FILE=deploy/.env.home
