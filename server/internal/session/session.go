@@ -237,6 +237,7 @@ type World struct {
 	published atomic.Int32
 	byClient  map[Client]*Player
 	byChar    map[int64]*Player
+	byAccount map[int64]int // players in the world per account (accountFull)
 	sectors   map[uint64][]*Player
 
 	// unsaved holds the final snapshot of characters that left until the database
@@ -617,6 +618,7 @@ func New(cfg Config) (*World, error) {
 		log:         cfg.Logger,
 		byClient:    map[Client]*Player{},
 		byChar:      map[int64]*Player{},
+		byAccount:   map[int64]int{},
 		sectors:     map[uint64][]*Player{},
 		unsaved:     map[int64]Snapshot{},
 		loading:     map[int64]int{},

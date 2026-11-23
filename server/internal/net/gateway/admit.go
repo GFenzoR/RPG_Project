@@ -13,7 +13,8 @@ import (
 // A client is a key of clientip.Key (an IPv4 address or an IPv6 /64, behind -trust-proxy
 // the last X-Forwarded-For entry). The per-client limits and the handshake bucket are
 // checked before the WebSocket upgrade and answered with HTTP 429; the global ones with
-// HTTP 503. MaxPlayers is checked after the Hello and answered with SERVER_FULL.
+// HTTP 503. MaxPlayers is checked after the Hello and answered with SERVER_FULL; the slot
+// is taken only once the play token was redeemed.
 type Limits struct {
 	// MaxConnsPerClient caps the open connections of one client, logged in or not.
 	MaxConnsPerClient int
@@ -181,6 +182,16 @@ func (a *admission) sweep(now time.Time) {
 			}
 		}
 	}
+}
+
+// playerRoom reports whether a MaxPlayers slot is free right now, without taking it. The
+// handshake checks it before the play token's redeem (a full server costs no database
+// query) and reserves the slot only after a successful redeem, so a Hello with a forged
+// token never holds one (review of lote 16).
+func (a *admission) playerRoom() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return !over(a.players, a.lim.MaxPlayers)
 }
 
 // reservePlayer takes a MaxPlayers slot for the login in progress.

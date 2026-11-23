@@ -37,6 +37,24 @@ func TestAccountCharacterCap(t *testing.T) {
 	if again.closed || p.CharacterID() != 9002 || h.w.Online() != 3 {
 		t.Fatalf("relogin: closed=%v (%v), online %d", again.closed, again.reason, h.w.Online())
 	}
+
+	// The takeover kept the count at two: a third is still refused.
+	still := &fakeClient{}
+	h.sim.Command(h.joinCmd(char(9003, "Tres", 7), still))
+	h.sim.Step()
+	if !still.closed || still.reason != pb.DisconnectReason_DISCONNECT_REASON_TOO_MANY_CHARACTERS {
+		t.Fatalf("third after relogin: closed=%v reason=%v", still.closed, still.reason)
+	}
+
+	// One leaves: its place is free again.
+	h.sim.Command(h.w.Leave(again))
+	h.sim.Step()
+	if h.w.PlayerByCharacter(9002) != nil {
+		t.Fatal("the character that left is still in the world")
+	}
+	if _, p3 := h.joinChar(char(9003, "Tres", 7)); p3 == nil || p3.CharacterID() != 9003 {
+		t.Fatal("third character refused after one of the two left")
+	}
 }
 
 func TestAccountCharacterCapConfigurable(t *testing.T) {

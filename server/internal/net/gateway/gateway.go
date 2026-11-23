@@ -399,8 +399,8 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	if !validToken(hello.GetSessionToken()) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION) // never reaches the database
 	}
-	if !c.ticket.reservePlayer() {
-		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
+	if !g.adm.playerRoom() {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL) // never reaches the database
 	}
 	// One of MaxHandshakes database slots, waited for at most HelloWait.
 	sctx, scancel := context.WithTimeout(ctx, g.cfg.HelloWait)
@@ -421,6 +421,12 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 			g.log.Error("gateway: redeem play token", "err", err, "count", n)
 		}
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
+	}
+	// The MaxPlayers slot is taken only now: a forged token never holds one while it
+	// waits for a database slot or its redeem. Another login may have taken the last one
+	// meanwhile; this token is spent then, and the client logs in again.
+	if !c.ticket.reservePlayer() {
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 	}
 	// Tell the loop a read is in flight before reading, so the ack of a save this read
 	// may miss cannot drop the snapshot the Join will need (see session.LoginStarted).

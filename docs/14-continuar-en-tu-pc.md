@@ -244,11 +244,13 @@ el punto 5:
     `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse). Con el tope
     por cuenta, en cambio, el relogueo sí toma el control. **Confirmar con el dueño** si
     con el mundo lleno el relogueo también debe tomar el control.
-  - **Las reservas de `-max-players` cuentan conexiones con `Hello` válido de forma,** no
-    jugadores: handshakes con tokens falsos de forma válida ocupan lugar mientras esperan
-    turno de la base (hasta 5 s). Acotado por `-ws-max-pending-per-ip` y el balde por IP,
-    pero con muchas /64 de IPv6 (un /48) es barato rotar. Documentado en docs/05; si se ve
-    en `ws_refused_total{reason="server_full"}`, reservar después del canje.
+  - **Hecho (revisión de cierre del lote 16):** el lugar de `-max-players` se toma después
+    de canjear el token; un token falso de forma válida ya no ocupa lugar mientras espera la
+    base (`TestForgedTokenHoldsNoPlayerSlot`). Si dos logins se disputan el último lugar,
+    el segundo en terminar el canje recibe `SERVER_FULL` con el token ya gastado.
+  - **Todos los turnos de la base ocupados → 503 para cualquier conexión nueva,** también
+    las que todavía no mandaron `Hello` (hasta 5 s por turno). Con 32 turnos no pasa con un
+    grupo de amigos; vigilar `ws_refused_total{reason="server_busy"}`.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía

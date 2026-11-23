@@ -494,13 +494,7 @@ func (w *World) accountFull(accountID int64) bool {
 	if limit < 0 {
 		return false
 	}
-	n := 0
-	for _, p := range w.players {
-		if p.accountID == accountID {
-			n++
-		}
-	}
-	return n >= limit
+	return w.byAccount[accountID] >= limit // O(1) per Join (review of lote 16)
 }
 
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
@@ -604,6 +598,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.published.Store(int32(len(w.players)))
 	w.byClient[client] = p
 	w.byChar[c.ID] = p
+	w.byAccount[p.accountID]++
 	w.index(p)
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
@@ -702,6 +697,11 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
 		delete(w.byChar, p.charID)
+	}
+	if n := w.byAccount[p.accountID]; n > 1 {
+		w.byAccount[p.accountID] = n - 1
+	} else {
+		delete(w.byAccount, p.accountID)
 	}
 	i := sort.Search(len(w.players), func(i int) bool { return w.players[i].id >= p.id })
 	w.players = append(w.players[:i], w.players[i+1:]...)

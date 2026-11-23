@@ -197,6 +197,62 @@ func TestFullHandshakeSemaphoreRefusesBeforeHello(t *testing.T) {
 	s.loginFrom("198.51.100.4", "b", 8) // free again
 }
 
+// A Hello with a forged token of the right shape must not hold a MaxPlayers slot while
+// its redeem runs (review of lote 16): with the slot reserved before the redeem, enough
+// forged Hellos kept real players out with SERVER_FULL.
+func TestForgedTokenHoldsNoPlayerSlot(t *testing.T) {
+	s := newStack(t, func(c *Config) { c.Limits = Limits{MaxPlayers: 1} })
+	release := make(chan struct{})
+	s.accounts.mu.Lock()
+	s.accounts.block = release
+	s.accounts.mu.Unlock()
+	forged := s.dial()
+	if err := forged.send(hello("forged", "0.1.0")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 }) // inside its redeem
+	if _, players, _ := s.gw.adm.counts(); players != 0 {
+		t.Fatalf("a login still redeeming holds %d player slots", players)
+	}
+	s.accounts.mu.Lock()
+	s.accounts.block = nil
+	s.accounts.mu.Unlock()
+	close(release)
+	if r := forged.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION {
+		t.Fatalf("forged token: reason %v", r)
+	}
+	s.login("a", 7) // the only slot was never taken
+	if _, players, _ := s.gw.adm.counts(); players != 1 {
+		t.Fatalf("player slots %d after a login", players)
+	}
+}
+
+// Two logins race for the last slot: both pass the early check, the one whose redeem
+// ends second gets SERVER_FULL and holds nothing.
+func TestLastPlayerSlotTakenAfterRedeem(t *testing.T) {
+	s := newStack(t, func(c *Config) { c.Limits = Limits{MaxPlayers: 1} })
+	release := make(chan struct{})
+	s.accounts.mu.Lock()
+	s.accounts.block = release
+	s.accounts.mu.Unlock()
+	s.token("a", 7)
+	s.token("b", 8)
+	slow := s.dial()
+	if err := slow.send(hello("a", "0.1.0")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 })
+	s.accounts.mu.Lock()
+	s.accounts.block = nil
+	s.accounts.mu.Unlock()
+	s.login("b", 8) // passes while the first is still redeeming
+	close(release)
+	if r := slow.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {
+		t.Fatalf("reason %v", r)
+	}
+	waitFor(t, func() bool { _, players, _ := s.gw.adm.counts(); return players == 1 })
+}
+
 func TestGlobalUnauthenticatedCap(t *testing.T) {
 	s := limited(t, Limits{MaxUnauthenticated: 2}, nil)
 	s.mustDialFrom("203.0.113.5")

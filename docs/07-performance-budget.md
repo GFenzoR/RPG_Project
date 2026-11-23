@@ -25,6 +25,12 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   agua no gasta la cuota del tick de los demás. Con correa, el que persigue a un objetivo
   fuera de su alcance hace una búsqueda por ese lapso aunque dé pasos (dos cuando decide
   que no llega), siempre dentro de su área de correa.
+- Comandos por tick (lote 16): la cola común y el carril de ciclo de vida (logins, logouts,
+  acuses de guardado) drenan cada uno hasta `MaxCommandsPerTick` (2048), así que un tick
+  ejecuta como mucho el doble, 4096. Es a propósito: un aluvión de logins tras un reinicio
+  no le quita turno a los comandos de los que ya juegan. El tope por cuenta de personajes
+  (`accountFull`) es un contador por cuenta, O(1) por `Join`, no un recorrido de los
+  jugadores (ver `docs/01-architecture.md`, "Equidad de la cola").
 - Envío por deltas (MapSlice, TileUpdate). Un frame por jugador por tick como máximo.
 - Pools para buffers de serialización.
 - Persistencia fuera del loop con snapshots copiados.

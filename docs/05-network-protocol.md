@@ -62,10 +62,11 @@ Detalles (T1.4, `server/internal/net/gateway`):
   de uno real (exactamente 43 caracteres base64url, 32 bytes sin relleno) se rechaza igual
   sin llegar a la base. Un error de la base durante el handshake →
   `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
-- **Servidor lleno:** si ya hay `-max-players` conexiones con jugador (o logins en
-  curso), o todos los turnos de la base del handshake siguen ocupados después de esperar
-  el `Hello` (5 s), → `Disconnect{SERVER_FULL}` antes de canjear el token (no se gasta).
-  También si la cola de logins del loop está llena (ahí el token ya se gastó). Límites
+- **Servidor lleno:** si ya hay `-max-players` conexiones con jugador (o logins con el
+  token ya canjeado), o todos los turnos de la base del handshake siguen ocupados después
+  de esperar el `Hello` (5 s), → `Disconnect{SERVER_FULL}` antes de canjear el token (no
+  se gasta). También si otro login tomó el último lugar mientras se canjeaba este token, o
+  si la cola de logins del loop está llena (en esos dos casos el token ya se gastó). Límites
   en "Límites".
 - **Personajes por cuenta:** una cuenta tiene como mucho `-max-chars-per-account` (2)
   personajes en el mundo a la vez, contando los link-dead; uno más →
@@ -1772,7 +1773,7 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   | Conexiones abiertas de un cliente (con jugador o no) | `-ws-max-conns-per-ip` | 32 | HTTP 429 |
   | Conexiones de un cliente aún en el handshake | `-ws-max-pending-per-ip` | 4 | HTTP 429 |
   | Conexiones nuevas de un cliente (balde) | `-ws-handshake-burst`, `-ws-handshake-every` | 5 seguidas, después 1 cada 2 s | HTTP 429 |
-  | Jugadores (conexiones con personaje o con login en curso) | `-max-players` | 500 | `Disconnect{SERVER_FULL}` después del `Hello` |
+  | Jugadores (conexiones con personaje o con el token ya canjeado) | `-max-players` | 500 | `Disconnect{SERVER_FULL}` después del `Hello` |
   | Personajes de una cuenta en el mundo | `-max-chars-per-account` | 2 | `Disconnect{TOO_MANY_CHARACTERS}` |
   | Comandos de una conexión esperando en la cola del loop | `-ws-max-queued-per-conn` | 64 (≥ la ráfaga de 60 del limitador) | se descartan (ver docs/01, "Equidad de la cola") |
 
@@ -1797,11 +1798,10 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   de producción (los jobs `stack` y `home-stack` de CI). Contra un servidor con `URL=` en
   esta máquina hace falta `-ws-loopback-exempt` (y un `-auth-rate-burst` mayor si son
   muchos bots).
-  El lugar de `-max-players` se reserva al recibir el `Hello`, antes de canjear el token
-  (así un servidor lleno no gasta tokens ni lee la base). Por eso, en el peor caso, hasta
-  `-ws-max-unauthenticated` handshakes sin autenticar que esperan turno de la base pueden
-  hacer que un jugador real reciba `SERVER_FULL` con el mundo casi lleno; cada IP aporta
-  como mucho `-ws-max-pending-per-ip` de ellos y el balde por IP los frena.
+  Al recibir el `Hello` solo se mira si queda lugar de `-max-players` (así un servidor
+  lleno no gasta tokens ni lee la base); el lugar se toma recién después de canjear el
+  token con éxito. Un `Hello` con un token falso de forma válida no ocupa lugar mientras
+  espera turno de la base ni durante el canje (revisión del lote 16).
 - **Logs acotados:** los comandos descartados de una conexión, los canjes de token y las
   cargas de personaje que fallan por la base y los logins rechazados por la cola llena se
   registran una vez por intervalo (10 s) con la cuenta (`count`), no uno por evento.
