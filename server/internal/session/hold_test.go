@@ -307,12 +307,30 @@ func TestHeldOverflowIsReserved(t *testing.T) {
 		t.Fatal("the held owner moved it to another public tile")
 	}
 
-	// Confirmed: the reservation ends with the hold.
+	// Confirmed: the hold ends; the reservation ends with the ack of Bruno's snapshot
+	// after the gift too (lote 16: it was a give-away, written at the end of its tick).
 	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("the gift was freed before the ack of Bruno's snapshot without it")
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), lastSave(t, h.saves, b.CharacterID()).Seq))
 	h.sim.Step()
 	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || len(h.w.GroundAt(pos(0, 1))) != 0 {
 		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
 	}
+}
+
+// lastSave is the last plain snapshot of character id the World submitted (saves).
+func lastSave(t *testing.T, saves []session.Snapshot, id int64) session.Snapshot {
+	t.Helper()
+	for i := len(saves) - 1; i >= 0; i-- {
+		if saves[i].CharacterID == id {
+			return saves[i]
+		}
+	}
+	t.Fatalf("no save of character %d", id)
+	return session.Snapshot{}
 }
 
 // When the transfer is not stored, what fell at the player's feet stays reserved until a
@@ -615,6 +633,9 @@ func TestHouseItemLeavingGoesIntoNoStrangersContainer(t *testing.T) {
 	cc, c := h.tenant("Cid", 0, pos(4, 6), stack(bagID, 1, 0))
 	cp := openPack(t, h.harness, cc)
 	h.send(cc, moveItem(inContainer(cp, 0), bagID, 0, onTile(pos(4, 5)), 1))
+	// Lote 16: Cid's bag is his until the database has his snapshot without it.
+	h.sim.Command(h.w.Saved(c.CharacterID(), lastSave(t, h.saves, c.CharacterID()).Seq))
+	h.sim.Step()
 
 	cids := openOnTile(t, h.harness, cl, pos(4, 5), bagID, 1)
 	if !hasKey(h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, inContainer(cids, 0), 1)), "inventory.floor_first") ||
@@ -713,6 +734,8 @@ func TestReservationEndsWithItsOwnAck(t *testing.T) {
 	}
 
 	h.sim.Command(h.w.Saved(b.CharacterID(), first.Seq))
+	// Lote 16: and the ack of Bruno's snapshot after the gift (the end of its tick).
+	h.sim.Command(h.w.Saved(b.CharacterID(), lastSave(t, h.saves, b.CharacterID()).Seq))
 	h.sim.Step()
 	if !h.w.InFlightForTest(b.CharacterID()) {
 		t.Fatal("the first ack ended the hold of the second purchase")

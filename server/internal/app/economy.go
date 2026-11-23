@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"math"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -88,7 +89,7 @@ func (w *economyWriter) Start() {
 			select {
 			case e, ok := <-w.ch:
 				if !ok {
-					w.write(buf)
+					w.writeSafe(buf)
 					return
 				}
 				buf = append(buf, e)
@@ -100,7 +101,7 @@ func (w *economyWriter) Start() {
 				}
 			case <-due:
 			}
-			w.write(buf)
+			w.writeSafe(buf)
 			buf, due = buf[:0], nil
 		}
 	}()
@@ -123,6 +124,19 @@ func (w *economyWriter) Stop(ctx context.Context) error {
 		<-w.finished
 		return ctx.Err()
 	}
+}
+
+// writeSafe is write with a panic (a bug in the writer) logged with its stack and the
+// batch dropped: the writer goes on with the next batch instead of taking the server down
+// (lote 16).
+func (w *economyWriter) writeSafe(batch []session.EconomyEntry) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.log.Error("economy: panic while writing a batch, dropped", "panic", r, "entries", len(batch),
+				"stack", string(debug.Stack()))
+		}
+	}()
+	w.write(batch)
 }
 
 // write merges and writes one batch, retrying transient errors until Stop gives up.

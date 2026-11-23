@@ -426,7 +426,7 @@ func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
 func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[cl]
-		w.playerCommand(p, func() {
+		w.playerCommand(ctx.Tick, p, func() {
 			w.input(ctx, p, msg)
 			c := p.capacity
 			p.capacity = 0
@@ -442,7 +442,7 @@ func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string,
 func (w *World) GiftAndInputForTest(cl Client, id string, n int, msg *pb.ClientMessage) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[cl]
-		w.playerCommand(p, func() {
+		w.playerCommand(ctx.Tick, p, func() {
 			c := p.capacity
 			p.capacity = 0
 			w.GiveForTest(p, id, n)

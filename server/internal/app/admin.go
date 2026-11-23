@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -99,10 +100,23 @@ func (a *adminWorker) Start() {
 			case <-a.stop: // Stop gave up: no more attempts, keep the job in the log
 				a.abandon(job)
 			default:
-				a.run(job)
+				a.runSafe(job)
 			}
 		}
 	}()
+}
+
+// runSafe is run with a panic (a bug in a writer) logged with its stack and the job
+// dropped: the worker goes on with the next job instead of taking the server down
+// (lote 16).
+func (a *adminWorker) runSafe(job session.AdminJob) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.log.Error("admin: panic while writing a job, dropped", "panic", r, "kind", job.Kind,
+				"stack", string(debug.Stack()))
+		}
+	}()
+	a.run(job)
 }
 
 // Stop stops accepting jobs and waits for the queued ones until ctx is done; then the

@@ -198,6 +198,28 @@ el punto 5:
     días sin "cerrar en todos lados" ni MFA para el staff, recompensas por personaje
     farmeables con alts, el bundle trae los datos de portales y misiones, instaladores sin
     firma.
+- **Integridad del juego (hecho, rama `sec/game-integrity`, lote 16; el dueño el
+  2026-11-20: "un estándar excelente de ciberseguridad [...] que los jugadores no puedan
+  modificar sus datos"):** cierra seis hallazgos de la auditoría: (1) duplicación por
+  caída al tirar algo a la calle (reserva hasta el guardado, docs/01) y `recover` con log
+  en el Saver y en los escritores de admin, economía y tienda; (2) los hitos
+  cooperativos ya no se hacen solo con alts (`milestone.fail_same_account`, docs/02
+  "Quests de hito"); (3) anti-flood de `Turn` hacia los observadores (docs/05); (4) la
+  oferta de traspaso de casa no revela si un invisible o alguien del personal está en
+  línea; (5) el chequeo de presencia muestra una muestra de color en vez de nombrar el
+  color (docs/05); (6) los hooks E2E (`__rpgClient`, `__rpgAudio`) ya no salen en el
+  build de producción (docs/08). Queda:
+  - **Mirarlo en el juego:** el E2E de T4.1 (`38-presence-check`: la muestra de color
+    sobre los cuatro botones) y que los E2E que usan `window.__rpgClient` sigan andando
+    contra el Vite de desarrollo.
+  - **Accesibilidad del chequeo de presencia:** una muestra de color sola no sirve a quien
+    no distingue rojo de verde, ni a un lector de pantalla (su etiqueta no dice el color,
+    a propósito). Si llega un reclamo, sumar una forma o un patrón por color.
+  - **Un script sigue pudiendo contestar** el chequeo clasificando el tono (nada que el
+    cliente dibuja es secreto): por eso un acierto nunca limpia la sospecha (docs/01).
+  - **Reserva de lo soltado con la base caída:** dura hasta que vuelve; el que lo soltó
+    puede recogerlo, nadie más. Con muchas tiradas seguidas un compañero espera hasta 2 s
+    para levantar lo que le dejan (la ventana de agrupado).
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía
@@ -1586,18 +1608,14 @@ el punto 5:
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
   mismo libro lo pide (antes, subir `market.push_every_ms`).
-- **Caída con la calle de por medio (límite general, no del comercio):** un transfer
-  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado del
-  final de ese comando (o tick) se escribe antes del transfer (docs/01, "Guardado antes
-  del transfer").
-  Queda el caso de una **caída** (o de la base caída al apagar, que se trata como una):
-  lo que alguien tiró a la calle y otro levantó puede quedar en las dos filas si el
-  guardado de quien lo levantó entró y el de quien lo tiró no. Es el límite de guardar
-  por personaje con el suelo en memoria, igual sin comercio. Lo mismo si la base rechaza
-  el snapshot mismo, no solo el transfer (lo avisa `PersistenceDataLost`). Una salida
-  sería reservar lo que se tira a la calle hasta escribir el estado de quien lo tiró (una
-  escritura por tirada, acotada por jugador, y una demora para levantarlo); hacerlo solo
-  si las alertas de economía lo muestran.
+- **Caída con la calle de por medio (resuelto en el lote 16):** lo que alguien suelta al
+  suelo público queda reservado a quien lo soltó hasta que la base confirma su snapshot
+  sin eso (docs/01, "Guardado de lo que se suelta al suelo público"), así que ni un
+  transfer descartado ni una caída lo dejan en dos filas. El costo: como mucho una
+  escritura cada 2 s por personaje que suelta cosas, y otro jugador espera uno o dos
+  ticks (con la base caída, hasta que vuelva) para levantarlo. Si la base rechaza para
+  siempre ese snapshot (lo avisa `PersistenceDataLost`), lo soltado queda reservado a su
+  dueño hasta reiniciar.
 - **Mundo:**
   - cada cartel cuesta un item y un ID (hoy todos los de Puerto, el Bosque y la Isla
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el

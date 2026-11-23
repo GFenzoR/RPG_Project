@@ -694,7 +694,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 
 	pickedUp := toOwner == p && it.carriedBy() != p
 	// T5.3 fail-safe: something p carries goes where no save has it (hold.go gaveAway).
-	gave := it.carriedBy() == p && w.publicGround(to)
+	// Lote 16: so does what lies reserved to p (a give-away whose save is not acked yet):
+	// moving it on, even to the next tile, must not end its reservation.
+	gave := (it.carriedBy() == p || w.heldFor(p, it)) && w.publicGround(to)
 
 	// Run it: take the units out of their place and put them in the new one (one
 	// Inventory for both ends: the pockets or a slot on each side).
@@ -736,7 +738,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		if r := landed.root(); r.onGround && (merge == nil && to.kind == locGround || w.heldFor(p, r)) {
 			root = r
 		}
-		w.gaveAway(p, root)
+		var at *Item
+		if r := landed.root(); r.onGround {
+			at = r
+		}
+		w.gaveAway(p, root, at)
 	}
 	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
 	// gathering or crafting try (earlyTry).

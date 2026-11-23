@@ -17,8 +17,8 @@ import (
 )
 
 // The case that made a command reserve what it gives away with the house write (hold.go
-// reserveGiven, docs/01 "Guardado antes del transfer"), played for real with the content
-// of data/: Ana's arc rune (arc_bolt) lies on the floor of her porch; from the street she
+// reserveGiven, docs/01 "Guardado de lo que se suelta al suelo público"), played for real
+// with the content of data/: Ana's arc rune (arc_bolt) lies on the floor of her porch; from the street she
 // uses it on an ember wyrmling (worn down to its last hit point), the last kill of
 // flame_crater, the side quest that ends on its kill step (lote 12): its cinder amulet
 // and its coins do not fit (she has no capacity left, and at level 60 the quest's

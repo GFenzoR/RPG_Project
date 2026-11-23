@@ -171,14 +171,20 @@ type Player struct {
 	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
-	// pre is p's snapshot from the end of the command (or tick) in which it last gave
-	// something away to the public ground (T5.3 fail-safe, hold.go gaveAway). p's next
-	// transfer writes it first, so a dropped transfer never takes p back to a save that
-	// still has it. gave is set from the give-away until that snapshot is taken
-	// (settleGivers). Both are cleared by any later snapshot of p, which is submitted
-	// behind the give-away anyway (snapshot).
-	pre  *Snapshot
+	// gave is set from a give-away to the public ground (T5.3 fail-safe, lote 16, hold.go
+	// gaveAway) until p's snapshot after it is taken: settleGivers submits it at once,
+	// or at the end of its coalescing window (giveNext). Any snapshot of p clears it.
 	gave bool
+	// gaveRoots are where p's give-aways since its last snapshot landed (the pile or the
+	// container lying on the street): the next snapshot of p reserves them to p with its
+	// seq (heldGround), so nobody else takes them before the database has p without them.
+	// giveWait are the ones already reserved while their save waits for giveNext (the
+	// tick the next give-away save may go out: one per giveSaveEvery); giveDue: p is in
+	// World.giveDue.
+	gaveRoots []*Item
+	giveWait  []*Item
+	giveNext  game.Tick
+	giveDue   bool
 	// left are the piles and containers on the public ground that leftHouse reserved to p
 	// since its last transfer snapshot: the house write that took them out numbers their
 	// reservations with p's snapshot in it (hold.go numberLeft). What p gave away in a
@@ -383,10 +389,11 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
 	w.saveSeq++
-	// T5.3: a snapshot is submitted (a save or a transfer's) behind whatever p gave away
-	// so far: the one kept for p's next transfer (gaveAway) is not needed any more. The one
-	// settleGivers keeps is taken here too, and kept again right after.
-	p.pre, p.gave = nil, false
+	// T5.3 / lote 16: every snapshot is submitted (a save or a transfer's), and it comes
+	// after whatever p gave away so far: what that landed in is reserved to p until the
+	// database acks this snapshot (hold.go reserveGave).
+	w.reserveGave(p, w.saveSeq)
+	p.gave = false
 	clear(p.given)
 	p.given = p.given[:0]
 	return Snapshot{

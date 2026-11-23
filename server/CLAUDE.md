@@ -191,12 +191,13 @@ server/
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
   `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`,
-  y encola antes el snapshot pendiente de `gaveAway`): un camino nuevo que lleve algo de
-  un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho, llamar a
-  `gaveAway` (marca al personaje; `settleGivers` toma su estado al principio y al final
-  de cada comando del jugador, `playerCommand`, y al final del tick, y se escribe antes
-  de su próximo transfer, así un transfer descartado no lo devuelve a un guardado que
-  todavía lo tiene; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
+  y encola antes el guardado de `gaveAway` que espera su ventana): un camino nuevo que
+  lleve algo de un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho,
+  llamar a `gaveAway` con la pila o el contenedor de la calle donde cayó (marca al
+  personaje; `settleGivers` toma su estado al principio y al final de cada comando del
+  jugador, `playerCommand`, y al final del tick, lo encola en el acto o al final de su
+  ventana de 2 s, y lo soltado queda reservado a él hasta el acuse, lote 16: ni un
+  transfer descartado ni una caída lo dejan en dos filas; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
   cambiar una casa corre por `playerCommand`, como `Input`. Ningún transfer puede dejar
   nada en el suelo público en su propio comando (comprueba antes que todo entra:
   `canBuy`, `canReceive`, `moneyThatFits`; `transferSnapshot` lo registra con nivel

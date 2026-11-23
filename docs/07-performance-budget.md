@@ -706,22 +706,22 @@ aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa d
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
 
-**Guardado antes del transfer (falla segura, docs/01).** Un personaje que soltó algo al
-suelo público desde su último snapshot escribe ese estado justo antes de su próximo
-transfer: como mucho una escritura más por personaje y transfer (lo que cuesta un
-autoguardado), y solo la primera vez después de soltar algo, porque cualquier snapshot
-posterior la reemplaza. Queda acotada por los mismos anti-flood que los transfers: en el
-peor caso duplica las escrituras de transfers de quien alterna tirar algo a la calle con
-cada transfer que le permiten los tres anti-flood juntos (`market.action_*` ≈ 2,5 por
-segundo, `trade.action_*` ≈ 3,3 y `houses.action_*` ≈ 3,3: ≈ 9 transfers por segundo →
-≈ 18 escrituras, 9 de ellas de este guardado). Sin transfers no se escribe nada más. En
-el loop, cada comando (o tick, para lo que el servidor deja caer fuera de un comando) en
-que algo cae a la calle toma un snapshot en memoria al terminar, uno solo aunque caigan
-muchas pilas (`BenchmarkThrowAway`, tirar una moneda y levantarla con un cofre de 40
-items: ≈ 3 µs y ≈ 8 KB más por tirada, 11 asignaciones). Con el rate limit de 30
-comandos por segundo son a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa
-que tirar items, y la memoria es un snapshot por jugador (el último), hasta su próximo
-guardado. Marcar a quien soltó algo es un bool y una lista que casi siempre está vacía
+**Guardado de lo que se suelta al suelo público (falla segura, docs/01; lote 16).** Un
+personaje que suelta algo a la calle escribe su estado de después en el acto, y lo que
+soltó queda reservado hasta el acuse. Los guardados se agrupan por personaje: el primero
+sale en el acto y los de los 2 s siguientes (`giveSaveEvery`) salen juntos al final de
+esa ventana, así que soltar cosas cuesta como mucho **una escritura cada 2 s por
+personaje** (lo que cuesta un autoguardado), además de los autoguardados de siempre; con
+1000 jugadores tirando cosas sin parar serían ≈ 500 escrituras por segundo de más, el
+mismo orden que los transfers en el peor caso. El transfer que sigue no escribe nada más
+si ese guardado ya salió (solo el que espera su ventana). En el loop, cada comando (o
+tick, para lo que el servidor deja caer fuera de un comando) en que algo cae a la calle
+toma un snapshot al terminar, uno solo aunque caigan muchas pilas (`BenchmarkThrowAway`,
+tirar una moneda y levantarla con un cofre de 40 items: ≈ 3 µs y ≈ 8 KB más por tirada,
+11 asignaciones; el agrupado solo ahorra snapshots). Con el rate limit de 30 comandos por
+segundo son a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa que tirar
+items. Cada pila soltada es una entrada de `World.heldGround` hasta el acuse (uno o dos
+ticks). Marcar a quien soltó algo es un bool y una lista que casi siempre está vacía
 (`World.givers`), que se mira al principio y al final de cada comando de un jugador y al
 final de cada tick. Lo que alguien saca de una casa a la calle guarda además un puntero
 por pila hasta la escritura de la casa, al final del mismo comando (`Player.left`).

@@ -1,6 +1,11 @@
 package session
 
-import "github.com/GFenzoR/RPG_Project/server/internal/world"
+import (
+	"slices"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+)
 
 // Transfer hold (T5.3 fail-safe, docs/01 "Transacciones"). A transfer leaves the loop
 // before the database has it; if it is then dropped (World.Tainted), whatever its
@@ -38,27 +43,36 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 //
 // The hold covers what happens while a transfer waits; a dropped transfer takes its
 // characters back to their last written save, which may be older. What a character gave
-// away to the public ground before the transfer (thrown on the street or into a container
-// there, or made for it by the server and fallen at its feet: the coins of an NPC sale,
-// a craft or a reward that did not fit) would then be in that save and in the save of
-// whoever picked it up. So a give-away (gaveAway) keeps the character's snapshot of the
-// end of that command, or of the tick for one the server made outside a command
-// (settleGivers, Player.pre): its state is whole again there (a dialog's later actions,
-// the quest step it completes, the other piles of the same gift). One still waiting when
-// a player command starts (made in a command that is not an Input, as a Join's tutorial
-// reward) is settled then, before that command changes a house (playerCommand). Its next
-// transfer submits that snapshot first (transferSnapshot): the Saver writes it before
-// the transfer, so a dropped or skipped transfer never takes the character back to a
-// save older than the give-away. It costs a write only for a transfer that follows a
-// give-away, and only once: any later snapshot of the character (an autosave, the final
-// one, a transfer's) replaces it. Its ack frees nothing that left a house after the
-// give-away: those reservations take the seq of the house write's own snapshot
-// (numberLeft), not of whatever snapshot comes next.
+// away to the public ground (thrown on the street or into a container there, or made for
+// it by the server and fallen at its feet: the coins of an NPC sale, a craft or a reward
+// that did not fit) would then be in that save and in the save of whoever picked it up.
+// The same happens without any transfer when the server stops uncleanly (lote 16): A
+// throws an item on the street, B picks it up and logs out (B's final save is written at
+// once), the server dies before A's next autosave: the item is in both rows.
 //
-// It does not cover a crash: with the database down at shutdown, that snapshot fails
-// with the transfer behind it (the shutdown abandons it), and a snapshot the database
-// rejects for good (ErrPermanent) taints nobody. Then the character goes back to an older
-// save, as anyone does in a crash (docs/01, docs/14).
+// So a give-away (gaveAway) is settled with the character's snapshot of the end of that
+// command, or of the tick for one the server made outside a command (settleGivers): its
+// state is whole again there (a dialog's later actions, the quest step it completes, the
+// other piles of the same gift). That snapshot is submitted at once, and what the
+// give-away landed in (the pile, or the container lying on the street) is reserved to
+// the character until the database acks it (reserveGave, heldGround): nobody else can
+// take it before the database has the giver without it, whatever happens to the queue
+// after that. The saves are coalesced per character: the first give-away is saved at
+// once, the ones in the next giveSaveEvery ticks are reserved right away and saved
+// together at its end (flushGiveDue), or with any earlier snapshot of the character (an
+// autosave, the final one, a transfer's: every snapshot reserves them with its own seq).
+// One still waiting when a player command starts (made in a command that is not an
+// Input, as a Join's tutorial reward) is settled then, before that command changes a
+// house or lets anybody else touch it (playerCommand). A transfer submits a waiting
+// give-away save first (transferSnapshot): the Saver writes it before the transfer, so a
+// dropped or skipped transfer never takes the character back to a save older than the
+// give-away. Its ack frees nothing that left a house after the give-away: those
+// reservations take the seq of the house write's own snapshot (numberLeft), not of
+// whatever snapshot comes next.
+//
+// A give-away save the database never acks (it is down, or rejects the row for good)
+// keeps the reservation: the giver may take its item back, nobody else, until a restart
+// or the item decays. A crash loses at most what lay on the ground, never makes two.
 //
 // No transfer may leave anything on the public ground in its own command (it checks
 // first that everything fits: canBuy, canReceive, moneyThatFits): the snapshot taken
@@ -117,9 +131,9 @@ func (w *World) transferSnapshot(p *Player) Snapshot {
 		// A give-away no command start settled: this command made it before its transfer.
 		w.log.Error("session: a transfer follows a give-away of its own command", "character", p.charID)
 	}
-	w.settleGave(p)
-	if p.pre != nil {
-		w.save(*p.pre)
+	w.settleGave(p, 0, true)
+	if len(p.giveWait) > 0 {
+		w.saveGave(p, 0) // its coalesced save goes first, as if its window had ended
 	}
 	s := w.snapshot(p, false)
 	w.inFlight[p.charID] = s.Seq
@@ -146,45 +160,56 @@ func (w *World) numberLeft(p *Player, seq uint64) {
 	p.left = p.left[:0]
 }
 
+// giveSaveEvery is the coalescing window of the give-away saves of one character (2 s):
+// a burst of drops costs one write, and what it dropped stays reserved to it that long
+// at most (plus the write).
+const giveSaveEvery = game.Tick(40)
+
 // gaveAway is called right after something of p's (carried by p, or made for p by the
 // server) landed on the public ground, where no save has it: whoever picks it up writes it
-// in their own save. p's snapshot from the end of this command (or tick) waits in p.pre
-// for p's next transfer (settleGivers, transferSnapshot); a later snapshot of p replaces
-// it. root is where it landed when that may be reserved to p (a pile of its own, or a pile
-// or container already reserved to p), nil otherwise (Player.given, reserveGiven).
-func (w *World) gaveAway(p *Player, root *Item) {
+// in their own save. p's snapshot from the end of this command (or tick) is submitted
+// (settleGivers) and reserves at to p until its ack (reserveGave). at is the pile or the
+// container lying on the street it landed in; root is the same when it may be reserved to
+// p inside a house write (a pile of its own, or a pile or container already reserved to
+// p), nil otherwise (Player.given, reserveGiven).
+func (w *World) gaveAway(p *Player, root, at *Item) {
 	p.given = append(p.given, root)
+	if at != nil {
+		p.gaveRoots = append(p.gaveRoots, at)
+	}
 	if !p.gave {
 		p.gave = true
 		w.givers = append(w.givers, p)
 	}
 }
 
-// settleGivers takes, for every player that gave something away since the last call, the
-// snapshot its next transfer writes first (Player.pre). It runs at the start and at the
-// end of every player command (playerCommand: Input; at the end after the command's house
-// changes are written) and at the end of every tick (flushSystem). Other commands (Join,
-// the acks, the test commands) settle at the next of those: the start of a player
-// command settles what they gave away before that command changes a house.
-func (w *World) settleGivers() {
+// settleGivers settles every player that gave something away since the last call
+// (settleGave) at tick now. It runs at the start and at the end of every player command
+// (playerCommand: Input; at the end after the command's house changes are written) and at
+// the end of every tick (flushSystem). Other commands (Join, the acks, the test commands)
+// settle at the next of those: the start of a player command settles what they gave away
+// before that command changes a house, or lets anybody else touch it.
+func (w *World) settleGivers(now game.Tick) {
 	if len(w.givers) == 0 {
 		return
 	}
 	for _, p := range w.givers {
 		if w.byChar[p.charID] == p { // one that left was saved (its final snapshot)
-			w.settleGave(p)
+			w.settleGave(p, now, false)
 		}
 	}
 	clear(w.givers)
 	w.givers = w.givers[:0]
 }
 
-// settleGave takes p's snapshot for its next transfer if p gave something away since its
-// last snapshot. A house p changed is written first, with p's snapshot (flushHouses),
-// which already comes after the give-away: then there is nothing to keep. Inside that
+// settleGave settles p's give-away since its last snapshot: p's snapshot is submitted now
+// (saveGave) or, inside the coalescing window of an earlier one (unless force), what it
+// landed in is reserved to p right away and saved at the window's end (flushGiveDue). A
+// house p changed is written first, with p's snapshot (flushHouses), which already comes
+// after the give-away and reserves it: then there is nothing left to do. Inside that
 // house write, when p's own command gave something away and changed the house, what it
 // gave away is reserved to p for the write instead (reserveGiven, see the rule above).
-func (w *World) settleGave(p *Player) {
+func (w *World) settleGave(p *Player, now game.Tick, force bool) {
 	if !p.gave {
 		return
 	}
@@ -198,8 +223,92 @@ func (w *World) settleGave(p *Player) {
 		}
 		w.log.Error("session: a command gave something away and changed a house", "character", p.charID)
 	}
-	s := w.snapshot(p, false)
-	p.pre = &s
+	if force || now >= p.giveNext {
+		w.saveGave(p, now)
+		return
+	}
+	// Coalesced: reserved now with no seq yet (no ack frees it), numbered by the next
+	// snapshot of p, which is submitted (flushGiveDue at the latest).
+	w.reserveGave(p, noSeq)
+	p.gave = false
+	clear(p.given)
+	p.given = p.given[:0]
+	if !p.giveDue {
+		p.giveDue = true
+		w.giveDue = append(w.giveDue, p)
+	}
+}
+
+// noSeq is the seq of a reservation no snapshot numbered yet: no ack reaches it.
+const noSeq = ^uint64(0)
+
+// saveGave submits p's snapshot after its give-aways (it reserves them, reserveGave) and
+// starts a coalescing window at now.
+func (w *World) saveGave(p *Player, now game.Tick) {
+	w.save(w.snapshot(p, false))
+	p.giveNext = now + giveSaveEvery
+}
+
+// reserveGave reserves to p, with seq, every pile or container its give-aways landed in
+// since its last snapshot (gaveRoots) or that waits for its coalesced save (giveWait),
+// while they still lie on the ground. A reservation of p's with a higher seq keeps it,
+// and one of another character is never taken over (no move gives anything into one:
+// groundHeld). With seq noSeq they wait in giveWait for the snapshot that numbers them.
+func (w *World) reserveGave(p *Player, seq uint64) {
+	if len(p.gaveRoots) == 0 && len(p.giveWait) == 0 {
+		return
+	}
+	var wait []*Item
+	if seq == noSeq {
+		wait = p.giveWait
+	}
+	for _, rs := range [2][]*Item{p.gaveRoots, p.giveWait} {
+		for _, r := range rs {
+			if !r.onGround {
+				continue
+			}
+			g, ok := w.heldGround[r]
+			if ok && g.char != p.charID {
+				continue
+			}
+			if !ok || g.seq < seq || g.seq == noSeq {
+				w.heldGround[r] = groundHold{char: p.charID, seq: seq}
+			}
+			if seq == noSeq && !slices.Contains(wait, r) {
+				wait = append(wait, r)
+			}
+		}
+	}
+	clear(p.gaveRoots)
+	p.gaveRoots = p.gaveRoots[:0]
+	if seq != noSeq {
+		clear(p.giveWait)
+		wait = p.giveWait[:0]
+	}
+	p.giveWait = wait
+}
+
+// flushGiveDue submits the coalesced give-away saves whose window ended by now (end of
+// tick, flushSystem). One that another snapshot already numbered, or whose player left
+// (its final snapshot did), needs none.
+func (w *World) flushGiveDue(now game.Tick) {
+	if len(w.giveDue) == 0 {
+		return
+	}
+	kept := w.giveDue[:0]
+	for _, p := range w.giveDue {
+		switch {
+		case w.byChar[p.charID] != p || len(p.giveWait) == 0:
+			p.giveDue = false
+		case now >= p.giveNext:
+			p.giveDue = false
+			w.saveGave(p, now)
+		default:
+			kept = append(kept, p)
+		}
+	}
+	clear(w.giveDue[len(kept):])
+	w.giveDue = kept
 }
 
 // reserveGiven reserves to p what its command gave away to the public ground, with the
@@ -225,6 +334,8 @@ func (w *World) reserveGiven(p *Player) bool {
 	}
 	clear(p.given)
 	p.given = p.given[:0]
+	clear(p.gaveRoots)
+	p.gaveRoots = p.gaveRoots[:0]
 	p.gave = false
 	return true
 }
@@ -285,7 +396,7 @@ func (w *World) holdGround(p *Player, it *Item) {
 		if h := w.inFlight[p.charID]; h != 0 {
 			w.heldGround[it] = groundHold{char: p.charID, seq: h}
 		}
-		w.gaveAway(p, it) // a pile of its own (drop)
+		w.gaveAway(p, it, it) // a pile of its own (drop)
 	}
 }
 

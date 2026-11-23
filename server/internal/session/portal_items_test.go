@@ -219,7 +219,7 @@ func TestItemFallKeepsTheHold(t *testing.T) {
 	evs = h.send(cl, drop)
 	g := h.w.GroundAt(landing)
 	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 4}}) ||
-		h.w.ReservedTo(g[0]) != other.CharacterID() || h.w.ReservedTo(g[1]) != 0 {
+		h.w.ReservedTo(g[0]) != other.CharacterID() || h.w.ReservedTo(g[1]) != p.CharacterID() { // lote 16: a give-away
 		t.Fatalf("after the ack: %v, below %v", systemKeys(evs), h.counts(landing))
 	}
 	h.checkInvariants()

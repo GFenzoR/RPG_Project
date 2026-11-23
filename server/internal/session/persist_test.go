@@ -415,3 +415,52 @@ func TestSaverDropsPermanentErrors(t *testing.T) {
 		t.Fatalf("written %v, failed outcomes %v", written, failed)
 	}
 }
+
+// Lote 16: a panic in a writer drops that job (logged, counted as rejected) and the Saver
+// goes on with the next ones; a transfer dropped that way taints its characters.
+func TestSaverSurvivesAPanickingWrite(t *testing.T) {
+	var mu sync.Mutex
+	var written []session.Snapshot
+	var failed []string
+	tainted := make(chan []int64, 1)
+	s, err := session.NewSaver(session.SaverConfig{
+		Clock:  clock.NewFake(time.Time{}),
+		Failed: func(o string) { mu.Lock(); failed = append(failed, o); mu.Unlock() },
+		Write: func(_ context.Context, snap session.Snapshot) error {
+			if snap.Seq == 1 {
+				panic("writer bug") //nolint:forbidigo // the bug the Saver must survive
+			}
+			mu.Lock()
+			written = append(written, snap)
+			mu.Unlock()
+			return nil
+		},
+		WriteTransfer: func(context.Context, session.Transfer) error { panic("transfer writer bug") }, //nolint:forbidigo // likewise
+		Tainted:       func(ids []int64) { tainted <- ids },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Start()
+	if !s.Submit(session.Snapshot{CharacterID: 1, Seq: 1}) || !s.Submit(session.Snapshot{CharacterID: 1, Seq: 2}) ||
+		!s.SubmitTransfer(session.Transfer{Snapshots: []session.Snapshot{{CharacterID: 3, Seq: 3}}}) ||
+		!s.Submit(session.Snapshot{CharacterID: 4, Seq: 4}) {
+		t.Fatal("submit refused")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(written) != 2 || written[0].Seq != 2 || written[1].Seq != 4 {
+		t.Fatalf("written %v", written)
+	}
+	if fmt.Sprint(failed) != "[rejected rejected]" {
+		t.Fatalf("failed outcomes %v", failed)
+	}
+	if ids := <-tainted; fmt.Sprint(ids) != "[3]" {
+		t.Fatalf("tainted %v", ids)
+	}
+}

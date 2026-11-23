@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -165,14 +166,33 @@ func (s *Saver) Stop(ctx context.Context) error {
 func (s *Saver) run() {
 	defer close(s.done)
 	for j := range s.ch {
-		if s.skipCrashed(j) || s.skipTainted(j) {
-			continue
+		s.handle(j)
+	}
+}
+
+// handle writes one job. A panic while writing it (a bug in a writer) is logged with its
+// stack and the job is dropped as rejected, so the goroutine keeps the queue going instead
+// of taking the server down (lote 16): a dropped transfer taints its characters, as a
+// rejected one does, and a dropped snapshot is not acked (the next one of its character
+// replaces it).
+func (s *Saver) handle(j Job) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.cfg.Logger.Error("session: panic while writing a job, dropped", "panic", r, "characters", jobCharacters(j),
+				"transfer", j.Transfer != nil, "stack", string(debug.Stack()))
+			s.failed(SaveRejected)
+			if j.Transfer != nil {
+				s.taint(j)
+			}
 		}
-		if j.Transfer != nil {
-			s.writeTransfer(*j.Transfer)
-		} else {
-			s.write(j.Snapshot)
-		}
+	}()
+	if s.skipCrashed(j) || s.skipTainted(j) {
+		return
+	}
+	if j.Transfer != nil {
+		s.writeTransfer(*j.Transfer)
+	} else {
+		s.write(j.Snapshot)
 	}
 }
 
