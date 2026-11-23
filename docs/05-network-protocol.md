@@ -56,10 +56,21 @@ Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 Detalles (T1.4, `server/internal/net/gateway`):
 - **`session_token`** es de un solo uso: el servidor lo borra al canjearlo en el `Hello`
   (tabla `sessions`, `kind = 'play'`). Reconectar exige otro `POST /api/play`.
-- **Hello:** debe ser el primer frame y llegar en 10 s; si no, el servidor cierra.
+- **Hello:** debe ser el primer frame y llegar en 5 s; si no, el servidor cierra.
   Primer frame que no es `Hello`, token inválido, vencido o ya usado, o personaje que
-  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un error de la base durante
-  el handshake → `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un token que no tiene la forma
+  de uno real (exactamente 43 caracteres base64url, 32 bytes sin relleno) se rechaza igual
+  sin llegar a la base. Un error de la base durante el handshake →
+  `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+- **Servidor lleno:** si ya hay `-max-players` conexiones con jugador (o logins en
+  curso), o todos los turnos de la base del handshake siguen ocupados después de esperar
+  el `Hello` (5 s), → `Disconnect{SERVER_FULL}` antes de canjear el token (no se gasta).
+  También si la cola de logins del loop está llena (ahí el token ya se gastó). Límites
+  en "Límites".
+- **Personajes por cuenta:** una cuenta tiene como mucho `-max-chars-per-account` (2)
+  personajes en el mundo a la vez, contando los link-dead; uno más →
+  `Disconnect{TOO_MANY_CHARACTERS}`. Entrar con uno que ya está en el mundo no cuenta como
+  otro: lo retoma ("Entrar dos veces").
 - **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
   `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
@@ -1749,6 +1760,34 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
   memoria. En combate cierra igual, pero el personaje queda en el mundo link-dead hasta
   que la pelea termina (lo que esa conexión mandó después no se ejecuta).
+- **Conexiones a `/ws` (lote 16, `gateway/admit.go`).** El servidor cuenta por **cliente**:
+  su IPv4, o su /64 en IPv6 (un abonado suele tener un /64 entero); detrás de Caddy, con
+  `-trust-proxy`, la última entrada de `X-Forwarded-For`, la misma regla que el rate
+  limit de la API HTTP (`net/clientip`). Antes de aceptar el WebSocket revisa, en orden:
+
+  | Límite | Flag de `gameserver` | Por defecto | Rechazo |
+  |---|---|---|---|
+  | Conexiones de todos aún en el handshake | `-ws-max-unauthenticated` | 1000 | HTTP 503 |
+  | Handshakes leyendo la base a la vez (canje del token y carga del personaje) | `-ws-max-handshakes` | 32 | HTTP 503 si están todos ocupados; el que ya mandó `Hello` espera hasta 5 s y si no, `SERVER_FULL` |
+  | Conexiones abiertas de un cliente (con jugador o no) | `-ws-max-conns-per-ip` | 8 | HTTP 429 |
+  | Conexiones de un cliente aún en el handshake | `-ws-max-pending-per-ip` | 4 | HTTP 429 |
+  | Conexiones nuevas de un cliente (balde) | `-ws-handshake-burst`, `-ws-handshake-every` | 5 seguidas, después 1 cada 2 s | HTTP 429 |
+  | Jugadores (conexiones con personaje o con login en curso) | `-max-players` | 500 | `Disconnect{SERVER_FULL}` después del `Hello` |
+  | Personajes de una cuenta en el mundo | `-max-chars-per-account` | 2 | `Disconnect{TOO_MANY_CHARACTERS}` |
+  | Comandos de una conexión esperando en la cola del loop | `-ws-max-queued-per-conn` | 16 | se descartan (ver docs/01, "Equidad de la cola") |
+
+  Un rechazo HTTP lleva `Retry-After` y nunca llega al `Hello` ni a la base: el navegador
+  solo ve que la conexión falló (el cliente muestra el texto de conexión perdida). Un
+  valor de `-1` quita ese límite (solo para pruebas de carga). Con
+  `-ws-loopback-exempt` (por defecto solo si `RPG_ENV` es `development` o `test`) los
+  límites **por cliente** no se aplican a 127.0.0.0/8 ni a `::1`: los bots, el E2E y
+  `make play` corren en la misma máquina; los globales sí. En producción (`RPG_ENV`
+  vacío o `production`) no hay excepción, y detrás de Caddy el cliente es la IP real.
+  `make bots` pasa además `-max-chars-per-account -1` (sus bots comparten cuenta, 10 por
+  cuenta); contra un servidor con `URL=` hacen falta esos flags.
+- **Logs acotados:** los comandos descartados de una conexión, los canjes de token y las
+  cargas de personaje que fallan por la base y los logins rechazados por la cola llena se
+  registran una vez por intervalo (10 s) con la cuenta (`count`), no uno por evento.
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
   Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
   `://` se compara con `esquema://host`: el cliente de escritorio usa

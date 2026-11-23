@@ -220,6 +220,26 @@ el punto 5:
   - **Reserva de lo soltado con la base caída:** dura hasta que vuelve; el que lo soltó
     puede recogerlo, nadie más. Con muchas tiradas seguidas un compañero espera hasta 2 s
     para levantar lo que le dejan (la ventana de agrupado).
+- **Topes de `/ws` y equidad de la cola (hecho, rama `sec/ws-gateway-caps`, lote 16, la
+  auditoría de seguridad; docs/05 "Límites", docs/01 "Equidad de la cola"):** conexiones
+  por IP (8 abiertas, 4 en el handshake, balde de 5 y 1 cada 2 s, HTTP 429), globales
+  (1000 sin login, 32 handshakes leyendo la base, HTTP 503), `-max-players` 500
+  (`SERVER_FULL`), 2 personajes por cuenta en el mundo (`TOO_MANY_CHARACTERS`), tokens con
+  forma de token real antes de la base, `Hello` en 5 s, cupo de 16 comandos por conexión en
+  la cola del loop y un carril propio para los logins. Todo con flags de `gameserver`; el
+  loopback queda exento de los topes por IP solo con `RPG_ENV` de desarrollo o prueba (o
+  `-ws-loopback-exempt`, que pasan el E2E y `make bots`). Queda:
+  - **Mirarlo en el juego** (la verificación final): login, relogueo del mismo personaje,
+    `make bots N=100` y los textos nuevos de desconexión.
+  - **El cliente no explica un 429/503:** el navegador no deja leer el estado HTTP de un
+    WebSocket rechazado, así que se ve "Se perdió la conexión con el servidor." Un
+    `GET` previo a un endpoint de estado podría distinguirlo.
+  - **Los link-dead no cuentan en `-max-players`** (el tope cuenta conexiones); sí en el
+    tope por cuenta. Están acotados por el tope por cuenta y la duración de la pelea.
+  - **`httpapi.clientKey` sigue con su copia de la regla** de la clave del cliente: ahora
+    vive también en `net/clientip`; unificarlas toca `httpapi`, que es de otro ítem del lote.
+  - **Con el mundo lleno, un relogueo del mismo personaje** desde otra conexión recibe
+    `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse).
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía

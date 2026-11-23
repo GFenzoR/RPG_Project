@@ -54,6 +54,27 @@ for each tick (50 ms):
 - Si un tick tarda más de 50 ms, se registra y el siguiente arranca de inmediato
   (no se acumula deuda). Métrica `tick_duration_ms`.
 
+### Equidad de la cola (lote 16, `game/fairness.go`)
+La cola de comandos es una sola (8192 lugares, hasta 2048 por tick), así que un solo
+actor que encola lo más rápido que puede la llenaría y el servidor rechazaría los
+comandos de todos los demás, también sus logins. Dos reglas lo impiden, sin tocar quién es
+dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
+- **Cupo por conexión.** Cada conexión encola sus comandos por un `game.Quota`: como mucho
+  `-ws-max-queued-per-conn` (16) suyos esperando en la cola; uno más se descarta en el
+  gateway, antes de la cola. El contador es un atómico de la conexión: sube al encolar y
+  baja cuando el loop ejecuta el comando (antes de ejecutarlo, así un comando que entra en
+  pánico también libera su lugar). Un cliente honesto manda unos pocos por tick y el loop
+  los vacía en el siguiente; con 500 jugadores a 16 cada uno la cola no se llena.
+- **Carril de ciclo de vida.** `Join`, `LoginStarted` y `LoginAborted` son
+  `game.LifecycleFunc`: van a un carril propio (2048 lugares) que el loop vacía primero en
+  cada tick, con su propio tope. Una cola llena nunca rechaza un login. `Leave` sigue en la
+  cola común, detrás de lo que su conexión mandó antes (un ataque mandado justo antes de
+  cerrar todavía cuenta y decide si queda link-dead); solo si la cola común está llena el
+  gateway lo pasa al carril, y ahí puede adelantarse a comandos viejos de esa conexión
+  (que `Input` ignora: el jugador ya no está). El orden dentro de cada carril es FIFO; un
+  `Join` puede adelantarse a comandos comunes de otros encolados antes, lo que ya podía
+  pasar con el acuse de un guardado que llega tarde (`Saved` lo tolera).
+
 ## El mundo en memoria
 - Posición: `(x uint16, y uint16, z uint8)`. Pisos 0–15, piso 7 = nivel del mar.
 - El mapa se carga completo en memoria al arrancar desde `world.bin` (compilado).
@@ -719,6 +740,9 @@ dinero real, se gasta en cosméticos y nada más. Piezas:
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.
+- Topes de conexiones a `/ws` por cliente y en total, de handshakes leyendo la base, de
+  jugadores y de personajes por cuenta (docs/05, "Límites"), y cupo de comandos por
+  conexión en la cola del loop ("Equidad de la cola").
 - Validación de forma de cada mensaje (tamaño máximo, rangos).
 - Nada del cliente se usa sin validar contra el estado del servidor.
 - Secretos por variables de entorno, nunca en el repo.
