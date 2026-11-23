@@ -207,7 +207,23 @@ func (s *session) do(act action) error {
 		if err != nil || email == "" {
 			return err
 		}
-		if err := l.script(nil, "deploy/home.sh", "admin", email, "admin"); err != nil {
+		err = l.script(nil, "deploy/home.sh", "admin", email, "admin")
+		if exitCode(err) == exitUnverified {
+			// Lote 16: the server printed the account (created, characters) and refused
+			// because it never confirmed its email. Only its owner can tell it is theirs.
+			fmt.Fprintln(l.out, "\nEsa cuenta nunca confirmó su email (sin correo configurado nadie puede), así que "+
+				"cualquiera pudo registrarla con tu dirección. Arriba ves cuándo se creó y sus personajes.")
+			ok, err := s.p.yesNo("¿Es tu cuenta (la creaste tú y esos son tus personajes)?", false)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Fprintln(l.out, "No le di el rol. Si no la creaste tú, no la uses: crea otra cuenta con otro email.")
+				return nil
+			}
+			err = l.script([]string{"ALLOW_UNVERIFIED=1"}, "deploy/home.sh", "admin", email, "admin")
+		}
+		if err != nil {
 			return &userError{
 				what: "No pude darle el rol admin a " + email,
 				next: "revisa que la cuenta exista (regístrate primero en " + s.url + "/ con Jugar) y que el email esté bien escrito",

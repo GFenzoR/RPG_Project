@@ -109,6 +109,9 @@ type Querier interface {
 	GetCosmeticForSale(ctx context.Context, id string) (GetCosmeticForSaleRow, error)
 	GetIdentity(ctx context.Context, arg GetIdentityParams) (int64, error)
 	GetOAuthPending(ctx context.Context, arg GetOAuthPendingParams) (GetOAuthPendingRow, error)
+	// What the operator sees before set-role writes (lote 16): who the account with that
+	// (normalized) email is, how it proved the email, and its characters.
+	GetRoleCandidate(ctx context.Context, email string) (GetRoleCandidateRow, error)
 	// The shop state of an account. blocked: disabled or with an active ban.
 	GetShopAccount(ctx context.Context, arg GetShopAccountParams) (GetShopAccountRow, error)
 	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)

@@ -62,3 +62,16 @@ SELECT role FROM accounts WHERE id = sqlc.arg(id);
 -- name: GetAccountRoles :many
 -- Current roles of some accounts: online staff lose a revoked role within seconds.
 SELECT id, role FROM accounts WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: GetRoleCandidate :one
+-- What the operator sees before set-role writes (lote 16): who the account with that
+-- (normalized) email is, how it proved the email, and its characters.
+SELECT a.id, a.role, a.created_at, a.email_verified_at, a.last_login_at, a.disabled_at,
+       COALESCE((SELECT array_agg(i.provider ORDER BY i.provider)
+                 FROM account_identities i
+                 WHERE i.account_id = a.id AND i.email_verified), '{}')::text[] AS verified_providers,
+       COALESCE((SELECT array_agg(c.name ORDER BY c.created_at, c.id)
+                 FROM characters c
+                 WHERE c.account_id = a.id), '{}')::text[] AS character_names
+FROM accounts a
+WHERE a.email = sqlc.arg(email);

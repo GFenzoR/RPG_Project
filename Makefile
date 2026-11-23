@@ -166,8 +166,8 @@ run-server: mapcompile ## Compile the map and run the game server on it (RPG_WOR
 
 # Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
 .PHONY: set-role
-set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" (DATABASE_URL)
-	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)"
+set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" [ALLOW_UNVERIFIED=1] (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)" $(if $(filter 1,$(ALLOW_UNVERIFIED)),-allow-unverified)
 
 .PHONY: reset-link
 reset-link: ## Print a one-use password reset link: make reset-link EMAIL=... [PUBLIC_URL=http://localhost:5173] (DATABASE_URL)
@@ -500,7 +500,7 @@ home-up: home-check-eol ## Build, start and check the game on this PC; prints wh
 	@$(HOME_SH) up
 
 .PHONY: home-admin
-home-admin: ## Give a registered account a role: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]
+home-admin: ## Give a registered account a role: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player] [ALLOW_UNVERIFIED=1]
 	@$(HOME_SH) admin "$(EMAIL)" "$(or $(ROLE),admin)"
 
 .PHONY: home-reset-password

@@ -17,6 +17,19 @@ type fakeAdminStore struct {
 	audit       store.AuditEntry
 	closed      bool
 	token       store.AccountToken
+	// candidate is the account behind gm@example.org (RoleCandidate); verified by default.
+	candidate *store.RoleCandidate
+}
+
+func (f *fakeAdminStore) RoleCandidate(_ context.Context, email string) (store.RoleCandidate, error) {
+	if email != "gm@example.org" {
+		return store.RoleCandidate{}, store.ErrNotFound
+	}
+	if f.candidate != nil {
+		return *f.candidate, nil
+	}
+	return store.RoleCandidate{ID: 7, Role: "player", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		EmailVerifiedAt: time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC), Characters: []string{"Warden"}}, nil
 }
 
 func (f *fakeAdminStore) SetRole(_ context.Context, email, role string, a store.AuditEntry) (int64, string, error) {
@@ -149,5 +162,48 @@ func TestAdminSetRole(t *testing.T) {
 	}
 	if _, out, err := run("audit", "-n", "5"); err != nil || !strings.Contains(out, "set_role") {
 		t.Fatalf("audit: %q %v", out, err)
+	}
+}
+
+// set-role shows the account first and only raises one that proved its email (a
+// confirmed address or a verified Google/Discord identity), unless -allow-unverified.
+func TestAdminSetRoleNeedsAProvenAccount(t *testing.T) {
+	now := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 11, 19, 8, 30, 0, 0, time.UTC)
+	run := func(c store.RoleCandidate, args ...string) (*fakeAdminStore, string, error) {
+		f := &fakeAdminStore{candidate: &c}
+		var out bytes.Buffer
+		err := adminCommand(context.Background(), args, func() (adminStore, error) { return f, nil }, &out, "cli:ops", func() time.Time { return now })
+		return f, out.String(), err
+	}
+	unverified := store.RoleCandidate{ID: 9, Role: "player", CreatedAt: created, Characters: []string{"Impostor", "Alt"}}
+	for _, role := range []string{"gm", "admin"} {
+		f, out, err := run(unverified, "set-role", "-email", "gm@example.org", "-role", role, "-note", "x")
+		if !errors.Is(err, errUnverified) || f.role != "" {
+			t.Fatalf("%s for an unverified account: %v, role written %q", role, err, f.role)
+		}
+		for _, want := range []string{"account 9 (gm@example.org), role player", "created:         2026-11-19T08:30:00Z",
+			"email verified:  never", "verified OAuth:  none", "last login:      never", "characters:      Impostor, Alt"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("output lacks %q:\n%s", want, out)
+			}
+		}
+	}
+	// Taking a role away never needs proof.
+	if f, _, err := run(unverified, "set-role", "-email", "gm@example.org", "-role", "player", "-note", "x"); err != nil || f.role != "player" {
+		t.Fatalf("demotion: %v", err)
+	}
+	// The operator checked the account and overrides.
+	f, out, err := run(unverified, "set-role", "-email", "gm@example.org", "-role", "admin", "-note", "x", "-allow-unverified")
+	if err != nil || f.role != "admin" || !strings.Contains(out, "-allow-unverified") {
+		t.Fatalf("override: %v %q", err, out)
+	}
+	// A verified OAuth identity proves the email too.
+	viaGoogle := unverified
+	viaGoogle.VerifiedProviders = []string{"google"}
+	viaGoogle.LastLoginAt = now
+	if f, out, err := run(viaGoogle, "set-role", "-email", "gm@example.org", "-role", "gm", "-note", "x"); err != nil || f.role != "gm" ||
+		!strings.Contains(out, "verified OAuth:  google") || !strings.Contains(out, "last login:      2026-11-20T00:00:00Z") {
+		t.Fatalf("google-verified: %v %q", err, out)
 	}
 }

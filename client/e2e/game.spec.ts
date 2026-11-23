@@ -1559,6 +1559,8 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
       "gm",
       "-note",
       "e2e",
+      // The e2e accounts never confirm their email (lote 16: set-role refuses that).
+      "-allow-unverified",
     ],
     {
       cwd: join(import.meta.dirname, "..", "..", "server"),

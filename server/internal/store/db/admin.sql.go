@@ -122,6 +122,47 @@ func (q *Queries) GetCharacterTarget(ctx context.Context, name string) (GetChara
 	return i, err
 }
 
+const getRoleCandidate = `-- name: GetRoleCandidate :one
+SELECT a.id, a.role, a.created_at, a.email_verified_at, a.last_login_at, a.disabled_at,
+       COALESCE((SELECT array_agg(i.provider ORDER BY i.provider)
+                 FROM account_identities i
+                 WHERE i.account_id = a.id AND i.email_verified), '{}')::text[] AS verified_providers,
+       COALESCE((SELECT array_agg(c.name ORDER BY c.created_at, c.id)
+                 FROM characters c
+                 WHERE c.account_id = a.id), '{}')::text[] AS character_names
+FROM accounts a
+WHERE a.email = $1
+`
+
+type GetRoleCandidateRow struct {
+	ID                int64
+	Role              string
+	CreatedAt         pgtype.Timestamptz
+	EmailVerifiedAt   pgtype.Timestamptz
+	LastLoginAt       pgtype.Timestamptz
+	DisabledAt        pgtype.Timestamptz
+	VerifiedProviders []string
+	CharacterNames    []string
+}
+
+// What the operator sees before set-role writes (lote 16): who the account with that
+// (normalized) email is, how it proved the email, and its characters.
+func (q *Queries) GetRoleCandidate(ctx context.Context, email string) (GetRoleCandidateRow, error) {
+	row := q.db.QueryRow(ctx, getRoleCandidate, email)
+	var i GetRoleCandidateRow
+	err := row.Scan(
+		&i.ID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.EmailVerifiedAt,
+		&i.LastLoginAt,
+		&i.DisabledAt,
+		&i.VerifiedProviders,
+		&i.CharacterNames,
+	)
+	return i, err
+}
+
 const insertAudit = `-- name: InsertAudit :exec
 INSERT INTO audit_log (at, source, actor_account_id, actor_character_id, actor_name, action,
                        target_account_id, target_character_id, target_name, args, result)

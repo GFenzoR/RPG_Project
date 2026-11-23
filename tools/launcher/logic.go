@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -377,6 +378,23 @@ func parseYesNo(s string, def bool) (yes, ok bool) {
 		return false, true
 	}
 	return false, false
+}
+
+// exitUnverified is the exit code of `gameserver admin set-role` (and so of deploy/home.sh
+// admin) when it refuses to raise an account that never proved its email (lote 16).
+const exitUnverified = 3
+
+// exitCode is the exit status of a finished command's error: 0 for nil, -1 when the
+// command did not run to an exit (not found, killed).
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
 }
 
 // validEmail is a sanity check before the email goes to the server's admin command,

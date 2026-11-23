@@ -189,8 +189,12 @@ cmd_admin() {
 	[[ -n $email ]] || die "usage: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]"
 	case $role in admin | gm | player) ;; *) die "ROLE must be admin, gm or player" ;; esac
 	running gameserver || die "the game is not running: make home-up first"
+	# Lote 16: set-role shows the account and refuses (exit 3) to raise one that never
+	# proved its email; ALLOW_UNVERIFIED=1 overrides once you checked it is yours.
+	local extra=()
+	[[ ${ALLOW_UNVERIFIED:-0} == 1 ]] && extra=(-allow-unverified)
 	compose exec -T gameserver /app/gameserver admin set-role -email "$email" -role "$role" \
-		-note "${NOTE:-make home-admin}"
+		-note "${NOTE:-make home-admin}" ${extra[@]+"${extra[@]}"}
 }
 
 cmd_backup() {

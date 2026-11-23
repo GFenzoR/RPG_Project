@@ -265,9 +265,10 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
             -d '{"email":"home-admin@example.com","password":"home-admin-pass-1"}' http://localhost:8080/api/auth/register)
           test "$code" = 201
-          make home-admin EMAIL=home-admin@example.com ROLE=gm
+          # No SMTP in CI: the account never confirms its email (lote 16 refuses that by default).
+          ALLOW_UNVERIFIED=1 make home-admin EMAIL=home-admin@example.com ROLE=gm
           CONFIRM=yes make home-restore FILE="$(find deploy/backups -name 'home-*.dump' | sort | head -n 1)"
-          if make home-admin EMAIL=home-admin@example.com ROLE=gm; then
+          if ALLOW_UNVERIFIED=1 make home-admin EMAIL=home-admin@example.com ROLE=gm; then
             echo "the account registered after the backup survived the restore"; exit 1
           fi
           curl -fsS http://localhost:8080/healthz

@@ -354,3 +354,51 @@ func (s *Store) SetRole(ctx context.Context, email, role string, audit AuditEntr
 }
 
 func optID(id int64) pgtype.Int8 { return pgtype.Int8{Int64: id, Valid: id != 0} }
+
+// RoleCandidate is what the operator's set-role shows about an account before writing
+// (lote 16): enough to tell whether the account behind an email is really the person
+// being promoted.
+type RoleCandidate struct {
+	ID        int64
+	Role      string
+	CreatedAt time.Time
+	// EmailVerifiedAt is zero if the account never confirmed its email.
+	EmailVerifiedAt time.Time
+	// LastLoginAt is zero if the account never logged in.
+	LastLoginAt time.Time
+	Disabled    bool
+	// VerifiedProviders are the linked OAuth identities whose provider verified the email.
+	VerifiedProviders []string
+	Characters        []string
+}
+
+// Proven reports whether the account proved it owns its email: a confirmed email or an
+// OAuth identity whose provider verified it.
+func (c RoleCandidate) Proven() bool {
+	return !c.EmailVerifiedAt.IsZero() || len(c.VerifiedProviders) > 0
+}
+
+// RoleCandidate returns the account with that (normalized) email, or ErrNotFound.
+func (s *Store) RoleCandidate(ctx context.Context, email string) (RoleCandidate, error) {
+	row, err := s.q.GetRoleCandidate(ctx, email)
+	if err != nil {
+		return RoleCandidate{}, fmt.Errorf("role candidate: %w", notFound(err))
+	}
+	return RoleCandidate{
+		ID:                row.ID,
+		Role:              row.Role,
+		CreatedAt:         row.CreatedAt.Time,
+		EmailVerifiedAt:   optTime(row.EmailVerifiedAt),
+		LastLoginAt:       optTime(row.LastLoginAt),
+		Disabled:          row.DisabledAt.Valid,
+		VerifiedProviders: row.VerifiedProviders,
+		Characters:        row.CharacterNames,
+	}, nil
+}
+
+func optTime(t pgtype.Timestamptz) time.Time {
+	if !t.Valid {
+		return time.Time{}
+	}
+	return t.Time
+}

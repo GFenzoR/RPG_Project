@@ -211,3 +211,39 @@ func TestRolesBansAudit(t *testing.T) {
 		t.Fatalf("audit rows after deleting accounts = %d", rows)
 	}
 }
+
+// What set-role shows before writing (lote 16): unproven until the email is confirmed or a
+// provider verified it on a linked identity.
+func TestRoleCandidate(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.Open(t, "it_store_role_candidate", true)
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	acc, err := st.CreateAccount(ctx, "who@example.org", "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: acc, Name: "Warden", Vocation: "guardian", Health: 150}, 5); err != nil {
+		t.Fatal(err)
+	}
+	c, err := st.RoleCandidate(ctx, "who@example.org")
+	if err != nil || c.ID != acc || c.Role != store.RolePlayer || c.Proven() || c.CreatedAt.IsZero() ||
+		!c.EmailVerifiedAt.IsZero() || len(c.Characters) != 1 || c.Characters[0] != "Warden" {
+		t.Fatalf("RoleCandidate = %+v, %v", c, err)
+	}
+	if _, err := st.RoleCandidate(ctx, "nobody@example.org"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unknown email: %v", err)
+	}
+	if err := st.LinkIdentity(ctx, acc, store.ExternalIdentity{Provider: "discord", Subject: "d1", Email: "x@example.org"}, now); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := st.RoleCandidate(ctx, "who@example.org"); c.Proven() {
+		t.Fatalf("an identity whose provider did not verify the email proves it: %+v", c)
+	}
+	if err := st.LinkIdentity(ctx, acc, store.ExternalIdentity{Provider: "google", Subject: "g1", Email: "who@example.org", EmailVerified: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := st.RoleCandidate(ctx, "who@example.org"); !c.Proven() || len(c.VerifiedProviders) != 1 || c.VerifiedProviders[0] != "google" {
+		t.Fatalf("verified google identity: %+v", c)
+	}
+
+}
