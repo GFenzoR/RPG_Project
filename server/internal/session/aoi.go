@@ -174,6 +174,7 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 	} else {
 		id = mo.id
 	}
+	w.livingStep(from, to) // pressure plates (livingworld.go)
 	var moved, gone, appeared *pb.ServerMessage
 	x0, x1 := int(min(from.X, to.X))-ViewHalfW, int(max(from.X, to.X))+ViewHalfW
 	y0, y1 := int(min(from.Y, to.Y))-ViewHalfH, int(max(from.Y, to.Y))+ViewHalfH
@@ -307,6 +308,9 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 				if ok {
 					stack = append(stack[:0], tileEntry{id: uint32(ground)})
 					for _, id := range w.m.Stack(pos) {
+						stack = append(stack, tileEntry{id: uint32(id)})
+					}
+					if id := w.livingAt(pos); id != 0 {
 						stack = append(stack, tileEntry{id: uint32(id)})
 					}
 					for _, it := range w.ground[pos] {

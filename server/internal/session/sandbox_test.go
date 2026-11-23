@@ -94,11 +94,14 @@ func newSandbox(t *testing.T) *sandbox {
 	must(err)
 	tutorial, err := content.LoadTutorial(dir)
 	must(err)
+	living, err := session.LoadLivingWorld(dir)
+	must(err)
 	s := &sandbox{m: m, pf: world.NewPathfinder(m, 0), healers: map[*session.Player]func(){},
 		casters: map[*session.Player]func(uint32){}, seen: map[*session.Corpse]bool{}, packs: map[*session.Player]packWin{}}
 	s.harness = dataHarnessWith(t, func(cfg *session.Config) {
 		cfg.Map, cfg.StartTown = m, "pruebas"
 		cfg.NPCs, cfg.BoatRoutes, cfg.Spells, cfg.Recipes, cfg.Tutorial = npcs, routes, spells, recipes, tutorial
+		cfg.LivingWorld = living
 		cfg.Quests = realQuests(t) // dataConfig parked the reach steps (parkReachSteps)
 		s.items, s.vocations, s.spells = cfg.Items, cfg.Vocations, spells
 		save := cfg.Save

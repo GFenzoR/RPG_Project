@@ -120,6 +120,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.tradeCancel(p)
 	case *pb.ClientMessage_MarketCommand:
 		w.marketCommand(ctx, p, m.MarketCommand)
+	case *pb.ClientMessage_PushObject:
+		w.pushObject(ctx, p, m.PushObject)
 	case *pb.ClientMessage_StashCommand:
 		w.stashCommand(ctx, p, m.StashCommand)
 	case *pb.ClientMessage_HouseCommand:

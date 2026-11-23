@@ -59,6 +59,8 @@ type Config struct {
 	// TrailWear is data/livingworld/wear.yaml (session.LoadTrailWear); nil turns the
 	// living world's trail wear off. With a TrailStore it survives restarts (trailwear.go).
 	TrailWear *session.TrailConfig
+	// LivingWorld is data/livingworld (session.LoadLivingWorld); nil means no living objects.
+	LivingWorld session.LivingDefs
 	// Attributes come from data/attributes.yaml (docs/02 "Atributos de items"); nil means
 	// no equipable rolls one.
 	Attributes content.Attributes
@@ -344,6 +346,7 @@ func New(cfg Config) (*App, error) {
 			Items:          cfg.Items,
 			Spells:         cfg.Spells,
 			Recipes:        cfg.Recipes,
+			LivingWorld:    cfg.LivingWorld,
 			Attributes:     cfg.Attributes,
 			Rand:           rng,
 			BoatRoutes:     cfg.BoatRoutes,

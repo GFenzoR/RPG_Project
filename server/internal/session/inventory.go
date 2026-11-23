@@ -417,7 +417,13 @@ func (p *Player) openByID(id uint32) *Item {
 
 // staticCount is how many entries the client sees below the dynamic items of pos: the
 // ground and the items of world.bin.
-func (w *World) staticCount(pos world.Pos) int { return 1 + len(w.m.Stack(pos)) }
+// The living world's object of pos (livingworld.go) counts as one more of them, above them.
+func (w *World) staticCount(pos world.Pos) int {
+	if w.livingAt(pos) != 0 {
+		return 2 + len(w.m.Stack(pos))
+	}
+	return 1 + len(w.m.Stack(pos))
+}
 
 // itemAt resolves the item a client action points at. stale views (another item, an
 // index out of range, a closed container) give nil. A tile p does not see gives nil too,
@@ -1025,7 +1031,7 @@ func (w *World) forgetContainers(p *Player) {
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStash(ctx, p, m) ||
 		w.usePortal(ctx, p, m) ||
-		w.useChest(ctx, p, m) || w.useStation(p, m) {
+		w.useChest(ctx, p, m) || w.useLiving(ctx, p, m) || w.useStation(p, m) {
 		return
 	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
@@ -1158,14 +1164,8 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 			return
 		}
 		i := int(m.GetStackIndex())
-		ground, _, exists := w.m.Tile(pos)
-		static := w.m.Stack(pos)
-		switch {
-		case !exists:
-		case i == 0:
-			def = w.byNum[ground]
-		case i <= len(static):
-			def = w.byNum[static[i-1]]
+		if _, _, exists := w.m.Tile(pos); exists && i < w.staticCount(pos) {
+			def = w.byNum[w.staticAt(pos, i)]
 		}
 		if def != nil {
 			if uint32(def.Numeric) != m.GetItemId() {

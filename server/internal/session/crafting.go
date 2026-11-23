@@ -62,8 +62,12 @@ func (w *World) staticAt(pos world.Pos, i int) uint16 {
 		g, _, _ := w.m.Tile(pos)
 		return g
 	}
-	if stack := w.m.Stack(pos); i-1 < len(stack) {
+	stack := w.m.Stack(pos)
+	if i-1 < len(stack) {
 		return stack[i-1]
+	}
+	if i-1 == len(stack) {
+		return w.livingAt(pos) // the living world's object, above the map's own items
 	}
 	return 0
 }

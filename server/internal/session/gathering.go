@@ -95,6 +95,9 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}
+	if w.toolOnLiving(ctx, p, tool, pos) { // an axe on vines, a pickaxe on a cracked rock
+		return
+	}
 	def := w.resourceAt(pos)
 	if def == nil && w.near(p, pos) {
 		// A tool used on a crafting station (a hammer on the anvil) opens it (T3.4).

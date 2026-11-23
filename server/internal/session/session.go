@@ -231,6 +231,9 @@ type Config struct {
 	TrailData       []byte
 	TrailDowntimeMs int64
 	SaveTrail       func(TrailSnapshot) bool
+	// LivingWorld is data/livingworld (LoadLivingWorld, livingworld/README.md): the map
+	// objects that break, move or open. Nil: none (every such item stays a plain map item).
+	LivingWorld LivingDefs
 	// RerouteMaxNodes and PathNodesPerTick tune the pathfinding quota.
 	RerouteMaxNodes  int
 	PathNodesPerTick int
@@ -379,8 +382,11 @@ type World struct {
 
 	// Gathering (T1.12): harvested tiles (charges left, refill event), the rate limit
 	// and the anti-AFK delay in ticks (0 = off).
-	resources      map[world.Pos]*resourceTile
-	gatherFor      game.Tick
+	resources map[world.Pos]*resourceTile
+	gatherFor game.Tick
+	// living is the living world (livingworld.go); nil without Config.LivingWorld.
+	living         *livingWorld
+	livingPushFor  game.Tick
 	gatherAFKAfter game.Tick
 	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
 	// their recipes, for StationOpen.
@@ -713,6 +719,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initGathering(); err != nil {
+		return nil, err
+	}
+	if err := w.initLivingWorld(); err != nil { // before the doors: its objects block like walls
 		return nil, err
 	}
 	if err := w.initDoors(); err != nil { // with checkArrivals (travel.go)

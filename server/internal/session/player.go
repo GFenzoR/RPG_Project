@@ -140,7 +140,9 @@ type Player struct {
 	// Gathering (T1.12): the first tick p can gather again, the tile p has been
 	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet) and its last
 	// counted attempt.
-	nextGather  game.Tick
+	nextGather game.Tick
+	// nextPush is when p may push a living object again (livingworld.go).
+	nextPush    game.Tick
 	gatherPos   world.Pos
 	gatherSince game.Tick
 	gatherLast  game.Tick
