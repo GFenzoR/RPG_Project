@@ -174,3 +174,152 @@ export function OAuthButtons(props: { t: Translate; returnTo: string }): JSX.Ele
     </div>
   );
 }
+
+/** The text of a failed account-security call: some codes read better here than generic. */
+function securityError(t: Translate, code: string): string {
+  if (code === "invalid_credentials") return t("client.account.wrong_password");
+  if (code === "reauth_required") return t("client.account.reauth");
+  const key = `error.${code}`;
+  return t(key) === key ? t("error.unknown") : t(key);
+}
+
+/**
+ * Lote 17, on the characters screen: change (or, for an account that only signs in with a
+ * provider, create) the password, and "sign out everywhere" with a confirmation.
+ * `onSignedOut` runs after every session ended, this one included.
+ */
+export function AccountSecurity(props: { t: Translate; onSignedOut(): void }): JSX.Element {
+  const { t } = props;
+  const [account, setAccount] = useState<Account | undefined>(undefined);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "changed">("idle");
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    let live = true;
+    accountApi.account().then(
+      (a) => live && setAccount(a),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  // Until the account answers, assume a password (the common case).
+  const hasPassword = account?.has_password ?? true;
+  const fail = (e: unknown): void => {
+    setError(securityError(t, e instanceof ApiError ? e.code : "unknown"));
+    setState("idle");
+  };
+
+  const change = (e: Event): void => {
+    e.preventDefault();
+    setState("busy");
+    setError(undefined);
+    accountApi.changePassword(hasPassword ? current : "", next).then(() => {
+      setCurrent("");
+      setNext("");
+      setState("changed");
+      setAccount((a) => (a ? { ...a, has_password: true } : a));
+    }, fail);
+  };
+
+  const signOutEverywhere = (): void => {
+    setState("busy");
+    setError(undefined);
+    accountApi.logoutAll().then(props.onSignedOut, (e: unknown) => {
+      // Already signed out (the session ended meanwhile): the login is where it ends too.
+      if (e instanceof ApiError && e.code === "unauthorized") return props.onSignedOut();
+      setConfirming(false);
+      fail(e);
+    });
+  };
+
+  return (
+    <details class="account-security" data-testid="account-security">
+      <summary>{t("client.account.title")}</summary>
+      <form data-testid="change-password" onSubmit={change}>
+        <h3>
+          {t(
+            hasPassword ? "client.account.password_title" : "client.account.password_create_title",
+          )}
+        </h3>
+        {!hasPassword && <p class="muted">{t("client.account.no_password_hint")}</p>}
+        {hasPassword && (
+          <label>
+            {t("client.account.current_password")}
+            <input
+              type="password"
+              name="current_password"
+              autoComplete="current-password"
+              required
+              value={current}
+              onInput={(e) => setCurrent(e.currentTarget.value)}
+            />
+          </label>
+        )}
+        <label>
+          {t("client.account.new_password")}
+          <input
+            type="password"
+            name="new_password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            maxLength={128}
+            value={next}
+            onInput={(e) => setNext(e.currentTarget.value)}
+          />
+          <small>{t("client.register.password_hint")}</small>
+        </label>
+        <button type="submit" disabled={state === "busy"}>
+          {t(
+            hasPassword
+              ? "client.account.password_submit"
+              : "client.account.password_create_submit",
+          )}
+        </button>
+        {state === "changed" && (
+          <p class="notice" role="status" data-testid="password-changed">
+            {t("client.account.password_changed")}
+          </p>
+        )}
+      </form>
+      <div class="logout-all" data-testid="logout-all">
+        <p class="muted">{t("client.account.logout_all_hint")}</p>
+        {confirming ? (
+          <div role="alertdialog" aria-label={t("client.account.logout_all")}>
+            <p>{t("client.account.logout_all_confirm")}</p>
+            <button
+              type="button"
+              class="danger"
+              data-testid="logout-all-confirm"
+              disabled={state === "busy"}
+              onClick={signOutEverywhere}
+            >
+              {t("client.account.logout_all_yes")}
+            </button>
+            <button type="button" class="link" onClick={() => setConfirming(false)}>
+              {t("client.account.cancel")}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-testid="logout-all-button"
+            disabled={state === "busy"}
+            onClick={() => setConfirming(true)}
+          >
+            {t("client.account.logout_all")}
+          </button>
+        )}
+      </div>
+      {error && (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      )}
+    </details>
+  );
+}

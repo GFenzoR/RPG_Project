@@ -1,7 +1,8 @@
 // HTTP API of the game server (docs/05-network-protocol.md, "API HTTP"). The web client
 // authenticates with the HttpOnly session cookie set by /api/auth/login: it never asks for
 // the token in the body, so a script on the page cannot read it. In the desktop app the
-// call goes through Rust (net/desktop.ts), which keeps the token in the OS keyring.
+// call goes through Rust (net/desktop.ts), which keeps the token in memory for the run.
+// The game never keeps the login (lote 17): nothing here stores a token.
 import { desktopApi, isDesktop } from "./desktop.ts";
 import type { Look } from "@rpg/renderer/look";
 
@@ -214,6 +215,17 @@ export const accountApi = {
     call("POST", "/api/auth/password/forgot", { email, lang }),
   reset: (token: string, password: string): Promise<void> =>
     call("POST", "/api/auth/password/reset", { token, password }),
+  /**
+   * Lote 17: a new password from a signed-in session. `current` is "" for an account
+   * that only signs in with a provider (allowed shortly after its login). Every other
+   * session of the account ends; this one stays.
+   */
+  changePassword: (current: string, next: string): Promise<void> =>
+    call("POST", "/api/account/password", { current_password: current, new_password: next }),
+  /** Lote 17: ends every session of the account, this one included. */
+  logoutAll: (): Promise<void> => call("POST", "/api/auth/logout-all"),
+  /** Lote 17: heartbeat while playing, so the session does not go idle. */
+  keepalive: (): Promise<void> => call("POST", "/api/auth/keepalive"),
 };
 
 /** OAuth login and linked identities (T2.1, docs/05 "OAuth"). */
