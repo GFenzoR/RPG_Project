@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package game.v1;
+
+option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
+
+// The living world (livingworld/README.md, docs/05 "Mundo vivo"). The file lives with the
+// rest of package game.v1 (buf wants a package's files in its directory).
+
+// TrailWear is the trail wear of tiles of one floor (server → client): grass worn into a
+// path by players' steps (livingworld/server/trail). Level 0 none, 1 trampled, 2 worn,
+// 3 bare dirt. It travels two ways:
+//   - in MapArea.wear (FullMapView, MapSlice): every tile of the area with a level above
+//     0; the client forgets the wear it had inside the area first;
+//   - as a ServerMessage on its own: the tiles in view whose level changed this tick (0:
+//     the grass recovered).
+// Packed for the bandwidth (docs/07): tiles[i] is x << 16 | y of the i-th tile and
+// levels[i] its level, one byte each.
+message TrailWear {
+  uint32 z = 1;
+  repeated uint32 tiles = 2;
+  bytes levels = 3;
+}

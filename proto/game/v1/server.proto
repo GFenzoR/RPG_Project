@@ -3,6 +3,7 @@ syntax = "proto3";
 package game.v1;
 
 import "game/v1/common.proto";
+import "game/v1/livingworld.proto";
 
 option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
 
@@ -64,6 +65,8 @@ message ServerMessage {
     QuestLog quest_log = 45;
     CreatureLook creature_look = 46;
     StashUpdate stash_update = 47;
+    // 48 is the living world's LivingObjectEvent (breakables).
+    TrailWear trail_wear = 49;
   }
 }
 
@@ -159,6 +162,8 @@ message MapArea {
   repeated MapFloor floors = 6;
   // Creatures standing inside the area.
   repeated Creature creatures = 7;
+  // Trail wear of the area's tiles, one per floor with any (livingworld.proto TrailWear).
+  repeated TrailWear wear = 8;
 }
 
 // FullMapView is the whole visible area, sent on login and after a teleport. walk_epoch

@@ -101,6 +101,7 @@ function world(): WorldState {
           height: 0,
           palette: [],
           floors: [],
+          wear: [],
           creatures: [
             mk(1, 10, CreatureKind.PLAYER),
             mk(5, 14, CreatureKind.MONSTER, "wolf"),
