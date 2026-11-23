@@ -196,6 +196,8 @@ class Validator {
   private recipes: SourceFile | undefined;
   private spells: SourceFile | undefined;
   private tutorial: SourceFile | undefined;
+  /** data/livingworld/*.yaml (livingworld/README.md), checked after the items. */
+  private living: SourceFile[] = [];
 
   private readonly root: string;
 
@@ -231,6 +233,7 @@ class Validator {
     this.checkSummons();
     this.checkI18n();
     this.checkSounds();
+    this.checkLivingWorld();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
       ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
@@ -399,6 +402,7 @@ class Validator {
       }
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
       if (!src || !isObj(src.data)) continue;
+      if (name === "objects") this.living.push(src);
       if (name === "plants") {
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {
@@ -2461,6 +2465,87 @@ class Validator {
               );
           }
         });
+      }
+    }
+  }
+
+  /**
+   * data/livingworld/*.yaml (livingworld/README.md): one entry per item; never a wall, a
+   * door or a ground; a breakable, pushable or closed gate blocks movement, its debris, an
+   * open gate and a plate do not; sounds exist in assets/sounds.yaml; debris lies at most
+   * as long as the respawn. The server's livingworld.Resolve applies the same rules.
+   */
+  private checkLivingWorld(): void {
+    if (this.living.length === 0) return;
+    const items = new Map<string, Obj>();
+    for (const { item } of this.items) if (typeof item["id"] === "string") items.set(item["id"], item);
+    const blocks = (it: Obj): boolean =>
+      it["blocks_movement"] === true || (it["kind"] === "wall" && it["blocks_movement"] !== false);
+    const soundsAbs = join(this.root, "assets", "sounds.yaml");
+    const soundsSrc = existsSync(soundsAbs)
+      ? parseYaml(readFileSync(soundsAbs, "utf8"), "assets/sounds.yaml", [])
+      : undefined;
+    const sounds =
+      soundsSrc && isObj(soundsSrc.data) && isObj(soundsSrc.data["sounds"])
+        ? new Set(Object.keys(soundsSrc.data["sounds"]))
+        : undefined;
+    const seen = new Map<string, string>();
+    for (const src of this.living) {
+      for (const [i, e] of asList(src.data).entries()) {
+        if (!isObj(e) || typeof e["item"] !== "string") continue;
+        const id = e["item"];
+        const first = seen.get(id);
+        if (first !== undefined) this.error(src, [i, "item"], `item "${id}" already has an entry (${first})`);
+        else seen.set(id, `${src.file} entry ${i}`);
+        const structure = (path: PathSegment[], ref: string): void => {
+          const it = items.get(ref);
+          if (!it) return; // an unknown id is checkRefs' error
+          if (it["kind"] === "wall")
+            this.error(src, path, `"${ref}" is a wall: walls never break nor move`);
+          else if (isObj(it["door"]))
+            this.error(src, path, `"${ref}" is a door: doors never break nor move`);
+          else if (it["kind"] === "ground") this.error(src, path, `"${ref}" is a ground`);
+        };
+        structure([i, "item"], id);
+        const it = items.get(id);
+        const mustBlock = (what: string): void => {
+          if (it && !blocks(it))
+            this.error(src, [i, "item"], `a ${what} must block movement (blocks_movement: true)`);
+        };
+        const walkable = (path: PathSegment[], ref: unknown, what: string): void => {
+          if (typeof ref !== "string") return;
+          structure(path, ref);
+          const alt = items.get(ref);
+          if (alt && blocks(alt)) this.error(src, path, `${what} "${ref}" must not block movement`);
+        };
+        const sound = (path: PathSegment[], v: unknown): void => {
+          if (typeof v === "string" && sounds && !sounds.has(v))
+            this.error(src, path, `unknown sound "${v}" (assets/sounds.yaml)`);
+        };
+        const b = e["breakable"];
+        if (isObj(b)) {
+          mustBlock("breakable object");
+          if (b["becomes"] !== "none") walkable([i, "breakable", "becomes"], b["becomes"], "debris");
+          sound([i, "breakable", "sound"], b["sound"]);
+          sound([i, "breakable", "hit_sound"], b["hit_sound"]);
+          const debris = typeof b["debris_seconds"] === "number" ? b["debris_seconds"] : 20;
+          const respawn = typeof b["respawn_seconds"] === "number" ? b["respawn_seconds"] : 300;
+          if (b["becomes"] !== "none" && debris > respawn)
+            this.error(src, [i, "breakable", "debris_seconds"], "longer than respawn_seconds");
+        }
+        const p = e["pushable"];
+        if (isObj(p)) {
+          mustBlock("pushable object");
+          sound([i, "pushable", "sound"], p["sound"]);
+        }
+        const g = e["gate"];
+        if (isObj(g)) {
+          mustBlock("closed gate");
+          walkable([i, "gate", "open"], g["open"], "the open gate");
+          sound([i, "gate", "sound"], g["sound"]);
+        }
+        if (isObj(e["plate"]) && it && blocks(it))
+          this.error(src, [i, "item"], "a pressure plate must not block movement");
       }
     }
   }
