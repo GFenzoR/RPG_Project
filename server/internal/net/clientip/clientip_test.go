@@ -17,6 +17,8 @@ func TestKey(t *testing.T) {
 		{"10.0.0.2:5000", "", true, "10.0.0.2"},
 		{"[2001:db8:1:2:3:4:5:6]:443", "", false, "2001:db8:1:2::/64"},
 		{"[::ffff:192.0.2.9]:80", "", false, "192.0.2.9"},
+		{"[::1]:80", "", false, "::1"},   // loopback is not widened to its /64
+		{"[::2]:80", "", false, "::/64"}, // which would make ::2 loopback too
 		{"pipe", "", false, "pipe"},
 	}
 	for _, c := range cases {
@@ -33,7 +35,7 @@ func TestKey(t *testing.T) {
 
 func TestIsLoopback(t *testing.T) {
 	for key, want := range map[string]bool{
-		"127.0.0.1": true, "127.5.0.1": true, "::/64": true, "203.0.113.7": false,
+		"127.0.0.1": true, "127.5.0.1": true, "::1": true, "::/64": false, "203.0.113.7": false,
 		"2001:db8::/64": false, "pipe": false,
 	} {
 		if got := IsLoopback(key); got != want {

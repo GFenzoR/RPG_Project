@@ -113,7 +113,8 @@ const (
 	// DefaultAutosaveEvery is the autosave interval of an online player (5 minutes).
 	DefaultAutosaveEvery = game.Tick(5 * time.Minute / game.TickDuration)
 	// DefaultMaxCharactersPerAccount is how many characters of one account may be in the
-	// world at once (docs/05 "Límites"; audit lote 16).
+	// world at once (docs/05 "Límites"; audit lote 16). tools/bots puts at most this many
+	// bots on one account (perAccount, serverCharsPerAccount): keep them in sync.
 	DefaultMaxCharactersPerAccount = 2
 	// DefaultRerouteMaxNodes bounds one reroute search (A* around creatures).
 	DefaultRerouteMaxNodes = 1500

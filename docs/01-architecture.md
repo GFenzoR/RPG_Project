@@ -55,16 +55,26 @@ for each tick (50 ms):
   (no se acumula deuda). Métrica `tick_duration_ms`.
 
 ### Equidad de la cola (lote 16, `game/fairness.go`)
-La cola de comandos es una sola (8192 lugares, hasta 2048 por tick), así que un solo
+La cola de comandos es una sola (8192 lugares, hasta 2048 por tick; el carril de ciclo de
+vida de abajo tiene aparte su propio tope de 2048 por tick, así que un tick ejecuta como
+mucho 4096 comandos entre los dos), así que un solo
 actor que encola lo más rápido que puede la llenaría y el servidor rechazaría los
 comandos de todos los demás, también sus logins. Dos reglas lo impiden, sin tocar quién es
 dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
 - **Cupo por conexión.** Cada conexión encola sus comandos por un `game.Quota`: como mucho
-  `-ws-max-queued-per-conn` (16) suyos esperando en la cola; uno más se descarta en el
-  gateway, antes de la cola. El contador es un atómico de la conexión: sube al encolar y
-  baja cuando el loop ejecuta el comando (antes de ejecutarlo, así un comando que entra en
-  pánico también libera su lugar). Un cliente honesto manda unos pocos por tick y el loop
-  los vacía en el siguiente; con 500 jugadores a 16 cada uno la cola no se llena.
+  `-ws-max-queued-per-conn` (64) suyos esperando en la cola; uno más se descarta en el
+  gateway, antes de la cola, sin aviso al cliente. El contador es un atómico de la
+  conexión: sube al encolar y baja cuando el loop ejecuta el comando (antes de ejecutarlo,
+  así un comando que entra en pánico también libera su lugar). Un cliente honesto manda
+  unos pocos por tick y el loop los vacía en el siguiente. El cupo es al menos la ráfaga
+  del limitador por conexión (60, docs/05 "Límites"): tras un tick lento o una ráfaga de
+  TCP (reenvío después de perder paquetes) un cliente honesto puede entregar de golpe
+  todo lo que el limitador le acepta, y con un cupo menor (antes 16) esos comandos se
+  perdían en silencio (un `Walk` que el cliente deshacía a los 3 s, un "usar" sin
+  respuesta). Lo que pasa de la ráfaga ya lo descarta el limitador, y el exceso sostenido
+  desconecta (`RATE_LIMITED`). Para llenar la cola (8192) hacen falta más de 128
+  conexiones con personaje vaciando su ráfaga a la vez; cada una exige una cuenta (2
+  personajes por cuenta) y el loop vacía 2048 por tick.
 - **Carril de ciclo de vida.** `Join`, `LoginStarted`, `LoginAborted` y `Saved` (el
   acuse de un guardado) son `game.LifecycleFunc`: van a un carril propio (2048 lugares)
   que el loop vacía primero en cada tick, con su propio tope. Una cola llena nunca rechaza

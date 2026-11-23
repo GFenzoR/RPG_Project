@@ -37,15 +37,22 @@ type Limits struct {
 }
 
 // DefaultLimits are the production limits.
+//
+// MaxConnsPerClient is generous on purpose: many honest players can share one public
+// IPv4 (mobile CGNAT, a cybercafe, a school), and each logged-in one holds a connection.
+// What protects the database are the pending cap and the handshake bucket, which stay
+// tight. MaxQueuedPerConn is at least the rate limiter's burst (DefaultRateLimit), so a
+// burst the limiter accepts (a slow tick, TCP resending after packet loss) is never
+// dropped by the quota without a word.
 var DefaultLimits = Limits{
-	MaxConnsPerClient:   8,
+	MaxConnsPerClient:   32,
 	MaxPendingPerClient: 4,
 	HandshakeBurst:      5,
 	HandshakeEvery:      2 * time.Second,
 	MaxUnauthenticated:  1000,
 	MaxHandshakes:       32,
 	MaxPlayers:          500,
-	MaxQueuedPerConn:    16,
+	MaxQueuedPerConn:    64,
 }
 
 // withDefaults fills the zero fields from DefaultLimits.

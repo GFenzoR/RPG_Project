@@ -222,13 +222,15 @@ el punto 5:
     para levantar lo que le dejan (la ventana de agrupado).
 - **Topes de `/ws` y equidad de la cola (hecho, rama `sec/ws-gateway-caps`, lote 16, la
   auditoría de seguridad; docs/05 "Límites", docs/01 "Equidad de la cola"):** conexiones
-  por IP (8 abiertas, 4 en el handshake, balde de 5 y 1 cada 2 s, HTTP 429), globales
+  por IP (32 abiertas, por los NAT compartidos; 4 en el handshake, balde de 5 y 1 cada 2 s, HTTP 429), globales
   (1000 sin login, 32 handshakes leyendo la base, HTTP 503), `-max-players` 500
   (`SERVER_FULL`), 2 personajes por cuenta en el mundo (`TOO_MANY_CHARACTERS`), tokens con
-  forma de token real antes de la base, `Hello` en 5 s, cupo de 16 comandos por conexión en
+  forma de token real antes de la base, `Hello` en 5 s, cupo de 64 comandos por conexión (≥ la ráfaga del limitador) en
   la cola del loop y un carril propio para los logins. Todo con flags de `gameserver`; el
   loopback queda exento de los topes por IP solo con `RPG_ENV` de desarrollo o prueba (o
-  `-ws-loopback-exempt`, que pasan el E2E y `make bots`). Queda:
+  `-ws-loopback-exempt`, que pasan el E2E y `make bots`). Los bots van de a 2 por cuenta
+  (`Duoaa Load`, `load-0@pair.bots.local`), así que pasan también contra el stack de
+  producción de CI. Rechazos en `/metrics` (`ws_refused_total`). Queda:
   - **Mirarlo en el juego** (la verificación final): login, relogueo del mismo personaje,
     `make bots N=100` y los textos nuevos de desconexión.
   - **El cliente no explica un 429/503:** el navegador no deja leer el estado HTTP de un
@@ -242,6 +244,11 @@ el punto 5:
     `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse). Con el tope
     por cuenta, en cambio, el relogueo sí toma el control. **Confirmar con el dueño** si
     con el mundo lleno el relogueo también debe tomar el control.
+  - **Las reservas de `-max-players` cuentan conexiones con `Hello` válido de forma,** no
+    jugadores: handshakes con tokens falsos de forma válida ocupan lugar mientras esperan
+    turno de la base (hasta 5 s). Acotado por `-ws-max-pending-per-ip` y el balde por IP,
+    pero con muchas /64 de IPv6 (un /48) es barato rotar. Documentado en docs/05; si se ve
+    en `ws_refused_total{reason="server_full"}`, reservar después del canje.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía

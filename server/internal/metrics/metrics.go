@@ -35,6 +35,9 @@ type Metrics struct {
 	bytesSent    prometheus.Counter
 	batchesSent  prometheus.Counter
 	connections  prometheus.Gauge
+	// wsRefused counts the /ws connections refused by the gateway limits, by reason
+	// (gateway.Refused*): a fixed set.
+	wsRefused *prometheus.CounterVec
 	// economyAlerts counts the economy alerts by kind (T4.1, session.Alert*).
 	economyAlerts *prometheus.CounterVec
 	// persistenceErrors counts failed database writes of the persistence goroutines by
@@ -88,6 +91,9 @@ func New() *Metrics {
 		connections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "ws_connections", Help: "Open game WebSocket connections.",
 		}),
+		wsRefused: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ws_refused_total", Help: "Game WebSocket connections refused by the limits: client_limit (HTTP 429), server_busy (HTTP 503), server_full (SERVER_FULL).",
+		}, []string{"reason"}),
 		economyAlerts: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "economy_alerts_total", Help: "Economy alerts: mismatch (possible duplication), gold_outlier, items_outlier, log_dropped.",
 		}, []string{"kind"}),
@@ -108,8 +114,13 @@ func New() *Metrics {
 			m.persistenceErrors.WithLabelValues(w, o)
 		}
 	}
+	// The gateway's reasons (gateway.Refused*; keep in sync, metrics does not import the
+	// gateway). They start at 0, so increase() sees the first refusal.
+	for _, r := range []string{"client_limit", "server_busy", "server_full"} {
+		m.wsRefused.WithLabelValues(r)
+	}
 	m.reg.MustRegister(m.tickDuration, m.tickOverruns, m.tickCommands, m.queuePending,
-		m.bytesSent, m.batchesSent, m.connections, m.economyAlerts,
+		m.bytesSent, m.batchesSent, m.connections, m.wsRefused, m.economyAlerts,
 		m.persistenceErrors, m.httpRequests, m.httpDuration,
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		collectors.NewGoCollector())
@@ -157,6 +168,13 @@ func (m *Metrics) ConnOpened() {
 func (m *Metrics) ConnClosed() {
 	if m != nil {
 		m.connections.Dec()
+	}
+}
+
+// ConnRefused counts a /ws connection refused by the gateway limits (gateway.Observer).
+func (m *Metrics) ConnRefused(reason string) {
+	if m != nil {
+		m.wsRefused.WithLabelValues(reason).Inc()
 	}
 }
 

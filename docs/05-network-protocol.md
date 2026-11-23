@@ -1769,22 +1769,34 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   |---|---|---|---|
   | Conexiones de todos aún en el handshake | `-ws-max-unauthenticated` | 1000 | HTTP 503 |
   | Handshakes leyendo la base a la vez (canje del token y carga del personaje) | `-ws-max-handshakes` | 32 | HTTP 503 si están todos ocupados; el que ya mandó `Hello` espera hasta 5 s y si no, `SERVER_FULL` |
-  | Conexiones abiertas de un cliente (con jugador o no) | `-ws-max-conns-per-ip` | 8 | HTTP 429 |
+  | Conexiones abiertas de un cliente (con jugador o no) | `-ws-max-conns-per-ip` | 32 | HTTP 429 |
   | Conexiones de un cliente aún en el handshake | `-ws-max-pending-per-ip` | 4 | HTTP 429 |
   | Conexiones nuevas de un cliente (balde) | `-ws-handshake-burst`, `-ws-handshake-every` | 5 seguidas, después 1 cada 2 s | HTTP 429 |
   | Jugadores (conexiones con personaje o con login en curso) | `-max-players` | 500 | `Disconnect{SERVER_FULL}` después del `Hello` |
   | Personajes de una cuenta en el mundo | `-max-chars-per-account` | 2 | `Disconnect{TOO_MANY_CHARACTERS}` |
-  | Comandos de una conexión esperando en la cola del loop | `-ws-max-queued-per-conn` | 16 | se descartan (ver docs/01, "Equidad de la cola") |
+  | Comandos de una conexión esperando en la cola del loop | `-ws-max-queued-per-conn` | 64 (≥ la ráfaga de 60 del limitador) | se descartan (ver docs/01, "Equidad de la cola") |
 
   Un rechazo HTTP lleva `Retry-After` y nunca llega al `Hello` ni a la base: el navegador
-  solo ve que la conexión falló (el cliente muestra el texto de conexión perdida). Un
+  solo ve que la conexión falló (el cliente muestra el texto de conexión perdida). Cada
+  rechazo suma en `ws_refused_total{reason}` de `/metrics`: `client_limit` (429),
+  `server_busy` (503) y `server_full` (`SERVER_FULL`).
+  **IP compartida (NAT).** Un "cliente" es una IPv4 pública: detrás de un CGNAT de
+  telefonía móvil, un cibercafé o un colegio, muchos jugadores honestos comparten una. Por
+  eso el tope de conexiones abiertas es holgado (32): cada jugador conectado usa una. Lo
+  que protege la base son los handshakes pendientes (4) y el balde (5 seguidas, luego 1
+  cada 2 s), que sí quedan ajustados: si todo un grupo detrás de la misma IP se reconecta
+  a la vez (un corte de la red), los que pasan del balde reciben 429 y entran reintentando
+  unos segundos después. Con más de 32 jugadores detrás de una IP, el 33.º recibe 429. Un
   valor de `-1` quita ese límite (solo para pruebas de carga). Con
   `-ws-loopback-exempt` (por defecto solo si `RPG_ENV` es `development` o `test`) los
   límites **por cliente** no se aplican a 127.0.0.0/8 ni a `::1`: los bots, el E2E y
   `make play` corren en la misma máquina; los globales sí. En producción (`RPG_ENV`
   vacío o `production`) no hay excepción, y detrás de Caddy el cliente es la IP real.
-  `make bots` pasa además `-max-chars-per-account -1` (sus bots comparten cuenta, 10 por
-  cuenta); contra un servidor con `URL=` hacen falta esos flags.
+  Los bots (`tools/bots`) comparten cuenta de a 2, lo que cabe en
+  `-max-chars-per-account` por defecto: corren también contra servidores con los límites
+  de producción (los jobs `stack` y `home-stack` de CI). Contra un servidor con `URL=` en
+  esta máquina hace falta `-ws-loopback-exempt` (y un `-auth-rate-burst` mayor si son
+  muchos bots).
   El lugar de `-max-players` se reserva al recibir el `Hello`, antes de canjear el token
   (así un servidor lleno no gasta tokens ni lee la base). Por eso, en el peor caso, hasta
   `-ws-max-unauthenticated` handshakes sin autenticar que esperan turno de la base pueden

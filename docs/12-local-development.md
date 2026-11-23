@@ -215,8 +215,9 @@ IP), corre los bots y lo apaga. Deja el reporte en `build/loadtest-<escenario>-<
 el log del servidor en `build/loadtest-server.log`. Los bots reusan cuentas y personajes
 del mismo `PREFIX` (por defecto `load`), así que se puede repetir sin limpiar la base.
 `PREFIX` son 2–12 letras minúsculas y pasa a ser la segunda palabra del nombre
-(`Botaa Load`). Se rechazan los prefijos que darían un nombre reservado para staff (`dev`;
-`mine`, porque genera `Botad Mine`, que contiene "admin"). El script falla si algo ya
+(`Duoaa Load`; 2 bots por cuenta, `load-0@pair.bots.local`). Se rechazan los prefijos que
+darían un nombre reservado para staff (`dev`; `mine`, porque genera `Duoad Mine`, que
+contiene "admin"). El script falla si algo ya
 responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta máquina, los
 bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
 En Windows nativo, Git Bash no puede mandarle SIGINT ni SIGTERM a un proceso nativo (solo

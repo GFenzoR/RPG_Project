@@ -103,6 +103,27 @@ type Observer interface {
 	Sent(bytes int)
 	ConnOpened()
 	ConnClosed()
+	// ConnRefused counts a /ws connection refused by the limits (admit.go), by reason:
+	// RefusedClientLimit, RefusedServerBusy or RefusedServerFull.
+	ConnRefused(reason string)
+}
+
+// Reasons of Observer.ConnRefused.
+const (
+	// RefusedClientLimit is an HTTP 429: the client's own limits (connections, pending
+	// handshakes, handshake bucket).
+	RefusedClientLimit = "client_limit"
+	// RefusedServerBusy is an HTTP 503: the server's handshake limits.
+	RefusedServerBusy = "server_busy"
+	// RefusedServerFull is a Disconnect{SERVER_FULL} after the Hello.
+	RefusedServerFull = "server_full"
+)
+
+// refused counts a refused connection (no Metrics: nothing).
+func (g *Gateway) refused(reason string) {
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnRefused(reason)
+	}
 }
 
 // Gateway serves /ws.
@@ -228,6 +249,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := clientip.Key(r, g.cfg.TrustProxy)
 	t, status := g.adm.admit(key, g.cfg.ExemptLoopback && clientip.IsLoopback(key), g.cfg.Clock.Now())
 	if t == nil {
+		if status == http.StatusTooManyRequests {
+			g.refused(RefusedClientLimit)
+		} else {
+			g.refused(RefusedServerBusy)
+		}
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter(status, g.cfg.Limits)))
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -326,6 +352,7 @@ func (c *conn) run(ctx context.Context) {
 	})); err != nil {
 		g.logQueueFull(char.ID)
 		c.abortLogin(char.ID)
+		g.refused(RefusedServerFull)
 		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
 		_ = c.ws.Close(websocket.StatusTryAgainLater, "")
 		return
@@ -347,6 +374,9 @@ func (c *conn) run(ctx context.Context) {
 func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	g := c.g
 	refuse := func(reason pb.DisconnectReason) (session.Character, bool) {
+		if reason == pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {
+			g.refused(RefusedServerFull)
+		}
 		_ = g.writeDisconnect(ctx, c.ws, reason)
 		_ = c.ws.Close(websocket.StatusPolicyViolation, "")
 		return session.Character{}, false

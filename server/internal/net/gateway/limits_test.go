@@ -337,3 +337,99 @@ func TestLogEvery(t *testing.T) {
 		t.Fatalf("flush %d", n)
 	}
 }
+
+// Many honest players behind one public IPv4 (mobile CGNAT, a cybercafe, a school) each
+// hold a logged-in connection: with 8 per client the 9th got 429. They join a bit apart
+// (the handshake bucket refills) and all stay in.
+func TestSharedIPv4FitsManyPlayers(t *testing.T) {
+	a := newAdmission(DefaultLimits.withDefaults())
+	now := time.Unix(0, 0)
+	const players = 24
+	for i := range players {
+		tk, status := a.admit("203.0.113.50", false, now)
+		if tk == nil {
+			t.Fatalf("player %d behind the shared IP refused with %d", i+1, status)
+		}
+		if !tk.reservePlayer() {
+			t.Fatalf("player %d: no player slot", i+1)
+		}
+		tk.authenticated()
+		now = now.Add(DefaultLimits.HandshakeEvery)
+	}
+	// The pending cap and the bucket still bound the handshakes of that IP.
+	for range DefaultLimits.MaxPendingPerClient {
+		if tk, _ := a.admit("203.0.113.50", false, now); tk == nil {
+			break
+		}
+	}
+	if tk, status := a.admit("203.0.113.50", false, now); tk != nil || status != http.StatusTooManyRequests {
+		t.Fatalf("handshakes of the shared IP not bounded: %v, %d", tk != nil, status)
+	}
+}
+
+// A burst the rate limiter accepts must fit the connection's quota: before, the quota
+// (16) dropped the 17th to 60th command of a burst of 60 without telling the client.
+func TestQuotaHoldsTheLimiterBurst(t *testing.T) {
+	now := time.Unix(0, 0)
+	lim := newLimiter(DefaultRateLimit, now)
+	q := game.NewQuota(DefaultLimits.MaxQueuedPerConn)
+	hold := &holdLoop{}
+	accepted := 0
+	for lim.take(now) == allow {
+		accepted++
+		if err := q.Enqueue(hold, game.CommandFunc(func(*game.TickContext) {})); err != nil {
+			t.Fatalf("command %d of an accepted burst dropped: %v", accepted, err)
+		}
+	}
+	if accepted < int(DefaultRateLimit.Burst) {
+		t.Fatalf("limiter accepted %d of its burst %v", accepted, DefaultRateLimit.Burst)
+	}
+}
+
+// refusalCounter is an Observer that counts the refusals by reason.
+type refusalCounter struct {
+	mu      sync.Mutex
+	refused map[string]int
+}
+
+func (r *refusalCounter) Sent(int)    {}
+func (r *refusalCounter) ConnOpened() {}
+func (r *refusalCounter) ConnClosed() {}
+func (r *refusalCounter) ConnRefused(reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refused[reason]++
+}
+
+func (r *refusalCounter) get(reason string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.refused[reason]
+}
+
+// The refusals of the limits reach the metrics by reason, so an attack or a badly tuned
+// limit shows in /metrics (ws_refused_total).
+func TestRefusalsAreCounted(t *testing.T) {
+	obs := &refusalCounter{refused: map[string]int{}}
+	s := limited(t, Limits{MaxConnsPerClient: 1, MaxUnauthenticated: 1, MaxPlayers: 1}, func(c *Config) { c.Metrics = obs })
+	s.loginFrom("203.0.113.60", "a", 7)
+	if _, status := s.dialFrom("203.0.113.60"); status != http.StatusTooManyRequests {
+		t.Fatalf("429 expected, got %d", status)
+	}
+	c := s.mustDialFrom("198.51.100.61") // the only unauthenticated place
+	if _, status := s.dialFrom("198.51.100.62"); status != http.StatusServiceUnavailable {
+		t.Fatalf("503 expected, got %d", status)
+	}
+	s.token("b", 8)
+	if err := c.send(hello("b", "0.1.0")); err != nil {
+		t.Fatal(err)
+	}
+	if r := c.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {
+		t.Fatalf("reason %v", r)
+	}
+	for _, reason := range []string{RefusedClientLimit, RefusedServerBusy, RefusedServerFull} {
+		if obs.get(reason) != 1 {
+			t.Fatalf("refusals %v, want one of each", obs.refused)
+		}
+	}
+}

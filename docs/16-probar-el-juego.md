@@ -44,6 +44,12 @@ de pruebas).
   dentro) y `-auth-rate-burst 200` (crear varias cuentas seguidas sin el 429 del límite por
   IP). Son solo de estos dos comandos (`LOCAL_PLAY_FLAGS` del Makefile): producción usa los
   valores por defecto.
+- Una cuenta tiene como mucho 2 personajes en el mundo a la vez (`-max-chars-per-account`,
+  `05-network-protocol.md` "Límites"), también con `make play`: la excepción de loopback
+  (`-ws-loopback-exempt`) no lo cubre. Para probar a mano con una sola cuenta algo de más
+  personajes (una misión de hito de 4 jugadores), súbelo:
+  `make play LOCAL_PLAY_FLAGS="-cookie-secure=false -auth-rate-burst 200 -max-chars-per-account 4"`
+  (`-1` lo quita), o usa una cuenta por cada 2 personajes.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
   en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a Thimblewick.

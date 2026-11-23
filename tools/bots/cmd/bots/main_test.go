@@ -28,7 +28,7 @@ func TestValidateCount(t *testing.T) {
 }
 
 func TestNamesAreUniqueAndValid(t *testing.T) {
-	valid := regexp.MustCompile(`^Bot[a-z]{2,3} [A-Z][a-z]{1,11}$`)
+	valid := regexp.MustCompile(`^Duo[a-z]{2,3} [A-Z][a-z]{1,11}$`)
 	for _, prefix := range []string{"load", "ci", "tunnel", "stress", "abcdefghijkl"} {
 		if err := checkPrefix(prefix, maxBots); err != nil {
 			t.Fatalf("checkPrefix(%q): %v", prefix, err)
@@ -42,7 +42,7 @@ func TestNamesAreUniqueAndValid(t *testing.T) {
 			seen[n] = true
 		}
 	}
-	if name("load", 0) != "Botaa Load" || name("ci", 27) != "Botbb Ci" {
+	if name("load", 0) != "Duoaa Load" || name("ci", 27) != "Duobb Ci" {
 		t.Fatalf("name: %q %q", name("load", 0), name("ci", 27))
 	}
 }
@@ -52,8 +52,8 @@ func TestCheckPrefixRejects(t *testing.T) {
 		prefix string
 		n      int
 	}{
-		{"dev", 1},           // "Botaa Dev": a reserved word
-		{"mine", 10},         // bot 3 is "Botad Mine": "botadmine" contains "admin"
+		{"dev", 1},           // "Duoaa Dev": a reserved word
+		{"mine", 10},         // bot 3 is "Duoad Mine": "duoadmine" contains "admin"
 		{"load100", 1},       // digits: "load100" and "load300" would fold into "Load"
 		{"load300", 1},       //
 		{"Load", 1},          // not lowercase
@@ -74,8 +74,9 @@ func TestCheckPrefixRejects(t *testing.T) {
 
 func TestAccountEmails(t *testing.T) {
 	email, password := account("load", 3)
-	// Not the "load-3@bots.local" of the T1.4 bot, whose accounts are full of characters.
-	if email != "load-3@load.bots.local" || password == "" {
+	// Not the "load-3@bots.local" of the T1.4 bot nor the "load-3@load.bots.local" of 10
+	// bots per account, whose accounts hold other bots' characters.
+	if email != "load-3@pair.bots.local" || password == "" {
 		t.Fatalf("account = %q, %q", email, password)
 	}
 }
@@ -107,5 +108,19 @@ func TestLoggedOutInAFightIsNoFailure(t *testing.T) {
 	if f.rep.LeftLinkDead != 1 || f.rep.OtherErrors != 2 || f.rep.Disconnects != 0 || len(f.rep.Errors) != 2 {
 		t.Fatalf("left link-dead %d, other errors %d, disconnects %d, errors %v",
 			f.rep.LeftLinkDead, f.rep.OtherErrors, f.rep.Disconnects, f.rep.Errors)
+	}
+}
+
+// serverCharsPerAccount is the server's default -max-chars-per-account
+// (session.DefaultMaxCharactersPerAccount, which tools/bots cannot import): the CI stack
+// and tunnel jobs run the bots against production defaults. Keep them in sync.
+const serverCharsPerAccount = 2
+
+// The bots of one account must fit the server's default cap of characters of one account
+// in the world: with 10 per account the third bot of the CI stack job got
+// Disconnect{TOO_MANY_CHARACTERS} and failed the run.
+func TestPerAccountFitsServerCap(t *testing.T) {
+	if perAccount < 1 || perAccount > serverCharsPerAccount {
+		t.Fatalf("perAccount = %d, want 1..%d", perAccount, serverCharsPerAccount)
 	}
 }

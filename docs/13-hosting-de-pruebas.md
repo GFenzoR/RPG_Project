@@ -242,7 +242,12 @@ Sin `tailscale serve` también funciona por la IP de Tailscale (o de tu LAN) en 
 pon `HOME_BIND=0.0.0.0` (o tu IP `100.x.y.z`) y `COOKIE_SECURE=false` en `deploy/.env.home` y
 repite `make home-up`. Con Tailscale todos los jugadores llegan desde la misma IP vista por
 Caddy, así que comparten el cupo de logins por IP (10 seguidos, luego 1 cada 6 s): de sobra
-para un grupo de amigos.
+para un grupo de amigos. Lo mismo pasa con los límites de `/ws` por IP (`05-network-protocol.md`,
+"Límites"): 32 conexiones abiertas, 4 handshakes a la vez y 5 conexiones nuevas seguidas
+(luego 1 cada 2 s). Ojo: lo que entra por el puerto publicado (tú en `localhost`, la LAN,
+Tailscale) llega a Caddy desde la IP del gateway de Docker, así que todos ellos son un
+solo cliente para esos límites. Si tras un corte se reconectan más de 5 a la vez, los
+demás ven "Se perdió la conexión" y entran al reintentar unos segundos después.
 
 ### 7. App de escritorio contra tu PC
 La app (Tauri, `apps/desktop`) es el mismo juego en una ventana propia. Para conseguirla:
