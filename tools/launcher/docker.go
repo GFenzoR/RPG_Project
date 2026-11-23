@@ -43,7 +43,7 @@ func (l *launcher) ensureDocker(stop func() bool) error {
 		return nil
 	}
 	fmt.Fprintln(l.out, ">> Docker no está corriendo: abriendo Docker Desktop...")
-	if err := startDockerDesktop(); err != nil {
+	if err := startDockerDesktop(l.origEnv); err != nil {
 		return err
 	}
 	start := time.Now()
@@ -70,7 +70,8 @@ func (l *launcher) ensureDocker(stop func() bool) error {
 	}
 }
 
-func startDockerDesktop() error {
+// startDockerDesktop opens Docker Desktop with env (nil: this process's environment).
+func startDockerDesktop(env []string) error {
 	var c *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -87,11 +88,26 @@ func startDockerDesktop() error {
 			next: "inícialo con: sudo systemctl start docker (o abre Docker Desktop) y vuelve a intentarlo",
 		}
 	}
+	c.Env = env
 	if err := c.Start(); err != nil {
 		return &userError{what: "No pude abrir Docker Desktop", next: "ábrelo a mano y vuelve a abrir el lanzador", err: err}
 	}
 	go func() { _ = c.Wait() }()
 	return nil
+}
+
+// containers lists the running containers: the home stack's (compose project homeProject)
+// and every other one. ok is false when docker could not tell (not running, timeout).
+func (l *launcher) containers() (home, others []string, ok bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "ps", "--format",
+		"{{.Names}}\t{{.Label \"com.docker.compose.project\"}}").Output()
+	if err != nil {
+		return nil, nil, false
+	}
+	home, others = splitContainers(string(out), homeProject)
+	return home, others, true
 }
 
 // stopDockerAndWSL closes Docker Desktop and, on Windows, shuts WSL down so its memory

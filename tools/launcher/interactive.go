@@ -45,6 +45,9 @@ func (in *interrupts) take() bool {
 	}
 }
 
+// eofSignalWindow is how long an EOF on stdin waits for the Ctrl+C that may have caused it.
+const eofSignalWindow = 300 * time.Millisecond
+
 type lineResult struct {
 	line string
 	err  error
@@ -98,7 +101,7 @@ func (p *prompter) ask(prompt string) (string, error) {
 			case <-p.intr.ch:
 				fmt.Fprintln(p.out)
 				return "", errInterrupted
-			case <-time.After(300 * time.Millisecond):
+			case <-time.After(eofSignalWindow):
 				return "", io.EOF
 			}
 		case <-p.intr.ch:
@@ -135,7 +138,7 @@ type session struct {
 	l    *launcher
 	p    *prompter
 	intr *interrupts
-	url  string
+	url  string // empty until the start finished: the stack may be half up
 }
 
 func interactive() int {
@@ -152,14 +155,16 @@ func interactive() int {
 		return 1
 	}
 	s := &session{l: l, p: p, intr: intr}
-	s.url, err = l.up(false, intr.take)
+	url, err := l.up(false, intr.take)
+	if err == nil {
+		s.url = url
+	}
 	if errors.Is(err, errInterrupted) || intr.take() {
 		return s.onCtrlC()
 	}
 	if err != nil {
 		report(out, err)
-		pause(p)
-		return 1
+		return s.onStartFailed()
 	}
 	openBrowser(s.url + "/")
 	return s.menu()
@@ -294,9 +299,32 @@ func (s *session) onCtrlC() int {
 	if stop {
 		return s.stopAndExit()
 	}
-	fmt.Fprintln(s.l.out, "El servidor sigue encendido. Para apagarlo, abre de nuevo el lanzador y elige la opción 6.")
+	if s.url == "" {
+		fmt.Fprintln(s.l.out, "Lo que alcanzó a arrancar sigue encendido. Para apagarlo, abre de nuevo el lanzador y elige la opción 6.")
+	} else {
+		fmt.Fprintln(s.l.out, "El servidor sigue encendido. Para apagarlo, abre de nuevo el lanzador y elige la opción 6.")
+	}
 	pause(s.p)
 	return 0
+}
+
+// onStartFailed runs after a failed start: `compose up --wait` stops nothing, so postgres
+// or the game server may be left running. It offers to stop them (Enter = yes).
+func (s *session) onStartFailed() int {
+	home, _, ok := s.l.containers()
+	if !ok || len(home) == 0 {
+		pause(s.p)
+		return 1
+	}
+	fmt.Fprintf(s.l.out, "\nQuedaron encendidos: %s.\n", strings.Join(home, ", "))
+	stop, err := s.p.yesNo("¿Detener lo que quedó encendido?", true)
+	if err != nil || !stop {
+		fmt.Fprintln(s.l.out, "Lo dejo como está. Para apagarlo, abre de nuevo el lanzador y elige la opción 6.")
+		pause(s.p)
+		return 1
+	}
+	s.stopAndExit()
+	return 1
 }
 
 func (s *session) stopAndExit() int {
@@ -305,12 +333,30 @@ func (s *session) stopAndExit() int {
 		report(s.l.out, err)
 		code = 1
 	}
-	free, err := s.p.yesNo("\n¿Cerrar también Docker Desktop y WSL para liberar memoria?", true)
+	_, others, ok := s.l.containers()
+	question, def := freeQuestion(others, ok)
+	free, err := s.p.yesNo(question, def)
 	if err == nil && free {
 		s.l.stopDockerAndWSL()
 	}
 	pause(s.p)
 	return code
+}
+
+// freeQuestion is the question about closing Docker Desktop and WSL after the stop, and
+// its default. Docker Desktop stops every container and `wsl --shutdown` every WSL distro,
+// so Enter means yes only when docker listed no container outside the home stack.
+func freeQuestion(others []string, listed bool) (string, bool) {
+	const wsl = "Apaga también todas las distros de WSL (y las terminales abiertas en ellas)."
+	switch {
+	case !listed:
+		return "\n¿Cerrar también Docker Desktop y WSL para liberar memoria? " + wsl, false
+	case len(others) > 0:
+		return "\nHay otros contenedores corriendo que no son del juego: " + strings.Join(others, ", ") +
+			".\n¿Cerrar igual Docker Desktop y WSL? Los detendría a ellos también. " + wsl, false
+	default:
+		return "\n¿Cerrar también Docker Desktop y WSL para liberar memoria? " + wsl, true
+	}
 }
 
 // pause keeps a double-clicked window open until the owner has read it.

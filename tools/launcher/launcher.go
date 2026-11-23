@@ -51,6 +51,9 @@ type launcher struct {
 	root string    // repo root (Makefile + deploy/home.sh)
 	bash string    // bash of Git for Windows, or the system bash elsewhere
 	out  io.Writer // progress messages
+	// origEnv is the environment before prepare changed PATH and the MSYS variables:
+	// Docker Desktop starts with it, not with Git's usr/bin ahead of System32.
+	origEnv []string
 }
 
 // prepare finds the repo, fixes PATH for a double-clicked process and finds bash.
@@ -59,6 +62,7 @@ func prepare(out io.Writer) (*launcher, error) {
 	if err != nil {
 		return nil, err
 	}
+	origEnv := os.Environ()
 	e := currentEnv()
 	gitRoot := findGitRoot(e, isFile)
 	dirs := extraPathDirs(runtime.GOOS, e, gitRoot)
@@ -77,7 +81,7 @@ func prepare(out io.Writer) (*launcher, error) {
 		}
 		return nil, &userError{what: "No encontré bash (Git Bash)", next: next}
 	}
-	return &launcher{root: root, bash: bash, out: out}, nil
+	return &launcher{root: root, bash: bash, out: out, origEnv: origEnv}, nil
 }
 
 // script runs a bash script of the repo with its output on the console.
@@ -99,9 +103,12 @@ func (l *launcher) docker(args ...string) error {
 
 func (l *launcher) envFile() string { return filepath.Join(l.root, "deploy", ".env.home") }
 
-func (l *launcher) baseURL() string {
+func (l *launcher) baseURL() string { return "http://localhost:" + l.port() }
+
+// port is HOME_HTTP_PORT of deploy/.env.home (8080 when unset or the file is missing).
+func (l *launcher) port() string {
 	b, _ := os.ReadFile(l.envFile()) // missing file: default port
-	return "http://localhost:" + homePort(string(b))
+	return homePort(string(b))
 }
 
 func (l *launcher) statePath() string { return filepath.Join(l.root, "build", "launcher-state.json") }
@@ -121,7 +128,7 @@ func (l *launcher) gitState() launchState {
 }
 
 // up starts the home stack through deploy/home.sh and waits until it answers. stop, when
-// not nil, is polled while waiting for Docker (the owner pressed Ctrl+C).
+// not nil, is polled while waiting for Docker and for the game (the owner pressed Ctrl+C).
 func (l *launcher) up(forceBuild bool, stop func() bool) (string, error) {
 	if err := l.ensureDocker(stop); err != nil {
 		return "", err
@@ -142,14 +149,17 @@ func (l *launcher) up(forceBuild bool, stop func() bool) (string, error) {
 	if err := l.script([]string{"BUILD=" + build}, "deploy/home.sh", "up"); err != nil {
 		return "", &userError{
 			what: "El servidor no pudo arrancar",
-			next: "lee los mensajes de arriba. Si dicen 'port is already allocated', otro programa usa el puerto 8080: " +
-				"cámbialo con HOME_HTTP_PORT en deploy/.env.home. Si no, vuelve a abrir el lanzador; si sigue " +
+			next: "lee los mensajes de arriba. Si dicen 'port is already allocated', otro programa usa el puerto " +
+				l.port() + ": cámbialo con HOME_HTTP_PORT en deploy/.env.home. Si no, vuelve a abrir el lanzador; si sigue " +
 				"fallando, mira docs/13-hosting-de-pruebas.md, \"Problemas comunes\"",
 			err: err,
 		}
 	}
 	url := l.baseURL()
-	if err := waitHealthy(url, 90*time.Second); err != nil {
+	if err := waitHealthy(url, 90*time.Second, stop); err != nil {
+		if errors.Is(err, errInterrupted) {
+			return "", err
+		}
 		return "", &userError{
 			what: "El servidor arrancó pero no responde en " + url,
 			next: "espera un minuto y elige \"Ver los registros\" en el menú, o vuelve a abrir el lanzador",
@@ -226,7 +236,9 @@ func httpOK(url string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func waitHealthy(base string, limit time.Duration) error {
+// waitHealthy polls base/healthz until it answers 200, limit passes (an error) or stop,
+// when not nil, reports a Ctrl+C (errInterrupted).
+func waitHealthy(base string, limit time.Duration, stop func() bool) error {
 	deadline := time.Now().Add(limit)
 	for {
 		if httpOK(base + "/healthz") {
@@ -235,7 +247,12 @@ func waitHealthy(base string, limit time.Duration) error {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("GET %s/healthz did not answer 200 in %s", base, limit)
 		}
-		time.Sleep(2 * time.Second)
+		for i := 0; i < 10; i++ { // 2 s, checking for Ctrl+C every 200 ms
+			if stop != nil && stop() {
+				return errInterrupted
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
 	}
 }
 

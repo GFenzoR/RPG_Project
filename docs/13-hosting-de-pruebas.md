@@ -25,23 +25,28 @@ tiene el `Makefile` y `deploy/home.sh`); el acceso directo apunta ahí. En Linux
 3. Arranca el servidor con lo mismo que `make home-up` (`deploy/home.sh up`; la primera
    vez crea `deploy/.env.home`). **Reconstruye las imágenes solo si el código cambió**
    desde el último arranque bueno (otro commit, o cambios sin commitear); si no, arranca
-   en segundos. Lo recuerda en `build/launcher-state.json`.
-4. Cuando el servidor responde, abre `http://localhost:8080` en tu navegador y muestra
-   un menú:
+   en segundos. Lo recuerda en `build/launcher-state.json`. Solo recuerda sus propios
+   arranques: si entre medio corriste `make home-up` en otro commit y volviste al de antes,
+   las imágenes son las de ese otro commit; usa `NequesRealm-Servidor.exe up --rebuild`
+   (o `make home-up`) para reconstruirlas.
+4. Cuando el servidor responde, abre `http://localhost:8080` (o el puerto de
+   `HOME_HTTP_PORT`) en tu navegador y muestra un menú:
 
 | Opción | Qué hace |
 |---|---|
-| 1. Abrir el juego en el navegador | Abre `http://localhost:8080/` otra vez |
+| 1. Abrir el juego en el navegador | Abre el juego otra vez (`http://localhost:8080/`, o el puerto de `HOME_HTTP_PORT`) |
 | 2. Hacerme admin | Pide tu email y te da el rol `admin` (`make home-admin`). Registra la cuenta antes con **Jugar**; vale desde el próximo login |
 | 3. Link para invitar amigos | Abre el Quick Tunnel de Cloudflare (`make home-tunnel`) e imprime el link `https://….trycloudflare.com` para compartir. Cambia en cada arranque |
 | 4. Ver los registros | Las últimas líneas de los logs de todos los servicios (en vivo: `make home-logs`) |
 | 5. Enlace para recuperar una contraseña | Pide el email y crea un enlace de un solo uso (`make home-reset-password`); dáselo a esa persona por un canal de confianza |
-| 6. Detener el servidor y salir | Apaga todo como `make home-down` (túnel y monitoreo incluidos; **los datos quedan**) y pregunta si cierras también Docker Desktop y WSL para liberar memoria (Enter = sí) |
+| 6. Detener el servidor y salir | Apaga todo como `make home-down` (túnel y monitoreo incluidos; **los datos quedan**) y pregunta si cierras también Docker Desktop y WSL para liberar memoria. Eso detiene **todos** los contenedores de Docker y apaga **todas** las distros de WSL (y las terminales abiertas en ellas): si hay otros contenedores corriendo (por ejemplo el Postgres de `make dev`), los nombra y Enter = no; si no, Enter = sí |
 
 - **Ctrl+C** hace la misma pregunta: detener el servidor (Enter = sí) o salir dejándolo
   encendido. **Cerrar la ventana** con la X deja el servidor encendido; para apagarlo,
   abre el lanzador otra vez y elige 6.
 - Si algo falla, la ventana dice qué falló y qué hacer, y espera un Enter antes de cerrarse.
+  Si el arranque falla a medias (un puerto ocupado, un servicio que no queda sano), nombra
+  lo que quedó encendido y pregunta si lo detiene (Enter = sí).
 - **Sin Docker Desktop instalado** lo dice y no sigue: instálalo
   (`winget install Docker.DockerDesktop` en PowerShell, o desde docker.com), ábrelo una vez
   hasta que diga *Engine running* (la primera vez pide aceptar la licencia y puede pedir

@@ -290,6 +290,7 @@ func TestValidEmail(t *testing.T) {
 		"tu@email.com": true, "a.b+c@sub.example.org": true,
 		"": false, "sin-arroba": false, "@x.com": false, "a@": false, "a@b": false, "a@b.": false,
 		"a@@b.com": false, "a b@c.com": false, "a@b.com; rm": false, "a$(x)@b.com": false,
+		"a*@b.com": false, "a?@b.com": false, "a[1]@b.com": false, "{a,b}@c.com": false, "~a@b.com": false,
 	} {
 		if validEmail(in) != want {
 			t.Errorf("validEmail(%q) != %v", in, want)

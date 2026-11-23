@@ -82,7 +82,11 @@ mismos archivos y perfiles de compose que `make home-down` (un test compara
 `homeProfiles` con `HOME_PROFILES` del Makefile y `ALL_PROFILES` de `home.sh`). Lo puro
 (buscar el repo, armar el PATH, elegir el `bash.exe` de Git y nunca el de WSL, decidir el
 rebuild, args de compose, el menú) está en `logic.go` con tests en `logic_test.go`; lo
-que toca procesos, en `launcher.go`, `docker.go` e `interactive.go`. Los textos al dueño
+que toca procesos, en `launcher.go`, `docker.go` e `interactive.go`. Las preguntas que
+corta Ctrl+C (`prompter`, `interrupts`: la lectura pendiente, el EOF falso de Windows) y
+la pregunta de cerrar Docker y WSL (Enter = no si corren contenedores ajenos a
+`rpg-home`) tienen tests en `interactive_test.go`. La CI también corre
+`GOOS=windows go vet` en este módulo. Los textos al dueño
 van en español neutro (por eso `misspell` no mira esta carpeta). Subcomandos sin
 preguntas: `up [--rebuild] [--open]`, `down [--stop-docker]`, `status`.
 

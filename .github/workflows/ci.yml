@@ -81,6 +81,11 @@ jobs:
         if: matrix.run == 'true'
         working-directory: ${{ matrix.module }}
         run: go vet ./...
+      # The launcher is a Windows program: also vet its Windows-only files (console_windows.go).
+      - name: go vet (windows)
+        if: matrix.run == 'true' && matrix.module == 'tools/launcher'
+        working-directory: ${{ matrix.module }}
+        run: GOOS=windows go vet ./...
       - name: golangci-lint
         if: matrix.run == 'true'
         uses: golangci/golangci-lint-action@v8

@@ -22,8 +22,10 @@ declare -A RULES=(
 	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
 	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	[go-bots]='^(tools/bots|server|proto)/'
-	# The launcher's test compares its compose profiles with deploy/home.sh (and the Makefile).
-	[go-launcher]='^(tools/launcher/|deploy/home\.sh$)'
+	# The launcher's test compares its compose profiles with deploy/home.sh and the Makefile
+	# (the Makefile is in GLOBAL, so it already runs this job), and its project name with
+	# deploy/docker-compose.home.yml.
+	[go-launcher]='^(tools/launcher/|deploy/home\.sh$|deploy/docker-compose\.home\.yml$)'
 	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules, and
 	# tools/mapcli/src/lote.test.ts runs the batch workflow of .claude/workflows.
 	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows|\.claude/workflows)/'
@@ -152,6 +154,8 @@ self_test() {
 	# The home launcher: its own Go job, also when deploy/home.sh changes.
 	check go-launcher true tools/launcher/logic.go
 	check go-launcher true deploy/home.sh
+	check go-launcher true deploy/docker-compose.home.yml
+	check go-launcher true Makefile
 	check go-launcher false deploy/home-tunnel.sh server/cmd/gameserver/main.go
 	check go-server false tools/launcher/logic.go
 	# Sound (T3.7): the .ogg files and sounds.yaml are client assets (validated, bundled, played

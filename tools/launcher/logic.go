@@ -290,6 +290,28 @@ func composeArgs(allProfiles bool, args ...string) []string {
 	return append(out, args...)
 }
 
+// homeProject is the compose project name of the home stack (`name:` of
+// deploy/docker-compose.home.yml; a test keeps them equal).
+const homeProject = "rpg-home"
+
+// splitContainers splits the lines "<name><TAB><compose project>" of docker ps into the
+// containers of project and the rest.
+func splitContainers(psOut, project string) (home, others []string) {
+	for _, line := range strings.Split(psOut, "\n") {
+		name, proj, _ := strings.Cut(strings.TrimRight(line, "\r"), "\t")
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if strings.TrimSpace(proj) == project {
+			home = append(home, name)
+		} else {
+			others = append(others, name)
+		}
+	}
+	return home, others
+}
+
 // composeCommandLine is the COMPOSE variable deploy/home-tunnel.sh expects.
 func composeCommandLine() string {
 	return "docker " + strings.Join(composeFiles, " ")
@@ -360,7 +382,9 @@ func parseYesNo(s string, def bool) (yes, ok bool) {
 // validEmail is a sanity check before the email goes to the server's admin command,
 // which looks the account up and gives the final answer.
 func validEmail(s string) bool {
-	if len(s) > 254 || strings.ContainsAny(s, " \t\"'<>,;\\`$") {
+	// No glob or brace characters either: the MSYS runtime of bash expands them in the
+	// arguments it gets from Windows, so the email could change on its way to the server.
+	if len(s) > 254 || strings.ContainsAny(s, " \t\"'<>,;\\`$*?[]{}~") {
 		return false
 	}
 	local, domain, ok := strings.Cut(s, "@")
