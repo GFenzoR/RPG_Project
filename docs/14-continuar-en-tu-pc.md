@@ -33,6 +33,10 @@ seguir con Claude Code en tu computador. El entorno local está en
 2. Corre `make setup`, `make db-up` y `make dev`, y abre `http://localhost:5173/` (sitio) y
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
+   Más fácil: `make launcher` una vez y después doble clic en `NequesRealm-Servidor.exe`
+   (en la carpeta del proyecto): arranca Docker y el servidor, abre el juego y trae un
+   menú para hacerte admin, invitar amigos y apagar todo (`13-hosting-de-pruebas.md`,
+   "La forma más fácil: doble clic").
 4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
    más rápido es `make play`: Thimblewick tiene todos los sistemas a unos pasos del
    templo y una instructora que da experiencia, entrenamiento, dinero y curación

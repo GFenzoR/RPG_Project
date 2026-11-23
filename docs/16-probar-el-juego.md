@@ -28,6 +28,11 @@ Abre esa URL. El primer arranque tarda (compila el servidor y Vite prepara los m
 algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó vivo),
 `make play` no arranca y lo dice; si el servidor se cae al arrancar, también.
 
+¿Solo quieres jugar el inicio normal, sin terminal? El lanzador de doble clic
+(`NequesRealm-Servidor.exe`, `13-hosting-de-pruebas.md`, "La forma más fácil: doble clic")
+levanta el servidor de casa en `http://localhost:8080` (Puerto con tutorial, sin la isla
+de pruebas).
+
 - `make play` corre además la tienda cosmética con el **proveedor de pagos falso**
   (`RPG_ENV=development`, `PAYMENTS_PROVIDER=fake`): se compra nácar sin dinero real en
   `http://localhost:5173/shop`. Solo lo activa con el servidor en `127.0.0.1` y la base en

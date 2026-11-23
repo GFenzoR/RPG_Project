@@ -3,6 +3,55 @@
 Antes del deploy alpha en AWS (T1.18) conviene poder jugar con amigos usando tu propio
 PC como servidor. Esta guía define qué se puede hostear dónde y cómo lo arma la tarea T1.19.
 
+## La forma más fácil: doble clic
+En Windows hay un lanzador: **`NequesRealm-Servidor.exe`**, en la carpeta del proyecto.
+Le das doble clic y arranca todo sin escribir comandos.
+
+**Crearlo (una vez, y de nuevo si cambia `tools/launcher/`).** Necesita Go (lo instala
+"Windows nativo" de `12-local-development.md`). En Git Bash, en la carpeta del proyecto:
+```bash
+make launcher            # crea NequesRealm-Servidor.exe en la raíz del repo (git lo ignora)
+make launcher-shortcut   # opcional: un acceso directo "Neque's Realm - Servidor" en el escritorio
+```
+El `.exe` tiene que quedar dentro de la carpeta del proyecto (busca hacia arriba la que
+tiene el `Makefile` y `deploy/home.sh`); el acceso directo apunta ahí. En Linux o macOS,
+`make launcher` deja además `./nequesrealm-servidor` para ese sistema.
+
+**Qué hace al abrirlo:**
+1. Encuentra Git Bash (el de Git para Windows, nunca el `bash.exe` de WSL) y Docker, aunque
+   no estén en el PATH de una ventana abierta con doble clic.
+2. Si Docker no está corriendo, abre Docker Desktop y espera (hasta 3 minutos, con un
+   contador).
+3. Arranca el servidor con lo mismo que `make home-up` (`deploy/home.sh up`; la primera
+   vez crea `deploy/.env.home`). **Reconstruye las imágenes solo si el código cambió**
+   desde el último arranque bueno (otro commit, o cambios sin commitear); si no, arranca
+   en segundos. Lo recuerda en `build/launcher-state.json`.
+4. Cuando el servidor responde, abre `http://localhost:8080` en tu navegador y muestra
+   un menú:
+
+| Opción | Qué hace |
+|---|---|
+| 1. Abrir el juego en el navegador | Abre `http://localhost:8080/` otra vez |
+| 2. Hacerme admin | Pide tu email y te da el rol `admin` (`make home-admin`). Registra la cuenta antes con **Jugar**; vale desde el próximo login |
+| 3. Link para invitar amigos | Abre el Quick Tunnel de Cloudflare (`make home-tunnel`) e imprime el link `https://….trycloudflare.com` para compartir. Cambia en cada arranque |
+| 4. Ver los registros | Las últimas líneas de los logs de todos los servicios (en vivo: `make home-logs`) |
+| 5. Enlace para recuperar una contraseña | Pide el email y crea un enlace de un solo uso (`make home-reset-password`); dáselo a esa persona por un canal de confianza |
+| 6. Detener el servidor y salir | Apaga todo como `make home-down` (túnel y monitoreo incluidos; **los datos quedan**) y pregunta si cierras también Docker Desktop y WSL para liberar memoria (Enter = sí) |
+
+- **Ctrl+C** hace la misma pregunta: detener el servidor (Enter = sí) o salir dejándolo
+  encendido. **Cerrar la ventana** con la X deja el servidor encendido; para apagarlo,
+  abre el lanzador otra vez y elige 6.
+- Si algo falla, la ventana dice qué falló y qué hacer, y espera un Enter antes de cerrarse.
+- **Sin Docker Desktop instalado** lo dice y no sigue: instálalo
+  (`winget install Docker.DockerDesktop` en PowerShell, o desde docker.com), ábrelo una vez
+  hasta que diga *Engine running* (la primera vez pide aceptar la licencia y puede pedir
+  `wsl --install --no-distribution` y reiniciar) y vuelve a abrir el lanzador.
+- **Sin Git para Windows** tampoco sigue: `winget install Git.Git`.
+
+Para scripts y pruebas tiene subcomandos sin preguntas (`--help` los lista):
+`NequesRealm-Servidor.exe up [--rebuild] [--open]`, `down [--stop-docker]` y `status`
+(sale con 0 si el juego responde, 1 si no).
+
 ## Jugar en tu PC en 3 pasos
 1. Instala **Docker** (Docker Desktop en Windows/macOS) y, en Windows, abre la terminal de
    **Ubuntu (WSL2)**. Detalle por sistema en el paso 1 de abajo.
