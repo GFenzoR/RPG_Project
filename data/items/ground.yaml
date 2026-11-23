@@ -1,6 +1,4 @@
-# Basic grounds. ground.speed is the terrain cost in percent (100 = normal). ground.surface
-# is what the ground is made of for the living world (footprints, plants, step sounds;
-# livingworld/README.md); the server ignores it.
+# Basic grounds: ground.speed is the terrain cost in % (100 = normal), ground.surface what it is made of (livingworld/README.md).
 - id: grass
   kind: ground
   sprite: ground/grass
