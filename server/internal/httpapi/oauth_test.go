@@ -194,7 +194,10 @@ func TestOAuthPendingOverHTTP(t *testing.T) {
 	}
 	expect(t, o.do("GET", "/api/auth/oauth/pending", ""), http.StatusGone, "pending_expired")
 	// Linked and audited, without the email.
-	w = o.do("POST", "/api/account/unlink", `{"provider":"google"}`)
+	// Unlinking re-authenticates like linking: the password of the account (lote 16).
+	expect(t, o.do("POST", "/api/account/unlink", `{"provider":"google"}`), http.StatusForbidden, "reauth_required")
+	expect(t, o.do("POST", "/api/account/unlink", `{"provider":"google","password":"wrong-password"}`), http.StatusUnauthorized, "invalid_credentials")
+	w = o.do("POST", "/api/account/unlink", `{"provider":"google","password":"long-password-1"}`)
 	expect(t, w, http.StatusNoContent, "")
 	for _, a := range o.repo.Audit {
 		if strings.Contains(a.TargetName+a.ActorName, "@") {

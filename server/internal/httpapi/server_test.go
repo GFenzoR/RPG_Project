@@ -149,7 +149,12 @@ func TestFullFlow(t *testing.T) {
 	// Login sets the token in the body and in a hardened cookie.
 	w = h.do(req{method: "POST", path: "/api/auth/login", body: creds})
 	expect(t, w, http.StatusOK, "")
-	cookies := w.Result().Cookies()
+	var cookies []*http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == httpapi.SessionCookie {
+			cookies = append(cookies, c)
+		}
+	}
 	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure ||
 		cookies[0].SameSite != http.SameSiteStrictMode || cookies[0].Path != "/api" {
 		t.Fatalf("cookie %+v", cookies)
@@ -321,12 +326,37 @@ func TestRateLimitTrustProxyUsesLastHop(t *testing.T) {
 
 func TestHealthz(t *testing.T) {
 	var down error
+	pings := 0
 	h := newHarness(t, func(c *httpapi.Config) {
-		c.Health = func(context.Context) error { return down }
+		c.Health = func(context.Context) error { pings++; return down }
 	})
 	expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
 	down = errors.New("db down")
+	h.clock.Advance(time.Second)
 	expect(t, h.do(req{method: "GET", path: "/healthz"}), 503, "unavailable")
+	if pings != 2 {
+		t.Fatalf("%d pings", pings)
+	}
+}
+
+// Lote 16: /healthz is public (Caddy routes it) and used to take a pool connection per
+// request; the ping is cached for a second, so a flood costs one ping per second.
+func TestHealthzCachesThePing(t *testing.T) {
+	pings := 0
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.Health = func(context.Context) error { pings++; return nil }
+	})
+	for i := 0; i < 500; i++ {
+		expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
+	}
+	if pings != 1 {
+		t.Fatalf("%d pings for 500 health checks in one second", pings)
+	}
+	h.clock.Advance(time.Second)
+	expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
+	if pings != 2 {
+		t.Fatalf("%d pings after the cache expired", pings)
+	}
 }
 
 // panicRepo panics when listing characters, to exercise the recover middleware.

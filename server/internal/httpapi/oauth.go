@@ -44,6 +44,8 @@ type pendingCreateRequest struct {
 
 type unlinkRequest struct {
 	Provider string `json:"provider"`
+	// Password re-authenticates an account that has one (like oauthLinkRequest).
+	Password string `json:"password,omitempty"`
 }
 
 type identityJSON struct {
@@ -54,12 +56,12 @@ type identityJSON struct {
 
 func (a *api) oauthRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/start", a.rateLimited(a.oauthStart))
-	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", a.rateLimited(a.oauthLink))
+	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", a.rateLimited(a.hashing(a.oauthLink)))
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", a.rateLimited(a.oauthCallback))
-	mux.HandleFunc("GET /api/auth/oauth/pending", a.oauthPending)
-	mux.HandleFunc("POST /api/auth/oauth/pending/confirm", a.rateLimited(a.pendingConfirm))
+	mux.HandleFunc("GET /api/auth/oauth/pending", a.tokenLimited(a.oauthPending))
+	mux.HandleFunc("POST /api/auth/oauth/pending/confirm", a.rateLimited(a.hashing(a.pendingConfirm)))
 	mux.HandleFunc("POST /api/auth/oauth/pending/create", a.rateLimited(a.pendingCreate))
-	mux.HandleFunc("POST /api/account/unlink", a.authed(a.unlink))
+	mux.HandleFunc("POST /api/account/unlink", a.rateLimited(a.hashing(a.unlink)))
 }
 
 func (a *api) oauthCookie(name, value string, maxAge int, same http.SameSite) *http.Cookie {
@@ -96,40 +98,43 @@ func (a *api) oauthLink(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	token := requestToken(r)
-	start := func() (auth.OAuthStart, error) {
-		return a.cfg.Auth.StartLink(r.Context(), token, r.PathValue("provider"), in.Password)
-	}
-	if in.Password == "" {
-		st, err := start()
-		if err != nil {
-			a.fail(w, r, err)
-			return
-		}
+	var st auth.OAuthStart
+	if a.reauthed(w, r, in.Password, func(token string) error {
+		var err error
+		st, err = a.cfg.Auth.StartLink(r.Context(), token, r.PathValue("provider"), in.Password)
+		return err
+	}) {
 		a.writeStart(w, st)
-		return
 	}
-	// A password check: under the same failed-login limits as /api/auth/login, keyed by
-	// the account's email (a stolen session cookie cannot guess the password faster).
+}
+
+// reauthed runs do (an action of the service that re-authenticates: StartLink, Unlink)
+// with the request's session token. With a password it is a password check: under the
+// same failed-login limits as /api/auth/login, keyed by the account's email (a stolen
+// session cookie cannot guess the password faster). On false the response was written.
+func (a *api) reauthed(w http.ResponseWriter, r *http.Request, password string, do func(token string) error) bool {
+	token := requestToken(r)
+	if password == "" {
+		if err := do(token); err != nil {
+			a.fail(w, r, err)
+			return false
+		}
+		return true
+	}
 	id, err := a.cfg.Auth.Authenticate(r.Context(), token)
 	if err != nil {
 		a.fail(w, r, err)
-		return
+		return false
 	}
 	p, err := a.cfg.Auth.Profile(r.Context(), id)
 	if err != nil {
 		a.fail(w, r, err)
-		return
+		return false
 	}
-	var st auth.OAuthStart
-	if _, ok := a.limitedLogin(w, r, p.Email, func() (auth.Token, error) {
-		var err error
-		st, err = start()
-		return auth.Token{}, err
-	}); !ok {
-		return
-	}
-	a.writeStart(w, st)
+	_, ok := a.limitedLogin(w, r, p.Email, func() (auth.Token, error) {
+		return auth.Token{}, do(token)
+	})
+	return ok
 }
 
 // oauthErrorCodes are the codes /oauth/error shows (site.oauth.error.<code>).
@@ -259,16 +264,18 @@ func (a *api) finishPending(w http.ResponseWriter, tok auth.Token, ret string) {
 	writeJSON(w, http.StatusOK, map[string]string{"return": auth.SafeReturn(ret)})
 }
 
-func (a *api) unlink(w http.ResponseWriter, r *http.Request, accountID int64) {
+// unlink needs the same re-authentication as a link (password, or a recent login for an
+// account without one): 403 reauth_required otherwise.
+func (a *api) unlink(w http.ResponseWriter, r *http.Request) {
 	var in unlinkRequest
 	if !a.decode(w, r, &in) {
 		return
 	}
-	if err := a.cfg.Auth.Unlink(r.Context(), accountID, in.Provider); err != nil {
-		a.fail(w, r, err)
-		return
+	if a.reauthed(w, r, in.Password, func(token string) error {
+		return a.cfg.Auth.Unlink(r.Context(), token, in.Provider, in.Password)
+	}) {
+		w.WriteHeader(http.StatusNoContent)
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // identitiesOf lists the account's identities for GET /api/account.

@@ -98,6 +98,15 @@ server/
   emite la sesión con `Service.loginAccount`; toda ruta de vuelta pasa por
   `auth.SafeReturn`; el `redirect_uri` sale de `PUBLIC_URL`.
 
+- **Límites de la API (lote 16, `httpapi/abuse.go`, docs/05 "Límites de la API"):** toda
+  ruta con sesión pasa por `authed` (límite de búsquedas de token por cliente **antes** de
+  `Authenticate`, plazo `httpDBTimeout`, límite por cuenta); una que busque un token sin
+  `authed` usa `tokenLimited`. Un handler nuevo que calcule una contraseña va en
+  `rateLimited(hashing(...))`; uno que cree filas por cuenta, en `accountLimited`. Los
+  tokens se validan con `plausibleToken` antes de cualquier consulta (`auth`). Un log que
+  un cliente pueda disparar a voluntad va por `sampledLog` (o `a.fail`, que ya muestrea).
+  Una acción de cuenta sensible re-autentica como `StartLink`/`Unlink` (`Service.reauth`).
+
 - **Gremios (T5.1):** `session/guild.go` + `guild` (puro) + `store/guilds.go` +
   `httpapi/guilds.go`. El loop es dueño de todos los gremios: `app` los carga una vez
   (`GuildStore.LoadGuilds`) antes de arrancar y cada cambio sale como `AdminJob{Kind:

@@ -24,8 +24,10 @@ var (
 	// Every request consumes, so cheap junk requests are throttled too.
 	DefaultAuthRateLimit = RateLimit{Burst: 10, Every: 6 * time.Second}
 	// DefaultLoginPairRateLimit: failed logins per (email, client IP) pair. Strict, and
-	// an attacker on other IPs cannot drain it for the victim.
-	DefaultLoginPairRateLimit = RateLimit{Burst: 5, Every: time.Minute}
+	// an attacker on other IPs cannot drain it for the victim. It refills (15 per hour)
+	// slower than DefaultLoginEmailRateLimit (30 per hour), so one client alone can never
+	// drain an account's per-email budget and lock its owner out (lote 16).
+	DefaultLoginPairRateLimit = RateLimit{Burst: 5, Every: 4 * time.Minute}
 	// DefaultLoginEmailRateLimit: failed logins per email from any IP. Loose (~30 per
 	// hour): it only slows guessing distributed over many IPs.
 	DefaultLoginEmailRateLimit = RateLimit{Burst: 30, Every: 2 * time.Minute}

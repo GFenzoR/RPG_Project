@@ -7,14 +7,16 @@ package httpapi
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net"
 	"net/http"
-	"net/netip"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -48,6 +50,20 @@ type Config struct {
 	AuthRateLimit       RateLimit // per IP; default DefaultAuthRateLimit
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
+	// Lote 16 (abuse.go). Zero values take the defaults; a raised AuthRateLimit burst
+	// (test harnesses on one IP) raises TokenRateLimit and AuthNetRateLimit too and turns
+	// NetHashing off (sharedIPScale).
+	TokenRateLimit        RateLimit // token lookups per client key; DefaultTokenRateLimit
+	AccountRateLimit      RateLimit // authed requests per account; DefaultAccountRateLimit
+	AccountWriteRateLimit RateLimit // play and character creation per account; DefaultAccountWriteRateLimit
+	AuthNetRateLimit      RateLimit // rateLimited routes per IPv6 /48 or IPv4 /24; DefaultAuthNetRateLimit
+	// NetHashing: password-hashing requests in flight per IPv6 /48 or IPv4 address
+	// (0 = DefaultNetHashing, negative = no cap).
+	NetHashing int
+	// DeviceKey signs the known-device cookies (32 bytes or more). Empty: a random key
+	// per process (a restart forgets the known devices, which only costs them the
+	// exemption from the per-email failed-login limit).
+	DeviceKey []byte
 	// Email flows (T2.1). VerifyResendRateLimit: verification emails per account;
 	// ResetEmailRateLimit: reset emails per address. Defaults in email.go.
 	VerifyResendRateLimit RateLimit
@@ -127,7 +143,7 @@ type Accounts interface {
 	ConfirmPending(ctx context.Context, token, password string) (auth.Token, string, error)
 	CreateFromPending(ctx context.Context, token, email string) (auth.Token, string, error)
 	Identities(ctx context.Context, accountID int64) ([]store.Identity, error)
-	Unlink(ctx context.Context, accountID int64, provider string) error
+	Unlink(ctx context.Context, token, provider, password string) error
 }
 
 var _ Accounts = (*auth.Service)(nil)
@@ -163,6 +179,16 @@ type api struct {
 	resetSlots    chan struct{} // reset requests handled in the background
 
 	shopLimiter *limiter // T5.7: checkouts and purchases per account
+
+	// Lote 16 (abuse.go).
+	tokenLimiter   *limiter // token lookups per client key
+	accountLimiter *limiter // authed requests per account
+	writeLimiter   *limiter // play and character creation per account
+	netLimiter     *limiter // rateLimited routes per network
+	netHashing     *inflight
+	deviceKey      [32]byte
+	healthC        healthCache
+	logs           logSampler
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -189,7 +215,15 @@ func newAPI(cfg Config) (*api, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
+	sharedIPScale(&cfg)
 	cfg.AuthRateLimit = orDefault(cfg.AuthRateLimit, DefaultAuthRateLimit)
+	cfg.TokenRateLimit = orDefault(cfg.TokenRateLimit, DefaultTokenRateLimit)
+	cfg.AccountRateLimit = orDefault(cfg.AccountRateLimit, DefaultAccountRateLimit)
+	cfg.AccountWriteRateLimit = orDefault(cfg.AccountWriteRateLimit, DefaultAccountWriteRateLimit)
+	cfg.AuthNetRateLimit = orDefault(cfg.AuthNetRateLimit, DefaultAuthNetRateLimit)
+	if cfg.NetHashing == 0 {
+		cfg.NetHashing = DefaultNetHashing
+	}
 	cfg.LoginPairRateLimit = orDefault(cfg.LoginPairRateLimit, DefaultLoginPairRateLimit)
 	cfg.LoginEmailRateLimit = orDefault(cfg.LoginEmailRateLimit, DefaultLoginEmailRateLimit)
 	cfg.PublicRateLimit = orDefault(cfg.PublicRateLimit, DefaultPublicRateLimit)
@@ -226,11 +260,17 @@ func newAPI(cfg Config) (*api, error) {
 		uploadSlots:   make(chan struct{}, cfg.MapUploadSlots),
 		downloadSlots: make(chan struct{}, maxPatchDownloads),
 		resetSlots:    make(chan struct{}, maxPendingResets),
+		netHashing:    newInflight(cfg.NetHashing),
 	}
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
 	}
 	a.guildHigh.Store(-1)
+	if len(cfg.DeviceKey) > 0 {
+		a.deviceKey = sha256.Sum256(cfg.DeviceKey)
+	} else if _, err := rand.Read(a.deviceKey[:]); err != nil {
+		return nil, fmt.Errorf("httpapi: device key: %w", err)
+	}
 	for _, l := range []struct {
 		dst    **limiter
 		rl     RateLimit
@@ -246,6 +286,13 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.verifyLimiter, cfg.VerifyResendRateLimit, failClosed},
 		{&a.resetLimiter, cfg.ResetEmailRateLimit, failClosed},
 		{&a.shopLimiter, shopRate, failOpen},
+		// Keys are client keys and account ids of real sessions: failOpen like the
+		// per-IP limit. The per-network limit is failClosed: its keys are whole /48s and
+		// /24s, so filling its table takes more networks than one attacker has.
+		{&a.tokenLimiter, cfg.TokenRateLimit, failOpen},
+		{&a.accountLimiter, cfg.AccountRateLimit, failOpen},
+		{&a.writeLimiter, cfg.AccountWriteRateLimit, failOpen},
+		{&a.netLimiter, cfg.AuthNetRateLimit, failClosed},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
@@ -260,12 +307,12 @@ func newAPI(cfg Config) (*api, error) {
 func (a *api) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.healthz)
-	mux.HandleFunc("POST /api/auth/register", a.rateLimited(a.register))
-	mux.HandleFunc("POST /api/auth/login", a.rateLimited(a.login))
-	mux.HandleFunc("POST /api/auth/logout", a.logout)
-	mux.HandleFunc("GET /api/characters", a.authed(a.listCharacters))
-	mux.HandleFunc("POST /api/characters", a.authed(a.createCharacter))
-	mux.HandleFunc("POST /api/play", a.authed(a.play))
+	mux.HandleFunc("POST /api/auth/register", a.rateLimited(a.hashing(a.register)))
+	mux.HandleFunc("POST /api/auth/login", a.rateLimited(a.hashing(a.login)))
+	mux.HandleFunc("POST /api/auth/logout", a.tokenLimited(a.logout))
+	mux.HandleFunc("GET /api/characters", a.authed(shortDBRoute(a.listCharacters)))
+	mux.HandleFunc("POST /api/characters", a.authed(a.accountLimited(shortDBRoute(a.createCharacter))))
+	mux.HandleFunc("POST /api/play", a.authed(a.accountLimited(shortDBRoute(a.play))))
 	mux.HandleFunc("GET /api/status", a.publicLimited(a.status))
 	a.emailRoutes(mux)
 	a.oauthRoutes(mux)
@@ -363,6 +410,11 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 // before the check, so concurrent requests cannot all slip through on one token, and
 // refunded unless the password was wrong: only failures count (docs/05). On false the
 // response was written.
+//
+// The pair limit refills slower than the per-email one, so one client key alone can
+// never drain an account's per-email budget (it takes several networks). A browser with
+// a known-device cookie of that email (set here after a correct password) skips the
+// per-email limit: strangers' failures never lock the owner out of their usual device.
 func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string, check func() (auth.Token, error)) (auth.Token, bool) {
 	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
 	ok, pairRes := a.pairLimiter.allow(pairKey)
@@ -370,11 +422,14 @@ func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string,
 		a.tooMany(w, a.cfg.LoginPairRateLimit)
 		return auth.Token{}, false
 	}
-	ok, emailRes := a.emailLimiter.allow(email)
-	if !ok {
-		a.pairLimiter.refund(pairRes)
-		a.tooMany(w, a.cfg.LoginEmailRateLimit)
-		return auth.Token{}, false
+	emailRes := reservation{slot: untracked}
+	if !a.knownDevice(r, email) {
+		ok, emailRes = a.emailLimiter.allow(email)
+		if !ok {
+			a.pairLimiter.refund(pairRes)
+			a.tooMany(w, a.cfg.LoginEmailRateLimit)
+			return auth.Token{}, false
+		}
 	}
 	spent := false
 	defer func() { // also runs if check panics
@@ -389,6 +444,7 @@ func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string,
 		a.fail(w, r, err)
 		return auth.Token{}, false
 	}
+	a.setDevice(w, email)
 	return tok, true
 }
 
@@ -489,8 +545,10 @@ func (a *api) play(w http.ResponseWriter, r *http.Request, accountID int64) {
 
 func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.Health != nil {
-		if err := a.cfg.Health(r.Context()); err != nil {
-			a.log.Warn("healthz: dependency down", "err", err)
+		// Public (Caddy routes it): the ping is cached for healthCacheTTL, so a flood of
+		// health checks costs one pool connection per second at most.
+		if err := a.health(r.Context()); err != nil {
+			a.sampledLog(slog.LevelWarn, "healthz: dependency down", "err", err)
 			writeError(w, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
@@ -500,10 +558,19 @@ func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 
 // ---- middleware ----------------------------------------------------------------
 
+// rateLimited spends the client's budget (IPv4 address or IPv6 /64) and its network's
+// (IPv6 /48 or IPv4 /24, failClosed) before the register, login, password and email
+// routes.
 func (a *api) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if ok, _ := a.limiter.allow(a.clientKey(r)); !ok {
+		ok, res := a.limiter.allow(a.clientKey(r))
+		if !ok {
 			a.tooMany(w, a.cfg.AuthRateLimit)
+			return
+		}
+		if ok, _ := a.netLimiter.allow(a.netKey(r, false)); !ok {
+			a.limiter.refund(res)
+			a.tooMany(w, a.cfg.AuthNetRateLimit)
 			return
 		}
 		next(w, r)
@@ -516,11 +583,28 @@ func (a *api) tooMany(w http.ResponseWriter, rl RateLimit) {
 	writeError(w, http.StatusTooManyRequests, "rate_limited")
 }
 
-func (a *api) authed(next func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
+// authedFunc is a handler of an authenticated route: it gets the account id.
+type authedFunc func(http.ResponseWriter, *http.Request, int64)
+
+// authed authenticates the request's token and calls next with its account. The
+// client's token-lookup budget is spent before the lookup (a flood of made-up tokens
+// cannot starve the database pool), the lookup is bounded by httpDBTimeout, and then
+// the account's own budget is spent.
+func (a *api) authed(next authedFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := a.cfg.Auth.Authenticate(r.Context(), requestToken(r))
+		if ok, _ := a.tokenLimiter.allow(a.clientKey(r)); !ok {
+			a.tooMany(w, a.cfg.TokenRateLimit)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), httpDBTimeout)
+		id, err := a.cfg.Auth.Authenticate(ctx, requestToken(r))
+		cancel()
 		if err != nil {
 			a.fail(w, r, err)
+			return
+		}
+		if ok, _ := a.accountLimiter.allow(strconv.FormatInt(id, 10)); !ok {
+			a.tooMany(w, a.cfg.AccountRateLimit)
 			return
 		}
 		next(w, r, id)
@@ -594,6 +678,21 @@ func (a *api) recoverer(next http.Handler) http.Handler {
 // clientKey is the rate-limit key of the client: its IPv4 address or its IPv6 /64
 // (one subscriber usually owns a whole /64, so per-address keys would be free to rotate).
 func (a *api) clientKey(r *http.Request) string {
+	addr, host, ok := a.clientAddr(r)
+	if !ok {
+		return host
+	}
+	if addr.Is6() {
+		if p, err := addr.Prefix(64); err == nil {
+			return p.String()
+		}
+	}
+	return addr.String()
+}
+
+// clientHost is the client's address as text: the last X-Forwarded-For entry with
+// TrustProxy, else the TCP peer.
+func (a *api) clientHost(r *http.Request) string {
 	host := ""
 	if a.cfg.TrustProxy {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -608,17 +707,7 @@ func (a *api) clientKey(r *http.Request) string {
 		}
 		host = h
 	}
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return host
-	}
-	addr = addr.Unmap()
-	if addr.Is6() {
-		if p, err := addr.Prefix(64); err == nil {
-			return p.String()
-		}
-	}
-	return addr.String()
+	return host
 }
 
 func (a *api) cookie(value string, expires time.Time) *http.Cookie {
@@ -700,7 +789,15 @@ func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, context.Canceled) {
 		return // client went away
 	}
-	a.log.Error("http api", "method", r.Method, "path", r.URL.Path, "err", err)
+	// Sampled per route and error: a failure a client can repeat at will (a database
+	// down, a timeout) is logged once, then summarized once a minute.
+	if ok, n := a.logs.allow("fail|"+r.Pattern+"|"+err.Error(), a.cfg.Clock.Now()); ok {
+		args := []any{"method", r.Method, "path", r.URL.Path, "err", err}
+		if n > 0 {
+			args = append(args, "suppressed", n)
+		}
+		a.log.Error("http api", args...)
+	}
 	writeError(w, http.StatusInternalServerError, "internal")
 }
 

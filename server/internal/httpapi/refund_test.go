@@ -66,7 +66,7 @@ func (*fakeAccounts) CreateFromPending(context.Context, string, string) (auth.To
 	return auth.Token{}, "", nil
 }
 func (*fakeAccounts) Identities(context.Context, int64) ([]store.Identity, error) { return nil, nil }
-func (*fakeAccounts) Unlink(context.Context, int64, string) error                 { return nil }
+func (*fakeAccounts) Unlink(context.Context, string, string, string) error        { return nil }
 
 func wrongPassword() (auth.Token, error) { return auth.Token{}, auth.ErrInvalidCredentials }
 
