@@ -80,6 +80,17 @@
   blocks_movement: true
   market_board: true
 
+# Account stash (docs/02 "Baúl de la cuenta"): using one of a town opens the chest shared by
+# every character of the account.
+- id: stash_chest
+  kind: decoration
+  sprite: decor/stash_chest
+  name: item.stash_chest.name
+  description: item.stash_chest.desc
+  pickupable: false
+  blocks_movement: true
+  stash: true
+
 - id: cooking_hearth
   kind: decoration
   sprite: decor/cooking_hearth

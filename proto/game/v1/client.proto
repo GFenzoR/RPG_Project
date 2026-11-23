@@ -49,6 +49,7 @@ message ClientMessage {
     UnequipCosmetic unequip_cosmetic = 35;
     Refine refine = 36;
     SetLook set_look = 37;
+    StashCommand stash_command = 38;
   }
 }
 
@@ -519,3 +520,41 @@ message UnequipCosmetic {
 message SetLook {
   BodyLook look = 1;
 }
+
+// StashCommand is one action of the account stash window (docs/02 "Baúl de la cuenta"):
+// the chest shared by every character of the account. The player must stand next to the
+// stash chest it opened the window at (UseItem on it). Every action is checked in the game
+// loop, which owns the one copy of the stash while a character of the account is online,
+// and answered with a StashUpdate (its result says whether it happened).
+message StashCommand {
+  oneof action {
+    StashDeposit deposit = 1;
+    StashWithdraw withdraw = 2;
+    StashClose close = 3;
+  }
+}
+
+// StashDeposit puts count units of the item at from (carried by the player: an equipment
+// slot, an open container it carries or a pocket cell; never the ground) in the stash: a
+// stack joins a stack of the stash with room for all of it, anything else takes a free
+// cell. count is ignored for items that do not stack (the whole instance goes, a
+// container with its content). Only tradeable items go in (a container: with tradeable
+// content).
+message StashDeposit {
+  ItemLocation from = 1;
+  uint32 item_id = 2;
+  uint32 count = 3;
+}
+
+// StashWithdraw takes count units of the stash cell index into the backpack (or else the
+// pockets). item_id and mods are the item the client saw there: a stale view (another
+// character of the account moved it meanwhile) is refused with STASH_RESULT_CHANGED.
+message StashWithdraw {
+  uint32 index = 1;
+  uint32 item_id = 2;
+  ItemMods mods = 3;
+  uint32 count = 4;
+}
+
+// StashClose closes the window.
+message StashClose {}

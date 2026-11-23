@@ -1,6 +1,9 @@
 package content
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Market holds the global market rules (T5.3, docs/02-game-design.md "Economía"). The
 // zero value (no market block, or enabled: false) turns the market off.
@@ -100,6 +103,29 @@ func (t Trade) check() error {
 	if t.Enabled && (t.MaxItems < 1 || t.MaxItems > 32 || t.RequestMs < 1000 || t.RequestMs > 600_000 ||
 		t.ActionBurst < 1 || t.ActionRefillMs < 1 || t.ActionRefillMs > 60_000) {
 		return errors.New("trade: max_items in 1..32, request_ms in 1000..600000, action_burst >= 1, action_refill_ms in 1..60000")
+	}
+	return nil
+}
+
+// Stash is the account stash (docs/02 "Baúl de la cuenta"): one chest per account shared by
+// all of its characters, opened at a stash chest of the map.
+type Stash struct {
+	Enabled bool `yaml:"enabled"`
+	// Slots is how many items (stacks, instances or containers with their content) it holds.
+	Slots int `yaml:"slots"`
+	// Anti-flood: a burst of ActionBurst deposits and withdrawals, then one every
+	// ActionRefillMs. Each one is a database transaction (the character and the stash).
+	ActionBurst    int `yaml:"action_burst"`
+	ActionRefillMs int `yaml:"action_refill_ms"`
+}
+
+// MaxStashSlots bounds Stash.Slots (account_stash_items.slot is a SMALLINT below it).
+const MaxStashSlots = 200
+
+func (s Stash) check() error {
+	if s.Enabled && (s.Slots < 1 || s.Slots > MaxStashSlots || s.ActionBurst < 1 || s.ActionRefillMs < 1 ||
+		s.ActionRefillMs > 60_000) {
+		return fmt.Errorf("stash: slots in 1..%d, action_burst >= 1, action_refill_ms in 1..60000", MaxStashSlots)
 	}
 	return nil
 }

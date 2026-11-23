@@ -54,6 +54,10 @@
           "type": "boolean",
           "description": "Using this map item opens the global market (T5.3, docs/02 \"Economía\")."
         },
+        "stash": {
+          "type": "boolean",
+          "description": "Using this map item opens the account stash, shared by every character of the account (docs/02 \"Baúl de la cuenta\")."
+        },
         "blocks_movement": {
           "type": "boolean",
           "description": "Blocks walking. Defaults to true for kind: wall, false otherwise (docs/03)."

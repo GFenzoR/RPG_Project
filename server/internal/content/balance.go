@@ -29,6 +29,9 @@ type Balance struct {
 	// enabled: false turns each off.
 	Market Market `yaml:"market"`
 	Trade  Trade  `yaml:"trade"`
+	// Stash is the account stash (docs/02 "Baúl de la cuenta"); absent or enabled: false
+	// turns it off.
+	Stash Stash `yaml:"stash"`
 	// Forge is the refine of equipables at an anvil (docs/02 "Forja"); absent or enabled:
 	// false turns it off.
 	Forge Forge `yaml:"forge"`
@@ -822,6 +825,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Trade.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Stash.check(); err != nil {
 		return Balance{}, err
 	}
 	if err := b.Forge.check(); err != nil {

@@ -881,6 +881,18 @@
         }
       }
     },
+    "stash": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Account stash shared by the characters of an account (docs/02 \"Baúl de la cuenta\"). Absent or enabled: false turns it off.",
+      "required": ["enabled", "slots", "action_burst", "action_refill_ms"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "slots": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
     "trade": {
       "type": "object",
       "additionalProperties": false,
