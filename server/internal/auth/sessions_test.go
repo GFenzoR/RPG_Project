@@ -173,7 +173,7 @@ func TestSignOutEverywhere(t *testing.T) {
 func TestChangePassword(t *testing.T) {
 	ctx := context.Background()
 	var kicked []int64
-	svc, repo, _ := newSessionService(t, func(c *auth.Config) {
+	svc, repo, clk := newSessionService(t, func(c *auth.Config) {
 		c.SessionsRevoked = func(id int64) { kicked = append(kicked, id) }
 	})
 	acc, _ := svc.Register(ctx, "ana@example.org", "secreto123")
@@ -184,7 +184,7 @@ func TestChangePassword(t *testing.T) {
 	// A pending reset link (issued by the operator here: no mailer in this service).
 	if err := repo.ReplaceAccountToken(ctx, store.AccountToken{
 		TokenHash: sum("reset"), AccountID: acc, Purpose: store.TokenResetPassword,
-		Email: "ana@example.org", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+		Email: "ana@example.org", CreatedAt: clk.Now(), ExpiresAt: clk.Now().Add(time.Hour),
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -37,7 +37,7 @@ func TestSessionIdleRevokeAndChangePassword(t *testing.T) {
 	a1 := mk("a1", acc, store.SessionAccount, 0)
 	a2 := mk("a2", acc, store.SessionAccount, 0)
 	play := mk("play", acc, store.SessionPlay, c.ID)
-	b1 := mk("b1", other, store.SessionAccount, 0)
+	mk("b1", other, store.SessionAccount, 0)
 
 	got, err := st.ActiveSession(ctx, a1, store.SessionAccount, now)
 	if err != nil || !got.LastSeenAt.Equal(now) {
@@ -64,7 +64,7 @@ func TestSessionIdleRevokeAndChangePassword(t *testing.T) {
 	if _, err := st.ActiveSession(ctx, a1, store.SessionAccount, later); err != nil {
 		t.Fatalf("active session purged: %v", err)
 	}
-	b1 = mk("b1-again", other, store.SessionAccount, 0)
+	b1 := mk("b1-again", other, store.SessionAccount, 0)
 	a2 = mk("a2-again", acc, store.SessionAccount, 0)
 
 	// Password change: keeps a1, revokes a2 and the play token, kills reset links.
