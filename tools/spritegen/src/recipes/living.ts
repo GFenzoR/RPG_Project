@@ -1,7 +1,8 @@
 // The living world's own pixel art (livingworld/README.md), written to
 // assets/livingworld/sprites/ (spriteFile): small plants that bend when walked through
 // (livingworld/plants/<item>, used by data/items/plants.yaml) and the client's effect masks
-// (livingworld/fx/<name>: footprints, ripples, dust, leaves and critters), which the
+// (livingworld/fx/<name>: footprints, ripples, dust, leaves and critters, and the colour
+// art of the trail wear, recipes/trail.ts), which the
 // client looks up by name. The masks are white or near white: the client tints them
 // (a footprint takes its surface's colour). Original art, 32x32 in the 3/4 style.
 import type { Image, Rgba } from "@rpg/spritepack";
@@ -9,6 +10,7 @@ import { disc, line, px } from "../draw.ts";
 import { hex } from "../palette.ts";
 import type { Rng } from "../draw.ts";
 import type { Recipe, RecipeBook } from "../recipe.ts";
+import { TRAIL } from "./trail.ts";
 
 const WHITE: Rgba = [255, 255, 255, 255];
 const LIGHT: Rgba = [214, 214, 214, 255];
@@ -118,16 +120,6 @@ const FX: RecipeBook = {
     paw(img, 14, 9, 1.6);
     paw(img, 18, 18, 1.6);
   }),
-  "livingworld/fx/wear": fx((img) => {
-    // A flattened, scuffed patch the size of a tile, its edge broken.
-    for (let y = 4; y < 28; y++)
-      for (let x = 4; x < 28; x++) {
-        const dx = (x - 15.5) / 12;
-        const dy = (y - 15.5) / 11;
-        const d = dx * dx + dy * dy;
-        if (d < 0.75 || (d < 1 && (x * 7 + y * 13) % 5 < 3)) px(img, x, y, LIGHT);
-      }
-  }),
   ...Object.fromEntries(
     [3, 6, 9, 12].map((r, i) => [`livingworld/fx/ripple_${i}`, fx((img) => ring(img, r))]),
   ),
@@ -196,4 +188,4 @@ const FX: RecipeBook = {
   ),
 };
 
-export const LIVING: RecipeBook = { ...PLANTS, ...FX };
+export const LIVING: RecipeBook = { ...PLANTS, ...FX, ...TRAIL };
