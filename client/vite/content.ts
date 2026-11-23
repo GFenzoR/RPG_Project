@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+import { parseLivingWorldData } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
@@ -48,6 +49,7 @@ import type {
   SpellDef,
 } from "../src/content-types.ts";
 import type { LayerSlot, Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
+import type { LivingWorldData } from "@rpg/living-world/data";
 
 /** The worn slots (packages/renderer look.ts WORN_SLOTS; types only from there at build time). */
 const WORN_SLOTS = ["head", "torso", "legs", "feet", "shield", "weapon"] as const;
@@ -93,6 +95,15 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
+
+/** data/livingworld/surfaces.yaml and plants.yaml as the living world uses them. */
+function loadLivingWorld(root: string): LivingWorldData {
+  const read = (name: string): unknown => {
+    const file = join(root, "data", "livingworld", name);
+    return existsSync(file) ? readYaml(file) : undefined;
+  };
+  return parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"));
+}
 
 /** Builds the content module from data/ and i18n/ under root. Throws on unreadable data. */
 export function loadClientContent(root: string): ClientContent {
@@ -153,6 +164,8 @@ export function loadClientContent(root: string): ClientContent {
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
         ...(isObj(raw["door"]) ? { door: true as const } : {}),
         ...(borders.has(raw["id"]) ? { border: true as const } : {}),
+        // The living world's surface (livingworld/README.md): footprints, plants, step sounds.
+        ...(typeof ground?.["surface"] === "string" ? { surface: ground["surface"] } : {}),
         ...(typeof raw["elevation"] === "number" && raw["elevation"] > 0
           ? { elevation: raw["elevation"] }
           : {}),
@@ -289,6 +302,7 @@ export function loadClientContent(root: string): ClientContent {
   const forge = loadForge(balance, ids);
   return {
     items,
+    livingWorld: loadLivingWorld(root),
     attributes,
     monsterSprites: monsters,
     // A topic conflict is the content test's to report (vite/content.test.ts): the build

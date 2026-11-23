@@ -73,6 +73,7 @@ import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
+import { mountLivingWorld, printOf } from "./living.ts";
 import type { ParticleView } from "./particles.ts";
 import {
   attackDir,
@@ -463,6 +464,9 @@ export async function createGameCanvas(
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
   const particleView: ParticleView = { x: 0, y: 0, width: 0, height: 0 };
+  // The living world's frame, reused (docs/07: a frame allocates nothing for it).
+  const livingSelf = { x: 0, y: 0 };
+  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf };
   const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
   const motionQuery =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
@@ -518,6 +522,9 @@ export async function createGameCanvas(
     if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
   };
   view.overlay.addChild(particles.view, hiddenLayer, behindWall);
+  // The living world (livingworld/README.md, render/living.ts): footprints on the ground
+  // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
+  const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
@@ -792,7 +799,20 @@ export async function createGameCanvas(
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
     // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
-    if (moving && st.walkStart !== stepBefore && !figure.clips.meta?.flying) kickUp(moving.from);
+    if (moving && st.walkStart !== stepBefore) {
+      const flying = figure.clips.meta?.flying === true;
+      if (!flying) kickUp(moving.from);
+      living?.onCreatureStep(
+        {
+          id: c.id,
+          from: moving.from,
+          to: moving.to,
+          durationMs: moving.duration,
+          print: printOf(c.look !== undefined, flying, figure.lift),
+        },
+        now,
+      );
+    }
     return pose.done;
   };
 
@@ -1135,6 +1155,14 @@ export async function createGameCanvas(
     particleView.width = app.screen.width / tilePx;
     particleView.height = app.screen.height / tilePx;
     particles.update(now, particleView, emitters, isDark(self.pos.z), reducedMotion());
+    livingView.x = cam.x;
+    livingView.y = cam.y;
+    livingView.width = particleView.width;
+    livingView.height = particleView.height;
+    livingView.z = self.pos.z;
+    livingSelf.x = self.pos.x;
+    livingSelf.y = self.pos.y;
+    living?.onTick(now, livingView);
     drawnBoxes.reset();
 
     const seen = new Set<number>();
@@ -1690,6 +1718,7 @@ export async function createGameCanvas(
       while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
       lights.destroy();
+      living?.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },

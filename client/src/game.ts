@@ -36,6 +36,7 @@ import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
 import { motionReduced } from "./state/ui-prefs.ts";
+import { stepSoundEvents } from "./render/living.ts";
 import type { ControlsMode } from "./state/controls.ts";
 import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
@@ -423,6 +424,8 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
+  /** The surface sound of an own step (living world, render/living.ts); made once. */
+  private stepEvents: ((to: Pos) => string[]) | undefined;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
@@ -471,6 +474,7 @@ export class Game {
     this.safe = loadSafeMode(opts.storage);
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
+    this.stepEvents = stepSoundEvents(this.world, opts.content);
     this.steer = new Steering({
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
@@ -1834,7 +1838,7 @@ export class Game {
     const craft = station
       ? this.opts.content.recipes.find((r) => r.station === station.itemId)?.craft
       : undefined;
-    return { selfId: this.world.selfId, tool: this.toolAt, craft };
+    return { selfId: this.world.selfId, tool: this.toolAt, craft, stepEvents: this.stepEvents };
   }
 
   /** Plays a batch's cues around the player and keeps the zone's loops. */

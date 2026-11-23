@@ -96,6 +96,9 @@ interface CachedChunk {
   ground: Container;
   shadows: Container | undefined;
   items: Sprite[];
+  /** Global tile x, y and item id of each of `items` (same order): forEachItemSprite. */
+  itemTiles: number[];
+  itemIds: string[];
   animated: Animated[];
   /** Light sources (tile art light): x, y (global tile) and radius in tiles, flat. */
   lights: number[];
@@ -139,6 +142,11 @@ export class MapView {
    * creatures). One unit = one sprite pixel; tile (x, y) starts at (x * tileSize, y * tileSize).
    */
   readonly overlay = new Container({ label: "overlay" });
+  /**
+   * World-space container over the grounds and their flat border pieces, under cast shadows,
+   * items and creatures: marks that lie on the ground (the living world's footprints).
+   */
+  readonly groundOverlay = new Container({ label: "ground overlay" });
   readonly tileSize: number;
 
   private readonly world = new Container({ label: "world" });
@@ -164,6 +172,8 @@ export class MapView {
   /** Every animated sprite of the cached chunks; rebuilt when chunks come or go. */
   private animated: Animated[] = [];
   private animatedStale = false;
+  /** Chunks built or dropped so far (version). */
+  private builds = 0;
   /** Which tiles of a chunk object hold a wall (or an item that joins walls). */
   private readonly walls = new WeakMap<ChunkData, Uint8Array>();
   private readonly joins = new Map<string, boolean>();
@@ -177,7 +187,13 @@ export class MapView {
     this.elevation = opts.elevation;
     this.tileSize = opts.tileSize;
     this.floorZ = opts.floor;
-    this.world.addChild(this.groundLayer, this.shadowLayer, this.itemLayer, this.overlay);
+    this.world.addChild(
+      this.groundLayer,
+      this.groundOverlay,
+      this.shadowLayer,
+      this.itemLayer,
+      this.overlay,
+    );
     this.root.addChild(this.world);
   }
 
@@ -306,6 +322,28 @@ export class MapView {
       const e = c.emitters;
       for (let i = 0; i + 2 < e.length; i += 3)
         fn(e[i] as number, e[i + 1] as number, PARTICLE_KINDS[e[i + 2] as number] ?? "dust");
+    }
+  }
+
+  /** Changes whenever a chunk is built or dropped: the item sprites are other ones. */
+  get version(): number {
+    return this.builds;
+  }
+
+  /**
+   * Calls fn for every item sprite of the built chunks (not the flat border pieces): its
+   * global tile, item id and sprite. The caller may skew or nudge a sprite (the living
+   * world's plants) but must not keep it past the next version change.
+   */
+  forEachItemSprite(fn: (x: number, y: number, id: string, sprite: Sprite) => void): void {
+    for (const c of this.cache.values()) {
+      for (let i = 0; i < c.items.length; i++)
+        fn(
+          c.itemTiles[i * 2] as number,
+          c.itemTiles[i * 2 + 1] as number,
+          c.itemIds[i] as string,
+          c.items[i] as Sprite,
+        );
     }
   }
 
@@ -444,6 +482,8 @@ export class MapView {
         : false;
     };
     const items: Sprite[] = [];
+    const itemTiles: number[] = [];
+    const itemIds: string[] = [];
     /** Flat border pieces: children of the chunk's ground container, destroyed with it. */
     const flats: Sprite[] = [];
     const lights: number[] = [];
@@ -480,6 +520,8 @@ export class MapView {
           sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
           sprite.zIndex = itemZIndex(x, y, i);
           items.push(sprite);
+          itemTiles.push(x, y);
+          itemIds.push(id);
         }
         if (elev && raised < MAX_ELEVATION)
           raised = Math.min(MAX_ELEVATION, raised + Math.max(0, elev(id)));
@@ -508,12 +550,15 @@ export class MapView {
       ground,
       shadows,
       items,
+      itemTiles,
+      itemIds,
       animated,
       lights,
       emitters,
       deps: deps.size > 0 ? [...deps.values()] : NO_DEPS,
     });
     if (animated.length > 0) this.animatedStale = true;
+    this.builds++;
   }
 
   private drop(key: string): void {
@@ -524,6 +569,7 @@ export class MapView {
     for (const sprite of c.items) sprite.destroy();
     if (c.animated.length > 0) this.animatedStale = true;
     this.cache.delete(key);
+    this.builds++;
   }
 
   private clear(): void {

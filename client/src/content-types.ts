@@ -1,4 +1,5 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
+import type { LivingWorldData } from "@rpg/living-world/data";
 import type { Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
 
 /** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
@@ -31,6 +32,11 @@ export interface ItemDef {
   blocks: boolean;
   /** Ground terrain cost in percent (100 = normal). */
   speed: number;
+  /**
+   * Ground items: what it is made of for the living world (data/items `ground.surface`,
+   * livingworld/README.md). Absent on other items and on grounds without one.
+   */
+  surface?: string;
   /** Several units share one stack (MoveItem sends a count). */
   stackable: boolean;
   /** Slots of a container item (0 = not a container). */
@@ -350,6 +356,11 @@ export interface ExperienceCurve {
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
+  /**
+   * data/livingworld/*.yaml (livingworld/README.md): surfaces and plants. Optional so
+   * fixtures can leave it out (then the living world shows nothing).
+   */
+  livingWorld?: LivingWorldData;
   /**
    * The item attributes of data/attributes.yaml by id (docs/02 "Atributos de items"): what
    * an instance's ItemMods.attribute names. Optional so fixtures can leave it out (then an

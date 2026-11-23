@@ -19,6 +19,21 @@ const REPO = fileURLToPath(new URL("../../", import.meta.url));
 describe("client content (T0.5)", () => {
   const content = loadClientContent(REPO);
 
+  it("ships each ground's surface and the living world's data (livingworld/README.md)", () => {
+    const byId = Object.fromEntries(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId["sand"]?.surface).toBe("sand");
+    expect(byId["dock_planks"]?.surface).toBe("wood");
+    expect(byId["bush"]?.surface).toBeUndefined();
+    // Every ground walkers stand on says what it is made of.
+    for (const d of Object.values(content.items))
+      if (d.ground && d.walkable) expect(d.surface, d.id).toBeDefined();
+    const lw = content.livingWorld;
+    expect(lw?.surfaces.sand?.footprintMs).toBeGreaterThan(0);
+    expect(lw?.surfaces.sand?.wind).toBeGreaterThan(0);
+    expect(lw?.plants["tall_grass"]).toEqual({ reaction: "bend", idle: true, leaves: false });
+    expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
+  });
+
   it("ships the item attributes and their card lines in both languages (docs/02)", () => {
     const attrs = content.attributes ?? {};
     expect(attrs["max_health"]?.text).toBe("attribute.max_health");

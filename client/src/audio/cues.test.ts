@@ -72,6 +72,21 @@ describe("cuesOf", () => {
     expect(cuesOf(move(8), ctx)).toEqual([]);
   });
 
+  it("an own step sounds like the surface it lands on, then like any step (living world)", () => {
+    const to = { x: 4, y: 5, z: 7 };
+    const step = msg({ case: "creatureMove", value: { id: 7, from: at, to, durationMs: 200 } });
+    const seen: unknown[] = [];
+    const withSurface = {
+      ...ctx,
+      stepEvents: (p: unknown) => {
+        seen.push(p);
+        return ["step.self.sand", "step.self"];
+      },
+    };
+    expect(cuesOf(step, withSurface)).toEqual([{ events: ["step.self.sand", "step.self"] }]);
+    expect(seen).toEqual([to]);
+  });
+
   it("system messages by key, with the station's craft or the tool first", () => {
     expect(cuesOf(system("progress.level_up"), ctx)).toEqual([
       { events: ["message.progress.level_up"] },
