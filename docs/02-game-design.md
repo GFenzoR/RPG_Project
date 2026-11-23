@@ -2966,6 +2966,27 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
   estación al fabricar suenan como recolección genérica.
 
+## Senderos (mundo vivo, lote 17, pedido del dueño del 2026-11-23)
+"Si muchos jugadores caminan sobre el pasto, empieza a verse la tierra; cuando dejan de
+pasar, el pasto se recupera." Es estado compartido: todos ven los mismos senderos, así que
+lo lleva el servidor (contrato en `livingworld/README.md`, números en
+`data/livingworld/wear.yaml`).
+- **Qué desgasta:** cada paso de un **jugador** sobre un suelo de superficie `grass` o
+  `tall_grass` (`ground.surface` de `data/items`; la lista es `surfaces` de `wear.yaml`)
+  suma `player_step` (4) puntos a esa casilla, hasta `max` (2400). Los **monstruos no**
+  (`monster_step: 0`): deambulan siempre por sus zonas y las pelarían aunque nadie pase;
+  se puede subir si se quiere que un cubil se note. Los NPCs nunca.
+- **Recuperación:** cada `decay_every_ms` (1 min) cada casilla gastada pierde `decay` (2)
+  puntos: desde el tope, el pasto vuelve en 20 h. También mientras el servidor está
+  apagado: al arrancar se descuenta ese tiempo.
+- **Niveles** (`levels`: 400, 1000, 1800): 0 nada, 1 pisoteado, 2 gastado, 3 tierra
+  pelada. Tres pasos por minuto en una casilla durante tres horas dejan tierra pelada.
+  La hierba alta, las matas y las flores (`trample` en `data/livingworld/plants.yaml`) se
+  dibujan aplastadas desde el nivel 1.
+- **El mapa no cambia:** el desgaste es una capa que el cliente dibuja sobre el suelo; los
+  caminos que ya están dibujados en un pueblo (tierra) no se tocan ni desgastan, y nada
+  escribe en `world/`. No cambia la velocidad ni ninguna regla: es solo cómo se ve.
+
 ## Apariencia (lote 13, pedido del dueño del 2026-11-19)
 "Debiéramos tener una ventana de personalización", y que los demás vean lo que lleva cada
 uno. Todo jugador, NPC que es una persona y monstruo humanoide es un humanoide del motor de

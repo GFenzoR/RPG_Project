@@ -1554,7 +1554,8 @@ toca al contenido:
 - **`ground.surface`** en cada suelo de `data/items` (enum `surface` de
   `common.schema.json`): `sand`, `wet_sand`, `snow`, `mud`, `grass`, `tall_grass`, `dirt`,
   `ash`, `stone`, `wood`, `water_shallow`, `lava`. De qué está hecho el suelo para el
-  cliente (huellas, plantas, pasos con sonido); el servidor lo ignora.
+  cliente (huellas, plantas, pasos con sonido); el servidor solo lo lee para el desgaste
+  de senderos (`wear.yaml`, abajo).
   ```yaml
   - id: sand
     kind: ground
@@ -1568,7 +1569,24 @@ toca al contenido:
   `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
   esté descrita.
 - **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
-  lista de `{ item, reaction: bend | rustle, idle?, leaves? }`; cada item una vez.
+  lista de `{ item, reaction: bend | rustle, idle?, leaves?, trample? }`; cada item una
+  vez. `trample`: sobre una casilla con desgaste de senderos se dibuja aplastada.
+- **`data/livingworld/wear.yaml`** (`livingworld-wear.schema.json`): el desgaste de
+  senderos, que lee el **servidor** (`livingworld/server/trail`, docs/02 "Senderos"):
+  `surfaces` (las superficies que se gastan), `player_step` y `monster_step` (puntos por
+  paso; 0: no desgasta), `max` (tope), `levels` (los puntos de los niveles 1, 2 y 3,
+  ascendentes y hasta `max`), `decay_every_ms` y `decay` (la recuperación) y
+  `save_every_ms` (cada cuánto se guarda). El servidor no arranca con uno inválido.
+  ```yaml
+  surfaces: [grass, tall_grass]
+  player_step: 4
+  monster_step: 0
+  max: 2400
+  levels: [400, 1000, 1800]
+  decay_every_ms: 60000
+  decay: 2
+  save_every_ms: 300000
+  ```
 - Cada `data/livingworld/<nombre>.yaml` necesita su `livingworld-<nombre>.schema.json`; un
   archivo sin esquema es un error (así un tipo nuevo de contenido del mundo vivo trae su
   esquema).

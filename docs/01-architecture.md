@@ -107,6 +107,22 @@ dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
 - Tiles con flags precomputados (bloquea paso, bloquea proyectil, zona de protección,
   no-logout, pvp) para que el pathfinding y la línea de visión sean baratos.
 
+### Desgaste de senderos (mundo vivo, lote 17)
+El pasto que muchos jugadores pisan muestra la tierra y se recupera si dejan de pasar
+(docs/02 "Senderos", `livingworld/README.md`). Es estado del mundo compartido, así que es
+del servidor y **del game loop**: `livingworld/server/trail` (`trail.Map`) lo guarda
+disperso por chunk de 32x32 (2 KiB por chunk con algún desgaste; sin desgaste, nada) y
+`server/internal/session/trailwear.go` (el pegamento) lo maneja en el loop:
+- cada paso de un jugador sobre un suelo cuya `ground.surface` desgasta suma puntos
+  (`move`, sin `through`); los monstruos, lo que diga `monster_step` (0 hoy); los NPCs nada;
+- `flushSystem` llama a `flushTrail` cada tick: la recuperación corre cada
+  `decay_every_ms` (contada en ticks, nunca `time.Now()`), los cambios de nivel van a los
+  jugadores que ven la casilla, y cada `save_every_ms` sale una copia (`Snapshot`) por
+  `Config.SaveTrail`;
+- nada de I/O en el loop: la copia es un `memcpy` por chunk; codificarla y escribirla es
+  de `app/trailwear.go` (`trailWriter`, su propia goroutine, se queda solo con la copia más
+  nueva). Al apagar, con el loop ya detenido, se escribe la última.
+
 ## Área de interés (AOI)
 - Cada jugador ve una ventana de 31x21 casillas centrada en él (la vista ancha de
   `00-vision.md`; antes era la de 15x11 de Tibia) + 1 de margen para animar entradas:
@@ -131,6 +147,7 @@ dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
 |---|---|---|
 | Cuentas, personajes, inventario, skills, quests | Postgres | Al salir + autoguardado cada 5 min escalonado |
 | Estado del mundo (items en el suelo) | Memoria | Se pierde al reiniciar (como Tibia en sus inicios), salvo el suelo de las casas |
+| Desgaste de senderos (mundo vivo, lote 17): `trail_wear` (migración 00027, una fila con el desgaste codificado) | Postgres; el loop lo tiene en memoria | Se lee una vez al arrancar (y se le resta la recuperación del tiempo apagado, desde `saved_at`); una copia cada `save_every_ms` (5 min) y al apagar, por la goroutine de `app/trailwear.go`. Si no se puede leer, se arranca sin desgaste |
 | Log de economía (T4.1: creación y destrucción de oro e items por fuente) | Postgres, `economy_log` append-only | Asíncrono por lotes (COPY), goroutine propia |
 | Reportes de jugadores (T4.1) | Postgres, `player_reports` | Asíncrono, goroutine de admin |
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |

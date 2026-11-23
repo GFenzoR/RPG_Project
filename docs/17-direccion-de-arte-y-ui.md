@@ -466,8 +466,18 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
   luciérnagas de noche (cuando haya noche) y sombras de peces en el agua. Pocos (10) y
   donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.
-- **Desgaste:** los senderos gastados (estado del servidor) se dibujan como parches más
-  oscuros sobre el suelo.
+- **Desgaste de senderos** (estado del servidor, docs/02 "Senderos"; rama
+  `feat/trail-wear`): tres etapas sobre el pasto, arte de color (no máscara) de
+  `tools/spritegen/src/recipes/trail.ts` con los verdes de `ground/grass` y los marrones de
+  `ground/dirt`: 1 pisoteado (hojas aplastadas, más pálidas, en vetas a lo largo del
+  sendero y alguna mota de tierra), 2 gastado (manchas de tierra entre el pasto aplastado),
+  3 tierra pelada (la tierra con terrones y un fleco de pasto aplastado). Cada etapa tiene
+  16 formas según qué vecinas (N, E, S, O) están gastadas: un lado con vecina llega al
+  borde y los otros se deshacen en un borde roto (alfa 0 o 255, sin tramado regular, con
+  las esquinas redondeadas), así un sendero se lee como una franja continua y una casilla
+  suelta como una mancha blanda. Va sobre los suelos y sus bordes (la capa de bordes no
+  cambia) y bajo items y criaturas. La hierba alta, las matas y las flores de una casilla
+  gastada se dibujan aplastadas (más bajas, con el pie fijo).
 - Capa: huellas, ondas, polvo, peces y desgaste sobre el suelo y bajo sombras, items y
   criaturas (`MapView.groundOverlay`); hojas y bichos sobre el mapa.
 - Arte propio 32x32 de `tools/spritegen/src/recipes/living.ts` en

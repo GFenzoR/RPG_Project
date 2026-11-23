@@ -293,9 +293,10 @@ transmite (ver abajo).
   sigue hasta que el nuevo puede sonar.
 
 ### Mundo vivo (lote 17, `livingworld/README.md`)
-Todo del cliente y con tope; con "Animaciones reducidas" no hay nada. Pools de sprites
+Los efectos son del cliente y con tope; con "Animaciones reducidas" no hay ninguno (el
+desgaste de senderos, que es estado del servidor, se sigue dibujando). Pools de sprites
 hechos una vez al montar (`MAX_WEAR_DRAWN` + `MAX_FOOTPRINTS` + `MAX_PUFFS` en el suelo,
-`MAX_LEAVES` + `MAX_CRITTERS` en el aire: 128 + 64 + 24 + 24 + 10 = 250 sprites, ocultos
+`MAX_LEAVES` + `MAX_CRITTERS` en el aire: 256 + 64 + 24 + 24 + 10 = 378 sprites, ocultos
 mientras no se usan). Por frame:
 
 | Efecto | Tope | Costo por frame |
@@ -305,7 +306,16 @@ mientras no se usan). Por frame:
 | Ondas y polvo | 24 | frame y alfa |
 | Hojas | 24 | caída y alfa |
 | Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
-| Desgaste dibujado | 128 casillas en vista | lo que mande el servidor |
+| Desgaste dibujado | 256 casillas en vista (de 759 por piso; las más gastadas) | un sprite por casilla; la lista con la forma de cada una (vecinas gastadas) se rearma solo cuando cambia el desgaste o las casillas de la vista, no cada frame |
+
+**Desgaste de senderos en el servidor** (`livingworld/server/trail`, en el loop): un paso
+cuesta una búsqueda en un mapa de chunks y una suma (nada si la superficie no se gasta).
+La recuperación recorre, una vez por `decay_every_ms` (1 min), las 1024 celdas de cada
+chunk con desgaste: con 1000 chunks gastados (32 millones de casillas posibles; un mundo
+real tendrá decenas) son ~1 M de comparaciones, menos de 1 ms una vez por minuto. Memoria:
+2 KiB por chunk con algo de desgaste. La copia para guardar (cada 5 min) es un `memcpy`
+de esos chunks; codificarla (4 B por casilla gastada + 7 por chunk) y escribirla va fuera
+del loop. Ancho de banda: docs/05 "Presupuesto de ancho de banda".
 
 Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
 navegador se mira en la revisión del E2E final del lote (docs/14).

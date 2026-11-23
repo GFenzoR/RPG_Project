@@ -1736,6 +1736,7 @@ dice que el servidor los manda.
 | `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) y la época de la caminata (`walk_epoch`) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
+| `TrailWear` | Desgaste de senderos (mundo vivo): las casillas en vista cuyo nivel cambió este tick ("Desgaste de senderos", abajo) |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista; `CreatureDisappear.reason` dice por qué (A9) |
 | `CreatureAttack` | Quién atacó, cómo (`MELEE`, `RANGED`, `SPELL`) y a quién o a qué área (A9) |
 | `CreatureMove` | `id`, `from`, `to`, `duration_ms`, `walk_seq` (solo el propio: el `seq` del `Walk` que ejecuta) |
@@ -1779,7 +1780,24 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `floors[]`: `MapFloor {z, tiles[]}` con `width × height` índices a `palette`, fila
   por fila (y, luego x). `-1` = sin tile.
 - `creatures`: criaturas paradas dentro del área.
+- `wear`: el desgaste de senderos del área, un `TrailWear` por piso con alguna casilla
+  gastada (abajo).
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
+
+### Desgaste de senderos (`proto/game/v1/livingworld.proto`, lote 17)
+El pasto gastado por los pasos de los jugadores (docs/02 "Senderos",
+`livingworld/README.md`). `TrailWear {z, tiles[], levels}`: `tiles[i]` es `x << 16 | y` de
+una casilla del piso `z` y `levels[i]` (un byte) su nivel, 0 nada, 1 pisoteado, 2 gastado,
+3 tierra pelada. Viaja de dos formas:
+- en `MapArea.wear` de un `FullMapView` o un `MapSlice`: todas las casillas del área con
+  nivel mayor que 0. El cliente olvida antes lo que tenía dentro de esa área (lo que pasó
+  mientras no la veía llega así);
+- como `ServerMessage.trail_wear` (campo 49; el 48 es `LivingObjectEvent` de los
+  rompibles): las casillas que el jugador ve cuyo nivel cambió en el tick (0: el pasto se
+  recuperó). Solo cambios de nivel, nunca cada paso: una casilla cruza un umbral cada
+  muchos pasos o cada varios minutos de recuperación.
+El cliente no lo inventa ni lo predice: lo guarda (`client/src/state/trail-wear.ts`) y lo
+dibuja el mundo vivo (`applyWear`).
 
 Reglas del área de interés (T1.4; vista ancha desde 2026-11):
 - El área es de 33x23 casillas centrada en el jugador: la ventana de 31x21
@@ -1908,3 +1926,8 @@ El aspecto (lote 13, `07-performance-budget.md` "Aspecto y equipo visible") suma
 `Creature` humanoide unos 35–45 B (`BodyLook`; un monstruo o un NPC, además sus piezas) y
 a uno que lleva equipo unos 10–20 B (`VisibleEquipment`); solo al aparecer o al cambiar,
 nunca por paso.
+El desgaste de senderos (lote 17) suma unos 4–5 B por casilla gastada al `MapArea` (3–4 B
+de `x << 16 | y` en varint y 1 B de nivel) y nada a un área sin desgaste: una columna nueva
+con un sendero que la cruza, ~10 B. Un cambio de nivel es un `TrailWear` de ~10 B para
+cada jugador que ve la casilla, y con los números de `wear.yaml` una casilla cambia de
+nivel cada decenas de pasos o cada varios minutos: despreciable al lado de los pasos.

@@ -104,6 +104,24 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
+  "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
+  "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
+  sobre `grass`/`tall_grass` (`livingworld/server/trail`), manda los niveles (docs/05
+  `TrailWear`), lo guarda en `trail_wear` (migración 00027) y el cliente dibuja tres
+  etapas con bordes suaves. Queda:
+  - **Afinar el ritmo con gente real:** `data/livingworld/wear.yaml` está pensado para un
+    servidor con tráfico (tres pasos por minuto en una casilla durante tres horas dejan
+    tierra); con pocos jugadores casi no se verá. Bajar `levels` o subir `player_step` si
+    el dueño quiere verlo antes.
+  - **Monstruos:** no desgastan (`monster_step: 0`); decidir si un cubil debe notarse.
+  - **Rompibles y senderos en la misma rama final:** `proto/game/v1/livingworld.proto`,
+    `livingworld/server/go.mod`, `livingworld/README.md` y el `ServerMessage` (48 para
+    `LivingObjectEvent`, 49 para `TrailWear`) se juntan al apilar `feat/breakables` con
+    esta rama: los dos archivos se suman, no se reemplazan.
+  - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
+    `store/trailwear_integration_test.go` y mirar un sendero en Thimblewick (`make play`,
+    caminar ida y vuelta muchas veces o bajar `levels` en local).
 - **Mundo vivo, parte visual (hecho, rama `feat/living-ground`, lote 17; el dueño el
   2026-11-23: "el entorno reacciona a los jugadores que pasan"; `livingworld/README.md`):**
   huellas, plantas que se doblan, ondas, polvo, hojas, bichos y pasos por superficie en
@@ -117,8 +135,9 @@ el punto 5:
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
     `surfaces.yaml`, pero ningún suelo las usa aún.
-  - **El módulo Go `livingworld/server`** lo arma el ítem del servidor del lote; la frontera
-    y `make test-livingworld` ya lo contemplan.
+  - **El módulo Go `livingworld/server`**: lo creó el desgaste de senderos (abajo) con
+    el paquete `trail`; el ítem de rompibles y empujables suma el suyo al mismo módulo
+    (mismo `go.mod`) al apilar las ramas del lote.
   - **Medir en el navegador:** los topes están en docs/07; falta mirar el tiempo de frame
     en el E2E final con mucha gente caminando sobre arena.
 - **Baúl de la cuenta (hecho, rama `feat/shared-stash`, lote 17; el dueño el 2026-11-23:
