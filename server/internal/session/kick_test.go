@@ -78,7 +78,7 @@ func TestSignOutAccountRefusesLoginInFlight(t *testing.T) {
 	c := session.Character{ID: 901, AccountID: account, Name: "Alfa", Vocation: "guardian", Level: 1, Health: 145,
 		RedeemedAt: h.sim.Now()}
 	h.sim.Clock().Advance(time.Second)
-	h.sim.Command(h.w.LoginStarted(c.ID))
+	h.sim.Command(h.w.LoginStarted(c.ID, c.AccountID))
 	h.sim.Command(h.w.SignOutAccount(account, h.sim.Now()))
 	h.sim.Step()
 	cl := &fakeClient{}
