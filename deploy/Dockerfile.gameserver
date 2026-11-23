@@ -9,7 +9,7 @@
 # Go cross-compiles on the build platform ($BUILDPLATFORM), so multi-arch builds do not run
 # the compiler under QEMU. Only the final COPY-only stage is per target platform.
 
-ARG GO_VERSION=1.24
+ARG GO_VERSION=1.27.4
 
 # ---- build: gameserver and the healthcheck probe, for the target platform -----------------
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build

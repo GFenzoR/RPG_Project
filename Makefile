@@ -80,7 +80,7 @@ test-ts:
 	pnpm test $(VITEST_ARGS)
 
 .PHONY: lint
-lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation
+lint: lint-go lint-ts lint-deploy validate ## golangci-lint + eslint/prettier/tsc + deploy checks + content validation
 
 .PHONY: lint-go
 lint-go:
@@ -89,6 +89,11 @@ lint-go:
 		(cd $$m && test -z "$$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files above need formatting"; exit 1; }); \
 		(cd $$m && go vet ./... && golangci-lint run ./...); \
 	done
+
+# Lote 16: static checks of deploy/ that need no Docker daemon (deploy/tests/).
+.PHONY: lint-deploy
+lint-deploy: ## Deploy checks: image Go version = go.mod toolchain
+	bash deploy/tests/check-go-version.sh
 
 .PHONY: lint-ts
 lint-ts:
