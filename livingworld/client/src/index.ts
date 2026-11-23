@@ -116,6 +116,8 @@ export interface LivingWorld {
   destroy(): void;
 }
 
+const NO_WEAR: readonly WearTile[] = [];
+
 /** A frame longer than this (a hidden tab) advances the effects this much only, ms. */
 export const MAX_FRAME_MS = 100;
 
@@ -239,6 +241,10 @@ export function createLivingWorld(
     }
   };
 
+  /** The floor of the frame, for critterSurface (made once: no closure per frame). */
+  let floorZ = 0;
+  const critterSurface = (x: number, y: number): Surface | undefined => surfaceAt(x, y, floorZ);
+
   let last: number | undefined;
   let wasReduced = false;
   const reduced = (): boolean => options.reduced?.() ?? false;
@@ -297,6 +303,7 @@ export function createLivingWorld(
         return;
       }
       wasReduced = false;
+      floorZ = view.z;
       ground.visible = true;
       air.visible = true;
       prints.step(ms, now);
@@ -334,7 +341,7 @@ export function createLivingWorld(
         now,
         view,
         view.self,
-        (x, y) => surfaceAt(x, y, view.z),
+        critterSurface,
         data.surfaces,
         options.night?.() ?? false,
       );
@@ -369,7 +376,8 @@ export function createLivingWorld(
 
   function draw(now: number, view: TickView, x0: number, y0: number, x1: number, y1: number): void {
     wearPool.begin();
-    for (const t of wear.inView(view.z, x0, y0, x1, y1)) {
+    // inView makes a list: only when the server marked worn tiles.
+    for (const t of wear.size > 0 ? wear.inView(view.z, x0, y0, x1, y1) : NO_WEAR) {
       const s = wearPool.next("wear", T);
       if (!s) break;
       s.position.set((t.x + 0.5) * T, (t.y + 0.5) * T);
