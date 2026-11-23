@@ -2,12 +2,15 @@ package gateway
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"math/rand/v2"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,9 +30,19 @@ import (
 type fakeAccounts struct {
 	mu     sync.Mutex
 	tokens map[string][2]int64
+	// calls counts RedeemPlayToken; while block is set, each call waits for it to close.
+	calls atomic.Int32
+	block chan struct{}
 }
 
 func (f *fakeAccounts) RedeemPlayToken(_ context.Context, tok string) (int64, int64, error) {
+	f.calls.Add(1)
+	f.mu.Lock()
+	block := f.block
+	f.mu.Unlock()
+	if block != nil {
+		<-block
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	v, ok := f.tokens[tok]
@@ -94,7 +107,8 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 	ctx, cancel := context.WithCancel(context.Background())
 	loopDone := make(chan struct{})
 	go func() { _ = loop.Run(ctx); close(loopDone) }()
-	cfg := Config{Accounts: s.accounts, Characters: fakeChars{}, Loop: loop, World: w, Clock: s.gwClock}
+	// Every test client dials from loopback; the limit tests turn the exemption off.
+	cfg := Config{Accounts: s.accounts, Characters: fakeChars{}, Loop: loop, World: w, Clock: s.gwClock, ExemptLoopback: true}
 	if mutate != nil {
 		mutate(&cfg)
 	}
@@ -118,7 +132,7 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 
 func (s *stack) token(tok string, char int64) {
 	s.accounts.mu.Lock()
-	s.accounts.tokens[tok] = [2]int64{1, char}
+	s.accounts.tokens[tk(tok)] = [2]int64{1, char}
 	s.accounts.mu.Unlock()
 }
 
@@ -150,8 +164,18 @@ func (c *client) send(m *pb.ClientMessage) error {
 	return c.ws.Write(ctx, websocket.MessageBinary, raw)
 }
 
-func hello(tok, ver string) *pb.ClientMessage {
+// hello is a Hello with the play token named tok (tk).
+func hello(tok, ver string) *pb.ClientMessage { return helloRaw(tk(tok), ver) }
+
+// helloRaw is a Hello with exactly this session token.
+func helloRaw(tok, ver string) *pb.ClientMessage {
 	return &pb.ClientMessage{Message: &pb.ClientMessage_Hello{Hello: &pb.Hello{SessionToken: tok, ClientVersion: ver, Locale: "es"}}}
+}
+
+// tk is the play token named name: 43 base64url characters, the shape of a real one.
+func tk(name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // next reads the next batch; ok is false when the connection closed.
