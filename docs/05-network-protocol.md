@@ -1785,6 +1785,11 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   vacío o `production`) no hay excepción, y detrás de Caddy el cliente es la IP real.
   `make bots` pasa además `-max-chars-per-account -1` (sus bots comparten cuenta, 10 por
   cuenta); contra un servidor con `URL=` hacen falta esos flags.
+  El lugar de `-max-players` se reserva al recibir el `Hello`, antes de canjear el token
+  (así un servidor lleno no gasta tokens ni lee la base). Por eso, en el peor caso, hasta
+  `-ws-max-unauthenticated` handshakes sin autenticar que esperan turno de la base pueden
+  hacer que un jugador real reciba `SERVER_FULL` con el mundo casi lleno; cada IP aporta
+  como mucho `-ws-max-pending-per-ip` de ellos y el balde por IP los frena.
 - **Logs acotados:** los comandos descartados de una conexión, los canjes de token y las
   cargas de personaje que fallan por la base y los logins rechazados por la cola llena se
   registran una vez por intervalo (10 s) con la cuenta (`count`), no uno por evento.

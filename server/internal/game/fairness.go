@@ -13,8 +13,9 @@ import (
 //
 //   - each connection enqueues through its own Quota: at most Quota.Max of its commands
 //     wait in the queue at once (the rest are refused at once, before the queue);
-//   - logins and logouts (LifecycleFunc) go to a separate lane with its own capacity,
-//     drained first every tick, so a full queue never refuses a Join or a Leave.
+//   - logins, logouts and save acks (LifecycleFunc) go to a separate lane with its own
+//     capacity, drained first every tick, so a full queue never refuses a Join or a
+//     Leave. Commands that must keep their relative order go through the same lane.
 
 // ErrQuotaExceeded is returned by Quota.Enqueue when the producer already has Max
 // commands waiting.
@@ -24,7 +25,7 @@ var ErrQuotaExceeded = errors.New("game: producer command quota exceeded")
 const DefaultLifecycleCapacity = 2048
 
 // LifecycleFunc is a Command that starts or ends a player's session (Join, Leave and the
-// login bookkeeping). Loop.Enqueue puts it in the lifecycle lane instead of the shared
+// login and save bookkeeping: LoginStarted, LoginAborted, Saved). Loop.Enqueue puts it in the lifecycle lane instead of the shared
 // queue: lifecycle commands run before the other queued commands of the same tick.
 type LifecycleFunc func(ctx *TickContext)
 

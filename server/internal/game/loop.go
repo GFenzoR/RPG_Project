@@ -91,8 +91,8 @@ func New(cfg Config) (*Loop, error) {
 		return nil, errors.New("game: Config.Rand is required")
 	}
 	if cfg.QueueCapacity < 0 || cfg.MaxCommandsPerTick < 0 || cfg.LifecycleCapacity < 0 {
-		return nil, fmt.Errorf("game: negative queue limits (capacity %d, per tick %d)",
-			cfg.QueueCapacity, cfg.MaxCommandsPerTick)
+		return nil, fmt.Errorf("game: negative queue limits (capacity %d, per tick %d, lifecycle %d)",
+			cfg.QueueCapacity, cfg.MaxCommandsPerTick, cfg.LifecycleCapacity)
 	}
 	for i, sys := range cfg.Systems {
 		if sys == nil {

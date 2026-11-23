@@ -9,7 +9,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 )
 
-// ackRetry holds the snapshot acks the loop's full queue refused (T5.3, World.Saved):
+// ackRetry holds the snapshot acks the loop's full lifecycle lane refused (T5.3, World.Saved):
 // only the highest seq per character, because an ack stands for every earlier one of its
 // character (the Saver writes in order). One goroutine at a time delivers them, a tick
 // apart, so a full queue under load costs one goroutine and one entry per character, not

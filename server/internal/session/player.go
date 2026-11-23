@@ -451,8 +451,11 @@ func (w *World) Leave(client Client) game.Command {
 // freed (T5.3, hold.go). So one ack stands for every earlier one of its character: the
 // app retries only the highest seq per character the full queue refused, and a late
 // ack is harmless.
+//
+// It goes through the lifecycle lane, like LoginStarted: the two must share one FIFO
+// (see LoginStarted). The acks are bounded by the saves, so they cannot flood the lane.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
-	return game.CommandFunc(func(*game.TickContext) {
+	return game.LifecycleFunc(func(*game.TickContext) {
 		if s, ok := w.unsaved[characterID]; ok && s.Seq <= seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
 		}
@@ -462,8 +465,11 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 
 // LoginStarted returns the command the gateway enqueues before it reads a character
 // from the database. It must be followed by Join or LoginAborted for the same
-// character. Because the queue is FIFO, an ack of a save that the read may have missed
-// runs after it and keeps the unsaved snapshot for the Join.
+// character. LoginStarted and Saved both go through the lifecycle lane, which is FIFO:
+// the gateway enqueues LoginStarted before it reads, so the ack of a save that the read
+// may have missed is enqueued after it, runs after it and keeps the unsaved snapshot for
+// the Join. (With Saved in the shared queue, an ack enqueued while that queue is being
+// drained would run before a LoginStarted waiting in the lane for the next tick.)
 func (w *World) LoginStarted(characterID int64) game.Command {
 	return game.LifecycleFunc(func(*game.TickContext) { w.loading[characterID]++ })
 }

@@ -239,7 +239,9 @@ el punto 5:
   - **`httpapi.clientKey` sigue con su copia de la regla** de la clave del cliente: ahora
     vive también en `net/clientip`; unificarlas toca `httpapi`, que es de otro ítem del lote.
   - **Con el mundo lleno, un relogueo del mismo personaje** desde otra conexión recibe
-    `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse).
+    `SERVER_FULL` (la conexión vieja todavía ocupa su lugar hasta cerrarse). Con el tope
+    por cuenta, en cambio, el relogueo sí toma el control. **Confirmar con el dueño** si
+    con el mundo lleno el relogueo también debe tomar el control.
 - **Bonus de grupo más visible (hecho, rama `feat/party-bonus`, lote 14; el dueño el
   2026-11-20: "un sistema de party, estar en party con otro jugador te da beneficios de
   experiencia"; docs/02 "Grupos", docs/05 "Grupos", docs/06 "Grupos"):** el grupo ya existía

@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -103,7 +104,8 @@ func TestLifecycleLaneHasItsOwnCapacity(t *testing.T) {
 	if err := l.Enqueue(noop); !errors.Is(err, ErrQueueFull) {
 		t.Fatalf("third lifecycle command: %v", err)
 	}
-	if _, err := New(Config{Clock: l.clock, Rand: l.rand, LifecycleCapacity: -1}); err == nil {
-		t.Fatal("negative lifecycle capacity accepted")
+	if _, err := New(Config{Clock: l.clock, Rand: l.rand, LifecycleCapacity: -1}); err == nil ||
+		!strings.Contains(err.Error(), "lifecycle -1") {
+		t.Fatalf("negative lifecycle capacity: %v", err)
 	}
 }

@@ -65,15 +65,26 @@ dueño del mundo (el loop sigue siendo la única goroutine que lo muta):
   baja cuando el loop ejecuta el comando (antes de ejecutarlo, así un comando que entra en
   pánico también libera su lugar). Un cliente honesto manda unos pocos por tick y el loop
   los vacía en el siguiente; con 500 jugadores a 16 cada uno la cola no se llena.
-- **Carril de ciclo de vida.** `Join`, `LoginStarted` y `LoginAborted` son
-  `game.LifecycleFunc`: van a un carril propio (2048 lugares) que el loop vacía primero en
-  cada tick, con su propio tope. Una cola llena nunca rechaza un login. `Leave` sigue en la
-  cola común, detrás de lo que su conexión mandó antes (un ataque mandado justo antes de
-  cerrar todavía cuenta y decide si queda link-dead); solo si la cola común está llena el
-  gateway lo pasa al carril, y ahí puede adelantarse a comandos viejos de esa conexión
-  (que `Input` ignora: el jugador ya no está). El orden dentro de cada carril es FIFO; un
-  `Join` puede adelantarse a comandos comunes de otros encolados antes, lo que ya podía
-  pasar con el acuse de un guardado que llega tarde (`Saved` lo tolera).
+- **Carril de ciclo de vida.** `Join`, `LoginStarted`, `LoginAborted` y `Saved` (el
+  acuse de un guardado) son `game.LifecycleFunc`: van a un carril propio (2048 lugares)
+  que el loop vacía primero en cada tick, con su propio tope. Una cola llena nunca rechaza
+  un login. `LoginStarted` y `Saved` comparten carril a propósito: el orden entre ellos
+  es el que protege el estado sin guardar de un relogueo rápido (`World.LoginStarted`). Si
+  `Saved` fuera por la cola común, un acuse encolado mientras el loop la vacía correría
+  antes que un `LoginStarted` que espera en el carril al tick siguiente, y el `Join`
+  cargaría la fila vieja de la base. Los acuses están acotados por los guardados, así que
+  no llenan el carril.
+- **El `Join` corre antes que todo lo demás de su conexión.** El gateway no lee mensajes
+  del cliente (ni encola su `Leave`) hasta que el `Join` corrió: un `Join` que llega al
+  carril después de vaciarlo podría quedar detrás de un `Leave` de la cola común, que
+  ignoraría al cliente desconocido, y el `Join` metería después un jugador atado a una
+  conexión cerrada.
+- `Leave` sigue en la cola común, detrás de lo que su conexión mandó antes (un ataque
+  mandado justo antes de cerrar todavía cuenta y decide si queda link-dead); solo si la
+  cola común está llena el gateway lo pasa al carril, y ahí puede adelantarse a comandos
+  viejos de esa conexión (que `Input` ignora: el jugador ya no está). El orden dentro de
+  cada carril es FIFO; un `Join` puede adelantarse a comandos comunes de otros encolados
+  antes.
 
 ## El mundo en memoria
 - Posición: `(x uint16, y uint16, z uint8)`. Pisos 0–15, piso 7 = nivel del mar.

@@ -374,6 +374,40 @@ func TestAckDuringLoginKeepsUnsaved(t *testing.T) {
 	}
 }
 
+// TestAckEnqueuedMidDrainAfterLoginStartedKeepsUnsaved: the gateway enqueues
+// LoginStarted while the loop is draining its queue (so it waits in the lifecycle lane
+// for the next tick) and the save commits and acks before that drain ends. The ack must
+// still run after LoginStarted, or it forgets the snapshot the Join needs and the
+// re-login loads the stale row (rollback, items both on the ground and in the bag).
+func TestAckEnqueuedMidDrainAfterLoginStartedKeepsUnsaved(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32))
+	a, p := h.join("Ana", at(5, 5))
+	h.input(a, walk(E))
+	h.sim.RunTicks(10)
+	h.input(a, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+	h.sim.Step()
+	final := h.saves[len(h.saves)-1]
+	stale := session.Character{ID: p.CharacterID(), Name: "Ana", Vocation: "guardian", Level: 1, Health: 145, HasPos: true, Pos: pos(5, 5)}
+
+	loop := h.sim.Loop()
+	// A shared-queue command stands for "the drain in progress": both enqueues land
+	// while it runs, in the order of the race.
+	h.sim.Command(game.CommandFunc(func(*game.TickContext) {
+		if err := loop.Enqueue(h.w.LoginStarted(stale.ID)); err != nil {
+			t.Error(err)
+		}
+		if err := loop.Enqueue(h.w.Saved(final.CharacterID, final.Seq)); err != nil {
+			t.Error(err)
+		}
+	}))
+	h.sim.Step()
+	h.sim.Step()
+	_, again := h.joinChar(stale)
+	if again.Pos() != pos(6, 5) {
+		t.Fatalf("relogin at %v, want the snapshot's 6,5", again.Pos())
+	}
+}
+
 func lookup(h *harness, p *session.Player) session.Client {
 	for _, c := range h.w.Clients() {
 		if h.w.ClientPlayer(c) == p {

@@ -313,7 +313,17 @@ func (c *conn) run(ctx context.Context) {
 	if !ok {
 		return
 	}
-	if err := g.cfg.Loop.Enqueue(g.cfg.World.Join(char, c)); err != nil {
+	// The Join goes through the lifecycle lane and the connection's other commands (its
+	// input, its Leave) through the shared queue, which a tick may drain before a Join
+	// that arrived after the lane's drain. So nothing else of this connection is enqueued
+	// until the Join has run: a Leave that ran first would be ignored and the Join would
+	// then put in a player bound to a closed connection.
+	joined := make(chan struct{})
+	join := g.cfg.World.Join(char, c)
+	if err := g.cfg.Loop.Enqueue(game.LifecycleFunc(func(tc *game.TickContext) {
+		defer close(joined) // also when the Join panics (the loop recovers it)
+		join.Execute(tc)
+	})); err != nil {
 		g.logQueueFull(char.ID)
 		c.abortLogin(char.ID)
 		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL)
@@ -322,6 +332,10 @@ func (c *conn) run(ctx context.Context) {
 	}
 	c.ticket.authenticated()
 	go c.writer()
+	select {
+	case <-joined:
+	case <-g.stopCh: // the loop may never run it; leave returns at once too
+	}
 	c.reader(ctx, char.ID)
 	c.leave()
 	c.Close(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)

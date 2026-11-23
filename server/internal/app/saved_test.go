@@ -80,7 +80,7 @@ func newAckRig(t *testing.T) *ackRig {
 		t.Fatal(err)
 	}
 	_, _, flush := r.w.Systems()
-	r.loop, err = game.New(game.Config{Clock: r.clk, Rand: rand.New(rand.NewPCG(1, 1)), Systems: []game.System{flush}, QueueCapacity: 4})
+	r.loop, err = game.New(game.Config{Clock: r.clk, Rand: rand.New(rand.NewPCG(1, 1)), Systems: []game.System{flush}, QueueCapacity: 4, LifecycleCapacity: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func (r *ackRig) drop(cl *ackClient, x uint32) []*pb.ServerMessage {
 
 // fill fills the loop's queue with no-ops: the next ack is refused.
 func (r *ackRig) fill() {
-	noop := game.CommandFunc(func(*game.TickContext) {})
+	noop := game.LifecycleFunc(func(*game.TickContext) {}) // acks go through the lifecycle lane
 	for r.loop.Enqueue(noop) == nil {
 	}
 }
@@ -224,8 +224,9 @@ func TestAckRetryTakesTurns(t *testing.T) {
 	r := newAckRig(t)
 	r.a.acks.pending = map[int64]uint64{1: 5, 2: 5, 3: 5}
 	r.a.acks.after = 1
-	noop := game.CommandFunc(func(*game.TickContext) {})
-	for range 3 { // one free slot of four
+	// Acks go through the lifecycle lane: fill it but for one free slot of four.
+	noop := game.LifecycleFunc(func(*game.TickContext) {})
+	for range 3 {
 		if err := r.loop.Enqueue(noop); err != nil {
 			t.Fatal(err)
 		}
