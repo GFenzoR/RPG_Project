@@ -350,7 +350,12 @@ export const STASH_CHEST: SpriteSpec = {
       shapes: [
         // A flat lid a little wider than the box, over a dark lip.
         { type: "box", min: [-SW - 0.5, -SD - 0.5, SH], max: [SW + 0.5, SD + 0.5, SH + 2.2] },
-        { type: "box", min: [-SW - 0.5, -SD - 0.5, SH - 0.8], max: [SW + 0.5, SD + 0.5, SH], material: "darkWood" },
+        {
+          type: "box",
+          min: [-SW - 0.5, -SD - 0.5, SH - 0.8],
+          max: [SW + 0.5, SD + 0.5, SH],
+          material: "darkWood",
+        },
       ],
     },
     {
