@@ -1546,6 +1546,36 @@ más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `inne
 que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
 `i18n/<lang>/site.yaml` (claves `site.*`).
 
+## Mundo vivo (`data/livingworld/`, lote 17)
+
+Contrato completo, invariantes y cómo agregar: `livingworld/README.md` (`docs/19`). Lo que
+toca al contenido:
+
+- **`ground.surface`** en cada suelo de `data/items` (enum `surface` de
+  `common.schema.json`): `sand`, `wet_sand`, `snow`, `mud`, `grass`, `tall_grass`, `dirt`,
+  `ash`, `stone`, `wood`, `water_shallow`, `lava`. De qué está hecho el suelo para el
+  cliente (huellas, plantas, pasos con sonido); el servidor lo ignora.
+  ```yaml
+  - id: sand
+    kind: ground
+    ground: { walkable: true, speed: 160, surface: sand }
+  ```
+- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`), por superficie:
+  `footprints` (ms que dura una huella sin viento; 0 o ausente: ninguna), `wind` (desgaste
+  extra por ms en una ráfaga), `dust` (polvo al correr), `ripple` (anillos en el agua),
+  `tint` (`#rrggbb` de huellas y polvo), `sound` (evento `step.self.<sound>` de
+  `assets/sounds.yaml`; por defecto el nombre de la superficie) y `critters` (`bird`,
+  `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
+  esté descrita.
+- **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
+  lista de `{ item, reaction: bend | rustle, idle?, leaves? }`; cada item una vez.
+- Cada `data/livingworld/<nombre>.yaml` necesita su `livingworld-<nombre>.schema.json`; un
+  archivo sin esquema es un error (así un tipo nuevo de contenido del mundo vivo trae su
+  esquema).
+- Las plantas son items comunes de `data/items/plants.yaml` (`kind: decoration`, sin
+  bloquear), con ids en `ids.lock.yaml` (`make gen-ids`) y sprites en
+  `assets/livingworld/sprites/plants/` (sprite `livingworld/plants/<id>`).
+
 ## Sonido (`assets/sounds.yaml`, T3.7)
 El manifiesto de sonido vive en `assets/` (no en `data/`) pero se valida igual
 (`sounds.schema.json` y `make validate`); el cliente lo empaqueta como `content.sounds`.
@@ -1607,6 +1637,10 @@ ambient:
   `none`), `pool` y `tracks` (cada toma con su fuente, el título que le dio Gemini, su
   prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,
   `lufs`, `kbps`, `bytes`). El resto del archivo es a mano.
+
+Pasos por superficie (mundo vivo): el paso propio prueba `step.self.<sound>` (el `sound` de
+su superficie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
+suena como `step.self`. Hoy no hay sonidos propios por superficie (docs/14).
 
 ### Música de una quest importante (`music` en `data/quests/<id>.yaml`)
 Una quest importante puede tener música propia en un lugar: mientras el jugador está en uno

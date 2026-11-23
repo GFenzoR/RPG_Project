@@ -46,6 +46,8 @@ assets/        Sprites, sonidos, atlas generados, CREDITS.md
 i18n/          Textos traducibles (es, en)
 deploy/        docker-compose, Caddyfile, scripts de backup
 docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un área.
+livingworld/   Mundo vivo: su código (client/ paquete TS, server/ módulo Go) en una carpeta
+               auditable aparte (ver livingworld/README.md y livingworld/CLAUDE.md)
 ```
 
 ## Docs a consultar según la tarea
@@ -66,6 +68,8 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Dirección de arte, animación, sensación de movimiento, UI y de dónde sacar assets →
   `docs/17-direccion-de-arte-y-ui.md`
 - Seguridad: modelo de amenazas, controles y checklist del operador → `docs/18-seguridad.md`
+- Mundo vivo (huellas, plantas, bichos, rompibles, desgaste) → `docs/19-mundo-vivo.md`, que
+  apunta a `livingworld/README.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md` (lotes)
 
 ## Principios de arquitectura

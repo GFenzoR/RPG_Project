@@ -447,6 +447,33 @@ mismo campo. Lo tienen el cajón de carga, el barril y la mesa (8 px; los dos ú
 del kit de props del lote 12): el libro de la herrera del archivo de Cinderstead está sobre una
 mesa y se dibuja 8 px más arriba.
 
+### Mundo vivo (hecho, 2026-11-23, rama `feat/living-ground`, lote 17)
+Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
+sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
+(`livingworld/README.md` tiene el contrato; aquí, la dirección de arte):
+- **Huellas** sobre arena, arena mojada, nieve, barro y ceniza: una marca por paso,
+  orientada hacia donde camina (pies alternados a cada lado; patas de bestia sobre su línea,
+  más grandes para las bestias altas; las voladoras no dejan). Son máscaras blancas
+  (`livingworld/fx/footprint_*`) teñidas con el `tint` de su superficie, un tono más oscuro
+  del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
+  el viento las borra antes, en ráfagas que recorren el mapa.
+- **Plantas que reaccionan:** hierba, hierba alta, flores, juncos, arbustos y jardineras se
+  doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms); las altas se
+  mecen solas con el viento. Sin shaders: un skew del sprite con el pie fijo. Los árboles
+  se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos).
+- **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
+  correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
+- **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
+  luciérnagas de noche (cuando haya noche) y sombras de peces en el agua. Pocos (10) y
+  donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.
+- **Desgaste:** los senderos gastados (estado del servidor) se dibujan como parches más
+  oscuros sobre el suelo.
+- Capa: huellas, ondas, polvo, peces y desgaste sobre el suelo y bajo sombras, items y
+  criaturas (`MapView.groundOverlay`); hojas y bichos sobre el mapa.
+- Arte propio 32x32 de `tools/spritegen/src/recipes/living.ts` en
+  `assets/livingworld/sprites/`; plantas nuevas como items (`data/items/plants.yaml`).
+- Todo se apaga con "Animaciones reducidas" o `prefers-reduced-motion`.
+
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones

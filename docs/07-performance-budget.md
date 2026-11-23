@@ -292,6 +292,24 @@ transmite (ver abajo).
   ese sonido se descarta. Un tema que tarda en llegar no corta nada: la música anterior
   sigue hasta que el nuevo puede sonar.
 
+### Mundo vivo (lote 17, `livingworld/README.md`)
+Todo del cliente y con tope; con "Animaciones reducidas" no hay nada. Pools de sprites
+hechos una vez al montar (`MAX_WEAR_DRAWN` + `MAX_FOOTPRINTS` + `MAX_PUFFS` en el suelo,
+`MAX_LEAVES` + `MAX_CRITTERS` en el aire: 128 + 64 + 24 + 24 + 10 = 250 sprites, ocultos
+mientras no se usan). Por frame:
+
+| Efecto | Tope | Costo por frame |
+|---|---|---|
+| Huellas | 64 vivas (la nueva reemplaza a la más gastada) | gasto y alfa de cada una |
+| Plantas | 48 moviéndose por pasos | skew de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
+| Ondas y polvo | 24 | frame y alfa |
+| Hojas | 24 | caída y alfa |
+| Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
+| Desgaste dibujado | 128 casillas en vista | lo que mande el servidor |
+
+Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
+navegador se mira en la revisión del E2E final del lote (docs/14).
+
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
 - Escenario base: 100 bots repartidos en la isla inicial durante 10 minutos.

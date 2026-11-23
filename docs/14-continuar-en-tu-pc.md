@@ -104,6 +104,23 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Mundo vivo, parte visual (hecho, rama `feat/living-ground`, lote 17; el dueño el
+  2026-11-23: "el entorno reacciona a los jugadores que pasan"; `livingworld/README.md`):**
+  huellas, plantas que se doblan, ondas, polvo, hojas, bichos y pasos por superficie en
+  `livingworld/client`. Queda:
+  - **Sonidos de paso propios por superficie:** sin ffmpeg en la máquina no se pudieron
+    generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
+    de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en
+    `sounds.yaml` y en `CREDITS.md`.
+  - **Día y noche:** no existe; las luciérnagas esperan uno (`night()` da falso).
+  - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
+    pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
+  - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
+    `surfaces.yaml`, pero ningún suelo las usa aún.
+  - **El módulo Go `livingworld/server`** lo arma el ítem del servidor del lote; la frontera
+    y `make test-livingworld` ya lo contemplan.
+  - **Medir en el navegador:** los topes están en docs/07; falta mirar el tiempo de frame
+    en el E2E final con mucha gente caminando sobre arena.
 - **Baúl de la cuenta (hecho, rama `feat/shared-stash`, lote 17; el dueño el 2026-11-23:
   "un baúl compartido por todos los personajes de la cuenta"; docs/02 "Baúl de la cuenta",
   docs/01, docs/05):** un cofre junto al tablero de cada pueblo, 30 celdas, solo items
