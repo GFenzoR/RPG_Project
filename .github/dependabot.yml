@@ -1,0 +1,27 @@
+# Lote 16 (docs/18 "Dependencias"): weekly update PRs. Actions are pinned to commit SHAs
+# (.github/scripts/check-action-pins.sh); dependabot bumps the SHA and its "# vX.Y.Z"
+# comment together. Security updates are separate and arrive as soon as an advisory does
+# (enable "Dependabot security updates" in the repository settings).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: gomod
+    directories:
+      - /server
+      - /tools/bots
+      - /tools/launcher
+      - /deploy/healthcheck
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
