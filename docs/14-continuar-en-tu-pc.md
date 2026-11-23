@@ -111,6 +111,10 @@ el punto 5:
   - **No se corrió `make e2e` ni `make test-integration`** en la rama: el test e2e "account
     stash" (`client/e2e/game.spec.ts`, screenshots `stash-01-shared` y `stash-02-taken`) y
     `store/stash_integration_test.go` corren al final del lote.
+  - **Migración 00025** (`00025_account_stash.sql`): supone que `00024_session_idle.sql`
+    (rama `feat/auth-sessions`, mismo lote) entra antes. Si el baúl se integra sin ella,
+    queda un hueco en la numeración (goose lo acepta); si entra otra 00025 antes, renumerar
+    esta con `make migrate-new`.
   - **Sin baúl en las casas** (el pedido decía "quizás"): un cofre en la casa sería otro item
     con `stash: true`; hoy solo están los de los pueblos.
   - **Mover parte de una pila:** la ventana guarda y saca la pila entera (el protocolo ya

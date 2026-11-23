@@ -1,4 +1,4 @@
--- Account stash (migration 00024, docs/02 "Baúl de la cuenta").
+-- Account stash (migration 00025, docs/02 "Baúl de la cuenta").
 
 -- name: LoadAccountStash :many
 SELECT slot, item FROM account_stash_items WHERE account_id = @account_id ORDER BY slot;

@@ -38,7 +38,7 @@ import (
 type accountStash struct {
 	account int64
 	// items are the cells in order; there may be more than the capacity if it was lowered
-	// (nothing is lost; nothing goes in while it is over).
+	// (nothing is lost; nothing goes in, not even units into a stack, while it is over).
 	items []*Item
 	// viewers are the players of the account with the window open.
 	viewers []*Player
@@ -223,8 +223,8 @@ func (w *World) stashCommand(ctx *game.TickContext, p *Player, m *pb.StashComman
 		return
 	}
 	st := p.stash
-	if st == nil {
-		w.stashAnswer(p, p.stashAt, nil, pb.StashResult_STASH_RESULT_TOO_FAR)
+	if st == nil { // no window open (closed, or never opened): nothing to act on
+		w.stashAnswer(p, p.stashAt, nil, pb.StashResult_STASH_RESULT_NOT_POSSIBLE)
 		return
 	}
 	switch {
@@ -296,7 +296,7 @@ func (w *World) stashDeposit(p *Player, st *accountStash, m *pb.StashDeposit) pb
 		}
 	}
 	merge := mergeTarget(st.items, it, count)
-	if merge == nil && len(st.items) >= w.stashSlots {
+	if len(st.items) > w.stashSlots || merge == nil && len(st.items) >= w.stashSlots {
 		return pb.StashResult_STASH_RESULT_FULL
 	}
 	release := w.holdInventory(p)
@@ -347,8 +347,11 @@ func (w *World) stashWithdraw(p *Player, st *accountStash, m *pb.StashWithdraw) 
 	count := it.count
 	if it.def.Stackable {
 		count = int(m.GetCount())
-		if count < 1 || count > it.count {
+		if count < 1 {
 			return pb.StashResult_STASH_RESULT_NOT_POSSIBLE
+		}
+		if count > it.count { // another character of the account took some since p looked
+			return pb.StashResult_STASH_RESULT_CHANGED
 		}
 	}
 	if it.def.Stackable && it.mods.Zero() && len(it.items) == 0 {
@@ -367,7 +370,8 @@ func (w *World) stashWithdraw(p *Player, st *accountStash, m *pb.StashWithdraw) 
 		return pb.StashResult_STASH_RESULT_OK
 	}
 	// The instance itself: an equipable keeps its attribute and refine, a rune its charges,
-	// a container its content.
+	// a container its content. A stack with mods (or content) goes whole: count only has to
+	// be within it.
 	if it.weight() > p.capacity-p.carried() {
 		return pb.StashResult_STASH_RESULT_TOO_HEAVY
 	}

@@ -49,7 +49,7 @@ type LoadAccountStashRow struct {
 	Item []byte
 }
 
-// Account stash (migration 00024, docs/02 "Baúl de la cuenta").
+// Account stash (migration 00025, docs/02 "Baúl de la cuenta").
 func (q *Queries) LoadAccountStash(ctx context.Context, accountID int64) ([]LoadAccountStashRow, error) {
 	rows, err := q.db.Query(ctx, loadAccountStash, accountID)
 	if err != nil {

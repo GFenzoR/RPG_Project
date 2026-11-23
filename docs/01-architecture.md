@@ -604,7 +604,7 @@ no lee la base. Por eso hay **una sola copia en memoria** por cuenta, dueña el 
   snapshot del personaje (`transferSnapshot`: lo deja en espera, `heldDrop`, hasta el acuse)
   con un `StashOp` (todas las celdas de la cuenta) en un `Transfer`;
   `store.SaveTransfer` lo escribe en la misma transacción (`account_stash_items`, migración
-  00024). Una caída antes de escribirlo deshace el movimiento en los dos lados; después, lo
+  00025). Una caída antes de escribirlo deshace el movimiento en los dos lados; después, lo
   deja entero en los dos.
 - **Taint:** el Saver marca el baúl de un transfer descartado (`taintedStashes`); un transfer
   posterior que lo escriba se salta y marca a su personaje (el otro de la cuenta que sacó lo

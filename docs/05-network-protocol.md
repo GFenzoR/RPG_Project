@@ -1398,18 +1398,22 @@ Reglas en `02-game-design.md` ("Baúl de la cuenta") y `balance.yaml stash`.
     el jugador lleva o un bolsillo (nunca el suelo); `count` solo para pilas (1..la pila).
   - `withdraw{index, item_id, mods, count}`: `index` es la celda; `item_id` y `mods` son lo
     que el cliente vio ahí (clave de comparación, como en `Refine`): si otro personaje de la
-    cuenta lo movió, `CHANGED`. Va a la mochila y después a los bolsillos.
+    cuenta lo movió, `CHANGED`. `count` solo para pilas: 0 es `NOT_POSSIBLE` y más que las
+    unidades que quedan es `CHANGED` (otro personaje sacó parte). Solo una pila sin `mods`
+    ni contenido se divide; una pila con `mods` sale entera (el `count` solo tiene que caber
+    en ella). Va a la mochila y después a los bolsillos.
   - `close{}`: cierra (contesta `StashUpdate{open: false}`).
 - Toda acción contesta un `StashUpdate` entero con su `result` (`StashResult`): `OK`,
   `FULL`, `NO_ROOM`, `TOO_HEAVY`, `TOO_FAR` (y cierra), `CHANGED`, `NOT_ALLOWED` (no
   comerciable, ofrecido en un intercambio), `TOO_FAST` (anti-flood), `UNAVAILABLE`,
-  `NOT_POSSIBLE`, `IN_COMBAT` (bloqueo PvP). El cliente muestra la clave
+  `NOT_POSSIBLE` (también un `deposit` o `withdraw` sin la ventana abierta), `IN_COMBAT`
+  (bloqueo PvP). El cliente muestra la clave
   `client.stash.result.<código>` en el log. Un cambio hecho por otro personaje de la cuenta
   con la ventana abierta le llega como `StashUpdate` con `OK`. Moverse lejos del cofre manda
   `StashUpdate{open: false}`; un mundo que pasa a solo lectura (`Tainted`) cierra todas.
 - **Persistencia:** cada movimiento que se hizo sale como un `Transfer` con el snapshot del
   personaje y un `StashOp` (todas las celdas de la cuenta, `account_stash_items`, migración
-  00024), en una transacción. El login lee el baúl con el personaje
+  00025), en una transacción. El login lee el baúl con el personaje
   (`PlayCharacter.Stash`); el loop lo usa solo si no tiene ya el de esa cuenta en memoria.
   `LoginStarted` y `LoginAborted` llevan la cuenta además del personaje (docs/01).
 

@@ -8,7 +8,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/store/db"
 )
 
-// Account stash (docs/02 "Baúl de la cuenta", migration 00024). The game loop owns the
+// Account stash (docs/02 "Baúl de la cuenta", migration 00025). The game loop owns the
 // stash of an account while a character of it is online: PlayCharacter reads it with the
 // character, and SaveTransfer writes each change (StashOp) with the snapshot of the
 // character whose inventory it changed, in ONE transaction.

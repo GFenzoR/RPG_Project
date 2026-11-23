@@ -1717,8 +1717,9 @@ personajes de una cuenta (docs/05 "Límites"). Números en `balance.yaml → sta
 - **Lugar:** `slots` celdas (30). Cada celda es una pila, una instancia o un contenedor con
   todo lo que lleva adentro. Una pila que se guarda se suma a una pila igual del baúl que
   tenga lugar para todas las unidades; si no, ocupa una celda libre. Con el baúl lleno solo
-  entran unidades a una pila que ya tiene. Si un día baja `slots`, nada se pierde: no entra
-  nada hasta que haya lugar.
+  entran unidades a una pila que ya tiene. Si un día baja `slots`, nada se pierde: mientras
+  tenga más celdas que `slots` no entra nada, ni siquiera unidades a una pila que ya tiene;
+  se puede sacar hasta volver a `slots`.
 - **Qué entra:** solo lo `tradeable` (un contenedor, solo si todo lo de adentro también lo
   es): un item de quest nunca pasa de un personaje a otro de la cuenta. No entra lo ofrecido
   en un intercambio abierto ni nada durante el bloqueo PvP. El personal del juego no lo usa

@@ -35,7 +35,7 @@ type stashHarness struct {
 
 // newStashHarness has a stash of slots cells; the transfers are logged by log (or kept in
 // stashHarness.transfers without one).
-func newStashHarness(t *testing.T, slots int, log *jobLog) *stashHarness {
+func newStashHarness(t *testing.T, slots int, log *jobLog, opts ...func(*session.Config)) *stashHarness {
 	t.Helper()
 	sh := &stashHarness{}
 	sh.harness = newHarness(t, worldtest.Map(t, 0, 0, 7, stashMap...), func(c *session.Config) {
@@ -49,9 +49,13 @@ func newStashHarness(t *testing.T, slots int, log *jobLog) *stashHarness {
 		items[def.ID] = &def
 		c.Items = items
 		c.Balance.Stash = content.Stash{Enabled: true, Slots: slots, ActionBurst: 100, ActionRefillMs: 50}
+		c.Balance.Trade = content.Trade{Enabled: true, MaxItems: 2, RequestMs: 5000, ActionBurst: 50, ActionRefillMs: 50}
 		c.Transfer = func(tr session.Transfer) bool { sh.transfers = append(sh.transfers, tr); return true }
 		if log != nil {
 			log.wire(c)
+		}
+		for _, o := range opts {
+			o(c)
 		}
 	})
 	return sh
@@ -197,7 +201,7 @@ func TestStashMergesStacksAndFills(t *testing.T) {
 }
 
 // Only a character next to the chest opens it; walking away closes the window, and a
-// command after that does nothing. Items that are not tradeable never go in.
+// command after that does nothing (NOT_POSSIBLE: no window). Items that are not tradeable never go in.
 func TestStashDistanceAndRefusals(t *testing.T) {
 	h := newStashHarness(t, 30, nil)
 	cl, p := h.account(1, 100, "Ana", pos(3, 3), nil, stack(salveID, 30, 0), stack(pebbleID, 2, 1))
@@ -221,8 +225,9 @@ func TestStashDistanceAndRefusals(t *testing.T) {
 	if u := lastStash(cl.take()); u == nil || u.GetOpen() {
 		t.Fatalf("the window stayed open after walking away: %v", u)
 	}
+	// The window is closed: there is nothing to act on.
 	if u := lastStash(h.send(cl, stashDeposit(inContainer(pack, 0), salveID, 1))); u.GetOpen() ||
-		u.GetResult() != pb.StashResult_STASH_RESULT_TOO_FAR || h.stashCount(100, salveID) != 0 {
+		u.GetResult() != pb.StashResult_STASH_RESULT_NOT_POSSIBLE || h.stashCount(100, salveID) != 0 {
 		t.Fatalf("a deposit from away: %v", u)
 	}
 	if len(h.transfers) != 0 {

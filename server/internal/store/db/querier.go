@@ -194,7 +194,7 @@ type Querier interface {
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
-	// Account stash (migration 00024, docs/02 "Baúl de la cuenta").
+	// Account stash (migration 00025, docs/02 "Baúl de la cuenta").
 	LoadAccountStash(ctx context.Context, accountID int64) ([]LoadAccountStashRow, error)
 	LoadHouseGuests(ctx context.Context) ([]LoadHouseGuestsRow, error)
 	LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, error)
