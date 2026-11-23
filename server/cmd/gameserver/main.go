@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	crand "crypto/rand"
-	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -140,12 +138,16 @@ func run(logger *slog.Logger, o options) error {
 	if o.databaseURL == "" {
 		return errors.New("DATABASE_URL is not set")
 	}
-	if o.seed == 0 {
-		var b [8]byte
-		if _, err := crand.Read(b[:]); err != nil {
-			return fmt.Errorf("seed: %w", err)
-		}
-		o.seed = binary.LittleEndian.Uint64(b[:])
+	// RPG_ENV says whether this is production (the default): the fake payment provider, a
+	// development world and the test-only switches refuse to start there.
+	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
+	if err := checkProductionFlags(logger, env, o); err != nil {
+		return err
+	}
+	explicitSeed := o.seed != 0
+	seed, seedHi, err := newSeeds(o.seed, cryptoRand)
+	if err != nil {
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -213,9 +215,8 @@ func run(logger *slog.Logger, o options) error {
 			return fmt.Errorf("content: %w", err)
 		}
 	}
-	// T5.7: RPG_ENV says whether this is production (the default); the fake payment
-	// provider refuses to start there, and so does a development world (loadWorld).
-	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
+	// T5.7: the fake payment provider refuses to start in production, and so does a
+	// development world (loadWorld).
 	pay, err := payments.FromEnv(os.Getenv, env, o.publicURL, nil, clk)
 	if err != nil {
 		return err
@@ -261,7 +262,7 @@ func run(logger *slog.Logger, o options) error {
 		go q.Run(ctx)
 	}
 	logger.Info("account emails", "mail", ms.what, "require_verified_email", o.requireVerifiedEmail)
-	providers, providerNames, err := providersFromEnv(os.Getenv)
+	providers, providerNames, err := providersFromEnv(os.Getenv, env)
 	if err != nil {
 		return fmt.Errorf("oauth: %w", err)
 	}
@@ -276,7 +277,8 @@ func run(logger *slog.Logger, o options) error {
 		Store:            st,
 		Clock:            clk,
 		Logger:           logger,
-		Seed:             o.seed,
+		Seed:             seed,
+		SeedHi:           seedHi,
 		Vocations:        vocations,
 		Balance:          balance,
 		Monsters:         monsters,
@@ -340,7 +342,8 @@ func run(logger *slog.Logger, o options) error {
 
 	logger.Info("gameserver started",
 		"version", buildinfo.Version, "commit", buildinfo.Commit, "http", o.httpAddr,
-		"ws", m != nil, "tick_ms", game.TickDuration.Milliseconds(), "seed", o.seed)
+		"ws", m != nil, "tick_ms", game.TickDuration.Milliseconds())
+	logger.Info("game loop seed", seedLogAttrs(explicitSeed, env, seed, seedHi)...)
 
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()

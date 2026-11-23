@@ -31,7 +31,8 @@ fi
 # the server running. Started from server/ so its default paths (../data) hold.
 (cd server && go build -o "../$LOG/gameserver" ./cmd/gameserver)
 # The desktop app's WebSocket origin: tauri://localhost on Linux and macOS.
-(cd server && exec "../$LOG/gameserver" -http "127.0.0.1:$PORT" -metrics-addr "" \
+# RPG_ENV=test: -auth-rate-burst is refused by a production server (lote 16).
+(cd server && RPG_ENV=test exec "../$LOG/gameserver" -http "127.0.0.1:$PORT" -metrics-addr "" \
 	-world ../build/world.bin -seed 1 -auth-rate-burst 1000 -start-town testisle \
 	-ws-origins "tauri://localhost,http://tauri.localhost") >"$LOG/server.log" 2>&1 &
 server_pid=$!

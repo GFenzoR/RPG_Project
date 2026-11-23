@@ -40,10 +40,13 @@ type Store interface {
 
 // Config configures an App.
 type Config struct {
-	Store     Store
-	Clock     clock.Clock
-	Logger    *slog.Logger
-	Seed      uint64
+	Store  Store
+	Clock  clock.Clock
+	Logger *slog.Logger
+	Seed   uint64
+	// SeedHi is the second word of the loop's PCG source (0 = Seed again). The gameserver
+	// fills both from crypto/rand unless -seed asks for a replayable run.
+	SeedHi    uint64
 	Vocations content.Vocations
 	Balance   content.Balance
 	// Monsters and Items come from data/ (session.Config); nil runs a world without monsters.
@@ -225,7 +228,12 @@ func New(cfg Config) (*App, error) {
 
 	var systems []game.System
 	// The loop's seeded source; the World rolls item attributes with it too (session.Config.Rand).
-	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed))
+	// SeedHi 0 = Seed again: the replayable (seed, seed) source of -seed and the tests.
+	seedHi := cfg.SeedHi
+	if seedHi == 0 {
+		seedHi = cfg.Seed
+	}
+	rng := rand.New(rand.NewPCG(cfg.Seed, seedHi))
 	if cfg.Map != nil {
 		ms, _ := cfg.Store.(MarketStore)
 		var writeTransfer func(context.Context, session.Transfer) error

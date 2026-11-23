@@ -151,7 +151,8 @@ export default defineConfig({
       url: `${puertoServerURL}/healthz`,
       reuseExistingServer: false,
       timeout: 240_000,
-      env: { DATABASE_URL: databaseUrl },
+      // -auth-rate-burst is a test-only switch: a production server refuses it (lote 16).
+      env: { DATABASE_URL: databaseUrl, RPG_ENV: "test" },
       stdout: "pipe",
     },
     {
@@ -184,6 +185,9 @@ export default defineConfig({
       timeout: 240_000,
       env: {
         DATABASE_URL: databaseUrl,
+        // The fake IdP's endpoint overrides and -auth-rate-burst are test-only: a production
+        // server refuses them (lote 16).
+        RPG_ENV: "test",
         PUBLIC_URL: mailClientURL,
         SMTP_HOST: "127.0.0.1",
         SMTP_PORT: String(smtpPort),
