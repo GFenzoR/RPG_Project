@@ -39,6 +39,8 @@ editor/        Map editor web (ver editor/CLAUDE.md)
 apps/desktop/  Envoltorio Tauri
 packages/      Librerías TS compartidas
 tools/         mapcli, mcp-world, bots de carga, generadores (ver tools/CLAUDE.md)
+livingworld/   Mundo vivo (objetos que se rompen, se empujan o se abren): módulo Go + paquete TS
+               propios, auditables aparte (ver livingworld/README.md y livingworld/CLAUDE.md)
 proto/         Esquemas Protobuf: fuente de verdad del protocolo
 data/          Contenido del juego en YAML (items, monstruos, NPCs, quests, hechizos...)
 world/         Mapas en formato de chunks JSON + metadatos de islas

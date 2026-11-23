@@ -115,10 +115,6 @@ el punto 5:
     tierra); con pocos jugadores casi no se verá. Bajar `levels` o subir `player_step` si
     el dueño quiere verlo antes.
   - **Monstruos:** no desgastan (`monster_step: 0`); decidir si un cubil debe notarse.
-  - **Rompibles y senderos en la misma rama final:** `proto/game/v1/livingworld.proto`,
-    `livingworld/server/go.mod`, `livingworld/README.md` y el `ServerMessage` (48 para
-    `LivingObjectEvent`, 49 para `TrailWear`) se juntan al apilar `feat/breakables` con
-    esta rama: los dos archivos se suman, no se reemplazan.
   - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
     `store/trailwear_integration_test.go` y mirar un sendero en Thimblewick (`make play`,
     caminar ida y vuelta muchas veces o bajar `levels` en local).
@@ -135,11 +131,23 @@ el punto 5:
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
     `surfaces.yaml`, pero ningún suelo las usa aún.
-  - **El módulo Go `livingworld/server`**: lo creó el desgaste de senderos (abajo) con
-    el paquete `trail`; el ítem de rompibles y empujables suma el suyo al mismo módulo
-    (mismo `go.mod`) al apilar las ramas del lote.
   - **Medir en el navegador:** los topes están en docs/07; falta mirar el tiempo de frame
     en el E2E final con mucha gente caminando sobre arena.
+- **Mundo vivo (hecho, rama `feat/breakables`, lote 17; el dueño el 2026-11-23: "el mapa se
+  puede romper en muchas cosas; los muros nunca"; `livingworld/README.md`, docs/19):**
+  módulo `livingworld/` (Go + `@rpg/living-world`), objetos rompibles, empujables, placas y
+  rastrillo, en Thimblewick y dos atajos en el cráter del volcán. Queda:
+  - **Sonidos propios:** usa los de siempre (`hit`, `woodcutting`, `mining`...); unos de
+    madera que se astilla o vasija que se rompe irían en `assets/sounds/livingworld/`.
+  - **El objeto no tiembla al golpearlo:** lo dibuja el renderer como item de la casilla; el
+    golpe solo tira astillas. Un temblor pediría que el renderer deje mover un item.
+  - **Arrastrar para empujar:** solo se empuja caminando contra el objeto; arrastrarlo con el
+    mouse (`movable`) no lo empuja.
+  - **Placas por radio:** cada placa enlaza todas las compuertas a su radio; dos puzzles a
+    menos de ese radio compartirían placas. Por ahora hay uno.
+  - **Sin persistencia** a propósito (transitorio, documentado): un reinicio rearma todo.
+  - **Atajos en otras islas:** solo el volcán; Puerto y el Bosque no tienen pasos naturales
+    de una casilla sin tocar muros de edificios.
 - **Baúl de la cuenta (hecho, rama `feat/shared-stash`, lote 17; el dueño el 2026-11-23:
   "un baúl compartido por todos los personajes de la cuenta"; docs/02 "Baúl de la cuenta",
   docs/01, docs/05):** un cofre junto al tablero de cada pueblo, 30 celdas, solo items

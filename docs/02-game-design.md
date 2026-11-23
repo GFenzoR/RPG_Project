@@ -3322,3 +3322,33 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 ### Pendiente
 Un ranking público de guerras. (Las marcas ya tienen sprites propios:
 `assets/sprites/ui/marks/`, dibujados por `client/src/render/marks.ts`.)
+
+## Mundo vivo (lote 17)
+
+Pedido del dueño (2026-11-23): el mapa se puede romper en muchas cosas para que el mundo se
+sienta vivo, pero **los muros nunca se rompen**; algunos objetos hay que romperlos o moverlos
+para avanzar. Todo el detalle (contrato, datos, números) está en
+[`livingworld/README.md`](../livingworld/README.md); acá, las reglas de juego:
+
+- **Romper.** Cajas, barriles, vasijas, enredaderas espinosas, matorrales espesos, rocas
+  agrietadas, barricadas podridas y telarañas tienen puntos de vida y una lista de formas
+  que los rompen: cuerpo a cuerpo (con el arma o a mano limpia: 5 de daño), cualquier ataque
+  (también un arma a distancia o una varita en rango), hacha, pico o fuego (un hechizo de
+  área de fuego sobre su casilla, o una varita de fuego). Se golpean con "usar" sobre el
+  objeto (o usando la herramienta sobre él), al ritmo de los oficios. Una forma equivocada
+  no gasta el golpe y dice `living.wrong_way`.
+- **Restos.** Roto, deja restos caminables que se desvanecen (`debris_seconds`) y vuelve a
+  estar `respawn_seconds` después de romperse, solo si su casilla está libre (sin
+  criaturas ni items sueltos; si no, lo intenta cada segundo).
+- **Botín.** Algunos tienen una tabla chica (monedas, una galleta, una poción, seda): se tira
+  una vez por rotura y cae en la casilla, a nombre de quien la rompió para la economía.
+- **Empujar.** Una roca musgosa o un cajón pesado se empujan caminando contra ellos (en
+  línea recta): se mueven una casilla si la de atrás está libre; el jugador no se mueve. Dos
+  empujes en el mismo tick: el primero gana. Vuelven a su lugar `reset_seconds` después del
+  último empuje, cuando ese lugar está libre (el puzzle se arma solo para el siguiente).
+- **Placas y compuertas.** Una placa de presión se hunde con una criatura o un objeto
+  empujable encima; un rastrillo se abre mientras todas sus placas (las que están a su
+  radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo.
+- **Nunca** en una zona de protección, una casa, una puerta o un muro, y nunca como único
+  camino de una quest un objeto que pide herramienta, un empujable o una compuerta.
+- **Estado transitorio:** nada de esto se guarda; un reinicio deja el mundo como el mapa.

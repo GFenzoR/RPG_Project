@@ -1520,6 +1520,29 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   cuentas deshabilitadas o suspendidas, como el ranking). Cache de
   60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
 
+### Mundo vivo (`server/internal/session/livingworld.go`, `proto/game/v1/livingworld.proto`)
+Reglas y contrato en `livingworld/README.md`. El objeto es **un item más de la casilla**:
+`FullMapView`, `MapSlice` y `TileUpdate` lo mandan encima de los items del mapa y debajo de
+los sueltos, así que su `stack_index` es `1 + len(items del mapa)`. Cuando se rompe, se mueve,
+se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en un empuje).
+- **Golpear:** `UseItem{from: pos, item_id, stack_index}` sobre el objeto: un golpe con el
+  arma de la mano derecha (o a mano limpia). `UseItemOn` de un hacha o un pico con `to: pos`:
+  un golpe de herramienta. Un hechizo o runa de área de fuego golpea los que arden en su
+  área. Respuestas: `living.wrong_way`, `living.already_broken`, `inventory.too_far`, la de
+  sin línea de visión y `gather.not_ready` (el ritmo de los oficios). Usar un empujable dice
+  `living.push_hint`; un rastrillo cerrado, `living.gate_closed`.
+- **Empujar:** `PushObject{pos, dir}` (cliente → servidor): el jugador está en la casilla
+  de al lado y empuja en línea recta (norte, este, sur u oeste). Lo manda el cliente cuando
+  una tecla lo haría caminar contra un objeto con `living: pushable` en el contenido. A lo
+  sumo uno cada 400 ms (uno antes se ignora); `living.push_blocked` si la casilla de atrás no
+  está libre, `inventory.not_possible` si ya no hay nada (otro lo empujó en el mismo tick),
+  `inventory.too_far` si no está al lado.
+- **`LivingObjectEvent`** (servidor → cliente, a quien ve la casilla, en el mismo batch que
+  su `TileUpdate`): `kind` (`HIT`, `BREAK`, `RESPAWN`, `PUSH`, `GATE_OPEN`, `GATE_CLOSE`,
+  `FADE`, `RESET`), `pos`, `to` (empuje y vuelta), `item_id`, `effect` (material de las
+  partículas), `sound` (id de `assets/sounds.yaml`) y `hp_permille` (lo que le queda tras
+  un golpe).
+
 ### Puertas (`server/internal/session/door.go`)
 Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.
 - **Usar:** `UseItem{from: pos, item_id, stack_index}` sobre el item de la puerta (índice
@@ -1743,6 +1766,7 @@ dice que el servidor los manda.
 | `CreatureTurn`, `CreatureHealth`, `CreatureOutfit`, `CreatureSpeed` | |
 | `Effect` | Efecto visual en posición (`effect_id`) |
 | `Projectile` | De A a B (`projectile_id`) |
+| `LivingObjectEvent` | Qué le pasó a un objeto del mundo vivo (golpe, rotura, empuje, restos que se desvanecen...) para efectos y sonido; su aspecto llega siempre en `TileUpdate` ("Mundo vivo") |
 | `FloatingText` | Daño, curación, XP |
 | `PlayerStats` | HP, MP, nivel, XP, capacidad, velocidad, alma |
 | `PlayerSkills` | Nivel y % de cada skill |

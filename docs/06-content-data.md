@@ -1678,6 +1678,18 @@ music:
   música que dependa del paso necesitaría que el servidor lo mande (docs/14, pendientes).
 - Hoy ninguna quest la usa: falta un tema propio para la que la merezca.
 
+## Mundo vivo (`data/livingworld/*.yaml`)
+Los objetos que se rompen, se empujan o se abren: una lista donde cada entrada nombra un item
+de `data/items` (los del mundo vivo están en `data/items/livingworld.yaml`, ids con
+`make gen-ids`) y exactamente un comportamiento: `breakable` (`hp`, `by`, `becomes`,
+`debris_seconds`, `respawn_seconds`, `loot`, `effect`, `sound`, `hit_sound`), `pushable`
+(`reset_seconds`), `gate` (`open`) o `plate` (`radius`). Esquema:
+`packages/content-schema/schemas/livingworld.schema.json`. `make validate` rechaza además un
+muro, una puerta o un suelo; un rompible, empujable o rastrillo cerrado que no bloquee; restos
+o un rastrillo abierto que bloqueen; un item con dos entradas; un sonido que no esté en
+`assets/sounds.yaml`; y restos que duren más que la reaparición. Formato, ejemplos y cómo
+agregar uno: `livingworld/README.md`.
+
 ## i18n
 ```yaml
 # i18n/es/items.yaml

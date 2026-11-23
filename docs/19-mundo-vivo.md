@@ -5,3 +5,4 @@ bichos, pasos con sonido; rompibles, empujables y desgaste de senderos) vive en 
 carpeta, `livingworld/`. Su documentación única, con el contrato, las invariantes, la lista
 de pegamento, dónde están sus datos, assets y protocolo, cómo agregar algo y cómo probarlo,
 es **[`livingworld/README.md`](../livingworld/README.md)**. Este archivo solo apunta allí.
+La guía corta para agentes es [`livingworld/CLAUDE.md`](../livingworld/CLAUDE.md).
