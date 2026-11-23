@@ -690,7 +690,11 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   por tick y cada búsqueda expande como máximo 2 × 1 500; una búsqueda solo arranca si
   cabe el peor caso. Sin cuota, el jugador espera al tick siguiente (no se rechaza).
 - `StopWalk` vacía la cola (el paso en curso termina). `Turn` cambia la dirección y
-  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí).
+  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí). **Anti-flood (lote
+  16):** a los observadores les llega una ráfaga de 6 giros y después uno cada 100 ms
+  (GCRA por jugador, `turnFlood` en `session/move.go`); la dirección cambia siempre al
+  instante y quien gira recibe cada `CreatureTurn` suyo. El último giro retenido sale
+  cuando el cupo se recarga, así que los observadores terminan viendo la dirección real.
 - `Ping` → `Pong` en el batch de ese tick.
 
 ### Combate cuerpo a cuerpo (T1.6, `server/internal/session/combat.go`)

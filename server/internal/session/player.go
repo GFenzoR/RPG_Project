@@ -279,6 +279,10 @@ type Player struct {
 	lookOff  bool
 	// lookDirty: in World.lookDirty, its CreatureLook goes out at the end of the tick.
 	lookDirty bool
+	// turnTAT: the Turn broadcast anti-flood (GCRA, move.go turnFlood); turnHeld: in
+	// World.turnHeld, its last direction not told to the observers yet.
+	turnTAT  game.Tick
+	turnHeld bool
 }
 
 // Invisible reports whether p is invisible (T3.2).

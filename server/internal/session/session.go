@@ -246,6 +246,9 @@ type World struct {
 	// lookDirty: the players whose look or visible equipment changed this tick
 	// (look.go lookChanged); flushLooks tells them once each.
 	lookDirty []*Player
+	// turnHeld: the players whose turn was over the turn limit (move.go turnFlood); their
+	// last direction goes out when their bucket allows it (flushTurns).
+	turnHeld []*Player
 	// diedAway: the death.died message of a character that died link-dead, by character,
 	// for its next login (linkdead.go diedLinkDeadNotice; until a restart).
 	diedAway map[int64]*pb.ServerMessage

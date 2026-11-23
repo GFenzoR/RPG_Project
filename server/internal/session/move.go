@@ -54,7 +54,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		if !ok {
 			return
 		}
-		w.turn(p, d)
+		w.turn(ctx, p, d)
 	case *pb.ClientMessage_SetTarget:
 		w.setTarget(ctx, p, m.SetTarget.GetCreatureId())
 	case *pb.ClientMessage_SetFightMode:
@@ -216,19 +216,74 @@ func (w *World) reject(p *Player, d pb.Direction) {
 	}}})
 }
 
-func (w *World) turn(p *Player, d world.Direction) {
+// Turn anti-flood (lote 16): turning in place is free and every change reaches every
+// observer, so a client spamming Turn would multiply its traffic by the crowd around it.
+// The observers hear a burst of turnBurst changes, then one every turnRefill ticks; the
+// direction itself always changes at once, and the last one held back goes out when the
+// bucket allows it (flushTurns), so what the observers see ends right.
+const (
+	turnBurst  = 6
+	turnRefill = game.Tick(2) // 100 ms at the 50 ms tick
+)
+
+func (w *World) turn(ctx *game.TickContext, p *Player, d world.Direction) {
 	if p.dir == d {
 		return
 	}
 	p.dir = d
-	// One message for p and every observer that knows it, never changed after emit.
-	msg := &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: dirMsg(d)}}}
-	p.emit(msg)
+	p.emit(turnMsg(p))
+	if !w.turnFlood(ctx.Tick, p) {
+		if !p.turnHeld {
+			p.turnHeld = true
+			w.turnHeld = append(w.turnHeld, p)
+		}
+		return
+	}
+	w.sendTurn(p)
+}
+
+func turnMsg(p *Player) *pb.ServerMessage {
+	return &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: p.id, Dir: dirMsg(p.dir)}}}
+}
+
+// sendTurn tells p's direction to every observer that knows p (one message, never
+// changed after emit).
+func (w *World) sendTurn(p *Player) {
+	msg := turnMsg(p)
 	w.eachObserver(p, p.pos, func(o *Player) {
-		if o.Knows(p.id) {
+		if o != p && o.Knows(p.id) {
 			o.emit(msg)
 		}
 	})
+}
+
+// turnFlood counts one broadcast turn (GCRA: turnBurst, then one every turnRefill).
+func (w *World) turnFlood(now game.Tick, p *Player) bool {
+	tat := max(p.turnTAT, now)
+	if tat-now > turnRefill*(turnBurst-1) {
+		return false
+	}
+	p.turnTAT = tat + turnRefill
+	return true
+}
+
+// flushTurns sends the held-back last direction of each player whose bucket allows it
+// now; the others wait for a later tick. A player who left is dropped.
+func (w *World) flushTurns(ctx *game.TickContext) {
+	kept := w.turnHeld[:0]
+	for _, p := range w.turnHeld {
+		switch {
+		case w.byChar[p.charID] != p:
+			p.turnHeld = false
+		case w.turnFlood(ctx.Tick, p):
+			p.turnHeld = false
+			w.sendTurn(p)
+		default:
+			kept = append(kept, p)
+		}
+	}
+	clear(w.turnHeld[len(kept):])
+	w.turnHeld = kept
 }
 
 // StepTicks returns how many ticks a step onto ground costs at speed:
@@ -496,6 +551,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushMapNotices(ctx.Tick)
 	w.pruneShopPending(ctx.Tick)
 	w.flushEconomy(ctx)
+	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
