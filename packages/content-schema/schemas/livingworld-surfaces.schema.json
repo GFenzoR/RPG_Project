@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-surfaces.schema.json",
+  "title": "Living world surfaces (data/livingworld/surfaces.yaml)",
+  "description": "What a step on each ground surface leaves behind in the client: footprints, wind, dust, ripples, footstep sound and ambient critters (livingworld/README.md). Cosmetic: the server never reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["surfaces"],
+  "properties": {
+    "surfaces": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/surface" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "footprints": {
+            "description": "Milliseconds a footprint lasts in still air (0: none).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120000
+          },
+          "wind": {
+            "description": "Extra wear per millisecond in a full gust.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "dust": { "type": "boolean" },
+          "ripple": { "type": "boolean" },
+          "tint": { "$ref": "common.schema.json#/$defs/hexColor" },
+          "sound": {
+            "description": "Footstep sound: event step.self.<sound> of assets/sounds.yaml.",
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "critters": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["bird", "butterfly", "firefly", "fish"] }
+          }
+        }
+      }
+    }
+  }
+}

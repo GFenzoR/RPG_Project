@@ -1,0 +1,19 @@
+# Plants of the living world (livingworld/README.md, docs/06 "Mundo vivo"): map items that
+# react when a creature walks on or next to them. Cosmetic: the server never reads it.
+#
+#   item      a data/items id
+#   reaction  bend: leans away and springs back (grass, flowers, reeds, bushes);
+#             rustle: a tree shakes a pixel or so
+#   idle      it also sways gently in the wind
+#   leaves    leaves fall from it now and then, and when someone brushes past
+plants:
+  - { item: grass_tuft, reaction: bend }
+  - { item: tall_grass, reaction: bend, idle: true }
+  - { item: wildflowers, reaction: bend, idle: true }
+  - { item: reeds, reaction: bend, idle: true }
+  - { item: bush, reaction: bend }
+  - { item: flower_box, reaction: bend }
+  - { item: oak_tree, reaction: rustle, leaves: true }
+  - { item: elm_tree, reaction: rustle, leaves: true }
+  - { item: birch_tree, reaction: rustle, leaves: true }
+  - { item: pine_tree, reaction: rustle }

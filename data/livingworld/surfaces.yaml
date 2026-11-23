@@ -1,0 +1,26 @@
+# The living world's surfaces (livingworld/README.md, docs/06 "Mundo vivo"): what a step on
+# each ground surface (data/items `ground.surface`) leaves behind in the client. Cosmetic:
+# the server never reads this file.
+#
+#   footprints  ms a footprint lasts in still air (absent or 0: none)
+#   wind        extra wear per ms in a full gust (sand: footprints blow away faster)
+#   dust        running over it raises a dust cloud
+#   ripple      a step through it spreads rings on the water
+#   tint        colour of its footprints and dust
+#   sound       footstep sound: the event step.self.<sound> of assets/sounds.yaml
+#               (default: the surface's name; without a mapping it plays step.self)
+#   critters    ambient critters it can host: bird and butterfly by day, firefly at
+#               night, fish in water
+surfaces:
+  sand: { footprints: 14000, wind: 2.5, dust: true, tint: "#6e5634", sound: sand, critters: [bird] }
+  wet_sand: { footprints: 24000, tint: "#4a3a26", sound: sand }
+  snow: { footprints: 40000, wind: 0.5, tint: "#7f8fa6", sound: snow }
+  mud: { footprints: 40000, tint: "#3a2c1c", sound: mud }
+  ash: { footprints: 20000, wind: 1.5, dust: true, tint: "#3c3634", sound: sand }
+  dirt: { dust: true, tint: "#7a6248", sound: dirt }
+  grass: { sound: grass, critters: [bird, butterfly, firefly] }
+  tall_grass: { sound: grass, critters: [butterfly, firefly] }
+  stone: { sound: stone }
+  wood: { sound: wood }
+  water_shallow: { ripple: true, sound: water, critters: [fish] }
+  lava: {}

@@ -361,6 +361,8 @@ class Validator {
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
 
+    this.loadLivingWorld(dataDir, known);
+
     for (const entry of readdirSync(dataDir).sort()) {
       if (!known.has(entry)) {
         this.error(
@@ -368,6 +370,62 @@ class Validator {
           [],
           "unexpected file: there is no schema for it (see docs/06-content-data.md)",
         );
+      }
+    }
+  }
+
+  /**
+   * data/livingworld/<name>.yaml (livingworld/README.md): each file has its own schema,
+   * livingworld-<name>.schema.json, so a new kind of living world content brings its schema
+   * along. Plants are listed once; every surface a ground item uses is described.
+   */
+  private loadLivingWorld(dataDir: string, known: Set<string>): void {
+    known.add("livingworld");
+    const abs = join(dataDir, "livingworld");
+    if (!existsSync(abs)) return;
+    for (const entry of readdirSync(abs).sort()) {
+      const rel = `data/livingworld/${entry}`;
+      const name = entry.replace(/\.yaml$/, "");
+      if (
+        !entry.endsWith(".yaml") ||
+        !existsSync(new URL(`livingworld-${name}.schema.json`, SCHEMA_DIR))
+      ) {
+        this.error(
+          rel,
+          [],
+          `no schema for it (packages/content-schema/schemas/livingworld-${name}.schema.json)`,
+        );
+        continue;
+      }
+      const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
+      if (!src || !isObj(src.data)) continue;
+      if (name === "plants") {
+        const seen = new Map<string, number>();
+        for (const [i, p] of asList(src.data["plants"]).entries()) {
+          const item = isObj(p) ? p["item"] : undefined;
+          if (typeof item !== "string") continue;
+          const first = seen.get(item);
+          if (first !== undefined)
+            this.error(
+              src,
+              ["plants", i, "item"],
+              `plant "${item}" already listed at plants[${first}]`,
+            );
+          else seen.set(item, i);
+        }
+      }
+      if (name === "surfaces") {
+        const described = isObj(src.data["surfaces"]) ? src.data["surfaces"] : {};
+        for (const { item, src: itemSrc, path } of this.items) {
+          const ground = item["ground"];
+          const surface = isObj(ground) ? ground["surface"] : undefined;
+          if (typeof surface === "string" && !(surface in described))
+            this.error(
+              itemSrc,
+              [...path, "ground", "surface"],
+              `surface "${surface}" is not described in data/livingworld/surfaces.yaml`,
+            );
+        }
       }
     }
   }

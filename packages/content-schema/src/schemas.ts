@@ -30,7 +30,9 @@ export type SchemaName =
   | "cosmetics"
   | "sounds"
   | "i18n"
-  | "ids-lock";
+  | "ids-lock"
+  // data/livingworld/<name>.yaml: livingworld-<name>.schema.json (livingworld/README.md).
+  | `livingworld-${string}`;
 
 export interface Usage {
   path: PathSegment[];

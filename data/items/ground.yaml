@@ -1,33 +1,35 @@
-# Basic grounds. ground.speed is the terrain cost in percent (100 = normal).
+# Basic grounds. ground.speed is the terrain cost in percent (100 = normal). ground.surface
+# is what the ground is made of for the living world (footprints, plants, step sounds;
+# livingworld/README.md); the server ignores it.
 - id: grass
   kind: ground
   sprite: ground/grass
   name: item.grass.name
-  ground: { walkable: true, speed: 150 }
+  ground: { walkable: true, speed: 150, surface: grass }
 
 - id: sand
   kind: ground
   sprite: ground/sand
   name: item.sand.name
-  ground: { walkable: true, speed: 160 }
+  ground: { walkable: true, speed: 160, surface: sand }
 
 - id: dirt
   kind: ground
   sprite: ground/dirt
   name: item.dirt.name
-  ground: { walkable: true, speed: 140 }
+  ground: { walkable: true, speed: 140, surface: dirt }
 
 - id: stone_floor
   kind: ground
   sprite: ground/stone_floor
   name: item.stone_floor.name
-  ground: { walkable: true, speed: 100 }
+  ground: { walkable: true, speed: 100, surface: stone }
 
 - id: water_shallow
   kind: ground
   sprite: ground/water_shallow
   name: item.water_shallow.name
-  ground: { walkable: false }
+  ground: { walkable: false, surface: water_shallow }
 
 # Shallow water with a shoal of fish (T1.12): use a fishing rod on it. Our own numbers.
 - id: water_shoal
@@ -35,7 +37,7 @@
   sprite: ground/water_shoal
   name: item.water_shoal.name
   description: item.water_shoal.desc
-  ground: { walkable: false }
+  ground: { walkable: false, surface: water_shallow }
   resource:
     tool: fishing
     skill: fishing
@@ -51,19 +53,19 @@
   kind: ground
   sprite: ground/wet_sand
   name: item.wet_sand.name
-  ground: { walkable: true, speed: 170 }
+  ground: { walkable: true, speed: 170, surface: wet_sand }
 
 - id: dock_planks
   kind: ground
   sprite: ground/dock_planks
   name: item.dock_planks.name
-  ground: { walkable: true, speed: 100 }
+  ground: { walkable: true, speed: 100, surface: wood }
 
 - id: wooden_floor
   kind: ground
   sprite: ground/wooden_floor
   name: item.wooden_floor.name
-  ground: { walkable: true, speed: 100 }
+  ground: { walkable: true, speed: 100, surface: wood }
 
 # Volcanic grounds (Karvask, T5.5). Each walks like the ground it replaced on the
 # island, so the hunting pace T5.5 was balanced with holds: ash like the dirt of the ash
@@ -73,30 +75,30 @@
   kind: ground
   sprite: ground/ash
   name: item.ash.name
-  ground: { walkable: true, speed: 140 }
+  ground: { walkable: true, speed: 140, surface: ash }
 
 - id: basalt
   kind: ground
   sprite: ground/basalt
   name: item.basalt.name
-  ground: { walkable: true, speed: 100 }
+  ground: { walkable: true, speed: 100, surface: stone }
 
 - id: cinder_path
   kind: ground
   sprite: ground/cinder_path
   name: item.cinder_path.name
-  ground: { walkable: true, speed: 110 }
+  ground: { walkable: true, speed: 110, surface: stone }
 
 - id: cooled_lava
   kind: ground
   sprite: ground/cooled_lava
   name: item.cooled_lava.name
   description: item.cooled_lava.desc
-  ground: { walkable: true, speed: 100 }
+  ground: { walkable: true, speed: 100, surface: stone }
 
 - id: lava
   kind: ground
   sprite: ground/lava
   name: item.lava.name
   description: item.lava.desc
-  ground: { walkable: false }
+  ground: { walkable: false, surface: lava }

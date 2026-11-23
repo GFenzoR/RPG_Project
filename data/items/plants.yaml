@@ -1,0 +1,27 @@
+# Small plants of the living world (livingworld/README.md): low growth creatures walk
+# through. data/livingworld/plants.yaml says how each one reacts to a step (they bend away and
+# spring back; tall ones sway in the wind). Own pixel art drawn by tools/spritegen into
+# assets/livingworld/sprites/plants/.
+- id: grass_tuft
+  kind: decoration
+  sprite: livingworld/plants/grass_tuft
+  name: item.grass_tuft.name
+  pickupable: false
+
+- id: tall_grass
+  kind: decoration
+  sprite: livingworld/plants/tall_grass
+  name: item.tall_grass.name
+  pickupable: false
+
+- id: wildflowers
+  kind: decoration
+  sprite: livingworld/plants/wildflowers
+  name: item.wildflowers.name
+  pickupable: false
+
+- id: reeds
+  kind: decoration
+  sprite: livingworld/plants/reeds
+  name: item.reeds.name
+  pickupable: false
