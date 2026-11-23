@@ -213,9 +213,9 @@ func (s *session) do(act action) error {
 			// because it never confirmed its email. Only its owner can tell it is theirs.
 			fmt.Fprintln(l.out, "\nEsa cuenta nunca confirmó su email (sin correo configurado nadie puede), así que "+
 				"cualquiera pudo registrarla con tu dirección. Arriba ves cuándo se creó y sus personajes.")
-			ok, err := s.p.yesNo("¿Es tu cuenta (la creaste tú y esos son tus personajes)?", false)
-			if err != nil {
-				return err
+			ok, askErr := s.p.yesNo("¿Es tu cuenta (la creaste tú y esos son tus personajes)?", false)
+			if askErr != nil {
+				return askErr
 			}
 			if !ok {
 				fmt.Fprintln(l.out, "No le di el rol. Si no la creaste tú, no la uses: crea otra cuenta con otro email.")
