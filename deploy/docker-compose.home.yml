@@ -39,6 +39,11 @@ services:
     environment:
       MP_MAX_MESSAGES: "500"
     networks: [edge]
+    # Lote 16: no database file (messages in /tmp), so nothing else to write.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     logging:
       driver: json-file
       options:

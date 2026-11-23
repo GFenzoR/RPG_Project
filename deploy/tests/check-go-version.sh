@@ -31,7 +31,9 @@ for m in "${MODULES[@]}"; do
 	tc=$(sed -n 's/^toolchain go\([0-9.]*\)\r*$/\1/p' "$mod")
 	gov=$(sed -n 's/^go \([0-9.]*\)\r*$/\1/p' "$mod")
 	[[ -n $tc ]] || err "$mod has no 'toolchain goX.Y.Z' line"
-	[[ -n $gov ]] && ver_ge "$gov" "$MIN_GO" || err "$mod: go directive '$gov' is older than $MIN_GO"
+	if [[ -z $gov ]] || ! ver_ge "$gov" "$MIN_GO"; then
+		err "$mod: go directive '$gov' is older than $MIN_GO"
+	fi
 	if [[ -n $tc ]]; then
 		if [[ -z $want ]]; then
 			want=$tc

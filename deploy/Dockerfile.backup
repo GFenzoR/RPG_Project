@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 #
-# Backup image: pg_dump 16 (same major as the database) + AWS CLI for the optional S3 copy.
+# Backup image: pg_dump 16 (same major as the database) + AWS CLI for the optional S3 copy
+# + age for the optional encryption of the dumps (BACKUP_AGE_RECIPIENT, lote 16).
 #
 #   docker build -f deploy/Dockerfile.backup -t rpg-backup .
 #
@@ -18,7 +19,7 @@ LABEL org.opencontainers.image.title="rpg-project-backup" \
 # Unpinned on purpose: Alpine drops old package versions from its index, which would
 # break rebuilds; the base image tag already pins the Alpine release.
 # hadolint ignore=DL3018
-RUN apk add --no-cache bash aws-cli
+RUN apk add --no-cache bash aws-cli age
 COPY --chmod=0755 deploy/backup.sh /usr/local/bin/backup.sh
 # Dumps are written by the unprivileged postgres user (uid 70 in the alpine image).
 RUN mkdir -p /backups && chown postgres:postgres /backups

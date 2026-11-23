@@ -69,7 +69,7 @@ proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with
 ## ---- quality gates ---------------------------------------------------------
 
 .PHONY: test
-test: test-go test-ts test-parity ## Go + TS tests
+test: test-go test-ts test-parity test-deploy ## Go + TS tests (+ deploy script tests)
 
 .PHONY: test-go
 test-go:
@@ -90,10 +90,19 @@ lint-go:
 		(cd $$m && go vet ./... && golangci-lint run ./...); \
 	done
 
-# Lote 16: static checks of deploy/ that need no Docker daemon (deploy/tests/).
+# Lote 16: static checks of deploy/ that need no Docker daemon (deploy/tests/): the image's
+# Go = the go.mod toolchain, and the hardening of the compose stacks (docker compose config,
+# skipped without the docker CLI), Caddy headers, backups, deploy.sh and image signing.
 .PHONY: lint-deploy
-lint-deploy: ## Deploy checks: image Go version = go.mod toolchain
+lint-deploy: ## Deploy checks: Go version match, compose/Caddy/backup/deploy hardening
 	bash deploy/tests/check-go-version.sh
+	bash deploy/tests/check-hardening.sh
+
+# deploy.sh and backup.sh against stub docker, cosign, pg_dump, aws and age.
+.PHONY: test-deploy
+test-deploy: ## Tests of deploy/deploy.sh and deploy/backup.sh (stubs, no Docker)
+	bash deploy/tests/backup_test.sh
+	bash deploy/tests/deploy_test.sh
 
 .PHONY: lint-ts
 lint-ts:

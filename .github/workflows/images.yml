@@ -72,6 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write # push to ghcr.io with GITHUB_TOKEN
+      id-token: write # keyless cosign signature of the pushed digest (lote 16)
     strategy:
       fail-fast: false
       matrix:
@@ -123,6 +124,7 @@ jobs:
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: build${{ env.PUSH == 'true' && ' and push' || '' }}
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -138,6 +140,25 @@ jobs:
             COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # Lote 16: keyless signature (Sigstore, this workflow's OIDC identity) of the digest
+      # just pushed. deploy/deploy.sh verifies it before running the image; the verify step
+      # here checks the exact identity deploy.sh trusts for main and vX.Y.Z tags.
+      - uses: sigstore/cosign-installer@v3
+        if: env.PUSH == 'true'
+      - name: sign the image (cosign, keyless)
+        if: env.PUSH == 'true'
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ $DIGEST == sha256:* ]] || { echo "no digest from the build: $DIGEST"; exit 1; }
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign verify \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/images.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST" > /dev/null
 
       # T4.5: the worker runs TypeScript through workspace symlinks; starting it (without a
       # token it only logs that it is disabled) proves every module resolves in the image.
@@ -170,7 +191,11 @@ jobs:
             docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < "$f"
           done
       - name: shellcheck
-        run: shellcheck deploy/*.sh deploy/monitoring/*.sh deploy/monitoring/alertmanager/*.sh
+        run: shellcheck deploy/*.sh deploy/tests/*.sh deploy/monitoring/*.sh deploy/monitoring/alertmanager/*.sh
+      # Lote 16: Go version match, container/Caddy/backup/deploy hardening, and the tests of
+      # deploy.sh (digest pins, signatures) and backup.sh (encryption) with stubs.
+      - name: deploy hardening checks and script tests
+        run: make lint-deploy test-deploy
       - name: docker compose config
         run: |
           printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=example.com\nACME_EMAIL=ops@example.com\n' > "$RUNNER_TEMP/ci.env"

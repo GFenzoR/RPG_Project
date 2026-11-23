@@ -88,6 +88,20 @@ header {
 	-Server
 }
 
+# Lote 16: the pages of the client build (website and /play) get the same Content Security
+# Policy as the desktop app (apps/desktop/src-tauri/tauri.conf.json): only this origin's
+# scripts (the Vite build has no inline script and Pixi runs without eval), styles and
+# fonts; images, audio and Pixi's workers also from data:/blob: URLs; fetch and the game
+# WebSocket to this origin (and wss: for the desktop-style server choice). Forms only post
+# here (OAuth and the payment checkout are navigations, not form posts). Not on /api, /ws,
+# /healthz (no HTML) nor Grafana (its own UI). Check with deploy/smoke.sh.
+@pages not path /api/* /ws /ws/* /healthz /grafana /grafana/*
+header @pages {
+	Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' wss:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+	Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	Cross-Origin-Opener-Policy "same-origin"
+}
+
 log {
 	output stdout
 	format json
