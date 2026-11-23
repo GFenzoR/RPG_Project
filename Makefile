@@ -551,7 +551,7 @@ launcher: ## Build NequesRealm-Servidor.exe: double-click it to start the game s
 ifneq ($(OS),Windows_NT)
 	cd tools/launcher && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ../../nequesrealm-servidor .
 endif
-	@echo "[launcher] built $(LAUNCHER_EXE): double-click it (docs/13, \"La forma más fácil: doble clic\")"
+	@echo "[launcher] built $(LAUNCHER_EXE): double-click it (docs/13-hosting-de-pruebas.md)"
 
 # Only when the owner runs it: a shortcut on the Windows desktop to the launcher.
 .PHONY: launcher-shortcut

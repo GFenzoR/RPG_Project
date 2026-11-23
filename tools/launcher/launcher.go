@@ -240,7 +240,12 @@ func waitHealthy(base string, limit time.Duration) error {
 }
 
 // openBrowser opens url in the default browser; failures are only reported.
+// LAUNCHER_NO_BROWSER=1 skips it (scripted runs of the interactive mode).
 func openBrowser(url string) {
+	if os.Getenv("LAUNCHER_NO_BROWSER") == "1" {
+		fmt.Fprintf(os.Stdout, "(LAUNCHER_NO_BROWSER=1: no abro %s)\n", url)
+		return
+	}
 	var c *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
