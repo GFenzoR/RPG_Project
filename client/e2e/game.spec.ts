@@ -3718,3 +3718,75 @@ test("account stash: one character stores fish, the other online one takes it ou
   await shot(b, "stash-02-taken");
   expect(errors).toEqual([]);
 });
+
+// Lote 17 (docs/05 "Token de cuenta"): the characters screen's "Cuenta y seguridad" panel.
+// A password change takes the account's other session out of the game; "sign out
+// everywhere" ends this one too and the login comes back with only the email filled in;
+// the new password then works.
+test("account security: change password, sign out everywhere, email prefill", async ({
+  page,
+  browser,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password } = await newGuardian(playwright, "Secure");
+  const newPassword = "e2e-password-2";
+
+  // Another browser in the game with the same account.
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await enterGame(otherPage, email, password);
+
+  await page.goto("/play/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByTestId("characters")).toBeVisible();
+
+  const panel = page.getByTestId("account-security");
+  await panel.getByText("Cuenta y seguridad").click();
+  const form = panel.getByTestId("change-password");
+  await expect(form).toBeVisible();
+  await panel.scrollIntoViewIfNeeded();
+  await shot(page, "03c-account-security");
+
+  // A wrong current password is refused and changes nothing.
+  await form.getByLabel("Contraseña actual").fill("not-the-password");
+  await form.getByLabel("Contraseña nueva").fill(newPassword);
+  await form.getByRole("button", { name: "Cambiar contraseña" }).click();
+  await expect(panel.getByRole("alert")).toHaveText("La contraseña actual no es correcta.");
+  errors.length = 0; // the refused change answers 401, which the browser logs: expected
+
+  await form.getByLabel("Contraseña actual").fill(password);
+  await form.getByLabel("Contraseña nueva").fill(newPassword);
+  await form.getByRole("button", { name: "Cambiar contraseña" }).click();
+  await expect(panel.getByTestId("password-changed")).toBeVisible();
+  // The other session's character left the game with PASSWORD_CHANGED.
+  await expect(otherPage.getByTestId("login-form")).toBeVisible({ timeout: 20_000 });
+  await expect(otherPage.getByText("Se cambió la contraseña de la cuenta")).toBeVisible();
+  await other.close();
+  await shot(page, "03d-password-changed");
+
+  // This session survived the change; "sign out everywhere" ends it as well.
+  await panel.getByTestId("logout-all-button").click();
+  await panel.getByTestId("logout-all-confirm").click();
+  await expect(loginForm).toBeVisible();
+  await expect(loginForm.getByLabel("Email")).toHaveValue(email);
+  await expect(loginForm.getByLabel("Contraseña")).toHaveValue("");
+  await shot(page, "03e-login-prefill");
+
+  // The old password no longer works; the new one does.
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("Email o contraseña incorrectos.");
+  errors.length = 0; // the refused login's 401: expected
+  await loginForm.getByLabel("Contraseña").fill(newPassword);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByTestId("characters")).toBeVisible();
+  expect(errors).toEqual([]);
+});

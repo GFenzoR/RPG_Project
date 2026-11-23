@@ -108,9 +108,6 @@ el punto 5:
   "un baúl compartido por todos los personajes de la cuenta"; docs/02 "Baúl de la cuenta",
   docs/01, docs/05):** un cofre junto al tablero de cada pueblo, 30 celdas, solo items
   comerciables, cada movimiento en una transacción con el personaje. Queda:
-  - **No se corrió `make e2e` ni `make test-integration`** en la rama: el test e2e "account
-    stash" (`client/e2e/game.spec.ts`, screenshots `stash-01-shared` y `stash-02-taken`) y
-    `store/stash_integration_test.go` corren al final del lote.
   - **Migración 00025** (`00025_account_stash.sql`); la de sesiones del mismo lote quedó
     en la 00026 y la 00024 es un hueco a propósito (`knownGaps` en
     `migrations/embed_test.go`): no reutilizarla.
@@ -131,6 +128,10 @@ el punto 5:
   Queda:
   - Al desplegar, **todos entran de nuevo una vez** (la migración 00026 borra las sesiones
     viejas): avisarlo.
+  - E2E "account security" (`client/e2e/game.spec.ts`, screenshots `03c` a `03e`): cambiar
+    la contraseña saca del juego a la otra sesión, "cerrar sesión en todos lados" vuelve al
+    login con solo el email y la contraseña nueva entra. `make test-integration` y
+    `make e2e` pasaron en la punta del lote (`lote17/final`).
   - Los **tests de Rust** de `api.rs` (token solo en memoria; `signs_out`: un
     "cerrar sesión en todos lados" que falla conserva la sesión) no se corrieron ni se
     compilaron en la sesión que los escribió (sin `cargo` en esa PC) y el CI de escritorio
