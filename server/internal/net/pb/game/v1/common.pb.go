@@ -598,11 +598,19 @@ func (x *ItemStack) GetMods() *ItemMods {
 // data/attributes.yaml, value its amount; the client shows the attribute's text with
 // {value}) and the refine level of the forge (0 = not refined). An item with mods never
 // stacks. A client that does not know the attribute shows nothing for it.
+//
+// The remains a death leaves say whose they are: remains_of is the data/monsters id of the
+// creature that fell (the client names them "remains of <monster>" and draws that
+// creature's own corpse, docs/05 "Restos"), body_of the name of the player whose body it
+// is ("body of <player>"). The server sets them when it makes the remains; a client never
+// sends them as a choice, only back as part of the item it means.
 type ItemMods struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Attribute     string                 `protobuf:"bytes,1,opt,name=attribute,proto3" json:"attribute,omitempty"`
 	Value         int32                  `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
 	Refine        uint32                 `protobuf:"varint,3,opt,name=refine,proto3" json:"refine,omitempty"`
+	RemainsOf     string                 `protobuf:"bytes,4,opt,name=remains_of,json=remainsOf,proto3" json:"remains_of,omitempty"`
+	BodyOf        string                 `protobuf:"bytes,5,opt,name=body_of,json=bodyOf,proto3" json:"body_of,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -656,6 +664,20 @@ func (x *ItemMods) GetRefine() uint32 {
 		return x.Refine
 	}
 	return 0
+}
+
+func (x *ItemMods) GetRemainsOf() string {
+	if x != nil {
+		return x.RemainsOf
+	}
+	return ""
+}
+
+func (x *ItemMods) GetBodyOf() string {
+	if x != nil {
+		return x.BodyOf
+	}
+	return ""
 }
 
 // LocalizedText is player-visible text sent as an i18n key plus parameters
@@ -963,11 +985,14 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\tItemStack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\rR\x05count\x12%\n" +
-	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"V\n" +
+	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"\x8e\x01\n" +
 	"\bItemMods\x12\x1c\n" +
 	"\tattribute\x18\x01 \x01(\tR\tattribute\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value\x12\x16\n" +
-	"\x06refine\x18\x03 \x01(\rR\x06refine\"M\n" +
+	"\x06refine\x18\x03 \x01(\rR\x06refine\x12\x1d\n" +
+	"\n" +
+	"remains_of\x18\x04 \x01(\tR\tremainsOf\x12\x17\n" +
+	"\abody_of\x18\x05 \x01(\tR\x06bodyOf\"M\n" +
 	"\rLocalizedText\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
 	"\x06params\x18\x02 \x03(\v2\x12.game.v1.TextParamR\x06params\"\xa3\x01\n" +

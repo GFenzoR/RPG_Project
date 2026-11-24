@@ -267,6 +267,10 @@ func TestDeathCorpseOwnerOnly(t *testing.T) {
 	if pack.Def().ID != "backpack" || len(corpse.Item.Items()) != 4 {
 		t.Fatalf("corpse holds %v", corpseItems(h))
 	}
+	// The body says whose it is ("body of Owner"), and no monster's.
+	if m := corpse.Item.Mods(); m.BodyOf != "Owner" || m.RemainsOf != "" {
+		t.Errorf("player corpse mods %+v, want BodyOf Owner", m)
+	}
 
 	open := func(cl *fakeClient) uint32 {
 		cl.take()

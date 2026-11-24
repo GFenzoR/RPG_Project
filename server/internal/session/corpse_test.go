@@ -99,11 +99,11 @@ func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 	cl.take()
 	killAll(h)
 
-	top := map[world.Pos]uint32{}
+	top := map[world.Pos]*pb.ItemStack{}
 	for _, tu := range find(cl.take(), (*pb.ServerMessage).GetTileUpdate) {
 		p := tu.GetPos()
 		items := tu.GetTile().GetItems()
-		top[world.Pos{X: uint16(p.GetX()), Y: uint16(p.GetY()), Z: uint8(p.GetZ())}] = items[len(items)-1].GetItemId()
+		top[world.Pos{X: uint16(p.GetX()), Y: uint16(p.GetY()), Z: uint8(p.GetZ())}] = items[len(items)-1]
 	}
 	for kind, want := range map[string]struct {
 		item    string
@@ -122,8 +122,16 @@ func TestMonsterLeavesTheRemainsOfItsFamily(t *testing.T) {
 		if got := cs[0].Item.Def().ID; got != want.item {
 			t.Errorf("%s left %q, want %q", kind, got, want.item)
 		}
-		if got := top[where[kind]]; got != want.numeric {
+		if got := top[where[kind]].GetItemId(); got != want.numeric {
 			t.Errorf("%s: the clients saw item %d on its tile, want %d", kind, got, want.numeric)
+		}
+		// Whose remains they are travels with the item, on the server and to the clients:
+		// the client names them "remains of <monster>" and draws that monster's corpse.
+		if got := cs[0].Item.Mods().RemainsOf; got != kind {
+			t.Errorf("%s: remains of %q", kind, got)
+		}
+		if got := top[where[kind]].GetMods().GetRemainsOf(); got != kind {
+			t.Errorf("%s: the clients saw remains of %q", kind, got)
 		}
 		var coins []uint32
 		for _, it := range cs[0].Loot() {

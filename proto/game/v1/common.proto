@@ -84,10 +84,18 @@ message ItemStack {
 // data/attributes.yaml, value its amount; the client shows the attribute's text with
 // {value}) and the refine level of the forge (0 = not refined). An item with mods never
 // stacks. A client that does not know the attribute shows nothing for it.
+//
+// The remains a death leaves say whose they are: remains_of is the data/monsters id of the
+// creature that fell (the client names them "remains of <monster>" and draws that
+// creature's own corpse, docs/05 "Restos"), body_of the name of the player whose body it
+// is ("body of <player>"). The server sets them when it makes the remains; a client never
+// sends them as a choice, only back as part of the item it means.
 message ItemMods {
   string attribute = 1;
   int32 value = 2;
   uint32 refine = 3;
+  string remains_of = 4;
+  string body_of = 5;
 }
 
 // LocalizedText is player-visible text sent as an i18n key plus parameters

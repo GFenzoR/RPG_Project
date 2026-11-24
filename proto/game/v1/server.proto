@@ -541,6 +541,9 @@ message ContainerOpen {
   uint32 capacity = 3;
   repeated ItemStack items = 4;
   bool has_parent = 5;
+  // The container's own instance data (ItemMods): the remains of a monster or a player's
+  // body name the window after whose they are. Absent for a plain container.
+  ItemMods mods = 6;
 }
 
 // ContainerUpdate replaces the contents of an open container.

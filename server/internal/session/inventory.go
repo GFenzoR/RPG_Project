@@ -954,7 +954,7 @@ func (w *World) toggleContainer(p *Player, c *Item) {
 	c.viewers = append(c.viewers, viewer{p: p, id: id})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ContainerOpen{ContainerOpen: &pb.ContainerOpen{
 		ContainerId: id, ItemId: uint32(c.def.Numeric), Capacity: uint32(c.def.Slots()),
-		Items: c.stacks(), HasParent: c.parent != nil,
+		Items: c.stacks(), HasParent: c.parent != nil, Mods: c.mods.msg(),
 	}}})
 	w.tutorialEvent(p, content.TriggerOpenContainer, c.def.ID)
 }
