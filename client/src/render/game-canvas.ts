@@ -118,7 +118,11 @@ import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta, samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
-import { creatureName } from "../state/messages.ts";
+import { creatureName, formatMessage } from "../state/messages.ts";
+import { BubbleLayer } from "./bubble-layer.ts";
+import type { BubbleAnchor } from "./bubble-layer.ts";
+import { admitSpeech } from "./bubbles.ts";
+import type { BubbleStyle } from "./bubbles.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -215,6 +219,8 @@ export interface GameCanvas {
    * length.
    */
   poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
+  /** E2E (docs/17 UI-11): the speech bubbles on screen now, by speaker. */
+  bubbles(): { id: number; style: BubbleStyle; lines: string[] }[];
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -301,6 +307,11 @@ export interface GameCanvasOptions {
    * reduced motion). Asked at each frame of a shake; without it, never.
    */
   shake?(): boolean;
+  /**
+   * docs/17 UI-11: whether what creatures say shows over their heads (Options →
+   * Interface). Asked every frame; without it, it does.
+   */
+  bubbles?(): boolean;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -543,12 +554,15 @@ export async function createGameCanvas(
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
+  // docs/17 UI-11: what creatures say, over their names (render/bubble-layer.ts).
+  const speech = new BubbleLayer();
+  const anchors = new Map<number, BubbleAnchor>();
   // Caves are dark (ART-7): a light map over the map, under effects and names.
   const lights = new LightLayer(glowTexture());
   // docs/17 MOV-7: the ring of a click-to-walk, over the light (seen in a cave too).
   const walkMark = new Graphics({ label: "walk mark" });
   let walkMarkDrawn = false;
-  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, textLayer);
+  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, speech.view, textLayer);
   /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
   let lightTile = 0;
   const addFireLight = (x: number, y: number, radius: number): void =>
@@ -1022,6 +1036,7 @@ export async function createGameCanvas(
 
   redrawLabels = (): void => {
     CanvasTextMetrics.clearMetrics();
+    speech.refresh();
     for (const s of sprites.values()) {
       s.label.style.update();
       s.guild.style.update();
@@ -1146,6 +1161,26 @@ export async function createGameCanvas(
     const from = view.elevationAt(w.from.x, w.from.y);
     const to = view.elevationAt(w.to.x, w.to.y);
     return from === to ? from : Math.round(from + ((to - from) * (now - w.start)) / w.duration);
+  };
+
+  /** docs/17 UI-11: takes what was said since the last frame and draws the bubbles. */
+  const drawSpeech = (now: number): void => {
+    const on = opts.bubbles?.() ?? true;
+    for (const said of world.takeSpeech()) {
+      const style = admitSpeech(said.kind, on);
+      if (!style) continue;
+      const text = said.localized
+        ? formatMessage(
+            { key: said.localized.key, params: said.localized.params, at: now },
+            content,
+            t,
+          )
+        : (said.text ?? "");
+      speech.say(said.speakerId, style, text, now);
+    }
+    if (!on) speech.clear();
+    speech.draw(anchors, now);
+    anchors.clear();
   };
 
   const draw = (now: number): void => {
@@ -1278,7 +1313,15 @@ export async function createGameCanvas(
           Math.round(s.label.y - s.label.height / 2),
         );
       }
+      // docs/17 UI-11: a speech bubble goes right over the name (or the bar, without one).
+      anchors.set(b.id, {
+        x: b.x,
+        top: at.show ? Math.round(s.label.y - s.label.height) - 1 : b.y,
+        self: b.self,
+        distance: b.distance,
+      });
     }
+    drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
@@ -1659,6 +1702,9 @@ export async function createGameCanvas(
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));
     },
+    bubbles() {
+      return speech.shown();
+    },
     poses() {
       const now = performance.now();
       const attacking: PoseTime[] = [];
@@ -1743,6 +1789,7 @@ export async function createGameCanvas(
       for (const id of [...sprites.keys()]) dropSprite(id);
       while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
+      speech.destroy();
       lights.destroy();
       living?.destroy();
       livingObjects.destroy();

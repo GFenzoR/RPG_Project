@@ -309,6 +309,11 @@ export interface ClientTestHooks {
     dying: PoseView[];
     vanishing: PoseView[];
   };
+  /**
+   * docs/17 UI-11: the speech bubbles on screen now: the speaker's creature id, the kind
+   * (say, yell, whisper, npc) and each message's wrapped lines.
+   */
+  bubbles(): { id: number; style: string; lines: string[] }[];
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -379,6 +384,11 @@ export interface GameOptions {
    * hit; reduced motion turns it off anyway. Without it, it shakes.
    */
   cameraShake?(): boolean;
+  /**
+   * docs/17 UI-11: whether what creatures say shows over their heads (Options →
+   * Interface), read every frame. Without it, it does.
+   */
+  chatBubbles?(): boolean;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -1959,6 +1969,7 @@ export class Game {
       hoverText: (x, y, z) => this.hoverText({ x, y, z }),
       restTile: (at) => this.restTile(at),
       shake: () => (this.opts.cameraShake?.() ?? true) && !motionReduced(document.documentElement),
+      bubbles: () => this.opts.chatBubbles?.() ?? true,
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -2061,6 +2072,7 @@ export class Game {
           .map((d) => ({ id: d.id, reason: DisappearReason[d.reason] }));
       },
       poses: () => canvas.poses(),
+      bubbles: () => canvas.bubbles(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)
