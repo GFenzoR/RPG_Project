@@ -573,3 +573,136 @@ test("sandbox living world: cut the vines by hand, push both boulders, the portc
   await expect(page.getByTestId("login-form")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+// docs/17 UI-3 (owner, 2026-11-23): the names over creatures grow with the map zoom in whole
+// steps (large by default, normal in Options → Interface) and their colours read on the
+// black outline; and ART-3: a wall piece just south of the own player fades, the player
+// keeps its colours (no pale copy over the map).
+test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in front of the player fades", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Rotulo");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(`${x},${y},${z}`);
+  };
+  const labels = () => page.evaluate(() => window.__rpgClient?.labels());
+  const scale = async (): Promise<number> =>
+    (await page.evaluate(() => window.__rpgClient?.zoom()))?.scale ?? 0;
+  const canvas = await page.getByTestId("game-canvas").boundingBox();
+  if (!canvas) throw new Error("no canvas");
+  const wheel = async (deltaY: number): Promise<void> => {
+    await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, deltaY);
+    await page.keyboard.up("Control");
+  };
+  const zoomTo = async (want: number): Promise<void> => {
+    for (let i = 0; i < 8 && (await scale()) !== want; i++) {
+      await wheel((await scale()) < want ? -100 : 100);
+      await page.waitForTimeout(150);
+    }
+    await expect.poll(scale).toBe(want);
+    await page.waitForTimeout(300);
+  };
+  const say = page.getByTestId("say").getByRole("textbox");
+  const tp = async (x: number, y: number, z: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} ${z}`);
+    await say.press("Enter");
+    await standsOn(x, y, z);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
+  /** The label of the first creature from `list` with that content id. */
+  const labelOf = async (list: "npcs" | "monsters", contentId: string) => {
+    const ids = await page.evaluate(
+      ({ l, c }) =>
+        (l === "npcs" ? window.__rpgClient?.npcs() : window.__rpgClient?.monsters())
+          ?.filter((n) => n.contentId === c)
+          .map((n) => n.id) ?? [],
+      { l: list, c: contentId },
+    );
+    const shown = (await labels())?.shown ?? [];
+    return shown.find((s) => ids.includes(s.id));
+  };
+
+  // The temple, by the instructor (an NPC), at the fitted 2x: large names, 2 px per cell.
+  await standsOn(2095, 2086, 7);
+  await zoomTo(2);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(2);
+  const npc2 = await labelOf("npcs", "pruebas_trainer");
+  expect(npc2?.fill).toBe(0xc79bff); // render/label-style.ts LABEL_COLORS.npc
+  await shot(page, "100-names-2x-npc");
+
+  // 1x: one cell per pixel, as before; half as tall.
+  await zoomTo(1);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(1);
+  const npc1 = await labelOf("npcs", "pruebas_trainer");
+  expect(npc1?.height ?? 0).toBeLessThan((npc2?.height ?? 0) * 0.6);
+  await shot(page, "100b-names-1x-npc");
+
+  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names at 2x and
+  // at 4x (3 px per cell).
+  await zoomTo(2);
+  await tp(2080, 2081, 7);
+  await expect
+    .poll(async () => (await labelOf("monsters", "bilge_rat"))?.fill, { timeout: 20_000 })
+    .toBe(0xff4f5e); // LABEL_COLORS.monster
+  await shot(page, "101-names-2x-monsters");
+  await zoomTo(4);
+  await expect.poll(async () => (await labels())?.scale).toBe(3);
+  await shot(page, "101b-names-4x-monsters");
+
+  // Options → Interface → "Name size": normal at 4x is 2 px per cell.
+  await openWindow(page, "options");
+  await page.getByTestId("name-size").selectOption("normal");
+  await closeWindow(page, "options");
+  await expect.poll(async () => (await labels())?.scale).toBe(2);
+  expect(await page.evaluate(() => localStorage.getItem("rpg.name-size"))).toBe("normal");
+  await shot(page, "101c-names-normal-4x-monsters");
+  await page.evaluate(() => localStorage.removeItem("rpg.name-size"));
+
+  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece fades
+  // and no pale copy of the player is drawn; a piece of the same wall far away does not.
+  await zoomTo(2);
+  await tp(2092, 2090, 7);
+  expect(await page.evaluate(() => window.__rpgClient?.walkable(2092, 2091, 7))).toBe(false);
+  await expect
+    .poll(async () => {
+      const f = await page.evaluate(() => window.__rpgClient?.wallFade(2092, 2091));
+      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5) && f.copies === 0;
+    })
+    .toBe(true);
+  const far = await page.evaluate(() => window.__rpgClient?.wallFade(2099, 2091));
+  expect(far?.alphas.every((a) => a === 1)).toBe(true);
+  await shot(page, "102-wall-fade-own-player");
+  const me = await page.evaluate(() => window.__rpgClient?.tileToClient(2092, 2090));
+  if (!me) throw new Error("no canvas");
+  await page.screenshot({
+    path: join(shots, "102b-wall-fade-own-player-close.png"),
+    clip: { x: me.x - 192, y: me.y - 192, width: 384, height: 320 },
+  });
+  expect(errors).toEqual([]);
+});
