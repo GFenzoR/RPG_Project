@@ -26,6 +26,8 @@ import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
 import { loadCameraShake, loadChatBubbles, loadNameSize } from "../state/ui-prefs.ts";
+import { logoutLockMs } from "../state/status.ts";
+import { rememberStayed, staysAfter, takeStayed } from "../state/stayed.ts";
 import type { GameSettings } from "./GameView.tsx";
 import { LookPickers } from "./LookPickers.tsx";
 import { LookPreview } from "./LookPreview.tsx";
@@ -86,7 +88,12 @@ function Screens({
   settings,
 }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
-  const [notice, setNotice] = useState<string | undefined>(undefined);
+  // A game closed in a fight last time (state/stayed.ts): the first screen says the
+  // character stayed in the world until the fight ended.
+  const [notice, setNotice] = useState<string | undefined>(() => {
+    const note = takeStayed(safeStorage(), Date.now());
+    return note && t("client.characters.stayed_in_fight", { name: note.name });
+  });
 
   useEffect(() => {
     // A still-valid session cookie skips the login.
@@ -173,8 +180,13 @@ function Screens({
             touchPad={touchPad ?? false}
             character={screen.character}
             sessionToken={screen.sessionToken}
-            onEnd={(reason) => {
-              setNotice(t(disconnectKey(reason)));
+            onEnd={(reason, inFight) => {
+              const ended = t(disconnectKey(reason));
+              setNotice(
+                inFight && staysAfter(reason)
+                  ? `${ended} ${t("client.characters.stayed_in_fight", { name: screen.character.name })}`
+                  : ended,
+              );
               toCharacters();
             }}
           />
@@ -566,7 +578,8 @@ function GameScreen(props: {
   touchPad: boolean;
   character: Character;
   sessionToken: string;
-  onEnd(reason: DisconnectReason | undefined): void;
+  /** inFight: the logout lock of a fight lasted when the game ended (state/stayed.ts). */
+  onEnd(reason: DisconnectReason | undefined, inFight: boolean): void;
 }): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const game = useRef<Game | undefined>(undefined);
@@ -578,6 +591,10 @@ function GameScreen(props: {
   const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>(emptyGameUi);
   const [storage] = useState(safeStorage);
+  // The conditions now, for the way out (onEnd, pagehide) outside a render.
+  const conditions = useRef(ui.conditions);
+  conditions.current = ui.conditions;
+  const inFight = (): boolean => logoutLockMs(conditions.current, performance.now()) !== undefined;
   // Options → Controls (docs/17 UI-6) reaches the Game, which reads it at each click; the
   // camera shake (docs/17 UI-9), at each heavy hit.
   const controls = useRef(props.settings?.controlsMode);
@@ -608,7 +625,7 @@ function GameScreen(props: {
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),
-      ended: (reason) => props.onEnd(reason),
+      ended: (reason) => props.onEnd(reason, inFight()),
       update: setUi,
     });
     game.current = g;
@@ -617,7 +634,14 @@ function GameScreen(props: {
     const keepalive = window.setInterval(() => {
       accountApi.keepalive().catch(() => undefined);
     }, KEEPALIVE_MS);
+    // Closing the tab, reloading or quitting the desktop app in a fight leaves the
+    // character in the world link-dead (docs/02): the next start says so.
+    const leaving = (): void => {
+      if (inFight()) rememberStayed(storage, { name: props.character.name, at: Date.now() });
+    };
+    window.addEventListener("pagehide", leaving);
     return () => {
+      window.removeEventListener("pagehide", leaving);
       window.clearInterval(keepalive);
       g.destroy();
     };
