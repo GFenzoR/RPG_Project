@@ -267,6 +267,19 @@ export interface ChatLine {
   at: number;
 }
 
+/**
+ * Something said aloud by a creature the player sees (docs/17 UI-11): a local chat line
+ * that came with its speaker's position, or an NPC's line of its dialog. The canvas draws
+ * it over the speaker's head (render/bubbles.ts) and takes it with takeSpeech.
+ */
+export interface SpeechSaid {
+  speakerId: number;
+  kind: MessageKind;
+  text: string | undefined;
+  localized: { key: string; params: TextParam[] } | undefined;
+  at: number;
+}
+
 export interface PlayerStatsState {
   health: number;
   maxHealth: number;
@@ -394,6 +407,9 @@ function pushLive<T extends { start: number }>(list: T[], x: T, ms: number): voi
 
 /** LivingObjectEvents kept for the canvas at most (a hidden tab draws no frames). */
 const LIVING_QUEUE = 64;
+
+/** Speech kept for the canvas at most (a hidden tab draws no frames), oldest dropped. */
+export const SPEECH_QUEUE = 16;
 
 /** Status log length. */
 const LOG_SIZE = 5;
@@ -568,6 +584,8 @@ export class WorldState implements TileSource {
    * frame (takeLiving). At most LIVING_QUEUE wait, the oldest dropped first.
    */
   private living: { event: LivingObjectEvent; at: number }[] = [];
+  /** Speech for the bubbles over the heads, until the canvas takes it (takeSpeech). */
+  private speech: SpeechSaid[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
@@ -646,6 +664,18 @@ export class WorldState implements TileSource {
     const out = this.living;
     this.living = [];
     return out;
+  }
+
+  /** The speech said since the last call, oldest first (docs/17 UI-11). */
+  takeSpeech(): SpeechSaid[] {
+    const out = this.speech;
+    this.speech = [];
+    return out;
+  }
+
+  private said(s: SpeechSaid): void {
+    this.speech.push(s);
+    if (this.speech.length > SPEECH_QUEUE) this.speech.shift();
   }
 
   /**
@@ -935,6 +965,16 @@ export class WorldState implements TileSource {
             params: o.text?.params ?? [],
           })),
         };
+        // docs/17 UI-11: the NPC says its line over its head too.
+        if (v.text?.key && v.npcCreatureId !== 0) {
+          this.said({
+            speakerId: v.npcCreatureId,
+            kind: MessageKind.NPC,
+            text: undefined,
+            localized: { key: v.text.key, params: v.text.params },
+            at: now,
+          });
+        }
         break;
       }
       case "dialogClose":
@@ -1007,18 +1047,26 @@ export class WorldState implements TileSource {
         const m = msg.value;
         if (m.kind !== MessageKind.SYSTEM) {
           if (m.body.case === undefined) break;
+          const text = m.body.case === "text" ? m.body.value : undefined;
+          const localized =
+            m.body.case === "localized"
+              ? { key: m.body.value.key, params: m.body.value.params }
+              : undefined;
           this.chat.push({
             kind: m.kind,
             speakerName: m.speakerName,
             speakerContentId: m.speakerContentId,
-            text: m.body.case === "text" ? m.body.value : undefined,
-            localized:
-              m.body.case === "localized"
-                ? { key: m.body.value.key, params: m.body.value.params }
-                : undefined,
+            text,
+            localized,
             at: now,
           });
           if (this.chat.length > CHAT_SIZE) this.chat.shift();
+          // docs/17 UI-11: the server sends the speaker's position only to whoever sees
+          // it (never for global, party, guild or system lines, nor an invisible speaker):
+          // that line also goes over the speaker's head.
+          if (m.pos && m.speakerId !== 0) {
+            this.said({ speakerId: m.speakerId, kind: m.kind, text, localized, at: now });
+          }
           break;
         }
         if (m.body.case !== "localized") break;

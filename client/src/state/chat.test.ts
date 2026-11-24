@@ -1,11 +1,19 @@
 import { NO_SOUNDS } from "../audio/cues.ts";
-import { ChatChannel, MessageKind, MessageSchema, TextParamSchema, create } from "@rpg/protocol";
+import {
+  ChatChannel,
+  DialogOpenSchema,
+  MessageKind,
+  MessageSchema,
+  PositionSchema,
+  TextParamSchema,
+  create,
+} from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { formatChat } from "./messages.ts";
-import { CHAT_SIZE, WorldState } from "./world.ts";
+import { CHAT_SIZE, SPEECH_QUEUE, WorldState } from "./world.ts";
 import {
   CHAT_TABS,
   WHEEL_LINE_PX,
@@ -88,6 +96,68 @@ describe("chat", () => {
       "[Global] Mira: hi",
       "Barquero: Hola Mira",
     ]);
+  });
+});
+
+describe("speech over the heads (docs/17 UI-11)", () => {
+  const said = (kind: MessageKind, text: string, speakerId: number, seen: boolean): Msg => ({
+    case: "chatMessage",
+    value: create(MessageSchema, {
+      kind,
+      speakerId,
+      speakerName: "Mira",
+      ...(seen ? { pos: create(PositionSchema, { x: 1, y: 2, z: 7 }) } : {}),
+      body: { case: "text", value: text },
+    }),
+  });
+
+  it("queues what a seen speaker says, once, oldest first", () => {
+    const w = new WorldState(content);
+    w.apply(said(MessageKind.SAY, "hola", 4, true), 10);
+    w.apply(said(MessageKind.YELL, "eh", 4, true), 20);
+    const out = w.takeSpeech();
+    expect(out.map((s) => [s.speakerId, s.kind, s.text, s.at])).toEqual([
+      [4, MessageKind.SAY, "hola", 10],
+      [4, MessageKind.YELL, "eh", 20],
+    ]);
+    expect(w.takeSpeech()).toEqual([]);
+  });
+
+  it("skips lines without the speaker's position: global, party, an unseen speaker", () => {
+    const w = new WorldState(content);
+    w.apply(said(MessageKind.GLOBAL, "hola", 4, false), 0);
+    w.apply(said(MessageKind.PARTY, "hola", 4, false), 0);
+    w.apply(said(MessageKind.SAY, "hola", 4, false), 0);
+    expect(w.chat).toHaveLength(3);
+    expect(w.takeSpeech()).toEqual([]);
+  });
+
+  it("keeps at most SPEECH_QUEUE while nothing takes it", () => {
+    const w = new WorldState(content);
+    for (let i = 0; i < SPEECH_QUEUE + 4; i++) w.apply(said(MessageKind.SAY, `m${i}`, 1, true), i);
+    const out = w.takeSpeech();
+    expect(out).toHaveLength(SPEECH_QUEUE);
+    expect(out[0]?.text).toBe("m4");
+  });
+
+  it("an NPC's dialog line goes over its head too", () => {
+    const w = new WorldState(content);
+    w.apply(
+      {
+        case: "dialogOpen",
+        value: create(DialogOpenSchema, {
+          dialogId: 1,
+          npcCreatureId: 77,
+          text: { key: "dialog.hello", params: [] },
+        }),
+      },
+      5,
+    );
+    const out = w.takeSpeech();
+    expect(out).toHaveLength(1);
+    expect(out[0]?.speakerId).toBe(77);
+    expect(out[0]?.kind).toBe(MessageKind.NPC);
+    expect(out[0]?.localized?.key).toBe("dialog.hello");
   });
 });
 
