@@ -124,6 +124,46 @@ func (q *Queries) DeleteCharacterUnjustKills(ctx context.Context, characterID in
 	return err
 }
 
+const getCharacterExplored = `-- name: GetCharacterExplored :many
+SELECT z, sx, sy, bits
+FROM character_explored
+WHERE character_id = $1
+ORDER BY z, sx, sy
+`
+
+type GetCharacterExploredRow struct {
+	Z    int16
+	Sx   int16
+	Sy   int16
+	Bits []byte
+}
+
+// The minimap's explored sectors of a character (migration 00028).
+func (q *Queries) GetCharacterExplored(ctx context.Context, characterID int64) ([]GetCharacterExploredRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterExplored, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterExploredRow{}
+	for rows.Next() {
+		var i GetCharacterExploredRow
+		if err := rows.Scan(
+			&i.Z,
+			&i.Sx,
+			&i.Sy,
+			&i.Bits,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
@@ -430,6 +470,34 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterExplored = `-- name: SaveCharacterExplored :exec
+INSERT INTO character_explored (character_id, z, sx, sy, bits)
+SELECT $1::bigint, unnest($2::smallint[]), unnest($3::smallint[]),
+       unnest($4::smallint[]), unnest($5::bytea[])
+ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = EXCLUDED.bits
+`
+
+type SaveCharacterExploredParams struct {
+	CharacterID int64
+	Zs          []int16
+	Sxs         []int16
+	Sys         []int16
+	Bits        [][]byte
+}
+
+// A snapshot upserts the sectors that gained bits during the login: a newer copy of a
+// sector is a superset of the saved one, so it replaces it.
+func (q *Queries) SaveCharacterExplored(ctx context.Context, arg SaveCharacterExploredParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterExplored,
+		arg.CharacterID,
+		arg.Zs,
+		arg.Sxs,
+		arg.Sys,
+		arg.Bits,
+	)
+	return err
 }
 
 const saveCharacterQuestState = `-- name: SaveCharacterQuestState :exec

@@ -17,6 +17,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/buildinfo"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
@@ -558,6 +559,7 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		Skills:     storeSkills(s.Skills),
 		Inventory:  storeItems(s.Inventory),
 		Storage:    s.Storage,
+		Explored:   storeExplored(s.Explored),
 		Conditions: storeConditions(s.Conditions),
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
@@ -566,6 +568,15 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 			Beard: s.Look.Beard},
 		SavedAt: a.cfg.Clock.Now(),
 	}
+}
+
+// storeExplored is a snapshot's explored sectors as saved (character_explored).
+func storeExplored(in []explore.SectorState) []store.ExploredSector {
+	out := make([]store.ExploredSector, len(in))
+	for i, s := range in {
+		out[i] = store.ExploredSector{Z: int(s.Key.Z()), SX: s.Key.SX(), SY: s.Key.SY(), Bits: append([]byte(nil), s.Bits[:]...)}
+	}
+	return out
 }
 
 func storeConditions(in []session.ConditionState) []store.Condition {

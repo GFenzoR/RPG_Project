@@ -25,8 +25,9 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 	}
 	evs := cl.take()
 	// The quest log comes too, empty for a character with no quest (questlog.go).
-	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills", "quest_log"}
-	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] || got[5] != want[5] {
+	// And the minimap's explored sectors (minimap.go).
+	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills", "minimap_index", "quest_log"}
+	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] || got[5] != want[5] || got[6] != want[6] {
 		t.Fatalf("join events %v, want %v", got, want)
 	}
 	if wl := evs[0].GetWelcome(); wl.GetCreatureId() != p.ID() || wl.GetTickMs() != 50 || wl.GetViewWidth() != 31 || wl.GetViewHeight() != 21 {

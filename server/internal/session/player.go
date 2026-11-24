@@ -7,6 +7,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
@@ -127,6 +128,17 @@ type Player struct {
 	reachFloors   uint16
 	reachStale    bool
 	questLogDirty bool
+	// The minimap (minimap.go): what the character explored, when the next delta may go,
+	// the MinimapRequest budget, the tracked quest and the last ObjectiveHint sent (hintStale:
+	// recompute it at the flush; hintForce: send it even if unchanged, a TrackQuest answer).
+	explored        *explore.Map
+	minimapAt       game.Tick
+	minimapBudget   int
+	minimapBudgetAt game.Tick
+	tracked         string
+	hintStale       bool
+	hintForce       bool
+	hintSent        hintKey
 	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
 	milestoneMarks uint64
 	// sigilMet is what it met of the milestone of the plate it stands on when last
@@ -418,6 +430,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
 		Look:        p.look,
+		Explored:    p.explored.Touched(),
 		Final:       final,
 	}
 }
@@ -579,6 +592,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
 		c.Look = s.Look
+		c.ExploredUnsaved = s.Explored // the final save may not be written yet
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -637,6 +651,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	joined = true
 	stashRolled := w.stashJoin(p, c) // stash.go: the one in memory, or else the one this login read
 	w.index(p)
+	p.explored = loadExplored(c)
+	p.minimapBudget = minimapBudget
+	p.exploreView()
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		CreatureId:     p.id,
@@ -655,6 +672,10 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.sendCosmetics(p) // T5.7
+	// The minimap (minimap.go): every explored sector, this login's first view included;
+	// those are not sent again as a delta.
+	p.emit(p.minimapIndex())
+	p.explored.TakePending()
 	// The quest log (questlog.go), empty too, goes at the flush of this tick: one QuestLog
 	// even when checkReach below completes a step.
 	p.questLogDirty = true
@@ -702,7 +723,8 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Pos, c.HasPos = p.pos, true
 	c.Cosmetics = p.cos
 	c.Look = p.look
-	if p.premSeq > c.PremiumSeq { // the online player heard of a newer shop change
+	c.ExploredUnsaved = p.explored.All() // all of it: its touched sectors may not be saved yet
+	if p.premSeq > c.PremiumSeq {        // the online player heard of a newer shop change
 		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq
 	}
 	return c

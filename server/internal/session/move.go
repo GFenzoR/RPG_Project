@@ -132,6 +132,10 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
 	case *pb.ClientMessage_SetLook:
 		w.setLook(ctx, p, m.SetLook)
+	case *pb.ClientMessage_MinimapRequest:
+		w.minimapRequest(ctx.Tick, p, m.MinimapRequest)
+	case *pb.ClientMessage_TrackQuest:
+		w.trackQuest(p, m.TrackQuest.GetQuestId())
 	case *pb.ClientMessage_Logout:
 		// No logout in the middle of a fight (linkdead.go): the PvP lock (T5.2) or
 		// travel.combat_block_ms since p fought a monster or took damage. Closing the
@@ -445,6 +449,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	// relocate checks the tile it lands on (a reward that did not fit would otherwise drop
 	// on the entrance, where nobody stands).
 	if !through {
+		p.exploreView() // the minimap (minimap.go)
 		w.checkReach(p)
 		w.sigilStep(p)
 		// The living world's trail wear (trailwear.go); an invisible player leaves no
@@ -513,6 +518,7 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.checkHouseView(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
+	p.exploreView() // the minimap (minimap.go)
 	w.checkReach(p) // a teleport, a portal, a boat or the temple count for a reach step
 	w.sigilStep(p)
 }
@@ -569,6 +575,8 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	for _, p := range w.players {
 		w.questRecheck(p)
 		w.flushQuestLog(p) // after the recheck: its changes are in this one
+		w.flushHint(p)     // minimap.go: the tracked quest's step may have changed
+		w.flushMinimap(ctx.Tick, p)
 		w.sendConditions(ctx.Tick, p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)

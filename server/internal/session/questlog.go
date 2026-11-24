@@ -150,6 +150,7 @@ func (w *World) reachNear(r *content.Reach, npc string) bool {
 func (p *Player) questsChanged() {
 	p.reachStale = true
 	p.questLogDirty = true
+	p.hintStale = p.tracked != "" // minimap.go: the tracked step may have changed
 }
 
 // checkReach completes p's current reach steps p now stands in (after a step, a

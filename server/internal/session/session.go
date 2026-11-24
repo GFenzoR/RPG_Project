@@ -18,6 +18,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
@@ -84,6 +85,11 @@ type Character struct {
 	// revocation of the account's sessions at or after it (KickAccount, SignOutAccount)
 	// refuses the Join: the token was spent before the revocation could find it.
 	RedeemedAt time.Time
+	// Explored is the minimap's explored sectors as saved (character_explored).
+	// ExploredUnsaved are sectors of an earlier login whose save may not be written yet
+	// (a quick re-login): merged in, and written again by the next snapshot.
+	Explored        []explore.SectorState
+	ExploredUnsaved []explore.SectorState
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -111,6 +117,9 @@ type Snapshot struct {
 	Cosmetics Cosmetics
 	// Look is the character's body (docs/02 "Apariencia").
 	Look content.Look
+	// Explored are the minimap sectors that gained explored tiles during the login (a
+	// copy): upserted, never deleted (explore.Map.Touched).
+	Explored []explore.SectorState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }

@@ -127,3 +127,18 @@ DELETE FROM pvp_unjust_kills WHERE character_id = sqlc.arg(character_id);
 -- name: SaveCharacterUnjustKills :exec
 INSERT INTO pvp_unjust_kills (character_id, killed_at)
 SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(killed_at)::timestamptz[]);
+
+-- name: GetCharacterExplored :many
+-- The minimap's explored sectors of a character (migration 00028).
+SELECT z, sx, sy, bits
+FROM character_explored
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY z, sx, sy;
+
+-- name: SaveCharacterExplored :exec
+-- A snapshot upserts the sectors that gained bits during the login: a newer copy of a
+-- sector is a superset of the saved one, so it replaces it.
+INSERT INTO character_explored (character_id, z, sx, sy, bits)
+SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(zs)::smallint[]), unnest(sqlc.arg(sxs)::smallint[]),
+       unnest(sqlc.arg(sys)::smallint[]), unnest(sqlc.arg(bits)::bytea[])
+ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = EXCLUDED.bits;
