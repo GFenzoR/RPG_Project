@@ -719,3 +719,60 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
   });
   expect(errors).toEqual([]);
 });
+
+// Day and night (livingworld/README.md "Día y noche"): a gm stops the world clock at noon
+// (short shadows under the feet, no tint) and at a full-moon night (silvery blue, the
+// temple's lamps glowing, a faint moon shadow), with the cast shadows drawn under every
+// creature in view. The clock runs again at the end: the other tests see whatever hour it is.
+test("sandbox day and night: noon and a full-moon night, with cast shadows", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Relojero");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const time = async (args: string): Promise<void> => {
+    await say.fill(`/time ${args}`);
+    await say.press("Enter");
+    await page.waitForTimeout(300);
+  };
+  const sky = () => page.evaluate(() => window.__rpgClient?.sky());
+
+  await time("speed 0");
+  await time("noon");
+  await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+  const noon = await sky();
+  expect(noon?.ambient).toBe(0xffffff);
+  expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
+  await say.blur();
+  await page.waitForTimeout(300);
+  await shot(page, "99b-daynight-noon");
+
+  await time("moon 4");
+  await time("night");
+  await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("night");
+  const night = await sky();
+  expect(night?.lamps).toBe(1);
+  expect(night?.moon).toBeCloseTo(1);
+  expect(night?.ambient).not.toBe(0xffffff);
+  expect(night?.shadowAlpha).toBeGreaterThan(0);
+  await say.blur();
+  await page.waitForTimeout(300);
+  await shot(page, "99c-daynight-night");
+
+  await time("speed 1");
+  expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
+  expect(errors).toEqual([]);
+});
