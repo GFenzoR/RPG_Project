@@ -703,6 +703,7 @@ func New(cfg Config) (*World, error) {
 	if w.rng == nil {
 		w.rng = rand.New(rand.NewPCG(1, 2))
 	}
+	w.pf.SetDiagonalCost(mv.DiagonalCost) // paths weigh a diagonal as the step timer does
 	if err := w.initCombat(); err != nil {
 		return nil, err
 	}

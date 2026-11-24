@@ -1185,6 +1185,9 @@ func TestSandboxTrades(t *testing.T) {
 	s := newSandbox(t)
 	cl, p := s.hero(5301, "Artesana", "guardian", 0, 0, 1, gear{"pickaxe", 1, 0}, gear{"felling_axe", 1, 0},
 		gear{"fishing_rod", 1, 0}, gear{"smithing_hammer", 1, 0})
+	// Two ore to start with: six veins of 4 swings give about 8.7 ore on average, too close
+	// to the 8 the forge may need to leave it to the luck of the seed.
+	s.w.GiveForTest(p, "iron_ore", 2)
 
 	var veins, birches []spot
 	for _, v := range [][2]int{{2065, 2088}, {2068, 2088}, {2070, 2090}, {2065, 2091}, {2067, 2093}, {2070, 2093}} {

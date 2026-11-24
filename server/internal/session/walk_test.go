@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"math"
 	"testing"
 
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -118,16 +119,35 @@ func TestStepDuration(t *testing.T) {
 		ticks  int
 	}{
 		{worldtest.Grass, false, 200, 10}, // 500 ms
-		{worldtest.Grass, true, 200, 15},  // 750 ms
+		{worldtest.Grass, true, 200, 14},  // 10 ticks × √2 = 14.14 → 700 ms
 		{worldtest.Mud, false, 200, 20},   // 1000 ms
 		{worldtest.Road, false, 200, 5},   // 250 ms
 		{worldtest.Grass, false, 205, 10}, // 487.8 ms, rounded up to 500
-		{worldtest.Grass, true, 205, 15},  // 731.7 ms → 750
+		{worldtest.Grass, true, 205, 14},  // from the 10 straight ticks, not 689.8 ms rounded up
+		{worldtest.Road, true, 200, 7},    // 5 × √2 = 7.07
+		{worldtest.Mud, true, 200, 28},    // 20 × √2 = 28.28
 		{worldtest.Grass, false, 30000, 1},
 	}
 	for _, c := range cases {
 		if got := h.w.StepTicks(c.ground, c.speed, c.diag); int(got) != c.ticks {
 			t.Errorf("StepTicks(%d, %d, %v) = %d, want %d", c.ground, c.speed, c.diag, got, c.ticks)
+		}
+	}
+}
+
+// TestDiagonalSameSpeed: with diagonal_cost √2 a diagonal step covers its √2 tiles at the
+// speed of a straight one (docs/02 "Movimiento"), within half a tick, at every terrain
+// and speed, and is never shorter than the straight step.
+func TestDiagonalSameSpeed(t *testing.T) {
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, "...m="))
+	for _, ground := range []uint16{worldtest.Grass, worldtest.Mud, worldtest.Road} {
+		for speed := 50; speed <= 1500; speed += 7 {
+			straight := float64(h.w.StepTicks(ground, speed, false))
+			diag := float64(h.w.StepTicks(ground, speed, true))
+			if diag < straight || math.Abs(diag-straight*math.Sqrt2) > 0.5 {
+				t.Fatalf("ground %d speed %d: straight %v ticks, diagonal %v, want %.2f ±0.5",
+					ground, speed, straight, diag, straight*math.Sqrt2)
+			}
 		}
 	}
 }
@@ -146,8 +166,9 @@ func TestDiagonalAndTerrain(t *testing.T) {
 	if len(ms) != 3 || p.Pos() != pos(3, 1) {
 		t.Fatalf("moves %v, at %v", ms, p.Pos())
 	}
-	// Diagonal onto mud: 1000*200/200*1.5 = 1500 ms; then two straight steps on mud.
-	if ms[0].GetDurationMs() != 1500 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
+	// Diagonal onto mud: 1000*200/200 = 20 ticks straight, × √2 = 28 ticks (1400 ms); then
+	// two straight steps on mud.
+	if ms[0].GetDurationMs() != 1400 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
 		t.Fatalf("durations %d %d %d", ms[0].GetDurationMs(), ms[1].GetDurationMs(), ms[2].GetDurationMs())
 	}
 }

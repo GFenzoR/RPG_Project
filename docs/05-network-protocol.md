@@ -686,11 +686,16 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 una acción hecha sobre una vista desactualizada del tile o contenedor.
 
 ### Caminar (T1.4, `server/internal/session`)
-- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración =
-  `base_step_ms × terreno% / velocidad` (× `diagonal_cost` en diagonal), con terreno el
-  `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
-  a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
-  posición cambia al **empezar** el paso.
+- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración de un
+  paso recto = `base_step_ms × terreno% / velocidad`, con terreno el `ground.speed` de la
+  casilla **de destino** (100 por defecto), redondeada hacia arriba a ticks de 50 ms (al
+  menos uno). Un paso en diagonal dura esos ticks × `diagonal_cost` (√2, leído en
+  milésimas: 1.414), redondeado al tick más cercano y nunca menos que el recto: así un
+  paso recto de 10 ticks es uno diagonal de 14, no de 15, y la velocidad por casilla de
+  distancia es la misma en las 8 direcciones. `CreatureMove.duration_ms` es esa duración
+  ya redondeada; el cliente predice la misma con aritmética entera
+  (`client/src/state/step-time.ts`, igual que `StepTicks`). La posición cambia al
+  **empezar** el paso.
 - **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
   mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
   cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un

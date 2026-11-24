@@ -50,6 +50,7 @@ import { TrailWearState } from "./trail-wear.ts";
 import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import { stepMs } from "./step-time.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -1664,11 +1665,7 @@ export class WorldState implements TileSource {
   stepDuration(to: Pos, speed: number, diagonal: boolean): number {
     const ground = this.item(this.tile(to.x, to.y, to.z)?.[0] ?? 0);
     const terrain = ground?.ground ? ground.speed : 100;
-    const mv = this.content.movement;
-    const ms = Math.ceil(
-      (mv.baseStepMs * terrain * (diagonal ? mv.diagonalCost : 1)) / Math.max(speed, 1),
-    );
-    return Math.max(Math.ceil(ms / 50), 1) * 50;
+    return stepMs(this.content.movement, terrain, speed, diagonal);
   }
 
   /**

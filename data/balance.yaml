@@ -3,7 +3,7 @@
 # (CLAUDE.md legal rule).
 movement:
   base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
-  diagonal_cost: 1.5
+  diagonal_cost: 1.414      # √2 in the step timer's thousandths: one speed in all 8 directions
   max_path_tiles: 100
   max_queued_steps: 4       # keyboard steps the client predicts and the server queues ahead
 

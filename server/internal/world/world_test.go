@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"math/rand/v2"
 	"reflect"
@@ -108,18 +109,15 @@ func walk(t testing.TB, m *Map, from Pos, path []Direction) Pos {
 	return p
 }
 
-// pathCost is the cost of a path in Pathfinder units (2×speed straight, 3×speed diagonal).
-func pathCost(m *Map, from Pos, path []Direction) int32 {
+// pathCost is the cost of a path in the units of pf (straightUnits×speed straight,
+// pf.diagUnits×speed diagonal).
+func pathCost(pf *Pathfinder, from Pos, path []Direction) int32 {
 	var c int32
 	p := from
 	for _, d := range path {
 		p, _ = p.Step(d)
-		g, _, _ := m.Tile(p)
-		if d.Diagonal() {
-			c += 3 * m.speed(g)
-		} else {
-			c += 2 * m.speed(g)
-		}
+		g, _, _ := pf.m.Tile(p)
+		c += pf.stepCost(d.Diagonal(), pf.m.speed(g))
 	}
 	return c
 }
@@ -434,8 +432,8 @@ func TestFindPath(t *testing.T) {
 }
 
 func TestFindPathPrefersCheapTerrain(t *testing.T) {
-	// Straight across grass costs 6 × 2 × 150 = 1800. Best: a diagonal onto the road, 5 road
-	// steps and one step back up onto grass: 3·50 + 5·2·50 + 2·150 = 950.
+	// Straight across grass costs 6 × 100 × 150 = 90000. Best: a diagonal onto the road, 5
+	// road steps and one step back up onto grass: 141·50 + 5·100·50 + 100·150 = 47050.
 	m := asciiMap(t, 0, 0, 7,
 		".......",
 		"=======",
@@ -445,14 +443,15 @@ func TestFindPathPrefersCheapTerrain(t *testing.T) {
 	if !ok {
 		t.Fatal("no path")
 	}
-	if got := pathCost(m, pt(0, 0), path); got != 950 {
-		t.Fatalf("path %v costs %d, want 950 (via the road)", path, got)
+	if got := pathCost(pf, pt(0, 0), path); got != 47050 {
+		t.Fatalf("path %v costs %d, want 47050 (via the road)", path, got)
 	}
 	// Default speed applies to grounds without one: floor costs 100 per straight step.
 	m = asciiMap(t, 0, 0, 7, "____")
-	path, _ = NewPathfinder(m, 0).Find(pt(0, 0), pt(3, 0), nil)
-	if got := pathCost(m, pt(0, 0), path); got != 600 {
-		t.Fatalf("floor path costs %d, want 600", got)
+	pf = NewPathfinder(m, 0)
+	path, _ = pf.Find(pt(0, 0), pt(3, 0), nil)
+	if got := pathCost(pf, pt(0, 0), path); got != 30000 {
+		t.Fatalf("floor path costs %d, want 30000", got)
 	}
 }
 
@@ -606,8 +605,15 @@ func TestExpandedResetsOnRejectedFind(t *testing.T) {
 	}
 }
 
-// TestFindPathOptimal compares A* with a plain Dijkstra on random maps.
+// TestFindPathOptimal compares A* with a plain Dijkstra on random maps, at the default
+// diagonal cost (√2) and at the old 1.5: the octile heuristic stays admissible at both.
 func TestFindPathOptimal(t *testing.T) {
+	for _, diag := range []float64{DefaultDiagonalCost, 1.5} {
+		t.Run(fmt.Sprint(diag), func(t *testing.T) { findPathOptimal(t, diag) })
+	}
+}
+
+func findPathOptimal(t *testing.T, diag float64) {
 	r := rand.New(rand.NewPCG(7, 7))
 	chars := []byte("....====__#~ |")
 	for trial := range 200 {
@@ -621,11 +627,12 @@ func TestFindPathOptimal(t *testing.T) {
 		}
 		m := asciiMap(t, 40, 40, 7, rows...)
 		pf := NewPathfinder(m, 0)
+		pf.SetDiagonalCost(diag)
 		for range 10 {
 			from := pt(40+r.IntN(20), 40+r.IntN(20))
 			to := pt(40+r.IntN(20), 40+r.IntN(20))
 			path, ok := pf.Find(from, to, nil)
-			want, reachable := dijkstra(m, from, to)
+			want, reachable := dijkstra(pf, from, to)
 			if ok != reachable {
 				t.Fatalf("trial %d %v→%v: found=%v, dijkstra reachable=%v\n%s", trial, from, to, ok, reachable, strings.Join(rows, "\n"))
 			}
@@ -635,14 +642,15 @@ func TestFindPathOptimal(t *testing.T) {
 			if end := walk(t, m, from, path); end != to {
 				t.Fatalf("trial %d: path ends at %v, want %v", trial, end, to)
 			}
-			if got := pathCost(m, from, path); got != want {
+			if got := pathCost(pf, from, path); got != want {
 				t.Fatalf("trial %d %v→%v: cost %d, dijkstra %d", trial, from, to, got, want)
 			}
 		}
 	}
 }
 
-func dijkstra(m *Map, from, to Pos) (int32, bool) {
+func dijkstra(pf *Pathfinder, from, to Pos) (int32, bool) {
+	m := pf.m
 	if !m.Walkable(to) {
 		return 0, false
 	}
@@ -669,10 +677,7 @@ func dijkstra(m *Map, from, to Pos) (int32, bool) {
 				continue
 			}
 			g, _, _ := m.Tile(n)
-			c := 2 * m.speed(g)
-			if d.Diagonal() {
-				c = 3 * m.speed(g)
-			}
+			c := pf.stepCost(d.Diagonal(), m.speed(g))
 			if old, seen := dist[n]; !seen || best+c < old {
 				dist[n] = best + c
 			}
@@ -819,5 +824,28 @@ func TestNPCPlacementChecks(t *testing.T) {
 	is.NPCs = []NPCPlacement{{NPC: "a", Pos: Pos{X: 31, Y: 30, Z: 3}}}
 	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "inside the island") {
 		t.Fatalf("err = %v, want an NPC on an unlisted floor rejected", err)
+	}
+}
+
+// A diagonal step costs √2 straight ones by default (docs/02 "Movimiento"), so a path
+// weighs distance as the step timer does; SetDiagonalCost follows balance.yaml.
+func TestDiagonalCostUnits(t *testing.T) {
+	pf := NewPathfinder(asciiMap(t, 0, 0, 7, "____"), 0)
+	if got := pf.stepCost(true, 100); got != 14100 {
+		t.Errorf("default diagonal step = %d, want 14100 (√2 × 10000)", got)
+	}
+	if got := pf.stepCost(false, 100); got != 10000 {
+		t.Errorf("straight step = %d, want 10000", got)
+	}
+	for c, want := range map[float64]int32{1.5: 150, 1.414: 141, 1.4142: 141, 0.5: 100} {
+		pf.SetDiagonalCost(c)
+		if pf.diagUnits != want {
+			t.Errorf("SetDiagonalCost(%v): %d units, want %d", c, pf.diagUnits, want)
+		}
+	}
+	// Open ground: the octile heuristic is the exact cost of the straight-then-diagonal path.
+	pf.SetDiagonalCost(DefaultDiagonalCost)
+	if got, want := pf.heuristic(5, 2), pf.m.minSpeed*(3*straightUnits+2*141); got != want {
+		t.Errorf("heuristic(5,2) = %d, want %d", got, want)
 	}
 }

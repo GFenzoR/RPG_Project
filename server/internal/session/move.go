@@ -294,22 +294,27 @@ func (w *World) flushTurns(ctx *game.TickContext) {
 	w.turnHeld = kept
 }
 
-// StepTicks returns how many ticks a step onto ground costs at speed:
-// base_step_ms × terrain% / speed, × diagonal_cost for diagonals, rounded up to whole
-// ticks (at least one). CreatureMove.duration_ms is this many ticks.
+// StepTicks returns how many ticks a step onto ground costs at speed: a straight one
+// base_step_ms × terrain% / speed, rounded up to whole ticks (at least one); a diagonal
+// one that many ticks × diagonal_cost, rounded to the nearest tick (never fewer than the
+// straight step). Rounding the diagonal from the straight ticks, not up from its own
+// milliseconds, keeps both directions at one speed per tile of distance (with √2, a
+// 10-tick straight step is a 14-tick diagonal, not 15). CreatureMove.duration_ms is this
+// many ticks; the client predicts the same (state/world.ts stepDuration).
 func (w *World) StepTicks(ground uint16, speed int, diagonal bool) game.Tick {
 	terrain := int64(world.DefaultGroundSpeed)
 	if gs := w.m.GroundSpeeds(); int(ground) < len(gs) && gs[ground] != 0 {
 		terrain = int64(gs[ground])
 	}
-	num := int64(w.mv.BaseStepMs) * terrain * 1000 // thousandths of a ms × speed
-	if diagonal {
-		num = num * w.diag / 1000
-	}
-	den := int64(max(speed, 1)) * 1000
+	num := int64(w.mv.BaseStepMs) * terrain // ms × speed
+	den := int64(max(speed, 1))
 	ms := (num + den - 1) / den
 	tickMs := game.TickDuration.Milliseconds()
-	return game.Tick(max((ms+tickMs-1)/tickMs, 1))
+	ticks := max((ms+tickMs-1)/tickMs, 1)
+	if diagonal {
+		ticks = max((ticks*w.diag+500)/1000, ticks)
+	}
+	return game.Tick(ticks)
 }
 
 // moveSystem advances every walking player whose previous step has finished.

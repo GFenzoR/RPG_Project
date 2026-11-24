@@ -79,7 +79,11 @@ estación, una puerta, un tablero), en el modo de menú es la acción por defect
 el doble click o Ctrl+click derecho.
 
 ## Movimiento
-- Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
+- Por casillas, 8 direcciones. Un paso en diagonal cuesta ×√2 (`diagonal_cost: 1.414`):
+  recorre √2 casillas en √2 veces el tiempo, así la velocidad en pantalla y el ritmo de
+  los pasos son los mismos en las 8 direcciones (pedido del dueño, 2026-11-23; antes era
+  ×1.5 como en Tibia clásico y la diagonal se sentía más lenta). El A* del servidor y del
+  cliente pesan la diagonal igual. Redondeo a ticks en `05-network-protocol.md` "Caminar".
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - **Click para caminar** (máx. 100 casillas): el cliente arma el camino con A* sobre las
@@ -113,7 +117,7 @@ el doble click o Ctrl+click derecho.
   cambia: cada paso dura lo que dice la fórmula de arriba y el servidor valida cada paso
   y su ritmo. Soltar la tecla en los últimos 50 ms de un paso todavía da el siguiente.
   - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
-    con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
+    con su costo de ×√2); si la diagonal está bloqueada, se camina por su mitad
     horizontal o vertical libre (se "desliza" junto a un muro).
   - **Girar sin caminar** (docs/17 MOV-2): quieto, una tecla (o el pad) hacia otro lado
     gira al personaje en el acto y camina solo si sigue apretada 80 ms: un toque corto
