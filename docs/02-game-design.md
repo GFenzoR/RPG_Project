@@ -1619,18 +1619,23 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
-  `monster_leash_tiles`. Con correa:
-  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella persiguiendo ni
-    huyendo (si huyendo llega al borde, acorralado pelea, como siempre).
-  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, lo
-    cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
+  `monster_leash_tiles`. El área de correa es su **zona de confort**: adentro persigue
+  siempre; afuera decide si sigue (**Persecución**, abajo). Con correa:
+  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella huyendo (si
+    huyendo llega al borde, acorralado pelea, como siempre) ni persiguiendo, salvo
+    mientras decidió seguir a su objetivo más allá (hasta su tope, abajo).
+  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, y no
+    decide seguirlo (o pasó su tope), lo cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
     dentro de su correa o a su alcance) o, si es agresivo y no hay ninguno, el que
     elegiría. Lo hace sin curarse ni olvidar quién lo hirió: que el que tenía el aggro
     salga del área no le quita la pelea, la experiencia ni el botín de quest al resto del
     grupo, ni sirve para sabotearlo (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si
-    no queda nadie lo suelta: recupera toda la vida, se le terminan las condiciones (una
-    quemadura no sigue sumando daño), olvida el daño recibido de todos (nadie cobra
-    experiencia por esa pelea) y vuelve caminando a casa. Un objetivo fuera del área pero
+    no queda nadie lo suelta (**se rinde**): **conserva su vida** (pedido del dueño del
+    2026-11-23: antes se curaba entero; solo se cierra en el acto el daño que recibió
+    desde donde no podía responder, abajo), se le terminan las condiciones (una quemadura
+    no sigue sumando daño), olvida el daño de esa pelea para la experiencia (nadie cobra
+    experiencia por ella: la próxima empieza de cero) pero **recuerda a quiénes lo
+    hirieron** (`memory_ms`, abajo) y vuelve caminando a casa a su velocidad. Un objetivo fuera del área pero
     a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
     peleando desde adentro.
   - Tampoco hay lugares seguros dentro del área. Mientras su objetivo está fuera de su
@@ -1649,7 +1654,7 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
       como inalcanzable (`TestLeashCreatureInTheWay`).
     Un objetivo dejado así cuenta como fuera de la correa para ese monstruo durante
     `combat.monster_shun_ms` (30 s), **solo en esa casilla** y fuera de su alcance: no lo
-    elige, cada golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como
+    elige, cada golpe suyo lo hace soltarlo (y cerrar esa herida si no queda nadie) y entrena como
     contra un objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). En otra
     casilla es un objetivo como cualquiera: si tampoco se llega, vuelve a costar los 2 s
     (`TestLeashShunsATile`); a los 30 s vence (`TestLeashShunExpires`). Cuando la
@@ -1663,7 +1668,10 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     sigue entero. Si no hay camino, espera ahí (`monster_path_retry_ms` entre búsquedas):
     nunca se teletransporta.
   - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
-    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y se cura); una
+    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y cierra esas
+    heridas: el daño que un jugador le hace desde donde el monstruo no puede responder,
+    fuera de lo que su correa o su persecución le dejan pisar y de su alcance, o desde una
+    casilla rechazada, se le cura al rendirse, `damageShare.unanswered`); una
     condición (quemadura, veneno) cuyo autor está
     fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
     esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
@@ -1675,6 +1683,87 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
     deja salir unas casillas por la abertura y los devuelve; vale para todo el mundo, no
     solo para la isla de pruebas.
+- **Persecución** (pedido del dueño del 2026-11-23: los monstruos deberían seguirte, o
+  decidir si te siguen; `server/internal/session/pursuit.go`, números en
+  `balance.yaml combat.monster_pursuit` y por monstruo en `pursuit`, docs/06 "Monstruo"):
+  - **Dentro de su zona de confort** (el área de correa) persigue siempre, como antes
+    (`TestPursuitChasesInsideTheComfortZone`).
+  - **Fuera de ella**, con su objetivo fuera de su alcance, tira cada `roll_ms` (3 s) si
+    sigue. La tirada usa el generador sembrado del loop (`ctx.Rand`, nunca `math/rand`
+    global): con la misma semilla la persecución es idéntica, tick a tick
+    (`TestPursuitGiveUpIsReproducible`). La probabilidad es
+    `persistence^(1 + 2·(d − correa) / (tope − correa))`, con `d` la distancia (Chebyshev)
+    del objetivo al centro del spawn: cerca del borde de la zona es casi su `persistence`,
+    en el tope su cubo (0,85 → 0,61; 0,5 → 0,125; 0,15 → 0,003), y con `persistence: 1`
+    no se rinde nunca antes del tope (`TestPursuitChance`). Con su vida bajo
+    `give_up_below_hp_pct` no sigue (los cobardes se rinden; huir sigue siendo
+    `flee_at_health_pct`); con la vida de su objetivo bajo `insist_target_hp_pct` la
+    probabilidad sube a mitad de camino hacia 1 (los agresivos insisten con la presa
+    herida). Una tirada vale para **todo su spawn** (la manada) contra ese objetivo hasta
+    la próxima: los lobos de un cubil siguen o se vuelven juntos. Un invocado sigue la
+    persecución de quien lo llamó (los del custodio se quedan en su forja con él). Una
+    persistencia de 0 o 1 no gasta tirada.
+  - **Tope duro** `max_chase_tiles` (Chebyshev desde el centro del spawn, nunca menos que
+    el área de correa, a lo sumo 40): nunca pasa de ahí aunque gane la tirada; un objetivo
+    más allá y fuera de su alcance se suelta (`TestPursuitHardCap`).
+  - **Se rinde seguro** cuando su objetivo pasa `lose_sight_ms` (4 s) fuera de su vista
+    (la ventana clásica de 15x11 + 1; mientras tanto lo sigue hacia donde está,
+    `TestPursuitLosesSight`; con 0 lo pierde en el acto, como antes), en cuanto entra a
+    una zona de protección (`TestPursuitProtectionZone`) y en cuanto cambia de piso (los
+    monstruos no usan portales, `TestPursuitFloorChange`). Un invisible se pierde en el
+    acto, como siempre. Nunca entra a una zona de protección.
+  - Al rendirse vuelve a casa caminando a su velocidad y **con la vida que tiene**
+    (`TestPursuitGiveUpKeepsHealth`). Recuerda a quiénes lo hirieron
+    `combat.monster_pursuit.memory_ms` (3 min): si vuelven a su zona de confort, en su
+    siguiente mirada (cada 250 ms) los elige **antes que a nadie**, aun siendo pasivo
+    (`TestPursuitReaggroesARememberedAttacker`); pasada la memoria, los olvida.
+  - **Por tipo** (`data/monsters`): el lobo es persistente (0,85, tope 22, 6 s sin verte,
+    insiste bajo 40 %), el sabueso de ceniza (0,8, tope 20) y el murciélago (0,7, tope
+    18) también; el jabalí 0,6 e insiste bajo 35 %; los humanos 0,6 y se rinden bajo
+    30 %; la rata (0,4) y el ciervo (0,3) se rinden bajo 50 % y la gaviota (0,2) bajo
+    60 %; los lentos (salamandra, sapo, escarabajo, gólem, espinoso, cangrejo, minero
+    ahogado: 0,15, tope 12, 2 s sin verte) abandonan enseguida; el resto usa el valor por
+    defecto (0,5, tope 16); el custodio (jefe) no sale nunca de su forja (0, tope 0).
+- **Regeneración fuera de combate** (`balance.yaml combat.monster_regen`, por monstruo
+  `regen`): sin objetivo y `delay_ms` (10 s) después de la última vez que hizo o recibió
+  daño (una ronda de ataque cuenta aunque falle), recupera `pct` % (1 %) de su vida
+  máxima, al menos 1, cada `interval_ms` (5 s): una curación completa tarda unos 8
+  minutos, así que quien se va a curar y vuelve lo encuentra todavía herido. Se cuenta por
+  ticks: el tiempo que pasó sin pensar (nadie cerca) también suma, y lo recupera de golpe
+  la próxima vez que piensa (`TestPursuitRegeneration`). Quien lo ve recibe la barra de
+  vida nueva, sin número verde ni efecto de curación. **En combate (con objetivo) no
+  regenera**, salvo con un hechizo `heal_self`. Al volver a vida llena olvida el daño de
+  una pelea que perdió de vista. El custodio regenera 0,5 % (unos 16 minutos).
+- **Errantes y respawn:** un monstruo fuera de su área de casa sigue contando como vivo
+  para su spawn (no reaparece otro). Para que vuelva siempre, uno fuera de casa piensa
+  aunque su sector no tenga jugadores cerca (`World.strays`): el que perseguía a alguien
+  que salió del juego o se alejó vuelve caminando (`TestPursuitIdleWalkHome`). Si sin
+  objetivo pasa `combat.monster_stray_ms` (5 min) sin llegar (no hay camino) y nadie lo
+  ve, vuelve a su spawn: desaparece (`DESPAWN`) y su spawn lo repone como un respawn, sin
+  experiencia ni botín (`TestPursuitStuckStrayRespawns`). Nunca se teletransporta a la
+  vista de nadie.
+- **Botín, experiencia y abusos de la persecución:**
+  - La experiencia y el botín siguen las reglas de siempre: se reparten por el daño de la
+    pelea en curso (y el aporte de grupo con su ventana `party.contribution_ms`); rendirse
+    borra ese daño, así que nadie cobra por una pelea que el monstruo abandonó, aunque lo
+    recuerde para volver a atacarlo. Volver a terminarlo herido sí paga: la vida que
+    perdió no vuelve de golpe.
+  - **Arrastrar monstruos a otros spawns o a pueblos:** el tope duro (16 por defecto, 22
+    el lobo, desde el centro de su spawn) y la probabilidad que baja con la distancia lo
+    limitan; los pueblos son zona de protección, nunca entra en ellas, y un objetivo que
+    entra en una lo pierde en el acto. Un monstruo arrastrado no elige objetivos nuevos
+    fuera de su zona de confort (solo a los que lo hirieron, y a ellos solo dentro de
+    ella), así que no se suma a la pelea de otro spawn.
+  - **Granjear experiencia arrastrándolo a un lugar seguro:** desde donde no puede
+    responder (fuera de lo que puede pisar y de su alcance, o desde una casilla que
+    rechazó por inalcanzable) los golpes no cuentan: al rendirse se cura ese daño, las
+    condiciones de ese autor terminan sin dañar y entrenan como contra un objetivo que no
+    responde (`skills.afk.factor`). Como no hay curación completa, el único daño que queda
+    es el de una pelea en la que pudo responder (`TestLeashGivesUpATargetItCannotReach`).
+  - **Estacionarlo en el borde de una zona de protección:** quien entra a la zona se
+    pierde en el acto y el monstruo no espera en el borde: vuelve caminando a casa (y a
+    los 10 s empieza a regenerar). Salir a pegarle desde el borde es pelear: el monstruo
+    responde y sigue las reglas de arriba.
 
 ## Muerte
 Valores iniciales (balance.yaml):

@@ -348,6 +348,26 @@ el punto 5:
     `characters.last_save_at` no cambió (un personaje que sale se guarda al instante).
     Después vuelve a entrar al mismo personaje todavía en combate, o con la pantalla de
     muerte si el lobo lo mató link-dead.
+- **Persecución y regeneración de monstruos (hecho, rama `feat/monster-pursuit`; pedido del
+  dueño del 2026-11-23: "que te sigan, o que decidan si te siguen" y "que se recuperen
+  lento"; docs/02 "Persecución", "Regeneración fuera de combate"):** fuera de su zona de
+  confort un monstruo tira si sigue (persistencia por tipo, tope duro, pierde de vista,
+  zona de protección, cambio de piso), al rendirse conserva su vida y recuerda a quien lo
+  hirió, regenera 1 % cada 5 s fuera de combate y los errantes vuelven a casa aunque no
+  haya nadie cerca. Queda:
+  - **Afinar con gente real:** las persistencias y topes por tipo (`data/monsters`
+    `pursuit`) son una primera mano; mirar en Thimblewick que el lobo persiga lo que el
+    dueño quiere y que los corrales no vuelvan a llenar el sendero (el lobo llega a 22
+    casillas del centro de su spawn si gana las tiradas).
+  - **Cliente:** la regeneración llega como la barra de vida (`CreatureHealth`), sin
+    efecto; el jugador no ve si un monstruo "decidió" seguirlo. Si el dueño quiere un
+    gesto (un aullido, un "!"), es un evento nuevo del protocolo.
+  - **Un objetivo fuera de vista** se persigue hacia donde está de verdad durante
+    `lose_sight_ms` (como si lo rastreara), no hacia donde se lo vio por última vez; la
+    vista es la ventana clásica, sin línea de visión (como antes).
+  - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
+  - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
+    siguiendo fuera del corral y volviendo herido.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
@@ -1763,6 +1783,8 @@ el punto 5:
     `feat/monster-abilities` (lote 10) que la persecución fuera y viniera frente a un muro
     (ahora sigue el rodeo entero, `chaseWay`, `TestChaseFollowsItsWayAroundAWall`) y que
     `make bench-tick` corriera sin correa (variante `/leash` de `BenchmarkTickMonsters`)):
+    desde el 2026-11-23 rendirse ya no cura entero (docs/02 "Persecución"), el daño hecho
+    desde donde no puede responder sí se cura al rendirse;
     nada valida que el centro de un spawn sea caminable (hoy todos lo son); la espera tras
     una búsqueda fallida (de casa o de la persecución) usa `readyAt`; y un arquero que va
     pisando casillas inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada

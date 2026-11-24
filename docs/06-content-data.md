@@ -423,6 +423,8 @@ behavior:
   aggressive: true
   flee_at_health_pct: 10
   target_distance: 1       # 1 = cuerpo a cuerpo; >1 = mantiene distancia
+pursuit: { persistence: 0.85, max_chase_tiles: 22, lose_sight_ms: 6000, insist_target_hp_pct: 40 }
+regen: { pct: 1 }          # opcional, como pursuit: lo que falta sale de balance.yaml
 attacks:
   - type: melee
     min: 0
@@ -465,6 +467,29 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   spritegen, un solo `make spritegen` escribe sus frames y su cadáver (sale de la receta,
   no del PNG). Un monstruo sin `look`, sin clip de muerte y sin imagen cuadrada no puede
   tener cadáver: `spritegen check` lo dice (`corpses/<id>: monster <id> has no corpse`).
+- **Persecución y regeneración** (`pursuit` y `regen`, opcionales; reglas en
+  `02-game-design.md` "Monstruos", "Persecución" y "Regeneración fuera de combate"): cada
+  campo que falta toma el de `balance.yaml combat.monster_pursuit` / `monster_regen`.
+  - `pursuit.persistence` (0–1): la probabilidad de seguir más allá de su zona de confort
+    (el área de correa), que baja con la distancia del objetivo a casa; 0 = nunca sale.
+  - `pursuit.max_chase_tiles` (0–40): tope duro, Chebyshev desde el centro del spawn
+    (nunca menos que el área de correa).
+  - `pursuit.lose_sight_ms` (≥ 0): cuánto conserva a un objetivo fuera de su vista; 0 = lo
+    pierde en el acto.
+  - `pursuit.give_up_below_hp_pct` (0–100): con menos vida que eso no sigue más allá de su
+    zona; `pursuit.insist_target_hp_pct` (0–100): contra un objetivo con menos vida que
+    eso, la probabilidad sube a mitad de camino hacia 1.
+  - `regen.delay_ms`, `regen.interval_ms`, `regen.pct` (0–100, decimales): `pct` % de su
+    vida máxima cada `interval_ms`, sin objetivo y `delay_ms` después de su última pelea;
+    `pct: 0` = no regenera.
+  Solo de `balance.yaml`: `monster_pursuit.roll_ms` (cada cuánto vuelve a tirar; exigido
+  con `persistence` > 0), `monster_pursuit.memory_ms` (cuánto recuerda a quien lo hirió;
+  0 = nada) y `combat.monster_stray_ms` (cuánto puede quedar fuera de casa sin llegar
+  antes de volver a su spawn; 0 = nunca). Valores por defecto: persistencia 0,5, tope 16,
+  4 s sin verte, tirada cada 3 s, insiste bajo 25 %, memoria 3 min; 1 % cada 5 s tras
+  10 s (unos 8 minutos de vida 0 a llena); errante 5 min. El esquema
+  (`monster.schema.json`, `balance.schema.json`) y el arranque (`content.ParseMonster`,
+  `Combat.check`) rechazan lo mismo.
 - **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
   es `monster.schema.json`, `$defs/attack`):
   ```yaml
