@@ -61,6 +61,16 @@ sounds:
   amb_olas: { file: sounds/ambient/olas.ogg, channel: ambient, volume: 0.5 }
   amb_bosque: { file: sounds/ambient/bosque.ogg, channel: ambient, volume: 0.5 }
   amb_volcan: { file: sounds/ambient/volcan.ogg, channel: ambient, volume: 0.5 }
+  # The living world's ambience loops (tools/soundgen src/ambience.ts).
+  amb_waves: { file: livingworld/sounds/ambience/waves.ogg, channel: ambient }
+  amb_desert_wind: { file: livingworld/sounds/ambience/desert_wind.ogg, channel: ambient }
+  amb_forest: { file: livingworld/sounds/ambience/forest.ogg, channel: ambient }
+  amb_cave: { file: livingworld/sounds/ambience/cave.ogg, channel: ambient }
+  amb_town: { file: livingworld/sounds/ambience/town.ogg, channel: ambient }
+  amb_fountain: { file: livingworld/sounds/ambience/fountain.ogg, channel: ambient }
+  amb_campfire: { file: livingworld/sounds/ambience/campfire.ogg, channel: ambient }
+  amb_torch: { file: livingworld/sounds/ambience/torch.ogg, channel: ambient }
+  amb_forge: { file: livingworld/sounds/ambience/forge.ogg, channel: ambient }
 
 # Game event → sound id, or a list of ids (one is picked at random). The client names the
 # events (client/src/audio/cues.ts, docs/02 "Sonido"); an event with no entry is silent.
