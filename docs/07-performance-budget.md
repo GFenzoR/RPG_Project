@@ -239,12 +239,13 @@ transmite (ver abajo).
 | Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
 | Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~29 KiB |
+| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~44 KiB (los del ambiente posicional, ~42 KiB cada uno) |
+| Ambiente posicional (lote 18) | ≤ `voices` (6) loops a la vez, 3 en un teléfono o con animaciones reducidas; los que suenan y 2 más decodificados | 9 loops de 16 s, ~380 KiB en total; ~3 MB de PCM cada uno decodificado: ~24 MB con 6 sonando y 2 guardados, ~15 MB con 3 |
 | Descarga al cambiar de zona | el tema que suena y el siguiente de su pool (≤ 3 MiB) | ~1,7–2,2 MiB |
 | Música en memoria | `KEEP_STREAMS` (4) archivos comprimidos sin usar, más los que suenan o se esperan si son más (como mucho 6: 4 voces y 2 pedidos), + los decodificadores de 2–4 elementos | ~4–5 MB; ~7 MB en el peor caso |
 | Música en la caché de la PWA | nada (`client/src/sw/policy.ts`: `/audio/sounds/music/` va a la red) | 0 |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
+| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~30 MB en el peor caso (efectos, interfaz y 8 loops de ambiente: 6 sonando y 2 guardados); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
 
 - **Por qué cambió (pedido del dueño, 2026-11-18):** al escuchar la música de Gemini pidió
   transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
@@ -282,7 +283,8 @@ transmite (ver abajo).
   `AudioBufferSourceNode` con `loop`, sin hueco en la vuelta (el `loop` de un `<audio>`
   deja uno en Chromium). Se sueltan apenas dejan de sonar y de esperarse.
 - **Formatos:** efectos y ambiente **Ogg Opus mono** 48 kHz (32 kbps los efectos, 16 el
-  ambiente); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
+  ambiente de la lava; 24 los loops del ambiente posicional, porque los chasquidos, las
+  gotas y las hojas se emborronan a 16); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
   música de Gemini estéreo a 48 kbps (40 las cuevas). `make music-gemini` escribe ese
   formato (`tools/gemini/music_import.py`, `KBPS` y `AMBIENT_KBPS`).
 - El test de `tools/soundgen` (`checkBudget`) falla si algún archivo, una pool o el total se
@@ -319,6 +321,13 @@ del loop. Ancho de banda: docs/05 "Presupuesto de ancho de banda".
 
 Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
 navegador se mira en la revisión del E2E final del lote (docs/14).
+
+**Ambiente posicional** (lote 18): el cálculo cuesta casi nada. La ventana de 21x21 se
+mueve sumando una fila o columna de 21 casillas por paso (un anillo guarda lo que sumó
+cada casilla, sin objetos nuevos) y se cuenta entera (441 casillas) cada 2 s; cada
+número de item se clasifica una sola vez. El juego lo pide cada 250 ms, no cada frame, y
+el motor solo mueve rampas de ganancia y paneo. Lo que pesa es la memoria de los loops
+decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

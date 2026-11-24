@@ -1912,6 +1912,28 @@ juego). Las reglas:
 Cómo se usa, paso a paso: `assets/README.md`, "Arte y música hechos con Gemini", y
 `tools/CLAUDE.md`, "gemini".
 
+### SND-1 Dirección de sonido: el ambiente bajo la música (2026-11-23, lote 18)
+El dueño: "la música está muy buena, pero en el pueblo se escucha el mar aunque el mar no
+está tan cerca". Quiere la música de fondo y, debajo, detalles distintos según dónde está
+parado: olas cerca del mar, viento en el desierto, árboles con viento en el bosque, agua
+suave cerca de una fuente, crepitar cerca de una fogata. Reglas que salen de ahí:
+- **El ambiente es del lugar, no de la isla.** Nada se oye si no está cerca: el mar a unas
+  10 casillas del agua, una fuente a 7, una antorcha a 3. Lo que está de un lado suena de
+  ese lado (paneo suave, nunca un solo oído).
+- **Nunca un corte.** Una capa entra y sale en 2,5 s; si vuelve mientras se apaga, sube la
+  misma (no se reinicia). Cada loop arranca en un punto distinto, así dos no coinciden
+  siempre en el mismo segundo (lo mismo que el dueño pidió para la música).
+- **La música manda.** El ambiente va en su canal (`ambient`, con su volumen y silencio),
+  bajo la música; las capas de zona se mezclan bajas (0,15–0,6) y un detalle (antorcha,
+  farol) apenas se nota. Un pueblo suena a gente lejos, sin palabras.
+- **Loops naturales.** Ruido con forma (olas que suben y rompen, ráfagas, hojas que
+  tiemblan, chasquidos del fuego, gotas con eco), sin melodía: si algo suena a música,
+  compite con la música. Sin costura audible: la vuelta del loop se funde.
+- **Liviano.** Pocas voces (6; 3 en un teléfono o con animaciones reducidas).
+- **Origen:** se puede pedir a Gemini (SRC-5); si lo que vuelve es musical o no sirve, una
+  receta propia de `tools/soundgen`. Los de hoy son de soundgen (Gemini no estaba abierto).
+Cómo funciona y cómo agregar un sonido: `livingworld/README.md`, "Ambiente".
+
 ## 7. Plan de implementación propuesto
 Cada tarea es un PR con sus tests y screenshots (CLAUDE.md, "Definición de terminado").
 Las que tocan `server/` o `proto/` pasan por `code-reviewer`.

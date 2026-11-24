@@ -302,8 +302,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Mientras el contexto no esté `running`, los efectos se descartan; los loops no.
   `Game` recibe el motor en `GameOptions.audio`: traduce cada mensaje con `cuesOf`
   (`audio/cues.ts`, puro) y, después del batch, los reproduce alrededor de la posición
-  propia. También fija el ambiente con `loopFor` (isla de `content.islands` o subsuelo) y
-  la escena de la música (abajo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
+  propia. También fija la escena de la música (abajo) y, cada `AMBIENCE_STEP_MS` (250 ms)
+  desde `frame`, el ambiente posicional (`audio/ambience.ts`, pegamento del mundo vivo:
+  `livingworld/README.md` "Ambiente"; el motor lo refleja con `setAmbience`). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
   de un efecto 5 en esa misma casilla. Se olvida al fabricar o al usar otro item.
 - Qué suena con cada evento está en `assets/sounds.yaml` (`content.sounds`). El plugin de
   Vite sirve esos archivos en `/audio/` y `vite build` los emite. No escribas nombres de
@@ -357,14 +358,16 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   un elemento que tuvo un `play()` en un gesto. Si igual rechaza un `play()`
   (`NotAllowedError`, `StreamLike.blocked`), el gesto siguiente lo vuelve a llamar desde
   donde va la voz. Falta probarlo en un iPhone y en la app de macOS (docs/14).
-- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente); al
-  salir, `Game.destroy` calla el ambiente y el título entra con su fundido. Dentro,
+- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente,
+  `setAmbience([])`); al salir, `Game.destroy` apaga el ambiente y el título entra con su fundido. Dentro,
   `Game.keepLoops` arma la escena con `sceneFor` (`audio/cues.ts`, puro: `loopFor` para la
   zona, `questPoolAt` para `content.questMusic`, de `music` en `data/quests`, y el primer
   jefe de `music.bosses` en la lista de batalla). Corre tras cada batch y cada
   `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un jefe sale de la vista sin mensaje.
-- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de
-  ambiente (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+- Memoria: el motor deja decodificados los loops de ambiente que suenan y `KEEP_LOOPS` (2)
+  de los últimos (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al
+  caché. `loops()` del hook E2E trae `ambience` (los loops que suenan) y `ambient` (el más
+  fuerte).
   La música no se decodifica entera (docs/07 "Audio").
 - **Sonidos que no bajan** (lote 10): `load` (efectos y loops de ambiente) pide el archivo
   con `withRetry` y `ASSET_RETRY` de `@rpg/renderer/retry` (4 intentos, esperas de 0,5, 1
@@ -372,8 +375,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `soundFailed` (hora de `ports.now` en que vuelve a valer) y borra la entrada de `buffers`:
   una reproducción antes de esa hora no pide nada; después, lo pide de nuevo. La espera es
   `STREAM_RETRY_MS` (5 s), doblando hasta `STREAM_RETRY_MAX_MS` (60 s), como la música.
-  El ambiente que se quiere vuelve solo: la bomba (`retryAmbient`) lo arranca cuando vence
-  la espera. Antes el fallo quedaba guardado (`undefined`) toda la sesión. Un archivo que
+  El ambiente que se quiere vuelve solo: el juego llama `setAmbience` cada 250 ms y,
+  vencida la espera, el archivo se pide de nuevo. Antes el fallo quedaba guardado (`undefined`) toda la sesión. Un archivo que
   llega pero `decodeAudioData` rechaza (un navegador sin Ogg) no se reintenta: `giveUp`
   lo anota con `Infinity`, como la música que el elemento no sabe tocar.
 

@@ -1624,10 +1624,12 @@ music:           # el director de música (client/src/audio/director.ts)
     boss_forge: [music_boss_forge]
   title: title                       # pool de fuera del juego (login y personajes)
   bosses: { slagbound_warden: boss_forge }   # monstruo de data/monsters → pool
-ambient:
-  fade_ms: 2000
-  islands: { puerto: amb_olas }
 ```
+- **Ambiente:** ya no hay un loop por isla (el bloque `ambient:` se fue en el lote 18). Los
+  loops de ambiente son sonidos del canal `ambient` (`amb_waves`, `amb_fountain`...) que
+  nombra `data/livingworld/ambience.yaml` ("Mundo vivo", abajo), y suenan según lo que hay
+  alrededor del jugador. Un archivo propio puede estar bajo `sounds/` o bajo
+  `livingworld/sounds/` (los del mundo vivo).
 - **Pools:** cada lugar nombra una pool y el director la baraja: cada tema una vez por
   vuelta y nunca el mismo dos veces seguidas. Una pool de un solo tema lo repite desde otro
   punto de entrada. Los lugares son las islas, el subsuelo, el título, cada jefe y el área de
@@ -1641,7 +1643,7 @@ ambient:
 - `make validate` exige que cada archivo exista (y uno de `vendor/` tenga su fila en
   `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada pool liste sonidos
   del canal `music`, que islas, subsuelo, título, jefes y las quests nombren pools que
-  existen, que los loops de `ambient` sean de su canal, que las islas existan en
+  existen, que las islas existan en
   `world/world.yaml`, que las claves de `bosses` sean monstruos de `data/monsters`, que
   `gap_ms` sea `[mínimo, máximo]` y que las medidas de cada tema quepan en él.
 - **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos),
@@ -1695,6 +1697,40 @@ objetos): `fist_damage` (golpe a mano limpia), `tool_damage` (un uso de hacha o 
 `push_cooldown_ms` (entre dos empujes de un jugador). En el mapa, cada lado de una compuerta
 cerrada debe llegar a un templo sin pasar por ella (el servidor no arranca si no; `make
 validate` lo marca).
+
+### `ambience.yaml`: el ambiente posicional (lote 18)
+
+Lo que se oye bajo la música según dónde está el jugador (pedido del dueño del
+2026-11-23; reglas y números en `livingworld/README.md`, "Ambiente"). Solo el cliente.
+
+```yaml
+radius: 10          # ventana cuadrada alrededor del jugador, casillas (2..16)
+fade_ms: 2500       # una capa va de muda a llena (o al revés) en este tiempo
+voices: 6           # loops a la vez; voices_lite en un teléfono o con animaciones reducidas
+voices_lite: 3
+rescan_ms: 2000     # cada tanto se cuenta la ventana entera (casillas que cambiaron)
+beds:               # capas de zona: por la mezcla de casillas de la ventana
+  waves:
+    sound: amb_waves          # sonido de assets/sounds.yaml, canal ambient
+    volume: 0.6               # ganancia a nivel lleno
+    floors: surface           # surface (z <= 7) | underground (z > 7) | any
+    full: 0.35                # parte de casillas con peso que da el nivel lleno
+    base: 0                   # nivel fijo (la cueva suena en todo el subsuelo)
+    surfaces: { water_shallow: 1, wet_sand: 0.4 }   # peso por superficie del suelo
+    items: {}                 # peso por item de data/items (árboles, puestos...)
+emitters:           # items del mapa que suenan solos
+  fountain: { sound: amb_fountain, volume: 0.6, radius: 7 }        # falloff: smooth
+  wall_torch: { sound: amb_torch, volume: 0.25, radius: 3, falloff: linear }
+```
+- Una casilla cuenta lo más pesado de su suelo y sus items; el nivel de una capa es su parte
+  de las casillas conocidas sobre `full` (hasta 1) más `base`.
+- Un emisor se oye dentro de su `radius` (smooth: (1 − d/r)²; linear: 1 − d/r), paneado
+  por su x; los de un mismo sonido suenan como una sola voz.
+- `make validate` (`livingworld-ambience.schema.json` y `checkAmbience`): cada `sound` es
+  un sonido `ambient` de `assets/sounds.yaml`, cada item existe, ningún `radius` de emisor
+  pasa el de la ventana y `voices_lite` no pasa `voices`.
+- Agregar un emisor (una cascada, un molino) o una capa (nieve con viento) no pide código:
+  una fila acá y, si hace falta, el sonido en `assets/sounds.yaml`.
 
 ## i18n
 ```yaml

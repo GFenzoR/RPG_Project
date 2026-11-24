@@ -2915,9 +2915,14 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   jugador. Se oye hasta 8 casillas (distancia de Chebyshev), con paneo estéreo según la
   diferencia en x. No se oyen los eventos de otro piso. Los sonidos propios (pasos,
   mensajes, UI) no son posicionales.
-- **Ambiente**: un loop por isla (`world/world.yaml`): olas en Puerto, bosque en Bosque y
-  el volcán en Karvask; bajo tierra no hay ambiente. Al cambiar de isla hay un
-  fundido cruzado (`ambient.fade_ms`).
+- **Ambiente** (lote 18, pedido del dueño del 2026-11-23; `livingworld/README.md`
+  "Ambiente"): ya no es un loop por isla. Bajo la música suena lo que hay alrededor del
+  jugador: olas cerca del mar, viento en la arena (y una brisa suave en el pasto), viento
+  en los árboles de un bosque, la lava, gotas en las cuevas y un murmullo donde hay puestos
+  y bancos; y, cerca de cada uno, el agua de una fuente o un pozo, el crepitar de un fogón
+  o un brasero, una antorcha o un farol y la fragua, paneados según de qué lado están. Las
+  capas entran y salen con fundidos lentos, sin cortes, y cada loop arranca en un punto
+  distinto. Usa el canal y el volumen de ambiente.
 - **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
   `sounds.yaml` `music`). Lo que oye el jugador:
   - **Cada lugar tiene una pool de temas enteros** (~3 minutos cada uno): Puerto alterna sus

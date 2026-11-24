@@ -116,6 +116,27 @@ el punto 5:
     (`MESSAGE_KIND_NPC` existe pero nadie lo emite); cuando lo haga, salen con globo solos.
   - **E2E** (lo corre el lote al final): `16a-chat-bubble` del test del chat, el globo del
     grito sobre el propio jugador.
+- **Ambiente posicional (hecho, rama `feat/soundscape`, lote 18; el dueño el 2026-11-23:
+  "en el pueblo se escucha el mar aunque no está tan cerca"; `livingworld/README.md`
+  "Ambiente", docs/17 SND-1):** el loop por isla se fue; bajo la música suenan capas por
+  lo que hay alrededor (olas, viento, brisa, bosque, lava, cueva, pueblo) y emisores
+  (fuentes, pozos, fogones, braseros, antorchas, faroles, fraguas), con fundidos y tope de
+  voces. Queda:
+  - **Escucharlo:** los nueve loops son de `tools/soundgen` (revisados solo por espectro y
+    costura, nadie los oyó). El dueño debería pasear por Velmara (orilla, plaza, fuente,
+    fragua) y por Selvaine y decir qué subir, bajar o rehacer; los volúmenes están en
+    `data/livingworld/ambience.yaml`.
+  - **Gemini:** no se probó: el Chrome del dueño con `--remote-debugging-port=9222` no estaba
+    abierto. Con él abierto, pedir loops naturales (olas en una orilla, viento del
+    desierto, viento en los árboles, una fuente de piedra, una fogata, una antorcha, una
+    cascada, una fragua, un murmullo de pueblo), convertirlos con `music_convert.py` (loop
+    de 16–30 s, mono) y acreditarlos con `credit.py`; si suenan musicales, quedan los de
+    soundgen.
+  - **Faltan items:** una fogata suelta (hoy el fogón hace de fogata) y una cascada no
+    existen como items; Thimblewick no tiene fuente. Las paredes no tapan el sonido de un
+    emisor (se oye una fragua a través de un muro).
+  - **E2E:** el test de sonido de `e2e/game.spec.ts` espera la brisa del pasto (y no las
+    olas) en el templo de la isla del E2E; lo corre el lote al final.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
