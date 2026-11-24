@@ -201,6 +201,15 @@ mundo de producción, `go run ./cmd/mapcompile -root .. -out ../build/world.bin`
 `make test-parity` compara la caminabilidad que calcula `mapcompile` con la de
 `packages/map-format` (necesita `pnpm install`; forma parte de `make test`).
 
+### Hora del mundo fija (día y noche)
+El día y la noche siguen el reloj real (ciclo de 240 minutos, `data/livingworld/daynight.yaml`).
+Para capturas o pruebas que no dependan de la hora, `-world-time <hora>` arranca el
+servidor con la hora detenida en una palabra de `/time` (`dawn`, `morning`, `noon`, `day`,
+`afternoon`, `dusk`, `night`, `midnight`); así corren los servidores del E2E (`client/playwright.config.ts`,
+`-world-time noon`). Solo desarrollo y test: con `RPG_ENV` vacía o `production` el
+servidor no arranca con ese flag. Con el servidor ya corriendo, un GM la cambia con
+`/time` (`16-probar-el-juego.md`).
+
 ### Prueba de carga
 ```
 make bots N=100                     # escenario base, 10 min, con su propio servidor
