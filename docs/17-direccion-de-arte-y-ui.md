@@ -2812,6 +2812,35 @@ color de algunos NPCs no se leían (el violeta `0x7d4fb0` sobre el contorno negr
   < 0,5), la de 2099,2091 no, y no se dibuja ninguna copia pálida del jugador
   (`102-wall-fade-own-player`, de cerca en `102b-...-close`).
 
+### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
+Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
+- **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
+  para cada monstruo de `data/monsters`, determinista y desde su propio arte: el último
+  frame de su muerte mirando al sur (cómo cayó; el cliente dibuja la caída al sur); un
+  monstruo con `look`, el humanoide del motor compuesto con sus colores en su último frame
+  de morir; uno de una sola imagen (la gaviota), el sprite girado un cuarto de costado y
+  aplastado a 3/5 de alto (la caída procedural de ANI-5). Después lo oscurece
+  (`CORPSE_LIGHT`) y le saca un poco de color (`CORPSE_COLOUR`): sin sangre, eso lo
+  ponen los efectos de golpe.
+- **Dónde va:** del tamaño de la criatura (el custodio de 96x96 conserva su huella) y
+  con su píxel más bajo donde estaban sus pies (`FEET_LINE` sobre el borde de la
+  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), así el
+  último frame de la caída, que se desvanece encima, y el cadáver coinciden. Un sprite
+  `br` más ancho que una casilla se ensancha para que su centro quede en la casilla.
+- **Cómo llega al mapa:** los restos siguen siendo el contenedor de la familia; el item
+  trae `mods.remains_of` (docs/05 "Restos") y el cliente lo apila en `MapView` con la
+  clave `<item>@<monstruo>` (`state/corpse-art.ts`), cuya textura es `corpses/<monstruo>`
+  si el atlas la tiene y la de la familia si no. El menú del click derecho muestra el
+  cadáver como ícono (ajustado a 64 px).
+- **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses
+  [--out FILE.png] [--scale N]`: cada monstruo de pie a la izquierda y su cadáver a la
+  derecha, sobre la grilla de casillas, como los pone el cliente. Revisado el 2026-11-24
+  con los 21 monstruos: todos se reconocen tendidos; el jabalí del motor queda
+  agazapado (es el último frame de su muerte) y el gólem y el custodio, un montón de
+  escoria con su forma.
+- **Pendiente:** etapas (fresco, seco, huesos) a lo largo de `monster_corpse_ms` y el
+  cuerpo de un jugador con su propio muñeco tendido (docs/14).
+
 ### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
 Lo que dijo el dueño de la prueba del 2026-11-19 (Thimblewick, build del lote 11):
 "cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique

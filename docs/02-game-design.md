@@ -882,6 +882,23 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+- **Los restos dicen de quién son** (pedido del dueño del 2026-11-23): el contenedor sigue
+  siendo el de la familia (mismas reglas de botín, 10 lugares, no se apila ni se levanta),
+  pero el servidor lo marca con el monstruo que cayó (`ItemMods.remains_of`, docs/05
+  "Restos") y el cliente lo nombra y lo dibuja por él:
+  - **El nombre**, en todos lados (mirar con Mayús+click, el texto del cursor, el título
+    del menú del click derecho, la ficha, la ventana del botín y las líneas del log):
+    `client.item.remains_of`, "restos de {monster}" en español ("restos de lobo",
+    "restos de araña de musgo") y "{monster} remains" en inglés ("wolf remains").
+  - **El cuerpo**: cada monstruo tiene el suyo, `corpses/<id>`, hecho de su propio arte
+    (el último frame de su muerte; uno sin muerte, el sprite volcado de costado y
+    aplastado), más oscuro, del tamaño de la criatura y donde estaban sus pies
+    (`tools/spritegen/src/recipes/corpses.ts`, docs/17 "Cadáveres"). Un monstruo nuevo lo
+    tiene con `make spritegen`, sin item ni receta a mano. El sprite de la familia queda
+    como respaldo (un atlas sin el cadáver).
+  - **El cuerpo de un jugador** dice de quién es (`ItemMods.body_of`, el nombre):
+    `client.item.body_of`, "cuerpo de {player}" / "body of {player}". Se dibuja todavía
+    con `remains_humanoid`; el muñeco del jugador tendido es un pendiente (docs/14).
 
 ### Bolsillos (decisión del dueño, 2026-11-19)
 La prueba de Thimblewick del 2026-11-19 mostró que la muerte deja la mochila en el
@@ -1591,7 +1608,8 @@ Valores iniciales (balance.yaml):
   (`session/death.go` `playerCorpse`; la ventana del cuerpo muestra todos sus lugares).
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
-- El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
+- El cuerpo (`creature_remains`, contenedor, "cuerpo de <jugador>": `ItemMods.body_of`,
+  ver "Restos") queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").

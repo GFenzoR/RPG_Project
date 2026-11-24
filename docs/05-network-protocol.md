@@ -35,6 +35,18 @@
   `TileUpdate` y en la `palette` de un `MapArea`), el intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
   cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
   viejo lo ignora.
+- **Restos** (2026-11-23, aditivo): `ItemMods.remains_of` (4) es el id de `data/monsters`
+  del monstruo cuyos restos son, y `ItemMods.body_of` (5) el nombre del jugador cuyo
+  cuerpo es. Los pone el servidor al crear los restos (`session/combat.go`, `death.go`) y
+  viajan en todo `ItemStack` de ellos: el `TileUpdate` de su casilla, el parámetro `item`
+  de `look.container` y la ventana del botín. `ContainerOpen.mods` (6, aditivo) son los
+  `mods` del contenedor mismo, para el título de su ventana. El cliente nombra los restos
+  `client.item.remains_of` con `monster.<id>.name` ("restos de lobo", "wolf remains") o
+  `client.item.body_of` con el nombre ("cuerpo de Ana") y dibuja el cadáver propio del
+  monstruo (`corpses/<id>`, docs/17 "Cadáveres"). El servidor no los toma del cliente:
+  como el resto de `mods`, el cliente solo los devuelve como parte del item que nombra.
+  Los restos nunca se guardan, así que tampoco estos campos. Un cliente viejo los ignora
+  y sigue mostrando el nombre y el sprite de la familia.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
   `TextParam {name, value}`. Es una lista y no un `map` para que la codificación sea
   determinista. `value` tiene tipo (`text` sin traducir, `number`, `content_id` o
@@ -787,8 +799,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `data/effects.yaml`.
 - Muerte de un monstruo: `CreatureDisappear{reason: DEATH}` (después de su
   `CreatureHealth` 0), `TileUpdate` con sus restos encima de la pila (el item de su
-  `corpse` en `data/monsters`, o `creature_remains`; dura `combat.monster_corpse_ms`;
-  es un contenedor con el botín, T1.8),
+  `corpse` en `data/monsters`, o `creature_remains`, con `mods.remains_of` = el id del
+  monstruo: ver "Restos" arriba; dura `combat.monster_corpse_ms`; es un contenedor con el
+  botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
   se reparte según el daño de los que siguen conectados; con un grupo que comparte, a cada
   miembro que comparte, ver "Grupos": `FloatingText.bonus` es la parte del bonus de grupo)

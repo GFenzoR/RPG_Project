@@ -257,6 +257,24 @@ el punto 5:
     `tide_crab`, `ore_beetle`, `hollow_crawler`, `moss_spider`, `mire_toad`, `gloom_bat`,
     `thieving_gull`, `thornling`, `cinder_salamander`, `ember_wyrmling`) ganan poco; los
     de Gemini (hojas a mano) pedirían hojas nuevas.
+- **Restos con nombre y cadáver propio (hecho, rama `feat/corpse-names`; el dueño el
+  2026-11-23: "restos de lobo", no "restos de bestia", y el cuerpo de cada bestia único):**
+  los restos llevan `ItemMods.remains_of` (el cuerpo de un jugador, `body_of`), el cliente
+  los nombra "restos de <monstruo>" / "<monster> remains" y "cuerpo de <jugador>" en el
+  look, el texto del cursor, el menú, la ficha, la ventana del botín y el log, y los dibuja
+  con `corpses/<id>` de spritegen (docs/02 "Restos", docs/05 "Restos", docs/06 "Cadáver
+  propio", docs/17 "Cadáveres"). Queda:
+  - **Etapas de descomposición** (fresco, seco, huesos sobre `combat.monster_corpse_ms`):
+    el cliente no sabe la edad de unos restos; haría falta la hora de muerte en `ItemMods`
+    o un `TileUpdate` del servidor por etapa. No se hizo.
+  - **El cuerpo de un jugador con su muñeco tendido:** hoy es `remains_humanoid` con su
+    nombre. Haría falta su aspecto en `ItemMods` (o el `CreatureLook` del muerto) y
+    componer las capas en el último frame de morir en el cliente (como `look-preview`).
+  - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
+    jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al
+    norte y el cadáver aparece mirando al sur.
+  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death`, `14-respawn`): el cadáver
+    del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

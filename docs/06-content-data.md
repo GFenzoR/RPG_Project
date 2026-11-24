@@ -167,6 +167,8 @@ items:
   un contenedor con `pickupable: false`, como los restos de cada familia de monstruos
   (`remains_fur`, `remains_chitin`, `remains_scales`, `remains_slag`, `remains_bones`,
   `remains_feathers`, `remains_humanoid`, `remains_bramble`; ver `corpse` en "Monstruo").
+  Los restos de un monstruo se nombran y se dibujan por el monstruo, no por la familia
+  ("Cadáver propio" en "Monstruo").
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
 - **Item de misión** (`quest: true`, docs/17 UI-6, solo de dibujo): un item que existe
   para una quest (lo que pide el `has_item` de un paso o de un diálogo: `bosun_logbook`,
@@ -441,6 +443,20 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   se pierde. Todo monstruo de `data/monsters` tiene el
   suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
   `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
+- **Cadáver propio** (2026-11-23, sin campo nuevo): la familia da el contenedor (botín,
+  lugares, reglas) y el sprite de respaldo; lo que el jugador ve es del monstruo. El
+  servidor marca los restos con su id (`ItemMods.remains_of`, docs/05 "Restos"), el
+  cliente los nombra `client.item.remains_of` con `monster.<id>.name` ("restos de lobo") y
+  los dibuja con `corpses/<id>`, que `tools/spritegen/src/recipes/corpses.ts` hace para
+  cada monstruo de esta carpeta desde su propio arte (el último frame de `death_s`; un
+  monstruo con `look`, el humanoide compuesto con sus colores en su último frame de morir;
+  uno de una sola imagen, volcado de costado). Se eligió así y no un item de cadáver por
+  monstruo: un item por monstruo duplicaba 21 contenedores iguales (y sus ids y nombres)
+  para cambiar solo el dibujo y el nombre, que ya salen del id del monstruo. Agregar un
+  monstruo: `make spritegen ONLY=corpses/` escribe su cadáver y lo revisas con
+  `node --experimental-strip-types tools/spritegen/src/cli.ts corpses` (cada monstruo de
+  pie al lado de su cadáver, `build/spritegen/corpses.png`); el test de los PNG
+  commiteados de spritegen falla mientras falte.
 - **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
   es `monster.schema.json`, `$defs/attack`):
   ```yaml
