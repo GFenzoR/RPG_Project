@@ -47,6 +47,7 @@ import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
 import { TrailWearState } from "./trail-wear.ts";
+import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import {
@@ -622,6 +623,8 @@ export class WorldState implements TileSource {
   private readonly chunks = new Map<string, ChunkTiles>();
   /** The living world's trail wear the server sent (state/trail-wear.ts). */
   readonly trailWear = new TrailWearState();
+  /** The world time (WorldClock): render/sky.ts draws the day and night from it. */
+  readonly worldClock = new WorldClockState();
   private readonly content: ClientContent;
 
   constructor(content: ClientContent) {
@@ -798,6 +801,9 @@ export class WorldState implements TileSource {
         break;
       case "trailWear":
         this.trailWear.apply(msg.value);
+        break;
+      case "worldClock":
+        this.worldClock.set(msg.value, now);
         break;
       case "tileUpdate": {
         const p = posOf(msg.value.pos);

@@ -28,6 +28,7 @@ import {
   actionDir,
 } from "@rpg/renderer";
 import type { AnimDir, LayerSlot, Pose } from "@rpg/renderer";
+import type { ShadowSink } from "./cast-shadows.ts";
 import { clipTexture, dirIndex, headLift } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 
@@ -113,6 +114,8 @@ export class CreatureBody {
   private faded = false;
   /** The alpha it was last drawn with (the pose's times `opacity`). */
   private drawnAlpha = 1;
+  /** The pose's sideways offset last drawn (a lunge): the cast shadow follows the feet. */
+  private drawnX = 0;
   /**
    * Multiplies the pose's alpha: the own player drawn see-through while invisible (T3.2).
    * The caller sets it instead of its container's alpha, which would fade layer by layer.
@@ -228,6 +231,7 @@ export class CreatureBody {
   draw(pose: Pose, dir: number): void {
     const alpha = pose.alpha * this.opacity;
     this.drawnAlpha = alpha;
+    this.drawnX = pose.x;
     if (this.sprites.length > 0) {
       this.drawLayers(pose, dir);
       this.fadeLayers(alpha);
@@ -241,6 +245,22 @@ export class CreatureBody {
       this.shadow.scale.set(pose.shadow * Math.abs(pose.scaleX));
       this.shadow.alpha = alpha;
     }
+  }
+
+  /**
+   * Hands `into` the drawing as it was last drawn, for its cast shadow (render/cast-shadows.ts):
+   * every visible layer's texture with its mirror and squash, standing at the feet. `x`, `y`
+   * is the body's container position (world pixels). The shadow stays on the ground under a
+   * hop (the pose's lift is left out); a body fading away below half casts none.
+   */
+  castShadow(into: ShadowSink, x: number, y: number): void {
+    if (this.drawnAlpha < 0.5) return;
+    const fx = x + this.baseX + this.drawnX;
+    const fy = y + this.baseY;
+    if (this.sprites.length > 0) {
+      for (const sp of this.sprites)
+        if (sp.visible) into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y);
+    } else into.part(this.sprite.texture, fx, fy, this.sprite.scale.x, this.sprite.scale.y);
   }
 
   private drawLayers(pose: Pose, dir: number): void {

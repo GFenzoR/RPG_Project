@@ -64,7 +64,7 @@ import type { NameSize } from "./render/label-style.ts";
 import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
-import type { GameCanvas, LabelsShown } from "./render/game-canvas.ts";
+import type { GameCanvas, LabelsShown, SkyHook } from "./render/game-canvas.ts";
 import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
@@ -338,6 +338,11 @@ export interface ClientTestHooks {
    * (say, yell, whisper, npc) and each message's wrapped lines.
    */
   bubbles(): { id: number; style: string; lines: string[] }[];
+  /**
+   * The day and night as last drawn (livingworld/README.md "Día y noche"): phase, light
+   * colour, lamps, moon, and how many cast shadow sprites the frame drew.
+   */
+  sky(): SkyHook | undefined;
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -2199,6 +2204,7 @@ export class Game {
       },
       poses: () => canvas.poses(),
       bubbles: () => canvas.bubbles(),
+      sky: () => canvas.sky(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)

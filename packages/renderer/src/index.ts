@@ -7,6 +7,8 @@ export * from "./look.ts";
 export { Atlas, MISSING_TEXTURE } from "./atlas.ts";
 export type { AtlasIcon, AtlasIndex, AtlasLoadOptions } from "./atlas.ts";
 export {
+  CAST_SHADOW_ALPHA,
+  CAST_SHADOW_TINT,
   MAX_STACK_ORDER,
   MapView,
   REVEAL_ALPHA,

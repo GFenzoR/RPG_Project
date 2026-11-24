@@ -320,6 +320,19 @@ export class MapView {
   }
 
   /**
+   * How strong the baked cast shadows of trees and buildings are, 0..1 of
+   * CAST_SHADOW_ALPHA: the client's day and night fades them with the sun (cheap: one
+   * alpha on their layer). 1 by default; the editor never changes it.
+   */
+  set castShadowStrength(k: number) {
+    this.shadowLayer.alpha = CAST_SHADOW_ALPHA * Math.min(1, Math.max(0, k));
+  }
+
+  get castShadowStrength(): number {
+    return this.shadowLayer.alpha / CAST_SHADOW_ALPHA;
+  }
+
+  /**
    * ART-3: fades the wall pieces drawn in front of a figure standing on tile row `row`
    * (rows south of it, so drawn over it) whose sprite overlaps `rect` (the figure, world
    * units), and fades back in the ones that no longer cover it. `undefined` reveals

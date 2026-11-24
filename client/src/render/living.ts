@@ -66,6 +66,7 @@ export function mountLivingWorld(
   content: ClientContent,
   atlas: Atlas,
   reduced: () => boolean,
+  night: () => boolean = () => false,
 ): LivingWorld | undefined {
   const data = content.livingWorld;
   if (!data) return undefined;
@@ -81,8 +82,8 @@ export function mountLivingWorld(
         forEach: (fn) => view.forEachItemSprite(fn),
       },
       reduced,
-      // No day and night yet: fireflies wait for one (docs/14).
-      night: () => false,
+      // The day and night (render/sky.ts): fireflies at night.
+      night,
     },
   );
 }

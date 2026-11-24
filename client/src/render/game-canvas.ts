@@ -75,6 +75,8 @@ import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { mountLivingWorld, printOf } from "./living.ts";
+import { CastShadows } from "./cast-shadows.ts";
+import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
 import {
   attackDir,
@@ -134,6 +136,7 @@ import { EffectLayer } from "./effect-layer.ts";
 import { livingEvent, mountLivingObjects } from "./living.ts";
 import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
+  AMBIENT,
   FIRE_TINT,
   LightLayer,
   PLAYER_LIGHT,
@@ -209,6 +212,16 @@ export interface LabelsShown {
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
 
+/** What the E2E hook `sky()` tells (GameCanvas.sky). */
+export interface SkyHook {
+  phase: string;
+  ambient: number;
+  lamps: number;
+  moon: number;
+  shadowAlpha: number;
+  shadows: number;
+}
+
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
   tileToClient(x: number, y: number): { x: number; y: number };
@@ -254,6 +267,11 @@ export interface GameCanvas {
   poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
   /** E2E (docs/17 UI-11): the speech bubbles on screen now, by speaker. */
   bubbles(): { id: number; style: BubbleStyle; lines: string[] }[];
+  /**
+   * E2E: the sky last drawn (render/sky.ts): its phase, light colour, lamps, moon and how
+   * many cast shadow sprites the frame drew; undefined underground or without a day and night.
+   */
+  sky(): SkyHook | undefined;
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -578,7 +596,15 @@ export async function createGameCanvas(
   view.overlay.addChild(particles.view, hiddenLayer);
   // The living world (livingworld/README.md, render/living.ts): footprints on the ground
   // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
-  const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
+  // The day and night (livingworld/README.md "Día y noche", render/sky.ts): the world clock
+  // the server sent, run on every frame into the sky's light and the sun's angle.
+  const sky = new SkyView(content.livingWorld?.dayNight, world.worldClock);
+  const living = mountLivingWorld(view, world, content, atlas, reducedMotion, () => sky.night());
+  // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
+  // world's footprints, under the items and the creatures; off with reduced motion and
+  // underground (no sun there: the contact ellipse stays).
+  const castShadows = new CastShadows();
+  view.groundOverlay.addChild(castShadows.root);
   // The living objects' effects (render/living.ts): over the map.
   const livingObjects = mountLivingObjects(view.overlay, {
     tileSize: T,
@@ -603,12 +629,14 @@ export async function createGameCanvas(
   app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, speech.view, textLayer);
   /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
   let lightTile = 0;
+  /** The fires' colour this frame: full in a cave, by how dark it is on the surface. */
+  let fireTint = FIRE_TINT;
   const addFireLight = (x: number, y: number, radius: number): void =>
     lights.add(
       (x + 0.5 - cam.x) * lightTile,
       (y + 0.5 - cam.y) * lightTile,
       radius * lightTile,
-      FIRE_TINT,
+      fireTint,
     );
 
   let scale = 1;
@@ -1271,6 +1299,9 @@ export async function createGameCanvas(
     }
     livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
+    const skyNow = isDark(self.pos.z) ? undefined : sky.update(now);
+    view.castShadowStrength = sky.staticShadows(skyNow);
+    const casting = castShadows.begin(reducedMotion() ? undefined : sky.shadowPose(skyNow));
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
@@ -1294,6 +1325,7 @@ export async function createGameCanvas(
       if (s.figure) {
         s.figure.opacity = see;
         animateBody(s.figure, stateOf(c.id, now), c, now);
+        if (casting) s.figure.castShadow(castShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
@@ -1372,6 +1404,7 @@ export async function createGameCanvas(
     }
     drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
+    if (casting) castShadows.end();
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
     drawGhosts(now);
@@ -1384,17 +1417,23 @@ export async function createGameCanvas(
     world.expire(now);
     drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale, nameScale);
-    if (isDark(self.pos.z)) {
+    // Caves are dark; the surface takes the sky's colour at dawn, dusk and night, and its
+    // lamps, fires and windows glow by how dark it is (render/sky.ts). By day: no pass.
+    const cave = isDark(self.pos.z);
+    if (cave || litSurface(skyNow)) {
+      const lamps = cave ? 1 : (skyNow?.lamps ?? 0);
       lightTile = tilePixels(cam, T);
+      fireTint = cave ? FIRE_TINT : dimmed(FIRE_TINT, lamps);
       const sp = world.drawPos(self, now);
-      lights.begin(app.screen.width, app.screen.height);
-      lights.add(
-        (sp.x + 0.5 - cam.x) * lightTile,
-        (sp.y + 0.5 - cam.y) * lightTile,
-        PLAYER_LIGHT * lightTile,
-        PLAYER_TINT,
-      );
-      view.forEachLight(addFireLight);
+      lights.begin(app.screen.width, app.screen.height, cave ? AMBIENT : skyNow?.ambient);
+      if (lamps > 0)
+        lights.add(
+          (sp.x + 0.5 - cam.x) * lightTile,
+          (sp.y + 0.5 - cam.y) * lightTile,
+          PLAYER_LIGHT * lightTile,
+          cave ? PLAYER_TINT : dimmed(PLAYER_TINT, lamps * NIGHT_PLAYER_LIGHT),
+        );
+      if (lamps > 0) view.forEachLight(addFireLight);
       lights.end(app.renderer);
     } else lights.hide();
   };
@@ -1777,6 +1816,18 @@ export async function createGameCanvas(
     bubbles() {
       return speech.shown();
     },
+    sky() {
+      const s = sky.current;
+      if (!s || isDark(world.self?.pos.z ?? 0)) return undefined;
+      return {
+        phase: s.phase,
+        ambient: s.ambient,
+        lamps: s.lamps,
+        moon: s.moon,
+        shadowAlpha: s.shadow.alpha,
+        shadows: castShadows.root.visible ? castShadows.count : 0,
+      };
+    },
     poses() {
       const now = performance.now();
       const attacking: PoseTime[] = [];
@@ -1867,6 +1918,7 @@ export async function createGameCanvas(
       effects.destroy();
       speech.destroy();
       lights.destroy();
+      castShadows.destroy();
       living?.destroy();
       livingObjects.destroy();
       view.destroy();

@@ -3,6 +3,7 @@ import type { Container, Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { Container as PixiContainer } from "pixi.js";
 import {
+  CAST_SHADOW_ALPHA,
   MapView,
   REVEAL_ALPHA,
   REVEAL_FADE_MS,
@@ -95,6 +96,14 @@ describe("MapView", () => {
     // The ground overlay lies between the grounds and the cast shadows.
     const world = v.root.children[0] as Container;
     expect(world.children.indexOf(v.groundOverlay)).toBe(1);
+    // The day and night fades the baked cast shadows with the sun (one alpha).
+    const shadows = world.children[2] as Container;
+    expect(shadows.alpha).toBeCloseTo(CAST_SHADOW_ALPHA);
+    v.castShadowStrength = 0.25;
+    expect(shadows.alpha).toBeCloseTo(CAST_SHADOW_ALPHA * 0.25);
+    expect(v.castShadowStrength).toBeCloseTo(0.25);
+    v.castShadowStrength = 7;
+    expect(shadows.alpha).toBeCloseTo(CAST_SHADOW_ALPHA);
   });
 
   it("orders by row, then column, then stack height", () => {

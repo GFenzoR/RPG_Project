@@ -147,6 +147,10 @@ Los únicos archivos fuera de `livingworld/` que pueden importarlo:
   tick, cambios a los clientes, `MapArea.wear`, la copia para guardar)
 - `server/internal/session/livingworld.go`: los objetos del mapa: el `Host`, los comandos y
   los ganchos del loop
+- `server/internal/session/daynight.go`: el reloj del mundo en el game loop (el
+  `WorldClock` al entrar, cada `sync_seconds` y tras un `/time` del staff)
+- `client/src/render/sky.ts`: el cielo de cada frame (el reloj del servidor llevado
+  adelante, la luz, las lámparas, la sombra del sol o de la luna, la noche de los bichos)
 <!-- glue:end -->
 
 El ambiente lo usa `client/src/game.ts` a través de `client/src/audio/ambience.ts`
