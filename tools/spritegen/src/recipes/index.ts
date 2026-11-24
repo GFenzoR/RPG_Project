@@ -1,11 +1,13 @@
 // Every recipe, by sprite path. A path may live in only one book. The sprite engine's specs
-// (engine/specs/) come in as one recipe per frame. The looks' previews are data (they read
-// data/): RECIPES has the repo's, recipesAt(root) those of another root.
+// (engine/specs/) come in as one recipe per frame. The looks' previews and the monsters'
+// corpses (recipes/corpses.ts) are data (they read data/): RECIPES has the repo's,
+// recipesAt(root) those of another root.
 import { resolve } from "node:path";
 import { engineRecipes } from "../engine/book.ts";
 import { lookPreviews, REPO_ROOT } from "../engine/specs/humanoid/previews.ts";
 import { ENGINE_SPECS } from "../engine/specs/index.ts";
 import type { RecipeBook } from "../recipe.ts";
+import { corpseRecipes } from "./corpses.ts";
 import { CREATURES } from "./creatures.ts";
 import { EFFECTS, MISSILES } from "./effects.ts";
 import { GROUND } from "./ground.ts";
@@ -46,7 +48,7 @@ const CODED: RecipeBook = merge(
   engineRecipes(ENGINE_SPECS),
 );
 
-export const RECIPES: RecipeBook = merge(CODED, lookPreviews());
+export const RECIPES: RecipeBook = merge(CODED, lookPreviews(), corpseRecipes(REPO_ROOT));
 
 const AT = new Map<string, RecipeBook>([[resolve(REPO_ROOT), RECIPES]]);
 
@@ -55,7 +57,7 @@ export function recipesAt(root: string): RecipeBook {
   const key = resolve(root);
   let book = AT.get(key);
   if (!book) {
-    book = merge(CODED, lookPreviews(key));
+    book = merge(CODED, lookPreviews(key), corpseRecipes(key));
     AT.set(key, book);
   }
   return book;

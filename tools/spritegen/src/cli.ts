@@ -3,6 +3,8 @@
 //   node tools/spritegen/src/cli.ts preview --out FILE.png [--scale N] [--only PREFIX]
 //   node tools/spritegen/src/cli.ts check [--root DIR]     every recipe path is used by data/,
 //        and every engine spec is valid, passes the gates and matches its sprites.yaml hints
+//   node tools/spritegen/src/cli.ts corpses [--out FILE.png] [--scale N]
+//        every monster standing beside its corpse (recipes/corpses.ts), to review with Read
 //   node tools/spritegen/src/cli.ts sheet [--only PREFIX] [--out DIR] [--scale N]
 //        contact sheet (every frame at N x, default 4) and 1x lineup of each engine sprite;
 //        with item icons among them, also icons.slots.png (each in an inventory slot at 2x
@@ -26,6 +28,7 @@ import { humanoidLineup, lookSheet, REVIEW_LOOKS } from "./engine/specs/humanoid
 import { STAG } from "./engine/specs/stag.ts";
 import { ICON_ROWS } from "./engine/specs/items/index.ts";
 import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
+import { corpseSheet } from "./recipes/corpses.ts";
 import { buildSprites, checkPaths, previewPng, recipePaths, spriteFile } from "./index.ts";
 
 const { positionals, values } = parseArgs({
@@ -40,14 +43,30 @@ const { positionals, values } = parseArgs({
 });
 const root = resolve(values.root);
 const command = positionals[0];
-if (command !== "build" && command !== "preview" && command !== "check" && command !== "sheet") {
+if (
+  command !== "build" &&
+  command !== "preview" &&
+  command !== "check" &&
+  command !== "sheet" &&
+  command !== "corpses"
+) {
   console.error(
-    "usage: spritegen build|preview|check|sheet [--root DIR] [--only PREFIX] [--out FILE.png|DIR]",
+    "usage: spritegen build|preview|check|sheet|corpses [--root DIR] [--only PREFIX] [--out FILE.png|DIR]",
   );
   process.exit(2);
 }
 
-if (command === "build") {
+if (command === "corpses") {
+  // Every monster standing beside its corpse, as the client places them (recipes/corpses.ts).
+  const scale = Number(values.scale);
+  const out = resolve(values.out ?? join(root, "build", "spritegen", "corpses.png"));
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(
+    out,
+    encodePng(scaleImage(corpseSheet(root), Number.isInteger(scale) && scale > 0 ? scale : 2)),
+  );
+  console.log(`spritegen: corpses sheet -> ${out}`);
+} else if (command === "build") {
   const built = buildSprites(root, values.only);
   for (const b of built)
     console.log(`${String(b.bytes).padStart(6)} B  ${relative(root, spriteFile(root, b.path))}`);

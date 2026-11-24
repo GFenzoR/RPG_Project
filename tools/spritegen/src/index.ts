@@ -20,6 +20,7 @@ import { castShadow, composite, rng, seedOf } from "./draw.ts";
 import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
+import { corpsePath, monsterIds } from "./recipes/corpses.ts";
 
 export { RECIPES, recipesAt } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
@@ -146,6 +147,8 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
   const book = recipesAt(root);
+  // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
+  const corpses = new Set(monsterIds(root).map(corpsePath));
   const problems: string[] = [];
   for (const p of recipePaths(undefined, book)) {
     const ui = book[p]?.kind === "ui";
@@ -158,6 +161,7 @@ export function checkPaths(root: string): string[] {
       !EFFECT_FRAME.test(p) &&
       !MISSILE_ART.test(p) &&
       !LIVING_FX.test(p) &&
+      !corpses.has(p) &&
       !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
       !used.has(TILE_PART.exec(p)?.[1] ?? "")
     )
