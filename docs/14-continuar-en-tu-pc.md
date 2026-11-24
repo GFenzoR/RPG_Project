@@ -319,6 +319,23 @@ el punto 5:
     guardián nuevo), la ficha de
     un arma a distancia ("Alcance: 5 m", "Peso: 700 g") y el texto de una casa libre
     ("(32 m²)"); lo corre el lote al final.
+- **No se puede salir en combate, visible (hecho, rama `feat/combat-logout`, lote 17; el
+  dueño el 2026-11-23: "como en Tibia, no te puedes desconectar durante una batalla";
+  docs/02 "Bloqueo de logout en combate"):** ya existía en el servidor; se revisó cada
+  salida (tabla en docs/02, tests en `session/combat_exit_test.go`), el rechazo dice los
+  segundos, el botón "Salir del juego" se ve bloqueado con la cuenta regresiva y la
+  siguiente pantalla dice que el personaje quedó en el mundo. Queda:
+  - **Aviso al cerrar la pestaña:** no hay un `beforeunload` que pregunte "¿salir?" en
+    combate (los navegadores solo muestran su texto genérico y molesta al recargar);
+    decidir con el dueño si se quiere.
+  - **El aviso "quedó en el mundo" es del navegador:** vive en su `localStorage`; en otro
+    dispositivo, o si la app de escritorio no dispara `pagehide` al cerrarse, no aparece
+    (el personaje queda link-dead igual: lo decide el servidor). Mostrarlo en cualquier
+    dispositivo pediría que la lista de personajes sepa quién está link-dead (el loop lo
+    publicaría como `PublishedOnline`).
+  - **E2E** (lo corre el lote al final): el de la pelea con el lobo mira el botón
+    bloqueado y la cuenta (`07c-logout-locked`), recarga en la pelea, ve el aviso
+    (`07d-stayed-in-fight`) y vuelve a entrar al mismo personaje todavía en combate.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

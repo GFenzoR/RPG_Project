@@ -146,7 +146,8 @@ server/
   `Player.fightAt`, que pone `markFight` al pegar, recibir daño o ser atacado por un
   monstruo, o el bloqueo PvP); un camino nuevo de daño o de ataque llama a `markFight`.
   `Logout` en combate se rechaza (`logoutBlock`: `pvp.logout_locked` o
-  `combat.logout_locked`). `Leave` en combate deja al jugador link-dead
+  `combat.logout_locked`, con `seconds` de `logoutWaitSeconds`). Cada salida en combate
+  tiene su test en `combat_exit_test.go` (tabla en docs/02). `Leave` en combate deja al jugador link-dead
   (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkLinkDead` (cada tick, solo sobre
   `World.linkDead`) lo saca: cuando `holdsLinkDead` deja de valer (la pelea terminó o pasó
   `travel.link_dead_max_ms` desde `Player.linkDeadAt`; el bloqueo PvP no tiene tope). Un

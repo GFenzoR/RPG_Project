@@ -107,13 +107,18 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (`travel.combat_block_ms` desde la última vez que un monstruo lo atacó, que recibió daño
   o que le pegó a un monstruo o a un jugador, o el bloqueo PvP; docs/02 "Bloqueo de logout
   en combate") se rechaza con un mensaje de sistema, `combat.logout_locked` (o
-  `pvp.logout_locked` con el bloqueo PvP), y la conexión sigue. Cerrar el socket sin
+  `pvp.logout_locked` con el bloqueo PvP) con el parámetro numérico `seconds` (lo que falta
+  del bloqueo, redondeado hacia arriba, al menos 1; desde el 2026-11-24, aditivo), y la
+  conexión sigue. El cliente no espera al rechazo para mostrar el bloqueo: lo lee del
+  estado `in_combat` ("Estados", abajo), que ya trae su fin en `remaining_ms`; no hace falta
+  un campo nuevo. Cerrar el socket sin
   `Logout` también saca al personaje y lo guarda, salvo en combate: queda en el mundo
   link-dead hasta que la pelea termina ("Desconexión en combate", abajo). Una casilla sin
   logout todavía no rechaza el `Logout` (solo la miran la inactividad y los chequeos de
   presencia).
 - **Desconexión en combate:** si la conexión se cierra en combate (la cierra el cliente,
-  se cae la red o la corta el servidor: cliente lento, reseteo de contraseña), el
+  se cae la red o la corta el servidor: cliente lento, flood, reseteo o cambio de
+  contraseña, "Cerrar sesión en todos lados"), el
   personaje no sale del mundo: queda sin conexión (no recibe nada; lo que esa conexión
   haya mandado después no se ejecuta) y atacable hasta que la pelea termina; ahí se guarda
   y sale (quien lo veía recibe `CreatureDisappear{LOGOUT}`). Si muere así, sale en ese
@@ -1770,7 +1775,9 @@ Reglas en `02-game-design.md` ("Condiciones").
 - **Estados** (lote 13, `server/internal/session/status.go`; reglas en `02-game-design.md`,
   "Estados del personaje"): después de las condiciones, la misma lista lleva hasta tres
   entradas con ids que no son de `balance.yaml`: `in_combat` (el bloqueo de logout,
-  `remaining_ms` hasta que se puede salir), `pvp_locked` (el bloqueo PvP del atacante,
+  `remaining_ms` hasta que se puede salir; llega al empezar la pelea, otra vez si su fin se
+  movió 1 s o más, y la lista sin él cuando termina: con eso el cliente cuenta los segundos
+  en la bandeja y bloquea el botón "Salir del juego"), `pvp_locked` (el bloqueo PvP del atacante,
   hasta que vence) y `protection_zone` (parado en una zona de protección; `remaining_ms` 0
   = sin fin, solo en ella: el cliente lo decide por el id, y cualquier otra entrada con 0
   está terminando). `ticks` es 0 en las tres. Es aditivo: un cliente viejo las mostraría como

@@ -174,8 +174,12 @@ client/
   entrar y lo lleva a los lobos.
 - Bloqueo de logout en combate (docs/02): un "Salir del juego" a menos de 12 s de una pelea
   lo rechaza el servidor con `combat.logout_locked` (`pvp.logout_locked` con el bloqueo
-  PvP). El cliente no hace nada propio: el mensaje flota sobre el mapa (`notices.ts`) y va
-  al log, y el jugador sigue en el juego con su objetivo. Un E2E que sale después de pelear
+  PvP), con los segundos que faltan: el mensaje flota sobre el mapa (`notices.ts`) y va
+  al log, y el jugador sigue en el juego con su objetivo. Antes del click, el botón ya se
+  ve bloqueado: `ui/LogoutButton.tsx` (`LogoutLock` lee `logoutLockMs` de los estados
+  `in_combat`/`pvp_locked` y redibuja cada segundo; `data-locked` y `logout-countdown` en
+  la barra, `logout-menu` en el menú del teléfono). Cerrar o recargar en combate deja una
+  nota (`state/stayed.ts`, `pagehide`) que la próxima pantalla muestra una vez. Un E2E que sale después de pelear
   usa `leaveAfterFight` (`e2e/game.spec.ts`), que reintenta cada 2 s hasta salir; el de la
   pelea con el lobo mira el rechazo (`07c-logout-locked`).
 

@@ -1744,9 +1744,21 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   ventana que impide zarpar ("Viajes en barco"), la desconexión por inactividad y los
   chequeos de presencia.
 - **Salir del juego en combate** se rechaza con `combat.logout_locked` ("Estás en
-  combate: todavía no puedes salir del juego. Espera unos segundos lejos de la pelea.");
-  con el bloqueo PvP, con `pvp.logout_locked`, como antes. La conexión sigue y el jugador puede volver a
-  intentarlo cuando la pelea termine.
+  combate: podrás salir del juego en {seconds} s, lejos de la pelea. Si cierras el juego,
+  tu personaje se queda en el mundo hasta que termine."); con el bloqueo PvP, con
+  `pvp.logout_locked`. Los dos llevan `seconds`, lo que falta del bloqueo redondeado hacia
+  arriba. La conexión sigue y el jugador puede volver a intentarlo cuando la pelea termine.
+- **Se ve antes de chocar con él** (el dueño el 2026-11-23: "como en Tibia, no te puedes
+  desconectar durante una batalla"): el estado "En combate" de la bandeja ("Estados del
+  personaje") cuenta los segundos, y el botón "Salir del juego" (barra de herramientas y
+  menú del teléfono) se ve bloqueado mientras dure: gris, con los segundos encima y un
+  tooltip que dice por qué y qué pasa si se cierra el juego. Un click igual manda el
+  `Logout` (decide el servidor) y el rechazo flota sobre el mapa. Si el juego se cerró en
+  combate (pestaña, recarga, app de escritorio) o el servidor cortó la conexión en combate
+  por algo que no saca al personaje (red, cliente lento, cambio de contraseña, cerrar
+  sesión en todos lados), la siguiente pantalla de login o la lista de personajes lo dice
+  una vez (`client.characters.stayed_in_fight`; una nota en el `localStorage` del
+  navegador, `client/src/state/stayed.ts`: solo en ese navegador).
 - **Cerrar la conexión en combate** (cerrar la pestaña o el juego, perder la red, un cliente
   lento que el servidor corta, un reseteo de contraseña) no saca al personaje: queda en el
   mundo sin conexión ("link-dead"). No actúa (suelta su objetivo, se para, lo que su
@@ -1774,6 +1786,23 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   hay dos en el mundo.
 - **Lo que saca en el acto igual:** una expulsión o un ban del staff, un guardado que falló
   (T5.3) y el apagado del servidor (que guarda a todos, también a los link-dead).
+- **Todas las salidas, una por una** (revisadas el 2026-11-24, tests en
+  `server/internal/session/combat_exit_test.go`, `linkdead_test.go`, `pvp_linkdead_test.go`
+  e `idle_test.go`):
+
+  | Salida en combate | Qué pasa |
+  |---|---|
+  | "Salir del juego" | rechazada (`combat.logout_locked` / `pvp.logout_locked` con los segundos) |
+  | Cerrar la pestaña o el navegador, recargar, cerrar la app de escritorio, perder la red | el servidor solo ve la conexión cerrada (`Leave`): link-dead hasta que termina la pelea |
+  | Cliente lento, flood de mensajes o mensaje inválido (el gateway corta) | igual: link-dead |
+  | Cambiar la contraseña, resetearla o "Cerrar sesión en todos lados" (lote 17) | son acciones de seguridad: cortan la conexión en el acto (y el login que iba en camino), pero el personaje queda link-dead hasta que termina la pelea: nunca son una salida de una pelea |
+  | Desconexión por inactividad, chequeo de presencia | nunca en combate: esperan a que termine |
+  | Volver a entrar | retoma al mismo personaje con su pelea (sigue bloqueado); nunca hay dos |
+  | Expulsión o ban del staff, guardado fallido, apagado | sacan en el acto (arriba) |
+
+- **Tope de personajes por cuenta:** un link-dead cuenta como en línea para el máximo de
+  personajes de una cuenta a la vez (lote 16, 2): no se puede dejar uno peleando sin
+  conexión y entrar con otros dos. Volver a entrar con el link-dead no es uno nuevo.
 - Una zona de protección **no** corta el bloqueo (tampoco el PvP): quien se refugia en un
   templo espera ahí a que venza, a salvo.
 
