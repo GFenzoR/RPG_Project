@@ -106,7 +106,27 @@ interface CachedChunk {
   emitters: number[];
   /** Neighbour chunks the wall pieces on this chunk's border were picked from. */
   deps: { cx: number; cy: number; data: ChunkData | undefined }[];
+  /** Wall pieces (walls and items that join walls) by global tile, for revealBehind. */
+  wallSprites: Map<string, Sprite[]>;
 }
+
+/** A rectangle in world units (one unit = one sprite pixel). */
+export interface WorldRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * ART-3: a wall piece in front of the own player that covers part of it fades to this
+ * alpha, so the player is seen through the wall (the wall gives way, not the player).
+ */
+export const REVEAL_ALPHA = 0.35;
+/** Time (ms) a wall takes to fade out or back in (exponential, about 95 % in 3× this). */
+export const REVEAL_FADE_MS = 90;
+/** How many tiles south of a figure's feet a tall wall piece can still cover it. */
+const REVEAL_ROWS = 3;
 
 /** Items can be stacked this high on one tile before the draw order is ambiguous. */
 export const MAX_STACK_ORDER = 256;
@@ -179,6 +199,9 @@ export class MapView {
   private readonly joins = new Map<string, boolean>();
   /** Elevation of each tile of a chunk object (ART-8), null when nothing there raises. */
   private readonly heights = new WeakMap<ChunkData, Uint8Array | null>();
+  /** Wall pieces faded by revealBehind (or still fading back in), with their target. */
+  private readonly revealed = new Map<Sprite, number>();
+  private revealNow: number | undefined;
 
   constructor(opts: MapViewOptions) {
     this.source = opts.source;
@@ -291,6 +314,48 @@ export class MapView {
     return data
       ? this.wallsOf(data)[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)] === 1
       : false;
+  }
+
+  /**
+   * ART-3: fades the wall pieces drawn in front of a figure standing on tile row `row`
+   * (rows south of it, so drawn over it) whose sprite overlaps `rect` (the figure, world
+   * units), and fades back in the ones that no longer cover it. `undefined` reveals
+   * nothing. Call once per frame after render(); `now` in ms drives a smooth fade.
+   */
+  revealBehind(rect: WorldRect | undefined, row: number, now: number): void {
+    const want = new Set<Sprite>();
+    if (rect) {
+      const T = this.tileSize;
+      const x0 = Math.floor(rect.x / T) - 1;
+      const x1 = Math.floor((rect.x + rect.width) / T) + 1;
+      for (let y = row + 1; y <= row + REVEAL_ROWS; y++) {
+        for (let x = x0; x <= x1; x++) {
+          for (const sp of this.wallSpritesAt(x, y)) {
+            if (overlaps(spriteRect(sp), rect)) want.add(sp);
+          }
+        }
+      }
+    }
+    for (const sp of want) this.revealed.set(sp, REVEAL_ALPHA);
+    for (const sp of this.revealed.keys()) if (!want.has(sp)) this.revealed.set(sp, 1);
+    const dt = this.revealNow === undefined ? Infinity : Math.max(0, now - this.revealNow);
+    this.revealNow = now;
+    const k = dt === Infinity ? 1 : 1 - Math.exp(-dt / REVEAL_FADE_MS);
+    for (const [sp, target] of this.revealed) {
+      if (sp.destroyed) {
+        this.revealed.delete(sp);
+        continue;
+      }
+      const a = sp.alpha + (target - sp.alpha) * k;
+      sp.alpha = Math.abs(target - a) < 0.01 ? target : a;
+      if (target === 1 && sp.alpha === 1) this.revealed.delete(sp);
+    }
+  }
+
+  private wallSpritesAt(x: number, y: number): readonly Sprite[] {
+    if (x < 0 || y < 0) return NO_SPRITES;
+    const c = this.cache.get(`${Math.floor(x / CHUNK_TILES)},${Math.floor(y / CHUNK_TILES)}`);
+    return c?.wallSprites.get(`${x},${y}`) ?? NO_SPRITES;
   }
 
   /**
@@ -487,6 +552,7 @@ export class MapView {
     /** Flat border pieces: children of the chunk's ground container, destroyed with it. */
     const flats: Sprite[] = [];
     const lights: number[] = [];
+    const wallSprites = new Map<string, Sprite[]>();
     let shadows: Container | undefined;
     const elev = this.elevation;
     for (const s of data.items) {
@@ -522,6 +588,12 @@ export class MapView {
           items.push(sprite);
           itemTiles.push(x, y);
           itemIds.push(id);
+          if (art?.wall || this.joinsWalls(id)) {
+            const k = `${x},${y}`;
+            const list = wallSprites.get(k);
+            if (list) list.push(sprite);
+            else wallSprites.set(k, [sprite]);
+          }
         }
         if (elev && raised < MAX_ELEVATION)
           raised = Math.min(MAX_ELEVATION, raised + Math.max(0, elev(id)));
@@ -556,6 +628,7 @@ export class MapView {
       lights,
       emitters,
       deps: deps.size > 0 ? [...deps.values()] : NO_DEPS,
+      wallSprites,
     });
     if (animated.length > 0) this.animatedStale = true;
     this.builds++;
@@ -578,6 +651,18 @@ export class MapView {
 }
 
 const EMPTY_WALLS = new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+const NO_SPRITES: readonly Sprite[] = [];
+
+/** A sprite's rectangle in its parent's units, from its texture, anchor and scale. */
+function spriteRect(sp: Sprite): WorldRect {
+  const w = sp.texture.width * Math.abs(sp.scale.x);
+  const h = sp.texture.height * Math.abs(sp.scale.y);
+  return { x: sp.x - sp.anchor.x * w, y: sp.y - sp.anchor.y * h, width: w, height: h };
+}
+
+export function overlaps(a: WorldRect, b: WorldRect): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
 
 /** Whether ground tile (lx, ly) of a chunk borders another ground (inside the chunk). */
 function edgeOf(ground: ChunkData["ground"], lx: number, ly: number, id: string): boolean {

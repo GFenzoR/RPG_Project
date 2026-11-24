@@ -216,10 +216,13 @@ parte de arriba transparente.
 - **Puertas:** pieza de 32x64 con marco y dintel, que continúa la tapa. Una puerta de casa
   (`houses.yaml` `doors`) que hoy es solo suelo recibe un marco decorativo que no bloquea.
 - **Muros altos** (murallas, acantilados): cara de 64 px (sprite de 32x96).
-- **Detrás de un muro:** el jugador propio, si queda tapado, se dibuja además como
-  **silueta** (contorno claro al 50 %) sobre los muros. Así nunca se pierde. A los demás no
-  se les hace nada: esconderse detrás de un muro es parte del juego. No hacemos los muros
-  transparentes como Diablo 2, porque dejaría ver los interiores.
+- **Detrás de un muro** (cambiado por el dueño el 2026-11-23): si un muro tapa al jugador
+  propio, **el muro cede**. Solo las piezas de muro que están al sur de él y cubren su
+  dibujo se vuelven translúcidas (35 %), con un fundido corto, y vuelven al alejarse. El
+  jugador nunca palidece. Antes se dibujaba encima una silueta clara al 45 %, y el dueño la
+  vio "pálida y rara". A los demás no se les hace nada: esconderse detrás de un muro es
+  parte del juego. Solo cede el muro que tapa al jugador, no todos los muros de la vista
+  como en Diablo 2, así los interiores no quedan a la vista.
 - Techos y pisos de arriba (en Tibia se ocultan al entrar) **quedan fuera** de este plan.
   Hoy solo se dibuja el piso del jugador.
 
@@ -247,9 +250,12 @@ parte de arriba transparente.
   tapa a la criatura de la casilla de atrás y la criatura de adelante tapa la cara. Las
   piezas se eligen mirando los vecinos también en el chunk de al lado, y un chunk se
   rearma si cambia un vecino del que dependen sus bordes.
-- **Silueta:** cuando el muro de la casilla de al sur tapa al jugador propio, el cliente
-  dibuja encima del mapa una copia de su frame, aclarada y al 45 %
-  (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
+- **El muro cede** (desde el 2026-11-23): `MapView` guarda las piezas de muro por casilla
+  (`wallSprites`, y también los items que se unen a los muros). En cada frame,
+  `revealBehind(rect, fila, ahora)` funde a `REVEAL_ALPHA` (0,35) las de las
+  `REVEAL_ROWS` filas al sur del jugador que se cruzan con su dibujo. El dibujo es
+  `figureRect` de `game-canvas.ts`: la caja del sprite del cuerpo. Las demás piezas vuelven
+  a 1, con un fundido exponencial de `REVEAL_FADE_MS` (90 ms). Los demás jugadores quedan
   tapados.
 - **Muros altos, ventanas y marcos (hecho, 2026-11-18):** la muralla `rampart_wall` (16
   piezas de 32x96, cara de 64 px), los muros con ventana `stone_wall_window` y

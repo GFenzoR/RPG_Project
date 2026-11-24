@@ -2,7 +2,14 @@ import { Texture } from "pixi.js";
 import type { Container, Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { Container as PixiContainer } from "pixi.js";
-import { MapView, entityZIndex, itemZIndex } from "./map-view.ts";
+import {
+  MapView,
+  REVEAL_ALPHA,
+  REVEAL_FADE_MS,
+  entityZIndex,
+  itemZIndex,
+  overlaps,
+} from "./map-view.ts";
 import type { ChunkData, TileSource } from "./map-view.ts";
 import { lookOf, tileHash } from "./tile-art.ts";
 import type { TileArt } from "./tile-art.ts";
@@ -232,6 +239,47 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     v.render(cam, size);
     expect(labelAt(v, 31, 5)).toEqual(["wall_12"]); // S, W
     expect(labelAt(v, 33, 5)).toEqual(["wall_0"]); // alone
+  });
+
+  it("fades the walls in front of a figure that cover it, never the ones behind (ART-3)", () => {
+    // The textures here are 1x1: each wall piece covers the pixel at its tile's bottom-right.
+    const chunks = new Map<string, ChunkData>([
+      [
+        "7/0/0",
+        {
+          ground: ground(),
+          items: [
+            { x: 10, y: 4, stack: ["wall"] }, // north of the figure: drawn behind it
+            { x: 10, y: 6, stack: ["wall"] }, // south of it, over its feet
+            { x: 20, y: 6, stack: ["wall"] }, // south, but far from it
+          ],
+        },
+      ],
+    ]);
+    const v = artView(chunks);
+    v.render(cam, size);
+    const wallAt = (x: number, y: number): Sprite =>
+      itemLayer(v).children.find((s) => s.x === (x + 1) * T && s.y === (y + 1) * T) as Sprite;
+    // A figure standing on row 5 whose drawing reaches down past the wall's corner, and up
+    // past the north wall's corner.
+    const figure = { x: 330, y: 150, width: 30, height: 80 };
+    v.revealBehind(figure, 5, 1000);
+    expect(wallAt(10, 6).alpha).toBe(REVEAL_ALPHA);
+    expect(wallAt(10, 4).alpha).toBe(1);
+    expect(wallAt(20, 6).alpha).toBe(1);
+    // It walks away: the wall fades back in smoothly, not in one frame.
+    v.revealBehind(undefined, 5, 1016);
+    const back = wallAt(10, 6).alpha;
+    expect(back).toBeGreaterThan(REVEAL_ALPHA);
+    expect(back).toBeLessThan(1);
+    v.revealBehind(undefined, 5, 1016 + REVEAL_FADE_MS * 10);
+    expect(wallAt(10, 6).alpha).toBe(1);
+  });
+
+  it("tells whether two rectangles overlap (touching edges do not)", () => {
+    const a = { x: 0, y: 0, width: 10, height: 10 };
+    expect(overlaps(a, { x: 9, y: 9, width: 5, height: 5 })).toBe(true);
+    expect(overlaps(a, { x: 10, y: 0, width: 5, height: 5 })).toBe(false);
   });
 
   it("picks a ground's look by tile, the same every time", () => {

@@ -61,8 +61,9 @@ client/
   le pasa a `MapView` el `TileArt` de cada item (`atlas.tileArt`, resuelto una vez por id)
   y la hora del frame, y `MapView` pone los looks de suelo, las piezas de muro, las anclas
   centradas, las sombras proyectadas (capa entre el suelo y los items) y avanza los tiles
-  animados sin asignar. Encima del mapa: la silueta del jugador propio cuando lo tapa el
-  muro de la casilla de al sur (`behindWall`, `view.wallAt`), y en los pisos z ≥ 8 la luz
+  animados sin asignar. Cuando un muro de las filas de al sur tapa al jugador propio, ese
+  muro se vuelve translúcido (`MapView.revealBehind` con `figureRect`, `REVEAL_ALPHA`): el
+  jugador nunca palidece (pedido del dueño del 2026-11-23). En los pisos z ≥ 8 la luz
   de `render/light-layer.ts` (multiply, bajo efectos y nombres; da luz el jugador y cada
   item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
@@ -684,7 +685,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la mano va sobre la ropa en las cuatro direcciones (docs/17 "Humanoides del motor": la
   oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
   `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
-  cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el cuerpo).
+  cuerpo es `figure.sprite` (siluetas y la caja de `figureRect` para el muro translúcido).
 - **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
   (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
   alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a

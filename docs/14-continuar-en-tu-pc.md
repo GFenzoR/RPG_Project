@@ -535,8 +535,9 @@ el punto 5:
     ataque a distancia: eso queda para la prueba a mano.
   - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
     jugador se ve con su aspecto y su equipo.
-  - **La silueta translúcida** (detrás de un muro, o tapado por otra criatura) muestra solo
-    el cuerpo, sin ropa ni arma.
+  - **La silueta translúcida** (tapado por otra criatura) muestra solo el cuerpo, sin ropa
+    ni arma. Detrás de un muro ya no hay silueta: el muro se vuelve translúcido (docs/17
+    ART-3, 2026-11-23).
   - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
     la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
   - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de

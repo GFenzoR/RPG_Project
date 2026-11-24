@@ -6,13 +6,22 @@ export * from "./camera.ts";
 export * from "./look.ts";
 export { Atlas, MISSING_TEXTURE } from "./atlas.ts";
 export type { AtlasIcon, AtlasIndex, AtlasLoadOptions } from "./atlas.ts";
-export { MAX_STACK_ORDER, MapView, entityZIndex, itemZIndex } from "./map-view.ts";
+export {
+  MAX_STACK_ORDER,
+  MapView,
+  REVEAL_ALPHA,
+  REVEAL_FADE_MS,
+  entityZIndex,
+  itemZIndex,
+  overlaps,
+} from "./map-view.ts";
 export type {
   ChunkData,
   ElevationLookup,
   MapViewOptions,
   TextureLookup,
   TileSource,
+  WorldRect,
 } from "./map-view.ts";
 export * from "./retry.ts";
 export * from "./tile-art.ts";

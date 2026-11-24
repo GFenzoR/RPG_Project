@@ -63,6 +63,7 @@ import type {
   StepKind,
   TileArt,
   WornSlot,
+  WorldRect,
 } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
@@ -157,12 +158,28 @@ const COLORS = {
 const BAR_W = 26;
 const BAR_H = 4;
 
-/** The own player seen through a wall (ART-3): its sprite, light and translucent. */
-const BEHIND_WALL_ALPHA = 0.45;
-const BEHIND_WALL_TINT = 0xd6e2ff;
 /** A creature hidden by a taller one in front of it (07-combat): drawn again like that. */
 const HIDDEN_ALPHA = 0.55;
 const HIDDEN_TINT = 0xffe2c8;
+
+/**
+ * The rectangle (world units) a creature's figure covers: its body sprite, anchored at the
+ * bottom centre and placed relative to the creature's container at (bodyX, bodyY).
+ */
+export function figureRect(
+  bodyX: number,
+  bodyY: number,
+  fig: {
+    x: number;
+    y: number;
+    scale: { x: number; y: number };
+    texture: { width: number; height: number };
+  },
+): WorldRect {
+  const w = fig.texture.width * Math.abs(fig.scale.x);
+  const h = fig.texture.height * Math.abs(fig.scale.y);
+  return { x: bodyX + fig.x - w / 2, y: bodyY + fig.y - h, width: w, height: h };
+}
 
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
@@ -438,13 +455,6 @@ export async function createGameCanvas(
         })
       : [],
   );
-  const doorTiles = new Set(content.houseDoors ?? []);
-  /**
-   * ART-3: the tile right south of the own player holds a wall that hides it. A house door's
-   * frame joins the walls but is open: standing just inside the doorway is not "behind".
-   */
-  const behindWallAt = (x: number, y: number): boolean =>
-    view.wallAt(x, y) && !(doorTiles.size > 0 && doorTiles.has(`${x},${y},${view.floor}`));
   const view = new MapView({
     source: new DecoratedSource(world, (z, cx, cy) => frames.get(`${z}/${cx}/${cy}`)),
     texture,
@@ -453,16 +463,6 @@ export async function createGameCanvas(
     elevation: (id) => content.items[Number(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
-  });
-  // ART-3: when a wall hides the own player (the wall right south of it covers its tile), a
-  // see-through copy of its sprite is drawn over the map, so the player never loses itself.
-  // The others stay hidden: hiding behind a wall is part of the game.
-  const behindWall = new Sprite({
-    anchor: { x: 0.5, y: 1 },
-    alpha: BEHIND_WALL_ALPHA,
-    tint: BEHIND_WALL_TINT,
-    visible: false,
-    roundPixels: true,
   });
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
@@ -526,7 +526,7 @@ export async function createGameCanvas(
     ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
     if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
   };
-  view.overlay.addChild(particles.view, hiddenLayer, behindWall);
+  view.overlay.addChild(particles.view, hiddenLayer);
   // The living world (livingworld/README.md, render/living.ts): footprints on the ground
   // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
   const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
@@ -1164,7 +1164,10 @@ export async function createGameCanvas(
       cam = { ...cam, x: cam.x + o.x / unit, y: cam.y + o.y / unit };
     }
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
-    behindWall.visible = false;
+    // ART-3: the wall pieces in front of the own player that cover it fade (the wall gives
+    // way, never the player); the others stay hidden: hiding behind a wall is part of the game.
+    let reveal: WorldRect | undefined;
+    let revealRow = 0;
     const tilePx = tilePixels(cam, T);
     particleView.x = cam.x;
     particleView.y = cam.y;
@@ -1226,13 +1229,9 @@ export async function createGameCanvas(
       view.placeEntity(s.body, later.x, later.y);
       const lift = s.figure?.lift ?? 0;
       drawnBoxes.add(c.id, p.x, p.y - raised, lift / T, entityZIndex(later.x, later.y));
-      if (c.id === world.selfId && s.figure && behindWallAt(Math.round(p.x), Math.round(p.y) + 1)) {
-        const fig = s.figure.sprite;
-        behindWall.texture = fig.texture;
-        behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
-        behindWall.scale.copyFrom(fig.scale);
-        behindWall.skew.copyFrom(fig.skew);
-        behindWall.visible = see === 1;
+      if (c.id === world.selfId && s.figure) {
+        reveal = figureRect(s.body.x, s.body.y, s.figure.sprite);
+        revealRow = Math.max(later.y, Math.round(p.y));
       }
       // Over the head of a figure taller than its tile (ART-2).
       const head = tileToScreen(cam, p.x + 0.5, p.y - raised - lift / T, T);
@@ -1254,6 +1253,7 @@ export async function createGameCanvas(
         distance: Math.max(Math.abs(c.pos.x - self.pos.x), Math.abs(c.pos.y - self.pos.y)),
       });
     }
+    view.revealBehind(reveal, revealRow, now);
     // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
     // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
     const placements = placeLabels(boxes, scale);
