@@ -33,7 +33,7 @@ const REPO = 'C:\\ProyectosVSCode\\RPG_Project'
 const BASE = args.base
 const NAME = args.name
 const PATHX = 'export PATH="/c/Program Files/Go/bin:/c/Program Files/Docker/Docker/resources/bin:/c/Users/fenzo/go/bin:/c/Users/fenzo/AppData/Roaming/npm:$PATH"'
-const ATTR = 'End every commit message with these two lines:\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VYGzVYFrCR4iudV4Qtt54T'
+const ATTR = 'End every commit message with these two lines:\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VYGzVaXXq1gtpVXN5LfFrF'
 const RISKS = ['high', 'server', 'content', 'client', 'docs']
 for (const it of args.items) {
   if (!it.slug || !it.branch || !it.wt || !it.brief || !RISKS.includes(it.risk)) {

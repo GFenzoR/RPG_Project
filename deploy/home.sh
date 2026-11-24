@@ -56,6 +56,14 @@ random_secret() { od -An -tx1 -N24 /dev/urandom | tr -d ' \n'; }
 ensure_env() {
 	[[ -f $TEMPLATE ]] || die "$TEMPLATE is missing: is this a full checkout?"
 	if [[ ! -f $ENV_FILE ]]; then
+		# New random passwords would not open a database volume that an earlier install (or
+		# another checkout of the repo: the compose project name is shared) initialized:
+		# the gameserver would fail to log in and restart forever.
+		if docker volume inspect rpg-home_pgdata >/dev/null 2>&1; then
+			die "a database from an earlier install exists (docker volume rpg-home_pgdata) but $ENV_FILE is missing, so its passwords are unknown.
+  Keep that data: copy the $ENV_FILE of that install (another folder or worktree of this repo) here.
+  Or start from scratch (DELETES accounts and characters): docker volume rm rpg-home_pgdata"
+		fi
 		local line out=""
 		while IFS= read -r line || [[ -n $line ]]; do
 			while [[ $line == *__RANDOM__* ]]; do
@@ -167,8 +175,15 @@ cmd_up() {
 	if ! VERSION=${VERSION:-dev} COMMIT=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)} \
 		compose ${profile[@]+"${profile[@]}"} up -d ${build[@]+"${build[@]}"} --wait --wait-timeout 600; then
 		compose "${ALL_PROFILES[@]}" ps -a || true
-		say "start failed. 'port is already allocated': change HOME_HTTP_PORT (or GRAFANA_PORT) in $ENV_FILE."
-		say "Otherwise see 'make home-logs' and docs/13, 'Problemas comunes'."
+		say "last gameserver log lines:"
+		compose logs --no-color --tail 25 gameserver 2>&1 || true
+		if compose logs --no-color gameserver 2>&1 | grep -q 'password authentication failed'; then
+			say "start failed: the database was created with other passwords than the ones in $ENV_FILE."
+			say "Copy the $ENV_FILE of the install that created it here, or start from scratch (DELETES accounts and characters): docker volume rm rpg-home_pgdata"
+		else
+			say "start failed. If it says 'port is already allocated': change HOME_HTTP_PORT (or GRAFANA_PORT) in $ENV_FILE."
+			say "Otherwise see 'make home-logs' and docs/13, 'Problemas comunes'."
+		fi
 		exit 1
 	fi
 	banner
