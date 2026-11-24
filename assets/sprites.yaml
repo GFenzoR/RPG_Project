@@ -172,11 +172,14 @@ animations:
 # steps: what each step on a ground kicks up (docs/17 MOV-7): dust, a small puff at the
 # feet, or ripple, a ring of drops spreading on wet ground.
 tiles:
-  ground/sand: { steps: dust }
-  ground/dirt: { steps: dust }
-  ground/ash: { steps: dust }
-  ground/cinder_path: { steps: dust }
-  ground/wet_sand: { steps: ripple }
+  # weight: the share of the main look. Grounds whose looks are other hearts of the same
+  # texture (docs/17 ART-4, recipes/variety.ts) keep it low, so no one tile repeats.
+  ground/grass: { weight: 0.3 }
+  ground/sand: { steps: dust, weight: 0.2 }
+  ground/dirt: { steps: dust, weight: 0.35 }
+  ground/ash: { steps: dust, weight: 0.3 }
+  ground/cinder_path: { steps: dust, weight: 0.3 }
+  ground/wet_sand: { steps: ripple, weight: 0.3 }
   ground/water_shallow: { ms: 240, sync: world, particles: spray }
   ground/water_shoal: { ms: 240, sync: world }
   ground/lava: { ms: 280, sync: world, particles: embers }

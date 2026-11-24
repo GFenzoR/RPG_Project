@@ -10,6 +10,7 @@ import {
   opaque,
   outline,
   px,
+  seedOf,
   shadeOf,
   tileNoise,
   tint,
@@ -18,6 +19,7 @@ import type { Rng } from "../draw.ts";
 import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
+import { groundBook, heart } from "./variety.ts";
 
 const { darkWood, weatheredWood, darkIron, rope, moss } = PALETTE;
 
@@ -357,12 +359,29 @@ function boulder(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.5 });
 }
 
+/** A grain ground with `n` looks whose hearts are other seeds of it. */
+function noiseLooks(
+  sprite: string,
+  draw: (img: Image, rand: Rng, seed: number) => void,
+  n: number,
+): RecipeBook {
+  const base = (img: Image, seed: number): void => draw(img, () => 0, seed);
+  return groundBook(
+    sprite,
+    seedOf(sprite),
+    base,
+    Array.from({ length: n }, (_, i) => heart(base, i + 1)),
+  );
+}
+
 export const TERRAIN: RecipeBook = {
   "ground/wooden_floor": { kind: "ground", draw: woodenFloor },
   "ground/dock_planks": { kind: "ground", draw: dockPlanks },
-  "ground/ash": { kind: "ground", draw: ashGround },
+  // Ash and cinder paths: grain textures, so their looks are other seeds of the heart
+  // (recipes/variety.ts, docs/17 ART-4).
+  ...noiseLooks("ground/ash", ashGround, 5),
   "ground/basalt": { kind: "ground", draw: basaltPaving },
-  "ground/cinder_path": { kind: "ground", draw: cinderPath },
+  ...noiseLooks("ground/cinder_path", cinderPath, 4),
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
   "decor/mooring_post": { kind: "object", draw: mooringPost },
   "decor/boulder": { kind: "object", draw: boulder },
