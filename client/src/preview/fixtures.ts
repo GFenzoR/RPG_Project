@@ -274,6 +274,16 @@ export function baseScene(content: ClientContent, now: number): Scene {
   ];
   ui.quests = questLog(Date.now(), itemNumber(content, "ember_key"));
   ui.clockOffset = 0;
+  // The minimap (docs/02 "Minimapa"): Puerto's temple square explored around the player
+  // (main.tsx stubGame paints it), a party member and chapter 2 tracked, its estimate
+  // north-east and off the minimap: the edge arrow.
+  ui.minimap = {
+    version: 1,
+    self: { x: 3163, y: 6384, z: 7, dir: Direction.SOUTH },
+    party: [{ id: 2, x: 3166, y: 6386 }],
+    hint: { questId: "ch2_roots", stepId: "cull_toads", x: 3290, y: 6300, z: 7, radius: 12 },
+    tracked: "ch2_roots",
+  };
   return { ui, name: "base" };
 }
 
