@@ -914,8 +914,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   más nuevos, 6 s, sin tomar clicks.
 - Nombres a zoom 1x (`render/labels.ts`): prioridad propio → objetivo → más cercano; si
   se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
-  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde zoom 2 no cambia
-  nada.
+  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde
+  `feat/name-labels` las reglas rigen mientras `zoom < 2 × labelScale` (`labelsFull`): con
+  nombres grandes, a cualquier zoom (ver "La fuente del canvas").
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
   deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
   `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los
@@ -1326,6 +1327,19 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `vite/canvas-font.test.ts` lee las tablas del `.ttf`: todo nombre de criatura tiene sus
   letras, uno acortado a zoom 1 (`labelText`) mide como mucho 96 px, las letras miden 7 y
   5 px de alto y los avances no son píxeles enteros (lo que dice `canvas-font.ts`).
+- **Tamaño y color de los nombres** (rama `feat/name-labels`, docs/17 "Hecho: nombres más
+  grandes y legibles"): `render/label-style.ts` (puro, con tests) tiene los tokens de color
+  (`LABEL_COLORS`, `SKULL_COLORS`, `LABEL_OUTLINE`; contraste ≥ `LABEL_MIN_CONTRAST`, 4,5,
+  comprobado en `label-style.test.ts`: un color nuevo va ahí, nunca suelto) y `labelScale`
+  (zoom, `NameSize`): los píxeles por celda de la fuente. Cada frame el canvas escala por
+  ese entero el nombre, el gremio, la marca y los números flotantes (`EffectLayer.draw`,
+  `textScale`), todos con `textureStyle` `nearest`; los huecos de `labels.ts` y de la marca
+  también. La opción es `rpg.name-size` (`loadNameSize`/`saveNameSize` de
+  `state/ui-prefs.ts`, `name-size` en `InterfaceOptions`), que llega como
+  `GameSettings.nameSize` → `GameOptions.nameSize()` → `GameCanvasOptions.nameSize()`.
+  Hooks E2E: `__rpgClient.labels()` (escala y caja en la página de cada nombre visible) y
+  `wallFade(x, y)` (el alfa de las piezas de muro de una casilla, `MapView.wallAlphaAt`, y
+  cuántas copias translúcidas se dibujaron).
 - **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
   `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
   (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten

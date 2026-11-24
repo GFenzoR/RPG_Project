@@ -137,6 +137,15 @@ el punto 5:
     emisor (se oye una fragua a través de un muro).
   - **E2E:** el test de sonido de `e2e/game.spec.ts` espera la brisa del pasto (y no las
     olas) en el templo de la isla del E2E; lo corre el lote al final.
+- **Nombres más grandes y legibles (hecho, rama `feat/name-labels`; el dueño el 2026-11-23:
+  "los nombres deben ser más grandes", el violeta de los NPCs no se leía; docs/17 "Hecho:
+  nombres más grandes y legibles"):** los nombres, gremios, marcas PvP y números flotantes
+  escalan con el zoom en pasos enteros (grande por defecto, normal en Opciones → Interfaz)
+  y los colores tienen contraste ≥ 4,5:1 contra el contorno. Falta que el dueño lo mire en
+  su pantalla: si a 1x (la app a 960x700) los quiere más grandes, `labelScale` daría 2 desde
+  zoom 1 con "Grande" (a 1x un nombre ocuparía 2/3 de casilla de alto y se ocultarían más
+  por solapes). El muro que se vuelve translúcido delante del jugador (ART-3) tiene ahora su
+  E2E (`102-wall-fade-own-player`).
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

@@ -2606,6 +2606,53 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
   ~125 con la negrita de 12 px).
 
+### Hecho: nombres más grandes y legibles (2026-11-24, rama `feat/name-labels`)
+El dueño (2026-11-23): "los nombres sobre los personajes deben ser más grandes", y con el
+color de algunos NPCs no se leían (el violeta `0x7d4fb0` sobre el contorno negro).
+- **Tamaño** (`client/src/render/label-style.ts`, `labelScale`, puro y con tests). Antes un
+  nombre medía siempre 11 px de pantalla, fuera cual fuera el zoom: a 4x en una pantalla de
+  alta densidad era un cuarto de casilla. Ahora el `Text` se rasteriza una vez al tamaño de
+  la grilla de la fuente (11 px, una celda por píxel) y se escala por un **entero** con
+  muestreo al más cercano (`textureStyle: { scaleMode: "nearest" }`): cada celda pasa a ser
+  un cuadrado exacto de 2x2 o 3x3 píxeles y el aspecto pixel art se mantiene (también el
+  contorno de 3 px, que escala con él). La escala sigue al zoom del mapa:
+  | Zoom del mapa | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  |---|---|---|---|---|---|---|---|---|
+  | Grande (por defecto) | 1 | 2 | 2 | 3 | 3 | 4 | 5 | 5 |
+  | Normal | 1 | 1 | 1 | 2 | 2 | 3 | 3 | 4 |
+  Grande es 3/5 del zoom redondeado hacia arriba; normal, la mitad hacia abajo (a 2x, el
+  zoom de un monitor 1080p, queda como antes). Escalan igual la línea del gremio, la marca
+  PvP y los números flotantes; la barra de vida ya escalaba con el zoom.
+- **Opción** Opciones → Interfaz → "Tamaño de nombres" (normal / grande; `rpg.name-size`,
+  `state/ui-prefs.ts`), grande por defecto.
+- **Solapes** (`render/labels.ts`): las reglas de T5.6 (perder el gremio, subir una línea,
+  ocultar los lejanos) ya no dependen del zoom solo, sino de qué tan grande es el nombre al
+  lado de su casilla: se saltan solo si `zoom >= 2 × labelScale` (`labelsFull`). Con
+  nombres grandes rigen a cualquier zoom, igual que a 1x; la separación al subir uno sobre
+  otro es de una celda escalada. El recorte a 12 caracteres sigue entrando: un nombre
+  recortado a escala k mide k veces lo de 1x al lado de una casilla k veces más grande.
+- **Colores** (tokens en `label-style.ts`, `LABEL_COLORS` y `SKULL_COLORS`; `game-canvas.ts`
+  y `state/pvp.ts` los usan). Cada relleno tiene un contraste WCAG de al menos 4,5:1 contra
+  el contorno negro (`label-style.test.ts` lo calcula para todos, y para los efectos de
+  nombre de la tienda contra su propio contorno), y los tonos quedan a 40° o más entre sí:
+  | Quién | Antes | Ahora | Contraste |
+  |---|---|---|---|
+  | Uno mismo (azul) | `0x3a7bd5` (5,0) | `0x5ea2ff` | 8,1 |
+  | Otro jugador (ámbar) | `0xd59a3a` | `0xf0b040` | 11,0 |
+  | Monstruo (rojo) | `0xb03a2e` (3,5) | `0xff4f5e` | 6,5 |
+  | NPC (violeta) | `0x7d4fb0` (3,6) | `0xc79bff` | 9,6 |
+  | Gremio (verde) | `0xb8e986` | igual | 15,0 |
+  | Marca agresor / asesino / proscrito | `0xf2b233` / `0xd23a3a` (4,4) / `0x8e4fd6` (4,2) | igual / `0xf04848` / `0xb07cff` | 11,2 / 5,7 / 7,2 |
+  Los bloques de color de una criatura sin sprite usan los mismos tokens.
+- **E2E** (`client/e2e/sandbox.spec.ts`, último test): el instructor de Thimblewick a 2x y a
+  1x (`100-names-2x-npc`, `100b-names-1x-npc`), las ratas del corral a 2x, a 4x y a 4x con
+  "Normal" (`101-*`), y el muro sur del templo delante del jugador (`102-*`, abajo). Hooks
+  `__rpgClient.labels()` y `wallFade(x, y)`.
+- **El muro delante del jugador** (ART-3, 2026-11-23) se verifica en el mismo test: parado en
+  2092,2090, justo al norte del muro sur del templo, la pieza de 2092,2091 baja de 1 (alfa
+  < 0,5), la de 2099,2091 no, y no se dibuja ninguna copia pálida del jugador
+  (`102-wall-fade-own-player`, de cerca en `102b-...-close`).
+
 ### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
 Lo que dijo el dueño de la prueba del 2026-11-19 (Thimblewick, build del lote 11):
 "cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique
