@@ -76,8 +76,8 @@ export function baseScene(content: ClientContent, now: number): Scene {
     level: 15,
     experience: 35280,
     levelPercent: 62,
-    capacity: 41250,
-    maxCapacity: 66000,
+    capacity: 21350, // grams free (docs/02 "Unidades")
+    maxCapacity: 59000,
     speed: 230,
   };
   ui.selfName = "Aldric Varn";

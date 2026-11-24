@@ -7,6 +7,7 @@ import type { JSX } from "preact";
 import { instanceName } from "../state/item-name.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { CardEffect, CardRequirement, CardStat, ItemCardView } from "../state/item-card.ts";
+import { formatLength, formatMass } from "../state/units.ts";
 
 /** A sprite's place in the atlas, as Game.itemIcon gives it. */
 export interface IconRect {
@@ -174,11 +175,25 @@ function AttributeLine(props: { t: Translate; card: ItemCardView }): JSX.Element
   );
 }
 
-/** A stat's value as the card writes it ("13", "33.00 oz", "33.00 oz (330.00 oz in total)"). */
+/** A stat's value without the stack's total ("13", "5 m", "1,2 kg"; docs/02 "Unidades"). */
+function statOwn(t: Translate, s: CardStat): string {
+  if (s.id === "weight") return formatMass(s.value, t);
+  if (s.id === "range") return formatLength(s.value, t);
+  return String(s.value);
+}
+
+/** The whole stack's weight as the card writes it after the unit's ("(12 kg in all)"). */
+function statTotal(t: Translate, s: CardStat): string | undefined {
+  return s.total === undefined
+    ? undefined
+    : t("client.card.weight_total", { weight: formatMass(s.total, t) });
+}
+
+/** A stat's value as the card writes it ("13", "5 m", "1,2 kg", "300 g (3 kg in all)"). */
 function statValue(t: Translate, s: CardStat): string {
-  if (s.id !== "weight") return String(s.value);
-  const oz = t("client.card.oz", { oz: s.value });
-  return s.total === undefined ? oz : `${oz} ${t("client.card.weight_total", { oz: s.total })}`;
+  const own = statOwn(t, s);
+  const total = statTotal(t, s);
+  return total === undefined ? own : `${own} ${total}`;
 }
 
 export function ItemCard(props: {
@@ -209,10 +224,8 @@ export function ItemCard(props: {
             <div key={s.id} data-stat={s.id}>
               <dt>{t(`client.card.stat.${s.id}`)}</dt>
               <dd>
-                {s.id === "weight" ? t("client.card.oz", { oz: s.value }) : s.value}
-                {s.total !== undefined && (
-                  <span class="card-total"> {t("client.card.weight_total", { oz: s.total })}</span>
-                )}
+                {statOwn(t, s)}
+                {s.total !== undefined && <span class="card-total"> {statTotal(t, s)}</span>}
               </dd>
             </div>
           ))}

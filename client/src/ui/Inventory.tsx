@@ -40,7 +40,7 @@ import {
   slotBox,
   slotDrop,
 } from "../state/equipment.ts";
-import { formatOz } from "../state/items.ts";
+import { formatMass } from "../state/units.ts";
 import { pocketCells, pocketRef } from "../state/pockets.ts";
 import type { ItemRef } from "../state/items.ts";
 import type { ContainerState, ItemView } from "../state/world.ts";
@@ -247,8 +247,8 @@ function Capacity(props: { t: Translate; free: number; max: number }): JSX.Eleme
       </span>
       <p>
         {props.t("client.inventory.capacity", {
-          free: formatOz(props.free),
-          max: formatOz(props.max),
+          free: formatMass(props.free, props.t),
+          max: formatMass(props.max, props.t),
         })}
       </p>
     </div>

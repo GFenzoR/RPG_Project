@@ -5,12 +5,6 @@ import type { Pos } from "./geometry.ts";
 import type { ItemMods } from "../content-types.ts";
 import type { WorldState } from "./world.ts";
 
-/** Grams per displayed "oz" (docs/06: weights in grams, shown in oz). */
-export const GRAMS_PER_OZ = 100;
-
-/** A weight in grams as the UI shows it: oz with two decimals. */
-export const formatOz = (grams: number): string => (grams / GRAMS_PER_OZ).toFixed(2);
-
 export type ItemLoc =
   | { kind: "pos"; pos: Pos }
   | { kind: "slot"; slot: EquipmentSlot }

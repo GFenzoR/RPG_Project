@@ -90,7 +90,7 @@ export interface ItemDef {
   /** data/items `kind` ("weapon", "armor", "consumable"...): the card's type line and the
    * shop's category. */
   kind?: string;
-  /** Grams (docs/06), shown in oz. Absent for 0. */
+  /** Grams (docs/06), shown in g or kg (state/units.ts). Absent for 0. */
   weight?: number;
   weapon?: WeaponStats;
   /** Ammunition: the type of the bows that shoot it and the attack it adds. */

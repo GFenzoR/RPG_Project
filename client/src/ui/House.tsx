@@ -8,6 +8,7 @@ import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { daysLeft, houseActions } from "../state/house.ts";
+import { formatArea } from "../state/units.ts";
 import { field } from "./Market.tsx";
 
 interface Props {
@@ -53,7 +54,7 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
       <p class="facts">
         {t("client.house.facts", {
           island: t(`island.${h.island}.name`),
-          size: h.size,
+          area: formatArea(h.size, t),
           items: h.items,
           max: h.maxItems,
         })}

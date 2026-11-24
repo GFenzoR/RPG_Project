@@ -3197,7 +3197,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await a.mouse.click(doorA.x, doorA.y);
   await a.keyboard.up("Shift");
   await expect(a.getByTestId("game-log")).toContainText(
-    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 casillas).",
+    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 m²).",
   );
   await openDoor(a);
   const win = a.getByTestId("house");

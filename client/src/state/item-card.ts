@@ -7,7 +7,6 @@ import { EquipmentSlot } from "@rpg/protocol";
 import type { AttributeDef, ForgeRules, ItemDef, ItemMods } from "../content-types.ts";
 import { refineGain, refineKind } from "./forge.ts";
 import type { RefineKind } from "./forge.ts";
-import { formatOz } from "./items.ts";
 
 /** What the card needs to know of the player looking. Unknown fields skip the check. */
 export interface Viewer {
@@ -16,13 +15,16 @@ export interface Viewer {
   magicLevel?: number | undefined;
 }
 
-/** One stat line: its label's i18n key and the value (a number, or "1.20" oz). */
+/**
+ * One stat line: its label's i18n key and the value. A weight is in grams and a range in
+ * tiles: the card writes them in g/kg and metres (state/units.ts, docs/02 "Unidades").
+ */
 export interface CardStat {
   /** client.card.stat.<id> */
   id: "attack" | "defense" | "armor" | "range" | "slots" | "charges" | "weight";
-  value: number | string;
-  /** For a stack: the whole stack's weight ("10.32"). */
-  total?: string | undefined;
+  value: number;
+  /** For a stack: the whole stack's weight, in grams. */
+  total?: number | undefined;
 }
 
 /** A requirement and whether the viewer meets it (undefined = unknown). */
@@ -183,8 +185,8 @@ export function itemCard(
     const grams = def.weight ?? 0;
     card.stats.push({
       id: "weight",
-      value: formatOz(grams),
-      total: card.count > 1 ? formatOz(grams * card.count) : undefined,
+      value: grams,
+      total: card.count > 1 ? grams * card.count : undefined,
     });
   }
   const req = def.requires;

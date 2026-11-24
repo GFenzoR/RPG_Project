@@ -390,7 +390,7 @@ describe("the right-click menu (docs/17 UI-6)", () => {
     id: "raw_fish",
     count: 12,
     type: ["client.card.kind.consumable", "client.card.food"],
-    stats: [{ id: "weight" as const, value: "5.00", total: "60.00" }],
+    stats: [{ id: "weight" as const, value: 500, total: 6000 }],
     requires: [],
     effects: [{ id: "food" as const, seconds: 60 }],
     desc: "item.raw_fish.desc",

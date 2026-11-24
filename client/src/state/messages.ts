@@ -5,7 +5,7 @@ import type { TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { instanceName } from "./item-name.ts";
-import { formatOz } from "./items.ts";
+import { formatMass } from "./units.ts";
 import type { ChatLine, CreatureState, LogMessage } from "./world.ts";
 
 /** The translated name of a creature: players by name, monsters and NPCs by content id. */
@@ -40,9 +40,9 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
         params[p.name] = p.value.value;
         break;
       case "number":
-        // Weights travel in grams and show in oz.
+        // Weights travel in grams and show in g or kg (docs/02 "Unidades").
         params[p.name] =
-          p.name === "weight" ? formatOz(Number(p.value.value)) : Number(p.value.value);
+          p.name === "weight" ? formatMass(Number(p.value.value), t) : Number(p.value.value);
         break;
       case "contentId":
         params[p.name] =

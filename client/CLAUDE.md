@@ -133,7 +133,7 @@ client/
 - `WorldState` guarda `inventory` (slot → item), `containers` (ventanas abiertas) y el
   `count` de cada item de los tiles (`tileCounts`). `state/items.ts` arma las
   `ItemLocation` del protocolo y el item de arriba de un tile.
-- Panel `ui/Inventory.tsx`: slots de equipo, capacidad (oz = gramos / 100) y una ventana
+- Panel `ui/Inventory.tsx`: slots de equipo, capacidad (gramos, en g o kg: `state/units.ts`) y una ventana
   por contenedor abierto. Los iconos son el sprite del atlas como fondo CSS
   (`Atlas.icon`). Desde `feat/equipment-d2` el equipo es una figura al estilo Diablo II,
   con la mochila equipada abajo y la capacidad como barra: ver "Notas del equipo y el
