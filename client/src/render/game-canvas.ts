@@ -1182,7 +1182,8 @@ export async function createGameCanvas(
       if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
     }
   };
-  const drawGhosts = (now: number): void => {
+  /** `casting`: the frame casts shadows; a falling body keeps its own until it fades. */
+  const drawGhosts = (now: number, casting: boolean): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
       animInput.now = now;
@@ -1193,6 +1194,7 @@ export async function createGameCanvas(
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
+      else if (casting) g.figure.castShadow(castShadows, g.body.x, g.body.y);
     }
   };
 
@@ -1404,10 +1406,12 @@ export async function createGameCanvas(
     }
     drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
-    if (casting) castShadows.end();
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
-    drawGhosts(now);
+    // The bodies falling or shimmering away cast their shadow too, until they fade below
+    // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
+    drawGhosts(now, casting);
+    if (casting) castShadows.end();
     // A creature mostly hidden by a taller one in front (a wolf right north of a player),
     // and a body falling or shimmering away behind one.
     hiddenShown = 0;

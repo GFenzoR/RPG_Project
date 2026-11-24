@@ -127,7 +127,8 @@ func (w *World) cmdTime(ctx *game.TickContext, p *Player, args []string) bool {
 		word := strings.ToLower(args[0])
 		if ms, ok := c.PhaseStart(word); ok {
 			w.sky.Set(tick, ms)
-		} else if m, err := strconv.Atoi(word); err == nil && m >= 0 && int64(m)*60_000 < c.CycleMs() {
+			// Compared in minutes: a huge number times 60 000 would wrap around into the cycle.
+		} else if m, err := strconv.Atoi(word); err == nil && m >= 0 && int64(m) < c.CycleMs()/60_000 {
 			w.sky.Set(tick, int64(m)*60_000)
 		} else {
 			return false

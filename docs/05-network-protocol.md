@@ -1618,7 +1618,8 @@ se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en 
   pertenece al día en que cayó; el `/time` del staff informa esa misma fase), `cycle_ms`
   (cuánto va del ciclo: 0 empieza el amanecer, `day_minutes` empieza la noche) y `rate`
   (ms del mundo por ms real: 1 normal, 0 detenido por el staff). Llega justo después del
-  `Welcome`, a todos cada `sync_seconds` (60) de `data/livingworld/daynight.yaml` y en el
+  `Welcome`, a todos cada `sync_seconds` (60) de `data/livingworld/daynight.yaml` mientras
+  el reloj corre (detenido, `rate` 0, no hay nada nuevo que decir y no se repite) y en el
   acto después de un `/time` (docs/16). El cliente lo lleva adelante a `rate` entre dos y
   dibuja con él la luz, las lámparas y las sombras; ninguna regla depende de la hora. Sin
   `daynight.yaml` el servidor no lo manda y el cliente dibuja el mediodía (también un

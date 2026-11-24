@@ -560,8 +560,9 @@ sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingwor
   ponerse. De noche la proyecta la luna, tenue (0,16) y según su fase (nada con luna
   nueva). Toda la capa se desvanece junta (un `AlphaFilter`): dos sombras que se cruzan o
   las capas de un muñeco no hacen manchas más oscuras. La **sombra de contacto** (la
-  elipse) sigue siempre: los pies nunca flotan. Con "Animaciones reducidas" no hay sombra
-  proyectada (solo la de contacto).
+  elipse) sigue siempre: los pies nunca flotan. Un cuerpo que cae muerto conserva su
+  sombra hasta desvanecerse a la mitad. Con "Animaciones reducidas" no hay sombra
+  proyectada (solo la de contacto); el tinte y las luces de la noche siguen.
 - **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
   sobre su capa); no giran con él (pendiente en docs/14).
 - La sombra gira en la **línea de los pies** del sprite, no en el borde de abajo de la

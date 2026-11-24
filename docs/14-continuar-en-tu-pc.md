@@ -238,8 +238,10 @@ el punto 5:
       sigue a la luna; apuntarla lejos del fuego queda para después.
     - **Medir en el navegador (decisión del dueño):** el pedido era un sprite más por
       criatura visible; la capa de sombras suma un sprite por capa de cada criatura (540
-      con 60 muñecos) y una pasada de filtro (docs/07), y ningún test mide el tiempo de
-      frame. Falta medirlo en el E2E con mucha gente de noche, sobre todo en móvil, o que
+      con 60 muñecos) y una pasada de filtro (docs/07). Del lado JS está medido (~0,035 ms
+      por frame colocar las 540, en Node), pero ningún test mide el tiempo de frame en el
+      navegador (batches, la pasada del filtro, el mapa de luz de noche). Falta medirlo
+      en el E2E con mucha gente de noche, sobre todo en móvil, o que
       el dueño acepte el costo; si no entra, la salida es hornear la silueta de cada
       muñeco en una textura (un sprite por criatura). El `AlphaFilter` de
       `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
@@ -255,7 +257,20 @@ el punto 5:
       la sombra ahora gira en la línea de los pies, no en el borde de la textura.
     - **Efectos reducidos sin sombra proyectada (decisión del dueño):** con "Animaciones
       reducidas" o `prefers-reduced-motion` (común en móvil) solo queda la elipse de
-      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así.
+      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así. El
+      tinte del cielo y el mapa de luz de la noche (lámparas, fogatas) **no** se apagan
+      con efectos reducidos: no se mueven ni parpadean, y sin ellos no habría noche;
+      confirmar también eso.
+    - **Luna nueva contra el piso de luminancia (mirar en las capturas):** el color
+      `night_new_moon` (`#58648c`, luminancia ~0,40) queda bajo `floor` 0,5, así que
+      nunca se dibuja tal cual: `withFloor` lo aclara. La diferencia real entre luna nueva
+      y llena es ~0,50 contra ~0,58, poco para "una noche más oscura". Al mirar
+      `99c-daynight-night` y `99f-daynight-new-moon`: subir `night_full_moon` o bajar
+      `floor` (mínimo del esquema 0,3). No se tocó a ciegas.
+    - **Sombra al morir (mirar en video o capturas):** un cuerpo que cae o se desvanece
+      ahora conserva su sombra proyectada hasta bajar de media opacidad; antes desaparecía
+      al empezar la animación. Ningún test unitario cubre ese cableado de
+      `game-canvas.ts` (solo el E2E).
     - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.

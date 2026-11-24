@@ -117,6 +117,25 @@ describe("CastShadows", () => {
     expect(layer.count).toBe(540);
   });
 
+  // docs/07: placing a crowd's shadows is ~0.035 ms of JS a frame (Node, 2026-11-24). A
+  // wide ceiling, so only a real regression (work per sprite, allocation) trips it. The
+  // browser's side (batches, the filter pass) is not measured here (docs/14).
+  it("places a crowd's shadows well inside the frame budget", () => {
+    const layer = new CastShadows(fakeFade);
+    const t = tex();
+    const frame = (f: number): void => {
+      layer.begin({ skewX: 0.3 + f * 1e-4, scaleY: 0.4, alpha: 0.4 });
+      for (let i = 0; i < 60 * 9; i++)
+        layer.part(t, i + f, f, i % 2 === 0 ? 1 : -1, 1, 8, (i % 3) * 0.1);
+      layer.end();
+    };
+    for (let f = 0; f < 50; f++) frame(f); // the pool, and the JIT
+    const frames = 500;
+    const start = performance.now();
+    for (let f = 0; f < frames; f++) frame(f);
+    expect((performance.now() - start) / frames).toBeLessThan(2);
+  });
+
   it("hides with no light to cast (alpha 0, or none)", () => {
     const layer = new CastShadows(fakeFade);
     layer.begin({ skewX: 0, scaleY: 0.2, alpha: 0.3 });

@@ -6,7 +6,7 @@
 // baked shadows of trees and buildings are, and night for the fireflies. The sky model
 // itself lives in livingworld/client/src/sky.ts. A frame allocates nothing.
 import { advance, newSky, shadowTransform, skyAt } from "@rpg/living-world";
-import type { DayNightData, Sky } from "@rpg/living-world";
+import type { DayNightData, Sky, WorldTime } from "@rpg/living-world";
 import type { WorldClockState } from "../state/world-clock.ts";
 import type { ShadowPose } from "./cast-shadows.ts";
 
@@ -20,6 +20,7 @@ export const NIGHT_PLAYER_LIGHT = 0.55;
 export class SkyView {
   private readonly sky: Sky = newSky();
   private readonly pose: ShadowPose = { skewX: 0, scaleY: 0, alpha: 0 };
+  private readonly time: WorldTime = { day: 0, cycleMs: 0 };
   private drawn = false;
 
   /** `data`: data/livingworld/daynight.yaml (no data: no day and night, `update` gives undefined). */
@@ -38,7 +39,7 @@ export class SkyView {
     const c = this.clock;
     if (!c.known) skyAt(d, 0, d.dayMs / 2, this.sky);
     else {
-      const t = advance(d, c.day, c.cycleMs, c.rate, now - c.at);
+      const t = advance(d, c.day, c.cycleMs, c.rate, now - c.at, this.time);
       skyAt(d, t.day, t.cycleMs, this.sky);
     }
     this.drawn = true;
@@ -70,9 +71,7 @@ export class SkyView {
    */
   shadowPose(sky: Sky | undefined, reduced = false): ShadowPose | undefined {
     if (reduced || !sky || sky.shadow.alpha <= 0) return undefined;
-    const t = shadowTransform(sky.shadow);
-    this.pose.skewX = t.skewX;
-    this.pose.scaleY = t.scaleY;
+    shadowTransform(sky.shadow, this.pose);
     this.pose.alpha = sky.shadow.alpha;
     return this.pose;
   }

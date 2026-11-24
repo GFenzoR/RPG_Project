@@ -128,9 +128,16 @@ export function parseDayNight(raw: unknown): DayNightData {
 /** The cycle's length, ms. */
 export const cycleLength = (d: DayNightData): number => d.dayMs + d.nightMs;
 
+/** A moment of the world on the client: the day and how far into its cycle, ms. */
+export interface WorldTime {
+  day: number;
+  cycleMs: number;
+}
+
 /**
  * The world time `elapsedMs` real ms after the server said (day, cycleMs) at `rate`
- * (WorldClock): the client runs the clock on between two syncs.
+ * (WorldClock): the client runs the clock on between two syncs. Written into `out` when
+ * given (the per-frame caller reuses one: a frame allocates nothing).
  */
 export function advance(
   d: DayNightData,
@@ -138,11 +145,14 @@ export function advance(
   cycleMs: number,
   rate: number,
   elapsedMs: number,
-): { day: number; cycleMs: number } {
+  out: WorldTime = { day: 0, cycleMs: 0 },
+): WorldTime {
   const len = cycleLength(d);
   const t = cycleMs + Math.max(0, elapsedMs) * Math.max(0, rate);
   const wraps = Math.floor(t / len);
-  return { day: day + wraps, cycleMs: t - wraps * len };
+  out.day = day + wraps;
+  out.cycleMs = t - wraps * len;
+  return out;
 }
 
 /** The moon's light on `day`: 0 at new moon (phase 0), 1 at full (phase lunarDays/2). */
@@ -210,10 +220,17 @@ export function arcShadow(
 /**
  * The Pixi transform that lays an upright sprite (anchored at its feet) on the ground as
  * `s`: skew.x and scale.y (scale.x stays 1). The tip of a sprite of height h lands h * s.x
- * east and h * s.y north of the feet.
+ * east and h * s.y north of the feet. Written into `out` when given (any object with the
+ * two fields: the per-frame caller reuses its own).
  */
-export function shadowTransform(s: ShadowCast): { skewX: number; scaleY: number } {
-  return { skewX: Math.atan2(-s.x, s.y), scaleY: Math.hypot(s.x, s.y) };
+export function shadowTransform<T extends { skewX: number; scaleY: number }>(
+  s: ShadowCast,
+  out?: T,
+): T | { skewX: number; scaleY: number } {
+  const o = out ?? { skewX: 0, scaleY: 0 };
+  o.skewX = Math.atan2(-s.x, s.y);
+  o.scaleY = Math.hypot(s.x, s.y);
+  return o;
 }
 
 /** A new Sky to fill with skyAt. */

@@ -219,8 +219,41 @@ func TestFrozenStartsStoppedWithoutASync(t *testing.T) {
 	if a, b := k.At(0), k.At(ticks(3_600_000)); a != b || a.Rate != 0 {
 		t.Fatalf("frozen clock moved: %+v -> %+v", a, b)
 	}
-	if k.SyncDue(1) {
-		t.Fatal("a frozen clock asked for a sync before its interval")
+	// Many sync intervals on, still none: a stopped clock has nothing new to say.
+	every := ticks(int64(cycle.SyncSeconds) * 1000)
+	for tick := int64(0); tick <= 5*every; tick++ {
+		if k.SyncDue(tick) {
+			t.Fatalf("a frozen clock asked for a sync at tick %d", tick)
+		}
+	}
+}
+
+// A clock staff stopped syncs once (the change) and then keeps quiet; started again it
+// syncs at once and every interval after that.
+func TestStoppedClockSyncsOnlyItsChanges(t *testing.T) {
+	k := New(cycle, tickMs, 0)
+	every := ticks(int64(cycle.SyncSeconds) * 1000)
+	k.SetRate(10, 0)
+	if !k.SyncDue(10) {
+		t.Fatal("stopping the clock was not synced at once")
+	}
+	for tick := int64(11); tick <= 10+3*every; tick++ {
+		if k.SyncDue(tick) {
+			t.Fatalf("a stopped clock asked for a sync at tick %d", tick)
+		}
+	}
+	// Moving a stopped clock is still told at once.
+	at := 10 + 3*every
+	k.Set(at, 0)
+	if !k.SyncDue(at) || k.SyncDue(at+every) {
+		t.Fatal("a stopped clock syncs a staff change, once")
+	}
+	k.SetRate(at+1, 1)
+	if !k.SyncDue(at + 1) {
+		t.Fatal("starting the clock was not synced at once")
+	}
+	if k.SyncDue(at+every) || !k.SyncDue(at+1+every) {
+		t.Fatal("a running clock syncs every interval after the change")
 	}
 }
 
@@ -231,5 +264,11 @@ func TestSetMoonAtDawn(t *testing.T) {
 	k.SetMoon(0, 4)
 	if tm := k.At(0); cycle.MoonPhase(tm) != 4 || cycle.Phase(tm) != Dawn {
 		t.Fatalf("moon 4 at dawn: %+v phase %d", tm, cycle.MoonPhase(tm))
+	}
+	// The dawn has the night before's moon: the night after this dawn has the next one.
+	night, _ := cycle.PhaseStart("night")
+	k.Set(0, night)
+	if tm := k.At(0); cycle.MoonPhase(tm) != 5 {
+		t.Fatalf("the night after a moon-4 dawn has moon %d, want 5", cycle.MoonPhase(tm))
 	}
 }

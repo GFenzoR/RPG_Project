@@ -142,15 +142,15 @@ t := k.At(tick)        // Day (ciclos desde la época) y CycleMs (0 = empieza el
 cycle.Phase(t)         // Dawn, Day, Dusk, Night
 cycle.MoonPhase(t)     // luna del cielo: 0 nueva .. lunar_days/2 llena (en el amanecer, la de la noche anterior)
 k.Set(tick, ms)        // staff: otra hora del mismo día
-k.SetMoon(tick, fase)  // staff: el próximo día con esa fase
+k.SetMoon(tick, fase)  // staff: el próximo día en que el cielo de esta hora tiene esa fase
 k.SetRate(tick, r)     // staff: 0 lo detiene, hasta 600
-k.SyncDue(tick)        // toca mandar el WorldClock (cada sync_seconds o tras un cambio)
-k.Frozen()             // recién creado: detenido sin sync propio (-world-time del E2E)
+k.SyncDue(tick)        // toca mandar el WorldClock (cada sync_seconds si corre, o tras un cambio)
+k.Frozen()             // recién creado: detenido (-world-time del E2E); detenido no pide sync periódico
 ```
 
 El pegamento (`server/internal/session/daynight.go`) manda `WorldClock` (`day`,
-`cycle_ms`, `rate`) al entrar (justo después del `Welcome`), a todos cada `sync_seconds` y
-en el acto tras un `/time` (docs/16). Ninguna regla del juego lee la hora.
+`cycle_ms`, `rate`) al entrar (justo después del `Welcome`), a todos cada `sync_seconds`
+mientras el reloj corre y en el acto tras un `/time` (docs/16). Ninguna regla del juego lee la hora.
 
 **Cliente** (`livingworld/client/src/sky.ts`, puro): `parseDayNight`, `advance` (corre el
 reloj entre dos `WorldClock`), `skyAt(datos, día, cycleMs)` → `Sky` (fase, `ambient` el
@@ -159,15 +159,18 @@ color multiplicado sobre la superficie, `lamps` 0..1, `moon`, `night`, `shadow`)
 sol sale por el este al empezar el día y se pone por el oeste al terminar: la sombra
 apunta al oeste a la mañana, queda corta bajo los pies al mediodía y apunta al este a la
 tarde, siempre hacia el "norte" de la vista 3/4; la luna cruza la noche igual. El
-pegamento `client/src/render/sky.ts` (`SkyView`) lo lee cada frame sin crear objetos, y el
-renderer del cliente dibuja:
+pegamento `client/src/render/sky.ts` (`SkyView`) lo lee cada frame sin crear objetos
+(`advance`, `skyAt` y `shadowTransform` escriben en los objetos que `SkyView` reutiliza), y
+el renderer del cliente dibuja:
 - la luz (`render/light-layer.ts`): en la superficie, el `ambient` del cielo como fondo del
   mapa de luz y las luces del jugador y de cada item con `light` atenuadas por `lamps`; de
   día, ninguna pasada. Las cuevas no cambian;
 - las sombras proyectadas (`render/cast-shadows.ts`, `CreatureBody.castShadow`): las capas
   del frame de cada criatura del piso, oscuras, desde los pies, en un contenedor sobre
   `MapView.groundOverlay` que se desvanece entero con un `AlphaFilter`; la sombra de
-  contacto queda siempre. Con "Animaciones reducidas", y bajo tierra, no hay;
+  contacto queda siempre. Un cuerpo que cae muerto o se desvanece sigue proyectando la suya
+  hasta bajar de media opacidad. Con "Animaciones reducidas", y bajo tierra, no hay (la
+  luz y el tinte de la noche sí siguen con "Animaciones reducidas": no son movimiento);
 - las sombras dibujadas de árboles y casas, que se desvanecen con el sol
   (`MapView.castShadowStrength`);
 - `night()` del mundo vivo (luciérnagas).

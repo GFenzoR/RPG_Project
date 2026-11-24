@@ -778,8 +778,9 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await shot(page, "99c-daynight-night");
 
     // The rest of the day, for the eye (docs/17): long shadows to the west under a low
-    // morning sun, the orange dusk, a new moon (the darkest night, no moon shadow) and the
-    // dawn after it.
+    // morning sun, the orange dusk, a new moon (the darkest night, no moon shadow) and a
+    // dawn: the same day's (/time sets the hour of the current day), the one before that
+    // night, still under the moon of the night before it (phase 7).
     await time("morning");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
     expect((await sky())?.shadows).toBeGreaterThan(0);

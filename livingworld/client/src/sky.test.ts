@@ -199,6 +199,17 @@ describe("the sun's shadow (sun angle mapping)", () => {
     }
   });
 
+  it("advance and shadowTransform write into the object they are given", () => {
+    // The per-frame callers (client/src/render/sky.ts) reuse theirs: a frame makes none.
+    const t = { day: 0, cycleMs: 0 };
+    expect(advance(d, 2, 239 * MIN, 1, 2 * MIN, t)).toBe(t);
+    expect(t).toEqual({ day: 3, cycleMs: 1 * MIN });
+    const pose = { skewX: 0, scaleY: 0, alpha: 0.3 };
+    const s = { x: -0.8, y: 0.3, alpha: 0.4 };
+    expect(shadowTransform(s, pose)).toBe(pose);
+    expect(pose).toEqual({ ...shadowTransform(s), alpha: 0.3 });
+  });
+
   it("arcShadow writes into the object it is given", () => {
     const out = { x: 9, y: 9, alpha: 9 };
     expect(arcShadow(0.5, 2, 0.3, out)).toBe(out);

@@ -331,9 +331,11 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
 
 **Día y noche y sombras proyectadas** (`livingworld/README.md` "Día y noche"):
 - Servidor: el reloj es una cuenta por tick que nadie mira salvo al mandar el `WorldClock`
-  (una vez por minuto a cada jugador, ~12 B). Sin memoria por jugador.
-- Cliente, cielo: `skyAt` cada frame son unas operaciones de punto flotante sobre un `Sky`
-  reutilizado; nada se crea.
+  (una vez por minuto a cada jugador mientras corre, ~12 B; detenido, solo al entrar y tras
+  un `/time`). Sin memoria por jugador.
+- Cliente, cielo: `advance`, `skyAt` y `shadowTransform` cada frame son unas operaciones
+  de punto flotante que escriben en los objetos que `SkyView` reutiliza (la hora, el `Sky`
+  y la pose de la sombra); nada se crea.
 - Cliente, luz: de día ninguna pasada. En el amanecer, el atardecer y la noche, la misma
   pasada de la luz de las cuevas (un mapa de luz a un cuarto de la pantalla, multiply) con
   un brillo por luz en vista (pool).
@@ -344,11 +346,15 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
   entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
   sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
-  **Sin medir contra este presupuesto:** el pedido era "un sprite más por criatura
-  visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la pasada del
-  filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz. El test solo
-  cuenta sprites del pool; no mide el tiempo de frame. Medirlo en el navegador (multitud
-  de noche, móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
+  **Medido solo del lado JS:** colocar las 540 sombras de una multitud de 60 muñecos
+  (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
+  sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
+  un frame de 16,6 ms; `cast-shadows.test.ts` lo vigila con un tope holgado de 2 ms.
+  **Sin medir contra este presupuesto, el lado GPU:** el pedido era "un sprite más por
+  criatura visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la
+  pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.
+  Ningún test mide el tiempo de frame en el navegador. Medirlo ahí (multitud de noche,
+  móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

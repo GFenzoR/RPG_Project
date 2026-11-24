@@ -331,7 +331,8 @@ func (x *TrailWear) GetLevels() []byte {
 // the cast shadows; no game rule depends on it.
 type WorldClock struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// day: cycles since the world's epoch (the moon's phase is day mod lunar_days).
+	// day: cycles since the world's epoch. The moon's phase is day mod lunar_days, except
+	// at dawn: the dawn still has the moon of the night before, (day - 1) mod lunar_days.
 	Day uint32 `protobuf:"varint,1,opt,name=day,proto3" json:"day,omitempty"`
 	// cycle_ms: how far into the cycle; 0 is the start of dawn, day_minutes the start of
 	// the night.

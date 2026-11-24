@@ -152,7 +152,8 @@ export const TrailWearSchema: GenMessage<TrailWear> = /*@__PURE__*/
  */
 export type WorldClock = Message<"game.v1.WorldClock"> & {
   /**
-   * day: cycles since the world's epoch (the moon's phase is day mod lunar_days).
+   * day: cycles since the world's epoch. The moon's phase is day mod lunar_days, except
+   * at dawn: the dawn still has the moon of the night before, (day - 1) mod lunar_days.
    *
    * @generated from field: uint32 day = 1;
    */

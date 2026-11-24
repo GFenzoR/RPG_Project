@@ -123,7 +123,9 @@ func TestStaffSetsTheTime(t *testing.T) {
 	if js := a.takeJobs(); len(js) != 0 {
 		t.Fatalf("telling the time was audited: %+v", js)
 	}
-	for _, bad := range []string{"/time teatime", "/time moon 9", "/time speed 9999", "/time 240", "/time a b c"} {
+	for _, bad := range []string{"/time teatime", "/time moon 9", "/time speed 9999", "/time 240", "/time -1", "/time a b c",
+		// 2^59 minutes: times 60 000 ms it wraps around to 0, inside the cycle.
+		"/time 576460752303423488", "/time 99999999999999999999"} {
 		a.sim.RunTicks(40)
 		if got := a.cmd(gm, bad); !slices.Equal(got, []string{"gm.usage"}) {
 			t.Errorf("%q: %v", bad, got)
@@ -168,5 +170,9 @@ func TestWorldClockFixedForTests(t *testing.T) {
 	tm, phase, _ := a.w.WorldTime(a.sim.Tick())
 	if phase != "day" || tm.Day != 0 || tm.CycleMs != 90*60_000 || tm.Rate != 0 {
 		t.Fatalf("fixed clock moved: %+v %s", tm, phase)
+	}
+	// 20 s, ten sync intervals: a stopped clock is not sent again.
+	if again := clocksOf(cl.take()); len(again) != 0 {
+		t.Fatalf("a stopped clock was synced %d times", len(again))
 	}
 }

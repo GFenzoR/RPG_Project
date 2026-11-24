@@ -321,14 +321,17 @@ personal"):
 Los cambios del staff no se guardan: tras un reinicio el reloj vuelve a la hora real (lo
 mismo si el game loop se atrasó respecto del reloj real: la hora deriva un poco hasta el
 próximo reinicio). La luna que informa `/time` es la del cielo: en el amanecer, la de la
-noche anterior (`/time moon 4` y luego `/time dawn` dice luna 3). El servidor del E2E
-arranca con `-world-time noon` (rechazado en producción): hora detenida al mediodía; el test
-de día y noche la deja así al terminar, aunque falle.
+noche anterior (`/time moon 4` y luego `/time dawn` dice luna 3). Al revés también:
+`/time moon 4` dado en el amanecer deja la luna 4 en ese cielo, y la noche que sigue
+(`/time night`) ya tiene la 5; para una noche con luna 4, primero `/time night` y después
+`/time moon 4`. El servidor del E2E arranca con `-world-time noon` (rechazado en
+producción): hora detenida al mediodía (un reloj detenido se manda al entrar y tras cada
+`/time`, no cada minuto); el test de día y noche la deja así al terminar, aunque falle.
 Todos los jugadores reciben el cambio en el acto. Qué mirar: a la mañana las sombras de los
 personajes largas hacia el oeste, al mediodía cortas bajo los pies, a la tarde hacia el
 este; de noche la superficie azul, las fogatas y faroles encendidos, luciérnagas en el pasto
 y una sombra tenue de la luna (ninguna con luna nueva); con "Animaciones reducidas", solo la
-sombra de contacto. Un cuerpo a menos de media opacidad (tu personaje invisible, que se ve
+sombra de contacto (la luz de la noche sigue). Un cuerpo a menos de media opacidad (tu personaje invisible, que se ve
 al 40 %, o uno que se desvanece) no proyecta sombra a propósito: le queda solo la de
 contacto. Bajo tierra todo sigue igual.
 

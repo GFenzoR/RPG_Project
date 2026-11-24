@@ -193,8 +193,10 @@ func New(c Cycle, tickMs int, epochMs int64) *Clock {
 	return &Clock{c: c, tickMs: tm, anchorMs: epochMs, rate: 1, syncTicks: sync, nextSync: sync}
 }
 
-// Frozen makes a new clock start stopped (rate 0) without a sync of its own: the E2E
-// server's fixed time (-world-time). Call it before the first tick.
+// Frozen makes a new clock start stopped (rate 0): the E2E server's fixed time
+// (-world-time). Like any stopped clock it asks for no periodic sync (SyncDue): a player
+// gets the time with its login and it does not change until staff moves it. Call it
+// before the first tick.
 func (k *Clock) Frozen() *Clock {
 	k.rate = 0
 	return k
@@ -230,8 +232,10 @@ func (k *Clock) Set(tick, cycleMs int64) {
 	k.anchorMs = t.Day*k.c.CycleMs() + floorMod(cycleMs, k.c.CycleMs())
 }
 
-// SetMoon moves to the nearest day (this one or a later one) whose moon phase is phase,
-// keeping the time of day.
+// SetMoon moves to the nearest day (this one or a later one) on which the moon in the sky
+// at this time of day (MoonPhase) is phase, keeping the time of day. At dawn the sky still
+// has the night before's moon, so that is the one set: the night that follows this dawn
+// has phase+1 (docs/16 "Día y noche").
 func (k *Clock) SetMoon(tick int64, phase int) {
 	k.reanchor(tick)
 	t := k.At(tick)
@@ -246,10 +250,11 @@ func (k *Clock) SetRate(tick, rate int64) {
 	k.rate = min(max(rate, 0), MaxRate)
 }
 
-// SyncDue reports whether the players are due the world time at tick: every sync_seconds,
-// and at once after a Set, SetMoon or SetRate.
+// SyncDue reports whether the players are due the world time at tick: every sync_seconds
+// while the clock runs, and at once after a Set, SetMoon or SetRate. A stopped clock
+// (rate 0: -world-time, /time speed 0) has nothing new to say between two staff changes.
 func (k *Clock) SyncDue(tick int64) bool {
-	if !k.changed && tick < k.nextSync {
+	if !k.changed && (k.rate == 0 || tick < k.nextSync) {
 		return false
 	}
 	k.changed = false

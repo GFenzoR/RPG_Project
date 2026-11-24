@@ -11,7 +11,8 @@
 // through one AlphaFilter: a doll's overlapping layers and two shadows crossing make one
 // even shade, never a darker patch. Cheap (docs/07): a pooled sprite per layer of each
 // creature in view, sharing the creature's own textures; nothing is made per frame once
-// the pool is big enough. The filter pass and the frame time are not measured yet (docs/14).
+// the pool is big enough. Placing a crowd's 540 is ~0.035 ms of JS a frame (docs/07); the
+// filter pass and the frame time in a browser are not measured yet (docs/14).
 import { AlphaFilter, Container, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CAST_SHADOW_TINT, MISSING_TEXTURE } from "@rpg/renderer";
