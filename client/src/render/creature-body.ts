@@ -97,6 +97,12 @@ export class CreatureBody {
   readonly sprite: Sprite;
   /** How far the drawing rises above the tile (labels go over it), sprite pixels. */
   readonly lift: number;
+  /**
+   * Drawn in eight facings (docs/17 ANI-1): its clips, and every layer of a paper doll,
+   * have the diagonals. One layer without them turns the whole figure four ways: a doll
+   * never mixes a diagonal body with a straight cloak.
+   */
+  readonly eight: boolean;
   private readonly shadow: Graphics | undefined;
   private readonly baseX: number;
   private readonly baseY: number;
@@ -153,6 +159,7 @@ export class CreatureBody {
     }
     this.tint = tint;
     this.layers = layers;
+    this.eight = clips.eight && layers.every((l) => l.clips.eight);
     this.orders = ANIM_DIRS.map((d) => layerOrder(layers, d));
     if (layers.length > 0) {
       this.pool = pool;

@@ -42,6 +42,7 @@ import {
   clipMs,
   entityZIndex,
   newAnimInput,
+  turnTo,
   newAnimState,
   newPose,
   screenToTile,
@@ -131,7 +132,7 @@ import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
-import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
+import { DEFAULT_OUTFIT, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
 import { livingEvent, mountLivingObjects } from "./living.ts";
 import { SHAKE_MS, shakeOffset } from "./shake.ts";
@@ -888,10 +889,15 @@ export async function createGameCanvas(
     const w = world.activeWalk(c, now);
     const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
     animInput.now = now;
-    animInput.dir = outfitDir(world.facing(c, now));
+    // docs/17 ANI-1: a figure with diagonals turns to them; one without keeps the half of a
+    // diagonal it already faces (turnTo).
+    const [fx, fy] = delta(world.facing(c, now));
+    st.facing = turnTo(st.facing, fx, fy, figure.eight);
+    animInput.dir = st.facing;
     animInput.walkStart = moving?.start;
     animInput.walkMs = moving?.duration ?? 0;
     animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
+    animInput.moveDy = moving ? Math.sign(moving.to.y - moving.from.y) : 0;
     const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
@@ -1187,10 +1193,13 @@ export async function createGameCanvas(
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
       animInput.now = now;
-      animInput.dir = outfitDir(g.dir);
+      const [gx, gy] = delta(g.dir);
+      g.state.facing = turnTo(g.state.facing, gx, gy, g.figure.eight);
+      animInput.dir = g.state.facing;
       animInput.walkStart = undefined;
       animInput.walkMs = 0;
       animInput.moveDx = 0;
+      animInput.moveDy = 0;
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
@@ -1838,7 +1847,7 @@ export async function createGameCanvas(
       for (const [id, st] of animStates) {
         const meta = sprites.get(id)?.figure?.clips.meta;
         const c = world.creatures.get(id);
-        const dir = outfitDir(c ? world.facing(c, now) : Direction.SOUTH);
+        const dir = st.facing;
         const clip = attackClip(meta, st.attackAction, dir);
         const action = clip ? attackClipAction(meta, st.attackAction, dir) : "lunge";
         const of = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
