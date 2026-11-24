@@ -100,10 +100,11 @@ describe("recipes", () => {
   const dollFrame = (p: string): boolean =>
     HUMANOID_LAYERS.some((l) => l.slot !== "body" && p.startsWith(`${l.sprite}/`));
 
-  // With the engine humanoids' ~3600 frames, the tests over every recipe take seconds.
+  // With the engine humanoids' ~9000 frames (eight facings), the tests over every recipe
+  // take a minute or more while the whole suite runs.
   it("render the same bytes every time", () => {
     for (const p of paths) expect(encodePng(render(p)).equals(encodePng(render(p))), p).toBe(true);
-  }, 60_000);
+  }, 180_000);
 
   it("have sizes in multiples of 32, only fully opaque or transparent pixels, and draw something", () => {
     for (const p of paths) {
@@ -126,7 +127,7 @@ describe("recipes", () => {
       if (!dollFrame(p) && !LIVING_FX.test(p) && !DECAL.test(p))
         expect(opaque, p).toBeGreaterThan(20);
     }
-  }, 60_000);
+  }, 180_000);
 
   it("ground decals are small, flat details in the middle of their tile (docs/17 ART-4)", () => {
     const decals = paths.filter((p) => DECAL.test(p));
@@ -239,7 +240,7 @@ describe("recipes", () => {
         `${p}: stale, run make spritegen`,
       ).toBe(true);
     }
-  }, 60_000);
+  }, 180_000);
 
   it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);
