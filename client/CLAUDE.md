@@ -605,9 +605,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Los NPCs usan su sprite del atlas como los monstruos (`content.npcSprites`, de
   `data/npcs`); sin textura, el bloque de color de siempre.
 - Jugadores (propio y ajenos): outfit `citizen` de `content.outfits` (`data/outfits.yaml`).
-  Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). `render/outfit.ts`
-  (puro, con tests): `outfitDir` lleva las 8 direcciones a n/e/s/w (las diagonales usan
-  la horizontal: noreste mira al este). El frame lo elige la animación ("Animación de
+  Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). La dirección la elige
+  `turnTo` (`packages/renderer/src/anim.ts`, docs/17 ANI-1) con `AnimState.facing`: una
+  figura con diagonales en todas sus capas (`ClipSet.eight`, `CreatureBody.eight`; los
+  humanoides del motor) gira a la diagonal; una de 4 direcciones conserva la mitad de la
+  diagonal que ya mira, o toma la horizontal. Nunca se mezclan. El frame lo elige la animación ("Animación de
   criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
   segunda, así pasos seguidos alternan 1, 2, 1, 2.
 - El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
@@ -691,7 +693,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   en la misma pose y frame. El orden por dirección es `LAYER_ORDER` de
   `packages/renderer/src/look.ts` (puro, con tests: `lookSprites`, `lookLayers`,
   `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Lo que se lleva en
-  la mano va sobre la ropa en las cuatro direcciones (docs/17 "Humanoides del motor": la
+  la mano va sobre la ropa (docs/17 "Humanoides del motor"; 8 órdenes, uno por dirección: la
   oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
   `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
   cuerpo es `figure.sprite` (siluetas y la caja de `figureRect` para el muro translúcido).

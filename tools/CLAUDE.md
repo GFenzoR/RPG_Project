@@ -337,7 +337,7 @@ Cada frame de un spec es una receta más (`engine/book.ts` la suma a `RECIPES`),
 | `spec.ts` | Los tipos del spec y `validateSpec` |
 | `shapes.ts` | Las primitivas: dónde las corta un rayo y su normal |
 | `render.ts` | `renderSpec`: rayos con buffer de profundidad, sombreado, limpieza, pliegues, borde iluminado, marcas y contorno |
-| `rig.ts`, `motion.ts` | Poses por keyframe, articulaciones, las cuatro direcciones; helpers (`trot`, `keys`, `mergePoses`) |
+| `rig.ts`, `motion.ts` | Poses por keyframe, articulaciones, las direcciones (cuatro, u ocho con `dirs: DIRS8` como el humanoide; las diagonales giran 60°, `DIAGONAL_TURN`); helpers (`trot`, `keys`, `mergePoses`) |
 | `gates.ts`, `check.ts` | Las puertas de calidad y las pistas de `assets/sprites.yaml` |
 | `sheet.ts` | Hoja de contacto y lineup para revisar |
 | `specs/` | Los specs del juego; `specs/index.ts` (`ENGINE_SPECS`) los registra; `specs/items/` los íconos de equipo; `specs/grow.ts` agranda un spec entero |
@@ -430,7 +430,7 @@ hojas y los tests; `previews.ts` arma los quietos de los atuendos y los retratos
 que usan `build`, `check` y `preview`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
 pasa solo las de imagen (paleta, alfa, tramado salvo en piezas finas, borde), y
 `humanoid.test.ts` juzga la figura compuesta (proporciones, el pie apoyado contra el
-`perTile` del cliente en las cuatro direcciones, el lugar de cada arma y escudo en la pila
+`perTile` del cliente en las ocho direcciones (`HUMANOID_DIRS`; en diagonal, hypot(perTile, perTileNS)), el lugar de cada arma y escudo en la pila
 contra el modelo dibujado como una sola figura, `measureHeld`, varios aspectos de pie sobre
 la fila del suelo y `data/looks.yaml` igual a las capas). Un arma o un escudo nuevo entra solo
 en esa medida: si su lugar en `LAYER_ORDER` deja de ser el mejor (más de un 10 %), falla. Una forma

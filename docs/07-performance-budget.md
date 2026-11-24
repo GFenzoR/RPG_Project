@@ -559,6 +559,32 @@ llena (2041 de 2048 de alto): la próxima capa o forma del muñeco probablemente
 tercera página (un draw call más por cambio de página en el peor caso); conviene medirlo
 en ese PR.
 
+**Humanoides en 8 direcciones** (2026-11-24, `feat/diagonal-motion`; docs/17 ANI-1): las 55
+capas del muñeco suman las cuatro diagonales de quieto, caminar, atacar, disparar y conjurar,
+80 frames por capa: **4400 frames** (164 por capa en vez de 84), recortados como los demás
+(4400 PNG más en el repo, ~1,5 MB). Medido contra la base (`fix/wall-fade`) en la misma
+máquina con `spritepack build`:
+
+| | Base | 8 direcciones | Diferencia |
+|---|---|---|---|
+| Páginas | 2 (2048x2041 y 2048x622) | **2** (2048x2034 y 2048x1126) | la segunda crece 504 px |
+| PNG | 1,88 + 1,24 = 3,12 MB | 2,03 + 2,23 = 4,26 MB | +1,14 MB |
+| JSON de las páginas | 694 + 1680 KB | 754 + 3193 KB | +1,57 MB |
+| `atlas.json` | 670 KB | 1079 KB | +409 KB |
+| Sprites | 6706 | 11106 | +4400 |
+
+Sigue dentro del presupuesto ("una página por capa": siguen siendo 2 páginas, y el atlas no
+cuenta en los 5 MB del bundle), así que no se partió nada ni se sacó ningún frame. Lo que
+baja el juego pasa de ~6,2 a ~9,3 MB, y casi la mitad del aumento es JSON (nombres de frame
+y espacios). **Propuesta si molesta**, en este orden: (1) JSON del atlas sin espacios
+(`JSON.stringify` sin indentar en `tools/spritepack/src/build.ts`; hoy va con 2 espacios,
+cerca de un tercio de su peso) y nombres de frame más cortos para el muñeco; (2) las capas
+del muñeco en su propia página, cargada aparte, y las diagonales en una tercera página que
+se baja después de entrar (mientras no llega, `ClipSet.eight` es falso y la figura va en 4
+direcciones, sin mezclar); (3) PNG indexado. En el cliente no cambia nada por frame: una
+diagonal es otra textura de la misma capa; el orden de capas por dirección sigue
+precalculado (ahora 8 órdenes).
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por

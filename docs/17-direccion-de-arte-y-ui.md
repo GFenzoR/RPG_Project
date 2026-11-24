@@ -577,9 +577,24 @@ sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingwor
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones
-4 (N, E, S, O), como hoy (`render/outfit.ts` lleva las diagonales a la horizontal). No hace
-falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
-un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
+**Los humanoides del motor, 8 (N, NE, E, SE, S, SO, O, NO)** desde el 2026-11-24 (pedido del
+dueño del 2026-11-23: la diagonal se sentía más lenta y el personaje caminaba al noreste
+mirando al este): todas las capas del muñeco (los dos cuerpos de los dos sexos, pelo, barba,
+cabeza, torso, piernas, pies, escudos y armas; los cosméticos son tintes de esas capas, sin
+píxeles propios) tienen quieto, caminar, atacar, disparar y conjurar en las ocho; morir sigue
+cayendo al sur. Las diagonales salen del mismo modelo girado, nunca espejadas: la luz sigue a
+la izquierda y el escudo en la mano izquierda. Giran **60°** desde el eje este-oeste, no 45°:
+en la proyección 3/4 una casilla al este y una al sur son 1 unidad de ancho por 1/0,58 de
+profundidad, así el modelo mira por donde su paso se desliza en pantalla (45° ahí) y el pie
+apoyado se queda (`DIAGONAL_TURN`, `FACING_YAW` de `style.ts`). El resto de las criaturas
+sigue en 4 (N, E, S, O). Qué dirección dibuja el cliente lo decide `turnTo`
+(`packages/renderer/src/anim.ts`): una figura con diagonales en todas sus capas
+(`ClipSet.eight`, `CreatureBody.eight`) gira a la diagonal en que camina o ataca; una de 4
+direcciones **conserva la mitad de la diagonal que ya mira** (al noreste después de mirar al
+norte sigue al norte; después de mirar al este, al este) y si no mira a ninguna de las dos
+toma la horizontal, como antes. Nunca se mezclan: si una capa no tiene diagonales (un arte
+nuevo sin ellas), la figura entera va en 4. E puede ser el espejo de O solo si el sprite
+declara `mirror: true`: con un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
 spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
 animados"); lo usan las criaturas de Gemini. El motor de sprites dibuja las cuatro desde su
 modelo, así el este conserva la luz desde la izquierda ("Motor de sprites", al final de
@@ -1092,12 +1107,14 @@ frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2
 cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
 unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
 casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
-`AnimActionMeta.perTileNS`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en
-las cuatro direcciones contra el `perTile` del cliente: se queda a 1 px de su punto del suelo.
+`AnimActionMeta.perTileNS`). Un paso en diagonal recorre una casilla de ancho y una de alto en
+pantalla: el ciclo avanza por distancia, hypot(8; 13,86) = 16 frames por paso
+(`walkPerStep`, también para las criaturas de 4 direcciones: un animal hace √2 veces su
+`perTile`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho
+direcciones contra lo que avanza el cliente: se queda a 1 px de su punto del suelo (en las
+diagonales, en x y en y).
 La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
-debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. Un paso en diagonal
-(la cara horizontal) sigue con el `perTile` de este y oeste: el pie no patina de lado, sí un
-poco hacia abajo. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
+debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
 el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
 `state/world.ts`) y el ciclo sigue sin repetir ni volver (`anim.test.ts`: un frame cada 50 ms
 de un paso de 400 ms da 0..7, 0..3 en dos pasos); solo un hueco real de la red la muestra, con
@@ -1121,7 +1138,14 @@ sobre la ropa, una pieza sostenida detrás del cuerpo pinta como mucho unos píx
 de una túnica larga. El arma va sobre todo; el escudo también, salvo mirando al este (en el
 brazo lejano): sobre el torso y bajo el pelo y lo de la cabeza. Al este el arma (mano cercana)
 va sobre el escudo, al oeste bajo él. El pelo va bajo el torso mirando al sur (lo que cae por
-la espalda) y la barba bajo todo mirando al norte. Una falda (túnica, túnica larga) no deja
+la espalda) y la barba bajo todo mirando al norte. Las diagonales toman la ropa y el pelo de la
+dirección recta hacia la que se inclinan (sur o norte) y las piezas de la mano de su lado: al
+sureste el arma sobre el escudo, al suroeste el escudo sobre el arma; al noreste el escudo
+(brazo lejano) bajo la cabeza y sobre el pelo; al noroeste el arma va arriba de todo menos el
+escudo, aunque esté en la mano lejana: bajo la ropa, una lanza levantada perdía 12 px contra
+una túnica, y sobre una túnica larga o una coraza pinta 1,35-1,45 veces los píxeles errados del
+mejor lugar (la única excepción del 10 % del test). Una lanza mirando al noreste deja hasta 6
+píxeles de hueco en los cuerpos de mujer (el tope de 3 sigue en las rectas). Una falda (túnica, túnica larga) no deja
 que la atraviesen las piernas (`occlude` sin piernas). `humanoid.test.ts` lo mide contra el
 modelo: dibuja la figura entera como una sola (las partes de la pieza con el cuerpo y la ropa
 de tres aspectos como oclusores, un solo buffer de profundidad: lo que se debe ver de la

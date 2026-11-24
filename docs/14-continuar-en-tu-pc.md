@@ -236,6 +236,26 @@ el punto 5:
   - **Integración y E2E** (Postgres y el navegador) los corre el lote al final: la lista
     con `look` (`store_integration_test.go`) y los screenshots `18b-characters-list`,
     `19-create-druid` y `account-03-first-character`.
+- **Diagonales (hecho, rama `feat/diagonal-motion`, lote 17; el dueño el 2026-11-23: "en
+  diagonal se siente más lento" y pidió sprites en diagonal):** `diagonal_cost` pasó de 1,5 a
+  √2 (1.414; docs/02 "Movimiento", docs/05 "Caminar"): la misma velocidad por casilla en las
+  8 direcciones, con el A* y la predicción del cliente iguales al servidor. Los humanoides del
+  motor (jugadores, NPCs que son personas y los 4 monstruos humanoides, que usan el mismo
+  muñeco) tienen 8 direcciones (docs/17 ANI-1). Queda:
+  - **Mirarlo en el juego:** el E2E `96d-movement-diagonal.png` (dos flechas, la persona
+    mirando la diagonal) y caminar en diagonal en Thimblewick con `make play`, también con
+    escudo y arma (el arma al noroeste va sobre la ropa aunque esté en la mano lejana; docs/17).
+  - **El peso del atlas:** 2 páginas todavía, pero lo que baja el juego pasó de ~6,2 a
+    ~9,3 MB (casi la mitad, JSON). La propuesta, en docs/07 "Humanoides en 8 direcciones".
+  - **Monstruos en 8 direcciones (siguiente):** siguen en 4 con la regla nueva (conservan la
+    mitad de la diagonal que ya miran). Los que más ganarían, por andar mucho en diagonal y
+    verse de cerca: los cuadrúpedos del motor (`bristleback_boar`, `bramble_stag`: ya son
+    modelos, solo falta pedir `dirs` de 8 en su spec, ~+70 frames cada uno, y revisar el
+    trote con la regla de la zancada), los perros (`wolf`, `ash_hound`) y `slag_golem` /
+    `slagbound_warden` (grandes, el giro se nota). Bichos chicos o que flotan (`bilge_rat`,
+    `tide_crab`, `ore_beetle`, `hollow_crawler`, `moss_spider`, `mire_toad`, `gloom_bat`,
+    `thieving_gull`, `thornling`, `cinder_salamander`, `ember_wyrmling`) ganan poco; los
+    de Gemini (hojas a mano) pedirían hojas nuevas.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
