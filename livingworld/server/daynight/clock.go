@@ -78,8 +78,10 @@ func (c Cycle) Check() error {
 		return errors.New("day and night: day_minutes and night_minutes must be >= 1")
 	case c.DayMinutes+c.NightMinutes > 24*60:
 		return errors.New("day and night: a cycle lasts at most 24 hours")
-	case c.DawnMinutes < 0 || c.DuskMinutes < 0 || c.DawnMinutes+c.DuskMinutes > c.DayMinutes:
-		return errors.New("day and night: dawn_minutes and dusk_minutes must fit in the day")
+	// Half the day each at most: the client's rule too (livingworld/client/src/sky.ts
+	// parseDayNight), so both always name the same phase; noon is never dawn or dusk.
+	case c.DawnMinutes < 0 || c.DuskMinutes < 0 || 2*c.DawnMinutes > c.DayMinutes || 2*c.DuskMinutes > c.DayMinutes:
+		return errors.New("day and night: dawn_minutes and dusk_minutes are each at most half of day_minutes")
 	case c.LunarDays < 2:
 		return errors.New("day and night: lunar_days must be >= 2")
 	case c.SyncSeconds < 1:
@@ -255,9 +257,12 @@ func (k *Clock) SyncDue(tick int64) bool {
 	return true
 }
 
+// PhaseWords are the words PhaseStart knows, in the cycle's order (the /time usage).
+var PhaseWords = []string{"dawn", "morning", "noon", "day", "afternoon", "dusk", "night", "midnight"}
+
 // PhaseStart is the cycle position staff names by word: dawn (mid-dawn), morning (a
-// quarter of the day), noon, afternoon (three quarters), dusk (mid-dusk), night and
-// midnight (mid-night). ok is false for any other word.
+// quarter of the day), noon or day, afternoon (three quarters), dusk (mid-dusk), night and
+// midnight (both mid-night). ok is false for any other word.
 func (c Cycle) PhaseStart(word string) (cycleMs int64, ok bool) {
 	day := c.DayMs()
 	switch word {

@@ -723,7 +723,8 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
 // Day and night (livingworld/README.md "Día y noche"): a gm stops the world clock at noon
 // (short shadows under the feet, no tint) and at a full-moon night (silvery blue, the
 // temple's lamps glowing, a faint moon shadow), with the cast shadows drawn under every
-// creature in view. The clock runs again at the end: the other tests see whatever hour it is.
+// creature in view; then the low sun of the morning, the dusk, a new-moon night and the dawn
+// after it. It leaves the clock stopped at noon, as the E2E servers start it.
 test("sandbox day and night: noon and a full-moon night, with cast shadows", async ({
   page,
   playwright,
@@ -775,6 +776,36 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99c-daynight-night");
+
+    // The rest of the day, for the eye (docs/17): long shadows to the west under a low
+    // morning sun, the orange dusk, a new moon (the darkest night, no moon shadow) and the
+    // dawn after it.
+    await time("morning");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    expect((await sky())?.shadows).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99d-daynight-morning");
+
+    await time("dusk");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dusk");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99e-daynight-dusk");
+
+    await time("moon 0");
+    await time("night");
+    await expect.poll(async () => (await sky())?.moon, { timeout: 10_000 }).toBeCloseTo(0);
+    expect((await sky())?.phase).toBe("night");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99f-daynight-new-moon");
+
+    await time("dawn");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dawn");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99g-daynight-dawn");
   } finally {
     await time("noon");
     await time("speed 0");

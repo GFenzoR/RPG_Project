@@ -310,7 +310,7 @@ La hora del mundo es la misma para todos y sigue la hora real (un ciclo de 240 m
 180 de día y 60 de noche). Para verla sin esperar, con una cuenta de staff (abajo, "Hacerse
 personal"):
 - `/time` dice la hora del mundo: la fase, el minuto del ciclo, la luna y la velocidad.
-- `/time dawn`, `morning`, `noon`, `afternoon`, `dusk`, `night` (o `midnight`), o
+- `/time dawn`, `morning`, `noon` (o `day`), `afternoon`, `dusk`, `night` (o `midnight`), o
   `/time <minuto>` (0 = empieza el amanecer, 180 = empieza la noche): otra hora del mismo
   día.
 - `/time moon <fase>`: el próximo día con esa luna (0 nueva, 4 llena).

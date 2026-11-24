@@ -100,6 +100,8 @@ export class CreatureBody {
   private readonly shadow: Graphics | undefined;
   private readonly baseX: number;
   private readonly baseY: number;
+  /** Empty rows under the feet in the textures (bc sprites): the cast shadow turns there. */
+  private readonly foot: number;
   private tint: number;
   /** Paper doll: one sprite per layer, in `layers` order; empty for a one-sprite body. */
   private readonly sprites: Sprite[] = [];
@@ -141,7 +143,8 @@ export class CreatureBody {
     const h = meta?.h ?? first?.height ?? tile;
     const bc = meta?.anchor === "bc";
     this.baseX = bc ? tile / 2 : tile - w / 2;
-    this.baseY = bc ? tile - FEET_LINE + (meta?.foot ?? 0) : tile;
+    this.foot = bc ? (meta?.foot ?? 0) : 0;
+    this.baseY = bc ? tile - FEET_LINE + this.foot : tile;
     this.lift = headLift(meta, { w, h }, tile, FEET_LINE);
     if (meta?.shadow === "ellipse") {
       this.shadow = new Graphics(shadowShape());
@@ -249,18 +252,23 @@ export class CreatureBody {
 
   /**
    * Hands `into` the drawing as it was last drawn, for its cast shadow (render/cast-shadows.ts):
-   * every visible layer's texture with its mirror and squash, standing at the feet. `x`, `y`
-   * is the body's container position (world pixels). The shadow stays on the ground under a
+   * every visible layer's texture with its mirror, squash and lean, standing at the feet (the
+   * feet line, `foot` rows above the texture's bottom edge). `x`, `y` is the body's
+   * container position (world pixels). The shadow stays on the ground under a
    * hop (the pose's lift is left out); a body fading away below half casts none.
    */
   castShadow(into: ShadowSink, x: number, y: number): void {
     if (this.drawnAlpha < 0.5) return;
     const fx = x + this.baseX + this.drawnX;
-    const fy = y + this.baseY;
+    const foot = this.foot;
+    const fy = y + this.baseY - foot;
     if (this.sprites.length > 0) {
       for (const sp of this.sprites)
-        if (sp.visible) into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y);
-    } else into.part(this.sprite.texture, fx, fy, this.sprite.scale.x, this.sprite.scale.y);
+        if (sp.visible) into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y, foot, sp.skew.x);
+    } else {
+      const sp = this.sprite;
+      into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y, foot, sp.skew.x);
+    }
   }
 
   private drawLayers(pose: Pose, dir: number): void {

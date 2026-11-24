@@ -69,6 +69,17 @@ describe("SkyView", () => {
     expect(dawn.shadowPose(dawn.update(0))).toBeUndefined();
   });
 
+  it("is not night underground, whatever the last surface frame was", () => {
+    const v = new SkyView(d, clockAt(200));
+    v.update(0);
+    expect(v.night()).toBe(true);
+    expect(v.none()).toBeUndefined();
+    expect(v.night()).toBe(false);
+    expect(v.current).toBeUndefined();
+    v.update(16);
+    expect(v.night()).toBe(true);
+  });
+
   it("casts no shadows with reduced effects, at any hour", () => {
     for (const m of [90, 200]) {
       const v = new SkyView(d, clockAt(m)); // noon, full-moon night

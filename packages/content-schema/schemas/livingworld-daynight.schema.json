@@ -24,8 +24,18 @@
       "properties": {
         "day_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
         "night_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
-        "dawn_minutes": { "type": "integer", "minimum": 0, "maximum": 720 },
-        "dusk_minutes": { "type": "integer", "minimum": 0, "maximum": 720 },
+        "dawn_minutes": {
+          "description": "At most half of day_minutes (the server refuses more; the client cuts it there).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
+        "dusk_minutes": {
+          "description": "At most half of day_minutes, like dawn_minutes.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
         "lunar_days": { "type": "integer", "minimum": 2, "maximum": 64 },
         "sync_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 }
       }

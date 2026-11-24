@@ -45,7 +45,16 @@ export class SkyView {
     return this.sky;
   }
 
-  /** The last sky drawn (fireflies ask between frames); undefined before the first. */
+  /**
+   * A frame with no sky over it (underground): nothing is drawn of it, and it is not night
+   * for the critters until the surface is drawn again.
+   */
+  none(): undefined {
+    this.drawn = false;
+    return undefined;
+  }
+
+  /** The last sky drawn (fireflies ask between frames); undefined before the first and underground. */
   get current(): Sky | undefined {
     return this.drawn ? this.sky : undefined;
   }

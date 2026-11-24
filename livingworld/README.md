@@ -126,7 +126,9 @@ minutos reales de día y 60 de noche** (240 por ciclo).
 de amanecer, día, atardecer y de la noche con luna nueva y llena; `floor` 0,5, la
 luminancia mínima de la noche; `sun_shadow` 0,42 y `moon_shadow` 0,16, la opacidad de las
 sombras; `max_shadow` 1,4 alturas). El servidor rechaza una clave desconocida de `cycle` y
-no mira `sky`.
+no mira `sky`. El amanecer y el atardecer duran cada uno, como mucho, la mitad del día: el
+servidor rechaza más (`Cycle.Check`) y el cliente lo recorta ahí, así los dos nombran
+siempre la misma fase.
 
 **Servidor** (`livingworld/server/daynight`): un `Clock` en el loop. El tiempo del mundo son
 milisegundos que corren a `rate` (1 normal) desde un ancla; el ancla inicial es la hora

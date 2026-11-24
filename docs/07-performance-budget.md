@@ -339,11 +339,16 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   un brillo por luz en vista (pool).
 - Cliente, sombras proyectadas: un sprite por capa dibujada de cada criatura del piso (un
   muñeco de 9 capas son 9; una bestia, 1), del pool de `CastShadows` (hecho una vez,
-  `cast-shadows.test.ts` mide una multitud de 60 muñecos durante 120 frames: 540 sprites
+  `cast-shadows.test.ts` cuenta una multitud de 60 muñecos durante 120 frames: 540 sprites
   hechos en el primero y ninguno más), con las texturas de la propia criatura (ninguna
   textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
   entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
   sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
+  **Sin medir contra este presupuesto:** el pedido era "un sprite más por criatura
+  visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la pasada del
+  filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz. El test solo
+  cuenta sprites del pool; no mide el tiempo de frame. Medirlo en el navegador (multitud
+  de noche, móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

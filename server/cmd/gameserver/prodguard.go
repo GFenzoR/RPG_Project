@@ -115,7 +115,7 @@ func checkWorldTime(c *session.DayNightCycle, word string) error {
 		return fmt.Errorf("-world-time=%s: there is no data/livingworld/daynight.yaml", word)
 	}
 	if _, ok := c.PhaseStart(word); !ok {
-		return fmt.Errorf("-world-time=%s: want dawn, morning, noon, afternoon, dusk, night or midnight", word)
+		return fmt.Errorf("-world-time=%s: want one of %s", word, strings.Join(session.DayNightWords(), ", "))
 	}
 	return nil
 }

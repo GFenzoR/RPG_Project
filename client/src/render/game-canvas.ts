@@ -1299,7 +1299,7 @@ export async function createGameCanvas(
     }
     livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
-    const skyNow = isDark(self.pos.z) ? undefined : sky.update(now);
+    const skyNow = isDark(self.pos.z) ? sky.none() : sky.update(now);
     view.castShadowStrength = sky.staticShadows(skyNow);
     const casting = castShadows.begin(sky.shadowPose(skyNow, reducedMotion()));
 

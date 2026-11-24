@@ -236,14 +236,26 @@ el punto 5:
       silueta por objeto como la de las criaturas.
     - **Sombra que se aleja de una luz fuerte:** de noche, junto a una fogata, la sombra
       sigue a la luna; apuntarla lejos del fuego queda para después.
-    - **Medir en el navegador:** la capa de sombras suma un sprite por capa de cada
-      criatura y una pasada de filtro (docs/07); falta mirar el tiempo de frame en el E2E
-      con mucha gente de noche, sobre todo en móvil. El `AlphaFilter` de
+    - **Medir en el navegador (decisión del dueño):** el pedido era un sprite más por
+      criatura visible; la capa de sombras suma un sprite por capa de cada criatura (540
+      con 60 muñecos) y una pasada de filtro (docs/07), y ningún test mide el tiempo de
+      frame. Falta medirlo en el E2E con mucha gente de noche, sobre todo en móvil, o que
+      el dueño acepte el costo; si no entra, la salida es hornear la silueta de cada
+      muñeco en una textura (un sprite por criatura). El `AlphaFilter` de
       `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
       pantalla) y de noche se suma la del mapa de luz.
     - **Sombras que se cruzan:** las de criaturas van en `groundOverlay`, debajo de las
       horneadas; donde se cruzan con la de un árbol o una casa se suman y queda una mancha
       más oscura. Revisarlo en las capturas.
+    - **Mirar las capturas:** el E2E saca `99b-daynight-noon`, `99c-daynight-night`,
+      `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
+      `99g-daynight-dawn`; nadie las miró todavía en esta rama (sin E2E en la revisión).
+      Mirarlas en el E2E final del lote y, aparte, un lobo o un thornling con sol bajo
+      (`/time morning`): sus sprites tienen filas vacías bajo los pies (`foot` 8 y 10) y
+      la sombra ahora gira en la línea de los pies, no en el borde de la textura.
+    - **Efectos reducidos sin sombra proyectada (decisión del dueño):** con "Animaciones
+      reducidas" o `prefers-reduced-motion` (común en móvil) solo queda la elipse de
+      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así.
     - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.

@@ -7,6 +7,7 @@
 # cycle (the server reads it, livingworld/server/daynight; the client too):
 #   day_minutes, night_minutes   real minutes of the day and of the night
 #   dawn_minutes, dusk_minutes   the first and last minutes of the day: the transitions
+#                                (each at most half of day_minutes)
 #   lunar_days                   days from new moon to new moon (phase lunar_days/2: full)
 #   sync_seconds                 how often every player gets the world time again
 # sky (the client only, livingworld/client/src/sky.ts):

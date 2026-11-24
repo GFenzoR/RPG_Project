@@ -35,8 +35,11 @@ func TestParseConfigRejects(t *testing.T) {
 		"unknown key":  "cycle: {day_minutes: 1, night_minutes: 1, dawn_minutes: 0, dusk_minutes: 0, lunar_days: 2, sync_seconds: 1, hours: 3}\nsky: {}",
 		"no night":     "cycle: {day_minutes: 10, night_minutes: 0, dawn_minutes: 0, dusk_minutes: 0, lunar_days: 2, sync_seconds: 1}",
 		"dawn too big": "cycle: {day_minutes: 10, night_minutes: 5, dawn_minutes: 6, dusk_minutes: 6, lunar_days: 2, sync_seconds: 1}",
-		"no moon":      "cycle: {day_minutes: 10, night_minutes: 5, dawn_minutes: 1, dusk_minutes: 1, lunar_days: 1, sync_seconds: 1}",
-		"no sync":      "cycle: {day_minutes: 10, night_minutes: 5, dawn_minutes: 1, dusk_minutes: 1, lunar_days: 4, sync_seconds: 0}",
+		// Fits in the day, but past its half: the client would cut it and disagree.
+		"long dawn": "cycle: {day_minutes: 180, night_minutes: 60, dawn_minutes: 100, dusk_minutes: 20, lunar_days: 8, sync_seconds: 1}",
+		"long dusk": "cycle: {day_minutes: 180, night_minutes: 60, dawn_minutes: 20, dusk_minutes: 100, lunar_days: 8, sync_seconds: 1}",
+		"no moon":   "cycle: {day_minutes: 10, night_minutes: 5, dawn_minutes: 1, dusk_minutes: 1, lunar_days: 1, sync_seconds: 1}",
+		"no sync":   "cycle: {day_minutes: 10, night_minutes: 5, dawn_minutes: 1, dusk_minutes: 1, lunar_days: 4, sync_seconds: 0}",
 	} {
 		if _, err := ParseConfig([]byte(raw)); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -193,7 +196,10 @@ func TestSyncEvery(t *testing.T) {
 }
 
 func TestPhaseStart(t *testing.T) {
-	for _, w := range []string{"dawn", "morning", "noon", "day", "afternoon", "dusk", "night", "midnight"} {
+	if len(PhaseWords) != 8 {
+		t.Fatalf("PhaseWords %v", PhaseWords)
+	}
+	for _, w := range PhaseWords {
 		ms, ok := cycle.PhaseStart(w)
 		if !ok || ms < 0 || ms >= cycle.CycleMs() {
 			t.Errorf("%s: %d %v", w, ms, ok)

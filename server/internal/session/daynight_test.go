@@ -137,6 +137,20 @@ func TestStaffSetsTheTime(t *testing.T) {
 	}
 }
 
+// A clock before the epoch (a test's injected clock at time zero and below) never wraps
+// the unsigned day on the wire.
+func TestWorldClockBeforeTheEpoch(t *testing.T) {
+	a := newAdminHarness(t, func(c *session.Config) {
+		c.DayNight = dayNight()
+		c.DayNightEpochMs = -3*cycleMs + 100*60_000
+	})
+	cl, _ := a.joinAs("Sun", session.RolePlayer, pos(2, 2))
+	got := clocksOf(cl.take())
+	if len(got) != 1 || got[0].GetDay() != 0 {
+		t.Fatalf("login clock before the epoch %v", got)
+	}
+}
+
 // A fixed time (-world-time, the E2E server): the clock starts at that time of day 0,
 // stopped, whatever the epoch the app passes (the hour the suite runs at).
 func TestWorldClockFixedForTests(t *testing.T) {

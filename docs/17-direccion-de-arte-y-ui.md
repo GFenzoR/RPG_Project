@@ -564,9 +564,15 @@ sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingwor
   proyectada (solo la de contacto).
 - **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
   sobre su capa); no giran con él (pendiente en docs/14).
-- Revisado sobre una vista previa de Thimblewick a cada hora (amanecer, mañana, mediodía,
-  tarde, atardecer, noche de luna llena y de luna nueva): los personajes quedan apoyados y
-  la noche se lee. Las capturas del E2E son `99b-daynight-noon` y `99c-daynight-night`.
+- La sombra gira en la **línea de los pies** del sprite, no en el borde de abajo de la
+  textura: un lobo o un thornling tienen filas vacías bajo los pies (`foot`) y su sombra
+  sale de las patas a cualquier hora. Si el cuerpo se dibuja inclinado (`skewX` de la
+  pose), la sombra se inclina con él.
+- Capturas del E2E, una por hora: `99b-daynight-noon`, `99c-daynight-night` (luna llena),
+  `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
+  `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
+  revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
+  guardadas.
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones

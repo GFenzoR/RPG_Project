@@ -107,6 +107,8 @@ export function parseDayNight(raw: unknown): DayNightData {
   const out: DayNightData = {
     dayMs,
     nightMs: Math.max(60_000, min(c["night_minutes"], d.nightMs)),
+    // Half the day each at most: the server's Cycle.Check refuses more, so both sides
+    // always name the same phase.
     dawnMs: Math.min(dayMs / 2, min(c["dawn_minutes"], d.dawnMs)),
     duskMs: Math.min(dayMs / 2, min(c["dusk_minutes"], d.duskMs)),
     lunarDays: Math.round(numberIn(c["lunar_days"], 2, 64, d.lunarDays)),

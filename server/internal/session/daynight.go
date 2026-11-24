@@ -19,6 +19,12 @@ import (
 // world time goes to a player at login (join, right after the Welcome), to everyone every
 // sync_seconds and at once after a staff /time. It is purely visual: no rule reads it.
 
+// DayNightWords are the words /time and -world-time take for a time of day.
+func DayNightWords() []string { return daynight.PhaseWords }
+
+// timeUsage is /time's usage line: every word the clock knows, so it cannot fall behind.
+var timeUsage = "/time [" + strings.Join(daynight.PhaseWords, "|") + "|minute] | /time moon phase | /time speed rate"
+
 // DayNightCycle is the `cycle` block of data/livingworld/daynight.yaml.
 type DayNightCycle = daynight.Cycle
 
@@ -57,7 +63,8 @@ func (w *World) initDayNight() {
 func (w *World) worldClockMsg(tick game.Tick) *pb.ServerMessage {
 	t := w.sky.At(int64(tick))
 	return &pb.ServerMessage{Message: &pb.ServerMessage_WorldClock{WorldClock: &pb.WorldClock{
-		Day:     uint32(t.Day),
+		// Never negative on the wire (an epoch before 1970, only a test's clock): day 0.
+		Day:     uint32(max(0, t.Day)),
 		CycleMs: uint32(t.CycleMs),
 		Rate:    uint32(t.Rate),
 	}}}
