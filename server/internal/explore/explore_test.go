@@ -130,3 +130,10 @@ func TestSectorBitOrder(t *testing.T) {
 		t.Fatalf("byte 9 = %08b", s[9])
 	}
 }
+
+func TestNilMapCopiesNothing(t *testing.T) {
+	var m *Map
+	if m.Touched() != nil || m.All() != nil {
+		t.Fatal("a nil map copied sectors")
+	}
+}

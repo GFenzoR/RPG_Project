@@ -260,15 +260,22 @@ func (m *Map) TakePending() []Key {
 }
 
 // Touched returns a copy of every touched sector, sorted by key: what a snapshot writes.
+// A nil Map has none.
 func (m *Map) Touched() []SectorState {
+	if m == nil {
+		return nil
+	}
 	return m.states(m.touched)
 }
 
 // TouchedKeys returns the touched sectors' keys, sorted.
 func (m *Map) TouchedKeys() []Key { return slices.Sorted(maps.Keys(m.touched)) }
 
-// All returns a copy of every sector, sorted by key.
+// All returns a copy of every sector, sorted by key (none for a nil Map).
 func (m *Map) All() []SectorState {
+	if m == nil {
+		return nil
+	}
 	out := make([]SectorState, 0, len(m.sectors))
 	for k, s := range m.sectors {
 		out = append(out, SectorState{Key: k, Bits: *s})
