@@ -12,7 +12,9 @@ import { TILE } from "./placeholder.ts";
 // attack: melee (the LPC slash); shoot: a ranged attack (bow); cast: a spell (docs/17 ANI-2).
 export const ANIM_ACTIONS = ["idle", "walk", "attack", "shoot", "cast", "death"] as const;
 export type AnimAction = (typeof ANIM_ACTIONS)[number];
-export const ANIM_DIRS = ["n", "e", "s", "w"] as const;
+// The straight facings, then the diagonals (the engine humanoids, docs/17 ANI-1): a clip
+// lists only the facings it has frames for.
+export const ANIM_DIRS = ["n", "e", "s", "w", "ne", "se", "sw", "nw"] as const;
 export type AnimDir = (typeof ANIM_DIRS)[number];
 export type Shadow = "baked" | "ellipse" | "none";
 

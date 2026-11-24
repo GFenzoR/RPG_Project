@@ -652,7 +652,7 @@ describe("the engine sprites of the game", () => {
       ).toBe(paths.length);
       if (spec.actions)
         for (const p of paths)
-          expect(p).toMatch(/\/(idle|walk|attack|shoot|cast|death)_[nesw]_\d+$/);
+          expect(p).toMatch(/\/(idle|walk|attack|shoot|cast|death)_(?:ne|se|sw|nw|[nesw])_\d+$/);
     }
   });
 

@@ -120,7 +120,8 @@ export const MISSILE_ART = new RegExp(
  * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
  * turns them into that sprite's clips.
  */
-export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w)_[0-9]+$/;
+export const ANIM_FRAME =
+  /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w|ne|se|sw|nw)_[0-9]+$/;
 
 /**
  * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other

@@ -6,7 +6,7 @@
 import { PALETTE } from "../palette.ts";
 import type { MaterialName } from "../palette.ts";
 import type { Vec3 } from "./math.ts";
-import { ACTIONS, LOOP, SIZES } from "./style.ts";
+import { ACTIONS, DIRS8, LOOP, SIZES } from "./style.ts";
 import type { ActionName, Dir, SizeName, Tone } from "./style.ts";
 
 /** What every primitive can say about its look (on top of its part's). */
@@ -290,8 +290,7 @@ export function validateSpec(spec: SpriteSpec): string[] {
           bad(`${where}: ${total} ms in all, ANI-2 wants ${rule.total[0]}-${rule.total[1]}`);
       }
       checkKeys(where, a.keys);
-      for (const d of a.dirs ?? [])
-        if (!["n", "e", "s", "w"].includes(d)) bad(`${where}: dir ${d}`);
+      for (const d of a.dirs ?? []) if (!DIRS8.includes(d)) bad(`${where}: dir ${d}`);
     }
   } else if (spec.actions && Object.keys(spec.actions).length > 0) {
     bad(`a ${spec.size} has no actions (only creatures are rigged)`);

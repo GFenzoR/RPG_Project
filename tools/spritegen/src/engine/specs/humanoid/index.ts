@@ -4,7 +4,7 @@
 // the body hides what is behind it, so the client stacks the layers in the order of
 // packages/renderer look.ts and gets the figure the model would draw.
 import type { ActionSpec, KeySpec, SpriteSpec } from "../../spec.ts";
-import { PROJECTION } from "../../style.ts";
+import { DIRS8, PROJECTION } from "../../style.ts";
 import type { ActionName, Dir } from "../../style.ts";
 import { chainPitch, layerDefs } from "./layers.ts";
 import type { LayerDef } from "./layers.ts";
@@ -38,6 +38,20 @@ export const HUMANOID_PER_TILE = walkPerTile(WALK_FRAMES, STRIDE);
 /** The same facing north or south, where the model's depth is foreshortened (rounded). */
 export const HUMANOID_PER_TILE_NS = Math.round((HUMANOID_PER_TILE / PROJECTION.depth) * 100) / 100;
 
+/**
+ * The same walking a diagonal (docs/17 ANI-1): a diagonal step slides a tile across and a
+ * tile down the screen, as far as a straight step each way, so the cycle plays the frames
+ * of both, by distance: hypot(perTile, perTileNS). packages/renderer anim.ts computes the
+ * same from the atlas.
+ */
+export const HUMANOID_PER_TILE_DIAG = Math.hypot(HUMANOID_PER_TILE, HUMANOID_PER_TILE_NS);
+
+/**
+ * The facings an engine humanoid is drawn in (docs/17 ANI-1): all eight, every layer, so
+ * the client turns a person to the diagonal it walks or attacks. Death falls facing south.
+ */
+export const HUMANOID_DIRS = DIRS8;
+
 /** The ms per frame of the timed actions (ANI-2), as sprites.yaml must repeat them. */
 export const HUMANOID_MS = { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } as const;
 
@@ -64,12 +78,13 @@ function actionsFor(def: LayerDef): Partial<Record<ActionName, ActionSpec>> {
       },
     }));
   };
+  const dirs = HUMANOID_DIRS;
   return {
-    idle: { frames: 2, ms: HUMANOID_MS.idle, keys: keysOf("idle") },
-    walk: { frames: WALK_FRAMES, keys: keysOf("walk") },
-    attack: { frames: 4, ms: HUMANOID_MS.attack, keys: keysOf("attack") },
-    shoot: { frames: 3, ms: HUMANOID_MS.shoot, keys: keysOf("shoot") },
-    cast: { frames: 3, ms: HUMANOID_MS.cast, keys: keysOf("cast") },
+    idle: { frames: 2, ms: HUMANOID_MS.idle, keys: keysOf("idle"), dirs },
+    walk: { frames: WALK_FRAMES, keys: keysOf("walk"), dirs },
+    attack: { frames: 4, ms: HUMANOID_MS.attack, keys: keysOf("attack"), dirs },
+    shoot: { frames: 3, ms: HUMANOID_MS.shoot, keys: keysOf("shoot"), dirs },
+    cast: { frames: 3, ms: HUMANOID_MS.cast, keys: keysOf("cast"), dirs },
     // Falling is drawn facing south, like today's player (the client turns it).
     death: { frames: 4, ms: HUMANOID_MS.death, keys: keysOf("death"), dirs: ["s"] },
   };

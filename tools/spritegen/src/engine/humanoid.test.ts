@@ -24,6 +24,8 @@ import {
   HUMANOID_LAYERS,
   HUMANOID_PER_TILE,
   HUMANOID_PER_TILE_NS,
+  HUMANOID_PER_TILE_DIAG,
+  HUMANOID_DIRS,
   SHAPES,
   STRIDE,
   WALK_FRAMES,
@@ -32,7 +34,7 @@ import {
 import { lookPreviews, lookTables, REPO_ROOT } from "./specs/humanoid/previews.ts";
 import { BODY_PARTS } from "./specs/humanoid/skeleton.ts";
 import type { Build, Sex } from "./specs/humanoid/skeleton.ts";
-import { DIRS, FACING_YAW, PROJECTION, SIZES } from "./style.ts";
+import { DIAGONAL_DIRS, DIAGONAL_TURN, DIRS, FACING_YAW, PROJECTION, SIZES } from "./style.ts";
 import type { ActionName, Dir } from "./style.ts";
 
 const ROOT = new URL("../../../../", import.meta.url);
@@ -166,6 +168,23 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
     expect(HUMANOID_PER_TILE).toBe(walkPerTile(WALK_FRAMES, STRIDE));
     expect(HUMANOID_PER_TILE).toBe(8);
     expect(HUMANOID_PER_TILE_NS).toBeCloseTo(HUMANOID_PER_TILE / PROJECTION.depth, 1);
+    // A diagonal step: a tile across and a tile down, by distance (packages/renderer anim.ts).
+    expect(HUMANOID_PER_TILE_DIAG).toBeCloseTo(Math.hypot(8, HUMANOID_PER_TILE_NS), 5);
+  });
+
+  it("draws every layer in eight facings, the diagonals along the map diagonal", () => {
+    expect(HUMANOID_DIRS).toEqual([...DIRS, ...DIAGONAL_DIRS]);
+    for (const l of HUMANOID_LAYERS)
+      for (const [action, a] of Object.entries(l.spec.actions ?? {}))
+        expect(a?.dirs, `${l.sprite} ${action}`).toEqual(
+          action === "death" ? ["s"] : HUMANOID_DIRS,
+        );
+    // One tile east and one south is 1 unit across for 1/depth of depth: 60°, not 45°.
+    expect(DIAGONAL_TURN).toBeCloseTo(60, 5);
+    expect(FACING_YAW.se).toBeCloseTo(120, 5);
+    expect(FACING_YAW.sw).toBeCloseTo(60, 5);
+    expect(FACING_YAW.nw).toBeCloseTo(300, 5);
+    expect(FACING_YAW.ne).toBeCloseTo(240, 5);
   });
 
   // The client draws walk frame floor((steps + t) * perTile) % frames while it slides the
@@ -191,20 +210,29 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
     ["foot_r", [0, 1, 2, 3]],
     ["foot_l", [4, 5, 6, 7]],
   ];
-  for (const dir of DIRS)
+  for (const dir of HUMANOID_DIRS)
     it(`facing ${dir}: within 1 px of its ground point while the body passes`, () => {
-      const ns = dir === "n" || dir === "s";
-      const step = 32 / (ns ? HUMANOID_PER_TILE_NS : HUMANOID_PER_TILE);
+      // The way the sprite slides on screen, and the frames a tile of that takes.
+      const sx = dir.includes("e") ? 1 : dir.includes("w") ? -1 : 0;
+      const sy = dir.includes("s") ? 1 : dir.includes("n") ? -1 : 0;
+      const per =
+        sx !== 0 && sy !== 0
+          ? HUMANOID_PER_TILE_DIAG
+          : sy !== 0
+            ? HUMANOID_PER_TILE_NS
+            : HUMANOID_PER_TILE;
+      const step = 32 / per;
       for (const [foot, frames] of planted) {
+        // Where it stands on the map: the sprite has moved f frames the way it faces.
         const ground = frames.map((f) => {
           const c = contact(foot, dir, f);
-          // Where it stands on the map: the sprite has moved f steps the way it faces.
-          const along = dir === "w" ? -1 : dir === "e" ? 1 : dir === "n" ? -1 : 1;
-          return ns ? c.y + along * f * step : c.x + along * f * step;
+          return { x: c.x + sx * f * step, y: c.y + sy * f * step };
         });
-        const first = ground[0] ?? 0;
-        for (const g of ground)
-          expect(Math.abs(g - first), `${dir} ${foot}`).toBeLessThanOrEqual(1);
+        const first = ground[0] ?? { x: 0, y: 0 };
+        for (const g of ground) {
+          if (sx !== 0) expect(Math.abs(g.x - first.x), `${dir} ${foot} x`).toBeLessThanOrEqual(1);
+          if (sy !== 0) expect(Math.abs(g.y - first.y), `${dir} ${foot} y`).toBeLessThanOrEqual(1);
+        }
       }
     });
 
@@ -307,7 +335,7 @@ describe("engine humanoid: the held pieces in the stack (LAYER_ORDER)", { timeou
     weapon: SHAPES.weapon.map((s) => `worn/weapon_${s}`),
     shield: SHAPES.shield.map((s) => `worn/shield_${s}`),
   };
-  for (const dir of DIRS)
+  for (const dir of HUMANOID_DIRS)
     it(`facing ${dir}: each held piece where the stack shows it closest to the model`, () => {
       for (const [slot, sprites] of Object.entries(HELD))
         for (const [look, clothes] of Object.entries(HELD_ON)) {
@@ -326,11 +354,16 @@ describe("engine humanoid: the held pieces in the stack (LAYER_ORDER)", { timeou
           // the piece more than 10 % closer to the model. The good places differ by a few
           // per cent from look to look; the weapon under the body facing west or north, as
           // it was, cost 1.3 to 3.7 times as much.
+          // Facing north-west the weapon is in the far hand, mostly behind the trunk: the
+          // robe and the plate would rather have it under them (over them it draws 1.35-1.45
+          // times the best count of wrong pixels, the skirt over the hilt), but there a
+          // raised spear vanishes 12 px into a tunic. Over everything, as facing north.
+          const slack = dir === "nw" && slot === "weapon" ? 1.5 : 1.1;
           const best = Math.min(...errors);
           expect(
             errors[place],
             `${slot} on the ${look} facing ${dir}: ${errors.join("/")}`,
-          ).toBeLessThanOrEqual(best * 1.1);
+          ).toBeLessThanOrEqual(best * slack);
         }
     });
 
@@ -418,7 +451,7 @@ describe("engine humanoid: the paper doll", () => {
   ];
   for (const t of LOOKS_TO_TRY)
     it(`${t.name}: stands on the feet line, stays in its frame, reads as one figure`, () => {
-      for (const dir of DIRS)
+      for (const dir of HUMANOID_DIRS)
         for (let f = 0; f < WALK_FRAMES; f++) {
           const img = composeFrame(t.look, t.worn, TABLES, "walk", dir, f);
           const b = box(img);
@@ -505,7 +538,14 @@ describe("engine humanoid: the previews of data/ (previews.ts)", () => {
  * hand (the trouser seat's radius covers both hips) and is left to the screenshots.
  */
 const MAX_HOLES = 3;
-describe("engine humanoid: the shared layers fit the four bodies", () => {
+/**
+ * The same in a diagonal facing (measured 2026-11-24): the spear held upright facing
+ * north-east, its shaft behind the trunk's edge, leaves 4 on the sturdy woman and 6 on the
+ * slender one; everything else stays within MAX_HOLES.
+ */
+const MAX_HOLES_DIAGONAL = 6;
+// Eight facings of every shared layer on four bodies: 6-8 s each on a dev machine.
+describe("engine humanoid: the shared layers fit the four bodies", { timeout: 60_000 }, () => {
   const BODIES: { sex: Sex; build: Build }[] = SEXES.flatMap((sex) =>
     BUILDS.map((build) => ({ sex, build })),
   );
@@ -516,8 +556,10 @@ describe("engine humanoid: the shared layers fit the four bodies", () => {
       const man = bodyOf("sturdy", "male");
       let worst = 0;
       let where = "";
+      let worstDiagonal = 0;
+      let whereDiagonal = "";
       for (const l of shared)
-        for (const dir of DIRS)
+        for (const dir of HUMANOID_DIRS)
           for (const [action, frame] of [
             ["idle", 0],
             ["walk", 2],
@@ -541,12 +583,18 @@ describe("engine humanoid: the shared layers fit the four bodies", () => {
             for (let i = 0; i < piece.width * piece.height; i++)
               if (opaque(whole, i) && !opaque(piece, i) && opaque(his, i) && !opaque(hers, i))
                 holes++;
-            if (holes > worst) {
+            if (DIAGONAL_DIRS.includes(dir)) {
+              if (holes > worstDiagonal) {
+                worstDiagonal = holes;
+                whereDiagonal = `${l.sprite} ${action} ${dir} ${frame}`;
+              }
+            } else if (holes > worst) {
               worst = holes;
               where = `${l.sprite} ${action} ${dir} ${frame}`;
             }
           }
       expect(worst, `worst: ${where}`).toBeLessThanOrEqual(MAX_HOLES);
+      expect(worstDiagonal, `worst: ${whereDiagonal}`).toBeLessThanOrEqual(MAX_HOLES_DIAGONAL);
     });
 });
 
@@ -567,14 +615,15 @@ describe("engine humanoid: every look has its frames", { timeout: 30_000 }, () =
             for (const torso of shapes["torso"] ?? []) {
               const look: Look = { sex, body, skin: "fair", hair, hairColor: "brown", beard };
               const worn: Worn = { torso: { shape: torso, tint: "linen" } };
-              for (const dir of DIRS) {
+              for (const dir of HUMANOID_DIRS) {
                 const layers = lookLayers(look, worn, dir, "walk", 0, TABLES);
                 for (const l of layers) expect(drawn.has(l.sprite), l.sprite).toBe(true);
               }
               looks++;
             }
     expect(looks).toBe(2 * 2 * 7 * 3 * 5);
-    // And each of those layers has every frame of every clip (84 a layer).
+    // And each of those layers has every frame of every clip (164 a layer: 20 per facing
+    // in eight facings, and death facing south).
     for (const l of HUMANOID_LAYERS)
       for (const [action, a] of Object.entries(l.spec.actions ?? {}))
         for (const dir of a?.dirs ?? DIRS)

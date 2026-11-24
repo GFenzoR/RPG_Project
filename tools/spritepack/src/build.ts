@@ -568,7 +568,7 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
 }
 
 /** An animation frame's name: <sprite>/<action>_<dir>_<n> (docs/17 ANI-4). */
-const FRAME_NAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_([nesw])_([0-9]+)$/;
+const FRAME_NAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(ne|se|sw|nw|[nesw])_([0-9]+)$/;
 
 /** Default ms per frame of an action whose frames are files (walk plays by distance). */
 const FILE_FRAME_MS: Record<AnimAction, number> = {

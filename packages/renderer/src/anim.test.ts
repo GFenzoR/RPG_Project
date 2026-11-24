@@ -22,6 +22,9 @@ import {
   startDeath,
   startHit,
   startVanish,
+  dirOf,
+  turnTo,
+  walkPerStep,
 } from "./anim.ts";
 import type { AnimInput, AnimMeta, AnimState, Pose } from "./anim.ts";
 
@@ -396,5 +399,80 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     const { s, in_, out } = setup();
     in_.now = 5;
     expect(animate(s, LPC, in_, out)).toBe(out);
+  });
+});
+
+describe("facings (docs/17 ANI-1)", () => {
+  it("names the facing of a direction by its signs", () => {
+    expect(dirOf(1, -1)).toBe("ne");
+    expect(dirOf(-3, 2)).toBe("sw");
+    expect(dirOf(0, -1)).toBe("n");
+    expect(dirOf(-1, 0)).toBe("w");
+    expect(dirOf(0, 0)).toBe("s");
+  });
+
+  it("turns an eight-facing figure to the diagonal it walks or attacks", () => {
+    expect(turnTo("n", 1, -1, true)).toBe("ne");
+    expect(turnTo("e", -1, 1, true)).toBe("sw");
+    expect(turnTo("ne", 0, 1, true)).toBe("s");
+    expect(turnTo("nw", 0, 0, true)).toBe("nw"); // no direction keeps the facing
+  });
+
+  it("keeps, with four facings, the half of a diagonal it already faces", () => {
+    // North-east after facing north stays north; after facing east, east.
+    expect(turnTo("n", 1, -1, false)).toBe("n");
+    expect(turnTo("e", 1, -1, false)).toBe("e");
+    expect(turnTo("s", -1, 1, false)).toBe("s");
+    expect(turnTo("w", -1, 1, false)).toBe("w");
+    // Neither half: the horizontal one, as before.
+    expect(turnTo("s", 1, -1, false)).toBe("e");
+    expect(turnTo("e", -1, -1, false)).toBe("w");
+    // A figure that was drawn eight ways and lost a layer's diagonals: never a diagonal.
+    expect(turnTo("ne", 1, -1, false)).toBe("e");
+    // Straight directions are themselves.
+    expect(turnTo("n", 0, 1, false)).toBe("s");
+  });
+
+  it("plays a diagonal step by distance: hypot of the frames across and down", () => {
+    const walk = { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS };
+    const in_ = newAnimInput();
+    in_.dir = "e";
+    in_.moveDx = 1;
+    in_.moveDy = -1;
+    expect(walkPerStep(walk, in_)).toBeCloseTo(Math.hypot(8, 13.86), 6);
+    in_.moveDy = 0;
+    expect(walkPerStep(walk, in_)).toBe(8);
+    in_.moveDx = 0;
+    in_.moveDy = 1;
+    in_.dir = "s";
+    expect(walkPerStep(walk, in_)).toBe(13.86);
+    // An animal (no perTileNS): √2 times its frames per tile on a diagonal.
+    const trot = { frames: 4, ms: 0, perTile: 2, dirs: DIRS };
+    in_.moveDx = -1;
+    expect(walkPerStep(trot, in_)).toBeCloseTo(2 * Math.SQRT2, 6);
+  });
+
+  it("advances the cycle by the diagonal's length, so the feet do not slide", () => {
+    const HUMAN: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.dir = "e";
+    in_.moveDx = 1;
+    in_.moveDy = 1;
+    in_.walkStart = 0;
+    in_.walkMs = 700;
+    in_.now = 350; // half the step: hypot(8, 13.86) / 2 = 8.0 frames in
+    expect(animate(s, HUMAN, in_, out).frame).toBe(Math.floor(Math.hypot(8, 13.86) / 2) % 8);
+    in_.walkStart = 700;
+    in_.now = 700;
+    animate(s, HUMAN, in_, out);
+    // The diagonal counted its whole length into the cycle (16 frames: two cycles).
+    expect(s.walkPer).toBeCloseTo(Math.hypot(8, 13.86), 6);
+    expect(s.walkPhase).toBeCloseTo(Math.hypot(8, 13.86) % 8, 6);
   });
 });

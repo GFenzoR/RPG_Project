@@ -12,8 +12,46 @@ export type AnimAction = "idle" | "walk" | "attack" | "shoot" | "cast" | "death"
  * for a ranged one (the bow), cast for a spell. A sprite without that clip plays attack.
  */
 export type AttackAction = "attack" | "shoot" | "cast";
-export type AnimDir = "n" | "e" | "s" | "w";
-export const ANIM_DIRS: readonly AnimDir[] = ["n", "e", "s", "w"];
+/**
+ * A facing (ANI-1): the four straight ones, and the diagonals of the engine humanoids. A
+ * sprite has the diagonals only when its clips were drawn in all eight (ClipSet.eight in
+ * the client); every other sprite faces four ways.
+ */
+export type AnimDir = "n" | "e" | "s" | "w" | "ne" | "se" | "sw" | "nw";
+/** The straight facings, then the diagonals (indices 0-3 are the four facings of old). */
+export const ANIM_DIRS: readonly AnimDir[] = ["n", "e", "s", "w", "ne", "se", "sw", "nw"];
+/** The four straight facings: what a sprite without diagonals is drawn in. */
+export const STRAIGHT_DIRS: readonly AnimDir[] = ["n", "e", "s", "w"];
+/** The diagonal facings. */
+export const DIAGONAL_DIRS: readonly AnimDir[] = ["ne", "se", "sw", "nw"];
+
+/** Index of a facing in ANIM_DIRS. */
+export const dirIndex = (d: AnimDir): number => ANIM_DIRS.indexOf(d);
+
+/** The facing of a step or a look (dx, dy) on the map: its signs only (y grows south). */
+export function dirOf(dx: number, dy: number): AnimDir {
+  const v = dy < 0 ? "n" : dy > 0 ? "s" : "";
+  const h = dx > 0 ? "e" : dx < 0 ? "w" : "";
+  return ((v + h) as AnimDir | "") || "s";
+}
+
+/**
+ * The facing a creature turns to for a direction (dx, dy), from `prev`, the way it faces
+ * now (docs/17 ANI-1). A straight direction is that facing. A diagonal one is the diagonal
+ * when the creature is drawn in eight facings (`eight`); with four, it keeps the half of
+ * the diagonal it already faces (going north-east while facing north keeps north, while
+ * facing east keeps east), and otherwise turns to the horizontal half (north-east after
+ * south looks east), as in classic top-down games. No direction keeps `prev`.
+ */
+export function turnTo(prev: AnimDir, dx: number, dy: number, eight: boolean): AnimDir {
+  if (dx === 0 && dy === 0) return prev;
+  const want = dirOf(dx, dy);
+  if (dx === 0 || dy === 0 || eight) return want;
+  const v = dy < 0 ? "n" : "s";
+  const h = dx > 0 ? "e" : "w";
+  if (prev === v || prev === h) return prev;
+  return h;
+}
 
 /** One action of an animated sprite, as atlas.json describes it (tools/spritepack anims.ts). */
 export interface AnimActionMeta {
@@ -147,6 +185,8 @@ export interface AnimState {
   vanishAt: number;
   /** Single-frame sprites with `facing`: drawn mirrored (kept while walking north or south). */
   flip: boolean;
+  /** The facing it is drawn in (turnTo keeps it between directions). */
+  facing: AnimDir;
 }
 
 export function newAnimState(id: number, now: number): AnimState {
@@ -168,6 +208,7 @@ export function newAnimState(id: number, now: number): AnimState {
     diedAt: Number.NaN,
     vanishAt: Number.NaN,
     flip: false,
+    facing: "s",
   };
 }
 
@@ -180,6 +221,8 @@ export interface AnimInput {
   walkMs: number;
   /** Horizontal direction of that step (-1, 0, 1), for the lean. */
   moveDx: number;
+  /** Vertical direction of that step (-1, 0, 1): a diagonal one walks farther. */
+  moveDy: number;
 }
 
 export const newAnimInput = (): AnimInput => ({
@@ -188,6 +231,7 @@ export const newAnimInput = (): AnimInput => ({
   walkStart: undefined,
   walkMs: 0,
   moveDx: 0,
+  moveDy: 0,
 });
 
 /** How to draw the creature this frame. animate() overwrites every field. */
@@ -403,9 +447,8 @@ function walking(
     // ANI-2: by distance, so feet do not slide when the speed changes; between chained
     // steps (t undefined, within IDLE_AFTER_MS) the last frame stays (ANI-3).
     if (t !== undefined) {
-      const ns = in_.dir === "n" || in_.dir === "s";
-      const per = Math.max(1, (ns ? walk.perTileNS : undefined) ?? walk.perTile ?? walk.frames);
       s.walkPhase %= walk.frames;
+      const per = walkPerStep(walk, in_);
       s.walkPer = per;
       s.walkFrame = Math.floor(s.walkPhase + t * per) % walk.frames;
     }
@@ -420,6 +463,19 @@ function walking(
     out.scaleY = (top - 1) / top;
     out.scaleX = (top + 1) / top;
   }
+}
+
+/**
+ * Walk frames one step plays, by distance (ANI-2): a diagonal step, a tile across and a
+ * tile down the screen, plays the length of both, hypot(perTile, perTileNS); a straight
+ * one, perTileNS facing north or south (the 3/4 view, specs/humanoid) and perTile
+ * otherwise (the stride is the drawn facing's).
+ */
+export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
+  const across = walk.perTile ?? walk.frames;
+  const down = walk.perTileNS ?? across;
+  if (in_.moveDx !== 0 && in_.moveDy !== 0) return Math.max(1, Math.hypot(across, down));
+  return Math.max(1, in_.dir === "n" || in_.dir === "s" ? down : across);
 }
 
 function idle(

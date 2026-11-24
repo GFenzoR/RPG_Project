@@ -5,7 +5,8 @@
 import { normalize, rad } from "./math.ts";
 import type { Vec3 } from "./math.ts";
 
-export type Dir = "n" | "e" | "s" | "w";
+/** A facing: the four straight ones, and the diagonals the engine humanoids add (ANI-1). */
+export type Dir = "n" | "e" | "s" | "w" | "ne" | "se" | "sw" | "nw";
 export type ActionName = "idle" | "walk" | "attack" | "shoot" | "cast" | "death";
 /** The shades of a palette.ts material, lightest first, plus its outline. */
 export type Tone = "light" | "base" | "shadow" | "deep" | "outline";
@@ -254,13 +255,38 @@ export const ACTIONS: Record<
 };
 
 /**
- * ANI-1: four facings. A model is built facing west (its nose toward -x, like the profile
- * drawings) and turned about the vertical by this many degrees for each facing. All four are
- * rendered from the model, so the east one keeps the light on the left (a mirrored west would
- * light it from the right) and no `mirror` hint is needed.
+ * How far a diagonal facing turns from its east or west side toward north or south
+ * (degrees): the map diagonal in model space. A tile is as many units across as down the
+ * screen, but a unit of depth shows as PROJECTION.depth rows, so one tile east and one
+ * south is 1 unit across for every 1/depth units of depth: 60° from the east-west axis, not
+ * 45°. Facing that way, the model walks the way its step slides on screen (45° there), and
+ * the planted foot holds (specs/humanoid, docs/17 "La regla de la zancada").
  */
-export const FACING_YAW: Record<Dir, number> = { w: 0, s: 90, e: 180, n: 270 };
+export const DIAGONAL_TURN = (Math.atan(1 / PROJECTION.depth) * 180) / Math.PI;
+
+/**
+ * ANI-1: four facings, eight for the engine humanoids. A model is built facing west (its
+ * nose toward -x, like the profile drawings) and turned about the vertical by this many
+ * degrees for each facing. Every facing is rendered from the model, so the east ones keep
+ * the light on the left (a mirrored west would light them from the right, and put the
+ * shield in the other hand) and no `mirror` hint is needed.
+ */
+export const FACING_YAW: Record<Dir, number> = {
+  w: 0,
+  s: 90,
+  e: 180,
+  n: 270,
+  sw: DIAGONAL_TURN,
+  se: 180 - DIAGONAL_TURN,
+  ne: 180 + DIAGONAL_TURN,
+  nw: 360 - DIAGONAL_TURN,
+};
+/** The facings a creature is rendered in unless its actions say otherwise. */
 export const DIRS: readonly Dir[] = ["s", "w", "n", "e"];
+/** The diagonal facings (the engine humanoids, docs/17 ANI-1). */
+export const DIAGONAL_DIRS: readonly Dir[] = ["se", "sw", "nw", "ne"];
+/** All eight facings: the straight ones first. */
+export const DIRS8: readonly Dir[] = [...DIRS, ...DIAGONAL_DIRS];
 
 /** ANI-4: the atlas name of a frame. */
 export const frameName = (sprite: string, action: ActionName, dir: Dir, n: number): string =>
