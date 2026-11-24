@@ -5,6 +5,14 @@
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import { CHAT_OPACITY, TEXT_SCALES, UI_SCALES } from "../state/ui-prefs.ts";
+import { NAME_SIZES } from "../render/label-style.ts";
+import type { NameSize } from "../render/label-style.ts";
+
+/** The label of each name size (literal keys: make validate checks them). */
+const NAME_SIZE_KEYS: Record<NameSize, string> = {
+  normal: "client.options.name_size_normal",
+  large: "client.options.name_size_large",
+};
 
 /** "125 %" in the player's language. */
 export const percent = (t: Translate, v: number): string =>
@@ -19,6 +27,9 @@ export function InterfaceOptions(props: {
   chatOpacity: number;
   /** What creatures say shows over their heads (docs/17 UI-11). */
   bubbles: boolean;
+  /** How big the names over creatures are (render/label-style.ts). */
+  nameSize: NameSize;
+  onNameSize(v: NameSize): void;
   onUiScale(v: number): void;
   onTextScale(v: number): void;
   onShake(on: boolean): void;
@@ -58,6 +69,23 @@ export function InterfaceOptions(props: {
         TEXT_SCALES,
         props.onTextScale,
       )}
+      <label class="scale" title={t("client.options.name_size_hint")}>
+        <span>{t("client.options.name_size")}</span>
+        <select
+          data-testid="name-size"
+          value={props.nameSize}
+          onChange={(e) => {
+            const v = NAME_SIZES.find((s) => s === e.currentTarget.value);
+            if (v) props.onNameSize(v);
+          }}
+        >
+          {NAME_SIZES.map((v) => (
+            <option key={v} value={v}>
+              {t(NAME_SIZE_KEYS[v])}
+            </option>
+          ))}
+        </select>
+      </label>
       <label class="check" title={t("client.options.camera_shake_hint")}>
         <input
           type="checkbox"

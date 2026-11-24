@@ -59,10 +59,12 @@ import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotk
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
 import type { ZoomView } from "./render/zoom.ts";
+import { DEFAULT_NAME_SIZE } from "./render/label-style.ts";
+import type { NameSize } from "./render/label-style.ts";
 import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
-import type { GameCanvas } from "./render/game-canvas.ts";
+import type { GameCanvas, LabelsShown } from "./render/game-canvas.ts";
 import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
@@ -270,6 +272,10 @@ export interface ClientTestHooks {
   zoom(): ZoomView;
   /** The server's window (Welcome) and the tiles the canvas shows of it (fractional when cut). */
   view(): { server: ViewTiles; shown: ViewTiles };
+  /** The names over creatures drawn now (docs/17 UI-3; GameCanvas.labels). */
+  labels(): LabelsShown | undefined;
+  /** Wall pieces on (x, y) of the own floor and the translucent copies (docs/17 ART-3). */
+  wallFade(x: number, y: number): { alphas: number[]; copies: number } | undefined;
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
@@ -391,6 +397,10 @@ export interface GameOptions {
    * Interface), read every frame. Without it, it does.
    */
   chatBubbles?(): boolean;
+   * How big the names over creatures are (Options → Interface, docs/17 UI-3), read at each
+   * frame. Without it, DEFAULT_NAME_SIZE.
+   */
+  nameSize?(): NameSize;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -1986,6 +1996,7 @@ export class Game {
       restTile: (at) => this.restTile(at),
       shake: () => (this.opts.cameraShake?.() ?? true) && !motionReduced(document.documentElement),
       bubbles: () => this.opts.chatBubbles?.() ?? true,
+      nameSize: () => this.opts.nameSize?.() ?? DEFAULT_NAME_SIZE,
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -2050,6 +2061,8 @@ export class Game {
       scale: () => canvas.scale,
       zoom: () => canvas.zoom,
       view: () => ({ server: world.view, shown: canvas.shown }),
+      labels: () => canvas.labels(),
+      wallFade: (x, y) => canvas.wallFade(x, y),
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,

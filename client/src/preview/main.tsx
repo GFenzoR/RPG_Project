@@ -274,6 +274,8 @@ function Preview(props: { game: Game }): JSX.Element {
         shake={true}
         chatOpacity={50}
         bubbles={true}
+        nameSize="large"
+        onNameSize={() => {}}
         onUiScale={() => {}}
         onTextScale={() => {}}
         onShake={() => {}}

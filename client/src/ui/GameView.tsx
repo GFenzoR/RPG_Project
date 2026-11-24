@@ -74,6 +74,7 @@ import {
   transformScale,
   watchedRef,
 } from "./window-dom.ts";
+import type { NameSize } from "../render/label-style.ts";
 import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
@@ -139,6 +140,8 @@ export interface GameSettings {
   cameraShake?: boolean | undefined;
   /** What creatures say shows over their heads (docs/17 UI-11). */
   chatBubbles?: boolean | undefined;
+  /** How big the names over creatures are (Options → Interface; docs/17 UI-3). */
+  nameSize?: NameSize | undefined;
 }
 
 /** What the screen shows before the first batch of the server. */

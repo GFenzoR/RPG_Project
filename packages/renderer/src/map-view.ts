@@ -352,6 +352,11 @@ export class MapView {
     }
   }
 
+  /** The alpha of each wall piece drawn on global tile (x, y) now (tests, E2E hooks). */
+  wallAlphaAt(x: number, y: number): number[] {
+    return this.wallSpritesAt(x, y).map((sp) => sp.alpha);
+  }
+
   private wallSpritesAt(x: number, y: number): readonly Sprite[] {
     if (x < 0 || y < 0) return NO_SPRITES;
     const c = this.cache.get(`${Math.floor(x / CHUNK_TILES)},${Math.floor(y / CHUNK_TILES)}`);

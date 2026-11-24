@@ -1,6 +1,7 @@
 // PvP on the client (T5.2): the safe mode switch, kept in the browser, and the look of a
 // skull. The server decides every attack; the switch only says what the player wants.
 import { Skull } from "@rpg/protocol";
+import { SKULL_COLORS } from "../render/label-style.ts";
 
 const SAFE_KEY = "rpg.safeMode";
 
@@ -35,15 +36,15 @@ export function skullId(s: Skull): string | undefined {
   }
 }
 
-/** The fill colour of a skull's placeholder icon (amber, crimson, violet); 0 for none. */
+/** The fill colour of a skull's placeholder icon (amber, red, violet: SKULL_COLORS); 0 for none. */
 export function skullColor(s: Skull): number {
   switch (s) {
     case Skull.AGGRESSOR:
-      return 0xf2b233;
+      return SKULL_COLORS.aggressor;
     case Skull.MURDERER:
-      return 0xd23a3a;
+      return SKULL_COLORS.murderer;
     case Skull.OUTLAW:
-      return 0x8e4fd6;
+      return SKULL_COLORS.outlaw;
     default:
       return 0;
   }

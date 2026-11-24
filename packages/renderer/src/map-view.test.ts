@@ -267,6 +267,9 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     expect(wallAt(10, 6).alpha).toBe(REVEAL_ALPHA);
     expect(wallAt(10, 4).alpha).toBe(1);
     expect(wallAt(20, 6).alpha).toBe(1);
+    expect(v.wallAlphaAt(10, 6)).toEqual([REVEAL_ALPHA]);
+    expect(v.wallAlphaAt(10, 4)).toEqual([1]);
+    expect(v.wallAlphaAt(11, 6)).toEqual([]);
     // It walks away: the wall fades back in smoothly, not in one frame.
     v.revealBehind(undefined, 5, 1016);
     const back = wallAt(10, 6).alpha;

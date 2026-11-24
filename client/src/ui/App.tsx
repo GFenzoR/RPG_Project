@@ -16,7 +16,7 @@ import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from 
 import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
-import { loadCameraShake, loadChatBubbles } from "../state/ui-prefs.ts";
+import { loadCameraShake, loadChatBubbles, loadNameSize } from "../state/ui-prefs.ts";
 import type { GameSettings } from "./GameView.tsx";
 import { LookPickers } from "./LookPickers.tsx";
 import { LookPreview } from "./LookPreview.tsx";
@@ -445,6 +445,9 @@ function GameScreen(props: {
   // docs/17 UI-11: the speech bubbles, read by the canvas every frame.
   const bubbles = useRef(props.settings?.chatBubbles);
   bubbles.current = props.settings?.chatBubbles;
+  // The size of the names (docs/17 UI-3), read by the canvas at each frame.
+  const nameSize = useRef(props.settings?.nameSize);
+  nameSize.current = props.settings?.nameSize;
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -459,6 +462,7 @@ function GameScreen(props: {
       controls: () => controls.current ?? loadControls(storage),
       cameraShake: () => shake.current ?? loadCameraShake(storage),
       chatBubbles: () => bubbles.current ?? loadChatBubbles(storage),
+      nameSize: () => nameSize.current ?? loadNameSize(storage),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),

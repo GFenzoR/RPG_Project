@@ -1,3 +1,6 @@
+import { DEFAULT_NAME_SIZE, NAME_SIZES } from "../render/label-style.ts";
+import type { NameSize } from "../render/label-style.ts";
+
 // Interface preferences kept in the browser (docs/17 UI-1, UI-9): "reduced animations",
 // on top of the system's prefers-reduced-motion. Applied as data-motion="reduced" on <html>,
 // which client.css reads like the media query.
@@ -134,6 +137,23 @@ export function applyScales(
   if (textScale === 1) root.style.removeProperty("--ui-text-scale");
   else root.style.setProperty("--ui-text-scale", String(textScale));
 }
+
+// ---- The size of the names over creatures (docs/17 UI-3, render/label-style.ts) ---------
+
+const NAME_SIZE_KEY = "rpg.name-size";
+
+/** The remembered name size: large (the default) unless the player picked normal. */
+export function loadNameSize(storage: Pick<Storage, "getItem"> | undefined): NameSize {
+  try {
+    const raw = storage?.getItem(NAME_SIZE_KEY);
+    return NAME_SIZES.find((s) => s === raw) ?? DEFAULT_NAME_SIZE;
+  } catch {
+    return DEFAULT_NAME_SIZE;
+  }
+}
+
+export const saveNameSize = (v: NameSize, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, NAME_SIZE_KEY, v);
 
 // ---- The chat's opacity (docs/17 UI-10) ------------------------------------------------
 

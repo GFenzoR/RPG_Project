@@ -105,7 +105,9 @@ import {
   CANVAS_TEXT_STROKE,
   loadCanvasFont,
 } from "./canvas-font.ts";
-import { labelText, placeLabels } from "./labels.ts";
+import { SHORT_NAME_CHARS, labelText, placeLabels } from "./labels.ts";
+import { DEFAULT_NAME_SIZE, LABEL_COLORS, LABEL_OUTLINE, labelScale } from "./label-style.ts";
+import type { NameSize } from "./label-style.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
@@ -144,11 +146,12 @@ import type { ViewTiles } from "../state/view.ts";
 
 const COLORS = {
   background: 0x000000,
-  self: 0x3a7bd5,
-  player: 0xd59a3a,
-  monster: 0xb03a2e,
-  npc: 0x7d4fb0,
-  guild: 0xb8e986,
+  // Names, guild lines and the fallback blocks use the label tokens (render/label-style.ts).
+  self: LABEL_COLORS.self,
+  player: LABEL_COLORS.player,
+  monster: LABEL_COLORS.monster,
+  npc: LABEL_COLORS.npc,
+  guild: LABEL_COLORS.guild,
   marker: 0xffffff,
   outline: 0x101010,
   target: 0xff2020,
@@ -185,6 +188,24 @@ export function figureRect(
   return { x: bodyX + fig.x - w / 2, y: bodyY + fig.y - h, width: w, height: h };
 }
 
+/** What GameCanvas.labels reports (E2E). */
+export interface LabelsShown {
+  /** Screen pixels per font cell of the names, and the map scale. */
+  scale: number;
+  zoom: number;
+  shown: {
+    id: number;
+    text: string;
+    fill: number;
+    scale: number;
+    /** Page px. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }[];
+}
+
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
 
@@ -211,6 +232,16 @@ export interface GameCanvas {
   readonly zoom: ZoomView;
   /** The tiles the canvas shows (fractional when cut to the box), at most WorldState.view. */
   readonly shown: ViewTiles;
+  /**
+   * E2E: the names drawn now (docs/17 UI-3): the label scale and, per shown creature label,
+   * its text, fill and box in page px.
+   */
+  labels(): LabelsShown;
+  /**
+   * E2E (docs/17 ART-3): the alpha of each wall piece on tile (x, y) of the own floor, and
+   * how many translucent copies of hidden creatures were drawn this frame.
+   */
+  wallFade(x: number, y: number): { alphas: number[]; copies: number };
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
@@ -312,6 +343,10 @@ export interface GameCanvasOptions {
    * Interface). Asked every frame; without it, it does.
    */
   bubbles?(): boolean;
+   * docs/17 UI-3: how big the names are (Options → Interface), asked at each frame; without
+   * it, DEFAULT_NAME_SIZE.
+   */
+  nameSize?(): NameSize;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -574,6 +609,8 @@ export async function createGameCanvas(
     );
 
   let scale = 1;
+  // Screen pixels per font cell of the names this frame (render/label-style.ts labelScale).
+  let nameScale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
   // The zoom the player chose (undefined = the fitted view) and what the map's box
   // allows; `scale` is the one drawn.
@@ -980,11 +1017,13 @@ export async function createGameCanvas(
           fontFamily: CANVAS_FONT,
           fontSize: CANVAS_FONT_SIZE,
           fill: colorOf(c),
-          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
+          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
           ...look?.name,
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
+        // Scaled by whole numbers (labelScale): every font cell an exact square of pixels.
+        textureStyle: { scaleMode: "nearest" },
       });
       labels.addChild(label);
       const guild = new Text({
@@ -993,10 +1032,11 @@ export async function createGameCanvas(
           fontFamily: CANVAS_FONT,
           fontSize: CANVAS_FONT_SIZE,
           fill: COLORS.guild,
-          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
+          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
+        textureStyle: { scaleMode: "nearest" },
       });
       labels.addChild(guild);
       const skull = new Container();
@@ -1021,7 +1061,7 @@ export async function createGameCanvas(
     }
     // The language can change during the game (T1.13).
     // Shortened at small zoom (T5.6, render/labels.ts); the zoom follows the window size.
-    const name = labelText(nameOf(c), scale);
+    const name = labelText(nameOf(c), scale, SHORT_NAME_CHARS, nameScale);
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
@@ -1231,6 +1271,7 @@ export async function createGameCanvas(
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
+    nameScale = labelScale(scale, opts.nameSize?.() ?? DEFAULT_NAME_SIZE);
     react(now);
     depart(now);
     for (const c of world.creatures.values()) {
@@ -1273,14 +1314,19 @@ export async function createGameCanvas(
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
+      // Names, guild lines and skulls grow with the zoom in whole steps (docs/17 UI-3).
+      s.label.scale.set(nameScale);
+      s.guild.scale.set(nameScale);
+      s.skull.scale.set(nameScale);
       const hasGuild = c.guild !== "";
       const hasSkull = s.drawnSkull !== Skull.UNSPECIFIED;
       boxes.push({
         id: c.id,
         x: Math.round(head.x),
-        y: barTop - 1,
+        y: barTop - nameScale,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? MARK_BOX.w + 2 : 0),
+          Math.max(s.label.width, hasGuild ? s.guild.width : 0) +
+          (hasSkull ? (MARK_BOX.w + 2) * nameScale : 0),
         nameHeight: s.label.height,
         guildHeight: hasGuild ? s.guild.height : 0,
         self: c.id === world.selfId,
@@ -1291,7 +1337,7 @@ export async function createGameCanvas(
     view.revealBehind(reveal, revealRow, now);
     // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
     // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
-    const placements = placeLabels(boxes, scale);
+    const placements = placeLabels(boxes, scale, nameScale);
     for (const b of boxes) {
       const s = sprites.get(b.id);
       const at = placements.get(b.id);
@@ -1309,7 +1355,7 @@ export async function createGameCanvas(
       }
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - MARK_HALF - 2),
+          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * nameScale),
           Math.round(s.label.y - s.label.height / 2),
         );
       }
@@ -1334,7 +1380,7 @@ export async function createGameCanvas(
     for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     world.expire(now);
     drawWalkMark(now, self.pos.z);
-    effects.draw(now, self.pos.z, cam, scale);
+    effects.draw(now, self.pos.z, cam, scale, nameScale);
     if (isDark(self.pos.z)) {
       lightTile = tilePixels(cam, T);
       const sp = world.drawPos(self, now);
@@ -1698,6 +1744,29 @@ export async function createGameCanvas(
     },
     get shown() {
       return shownTiles(app.screen.width, app.screen.height, scale, T);
+    },
+    labels() {
+      const r = canvas.getBoundingClientRect();
+      const k = r.width / (app.screen.width || 1);
+      const shown: LabelsShown["shown"] = [];
+      for (const [id, s] of sprites) {
+        if (!s.label.visible || s.label.destroyed) continue;
+        const b = s.label.getBounds();
+        shown.push({
+          id,
+          text: s.label.text,
+          fill: Number(s.label.style.fill),
+          scale: s.label.scale.x,
+          x: r.left + b.x * k,
+          y: r.top + b.y * k,
+          width: b.width * k,
+          height: b.height * k,
+        });
+      }
+      return { scale: nameScale, zoom: scale, shown };
+    },
+    wallFade(x, y) {
+      return { alphas: view.wallAlphaAt(x, y), copies: hiddenShown };
     },
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));

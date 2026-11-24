@@ -303,6 +303,7 @@ export class EffectLayer {
       },
       anchor: { x: 0.5, y: 1 },
       roundPixels: true,
+      textureStyle: { scaleMode: "nearest" },
     });
     this.texts.addChild(o);
     return o;
@@ -317,7 +318,11 @@ export class EffectLayer {
   };
 
   /** Draws everything the world keeps on `floor` (call after world.expire(now)). */
-  draw(now: number, floor: number, cam: Camera, scale: number): void {
+  /**
+   * `textScale`: screen pixels per font cell of the floating numbers, the names' scale
+   * (render/label-style.ts labelScale; 1 = the font's grid size).
+   */
+  draw(now: number, floor: number, cam: Camera, scale: number, textScale = 1): void {
     this.frame++;
     const p = tilePixels(cam, this.tileSize);
 
@@ -412,6 +417,7 @@ export class EffectLayer {
         this.numbers.set(f, n);
       }
       n.seen = this.frame;
+      n.obj.scale.set(textScale);
       const k = Math.min(1, (now - f.start) / FLOATING_TEXT_MS);
       n.obj.position.set(
         Math.round((f.pos.x + 0.5 - cam.x) * p),

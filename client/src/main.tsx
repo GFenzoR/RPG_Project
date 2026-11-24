@@ -22,12 +22,14 @@ import {
   loadCameraShake,
   loadChatBubbles,
   loadChatOpacity,
+  loadNameSize,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   saveCameraShake,
   saveChatBubbles,
   saveChatOpacity,
+  saveNameSize,
   saveReducedMotion,
   saveTextScale,
   saveUiScale,
@@ -130,6 +132,8 @@ function Root(): JSX.Element {
   const [shake, setShake] = useState(() => loadCameraShake(storage));
   // docs/17 UI-11: the speech bubbles over the heads (Options → Interface).
   const [bubbles, setBubbles] = useState(() => loadChatBubbles(storage));
+  // docs/17 UI-3: how big the names over creatures are (Options → Interface).
+  const [nameSize, setNameSize] = useState(() => loadNameSize(storage));
   useEffect(() => {
     applyScales(document.documentElement, uiScale, textScale);
   }, [uiScale, textScale]);
@@ -171,6 +175,11 @@ function Root(): JSX.Element {
       shake={shake}
       chatOpacity={chatOpacity}
       bubbles={bubbles}
+      nameSize={nameSize}
+      onNameSize={(v) => {
+        saveNameSize(v, storage);
+        setNameSize(v);
+      }}
       onUiScale={(v) => {
         saveUiScale(v, storage);
         setUiScale(v);
@@ -232,6 +241,7 @@ function Root(): JSX.Element {
         uiScale,
         cameraShake: shake,
         chatBubbles: bubbles,
+        nameSize,
         interfaceOptions: interfaceOptions(),
       }}
       audio={audio}
