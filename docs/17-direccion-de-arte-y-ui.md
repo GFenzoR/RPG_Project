@@ -2822,6 +2822,15 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
   aplastado a 3/5 de alto (la caída procedural de ANI-5). Después lo oscurece
   (`CORPSE_LIGHT`) y le saca un poco de color (`CORPSE_COLOUR`): sin sangre, eso lo
   ponen los efectos de golpe.
+- **Una sola pasada:** el arte que dibuja el código (los frames del motor, la gaviota de
+  `recipes/creatures.ts`) se toma de su receta al dibujar el cadáver, nunca del PNG
+  commiteado: cambiar el spec del jabalí o agregar un monstruo del motor y correr `make
+  spritegen` una vez escribe los frames y el cadáver de esos frames, en cualquier orden.
+  Solo el arte que ninguna receta dibuja (los frames de Gemini, que un build no
+  reescribe) se lee de `assets/sprites`. Un monstruo sin `look`, sin clip de muerte y sin
+  imagen cuadrada no tiene de dónde sacar su cadáver: `spritegen check` (`checkPaths`, lo
+  corre `make spritegen` al final y `make test`) lo nombra. Una imagen suelta tiene que
+  ser cuadrada (`tipOver` la gira un cuarto; otra forma falla en vez de recortarse).
 - **Dónde va:** del tamaño de la criatura (el custodio de 96x96 conserva su huella) y
   con su píxel más bajo donde estaban sus pies (`FEET_LINE` sobre el borde de la
   casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), así el
@@ -2830,14 +2839,28 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
 - **Cómo llega al mapa:** los restos siguen siendo el contenedor de la familia; el item
   trae `mods.remains_of` (docs/05 "Restos") y el cliente lo apila en `MapView` con la
   clave `<item>@<monstruo>` (`state/corpse-art.ts`), cuya textura es `corpses/<monstruo>`
-  si el atlas la tiene y la de la familia si no. El menú del click derecho muestra el
-  cadáver como ícono (ajustado a 64 px).
+  si el atlas la tiene y la de la familia si no (`mapItemTexture`, `mapItemArt`). Quien
+  recibe esas claves de `MapView` y solo conoce items (el mundo vivo, la elevación) les
+  saca el monstruo (`plainItemKey`, `mapItemId`). El menú del click derecho muestra el
+  cadáver como ícono, ajustado a 64 px: uno más grande que la caja (el custodio, 96 px)
+  se achica a ella (`BigIcon` con `shrink`) en vez de salirse a 1x. Si el cliente no
+  tiene el nombre del monstruo (`monster.<id>.name`), los restos se llaman como su
+  familia (`instanceName`), nunca con la clave cruda.
 - **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses
   [--out FILE.png] [--scale N]`: cada monstruo de pie a la izquierda y su cadáver a la
   derecha, sobre la grilla de casillas, como los pone el cliente. Revisado el 2026-11-24
-  con los 21 monstruos: todos se reconocen tendidos; el jabalí del motor queda
-  agazapado (es el último frame de su muerte) y el gólem y el custodio, un montón de
-  escoria con su forma.
+  con los 21 monstruos: todos se reconocen, con tres salvedades que la revisión de
+  código anotó y quedan para una pasada de arte (el jabalí, que quedaba casi de pie,
+  ya no: las dos keys finales de `death` en `specs/boar.ts` lo giran además sobre el
+  eje vertical, así queda tendido de costado en las cuatro direcciones, y su cadáver
+  salió solo de esos frames): la gaviota, una sola imagen girada, se lee
+  poco como un ave caída (pide un clip de muerte o un spec del motor); y el gólem y el
+  custodio son un montón de escoria (su último frame de muerte), casi lo mismo que el
+  sprite de familia `remains_slag` salvo el tamaño.
+- **La rama `br` no tiene caso real:** hoy ningún monstruo con arte más ancho que una
+  casilla está anclado abajo a la derecha (todos los cadáveres miden 32, 64 o 96 px y
+  son `bc`); el ensanche a `2w - 32` solo lo cubre un test sintético. El primero que
+  pase por ahí hay que mirarlo en el juego contra el último frame de su caída.
 - **Pendiente:** etapas (fresco, seco, huesos) a lo largo de `monster_corpse_ms` y el
   cuerpo de un jugador con su propio muñeco tendido (docs/14).
 

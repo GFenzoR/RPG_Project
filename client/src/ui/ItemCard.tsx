@@ -32,11 +32,15 @@ export function iconStyle(icon: IconRect | undefined): JSX.CSSProperties {
  * The whole scale of a big icon: 2x, or with `fit` the largest whole scale (at least 1) at
  * which it fits a `fit` px square. An NPC's portrait fits 64 px: a 32 px sprite of Dungeon
  * Crawl at 2x and a 64 px LPC character at 1x take the same box (at 2x the LPC frame was
- * 128 px, and an NPC's dialog no longer fit a phone on its side).
+ * 128 px, and an NPC's dialog no longer fit a phone on its side). With `shrink` a sprite
+ * larger than the square is scaled down to it (a fraction) instead of spilling out at 1x:
+ * a boss's 96 px corpse in the menu's 64 px box.
  */
-export function bigIconScale(icon: IconRect, fit?: number): number {
+export function bigIconScale(icon: IconRect, fit?: number, shrink = false): number {
   if (fit === undefined) return 2;
-  return Math.max(1, Math.floor(fit / Math.max(icon.width, icon.height, 1)));
+  const size = Math.max(icon.width, icon.height, 1);
+  if (shrink && size > fit) return fit / size;
+  return Math.max(1, Math.floor(fit / size));
 }
 
 /** An atlas icon at a whole scale (a box that size; the icon scaled pixelated: client.css). */
@@ -45,9 +49,11 @@ export function BigIcon(props: {
   class?: string;
   /** Fit the icon in a square of this many px instead of drawing it at 2x. */
   fit?: number;
+  /** With `fit`: scale a sprite larger than the square down to it. */
+  shrink?: boolean;
 }): JSX.Element {
   const icon = props.icon;
-  const scale = icon ? bigIconScale(icon, props.fit) : 2;
+  const scale = icon ? bigIconScale(icon, props.fit, props.shrink) : 2;
   return (
     <span
       class={`big-icon ${props.class ?? ""}`}

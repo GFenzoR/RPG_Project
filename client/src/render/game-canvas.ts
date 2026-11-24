@@ -128,7 +128,7 @@ import { BubbleLayer } from "./bubble-layer.ts";
 import type { BubbleAnchor } from "./bubble-layer.ts";
 import { admitSpeech } from "./bubbles.ts";
 import type { BubbleStyle } from "./bubbles.ts";
-import { corpseArt, corpseSprite, parseMapItemKey } from "../state/corpse-art.ts";
+import { mapItemArt, mapItemId, mapItemTexture } from "../state/corpse-art.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -495,16 +495,11 @@ export async function createGameCanvas(
 
   // A tile item's key is its number, or "<number>@<monster>" for the remains of a monster,
   // drawn as that monster's own corpse when the atlas has it (state/corpse-art.ts).
-  const corpseOf = (id: string): Texture | undefined => {
-    const { remainsOf } = parseMapItemKey(id);
-    return remainsOf ? atlas.texture(corpseSprite(remainsOf)) : undefined;
-  };
   const textures = new Map<string, Texture>();
   const texture = (id: string): Texture => {
     let tex = textures.get(id);
     if (!tex) {
-      const sprite = content.items[parseMapItemKey(id).itemId]?.sprite;
-      tex = corpseOf(id) ?? ((sprite && atlas.texture(sprite)) || MISSING_TEXTURE);
+      tex = mapItemTexture(id, content.items, atlas) ?? MISSING_TEXTURE;
       textures.set(id, tex);
     }
     return tex;
@@ -516,9 +511,7 @@ export async function createGameCanvas(
   const art = (id: string): TileArt<Texture> | undefined => {
     let a = arts.get(id);
     if (a === undefined) {
-      const corpse = corpseOf(id);
-      const sprite = content.items[parseMapItemKey(id).itemId]?.sprite;
-      a = corpse ? corpseArt(corpse) : (sprite && atlas.tileArt(sprite)) || null;
+      a = mapItemArt(id, content.items, atlas) ?? null;
       arts.set(id, a);
     }
     return a ?? undefined;
@@ -539,7 +532,7 @@ export async function createGameCanvas(
     texture,
     art,
     // ART-8: tables and crates raise what is stacked on them (data/items elevation).
-    elevation: (id) => content.items[parseMapItemKey(id).itemId]?.elevation ?? 0,
+    elevation: (id) => content.items[mapItemId(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
   });

@@ -261,8 +261,26 @@ func TestDeathCorpseOwnerOnly(t *testing.T) {
 	h := deathHarness(t, func(c *session.Config) { c.Balance.Death.EquipmentDropPct = 100 })
 	owner, p := h.geared("Owner", 20, 0)
 	other, _ := h.join("Other", at(41, 40))
+	other.take()
 	h.kill(p)
 	corpse := h.w.CorpsesAt(pos(40, 40))[0]
+	// Who stands by sees whose body fell: the tile's item carries body_of on the wire.
+	seen := false
+	for _, tu := range find(other.take(), (*pb.ServerMessage).GetTileUpdate) {
+		q := tu.GetPos()
+		items := tu.GetTile().GetItems()
+		if q.GetX() != 40 || q.GetY() != 40 || len(items) == 0 {
+			continue
+		}
+		seen = true
+		if top := items[len(items)-1]; top.GetItemId() != corpseID || top.GetMods().GetBodyOf() != "Owner" ||
+			top.GetMods().GetRemainsOf() != "" {
+			t.Errorf("the body on the tile is %v, want item %d with body_of Owner", top, corpseID)
+		}
+	}
+	if !seen {
+		t.Errorf("no TileUpdate showed the body to who stood by")
+	}
 	pack := corpse.Item.Items()[0] // everything drops, in slot order: the backpack first
 	if pack.Def().ID != "backpack" || len(corpse.Item.Items()) != 4 {
 		t.Fatalf("corpse holds %v", corpseItems(h))
@@ -279,6 +297,10 @@ func TestDeathCorpseOwnerOnly(t *testing.T) {
 		opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
 		if len(opens) != 1 {
 			t.Fatalf("corpse not opened: %v", opens)
+		}
+		// The window is titled "body of Owner": the name travels with ContainerOpen.
+		if m := opens[0].GetMods(); m.GetBodyOf() != "Owner" || m.GetRemainsOf() != "" {
+			t.Errorf("corpse window mods %v, want body_of Owner", m)
 		}
 		return opens[0].GetContainerId()
 	}

@@ -29,7 +29,14 @@ import { STAG } from "./engine/specs/stag.ts";
 import { ICON_ROWS } from "./engine/specs/items/index.ts";
 import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
 import { corpseSheet } from "./recipes/corpses.ts";
-import { buildSprites, checkPaths, previewPng, recipePaths, spriteFile } from "./index.ts";
+import {
+  buildSprites,
+  checkPaths,
+  previewPng,
+  recipePaths,
+  recipesAt,
+  spriteFile,
+} from "./index.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -63,7 +70,12 @@ if (command === "corpses") {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(
     out,
-    encodePng(scaleImage(corpseSheet(root), Number.isInteger(scale) && scale > 0 ? scale : 2)),
+    encodePng(
+      scaleImage(
+        corpseSheet(root, recipesAt(root)),
+        Number.isInteger(scale) && scale > 0 ? scale : 2,
+      ),
+    ),
   );
   console.log(`spritegen: corpses sheet -> ${out}`);
 } else if (command === "build") {

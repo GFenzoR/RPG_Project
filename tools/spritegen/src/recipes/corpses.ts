@@ -4,15 +4,21 @@
 // the family's container item with the monster that fell (ItemMods remains_of) and the
 // client draws this sprite for it (client/src/state/corpse-art.ts). Data drives them: a
 // new monster gets its corpse with `make spritegen`, and the committed-PNG test fails
-// until it has one (tools/spritepack packs every PNG of assets/sprites).
+// until it has one (tools/spritepack packs every PNG of assets/sprites); a monster with
+// no art to make one from is a problem of `spritegen check` (index.ts checkPaths).
 //
 // How each one is made, deterministically:
 // - an engine humanoid (a `look`): its paper doll composed in the last frame of its death
 //   (facing south, as the client draws the fall), with the look's own tints;
-// - a creature with a death clip (<sprite>/death_s_<n>.png): the clip's last frame, how the
+// - a creature with a death clip (<sprite>/death_s_<n>): the clip's last frame, how the
 //   creature fell;
 // - a single image (no clip): the sprite tipped onto its side and flattened against the
 //   floor, the procedural fall's last pose.
+// Art that code draws (the engine's frames, recipes/creatures.ts) is taken from its recipe,
+// drawn when the corpse is, never from its committed PNG: one `make spritegen` after
+// changing a creature (or adding one) writes its frames and the corpse of those frames, in
+// any order. Only art no recipe draws (a hand-made or third-party PNG, which a build never
+// rewrites) is read from assets/sprites.
 // Then the body is darkened and a little greyed (no blood: the hit effects have it), and
 // placed so the client can draw every corpse centred on its tile with its lowest pixel
 // where the creature's feet stood (FEET_LINE above the tile's bottom), as big as the
@@ -25,6 +31,7 @@ import { composeFrame } from "../engine/specs/humanoid/compose.ts";
 import { lookOf, lookTables, wornOf } from "../engine/specs/humanoid/previews.ts";
 import { HUMANOID_LAYERS } from "../engine/specs/humanoid/index.ts";
 import type { Recipe, RecipeBook } from "../recipe.ts";
+import { renderRecipe, TILE } from "../render.ts";
 
 /** The atlas path of a monster's corpse (client/src/state/corpse-art.ts corpseSprite). */
 export const corpsePath = (monster: string): string => `corpses/${monster}`;
@@ -70,9 +77,15 @@ function lowestRow(img: Image): number {
 /**
  * A single image (no death clip) fallen: turned a quarter onto its side (its back to the
  * floor's far side) and flattened to 3/5 of its height, as the procedural fall squashes it.
+ * Square sprites only (the turn keeps the size): another shape throws instead of losing
+ * pixels.
  */
 export function tipOver(src: Image): Image {
-  const n = src.width; // square sprites: the turn keeps the size
+  if (src.width !== src.height)
+    throw new Error(
+      `spritegen: a corpse is tipped over from a square image, not ${src.width}x${src.height} (give the creature a death clip)`,
+    );
+  const n = src.width;
   const turned = createImage(n, n);
   for (let y = 0; y < src.height; y++)
     for (let x = 0; x < src.width; x++) {
@@ -95,13 +108,17 @@ export function tipOver(src: Image): Image {
   return out;
 }
 
+/** How wide the corpse of a body `width` px wide anchored `anchor` is (corpseOf). */
+export const corpseWidth = (width: number, anchor: "bc" | "br"): number =>
+  anchor === "br" && width > TILE ? 2 * width - TILE : width;
+
 /**
  * The fallen body `src` (anchored `anchor` as the creature was drawn) as a corpse sprite:
  * darkened, centred on its tile (a bottom-right sprite wider than a tile is widened so
  * its centre falls where it stood) and with its lowest pixel FEET_LINE above the bottom.
  */
 export function corpseOf(src: Image, anchor: "bc" | "br"): Image {
-  const width = anchor === "br" && src.width > 32 ? 2 * src.width - 32 : src.width;
+  const width = corpseWidth(src.width, anchor);
   const out = createImage(width, src.height);
   const low = lowestRow(src);
   const dy = low < 0 ? 0 : src.height - 1 - FEET_LINE - low;
@@ -134,16 +151,59 @@ function anchors(root: string): Map<string, "bc" | "br"> {
   return out;
 }
 
-/** The last death frame file of a sprite folder facing south, if it has a clip. */
-function lastDeathFrame(dir: string): string | undefined {
-  if (!existsSync(dir)) return undefined;
-  const frames = readdirSync(dir)
-    .map((f) => /^death_s_([0-9]+)\.png$/.exec(f))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .map((m) => Number(m[1]))
-    .sort((a, b) => a - b);
-  const last = frames[frames.length - 1];
-  return last === undefined ? undefined : join(dir, `death_s_${last}.png`);
+/** The highest <n> of the names `<prefix><n><suffix>` among `names` (undefined: none). */
+function lastFrame(names: Iterable<string>, prefix: string, suffix: string): number | undefined {
+  let last: number | undefined;
+  for (const name of names) {
+    if (!name.startsWith(prefix) || !name.endsWith(suffix)) continue;
+    const digits = name.slice(prefix.length, name.length - suffix.length);
+    if (!/^[0-9]+$/.test(digits)) continue;
+    last = Math.max(last ?? 0, Number(digits));
+  }
+  return last;
+}
+
+/** A fallen body before it is made a corpse: its size, and how to draw it. */
+interface Fallen {
+  width: number;
+  height: number;
+  body: () => Image;
+}
+
+/**
+ * The fallen body of the creature drawn with `sprite`: the last frame of its death clip
+ * facing south, or its single image tipped over. Art of `coded` (the recipes in code) is
+ * drawn from its recipe when asked, so it is never an older PNG; other art is the PNG of
+ * assets/sprites under `root`. Undefined: nothing to make it from (a single image that is
+ * not square cannot be tipped over).
+ */
+function fallenOf(root: string, sprite: string, coded: RecipeBook): Fallen | undefined {
+  const clip = `${sprite}/death_s_`;
+  const codedLast = lastFrame(Object.keys(coded), clip, "");
+  const frame = codedLast === undefined ? undefined : coded[`${clip}${codedLast}`];
+  if (frame)
+    return {
+      width: frame.width ?? TILE,
+      height: frame.height ?? TILE,
+      body: () => renderRecipe(`${clip}${codedLast ?? 0}`, frame),
+    };
+  const dir = join(root, "assets", "sprites", sprite);
+  const fileLast = existsSync(dir) ? lastFrame(readdirSync(dir), "death_s_", ".png") : undefined;
+  if (fileLast !== undefined) {
+    const img = decodePng(readFileSync(join(dir, `death_s_${fileLast}.png`)));
+    return { width: img.width, height: img.height, body: () => img };
+  }
+  const recipe = coded[sprite];
+  if (recipe) {
+    const size = { width: recipe.width ?? TILE, height: recipe.height ?? TILE };
+    if (size.width !== size.height) return undefined;
+    return { ...size, body: () => tipOver(renderRecipe(sprite, recipe)) };
+  }
+  const single = join(root, "assets", "sprites", `${sprite}.png`);
+  if (!existsSync(single)) return undefined;
+  const img = decodePng(readFileSync(single));
+  if (img.width !== img.height) return undefined;
+  return { width: img.width, height: img.height, body: () => tipOver(img) };
 }
 
 /** The ids of data/monsters under `root`, sorted by file. */
@@ -159,8 +219,12 @@ export function monsterIds(root: string): string[] {
     .filter((id): id is string => typeof id === "string");
 }
 
-/** One corpse recipe per monster of data/monsters under `root` that has art to make it from. */
-export function corpseRecipes(root: string): RecipeBook {
+/**
+ * One corpse recipe per monster of data/monsters under `root` that has art to make it from
+ * (see fallenOf; `coded` are the recipes in code, whose art is drawn and not read). A
+ * monster left out is a problem of `spritegen check`.
+ */
+export function corpseRecipes(root: string, coded: RecipeBook): RecipeBook {
   const book: RecipeBook = {};
   const dir = join(root, "data", "monsters");
   if (!existsSync(dir)) return book;
@@ -186,16 +250,11 @@ export function corpseRecipes(root: string): RecipeBook {
     const sprite = m["sprite"];
     if (typeof sprite !== "string") continue;
     const anchor = hints.get(sprite) ?? "br";
-    const death = lastDeathFrame(join(root, "assets", "sprites", sprite));
-    const single = join(root, "assets", "sprites", `${sprite}.png`);
-    const fallen = death
-      ? decodePng(readFileSync(death))
-      : existsSync(single)
-        ? tipOver(decodePng(readFileSync(single)))
-        : undefined;
+    const fallen = fallenOf(root, sprite, coded);
     if (!fallen) continue;
-    const img = corpseOf(fallen, anchor);
-    book[path] = recipeOf(img.width, img.height, () => img);
+    book[path] = recipeOf(corpseWidth(fallen.width, anchor), fallen.height, () =>
+      corpseOf(fallen.body(), anchor),
+    );
   }
   return book;
 }
@@ -222,14 +281,13 @@ function living(root: string, m: Obj): { img: Image; anchor: "bc" | "br" } | und
  * the tile at the right, both placed as the client places them (centred, feet FEET_LINE
  * above the tile's bottom). 1x; scale it to look.
  */
-export function corpseSheet(root: string): Image {
+export function corpseSheet(root: string, book: RecipeBook): Image {
   const dir = join(root, "data", "monsters");
   const ids = readdirSync(dir)
     .filter((f) => /\.ya?ml$/.test(f))
     .sort()
     .map((f) => parseYaml(readFileSync(join(dir, f), "utf8")))
     .filter(isObj);
-  const book = corpseRecipes(root);
   const CELL_W = 224;
   const CELL_H = 112;
   const COLS = 4;

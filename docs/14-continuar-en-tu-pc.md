@@ -267,8 +267,8 @@ el punto 5:
   - **Etapas de descomposición** (fresco, seco, huesos sobre `combat.monster_corpse_ms`):
     el cliente no sabe la edad de unos restos; haría falta la hora de muerte en `ItemMods`
     o un `TileUpdate` del servidor por etapa. No se hizo.
-  - **El cuerpo de un jugador con su muñeco tendido:** hoy es `remains_humanoid` con su
-    nombre. Haría falta su aspecto en `ItemMods` (o el `CreatureLook` del muerto) y
+  - **El cuerpo de un jugador con su muñeco tendido:** hoy es `creature_remains`
+    (`CorpseItem`, huesos sobre un cuero) con su nombre. Haría falta su aspecto en `ItemMods` (o el `CreatureLook` del muerto) y
     componer las capas en el último frame de morir en el cliente (como `look-preview`).
   - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
     jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al

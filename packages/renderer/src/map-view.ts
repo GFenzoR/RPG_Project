@@ -43,7 +43,13 @@ import {
 } from "./tile-art.ts";
 import type { ParticleKind, TileArt, TileSync } from "./tile-art.ts";
 
-/** One 32x32 chunk: row-major ground IDs and sparse item stacks (local coordinates). */
+/**
+ * One 32x32 chunk: row-major ground IDs and sparse item stacks (local coordinates). An ID
+ * is the source's own key, opaque here: MapView only hands it back to the lookups below and
+ * to forEachItemSprite, and sprites are told apart by it. The game client's is the item's
+ * number, or "<number>@<monster>" for the remains of a monster, drawn as that monster's
+ * corpse (client/src/state/corpse-art.ts); a caller that wants the item parses it there.
+ */
 export interface ChunkData {
   readonly ground: readonly (string | null)[];
   readonly items: readonly {
@@ -418,7 +424,7 @@ export class MapView {
 
   /**
    * Calls fn for every item sprite of the built chunks (not the flat border pieces): its
-   * global tile, item id and sprite. The caller may skew or nudge a sprite (the living
+   * global tile, item id (the source's key, see ChunkData) and sprite. The caller may skew or nudge a sprite (the living
    * world's plants) but must not keep it past the next version change.
    */
   forEachItemSprite(fn: (x: number, y: number, id: string, sprite: Sprite) => void): void {

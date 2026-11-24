@@ -12,7 +12,16 @@ import { translator } from "../i18n/i18n.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { cardTitle } from "../ui/ItemCard.tsx";
 import { itemName } from "../ui/Inventory.tsx";
-import { corpseArt, corpseSprite, mapItemKey, parseMapItemKey } from "./corpse-art.ts";
+import {
+  corpseArt,
+  corpseSprite,
+  mapItemArt,
+  mapItemId,
+  mapItemKey,
+  mapItemTexture,
+  parseMapItemKey,
+  plainItemKey,
+} from "./corpse-art.ts";
 import { itemCard } from "./item-card.ts";
 import { instanceName } from "./item-name.ts";
 import { topItem } from "./items.ts";
@@ -98,6 +107,12 @@ describe("the name of remains", () => {
     expect(instanceName(en, content.items[FUR], FUR, spider)).toBe("moss spider remains");
     expect(instanceName(es, content.items[BODY], BODY, anaBody)).toBe("cuerpo de Ana");
     expect(instanceName(en, content.items[BODY], BODY, anaBody)).toBe("body of Ana");
+  });
+
+  it("falls back to the family's name when the client has no name for the monster", () => {
+    const unknown = { ...wolfRemains, remainsOf: "not_in_this_bundle" };
+    expect(instanceName(es, content.items[FUR], FUR, unknown)).toBe("restos de bestia");
+    expect(instanceName(en, content.items[FUR], FUR, unknown)).toBe(en("item.remains_fur.name"));
   });
 
   it("leaves every other item as it was: its own name, a refined one with its level", () => {
@@ -207,5 +222,44 @@ describe("the corpse on the map", () => {
       String(SWORD),
       `${FUR}@wolf`,
     ]);
+  });
+
+  it("reads the item of a tile key without the monster", () => {
+    expect(mapItemId(`${FUR}@wolf`)).toBe(FUR);
+    expect(mapItemId("48")).toBe(48);
+    expect(plainItemKey(`${FUR}@wolf`)).toBe(String(FUR));
+    expect(plainItemKey("48")).toBe("48");
+  });
+
+  it("takes the monster's corpse from the atlas, and the family's remains without one", () => {
+    // An atlas with the wolf's corpse and the family's sprite, but no corpse for the boar
+    // (a client older than the monster, or art still to be made).
+    const has = new Set(["corpses/wolf", "decor/remains_fur", "decor/remains_humanoid"]);
+    const atlas = {
+      texture: (sprite: string) => (has.has(sprite) ? `tex:${sprite}` : undefined),
+      tileArt: (sprite: string) =>
+        has.has(sprite) ? { ...corpseArt(`art:${sprite}`), anchorX: 1 as const } : undefined,
+    };
+    const items = content.items;
+    expect(mapItemTexture(`${FUR}@wolf`, items, atlas)).toBe("tex:corpses/wolf");
+    expect(mapItemTexture(`${FUR}@bristleback_boar`, items, atlas)).toBe("tex:decor/remains_fur");
+    expect(mapItemTexture(String(FUR), items, atlas)).toBe("tex:decor/remains_fur");
+    // A player's body is its item's sprite: no monster in its key.
+    expect(mapItemTexture(mapItemKey(BODY, anaBody), items, atlas)).toBe(
+      "tex:decor/remains_humanoid",
+    );
+    // No sprite at all: the canvas draws its missing texture.
+    expect(mapItemTexture(String(SWORD), items, atlas)).toBeUndefined();
+    expect(
+      mapItemTexture("999@wolf", items, { ...atlas, texture: () => undefined }),
+    ).toBeUndefined();
+
+    // The corpse is centred on its tile; the family's remains keep their own tile art.
+    expect(mapItemArt(`${FUR}@wolf`, items, atlas)).toEqual(corpseArt("tex:corpses/wolf"));
+    expect(mapItemArt(`${FUR}@bristleback_boar`, items, atlas)).toMatchObject({
+      base: "art:decor/remains_fur",
+      anchorX: 1,
+    });
+    expect(mapItemArt(String(SWORD), items, atlas)).toBeUndefined();
   });
 });

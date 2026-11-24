@@ -16,17 +16,18 @@ import {
   textWidth,
 } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
-import { castShadow, composite, rng, seedOf } from "./draw.ts";
+import { composite } from "./draw.ts";
 import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
 import { corpsePath, monsterIds } from "./recipes/corpses.ts";
+import { renderRecipe, TILE } from "./render.ts";
 
 export { RECIPES, recipesAt } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
 export { UI_ICON_BOX, UI_SLOT_BOX, UI_STATUS_BOX, uiIconBox } from "./recipe.ts";
 
-export const TILE = 32;
+export { TILE } from "./render.ts";
 
 /**
  * Recipe paths in a stable (sorted) order, optionally only those starting with `only`, of
@@ -40,14 +41,7 @@ export function recipePaths(only?: string, book: RecipeBook = RECIPES): string[]
 
 /** Draws one recipe into a fresh image of its size (a creature with its cast shadow). */
 export function render(path: string, recipe: Recipe = mustGet(path)): Image {
-  const img = createImage(recipe.width ?? TILE, recipe.height ?? TILE);
-  const seed = seedOf(path);
-  recipe.draw(img, rng(seed), seed);
-  // A creature of ours casts the shadow the Dungeon Crawl monsters have, so both sit on
-  // the map the same way (assets/README.md, "Sombra de las criaturas"), unless it stands
-  // on the renderer's contact ellipse like the animated monsters (shadow: false).
-  if (recipe.kind === "creature" && recipe.shadow !== false) castShadow(img, recipe.shadow);
-  return img;
+  return renderRecipe(path, recipe);
 }
 
 function mustGet(path: string, book: RecipeBook = RECIPES): Recipe {
@@ -141,8 +135,9 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
 /**
  * Problems with the recipe set: paths no data/ file uses (and that are neither outfit nor
  * effect frames, missile art nor ui icons), ui icons that are not of kind "ui" (or the
- * other way round), and effect or missile strips whose frames are not 0, 1, ... without a
- * gap (the client stops at the first missing frame).
+ * other way round), effect or missile strips whose frames are not 0, 1, ... without a
+ * gap (the client stops at the first missing frame), and monsters of data/monsters with no
+ * corpse of their own (no look, death clip nor image to make it from: recipes/corpses.ts).
  */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
@@ -150,6 +145,11 @@ export function checkPaths(root: string): string[] {
   // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
   const corpses = new Set(monsterIds(root).map(corpsePath));
   const problems: string[] = [];
+  for (const id of monsterIds(root))
+    if (!book[corpsePath(id)])
+      problems.push(
+        `${corpsePath(id)}: monster ${id} has no corpse: it needs a look, a death clip (<sprite>/death_s_<n>) or a square image (<sprite>) to make it from`,
+      );
   for (const p of recipePaths(undefined, book)) {
     const ui = book[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))

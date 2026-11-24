@@ -19,6 +19,10 @@ export function modsOf(s: { mods?: ItemMods | undefined } | undefined): ItemMods
  * An instance's mods as a data-tip-mods value ("attack:3:0"; undefined for a plain item):
  * what an element with data-tip-item adds so its card (ui/ItemTooltip.tsx) shows them.
  */
+// Whose remains an item is (remainsOf, bodyOf) does not travel in a tip: remains lie on
+// the map and never enter a container, a pocket or a slot, the only places with tips. If
+// that changes, add them here and in parseTipMods, and name ui/Inventory.tsx ItemCell with
+// the instance's mods.
 export function tipMods(mods: ItemMods | undefined): string | undefined {
   return mods ? `${mods.attribute}:${mods.value}:${mods.refine}` : undefined;
 }

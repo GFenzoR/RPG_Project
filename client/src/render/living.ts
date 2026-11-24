@@ -22,6 +22,7 @@ import type { LivingObjectEvent } from "@rpg/protocol";
 import type { Atlas, MapView } from "@rpg/renderer";
 import type { Container, Texture } from "pixi.js";
 import type { ClientContent, ItemDef } from "../content-types.ts";
+import { plainItemKey } from "../state/corpse-art.ts";
 import type { Pos } from "../state/geometry.ts";
 
 export type { LivingObjects, LivingWorld } from "@rpg/living-world";
@@ -77,15 +78,31 @@ export function mountLivingWorld(
       tileSize: atlas.tileSize,
       data,
       texture: (name) => (isArt(atlas, name) ? atlas.texture(name) : undefined),
-      plants: {
-        version: () => view.version,
-        forEach: (fn) => view.forEachItemSprite(fn),
-      },
+      plants: plantSource(view),
       reduced,
       // The day and night (render/sky.ts): fireflies at night.
       night,
     },
   );
+}
+
+/**
+ * The map's item sprites as the living world reads them: by the item's number. MapView
+ * hands each sprite with its tile key, which for the remains of a monster is
+ * "<number>@<monster>" (state/corpse-art.ts); the living world's rules know items only.
+ */
+export function plantSource<S>(view: {
+  readonly version: number;
+  forEachItemSprite(fn: (x: number, y: number, key: string, sprite: S) => void): void;
+}): {
+  version(): number;
+  forEach(fn: (x: number, y: number, itemId: string, sprite: S) => void): void;
+} {
+  return {
+    version: () => view.version,
+    forEach: (fn) =>
+      view.forEachItemSprite((x, y, key, sprite) => fn(x, y, plainItemKey(key), sprite)),
+  };
 }
 
 /**

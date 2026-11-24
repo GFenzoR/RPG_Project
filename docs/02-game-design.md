@@ -894,11 +894,13 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     (el último frame de su muerte; uno sin muerte, el sprite volcado de costado y
     aplastado), más oscuro, del tamaño de la criatura y donde estaban sus pies
     (`tools/spritegen/src/recipes/corpses.ts`, docs/17 "Cadáveres"). Un monstruo nuevo lo
-    tiene con `make spritegen`, sin item ni receta a mano. El sprite de la familia queda
+    tiene con `make spritegen`, en una sola pasada y sin item ni receta a mano; uno sin
+    arte del que sacarlo es un problema de `spritegen check`. El sprite de la familia queda
     como respaldo (un atlas sin el cadáver).
   - **El cuerpo de un jugador** dice de quién es (`ItemMods.body_of`, el nombre):
     `client.item.body_of`, "cuerpo de {player}" / "body of {player}". Se dibuja todavía
-    con `remains_humanoid`; el muñeco del jugador tendido es un pendiente (docs/14).
+    con `creature_remains` (`CorpseItem`, `session/death.go` `playerCorpse`: huesos sobre
+    un cuero); el muñeco del jugador tendido es un pendiente (docs/14).
 
 ### Bolsillos (decisión del dueño, 2026-11-19)
 La prueba de Thimblewick del 2026-11-19 mostró que la muerte deja la mochila en el

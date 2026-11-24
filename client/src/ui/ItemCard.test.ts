@@ -163,6 +163,15 @@ describe("BigIcon", () => {
     expect(bigIconScale(icon(96, 96), 64)).toBe(1);
   });
 
+  it("with shrink, scales a sprite larger than the square down into it", () => {
+    expect(bigIconScale(icon(96, 96), 64, true)).toBeCloseTo(2 / 3);
+    expect(bigIconScale(icon(32, 32), 64, true)).toBe(2);
+    expect(bigIconScale(icon(64, 64), 64, true)).toBe(1);
+    // The box is the square, never the sprite's own 96 px.
+    const boss = BigIcon({ icon: icon(96, 96), fit: 64, shrink: true }) as unknown as Node;
+    expect(boss.props["style"]).toEqual({ width: "64px", height: "64px" });
+  });
+
   it("sizes its box and scales the sprite to match", () => {
     const fitted = BigIcon({ icon: icon(64, 64), fit: 64 }) as unknown as Node;
     expect(fitted.props["style"]).toEqual({ width: "64px", height: "64px" });

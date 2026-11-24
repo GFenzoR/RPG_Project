@@ -115,10 +115,18 @@ func TestLootCorpse(t *testing.T) {
 	if len(looks) != 1 || looks[0].GetLocalized().GetKey() != "look.container" {
 		t.Fatalf("look = %v", looks)
 	}
+	named := false
 	for _, prm := range looks[0].GetLocalized().GetParams() {
-		if prm.GetName() == "item" && prm.GetItem().GetMods().GetRemainsOf() != "wolf" {
+		if prm.GetName() != "item" {
+			continue
+		}
+		named = true
+		if prm.GetItem().GetMods().GetRemainsOf() != "wolf" {
 			t.Errorf("looked at %v, want the remains of the wolf", prm.GetItem())
 		}
+	}
+	if !named {
+		t.Errorf("look params %v carry no item: nothing names the monster", looks[0].GetLocalized().GetParams())
 	}
 
 	pack := openPack(t, h, cl)

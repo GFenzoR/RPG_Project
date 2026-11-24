@@ -18,7 +18,9 @@ description: Agrega un monstruo nuevo al juego (YAML, textos es/en, sprite o pla
    - Su cadáver propio (`corpses/<id>`) sale de su arte: después de tener el sprite,
      `make spritegen ONLY=corpses/` y revisa
      `node --experimental-strip-types tools/spritegen/src/cli.ts corpses` con Read
-     (docs/06 "Cadáver propio"). Nada de items ni textos para el cadáver.
+     (docs/06 "Cadáver propio"). Nada de items ni textos para el cadáver. Si `spritegen
+     check` dice `has no corpse`, al monstruo le falta arte del que sacarlo (un `look`,
+     un clip `death_s_<n>` o una imagen cuadrada).
    - Habilidades opcionales, todas dato: ataques con `area` (círculo o rayo),
      `below_hp_pct`, `heal_self`, `summon` y, para un jefe, `phases` (formato en docs/06
      "Monstruo", reglas en docs/02 "Habilidades"). Los duelos de balance ya las simulan.

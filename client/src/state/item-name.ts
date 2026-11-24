@@ -24,8 +24,13 @@ export function instanceName(
   itemId: number,
   mods?: NameMods | undefined,
 ): string {
-  if (mods?.remainsOf)
-    return t("client.item.remains_of", { monster: t(`monster.${mods.remainsOf}.name`) });
+  if (mods?.remainsOf) {
+    // A monster this client has no name for (a bundle older than the server's data): the
+    // family's remains by their own name, never the raw key inside "restos de ...".
+    const key = `monster.${mods.remainsOf}.name`;
+    const monster = t(key);
+    if (monster !== key) return t("client.item.remains_of", { monster });
+  }
   if (mods?.bodyOf) return t("client.item.body_of", { player: mods.bodyOf });
   return refinedName(t, def ? t(`item.${def.id}.name`) : String(itemId), mods?.refine);
 }

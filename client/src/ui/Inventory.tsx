@@ -362,6 +362,8 @@ function ItemCell(props: {
   const ref = props.itemRef(item);
   // T5.6: the item picked by a tap (waiting for its destination) is outlined.
   const picked = props.picked !== undefined && sameRef(props.picked, ref);
+  // By its data/items name, without the instance's mods: what a cell holds is never the
+  // remains of a death (they stay on the map; state/mods.ts tipMods).
   const name = itemName(props.content, props.t, item.itemId);
   const icon = game?.itemIcon(item.itemId);
   const scale = icon && props.box ? iconScale(props.box, icon) : 1;

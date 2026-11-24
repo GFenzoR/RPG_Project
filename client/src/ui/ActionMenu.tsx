@@ -244,7 +244,11 @@ export function ActionMenu(props: {
         {menu.title && (
           <div class="touch-menu-title">
             {icon && (
-              <BigIcon icon={icon} class="touch-menu-icon" {...(corpse ? { fit: 64 } : {})} />
+              <BigIcon
+                icon={icon}
+                class="touch-menu-icon"
+                {...(corpse ? { fit: 64, shrink: true } : {})}
+              />
             )}
             <span class={card?.quest ? "touch-menu-name quest" : "touch-menu-name"}>
               {menu.title}

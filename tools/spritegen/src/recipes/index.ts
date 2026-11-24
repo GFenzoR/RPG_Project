@@ -48,7 +48,7 @@ const CODED: RecipeBook = merge(
   engineRecipes(ENGINE_SPECS),
 );
 
-export const RECIPES: RecipeBook = merge(CODED, lookPreviews(), corpseRecipes(REPO_ROOT));
+export const RECIPES: RecipeBook = merge(CODED, lookPreviews(), corpseRecipes(REPO_ROOT, CODED));
 
 const AT = new Map<string, RecipeBook>([[resolve(REPO_ROOT), RECIPES]]);
 
@@ -57,7 +57,7 @@ export function recipesAt(root: string): RecipeBook {
   const key = resolve(root);
   let book = AT.get(key);
   if (!book) {
-    book = merge(CODED, lookPreviews(key), corpseRecipes(key));
+    book = merge(CODED, lookPreviews(key), corpseRecipes(key, CODED));
     AT.set(key, book);
   }
   return book;
