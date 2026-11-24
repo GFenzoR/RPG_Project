@@ -3357,6 +3357,22 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 Un ranking público de guerras. (Las marcas ya tienen sprites propios:
 `assets/sprites/ui/marks/`, dibujados por `client/src/render/marks.ts`.)
 
+## Día y noche (pedido del dueño del 2026-11-23)
+
+El mundo tiene un ciclo de **180 minutos reales de día y 60 de noche** (decisión del dueño);
+el amanecer y el atardecer son los primeros y los últimos 15 minutos del día. La luna
+cambia de fase cada día, de nueva a llena y vuelta en 8 días. La hora la lleva el servidor
+(la misma para todos, sigue entre reinicios) y la manda a cada cliente.
+
+**Por ahora es solo visual:** de noche la superficie se ve azul y más oscura (más clara y
+plateada con luna llena, más oscura con luna nueva, pero nunca tanto que cueste jugar),
+brillan las fogatas, antorchas, faroles y ventanas, salen las luciérnagas, y las sombras de
+los personajes siguen al sol (a la mañana hacia el oeste, al mediodía cortas bajo los pies,
+a la tarde hacia el este) y de noche a la luna, tenues. Ninguna regla (monstruos, daño,
+visión, tiendas) depende de la hora; las cuevas no cambian. Los números están en
+`data/livingworld/daynight.yaml` y el detalle en `livingworld/README.md` "Día y noche". El
+staff la cambia para probar con `/time` (docs/16).
+
 ## Mundo vivo (lote 17)
 
 Pedido del dueño (2026-11-23): el mapa se puede romper en muchas cosas para que el mundo se

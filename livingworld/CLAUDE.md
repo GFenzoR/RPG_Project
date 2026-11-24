@@ -1,7 +1,8 @@
 # livingworld/ — mundo vivo (guía corta para agentes)
 
 **Propósito:** el entorno reacciona a quien pasa (huellas, plantas que se doblan, ondas,
-polvo, hojas, bichos, pasos con sonido, y en el servidor rompibles, empujables y desgaste).
+polvo, hojas, bichos, pasos con sonido, día y noche, y en el servidor rompibles, empujables,
+desgaste y el reloj del mundo).
 La fuente única es `livingworld/README.md`: léela antes de tocar nada.
 
 **Invariantes:**

@@ -455,7 +455,7 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
 - **Luz:**
   - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
     y de cada antorcha (capa de oscuridad en multiply y luces aditivas);
-  - día y noche no entran en este plan.
+  - día y noche: después llegó el ciclo (abajo, "Día y noche y sombras proyectadas").
 
 **Hecho (A10 y la luz de A13, 2026-11-18):**
 - **Formato:** frames `<sprite>/frame_<n>` (el sprite es el frame 0) y, en la sección
@@ -512,7 +512,7 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
   correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
-  luciérnagas de noche (cuando haya noche) y sombras de peces en el agua. Pocos (10) y
+  luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
   donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.
 - **Desgaste de senderos** (estado del servidor, docs/02 "Senderos"; rama
   `feat/trail-wear`): tres etapas sobre el pasto, arte de color (no máscara) de
@@ -532,6 +532,41 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   `assets/livingworld/sprites/`; plantas nuevas como items (`data/items/plants.yaml`).
 - Todo se apaga con "Animaciones reducidas" o `prefers-reduced-motion`.
 
+
+### Día y noche y sombras proyectadas (hecho, 2026-11-24, rama `feat/day-night-shadows`)
+Pedido del dueño (2026-11-23): "los personajes todavía parecen flotar: sombras dinámicas
+que sigan la forma real de cada uno; un ciclo de día y noche; y que las sombras sigan al
+sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingworld/README.md`
+"Día y noche"; aquí, la dirección de arte.
+- **El ciclo:** 180 minutos reales de día y 60 de noche (decisión del dueño). El amanecer y
+  el atardecer son los primeros y los últimos 15 minutos del día. La luna cambia de fase
+  cada día, en 8 días.
+- **La luz sobre la superficie** (multiply, la misma capa de luz de las cuevas): neutra de
+  día (sin pasada de más), cálida al amanecer (`#ffc9a8`), naranja al atardecer
+  (`#ffa86e`) y azul de noche: plateada con luna llena (`#8494c4`), más oscura con luna
+  nueva (`#58648c`). **Nunca demasiado oscuro:** la noche no baja de una luminancia de 0,5
+  (`floor`); un color más oscuro se mezcla hacia el blanco hasta llegar. Las transiciones
+  son continuas (también al cambiar de día: la noche usa la luna del día en que cayó). Las
+  cuevas no cambian.
+- **Lámparas:** de noche (y subiendo durante el atardecer) brillan el jugador (una luz más
+  suave que en la cueva) y todo item con `light` del atlas: fogatas, antorchas, faroles y
+  ventanas.
+- **Sombra proyectada de las criaturas:** la silueta de lo que se dibuja (cuerpo, ropa,
+  equipo, en su frame), oscura (`CAST_SHADOW_TINT`, el mismo violeta casi negro de las
+  sombras de árboles y casas), apoyada en los pies y tumbada en el suelo hacia el "norte"
+  de la vista 3/4 (el sol está del lado de quien mira), torcida hacia donde no está el
+  sol: larga al oeste a la mañana, corta bajo los pies al mediodía, larga al este a la
+  tarde. Más larga cuanto más bajo el sol (hasta 1,4 alturas) y más tenue al salir y al
+  ponerse. De noche la proyecta la luna, tenue (0,16) y según su fase (nada con luna
+  nueva). Toda la capa se desvanece junta (un `AlphaFilter`): dos sombras que se cruzan o
+  las capas de un muñeco no hacen manchas más oscuras. La **sombra de contacto** (la
+  elipse) sigue siempre: los pies nunca flotan. Con "Animaciones reducidas" no hay sombra
+  proyectada (solo la de contacto).
+- **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
+  sobre su capa); no giran con él (pendiente en docs/14).
+- Revisado sobre una vista previa de Thimblewick a cada hora (amanecer, mañana, mediodía,
+  tarde, atardecer, noche de luna llena y de luna nueva): los personajes quedan apoyados y
+  la noche se lee. Las capturas del E2E son `99b-daynight-noon` y `99c-daynight-night`.
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones

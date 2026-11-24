@@ -229,7 +229,17 @@ el punto 5:
     generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
     de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en
     `sounds.yaml` y en `CREDITS.md`.
-  - **Día y noche:** no existe; las luciérnagas esperan uno (`night()` da falso).
+  - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
+    lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
+    - **Sombras de objetos altos que giren con el sol:** árboles, pilares y casas tienen
+      su sombra dibujada (ART-5), que solo se desvanece con el sol; girarlas pide una
+      silueta por objeto como la de las criaturas.
+    - **Sombra que se aleja de una luz fuerte:** de noche, junto a una fogata, la sombra
+      sigue a la luna; apuntarla lejos del fuego queda para después.
+    - **Medir en el navegador:** la capa de sombras suma un sprite por capa de cada
+      criatura y una pasada de filtro (docs/07); falta mirar el tiempo de frame en el E2E
+      con mucha gente de noche.
+    - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
@@ -803,8 +813,8 @@ el punto 5:
     en el E2E o con `make play` bajando la escalera de la mina de Lanternby (3176,6322).
   - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar de Lanternby es playa
     abierta con el muelle; queda para un pueblo amurallado de una isla nueva.
-  - **El farol no alumbra en la superficie** (la capa de luz solo dibuja en z ≥ 8 y no hay
-    noche): si llega un ciclo de día y noche, ya tiene su `light`.
+  - **El farol alumbra de noche** (día y noche, rama `feat/day-night-shadows`): su `light`
+    brilla en la superficie cuando se encienden las lámparas.
   - **Una casa no se puede amueblar con más fijo que bloquee:** cama, banco y jardinera
     son lo único que va adentro (docs/03); una mesa o un estante fijo le quitaría casillas
     al inquilino. Muebles que el jugador compre y ponga son otra tarea (decoración de casas,

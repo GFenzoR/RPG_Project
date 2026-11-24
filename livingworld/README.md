@@ -19,7 +19,8 @@ pegamento, dónde viven datos, assets y protocolo, cómo agregar algo y cómo pr
 | Items nuevos (plantas) | `data/items/plants.yaml`, ids con `make gen-ids` en `data/ids.lock.yaml` | `grass_tuft`, `tall_grass`, `wildflowers`, `reeds` |
 | Sprites | `assets/livingworld/sprites/` (los arma `tools/spritegen`, `recipes/living.ts`; `tools/spritepack` los empaqueta como `livingworld/<ruta>`) | arte propio |
 | Sonidos | `assets/livingworld/sounds/` (registrados en `assets/sounds.yaml` y `assets/CREDITS.md`) | los loops del ambiente en `ambience/` (`tools/soundgen`, `src/ambience.ts`); los pasos por superficie, pendientes (usan `step`) |
-| Mensajes | `proto/game/v1/livingworld.proto` (buf quiere los archivos de un paquete en su carpeta) | `TrailWear` (`ServerMessage.trail_wear` = 49 y `MapArea.wear`) |
+| Mensajes | `proto/game/v1/livingworld.proto` (buf quiere los archivos de un paquete en su carpeta) | `TrailWear` (`ServerMessage.trail_wear` = 49 y `MapArea.wear`), `WorldClock` (`ServerMessage.world_clock` = 53) |
+| Día y noche (reloj, luz, luna, sombras proyectadas) | `livingworld/server/daynight` (reloj), `livingworld/client/src/sky.ts` (cielo), `data/livingworld/daynight.yaml` | hecho (`feat/day-night-shadows`); ver "Día y noche" |
 | Persistencia | tabla `trail_wear` (migración `server/migrations/00027_trail_wear.sql`) | una fila con el desgaste codificado |
 
 ## Contrato del cliente
@@ -41,7 +42,8 @@ lw.destroy();
 - `surfaceLookup(x, y, z)`: la superficie de la casilla (`ground.surface` de su suelo).
 - `options`: `tileSize`, `data` (de `data/livingworld/`), `texture(nombre)` (el atlas),
   `plants` (`version()` y `forEach` sobre los sprites de items del piso: `MapView.version` y
-  `MapView.forEachItemSprite`), `reduced()` y `night()`.
+  `MapView.forEachItemSprite`), `reduced()` y `night()` (la noche del cielo,
+  `client/src/render/sky.ts`: luciérnagas en vez de pájaros y mariposas).
 - `CreatureStep`: `id`, `from`, `to`, `durationMs` y `print` (`feet` humanoide, `paw` bestia,
   `big_paw` bestia grande, `none` voladora).
 
@@ -111,6 +113,64 @@ s := m.Snapshot()                    // copia, en el loop; s.Encode() fuera de �
   memoria.
 - El mapa de autor nunca cambia: el desgaste es una capa encima. Un camino de tierra ya
   dibujado no se gasta (la superficie `dirt` no está en `surfaces`).
+
+## Día y noche
+
+Pedido del dueño (2026-11-23): que los personajes no parezcan flotar (sombras que siguen su
+forma), un ciclo de día y noche, y sombras que siguen al sol. Decisión del dueño: **180
+minutos reales de día y 60 de noche** (240 por ciclo).
+
+**Datos** (`data/livingworld/daynight.yaml`, esquema `livingworld-daynight.schema.json`):
+`cycle` lo leen servidor y cliente (`day_minutes` 180, `night_minutes` 60, `dawn_minutes`
+15, `dusk_minutes` 15, `lunar_days` 8, `sync_seconds` 60); `sky` solo el cliente (colores
+de amanecer, día, atardecer y de la noche con luna nueva y llena; `floor` 0,5, la
+luminancia mínima de la noche; `sun_shadow` 0,42 y `moon_shadow` 0,16, la opacidad de las
+sombras; `max_shadow` 1,4 alturas). El servidor rechaza una clave desconocida de `cycle` y
+no mira `sky`.
+
+**Servidor** (`livingworld/server/daynight`): un `Clock` en el loop. El tiempo del mundo son
+milisegundos que corren a `rate` (1 normal) desde un ancla; el ancla inicial es la hora
+Unix del reloj inyectado del servidor al arrancar (`Config.DayNightEpochMs`, que pone
+`app`): el ciclo sigue entre reinicios y es el mismo para todos. Avanza con el número de
+tick: determinista, sin `time.Now()`.
+
+```go
+k := daynight.New(cycle, tickMs, epochMs)
+t := k.At(tick)        // Day (ciclos desde la época) y CycleMs (0 = empieza el amanecer)
+cycle.Phase(t)         // Dawn, Day, Dusk, Night
+cycle.MoonPhase(t)     // 0 nueva .. lunar_days/2 llena; MoonLight(t) 0..1
+k.Set(tick, ms)        // staff: otra hora del mismo día
+k.SetMoon(tick, fase)  // staff: el próximo día con esa fase
+k.SetRate(tick, r)     // staff: 0 lo detiene, hasta 600
+k.SyncDue(tick)        // toca mandar el WorldClock (cada sync_seconds o tras un cambio)
+```
+
+El pegamento (`server/internal/session/daynight.go`) manda `WorldClock` (`day`,
+`cycle_ms`, `rate`) al entrar (justo después del `Welcome`), a todos cada `sync_seconds` y
+en el acto tras un `/time` (docs/16). Ninguna regla del juego lee la hora.
+
+**Cliente** (`livingworld/client/src/sky.ts`, puro): `parseDayNight`, `advance` (corre el
+reloj entre dos `WorldClock`), `skyAt(datos, día, cycleMs)` → `Sky` (fase, `ambient` el
+color multiplicado sobre la superficie, `lamps` 0..1, `moon`, `night`, `shadow`) y
+`shadowTransform` (el skew y la escala de Pixi que tumban un sprite parado en el suelo). El
+sol sale por el este al empezar el día y se pone por el oeste al terminar: la sombra
+apunta al oeste a la mañana, queda corta bajo los pies al mediodía y apunta al este a la
+tarde, siempre hacia el "norte" de la vista 3/4; la luna cruza la noche igual. El
+pegamento `client/src/render/sky.ts` (`SkyView`) lo lee cada frame sin crear objetos, y el
+renderer del cliente dibuja:
+- la luz (`render/light-layer.ts`): en la superficie, el `ambient` del cielo como fondo del
+  mapa de luz y las luces del jugador y de cada item con `light` atenuadas por `lamps`; de
+  día, ninguna pasada. Las cuevas no cambian;
+- las sombras proyectadas (`render/cast-shadows.ts`, `CreatureBody.castShadow`): las capas
+  del frame de cada criatura del piso, oscuras, desde los pies, en un contenedor sobre
+  `MapView.groundOverlay` que se desvanece entero con un `AlphaFilter`; la sombra de
+  contacto queda siempre. Con "Animaciones reducidas", y bajo tierra, no hay;
+- las sombras dibujadas de árboles y casas, que se desvanecen con el sol
+  (`MapView.castShadowStrength`);
+- `night()` del mundo vivo (luciérnagas).
+
+Sin `daynight.yaml` no hay `WorldClock` ni cielo; antes del primer `WorldClock` (o con un
+servidor viejo) el cliente dibuja el mediodía.
 
 ## Invariantes
 1. **El cliente es cosmético.** Nada de `livingworld/client` cambia reglas ni manda nada al
@@ -244,6 +304,12 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   blanca: el cliente la tiñe) en `recipes/living.ts`.
 
 ## Cómo probar
+- Día y noche: `livingworld/server/daynight/clock_test.go` (ciclo, fases, luna, época del
+  reloj inyectado, `/time`, ritmo, sincronía), `livingworld/client/src/sky.test.ts` (sol,
+  tinte, piso de luminancia, lámparas, luna, transformación de la sombra),
+  `server/internal/session/daynight_test.go` (login, sincronía, `/time` y su auditoría),
+  `client/src/render/sky.test.ts`, `cast-shadows.test.ts` y `light-layer.test.ts`; E2E
+  "sandbox day and night" (`99b-daynight-noon`, `99c-daynight-night`).
 - `make test-livingworld`: tests Go de `livingworld/server` (el desgaste: sube con los
   pasos, tope, recuperación con el tick, niveles, cambios solo al cambiar de nivel, ida y
   vuelta de la copia, bytes rotos, el ritmo de `wear.yaml`) y vitest de `livingworld/client`
@@ -553,7 +619,8 @@ determinista):
 ## Pendiente
 - Sonidos de paso propios por superficie: sin ffmpeg no se pudieron generar; los eventos ya
   existen y caen en `step`.
-- No hay día y noche: las luciérnagas esperan uno (`night()` da siempre falso).
+- Día y noche: las sombras de árboles y casas no giran con el sol (solo se desvanecen);
+  una sombra no se aleja de una fogata cercana; no hay hora en el HUD (docs/14).
 - Plantas nuevas sin colocar en los mapas.
 - Ambiente: los loops son de soundgen; probar Gemini (el Chrome del dueño no estaba
   abierto el 2026-11-24) y que el dueño los escuche; una cascada y una fogata suelta

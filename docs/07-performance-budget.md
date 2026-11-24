@@ -329,6 +329,22 @@ número de item se clasifica una sola vez. El juego lo pide cada 250 ms, no cada
 el motor solo mueve rampas de ganancia y paneo. Lo que pesa es la memoria de los loops
 decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
 
+**Día y noche y sombras proyectadas** (`livingworld/README.md` "Día y noche"):
+- Servidor: el reloj es una cuenta por tick que nadie mira salvo al mandar el `WorldClock`
+  (una vez por minuto a cada jugador, ~12 B). Sin memoria por jugador.
+- Cliente, cielo: `skyAt` cada frame son unas operaciones de punto flotante sobre un `Sky`
+  reutilizado; nada se crea.
+- Cliente, luz: de día ninguna pasada. En el amanecer, el atardecer y la noche, la misma
+  pasada de la luz de las cuevas (un mapa de luz a un cuarto de la pantalla, multiply) con
+  un brillo por luz en vista (pool).
+- Cliente, sombras proyectadas: un sprite por capa dibujada de cada criatura del piso (un
+  muñeco de 9 capas son 9; una bestia, 1), del pool de `CastShadows` (hecho una vez,
+  `cast-shadows.test.ts` mide una multitud de 60 muñecos durante 120 frames: 540 sprites
+  hechos en el primero y ninguno más), con las texturas de la propia criatura (ninguna
+  textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
+  entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
+  sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
+
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
 - Escenario base: 100 bots repartidos en la isla inicial durante 10 minutos.

@@ -63,6 +63,18 @@ describe("CastShadows", () => {
     expect(layer.root.children.filter((c) => c.visible)).toHaveLength(1);
   });
 
+  it("costs one sprite per drawn layer of a crowd, made once (docs/07)", () => {
+    const layer = new CastShadows(fakeFade);
+    // 60 paper dolls of 9 layers in view, 120 frames: the pool never grows after the first.
+    for (let f = 0; f < 120; f++) {
+      layer.begin({ skewX: 0.3, scaleY: 0.4, alpha: 0.4 });
+      for (let i = 0; i < 60 * 9; i++) layer.part(Texture.WHITE, i, f, 1, 1);
+      layer.end();
+    }
+    expect(layer.made).toBe(540);
+    expect(layer.count).toBe(540);
+  });
+
   it("hides with no light to cast (alpha 0, or none)", () => {
     const layer = new CastShadows(fakeFade);
     layer.begin({ skewX: 0, scaleY: 0.2, alpha: 0.3 });

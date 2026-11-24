@@ -305,6 +305,24 @@ Al norte del templo, entre la costa y los corrales (tabla de arriba; reglas en
 4. **El volcán** tiene dos atajos en el muro del cráter, al noroeste: una roca agrietada
    (3699,5753, pico) y una barricada podrida (3714,5746).
 
+### Día y noche
+La hora del mundo es la misma para todos y sigue la hora real (un ciclo de 240 minutos:
+180 de día y 60 de noche). Para verla sin esperar, con una cuenta de staff (abajo, "Hacerse
+personal"):
+- `/time` dice la hora del mundo: la fase, el minuto del ciclo, la luna y la velocidad.
+- `/time dawn`, `morning`, `noon`, `afternoon`, `dusk`, `night` (o `midnight`), o
+  `/time <minuto>` (0 = empieza el amanecer, 180 = empieza la noche): otra hora del mismo
+  día.
+- `/time moon <fase>`: el próximo día con esa luna (0 nueva, 4 llena).
+- `/time speed <n>`: el mundo corre n veces más rápido (`/time speed 60`: un ciclo en 4
+  minutos); `/time speed 0` lo detiene (para mirar o sacar capturas) y `/time speed 1`
+  vuelve a lo normal. Un reinicio del servidor también.
+Todos los jugadores reciben el cambio en el acto. Qué mirar: a la mañana las sombras de los
+personajes largas hacia el oeste, al mediodía cortas bajo los pies, a la tarde hacia el
+este; de noche la superficie azul, las fogatas y faroles encendidos, luciérnagas en el pasto
+y una sombra tenue de la luna (ninguna con luna nueva); con "Animaciones reducidas", solo la
+sombra de contacto. Bajo tierra todo sigue igual.
+
 ## 5. Hacerse personal (GM o admin)
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):
 
