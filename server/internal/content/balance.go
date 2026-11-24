@@ -645,6 +645,10 @@ type CombatMode struct {
 // Stances are the fight stances of balance.yaml, in protocol order (FightStance 1..3).
 var Stances = [...]string{"offensive", "balanced", "defensive"}
 
+// MaxDiagonalCost caps movement.diagonal_cost (world.MaxDiagonalCost): a diagonal step is
+// two straight ones at most, and past it a path's cost could overflow.
+const MaxDiagonalCost = 2
+
 // MaxQueuedSteps caps movement.max_queued_steps: a deeper queue would only let a client
 // run further ahead of what the server confirmed.
 const MaxQueuedSteps = 8
@@ -785,8 +789,8 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if m.BaseStepMs <= 0 || m.BaseStepMs > 60_000 {
 		return Balance{}, errors.New("movement.base_step_ms must be in 1..60000")
 	}
-	if m.DiagonalCost < 1 || m.DiagonalCost > 10 {
-		return Balance{}, errors.New("movement.diagonal_cost must be in 1..10")
+	if m.DiagonalCost < 1 || m.DiagonalCost > MaxDiagonalCost {
+		return Balance{}, errors.New("movement.diagonal_cost must be in 1..2 (world.MaxDiagonalCost)")
 	}
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")

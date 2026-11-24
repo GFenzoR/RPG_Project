@@ -4,8 +4,8 @@
 // one texture, which packages/renderer anim.ts moves procedurally. Built once per sprite
 // and cached by the canvas: drawing a frame only indexes arrays. Pure apart from the
 // texture lookup (tests pass strings).
-import { ANIM_DIRS, DIAGONAL_DIRS, OWN_FACINGS, STRAIGHT_DIRS } from "@rpg/renderer";
-import type { AnimAction, AnimMeta } from "@rpg/renderer";
+import { ANIM_DIRS, OWN_FACINGS, STRAIGHT_DIRS } from "@rpg/renderer";
+import type { AnimAction, AnimDir, AnimMeta } from "@rpg/renderer";
 
 export interface ClipSet<T> {
   /** Clip lengths and drawing hints, with only the actions that have every texture. */
@@ -57,10 +57,33 @@ export function spriteClips<T>(
   const still = lookup(path);
   if (!meta)
     return still === undefined ? undefined : { meta: undefined, frames: {}, still, eight: false };
+  // A missing diagonal frame never drops an action whose straight facings are whole, and a
+  // clip is never half eight, half four: the whole sprite is rebuilt in four.
   let eight = hasEightFacings(meta);
+  let built = eight ? buildClips(path, meta, ANIM_DIRS, lookup) : undefined;
+  if (!built || built.dropped) {
+    eight = false;
+    built = buildClips(path, meta, STRAIGHT_DIRS, lookup);
+  }
+  const { frames, actions } = built;
+  const first = frames.idle?.[2]?.[0] ?? frames.walk?.[2]?.[0];
+  if (still === undefined && first === undefined) return undefined;
+  return { meta: { ...meta, actions }, frames, still: still ?? first, eight };
+}
+
+/**
+ * The actions of `meta` with every frame in the atlas, facing `dirs`. `dropped`: some
+ * action was left out for a frame it lacks.
+ */
+function buildClips<T>(
+  path: string,
+  meta: AnimMeta,
+  dirs: readonly AnimDir[],
+  lookup: (key: string) => T | undefined,
+): { frames: Partial<Record<AnimAction, T[][]>>; actions: AnimMeta["actions"]; dropped: boolean } {
   const frames: Partial<Record<AnimAction, T[][]>> = {};
   const actions: AnimMeta["actions"] = {};
-  const dirs = eight ? ANIM_DIRS : STRAIGHT_DIRS;
+  let dropped = false;
   for (const action of ACTIONS) {
     const a = meta.actions[action];
     if (!a || a.frames < 1 || a.dirs.length === 0) continue;
@@ -83,14 +106,9 @@ export function spriteClips<T>(
     if (byDir.length === dirs.length) {
       frames[action] = byDir;
       actions[action] = a;
-    } else if (DIAGONAL_DIRS.some((d) => a.dirs.includes(d))) eight = false;
+    } else dropped = true;
   }
-  // A missing diagonal frame drops the action; without it the rest still has eight facings
-  // only if no other action relied on them (a clip is never half eight, half four).
-  if (!eight) for (const list of Object.values(frames)) list.length = Math.min(list.length, 4);
-  const first = frames.idle?.[2]?.[0] ?? frames.walk?.[2]?.[0];
-  if (still === undefined && first === undefined) return undefined;
-  return { meta: { ...meta, actions }, frames, still: still ?? first, eight };
+  return { frames, actions, dropped };
 }
 
 /**

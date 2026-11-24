@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"math/rand/v2"
 	"reflect"
 	"strings"
@@ -837,12 +838,23 @@ func TestDiagonalCostUnits(t *testing.T) {
 	if got := pf.stepCost(false, 100); got != 10000 {
 		t.Errorf("straight step = %d, want 10000", got)
 	}
-	for c, want := range map[float64]int32{1.5: 150, 1.414: 141, 1.4142: 141, 0.5: 100} {
+	// Out of 1..MaxDiagonalCost is clamped: past it a path's cost would overflow int32.
+	for c, want := range map[float64]int32{1.5: 150, 1.414: 141, 1.4142: 141, 0.5: 100, 2: 200, 10: 200, 1000: 200} {
 		pf.SetDiagonalCost(c)
 		if pf.diagUnits != want {
 			t.Errorf("SetDiagonalCost(%v): %d units, want %d", c, pf.diagUnits, want)
 		}
 	}
+	// f = g + h: the dearest path and the dearest heuristic together, at any uint16 speed.
+	pf.SetDiagonalCost(MaxDiagonalCost)
+	slowest := pf.m.minSpeed
+	pf.m.minSpeed = 65535
+	g := int64(MaxPathLength) * int64(pf.stepCost(true, 65535))
+	h := int64(pf.heuristic(MaxPathLength, MaxPathLength))
+	if g <= 0 || h <= 0 || g+h > math.MaxInt32 {
+		t.Errorf("the dearest f = %d + %d, more than int32 holds", g, h)
+	}
+	pf.m.minSpeed = slowest
 	// Open ground: the octile heuristic is the exact cost of the straight-then-diagonal path.
 	pf.SetDiagonalCost(DefaultDiagonalCost)
 	if got, want := pf.heuristic(5, 2), pf.m.minSpeed*(3*straightUnits+2*141); got != want {

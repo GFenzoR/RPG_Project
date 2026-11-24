@@ -97,9 +97,10 @@ export interface AttackSeen {
 }
 
 /**
- * Unit direction of an attack from its attacker: towards its target where the client
- * draws it, else towards `to`; an attack on its own tile (an area spell around the
- * caster) goes where the attacker faces.
+ * Unit direction of an attack from its attacker: the octant of its target where the client
+ * draws it, else of `to` (a target far to the east and a tile north is to the east: the
+ * attacker turns that way, anim.ts faceTo); an attack on its own tile (an area spell
+ * around the caster) goes where the attacker faces.
  */
 export function attackDir(
   attacker: Fighter,
@@ -107,8 +108,10 @@ export function attackDir(
   to: Pos,
 ): readonly [number, number] {
   const at = target?.pos ?? to;
-  const dx = Math.sign(at.x - attacker.pos.x);
-  const dy = Math.sign(at.y - attacker.pos.y);
+  const x = at.x - attacker.pos.x;
+  const y = at.y - attacker.pos.y;
+  const dx = Math.abs(x) * 2 < Math.abs(y) ? 0 : Math.sign(x);
+  const dy = Math.abs(y) * 2 < Math.abs(x) ? 0 : Math.sign(y);
   if (dx !== 0 || dy !== 0) return [dx, dy];
   const [fx, fy] = delta(attacker.dir);
   return [fx, fy];

@@ -10,7 +10,7 @@ function grid(rows: string[]): (x: number, y: number) => boolean {
   };
 }
 
-const opts = { diagonalCost: 1.5, maxSteps: 100 };
+const opts = { diagonalCost: 1.414, maxSteps: 100 };
 const at = (x: number, y: number): { x: number; y: number; z: number } => ({ x, y, z: 7 });
 
 describe("findPath", () => {

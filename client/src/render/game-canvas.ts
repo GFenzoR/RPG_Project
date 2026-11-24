@@ -42,7 +42,7 @@ import {
   clipMs,
   entityZIndex,
   newAnimInput,
-  turnTo,
+  faceTo,
   newAnimState,
   newPose,
   screenToTile,
@@ -891,11 +891,11 @@ export async function createGameCanvas(
     const w = world.activeWalk(c, now);
     const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
     animInput.now = now;
-    // docs/17 ANI-1: a figure with diagonals turns to them; one without keeps the half of a
-    // diagonal it already faces (turnTo).
+    // docs/17 ANI-1: it faces its attack while that plays and until it walks or turns, else
+    // its step or its own direction; a figure with diagonals turns to them, one without
+    // keeps the half of a diagonal it already faces (faceTo, turnTo).
     const [fx, fy] = delta(world.facing(c, now));
-    st.facing = turnTo(st.facing, fx, fy, figure.eight);
-    animInput.dir = st.facing;
+    animInput.dir = faceTo(st, figure.clips.meta, now, fx, fy, moving !== undefined, figure.eight);
     animInput.walkStart = moving?.start;
     animInput.walkMs = moving?.duration ?? 0;
     animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
@@ -1196,8 +1196,7 @@ export async function createGameCanvas(
       const g = ghosts[i] as Ghost;
       animInput.now = now;
       const [gx, gy] = delta(g.dir);
-      g.state.facing = turnTo(g.state.facing, gx, gy, g.figure.eight);
-      animInput.dir = g.state.facing;
+      animInput.dir = faceTo(g.state, g.figure.clips.meta, now, gx, gy, false, g.figure.eight);
       animInput.walkStart = undefined;
       animInput.walkMs = 0;
       animInput.moveDx = 0;

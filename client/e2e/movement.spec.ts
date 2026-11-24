@@ -460,11 +460,12 @@ test("two arrows walk the diagonal at the straight speed, the person turned to i
   const { d } = best;
   await page.waitForTimeout(300); // let the atlas textures upload
 
+  const HELD_MS = 1100;
   // Both keys at once: the first step is the diagonal. Mid-walk, the person is drawn
   // facing it (docs/17 ANI-1: the engine humanoid has eight facings).
   const t0 = await now(page);
   for (const k of d.keys) await page.keyboard.down(k);
-  await page.waitForTimeout(1100);
+  await page.waitForTimeout(HELD_MS);
   const drawn = await page.evaluate(() => window.__rpgClient?.drawnFacing());
   await page.screenshot({ path: join(shots, "96d-movement-diagonal.png") });
   for (const k of d.keys) await page.keyboard.up(k);
@@ -475,14 +476,29 @@ test("two arrows walk the diagonal at the straight speed, the person turned to i
   expect(n).toBeGreaterThanOrEqual(1);
   expect(end.x - start.x).toBe(d.dx * n);
   expect(end.y - start.y).toBe(d.dy * n); // a pure diagonal, never a straight step
-  // docs/02: a diagonal step lasts the straight one x sqrt(2), rounded to the tick.
-  const straight = await page.evaluate(
-    ({ x, y, z }) => window.__rpgClient?.stepMs(x, y, z) ?? 0,
-    end,
-  );
+  // docs/02: a diagonal step lasts the straight one x sqrt(2), rounded to the tick (50 ms),
+  // not the x1.5 of before: the same speed per tile of distance as a straight step.
+  const stepAt = (t: Tile, diagonal: boolean): Promise<number> =>
+    page.evaluate(({ t, diagonal }) => window.__rpgClient?.stepMs(t.x, t.y, t.z, diagonal) ?? 0, {
+      t,
+      diagonal,
+    });
+  const straight = await stepAt(end, false);
+  const diagonal = await stepAt(end, true);
   console.log(
-    `held ${d.keys.join("+")}: ${n} diagonal steps in ${Math.round(held)} ms, straight ${straight} ms`,
+    `held ${d.keys.join("+")}: ${n} diagonal steps in ${Math.round(held)} ms, straight ${straight} ms, diagonal ${diagonal} ms`,
   );
+  expect(straight).toBeGreaterThan(50);
+  expect(diagonal).toBe(Math.round((straight / 50) * Math.SQRT2) * 50);
   expect(n).toBeLessThanOrEqual(Math.floor(held / (MIN_STEP_MS * 1.4)) + 1);
+  // And a floor: the server paces the steps, one starting as the last ends, so the keys
+  // held for HELD_MS start a step for every diagonal step's time that fits (300 ms of
+  // slack for the round trip), up to the free run. A slower diagonal walks fewer.
+  let fit = 0;
+  for (let i = 1, t = 0; i <= best.run && t <= HELD_MS - 300; i++) {
+    fit = i;
+    t += await stepAt({ x: start.x + d.dx * i, y: start.y + d.dy * i, z: start.z }, true);
+  }
+  expect(n).toBeGreaterThanOrEqual(fit);
   expect(errors).toEqual([]);
 });

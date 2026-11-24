@@ -299,8 +299,11 @@ func (w *World) flushTurns(ctx *game.TickContext) {
 // one that many ticks × diagonal_cost, rounded to the nearest tick (never fewer than the
 // straight step). Rounding the diagonal from the straight ticks, not up from its own
 // milliseconds, keeps both directions at one speed per tile of distance (with √2, a
-// 10-tick straight step is a 14-tick diagonal, not 15). CreatureMove.duration_ms is this
-// many ticks; the client predicts the same (state/world.ts stepDuration).
+// 10-tick straight step is a 14-tick diagonal, not 15). A one-tick straight step is the
+// exception: √2 would round back to one tick and the diagonal would cover √2 times the
+// distance per tick, so a diagonal that costs more than a straight step lasts two there.
+// CreatureMove.duration_ms is this many ticks; the client predicts the same
+// (state/step-time.ts stepMs).
 func (w *World) StepTicks(ground uint16, speed int, diagonal bool) game.Tick {
 	terrain := int64(world.DefaultGroundSpeed)
 	if gs := w.m.GroundSpeeds(); int(ground) < len(gs) && gs[ground] != 0 {
@@ -312,7 +315,11 @@ func (w *World) StepTicks(ground uint16, speed int, diagonal bool) game.Tick {
 	tickMs := game.TickDuration.Milliseconds()
 	ticks := max((ms+tickMs-1)/tickMs, 1)
 	if diagonal {
-		ticks = max((ticks*w.diag+500)/1000, ticks)
+		straight := ticks
+		ticks = max((straight*w.diag+500)/1000, straight)
+		if straight == 1 && w.diag > 1000 {
+			ticks = 2
+		}
 	}
 	return game.Tick(ticks)
 }

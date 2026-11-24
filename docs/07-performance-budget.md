@@ -373,7 +373,8 @@ Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=str
   ejecuta en el siguiente tick y responde en el batch de ese tick, así que incluye la
   espera al tick (0–50 ms, ~25 ms de media) y la red local. Es el piso de la latencia
   de cualquier comando.
-- **Comportamiento de los bots**: rutas A* sobre `world.bin` hacia su zona (base: 9 zonas
+- **Comportamiento de los bots**: rutas A* sobre `world.bin` (pesan la diagonal con el
+  `diagonal_cost` de `data/balance.yaml`, flag `-data`, como el servidor) hacia su zona (base: 9 zonas
   de Velmara en round robin; stress: todos a 8 casillas o menos del templo y
   la plaza). Después reparten su tiempo así:
   - base: vagar 45 %, pelear 25 %, hablar con un NPC 12 %, chat 10 %, nada 8 %;
@@ -574,11 +575,13 @@ máquina con `spritepack build`:
 | Sprites | 6706 | 11106 | +4400 |
 
 Sigue dentro del presupuesto ("una página por capa": siguen siendo 2 páginas, y el atlas no
-cuenta en los 5 MB del bundle), así que no se partió nada ni se sacó ningún frame. Lo que
-baja el juego pasa de ~6,2 a ~9,3 MB, y casi la mitad del aumento es JSON (nombres de frame
-y espacios). **Propuesta si molesta**, en este orden: (1) JSON del atlas sin espacios
-(`JSON.stringify` sin indentar en `tools/spritepack/src/build.ts`; hoy va con 2 espacios,
-cerca de un tercio de su peso) y nombres de frame más cortos para el muñeco; (2) las capas
+cuenta en los 5 MB del bundle), así que no se partió nada ni se sacó ningún frame. Con
+el JSON indentado lo que baja el juego pasaba de ~6,2 a ~9,3 MB, y casi la mitad del aumento
+era JSON (nombres de frame y espacios). **Hecho** en la misma rama: `writeAtlas`
+(`tools/spritepack/src/build.ts`) escribe el JSON del atlas sin indentar (se genera, nadie
+lo revisa como diff): las páginas bajan de 754 + 3193 KB a 390 + 1647 KB y `atlas.json` de
+1079 a 709 KB, así que la descarga queda en **~7,0 MB**. **Propuesta si todavía molesta**,
+en este orden: (1) nombres de frame más cortos para el muñeco; (2) las capas
 del muñeco en su propia página, cargada aparte, y las diagonales en una tercera página que
 se baja después de entrar (mientras no llega, `ClipSet.eight` es falso y la figura va en 4
 direcciones, sin mezclar); (3) PNG indexado. En el cliente no cambia nada por frame: una

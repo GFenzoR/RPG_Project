@@ -561,9 +561,11 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
   };
   for (const page of atlas.pages) {
     write(page.pngFile, encodePng(page.image));
-    write(page.jsonFile, JSON.stringify(page.json, null, 2) + "\n");
+    write(page.jsonFile, JSON.stringify(page.json) + "\n");
   }
-  write("atlas.json", JSON.stringify(atlas.index, null, 2) + "\n");
+  // No indentation: the client downloads these, and spaces were near half their weight
+  // (docs/07 "Humanoides en 8 direcciones"). They are generated, never reviewed as a diff.
+  write("atlas.json", JSON.stringify(atlas.index) + "\n");
   return written;
 }
 

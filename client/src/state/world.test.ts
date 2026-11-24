@@ -75,7 +75,7 @@ const content: ClientContent = {
   vocations: ["guardian"],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -460,8 +460,8 @@ describe("WorldState", () => {
 
   it("computes step durations like the server", () => {
     const w = entered();
-    // sand 150%, speed 200, diagonal ×1.5: 1000*150*1.5/200 = 1125 → 1150 (whole ticks)
-    expect(w.stepDuration({ x: 102, y: 200, z: 7 }, 200, true)).toBe(1150);
+    // sand 150%, speed 200: 750 ms straight, 15 ticks; diagonal × √2 = 21.21 → 21 ticks
+    expect(w.stepDuration({ x: 102, y: 200, z: 7 }, 200, true)).toBe(1050);
     expect(w.stepDuration({ x: 100, y: 201, z: 7 }, 220, false)).toBe(500); // 455 → 500
   });
 });

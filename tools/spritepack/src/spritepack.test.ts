@@ -569,6 +569,11 @@ tiles:
       expect(readFileSync(join(out2, f))).toEqual(readFileSync(join(out1, f)));
     }
     expect(() => readFileSync(join(out2, "atlas-7.png"))).toThrow();
+    // What the client downloads carries no indentation (docs/07): one line each.
+    for (const f of ["atlas-0.json", "atlas.json"]) {
+      const text = readFileSync(join(out1, f), "utf8");
+      expect(text).toBe(JSON.stringify(JSON.parse(text)) + "\n");
+    }
     const png = decodePng(readFileSync(join(out1, "atlas-0.png")));
     expect([png.width, png.height]).toEqual([64, 32]);
   });

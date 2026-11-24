@@ -181,7 +181,6 @@ export function loadClientContent(root: string): ClientContent {
   // The attributes' card lines live in items.yaml (attribute.*): the client takes them too.
   for (const a of Object.values(attributes)) descKeys.add(a.text);
   const balance = readYaml(join(root, "data", "balance.yaml"));
-  const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
@@ -332,11 +331,7 @@ export function loadClientContent(root: string): ClientContent {
     spells,
     recipes,
     ...(forge ? { forge } : {}),
-    movement: {
-      baseStepMs: num(mv["base_step_ms"], 1000),
-      diagonalCost: num(mv["diagonal_cost"], 1.5),
-      maxPathTiles: num(mv["max_path_tiles"], 100),
-    },
+    movement: loadMovement(balance),
     chat: { maxLength: num(chat["max_length"], 255) },
     experience: {
       a: num(curve["a"], 0),
@@ -483,6 +478,21 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
  * attributes; a file that does not parse fails the build (a card without its lines would
  * go unnoticed).
  */
+/**
+ * balance.yaml `movement` as the client predicts with it. The schema requires every field;
+ * a missing one falls back to the server's default (world.DefaultDiagonalCost: a diagonal
+ * costs √2, docs/02 "Movimiento").
+ */
+export function loadMovement(balance: unknown): ClientContent["movement"] {
+  const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
+  const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
+  return {
+    baseStepMs: num(mv["base_step_ms"], 1000),
+    diagonalCost: num(mv["diagonal_cost"], 1.414),
+    maxPathTiles: num(mv["max_path_tiles"], 100),
+  };
+}
+
 export function loadAttributes(root: string): Record<string, AttributeDef> {
   const file = join(root, "data", "attributes.yaml");
   if (!existsSync(file)) return {};

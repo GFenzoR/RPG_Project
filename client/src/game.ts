@@ -279,8 +279,11 @@ export interface ClientTestHooks {
    * to screen pixels): continuous motion means it moves on every frame while walking.
    */
   trail(ms: number): { t: number; x: number; y: number }[];
-  /** How long a straight own step onto (x, y, z) lasts at the player's speed now, ms. */
-  stepMs(x: number, y: number, z: number): number;
+  /**
+   * How long an own step onto (x, y, z) lasts at the player's speed now, ms: a straight
+   * one, or with `diagonal` a diagonal one.
+   */
+  stepMs(x: number, y: number, z: number, diagonal?: boolean): number;
   /**
    * The facing the own figure was last drawn in (docs/17 ANI-1: "n" ... "nw"), and whether
    * it is drawn in eight facings; undefined before its first frame.
@@ -2159,9 +2162,9 @@ export class Game {
         };
       },
       trail: (ms) => this.trail.since(performance.now() - ms),
-      stepMs: (x, y, z) => {
+      stepMs: (x, y, z, diagonal = false) => {
         const s = world.self;
-        return s ? world.stepDuration({ x, y, z }, s.speed, false) : 0;
+        return s ? world.stepDuration({ x, y, z }, s.speed, diagonal) : 0;
       },
       walkable: (x, y, z) => world.free(x, y, z),
       drawnFacing: () => canvas.drawnFacing(world.selfId),

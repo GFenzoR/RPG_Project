@@ -609,7 +609,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `turnTo` (`packages/renderer/src/anim.ts`, docs/17 ANI-1) con `AnimState.facing`: una
   figura con diagonales en todas sus capas (`ClipSet.eight`, `CreatureBody.eight`; los
   humanoides del motor) gira a la diagonal; una de 4 direcciones conserva la mitad de la
-  diagonal que ya mira, o toma la horizontal. Nunca se mezclan. El frame lo elige la animación ("Animación de
+  diagonal que ya mira, o toma la horizontal. Nunca se mezclan. El canvas llama a `faceTo`
+  (mismo archivo) por criatura y por frame: mira hacia su ataque (`startAttack`, por octante)
+  mientras dura el clip o la embestida y hasta que camina o gira; si no, hacia su paso o su
+  `dir`. El servidor no gira a un jugador que ataca: es solo dibujo. El frame lo elige la animación ("Animación de
   criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
   segunda, así pasos seguidos alternan 1, 2, 1, 2.
 - El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos

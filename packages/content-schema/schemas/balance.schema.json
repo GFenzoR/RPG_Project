@@ -35,8 +35,10 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "diagonal_cost": {
+          "description": "Times a straight step a diagonal one lasts and weighs in paths (docs/02 \"Movimiento\"): √2 for one speed in every direction, 2 at most.",
           "type": "number",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 2
         },
         "max_path_tiles": {
           "$ref": "common.schema.json#/$defs/positiveInt"

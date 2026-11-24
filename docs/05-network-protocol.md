@@ -692,7 +692,11 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   menos uno). Un paso en diagonal dura esos ticks × `diagonal_cost` (√2, leído en
   milésimas: 1.414), redondeado al tick más cercano y nunca menos que el recto: así un
   paso recto de 10 ticks es uno diagonal de 14, no de 15, y la velocidad por casilla de
-  distancia es la misma en las 8 direcciones. `CreatureMove.duration_ms` es esa duración
+  distancia es la misma en las 8 direcciones. Una excepción: si el paso recto dura un solo
+  tick, el diagonal dura dos (√2 redondearía a uno y la diagonal rendiría √2 veces más
+  distancia por tick; solo pasa a velocidades que hoy nadie alcanza: 2000 en suelo normal,
+  1000 en camino). `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con más, el costo
+  de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa duración
   ya redondeada; el cliente predice la misma con aritmética entera
   (`client/src/state/step-time.ts`, igual que `StepTicks`). La posición cambia al
   **empezar** el paso.

@@ -592,7 +592,17 @@ sigue en 4 (N, E, S, O). Qué dirección dibuja el cliente lo decide `turnTo`
 (`ClipSet.eight`, `CreatureBody.eight`) gira a la diagonal en que camina o ataca; una de 4
 direcciones **conserva la mitad de la diagonal que ya mira** (al noreste después de mirar al
 norte sigue al norte; después de mirar al este, al este) y si no mira a ninguna de las dos
-toma la horizontal, como antes. Nunca se mezclan: si una capa no tiene diagonales (un arte
+toma la horizontal, como antes. **Al atacar** (`faceTo`, que el canvas llama por criatura y
+por frame): el servidor no gira a un jugador que ataca (su `dir` solo cambia al caminar o
+con `Turn`), así que el giro es del cliente: la figura mira hacia su ataque (el octante del
+objetivo: lejos al este y una casilla al norte es este, no noreste; `startAttack`,
+`attackDir`) mientras dura el clip o la embestida, y después **sigue mirando ahí** hasta que
+camina o cambia de dirección, para no volver a girar entre golpe y golpe. Es solo dibujo:
+`dir` del servidor no cambia. La regla de 4 direcciones depende de hacia dónde miraba la
+figura en *este* cliente (`AnimState.facing` arranca al sur cuando la criatura entra en
+vista), así que dos clientes pueden ver al mismo monstruo de 4 direcciones mirando distinto
+en una diagonal; es cosmético y se acepta. Si a una figura de 8 le falta un frame diagonal en
+el atlas, se arma entera en 4 con sus frames rectos (`spriteClips`), sin perder la acción. Nunca se mezclan: si una capa no tiene diagonales (un arte
 nuevo sin ellas), la figura entera va en 4. E puede ser el espejo de O solo si el sprite
 declara `mirror: true`: con un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
 spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites

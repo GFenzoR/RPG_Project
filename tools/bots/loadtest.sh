@@ -104,4 +104,4 @@ echo "loadtest: server up on :$port (log: $log)"
 
 # Run from the caller's directory, so a relative -report lands where the caller expects.
 "$bots" -url "http://127.0.0.1:$port" -metrics "http://$maddr/metrics" \
-  -world "$root/build/world.bin" -require-metrics "$@"
+  -world "$root/build/world.bin" -data "$root/data" -require-metrics "$@"

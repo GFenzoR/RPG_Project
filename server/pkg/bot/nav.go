@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -17,6 +19,9 @@ const navMaxNodes = 40000
 type Nav struct {
 	m    *world.Map
 	pool sync.Pool
+	// diag is the diagonal step cost in thousandths (balance.yaml movement.diagonal_cost):
+	// every search weighs a diagonal with it, as the server's paths and step timer do.
+	diag atomic.Int64
 }
 
 // LoadNav loads a compiled map for path planning.
@@ -30,8 +35,21 @@ func LoadNav(path string) (*Nav, error) {
 
 func newNav(m *world.Map) *Nav {
 	n := &Nav{m: m}
+	n.diag.Store(int64(world.DefaultDiagonalCost * 1000))
 	n.pool.New = func() any { return world.NewPathfinder(m, navMaxNodes) }
 	return n
+}
+
+// UseBalance makes the paths weigh a diagonal step as dataDir's balance.yaml says
+// (movement.diagonal_cost), like the server that loads the same file. Without it a Nav
+// uses world.DefaultDiagonalCost.
+func (n *Nav) UseBalance(dataDir string) error {
+	b, err := content.LoadBalance(dataDir)
+	if err != nil {
+		return fmt.Errorf("nav: %w", err)
+	}
+	n.diag.Store(int64(b.Movement.DiagonalCost*1000 + 0.5))
+	return nil
 }
 
 func wpos(p Pos) world.Pos { return world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)} }
@@ -54,6 +72,7 @@ func (n *Nav) Path(from, to Pos) ([]Direction, bool) {
 	}
 	pf := n.pool.Get().(*world.Pathfinder)
 	defer n.pool.Put(pf)
+	pf.SetDiagonalCost(float64(n.diag.Load()) / 1000)
 	path, ok := pf.FindAvoiding(wpos(from), wpos(to), nil, n.m.MovesOnStep)
 	if !ok {
 		return nil, false

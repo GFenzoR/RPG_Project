@@ -94,6 +94,10 @@ describe("what the server says", () => {
     const self = fighter(SELF, CreatureKind.PLAYER, 4, 5);
     // The target moved since: the client's position wins over the tile of the event.
     expect(attackDir(self, fighter(10, CreatureKind.MONSTER, 4, 4), at(5, 5))).toEqual([0, -1]);
+    // Its octant, not its signs: far to the east and a tile north is east.
+    expect(attackDir(self, fighter(10, CreatureKind.MONSTER, 9, 4), at(9, 4))).toEqual([1, 0]);
+    expect(attackDir(self, fighter(10, CreatureKind.MONSTER, 3, 1), at(3, 1))).toEqual([0, -1]);
+    expect(attackDir(self, fighter(10, CreatureKind.MONSTER, 7, 3), at(7, 3))).toEqual([1, -1]);
     // A target out of the window: the edge point on its side.
     expect(attackDir(self, undefined, at(20, 5))).toEqual([1, 0]);
     // An area around the caster: where it faces.

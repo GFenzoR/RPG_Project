@@ -127,6 +127,9 @@ func TestStepDuration(t *testing.T) {
 		{worldtest.Road, true, 200, 7},    // 5 × √2 = 7.07
 		{worldtest.Mud, true, 200, 28},    // 20 × √2 = 28.28
 		{worldtest.Grass, false, 30000, 1},
+		{worldtest.Grass, true, 30000, 2}, // a one-tick straight step: never a one-tick diagonal
+		{worldtest.Road, true, 1000, 2},   // 50 ms straight
+		{worldtest.Road, true, 999, 3},    // 2 ticks × √2 = 2.83
 	}
 	for _, c := range cases {
 		if got := h.w.StepTicks(c.ground, c.speed, c.diag); int(got) != c.ticks {
@@ -137,13 +140,20 @@ func TestStepDuration(t *testing.T) {
 
 // TestDiagonalSameSpeed: with diagonal_cost √2 a diagonal step covers its √2 tiles at the
 // speed of a straight one (docs/02 "Movimiento"), within half a tick, at every terrain
-// and speed, and is never shorter than the straight step.
+// and speed, and is never shorter than the straight step. Where the straight step is one
+// tick, the diagonal is two: it never covers more distance per tick than a straight one.
 func TestDiagonalSameSpeed(t *testing.T) {
 	h := newHarness(t, worldtest.Map(t, 0, 0, 7, "...m="))
 	for _, ground := range []uint16{worldtest.Grass, worldtest.Mud, worldtest.Road} {
-		for speed := 50; speed <= 1500; speed += 7 {
+		for speed := 50; speed <= 3000; speed += 7 {
 			straight := float64(h.w.StepTicks(ground, speed, false))
 			diag := float64(h.w.StepTicks(ground, speed, true))
+			if straight == 1 {
+				if diag != 2 {
+					t.Fatalf("ground %d speed %d: one straight tick, diagonal %v, want 2", ground, speed, diag)
+				}
+				continue
+			}
 			if diag < straight || math.Abs(diag-straight*math.Sqrt2) > 0.5 {
 				t.Fatalf("ground %d speed %d: straight %v ticks, diagonal %v, want %.2f ±0.5",
 					ground, speed, straight, diag, straight*math.Sqrt2)

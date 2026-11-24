@@ -166,6 +166,15 @@ describe("eight facings (docs/17 ANI-1)", () => {
     const d = spriteClips("c/p", { "c/p": PERSON }, atlasOf(gap));
     expect(d?.eight).toBe(false);
     expect(d?.frames.idle).toHaveLength(4);
+    // The action with the gap is not lost: its four straight facings are whole.
+    expect(d?.frames.walk).toHaveLength(4);
+    expect(d?.frames.walk?.[dirIndex("e")]).toEqual(c?.frames.walk?.[dirIndex("e")]);
+    expect(d?.meta?.actions.walk).toBeDefined();
+    // A straight frame missing still drops the action, and the rest goes four ways too.
+    const lost = keysOf(ALL).filter((k) => k !== "c/p/walk_e_1");
+    const e = spriteClips("c/p", { "c/p": PERSON }, atlasOf(lost));
+    expect(e?.frames.walk).toBeUndefined();
+    expect(e?.frames.idle).toHaveLength(4);
     expect(spriteClips("c/hero", { "c/hero": HERO }, atlasOf(heroKeys))?.eight).toBe(false);
   });
 });

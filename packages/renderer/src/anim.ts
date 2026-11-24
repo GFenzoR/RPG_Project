@@ -30,10 +30,13 @@ export const dirIndex = (d: AnimDir): number => ANIM_DIRS.indexOf(d);
 
 /** The facing of a step or a look (dx, dy) on the map: its signs only (y grows south). */
 export function dirOf(dx: number, dy: number): AnimDir {
-  const v = dy < 0 ? "n" : dy > 0 ? "s" : "";
-  const h = dx > 0 ? "e" : dx < 0 ? "w" : "";
-  return ((v + h) as AnimDir | "") || "s";
+  // A table by sign, not a string built per call: it runs for every creature every frame,
+  // and drawing a frame creates nothing (docs/07).
+  return DIR_BY_SIGN[(Math.sign(dy) + 1) * 3 + Math.sign(dx) + 1] ?? "s";
 }
+
+/** dirOf's facings by (sign(dy) + 1) × 3 + sign(dx) + 1; no direction looks south. */
+const DIR_BY_SIGN: readonly AnimDir[] = ["nw", "n", "ne", "w", "s", "e", "sw", "s", "se"];
 
 /**
  * The facing a creature turns to for a direction (dx, dy), from `prev`, the way it faces
@@ -41,16 +44,52 @@ export function dirOf(dx: number, dy: number): AnimDir {
  * when the creature is drawn in eight facings (`eight`); with four, it keeps the half of
  * the diagonal it already faces (going north-east while facing north keeps north, while
  * facing east keeps east), and otherwise turns to the horizontal half (north-east after
- * south looks east), as in classic top-down games. No direction keeps `prev`.
+ * south looks east), as in classic top-down games. No direction keeps `prev`, but never a
+ * diagonal a four-facing figure cannot be drawn in (it lost a layer's diagonals while
+ * facing one): that one turns to the diagonal's horizontal half.
  */
 export function turnTo(prev: AnimDir, dx: number, dy: number, eight: boolean): AnimDir {
-  if (dx === 0 && dy === 0) return prev;
+  if (dx === 0 && dy === 0) return eight || prev.length === 1 ? prev : (prev[1] as AnimDir);
   const want = dirOf(dx, dy);
   if (dx === 0 || dy === 0 || eight) return want;
   const v = dy < 0 ? "n" : "s";
   const h = dx > 0 ? "e" : "w";
   if (prev === v || prev === h) return prev;
   return h;
+}
+
+/**
+ * Turns a creature for this frame and returns the facing to draw it in (docs/17 ANI-1):
+ * towards its last attack while that plays (its clip, or the lunge), and after it until the
+ * creature walks or looks another way, so a fighter standing still keeps facing its target
+ * between blows; otherwise the way the world says it looks, (dx, dy), its step's while
+ * `moving`. Both through turnTo, so a four-facing figure keeps its sticky half.
+ */
+export function faceTo(
+  s: AnimState,
+  meta: AnimMeta | undefined,
+  now: number,
+  dx: number,
+  dy: number,
+  moving: boolean,
+  eight: boolean,
+): AnimDir {
+  if (s.attackTurn && Number.isNaN(s.diedAt)) {
+    const dir = turnTo(s.facing, s.attackDx, s.attackDy, eight);
+    const clip = attackClip(meta, s.attackAction, dir);
+    const ms = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
+    const since = now - s.attackAt;
+    const playing = since >= 0 && since < ms;
+    if (playing || (!moving && dx === s.lookDx && dy === s.lookDy)) {
+      s.facing = dir;
+      return dir;
+    }
+    s.attackTurn = false;
+  }
+  s.lookDx = dx;
+  s.lookDy = dy;
+  s.facing = turnTo(s.facing, dx, dy, eight);
+  return s.facing;
 }
 
 /** One action of an animated sprite, as atlas.json describes it (tools/spritepack anims.ts). */
@@ -173,6 +212,11 @@ export interface AnimState {
   attackAction: AttackAction;
   attackDx: number;
   attackDy: number;
+  /** It still faces that attack (faceTo): until it walks or looks another way. */
+  attackTurn: boolean;
+  /** The way the world last said it looks, outside an attack (faceTo tells a turn by it). */
+  lookDx: number;
+  lookDy: number;
   /** Last hit taken: when, and the unit direction it is pushed. */
   hitAt: number;
   hitDx: number;
@@ -201,6 +245,9 @@ export function newAnimState(id: number, now: number): AnimState {
     attackAction: "attack",
     attackDx: 0,
     attackDy: 0,
+    attackTurn: false,
+    lookDx: 0,
+    lookDy: 0,
     hitAt: Number.NEGATIVE_INFINITY,
     hitDx: 0,
     hitDy: 0,
@@ -274,8 +321,9 @@ export const newPose = (): Pose => ({
 });
 
 /**
- * An attack towards (dx, dy) (any length; only the sign counts): its clip (`action`, else
- * attack) or, without one, the lunge.
+ * An attack towards (dx, dy) (any length; only its octant counts: a target far to the east
+ * and a tile north is to the east, not the north-east): its clip (`action`, else attack)
+ * or, without one, the lunge; and the creature turns that way (faceTo).
  */
 export function startAttack(
   s: AnimState,
@@ -286,8 +334,11 @@ export function startAttack(
 ): void {
   s.attackAt = now;
   s.attackAction = action;
-  s.attackDx = Math.sign(dx);
-  s.attackDy = Math.sign(dy);
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  s.attackDx = ax * 2 < ay ? 0 : Math.sign(dx);
+  s.attackDy = ay * 2 < ax ? 0 : Math.sign(dy);
+  s.attackTurn = s.attackDx !== 0 || s.attackDy !== 0;
 }
 
 /** A hit: flash, and a push towards (dx, dy) (only the sign counts). */

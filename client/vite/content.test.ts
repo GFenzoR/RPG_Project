@@ -8,6 +8,7 @@ import {
   GAME_SITE_KEYS,
   dialogTopics,
   loadAttributes,
+  loadMovement,
   loadClientContent,
   loadForge,
   loadPortals,
@@ -96,6 +97,17 @@ describe("client content (T0.5)", () => {
     }
     expect(loadForge({ forge: { enabled: false } }, ids)).toBeUndefined();
     expect(loadForge({ forge: { enabled: true, station: "nowhere" } }, ids)).toBeUndefined();
+  });
+
+  it("reads the movement constants, a diagonal at √2 like the server when one is missing", () => {
+    expect(loadMovement({ movement: { base_step_ms: 800, diagonal_cost: 1.5 } })).toEqual({
+      baseStepMs: 800,
+      diagonalCost: 1.5,
+      maxPathTiles: 100,
+    });
+    // server/internal/world DefaultDiagonalCost.
+    expect(loadMovement({})).toEqual({ baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 });
+    expect(content.movement.diagonalCost).toBe(1.414); // data/balance.yaml
   });
 
   it("reads no attributes without the file and fails on a broken one", () => {

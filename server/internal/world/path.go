@@ -50,8 +50,19 @@ const DefaultDiagonalCost = 1.414
 
 // straightUnits is what a straight step costs per terrain percent, in Pathfinder.cost
 // units; a diagonal one costs Pathfinder.diagUnits (straightUnits × the diagonal cost,
-// rounded). int32 holds MaxPathLength diagonal steps at any uint16 terrain speed.
+// rounded). A path's cost g and its heuristic h each stay within MaxPathLength ×
+// maxCostSpeed × straightUnits × MaxDiagonalCost, so f = g + h fits int32.
 const straightUnits = 100
+
+// maxCostSpeed is the highest terrain speed (percent) a search counts: a slower ground
+// costs as much as this one (327 times normal ground; real terrains are 50-200). It keeps
+// g + h within int32 whatever uint16 speed a ground item declares.
+const maxCostSpeed = 32767
+
+// MaxDiagonalCost is the highest diagonal step cost (balance.yaml movement.diagonal_cost):
+// a diagonal is two straight steps at most, which is what it replaces. Past it a path's
+// cost could overflow (straightUnits).
+const MaxDiagonalCost = 2
 
 // pathWindow is the side of the square of tiles a search can visit, centred on the start.
 const pathWindow = 2*MaxPathLength + 1
@@ -117,14 +128,15 @@ func NewPathfinder(m *Map, maxNodes int) *Pathfinder {
 }
 
 // SetDiagonalCost sets how many times a straight step a diagonal one costs (balance.yaml
-// movement.diagonal_cost, at least 1), so paths agree with the step timer. The heuristic
-// stays admissible: its octile distance uses the same two costs.
+// movement.diagonal_cost, clamped to 1..MaxDiagonalCost), so paths agree with the step
+// timer. The heuristic stays admissible: its octile distance uses the same two costs.
 func (pf *Pathfinder) SetDiagonalCost(c float64) {
-	pf.diagUnits = int32(max(c, 1)*straightUnits + 0.5)
+	pf.diagUnits = int32(min(max(c, 1), MaxDiagonalCost)*straightUnits + 0.5)
 }
 
 // stepCost is what one step onto a tile of terrain speed `speed` costs.
 func (pf *Pathfinder) stepCost(diagonal bool, speed int32) int32 {
+	speed = min(speed, maxCostSpeed)
 	if diagonal {
 		return pf.diagUnits * speed
 	}
@@ -206,7 +218,7 @@ func (pf *Pathfinder) heuristic(dx, dy int) int32 {
 	if pf.bySteps {
 		return int32(hi)
 	}
-	return pf.m.minSpeed * (straightUnits*int32(hi-lo) + pf.diagUnits*int32(lo))
+	return min(pf.m.minSpeed, maxCostSpeed) * (straightUnits*int32(hi-lo) + pf.diagUnits*int32(lo))
 }
 
 // Find returns a walking path from `from` to `to` as a list of directions, appended to

@@ -246,7 +246,8 @@ el punto 5:
     mirando la diagonal) y caminar en diagonal en Thimblewick con `make play`, también con
     escudo y arma (el arma al noroeste va sobre la ropa aunque esté en la mano lejana; docs/17).
   - **El peso del atlas:** 2 páginas todavía, pero lo que baja el juego pasó de ~6,2 a
-    ~9,3 MB (casi la mitad, JSON). La propuesta, en docs/07 "Humanoides en 8 direcciones".
+    ~7,0 MB (ya con el JSON del atlas sin indentar; indentado eran ~9,3). Lo que queda por
+    hacer si molesta, en docs/07 "Humanoides en 8 direcciones".
   - **Monstruos en 8 direcciones (siguiente):** siguen en 4 con la regla nueva (conservan la
     mitad de la diagonal que ya miran). Los que más ganarían, por andar mucho en diagonal y
     verse de cerca: los cuadrúpedos del motor (`bristleback_boar`, `bramble_stag`: ya son
