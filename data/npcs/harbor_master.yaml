@@ -15,11 +15,13 @@ look:
 notes: >-
   Opens and closes Chapter 1 (ch1_shipwreck) and runs the boat to the forest island
   (Chapter 2). Not a merchant: tools and provisions live in puerto_provisioner.
-  Gifts depend on the vocation. Accepting gives coins and a biscuit: the class weapon comes
-  in the start_kit (data/vocations.yaml). A character that does not carry that weapon (one
-  made before the kit existed, or one that lost it) gets it here too, so nobody starts the
-  chapter unarmed: at most one more starting weapon per character. Rangers get coins for
-  arrows on top. For the logbook, guardians get an iron sword and the others its value in
+  Gifts depend on the vocation. Accepting gives a biscuit: the class weapon comes in the
+  start_kit (data/vocations.yaml). A character that does not carry that weapon (one made
+  before the kit existed, or one that lost it) gets it here too, so nobody starts the
+  chapter unarmed: at most one more starting weapon per character. Rangers get 20 coins
+  for arrows on top, as before the kit. No other coins: a new character is worth, sold
+  whole, what it was before the kit (docs/02 "Equipo inicial", the start budget; a test
+  keeps it). For the logbook, guardians get an iron sword and the others its value in
   coins (the greeting has no room for a tenth option, and neither has ch1_offer: two per
   vocation plus the refusal).
   A new vocation needs its own branch here.
@@ -74,7 +76,6 @@ dialog:
             - { has_item: { item: rusty_cutlass } }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_gold: 30 } # the class weapon comes in the start_kit (2026-11-23)
             - { give_item: ship_biscuit }
           goto: ch1_accepted
         - text: dialog.accept
@@ -84,7 +85,6 @@ dialog:
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: rusty_cutlass }
-            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted
         - text: dialog.accept
@@ -93,7 +93,6 @@ dialog:
             - { has_item: { item: spark_wand } }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
         - text: dialog.accept
@@ -103,7 +102,6 @@ dialog:
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: spark_wand }
-            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
         - text: dialog.accept
@@ -112,7 +110,7 @@ dialog:
             - { has_item: { item: short_bow } }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_gold: 50 } # 30 + 20 for arrows
+            - { give_gold: 20 } # for arrows, as before the start_kit
             - { give_item: ship_biscuit }
           goto: ch1_accepted_ranger
         - text: dialog.accept
@@ -122,7 +120,7 @@ dialog:
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: short_bow }
-            - { give_gold: 50 }
+            - { give_gold: 20 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_ranger
         - text: dialog.accept
@@ -131,7 +129,6 @@ dialog:
             - { has_item: { item: sapling_staff } }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_druid
         - text: dialog.accept
@@ -141,7 +138,6 @@ dialog:
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: sapling_staff }
-            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_druid
         - text: dialog.decline

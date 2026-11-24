@@ -2177,6 +2177,7 @@ class Validator {
       let shield = false;
       const wornSlots = new Set<string>();
       const carried = new Set<string>(); // piles in the backpack and pockets
+      let grams = this.startPackWeight(); // the kit and the starting backpack
       for (const [j, entry] of asList(voc["start_kit"]).entries()) {
         if (!isObj(entry)) continue;
         const path: PathSegment[] = [i, "start_kit", j];
@@ -2191,6 +2192,7 @@ class Validator {
           this.error(src, [...path, "count"], `${name} does not stack: one per entry`);
         else if (count > stack)
           this.error(src, [...path, "count"], `${count} ${name} is more than its stack (${stack})`);
+        if (typeof item["weight"] === "number") grams += item["weight"] * count;
         const req = isObj(item["requires"]) ? item["requires"] : {};
         if (Number(req["level"] ?? 1) > 1)
           this.error(
@@ -2233,7 +2235,26 @@ class Validator {
           [i, "start_kit"],
           "a two-handed weapon and a shield: one of them never fits",
         );
+      // Nothing weighs the kit when it is given (session/startkit.go): it must not start a
+      // character over its capacity.
+      const start = isObj(voc["start"]) ? voc["start"]["capacity"] : undefined;
+      if (asList(voc["start_kit"]).length > 0 && typeof start === "number" && grams > start)
+        this.error(
+          src,
+          [i, "start_kit"],
+          `the kit weighs ${grams} g with the starting backpack, more than the ${start} g a level 1 ${id} carries`,
+        );
     }
+  }
+
+  /** The weight in grams of balance.yaml inventory.start_container (0 without one). */
+  private startPackWeight(): number {
+    const inv =
+      this.balance && isObj(this.balance.data) ? this.balance.data["inventory"] : undefined;
+    if (!isObj(inv)) return 0;
+    const owned = this.index.ids.item.get(String(inv["start_container"]));
+    const pack = owned ? this.itemDef(owned) : undefined;
+    return pack && typeof pack["weight"] === "number" ? pack["weight"] : 0;
   }
 
   /**

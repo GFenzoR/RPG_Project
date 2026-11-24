@@ -11,7 +11,14 @@ import type { AudioEngine } from "../audio/engine.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, accountApi, api } from "../net/api.ts";
 import type { Character, LookJSON } from "../net/api.ts";
-import { canCreate, canGoBack, firstView, kitLine, showsAccount } from "../state/characters.ts";
+import {
+  canCreate,
+  canGoBack,
+  firstView,
+  kitLine,
+  listLook,
+  showsAccount,
+} from "../state/characters.ts";
 import type { CharactersView, KitEntry } from "../state/characters.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
 import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
@@ -503,14 +510,7 @@ export function CharacterList(props: {
           {c.look && props.content.looks && (
             <LookPreview
               t={t}
-              look={{
-                sex: c.look.sex,
-                body: c.look.body,
-                skin: c.look.skin,
-                hair: c.look.hair,
-                hairColor: c.look.hair_color,
-                beard: c.look.beard,
-              }}
+              look={listLook(c.look, props.content.lookOptions)}
               worn={props.clothes}
               tables={props.content.looks}
               scale={1}

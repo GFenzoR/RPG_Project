@@ -217,9 +217,14 @@ el punto 5:
   - **Arte propio de los hechizos nuevos:** usan el efecto y el sonido de su elemento,
     como todos; si el dueño quiere un efecto distinto por hechizo, hace falta un id de
     efecto por hechizo en el protocolo.
-  - **La jefa del puerto da monedas en vez del arma:** 30 (50 al montaraz). Si el dueño
-    prefiere otra cosa (una pieza de la banda 2, un brebaje), es dato de
-    `data/npcs/harbor_master.yaml`.
+  - **Decisión del dueño, oro por personaje nuevo:** la revisión del lote notó que el kit
+    vendido al armero más monedas nuevas de la jefa del puerto eran unas 80 monedas por
+    personaje (10 personajes por cuenta). Quedó neutro respecto de antes del kit (docs/02
+    "Equipo inicial", presupuesto de inicio): la jefa del puerto no da monedas por el arma
+    (el montaraz conserva sus 20 para flechas) y el armero paga una sola moneda por la tapa
+    de barril y por cada prenda sencilla. Si el dueño prefiere regalar algo al aceptar (monedas, una
+    pieza de la banda 2, un brebaje), es dato de `data/npcs/harbor_master.yaml` y el tope
+    de `TestStartKitResaleBudget`.
   - **Personajes creados antes:** no reciben el kit (ya jugaron), pero la jefa del puerto
     le da el arma de clase a quien no la lleve al aceptar `ch1_shipwreck`, así que ninguno
     queda desarmado. No reciben el escudo, la ropa ni las flechas (el armero los vende; el

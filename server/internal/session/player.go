@@ -628,7 +628,10 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	// character is saved at once with it (below), so a crash before its first autosave
 	// does not roll another at the next login.
 	rolled := slices.ContainsFunc(c.Inventory, w.needsRoll)
-	kit := w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
+	// A fresh start (the backpack and the start_kit) is for a character that never played:
+	// no position, and no mark of an earlier one (startKitKey).
+	fresh := !c.HasPos && !c.InventoryLoaded && c.Storage[startKitKey] == 0
+	kit := w.loadInventory(p, c.Inventory, fresh)
 	// After the equipment: its attributes may raise the maximums (attributes.go).
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
@@ -636,6 +639,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	p.mana = min(max(c.Mana, 0), p.maxMana)
 	p.storage = quest.NewLog(c.Storage)
+	if fresh && len(c.Inventory) == 0 {
+		p.storage.Set(startKitKey, 1) // saved with the kit, or with the first position
+	}
 	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
 	if carry != nil {
 		w.carryFight(carry, p) // a link-dead character taken over keeps its fight and locks

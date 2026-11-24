@@ -67,15 +67,18 @@ shop:
     - { item: thornwood_longbow, price: 600 }
     - { item: lesser_temper_stone, price: 10 }
     - { item: greater_temper_stone, price: 150 }
+  # The barrel lid and the plain clothes (tunic, trousers, boots) go for one coin: every
+  # new character starts with them (start_kit), and a real price would pay each one for
+  # being made (docs/02 "Equipo inicial", the start budget).
   buys:
     - { item: rusty_cutlass, price: 10 }
     - { item: hatchet, price: 10 }
     - { item: belaying_pin, price: 10 }
-    - { item: barrel_lid_shield, price: 8 }
+    - { item: barrel_lid_shield, price: 1 }
     - { item: sailcloth_cap, price: 3 }
-    - { item: patched_tunic, price: 6 }
-    - { item: canvas_trousers, price: 3 }
-    - { item: tarred_boots, price: 3 }
+    - { item: patched_tunic, price: 1 }
+    - { item: canvas_trousers, price: 1 }
+    - { item: tarred_boots, price: 1 }
     - { item: short_bow, price: 10 }
     - { item: iron_sword, price: 50 }
     - { item: forged_axe, price: 50 }

@@ -9,7 +9,8 @@ notes: >-
   starts ch1_shipwreck on the pier. Only arcanists and druids have a level 1 spell, so
   the spell step is theirs. The reward is deliberately tiny (a few coins). Every new
   character already wears its vocation's start_kit (data/vocations.yaml): the backpack
-  step names the class weapon in its hand, the biscuits and the poultice.
+  step says what a newcomer carries (the class weapon in its hand, the biscuits and the
+  poultice) without promising it: a character made before the kits has none.
 steps:
   - id: first_steps
     text: tutorial.step.first_steps

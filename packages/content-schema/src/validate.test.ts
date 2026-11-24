@@ -188,6 +188,21 @@ describe("validator diagnostics", () => {
     );
   });
 
+  it("refuses a start_kit heavier than a level 1 of the vocation carries", () => {
+    const heavy = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("the kit weighs"));
+    expect(heavy()).toEqual([]);
+    // The druid carries 380 kg; at 5 kg it cannot hold its own kit and backpack.
+    edit(
+      "data/vocations.yaml",
+      "start: { health: 140, mana: 75, capacity: 380000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
+      "start: { health: 140, mana: 75, capacity: 5000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
+    );
+    const errs = heavy();
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toMatch(/more than the 5000 g a level 1 druid carries/);
+  });
+
   const reachErrors = (): string[] =>
     messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
   // The reach step of ch3_gate, on the volcano's mine floor.
@@ -1011,7 +1026,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:63:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:65:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),

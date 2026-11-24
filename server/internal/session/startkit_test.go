@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,11 +138,22 @@ func TestStartKitIsTheVocations(t *testing.T) {
 	h.checkInvariants()
 }
 
-// A kit naming an unknown item, or more than a stack, refuses to start.
+// A kit naming an unknown item, or more than a stack, refuses to start; so does one that
+// would not be handed over whole: more carried piles than the pockets hold (there is no
+// starting backpack here: the first wand counts as worn, five more are carried) or more
+// weight than a level 1 carries.
 func TestStartKitChecked(t *testing.T) {
-	for _, kit := range [][]content.KitItem{{{Item: "nothing_here"}}, {{Item: "test_sword", Count: 2}}, {{Item: "test_salve", Count: 101}}} {
+	wands := make([]content.KitItem, pocketSlots+2)
+	for i := range wands {
+		wands[i].Item = "test_wand"
+	}
+	for i, kit := range [][]content.KitItem{{{Item: "nothing_here"}}, {{Item: "test_sword", Count: 2}}, {{Item: "test_salve", Count: 101}},
+		wands, {{Item: "test_sword"}}} {
 		g := testVocations["guardian"]
 		g.StartKit = kit
+		if i == 4 {
+			g.Start.Capacity = testItems()["test_sword"].Weight - 1
+		}
 		_, err := session.New(session.Config{Map: worldtest.Open(t, 0, 0, 8, 8), Balance: testBalance(), Items: testItems(),
 			Vocations: content.Vocations{"guardian": g}, Save: func(session.Snapshot) bool { return true }})
 		if err == nil || !strings.Contains(err.Error(), "start_kit") {
@@ -192,6 +204,38 @@ func TestStartKitWithoutRoom(t *testing.T) {
 		t.Fatalf("saved %+v, want the %d wands that fit", h.saves, pocketSlots)
 	}
 	h.sim.Step()
+	h.checkInvariants()
+}
+
+// The fresh start leaves its mark in the character's storage, saved with the kit: a row
+// that carries the mark gets neither the kit nor the backpack again, even when it has no
+// position and carries nothing (a saved position the gateway could not read).
+func TestStartKitMarkOutlivesThePosition(t *testing.T) {
+	h := kitHarness(t)
+	fresh := session.Character{ID: 9310, AccountID: 9310, Name: "Marked", Vocation: "guardian", Level: 1, Health: 145}
+	cl, _ := h.joinChar(fresh)
+	given := len(h.entries(session.EconStartKit))
+	if given == 0 || len(h.saves) == 0 {
+		t.Fatalf("no kit (%d entries) or no save (%d)", given, len(h.saves))
+	}
+	last := h.saves[len(h.saves)-1]
+	if last.Storage["start_kit"] != 1 {
+		t.Fatalf("the save with the kit has no mark: %v", last.Storage)
+	}
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	last = h.saves[len(h.saves)-1]
+	h.sim.Command(h.w.Saved(last.CharacterID, last.Seq))
+	h.sim.Step()
+	row := fresh
+	row.Storage = last.Storage // no position, nothing carried
+	_, q := h.joinChar(row)
+	if n := len(h.entries(session.EconStartKit)); n != given {
+		t.Errorf("a marked row without a position got the kit again (%d entries, was %d)", n, given)
+	}
+	if got := equipped(q); len(got) != 0 {
+		t.Errorf("a marked row without a position got %v", got)
+	}
 	h.checkInvariants()
 }
 
@@ -261,7 +305,7 @@ func TestStartKitRealData(t *testing.T) {
 
 // A character made before the kits existed (it has a position, so no kit) still starts
 // Chapter 1 armed: the harbor master hands the class weapon to whoever does not carry
-// it, once, with the coins; one that carries it gets the coins only.
+// it, once (the ranger, with its coins for arrows); one that carries it gets no second one.
 func TestHarborMasterArmsTheUnarmed(t *testing.T) {
 	for voc, weapon := range map[string]string{
 		"guardian": "rusty_cutlass", "arcanist": "spark_wand", "ranger": "short_bow", "druid": "sapling_staff",
@@ -281,7 +325,11 @@ func TestHarborMasterArmsTheUnarmed(t *testing.T) {
 			t.Fatalf("%s: offer options %v, want one accept and the refusal", voc, d.Options)
 		}
 		h.pick(cl, d, "dialog.accept")
-		if n := h.w.CountItem(p, weapon); n != 1 || h.w.Money(p) < 30 {
+		coins := int64(0)
+		if voc == "ranger" {
+			coins = 20 // for arrows
+		}
+		if n := h.w.CountItem(p, weapon); n != 1 || h.w.Money(p) != coins {
 			t.Errorf("%s: accepted with %d %s and %d coins, want the weapon and the coins", voc, n, weapon, h.w.Money(p))
 		}
 		// The new character of the same vocation carries its weapon: coins only.
@@ -294,6 +342,53 @@ func TestHarborMasterArmsTheUnarmed(t *testing.T) {
 		h.pick(cl2, d, "dialog.accept")
 		if n := h.w.CountItem(q, weapon); n != 1 || h.w.Money(q) != h.w.Money(p) {
 			t.Errorf("%s: a new character accepted with %d %s and %d coins (the old one %d)", voc, n, weapon, h.w.Money(q), h.w.Money(p))
+		}
+	}
+}
+
+// The start budget (docs/02 "Equipo inicial"): a new character, sold whole, is worth what
+// it was before the kits (the class weapon's resale, 10, plus the ranger's 20 coins for
+// arrows) and one coin for each piece of plain gear (every item that can be had needs a
+// buyer, make validate). Every character of an account gets a kit, so anything above it is gold made by
+// making characters: what the NPCs pay for the kit's pieces plus the coins the harbor
+// master gives to one that carries its weapon must stay within it.
+func TestStartKitResaleBudget(t *testing.T) {
+	cfg := dataConfig(t, nil)
+	resale := map[string]int64{}
+	for _, n := range cfg.NPCs {
+		if n.Shop == nil {
+			continue
+		}
+		for _, o := range n.Shop.Buys {
+			resale[o.Item] = max(resale[o.Item], o.Price)
+		}
+	}
+	offer := cfg.NPCs["harbor_master"].Dialog.Nodes["ch1_offer"]
+	for voc, budget := range map[string]int64{"guardian": 14, "arcanist": 13, "ranger": 33, "druid": 13} {
+		var worth int64
+		for _, k := range cfg.Vocations[voc].StartKit {
+			worth += resale[k.Item] * int64(k.Units())
+		}
+		accepts := 0
+		for _, o := range offer.Options {
+			mine, carries := false, false
+			for _, c := range o.If {
+				mine = mine || slices.Contains(c.VocationIn, voc)
+				carries = carries || c.HasItem != nil
+			}
+			if !mine || !carries {
+				continue
+			}
+			accepts++
+			for _, a := range o.Action {
+				worth += a.GiveGold
+			}
+		}
+		if accepts != 1 {
+			t.Errorf("%s: %d accept options for a character that carries its weapon, want 1", voc, accepts)
+		}
+		if worth > budget {
+			t.Errorf("%s: the kit's resale plus the accept's coins is %d, over the start budget of %d", voc, worth, budget)
 		}
 	}
 }

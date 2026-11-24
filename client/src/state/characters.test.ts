@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canCreate, canGoBack, firstView, kitLabel, kitLine, showsAccount } from "./characters.ts";
+import {
+  canCreate,
+  canGoBack,
+  firstView,
+  kitLabel,
+  kitLine,
+  listLook,
+  showsAccount,
+} from "./characters.ts";
 
 describe("characters screen flow", () => {
   it("goes straight to the form with no characters and to the list with one or more", () => {
@@ -61,5 +69,43 @@ describe("starting kit line", () => {
     const name = (id: string): string => `<${id}>`;
     expect(kitLabel({ item: "arrow", count: 60 }, name)).toBe("60 × <arrow>");
     expect(kitLabel({ item: "short_bow", count: 1 }, name)).toBe("<short_bow>");
+  });
+});
+
+describe("the look of a listed character", () => {
+  const choices = {
+    sexes: ["male", "female"],
+    builds: ["lean", "sturdy"],
+    skins: ["tan", "pale"],
+    hairStyles: ["crop", "long"],
+    hairColors: ["grey", "black"],
+    beards: ["none", "full"],
+  };
+  const sent = {
+    sex: "female",
+    body: "sturdy",
+    skin: "pale",
+    hair: "long",
+    hair_color: "black",
+    beard: "none",
+  };
+  it("is the server's when the content knows every id", () => {
+    expect(listLook(sent, choices)).toEqual({
+      sex: "female",
+      body: "sturdy",
+      skin: "pale",
+      hair: "long",
+      hairColor: "black",
+      beard: "none",
+    });
+  });
+  it("replaces an id the content no longer has by the first choice", () => {
+    const look = listLook({ ...sent, skin: "retired_skin", hair: "retired_hair" }, choices);
+    expect(look.skin).toBe("tan");
+    expect(look.hair).toBe("crop");
+    expect(look.body).toBe("sturdy");
+  });
+  it("passes the server's through without the choices (fixtures)", () => {
+    expect(listLook({ ...sent, skin: "retired_skin" }, undefined).skin).toBe("retired_skin");
   });
 });

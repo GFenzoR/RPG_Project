@@ -395,8 +395,13 @@ vez**, en el primer login del personaje (el mismo momento que la mochila inicial
 (nivel, vocación, manos), el resto en la mochila y después en los bolsillos. Se guarda en el
 acto y queda en el log de economía como `start_kit`, que no cuenta como ganancia para el
 detector de atípicos (no es botín). Nunca se repite: ni al morir (no hay mochila gratis
-después de la muerte, "Bolsillos") ni al volver a entrar. Dos entradas del mismo apilable
-se juntan en una pila; lo que no entra en la mochila ni en los bolsillos no se da.
+después de la muerte, "Bolsillos") ni al volver a entrar. Lo aseguran dos cosas: el
+personaje ya tiene posición guardada y, además, lleva la marca `start_kit` en su storage
+(como los cofres con `chest.<id>`), que se guarda junto con el kit; así una fila cuya
+posición no se pueda leer no vuelve a contar como personaje nuevo. Dos entradas del mismo
+apilable se juntan en una pila. El servidor se niega a arrancar con un kit que no podría
+entregar entero: más pilas sueltas que celdas en la mochila inicial más los bolsillos, o
+más peso (con la mochila) que la capacidad de esa vocación a nivel 1.
 
 | Vocación | Propio | Para todos |
 |---|---|---|
@@ -406,18 +411,37 @@ se juntan en una pila; lo que no entra en la mochila ni en los bolsillos no se d
 | Druida | vara de retoño (`sapling_staff`) | ídem |
 
 Todo son items que ya existían (banda 1 del catálogo). Como el arma de clase viene en el
-kit, la jefa del puerto da al aceptar `ch1_shipwreck` 30 monedas (50 al montaraz, con las
-de las flechas) y la galleta de siempre. **Quien no lleva su arma de clase la recibe ahí**
-(`lacks_item` en `data/npcs/harbor_master.yaml`), además de las monedas: un personaje
+kit, la jefa del puerto ya no la da al aceptar `ch1_shipwreck`: da la galleta de siempre
+y, al montaraz, sus 20 monedas para flechas, como antes del kit. **Quien no lleva su arma
+de clase la recibe ahí** (`lacks_item` en `data/npcs/harbor_master.yaml`): un personaje
 creado antes de que existiera el kit ya tiene posición guardada y no lo recibe, y nadie
 debe empezar el capítulo desarmado. Vale una sola vez por personaje (la quest solo se
 acepta una vez), así que quien suelte o guarde el arma del kit antes de hablar consigue a
-lo sumo una segunda arma inicial, de poco valor; un arma refinada no cuenta
+lo sumo una segunda arma inicial (10 monedas de reventa); un arma refinada no cuenta
 como llevada (`spareable`). El escudo, la ropa y las flechas del kit no se reponen: el
-armero los vende. `make validate` revisa cada kit (que la vocación pueda usar cada pieza a
+armero los vende.
+
+**Presupuesto de inicio.** Una cuenta tiene hasta 10 personajes y cada uno recibe su kit,
+así que todo lo que un personaje nuevo pueda convertir en monedas es oro que se fabrica
+creando personajes. Regla: un personaje nuevo, vendido entero, vale lo mismo que antes
+del kit, es decir la reventa de su arma de clase (10) más, en el montaraz, las 20 monedas
+para flechas, y una moneda por cada pieza sencilla. Por eso:
+- la jefa del puerto no da monedas por el arma que ya viene en el kit;
+- el armero paga una sola moneda por la tapa de barril, la túnica remendada, los
+  pantalones de lona y las botas alquitranadas (antes 8, 6, 3 y 3; `make validate` exige
+  que todo item que se consigue tenga comprador, así que no pueden quedar sin ninguno), y
+  nadie compra las flechas, las galletas ni la cataplasma;
+- `TestStartKitResaleBudget` (`server/internal/session/startkit_test.go`) suma, con los
+  datos reales, la reventa del kit y las monedas del accept de quien lleva su arma, y falla
+  si pasa de 14 en el guardián, 13 en el arcanista y el druida y 33 en el montaraz (antes
+  de este ajuste eran 60, 52, 72 y 52). Subir ese tope es una decisión del dueño: se
+  cambia el número del test junto con los datos.
+
+`make validate` revisa cada kit (que la vocación pueda usar cada pieza a
 nivel 1, sin items retirados, cantidades solo en apilables y dentro de su pila, nunca un
-arma de dos manos con escudo y que lo que no se lleva puesto entre en la mochila inicial
-más los bolsillos; una segunda pieza para el mismo slot es un aviso).
+arma de dos manos con escudo, que lo que no se lleva puesto entre en la mochila inicial
+más los bolsillos y que el kit con la mochila no pese más que la capacidad de la vocación
+a nivel 1; una segunda pieza para el mismo slot es un aviso).
 
 #### Entrenamiento por vocación
 Intentos para llevar una skill a 30 (el nivel mágico a 15) con los `skill_factors` de
@@ -831,9 +855,10 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   mochila (el tutorial la abre) y con el `start_kit` de su vocación ("Equipo inicial",
   2026-11-23): el arma de clase, la ropa y, según la vocación, el escudo o las flechas ya
   puestos, y las galletas y la cataplasma en la mochila; los bolsillos, vacíos. Al aceptar
-  el capítulo 1 la jefa del puerto da monedas (30; 50 al montaraz, para flechas) y una
-  galleta, y el arma de clase solo a quien no la lleve (antes del kit la daba siempre:
-  T1.10 y la auditoría de contenido m5). El armero vende arcos, flechas y la
+  el capítulo 1 la jefa del puerto da una galleta, 20 monedas para flechas al montaraz y
+  el arma de clase solo a quien no la lleve (antes del kit la daba siempre: T1.10 y la
+  auditoría de contenido m5; sin más monedas, "Equipo inicial", presupuesto de inicio). El
+  armero vende arcos, flechas y la
   ropa del kit inicial (para cualquier vocación: desde el lote 11 solo el torso pesado pide
   guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
   brebaje de maná. En el Bosque las varas, las

@@ -105,12 +105,24 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 	if r.Node != "ch1_offer" {
 		t.Fatalf("result %+v", r)
 	}
-	// Only the arcanist's accept is visible; choosing the guardian's one is refused.
-	if r := Choose(hm, "ch1_offer", 0, f); r.Node != "ch1_offer" || f.money != 0 {
-		t.Fatalf("hidden option ran: %+v", r)
+	// Only the arcanist's accepts are options of hers, and of those only the one that
+	// matches what she carries: every other one is refused and runs nothing.
+	offer := hm.Dialog.Nodes["ch1_offer"]
+	vis := Visible(offer, f)
+	if len(vis) != 2 || offer.Options[vis[0]].Goto != "ch1_accepted_arcanist" || offer.Options[vis[1]].Text != "dialog.decline" {
+		t.Fatalf("offer options %v", texts(offer, f))
 	}
-	r = Choose(hm, "ch1_offer", 1, f)
-	if r.Node != "ch1_accepted_arcanist" || f.items["spark_wand"] != 1 || f.items["ship_biscuit"] != 1 {
+	for i, o := range offer.Options {
+		if i == vis[0] || i == vis[1] {
+			continue
+		}
+		if r := Choose(hm, "ch1_offer", i, f); r.Node != "ch1_offer" || f.money != 0 || len(f.items) != 0 {
+			t.Fatalf("hidden option %d (%s) ran: %+v", i, o.Goto, r)
+		}
+	}
+	// She carries no wand (a character from before the start_kit): the wand comes too.
+	r = Choose(hm, "ch1_offer", vis[0], f)
+	if r.Node != "ch1_accepted_arcanist" || f.items["spark_wand"] != 1 || f.items["ship_biscuit"] != 1 || f.money != 0 {
 		t.Fatalf("accept: %+v money %d items %v", r, f.money, f.items)
 	}
 	if s, step := f.QuestState("ch1_shipwreck"); s != quest.InProgress || step != "clear_wolves" {
@@ -189,29 +201,45 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 	}
 }
 
-// The ranger and the druid get their own starter weapon when they accept (T3.1).
-func TestHarborMasterKitForRangerAndDruid(t *testing.T) {
+// Accepting Chapter 1 by vocation (T3.1, and the start_kit of 2026-11-23): a character
+// that carries its class weapon (the kit's) gets the biscuit and no second weapon; one
+// that does not gets the weapon too. Only the ranger gets coins, for arrows: nothing else
+// (docs/02 "Equipo inicial", the start budget).
+func TestHarborMasterAcceptByVocation(t *testing.T) {
 	hm := load(t, "harbor_master")
+	offer := hm.Dialog.Nodes["ch1_offer"]
 	for _, c := range []struct {
 		vocation, node, item string
 		money                int64
 	}{
+		{"guardian", "ch1_accepted", "rusty_cutlass", 0},
+		{"arcanist", "ch1_accepted_arcanist", "spark_wand", 0},
 		{"ranger", "ch1_accepted_ranger", "short_bow", 20},
 		{"druid", "ch1_accepted_druid", "sapling_staff", 0},
 	} {
-		f := newFake(t, c.vocation)
-		accept := -1
-		for i, o := range hm.Dialog.Nodes["ch1_offer"].Options {
-			if o.Goto == c.node {
+		for _, armed := range []bool{true, false} {
+			f := newFake(t, c.vocation)
+			if armed {
+				f.items[c.item] = 1
+			}
+			// The one accept this character sees: by where it leads, not by its index.
+			accept := -1
+			for _, i := range Visible(offer, f) {
+				if offer.Options[i].Goto != c.node {
+					continue
+				}
+				if accept >= 0 {
+					t.Fatalf("%s (armed %v): two accept options, %d and %d", c.vocation, armed, accept, i)
+				}
 				accept = i
 			}
-		}
-		if accept < 0 {
-			t.Fatalf("%s: no accept option leads to %s", c.vocation, c.node)
-		}
-		r := Choose(hm, "ch1_offer", accept, f)
-		if r.Node != c.node || f.items[c.item] != 1 || f.money != c.money || f.items["ship_biscuit"] != 1 {
-			t.Errorf("%s: %+v money %d items %v", c.vocation, r, f.money, f.items)
+			if accept < 0 {
+				t.Fatalf("%s (armed %v): no visible accept leads to %s", c.vocation, armed, c.node)
+			}
+			r := Choose(hm, "ch1_offer", accept, f)
+			if r.Node != c.node || f.items[c.item] != 1 || f.money != c.money || f.items["ship_biscuit"] != 1 {
+				t.Errorf("%s (armed %v): %+v money %d items %v", c.vocation, armed, r, f.money, f.items)
+			}
 		}
 	}
 }

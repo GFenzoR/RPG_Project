@@ -3,6 +3,11 @@
 // first, with a button that opens the form, and the form has a way back to the list.
 // Pure: ui/App.tsx Characters renders what these decide.
 
+import type { Look } from "@rpg/renderer/look";
+import type { LookJSON } from "../net/api.ts";
+import { startingLook } from "./look.ts";
+import type { LookChoices } from "./look.ts";
+
 /** One entry of a vocation's start_kit (data/vocations.yaml). */
 export interface KitEntry {
   item: string;
@@ -57,4 +62,22 @@ export function kitLine(
 /** "name" or "count × name" for a kit entry, with the item's translated name. */
 export function kitLabel(e: KitEntry, name: (item: string) => string): string {
   return e.count > 1 ? `${e.count} × ${name(e.item)}` : name(e.item);
+}
+
+/**
+ * The look the list draws for a character: the server's, with every id the client's
+ * content no longer has (retired from data/looks.yaml, or a newer server) replaced by the
+ * first choice, so the figure never asks the tables for a tint they lack. Without the
+ * choices (fixtures) it is the server's as it came.
+ */
+export function listLook(look: LookJSON, choices: LookChoices | undefined): Look {
+  const sent: Look = {
+    sex: look.sex,
+    body: look.body,
+    skin: look.skin,
+    hair: look.hair,
+    hairColor: look.hair_color,
+    beard: look.beard,
+  };
+  return choices ? startingLook(choices, sent) : sent;
 }

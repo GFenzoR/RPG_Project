@@ -22,13 +22,33 @@ type kitPiece struct {
 	count int
 }
 
+// startKitKey is the storage key of a character that already had its fresh start (the
+// starting backpack and the kit): like a chest's content.ChestKey, it is the character's
+// own memory of it. The position is the first guard; this one holds when a saved row's
+// position cannot be read (out of range, gateway.toCharacter) and the character carries
+// nothing: without it that login would be "fresh" again.
+const startKitKey = "start_kit"
+
 // initStartKits resolves every vocation's start_kit against the items: a missing item,
-// a count on a piece that does not stack or more than a stack refuses to start (make
-// validate checks the same and more, packages/content-schema checkStartKits).
+// a count on a piece that does not stack or more than a stack refuses to start, and so
+// does a kit that giveStartKit could not hand over whole: more carried piles than the
+// starting backpack and the pockets hold, or more weight than the vocation carries at
+// level 1 (make validate checks the same and more, packages/content-schema
+// checkStartKits; the server may run on data nobody validated).
 func (w *World) initStartKits() error {
 	w.startKits = map[string][]kitPiece{}
+	room := max(w.cfg.Balance.Inventory.PocketSlots, 0)
+	weight := 0
+	if w.startContainer != nil {
+		room += w.startContainer.Slots()
+		weight = w.startContainer.Weight
+	}
 	for _, id := range sortedKeys(w.cfg.Vocations) {
-		for i, k := range w.cfg.Vocations[id].StartKit {
+		voc := w.cfg.Vocations[id]
+		worn := map[pb.EquipmentSlot]bool{}
+		carried := map[string]bool{} // piles in the backpack and the pockets
+		grams := weight
+		for i, k := range voc.StartKit {
 			def := w.cfg.Items[k.Item]
 			if def == nil {
 				return fmt.Errorf("session: vocation %q start_kit #%d: unknown item %q", id, i, k.Item)
@@ -37,6 +57,25 @@ func (w *World) initStartKits() error {
 				return fmt.Errorf("session: vocation %q start_kit #%d: %d %s do not fit one stack", id, i, n, k.Item)
 			}
 			w.startKits[id] = append(w.startKits[id], kitPiece{def: def, count: k.Units()})
+			grams += def.Weight * k.Units()
+			// The first piece of a slot is worn (the pieces a character may not wear are
+			// make validate's errors); units of one stackable share a pile.
+			switch slot := slotFor(def); {
+			case slot != pb.EquipmentSlot_EQUIPMENT_SLOT_UNSPECIFIED && !worn[slot]:
+				worn[slot] = true
+			case def.Stackable:
+				carried[k.Item] = true
+			default:
+				carried[fmt.Sprintf("%s#%d", k.Item, i)] = true
+			}
+		}
+		if len(carried) > room {
+			return fmt.Errorf("session: vocation %q start_kit: %d carried piles do not fit the starting backpack and the pockets (%d cells)",
+				id, len(carried), room)
+		}
+		if limit := voc.Start.Capacity; len(voc.StartKit) > 0 && limit > 0 && grams > limit {
+			return fmt.Errorf("session: vocation %q start_kit: it weighs %d g with the backpack, more than the %d g a level 1 carries",
+				id, grams, limit)
 		}
 	}
 	return nil

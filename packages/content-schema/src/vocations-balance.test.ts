@@ -327,7 +327,8 @@ describe("spell roles", () => {
 });
 
 // The tutorial's open_backpack step (i18n tutorial.step.open_backpack) is written by hand
-// and says what every new character has: its vocation's weapon in its hand, plain clothes
+// and says what a newcomer has (not "you": a character made before the kits, still in
+// the tutorial, has none of it): its vocation's weapon in its hand, plain clothes
 // on, and biscuits and a poultice in the backpack. The kits are data: if one stops being
 // that, this fails and the text (es and en) must change with it.
 describe("start kits keep the tutorial's word", () => {
@@ -354,6 +355,11 @@ describe("start kits keep the tutorial's word", () => {
   it("the text still names the weapon, the clothes, the biscuits and the poultice", () => {
     expect(text("es")).toMatch(/arma.*mano.*ropa.*galletas.*cataplasma/s);
     expect(text("en")).toMatch(/weapon.*hand.*clothes.*biscuits.*poultice/s);
+    // It speaks of whoever just arrived, never promises it to the reader.
+    expect(text("es")).toMatch(/^Quien acaba de llegar/);
+    expect(text("es")).not.toMatch(/tu arma|tu mano/i);
+    expect(text("en")).toMatch(/^A newcomer/);
+    expect(text("en")).not.toMatch(/your vocation|your hand/i);
   });
 
   for (const v of kits) {
