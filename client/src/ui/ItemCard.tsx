@@ -4,7 +4,7 @@
 // centred, no icon, the description last). The data is state/item-card.ts (pure); this only
 // draws it. No hooks: ItemCard.test.ts walks its tree without a DOM.
 import type { JSX } from "preact";
-import { refinedName } from "../state/forge.ts";
+import { instanceName } from "../state/item-name.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { CardEffect, CardRequirement, CardStat, ItemCardView } from "../state/item-card.ts";
 
@@ -65,12 +65,13 @@ export function BigIcon(props: {
 
 /** The item's name with its count ("arrow ×37"). */
 export function cardTitle(t: Translate, card: ItemCardView): string {
-  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
-  const name = refinedName(
-    t,
-    card.id ? t(`item.${card.id}.name`) : String(card.itemId),
-    card.refine?.level,
-  );
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword";
+  // the remains of a death after whose they are (state/item-name.ts).
+  const name = instanceName(t, card.id ? { id: card.id } : undefined, card.itemId, {
+    refine: card.refine?.level,
+    remainsOf: card.remainsOf,
+    bodyOf: card.bodyOf,
+  });
   return card.count > 1 ? t("client.card.count", { name, count: card.count }) : name;
 }
 

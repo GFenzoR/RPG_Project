@@ -17,6 +17,10 @@ export interface ItemMods {
   attribute: string;
   value: number;
   refine: number;
+  /** Remains a monster left: its data/monsters id (named and drawn after it, docs/05). */
+  remainsOf?: string;
+  /** A player's body: the player's name ("body of <player>"). */
+  bodyOf?: string;
 }
 
 export interface ItemDef {

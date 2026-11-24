@@ -24,6 +24,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import { tipMods } from "../state/mods.ts";
+import { instanceName } from "../state/item-name.ts";
+import type { NameMods } from "../state/item-name.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { sameRef } from "../input/actions.ts";
@@ -279,7 +281,7 @@ export function ContainerView(props: {
     >
       {!props.framed && (
         <header>
-          <span>{itemName(content, t, c.itemId)}</span>
+          <span>{itemName(content, t, c.itemId, c.mods)}</span>
           <button
             type="button"
             aria-label={t("client.inventory.close")}
@@ -335,9 +337,14 @@ export function emptySlotStyle(
   };
 }
 
-export function itemName(content: ClientContent, t: Translate, itemId: number): string {
-  const def = content.items[itemId];
-  return def ? t(`item.${def.id}.name`) : String(itemId);
+/** An item's name, with the instance's mods when it has them (state/item-name.ts). */
+export function itemName(
+  content: ClientContent,
+  t: Translate,
+  itemId: number,
+  mods?: NameMods | undefined,
+): string {
+  return instanceName(t, content.items[itemId], itemId, mods);
 }
 
 function ItemCell(props: {

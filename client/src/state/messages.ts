@@ -4,7 +4,7 @@ import { CreatureKind, MessageKind } from "@rpg/protocol";
 import type { TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
-import { refinedName } from "./forge.ts";
+import { instanceName } from "./item-name.ts";
 import { formatOz } from "./items.ts";
 import type { ChatLine, CreatureState, LogMessage } from "./world.ts";
 
@@ -19,12 +19,9 @@ export function creatureName(c: CreatureState, t: Translate): string {
 function itemText(p: TextParam, content: ClientContent, t: Translate): string {
   if (p.value.case !== "item") return "";
   const def = content.items[p.value.value.itemId];
-  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
-  const name = refinedName(
-    t,
-    def ? t(`item.${def.id}.name`) : String(p.value.value.itemId),
-    p.value.value.mods?.refine,
-  );
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword";
+  // the remains of a death after whose they are: "restos de lobo".
+  const name = instanceName(t, def, p.value.value.itemId, p.value.value.mods);
   const count = p.value.value.count;
   return count > 1 ? t("client.log.item_count", { count, name }) : name;
 }

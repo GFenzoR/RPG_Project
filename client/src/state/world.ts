@@ -49,6 +49,7 @@ import { EquippedBackpack } from "./backpack.ts";
 import { TrailWearState } from "./trail-wear.ts";
 import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
+import { mapItemKey } from "./corpse-art.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { stepMs } from "./step-time.ts";
 import {
@@ -455,6 +456,8 @@ export interface ContainerState {
   capacity: number;
   items: ItemView[];
   hasParent: boolean;
+  /** The container's own mods: whose remains or body it is (its window's title). */
+  mods?: ItemMods | undefined;
 }
 
 const itemView = (s: ItemStack): ItemView => {
@@ -735,7 +738,10 @@ export class WorldState implements TileSource {
       const first = t[0] ?? 0;
       const hasGround = this.item(first)?.ground === true;
       if (hasGround) ground[i] = String(first);
-      const stack = (hasGround ? t.slice(1) : t).map(String);
+      // The remains of a monster draw as its own corpse (state/corpse-art.ts).
+      const mods = c.mods[i];
+      const from = hasGround ? 1 : 0;
+      const stack = t.slice(from).map((id, j) => mapItemKey(id, mods?.[from + j]));
       if (stack.length > 0)
         items.push({ x: i % CHUNK_TILES, y: Math.floor(i / CHUNK_TILES), stack });
     });
@@ -1215,6 +1221,8 @@ export class WorldState implements TileSource {
           items: v.items.map(itemView),
           hasParent: v.hasParent,
         };
+        const mods = modsOf(v);
+        if (mods) c.mods = mods;
         this.containers = [...this.containers.filter((o) => o.id !== c.id), c];
         this.backpack.opened(c, now);
         break;

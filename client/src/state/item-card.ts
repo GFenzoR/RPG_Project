@@ -81,6 +81,9 @@ export interface ItemCardView {
    * know the forge's rules). Absent on a plain item.
    */
   refine?: { level: number; kind: RefineKind; gain: number } | undefined;
+  /** The remains of a death: whose they are (the title names them after it). */
+  remainsOf?: string | undefined;
+  bodyOf?: string | undefined;
 }
 
 /**
@@ -131,6 +134,8 @@ export function itemCard(
     effects: [],
     marks: [],
   };
+  if (mods?.remainsOf) card.remainsOf = mods.remainsOf;
+  if (mods?.bodyOf) card.bodyOf = mods.bodyOf;
   if (!def) return card;
   const kind = def.kind ?? "";
   card.type = typeLine(def, kind);

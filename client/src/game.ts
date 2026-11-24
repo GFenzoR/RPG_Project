@@ -45,6 +45,7 @@ import { HeldDirection } from "./input/dpad.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
+import { instanceName } from "./state/item-name.ts";
 import type { ClientContent, ItemMods } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import {
@@ -1574,7 +1575,7 @@ export class Game {
     const title = other
       ? creatureName(other, this.opts.t)
       : top
-        ? this.itemTitle(top.itemId)
+        ? this.itemTitle(top.itemId, top.mods)
         : c
           ? creatureName(c, this.opts.t)
           : "";
@@ -1591,7 +1592,7 @@ export class Game {
   /** The menu of a DOM item: its default action first, look, move, maybe move part. */
   private openItemMenu(ref: ItemRef, x: number, y: number, mouse = false): void {
     const actions = itemActions(this.itemFacts(ref));
-    const title = this.itemTitle(ref.itemId);
+    const title = this.itemTitle(ref.itemId, ref.mods);
     this.openMenu({ x, y, title, actions, card: this.card(ref), mouse, stack: ref.count }, { ref });
   }
 
@@ -1700,9 +1701,10 @@ export class Game {
     if (slot !== undefined) this.moveItem(ref, { kind: "slot", slot });
   }
 
-  private itemTitle(itemId: number): string {
+  /** An item's name as menus and hints say it (state/item-name.ts): "restos de lobo". */
+  private itemTitle(itemId: number, mods?: ItemMods): string {
     const def = this.opts.content.items[itemId];
-    return def ? this.opts.t(`item.${def.id}.name`) : "";
+    return def ? instanceName(this.opts.t, def, itemId, mods) : "";
   }
 
   private openMenu(view: ActionMenuView, target: MenuTarget): void {
@@ -2349,7 +2351,11 @@ export class Game {
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
     });
     if (kind === undefined) return "";
-    const name = other ? creatureName(other, this.opts.t) : item ? this.itemTitle(item.itemId) : "";
+    const name = other
+      ? creatureName(other, this.opts.t)
+      : item
+        ? this.itemTitle(item.itemId, item.mods)
+        : "";
     const t = this.opts.t;
     return name && kind !== "climb"
       ? t(`client.action.${kind}`, { name })

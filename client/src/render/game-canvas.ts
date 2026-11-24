@@ -128,6 +128,7 @@ import { BubbleLayer } from "./bubble-layer.ts";
 import type { BubbleAnchor } from "./bubble-layer.ts";
 import { admitSpeech } from "./bubbles.ts";
 import type { BubbleStyle } from "./bubbles.ts";
+import { corpseArt, corpseSprite, parseMapItemKey } from "../state/corpse-art.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -492,24 +493,32 @@ export async function createGameCanvas(
   canvas.style.imageRendering = "pixelated";
   host.appendChild(canvas);
 
+  // A tile item's key is its number, or "<number>@<monster>" for the remains of a monster,
+  // drawn as that monster's own corpse when the atlas has it (state/corpse-art.ts).
+  const corpseOf = (id: string): Texture | undefined => {
+    const { remainsOf } = parseMapItemKey(id);
+    return remainsOf ? atlas.texture(corpseSprite(remainsOf)) : undefined;
+  };
   const textures = new Map<string, Texture>();
   const texture = (id: string): Texture => {
     let tex = textures.get(id);
     if (!tex) {
-      const sprite = content.items[Number(id)]?.sprite;
-      tex = (sprite && atlas.texture(sprite)) || MISSING_TEXTURE;
+      const sprite = content.items[parseMapItemKey(id).itemId]?.sprite;
+      tex = corpseOf(id) ?? ((sprite && atlas.texture(sprite)) || MISSING_TEXTURE);
       textures.set(id, tex);
     }
     return tex;
   };
   // Tile art (docs/17 ART-3, ART-4, ART-7): ground looks, wall pieces, animated tiles, anchors
-  // and cast shadows, resolved once per item.
+  // and cast shadows, resolved once per item. A corpse is centred on its tile, as the
+  // creature stood (its sprite is the creature's frame, wider than a tile for most).
   const arts = new Map<string, TileArt<Texture> | null>();
   const art = (id: string): TileArt<Texture> | undefined => {
     let a = arts.get(id);
     if (a === undefined) {
-      const sprite = content.items[Number(id)]?.sprite;
-      a = (sprite && atlas.tileArt(sprite)) || null;
+      const corpse = corpseOf(id);
+      const sprite = content.items[parseMapItemKey(id).itemId]?.sprite;
+      a = corpse ? corpseArt(corpse) : (sprite && atlas.tileArt(sprite)) || null;
       arts.set(id, a);
     }
     return a ?? undefined;
@@ -530,7 +539,7 @@ export async function createGameCanvas(
     texture,
     art,
     // ART-8: tables and crates raise what is stacked on them (data/items elevation).
-    elevation: (id) => content.items[Number(id)]?.elevation ?? 0,
+    elevation: (id) => content.items[parseMapItemKey(id).itemId]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
   });

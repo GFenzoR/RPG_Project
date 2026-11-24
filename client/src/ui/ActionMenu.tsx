@@ -10,6 +10,8 @@ import type { ClientContent } from "../content-types.ts";
 import type { ActionMenuView, Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { halfStack, splitCount } from "../state/items.ts";
+import { instanceName } from "../state/item-name.ts";
+import { corpseSprite } from "../state/corpse-art.ts";
 import type { ItemRef } from "../state/items.ts";
 import { cardLines } from "../state/item-card.ts";
 import { BigIcon, ItemCard } from "./ItemCard.tsx";
@@ -165,7 +167,7 @@ export function ActionMenu(props: {
   menu: ActionMenuView;
   game:
     | (Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> &
-        Partial<Pick<Game, "menuSplit" | "itemIcon">>)
+        Partial<Pick<Game, "menuSplit" | "itemIcon" | "spriteIcon">>)
     | undefined;
   /** The screen size (window.innerWidth/innerHeight; fixed values in tests). */
   viewport: { width: number; height: number };
@@ -210,7 +212,9 @@ export function ActionMenu(props: {
   // Read when the click happens, not when the menu was drawn: the press that arms it comes
   // right before its click, maybe before any new render.
   const counts = (e: MouseEvent): boolean => menuClickCounts(game?.menuPressed ?? false, e.detail);
-  const icon = card ? game?.itemIcon?.(card.itemId) : undefined;
+  // The remains of a monster show its own corpse (state/corpse-art.ts), fitted to 64 px.
+  const corpse = card?.remainsOf ? game?.spriteIcon?.(corpseSprite(card.remainsOf)) : undefined;
+  const icon = corpse ?? (card ? game?.itemIcon?.(card.itemId) : undefined);
   const stack = menu.stack ?? 1;
   return (
     <div class="touch-menu-layer" data-testid="action-menu-layer">
@@ -239,7 +243,9 @@ export function ActionMenu(props: {
       >
         {menu.title && (
           <div class="touch-menu-title">
-            {icon && <BigIcon icon={icon} class="touch-menu-icon" />}
+            {icon && (
+              <BigIcon icon={icon} class="touch-menu-icon" {...(corpse ? { fit: 64 } : {})} />
+            )}
             <span class={card?.quest ? "touch-menu-name quest" : "touch-menu-name"}>
               {menu.title}
             </span>
@@ -321,7 +327,7 @@ export function PickBanner(props: {
 }): JSX.Element {
   const { t, picked } = props;
   const def = props.content.items[picked.itemId];
-  const name = def ? t(`item.${def.id}.name`) : String(picked.itemId);
+  const name = instanceName(t, def, picked.itemId, picked.mods);
   return (
     <div class="pick-banner" role="status" data-testid="pick-banner">
       <span class="pick-banner-text">

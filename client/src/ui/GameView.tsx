@@ -881,7 +881,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       const c = ui.containers.find((o) => o.id === cid);
       return c
         ? {
-            title: itemName(props.content, t, c.itemId),
+            title: itemName(props.content, t, c.itemId, c.mods),
             icon: "inventory",
             // In .inventory: the slots and items look as under the equipment.
             body: (
