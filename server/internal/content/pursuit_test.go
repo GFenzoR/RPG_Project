@@ -47,7 +47,7 @@ func TestMonsterPursuitErrors(t *testing.T) {
 		"negative memory":             {MonsterPursuit: Pursuit{MemoryMs: -1}},
 		"negative stray":              {MonsterStrayMs: -1},
 	} {
-		if c.MonsterPursuit.check() == nil && c.MonsterRegen.check() == nil && c.MonsterStrayMs >= 0 {
+		if c.MonsterPursuit.Check() == nil && c.MonsterRegen.Check() == nil && c.MonsterStrayMs >= 0 {
 			t.Errorf("%s: accepted", name)
 		}
 	}

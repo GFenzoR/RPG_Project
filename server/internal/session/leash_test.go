@@ -316,8 +316,10 @@ func TestLeashCountsOnlyTheAttacksInUse(t *testing.T) {
 		h.input(cl, setTarget(wolf.ID()))
 		n := h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
 		t.Logf("the wolf gave the ranger up after %d ticks", n)
-		if hp, maxHP := wolf.Health(); hp >= maxHP {
-			t.Errorf("the wolf gave up at %d/%d health, want its wounds kept", hp, maxHP)
+		// Every arrow came from out of its reach and it never answered one: they close.
+		if hp, maxHP := wolf.Health(); hp != maxHP || h.w.CountItem(p, "test_arrow") == 60 {
+			t.Errorf("the wolf gave up at %d/%d health after %d arrows, want some shots and those wounds closed",
+				hp, maxHP, 60-h.w.CountItem(p, "test_arrow"))
 		}
 		if hp, maxHP := p.Health(); hp != maxHP {
 			t.Errorf("the ranger has %d/%d health: the wolf cast its low-health spell at full health", hp, maxHP)
@@ -403,7 +405,7 @@ func TestLeashAreaThatMissesHoldsNoTarget(t *testing.T) {
 // water from a wolf, inside the wolf's leash area but where the wolf could only get by
 // leaving it, shoots the wolf, which stands at the water. Its chase checks the way once a
 // second (pathRetry), not every tick; after stuckFor without one it gives the ranger up
-// (keeping its wounds, damage forgotten) and walks home. Then, for shunFor and on that tile, the
+// (the wounds it never answered close: full health, damage forgotten) and walks home. Then, for shunFor and on that tile, the
 // ranger is beyond its leash: the wolf does not pick it again, each arrow makes it turn
 // and give up again (it cannot be killed from there) and trains as against a target that
 // does not fight back (skills.afk.factor, 0.25 in testBalance: 4 shots, 1 try).
@@ -420,8 +422,8 @@ func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
 		}
 		return wolf.TargetID() == 0
 	}, sim.MaxSeconds(8))
-	if hp, maxHP := wolf.Health(); hp >= maxHP || wolf.DamageShareForTest(p.ID()) != 0 || h.w.CountItem(p, "test_arrow") == 60 {
-		t.Fatalf("the wolf gave up at %d/%d health, remembering %d damage (%d arrows left): want wounded and 0 after some shots",
+	if hp, maxHP := wolf.Health(); hp != maxHP || wolf.DamageShareForTest(p.ID()) != 0 || h.w.CountItem(p, "test_arrow") == 60 {
+		t.Fatalf("the wolf gave up at %d/%d health, remembering %d damage (%d arrows left): want full and 0 after some shots",
 			hp, maxHP, wolf.DamageShareForTest(p.ID()), h.w.CountItem(p, "test_arrow"))
 	}
 	gaveUpAt, _ := wolf.Health()

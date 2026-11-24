@@ -287,8 +287,10 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 	m.health -= dmg
 	m.calmAt = ctx.Tick
 	if dmg > 0 && c.source != 0 {
-		w.addShare(ctx.Tick, m, c.source, dmg, false)
-		w.contribute(ctx, w.playerByID(c.source))
+		// Like a hit (damageMonster): unanswered while m's attacks do not reach its author.
+		src := w.playerByID(c.source)
+		w.addShare(ctx.Tick, m, c.source, dmg, src == nil || !w.strikes(m, src.pos))
+		w.contribute(ctx, src)
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), el)
 	if m.health <= 0 {

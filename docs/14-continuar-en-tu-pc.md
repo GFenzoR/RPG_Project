@@ -364,7 +364,19 @@ el punto 5:
     gesto (un aullido, un "!"), es un evento nuevo del protocolo.
   - **Un objetivo fuera de vista** se persigue hacia donde está de verdad durante
     `lose_sight_ms` (como si lo rastreara), no hacia donde se lo vio por última vez; la
-    vista es la ventana clásica, sin línea de visión (como antes).
+    vista es la ventana clásica, sin línea de visión (como antes). **A confirmar por el
+    dueño** (la revisión lo marcó).
+  - **Decisiones de la revisión, a confirmar por el dueño** (docs/02 "Botín, experiencia y
+    abusos de la persecución"): (1) el daño hecho desde fuera del alcance del monstruo que
+    este nunca respondió se cura cuando se rinde (cierra matar sin riesgo desde el otro
+    lado del agua o disparando y saliendo de la correa, también al custodio); el costo es
+    que un arquero o mago que lo hiere sin que nunca lo alcance y se va lo encuentra
+    curado. (2) Al rendirse conserva el reparto de daño `memory_ms` (3 min): quien lo
+    remata comparte experiencia, botín y drop de quest con quien lo hirió. (3) Queda sin
+    tratar la orilla de una zona de protección: quien dispara y entra a la zona se pierde
+    sin rendición, así que esas heridas quedan (la regeneración empieza a los 10 s). (4) No hay test de
+    `insist_target_hp_pct` dentro de una persecución real (solo la fórmula,
+    `TestPursuitChance`).
   - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
   - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
     siguiendo fuera del corral y volviendo herido.
@@ -1783,8 +1795,8 @@ el punto 5:
     `feat/monster-abilities` (lote 10) que la persecución fuera y viniera frente a un muro
     (ahora sigue el rodeo entero, `chaseWay`, `TestChaseFollowsItsWayAroundAWall`) y que
     `make bench-tick` corriera sin correa (variante `/leash` de `BenchmarkTickMonsters`)):
-    desde el 2026-11-23 rendirse ya no cura entero (docs/02 "Persecución"), el daño hecho
-    desde donde no puede responder sí se cura al rendirse;
+    desde el 2026-11-23 rendirse ya no cura entero (docs/02 "Persecución"), el daño que
+    nunca llegó a responder sí se cura al rendirse;
     nada valida que el centro de un spawn sea caminable (hoy todos lo son); la espera tras
     una búsqueda fallida (de casa o de la persecución) usa `readyAt`; y un arquero que va
     pisando casillas inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada

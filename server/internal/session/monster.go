@@ -178,8 +178,9 @@ type Monster struct {
 	// combat.monster_pursuit.memory_ms: it turns on them first (remembered).
 	foes []grudge
 	// stray: m is in World.strays (out of its home area); awaySince is the last tick it
-	// was home or had a target (trackStray).
+	// was home or had a target (trackStray). removed: it left the world (removeMonster).
 	stray     bool
+	removed   bool
 	awaySince game.Tick
 }
 
@@ -227,9 +228,30 @@ func (m *Monster) Speed() int { return m.speed }
 type damageShare struct {
 	player uint32
 	amount int
-	// unanswered is the part of amount dealt from where m could not answer (beyondLeash),
-	// which it heals when it gives up (giveUp).
+	// unanswered is the part of amount m has not answered: dealt from out of the reach of
+	// its attacks (strikes) since its last attack round on that player (answered). It
+	// closes when m gives up (giveUp): a monster that never got to fight back, across
+	// water, held by its leash or its chase cap, or shot by someone who steps out of its
+	// area as it arrives, is not whittled down.
 	unanswered int
+}
+
+// answered has m answer player id (an attack round of m on it, monsterAttacks): what id
+// dealt from out of its reach until now was part of a fight, and stays if m gives up.
+func (m *Monster) answered(id uint32) {
+	for i := range m.damage {
+		if m.damage[i].player == id {
+			m.damage[i].unanswered = 0
+			return
+		}
+	}
+}
+
+// cowed reports whether m's health is below its give_up_below_hp_pct: it does not chase
+// beyond its leash area, whatever its pack decided.
+func (m *Monster) cowed() bool {
+	pk := m.chaser()
+	return pk.giveUpPct > 0 && m.health*100 < pk.giveUpPct*m.maxHealth
 }
 
 // grudge is a player a monster remembers after giving up on it, until a tick (pursuit.go).
@@ -339,7 +361,10 @@ func (w *World) initCombat() error {
 			k.corpse = it
 		}
 		k.prepareAttacks()
-		k.pursuit = w.pursuitOf(def)
+		var err error
+		if k.pursuit, err = w.pursuitOf(def); err != nil {
+			return fmt.Errorf("session: monster %q: %w", def.ID, err)
+		}
 		for _, l := range def.Loot {
 			it := w.cfg.Items[l.Item]
 			if it == nil {
@@ -745,13 +770,28 @@ func (w *World) covers(m *Monster, ka *kindAttack, p world.Pos) bool {
 	}
 }
 
-// think runs one tick of monster m's state machine.
+// think runs one tick of monster m's state machine (act), then notes whether that left it
+// out of its home area (trackStray: after its step, so a monster whose last think took it
+// out, its target leaving the world in that tick, is a stray at once).
 func (w *World) think(ctx *game.TickContext, m *Monster) {
-	b := m.kind.def.Behavior
-	if m.target != nil && !w.keepsTrack(ctx.Tick, m, m.target) {
-		m.setTarget(nil) // lost (gone, in a protection zone, out of sight too long): it walks home
+	w.act(ctx, m)
+	if !m.removed { // not one that went back to its spawn (retire)
+		w.trackStray(ctx.Tick, m)
 	}
-	w.trackStray(ctx.Tick, m)
+}
+
+// act is what m does this tick.
+func (w *World) act(ctx *game.TickContext, m *Monster) {
+	b := m.kind.def.Behavior
+	if m.target != nil {
+		if w.keepsTrack(ctx.Tick, m, m.target) {
+			// A fight, even one in which nobody lands a hit (it flees, or never catches its
+			// target): its regeneration counts from the tick it ends, not from the last hit.
+			m.calmAt = ctx.Tick
+		} else {
+			m.setTarget(nil) // lost (gone, in a protection zone, out of sight too long): it walks home
+		}
+	}
 	if len(m.shunned) > 0 {
 		m.shunned = slices.DeleteFunc(m.shunned, func(s shun) bool { return ctx.Tick >= s.until })
 	}
@@ -994,22 +1034,31 @@ func (w *World) retarget(ctx *game.TickContext, m *Monster, old *Player, inReach
 }
 
 // giveUp makes m drop its target: it keeps its wounds (it heals slowly out of combat,
-// regen), but for those dealt from where it could not answer (beyondLeash), which close at
-// once (telling who sees it): nobody whittles a monster down from beyond its leash. Its
-// conditions end (a burn would otherwise go on hurting it for whoever cast it, and could
-// kill it from outside the leash), what it summoned goes, and it goes idle. It forgets the
-// damage each one dealt (nobody earns experience for that fight: the next one starts
-// afresh), but remembers who hurt it for combat.monster_pursuit.memory_ms (foes: it turns
-// on them first when they come back). It still keeps away from whom it shunned.
+// regen), but for those it never got to answer (damageShare.unanswered), which close at
+// once (telling who sees it) and leave their author's share: nobody whittles a monster
+// down from where it cannot fight back. Its conditions end (a burn would otherwise go on
+// hurting it for whoever cast it, and could kill it from outside the leash), what it
+// summoned goes, and it goes idle. It remembers who hurt it, and the damage each one dealt
+// in a fight it answered, for combat.monster_pursuit.memory_ms after their last hit (foes:
+// it turns on them first when they come back, and whoever finishes it shares the
+// experience and the loot with them; forget); without a memory it forgets both at once.
+// It still keeps away from whom it shunned.
 func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 	m.setTarget(nil)
 	m.state = StateIdle
 	healed := 0
-	for _, s := range m.damage {
+	for i := range m.damage {
+		s := &m.damage[i]
 		healed += s.unanswered
+		s.amount -= s.unanswered
+		s.unanswered = 0
 		w.remember(ctx.Tick, m, s.player)
 	}
-	m.damage = m.damage[:0]
+	if w.memoryFor == 0 {
+		m.damage = m.damage[:0]
+	} else {
+		m.damage = slices.DeleteFunc(m.damage, func(s damageShare) bool { return s.amount <= 0 })
+	}
 	w.clearConditions(ctx, holder{m: m}, false)
 	w.despawnSummons(ctx, m) // the fight is over: what it called goes with it
 	if healed > 0 && m.health < m.maxHealth {
@@ -1036,7 +1085,7 @@ func (w *World) healthChanged(m *Monster) {
 // back: out of its attacks' reach (strikes: a beam or a circle that misses p's tile does
 // not hold it), and out of the area it may fight in now (bound: its leash area, or its
 // chase cap while it pursues, pursuit.go) or on a tile where m shunned it (no way within
-// that area led there, chase). Hits from there heal when m gives up (giveUp). Hits from there train like hits on
+// that area led there, chase). Hits from there train like hits on
 // a target that does not fight back (skills.afk.factor): a monster held by its leash is
 // no training dummy. On another tile a shunned player is a target like any other: an
 // unreachable one costs stuckFor again.
@@ -1285,7 +1334,7 @@ func (w *World) removeMonster(m *Monster, why pb.DisappearReason) {
 	})
 	w.munindex(m)
 	delete(w.monByID, m.id)
-	m.stray = false // World.strays lets it go
+	m.stray, m.removed = false, true // World.strays lets it go
 	if b := m.master; b != nil {
 		b.summons = slices.DeleteFunc(b.summons, func(s *Monster) bool { return s == m })
 	}

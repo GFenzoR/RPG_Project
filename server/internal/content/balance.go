@@ -666,12 +666,14 @@ type Pursuit struct {
 	// InsistTargetHpPct: a target with less health than this halves the chance of
 	// giving up.
 	InsistTargetHpPct int `yaml:"insist_target_hp_pct"`
-	// MemoryMs is how long it remembers who hurt it after their last hit (balance only):
-	// it re-aggroes them first and their damage still counts. 0: forgotten on giving up.
+	// MemoryMs is how long it remembers who hurt it after their last hit, once it gave their
+	// fight up (balance only): it re-aggroes them first and their damage still counts for
+	// the experience and the loot. 0: forgotten on giving up.
 	MemoryMs int `yaml:"memory_ms"`
 }
 
-func (p Pursuit) check() error {
+// Check validates p: the balance's numbers, or a monster's resolved against them.
+func (p Pursuit) Check() error {
 	if p.Persistence < 0 || p.Persistence > 1 || p.MaxChaseTiles < 0 || p.MaxChaseTiles > MaxChaseTiles ||
 		p.LoseSightMs < 0 || p.RollMs < 0 || p.MemoryMs < 0 ||
 		p.GiveUpBelowHpPct < 0 || p.GiveUpBelowHpPct > 100 || p.InsistTargetHpPct < 0 || p.InsistTargetHpPct > 100 {
@@ -691,7 +693,8 @@ type MonsterRegenRate struct {
 	Pct        float64 `yaml:"pct"`
 }
 
-func (r MonsterRegenRate) check() error {
+// Check validates r: the balance's numbers, or a monster's resolved against them.
+func (r MonsterRegenRate) Check() error {
 	if r.DelayMs < 0 || r.IntervalMs < 0 || r.Pct < 0 || r.Pct > 100 || r.Pct > 0 && r.IntervalMs <= 0 {
 		return errors.New("delay_ms >= 0, pct in 0..100 and, with a pct, interval_ms > 0")
 	}
@@ -958,10 +961,10 @@ func (c Combat) check() error {
 	if c.MonsterPathRetryMs <= 0 || c.MonsterStuckMs <= 0 || c.MonsterShunMs <= 0 {
 		return errors.New("combat: monster_path_retry_ms, monster_stuck_ms and monster_shun_ms must be > 0")
 	}
-	if err := c.MonsterPursuit.check(); err != nil {
+	if err := c.MonsterPursuit.Check(); err != nil {
 		return fmt.Errorf("combat.monster_pursuit: %w", err)
 	}
-	if err := c.MonsterRegen.check(); err != nil {
+	if err := c.MonsterRegen.Check(); err != nil {
 		return fmt.Errorf("combat.monster_regen: %w", err)
 	}
 	if c.MonsterStrayMs < 0 {

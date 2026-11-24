@@ -243,8 +243,8 @@ func TestPursuitFloorChange(t *testing.T) {
 	}
 }
 
-// Giving up keeps the monster's wounds (no full heal) and it walks home at its speed; its
-// slow regeneration starts only after the delay without a fight.
+// Giving up keeps the monster's wounds (no full heal) and it walks home at its speed
+// (when its slow regeneration starts: TestPursuitRegenStartsWhenTheFightEnds).
 func TestPursuitGiveUpKeepsHealth(t *testing.T) {
 	regen := content.MonsterRegenRate{DelayMs: 10000, IntervalMs: 5000, Pct: 1}
 	h := pursuitHarness(t, nil, harmlessWolf(false), content.Pursuit{RollMs: 1000}, regen)

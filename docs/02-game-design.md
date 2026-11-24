@@ -1631,11 +1631,11 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     salga del área no le quita la pelea, la experiencia ni el botín de quest al resto del
     grupo, ni sirve para sabotearlo (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si
     no queda nadie lo suelta (**se rinde**): **conserva su vida** (pedido del dueño del
-    2026-11-23: antes se curaba entero; solo se cierra en el acto el daño que recibió
-    desde donde no podía responder, abajo), se le terminan las condiciones (una quemadura
-    no sigue sumando daño), olvida el daño de esa pelea para la experiencia (nadie cobra
-    experiencia por ella: la próxima empieza de cero) pero **recuerda a quiénes lo
-    hirieron** (`memory_ms`, abajo) y vuelve caminando a casa a su velocidad. Un objetivo fuera del área pero
+    2026-11-23: antes se curaba entero; solo se cierra en el acto el daño que nunca llegó
+    a responder, abajo), se le terminan las condiciones (una quemadura no sigue sumando
+    daño), **recuerda a quiénes lo hirieron y el daño de cada uno** durante `memory_ms`
+    (abajo; sin memoria lo olvida en el acto) y vuelve caminando a casa a su velocidad. Un
+    objetivo fuera del área pero
     a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
     peleando desde adentro.
   - Tampoco hay lugares seguros dentro del área. Mientras su objetivo está fuera de su
@@ -1669,9 +1669,15 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     nunca se teletransporta.
   - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
     suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y cierra esas
-    heridas: el daño que un jugador le hace desde donde el monstruo no puede responder,
-    fuera de lo que su correa o su persecución le dejan pisar y de su alcance, o desde una
-    casilla rechazada, se le cura al rendirse, `damageShare.unanswered`); una
+    heridas). La regla es una sola (**daño sin responder**, `damageShare.unanswered`): el
+    daño que un jugador le hace desde fuera del alcance de sus ataques queda "sin
+    responder" hasta que el monstruo le tira una ronda de ataque a ese jugador (acierte o
+    no); si se rinde antes, ese daño se cura en el acto y sale de la parte de ese jugador.
+    Vale igual desde fuera de la correa o del tope, desde el otro lado del agua (aunque
+    cambie de casilla cada vez que el monstruo rechaza una, `TestPursuitUnreachableHopsDoNotWearItDown`)
+    o disparando desde adentro y saliendo cuando el monstruo llega
+    (`TestPursuitHitAndStepOutClosesTheWounds`); lo que regenera mientras tanto se descuenta
+    primero de ese daño (`TestPursuitRegenAndGiveUpDoNotHealTwice`). Una
     condición (quemadura, veneno) cuyo autor está
     fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
     esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
@@ -1700,7 +1706,10 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     `flee_at_health_pct`); con la vida de su objetivo bajo `insist_target_hp_pct` la
     probabilidad sube a mitad de camino hacia 1 (los agresivos insisten con la presa
     herida). Una tirada vale para **todo su spawn** (la manada) contra ese objetivo hasta
-    la próxima: los lobos de un cubil siguen o se vuelven juntos. Un invocado sigue la
+    la próxima: los lobos de un cubil siguen o se vuelven juntos
+    (`TestPursuitPackSharesOneRoll`). El cobarde es la excepción: uno bajo su
+    `give_up_below_hp_pct` se vuelve solo, sin tirar, y su rendición no es la decisión de
+    la manada (`TestPursuitCowardLeavesItsPack`). Un invocado sigue la
     persecución de quien lo llamó (los del custodio se quedan en su forja con él). Una
     persistencia de 0 o 1 no gasta tirada.
   - **Tope duro** `max_chase_tiles` (Chebyshev desde el centro del spawn, nunca menos que
@@ -1713,10 +1722,13 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     monstruos no usan portales, `TestPursuitFloorChange`). Un invisible se pierde en el
     acto, como siempre. Nunca entra a una zona de protección.
   - Al rendirse vuelve a casa caminando a su velocidad y **con la vida que tiene**
-    (`TestPursuitGiveUpKeepsHealth`). Recuerda a quiénes lo hirieron
-    `combat.monster_pursuit.memory_ms` (3 min): si vuelven a su zona de confort, en su
-    siguiente mirada (cada 250 ms) los elige **antes que a nadie**, aun siendo pasivo
-    (`TestPursuitReaggroesARememberedAttacker`); pasada la memoria, los olvida.
+    (`TestPursuitGiveUpKeepsHealth`; menos el daño sin responder, arriba). Recuerda a
+    quiénes lo hirieron, y el daño de cada uno, `combat.monster_pursuit.memory_ms` (3 min)
+    desde su último golpe: si vuelven a su zona de confort, en su siguiente mirada (cada
+    250 ms) los elige **antes que a nadie**, aun siendo pasivo
+    (`TestPursuitReaggroesARememberedAttacker`), y quien lo termine reparte la experiencia,
+    el botín y el drop de quest con ellos; pasada la memoria (o regenerado a vida llena)
+    los olvida a ellos y a su daño (`TestPursuitGiveUpKeepsTheDamageShares`).
   - **Por tipo** (`data/monsters`): el lobo es persistente (0,85, tope 22, 6 s sin verte,
     insiste bajo 40 %), el sabueso de ceniza (0,8, tope 20) y el murciélago (0,7, tope
     18) también; el jabalí 0,6 e insiste bajo 35 %; los humanos 0,6 y se rinden bajo
@@ -1725,8 +1737,10 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     ahogado: 0,15, tope 12, 2 s sin verte) abandonan enseguida; el resto usa el valor por
     defecto (0,5, tope 16); el custodio (jefe) no sale nunca de su forja (0, tope 0).
 - **Regeneración fuera de combate** (`balance.yaml combat.monster_regen`, por monstruo
-  `regen`): sin objetivo y `delay_ms` (10 s) después de la última vez que hizo o recibió
-  daño (una ronda de ataque cuenta aunque falle), recupera `pct` % (1 %) de su vida
+  `regen`): sin objetivo y `delay_ms` (10 s) después de su última pelea (el último tick en
+  que tuvo objetivo, o hizo o recibió daño: una pelea larga sin golpes, huyendo o sin
+  alcanzar a su objetivo, no le deja regeneración acumulada para cobrar al terminar,
+  `TestPursuitRegenStartsWhenTheFightEnds`), recupera `pct` % (1 %) de su vida
   máxima, al menos 1, cada `interval_ms` (5 s): una curación completa tarda unos 8
   minutos, así que quien se va a curar y vuelve lo encuentra todavía herido. Se cuenta por
   ticks: el tiempo que pasó sin pensar (nadie cerca) también suma, y lo recupera de golpe
@@ -1738,28 +1752,40 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   para su spawn (no reaparece otro). Para que vuelva siempre, uno fuera de casa piensa
   aunque su sector no tenga jugadores cerca (`World.strays`): el que perseguía a alguien
   que salió del juego o se alejó vuelve caminando (`TestPursuitIdleWalkHome`). Si sin
-  objetivo pasa `combat.monster_stray_ms` (5 min) sin llegar (no hay camino) y nadie lo
-  ve, vuelve a su spawn: desaparece (`DESPAWN`) y su spawn lo repone como un respawn, sin
-  experiencia ni botín (`TestPursuitStuckStrayRespawns`). Nunca se teletransporta a la
-  vista de nadie.
+  objetivo pasa `combat.monster_stray_ms` (5 min) sin llegar (no hay camino) y ningún
+  jugador lo tiene en pantalla (la ventana ancha de 31x21, no la clásica:
+  `TestPursuitStrayStaysWhileOnScreen`), vuelve a su spawn: desaparece (`DESPAWN`) y su
+  spawn lo repone como un respawn, sin experiencia ni botín
+  (`TestPursuitStuckStrayRespawns`). El tiempo que pasó fuera persiguiendo a alguien no
+  cuenta (`TestPursuitStrayFromItsFirstStepOut`). Nunca se teletransporta a la vista de
+  nadie.
 - **Botín, experiencia y abusos de la persecución:**
-  - La experiencia y el botín siguen las reglas de siempre: se reparten por el daño de la
-    pelea en curso (y el aporte de grupo con su ventana `party.contribution_ms`); rendirse
-    borra ese daño, así que nadie cobra por una pelea que el monstruo abandonó, aunque lo
-    recuerde para volver a atacarlo. Volver a terminarlo herido sí paga: la vida que
-    perdió no vuelve de golpe.
+  - La experiencia y el botín siguen las reglas de siempre: se reparten por el daño que
+    cada uno le hizo (y el aporte de grupo con su ventana `party.contribution_ms`).
+    Rendirse **conserva ese reparto** mientras dure `memory_ms` desde el último golpe de
+    cada uno (menos el daño sin responder, que se cura y no cuenta): así nadie le roba la
+    muerte a quien lo dejó herido y salió un paso de su zona, rematándolo cuando se rinde.
+    Pasada la memoria, o cuando regenera a vida llena, ese daño se olvida.
   - **Arrastrar monstruos a otros spawns o a pueblos:** el tope duro (16 por defecto, 22
     el lobo, desde el centro de su spawn) y la probabilidad que baja con la distancia lo
     limitan; los pueblos son zona de protección, nunca entra en ellas, y un objetivo que
     entra en una lo pierde en el acto. Un monstruo arrastrado no elige objetivos nuevos
     fuera de su zona de confort (solo a los que lo hirieron, y a ellos solo dentro de
     ella), así que no se suma a la pelea de otro spawn.
-  - **Granjear experiencia arrastrándolo a un lugar seguro:** desde donde no puede
-    responder (fuera de lo que puede pisar y de su alcance, o desde una casilla que
-    rechazó por inalcanzable) los golpes no cuentan: al rendirse se cura ese daño, las
-    condiciones de ese autor terminan sin dañar y entrenan como contra un objetivo que no
-    responde (`skills.afk.factor`). Como no hay curación completa, el único daño que queda
-    es el de una pelea en la que pudo responder (`TestLeashGivesUpATargetItCannotReach`).
+  - **Granjear experiencia arrastrándolo a un lugar seguro, o matarlo sin riesgo:** el
+    daño hecho desde fuera del alcance de sus ataques que el monstruo no llegó a responder
+    (una ronda de ataque sobre ese jugador) se cura cuando se rinde: desde fuera de lo que
+    puede pisar, desde una casilla sin camino (durante la búsqueda y aunque el jugador
+    salte de casilla en casilla), o disparando desde adentro y saliendo de la correa o del
+    tope cuando llega (también el custodio, atado a su forja). Las condiciones de un autor
+    fuera de su correa y de su alcance terminan sin dañar, y los golpes desde fuera de su correa o desde
+    una casilla rechazada entrenan como contra un objetivo que no responde
+    (`skills.afk.factor`). El único daño que queda al rendirse es el de una pelea en la que
+    respondió (`TestLeashGivesUpATargetItCannotReach`,
+    `TestPursuitUnreachableHopsDoNotWearItDown`, `TestPursuitHitAndStepOutClosesTheWounds`).
+    Consecuencia aceptada: quien lo hiere solo a distancia sin que nunca lo alcance y se
+    va, lo encuentra curado de ese daño si se rindió (no si lo perdió de vista o el
+    jugador entró a una zona de protección).
   - **Estacionarlo en el borde de una zona de protección:** quien entra a la zona se
     pierde en el acto y el monstruo no espera en el borde: vuelve caminando a casa (y a
     los 10 s empieza a regenerar). Salir a pegarle desde el borde es pelear: el monstruo
@@ -2682,9 +2708,11 @@ manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests
    ("Monstruos"), si el que tiene el aggro sale de su área de correa y de su alcance, el
    custodio pasa a otro del grupo que lo pelee desde adentro sin curarse ni olvidar: el
    sello sigue siendo de todos los que lo hirieron
-   (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si no queda nadie suelta la pelea y
-   olvida quién lo hirió: el sello es para los que le hagan daño después
-   (`TestQuestDropForgottenWhenTheWardenGivesUp`).
+   (`TestQuestDropKeptWhenTheHolderStepsOut`). Si no queda nadie suelta la pelea, pero
+   recuerda el daño de quienes lo pelearon `memory_ms` (3 min; docs/02 "Persecución"): si
+   otro lo mata en ese plazo, el sello también es de ellos
+   (`TestQuestDropRememberedWhenTheWardenGivesUp`); pasada la memoria o regenerado a vida
+   llena, solo de los que le hagan daño después.
 - **Bestiario de Karvask** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de

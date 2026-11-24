@@ -213,8 +213,9 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
 	w.markFight(ctx, p)
 	if dmg > 0 {
-		// A hit from where m cannot answer (beyondLeash) is healed if m gives up (giveUp).
-		w.addShare(ctx.Tick, m, p.id, dmg, w.beyondLeash(ctx.Tick, m, p))
+		// A hit from where m's attacks do not reach p closes if m gives up before it gets
+		// to answer p (damageShare.unanswered).
+		w.addShare(ctx.Tick, m, p.id, dmg, !w.strikes(m, p.pos))
 		w.contribute(ctx, p)
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
@@ -229,10 +230,16 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	return dmg
 }
 
-// addShare adds dmg that player id dealt to m at tick now (unanswered: from where m could
-// not answer, beyondLeash) to its experience share; m was in a fight then (regen).
+// addShare adds dmg that player id dealt to m at tick now (unanswered: from out of the
+// reach of m's attacks, damageShare.unanswered) to its experience share; m was in a fight
+// then (regen) and, if it remembers id from a fight it gave up, does so memory_ms more.
 func (w *World) addShare(now game.Tick, m *Monster, id uint32, dmg int, unanswered bool) {
 	m.calmAt = now
+	for i := range m.foes {
+		if m.foes[i].player == id {
+			m.foes[i].until = now + w.memoryFor
+		}
+	}
 	u := 0
 	if unanswered {
 		u = dmg
@@ -304,6 +311,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]
 		m.calmAt = ctx.Tick // dealing damage (or trying to) keeps it from regenerating
+		m.answered(t.id)    // ...and answers what t did to it from out of its reach
 		w.fought(ctx, m, t)
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue

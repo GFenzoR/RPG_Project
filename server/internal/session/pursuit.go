@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"math"
 	"slices"
 
@@ -18,8 +19,9 @@ import (
 // its own and its target's health; one decision for its whole spawn, its pack), never
 // farther than its chase cap (max_chase_tiles from its spawn's center). It gives up for
 // sure when its target stays out of its sight lose_sight_ms, steps into a protection zone
-// or changes floor. Giving up it keeps its wounds and walks home; it remembers who hurt it
-// (memory_ms) and turns on them first when they come back into its comfort zone. Out of
+// or changes floor. Giving up it keeps its wounds (but those it never got to answer, which
+// close) and walks home; it remembers who hurt it and their damage (memory_ms) and turns on
+// them first when they come back into its comfort zone. Out of
 // combat it regenerates slowly (combat.monster_regen). An idle monster out of its home
 // area thinks even where no player is, so it walks home; one stuck away monster_stray_ms
 // goes back to its spawn when nobody sees it.
@@ -63,11 +65,20 @@ func (w *World) initPursuit() {
 	w.packs = map[*world.Spawn]packRoll{}
 }
 
-// pursuitOf resolves def's pursuit and regeneration against the balance's defaults.
-func (w *World) pursuitOf(def *content.Monster) pursuitKind {
+// pursuitOf resolves def's pursuit and regeneration against the balance's defaults, and
+// checks the result: a monster's own persistence or regeneration needs the balance's
+// roll_ms or an interval_ms (ParseMonster cannot tell: it does not know the balance), or
+// it would roll, or heal, every tick.
+func (w *World) pursuitOf(def *content.Monster) (pursuitKind, error) {
 	c := w.cfg.Balance.Combat
 	p := def.Pursuit.Resolve(c.MonsterPursuit)
 	r := def.Regen.Resolve(c.MonsterRegen)
+	if err := p.Check(); err != nil {
+		return pursuitKind{}, fmt.Errorf("pursuit (with balance combat.monster_pursuit): %w", err)
+	}
+	if err := r.Check(); err != nil {
+		return pursuitKind{}, fmt.Errorf("regen (with balance combat.monster_regen): %w", err)
+	}
 	k := pursuitKind{persistence: p.Persistence, maxChase: p.MaxChaseTiles,
 		giveUpPct: p.GiveUpBelowHpPct, insistPct: p.InsistTargetHpPct, regenPct: r.Pct}
 	if p.LoseSightMs > 0 {
@@ -80,7 +91,7 @@ func (w *World) pursuitOf(def *content.Monster) pursuitKind {
 	if r.Pct > 0 {
 		k.regenEvery = ticksFor(r.IntervalMs)
 	}
-	return k
+	return k, nil
 }
 
 // chaser is the pursuit m follows: its master's for a summon (a boss's summons stay in
@@ -129,10 +140,14 @@ func (w *World) judgePursuit(ctx *game.TickContext, m *Monster, t *Player) {
 }
 
 // keepChasing returns m's decision on chasing t, d tiles from its spawn's center, beyond
-// its leash area l: the one it rolled on t less than roll_ms ago, else the one its pack (its
+// its leash area l: never with its health below give_up_below_hp_pct (cowed: it turns back
+// alone, the rest of its pack goes on); else the one it rolled on t less than roll_ms ago, else the one its pack (its
 // spawn) took on t then, else a new roll of pursuitChance with the loop's seeded random
 // source (none for a chance of 0 or 1: a monster that never chases costs no draw).
 func (w *World) keepChasing(ctx *game.TickContext, m *Monster, t *Player, d, l int) bool {
+	if m.cowed() {
+		return false // whatever it or its pack rolled: its own decision, not its pack's
+	}
 	if m.rolledOn == t.id && ctx.Tick < m.rollAt {
 		return m.keep
 	}
@@ -164,7 +179,7 @@ func (w *World) pursuitChance(m *Monster, t *Player, d, l int) float64 {
 	pk := m.chaser()
 	c := pk.persistence
 	span := w.chaseCap(m, l) - l
-	if c <= 0 || span <= 0 || pk.giveUpPct > 0 && m.health*100 < pk.giveUpPct*m.maxHealth {
+	if c <= 0 || span <= 0 || m.cowed() {
 		return 0
 	}
 	c = math.Pow(c, 1+2*float64(d-l)/float64(span))
@@ -238,16 +253,26 @@ func (w *World) remembered(tick game.Tick, m *Monster) *Player {
 	return best
 }
 
-// forget drops the foes m remembers whose memory_ms ran out.
+// forget drops the foes m remembers whose memory_ms ran out since their last hit, and
+// with each the damage it dealt (the share giveUp kept).
 func (w *World) forget(tick game.Tick, m *Monster) {
-	if len(m.foes) > 0 {
-		m.foes = slices.DeleteFunc(m.foes, func(f grudge) bool { return tick >= f.until })
+	if len(m.foes) == 0 {
+		return
 	}
+	m.foes = slices.DeleteFunc(m.foes, func(f grudge) bool {
+		if tick < f.until {
+			return false
+		}
+		m.damage = slices.DeleteFunc(m.damage, func(s damageShare) bool { return s.player == f.player })
+		return true
+	})
 }
 
 // regen heals an idle, wounded m regen pct % of its maximum health (at least 1) for every
-// interval due since regen delay went by without it dealing or taking damage (calmAt):
-// counted from the ticks, so time it spent where nobody was (no think) counts too. Who
+// interval due since regen delay went by without a fight (calmAt: the last tick it had a
+// target, dealt or took damage): counted from the ticks, so time it spent where nobody
+// was (no think) counts too. What it heals comes first out of the wounds it never
+// answered (damageShare.unanswered), so a later giveUp does not close them again. Who
 // sees it gets the new health bar, without the effect and the number of a heal. Healed to
 // full it forgets the damage of a fight it lost track of (its target hid in a protection
 // zone, left): nobody earns experience from a fight it recovered from.
@@ -263,9 +288,16 @@ func (w *World) regen(ctx *game.TickContext, m *Monster) {
 	n := 1 + int((ctx.Tick-due)/pk.regenEvery)
 	m.regenAt = due + game.Tick(n)*pk.regenEvery
 	per := max(int(float64(m.maxHealth)*pk.regenPct/100+0.5), 1)
-	m.health = min(m.health+n*per, m.maxHealth)
+	heal := min(n*per, m.maxHealth-m.health)
+	m.health += heal
 	if m.health >= m.maxHealth {
 		m.damage = m.damage[:0]
+	}
+	for i := range m.damage {
+		s := &m.damage[i]
+		c := min(s.unanswered, heal)
+		s.unanswered -= c
+		heal -= c
 	}
 	w.healthChanged(m)
 }
@@ -295,12 +327,21 @@ func (w *World) trackStray(tick game.Tick, m *Monster) {
 }
 
 // straying is an idle m out of its home area (walkHome): once it has been so
-// monster_stray_ms without getting home and nobody sees it, it goes back to its spawn
-// (retire).
+// monster_stray_ms without getting home and no player has it on screen (onScreen), it goes
+// back to its spawn (retire).
 func (w *World) straying(ctx *game.TickContext, m *Monster) {
-	if w.strayFor > 0 && ctx.Tick-m.awaySince >= w.strayFor && m.master == nil && !w.watched(m.pos) {
+	if w.strayFor > 0 && ctx.Tick-m.awaySince >= w.strayFor && m.master == nil && !w.onScreen(m.pos) {
 		w.retire(ctx, m)
 	}
+}
+
+// onScreen reports whether any player has p in its view (the wide one, eachObserver; not
+// the classic window a monster notices players in, watched): who would see a monster
+// there vanish.
+func (w *World) onScreen(p world.Pos) bool {
+	seen := false
+	w.eachObserver(nil, p, func(*Player) { seen = true })
+	return seen
 }
 
 // retire takes a stray m out of the world (DESPAWN, nobody sees it) and has its spawn bring

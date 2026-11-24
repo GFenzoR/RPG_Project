@@ -483,8 +483,10 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
     vida máxima cada `interval_ms`, sin objetivo y `delay_ms` después de su última pelea;
     `pct: 0` = no regenera.
   Solo de `balance.yaml`: `monster_pursuit.roll_ms` (cada cuánto vuelve a tirar; exigido
-  con `persistence` > 0), `monster_pursuit.memory_ms` (cuánto recuerda a quien lo hirió;
-  0 = nada) y `combat.monster_stray_ms` (cuánto puede quedar fuera de casa sin llegar
+  con `persistence` > 0, también la de un solo monstruo: el servidor no arranca si un
+  monstruo tiene `persistence` y el balance no tiene `roll_ms`, ni si uno tiene `regen.pct`
+  sin ningún `interval_ms`), `monster_pursuit.memory_ms` (cuánto recuerda, desde su último
+  golpe, a quien lo hirió y su daño después de rendirse; 0 = nada) y `combat.monster_stray_ms` (cuánto puede quedar fuera de casa sin llegar
   antes de volver a su spawn; 0 = nunca). Valores por defecto: persistencia 0,5, tope 16,
   4 s sin verte, tirada cada 3 s, insiste bajo 25 %, memoria 3 min; 1 % cada 5 s tras
   10 s (unos 8 minutos de vida 0 a llena); errante 5 min. El esquema
