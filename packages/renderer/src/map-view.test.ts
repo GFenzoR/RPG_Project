@@ -11,7 +11,7 @@ import {
   overlaps,
 } from "./map-view.ts";
 import type { ChunkData, TileSource } from "./map-view.ts";
-import { lookOf, tileHash } from "./tile-art.ts";
+import { groundDecal, groundLook, groundTone, lookOf, tileHash } from "./tile-art.ts";
 import type { TileArt } from "./tile-art.ts";
 
 const T = 32;
@@ -148,6 +148,8 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
   const fringe = [0, 1, 2, 3].map((k) => named(`fringe/${k}`));
   const surf = [0, 1, 2, 3].map((k) => [named(`surf/${k}/0`), named(`surf/${k}/1`)]);
   const treeShadow = named("tree/shadow");
+  const sandLooks = [0, 1, 2, 3, 4].map((k) => named(k === 0 ? "sand" : `sand/var_${k}`));
+  const sandDecals = [named("sand/decal_1"), named("sand/decal_2")];
   const art = (id: string): TileArt<Texture> | undefined => {
     const base = {
       weight: 0.7,
@@ -160,6 +162,14 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     if (id === "wall") return { ...base, base: named("wall"), wall: pieces, joinsWalls: true };
     if (id === "door") return { ...base, base: named("door"), joinsWalls: true };
     if (id === "grass") return { ...base, base: looks[0] as Texture, variants: looks };
+    if (id === "sand")
+      return {
+        ...base,
+        base: sandLooks[0] as Texture,
+        variants: sandLooks,
+        decals: sandDecals,
+        weight: 0.3,
+      };
     if (id === "water") return { ...base, base: water[0] as Texture, frames: water, ms: 200 };
     if (id === "torch")
       return { ...base, base: torch[0] as Texture, frames: torch, ms: 100, sync: "tile" };
@@ -297,12 +307,52 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     expect(first).toHaveLength(1024);
     const counts = new Map<string, number>();
     for (const l of first) counts.set(l, (counts.get(l) ?? 0) + 1);
-    expect(counts.get("grass") ?? 0).toBeGreaterThan(600);
+    // About 70 % the main look (more in calm areas, fewer in busy ones), the rest the others.
+    expect(counts.get("grass") ?? 0).toBeGreaterThan(500);
     expect(counts.get("grass/var_1") ?? 0).toBeGreaterThan(80);
     expect(counts.get("grass/var_2") ?? 0).toBeGreaterThan(80);
+    // Each tile shows the look groundLook gives it (mapcli renders the same).
+    const grassArt = art("grass") as TileArt<Texture>;
+    first.forEach((label, i) => {
+      const k = groundLook(grassArt, i % 32, Math.floor(i / 32), 7);
+      expect(label).toBe(k === 0 ? "grass" : `grass/var_${k}`);
+    });
     const b = artView(chunks);
     b.render(cam, size);
     expect(looksOf(b)).toEqual(first);
+  });
+
+  it("tints grounds and flat pieces by groundTone and lays decals only inside a field", () => {
+    const g = new Array<string | null>(32 * 32).fill("sand");
+    // A strip of grass: the sand tiles next to it are edges and get no decal.
+    for (let y = 0; y < 32; y++) g[y * 32 + 16] = "grass";
+    const chunks = new Map<string, ChunkData>([
+      ["7/0/0", { ground: g, items: [{ x: 15, y: 4, stack: ["flat_fringe"] }] }],
+    ]);
+    const v = artView(chunks);
+    v.render(cam, size);
+    const c = layer(v, 0).children[0] as Container;
+    const sprites = c.children as Sprite[];
+    for (let i = 0; i < 32 * 32; i++) {
+      const s = sprites[i] as Sprite;
+      expect(s.tint).toBe(groundTone(i % 32, Math.floor(i / 32), 7));
+    }
+    const expected: string[] = [];
+    const inside = (x: number, y: number): boolean =>
+      x > 0 && y > 0 && x < 31 && y < 31 && Math.abs(x - 16) > 1;
+    for (let y = 0; y < 32; y++)
+      for (let x = 0; x < 32; x++) {
+        const d = groundDecal(x, y, 7, sandDecals.length);
+        if (d >= 0 && inside(x, y)) expected.push(`sand/decal_${d + 1}@${x},${y}`);
+      }
+    expect(expected.length).toBeGreaterThan(5);
+    const decals = sprites.slice(32 * 32, -1);
+    expect(decals.map((s) => `${s.texture.label ?? ""}@${s.x / T},${s.y / T}`)).toEqual(expected);
+    for (const s of decals) expect(s.tint).toBe(groundTone(s.x / T, s.y / T, 7));
+    // The flat piece comes last, tinted like the ground of its tile.
+    const piece = sprites.at(-1) as Sprite;
+    expect(piece.texture.label?.startsWith("fringe/")).toBe(true);
+    expect(piece.tint).toBe(groundTone(15, 4, 7));
   });
 
   it("steps animated grounds and items, a tile animation with its own phase", () => {

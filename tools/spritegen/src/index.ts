@@ -124,11 +124,11 @@ export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w)_
 
 /**
  * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other
- * looks <sprite>/var_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
+ * looks <sprite>/var_<n> and its decals <sprite>/decal_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
  * <sprite>/wall_<mask> and a cast shadow <sprite>/shadow. Valid when data/ uses <sprite>.
  */
 export const TILE_PART =
-  /^(.+)\/(?:var_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
+  /^(.+)\/(?:var_[1-9][0-9]*|decal_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
 
 /**
  * Client interface icons, which the client finds by path (no data/ file names them):

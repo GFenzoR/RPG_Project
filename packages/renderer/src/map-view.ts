@@ -32,6 +32,9 @@ import {
   frameAt,
   framePhase,
   framesOfLook,
+  groundDecal,
+  groundLook,
+  groundTone,
   lookOf,
   stackElevation,
   tileHash,
@@ -513,43 +516,65 @@ export class MapView {
     const animated: Animated[] = [];
     const emitters: number[] = [];
     const ground = new Container({ label: `ground ${key}`, x: ox, y: oy });
-    for (let ly = 0; ly < CHUNK_TILES; ly++) {
-      for (let lx = 0; lx < CHUNK_TILES; lx++) {
-        const id = data.ground[ly * CHUNK_TILES + lx];
-        if (id === null || id === undefined) continue;
-        const art = this.art?.(id);
-        const hash = art ? tileHash(gx + lx, gy + ly, z) : 0;
-        let tex = art?.base ?? this.texture(id);
-        if (art?.variants) tex = art.variants[lookOf(art, hash, true)] ?? tex;
-        const sprite = new Sprite({ texture: tex, x: lx * T, y: ly * T, width: T, height: T });
-        if (art?.frames) animated.push(animatedOf(sprite, art, hash, 0));
-        if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
-          emitters.push(gx + lx, gy + ly, PARTICLE_KINDS.indexOf(art.particles));
-        ground.addChild(sprite);
-      }
-    }
-    const walls = this.wallsOf(data);
     const deps = new Map<string, CachedChunk["deps"][number]>();
-    /** Whether global tile (x, y) holds a wall, reading the neighbour chunk if it must. */
-    const wallAt = (x: number, y: number): boolean => {
-      const lx = x - gx;
-      const ly = y - gy;
-      if (lx >= 0 && ly >= 0 && lx < CHUNK_TILES && ly < CHUNK_TILES)
-        return walls[ly * CHUNK_TILES + lx] === 1;
-      if (x < 0 || y < 0) return false;
+    /** The chunk holding global tile (x, y): this one, or a neighbour (then a dependency). */
+    const chunkAt = (x: number, y: number): ChunkData | undefined => {
       const ncx = Math.floor(x / CHUNK_TILES);
       const ncy = Math.floor(y / CHUNK_TILES);
+      if (ncx === cx && ncy === cy) return data;
+      if (x < 0 || y < 0) return undefined;
       const k = `${ncx},${ncy}`;
       let dep = deps.get(k);
       if (!dep) {
         dep = { cx: ncx, cy: ncy, data: this.source.chunk(z, ncx, ncy) };
         deps.set(k, dep);
       }
-      return dep.data
-        ? this.wallsOf(dep.data)[
-            (y - ncy * CHUNK_TILES) * CHUNK_TILES + (x - ncx * CHUNK_TILES)
-          ] === 1
-        : false;
+      return dep.data;
+    };
+    const local = (v: number): number => ((v % CHUNK_TILES) + CHUNK_TILES) % CHUNK_TILES;
+    const groundAt = (x: number, y: number): string | null | undefined =>
+      chunkAt(x, y)?.ground[local(y) * CHUNK_TILES + local(x)];
+    /** A decal goes only where the four neighbours are the same ground (no border on it). */
+    const inField = (x: number, y: number, id: string): boolean =>
+      groundAt(x, y - 1) === id &&
+      groundAt(x + 1, y) === id &&
+      groundAt(x, y + 1) === id &&
+      groundAt(x - 1, y) === id;
+    /** Decals of this chunk: drawn after every ground, before the flat border pieces. */
+    const decals: Sprite[] = [];
+    for (let ly = 0; ly < CHUNK_TILES; ly++) {
+      for (let lx = 0; lx < CHUNK_TILES; lx++) {
+        const id = data.ground[ly * CHUNK_TILES + lx];
+        if (id === null || id === undefined) continue;
+        const art = this.art?.(id);
+        const x = gx + lx;
+        const y = gy + ly;
+        const hash = art ? tileHash(x, y, z) : 0;
+        let tex = art?.base ?? this.texture(id);
+        // The look and the tone of a ground (docs/17 ART-4): the grid of one tile fades.
+        if (art?.variants) tex = art.variants[groundLook(art, x, y, z)] ?? tex;
+        const tint = groundTone(x, y, z);
+        const sprite = new Sprite({ texture: tex, x: lx * T, y: ly * T, width: T, height: T });
+        sprite.tint = tint;
+        if (art?.frames) animated.push(animatedOf(sprite, art, hash, 0));
+        if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
+          emitters.push(x, y, PARTICLE_KINDS.indexOf(art.particles));
+        ground.addChild(sprite);
+        const d = art?.decals ? groundDecal(x, y, z, art.decals.length) : -1;
+        if (art?.decals && d >= 0 && inField(x, y, id)) {
+          const decal = new Sprite({ texture: art.decals[d] as Texture, x: lx * T, y: ly * T });
+          decal.width = T;
+          decal.height = T;
+          decal.tint = tint;
+          decals.push(decal);
+        }
+      }
+    }
+    if (decals.length > 0) ground.addChild(...decals);
+    /** Whether global tile (x, y) holds a wall, reading the neighbour chunk if it must. */
+    const wallAt = (x: number, y: number): boolean => {
+      const c = chunkAt(x, y);
+      return c ? this.wallsOf(c)[local(y) * CHUNK_TILES + local(x)] === 1 : false;
     };
     const items: Sprite[] = [];
     const itemTiles: number[] = [];
@@ -586,6 +611,8 @@ export class MapView {
           // A border piece lies on its tile's ground, inside the tile: drawn with the grounds
           // (after all of them, in stack order), under shadows, items and creatures.
           sprite.position.set((s.x + ax) * T, (s.y + 1) * T - raised);
+          // Tinted like the ground it comes from: the tone is the same function of position.
+          sprite.tint = groundTone(x, y, z);
           flats.push(sprite);
         } else {
           sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);

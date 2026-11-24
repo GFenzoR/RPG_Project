@@ -1,6 +1,8 @@
 // Map tile art (docs/17 ART-3, ART-4, ART-7): the `tiles` section of assets/sprites.yaml and
 // atlas.json. A map sprite can have, next to it, sprites named
 //   <sprite>/var_<n>     alternate looks of a ground (n = 1..), picked per tile by a hash;
+//   <sprite>/decal_<n>   sparse details of a ground (n = 1..), transparent, laid flat on a
+//                        few of its tiles (a shell, a flower: ground art, not items);
 //   <sprite>/frame_<n>   more frames of an animated sprite (n = 1..; the sprite is frame 0);
 //   <sprite>/wall_<m>    the 16 pieces of a wall, one per mask of wall neighbours (N=1,
 //                        E=2, S=4, W=8), all of them;
@@ -25,6 +27,7 @@ export type StepKind = (typeof STEP_KINDS)[number];
 /** atlas.json `tiles[sprite]`: see TileMeta in packages/renderer tile-art.ts. */
 export interface TileMeta {
   variants?: number;
+  decals?: number;
   weight?: number;
   frames?: number;
   ms?: number;
@@ -54,8 +57,11 @@ export interface TileEntry {
   steps?: StepKind;
 }
 
-/** A part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow (same as tile-art.ts). */
-export const TILE_PART = /^(.+)\/(var|frame|wall|shadow)(?:_([0-9]+))?$/;
+/**
+ * A part's name: <base>/var_<n>, decal_<n>, frame_<n>, wall_<mask> or shadow (same as
+ * tile-art.ts).
+ */
+export const TILE_PART = /^(.+)\/(var|decal|frame|wall|shadow)(?:_([0-9]+))?$/;
 export const WALL_PIECES = 16;
 /** The sprites under this directory are flat (TileMeta flat): the border pieces. */
 export const FLAT_DIR = "borders/";
@@ -185,6 +191,8 @@ export function tileMetas(
     };
     const variants = run("var");
     if (variants > 0) meta.variants = variants;
+    const decals = run("decal");
+    if (decals > 0) meta.decals = decals;
     const frames = run("frame");
     if (frames > 0) meta.frames = frames + 1;
     const walls = numbers("wall");
