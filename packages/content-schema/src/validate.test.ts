@@ -77,7 +77,7 @@ describe("repository content", () => {
       "outfits",
       "cosmetics",
       "sounds",
-      "livingworld",
+      "livingworld-objects",
       "i18n",
       "ids-lock",
     ];
@@ -651,9 +651,11 @@ describe("validator diagnostics", () => {
     mkdirSync(file("assets"), { recursive: true });
     writeFileSync(file("assets/sounds.yaml"), "format: 1\nsounds: {}\n");
     writeFileSync(
-      file("data/livingworld/bad.yaml"),
+      file("data/livingworld/objects.yaml"),
       [
         "- item: rock_wall",
+        "  breakable: { hp: 5, by: [melee], becomes: none }",
+        "- item: weathered_crate",
         "  breakable: { hp: 5, by: [melee], becomes: none }",
         "- item: weathered_crate",
         "  pushable: {}",

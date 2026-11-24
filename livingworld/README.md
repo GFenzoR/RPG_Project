@@ -353,7 +353,7 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
 | Items (intacto, roto, compuerta abierta, placa) | `data/items/livingworld.yaml`, ids con `make gen-ids` (`data/ids.lock.yaml`) |
 | Comportamiento | `data/livingworld/*.yaml`, esquema `packages/content-schema/schemas/livingworld-objects.schema.json` |
 | Nombres y descripciones | `i18n/<idioma>/items.yaml` (`item.<id>.*`); mensajes `living.*` en `client.yaml`; paleta `editor.living_*` en `editor.yaml` |
-| Sprites | `assets/sprites/livingworld/` (el pipeline de sprites lee solo `assets/sprites/`), dibujados por `tools/spritegen/src/engine/specs/livingworld.ts` |
+| Sprites | `assets/livingworld/sprites/` (`tools/spritepack` los empaqueta como `livingworld/<nombre>`), dibujados por `tools/spritegen/src/engine/specs/livingworld.ts` |
 | Sonidos | ids de `assets/sounds.yaml` (los de siempre: `hit`, `woodcutting`, `mining`...); uno nuevo iría en `assets/sounds/livingworld/` con su fila en `assets/CREDITS.md` |
 | Mensajes | `proto/game/v1/livingworld.proto` (paquete `game.v1`: buf exige el archivo en el directorio de su paquete) |
 | Mapa | objetos colocados como items comunes en los chunks (`world/`) |

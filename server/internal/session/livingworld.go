@@ -26,7 +26,7 @@ type LivingDefs = lw.Defs
 // livingWorld is the module's World (World.living): only this file names the module.
 type livingWorld = lw.World
 
-// LoadLivingWorld reads <dataDir>/livingworld/*.yaml (none: no living objects).
+// LoadLivingWorld reads <dataDir>/livingworld/objects.yaml (none: no living objects).
 func LoadLivingWorld(dataDir string) (LivingDefs, error) {
 	return lw.LoadDir(filepath.Join(dataDir, "livingworld"))
 }

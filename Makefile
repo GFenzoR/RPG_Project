@@ -77,7 +77,7 @@ test: test-go test-ts test-parity test-deploy test-livingworld-boundary ## Go + 
 .PHONY: test-livingworld
 test-livingworld: test-livingworld-boundary ## Go and TS tests of livingworld/ (and its boundary check)
 	cd livingworld/server && go test ./...
-	pnpm --filter @rpg/living-world test $(VITEST_ARGS)
+	pnpm exec vitest run --project @rpg/living-world $(VITEST_ARGS)
 
 .PHONY: test-livingworld-boundary
 test-livingworld-boundary:
@@ -86,6 +86,7 @@ test-livingworld-boundary:
 .PHONY: lint-livingworld
 lint-livingworld: ## The living world's boundary: what it imports and who imports it (livingworld/README.md)
 	bash livingworld/check-boundary.sh
+	node --experimental-strip-types livingworld/client/scripts/boundary.ts
 
 .PHONY: test-go
 test-go:
@@ -119,19 +120,6 @@ lint-deploy: ## Deploy checks: Go version match, compose/Caddy/backup/deploy har
 test-deploy: ## Tests of deploy/deploy.sh and deploy/backup.sh (stubs, no Docker)
 	bash deploy/tests/backup_test.sh
 	bash deploy/tests/deploy_test.sh
-
-# The living world's boundary (livingworld/README.md "Frontera"): livingworld/ never imports
-# server/ or client/, and only the glue files of its README import it.
-.PHONY: lint-livingworld
-lint-livingworld: ## Living world boundary: no server/ or client/ imports inside, only glue files outside
-	node --experimental-strip-types livingworld/client/scripts/boundary.ts
-
-# Go tests of livingworld/server (when that module exists) and the vitest of
-# livingworld/client (simulations, mounting, boundary). make test runs them too.
-.PHONY: test-livingworld
-test-livingworld: ## Go and TS tests of livingworld/ (livingworld/README.md)
-	@if [ -f livingworld/server/go.mod ]; then echo "==> go test (livingworld/server)"; (cd livingworld/server && go test ./...); fi
-	pnpm exec vitest run --project @rpg/living-world $(VITEST_ARGS)
 
 .PHONY: lint-ts
 lint-ts:

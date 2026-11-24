@@ -401,8 +401,8 @@ class Validator {
         continue;
       }
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
+      if (src && name === "objects") this.living.push(src); // a list, not an object
       if (!src || !isObj(src.data)) continue;
-      if (name === "objects") this.living.push(src);
       if (name === "plants") {
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {

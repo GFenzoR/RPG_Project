@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -118,8 +117,12 @@ type Plate struct {
 // Defs is every entry of data/livingworld, in file order.
 type Defs []*Def
 
-// LoadDir reads every <dir>/*.yaml (sorted by name). A missing dir is no error: no
-// living-world objects.
+// ObjectsFile is the file of data/livingworld that lists the objects; the others
+// (surfaces, plants, wear) are other parts of the living world with their own shapes.
+const ObjectsFile = "objects.yaml"
+
+// LoadDir reads <dir>/objects.yaml. A missing dir or file is no error: no living-world
+// objects.
 func LoadDir(dir string) (Defs, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -130,7 +133,7 @@ func LoadDir(dir string) (Defs, error) {
 	}
 	var all Defs
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+		if e.IsDir() || e.Name() != ObjectsFile {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(dir, e.Name()))

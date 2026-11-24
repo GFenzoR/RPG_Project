@@ -315,7 +315,7 @@ func TestCompilePruebas(t *testing.T) {
 		kinds[pt.Kind]++
 	}
 	want := map[world.PortalKind]int{world.PortalStairs: 2, world.PortalLadder: 2, world.PortalHole: 1,
-		world.PortalRopeSpot: 1, world.PortalTeleport: 1}
+		world.PortalRopeSpot: 1, world.PortalTeleport: 2}
 	for k, n := range want {
 		if kinds[k] != n {
 			t.Errorf("%d portals of kind %v, want %d", kinds[k], k, n)
