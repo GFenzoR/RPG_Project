@@ -232,7 +232,8 @@ spritepack encuentra por nombre (arte propio o entradas de `sprites.yaml`):
 
 | Parte | Qué es | Quién la usa |
 |---|---|---|
-| `<sprite>/var_<n>` (n = 1..) | Otro look del suelo; el sprite es el look 0 | El renderer elige uno por casilla con `tileHash(x, y, z)`, el 0 en el 70 % |
+| `<sprite>/var_<n>` (n = 1..) | Otro look del suelo; el sprite es el look 0 | El renderer elige uno por casilla con `groundLook` (docs/17 ART-4: zonas que tiran a looks vecinos, nunca el mismo look alternativo en dos casillas de lado), el 0 en la parte `weight` |
+| `<sprite>/decal_<n>` (n = 1..) | Un detalle suelto de un suelo (una concha, una flor), transparente, chico y en el centro | El renderer lo pone plano sobre unas pocas casillas (`groundDecal`), solo donde las cuatro vecinas son del mismo suelo; no es un item |
 | `<sprite>/frame_<n>` (n = 1..) | Otro frame de un suelo o item animado; el sprite es el frame 0 | `MapView` los avanza con el reloj; `mapcli render` muestra el 0 |
 | `<sprite>/wall_<m>` (m = 0..15, las 16) | La pieza de muro para cada máscara de vecinos muro (N=1, E=2, S=4, O=8), de 32x64 | El renderer pone en cada casilla la de sus vecinos |
 | `<sprite>/shadow` | Su sombra proyectada, en negro, del tamaño del sprite | La capa de sombras, teñida y translúcida, entre el suelo y los items |
@@ -261,7 +262,10 @@ tiles:
   casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
   entrada: 250 ms y `world`.
 - `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7 en un suelo; en
-  un item, las piezas de borde, los looks salen parejos).
+  un item, las piezas de borde, los looks salen parejos). Los suelos cuyos looks son otros
+  corazones de la misma textura (arena, pasto, tierra, ceniza...) la bajan a 0,2-0,35.
+- Además del look, el renderer tiñe cada suelo y cada pieza plana con `groundTone` (un
+  ruido lento de la posición: zonas un poco más oscuras o más cálidas, docs/17 ART-4).
 - `ms` y `sync` sin frames, `weight` sin looks, piezas de muro incompletas o partes sin su
   sprite son errores de `make sprites`.
 
@@ -297,8 +301,12 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
   Items de inventario: 32x32 centrados con fondo transparente.
 - Muros (`recipes/walls.ts`): 16 piezas de 32x64 por material, la tapa levantada 32 px
   sobre la cara (ver "Arte del mapa" arriba y docs/17 ART-3).
-- Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
-  bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
+- Suelos (`recipes/ground.ts`, `recipes/variety.ts`): textura de baja frecuencia, looks que
+  conservan el anillo de 1 px del principal y redibujan el corazón (otra semilla, más
+  ondas, más grano, más seco...; el test exige el anillo igual), detalles sueltos
+  `decal_<n>` chicos y centrados, y una media de L* entre 20 y 50 (ART-6, lo revisa el
+  test; la lava no, brilla). Un suelo nuevo de textura continua (nieve, piso de cueva) se
+  escribe como `LevelGround` y entra con `levelLooks`.
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
 - Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo), salvo las del
   motor de sprites (jabalí, ciervo y eco de la forja), que se paran sobre la sombra de

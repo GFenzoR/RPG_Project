@@ -281,7 +281,8 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 ## spritegen
 `tools/spritegen` (T0.5) dibuja el pixel art propio en `assets/sprites/<ruta>.png` a partir
 de recetas en código: `src/recipes/{terrain,ground,walls,trees,props,portals,items,creatures,effects,ui}.ts`
-(`ground.ts`: suelos con sus looks y el agua y la lava animadas; `walls.ts`: las 16 piezas de
+(`ground.ts`: suelos con sus looks y detalles sueltos y el agua y la lava animadas;
+`variety.ts`: cómo un look conserva el anillo del principal y redibuja el corazón, docs/17 ART-4; `walls.ts`: las 16 piezas de
 cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con viento y sombra;
 `props.ts`: fragua, fogón, antorcha, estandarte, brasero y fuente animados; `portals.ts`:
 escaleras de mano, agujeros, puntos de soga y teletransportes; arte del mapa en
@@ -299,7 +300,7 @@ que el cliente busca por ruta (`MISSILE_ART`, nada más: la flecha `missiles/arr
 y, por elemento con orbe, `missiles/<elemento>/<n>` hasta `MAX_ORB_FRAMES` - 1 y
 `missiles/<elemento>/trail`), o un icono de interfaz
 `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta, o una
-parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
+parte de arte del mapa `var_<n>`, `decal_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
 `data/` usa). Un test exige además a cada suelo una media de L* entre 20 y 50 (docs/17
 ART-6; la lava no). El
 preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los jugadores,

@@ -157,6 +157,22 @@ el punto 5:
   - **Sin teclado:** con el ✥ fuera, mover o cambiar el tamaño de una ventana pide el
     mouse. Si el dueño quiere de nuevo una forma con el teclado, que no sea un botón en la
     barra (le resultaba confuso).
+- **Variedad de suelos (hecho, rama `feat/ground-variety`; el dueño el 2026-11-23: "los
+  sprites de piso se repiten demasiado, sobre todo la arena"; docs/17 ART-4):** 11 looks de
+  arena y de pasto, más looks de tierra, arena mojada, piedra, ceniza y escoria, elección
+  por zonas sin el mismo look alternativo en casillas de lado, un tono lento por posición
+  y detalles sueltos en arena y pasto (conchas, ramas, flores, trébol). Queda:
+  - **Mirarlo en el juego:** el E2E del lote saca las capturas; si al dueño el tono le
+    parece mucho o poco, es `TONE_DEPTH` (0,1) en `packages/renderer/src/tile-art.ts`, y la
+    cantidad de detalles, `DECAL_DENSITY` (0,05).
+  - **Agua, lava, lava enfriada, basalto y pisos de madera** siguen con un look: el agua y
+    la lava porque cada look necesita sus 4 frames; el basalto y la lava enfriada porque
+    un corazón distinto corta sus losas a la mitad. La lava enfriada muestra bandas
+    diagonales regulares en zonas grandes.
+  - **Nieve y piso de cueva** no existen como suelos propios: cuando entren, como
+    `LevelGround` con `levelLooks` (`assets/README.md`).
+  - El desgaste de senderos (`livingworld`) dibuja sus etapas sin el tono del suelo; con
+    `TONE_DEPTH` 0,1 la diferencia es chica, pero conviene mirarla en el E2E.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

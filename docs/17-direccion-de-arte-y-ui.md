@@ -271,8 +271,8 @@ parte de arriba transparente.
   5 tonos por suelo, y dentro de un mismo suelo **ΔL\* ≤ 15** (CIELAB) entre el tono más
   claro y el más oscuro. El pasto de hoy salta mucho más.
 - **Detalles sueltos:**
-  - los decorativos (matas, piedritas, flores) los esparce el cliente con el mismo hash:
-    no se pueden tocar y no pesan en el mapa;
+  - los decorativos (matas, piedritas, flores) los esparce el renderer con un hash de la
+    posición (`groundDecal`, abajo): no se pueden tocar y no pesan en el mapa;
   - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
 - **Bordes** (`gen-borders`): entre todos los pares de suelos naturales que se tocan, con
   orilla irregular (nunca recta) que no se repite de casilla en casilla, y en el agua con
@@ -330,6 +330,48 @@ mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
 - Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de
   una casilla) termina en punta (dos esquinas de adentro); se lee como un sendero que se
   afina. Una pieza propia para ese caso serían 4 piezas más por suelo.
+
+**Hecho (2026-11-24, `feat/ground-variety`):** el dueño: "los sprites de piso se repiten
+demasiado, sobre todo la arena; crea muchas más variaciones para que las áreas grandes se
+vean naturales". La arena tenía manchas de 16 px y motas que caían en el mismo lugar de
+cada casilla: un campo de arena era una grilla. Tres capas, todas funciones puras de la
+posición en `packages/renderer/src/tile-art.ts` (el cliente, el editor y `mapcli render`
+dibujan lo mismo; nada cambia en el mapa ni en el servidor):
+- **Muchos looks por suelo** (`recipes/variety.ts` de spritegen): arena y pasto 11, tierra y
+  piedra de piso 6, arena mojada y ceniza 5, escoria 4. Cada look conserva el anillo de 1 px
+  del look principal y redibuja su **corazón**: otra semilla de la misma textura, o una
+  versión con más ondas de viento, más grano, más húmeda o más clara (arena), más tupida,
+  más seca o con trébol (pasto). En la arena, el pasto y la tierra la textura es un campo
+  de niveles y el corazón se funde con el anillo en el nivel, sin tramado (`levelHeart`); el
+  look principal sale de la semilla cuyo anillo queda más cerca del nivel medio
+  (`calmSeed`), así el anillo que todos comparten no dibuja la grilla. La ceniza y la
+  escoria (grano fino) funden el corazón con un tramado ordenado. Sus manchas grandes son
+  más suaves que antes: la sombra amplia la pone el tono (abajo). El peso del principal
+  (`weight` en `tiles`) baja a 0,2-0,35: ningún tile domina.
+- **Elección por zonas** (`groundLook`): un ruido lento (`macroNoise`, celdas de 14 y 6
+  casillas) hace que cada zona tire a una tanda de looks vecinos en la lista (los looks
+  parecidos van juntos: una playa con ondas, otra con grano) y a más o menos looks
+  alternativos. Dos casillas de lado nunca muestran el mismo look alternativo (los looks
+  pares van en un color del damero y los impares en el otro) y una casilla se corre del
+  look de sus vecinas diagonales de arriba (en bandas de 8 filas: menos del 5 % repite).
+- **Tono** (`groundTone`): cada suelo y cada pieza de borde se tiñe con otro ruido lento,
+  hasta un 10 % más oscuro y un poco más cálido o más frío. Las zonas grandes cambian de
+  tono sin escalones entre casillas (a lo sumo 6 niveles de 255), y como el tono es de la
+  posición, el borde de un suelo coincide con el suelo del que sale.
+- **Detalles sueltos** (`groundDecal`, `<suelo>/decal_<n>`): arena (conchas, piedritas, una
+  rama seca, huellas de gaviota, alga seca, ondas de viento) y pasto (flores amarillas,
+  blancas y violetas, trébol, dos piedras, hojas caídas). Uno cada ~20 casillas, más en
+  unas zonas que en otras, nunca dos que se toquen y solo donde las cuatro vecinas son del
+  mismo suelo (ningún borde los tapa). Son arte del suelo, no items: no se pueden tocar ni
+  bloquean, se dibujan con los suelos debajo de bordes, sombras e items, son chicos (5-80
+  px, en el centro de la casilla) y del valor del suelo.
+- Tests: `ground-variety.test.ts` del renderer (determinismo, vecinos distintos, diagonales,
+  continuidad del ruido, tono, detalles), `map-view.test.ts` y `render.test.ts` de mapcli
+  (tono y detalles como el juego), spritegen (anillo igual al principal, detalles chicos y
+  centrados, banda de ART-6) y spritepack (`decals` en `atlas.json`).
+- Queda: el agua y la lava (animadas: un look necesita sus 4 frames), la lava enfriada y el
+  basalto (celdas: otro corazón corta una losa) y los pisos de madera siguen con un solo
+  look. No hay nieve ni piso de cueva propios todavía: cuando entren, con `levelLooks`.
 
 ### ART-5 Contorno, sombra y luz
 - **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
