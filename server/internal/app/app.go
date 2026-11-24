@@ -62,6 +62,9 @@ type Config struct {
 	TrailWear *session.TrailConfig
 	// LivingWorld is data/livingworld (session.LoadLivingWorld); nil means no living objects.
 	LivingWorld session.LivingDefs
+	// DayNight is data/livingworld/daynight.yaml's cycle (session.LoadDayNight); nil: no
+	// day and night. The world time starts at the clock's Unix time.
+	DayNight *session.DayNightCycle
 	// Attributes come from data/attributes.yaml (docs/02 "Atributos de items"); nil means
 	// no equipable rolls one.
 	Attributes content.Attributes
@@ -334,6 +337,8 @@ func New(cfg Config) (*App, error) {
 			TrailData:       trailData,
 			TrailDowntimeMs: trailDown,
 			SaveTrail:       saveTrail,
+			DayNight:        cfg.DayNight,
+			DayNightEpochMs: cfg.Clock.Now().UnixMilli(),
 
 			StoreHeartbeat: a.storeBeat,
 			Transfer:       transfer,

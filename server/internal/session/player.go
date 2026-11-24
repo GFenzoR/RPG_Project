@@ -668,6 +668,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ViewHeight:     ViewTilesH,
 		AttackEvents:   true, // CreatureAttack and CreatureDisappear.reason (attack.go)
 	}}})
+	w.dayNightJoin(ctx.Tick, p) // the sky before the first frame
 	// Saved conditions first (T3.2): the first stats, and what observers get, already
 	// carry their speed (and an invisible player is never shown).
 	w.loadConditions(ctx, p, c.Conditions)

@@ -241,6 +241,12 @@ type Config struct {
 	TrailData       []byte
 	TrailDowntimeMs int64
 	SaveTrail       func(TrailSnapshot) bool
+	// DayNight is the living world's day and night (daynight.go,
+	// data/livingworld/daynight.yaml); nil: no WorldClock is sent. DayNightEpochMs is the
+	// world time at tick 0: the app passes its clock's Unix time at start, so the cycle goes
+	// on across restarts.
+	DayNight        *DayNightCycle
+	DayNightEpochMs int64
 	// LivingWorld is data/livingworld (LoadLivingWorld, livingworld/README.md): the map
 	// objects that break, move or open. Nil: none (every such item stays a plain map item).
 	LivingWorld LivingDefs
@@ -260,6 +266,8 @@ type World struct {
 	log  *slog.Logger
 	// trail is the living world's trail wear (trailwear.go).
 	trail trailWear
+	// sky is the living world's clock (daynight.go); nil without a day and night.
+	sky dayNight
 
 	nextID  uint32
 	players []*Player // ordered by creature id: deterministic iteration
@@ -753,6 +761,7 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initTrail()
+	w.initDayNight()
 	return w, nil
 }
 

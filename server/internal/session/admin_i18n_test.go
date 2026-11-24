@@ -14,6 +14,7 @@ func TestAdminMessagesTranslated(t *testing.T) {
 		msgGMTeleported, msgGMItemUnknown, msgGMItemCount, msgGMItemCreated, msgGMProtected, msgGMKicked,
 		msgGMBanDuration, msgGMBanReason, msgGMBanned, msgGMUnbanned, msgGMNotBanned, msgGMFailed,
 		msgGMMapSubmission, msgGMMapSubmissions,
+		"gm.time_dawn", "gm.time_day", "gm.time_dusk", "gm.time_night", // daynight.go msgGMTime
 		"client.chat.line.broadcast", "client.disconnect.banned", "error.account_banned"}
 	for _, lang := range []string{"es", "en"} {
 		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "i18n", lang, "client.yaml"))

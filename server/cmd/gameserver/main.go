@@ -210,6 +210,10 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	dayNight, err := session.LoadDayNight(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	living, err := session.LoadLivingWorld(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -332,6 +336,7 @@ func run(logger *slog.Logger, o options) error {
 		Spells:           spells,
 		Recipes:          recipes,
 		TrailWear:        trailWear,
+		DayNight:         dayNight,
 		LivingWorld:      living,
 		Attributes:       attributes,
 		BoatRoutes:       routes,

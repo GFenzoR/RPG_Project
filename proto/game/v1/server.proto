@@ -70,6 +70,7 @@ message ServerMessage {
     MinimapIndex minimap_index = 50;
     MinimapSectors minimap_sectors = 51;
     ObjectiveHint objective_hint = 52;
+    WorldClock world_clock = 53;
   }
 }
 

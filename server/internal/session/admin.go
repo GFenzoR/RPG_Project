@@ -215,6 +215,8 @@ var gmCommands = map[string]gmCommand{
 	"house":      {RoleGM, "house_info", "/house id", (*World).cmdHouse},
 	"houseevict": {RoleGM, "house_evict", "/houseevict id", (*World).cmdHouseEvict},
 	"housemove":  {RoleGM, "house_move", "/housemove id Name", (*World).cmdHouseMove},
+	// Day and night (livingworld/README.md "Día y noche", docs/16): testing the sky.
+	"time": {RoleGM, "set_time", "/time [dawn|morning|noon|afternoon|dusk|night|minute] | /time moon phase | /time speed rate", (*World).cmdTime},
 	// Cosmetic shop (T5.7). Only admins create or remove premium currency.
 	"premium":   {RoleAdmin, "premium_grant", "/premium Name +100|-100 note | /premium Name +0 clear note", (*World).cmdPremium},
 	"purchases": {RoleGM, "premium_history", "/purchases Name", (*World).cmdPurchases},

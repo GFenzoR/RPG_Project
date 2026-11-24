@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/livingworld.proto.
  */
 export const file_game_v1_livingworld: GenFile = /*@__PURE__*/
-  fileDesc("ChlnYW1lL3YxL2xpdmluZ3dvcmxkLnByb3RvEgdnYW1lLnYxIk0KClB1c2hPYmplY3QSHgoDcG9zGAEgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIfCgNkaXIYAiABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiLAAQoRTGl2aW5nT2JqZWN0RXZlbnQSJwoEa2luZBgBIAEoDjIZLmdhbWUudjEuTGl2aW5nT2JqZWN0S2luZBIeCgNwb3MYAiABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh0KAnRvGAMgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIPCgdpdGVtX2lkGAQgASgNEg4KBmVmZmVjdBgFIAEoCRINCgVzb3VuZBgGIAEoCRITCgtocF9wZXJtaWxsZRgHIAEoDSI1CglUcmFpbFdlYXISCQoBehgBIAEoDRINCgV0aWxlcxgCIAMoDRIOCgZsZXZlbHMYAyABKAwqrQIKEExpdmluZ09iamVjdEtpbmQSIgoeTElWSU5HX09CSkVDVF9LSU5EX1VOU1BFQ0lGSUVEEAASGgoWTElWSU5HX09CSkVDVF9LSU5EX0hJVBABEhwKGExJVklOR19PQkpFQ1RfS0lORF9CUkVBSxACEh4KGkxJVklOR19PQkpFQ1RfS0lORF9SRVNQQVdOEAMSGwoXTElWSU5HX09CSkVDVF9LSU5EX1BVU0gQBBIgChxMSVZJTkdfT0JKRUNUX0tJTkRfR0FURV9PUEVOEAUSIQodTElWSU5HX09CSkVDVF9LSU5EX0dBVEVfQ0xPU0UQBhIbChdMSVZJTkdfT0JKRUNUX0tJTkRfRkFERRAHEhwKGExJVklOR19PQkpFQ1RfS0lORF9SRVNFVBAIQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
+  fileDesc("ChlnYW1lL3YxL2xpdmluZ3dvcmxkLnByb3RvEgdnYW1lLnYxIk0KClB1c2hPYmplY3QSHgoDcG9zGAEgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIfCgNkaXIYAiABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiLAAQoRTGl2aW5nT2JqZWN0RXZlbnQSJwoEa2luZBgBIAEoDjIZLmdhbWUudjEuTGl2aW5nT2JqZWN0S2luZBIeCgNwb3MYAiABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh0KAnRvGAMgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIPCgdpdGVtX2lkGAQgASgNEg4KBmVmZmVjdBgFIAEoCRINCgVzb3VuZBgGIAEoCRITCgtocF9wZXJtaWxsZRgHIAEoDSI1CglUcmFpbFdlYXISCQoBehgBIAEoDRINCgV0aWxlcxgCIAMoDRIOCgZsZXZlbHMYAyABKAwiOQoKV29ybGRDbG9jaxILCgNkYXkYASABKA0SEAoIY3ljbGVfbXMYAiABKA0SDAoEcmF0ZRgDIAEoDSqtAgoQTGl2aW5nT2JqZWN0S2luZBIiCh5MSVZJTkdfT0JKRUNUX0tJTkRfVU5TUEVDSUZJRUQQABIaChZMSVZJTkdfT0JKRUNUX0tJTkRfSElUEAESHAoYTElWSU5HX09CSkVDVF9LSU5EX0JSRUFLEAISHgoaTElWSU5HX09CSkVDVF9LSU5EX1JFU1BBV04QAxIbChdMSVZJTkdfT0JKRUNUX0tJTkRfUFVTSBAEEiAKHExJVklOR19PQkpFQ1RfS0lORF9HQVRFX09QRU4QBRIhCh1MSVZJTkdfT0JKRUNUX0tJTkRfR0FURV9DTE9TRRAGEhsKF0xJVklOR19PQkpFQ1RfS0lORF9GQURFEAcSHAoYTElWSU5HX09CSkVDVF9LSU5EX1JFU0VUEAhCRlpEZ2l0aHViLmNvbS9HRmVuem9SL1JQR19Qcm9qZWN0L3NlcnZlci9pbnRlcm5hbC9uZXQvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw", [file_game_v1_common]);
 
 /**
  * PushObject pushes the object on pos one tile in dir (client → server). The player
@@ -141,6 +141,45 @@ export type TrailWear = Message<"game.v1.TrailWear"> & {
  */
 export const TrailWearSchema: GenMessage<TrailWear> = /*@__PURE__*/
   messageDesc(file_game_v1_livingworld, 2);
+
+/**
+ * WorldClock is the world's time of day (server → client; livingworld/server/daynight,
+ * data/livingworld/daynight.yaml). Sent at login, every `sync_seconds` and at once after a
+ * staff /time. The client runs it on from there at `rate` and draws the sky, the light and
+ * the cast shadows; no game rule depends on it.
+ *
+ * @generated from message game.v1.WorldClock
+ */
+export type WorldClock = Message<"game.v1.WorldClock"> & {
+  /**
+   * day: cycles since the world's epoch (the moon's phase is day mod lunar_days).
+   *
+   * @generated from field: uint32 day = 1;
+   */
+  day: number;
+
+  /**
+   * cycle_ms: how far into the cycle; 0 is the start of dawn, day_minutes the start of
+   * the night.
+   *
+   * @generated from field: uint32 cycle_ms = 2;
+   */
+  cycleMs: number;
+
+  /**
+   * rate: world milliseconds per real millisecond (1 normal; 0 stopped by staff).
+   *
+   * @generated from field: uint32 rate = 3;
+   */
+  rate: number;
+};
+
+/**
+ * Describes the message game.v1.WorldClock.
+ * Use `create(WorldClockSchema)` to create a new message.
+ */
+export const WorldClockSchema: GenMessage<WorldClock> = /*@__PURE__*/
+  messageDesc(file_game_v1_livingworld, 3);
 
 /**
  * LivingObjectKind is what happened to a living object.

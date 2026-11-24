@@ -572,6 +572,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.flushTrail(ctx.Tick)
+	w.flushDayNight(ctx.Tick)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
