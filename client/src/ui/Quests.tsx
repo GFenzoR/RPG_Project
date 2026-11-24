@@ -106,6 +106,8 @@ function QuestItem(props: {
   e: QuestEntryView;
   serverNow: number;
   content: ClientContent | undefined;
+  tracked: boolean;
+  onTrack: ((id: string) => void) | undefined;
 }): JSX.Element {
   const { t, e } = props;
   const left = cooldownLeft(e, props.serverNow);
@@ -172,6 +174,17 @@ function QuestItem(props: {
         <span class="quest-kind">{questKind(t, e)}</span>
       </div>
       {status}
+      {e.state === "active" && props.onTrack && (
+        <button
+          type="button"
+          class="quest-track"
+          data-testid="quest-track"
+          aria-pressed={props.tracked}
+          onClick={() => props.onTrack?.(props.tracked ? "" : e.id)}
+        >
+          {t(props.tracked ? "client.quests.untrack" : "client.quests.track")}
+        </button>
+      )}
       {e.milestone && e.state !== "done" && (
         <MilestoneReqs t={t} m={e.milestone} content={props.content} />
       )}
@@ -191,6 +204,9 @@ export function QuestsBody(props: {
   serverNow: number;
   /** The client's content (a milestone's gear item by name); without it, its numeric id. */
   content?: ClientContent | undefined;
+  /** The quest tracked on the minimap ("": none) and how to track one ("" stops). */
+  tracked?: string | undefined;
+  onTrack?: ((id: string) => void) | undefined;
 }): JSX.Element {
   const { t, tab } = props;
   const tabs = questTabs(props.log, props.serverNow);
@@ -229,7 +245,15 @@ export function QuestsBody(props: {
       ) : (
         <ul class="quest-list" key={tab}>
           {shown.map((e) => (
-            <QuestItem key={e.id} t={t} e={e} serverNow={props.serverNow} content={props.content} />
+            <QuestItem
+              key={e.id}
+              t={t}
+              e={e}
+              serverNow={props.serverNow}
+              content={props.content}
+              tracked={props.tracked === e.id}
+              onTrack={props.onTrack}
+            />
           ))}
         </ul>
       )}
@@ -250,6 +274,8 @@ export function QuestsPanel(props: {
   log: QuestLogView | undefined;
   clockOffset: number;
   content?: ClientContent | undefined;
+  tracked?: string | undefined;
+  onTrack?: ((id: string) => void) | undefined;
 }): JSX.Element {
   const [tab, setTab] = useState<QuestTab>("active");
   const [, setTick] = useState(0);
@@ -268,6 +294,8 @@ export function QuestsPanel(props: {
       onTab={setTab}
       serverNow={serverNow}
       content={props.content}
+      tracked={props.tracked}
+      onTrack={props.onTrack}
     />
   );
 }

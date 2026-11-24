@@ -1232,3 +1232,26 @@ body.dragging-window * {
 :root[data-motion="reduced"] .voyage {
   animation-duration: 2600ms !important;
 }
+
+/* The minimap (ui/Minimap.tsx) sits top right of the map: the equipment and the containers
+   under it start below it while they are at their default places (--minimap-h is its
+   height open, or its title bar folded). */
+.game[data-ui="windows"] {
+  --minimap-h: 0px;
+}
+.game[data-ui="windows"]:has(.minimap) {
+  --minimap-h: 2.25rem;
+}
+.game[data-ui="windows"]:has(.minimap[data-open]) {
+  --minimap-h: calc(160px + 6.25rem);
+}
+.gwin:not([data-placed])[data-window="inventory"] {
+  top: var(--minimap-h);
+  max-height: calc(100% - var(--minimap-h));
+}
+.gwin:not([data-placed])[data-window^="container-"] {
+  --container-top: min(
+    calc(var(--minimap-h) + var(--containers-top, 0px) + var(--nth, 0) * 1.75rem),
+    calc(100% - 2rem)
+  );
+}

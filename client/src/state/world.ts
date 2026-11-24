@@ -91,6 +91,7 @@ import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 import { CLASSIC_VIEW, serverView } from "./view.ts";
 import type { ViewTiles } from "./view.ts";
+import { MinimapState } from "./minimap.ts";
 
 export interface Walk {
   from: Pos;
@@ -561,6 +562,8 @@ export class WorldState implements TileSource {
    * sends it (at login), or from a server without one.
    */
   quests: QuestLogView | undefined;
+  /** The minimap (docs/02 "Minimapa"): explored tiles, server colours and the tracked hint. */
+  readonly minimap = new MinimapState();
   /** The server's clock minus the client's at the Welcome (ms): a task's countdown. */
   clockOffset = 0;
   /** The player's own active conditions (T3.2), in the server's order. */
@@ -910,6 +913,29 @@ export class WorldState implements TileSource {
       case "questLog":
         this.quests = questLogFrom(msg.value);
         break;
+      case "minimapIndex":
+        this.minimap.applyIndex(msg.value.floors);
+        break;
+      case "minimapSectors":
+        this.minimap.applySectors(msg.value.sectors);
+        break;
+      case "objectiveHint": {
+        const h = msg.value;
+        this.minimap.tracked = h.questId;
+        this.minimap.hint =
+          h.questId !== "" && h.center
+            ? {
+                questId: h.questId,
+                stepId: h.stepId,
+                x: h.center.x,
+                y: h.center.y,
+                z: h.center.z,
+                radius: h.radius,
+              }
+            : undefined;
+        this.minimap.version++;
+        break;
+      }
       case "presenceCheck":
         if (msg.value.checkId === this.presenceAnswered) break;
         this.presence = {

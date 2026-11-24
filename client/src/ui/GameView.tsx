@@ -44,6 +44,7 @@ import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import type { GuildTab } from "./Guild.tsx";
 import { AppearancePanel } from "./Appearance.tsx";
 import { QuestsPanel } from "./Quests.tsx";
+import { Minimap } from "./Minimap.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
@@ -550,7 +551,14 @@ export function GameView(props: GameViewProps): JSX.Element {
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
   const quests = (
-    <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} content={props.content} />
+    <QuestsPanel
+      t={t}
+      log={ui.quests}
+      clockOffset={ui.clockOffset}
+      content={props.content}
+      tracked={ui.minimap?.tracked ?? ""}
+      onTrack={(id) => game?.trackQuest(id)}
+    />
   );
   const chat = (
     <ChatPanel
@@ -589,6 +597,10 @@ export function GameView(props: GameViewProps): JSX.Element {
           <strong>{t("client.level_up.title")}</strong>
           <span>{t("client.characters.level", { level: levelNotice })}</span>
         </div>
+      )}
+      {/* The minimap (docs/02 "Minimapa"): top right of the map, under the windows. */}
+      {props.entered && (
+        <Minimap t={t} game={game} mm={ui.minimap} phone={layout.id.startsWith("phone")} />
       )}
       {/* Server notices over the map (T5.6): the newest messages, also in the log. They
           never take a click (pointer-events: none in client.css). */}

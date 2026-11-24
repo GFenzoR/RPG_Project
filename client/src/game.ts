@@ -74,6 +74,8 @@ import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import { colourItem, parseHex } from "./state/minimap.ts";
+import type { MinimapState, ObjectiveHintView } from "./state/minimap.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
 import { cuesOf, sceneFor } from "./audio/cues.ts";
@@ -106,6 +108,18 @@ import type {
 } from "./state/world.ts";
 
 /** What the DOM UI shows next to the canvas, refreshed after every server batch. */
+/** What the minimap draws (GameUi.minimap). */
+export interface MinimapUi {
+  /** Grows with every change of what is explored or known (MinimapState.version). */
+  version: number;
+  self: { x: number; y: number; z: number; dir: Direction };
+  /** Party members in view on the own floor. */
+  party: { id: number; x: number; y: number }[];
+  hint: ObjectiveHintView | undefined;
+  /** The quest the server says is tracked ("": none). */
+  tracked: string;
+}
+
 export interface GameUi {
   battle: CreatureState[];
   target: number | undefined;
@@ -156,6 +170,8 @@ export interface GameUi {
    * and the server's clock minus the client's (ms) for a task's countdown.
    */
   quests: QuestLogView | undefined;
+  /** The minimap (docs/02 "Minimapa", ui/Minimap.tsx); undefined before the own creature. */
+  minimap?: MinimapUi | undefined;
   clockOffset: number;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
@@ -526,12 +542,19 @@ export class Game {
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
           if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
+          if (e.message.case === "welcome") this.trackAfterWelcome = true;
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
           }
         }
         this.sound(cues);
+        if (this.trackAfterWelcome && this.world.self) {
+          // The tracked quest is not saved by the server (docs/05 TrackQuest): sent again.
+          this.trackAfterWelcome = false;
+          const id = loadTracked(this.world.self.name);
+          if (id) this.conn.send({ case: "trackQuest", value: { questId: id } });
+        }
         if (this.world.self && !this.canvas && !this.starting && !this.canvasFailed)
           void this.startCanvas();
         this.publish();
@@ -899,6 +922,56 @@ export class Game {
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
+  /**
+   * Tracks quest id on the minimap ("" stops): the server answers with its estimate. Kept
+   * per character on this device and sent again at every login.
+   */
+  trackQuest(id: string): void {
+    this.conn.send({ case: "trackQuest", value: { questId: id } });
+    const name = this.world.self?.name;
+    if (name) saveTracked(name, id);
+  }
+
+  /** Asks the server for explored minimap sectors of floor z (MinimapState.wanted). */
+  minimapRequest(z: number, sectors: number[]): void {
+    if (sectors.length > 0) this.conn.send({ case: "minimapRequest", value: { z, sectors } });
+  }
+
+  private readonly minimapColours = new Map<number, readonly [number, number, number]>();
+
+  /**
+   * What the minimap paints with: the explored state, the colour item of a tile (what the
+   * client has of it now, else what the server gave) and an item's colour (the atlas's
+   * average of its sprite; a plain shade by kind until the atlas is up or without one).
+   */
+  minimapSource(): {
+    state: MinimapState;
+    tileItem(x: number, y: number, z: number): number;
+    colour(item: number): readonly [number, number, number];
+  } {
+    const w = this.world;
+    return {
+      state: w.minimap,
+      tileItem: (x, y, z) =>
+        colourItem(w.tile(x, y, z), (id) => w.item(id)) || w.minimap.serverItem(x, y, z),
+      colour: (item) => {
+        let c = this.minimapColours.get(item);
+        if (c) return c;
+        const hex = this.canvas?.itemColor(item);
+        const def = w.item(item);
+        c = hex
+          ? parseHex(hex)
+          : def?.blocks
+            ? ([110, 104, 96] as const)
+            : def?.ground && !def.walkable
+              ? ([38, 64, 112] as const)
+              : ([64, 88, 52] as const);
+        if (hex) this.minimapColours.set(item, c);
+        return c;
+      },
+    };
+  }
+
   skipTutorial(): void {
     this.conn.send({ case: "tutorialSkip", value: {} });
   }
@@ -1784,6 +1857,28 @@ export class Game {
     return { containers: others, backpack };
   }
 
+  private trackAfterWelcome = false;
+
+  /** The minimap's part of GameUi; the own view is explored here, as the server does. */
+  private minimapUi(): MinimapUi | undefined {
+    const w = this.world;
+    const s = w.self;
+    if (!s) return undefined;
+    w.minimap.revealView(s.pos.x, s.pos.y, s.pos.z, w.view.width, w.view.height);
+    const party: MinimapUi["party"] = [];
+    for (const m of w.party.party?.members ?? []) {
+      const c = m.id === w.selfId ? undefined : w.creatures.get(m.id);
+      if (c && c.pos.z === s.pos.z) party.push({ id: m.id, x: c.pos.x, y: c.pos.y });
+    }
+    return {
+      version: w.minimap.version,
+      self: { x: s.pos.x, y: s.pos.y, z: s.pos.z, dir: s.dir },
+      party,
+      hint: w.minimap.hint,
+      tracked: w.minimap.tracked,
+    };
+  }
+
   private publish(): void {
     const w = this.world;
     const self = w.self;
@@ -1817,6 +1912,7 @@ export class Game {
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,
       quests: w.quests,
+      minimap: this.minimapUi(),
       clockOffset: w.clockOffset,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
@@ -2358,4 +2454,30 @@ export class Game {
   private readonly onFocusIn = (e: FocusEvent): void => {
     if (isTextField(e.target)) this.keys.clear();
   };
+}
+
+const TRACK_KEY = "rpg.track";
+
+/** The quest a character tracks on this device ("" or undefined: none). */
+export function loadTracked(name: string): string | undefined {
+  try {
+    const all = JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, unknown>;
+    const v = all[name];
+    return typeof v === "string" && v !== "" ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveTracked(name: string, id: string): void {
+  try {
+    const all = new Map(
+      Object.entries(JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, string>),
+    );
+    if (id) all.set(name, id);
+    else all.delete(name);
+    localStorage.setItem(TRACK_KEY, JSON.stringify(Object.fromEntries(all)));
+  } catch {
+    // Storage blocked: tracking lasts for this login only.
+  }
 }

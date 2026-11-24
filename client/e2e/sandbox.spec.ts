@@ -417,6 +417,19 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
   await expect(ch1.getByTestId("quest-step")).not.toBeEmpty();
   await page.waitForTimeout(300); // let the atlas textures upload before the screenshot
   await shot(page, "96-sandbox-quests");
+  // The minimap (docs/02 "Minimapa"): track the chapter. Its wolves are far from the
+  // sandbox, so the estimate is an arrow on the minimap's edge with a rough distance; the
+  // temple around the player is explored, the rest black.
+  const minimap = page.getByTestId("minimap");
+  await expect(minimap).toBeVisible();
+  for (const side of ["top", "right", "bottom", "left"])
+    await expect(minimap.getByTestId(`minimap-${side}`)).not.toBeEmpty();
+  await ch1.getByTestId("quest-track").click();
+  await expect(ch1.getByTestId("quest-track")).toHaveAttribute("aria-pressed", "true");
+  await expect(minimap).toHaveAttribute("data-tracked", "ch1_shipwreck");
+  await expect(minimap.getByTestId("minimap-hint")).toHaveAttribute("data-kind", /area|arrow/);
+  await minimap.screenshot({ path: join(shots, "96c-minimap-tracked.png") });
+  await shot(page, "96d-minimap-hud");
   await quests.locator('[data-quest-tab="finished"]').click();
   const rats = quests.locator('.quest[data-quest="pruebas_rats"]');
   await expect(rats.getByTestId("quest-cooldown")).toContainText("Disponible otra vez en");

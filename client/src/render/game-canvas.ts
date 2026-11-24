@@ -222,6 +222,8 @@ export interface GameCanvas {
   worldAt(clientX: number, clientY: number): { x: number; y: number } | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
+  /** An item's minimap colour from the atlas ("#rrggbb", docs/02 "Minimapa"), if it has one. */
+  itemColor(itemId: number): string | undefined;
   /** Where any sprite of the atlas is (an NPC's portrait in its dialog), real art or not. */
   spriteIcon(path: string): AtlasIcon | undefined;
   /** Where a PvP mark's sprite is in the atlas (real art only), for the battle list. */
@@ -1833,6 +1835,10 @@ export async function createGameCanvas(
     markIcon(mark) {
       const path = markPath(mark);
       return path ? atlas.icon(path) : undefined;
+    },
+    itemColor(itemId) {
+      const sprite = content.items[itemId]?.sprite;
+      return sprite ? atlas.index.minimap?.[sprite] : undefined;
     },
     itemIcon(itemId) {
       const sprite = content.items[itemId]?.sprite;
