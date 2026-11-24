@@ -1,5 +1,7 @@
 # Vocations (docs/02-game-design.md): guardian and arcanist (MVP), ranger and druid (T3.1).
 # Our own numbers (CLAUDE.md legal rule): never copy another game's constants.
+# start_kit (2026-11-23): what a new character gets once, at its first login (docs/02
+# "Equipo inicial"): each piece in the slot it fits, the rest in the backpack.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc
@@ -16,6 +18,15 @@
     magic: 2.7
     fishing: 1.11
   weapons: [sword, axe, club]
+  start_kit:
+    - { item: rusty_cutlass }
+    - { item: barrel_lid_shield }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 - id: arcanist
   name: vocation.arcanist.name
@@ -33,6 +44,14 @@
     magic: 1.11
     fishing: 1.11
   weapons: [wand]
+  start_kit:
+    - { item: spark_wand }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 # Ranger (T3.1): distance damage and a hybrid. Trains distance fastest of all, shield
 # almost like a guardian and some magic; health and mana per level sit between both.
@@ -52,6 +71,15 @@
     magic: 1.45
     fishing: 1.11
   weapons: [distance, sword, axe, club]
+  start_kit:
+    - { item: short_bow }
+    - { item: arrow, count: 60 }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 # Druid (T3.1): support and healing. Magic trains as fast as the arcanist's, the body
 # is as fragile, and its staffs shoot like wands.
@@ -71,3 +99,11 @@
     magic: 1.11
     fishing: 1.11
   weapons: [wand]
+  start_kit:
+    - { item: sapling_staff }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }

@@ -25,7 +25,19 @@ type Vocation struct {
 	SkillFactors map[string]float64 `yaml:"skill_factors"`
 	// Weapons are the weapon types (data/items weapon.type) the vocation can wield.
 	Weapons []string `yaml:"weapons"`
+	// StartKit is what a new character gets once, at its first login (docs/02 "Equipo
+	// inicial"): each piece in the slot it fits, the rest in the backpack and pockets.
+	StartKit []KitItem `yaml:"start_kit"`
 }
+
+// KitItem is one entry of a vocation's start_kit: Count units of the item Item (0 = 1).
+type KitItem struct {
+	Item  string `yaml:"item"`
+	Count int    `yaml:"count"`
+}
+
+// Units is how many units the entry gives (at least 1).
+func (k KitItem) Units() int { return max(k.Count, 1) }
 
 // Regen is what a vocation recovers every IntervalMs.
 type Regen struct {
@@ -111,6 +123,11 @@ func ParseVocations(raw []byte) (Vocations, error) {
 		}
 		if v.Regen.Health < 0 || v.Regen.Mana < 0 || v.Regen.IntervalMs < 0 {
 			return nil, fmt.Errorf("vocation %q: regen values must be >= 0", v.ID)
+		}
+		for j, k := range v.StartKit {
+			if k.Item == "" || k.Count < 0 {
+				return nil, fmt.Errorf("vocation %q: start_kit #%d needs an item and a count >= 1", v.ID, j)
+			}
 		}
 		for id, f := range v.SkillFactors {
 			if f < 1 || f > 10 {

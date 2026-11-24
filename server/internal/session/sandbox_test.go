@@ -530,6 +530,10 @@ func (s *sandbox) packIndex(p *session.Player, id string) uint32 {
 // equip drags id from the backpack to slot.
 func (s *sandbox) equip(cl *fakeClient, p *session.Player, id string, slot pb.EquipmentSlot) {
 	s.t.Helper()
+	// What the slot holds (the start_kit's weapon or shield) goes to the floor first.
+	if old := p.Equipped(slot); old != nil {
+		s.send(cl, moveItem(inSlot(slot), s.num(old.Def().ID), 0, onTile(p.Pos()), uint32(old.Count())))
+	}
 	win := s.packWindow(cl, p)
 	n := uint32(1)
 	if s.items[id].Stackable {
@@ -1081,8 +1085,9 @@ func TestSandboxPortals(t *testing.T) {
 	// A biscuit thrown onto the stairs lands below them.
 	s.walkNear(cl, p, sbStairsDown)
 	win = s.packWindow(cl, p)
+	biscuits := s.w.CountItem(p, "ship_biscuit")
 	evs = s.send(cl, moveItem(inContainer(win, s.packIndex(p, "ship_biscuit")), s.num("ship_biscuit"), 0, onTile(sbStairsDown), 1))
-	if s.w.CountItem(p, "ship_biscuit") != 2 {
+	if s.w.CountItem(p, "ship_biscuit") != biscuits-1 {
 		t.Fatalf("threw a biscuit onto the stairs: %v", systemKeys(evs))
 	}
 	landed := false
@@ -1337,8 +1342,9 @@ func TestSandboxHouse(t *testing.T) {
 	floor := at3(2089, 2111, 7)
 	win := s.packWindow(cl, p)
 	n := len(s.transfers)
+	biscuits := s.w.CountItem(p, "ship_biscuit")
 	evs := s.send(cl, moveItem(inContainer(win, s.packIndex(p, "ship_biscuit")), s.num("ship_biscuit"), 0, onTile(floor), 1))
-	if g := s.w.GroundAt(floor); len(g) != 1 || g[0].Def().ID != "ship_biscuit" || s.w.CountItem(p, "ship_biscuit") != 1 {
+	if g := s.w.GroundAt(floor); len(g) != 1 || g[0].Def().ID != "ship_biscuit" || s.w.CountItem(p, "ship_biscuit") != biscuits-1 {
 		t.Fatalf("drop a biscuit in the house: %v", systemKeys(evs))
 	}
 	written := false

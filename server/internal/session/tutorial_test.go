@@ -147,7 +147,7 @@ func TestTutorialPlaythrough(t *testing.T) {
 	if ts == nil || ts.State != pb.TutorialState_TUTORIAL_STATE_DONE || !hasKey(evs, "tutorial.completed") {
 		t.Fatalf("end: %v %v", ts, systemKeys(evs))
 	}
-	if got := h.w.Money(p) - money; got != 20 { // the guardian's quest reward is a weapon
+	if got := h.w.Money(p) - money; got != 50 { // the tutorial's 20 and the quest's 30 (the weapon is in the start_kit)
 		t.Fatalf("reward: +%d coins", got)
 	}
 	if p.TutorialStep(h.w) != "" || p.Storage("tutorial.done") != 1 || p.Storage("tutorial.step") != 0 {

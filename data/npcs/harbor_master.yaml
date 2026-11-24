@@ -69,29 +69,28 @@ dialog:
           if: { vocation_in: [guardian] }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_item: rusty_cutlass }
+            - { give_gold: 30 } # the class weapon comes in the start_kit (2026-11-23)
             - { give_item: ship_biscuit }
           goto: ch1_accepted
         - text: dialog.accept
           if: { vocation_in: [arcanist] }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_item: spark_wand }
+            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
         - text: dialog.accept
           if: { vocation_in: [ranger] }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_item: short_bow }
-            - { give_gold: 20 }
+            - { give_gold: 50 } # 30 + 20 for arrows
             - { give_item: ship_biscuit }
           goto: ch1_accepted_ranger
         - text: dialog.accept
           if: { vocation_in: [druid] }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_item: sapling_staff }
+            - { give_gold: 30 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_druid
         - text: dialog.decline

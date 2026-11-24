@@ -362,7 +362,7 @@ func TestDroppedTransferKeepsTheWholeDialog(t *testing.T) {
 	h.input(ca, useItem(inSlot(slotBackpack), backpack, 0))
 	h.sim.Step()
 	wa := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)[0].GetContainerId()
-	h.send(ca, tradeReq(b.ID(), inContainer(wa, 0), rope))
+	h.send(ca, tradeReq(b.ID(), inContainer(wa, packIndexOf(a, rope)), rope))
 	h.send(cb, tradeReq(a.ID(), nil, 0))
 	h.send(ca, tradeAccept)
 	if u := lastTrade(h.send(cb, tradeAccept)); u.GetState() != pb.TradeState_TRADE_STATE_COMPLETED {
@@ -432,7 +432,7 @@ func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
 	h.input(ca, useItem(inSlot(slotBackpack), backpack, 0))
 	h.sim.Step()
 	wa := find(ca.take(), (*pb.ServerMessage).GetContainerOpen)[0].GetContainerId()
-	h.send(ca, tradeReq(b.ID(), inContainer(wa, 0), rope))
+	h.send(ca, tradeReq(b.ID(), inContainer(wa, packIndexOf(a, rope)), rope))
 	h.send(cb, tradeReq(a.ID(), nil, 0))
 	h.send(ca, tradeAccept)
 	if u := lastTrade(h.send(cb, tradeAccept)); u.GetState() != pb.TradeState_TRADE_STATE_COMPLETED {
@@ -1647,4 +1647,14 @@ func TestCoalescedThrowPickedBackUpLeavesTheWait(t *testing.T) {
 	if n := h.w.GiveWaitForTest(a.CharacterID()); n != 1 {
 		t.Fatalf("giveWait holds %d piles after the salves came back, want the coin's only", n)
 	}
+}
+
+// packIndexOf is the cell of p's backpack that holds item (numeric id), or 0.
+func packIndexOf(p *session.Player, item uint32) uint32 {
+	for i, it := range p.Equipped(slotBackpack).Items() {
+		if uint32(it.Def().Numeric) == item {
+			return uint32(i)
+		}
+	}
+	return 0
 }

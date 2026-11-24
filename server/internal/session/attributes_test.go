@@ -184,8 +184,9 @@ func TestShopAndDialogItemsRoll(t *testing.T) {
 	evs := h.pick(cl, d, "dialog.trade")
 	shop := find(evs, (*pb.ServerMessage).GetShopOpen)[0]
 	tunic := uint32(items["patched_tunic"].Numeric)
+	worn := h.w.ItemsForTest(p, "patched_tunic") // the start_kit's
 	h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopBuy{ShopBuy: &pb.ShopBuy{DialogId: shop.DialogId, ItemId: tunic, Count: 2}}})
-	bought := h.w.ItemsForTest(p, "patched_tunic")
+	bought := slices.DeleteFunc(h.w.ItemsForTest(p, "patched_tunic"), func(it *session.Item) bool { return slices.Contains(worn, it) })
 	if len(bought) != 2 {
 		t.Fatalf("bought %d tunics", len(bought))
 	}
@@ -205,8 +206,10 @@ func TestShopAndDialogItemsRoll(t *testing.T) {
 		t.Fatalf("logged %v", logged)
 	}
 	// Selling one back pays its base price (data: 10 for the cutlass), whatever it rolled.
-	money := h.w.Money(p)
+	// The start_kit's cutlass is in the hand: into the backpack first (NPCs buy no worn piece).
 	cutlass := uint32(items["rusty_cutlass"].Numeric)
+	h.send(cl, moveItem(inSlot(slotRight), cutlass, 0, inSlot(slotBackpack), 1))
+	money := h.w.Money(p)
 	h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: shop.DialogId, ItemId: cutlass, Count: 1}}})
 	if h.w.Money(p) != money+10 || len(h.w.ItemsForTest(p, "rusty_cutlass")) != 0 {
 		t.Fatalf("sold for %d", h.w.Money(p)-money)

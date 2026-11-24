@@ -628,7 +628,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	// character is saved at once with it (below), so a crash before its first autosave
 	// does not roll another at the next login.
 	rolled := slices.ContainsFunc(c.Inventory, w.needsRoll)
-	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
+	kit := w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	// After the equipment: its attributes may raise the maximums (attributes.go).
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
@@ -687,6 +687,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.tellDiedAway(p) // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
+	w.econStartKit(p, kit) // after the ledger's base, which counted it
 	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
 	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
@@ -705,7 +706,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
 	w.scheduleAutosave(ctx, p, first)
 	w.scheduleRegen(ctx, p)
-	if rolled {
+	if rolled || len(kit) > 0 { // the kit is saved at once: given, it is never given again
 		w.save(w.snapshot(p, false))
 	}
 	if stashRolled && !w.readOnly {

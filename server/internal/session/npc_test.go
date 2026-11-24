@@ -293,7 +293,7 @@ func TestChapterOnePlayable(t *testing.T) {
 		t.Fatal("the client does not know the harbor master")
 	}
 
-	// Accept the quest: the guardian's kit and the first step.
+	// Accept the quest: coins (the cutlass came in the start_kit) and the first step.
 	d := h.lastDialog(h.send(cl, talkMsg(master.ID())))
 	if d.Text.Key != "npc.harbor_master.greet" || d.NpcCreatureId != master.ID() {
 		t.Fatalf("greet: %+v", d)
@@ -303,8 +303,8 @@ func TestChapterOnePlayable(t *testing.T) {
 		t.Fatalf("offer options %v", d.Options)
 	}
 	evs := h.pick(cl, d, "dialog.accept")
-	if !messageKeys(evs)["dialog.quest_started"] || h.w.CountItem(p, "rusty_cutlass") != 1 || h.w.CountItem(p, "ship_biscuit") != 1 {
-		t.Fatalf("accept: messages %v, cutlass %d", messageKeys(evs), h.w.CountItem(p, "rusty_cutlass"))
+	if !messageKeys(evs)["dialog.quest_started"] || h.w.CountItem(p, "rusty_cutlass") != 1 || h.w.CountItem(p, "ship_biscuit") != 6 || h.w.Money(p) != 30 {
+		t.Fatalf("accept: messages %v, cutlass %d, coins %d", messageKeys(evs), h.w.CountItem(p, "rusty_cutlass"), h.w.Money(p))
 	}
 	if s, step := h.w.QuestState(p, "ch1_shipwreck"); s != quest.InProgress || step != "clear_wolves" {
 		t.Fatalf("quest %v %q", s, step)
@@ -382,8 +382,8 @@ func TestChapterOnePlayable(t *testing.T) {
 	}
 }
 
-// The arcanist accepts the same quest and gets its own weapon, a spark wand (content audit
-// m5; it used to get coins); options are checked again on the server.
+// The arcanist accepts the same quest: its spark wand came in the start_kit (2026-11-23),
+// the quest gives coins; options are checked again on the server.
 func TestArcanistBranchAndStaleOptions(t *testing.T) {
 	h := dataHarness(t)
 	c := session.Character{ID: 901, AccountID: 901, Name: "Mage", Vocation: "arcanist", Level: 1, Health: 100, Mana: 100}
@@ -396,7 +396,7 @@ func TestArcanistBranchAndStaleOptions(t *testing.T) {
 		t.Fatal("a hidden option ran")
 	}
 	h.pick(cl, d, "dialog.accept")
-	if h.w.Money(p) != 0 || h.w.CountItem(p, "spark_wand") != 1 || h.w.CountItem(p, "rusty_cutlass") != 0 {
+	if h.w.Money(p) != 30 || h.w.CountItem(p, "spark_wand") != 1 || h.w.CountItem(p, "rusty_cutlass") != 0 {
 		t.Fatalf("arcanist kit: %d coins, %d spark wands", h.w.Money(p), h.w.CountItem(p, "spark_wand"))
 	}
 	// A stale dialog id is ignored; option 0 closes.

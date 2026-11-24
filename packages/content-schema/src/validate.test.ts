@@ -114,6 +114,49 @@ describe("validator diagnostics", () => {
       }
     }
   };
+  it('checks each vocation\'s start_kit (docs/02 "Equipo inicial")', () => {
+    const kitErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("vocations.yaml"));
+    expect(kitErrors()).toEqual([]);
+    // The guardian's kit: another vocation's wand, a level 5 sword, a count on a weapon,
+    // more arrows than a stack, a two-handed weapon with the shield and an unknown item.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: rusty_cutlass }\n",
+      "    - { item: rusty_cutlass, count: 2 }\n    - { item: spark_wand }\n    - { item: iron_sword }\n" +
+        "    - { item: arrow, count: 500 }\n    - { item: no_such_item }\n",
+    );
+    const errs = kitErrors();
+    expect(errs).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/rusty_cutlass does not stack/),
+        expect.stringMatching(/spark_wand is for arcanist, not guardian/),
+        expect.stringMatching(/guardian does not wield wand/),
+        expect.stringMatching(/iron_sword asks for level 5/),
+        expect.stringMatching(/500 arrow is more than its stack \(100\)/),
+        expect.stringMatching(/unknown item "no_such_item"/),
+      ]),
+    );
+    // The ranger's two-handed bow with a shield.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: short_bow }\n",
+      "    - { item: short_bow }\n    - { item: barrel_lid_shield }\n",
+    );
+    expect(kitErrors()).toEqual(
+      expect.arrayContaining([expect.stringMatching(/two-handed weapon and a shield/)]),
+    );
+    // The schema: an unknown field and a count of 0.
+    edit("data/vocations.yaml", "{ item: sapling_staff }", "{ item: sapling_staff, slot: 3 }");
+    edit(
+      "data/vocations.yaml",
+      "{ item: seaweed_poultice, count: 1 }",
+      "{ item: seaweed_poultice, count: 0 }",
+    );
+    expect(kitErrors().join("\n")).toMatch(/slot/);
+    expect(kitErrors().join("\n")).toMatch(/count/);
+  });
+
   const reachErrors = (): string[] =>
     messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
   // The reach step of ch3_gate, on the volcano's mine floor.

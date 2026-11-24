@@ -195,6 +195,7 @@ class Validator {
   private balance: SourceFile | undefined;
   private recipes: SourceFile | undefined;
   private spells: SourceFile | undefined;
+  private vocations: SourceFile | undefined;
   private tutorial: SourceFile | undefined;
   /** data/livingworld/*.yaml (livingworld/README.md), checked after the items. */
   private living: SourceFile[] = [];
@@ -225,6 +226,7 @@ class Validator {
     this.checkToolTargets();
     this.checkItemTrade();
     this.checkRetiredItems();
+    this.checkStartKits();
     this.checkEquipLevels();
     this.checkForge();
     this.checkChests();
@@ -279,6 +281,7 @@ class Validator {
     if (balance) this.checkBalance(balance);
 
     const vocations = single("vocations.yaml", "vocations", true);
+    this.vocations = vocations;
     if (vocations) {
       for (const [i, voc] of asList(vocations.data).entries()) {
         this.register("vocation", voc, vocations, [i]);
@@ -2159,6 +2162,61 @@ class Validator {
    * no quest or tutorial rewards it, no spell conjures it and no character starts with it.
    * An NPC may still buy it (checkItemTrade lets that buyer be).
    */
+  /**
+   * The starting kit of each vocation (data/vocations.yaml start_kit, docs/02 "Equipo
+   * inicial"): every piece is one a new character of that vocation can carry and, if it is
+   * equipment, wear at level 1 (no retired item, no level, no other vocation, a weapon type
+   * the vocation wields); a count only for a stackable, within its stack. A two-handed
+   * weapon leaves no hand for a shield. Unknown ids are checkRefs' (x-ref).
+   */
+  private checkStartKits(): void {
+    const src = this.vocations;
+    if (!src) return;
+    for (const [i, voc] of asList(src.data).entries()) {
+      if (!isObj(voc)) continue;
+      const id = String(voc["id"]);
+      const wields = asList(voc["weapons"]).map(String);
+      let twoHanded = false;
+      let shield = false;
+      for (const [j, entry] of asList(voc["start_kit"]).entries()) {
+        if (!isObj(entry)) continue;
+        const path: PathSegment[] = [i, "start_kit", j];
+        const owned = this.index.ids.item.get(String(entry["item"]));
+        const item = owned ? this.itemDef(owned) : undefined;
+        if (!item) continue;
+        const name = String(entry["item"]);
+        if (item["retired"] === true) this.error(src, path, `${name} is retired`);
+        const count = typeof entry["count"] === "number" ? entry["count"] : 1;
+        const stack = typeof item["max_stack"] === "number" ? item["max_stack"] : 100;
+        if (count > 1 && item["stackable"] !== true)
+          this.error(src, [...path, "count"], `${name} does not stack: one per entry`);
+        else if (count > stack)
+          this.error(src, [...path, "count"], `${count} ${name} is more than its stack (${stack})`);
+        const req = isObj(item["requires"]) ? item["requires"] : {};
+        if (Number(req["level"] ?? 1) > 1)
+          this.error(
+            src,
+            path,
+            `${name} asks for level ${String(req["level"])}: a new character is level 1`,
+          );
+        const only = asList(req["vocations"]).map(String);
+        if (only.length > 0 && !only.includes(id))
+          this.error(src, path, `${name} is for ${only.join(", ")}, not ${id}`);
+        const weapon = isObj(item["weapon"]) ? item["weapon"] : undefined;
+        if (weapon && !wields.includes(String(weapon["type"])))
+          this.error(src, path, `${id} does not wield ${String(weapon["type"])} (${name})`);
+        if (weapon && weapon["hands"] === 2) twoHanded = true;
+        if (isObj(item["shield"])) shield = true;
+      }
+      if (twoHanded && shield)
+        this.error(
+          src,
+          [i, "start_kit"],
+          "a two-handed weapon and a shield: one of them never fits",
+        );
+    }
+  }
+
   private checkRetiredItems(): void {
     const retired = new Set(
       this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
