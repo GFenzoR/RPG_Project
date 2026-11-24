@@ -9,6 +9,7 @@ defense: 16
 behavior:
   aggressive: true
   target_distance: 1
+pursuit: { persistence: 0.8, max_chase_tiles: 20, lose_sight_ms: 6000 }
 attacks:
   - { type: melee, min: 0, max: 50, interval_ms: 2000 }
 resistances: { fire: 70, earth: 10, ice: -20 }

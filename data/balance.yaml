@@ -51,11 +51,12 @@ combat:
   level_divisor: 4
   shield_block_divisor: 4
   monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
-  # Leash (docs/02-game-design.md, "Monstruos"): a monster chases and flees only within
-  # its spawn's radius + monster_leash_tiles (Chebyshev from the spawn's center). A target
-  # beyond that and out of its attacks' reach is dropped for another player fighting it
-  # from inside, or else it heals to full, forgets who hurt it and walks home; without a
-  # target it walks back into its spawn's radius. 0 = no leash.
+  # Leash (docs/02-game-design.md, "Monstruos"): a monster's comfort zone is its spawn's
+  # radius + monster_leash_tiles (Chebyshev from the spawn's center): it picks targets and
+  # always chases within it; beyond it, monster_pursuit decides. A target it does not
+  # chase (out of its attacks' reach) is dropped for another player fighting it from
+  # inside, or else it gives up (keeping its wounds) and walks home; without a target it
+  # walks back into its spawn's radius. 0 = no leash.
   monster_leash_tiles: 6
   # A search for a way (A*) that found none waits this long before the next one; a chase
   # with a leash checks the way to a target out of its reach this often.
@@ -66,6 +67,36 @@ combat:
   monster_stuck_ms: 2000
   # ...and, on that tile and out of reach, counts as beyond the leash for that monster.
   monster_shun_ms: 30000
+  # Pursuit (docs/02-game-design.md, "Monstruos", owner's request of 2026-11-23): the
+  # leash area is a monster's comfort zone, where it always chases. A target beyond it and
+  # out of reach it keeps chasing while a roll every roll_ms says so: chance = persistence,
+  # scaled down linearly with the target's distance from the spawn's center up to
+  # max_chase_tiles (the hard cap, Chebyshev from the center; never less than the leash
+  # area); 0 below give_up_below_hp_pct of its own health; halfway to 1 against a target
+  # below insist_target_hp_pct of its health. A spawn's monsters share one roll per target
+  # (a pack). A target out of its sight (the classic window) for lose_sight_ms, in a
+  # protection zone or on another floor is given up. Giving up, it keeps its wounds (only
+  # the damage dealt from where it could not answer heals at once), forgets the damage
+  # (no experience for that fight) and remembers who hurt it memory_ms, turning on them
+  # first when they come back into its leash area. data/monsters may override all but
+  # roll_ms and memory_ms (pursuit: {...}).
+  monster_pursuit:
+    persistence: 0.5
+    max_chase_tiles: 16
+    lose_sight_ms: 4000
+    roll_ms: 3000
+    give_up_below_hp_pct: 0
+    insist_target_hp_pct: 25
+    memory_ms: 180000
+  # Out-of-combat regeneration: without a target and delay_ms after it last dealt or took
+  # damage, pct % of its maximum health (at least 1) every interval_ms. 1 % every 5 s: a
+  # full heal takes about 8 minutes, so a player who walks off to heal and comes back
+  # finds it still hurt. data/monsters may override each field (regen: {...}).
+  monster_regen: { delay_ms: 10000, interval_ms: 5000, pct: 1 }
+  # An idle monster out of its home area walks home (even where no player is); one that
+  # has not got home after this long, and that nobody sees, goes back to its spawn
+  # (despawn + respawn). 0 = never.
+  monster_stray_ms: 300000
   # Wands (T1.9): a distance attack of the weapon's element and range that hits
   # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
   wand_min_factor: 0.5

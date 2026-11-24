@@ -634,6 +634,68 @@ type Combat struct {
 	// MonsterShunMs is how long a player given up that way stays beyond the leash for
 	// that monster while it stands on the same tile.
 	MonsterShunMs int `yaml:"monster_shun_ms"`
+	// MonsterPursuit is how monsters follow a target beyond their leash area, and
+	// MonsterRegen how they heal out of combat; data/monsters may override each field
+	// (docs/02-game-design.md, monsters section). Zero: no pursuit beyond the leash area, a
+	// target out of sight lost at once, no regeneration and attackers forgotten on giving
+	// up (the behaviour before them).
+	MonsterPursuit Pursuit          `yaml:"monster_pursuit"`
+	MonsterRegen   MonsterRegenRate `yaml:"monster_regen"`
+	// MonsterStrayMs: an idle monster that has stood out of its home area this long
+	// without finding its way home, and that no player sees, goes back to its spawn
+	// (despawn + respawn). 0: never.
+	MonsterStrayMs int `yaml:"monster_stray_ms"`
+}
+
+// MaxChaseTiles bounds Pursuit.MaxChaseTiles: nobody drags a monster across the world.
+const MaxChaseTiles = 40
+
+// Pursuit is how a monster follows a target beyond its leash area (its comfort zone).
+type Pursuit struct {
+	// Persistence (0-1) is the chance that it keeps chasing, checked every RollMs while
+	// its target is beyond the leash area; it falls with the target's distance from home.
+	Persistence float64 `yaml:"persistence"`
+	// MaxChaseTiles is the hard cap (Chebyshev from its spawn's center) of a chase.
+	MaxChaseTiles int `yaml:"max_chase_tiles"`
+	// LoseSightMs: a target out of its sight this long is given up (0: at once).
+	LoseSightMs int `yaml:"lose_sight_ms"`
+	// RollMs is how often the decision is rolled again (balance only).
+	RollMs int `yaml:"roll_ms"`
+	// GiveUpBelowHpPct: with less health than this, it does not chase beyond the leash.
+	GiveUpBelowHpPct int `yaml:"give_up_below_hp_pct"`
+	// InsistTargetHpPct: a target with less health than this halves the chance of
+	// giving up.
+	InsistTargetHpPct int `yaml:"insist_target_hp_pct"`
+	// MemoryMs is how long it remembers who hurt it after their last hit (balance only):
+	// it re-aggroes them first and their damage still counts. 0: forgotten on giving up.
+	MemoryMs int `yaml:"memory_ms"`
+}
+
+func (p Pursuit) check() error {
+	if p.Persistence < 0 || p.Persistence > 1 || p.MaxChaseTiles < 0 || p.MaxChaseTiles > MaxChaseTiles ||
+		p.LoseSightMs < 0 || p.RollMs < 0 || p.MemoryMs < 0 ||
+		p.GiveUpBelowHpPct < 0 || p.GiveUpBelowHpPct > 100 || p.InsistTargetHpPct < 0 || p.InsistTargetHpPct > 100 {
+		return fmt.Errorf("persistence in 0..1, max_chase_tiles in 0..%d, times >= 0, percents in 0..100", MaxChaseTiles)
+	}
+	if p.Persistence > 0 && p.RollMs <= 0 {
+		return errors.New("a persistence needs roll_ms > 0")
+	}
+	return nil
+}
+
+// MonsterRegenRate is a monster's out-of-combat regeneration: Pct % of its maximum health every
+// IntervalMs, once DelayMs went by without dealing or taking damage and without a target.
+type MonsterRegenRate struct {
+	DelayMs    int     `yaml:"delay_ms"`
+	IntervalMs int     `yaml:"interval_ms"`
+	Pct        float64 `yaml:"pct"`
+}
+
+func (r MonsterRegenRate) check() error {
+	if r.DelayMs < 0 || r.IntervalMs < 0 || r.Pct < 0 || r.Pct > 100 || r.Pct > 0 && r.IntervalMs <= 0 {
+		return errors.New("delay_ms >= 0, pct in 0..100 and, with a pct, interval_ms > 0")
+	}
+	return nil
 }
 
 // CombatMode scales attack and shield defense for a fight stance.
@@ -895,6 +957,15 @@ func (c Combat) check() error {
 	}
 	if c.MonsterPathRetryMs <= 0 || c.MonsterStuckMs <= 0 || c.MonsterShunMs <= 0 {
 		return errors.New("combat: monster_path_retry_ms, monster_stuck_ms and monster_shun_ms must be > 0")
+	}
+	if err := c.MonsterPursuit.check(); err != nil {
+		return fmt.Errorf("combat.monster_pursuit: %w", err)
+	}
+	if err := c.MonsterRegen.check(); err != nil {
+		return fmt.Errorf("combat.monster_regen: %w", err)
+	}
+	if c.MonsterStrayMs < 0 {
+		return errors.New("combat: monster_stray_ms must be >= 0")
 	}
 	for _, s := range Stances {
 		m, ok := c.Modes[s]

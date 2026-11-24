@@ -1010,7 +1010,7 @@ describe("validator diagnostics", () => {
   it("points at file:line:col and suggests the closest id for unknown references", () => {
     edit("data/monsters/wolf.yaml", "item: wolf_pelt,", "item: wolf_pelts,");
     expect(messages(root)).toContain(
-      'error data/monsters/wolf.yaml:17:7 loot[0].item: unknown item "wolf_pelts" (did you mean "wolf_pelt"?)',
+      'error data/monsters/wolf.yaml:18:7 loot[0].item: unknown item "wolf_pelts" (did you mean "wolf_pelt"?)',
     );
   });
 

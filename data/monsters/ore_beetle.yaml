@@ -9,6 +9,7 @@ defense: 10
 behavior:
   aggressive: true
   target_distance: 1
+pursuit: { persistence: 0.15, max_chase_tiles: 12, lose_sight_ms: 2000 }  # slow: gives up early
 attacks:
   - { type: melee, min: 0, max: 28, interval_ms: 2000, condition: { id: poison, chance: 0.3, ticks: 5, damage: 3 } }
 resistances: { physical: 10, earth: 30, fire: -15, energy: -10 }
