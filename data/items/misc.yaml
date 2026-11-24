@@ -42,7 +42,7 @@
   sprite: materials/wolf_pelt
   name: item.wolf_pelt.name
   description: item.wolf_pelt.desc
-  weight: 1500
+  weight: 1200
   stackable: true
   max_stack: 100
   tradeable: true
@@ -168,7 +168,7 @@
   sprite: materials/iron_ore
   name: item.iron_ore.name
   description: item.iron_ore.desc
-  weight: 1200
+  weight: 900
   stackable: true
   max_stack: 100
   tradeable: true
@@ -385,7 +385,7 @@
   sprite: quest/sealed_coffer
   name: item.sealed_coffer.name
   description: item.sealed_coffer.desc
-  weight: 4000
+  weight: 2500
   quest: true
   tradeable: false
   notes: Chapter 2 quest item (ch2_coffer), the coffer stolen from the wreck of Chapter 1. Dropped by hollow crawlers in the smugglers' cave; taken by bosque_druid. No value, so no NPC buys it.

@@ -487,6 +487,58 @@ func TestShopBuyAndSell(t *testing.T) {
 	}
 }
 
+// TestOverloadedSellerKeepsTheCoins (review of feat/metric-units): a character over its
+// capacity (the realistic loads shrank it, docs/02 "Cargas realistas") sells its way out:
+// the coins of a sale that leaves it no heavier go into its packs, never on the floor
+// where anyone takes them. A sale whose coins would overload the seller is refused whole.
+// It plays with the capacities of data/vocations.yaml (45 kg for a level 1 guardian).
+func TestOverloadedSellerKeepsTheCoins(t *testing.T) {
+	// A pelt as light as paper: its 5 coppers (15 g) weigh more than it does.
+	h := dataHarnessWith(t, func(c *session.Config) { c.Items["wolf_pelt"].Weight = 1 })
+	c := session.Character{ID: 903, AccountID: 903, Name: "Hauler", Vocation: "guardian", Level: 1, Health: 145, Mana: 20}
+	cl, p := h.joinFresh(c, pos(11, 11))
+	if p.CapacityForTest() != 45_000 {
+		t.Fatalf("a level 1 guardian carries %d g, want the 45 kg of data/vocations.yaml", p.CapacityForTest())
+	}
+	prov := h.npc("puerto_provisioner")
+	h.sim.Command(gameFunc(func() {
+		h.w.GiveForTest(p, "iron_ore", 20)
+		h.w.GiveForTest(p, "wolf_pelt", 2)
+	}))
+	h.sim.Step()
+	// Over the capacity by more than one sale sheds: still overloaded after it.
+	h.sim.Command(gameFunc(func() { h.w.SetCapacityForTest(p, p.Carried()-10_000) }))
+	h.sim.Step()
+	cl.take()
+	d := h.lastDialog(h.send(cl, talkMsg(prov.ID())))
+	h.pick(cl, d, "dialog.trade")
+	sell := func(id string, n uint32) []*pb.ServerMessage {
+		return h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{
+			DialogId: d.DialogId, ItemId: itemNum(t, h, p, id), Count: n}}})
+	}
+	evs := sell("iron_ore", 2)
+	if p.Carried() <= p.CapacityForTest() {
+		t.Fatal("the test wants a seller still over its capacity after the sale")
+	}
+	if !messageKeys(evs)["shop.sold"] || messageKeys(evs)["dialog.item_on_floor"] || len(h.w.GroundAt(p.Pos())) != 0 {
+		t.Fatalf("an overloaded seller's coins fell: %v, %d stacks on the floor", messageKeys(evs), len(h.w.GroundAt(p.Pos())))
+	}
+	if h.w.Money(p) != 6 || h.w.CountItem(p, "iron_ore") != 18 {
+		t.Fatalf("sale: money %d ore %d, want 6 and 18", h.w.Money(p), h.w.CountItem(p, "iron_ore"))
+	}
+	// Coins heavier than what is sold: refused while they would not fit, nothing changes.
+	if evs := sell("wolf_pelt", 2); !messageKeys(evs)["shop.no_room"] || h.w.Money(p) != 6 || h.w.CountItem(p, "wolf_pelt") != 2 {
+		t.Fatalf("a sale that overloads the seller: %v, money %d pelts %d", messageKeys(evs), h.w.Money(p), h.w.CountItem(p, "wolf_pelt"))
+	}
+	// With the capacity for them it goes through.
+	h.sim.Command(gameFunc(func() { h.w.SetCapacityForTest(p, p.Carried()+28) })) // 30 g of coins for 2 g of pelts
+	h.sim.Step()
+	cl.take()
+	if evs := sell("wolf_pelt", 2); !messageKeys(evs)["shop.sold"] || h.w.Money(p) != 16 || len(h.w.GroundAt(p.Pos())) != 0 {
+		t.Fatalf("a sale that fits: %v, money %d", messageKeys(evs), h.w.Money(p))
+	}
+}
+
 func itemNum(t *testing.T, h *harness, _ *session.Player, id string) uint32 {
 	t.Helper()
 	items, err := content.LoadItems(filepath.Join("..", "..", "..", "data"))

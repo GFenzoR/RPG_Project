@@ -1236,7 +1236,10 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
 - `ShopBuy` es todo o nada: dinero suficiente, capacidad y lugar en la mochila (se
   apila con lo que ya hay, y queda un lugar libre por cada moneda menor para el vuelto)
   o `shop.no_money` / `shop.no_room`. `ShopSell` toma de los
-  contenedores, nunca lo equipado (`shop.not_enough`). Tras cada compra o venta: `Message`
+  contenedores, nunca lo equipado (`shop.not_enough`); sus monedas nunca caen al suelo por
+  peso: entran aunque el vendedor esté sobrecargado si pesan menos que lo vendido, y si
+  pesan más y no caben en su capacidad la venta se rechaza con `shop.no_room` (docs/02
+  "Cargas realistas"). Tras cada compra o venta: `Message`
   `shop.bought`/`shop.sold`, `PlayerStats` y un `ShopOpen` actualizado.
 - **Dinero:** la suma de `worth × count` de los items `currency` que lleva (equipo y
   contenedores anidados). Pagar saca primero las monedas de menor valor y devuelve el

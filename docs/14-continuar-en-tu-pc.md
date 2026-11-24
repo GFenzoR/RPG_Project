@@ -278,19 +278,40 @@ el punto 5:
 - **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
   2026-11-23: "todas las unidades y distancias en el sistema métrico"; docs/02
   "Unidades" y "Cargas realistas"):** pesos en g/kg (`formatMass`), alcances en m y casas
-  en m² (1 casilla = 1 m); capacidad de 36–45 kg al nivel 1 y pesos reales en todo
-  `data/items`; `TestHuntLootFits` mide que una cacería de 60 muertes entra a los niveles
-  1, 10 y 30. Queda:
+  en m² (1 casilla = 1 m); capacidad de 40–45 kg al nivel 1 y pesos reales en todo
+  `data/items`; `TestHuntLootFits` mide que una cacería de 60 muertes entra cada cinco
+  niveles del 1 al 50, con soga, pala y una bolsa de monedas encima. Queda:
   - **Personajes que ya existen:** la capacidad se deriva del nivel (sin migración), pero
     quien llevaba más de lo que ahora puede cargar (un guardián de nivel 30 con 100 kg de
     botín en la mochila) queda sobrecargado: no queda atascado, solo no levanta nada hasta
-    vender o soltar. En un servidor con jugadores, avisarlo en las noticias.
+    vender o soltar. Vender a un NPC es seguro: las monedas de la venta entran aunque siga
+    sobrecargado (`TestOverloadedSellerKeepsTheCoins`; antes caían al suelo, donde tras el
+    guardado las levantaba cualquiera). **Ojo:** una recompensa de quest (oro o item) y lo
+    cobrado del mercado sí caen a sus pies si no entran por peso: que venda o suelte antes
+    de entregar. En un servidor con jugadores, avisar las dos cosas en las noticias.
   - **Afinar con gente real:** la cacería de 60 muertes y el 15 % de suerte son una
     estimación; si los jugadores vuelven al pueblo demasiado seguido, subir `per_level`
     de `data/vocations.yaml` o bajar el peso de las pieles y el mineral.
-  - **Más niveles:** el test mira 1, 10 y 30; los monstruos de 35 a 58 (delver, gólem,
-    dragoncillo) no tienen un chequeo propio (con 80–100 kg a esos niveles entran de sobra
-    en las cuentas a mano).
+  - **Decisión de balance para el dueño, material pesado:** al cubrir todos los niveles
+    el test mostró que 60 muertes de espinoso (100 kg: troncos de olmo), de gólem de
+    escoria (112 kg: mineral de ascua y núcleos) y de minero de obsidiana (46 kg) **no
+    entran**; la cuenta a mano anterior ("entran de sobra") estaba mal. Hoy son la
+    excepción declarada del test (`heavyHaul`: deben entrar 15 muertes; entran 17, 20 y
+    43 al más justo). Si se quiere que entren enteros hay que bajar su botín (p. ej. el
+    tronco del espinoso de 30 % a ~5 %, el mineral del gólem de 45 % a ~10 %) o el peso
+    de troncos, mineral y núcleos: cambia la economía de la leña y la forja, por eso no
+    se tocó.
+  - **Decisión de balance para el dueño, botín ya tocado:** bajaron el mineral del
+    escarabajo (35 → 20 %), la carne del jabalí (50 → 35 %) y la piel del sabueso
+    (22 → 18 %); eso baja el ingreso por cacería y alarga `foreman_ore` (5 de mineral).
+    Los tests de balance pasan; revisar si el ritmo se siente bien.
+  - **Capacidad de los magos:** arcanista 40 kg y druida 41 kg al nivel 1 (+0,7 kg por
+    nivel), más cerca del montaraz (42 kg) de lo pensado al principio (36 y 37): con soga,
+    pala y 20 brebajes de maná no les entraba la cacería del nivel 5 al 10.
+  - **El fixture de los tests de sesión** (`helpers_test.go`, `testVocations`) sigue con
+    420 kg y pesos de la escala vieja: no se cambió porque varios tests cuentan con esos
+    números; los tests con datos reales (`dataHarness`) ya juegan con las capacidades
+    nuevas.
   - **El atributo `speed`** sigue diciendo "+N de velocidad" (puntos, no una velocidad):
     si se quiere mostrar en m/s hay que pasar por la fórmula del paso (docs/02
     "Movimiento").

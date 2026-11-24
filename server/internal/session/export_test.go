@@ -203,6 +203,12 @@ func (w *World) TrainForTest(p *Player, id string, n int64) { w.addTries(p, w.sk
 // SetCapacityForTest sets p's capacity in grams (T3.4).
 func (w *World) SetCapacityForTest(p *Player, grams int) { p.capacity = grams }
 
+// CapacityForTest returns p's capacity in grams.
+func (p *Player) CapacityForTest() int { return p.capacity }
+
+// FreeCellsForTest returns the free cells at the top level of p's packs.
+func (p *Player) FreeCellsForTest() int { return p.freeCells() }
+
 // SetStorageForTest sets a quest_state value of p (tests only, loop goroutine).
 func (p *Player) SetStorageForTest(key string, v int64) { p.storage.Set(key, v) }
 

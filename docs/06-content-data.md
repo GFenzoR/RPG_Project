@@ -115,7 +115,7 @@ items:
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 1200            # en gramos por unidad; la UI lo muestra en g o kg
+  weight: 1100            # en gramos por unidad; la UI lo muestra en g o kg
   stackable: false
   tradeable: true
   weapon:
@@ -201,7 +201,7 @@ items:
   y `riveted_round_shield`. Nunca se borra un item que pudo quedar en un inventario
   guardado: se retira.
 - **Peso:** `weight` en gramos por unidad, realista para lo que es el objeto (una espada
-  1–1,5 kg, un peto de placas 12–20 kg, una moneda unos gramos; tabla en
+  1–1,5 kg, un torso pesado 4–19 kg según su banda, una moneda unos gramos; tabla en
   `02-game-design.md` "Unidades"). La UI lo muestra en g por debajo de 1 kg y en kg con
   hasta dos decimales (`client/src/state/units.ts`). La capacidad de
   `data/vocations.yaml` también va en gramos. Un alcance (`weapon.range`) son casillas, y

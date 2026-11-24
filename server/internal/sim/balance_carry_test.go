@@ -1,10 +1,11 @@
 package sim_test
 
 // Realistic loads (owner, 2026-11-23; docs/02 "Unidades", "Cargas realistas"): capacity
-// and item weights are real grams, a starting character carries some 36-45 kg. The hunting
+// and item weights are real grams, a starting character carries some 40-45 kg. The hunting
 // loop must stay playable: a character in its level's kit, with its supplies, carries a
-// normal hunt's loot home. This checks it at levels 1, 10 and 30 for every vocation,
-// against every common monster of that level, with the kits of the balance sims.
+// normal hunt's loot home. This checks it every five levels up to 50 for every vocation,
+// against every common monster of that level, with the kits of the balance sims, the
+// tools an explorer carries (a rope and a shovel) and a purse.
 
 import (
 	"fmt"
@@ -23,8 +24,18 @@ const (
 	lootLuck = 1.15
 )
 
-// carryLevels are the levels TestHuntLootFits checks.
-var carryLevels = []int{1, 10, 30}
+// heavyHaul are the monsters whose loot is raw material by the kilo (logs, ore, slag
+// cores): nobody carries 60 kills of it home, the hunter picks or goes back sooner. They
+// must still leave room for heavyKills kills (some 8 minutes); docs/02 "Cargas realistas"
+// lists them and docs/14 leaves their drops to the owner.
+var heavyHaul = map[string]bool{"thornling": true, "obsidian_delver": true, "slag_golem": true}
+
+// heavyKills is the hunt a heavyHaul monster must allow.
+const heavyKills = 15
+
+// carryLevels are the levels TestHuntLootFits checks: every five, so every common monster
+// is hunted at one of them (TestHuntLootFits fails if one is not).
+var carryLevels = []int{1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50}
 
 // carryKit is what a vocation wears at level: the kits of the careers
 // (balance_vocations_test.go), the guardian's of the melee sims.
@@ -46,11 +57,12 @@ type supply struct {
 	count int
 }
 
-// carrySupplies is what a vocation brings to a hunt besides its kit: food for everyone,
-// health draughts for the guardian, mana draughts for the casters, some of both and its
-// ammo for the ranger.
+// carrySupplies is what a vocation brings to a hunt besides its kit: a rope and a shovel
+// (the tools one keeps in the backpack), a purse (100 copper and 10 silver coins: change
+// for the shops) and food for everyone; health draughts for the guardian, mana draughts
+// for the casters, some of both and its ammo for the ranger.
 func carrySupplies(voc string, ammo string) []supply {
-	s := []supply{{"ship_biscuit", 10}}
+	s := []supply{{"rope", 1}, {"shovel", 1}, {"copper_coin", 100}, {"silver_coin", 10}, {"ship_biscuit", 10}}
 	switch voc {
 	case "guardian":
 		s = append(s, supply{"health_draught", 10})
@@ -87,7 +99,7 @@ func huntersOf(level int) []string {
 	return out
 }
 
-// carried is the grams of kit, the backpack and the supplies.
+// carried is the grams of kit, the backpack, the tools, the purse and the supplies.
 func (d *balanceData) carried(t *testing.T, voc string, level int) int {
 	t.Helper()
 	k := carryKit(voc, level)
@@ -110,10 +122,14 @@ func (d *balanceData) carried(t *testing.T, voc string, level int) int {
 func TestHuntLootFits(t *testing.T) {
 	d := loadData(t)
 	debug := os.Getenv("DEBUG_BALANCE") != ""
+	hunted, tooHeavy := map[string]bool{}, map[string]bool{}
 	for _, level := range carryLevels {
 		monsters := huntersOf(level)
 		if len(monsters) == 0 {
 			t.Fatalf("no common monster to hunt at level %d", level)
+		}
+		for _, id := range monsters {
+			hunted[id] = true
 		}
 		for _, voc := range []string{"guardian", "arcanist", "ranger", "druid"} {
 			v, ok := d.vocations[voc]
@@ -128,16 +144,34 @@ func TestHuntLootFits(t *testing.T) {
 				if m == nil {
 					t.Fatalf("unknown monster %s", id)
 				}
-				loot := d.huntLootGrams(t, m, huntKills) * lootLuck
-				line := fmt.Sprintf("level %d %s: capacity %.1f kg, kit and supplies %.1f kg, %d %s %.1f kg",
-					level, voc, kg(capacity), kg(worn), huntKills, id, loot/1000)
+				kills := huntKills
+				if heavyHaul[id] {
+					kills = heavyKills
+				}
+				loot := d.huntLootGrams(t, m, kills) * lootLuck
+				line := fmt.Sprintf("level %d %s: capacity %.1f kg, kit and supplies %.1f kg, %.1f kg free, %d %s %.1f kg (full after %.0f kills)",
+					level, voc, kg(capacity), kg(worn), kg(free), kills, id, loot/1000, float64(free)*float64(kills)/loot)
 				if debug {
 					t.Log(line)
 				}
 				if loot > float64(free) {
-					t.Errorf("%s: does not fit (%.1f kg free)", line, kg(free))
+					t.Errorf("%s: does not fit", line)
+				}
+				if heavyHaul[id] && d.huntLootGrams(t, m, huntKills)*lootLuck > float64(free) {
+					tooHeavy[id] = true
 				}
 			}
+		}
+	}
+	for id := range commonTargets() {
+		if !hunted[id] {
+			t.Errorf("no level of carryLevels hunts %s", id)
+		}
+	}
+	// A heavy hauler whose whole hunt fits every vocation is no exception any more.
+	for id := range heavyHaul {
+		if !tooHeavy[id] {
+			t.Errorf("%s fits a hunt of %d kills: take it out of heavyHaul", id, huntKills)
 		}
 	}
 }

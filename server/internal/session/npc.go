@@ -430,8 +430,16 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 	// (docs/02 "Atributos de items"); it takes the weakest instances first (spareFirst)
 	// and never a refined one (spareable).
 	amount := l.sell * int64(n)
+	// The coins of a sale never fall on the floor for their weight. A sale that leaves p
+	// no heavier pays into its packs even while p is over its capacity (a character whose
+	// capacity shrank sells its way out, docs/02 "Cargas realistas"); one whose coins
+	// would put p over its capacity is refused, like a purchase that does not fit.
+	if gain := w.moneyWeight(amount) - l.def.Weight*n; gain > 0 && gain > p.capacity-p.carried() {
+		p.emit(systemMsg(msgShopNoRoom))
+		return
+	}
 	taken := w.takeItem(p, l.def, n, false)
-	w.giveMoney(p, amount)
+	w.payOut(p, amount)
 	w.econTaken(p, EconNPCSell, p.dialog.npc.def.ID, l.def, n, taken)
 	w.econGold(p, EconNPCSell, p.dialog.npc.def.ID, amount)
 	w.log.Info("economy: npc purchase", "character", p.charID, "npc", p.dialog.npc.def.ID, "item", l.def.ID, "count", n, "amount", amount)
@@ -601,16 +609,18 @@ func (w *World) canReceive(p *Player, def *content.Item, n, extra int) bool {
 // message. An equipable is created: it rolls its attribute (attributes.go). It returns the
 // new instances (not the units merged into a stack p had), for econMade.
 func (w *World) giveItem(p *Player, def *content.Item, n int) []*Item {
-	return w.give(p, def, n, nil)
+	return w.give(p, def, n, nil, false)
 }
 
 // giveMods is giveItem of one instance whose mods are known (a market offer, a mailbox
 // entry): it keeps them (an equipable without an attribute rolls one, as on load).
 func (w *World) giveMods(p *Player, def *content.Item, mods Mods) []*Item {
-	return w.give(p, def, 1, &mods)
+	return w.give(p, def, 1, &mods, false)
 }
 
-func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
+// give is giveItem and giveMods. anyWeight skips the capacity check: the caller already
+// settled the weight (payOut), so only a lack of room sends a stack to the floor.
+func (w *World) give(p *Player, def *content.Item, n int, mods *Mods, anyWeight bool) []*Item {
 	if def == nil || n <= 0 {
 		return nil
 	}
@@ -635,7 +645,7 @@ func (w *World) give(p *Player, def *content.Item, n int, mods *Mods) []*Item {
 			k = min(n, def.StackLimit()-merge.count)
 		}
 		pack := p.packWithRoom()
-		heavy := def.Weight*k > p.capacity-p.carried()
+		heavy := !anyWeight && def.Weight*k > p.capacity-p.carried()
 		switch {
 		case merge != nil && !heavy:
 			merge.count += k
@@ -764,6 +774,28 @@ func (w *World) giveMoney(p *Player, amount int64) {
 			amount -= n * coin.Currency.Worth
 		}
 	}
+}
+
+// payOut is giveMoney for a payment whose weight the caller already checked (shopSell):
+// the coins go into p's packs whatever p carries, and fall only for lack of room.
+func (w *World) payOut(p *Player, amount int64) {
+	for _, coin := range w.coins {
+		if n := amount / coin.Currency.Worth; n > 0 {
+			w.give(p, coin, int(n), nil, true)
+			amount -= n * coin.Currency.Worth
+		}
+	}
+}
+
+// moneyWeight is the grams of amount in the fewest coins, as giveMoney gives it.
+func (w *World) moneyWeight(amount int64) int {
+	g := 0
+	for _, coin := range w.coins {
+		n := amount / coin.Currency.Worth
+		g += int(n) * coin.Weight
+		amount -= n * coin.Currency.Worth
+	}
+	return g
 }
 
 // ---- quests ------------------------------------------------------------------------

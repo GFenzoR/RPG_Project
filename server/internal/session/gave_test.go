@@ -385,7 +385,8 @@ func TestDroppedTransferKeepsTheWholeDialog(t *testing.T) {
 	}
 }
 
-// The coins of an NPC sale fall at Ana's feet (she carries too much) and Caio picks them
+// The coins of an NPC sale fall at Ana's feet (her packs are full and she sells part of a
+// stack, so no cell opens: a sale's coins never fall for their weight) and Caio picks them
 // up. Ana's next trade is rejected: her row must not have the pelts she sold any more, or
 // they are sold twice (the coins are in Caio's row).
 func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
@@ -400,20 +401,22 @@ func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
 	cc, c := h.joinFresh(session.Character{ID: 9103, AccountID: 9103, Name: "Caio", Vocation: "guardian", Level: 1,
 		Health: 145, Mana: 20}, pos(10, 11))
 	h.sim.Command(gameFunc(func() {
+		h.w.SetCapacityForTest(a, 1_000_000)
 		h.w.GiveForTest(a, "rope", 1)
-		h.w.GiveForTest(a, "wolf_pelt", 3)
+		h.w.GiveForTest(a, "wolf_pelt", 4)
+		h.w.GiveForTest(a, "shovel", a.FreeCellsForTest()) // no cell left for the coins
 	}))
 	h.sim.Step()
+	if a.FreeCellsForTest() != 0 || len(h.w.GroundAt(pos(11, 11))) != 0 {
+		t.Fatalf("Ana's packs: %d free cells, %d stacks at her feet", a.FreeCellsForTest(), len(h.w.GroundAt(pos(11, 11))))
+	}
 	db.saveNow(h, ca) // her last written save has the pelts
-
-	h.sim.Command(gameFunc(func() { h.w.SetCapacityForTest(a, 0) })) // the coins will not fit
-	h.sim.Step()
 	ca.take()
 	d := h.lastDialog(h.send(ca, talkMsg(h.npc("puerto_provisioner").ID())))
 	h.pick(ca, d, "dialog.trade")
 	evs := h.send(ca, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{
 		DialogId: d.DialogId, ItemId: pelt, Count: 3}}})
-	if !messageKeys(evs)["dialog.item_on_floor"] || h.w.CountItem(a, "wolf_pelt") != 0 {
+	if !messageKeys(evs)["dialog.item_on_floor"] || h.w.CountItem(a, "wolf_pelt") != 1 {
 		t.Fatalf("the sale's coins did not fall: %v", messageKeys(evs))
 	}
 	db.sync(h) // the give-away's save is in (lote 16: until then the coins are Ana's)
@@ -443,8 +446,8 @@ func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
 	if !slices.Equal(ids, []int64{a.CharacterID(), b.CharacterID()}) {
 		t.Fatalf("tainted %v, want Ana and Beto", ids)
 	}
-	if n := db.count(a.CharacterID(), uint16(pelt)); n != 0 {
-		t.Fatalf("Ana's row still has the %d pelts she sold; Caio's has their coins (%d)", n,
+	if n := db.count(a.CharacterID(), uint16(pelt)); n != 1 {
+		t.Fatalf("Ana's row has %d pelts, want the one she kept of 4; Caio's has the coins of the 3 sold (%d)", n,
 			db.count(c.CharacterID(), uint16(coin)))
 	}
 	if db.count(a.CharacterID(), uint16(rope)) != 1 || db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {

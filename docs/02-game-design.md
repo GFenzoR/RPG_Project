@@ -850,8 +850,8 @@ empieza ya no carga 420 kg.
 |---|---|---|---|---|---|
 | Guardián | 45 kg | +1 kg | 54 kg | 74 kg | 119 kg |
 | Montaraz | 42 kg | +0,8 kg | 49,2 kg | 65,2 kg | 101,2 kg |
-| Druida | 37 kg | +0,65 kg | 42,9 kg | 55,9 kg | 85,1 kg |
-| Arcanista | 36 kg | +0,6 kg | 41,4 kg | 53,4 kg | 80,4 kg |
+| Druida | 41 kg | +0,7 kg | 47,3 kg | 61,3 kg | 92,8 kg |
+| Arcanista | 40 kg | +0,7 kg | 46,3 kg | 60,3 kg | 91,8 kg |
 
 La capacidad sale de la vocación y el nivel (`content.Vocation.AtLevel`): no se guarda por
 personaje, así que los personajes que ya existen no necesitan migración.
@@ -864,32 +864,70 @@ ascua), 14 kg (cota de escamas de dragoncillo) y 19 kg (coraza de acero de marea
 1,4–1,9 kg; cabeza 200 g (gorro) a 2,6 kg (yelmo), piernas 0,7–4,45 kg, pies 1–2,5 kg;
 amuletos 60 g, anillos 15 g; mochila 1 kg; brebajes 300–350 g; runa 50 g; flecha 25 g, virote 35 g; moneda de cobre 3 g, de plata
 5 g, de oro 8 g; comida en gramos (galleta 100 g, pescado 300–400 g, carne 400–500 g,
-guiso 600 g); materiales pesados: troncos 2,5–3,5 kg, mineral 1,2–1,3 kg, lingote 1 kg,
-piel 1,5 kg, cornamenta 1,5 kg, núcleo de escoria 4 kg; la piedra suelta de la minería es
+guiso 600 g); materiales pesados: troncos 2,5–3,5 kg, mineral de hierro 900 g y de ascua
+1,3 kg, lingote 1 kg, piel de lobo 1,2 kg y de sabueso 1,5 kg, cornamenta 1,5 kg, cofre
+sellado 2,5 kg, núcleo de escoria 4 kg; la piedra suelta de la minería es
 un trozo de mano de 500 g (así minar no llena la capacidad en unos golpes).
 
 **Una cacería entra en la mochila.** `TestHuntLootFits` (`server/internal/sim`) arma a cada
-vocación en los niveles 1, 10 y 30 con el kit de las simulaciones de balance (`kitFor`,
-`casterKit`, `crossbowKit`), la mochila, provisiones (10 galletas; 10 brebajes de vida el
-guardián, 20 de maná los magos, 5 y 5 más 100 flechas o virotes el montaraz) y le suma el
-botín esperado de **60 muertes** (unos 30 minutos a ~30 s por muerte) de cada monstruo
-común de su nivel (objetivo entre nivel − 4 y nivel + 2, con todo lo que suelta, monedas
-incluidas), con un 15 % de margen por la suerte. Las cuentas al ajustar (botín de 60
-muertes, sin el margen, contra lo libre con kit y provisiones):
+vocación cada cinco niveles, del 1 al 50, con el kit de las simulaciones de balance
+(`kitFor`, `casterKit`, `crossbowKit`), la mochila, las herramientas que uno lleva siempre
+(soga y pala, 3,3 kg), una bolsa de monedas (100 de cobre y 10 de plata), provisiones (10
+galletas; 10 brebajes de vida el guardián, 20 de maná los magos, 5 y 5 más 100 flechas o
+virotes el montaraz) y le suma el botín esperado de **60 muertes** (unos 30 minutos a
+~30 s por muerte) de cada monstruo común de su nivel (objetivo entre nivel − 4 y nivel + 2,
+con todo lo que suelta, monedas incluidas), con un 15 % de margen por la suerte. El test
+falla también si un monstruo común no queda cubierto por ningún nivel. La tabla sale de
+`DEBUG_BALANCE=1 go test ./internal/sim -run TestHuntLootFits -v` (botín de la cacería
+**con** el 15 % de suerte, contra lo libre de la vocación más justa; al tocar pesos,
+capacidades o botín, regenerarla):
 
-| Nivel | Lo más pesado de cazar | Botín | Libre (el más justo) |
+| Nivel | Lo más pesado de cazar | Botín con suerte | Libre (el más justo) | Se llena tras |
+|---|---|---|---|---|
+| 1 | gaviota ladrona | 0,5 kg | 23,4 kg (druida) | miles de muertes |
+| 5 | lobo | 21,3 kg | 23,6 kg (druida) | 67 muertes |
+| 10 | ciervo de zarza | 22,9 kg | 27,1 kg (druida y montaraz) | 71 |
+| 10 | escarabajo de mena | 20,8 kg | 27,1 kg (druida y montaraz) | 78 |
+| 15 | minero ahogado | 23,5 kg | 24,8 kg (montaraz) | 63 |
+| 25 | reptante hueco | 30,8 kg | 32,8 kg (montaraz) | 64 |
+| 30 | sabueso de ceniza | 25,2 kg | 29,4 kg (montaraz) | 70 |
+| 50 | dragoncillo de ascua | 17,6 kg | 45,5 kg (montaraz) | 155 |
+
+El más justo desde el nivel 15 es el montaraz de ballesta (coraza, escudo, ballesta y 100
+virotes); antes, los magos, por sus 20 brebajes de maná (7 kg).
+
+**Los que sueltan material a kilos no entran** (`heavyHaul` en el test): el espinoso
+(troncos de olmo de 3,5 kg y corazón de espino), el minero de obsidiana (mineral de ascua, picos) y
+el gólem de escoria (mineral de ascua y núcleos de 4 kg). Nadie carga 60 muertes de eso:
+el cazador elige qué levanta o vuelve antes. El test les exige que entren al menos
+**15 muertes** (unos 8 minutos), y falla si alguno ya entra entero (para sacarlo de la
+lista). Es una decisión de balance pendiente del dueño (docs/14):
+
+| Nivel | Monstruo | Botín de 60 muertes con suerte | Se llena tras (el más justo) |
 |---|---|---|---|
-| 1 | gaviota ladrona | 0,4 kg | 23,1 kg (druida) |
-| 10 | escarabajo de mena | 21,7 kg | 26,2 kg (arcanista) |
-| 10 | ciervo de zarza | 19,9 kg | 26,2 kg (arcanista) |
-| 10 | jabalí cerdoso | 15,9 kg | 26,2 kg (arcanista) |
-| 30 | sabueso de ceniza | 21,9 kg | 32 kg (arcanista; el montaraz con coraza, escudo y ballesta, 33,1 kg) |
+| 20 | espinoso | 100,3 kg | 17 muertes (montaraz) |
+| 35 | minero de obsidiana | 46,3 kg | 43 (montaraz; el guardián sí carga las 60) |
+| 40–45 | gólem de escoria | 112,5 kg | 20–22 (montaraz) |
 
 Para que entrara se tocó el botín: el escarabajo de mena suelta mineral de hierro con 20 %
 (antes 35 %), el jabalí carne con 35 % (antes 50 %) y el sabueso de ceniza su piel con
 18 % (antes 22 %); el cobre pesa 3 g (lo que más se junta: ~1900 monedas en una cacería
-de sabuesos). Llenarse sigue pasando en una cacería larga o minando, y es parte del
-juego: se vuelve al pueblo a vender.
+de sabuesos). Y, al sumar las herramientas y cubrir todos los niveles (revisión del
+2026-11-24), los magos pasaron a 40 y 41 kg con +0,7 kg por nivel (antes 36 y 37 kg con
++0,6 y +0,65), el mineral de hierro a 900 g (antes 1,2 kg), la piel de lobo a 1,2 kg
+(antes 1,5 kg) y el cofre sellado a 2,5 kg (antes 4 kg). Llenarse sigue pasando en una
+cacería larga o minando, y es parte del juego: se vuelve al pueblo a vender.
+
+**Vender nunca tira las monedas por peso** (`shopSell`, `TestOverloadedSellerKeepsTheCoins`).
+Un personaje sobrecargado (uno que ya existía y cargaba más de lo que ahora puede) vende
+para salir: si lo que cobra pesa menos que lo que vende, las monedas van a sus bolsillos y
+su mochila aunque siga por encima de su capacidad. Si las monedas pesan más que lo vendido
+y no entran en su capacidad, la venta se rechaza entera (`shop.no_room`), como una compra
+que no cabe. Solo caen al suelo si no hay ni una celda libre (vender parte de una pila con
+todo lleno), como siempre. Las recompensas de quest y lo cobrado del mercado siguen la
+regla general: lo que no entra por peso cae a los pies del personaje (reservado para él
+solo hasta que se guarda), así que a un sobrecargado le conviene vender o soltar antes de
+entregar una quest.
 
 ## Items, equipo e inventario
 Implementado en T1.8 (`server/internal/session/inventory.go`):
