@@ -101,8 +101,9 @@ s := m.Snapshot()                    // copia, en el loop; s.Encode() fuera de √
   el nivel (es lo que viaja a los clientes).
 - El pegamento (`server/internal/session/trailwear.go`) da la superficie de cada suelo
   (`ground.surface` de `data/items`), llama a `OnStep` en `move` (pasos propios, no los de
-  un portal) y en `stepMonster`, a `OnTick`/`TakeChanges` en `flushSystem` (cada cambio a
-  quien ve la casilla, `TrailWear`), a `EachInRect` en `mapArea`, y pasa el `Snapshot` a
+  un portal ni los de un jugador invisible) y en `stepMonster`, a `OnTick`/`TakeChanges` en `flushSystem` (cada cambio a
+  quien ve la casilla, `TrailWear`), a `EachInRect` en `mapArea` (solo el piso del jugador:
+  los cambios llegan a quien est√° en el piso de la casilla), y pasa el `Snapshot` a
   `Config.SaveTrail`. `server/internal/app/trailwear.go` lo escribe (`trail_wear`) desde
   su goroutine y lo lee al arrancar (`TrailStore`); sin Postgres (los fakes) vive solo en
   memoria.

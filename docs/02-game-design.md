@@ -2975,7 +2975,8 @@ lo lleva el servidor (contrato en `livingworld/README.md`, números en
   `tall_grass` (`ground.surface` de `data/items`; la lista es `surfaces` de `wear.yaml`)
   suma `player_step` (4) puntos a esa casilla, hasta `max` (2400). Los **monstruos no**
   (`monster_step: 0`): deambulan siempre por sus zonas y las pelarían aunque nadie pase;
-  se puede subir si se quiere que un cubil se note. Los NPCs nunca.
+  se puede subir si se quiere que un cubil se note. Los NPCs nunca, ni un jugador
+  invisible (su sendero delataría por dónde anda quien no se ve).
 - **Recuperación:** cada `decay_every_ms` (1 min) cada casilla gastada pierde `decay` (2)
   puntos: desde el tope, el pasto vuelve en 20 h. También mientras el servidor está
   apagado: al arrancar se descuenta ese tiempo.

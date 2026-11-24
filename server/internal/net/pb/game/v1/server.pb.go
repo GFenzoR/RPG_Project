@@ -2246,7 +2246,8 @@ type MapArea struct {
 	Floors  []*MapFloor            `protobuf:"bytes,6,rep,name=floors,proto3" json:"floors,omitempty"`
 	// Creatures standing inside the area.
 	Creatures []*Creature `protobuf:"bytes,7,rep,name=creatures,proto3" json:"creatures,omitempty"`
-	// Trail wear of the area's tiles, one per floor with any (livingworld.proto TrailWear).
+	// Trail wear of the area's tiles on the player's own floor, if any (livingworld.proto
+	// TrailWear): its deltas reach only the players on the tile's floor.
 	Wear          []*TrailWear `protobuf:"bytes,8,rep,name=wear,proto3" json:"wear,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

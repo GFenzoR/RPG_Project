@@ -609,7 +609,8 @@ export type MapArea = Message$1<"game.v1.MapArea"> & {
   creatures: Creature[];
 
   /**
-   * Trail wear of the area's tiles, one per floor with any (livingworld.proto TrailWear).
+   * Trail wear of the area's tiles on the player's own floor, if any (livingworld.proto
+   * TrailWear): its deltas reach only the players on the tile's floor.
    *
    * @generated from field: repeated game.v1.TrailWear wear = 8;
    */

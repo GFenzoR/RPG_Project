@@ -162,7 +162,8 @@ message MapArea {
   repeated MapFloor floors = 6;
   // Creatures standing inside the area.
   repeated Creature creatures = 7;
-  // Trail wear of the area's tiles, one per floor with any (livingworld.proto TrailWear).
+  // Trail wear of the area's tiles on the player's own floor, if any (livingworld.proto
+  // TrailWear): its deltas reach only the players on the tile's floor.
   repeated TrailWear wear = 8;
 }
 

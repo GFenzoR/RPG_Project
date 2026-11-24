@@ -23,7 +23,7 @@ declare -A RULES=(
 	[go-server]='^((server|livingworld/server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	# The living world's Go module (livingworld/README.md): its own tests; the server's job
 	# runs too, since server/ requires it.
-	[go-livingworld]='^livingworld/server/'
+	[go-livingworld]='^(livingworld/server/|data/livingworld/wear\.yaml$)'
 	[go-bots]='^(tools/bots|server|livingworld/server|proto)/'
 	# The launcher's test compares its compose profiles with deploy/home.sh and the Makefile
 	# (the Makefile is in GLOBAL, so it already runs this job), and its project name with
@@ -89,6 +89,9 @@ self_test() {
 	# The living world module (livingworld/README.md): its job, the server's and the bots'.
 	for j in go-livingworld go-server go-bots integration e2e; do check "$j" true livingworld/server/world.go; done
 	check go-livingworld false server/internal/session/move.go
+	# TestRepoConfig reads the wear numbers of data/livingworld/wear.yaml.
+	check go-livingworld true data/livingworld/wear.yaml
+	check go-livingworld false data/items/ground.yaml
 	for j in ts build e2e; do check "$j" true livingworld/client/src/index.ts; done
 	for j in go-livingworld go-server; do check "$j" false livingworld/client/src/index.ts; done
 	check go-bots true server/pkg/bot/bot.go

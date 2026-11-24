@@ -187,3 +187,50 @@ func TestTrailWearPersistsAcrossARestart(t *testing.T) {
 		t.Fatalf("corrupt data restored level %d", got)
 	}
 }
+
+// An invisible player leaves no trail: its worn path would show where nobody is seen.
+func TestTrailWearIgnoresInvisiblePlayers(t *testing.T) {
+	h := trailHarness(t, nil, nil, 0)
+	cl, p := h.join("Ghost", at(2, 1))
+	h.w.SetInvisibleForTest(p, true)
+	for range 3 { // visible, (3, 1) would reach 18: level 1
+		stepTo(t, h, cl, p, pb.Direction_DIRECTION_EAST, pos(3, 1))
+		stepTo(t, h, cl, p, pb.Direction_DIRECTION_WEST, pos(2, 1))
+	}
+	if lv := h.w.TrailLevel(pos(3, 1)); lv != 0 {
+		t.Fatalf("an invisible player wore the grass to level %d", lv)
+	}
+}
+
+// MapArea.wear carries only the player's own floor: the level changes of a tile reach the
+// players on its floor, so the wear of a floor seen from above would go stale.
+func TestTrailWearAreaOnlyOfThePlayersFloor(t *testing.T) {
+	m := worldtest.Floors(t, 0, 0,
+		worldtest.Layer{Z: 6, Rows: []string{"", "", "", "", "      ..."}},
+		worldtest.Layer{Z: 7, Rows: trailRows})
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Items = trailItems()
+		c.Trail = trailConfig()
+		c.SaveTrail = func(session.TrailSnapshot) bool { return true }
+	})
+	cl, p := h.join("Walker", at(2, 1))
+	for range 2 { // (3, 1) and (2, 1): level 1 on floor 7
+		stepTo(t, h, cl, p, pb.Direction_DIRECTION_EAST, pos(3, 1))
+		stepTo(t, h, cl, p, pb.Direction_DIRECTION_WEST, pos(2, 1))
+	}
+	up := world.Pos{X: 7, Y: 4, Z: 6}
+	above, _ := h.join("Above", &up)
+	var area *pb.MapArea
+	for _, f := range find(above.take(), (*pb.ServerMessage).GetFullMapView) {
+		area = f.GetArea()
+	}
+	if area == nil {
+		t.Fatal("no FullMapView")
+	}
+	if len(area.GetFloors()) < 2 {
+		t.Fatalf("the player above sees %d floors, want floor 7 too", len(area.GetFloors()))
+	}
+	if w := area.GetWear(); len(w) != 0 {
+		t.Fatalf("FullMapView on floor 6 carries the wear of floor %d", w[0].GetZ())
+	}
+}

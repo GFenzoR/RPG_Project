@@ -38,7 +38,7 @@ func (s Snapshot) Tiles() int {
 
 // The encoding (little endian): the magic "TW", the version 1, then per chunk z (1 byte),
 // cx and cy (2 bytes each) and its worn cells (2 bytes), then each worn cell's index in the
-// chunk and its wear (2 bytes each). A chunk is 9 + 4 x worn bytes.
+// chunk and its wear (2 bytes each). A chunk is 7 + 4 x worn bytes.
 var magic = [3]byte{'T', 'W', 1}
 
 // Encode returns the bytes Restore reads (data of the trail_wear row).

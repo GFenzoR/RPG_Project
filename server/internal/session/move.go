@@ -445,7 +445,11 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	if !through {
 		w.checkReach(p)
 		w.sigilStep(p)
-		w.trailPlayerStep(to) // the living world's trail wear (trailwear.go)
+		// The living world's trail wear (trailwear.go); an invisible player leaves no
+		// trail, or its path would show where nobody is seen.
+		if !p.invisible {
+			w.trailPlayerStep(to)
+		}
 	}
 }
 

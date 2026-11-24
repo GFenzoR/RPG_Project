@@ -49,7 +49,7 @@ type trailWriter struct {
 	log *slog.Logger
 
 	mu      sync.Mutex
-	pending *session.TrailSnapshot
+	pending *trailCopy
 	signal  chan struct{}
 	stop    chan struct{}
 	done    chan struct{}
@@ -60,11 +60,24 @@ func newTrailWriter(st TrailStore, clk clock.Clock, log *slog.Logger) *trailWrit
 		stop: make(chan struct{}), done: make(chan struct{})}
 }
 
+// trailCopy is a copy of the wear waiting to be written and when it was taken (the row's
+// saved_at: the downtime the grass recovers at the next start counts from it, not from a
+// write the database held up).
+type trailCopy struct {
+	wear interface{ Encode() []byte }
+	at   time.Time
+}
+
 // Submit keeps s as the copy to write next (replacing one still waiting). It never
 // blocks and always takes it (session.Config.SaveTrail).
 func (t *trailWriter) Submit(s session.TrailSnapshot) bool {
+	return t.submit(s, t.clk.Now())
+}
+
+// submit keeps wear, taken at at, as the copy to write next.
+func (t *trailWriter) submit(wear interface{ Encode() []byte }, at time.Time) bool {
 	t.mu.Lock()
-	t.pending = &s
+	t.pending = &trailCopy{wear: wear, at: at}
 	t.mu.Unlock()
 	select {
 	case t.signal <- struct{}{}:
@@ -102,10 +115,10 @@ func (t *trailWriter) flush(parent context.Context) {
 	}
 }
 
-func (t *trailWriter) write(parent context.Context, s session.TrailSnapshot) error {
+func (t *trailWriter) write(parent context.Context, c trailCopy) error {
 	ctx, cancel := context.WithTimeout(parent, trailWriteTimeout)
 	defer cancel()
-	return t.st.SaveTrailWear(ctx, s.Encode(), t.clk.Now())
+	return t.st.SaveTrailWear(ctx, c.wear.Encode(), c.at)
 }
 
 // Stop writes what is waiting and ends the goroutine (bounded by ctx).

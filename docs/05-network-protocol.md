@@ -1780,8 +1780,9 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `floors[]`: `MapFloor {z, tiles[]}` con `width × height` índices a `palette`, fila
   por fila (y, luego x). `-1` = sin tile.
 - `creatures`: criaturas paradas dentro del área.
-- `wear`: el desgaste de senderos del área, un `TrailWear` por piso con alguna casilla
-  gastada (abajo).
+- `wear`: el desgaste de senderos del área en el piso del jugador (un `TrailWear`, si hay
+  alguna casilla gastada; abajo). Los pisos que se ven desde arriba no lo traen: los
+  cambios de nivel solo llegan a quien está en el piso de la casilla.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
 
 ### Desgaste de senderos (`proto/game/v1/livingworld.proto`, lote 17)
@@ -1789,8 +1790,8 @@ El pasto gastado por los pasos de los jugadores (docs/02 "Senderos",
 `livingworld/README.md`). `TrailWear {z, tiles[], levels}`: `tiles[i]` es `x << 16 | y` de
 una casilla del piso `z` y `levels[i]` (un byte) su nivel, 0 nada, 1 pisoteado, 2 gastado,
 3 tierra pelada. Viaja de dos formas:
-- en `MapArea.wear` de un `FullMapView` o un `MapSlice`: todas las casillas del área con
-  nivel mayor que 0. El cliente olvida antes lo que tenía dentro de esa área (lo que pasó
+- en `MapArea.wear` de un `FullMapView` o un `MapSlice`: todas las casillas del área en el
+  piso del jugador con nivel mayor que 0. El cliente olvida antes lo que tenía dentro de esa área (lo que pasó
   mientras no la veía llega así);
 - como `ServerMessage.trail_wear` (campo 49; el 48 es `LivingObjectEvent` de los
   rompibles): las casillas que el jugador ve cuyo nivel cambió en el tick (0: el pasto se

@@ -51,21 +51,45 @@ func TestLoadTrail(t *testing.T) {
 	}
 }
 
+// fakeWear is a copy of the wear whose bytes say which one it is.
+type fakeWear string
+
+func (f fakeWear) Encode() []byte { return []byte(f) }
+
 // Only the newest copy is written: copies that arrive while one waits replace it, and
 // Stop writes what is left.
 func TestTrailWriterWritesTheNewestCopy(t *testing.T) {
 	st := &fakeTrailStore{}
 	w := newTrailWriter(st, clock.NewFake(time.Unix(0, 0)), slog.New(slog.DiscardHandler))
-	for range 3 {
-		if !w.Submit(session.TrailSnapshot{}) {
-			t.Fatal("Submit refused")
+	for _, c := range []fakeWear{"first", "second", "third"} {
+		if !w.submit(c, time.Unix(0, 0)) {
+			t.Fatal("submit refused")
 		}
 	}
 	w.Start()
 	if err := w.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if st.writes != 1 || string(st.data) != "TW\x01" {
-		t.Fatalf("%d writes of %q, want one", st.writes, st.data)
+	if st.writes != 1 || string(st.data) != "third" {
+		t.Fatalf("%d writes of %q, want one of the third copy", st.writes, st.data)
+	}
+}
+
+// The row's saved_at is when the loop took the copy, not when the database wrote it.
+func TestTrailWriterSavesTheCopysTime(t *testing.T) {
+	st := &fakeTrailStore{}
+	taken := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	clk := clock.NewFake(taken)
+	w := newTrailWriter(st, clk, slog.New(slog.DiscardHandler))
+	if !w.Submit(session.TrailSnapshot{}) {
+		t.Fatal("Submit refused")
+	}
+	clk.Advance(time.Minute) // a slow database: the write comes a minute later
+	w.Start()
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if st.writes != 1 || string(st.data) != "TW\x01" || !st.at.Equal(taken) {
+		t.Fatalf("%d writes of %q at %v, want one at %v", st.writes, st.data, st.at, taken)
 	}
 }

@@ -16,8 +16,9 @@ export const file_game_v1_livingworld: GenFile = /*@__PURE__*/
  * TrailWear is the trail wear of tiles of one floor (server → client): grass worn into a
  * path by players' steps (livingworld/server/trail). Level 0 none, 1 trampled, 2 worn,
  * 3 bare dirt. It travels two ways:
- *   - in MapArea.wear (FullMapView, MapSlice): every tile of the area with a level above
- *     0; the client forgets the wear it had inside the area first;
+ *   - in MapArea.wear (FullMapView, MapSlice): every tile of the area on the player's
+ *     floor with a level above 0; the client forgets the wear it had inside the area
+ *     first;
  *   - as a ServerMessage on its own: the tiles in view whose level changed this tick (0:
  *     the grass recovered).
  * Packed for the bandwidth (docs/07): tiles[i] is x << 16 | y of the i-th tile and
