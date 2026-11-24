@@ -354,11 +354,11 @@ type World struct {
 	// until it gives up), how long an idle monster may stray out of its home area before
 	// it goes back to its spawn (0: never), the idle monsters out of their home area (they
 	// think even in sectors without players, so they walk home) and the last pursuit
-	// decision of each spawn (its pack follows it).
+	// decisions of each spawn, one per target (its pack follows them).
 	memoryFor game.Tick
 	strayFor  game.Tick
 	strays    []*Monster
-	packs     map[*world.Spawn]packRoll
+	packs     map[*world.Spawn][]packRoll
 
 	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner, and
 	// the largest player corpse made so far (death.go playerCorpse; nil until one needs

@@ -478,20 +478,27 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
     pierde en el acto.
   - `pursuit.give_up_below_hp_pct` (0–100): con menos vida que eso no sigue más allá de su
     zona; `pursuit.insist_target_hp_pct` (0–100): contra un objetivo con menos vida que
-    eso, la probabilidad sube a mitad de camino hacia 1.
+    eso, la probabilidad sube `insist_boost` del camino hacia 1.
   - `regen.delay_ms`, `regen.interval_ms`, `regen.pct` (0–100, decimales): `pct` % de su
     vida máxima cada `interval_ms`, sin objetivo y `delay_ms` después de su última pelea;
     `pct: 0` = no regenera.
-  Solo de `balance.yaml`: `monster_pursuit.roll_ms` (cada cuánto vuelve a tirar; exigido
-  con `persistence` > 0, también la de un solo monstruo: el servidor no arranca si un
-  monstruo tiene `persistence` y el balance no tiene `roll_ms`, ni si uno tiene `regen.pct`
-  sin ningún `interval_ms`), `monster_pursuit.memory_ms` (cuánto recuerda, desde su último
+  Solo de `balance.yaml`: `monster_pursuit.roll_ms` (cada cuánto vuelve a tirar, ≥ 50;
+  exigido con `persistence` > 0, también la de un solo monstruo: ni `make validate` pasa ni
+  el servidor arranca si un monstruo tiene `persistence` y el balance no tiene `roll_ms`,
+  ni si uno tiene `regen.pct` sin ningún `interval_ms`),
+  `monster_pursuit.distance_exponent` (0–10: cuánto baja la probabilidad con la distancia a
+  casa, `persistence^(1 + exponente × fracción del camino de la correa al tope)`; 0 = no
+  baja) y `monster_pursuit.insist_boost` (0–1: cuánto del camino hacia 1 sube contra un
+  objetivo bajo `insist_target_hp_pct`; 0 = nada), `monster_pursuit.memory_ms` (cuánto recuerda, desde su último
   golpe, a quien lo hirió y su daño después de rendirse; 0 = nada) y `combat.monster_stray_ms` (cuánto puede quedar fuera de casa sin llegar
   antes de volver a su spawn; 0 = nunca). Valores por defecto: persistencia 0,5, tope 16,
-  4 s sin verte, tirada cada 3 s, insiste bajo 25 %, memoria 3 min; 1 % cada 5 s tras
+  4 s sin verte, tirada cada 3 s, exponente 2, insiste bajo 25 % a mitad de camino (0,5), memoria 3 min; 1 % cada 5 s tras
   10 s (unos 8 minutos de vida 0 a llena); errante 5 min. El esquema
   (`monster.schema.json`, `balance.schema.json`) y el arranque (`content.ParseMonster`,
-  `Combat.check`) rechazan lo mismo.
+  `Combat.check`) rechazan lo mismo (`roll_ms` e `interval_ms` de al menos 50 ms, un
+  tick, en los dos); lo que cruza un monstruo con el balance (`persistence` sin `roll_ms`,
+  `pct` sin `interval_ms`) lo revisan `make validate` (`checkMonster`, `checkBalance`) y el
+  arranque (`session.pursuitOf`).
 - **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
   es `monster.schema.json`, `$defs/attack`):
   ```yaml

@@ -666,21 +666,41 @@ type Pursuit struct {
 	// InsistTargetHpPct: a target with less health than this halves the chance of
 	// giving up.
 	InsistTargetHpPct int `yaml:"insist_target_hp_pct"`
+	// DistanceExponent is how fast the chance falls with the target's distance from home:
+	// persistence ^ (1 + DistanceExponent x the fraction of the way from the leash area to
+	// MaxChaseTiles). 0: the persistence everywhere (balance only).
+	DistanceExponent float64 `yaml:"distance_exponent"`
+	// InsistBoost is how much of the way to 1 the chance goes against a target below
+	// InsistTargetHpPct (0.5: halfway; 0: none; balance only).
+	InsistBoost float64 `yaml:"insist_boost"`
 	// MemoryMs is how long it remembers who hurt it after their last hit, once it gave their
 	// fight up (balance only): it re-aggroes them first and their damage still counts for
 	// the experience and the loot. 0: forgotten on giving up.
 	MemoryMs int `yaml:"memory_ms"`
 }
 
-// Check validates p: the balance's numbers, or a monster's resolved against them.
+// MinPeriodMs is the shortest roll_ms or interval_ms (one tick), as the schemas ask.
+const MinPeriodMs = 50
+
+// MaxDistanceExponent bounds Pursuit.DistanceExponent.
+const MaxDistanceExponent = 10
+
+// Check validates p: the balance's numbers, or a monster's resolved against them. It
+// rejects what balance.schema.json and monster.schema.json reject.
 func (p Pursuit) Check() error {
 	if p.Persistence < 0 || p.Persistence > 1 || p.MaxChaseTiles < 0 || p.MaxChaseTiles > MaxChaseTiles ||
-		p.LoseSightMs < 0 || p.RollMs < 0 || p.MemoryMs < 0 ||
+		p.LoseSightMs < 0 || p.MemoryMs < 0 ||
 		p.GiveUpBelowHpPct < 0 || p.GiveUpBelowHpPct > 100 || p.InsistTargetHpPct < 0 || p.InsistTargetHpPct > 100 {
 		return fmt.Errorf("persistence in 0..1, max_chase_tiles in 0..%d, times >= 0, percents in 0..100", MaxChaseTiles)
 	}
-	if p.Persistence > 0 && p.RollMs <= 0 {
-		return errors.New("a persistence needs roll_ms > 0")
+	if p.DistanceExponent < 0 || p.DistanceExponent > MaxDistanceExponent || p.InsistBoost < 0 || p.InsistBoost > 1 {
+		return fmt.Errorf("distance_exponent in 0..%d, insist_boost in 0..1", MaxDistanceExponent)
+	}
+	if p.RollMs != 0 && p.RollMs < MinPeriodMs {
+		return fmt.Errorf("roll_ms must be >= %d", MinPeriodMs)
+	}
+	if p.Persistence > 0 && p.RollMs == 0 {
+		return errors.New("a persistence needs roll_ms")
 	}
 	return nil
 }
@@ -693,10 +713,17 @@ type MonsterRegenRate struct {
 	Pct        float64 `yaml:"pct"`
 }
 
-// Check validates r: the balance's numbers, or a monster's resolved against them.
+// Check validates r: the balance's numbers, or a monster's resolved against them. It
+// rejects what balance.schema.json and monster.schema.json reject.
 func (r MonsterRegenRate) Check() error {
-	if r.DelayMs < 0 || r.IntervalMs < 0 || r.Pct < 0 || r.Pct > 100 || r.Pct > 0 && r.IntervalMs <= 0 {
-		return errors.New("delay_ms >= 0, pct in 0..100 and, with a pct, interval_ms > 0")
+	if r.DelayMs < 0 || r.Pct < 0 || r.Pct > 100 {
+		return errors.New("delay_ms >= 0, pct in 0..100")
+	}
+	if r.IntervalMs != 0 && r.IntervalMs < MinPeriodMs {
+		return fmt.Errorf("interval_ms must be >= %d", MinPeriodMs)
+	}
+	if r.Pct > 0 && r.IntervalMs == 0 {
+		return errors.New("a pct needs interval_ms")
 	}
 	return nil
 }

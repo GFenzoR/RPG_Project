@@ -70,19 +70,21 @@ combat:
   # Pursuit (docs/02-game-design.md, "Monstruos", owner's request of 2026-11-23): the
   # leash area is a monster's comfort zone, where it always chases. A target beyond it and
   # out of reach it keeps chasing while a roll every roll_ms says so: chance =
-  # persistence ^ (1 + 2 x (d - leash area) / (max_chase_tiles - leash area)), d being the
-  # target's distance from the spawn's center: about the persistence just out of the leash
-  # area, its cube at max_chase_tiles (the hard cap, Chebyshev from the center; never less
-  # than the leash area); 0 below give_up_below_hp_pct of its own health; halfway to 1
-  # against a target below insist_target_hp_pct of its health. A spawn's monsters share one
+  # persistence ^ (1 + distance_exponent x (d - leash area) / (max_chase_tiles - leash
+  # area)), d being the target's distance from the spawn's center: with 2, about the
+  # persistence just out of the leash area, its cube at max_chase_tiles (the hard cap,
+  # Chebyshev from the center; never less than the leash area); 0 below
+  # give_up_below_hp_pct of its own health; against a target below insist_target_hp_pct of
+  # its health, insist_boost of the way to 1 (0.5: halfway). A spawn's monsters share one
   # roll per target (a pack; one below its give_up_below_hp_pct turns back alone). A target
   # out of its sight (the classic window) for lose_sight_ms, in a protection zone or on
   # another floor is given up. Giving up, it keeps its wounds (only the damage dealt from
   # out of its reach that it never answered with an attack round heals at once) and
   # remembers who hurt it, and their damage, memory_ms after their last hit: it turns on
   # them first when they come back into its leash area, and they share the experience and
-  # the loot of whoever finishes it. data/monsters may override all but roll_ms and
-  # memory_ms (pursuit: {...}); roll_ms is needed as soon as any monster has a persistence.
+  # the loot of whoever finishes it. data/monsters may override all but roll_ms,
+  # distance_exponent, insist_boost and memory_ms (pursuit: {...}); roll_ms is needed as
+  # soon as any monster has a persistence.
   monster_pursuit:
     persistence: 0.5
     max_chase_tiles: 16
@@ -90,6 +92,8 @@ combat:
     roll_ms: 3000
     give_up_below_hp_pct: 0
     insist_target_hp_pct: 25
+    distance_exponent: 2
+    insist_boost: 0.5
     memory_ms: 180000
   # Out-of-combat regeneration: without a target and delay_ms after its last fight (the
   # last tick it had a target, dealt or took damage), pct % of its maximum health (at least 1) every interval_ms. 1 % every 5 s: a

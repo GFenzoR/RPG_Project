@@ -229,26 +229,39 @@ type damageShare struct {
 	player uint32
 	amount int
 	// unanswered is the part of amount m has not answered: dealt from out of the reach of
-	// its attacks (strikes) since its last attack round on that player (answered). It
-	// closes when m gives up (giveUp): a monster that never got to fight back, across
-	// water, held by its leash or its chase cap, or shot by someone who steps out of its
-	// area as it arrives, is not whittled down.
+	// its attacks (strikes) since its last attack round on that player, or on another one
+	// while that player stood where m may go (answer). It closes when m gives up (giveUp):
+	// a monster that never got to fight back, across water, held by its leash or its chase
+	// cap, or shot by someone who steps out of its area or into a protection zone as it
+	// arrives, is not whittled down.
 	unanswered int
 }
 
-// answered has m answer player id (an attack round of m on it, monsterAttacks): what id
-// dealt from out of its reach until now was part of a fight, and stays if m gives up.
-func (m *Monster) answered(id uint32) {
+// answer is what an attack round of m on its target t (monsterAttacks) does to the wounds
+// it had not answered: it is in a fight, so what t dealt from out of its reach until now
+// stays if it gives up, and so does what the others dealt who fight it from where it may
+// go (a valid target, not beyondLeash): the archer or the mage of a group whose tank holds
+// it never gets a round of its own, and is no less part of that fight. Those it could not
+// turn on (beyond its leash, on a tile it shunned, hidden in a protection zone) stay
+// unanswered.
+func (w *World) answer(tick game.Tick, m *Monster, t *Player) {
 	for i := range m.damage {
-		if m.damage[i].player == id {
-			m.damage[i].unanswered = 0
-			return
+		s := &m.damage[i]
+		if s.unanswered == 0 {
+			continue
 		}
+		if s.player != t.id {
+			if p := w.playerByID(s.player); p == nil || !w.validTarget(m, p) || w.beyondLeash(tick, m, p) {
+				continue
+			}
+		}
+		s.unanswered = 0
 	}
 }
 
-// cowed reports whether m's health is below its give_up_below_hp_pct: it does not chase
-// beyond its leash area, whatever its pack decided.
+// cowed reports whether m's health is below its give_up_below_hp_pct (a summon's: its
+// master's, chaser, against its own health): it does not chase beyond its leash area,
+// whatever its pack decided.
 func (m *Monster) cowed() bool {
 	pk := m.chaser()
 	return pk.giveUpPct > 0 && m.health*100 < pk.giveUpPct*m.maxHealth
@@ -789,7 +802,12 @@ func (w *World) act(ctx *game.TickContext, m *Monster) {
 			// target): its regeneration counts from the tick it ends, not from the last hit.
 			m.calmAt = ctx.Tick
 		} else {
-			m.setTarget(nil) // lost (gone, in a protection zone, out of sight too long): it walks home
+			// Lost (gone, in a protection zone, on another floor, out of sight too long): as a
+			// target that left its leash area, it turns to someone else who fights it or
+			// gives up, which closes the wounds it never answered and starts its memory.
+			// Shooting it and stepping into a protection zone as it arrives wears it down no
+			// more than stepping out of its area does.
+			w.dropTarget(ctx, m)
 		}
 	}
 	if len(m.shunned) > 0 {
@@ -821,6 +839,7 @@ func (w *World) act(ctx *game.TickContext, m *Monster) {
 				w.face(m, t.pos)
 				return
 			}
+			w.settle(ctx.Tick, m)
 		}
 		m.state = StateIdle
 		if w.walkHome(ctx, m) {
@@ -994,9 +1013,10 @@ func (w *World) roam(m *Monster, leash int) tileSquare {
 }
 
 // dropTarget is what m does when its target fights it from where it may not go
-// (beyondLeash): it turns to another player (retarget), keeping its wounds and who hurt
-// it, so a group does not lose its fight, its experience or a quest drop because whoever
-// held the monster stepped away. With nobody left it gives up (giveUp).
+// (beyondLeash) or it lost track of it (keepsTrack): it turns to another player
+// (retarget), keeping its wounds and who hurt it, so a group does not lose its fight, its
+// experience or a quest drop because whoever held the monster stepped away. With nobody
+// left it gives up (giveUp).
 func (w *World) dropTarget(ctx *game.TickContext, m *Monster) {
 	if !w.retarget(ctx, m, m.target, false) {
 		w.giveUp(ctx, m)

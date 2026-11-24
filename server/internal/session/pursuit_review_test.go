@@ -263,30 +263,6 @@ func TestPursuitCowardLeavesItsPack(t *testing.T) {
 	}
 }
 
-// What it regenerates comes out of the wounds it never answered (review): a wolf that lost
-// sight of who shot it from afar, regenerated a little and then gives up closes only what
-// is left of them, not the same wounds twice.
-func TestPursuitRegenAndGiveUpDoNotHealTwice(t *testing.T) {
-	regen := content.MonsterRegenRate{DelayMs: 10000, IntervalMs: 5000, Pct: 1}
-	h := pursuitHarness(t, nil, harmlessWolf(false), content.Pursuit{RollMs: 1000, MemoryMs: 600000}, regen)
-	_, p, wolf := engaged(t, h, "Sniper", pos(22, 20))
-	h.sim.RunUntil(func() bool { return chebyshev(wolf.Pos(), p.Pos()) <= 1 }, sim.MaxSeconds(3))
-	h.do(func(ctx *game.TickContext) {
-		h.w.DamageMonsterForTest(ctx, wolf, p, 40) // next to it: a fight
-		h.w.Teleport(p, pos(20, 50))               // out of its sight
-		h.w.DamageMonsterForTest(ctx, wolf, p, 30) // from where it cannot answer
-	})
-	h.sim.RunTicks(20 * 31)
-	mid, _ := wolf.Health()
-	if wolf.TargetID() != 0 || mid <= 30 || mid >= 40 {
-		t.Fatalf("after 31 s: the wolf targets %d with %d health, want nobody and a few points over 30", wolf.TargetID(), mid)
-	}
-	h.do(func(ctx *game.TickContext) { h.w.GiveUpForTest(ctx, wolf) })
-	if hp, _ := wolf.Health(); hp != 60 {
-		t.Errorf("giving up after regenerating %d: %d health, want 60 (the 30 it never answered, once)", mid-30, hp)
-	}
-}
-
 // A stray never goes back to its spawn under a player's eyes (review): one who has it on
 // screen (the wide view, wider than the classic window monsters notice players in) keeps
 // it there; once that player is gone, it goes.

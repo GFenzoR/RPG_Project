@@ -16,10 +16,10 @@ import (
 // area (its spawn's radius + combat.monster_leash_tiles) is its comfort zone. Inside it, it
 // always chases. A target beyond it and out of its reach it follows only while a roll of
 // its persistence says so (every roll_ms, falling with the target's distance from home,
-// its own and its target's health; one decision for its whole spawn, its pack), never
-// farther than its chase cap (max_chase_tiles from its spawn's center). It gives up for
-// sure when its target stays out of its sight lose_sight_ms, steps into a protection zone
-// or changes floor. Giving up it keeps its wounds (but those it never got to answer, which
+// its own and its target's health; one decision per target for its whole spawn, its pack),
+// never farther than its chase cap (max_chase_tiles from its spawn's center). It gives up
+// for sure when its target stays out of its sight lose_sight_ms, steps into a protection
+// zone or changes floor. Giving up it keeps its wounds (but those it never got to answer, which
 // close) and walks home; it remembers who hurt it and their damage (memory_ms) and turns on
 // them first when they come back into its comfort zone. Out of
 // combat it regenerates slowly (combat.monster_regen). An idle monster out of its home
@@ -44,12 +44,42 @@ type pursuitKind struct {
 	regenPct               float64
 }
 
-// packRoll is the last pursuit decision of the monsters of one spawn: whether they keep
-// chasing target, until when.
+// packRoll is the last pursuit decision of the monsters of one spawn on one target:
+// whether they keep chasing it, until when.
 type packRoll struct {
 	target uint32
 	until  game.Tick
 	keep   bool
+}
+
+// packRolled returns the decision in rolls on target that still holds at tick now.
+func packRolled(rolls []packRoll, target uint32, now game.Tick) (packRoll, bool) {
+	for _, r := range rolls {
+		if r.target == target && now < r.until {
+			return r, true
+		}
+	}
+	return packRoll{}, false
+}
+
+// notePack returns rolls with r: in the place of the one on its target or of one that ran
+// out by tick now, so a spawn holds no more decisions than targets its pack chased at once.
+func notePack(rolls []packRoll, r packRoll, now game.Tick) []packRoll {
+	free := -1
+	for i := range rolls {
+		if rolls[i].target == r.target {
+			rolls[i] = r
+			return rolls
+		}
+		if free < 0 && now >= rolls[i].until {
+			free = i
+		}
+	}
+	if free >= 0 {
+		rolls[free] = r
+		return rolls
+	}
+	return append(rolls, r)
 }
 
 // initPursuit reads the balance's pursuit numbers that are not per monster.
@@ -62,7 +92,7 @@ func (w *World) initPursuit() {
 	if c.MonsterStrayMs > 0 {
 		w.strayFor = ticksFor(c.MonsterStrayMs)
 	}
-	w.packs = map[*world.Spawn]packRoll{}
+	w.packs = map[*world.Spawn][]packRoll{}
 }
 
 // pursuitOf resolves def's pursuit and regeneration against the balance's defaults, and
@@ -141,9 +171,11 @@ func (w *World) judgePursuit(ctx *game.TickContext, m *Monster, t *Player) {
 
 // keepChasing returns m's decision on chasing t, d tiles from its spawn's center, beyond
 // its leash area l: never with its health below give_up_below_hp_pct (cowed: it turns back
-// alone, the rest of its pack goes on); else the one it rolled on t less than roll_ms ago, else the one its pack (its
-// spawn) took on t then, else a new roll of pursuitChance with the loop's seeded random
-// source (none for a chance of 0 or 1: a monster that never chases costs no draw).
+// alone, the rest of its pack goes on); else the one it rolled on t less than roll_ms ago,
+// else the one its pack (its spawn) took on t then (a pack pulled by two players holds a
+// decision on each: the wolves on one do not overwrite that of the wolves on the other),
+// else a new roll of pursuitChance with the loop's seeded random source (none for a chance
+// of 0 or 1: a monster that never chases costs no draw).
 func (w *World) keepChasing(ctx *game.TickContext, m *Monster, t *Player, d, l int) bool {
 	if m.cowed() {
 		return false // whatever it or its pack rolled: its own decision, not its pack's
@@ -153,7 +185,8 @@ func (w *World) keepChasing(ctx *game.TickContext, m *Monster, t *Player, d, l i
 	}
 	pk := m.chaser()
 	sp := m.slot.spawn
-	if pr, ok := w.packs[sp]; ok && pr.target == t.id && ctx.Tick < pr.until {
+	rolls := w.packs[sp]
+	if pr, ok := packRolled(rolls, t.id, ctx.Tick); ok {
 		m.rolledOn, m.rollAt, m.keep = t.id, pr.until, pr.keep
 		return pr.keep
 	}
@@ -165,16 +198,17 @@ func (w *World) keepChasing(ctx *game.TickContext, m *Monster, t *Player, d, l i
 		keep = ctx.Rand.Float64() < c
 	}
 	m.rolledOn, m.rollAt, m.keep = t.id, ctx.Tick+pk.rollFor, keep
-	w.packs[sp] = packRoll{target: t.id, until: m.rollAt, keep: keep}
+	w.packs[sp] = notePack(rolls, packRoll{target: t.id, until: m.rollAt, keep: keep}, ctx.Tick)
 	return keep
 }
 
 // pursuitChance is the chance that m keeps chasing t, d tiles from its spawn's center
-// beyond its leash area l: persistence^(1 + 2·(d-l)/(cap-l)), which falls with the distance
-// from home, from about the persistence just out of the leash area to its cube at the chase
-// cap (0.85: 0.61; 0.5: 0.125; 0.15: 0.003), and stays 1 for a persistence of 1; 0 with
-// its own health below give_up_below_hp_pct; with t's health below insist_target_hp_pct,
-// halfway to 1.
+// beyond its leash area l: persistence^(1 + e·(d-l)/(cap-l)), e being the balance's
+// combat.monster_pursuit.distance_exponent, which falls with the distance from home: with
+// 2, from about the persistence just out of the leash area to its cube at the chase cap
+// (0.85: 0.61; 0.5: 0.125; 0.15: 0.003), and stays 1 for a persistence of 1; 0 with its
+// own health below give_up_below_hp_pct; with t's health below insist_target_hp_pct, the
+// balance's insist_boost of the way to 1 (0.5: halfway).
 func (w *World) pursuitChance(m *Monster, t *Player, d, l int) float64 {
 	pk := m.chaser()
 	c := pk.persistence
@@ -182,16 +216,18 @@ func (w *World) pursuitChance(m *Monster, t *Player, d, l int) float64 {
 	if c <= 0 || span <= 0 || m.cowed() {
 		return 0
 	}
-	c = math.Pow(c, 1+2*float64(d-l)/float64(span))
+	bp := &w.cfg.Balance.Combat.MonsterPursuit
+	c = math.Pow(c, 1+bp.DistanceExponent*float64(d-l)/float64(span))
 	if pk.insistPct > 0 && t.health*100 < pk.insistPct*max(t.maxHealth, 1) {
-		c += (1 - c) / 2
+		c += (1 - c) * bp.InsistBoost
 	}
 	return c
 }
 
 // keepsTrack reports whether m keeps target t: still in the world, on its floor (monsters
 // do not take stairs), out of protection zones, not invisible to it and, out of its sight
-// (InSight), for less than lose_sight_ms (0: lost at once). Every think measures it.
+// (InSight), for less than lose_sight_ms (0: lost at once). Every think measures it; a
+// target it does not keep it drops as one it may not go after (act, dropTarget).
 func (w *World) keepsTrack(tick game.Tick, m *Monster, t *Player) bool {
 	if w.byClient[t.client] != t || t.pos.Z != m.pos.Z || w.inProtection(t.pos) || !seesPlayer(m, t) {
 		return false
@@ -253,8 +289,30 @@ func (w *World) remembered(tick game.Tick, m *Monster) *Player {
 	return best
 }
 
+// settle starts the memory of the players whose damage an idle m still holds without one,
+// when it finds nobody to turn on: its fight ended without a giveUp (its target died or
+// left the world), and their shares would otherwise outlive memory_ms. Without a memory
+// they stay until it heals to full (regen), as before.
+func (w *World) settle(tick game.Tick, m *Monster) {
+	if w.memoryFor == 0 {
+		return
+	}
+next:
+	for i := range m.damage {
+		id := m.damage[i].player
+		for _, f := range m.foes {
+			if f.player == id {
+				continue next
+			}
+		}
+		m.foes = append(m.foes, grudge{player: id, until: tick + w.memoryFor})
+	}
+}
+
 // forget drops the foes m remembers whose memory_ms ran out since their last hit, and
-// with each the damage it dealt (the share giveUp kept).
+// with each the damage it dealt (the share giveUp kept). Foes and shares go by creature
+// id, which a player gets anew each time it enters the world: one who logs out and back in
+// is a stranger to it (the logout block while in combat bounds what that gives away).
 func (w *World) forget(tick game.Tick, m *Monster) {
 	if len(m.foes) == 0 {
 		return
@@ -272,10 +330,11 @@ func (w *World) forget(tick game.Tick, m *Monster) {
 // interval due since regen delay went by without a fight (calmAt: the last tick it had a
 // target, dealt or took damage): counted from the ticks, so time it spent where nobody
 // was (no think) counts too. What it heals comes first out of the wounds it never
-// answered (damageShare.unanswered), so a later giveUp does not close them again. Who
-// sees it gets the new health bar, without the effect and the number of a heal. Healed to
-// full it forgets the damage of a fight it lost track of (its target hid in a protection
-// zone, left): nobody earns experience from a fight it recovered from.
+// answered (mend), so a later giveUp does not close them again. Who sees it gets the new
+// health bar, without the effect and the number of a heal. Healed to full it forgets the
+// damage of the fights it remembers: nobody earns experience from a fight it recovered
+// from. The rate is its own kind's, a summon's too (unlike its pursuit, chaser: how fast a
+// body heals is not its master's decision).
 func (w *World) regen(ctx *game.TickContext, m *Monster) {
 	pk := &m.kind.pursuit
 	if pk.regenEvery == 0 || m.health >= m.maxHealth {
@@ -293,13 +352,23 @@ func (w *World) regen(ctx *game.TickContext, m *Monster) {
 	if m.health >= m.maxHealth {
 		m.damage = m.damage[:0]
 	}
+	m.mend(heal)
+	w.healthChanged(m)
+}
+
+// mend takes heal health m just got back (its regeneration, its own heal) out of the
+// wounds it never answered (damageShare.unanswered): a later giveUp closes what is left of
+// them, not the same wounds twice. Their authors' shares stay: the damage was dealt.
+func (m *Monster) mend(heal int) {
 	for i := range m.damage {
+		if heal <= 0 {
+			return
+		}
 		s := &m.damage[i]
 		c := min(s.unanswered, heal)
 		s.unanswered -= c
 		heal -= c
 	}
-	w.healthChanged(m)
 }
 
 // trackStray keeps a monster with a leash that stands out of its home area in

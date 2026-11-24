@@ -542,6 +542,15 @@ func (w *World) MoveMonsterForTest(m *Monster, p world.Pos) {
 	w.mindex(m)
 }
 
+// HealMonsterForTest heals m as its own heal_self does (tests only, loop goroutine).
+func (w *World) HealMonsterForTest(m *Monster, amount int) { w.healMonster(m, amount) }
+
+// SetTargetForTest has m target p (tests only, loop goroutine).
+func (m *Monster) SetTargetForTest(p *Player) { m.setTarget(p) }
+
+// PackRollsForTest is how many pursuit decisions the spawn of m holds.
+func (w *World) PackRollsForTest(m *Monster) int { return len(w.packs[m.slot.spawn]) }
+
 // StraysForTest is how many monsters World.strays holds.
 func (w *World) StraysForTest() int { return len(w.strays) }
 

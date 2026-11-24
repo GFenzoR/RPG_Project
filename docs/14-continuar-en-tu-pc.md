@@ -372,11 +372,24 @@ el punto 5:
     lado del agua o disparando y saliendo de la correa, también al custodio); el costo es
     que un arquero o mago que lo hiere sin que nunca lo alcance y se va lo encuentra
     curado. (2) Al rendirse conserva el reparto de daño `memory_ms` (3 min): quien lo
-    remata comparte experiencia, botín y drop de quest con quien lo hirió. (3) Queda sin
-    tratar la orilla de una zona de protección: quien dispara y entra a la zona se pierde
-    sin rendición, así que esas heridas quedan (la regeneración empieza a los 10 s). (4) No hay test de
-    `insist_target_hp_pct` dentro de una persecución real (solo la fórmula,
-    `TestPursuitChance`).
+    remata comparte experiencia, botín y drop de quest con quien lo hirió.
+  - **Segunda revisión (hecho; decisiones a confirmar por el dueño):** (1) perder al
+    objetivo (zona de protección, fuera de vista `lose_sight_ms`, otro piso) ahora es
+    rendirse: cierra el daño sin responder, así que disparar desde la orilla de una zona
+    de protección y entrar no desgasta al monstruo
+    (`TestPursuitShootAndHideClosesTheWounds`). (2) Una ronda de ataque responde también
+    el daño de los demás que pelean desde donde el monstruo puede ir: el arquero de un
+    grupo con tanque conserva su daño y su parte si el grupo se retira
+    (`TestPursuitGroupDamageIsAnswered`). (3) El exponente de la distancia y el empuje de
+    `insist_target_hp_pct` son datos (`distance_exponent`, `insist_boost`). (4) Una manada
+    de la que tiran dos jugadores decide por objetivo. (5) La memoria va por id de
+    criatura: quien reloguea es un desconocido (lo acota el bloqueo de logout en combate);
+    guardarla por personaje queda para cuando haga falta. (6) No se cambió: un invocado
+    compara su propia vida con el `give_up_below_hp_pct` de quien lo llamó y regenera al
+    ritmo de su tipo (sin efecto hoy: el único que invoca no sale de su forja); y
+    `thinkStrays` recorre cada tick a los monstruos fuera de su radio de casa, también a
+    los que pelean dentro de la correa (un recorrido sin asignaciones; solo piensa el que
+    no pensó ese tick). Las cifras de docs/07 las midió el autor, sin bots.
   - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
   - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
     siguiendo fuera del corral y volviendo herido.

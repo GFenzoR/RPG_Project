@@ -201,7 +201,7 @@
           "minimum": 50
         },
         "monster_pursuit": {
-          "description": "Pursuit beyond the leash area (docs/02 \"Monstruos\"): a target beyond it and out of reach is chased while a roll every roll_ms of persistence (scaled down with the target's distance from the spawn's center up to max_chase_tiles, 0 below give_up_below_hp_pct of its own health, halfway to 1 against a target below insist_target_hp_pct) says so. A target out of sight lose_sight_ms is given up. Giving up keeps the monster's wounds; it remembers who hurt it memory_ms. Absent or 0 = no pursuit beyond the leash, a target out of sight lost at once, nobody remembered.",
+          "description": "Pursuit beyond the leash area (docs/02 \"Monstruos\"): a target beyond it and out of reach is chased while a roll every roll_ms of persistence (scaled down with the target's distance from the spawn's center up to max_chase_tiles, 0 below give_up_below_hp_pct of its own health, insist_boost of the way to 1 against a target below insist_target_hp_pct) says so. A target out of sight lose_sight_ms is given up. Giving up keeps the monster's wounds; it remembers who hurt it memory_ms. Absent or 0 = no pursuit beyond the leash, a target out of sight lost at once, nobody remembered.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -211,6 +211,18 @@
             "roll_ms": { "type": "integer", "minimum": 50 },
             "give_up_below_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
             "insist_target_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "distance_exponent": {
+              "description": "How fast the chance falls with the target's distance from home: persistence ^ (1 + distance_exponent x the fraction of the way from the leash area to max_chase_tiles). 0 or absent = the persistence everywhere.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "insist_boost": {
+              "description": "How much of the way to 1 the chance goes against a target below insist_target_hp_pct (0.5 = halfway). 0 or absent = none.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
             "memory_ms": { "type": "integer", "minimum": 0 }
           }
         },

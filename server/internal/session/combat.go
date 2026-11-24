@@ -310,8 +310,8 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]
-		m.calmAt = ctx.Tick // dealing damage (or trying to) keeps it from regenerating
-		m.answered(t.id)    // ...and answers what t did to it from out of its reach
+		m.calmAt = ctx.Tick      // dealing damage (or trying to) keeps it from regenerating
+		w.answer(ctx.Tick, m, t) // ...and answers what was dealt from out of its reach
 		w.fought(ctx, m, t)
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue

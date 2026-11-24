@@ -311,11 +311,14 @@ func ParseMonster(raw []byte) (*Monster, error) {
 		return nil, fmt.Errorf("monster %q: %w", m.ID, err)
 	}
 	// Its own fields only: the balance's roll_ms and interval_ms are not known here (the
-	// session checks the resolved numbers when it starts, pursuitOf).
-	if err := m.Pursuit.Resolve(Pursuit{RollMs: 1}).Check(); err != nil {
+	// session checks the resolved numbers when it starts, pursuitOf; make validate too).
+	if err := m.Pursuit.Resolve(Pursuit{RollMs: MinPeriodMs}).Check(); err != nil {
 		return nil, fmt.Errorf("monster %q: pursuit: %w", m.ID, err)
 	}
-	if err := m.Regen.Resolve(MonsterRegenRate{IntervalMs: 1}).Check(); err != nil {
+	if r := m.Regen; r != nil && r.IntervalMs != nil && *r.IntervalMs < MinPeriodMs {
+		return nil, fmt.Errorf("monster %q: regen: interval_ms must be >= %d", m.ID, MinPeriodMs)
+	}
+	if err := m.Regen.Resolve(MonsterRegenRate{IntervalMs: MinPeriodMs}).Check(); err != nil {
 		return nil, fmt.Errorf("monster %q: regen: %w", m.ID, err)
 	}
 	for i, l := range m.Loot {

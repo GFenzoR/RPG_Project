@@ -134,7 +134,7 @@ func benchMonsters(b *testing.B, n int, portal bool, variant int) {
 		bal.Combat.MonsterLeashTiles = 6
 	case benchPursuit:
 		bal.Combat.MonsterLeashTiles = 6
-		bal.Combat.MonsterPursuit = content.Pursuit{Persistence: 0.5, MaxChaseTiles: 16, LoseSightMs: 4000, RollMs: 3000,
+		bal.Combat.MonsterPursuit = content.Pursuit{Persistence: 0.5, MaxChaseTiles: 16, LoseSightMs: 4000, RollMs: 3000, DistanceExponent: 2, InsistBoost: 0.5,
 			InsistTargetHpPct: 25, MemoryMs: 180000}
 		bal.Combat.MonsterRegen = content.MonsterRegenRate{DelayMs: 10000, IntervalMs: 5000, Pct: 1}
 		bal.Combat.MonsterStrayMs = 300000

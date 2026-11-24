@@ -37,6 +37,7 @@ func TestMonsterPursuitErrors(t *testing.T) {
 		"give up above 100":   "pursuit: { give_up_below_hp_pct: 101 }",
 		"regen above 100":     "regen: { pct: 101 }",
 		"regen every 0":       "regen: { pct: 1, interval_ms: 0 }",
+		"regen under a tick":  "regen: { interval_ms: 20 }",
 	} {
 		if _, err := ParseMonster([]byte("id: x\nhealth: 5\nspeed: 100\n" + src)); err == nil {
 			t.Errorf("%s: expected error", name)
@@ -46,6 +47,13 @@ func TestMonsterPursuitErrors(t *testing.T) {
 		"persistence without roll_ms": {MonsterPursuit: Pursuit{Persistence: 0.5}},
 		"negative memory":             {MonsterPursuit: Pursuit{MemoryMs: -1}},
 		"negative stray":              {MonsterStrayMs: -1},
+		// What balance.schema.json rejects (minimum 50), the server does too (review).
+		"roll under a tick":       {MonsterPursuit: Pursuit{RollMs: 20}},
+		"interval under a tick":   {MonsterRegen: MonsterRegenRate{IntervalMs: 49, Pct: 1}},
+		"exponent below 0":        {MonsterPursuit: Pursuit{DistanceExponent: -1}},
+		"exponent above its cap":  {MonsterPursuit: Pursuit{DistanceExponent: 11}},
+		"insist boost above 1":    {MonsterPursuit: Pursuit{InsistBoost: 1.5}},
+		"pct without an interval": {MonsterRegen: MonsterRegenRate{Pct: 1}},
 	} {
 		if c.MonsterPursuit.Check() == nil && c.MonsterRegen.Check() == nil && c.MonsterStrayMs >= 0 {
 			t.Errorf("%s: accepted", name)
@@ -65,7 +73,8 @@ func TestPursuitRepoData(t *testing.T) {
 	if r := c.MonsterRegen; r.Pct <= 0 || float64(r.IntervalMs)*100/r.Pct < 5*60*1000 || r.DelayMs < 5000 {
 		t.Errorf("monster_regen %+v: want a full heal of 5 minutes or more, after 5 s or more without a fight", r)
 	}
-	if p := c.MonsterPursuit; p.MaxChaseTiles <= 0 || p.Persistence <= 0 || p.LoseSightMs <= 0 || p.MemoryMs <= 0 {
+	if p := c.MonsterPursuit; p.MaxChaseTiles <= 0 || p.Persistence <= 0 || p.LoseSightMs <= 0 || p.MemoryMs <= 0 ||
+		p.DistanceExponent <= 0 || p.InsistBoost <= 0 {
 		t.Errorf("monster_pursuit %+v", p)
 	}
 	ms, err := LoadMonsters(dir)

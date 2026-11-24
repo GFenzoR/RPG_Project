@@ -101,6 +101,11 @@ interface ContentIndex {
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+/** The number at key k of o, if o is an object that has one. */
+const numberAt = (o: unknown, k: string): number | undefined => {
+  const v = isObj(o) ? o[k] : undefined;
+  return typeof v === "number" ? v : undefined;
+};
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** The twelve pieces of a fringe and of the surf (BORDER_PIECES of @rpg/map-format ops). */
 const BORDER_PIECES = [
@@ -796,6 +801,16 @@ class Validator {
           `reference_min_sellers (${n("reference_min_sellers")}) is more than reference_min_votes (${n("reference_min_votes")}): each vote has one seller`,
         );
     }
+    // Monster pursuit and regeneration: a chance needs its roll, a heal its interval, or
+    // the monster would roll or heal every tick (server content Pursuit.Check and
+    // MonsterRegenRate.Check; a monster's own numbers: checkMonster).
+    const combat = isObj(src.data) ? src.data["combat"] : undefined;
+    const pursuit = isObj(combat) ? combat["monster_pursuit"] : undefined;
+    const regen = isObj(combat) ? combat["monster_regen"] : undefined;
+    if ((numberAt(pursuit, "persistence") ?? 0) > 0 && numberAt(pursuit, "roll_ms") === undefined)
+      this.error(src, ["combat", "monster_pursuit", "persistence"], "a persistence needs roll_ms");
+    if ((numberAt(regen, "pct") ?? 0) > 0 && numberAt(regen, "interval_ms") === undefined)
+      this.error(src, ["combat", "monster_regen", "pct"], "a pct needs interval_ms");
   }
 
   private checkVocation(voc: unknown, src: SourceFile, path: PathSegment[]): void {
@@ -945,6 +960,31 @@ class Validator {
         );
       }
     }
+    // Its own persistence or regeneration against balance.yaml, which holds the roll_ms
+    // (balance only) and the default interval_ms: without them the server does not start
+    // (session pursuitOf).
+    const combat = isObj(this.balance?.data) ? this.balance.data["combat"] : undefined;
+    const defPursuit = isObj(combat) ? combat["monster_pursuit"] : undefined;
+    const defRegen = isObj(combat) ? combat["monster_regen"] : undefined;
+    if (
+      (numberAt(m["pursuit"], "persistence") ?? 0) > 0 &&
+      numberAt(defPursuit, "roll_ms") === undefined
+    )
+      this.error(
+        src,
+        ["pursuit", "persistence"],
+        "a persistence needs balance.yaml combat.monster_pursuit.roll_ms",
+      );
+    if (
+      (numberAt(m["regen"], "pct") ?? 0) > 0 &&
+      numberAt(m["regen"], "interval_ms") === undefined &&
+      numberAt(defRegen, "interval_ms") === undefined
+    )
+      this.error(
+        src,
+        ["regen", "pct"],
+        "a pct needs an interval_ms, here or in balance.yaml combat.monster_regen",
+      );
   }
 
   /**

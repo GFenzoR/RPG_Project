@@ -1395,6 +1395,40 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  // Review of the monster pursuit: what the server refuses to start with, make validate
+  // reports (docs/06 "Monstruo", "Persecución y regeneración").
+  it("asks for the balance's roll_ms and an interval_ms with a persistence or a regeneration", () => {
+    edit("data/balance.yaml", "    roll_ms: 3000\n", "");
+    edit(
+      "data/balance.yaml",
+      "monster_regen: { delay_ms: 10000, interval_ms: 5000, pct: 1 }",
+      "monster_regen: { delay_ms: 10000, pct: 1 }",
+    );
+    edit("data/monsters/slagbound_warden.yaml", "regen: {", "regen: { interval_ms: 8000,");
+    const out = messages(root).filter((m) => m.startsWith("error "));
+    const has = (file: string, text: string): boolean =>
+      out.some((m) => m.includes(file) && m.includes(text));
+    expect(
+      has("data/balance.yaml", "combat.monster_pursuit.persistence: a persistence needs roll_ms"),
+    ).toBe(true);
+    expect(has("data/balance.yaml", "combat.monster_regen.pct: a pct needs interval_ms")).toBe(
+      true,
+    );
+    expect(
+      has("data/monsters/wolf.yaml", "pursuit.persistence: a persistence needs balance.yaml"),
+    ).toBe(true);
+    // Its own interval is enough for the warden; no monster without a regen block is named.
+    expect(out.some((m) => m.includes("regen.pct: a pct needs an interval_ms"))).toBe(false);
+    edit("data/monsters/slagbound_warden.yaml", "regen: { interval_ms: 8000,", "regen: {");
+    expect(
+      messages(root).some(
+        (m) =>
+          m.includes("data/monsters/slagbound_warden.yaml") &&
+          m.includes("regen.pct: a pct needs an interval_ms"),
+      ),
+    ).toBe(true);
+  });
+
   // Monster abilities (docs/06 "Monstruo"): areas, heal_self, summon and phases.
   it("checks monster areas, heals, summons and phases", () => {
     writeFileSync(

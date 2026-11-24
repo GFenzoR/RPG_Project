@@ -26,8 +26,8 @@ const (
 var home = pos(20, 20)
 
 // pursuitHarness is a harness on m (an open 64x64 floor 7 if nil) with one wolf (def,
-// wolfDef if nil) spawned at 20,20, the leash of these tests and the given pursuit and
-// regeneration.
+// wolfDef if nil) spawned at 20,20, the leash of these tests and the given pursuit (with
+// the repo's distance_exponent and insist_boost if it sets neither) and regeneration.
 func pursuitHarness(t *testing.T, m *world.Map, def *content.Monster, p content.Pursuit, r content.MonsterRegenRate,
 	opts ...func(*session.Config)) *harness {
 	t.Helper()
@@ -38,6 +38,9 @@ func pursuitHarness(t *testing.T, m *world.Map, def *content.Monster, p content.
 		def = wolfDef()
 	}
 	m.Islands()[0].Spawns = []world.Spawn{spawnAt(def.ID, 20, 20, pursuitRadius, 60)}
+	if p.DistanceExponent == 0 && p.InsistBoost == 0 { // the repo's, unless the test sets its own (opts: none)
+		p.DistanceExponent, p.InsistBoost = 2, 0.5
+	}
 	return newHarness(t, m, func(c *session.Config) {
 		c.Monsters = content.Monsters{def.ID: def}
 		c.Items = testItems()

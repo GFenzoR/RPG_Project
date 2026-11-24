@@ -1662,8 +1662,8 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     a casa): no gasta en cada tick la cuota de búsquedas de los demás monstruos.
   - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
     perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
-    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
-    caso; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
+    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse, salvo el
+    daño sin responder cuando lo soltó o lo perdió; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
     que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
     sigue entero. Si no hay camino, espera ahí (`monster_path_retry_ms` entre búsquedas):
     nunca se teletransporta.
@@ -1672,7 +1672,8 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     heridas). La regla es una sola (**daño sin responder**, `damageShare.unanswered`): el
     daño que un jugador le hace desde fuera del alcance de sus ataques queda "sin
     responder" hasta que el monstruo le tira una ronda de ataque a ese jugador (acierte o
-    no); si se rinde antes, ese daño se cura en el acto y sale de la parte de ese jugador.
+    no), o a otro mientras ese jugador está donde el monstruo puede ir (la pelea de un
+    grupo, abajo "Botín, experiencia y abusos"); si se rinde antes, ese daño se cura en el acto y sale de la parte de ese jugador.
     Vale igual desde fuera de la correa o del tope, desde el otro lado del agua (aunque
     cambie de casilla cada vez que el monstruo rechaza una, `TestPursuitUnreachableHopsDoNotWearItDown`)
     o disparando desde adentro y saliendo cuando el monstruo llega
@@ -1698,16 +1699,21 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     sigue. La tirada usa el generador sembrado del loop (`ctx.Rand`, nunca `math/rand`
     global): con la misma semilla la persecución es idéntica, tick a tick
     (`TestPursuitGiveUpIsReproducible`). La probabilidad es
-    `persistence^(1 + 2·(d − correa) / (tope − correa))`, con `d` la distancia (Chebyshev)
-    del objetivo al centro del spawn: cerca del borde de la zona es casi su `persistence`,
+    `persistence^(1 + e·(d − correa) / (tope − correa))`, con `d` la distancia (Chebyshev)
+    del objetivo al centro del spawn y `e` el `distance_exponent` del balance (2; con 0 la
+    distancia no cuenta): cerca del borde de la zona es casi su `persistence`,
     en el tope su cubo (0,85 → 0,61; 0,5 → 0,125; 0,15 → 0,003), y con `persistence: 1`
-    no se rinde nunca antes del tope (`TestPursuitChance`). Con su vida bajo
+    no se rinde nunca antes del tope (`TestPursuitChance`,
+    `TestPursuitChanceBalanceNumbers`). Con su vida bajo
     `give_up_below_hp_pct` no sigue (los cobardes se rinden; huir sigue siendo
     `flee_at_health_pct`); con la vida de su objetivo bajo `insist_target_hp_pct` la
-    probabilidad sube a mitad de camino hacia 1 (los agresivos insisten con la presa
-    herida). Una tirada vale para **todo su spawn** (la manada) contra ese objetivo hasta
-    la próxima: los lobos de un cubil siguen o se vuelven juntos
-    (`TestPursuitPackSharesOneRoll`). El cobarde es la excepción: uno bajo su
+    probabilidad sube `insist_boost` del camino hacia 1 (0,5: a mitad de camino; los
+    agresivos insisten con la presa herida, `TestPursuitInsistsOnAWeakTarget`). Una tirada
+    vale para **todo su spawn** (la manada) contra ese objetivo hasta la próxima: los lobos
+    de un cubil siguen o se vuelven juntos (`TestPursuitPackSharesOneRoll`). Si dos
+    jugadores tiran de la misma manada, hay una decisión **por objetivo**: los lobos que
+    siguen a uno deciden juntos, aparte de los que siguen al otro
+    (`TestPursuitPackDecidesPerTarget`). El cobarde es la excepción: uno bajo su
     `give_up_below_hp_pct` se vuelve solo, sin tirar, y su rendición no es la decisión de
     la manada (`TestPursuitCowardLeavesItsPack`). Un invocado sigue la
     persecución de quien lo llamó (los del custodio se quedan en su forja con él). Una
@@ -1720,7 +1726,12 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     `TestPursuitLosesSight`; con 0 lo pierde en el acto, como antes), en cuanto entra a
     una zona de protección (`TestPursuitProtectionZone`) y en cuanto cambia de piso (los
     monstruos no usan portales, `TestPursuitFloorChange`). Un invisible se pierde en el
-    acto, como siempre. Nunca entra a una zona de protección.
+    acto, como siempre. Nunca entra a una zona de protección. **Perder a su objetivo es
+    rendirse** (segunda revisión): hace lo mismo que con uno que salió de su correa, o
+    sea pasa a otro jugador que lo esté peleando desde donde puede ir (también mientras
+    perseguía fuera de su zona, `TestPursuitRetargetsWhilePursuing`) o, si no hay, se
+    rinde, con todo lo de abajo: cierra el daño sin responder, terminan sus condiciones y
+    empieza su memoria.
   - Al rendirse vuelve a casa caminando a su velocidad y **con la vida que tiene**
     (`TestPursuitGiveUpKeepsHealth`; menos el daño sin responder, arriba). Recuerda a
     quiénes lo hirieron, y el daño de cada uno, `combat.monster_pursuit.memory_ms` (3 min)
@@ -1728,7 +1739,13 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     250 ms) los elige **antes que a nadie**, aun siendo pasivo
     (`TestPursuitReaggroesARememberedAttacker`), y quien lo termine reparte la experiencia,
     el botín y el drop de quest con ellos; pasada la memoria (o regenerado a vida llena)
-    los olvida a ellos y a su daño (`TestPursuitGiveUpKeepsTheDamageShares`).
+    los olvida a ellos y a su daño (`TestPursuitGiveUpKeepsTheDamageShares`). Una pelea
+    que terminó sin rendición (su objetivo murió o salió del juego) se olvida igual a los
+    `memory_ms` de quedar sin nadie a quien pelear (`TestPursuitLostFightIsForgotten`). La
+    memoria y el reparto van por id de criatura, que un jugador recibe de nuevo cada vez
+    que entra al mundo: quien sale y vuelve a entrar es un desconocido para el monstruo y
+    pierde su parte. Lo acota el bloqueo de logout en combate (nadie sale en medio de la
+    pelea para borrar el recuerdo); aceptado así.
   - **Por tipo** (`data/monsters`): el lobo es persistente (0,85, tope 22, 6 s sin verte,
     insiste bajo 40 %), el sabueso de ceniza (0,8, tope 20) y el murciélago (0,7, tope
     18) también; el jabalí 0,6 e insiste bajo 35 %; los humanos 0,6 y se rinden bajo
@@ -1746,8 +1763,13 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   ticks: el tiempo que pasó sin pensar (nadie cerca) también suma, y lo recupera de golpe
   la próxima vez que piensa (`TestPursuitRegeneration`). Quien lo ve recibe la barra de
   vida nueva, sin número verde ni efecto de curación. **En combate (con objetivo) no
-  regenera**, salvo con un hechizo `heal_self`. Al volver a vida llena olvida el daño de
-  una pelea que perdió de vista. El custodio regenera 0,5 % (unos 16 minutos).
+  regenera**, salvo con un hechizo `heal_self`. Lo que recupera, regenerando o con
+  `heal_self`, sale primero del daño sin responder, así rendirse después no cierra dos
+  veces la misma herida (`TestPursuitRegenAndGiveUpDoNotHealTwice`,
+  `TestPursuitOwnHealAndGiveUpDoNotHealTwice`). Al volver a vida llena olvida el daño de
+  las peleas que recordaba. El ritmo es el de su propio tipo, también para un invocado
+  (la persecución de un invocado es la de quien lo llamó; cuánto sana su cuerpo, no). El
+  custodio regenera 0,5 % (unos 16 minutos).
 - **Errantes y respawn:** un monstruo fuera de su área de casa sigue contando como vivo
   para su spawn (no reaparece otro). Para que vuelva siempre, uno fuera de casa piensa
   aunque su sector no tenga jugadores cerca (`World.strays`): el que perseguía a alguien
@@ -1774,22 +1796,32 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     ella), así que no se suma a la pelea de otro spawn.
   - **Granjear experiencia arrastrándolo a un lugar seguro, o matarlo sin riesgo:** el
     daño hecho desde fuera del alcance de sus ataques que el monstruo no llegó a responder
-    (una ronda de ataque sobre ese jugador) se cura cuando se rinde: desde fuera de lo que
+    se cura cuando se rinde: desde fuera de lo que
     puede pisar, desde una casilla sin camino (durante la búsqueda y aunque el jugador
     salte de casilla en casilla), o disparando desde adentro y saliendo de la correa o del
-    tope cuando llega (también el custodio, atado a su forja). Las condiciones de un autor
+    tope, entrando a una zona de protección o saliendo de su vista cuando llega (también
+    el custodio, atado a su forja). **Responder** es una ronda de ataque: sobre ese
+    jugador, o sobre otro mientras ese jugador está donde el monstruo puede ir (un
+    objetivo válido, dentro de su correa y no en una casilla rechazada). Así el arquero o
+    el mago de un grupo cuyo tanque sostiene al monstruo pelea de verdad aunque nunca
+    reciba una ronda: si el grupo se retira a curarse, el monstruo se rinde todavía herido
+    y el arquero conserva su parte (`TestPursuitGroupDamageIsAnswered`); el que le pega
+    desde fuera de la correa mientras otro lo sostiene, no. Las condiciones de un autor
     fuera de su correa y de su alcance terminan sin dañar, y los golpes desde fuera de su correa o desde
     una casilla rechazada entrenan como contra un objetivo que no responde
     (`skills.afk.factor`). El único daño que queda al rendirse es el de una pelea en la que
     respondió (`TestLeashGivesUpATargetItCannotReach`,
-    `TestPursuitUnreachableHopsDoNotWearItDown`, `TestPursuitHitAndStepOutClosesTheWounds`).
+    `TestPursuitUnreachableHopsDoNotWearItDown`, `TestPursuitHitAndStepOutClosesTheWounds`,
+    `TestPursuitShootAndHideClosesTheWounds`).
     Consecuencia aceptada: quien lo hiere solo a distancia sin que nunca lo alcance y se
-    va, lo encuentra curado de ese daño si se rindió (no si lo perdió de vista o el
-    jugador entró a una zona de protección).
+    va, se esconde o entra a una zona de protección, lo encuentra curado de ese daño.
   - **Estacionarlo en el borde de una zona de protección:** quien entra a la zona se
-    pierde en el acto y el monstruo no espera en el borde: vuelve caminando a casa (y a
-    los 10 s empieza a regenerar). Salir a pegarle desde el borde es pelear: el monstruo
-    responde y sigue las reglas de arriba.
+    pierde en el acto, y perderlo es rendirse: el monstruo no espera en el borde, vuelve
+    caminando a casa (a los 10 s empieza a regenerar) y el daño que le hicieron de lejos
+    sin que llegara a responder se cierra, igual que al salir de su correa. Disparar desde
+    el borde y entrar cuando llega, una y otra vez, no lo desgasta
+    (`TestPursuitShootAndHideClosesTheWounds`). Quedarse afuera a pegarle es pelear: el
+    monstruo responde, ese daño queda y sigue las reglas de arriba.
 
 ## Muerte
 Valores iniciales (balance.yaml):
