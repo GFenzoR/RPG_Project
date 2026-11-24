@@ -281,6 +281,11 @@ export interface ClientTestHooks {
   trail(ms: number): { t: number; x: number; y: number }[];
   /** How long a straight own step onto (x, y, z) lasts at the player's speed now, ms. */
   stepMs(x: number, y: number, z: number): number;
+  /**
+   * The facing the own figure was last drawn in (docs/17 ANI-1: "n" ... "nw"), and whether
+   * it is drawn in eight facings; undefined before its first frame.
+   */
+  drawnFacing(): { facing: string; eight: boolean } | undefined;
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
@@ -2159,6 +2164,7 @@ export class Game {
         return s ? world.stepDuration({ x, y, z }, s.speed, false) : 0;
       },
       walkable: (x, y, z) => world.free(x, y, z),
+      drawnFacing: () => canvas.drawnFacing(world.selfId),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
       zoom: () => canvas.zoom,

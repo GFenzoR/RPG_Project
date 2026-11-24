@@ -28,7 +28,14 @@ const WAYS = [
   { key: "ArrowDown", dx: 0, dy: 1 },
   { key: "ArrowUp", dx: 0, dy: -1 },
 ] as const;
-type Way = (typeof WAYS)[number];
+type Way = { key: string; dx: number; dy: number };
+/** The diagonals: two perpendicular arrows held together (docs/02 "Movimiento"). */
+const DIAGONALS = [
+  { keys: ["ArrowUp", "ArrowRight"], dx: 1, dy: -1, facing: "ne" },
+  { keys: ["ArrowDown", "ArrowRight"], dx: 1, dy: 1, facing: "se" },
+  { keys: ["ArrowDown", "ArrowLeft"], dx: -1, dy: 1, facing: "sw" },
+  { keys: ["ArrowUp", "ArrowLeft"], dx: -1, dy: -1, facing: "nw" },
+] as const;
 type Tile = { x: number; y: number; z: number };
 
 /** The shortest step at level 1: speed 205 on the fastest ground (100), in whole ticks. */
@@ -426,5 +433,56 @@ test("with ~150 ms of latency a held key, the mouse held and a click all walk wi
   expect(click.back).toBe(0);
   // Before MOV-4 the first step waited a round trip and a tick (≥ 150 ms here).
   expect(click.leftAt - tc).toBeLessThan(150);
+  expect(errors).toEqual([]);
+});
+
+test("two arrows walk the diagonal at the straight speed, the person turned to it", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const api = await playwright.request.newContext({ baseURL: serverURL });
+  await enter(page, api, "diagonal");
+  await api.dispose();
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  const start = await standing(page);
+  let best: { d: (typeof DIAGONALS)[number]; run: number } | undefined;
+  for (const d of DIAGONALS) {
+    const run = await freeRun(page, start, { key: d.keys[0], dx: d.dx, dy: d.dy }, 6);
+    if (!best || run > best.run) best = { d, run };
+  }
+  if (!best || best.run < 3) throw new Error(`no diagonal run of 3 from ${JSON.stringify(start)}`);
+  const { d } = best;
+  await page.waitForTimeout(300); // let the atlas textures upload
+
+  // Both keys at once: the first step is the diagonal. Mid-walk, the person is drawn
+  // facing it (docs/17 ANI-1: the engine humanoid has eight facings).
+  const t0 = await now(page);
+  for (const k of d.keys) await page.keyboard.down(k);
+  await page.waitForTimeout(1100);
+  const drawn = await page.evaluate(() => window.__rpgClient?.drawnFacing());
+  await page.screenshot({ path: join(shots, "96d-movement-diagonal.png") });
+  for (const k of d.keys) await page.keyboard.up(k);
+  const end = await standing(page);
+  const held = (await now(page)) - t0;
+  expect(drawn).toEqual({ facing: d.facing, eight: true });
+  const n = Math.abs(end.x - start.x);
+  expect(n).toBeGreaterThanOrEqual(1);
+  expect(end.x - start.x).toBe(d.dx * n);
+  expect(end.y - start.y).toBe(d.dy * n); // a pure diagonal, never a straight step
+  // docs/02: a diagonal step lasts the straight one x sqrt(2), rounded to the tick.
+  const straight = await page.evaluate(
+    ({ x, y, z }) => window.__rpgClient?.stepMs(x, y, z) ?? 0,
+    end,
+  );
+  console.log(
+    `held ${d.keys.join("+")}: ${n} diagonal steps in ${Math.round(held)} ms, straight ${straight} ms`,
+  );
+  expect(n).toBeLessThanOrEqual(Math.floor(held / (MIN_STEP_MS * 1.4)) + 1);
   expect(errors).toEqual([]);
 });

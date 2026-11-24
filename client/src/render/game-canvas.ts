@@ -22,8 +22,8 @@ import {
   TextureStyle,
 } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
-import type { AttackKind } from "@rpg/protocol";
+import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
+import type { AttackKind, Direction } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
@@ -273,6 +273,8 @@ export interface GameCanvas {
    * many cast shadow sprites the frame drew; undefined underground or without a day and night.
    */
   sky(): SkyHook | undefined;
+  /** E2E: the facing creature `id` was last drawn in, and whether its figure has eight. */
+  drawnFacing(id: number): { facing: string; eight: boolean } | undefined;
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -1840,6 +1842,11 @@ export async function createGameCanvas(
         shadowAlpha: s.shadow.alpha,
         shadows: castShadows.root.visible ? castShadows.count : 0,
       };
+    },
+    drawnFacing(id) {
+      const st = animStates.get(id);
+      const figure = sprites.get(id)?.figure;
+      return st && figure ? { facing: st.facing, eight: figure.eight } : undefined;
     },
     poses() {
       const now = performance.now();
