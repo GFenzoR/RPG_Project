@@ -1482,16 +1482,32 @@ test("chat on the local and global channels, then switch the language", async ({
   await sayInput.press("Enter");
   await expect(chat).toContainText(`${name} dice: <b>hola</b> {name}`);
   await expect(chat.locator("b")).toHaveCount(0);
+  // docs/17 UI-11: what is said nearby also shows over the speaker's head, as plain text.
+  const bubbleSaid = (style: string, text: string) =>
+    page.waitForFunction(
+      ([s, x]) =>
+        (window.__rpgClient?.bubbles() ?? []).some((b) => b.style === s && b.lines.join(" ") === x),
+      [style, text] as const,
+    );
+  await bubbleSaid("say", "<b>hola</b> {name}");
 
   await page.getByTestId("chat-channel").selectOption({ label: "Gritar" });
   await sayInput.fill("hay alguien");
   await sayInput.press("Enter");
   await expect(chat).toContainText(`${name} grita: hay alguien`);
+  await bubbleSaid("yell", "hay alguien");
+  await shot(page, "16a-chat-bubble");
 
   await page.getByTestId("chat-channel").selectOption({ label: "Global" });
   await sayInput.fill("hola a todos");
   await sayInput.press("Enter");
   await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
+  // The global channel is heard from anywhere: no bubble over the head.
+  expect(
+    (await page.evaluate(() => window.__rpgClient?.bubbles() ?? [])).some((b) =>
+      b.lines.join(" ").includes("hola a todos"),
+    ),
+  ).toBe(false);
   // The global channel waits between two messages (balance.yaml chat.global_interval_ms).
   await sayInput.fill("otra vez");
   await sayInput.press("Enter");

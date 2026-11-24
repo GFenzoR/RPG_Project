@@ -1725,6 +1725,50 @@ canal de comercio en el protocolo) y plegado sigue mostrando solo su barra.
 - El log del sistema es una pestaña más. Los avisos importantes siguen saliendo sobre el
   mapa (`ui/notices.ts`).
 
+### UI-11 Globos de diálogo sobre las cabezas (hecho, 2026-11-24, rama `feat/chat-bubbles`)
+Pedido del dueño del 2026-11-23: lo que alguien dice en el canal local aparece también sobre
+su cabeza, para que la conversación se sienta natural.
+- **Qué lleva globo:** decir, gritar y susurrar (`MessageKind` `SAY`, `YELL`, `WHISPER`) y
+  la línea de un NPC en su diálogo (`DialogOpen`, solo la ve quien habla con él). Nunca el
+  global, el grupo, el gremio, los anuncios de staff ni los mensajes del sistema
+  (`bubbleStyle` de `client/src/render/bubbles.ts`). El cliente solo arma globo para un
+  `Message` que trae `pos`: el servidor la manda solo a quien ve al que habla (un
+  invisible o alguien fuera de la ventana se oye por nombre, sin globo). El alcance de
+  cada modo lo pone el servidor (`balance.yaml` `chat.ranges`): un susurro solo llega a
+  quien está cerca. Los mensajes propios también tienen globo (el servidor se los devuelve
+  con `pos`). No hay lista de ignorados todavía; cuando exista, la misma regla la respeta
+  (ver docs/14).
+- **Cómo se ve:** una caja oscura redondeada con una colita hacia la cabeza, justo sobre
+  el nombre (sobre la barra de vida si el nombre está oculto a zoom 1), en la fuente del
+  canvas (Pixelify Sans 11 px, UI-3) con líneas de 13 px. Decir: pergamino sobre marrón;
+  gritar: naranja con borde de 2 px y dura 1,5 veces más; susurrar: azul gris, caja más
+  transparente y dura 0,8 veces; NPC: verde pálido. La fuente es de píxel: un grito no se
+  agranda (se vería borroso), se distingue por color, borde y duración.
+- **Cuánto dura:** 2,5 s + 60 ms por carácter, entre 3,5 y 9 s (por el factor del modo);
+  se desvanece en sus últimos 600 ms (`bubbleLife`, `bubbleAlpha`).
+- **Ajuste de línea:** a 150 px por línea, sin cortar palabras salvo una más ancha que la
+  línea; como mucho 4 líneas por mensaje, la última con "…" (`wrapBubble`).
+- **Varios mensajes:** los de un mismo hablante se apilan (el más nuevo abajo, junto a la
+  cabeza), como mucho 3 mensajes y 6 líneas; al llegar otro se va el más viejo
+  (`SpeechBubbles`).
+- **Varios hablantes juntos:** el propio jugador primero y después los más cercanos quedan
+  sobre su cabeza; un globo que taparía a otro ya puesto sube justo encima de él (2 px de
+  separación), las veces que haga falta, sin pasar del borde de arriba del canvas
+  (`stackBubbles`).
+- **Sigue a la criatura** con la misma interpolación que el nombre y la barra (se ancla al
+  nombre en cada frame). Una criatura que el canvas no dibuja (otro piso, fuera de la
+  vista) no muestra su globo mientras dura.
+- **Texto del jugador:** un `Text` de Pixi sin `tagStyles`, así nada se interpreta como
+  marcado; el largo ya lo limita el servidor (255).
+- **Opción:** Opciones → Interfaz, "Globos de diálogo sobre las cabezas"
+  (`data-testid="chat-bubbles"`, `localStorage` `rpg.chat-bubbles`, encendida por
+  defecto). Apagada, no se arma ninguno y se borran los que había.
+- **Código:** reglas puras en `render/bubbles.ts` (con tests); `render/bubble-layer.ts`
+  dibuja una pila por hablante (con tests sin canvas: mide con una función inyectada, nunca
+  con `Text.width`); `game-canvas.ts` pone la capa entre los nombres y los números
+  flotantes y la ancla al nombre; `WorldState.takeSpeech` guarda lo dicho (hasta
+  `SPEECH_QUEUE`, 16) hasta el frame siguiente. Hook E2E `__rpgClient.bubbles()`.
+
 ## 6. Assets: de dónde salen y cómo se registran (SRC)
 
 ### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)

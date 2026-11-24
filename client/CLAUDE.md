@@ -194,6 +194,12 @@ client/
   guarda el idioma en estado y `ui/LanguagePicker.tsx` lo cambia en vivo (esquina fuera del
   juego; dentro, la ventana Opciones en escritorio y el menú ☰ en teléfonos); el `Game`
   recibe `t` por un ref y el canvas renombra etiquetas.
+- **Globos sobre las cabezas** (docs/17 UI-11): lo dicho en el canal local (y la línea del
+  NPC en su diálogo) también va sobre quien habla. `WorldState.takeSpeech` (solo un
+  `Message` con `pos`), reglas puras en `render/bubbles.ts` (estilo por canal, ajuste de
+  línea, duración, apilado, separación) y la capa en `render/bubble-layer.ts`, entre los
+  nombres y los números. Opción `chat-bubbles` en Opciones → Interfaz (`rpg.chat-bubbles`).
+  Hook E2E `__rpgClient.bubbles()`.
 - `translator(texts, lang)` soporta plurales ICU; `make validate` revisa las claves literales
   del código (cliente, editor y servidor).
 

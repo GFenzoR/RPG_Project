@@ -104,6 +104,18 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Globos de diálogo (hecho, rama `feat/chat-bubbles`; el dueño el 2026-11-23: lo dicho en
+  el canal local aparece sobre la cabeza; docs/17 UI-11):** decir, gritar, susurrar y la
+  línea del NPC en su diálogo, con ajuste de línea, apilado, separación entre hablantes y
+  la opción en Opciones → Interfaz. Sin cambios de servidor ni protocolo. Queda:
+  - **Lista de ignorados:** no existe; cuando se haga, `drawSpeech` de `game-canvas.ts`
+    debe saltar a los ignorados igual que el chat.
+  - **Mirar en el playtest** si 150 px de ancho y los tiempos (3,5 a 9 s) se sienten
+    bien con mucha gente hablando, y si el grito necesita algo más que color y borde.
+  - **NPCs que hablan solos** (pregones, saludos al pasar): el servidor no los manda
+    (`MESSAGE_KIND_NPC` existe pero nadie lo emite); cuando lo haga, salen con globo solos.
+  - **E2E** (lo corre el lote al final): `16a-chat-bubble` del test del chat, el globo del
+    grito sobre el propio jugador.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
