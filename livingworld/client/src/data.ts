@@ -5,6 +5,9 @@
 // parseAmbience, ambience.ts).
 import type { AmbienceData } from "./ambience.ts";
 
+import { parseDayNight } from "./sky.ts";
+import type { DayNightData } from "./sky.ts";
+
 /** What a ground is made of: data/items `ground.surface` (common.schema.json "surface"). */
 export const SURFACES = [
   "sand",
@@ -67,6 +70,8 @@ export interface LivingWorldData {
   plants: Readonly<Record<string, PlantRule>>;
   /** data/livingworld/ambience.yaml (ambience.ts); none: no positional ambience. */
   ambience?: AmbienceData | undefined;
+  /** data/livingworld/daynight.yaml (sky.ts); absent: no day and night (always noon). */
+  dayNight?: DayNightData | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };
@@ -86,11 +91,17 @@ function parseTint(v: unknown): number {
  * YAML). Lenient: make validate checks the files against their schemas, so anything
  * malformed here is skipped rather than thrown.
  */
-export function parseLivingWorldData(surfaces: unknown, plants: unknown): LivingWorldData {
+export function parseLivingWorldData(
+  surfaces: unknown,
+  plants: unknown,
+  dayNight?: unknown,
+): LivingWorldData {
   const out: {
     surfaces: Partial<Record<Surface, SurfaceRules>>;
     plants: Record<string, PlantRule>;
+    dayNight?: DayNightData;
   } = { surfaces: {}, plants: {} };
+  if (dayNight !== undefined && dayNight !== null) out.dayNight = parseDayNight(dayNight);
   const s = isObj(surfaces) && isObj(surfaces["surfaces"]) ? surfaces["surfaces"] : {};
   for (const [name, raw] of Object.entries(s)) {
     if (!isSurface(name) || !isObj(raw)) continue;

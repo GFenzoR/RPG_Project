@@ -37,6 +37,10 @@ describe("client content (T0.5)", () => {
       trample: true,
     });
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
+    // Day and night (data/livingworld/daynight.yaml): the owner's 180 + 60 minutes.
+    expect(lw?.dayNight?.dayMs).toBe(180 * 60_000);
+    expect(lw?.dayNight?.nightMs).toBe(60 * 60_000);
+    expect(lw?.dayNight?.floor).toBeGreaterThanOrEqual(0.4);
   });
 
   it("ships the positional ambience: beds and emitters on ambient sounds (livingworld/README.md)", () => {

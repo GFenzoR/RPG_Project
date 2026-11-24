@@ -96,14 +96,14 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
 
-/** data/livingworld/surfaces.yaml, plants.yaml and ambience.yaml as the living world uses them. */
+/** data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml and daynight.yaml as the living world uses them. */
 function loadLivingWorld(root: string): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
   return {
-    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml")),
+    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml")),
     ambience: parseAmbience(read("ambience.yaml")),
   };
 }

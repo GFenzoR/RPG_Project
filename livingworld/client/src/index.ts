@@ -25,6 +25,7 @@ import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
 import type { WearDraw, WearTile } from "./wear.ts";
 
 export * from "./data.ts";
+export * from "./sky.ts";
 export {
   BREAK_MS,
   BURST_COUNT,
