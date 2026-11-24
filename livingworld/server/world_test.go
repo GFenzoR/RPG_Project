@@ -180,7 +180,7 @@ func TestDebrisFadesThenRespawnWaitsForTheOccupant(t *testing.T) {
 	if w.ItemAt(p) != 0 {
 		t.Fatal("the retry waits a second")
 	}
-	w.OnTick(100 + 5*tps + respawnRetry)
+	w.OnTick(100 + 5*tps + tps)
 	if w.ItemAt(p) != 10 || !h.block[p][0] {
 		t.Fatal("crate did not respawn on a free tile")
 	}
@@ -266,7 +266,7 @@ func TestBoulderGoesHomeWhenFree(t *testing.T) {
 		t.Fatal("reset onto a creature")
 	}
 	delete(h.creatures, at(5, 5))
-	w.OnTick(10 + 10*tps + respawnRetry)
+	w.OnTick(10 + 10*tps + tps)
 	if w.ItemAt(at(5, 5)) != 13 || w.ItemAt(at(6, 5)) != 0 {
 		t.Fatal("boulder did not go home")
 	}
@@ -334,5 +334,73 @@ func TestLoadDirMissingIsEmpty(t *testing.T) {
 	defs, err := LoadDir(t.TempDir() + "/nope")
 	if err != nil || defs != nil {
 		t.Fatalf("LoadDir of a missing dir: %v, %v", defs, err)
+	}
+}
+
+// A blocked respawn waits one second of the loop's own ticks (Resolve's tps), not a
+// fixed count that assumes 50 ms ticks.
+func TestRespawnRetryFollowsTicksPerSecond(t *testing.T) {
+	defs, err := Parse([]byte(testYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const slow = 10
+	cat, err := Resolve(defs, lookup, nil, slow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHost()
+	w := New(cat, h)
+	rnd := rand.New(rand.NewPCG(1, 2))
+	w.Place(at(1, 1), 12) // rock: respawns after 3 s, no debris
+	w.OnTick(1)
+	if r := w.OnAttackObject(at(1, 1), Hit{Methods: []string{ByPick}, Damage: 10}, rnd); r != HitBroken {
+		t.Fatalf("pick: %v", r)
+	}
+	h.creatures[at(1, 1)] = true
+	w.OnTick(1 + 3*slow) // due, but someone stands there
+	if w.Breakable(at(1, 1)) {
+		t.Fatal("respawned on a creature")
+	}
+	delete(h.creatures, at(1, 1))
+	w.OnTick(1 + 3*slow + slow - 1)
+	if w.Breakable(at(1, 1)) {
+		t.Fatal("respawned before a second went by")
+	}
+	w.OnTick(1 + 3*slow + slow)
+	if !w.Breakable(at(1, 1)) {
+		t.Fatal("not respawned one second after the blocked try")
+	}
+	if w.Timers() != 0 {
+		t.Fatalf("%d timers left once everything stands", w.Timers())
+	}
+}
+
+// The timers run from a queue: a push that restarts a boulder's reset leaves a stale
+// entry that never moves it early, and the queue empties once every timer ran.
+func TestTimersQueueSkipsStaleEntries(t *testing.T) {
+	w, _ := setup(t)
+	w.Place(at(5, 5), 13) // boulder: resets after 10 s
+	w.OnTick(1)
+	if w.Push(at(5, 5), 1, 0) != PushMoved {
+		t.Fatal("first push")
+	}
+	w.OnTick(1 + 5*tps)
+	if w.Push(at(6, 5), 1, 0) != PushMoved {
+		t.Fatal("second push")
+	}
+	w.OnTick(1 + 10*tps) // the first push's reset is stale now
+	if w.Has(at(5, 5)) || !w.Has(at(7, 5)) {
+		t.Fatal("the stale timer of the first push sent the boulder home")
+	}
+	w.OnTick(1 + 15*tps)
+	if !w.Has(at(5, 5)) || w.Has(at(7, 5)) {
+		t.Fatal("the boulder did not go home 10 s after the last push")
+	}
+	if w.Timers() != 0 {
+		t.Fatalf("%d timers left", w.Timers())
+	}
+	if g := w.Gates(); len(g) != 0 {
+		t.Fatalf("gates %v", g)
 	}
 }

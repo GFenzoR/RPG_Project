@@ -35,7 +35,7 @@ func (w *World) Push(from Pos, dx, dy int) PushResult {
 	}
 	w.move(o, to)
 	if o.k.reset > 0 {
-		o.until = w.tick + o.k.reset
+		w.schedule(o, w.tick+o.k.reset)
 	}
 	w.host.Event(Event{Kind: EventPush, Pos: from, To: to, Item: o.k.num, Effect: o.k.def.Pushable.Effect, Sound: o.k.def.Pushable.Sound})
 	w.updatePlates()
@@ -61,7 +61,7 @@ func (w *World) resetPushable(o *object) {
 		return
 	}
 	if w.objs[o.home] != nil || !w.host.Free(o.home) {
-		o.until = w.tick + respawnRetry
+		w.schedule(o, w.tick+w.cat.retry)
 		return
 	}
 	from := o.pos

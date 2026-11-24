@@ -76,10 +76,10 @@ func (w *World) OnAttackObject(p Pos, h Hit, rnd Rand) HitResult {
 	w.host.Event(Event{Kind: EventBreak, Pos: p, Item: o.k.num, Effect: b.Effect, Sound: b.Sound})
 	if o.k.alt != 0 {
 		w.set(o, debris)
-		o.until = w.tick + max(o.k.debris, 1)
+		w.schedule(o, w.tick+max(o.k.debris, 1))
 	} else {
 		w.set(o, gone)
-		o.until = w.tick + max(o.k.respawn, 1)
+		w.schedule(o, w.tick+max(o.k.respawn, 1))
 	}
 	if drops := rollLoot(b.Loot, rnd); len(drops) > 0 {
 		w.host.DropLoot(p, h.Actor, o.k.def.Item, drops)
@@ -95,12 +95,12 @@ func (w *World) breakableTimer(o *object) {
 		w.host.Event(Event{Kind: EventFade, Pos: o.pos, Item: o.k.alt, Effect: o.k.def.Breakable.Effect})
 		w.set(o, gone)
 		// The respawn counts from the break: debris_seconds <= respawn_seconds (checked).
-		o.until = w.tick + max(o.k.respawn-o.k.debris, 1)
+		w.schedule(o, w.tick+max(o.k.respawn-o.k.debris, 1))
 	case gone:
 		// Never on a creature nor on loose items (they would end up inside the crate):
 		// try again in a second.
 		if !w.host.Free(o.pos) {
-			o.until = w.tick + respawnRetry
+			w.schedule(o, w.tick+w.cat.retry)
 			return
 		}
 		o.hp = o.k.def.Breakable.HP
@@ -109,10 +109,6 @@ func (w *World) breakableTimer(o *object) {
 		w.host.Event(Event{Kind: EventRespawn, Pos: o.pos, Item: o.k.num, Effect: o.k.def.Breakable.Effect})
 	}
 }
-
-// respawnRetry is how many ticks a respawn (or a reset) blocked by a creature waits
-// before it tries again: one second of 50 ms ticks.
-const respawnRetry = 20
 
 // rollLoot rolls a loot table: each entry by its chance, then its count.
 func rollLoot(loot []LootEntry, rnd Rand) []Drop {

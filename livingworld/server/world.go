@@ -11,6 +11,7 @@
 package livingworld
 
 import (
+	"container/heap"
 	"slices"
 )
 
@@ -112,6 +113,7 @@ type object struct {
 	st    state
 	hp    int
 	until uint64 // tick of the next change (debris fades, respawn, reset); 0 none
+	seq   int    // its index in World.order (ties of the timers go in placement order)
 	// plates linked to a gate.
 	plates []Pos
 }
@@ -136,7 +138,39 @@ type World struct {
 	order  []*object
 	plates map[Pos]*plate // pressure plates of the map
 	gates  []*object
+	// timers holds the objects with a timer, soonest first (an entry whose tick is no
+	// longer its object's until is stale and skipped): a tick costs the timers due, not a
+	// walk over every object of the map.
+	timers timerQueue
 	tick   uint64
+}
+
+// timer is an entry of World.timers.
+type timer struct {
+	at uint64
+	o  *object
+}
+
+// timerQueue is a min-heap of timers by tick, then placement order (deterministic).
+type timerQueue []timer
+
+func (q timerQueue) Len() int { return len(q) }
+func (q timerQueue) Less(i, j int) bool {
+	return q[i].at < q[j].at || q[i].at == q[j].at && q[i].o.seq < q[j].o.seq
+}
+func (q timerQueue) Swap(i, j int) { q[i], q[j] = q[j], q[i] }
+func (q *timerQueue) Push(x any)   { *q = append(*q, x.(timer)) }
+func (q *timerQueue) Pop() any {
+	old := *q
+	t := old[len(old)-1]
+	*q = old[:len(old)-1]
+	return t
+}
+
+// schedule sets o's next change at tick at (> the current tick).
+func (w *World) schedule(o *object, at uint64) {
+	o.until = at
+	heap.Push(&w.timers, timer{at: at, o: o})
 }
 
 // New builds an empty World over a resolved catalog.
@@ -159,7 +193,7 @@ func (w *World) Place(p Pos, num uint16) bool {
 	if w.objs[p] != nil {
 		return false // one object per tile: a second one stays a plain map item
 	}
-	o := &object{k: k, home: p, pos: p}
+	o := &object{k: k, home: p, pos: p, seq: len(w.order)}
 	if k.def.Breakable != nil {
 		o.hp = k.def.Breakable.HP
 	}
@@ -202,6 +236,16 @@ func (w *World) ItemAt(p Pos) uint16 {
 		return n
 	}
 	return 0
+}
+
+// Gates returns the tiles of the gates, in placement order (the host checks that a
+// closed gate locks nobody in: every side of it reaches a temple another way).
+func (w *World) Gates() []Pos {
+	out := make([]Pos, 0, len(w.gates))
+	for _, g := range w.gates {
+		out = append(out, g.pos)
+	}
+	return out
 }
 
 // Has reports whether an object (in any state) belongs to p.
@@ -248,13 +292,18 @@ func (w *World) OnStep(from, to Pos) {
 	}
 }
 
-// OnTick runs the timers due at tick: debris that fades, objects that respawn, boulders
-// that go home, plates and gates.
+// OnTick runs the timers due at tick (debris that fades, objects that respawn, boulders
+// that go home), then the plates and gates. The plates are checked every tick, not only on
+// OnStep: a creature also leaves or reaches a plate by a teleport, a death, a login or a
+// logout, which the module does not hear of. That costs one Occupied per plate (a puzzle
+// has a few), never a walk over the objects.
 func (w *World) OnTick(tick uint64) {
 	w.tick = tick
-	for _, o := range w.order {
-		if o.until == 0 || tick < o.until {
-			continue
+	for len(w.timers) > 0 && w.timers[0].at <= tick {
+		t := heap.Pop(&w.timers).(timer)
+		o := t.o
+		if o.until != t.at {
+			continue // stale: its timer changed since
 		}
 		switch {
 		case o.k.def.Breakable != nil:
@@ -267,3 +316,6 @@ func (w *World) OnTick(tick uint64) {
 		w.updatePlates()
 	}
 }
+
+// Timers returns how many timer entries are queued (tests: stale entries do not pile up).
+func (w *World) Timers() int { return len(w.timers) }

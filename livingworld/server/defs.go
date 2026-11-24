@@ -178,6 +178,9 @@ type Catalog struct {
 	plates map[uint16]*Def
 	// Loot items, resolved (glue creates them).
 	defs Defs
+	// retry is how many ticks a respawn (or a reset) blocked by a creature or an item waits
+	// before it tries again: one second.
+	retry uint64
 }
 
 // kind is one resolved object definition.
@@ -200,7 +203,7 @@ func Resolve(defs Defs, items ItemLookup, sounds SoundLookup, tps uint64) (*Cata
 	if tps == 0 {
 		return nil, errors.New("livingworld: ticks per second must be positive")
 	}
-	c := &Catalog{byNum: map[uint16]*kind{}, plates: map[uint16]*Def{}, defs: defs}
+	c := &Catalog{byNum: map[uint16]*kind{}, plates: map[uint16]*Def{}, defs: defs, retry: tps}
 	seen := map[string]bool{}
 	for i, d := range defs {
 		if err := checkDef(d, items, sounds); err != nil {
