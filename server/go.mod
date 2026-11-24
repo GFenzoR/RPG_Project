@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.27.4
 
 require (
+	github.com/GFenzoR/RPG_Project/livingworld/server v0.0.0
 	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/pressly/goose/v3 v3.26.0
@@ -34,3 +35,5 @@ require (
 )
 
 tool google.golang.org/protobuf/cmd/protoc-gen-go
+
+replace github.com/GFenzoR/RPG_Project/livingworld/server => ../livingworld/server

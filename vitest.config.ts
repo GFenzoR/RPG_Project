@@ -4,8 +4,10 @@ import { globSync } from "node:fs";
 import { dirname } from "node:path";
 import { defineConfig } from "vitest/config";
 
-// Same packages as pnpm-workspace.yaml; Go modules such as tools/bots have no package.json.
-const projects = globSync("{client,editor,packages/*,tools/*}/package.json").map(dirname).sort();
+// Same packages as pnpm-workspace.yaml (livingworld/client too); Go modules such as tools/bots have no package.json.
+const projects = globSync("{client,editor,packages/*,tools/*,livingworld/client}/package.json")
+  .map(dirname)
+  .sort();
 
 export default defineConfig({
   test: { projects },

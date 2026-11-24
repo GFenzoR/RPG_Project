@@ -39,3 +39,9 @@
   from: { x: 2113, y: 2104, z: 8 }
   to: { x: 2095, y: 2094, z: 7 }
   notes: "Back of the cave: back to the square, in front of the temple."
+
+- id: pruebas_vault_exit
+  kind: teleport
+  from: { x: 2105, y: 2066, z: 7 }
+  to: { x: 2104, y: 2071, z: 7 }
+  notes: "Living world vault behind the portcullis: the way out when it closes (rocks reset, restart)."

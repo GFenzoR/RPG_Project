@@ -13,6 +13,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@rpg/living-world": "workspace:*",
     "@rpg/protocol": "workspace:*",
     "@rpg/renderer": "workspace:*",
     "@tauri-apps/api": "2.12.4",

@@ -469,3 +469,107 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
   await shot(page, "98-sandbox-chest");
   expect(errors).toEqual([]);
 });
+
+// The living world's corner of Thimblewick (lote 17, livingworld/README.md), north of the
+// temple between the coast and the pens: vines cut by hand open the garden, and two
+// boulders pushed onto their plates raise the portcullis. No console error and no
+// disconnection on the way (PushObject is ClientMessage field 39).
+test("sandbox living world: cut the vines by hand, push both boulders, the portcullis opens", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Rompedor");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(`${x},${y},${z}`);
+  };
+  const topOf = (x: number, y: number): Promise<number | undefined> =>
+    page.evaluate(({ a, b }) => window.__rpgClient?.tile(a, b, 7)?.at(-1), { a: x, b: y });
+  const item = (id: string): Promise<number | undefined> =>
+    page.evaluate((i) => window.__rpgClient?.itemNumber(i), id);
+  const walkable = (x: number, y: number): Promise<boolean | undefined> =>
+    page.evaluate(({ a, b }) => window.__rpgClient?.walkable(a, b, 7), { a: x, b: y });
+  const say = page.getByTestId("say").getByRole("textbox");
+  const tp = async (x: number, y: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} 7`);
+    await say.press("Enter");
+    await standsOn(x, y, 7);
+    await page.waitForTimeout(300);
+  };
+
+  // The area as the reviewed render shows it.
+  await tp(2096, 2071);
+  expect(await topOf(2096, 2070)).toBe(await item("thorny_vines"));
+  expect(await topOf(2105, 2068)).toBe(await item("portcullis_closed"));
+  expect(await topOf(2101, 2070)).toBe(await item("mossy_boulder"));
+  expect(await topOf(2105, 2071)).toBe(await item("mossy_boulder"));
+  expect(await topOf(2108, 2070)).toBe(await item("heavy_crate"));
+  expect(await topOf(2088, 2071)).toBe(await item("cracked_rock"));
+  await shot(page, "97-living-garden");
+
+  // Bare hands on the vines (Ctrl+right click: use), at the pace of the trades, until cut. From
+  // the tile diagonal to them: from right below, the player's own sprite covers the vines'
+  // tile and takes the click.
+  await tp(2095, 2071);
+  const cut = await item("cut_vines");
+  for (let i = 0; i < 12 && (await topOf(2096, 2070)) !== cut; i++) {
+    const at = await page.evaluate(() => window.__rpgClient?.tileToClient(2096, 2070));
+    if (!at) throw new Error("no client position for the vines");
+    // Ctrl+right uses the top item at once in both controls modes (input/mouse.ts).
+    await page.keyboard.down("Control");
+    await page.mouse.click(at.x, at.y, { button: "right" });
+    await page.keyboard.up("Control");
+    await page.waitForTimeout(1200);
+  }
+  expect(await topOf(2096, 2070)).toBe(cut);
+  expect(await walkable(2096, 2070)).toBe(true);
+  await shot(page, "98-living-vines-cut");
+
+  // The portcullis: the west boulder east onto its plate, the south one north onto its.
+  const boulder = await item("mossy_boulder");
+  // A tap of a walking key into a pushable object pushes it (Game.pushAhead, at most once
+  // per PUSH_EVERY_MS); a tap may first only turn the player (MOV-2), so tap until it moves.
+  const pushToward = async (key: string, x: number, y: number): Promise<void> => {
+    await say.blur(); // /tp left the focus in the chat: the arrows would move its caret
+    for (let i = 0; i < 6 && (await topOf(x, y)) !== boulder; i++) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(600);
+    }
+    expect(await topOf(x, y)).toBe(boulder);
+  };
+  await tp(2100, 2070);
+  await pushToward("ArrowRight", 2102, 2070);
+  await tp(2105, 2072);
+  await pushToward("ArrowUp", 2105, 2070);
+  await expect
+    .poll(() => topOf(2105, 2068), { timeout: 10_000 })
+    .toBe(await item("portcullis_open"));
+  expect(await walkable(2105, 2068)).toBe(true);
+  await page.waitForTimeout(300);
+  await shot(page, "99-living-portcullis-open");
+
+  // Still in the game: the pushes never closed the connection.
+  expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
+  await expect(page.getByTestId("login-form")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

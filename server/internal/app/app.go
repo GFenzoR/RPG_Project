@@ -56,6 +56,11 @@ type Config struct {
 	Spells content.Spells
 	// Recipes come from data/recipes.yaml (T3.4); nil means no crafting.
 	Recipes content.Recipes
+	// TrailWear is data/livingworld/wear.yaml (session.LoadTrailWear); nil turns the
+	// living world's trail wear off. With a TrailStore it survives restarts (trailwear.go).
+	TrailWear *session.TrailConfig
+	// LivingWorld is data/livingworld (session.LoadLivingWorld); nil means no living objects.
+	LivingWorld session.LivingDefs
 	// Attributes come from data/attributes.yaml (docs/02 "Atributos de items"); nil means
 	// no equipable rolls one.
 	Attributes content.Attributes
@@ -140,6 +145,8 @@ type App struct {
 	saver   *session.Saver
 	admin   *adminWorker
 	economy *economyWriter
+	// trail writes the trail wear (trailwear.go); nil without a TrailStore.
+	trail *trailWriter
 	// loopDone is closed when the game loop stopped (commands can no longer run).
 	loopDone chan struct{}
 	// storeBeat is the database heartbeat (houses.go heartbeat; 0: none).
@@ -312,7 +319,21 @@ func New(cfg Config) (*App, error) {
 		if houseData != nil && cfg.Store != nil {
 			a.storeBeat = storeHeartbeat // content audit M6: a database outage is not absence
 		}
+		// The living world's trail wear (trailwear.go): read once, before the loop owns it.
+		var trailData []byte
+		var trailDown int64
+		var saveTrail func(session.TrailSnapshot) bool
+		if ts, ok := cfg.Store.(TrailStore); ok && cfg.TrailWear != nil {
+			trailData, trailDown = loadTrail(ts, cfg.Clock, cfg.Logger)
+			a.trail = newTrailWriter(ts, cfg.Clock, cfg.Logger)
+			saveTrail = a.trail.Submit
+		}
 		w, err := session.New(session.Config{
+			Trail:           cfg.TrailWear,
+			TrailData:       trailData,
+			TrailDowntimeMs: trailDown,
+			SaveTrail:       saveTrail,
+
 			StoreHeartbeat: a.storeBeat,
 			Transfer:       transfer,
 			Market:         market,
@@ -325,6 +346,7 @@ func New(cfg Config) (*App, error) {
 			Items:          cfg.Items,
 			Spells:         cfg.Spells,
 			Recipes:        cfg.Recipes,
+			LivingWorld:    cfg.LivingWorld,
 			Attributes:     cfg.Attributes,
 			Rand:           rng,
 			BoatRoutes:     cfg.BoatRoutes,
@@ -461,6 +483,9 @@ func (a *App) Run(ctx context.Context) error {
 		a.admin.Start()
 		a.economy.Start()
 	}
+	if a.trail != nil {
+		a.trail.Start()
+	}
 	a.running.Store(true)
 	if a.storeBeat > 0 {
 		go a.heartbeat()
@@ -498,6 +523,13 @@ func (a *App) Run(ctx context.Context) error {
 	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
 	stage("economy log did not drain", a.economy.Stop)
 	stage("pending economy entries", func(ctx context.Context) error { return a.economy.writePending(ctx, pendingEconomy) })
+	if a.trail != nil {
+		// The loop has stopped: the wear as it is now is the last copy to write.
+		if snap, ok := a.World.TrailSnapshot(); ok {
+			a.trail.Submit(snap)
+		}
+		stage("trail wear not saved", a.trail.Stop)
+	}
 	a.log.Info("players saved at shutdown", "online", online, "ticks", uint64(a.Loop.Tick()))
 	return runErr
 }

@@ -32,6 +32,9 @@ type Balance struct {
 	// Stash is the account stash (docs/02 "Baúl de la cuenta"); absent or enabled: false
 	// turns it off.
 	Stash Stash `yaml:"stash"`
+	// Living holds the living world's rules that belong to no object (data/livingworld);
+	// the server needs it whenever there are living objects.
+	Living Living `yaml:"living"`
 	// Forge is the refine of equipables at an anvil (docs/02 "Forja"); absent or enabled:
 	// false turns it off.
 	Forge Forge `yaml:"forge"`
@@ -830,6 +833,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if err := b.Stash.check(); err != nil {
 		return Balance{}, err
 	}
+	if err := b.Living.check(); err != nil {
+		return Balance{}, err
+	}
 	if err := b.Forge.check(); err != nil {
 		return Balance{}, err
 	}
@@ -891,6 +897,28 @@ func (c Combat) check() error {
 		if !ok || m.Attack < 0 || m.Defense < 0 {
 			return fmt.Errorf("combat.modes.%s missing or negative", s)
 		}
+	}
+	return nil
+}
+
+// Living is balance.living: the living world's numbers that belong to no object
+// (livingworld/README.md); the objects' own live in data/livingworld.
+type Living struct {
+	// FistDamage is a bare-handed strike's damage on a breakable object.
+	FistDamage int `yaml:"fist_damage"`
+	// ToolDamage is the damage of one use of a tool (an axe, a pickaxe) on one.
+	ToolDamage int `yaml:"tool_damage"`
+	// PushCooldownMs is how often one player may push an object.
+	PushCooldownMs int `yaml:"push_cooldown_ms"`
+}
+
+// MaxLivingDamage bounds Living's damages (an object has at most livingworld.MaxHP).
+const MaxLivingDamage = 10000
+
+func (l Living) check() error {
+	if l.FistDamage < 0 || l.FistDamage > MaxLivingDamage || l.ToolDamage < 0 || l.ToolDamage > MaxLivingDamage ||
+		l.PushCooldownMs < 0 || l.PushCooldownMs > 60_000 {
+		return fmt.Errorf("living: fist_damage and tool_damage in 0..%d, push_cooldown_ms in 0..60000", MaxLivingDamage)
 	}
 	return nil
 }

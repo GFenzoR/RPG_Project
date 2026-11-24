@@ -1,0 +1,121 @@
+# Living world objects (livingworld/README.md, docs/02 "Mundo vivo"): what the items of
+# data/items/livingworld.yaml do on the map. One entry per item, with exactly one of:
+#   breakable: { hp, by: [melee | any_attack | tool:axe | tool:pick | fire], becomes: <item>
+#                | none, debris_seconds, respawn_seconds, loot: [{ item, chance, count }],
+#                effect: wood | stone | plant | web | clay, sound, hit_sound }
+#   pushable:  { reset_seconds (required, > 0), effect, sound }   walk into it to push it one tile
+#   gate:      { open: <item>, sound }             open while its plates are all pressed
+#   plate:     { radius }                          links to the gates within radius tiles
+# Walls, doors and grounds can never be here (make validate and the server refuse them),
+# and the map validator refuses these objects on protection zones, houses and doors.
+# Sounds are ids of assets/sounds.yaml. Our own numbers.
+
+- item: weathered_crate
+  breakable:
+    hp: 24
+    by: [melee, any_attack, fire]
+    becomes: weathered_crate_debris
+    debris_seconds: 20
+    respawn_seconds: 240
+    effect: wood
+    hit_sound: hit
+    sound: woodcutting
+    loot:
+      - { item: gold_coin, chance: 0.6, count: [2, 9] }
+      - { item: ship_biscuit, chance: 0.2 }
+
+- item: rickety_barrel
+  breakable:
+    hp: 18
+    by: [melee, any_attack, fire]
+    becomes: rickety_barrel_debris
+    debris_seconds: 20
+    respawn_seconds: 240
+    effect: wood
+    hit_sound: hit
+    sound: woodcutting
+    loot:
+      - { item: gold_coin, chance: 0.5, count: [1, 6] }
+
+- item: clay_pot
+  breakable:
+    hp: 6
+    by: [melee, any_attack]
+    becomes: clay_pot_shards
+    debris_seconds: 15
+    respawn_seconds: 300
+    effect: clay
+    sound: mining
+    loot:
+      - { item: gold_coin, chance: 0.4, count: [1, 4] }
+      - { item: health_draught, chance: 0.08 }
+
+- item: thorny_vines
+  breakable:
+    hp: 20
+    by: [melee, "tool:axe", fire]
+    becomes: cut_vines
+    debris_seconds: 30
+    respawn_seconds: 180
+    effect: plant
+    hit_sound: woodcutting
+    sound: woodcutting
+
+- item: thick_bush
+  breakable:
+    hp: 14
+    by: [melee, "tool:axe", fire]
+    becomes: cut_bush
+    debris_seconds: 30
+    respawn_seconds: 180
+    effect: plant
+    hit_sound: woodcutting
+    sound: woodcutting
+
+- item: cracked_rock
+  breakable:
+    hp: 30
+    by: ["tool:pick"]
+    becomes: rock_rubble
+    debris_seconds: 40
+    respawn_seconds: 600
+    effect: stone
+    hit_sound: mining
+    sound: mining
+    loot:
+      - { item: rough_stone, chance: 0.5, count: [1, 2] }
+
+- item: rotten_barricade
+  breakable:
+    hp: 36
+    by: [melee, any_attack, "tool:axe", fire]
+    becomes: barricade_planks
+    debris_seconds: 30
+    respawn_seconds: 420
+    effect: wood
+    hit_sound: hit
+    sound: woodcutting
+
+- item: spider_web
+  breakable:
+    hp: 8
+    by: [melee, fire]
+    becomes: torn_web
+    debris_seconds: 15
+    respawn_seconds: 150
+    effect: web
+    sound: miss
+    loot:
+      - { item: spider_silk, chance: 0.3 }
+
+- item: mossy_boulder
+  pushable: { reset_seconds: 180, effect: stone, sound: spell_earth }
+
+- item: heavy_crate
+  pushable: { reset_seconds: 180, effect: wood, sound: hit }
+
+- item: portcullis_closed
+  gate: { open: portcullis_open, sound: smithing }
+
+- item: pressure_plate
+  plate: { radius: 6 }

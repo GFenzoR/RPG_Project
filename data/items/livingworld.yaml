@@ -1,0 +1,156 @@
+# Living world objects (livingworld/README.md): map items that break, move or open. What
+# they do lives in data/livingworld/objects.yaml; here they are ordinary items. None is ever
+# picked up. The broken states (debris) never block, so the way stays open while they lie.
+
+# ---- breakables -------------------------------------------------------------------------
+- id: weathered_crate
+  kind: decoration
+  sprite: livingworld/weathered_crate
+  name: item.weathered_crate.name
+  description: item.weathered_crate.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: weathered_crate_debris
+  kind: decoration
+  sprite: livingworld/weathered_crate_debris
+  name: item.weathered_crate_debris.name
+  pickupable: false
+
+- id: rickety_barrel
+  kind: decoration
+  sprite: livingworld/rickety_barrel
+  name: item.rickety_barrel.name
+  description: item.rickety_barrel.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: rickety_barrel_debris
+  kind: decoration
+  sprite: livingworld/rickety_barrel_debris
+  name: item.rickety_barrel_debris.name
+  pickupable: false
+
+- id: clay_pot
+  kind: decoration
+  sprite: livingworld/clay_pot
+  name: item.clay_pot.name
+  description: item.clay_pot.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: clay_pot_shards
+  kind: decoration
+  sprite: livingworld/clay_pot_shards
+  name: item.clay_pot_shards.name
+  pickupable: false
+
+- id: thorny_vines
+  kind: decoration
+  sprite: livingworld/thorny_vines
+  name: item.thorny_vines.name
+  description: item.thorny_vines.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: cut_vines
+  kind: decoration
+  sprite: livingworld/cut_vines
+  name: item.cut_vines.name
+  pickupable: false
+
+- id: thick_bush
+  kind: decoration
+  sprite: livingworld/thick_bush
+  name: item.thick_bush.name
+  description: item.thick_bush.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: cut_bush
+  kind: decoration
+  sprite: livingworld/cut_bush
+  name: item.cut_bush.name
+  pickupable: false
+
+- id: cracked_rock
+  kind: decoration
+  sprite: livingworld/cracked_rock
+  name: item.cracked_rock.name
+  description: item.cracked_rock.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: rock_rubble
+  kind: decoration
+  sprite: livingworld/rock_rubble
+  name: item.rock_rubble.name
+  pickupable: false
+
+- id: rotten_barricade
+  kind: decoration
+  sprite: livingworld/rotten_barricade
+  name: item.rotten_barricade.name
+  description: item.rotten_barricade.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: barricade_planks
+  kind: decoration
+  sprite: livingworld/barricade_planks
+  name: item.barricade_planks.name
+  pickupable: false
+
+- id: spider_web
+  kind: decoration
+  sprite: livingworld/spider_web
+  name: item.spider_web.name
+  description: item.spider_web.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: torn_web
+  kind: decoration
+  sprite: livingworld/torn_web
+  name: item.torn_web.name
+  pickupable: false
+
+# ---- pushables, plates and gates --------------------------------------------------------
+- id: mossy_boulder
+  kind: decoration
+  sprite: livingworld/mossy_boulder
+  name: item.mossy_boulder.name
+  description: item.mossy_boulder.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: heavy_crate
+  kind: decoration
+  sprite: livingworld/heavy_crate
+  name: item.heavy_crate.name
+  description: item.heavy_crate.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: pressure_plate
+  kind: decoration
+  sprite: livingworld/pressure_plate
+  name: item.pressure_plate.name
+  description: item.pressure_plate.desc
+  pickupable: false
+
+- id: portcullis_closed
+  kind: decoration
+  sprite: livingworld/portcullis_closed
+  name: item.portcullis_closed.name
+  description: item.portcullis_closed.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: portcullis_open
+  kind: decoration
+  sprite: livingworld/portcullis_open
+  name: item.portcullis_open.name
+  pickupable: false

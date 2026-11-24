@@ -30,6 +30,7 @@ import {
   render,
   spriteFile,
   UI_ICON,
+  LIVING_FX,
   UI_ICON_BOX,
   UI_SLOT_BOX,
   UI_STATUS_BOX,
@@ -117,7 +118,8 @@ describe("recipes", () => {
         else if (a !== 0 && partial < 0) partial = a;
       }
       expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
-      if (!dollFrame(p)) expect(opaque, p).toBeGreaterThan(20);
+      // The living world's effect masks are a few pixels on purpose (a firefly, a leaf).
+      if (!dollFrame(p) && !LIVING_FX.test(p)) expect(opaque, p).toBeGreaterThan(20);
     }
   }, 60_000);
 

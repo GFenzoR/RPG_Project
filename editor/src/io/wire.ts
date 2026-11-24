@@ -54,6 +54,21 @@ export interface PaletteItem {
   key?: string;
   /** docs/17 ART-8: sprite pixels it raises what is stacked on it (data/items `elevation`). */
   elevation?: number;
+  /** A ground's surface for the living world (data/items `ground.surface`, livingworld/README.md). */
+  surface?: string;
+  /** A plant of data/livingworld/plants.yaml: how it reacts to a step. */
+  plant?: "bend" | "rustle";
+  /**
+   * What it is in the living world (data/livingworld, livingworld/README.md), for the
+   * palette's "living world" category and its note: the kind and, for a breakable object,
+   * how it breaks and its hit points; for a plate, its radius.
+   */
+  living?: {
+    kind: "breakable" | "debris" | "pushable" | "gate" | "plate";
+    by?: string[];
+    hp?: number;
+    radius?: number;
+  };
 }
 
 /** Same shape as map-format's Diagnostic (that module pulls in Node). */

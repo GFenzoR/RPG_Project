@@ -77,6 +77,7 @@ describe("repository content", () => {
       "outfits",
       "cosmetics",
       "sounds",
+      "livingworld-objects",
       "i18n",
       "ids-lock",
     ];
@@ -405,6 +406,35 @@ describe("validator diagnostics", () => {
     expect(has(`nothing gives the forge's "radiant_temper_stone" in production`)).toBe(true);
   });
 
+  it("checks the living world: surfaces, plants and a schema for each file (livingworld/README.md)", () => {
+    edit("data/items/ground.yaml", "surface: sand }", "surface: marble }");
+    edit(
+      "data/livingworld/surfaces.yaml",
+      "  mud: { footprints: 40000,",
+      "  mud: { footprints: -1,",
+    );
+    edit("data/livingworld/surfaces.yaml", "  lava: {}", "  lava: {}\n  marsh: {}");
+    appendFileSync(
+      file("data/livingworld/plants.yaml"),
+      "  - { item: bush, reaction: bend }\n  - { item: no_such_plant, reaction: wiggle }\n",
+    );
+    writeFileSync(file("data/livingworld/geysers.yaml"), "geysers: []\n");
+    const out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out.some((m) => m.includes("ground.yaml") && m.includes("surface"))).toBe(true);
+    expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("marsh"))).toBe(true);
+    expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("footprints"))).toBe(true);
+    expect(out.some((m) => m.includes('plant "bush" already listed'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
+    expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);
+    expect(out.some((m) => m.includes("geysers.yaml") && m.includes("no schema"))).toBe(true);
+  });
+
+  it("wants every ground surface described in data/livingworld/surfaces.yaml", () => {
+    edit("data/livingworld/surfaces.yaml", "  snow: {", "  # snow: {");
+    edit("data/items/ground.yaml", "surface: sand }", "surface: snow }");
+    expect(messages(root).some((m) => m.includes('surface "snow" is not described'))).toBe(true);
+  });
+
   it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
     writeFileSync(
       file("data/boat_routes.yaml"),
@@ -615,6 +645,44 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('date "2026-01-04" must match'))).toBe(true);
     expect(out.some((m) => m.includes("2026-01-05-no-en.yaml") && m.includes("title"))).toBe(true);
     expect(out.some((m) => m.includes("Bad_Name.yaml") && m.includes("file names"))).toBe(true);
+  });
+
+  it("checks data/livingworld: never walls nor doors, blocking rules, sounds (livingworld/README.md)", () => {
+    mkdirSync(file("assets"), { recursive: true });
+    writeFileSync(file("assets/sounds.yaml"), "format: 1\nsounds: {}\n");
+    writeFileSync(
+      file("data/livingworld/objects.yaml"),
+      [
+        "- item: rock_wall",
+        "  breakable: { hp: 5, by: [melee], becomes: none }",
+        "- item: weathered_crate",
+        "  breakable: { hp: 5, by: [melee], becomes: none }",
+        "- item: weathered_crate",
+        "  pushable: {}",
+        "- item: cracked_rock",
+        "  breakable: { hp: 5, by: [kick], becomes: mossy_boulder, sound: nope }",
+        "- item: pressure_plate",
+        "  breakable: { hp: 1, by: [melee], becomes: none }",
+        "  plate: { radius: 3 }",
+        "- item: thick_bush",
+        "  gate: { open: portcullis_closed }",
+        "- item: mossy_boulder",
+        "  pushable: { reset_seconds: 0 }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.includes("livingworld"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('"rock_wall" is a wall')).toBe(true);
+    expect(has('item "weathered_crate" already has an entry')).toBe(true);
+    expect(has("must be one of")).toBe(true); // by: kick
+    expect(has('debris "mossy_boulder" must not block movement')).toBe(true);
+    expect(has('sound "nope" is not declared')).toBe(true);
+    expect(has('the open gate "portcullis_closed" must not block movement')).toBe(true);
+    expect(has("must NOT have more than 2 properties")).toBe(true); // two behaviours
+    expect(has("reset_seconds")).toBe(true); // a boulder that never goes home
+    expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("livingworld"))).toEqual(
+      [],
+    );
   });
 
   it("checks assets/sounds.yaml: files, credits, references and islands (T3.7)", () => {

@@ -15,10 +15,10 @@ function view(chunks: Map<string, ChunkData>): MapView {
   return new MapView({ source, texture: () => Texture.WHITE, tileSize: T, floor: 7 });
 }
 
-/** The layers: root → world → [ground, shadows, items, overlay]. */
+/** The layers: root → world → [ground, ground overlay, shadows, items, overlay]. */
 const layer = (v: MapView, i: number): Container =>
   (v.root.children[0] as Container).children[i] as Container;
-const itemLayer = (v: MapView): Container => layer(v, 2);
+const itemLayer = (v: MapView): Container => layer(v, 3);
 
 /** Global tile of each drawn item sprite, in draw order. */
 const drawn = (v: MapView): string[] =>
@@ -66,6 +66,28 @@ describe("MapView", () => {
     v.render({ x: 160, y: 160, zoom: 1 }, size);
     expect(v.chunkCount).toBe(1);
     expect(drawn(v)).toEqual([]);
+  });
+
+  it("lists the item sprites with their tile and id, and versions the built chunks", () => {
+    const chunks = new Map<string, ChunkData>([
+      ["7/0/0", { ground: ground(), items: [{ x: 3, y: 4, stack: ["bush", "coin"] }] }],
+    ]);
+    const v = view(chunks);
+    const before = v.version;
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 20 * T, height: 20 * T });
+    expect(v.version).toBeGreaterThan(before);
+    const seen: string[] = [];
+    v.forEachItemSprite((x, y, id, sprite) => {
+      expect(itemLayer(v).children).toContain(sprite);
+      seen.push(`${x},${y},${id}`);
+    });
+    expect(seen).toEqual(["3,4,bush", "3,4,coin"]);
+    const built = v.version;
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 20 * T, height: 20 * T });
+    expect(v.version).toBe(built); // nothing rebuilt
+    // The ground overlay lies between the grounds and the cast shadows.
+    const world = v.root.children[0] as Container;
+    expect(world.children.indexOf(v.groundOverlay)).toBe(1);
   });
 
   it("orders by row, then column, then stack height", () => {
@@ -318,7 +340,7 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     expect([piece.x, piece.y]).toEqual([6 * T, 7 * T]);
     // The ground layer is drawn before the shadows: the tree's shadow darkens the fringe.
     const world = v.root.children[0] as Container;
-    expect(world.children.indexOf(layer(v, 0))).toBeLessThan(world.children.indexOf(layer(v, 1)));
+    expect(world.children.indexOf(layer(v, 0))).toBeLessThan(world.children.indexOf(layer(v, 2)));
   });
 
   it("centres a bc sprite on its tile and draws its shadow under the items", () => {
@@ -331,7 +353,7 @@ describe("MapView tile art (docs/17 ART-3, ART-4, ART-7)", () => {
     expect(sprite?.anchor.x).toBe(0.5);
     expect(sprite?.x).toBe(4.5 * T);
     expect(sprite?.y).toBe(7 * T);
-    const shadows = layer(v, 1);
+    const shadows = layer(v, 2);
     const [sh] = (shadows.children[0] as Container).children as Sprite[];
     expect(sh?.texture).toBe(treeShadow);
     expect(sh?.x).toBe(4.5 * T);

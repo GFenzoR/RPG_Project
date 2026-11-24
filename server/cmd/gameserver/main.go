@@ -206,6 +206,14 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	trailWear, err := session.LoadTrailWear(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	living, err := session.LoadLivingWorld(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	attributes, err := content.LoadAttributes(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -323,6 +331,8 @@ func run(logger *slog.Logger, o options) error {
 		Items:            items,
 		Spells:           spells,
 		Recipes:          recipes,
+		TrailWear:        trailWear,
+		LivingWorld:      living,
 		Attributes:       attributes,
 		BoatRoutes:       routes,
 		Tutorial:         tutorial,

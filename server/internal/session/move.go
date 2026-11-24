@@ -120,6 +120,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.tradeCancel(p)
 	case *pb.ClientMessage_MarketCommand:
 		w.marketCommand(ctx, p, m.MarketCommand)
+	case *pb.ClientMessage_PushObject:
+		w.pushObject(ctx, p, m.PushObject)
 	case *pb.ClientMessage_StashCommand:
 		w.stashCommand(ctx, p, m.StashCommand)
 	case *pb.ClientMessage_HouseCommand:
@@ -445,6 +447,11 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	if !through {
 		w.checkReach(p)
 		w.sigilStep(p)
+		// The living world's trail wear (trailwear.go); an invisible player leaves no
+		// trail, or its path would show where nobody is seen.
+		if !p.invisible {
+			w.trailPlayerStep(to)
+		}
 	}
 }
 
@@ -557,6 +564,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushEconomy(ctx)
 	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
+	w.flushTrail(ctx.Tick)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

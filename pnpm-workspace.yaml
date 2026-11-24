@@ -1,7 +1,10 @@
 packages:
   - apps/desktop
   - client
+  - livingworld/client
   - editor
   - packages/*
+  # The living world's client effects (livingworld/README.md).
+  - livingworld/client
   - tools/*
   # tools/bots is a Go module, not a pnpm package (it has no package.json).

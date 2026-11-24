@@ -571,3 +571,28 @@ items:
   orthavel_sign: 468
   morvund_sign: 469
   stash_chest: 470
+  grass_tuft: 471
+  tall_grass: 472
+  wildflowers: 473
+  reeds: 474
+  weathered_crate: 475
+  weathered_crate_debris: 476
+  rickety_barrel: 477
+  rickety_barrel_debris: 478
+  clay_pot: 479
+  clay_pot_shards: 480
+  thorny_vines: 481
+  cut_vines: 482
+  thick_bush: 483
+  cut_bush: 484
+  cracked_rock: 485
+  rock_rubble: 486
+  rotten_barricade: 487
+  barricade_planks: 488
+  spider_web: 489
+  torn_web: 490
+  mossy_boulder: 491
+  heavy_crate: 492
+  pressure_plate: 493
+  portcullis_closed: 494
+  portcullis_open: 495

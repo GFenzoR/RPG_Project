@@ -50,6 +50,9 @@ importers:
 
   client:
     dependencies:
+      '@rpg/living-world':
+        specifier: workspace:*
+        version: link:../livingworld/client
       '@rpg/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -102,6 +105,12 @@ importers:
       yaml:
         specifier: 2.9.1
         version: 2.9.1
+
+  livingworld/client:
+    dependencies:
+      pixi.js:
+        specifier: 8.22.0
+        version: 8.22.0
 
   packages/content-schema:
     dependencies:

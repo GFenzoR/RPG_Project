@@ -12,6 +12,16 @@ const repo = resolve(import.meta.dirname, "../..");
 const root = process.env["EDITOR_E2E_ROOT"] ?? "";
 const shots = join(import.meta.dirname, "screenshots", "actual");
 
+/**
+ * Waits for the editor to load its island. The first page of a run meets a cold Vite
+ * (it pre-bundles the dependencies and serves every module the first time) and every
+ * chunk of the world, which on a busy machine takes longer than expect's default 5 s.
+ */
+const editorReady = (page: Page): Promise<void> =>
+  expect
+    .poll(() => page.evaluate(() => window.__rpgEditor?.ready === true), { timeout: 30_000 })
+    .toBe(true);
+
 type Tile = { ground: string | null; stack: string[] } | undefined;
 
 const tile = (page: Page, x: number, y: number, z: number): Promise<Tile> =>
@@ -82,7 +92,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
 
   await page.goto("/?lang=es&island=testisle");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
   await expect(page.getByTestId("island")).toHaveValue("testisle");
   await expect(page.getByTestId("island").locator("option")).toHaveText([
@@ -211,7 +221,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
 
   // Reload: the edits come back from disk.
   await page.reload();
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   expect((await tile(page, 1050, 1050, 7))?.stack).toEqual(["cargo_crate"]);
   expect((await tile(page, 1049, 1063, 7))?.ground).toBe("sand");
 
@@ -230,7 +240,7 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?lang=es&island=testisle");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await expect(page.getByTestId("autoborder")).toBeChecked();
 
   // Rectangle (R): drag a 4x3 sand rect into the grass; autoborder adds the grass edges.
@@ -423,7 +433,7 @@ test("asks before leaving with unsaved changes, and refuses to save over changes
   page,
 }) => {
   await page.goto("/?lang=es&island=testisle");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await pick(page, "tierra", "dirt");
   await clickTile(page, 1046, 1059);
   expect((await tile(page, 1046, 1059, 7))?.ground).toBe("dirt");
@@ -480,7 +490,7 @@ test("hito 2: map patches — export, diff view, import with and without conflic
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?lang=es&island=testisle");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
   const CHUNK = "world/islands/testisle/chunks/z07/c0033_0032.json";
   const onDisk = readFileSync(join(root, CHUNK), "utf8");
@@ -586,7 +596,7 @@ test("houses: draw a house in the panel, check it, save houses.yaml and its name
   const issues = page.getByTestId("house-issue");
 
   await page.goto("/?lang=es&island=testisle");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   // Zoom out around the temple so the house area (east of the wolves) is on screen.
   const temple = await clientOf(page, 1056, 1056);
   await page.mouse.move(temple.x, temple.y);
@@ -703,7 +713,7 @@ test("houses: draw a house in the panel, check it, save houses.yaml and its name
 
   // Reload: the house and its names come back from disk; delete and undo it.
   await page.reload();
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await page.getByTestId("house-testisle_house_1").click();
   await expect(page.getByTestId("house-name-es")).toHaveValue("Casa de la Prueba");
   await expect(page.getByTestId("house-name-en")).toHaveValue("Test House");
@@ -720,7 +730,7 @@ test("doors and keys: the tile info and the palette say which key opens them", a
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?lang=es&island=volcan");
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   // The forge gate of the volcanic mine (docs/02 "Puertas con llave"), on floor 8.
   await page.evaluate(() => window.__rpgEditor?.centerOn(3692, 5832, 8));
   await expect(page.getByTestId("floor")).toHaveText("Piso 8");
@@ -772,7 +782,7 @@ test("the atlas does not load: retries, then an error whose button starts the ma
   await shot(page, "52-atlas-failed");
   down = false;
   await page.getByTestId("canvas-retry").click();
-  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await editorReady(page);
   await expect(failed).toHaveCount(0);
   await expect(page.getByTestId("map-canvas")).toHaveCount(1);
   expect(requests).toBe(5);

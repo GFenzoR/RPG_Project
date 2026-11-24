@@ -39,6 +39,11 @@ export interface CueContext {
   tool: { use: string; pos: Pos } | undefined;
   /** Craft skill of the open station ("smithing", "cooking"), for craft sounds. */
   craft: string | undefined;
+  /**
+   * The events of an own step onto a tile, most specific first: the step sound of its
+   * surface, then step.self (render/living.ts stepSoundEvents). Without it, step.self.
+   */
+  stepEvents?: ((to: Pos) => string[]) | undefined;
 }
 
 const EFFECT_NAMES: Record<number, string> = {
@@ -84,7 +89,11 @@ export function cuesOf(msg: ServerMessage["message"], ctx: CueContext): Cue[] {
     case "dialogOpen":
       return [{ events: ["ui.dialog_open"] }];
     case "creatureMove":
-      return msg.value.id === ctx.selfId ? [{ events: ["step.self"] }] : [];
+      if (msg.value.id !== ctx.selfId) return [];
+      {
+        const to = pos(msg.value.to);
+        return [{ events: to && ctx.stepEvents ? ctx.stepEvents(to) : ["step.self"] }];
+      }
     case "chatMessage": {
       const m = msg.value;
       if (m.kind !== MessageKind.SYSTEM || m.body.case !== "localized") return [];

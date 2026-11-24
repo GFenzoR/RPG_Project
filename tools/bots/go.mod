@@ -13,3 +13,7 @@ require (
 
 // The bot client lives in the server module (server/pkg/bot) next to the protocol code.
 replace github.com/GFenzoR/RPG_Project/server => ../../server
+
+// The server requires the living world module through its own replace (livingworld/README.md),
+// which a dependency's go.mod does not carry over: repeat it here.
+replace github.com/GFenzoR/RPG_Project/livingworld/server => ../../livingworld/server

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 115, "cy": 179, "z": 7 },
-  "palette": ["ash", "sand", "water_shallow", "cooled_lava", "border_ash_w", "border_surf_inner_sw", "border_sand_inner_sw", "border_surf_s", "border_sand_s", "border_ash_inner_sw", "border_ash_sw", "pine_tree", "border_ash_s", "boulder", "bush", "rock_wall", "border_ash_inner_nw", "border_ash_n", "border_ash_nw"],
+  "palette": ["ash", "sand", "water_shallow", "cooled_lava", "border_ash_w", "border_surf_inner_sw", "border_sand_inner_sw", "border_surf_s", "border_sand_s", "border_ash_inner_sw", "border_ash_sw", "pine_tree", "border_ash_s", "boulder", "bush", "rock_wall", "border_ash_inner_nw", "border_ash_n", "border_ash_nw", "cracked_rock"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1],
@@ -89,7 +89,7 @@
     { "x": 24, "y": 23, "stack": [13] },
     { "x": 19, "y": 24, "stack": [15] },
     { "x": 20, "y": 24, "stack": [4, 15] },
-    { "x": 19, "y": 25, "stack": [16, 15] },
+    { "x": 19, "y": 25, "stack": [16, 19] },
     { "x": 20, "y": 25, "stack": [18] },
     { "x": 12, "y": 26, "stack": [13] },
     { "x": 18, "y": 26, "stack": [15] },

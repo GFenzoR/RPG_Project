@@ -55,10 +55,31 @@ function mustGet(path: string, book: RecipeBook = RECIPES): Recipe {
   return r;
 }
 
-/** Where a path's PNG lives under root. */
+/** The living world's sprites (livingworld/README.md) keep their own folder of assets/. */
+export const LIVING_PREFIX = "livingworld/";
+
+/**
+ * Where a path's PNG lives under root: assets/sprites/<path>.png, or for the living world's
+ * livingworld/<rest> paths assets/livingworld/sprites/<rest>.png (tools/spritepack reads
+ * both, under the same names).
+ */
 export function spriteFile(root: string, path: string): string {
+  if (path.startsWith(LIVING_PREFIX))
+    return join(
+      root,
+      "assets",
+      "livingworld",
+      "sprites",
+      `${path.slice(LIVING_PREFIX.length)}.png`,
+    );
   return join(root, "assets", "sprites", `${path}.png`);
 }
+
+/**
+ * The living world's effect masks (footprints, ripples, dust, leaves, critters), which the
+ * client looks up by name (livingworld/client): livingworld/fx/<name>, of kind "effect".
+ */
+export const LIVING_FX = /^livingworld\/fx\/[a-z0-9_]+$/;
 
 /** Renders and writes every recipe (or those under `only`); returns path and bytes. */
 export function buildSprites(root: string, only?: string): { path: string; bytes: number }[] {
@@ -135,6 +156,7 @@ export function checkPaths(root: string): string[] {
       !OUTFIT_FRAME.test(p) &&
       !EFFECT_FRAME.test(p) &&
       !MISSILE_ART.test(p) &&
+      !LIVING_FX.test(p) &&
       !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
       !used.has(TILE_PART.exec(p)?.[1] ?? "")
     )

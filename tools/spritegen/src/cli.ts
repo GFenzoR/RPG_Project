@@ -13,7 +13,7 @@
 //        and humanoid.lineup.png (the looks at 1x and 2x on the tile grid beside the boar,
 //        the stag and, with --ref FILE.png, a reference person such as the old LPC one)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { decodePng, encodePng, parseYaml, scaleImage } from "@rpg/spritepack";
 import { engineProblems } from "./engine/check.ts";
@@ -26,7 +26,7 @@ import { humanoidLineup, lookSheet, REVIEW_LOOKS } from "./engine/specs/humanoid
 import { STAG } from "./engine/specs/stag.ts";
 import { ICON_ROWS } from "./engine/specs/items/index.ts";
 import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
-import { buildSprites, checkPaths, previewPng, recipePaths } from "./index.ts";
+import { buildSprites, checkPaths, previewPng, recipePaths, spriteFile } from "./index.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -50,7 +50,7 @@ if (command !== "build" && command !== "preview" && command !== "check" && comma
 if (command === "build") {
   const built = buildSprites(root, values.only);
   for (const b of built)
-    console.log(`${String(b.bytes).padStart(6)} B  assets/sprites/${b.path}.png`);
+    console.log(`${String(b.bytes).padStart(6)} B  ${relative(root, spriteFile(root, b.path))}`);
   console.log(`spritegen: ${built.length} sprites`);
 } else if (command === "preview") {
   const scale = Number(values.scale);

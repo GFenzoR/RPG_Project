@@ -31,6 +31,7 @@ const (
 // combatSystem runs every tick after walking: players attack their targets, monsters in
 // active sectors think, and (on the first tick) the map's spawns are populated.
 func (w *World) combatSystem(ctx *game.TickContext) {
+	w.livingTick(ctx)
 	if !w.spawned && len(w.slots) > 0 {
 		w.spawnAll(ctx)
 	}
@@ -512,6 +513,9 @@ func (w *World) tileChanged(pos world.Pos) {
 	}
 	t := &pb.Tile{Items: []*pb.ItemStack{{ItemId: uint32(ground)}}}
 	for _, id := range w.m.Stack(pos) {
+		t.Items = append(t.Items, &pb.ItemStack{ItemId: uint32(id)})
+	}
+	if id := w.livingAt(pos); id != 0 {
 		t.Items = append(t.Items, &pb.ItemStack{ItemId: uint32(id)})
 	}
 	for _, it := range w.ground[pos] {

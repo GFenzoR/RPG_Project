@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-GO_MODULES := server tools/bots tools/launcher
+GO_MODULES := server livingworld/server tools/bots tools/launcher
 COMPOSE_DEV := docker compose -f deploy/docker-compose.dev.yml
 # Cloud sessions run Postgres as a VM service; local machines use Docker.
 IS_CLOUD := $(filter true,$(CLAUDE_CODE_REMOTE))
@@ -69,7 +69,24 @@ proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with
 ## ---- quality gates ---------------------------------------------------------
 
 .PHONY: test
-test: test-go test-ts test-parity test-deploy ## Go + TS tests (+ deploy script tests)
+test: test-go test-ts test-parity test-deploy test-livingworld-boundary ## Go + TS tests (+ deploy script and living world boundary tests)
+
+# The living world (livingworld/README.md): its Go module, its TS package and the boundary
+# check's own tests. make test runs the first two with everything else (GO_MODULES, the
+# vitest projects) and the third through test-livingworld-boundary.
+.PHONY: test-livingworld
+test-livingworld: test-livingworld-boundary ## Go and TS tests of livingworld/ (and its boundary check)
+	cd livingworld/server && go test ./...
+	pnpm exec vitest run --project @rpg/living-world $(VITEST_ARGS)
+
+.PHONY: test-livingworld-boundary
+test-livingworld-boundary:
+	bash livingworld/check-boundary_test.sh
+
+.PHONY: lint-livingworld
+lint-livingworld: ## The living world's boundary: what it imports and who imports it (livingworld/README.md)
+	bash livingworld/check-boundary.sh
+	node --experimental-strip-types livingworld/client/scripts/boundary.ts
 
 .PHONY: test-go
 test-go:
@@ -80,7 +97,7 @@ test-ts:
 	pnpm test $(VITEST_ARGS)
 
 .PHONY: lint
-lint: lint-go lint-ts lint-deploy validate ## golangci-lint + eslint/prettier/tsc + deploy checks + content validation
+lint: lint-go lint-ts lint-deploy lint-livingworld validate ## golangci-lint + eslint/prettier/tsc + deploy checks + living world boundary + content validation
 
 .PHONY: lint-go
 lint-go:
@@ -154,7 +171,7 @@ fuzz: ## Fuzz every target for FUZZTIME (default 30s): make fuzz [FUZZTIME=5m] [
 # checks run in CI (.github/workflows/security.yml). govulncheck only fails on code that
 # actually reaches a vulnerable function; gitleaks is optional locally (CI always runs it).
 GOVULNCHECK_VERSION := v1.9.0
-AUDIT_GO_MODULES := server tools/bots tools/launcher deploy/healthcheck
+AUDIT_GO_MODULES := server livingworld/server tools/bots tools/launcher deploy/healthcheck
 .PHONY: audit
 audit: ## govulncheck (Go modules) + pnpm audit --prod (high) + gitleaks over the history if installed
 	@set -e; for m in $(AUDIT_GO_MODULES); do echo "==> govulncheck ($$m)"; \

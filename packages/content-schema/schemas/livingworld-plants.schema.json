@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-plants.schema.json",
+  "title": "Living world plants (data/livingworld/plants.yaml)",
+  "description": "Map items that react when a creature walks on or next to them (livingworld/README.md). Cosmetic: the server never reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plants"],
+  "properties": {
+    "plants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "reaction"],
+        "properties": {
+          "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "reaction": { "enum": ["bend", "rustle"] },
+          "idle": { "type": "boolean" },
+          "leaves": { "type": "boolean" },
+          "trample": {
+            "description": "On a tile worn into a path (trail wear) it is drawn flattened.",
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

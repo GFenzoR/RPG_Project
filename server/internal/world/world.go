@@ -4,8 +4,10 @@
 // can a creature stand here, which path leads there, is there line of sight.
 //
 // A Map is only touched by the game loop goroutine. It is immutable after loading but for
-// one thing: a door that opens or closes swaps its item and blocking flags
-// (Map.ReplaceItem, docs/02-game-design.md "Puertas con llave").
+// two things: a door that opens or closes swaps its item and blocking flags
+// (Map.ReplaceItem, docs/02-game-design.md "Puertas con llave"), and the living world's
+// objects (livingworld/README.md) leave the stacks at load (TakeItem) and set what their
+// tiles block as they break, move or open (SetBlockFlags).
 package world
 
 import (
@@ -706,4 +708,40 @@ func (m *Map) speed(ground uint16) int32 {
 		}
 	}
 	return DefaultGroundSpeed
+}
+
+// TakeItem removes the item at index i of p's stack (0 = the bottom item above the
+// ground) and returns it. It runs while the world loads, before the loop starts: the
+// living world (livingworld/README.md) takes its objects out of the map's own stacks and
+// shows them itself. The tile's flags stay; the caller sets them with SetBlockFlags.
+func (m *Map) TakeItem(p Pos, i int) (uint16, bool) {
+	s, t := m.sectorAt(int(p.X), int(p.Y), int(p.Z))
+	if s == nil || s.Ground[t] == 0 {
+		return 0, false
+	}
+	k := s.stackSlot(uint16(t))
+	if k < 0 || i < 0 || i >= len(s.Stacks[k].Items) {
+		return 0, false
+	}
+	items := s.Stacks[k].Items
+	id := items[i]
+	items = append(items[:i:i], items[i+1:]...)
+	if len(items) == 0 {
+		s.Stacks = append(s.Stacks[:k], s.Stacks[k+1:]...)
+	} else {
+		s.Stacks[k].Items = items
+	}
+	return id, true
+}
+
+// SetBlockFlags sets the BlockFlags of p to those of block; its other flags stay. The
+// living world calls it whenever an object of p appears, breaks, opens or moves. It
+// reports whether p has a tile.
+func (m *Map) SetBlockFlags(p Pos, block Flags) bool {
+	s, t := m.sectorAt(int(p.X), int(p.Y), int(p.Z))
+	if s == nil || s.Ground[t] == 0 {
+		return false
+	}
+	s.Flags[t] = s.Flags[t]&^BlockFlags | block&BlockFlags
+	return true
 }

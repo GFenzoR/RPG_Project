@@ -73,6 +73,7 @@ import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
+import { mountLivingWorld, printOf } from "./living.ts";
 import type { ParticleView } from "./particles.ts";
 import {
   attackDir,
@@ -123,6 +124,7 @@ import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
+import { livingEvent, mountLivingObjects } from "./living.ts";
 import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
   FIRE_TINT,
@@ -230,6 +232,8 @@ export interface GameCanvasOptions {
   useTile(x: number, y: number, z: number, top: boolean): void;
   /** A tile was shift-clicked (look at its top item). */
   lookTile(x: number, y: number, z: number): void;
+  /** Plays a sound of assets/sounds.yaml by id at a tile (the living world's objects). */
+  playSound?(id: string, at: { x: number; y: number; z: number }): void;
   /**
    * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
    * Shift+right click in both), at page coordinates (cx, cy).
@@ -463,6 +467,11 @@ export async function createGameCanvas(
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
   const particleView: ParticleView = { x: 0, y: 0, width: 0, height: 0 };
+  // The living world's frame, reused (docs/07: a frame allocates nothing for it).
+  const livingSelf = { x: 0, y: 0 };
+  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf };
+  /** The trail wear version the living world has (state/trail-wear.ts). */
+  let livingWear = -1;
   const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
   const motionQuery =
     typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
@@ -518,6 +527,19 @@ export async function createGameCanvas(
     if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
   };
   view.overlay.addChild(particles.view, hiddenLayer, behindWall);
+  // The living world (livingworld/README.md, render/living.ts): footprints on the ground
+  // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
+  const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
+  // The living objects' effects (render/living.ts): over the map.
+  const livingObjects = mountLivingObjects(view.overlay, {
+    tileSize: T,
+    items: content.items,
+    tile: (x, y, z) => world.tile(x, y, z),
+    elevationAt: (x, y) => view.elevationAt(x, y),
+    texture: (sprite) => atlas.texture(sprite),
+    ...(opts.playSound ? { playSound: opts.playSound } : {}),
+    reducedMotion: () => reducedMotion(),
+  });
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
@@ -792,7 +814,21 @@ export async function createGameCanvas(
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
     // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
-    if (moving && st.walkStart !== stepBefore && !figure.clips.meta?.flying) kickUp(moving.from);
+    if (moving && st.walkStart !== stepBefore) {
+      const flying = figure.clips.meta?.flying === true;
+      if (!flying) kickUp(moving.from);
+      living?.onCreatureStep(
+        {
+          id: c.id,
+          from: moving.from,
+          to: moving.to,
+          durationMs: moving.duration,
+          print: printOf(c.look !== undefined, flying, figure.lift),
+        },
+        now,
+      );
+      if (!flying) livingObjects.onStep(moving.from, moving.to, now);
+    }
     return pose.done;
   };
 
@@ -1135,6 +1171,24 @@ export async function createGameCanvas(
     particleView.width = app.screen.width / tilePx;
     particleView.height = app.screen.height / tilePx;
     particles.update(now, particleView, emitters, isDark(self.pos.z), reducedMotion());
+    livingView.x = cam.x;
+    livingView.y = cam.y;
+    livingView.width = particleView.width;
+    livingView.height = particleView.height;
+    livingView.z = self.pos.z;
+    livingSelf.x = self.pos.x;
+    livingSelf.y = self.pos.y;
+    // Trail wear (state/trail-wear.ts): handed over whole, only when it changed.
+    if (living && world.trailWear.version !== livingWear) {
+      livingWear = world.trailWear.version;
+      living.applyWear(world.trailWear.list(), true);
+    }
+    living?.onTick(now, livingView);
+    for (const { event, at } of world.takeLiving()) {
+      const e = livingEvent(event);
+      if (e) livingObjects.onObjectEvent(e, at);
+    }
+    livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
 
     const seen = new Set<number>();
@@ -1690,6 +1744,8 @@ export async function createGameCanvas(
       while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
       lights.destroy();
+      living?.destroy();
+      livingObjects.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },

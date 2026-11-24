@@ -222,6 +222,18 @@ type Config struct {
 	// absence (a database outage with the loop up keeps everyone out). 0: no heartbeat, the
 	// database counts as always up (tests, no database).
 	StoreHeartbeat time.Duration
+	// Trail is the living world's trail wear (trailwear.go, data/livingworld/wear.yaml);
+	// nil turns it off. TrailData is the wear saved last (the trail_wear row; empty: none)
+	// and TrailDowntimeMs how long ago it was saved: the grass recovers that much at start.
+	// SaveTrail submits a copy of the wear to persistence without blocking (false: queue
+	// full, retried on the next tick); nil keeps the wear in memory only.
+	Trail           *TrailConfig
+	TrailData       []byte
+	TrailDowntimeMs int64
+	SaveTrail       func(TrailSnapshot) bool
+	// LivingWorld is data/livingworld (LoadLivingWorld, livingworld/README.md): the map
+	// objects that break, move or open. Nil: none (every such item stays a plain map item).
+	LivingWorld LivingDefs
 	// RerouteMaxNodes and PathNodesPerTick tune the pathfinding quota.
 	RerouteMaxNodes  int
 	PathNodesPerTick int
@@ -236,6 +248,8 @@ type World struct {
 	mv   content.Movement
 	diag int64 // diagonal_cost in thousandths
 	log  *slog.Logger
+	// trail is the living world's trail wear (trailwear.go).
+	trail trailWear
 
 	nextID  uint32
 	players []*Player // ordered by creature id: deterministic iteration
@@ -368,8 +382,14 @@ type World struct {
 
 	// Gathering (T1.12): harvested tiles (charges left, refill event), the rate limit
 	// and the anti-AFK delay in ticks (0 = off).
-	resources      map[world.Pos]*resourceTile
-	gatherFor      game.Tick
+	resources map[world.Pos]*resourceTile
+	gatherFor game.Tick
+	// living is the living world (livingworld.go); nil without Config.LivingWorld.
+	living        *livingWorld
+	livingPushFor game.Tick
+	// livingLanding are the tiles portals arrive on: no pushed object rests there
+	// (livingHost.Free), or whoever takes the portal would find its landing taken.
+	livingLanding  map[world.Pos]bool
 	gatherAFKAfter game.Tick
 	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
 	// their recipes, for StationOpen.
@@ -704,6 +724,9 @@ func New(cfg Config) (*World, error) {
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}
+	if err := w.initLivingWorld(); err != nil { // before the doors: its objects block like walls
+		return nil, err
+	}
 	if err := w.initDoors(); err != nil { // with checkArrivals (travel.go)
 		return nil, err
 	}
@@ -719,6 +742,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initTutorial(); err != nil {
 		return nil, err
 	}
+	w.initTrail()
 	return w, nil
 }
 

@@ -36,6 +36,7 @@ import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
 import { motionReduced } from "./state/ui-prefs.ts";
+import { stepSoundEvents } from "./render/living.ts";
 import type { ControlsMode } from "./state/controls.ts";
 import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
@@ -347,6 +348,8 @@ const TOUCH_CONTEXTMENU_MS = 1500;
 
 /** How often the frame looks again at what should play (a boss leaves view silently). */
 const LOOPS_EVERY_MS = 500;
+/** How often a key held into a pushable object pushes it (the server's pace is 400 ms). */
+const PUSH_EVERY_MS = 400;
 
 declare global {
   interface Window {
@@ -423,8 +426,12 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
+  /** The surface sound of an own step (living world, render/living.ts); made once. */
+  private stepEvents: ((to: Pos) => string[]) | undefined;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
+  /** When a key into a pushable object may push again (pushAhead). */
+  private pushAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
   private safe = true;
   /** T5.6: the direction held on the on-screen pad (read like the movement keys). */
@@ -471,6 +478,7 @@ export class Game {
     this.safe = loadSafeMode(opts.storage);
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
+    this.stepEvents = stepSoundEvents(this.world, opts.content);
     this.steer = new Steering({
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
@@ -1834,7 +1842,7 @@ export class Game {
     const craft = station
       ? this.opts.content.recipes.find((r) => r.station === station.itemId)?.craft
       : undefined;
-    return { selfId: this.world.selfId, tool: this.toolAt, craft };
+    return { selfId: this.world.selfId, tool: this.toolAt, craft, stepEvents: this.stepEvents };
   }
 
   /** Plays a batch's cues around the player and keeps the zone's loops. */
@@ -1927,6 +1935,7 @@ export class Game {
       content: this.opts.content,
       t: this.opts.t,
       frame: (now) => this.frame(now),
+      playSound: (id, at) => this.opts.audio?.playId(id, at, this.world.self?.pos),
       clickTile: (x, y, z) => {
         // A picked item (the menu's "Move", docs/17 UI-6) goes where the mouse clicks.
         if (this.picker.picked) this.placePicked({ kind: "pos", pos: { x, y, z } });
@@ -2115,7 +2124,19 @@ export class Game {
     const input = this.steerInput;
     input.key = key;
     input.toward = key === undefined && hold ? this.canvas?.worldAt(hold.x, hold.y) : undefined;
-    this.sendStep(this.steer.next(this.world, now, input));
+    const next = this.steer.next(this.world, now, input);
+    // A key into a pushable object (livingworld/README.md) pushes it: the step would be
+    // refused, the server moves the object (and nothing else) if the tile behind is free.
+    if (next?.kind !== "walk" && key !== undefined) this.pushAhead(key, now);
+    this.sendStep(next);
+  }
+
+  /** Sends PushObject for the pushable object a step in `dir` walks into, if any. */
+  private pushAhead(dir: Direction, now: number): void {
+    const to = this.world.pushableAhead(dir);
+    if (!to || now < this.pushAt) return;
+    this.pushAt = now + PUSH_EVERY_MS;
+    this.conn.send({ case: "pushObject", value: { pos: to, dir } });
   }
 
   private sendStep(step: StepChoice | undefined): void {

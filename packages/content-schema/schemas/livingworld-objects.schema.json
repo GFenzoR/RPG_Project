@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-objects.schema.json",
+  "title": "Living world objects (data/livingworld/objects.yaml)",
+  "description": "What the living-world items do on the map (livingworld/README.md, docs/06 \"Mundo vivo\"): each entry names an item of data/items and exactly one behaviour. make validate also refuses walls, doors and grounds here, a breakable or pushable item that does not block movement, debris or an open gate that blocks it, an item with two entries and sounds missing from assets/sounds.yaml; the map validator refuses these objects on protection zones, houses and door tiles. The server applies the same rules at start (livingworld/server Resolve).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["item"],
+    "minProperties": 2,
+    "maxProperties": 2,
+    "properties": {
+      "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+      "breakable": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hp", "by", "becomes"],
+        "properties": {
+          "hp": {
+            "description": "Hit points. A melee strike or a shot takes the weapon's attack (5 bare-handed), a tool the tool's damage, fire the spell's damage.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "by": {
+            "description": "Ways it breaks: melee (a strike from a tile next to it), any_attack (melee, or a distance weapon or wand within range), tool:axe (an axe: a woodcutting tool or a weapon of type axe), tool:pick (a mining tool), fire (a fire area spell or rune over its tile, or a fire wand).",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["melee", "any_attack", "tool:axe", "tool:pick", "fire"] }
+          },
+          "becomes": {
+            "description": "Item of its debris (must not block movement), or none: nothing is left.",
+            "type": "string",
+            "if": { "const": "none" },
+            "else": { "$ref": "common.schema.json#/$defs/itemRef" }
+          },
+          "debris_seconds": {
+            "description": "How long the debris lies before it fades (default 20). At most respawn_seconds.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "respawn_seconds": {
+            "description": "How long after it broke it stands again (default 300), once no creature nor loose item is on its tile.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "loot": {
+            "description": "Rolled once per break like a monster's loot; the items land on its tile.",
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["item", "chance"],
+              "properties": {
+                "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+                "chance": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+                "count": {
+                  "type": "array",
+                  "prefixItems": [
+                    { "type": "integer", "minimum": 1, "maximum": 100 },
+                    { "type": "integer", "minimum": 1, "maximum": 100 }
+                  ],
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            }
+          },
+          "effect": { "$ref": "#/$defs/effect" },
+          "sound": { "$ref": "#/$defs/sound" },
+          "hit_sound": { "$ref": "#/$defs/sound" }
+        }
+      },
+      "pushable": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reset_seconds"],
+        "properties": {
+          "reset_seconds": {
+            "description": "That long after its last push it goes back where the map put it, once that tile is free. Required and never 0: a boulder that never goes home could block a passage until a restart.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "effect": { "$ref": "#/$defs/effect" },
+          "sound": { "$ref": "#/$defs/sound" }
+        }
+      },
+      "gate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["open"],
+        "properties": {
+          "open": {
+            "description": "Item of the open gate (must not block movement). It opens while every plate within a plate's radius is pressed, and closes when one is not, once nothing stands in it.",
+            "$ref": "common.schema.json#/$defs/itemRef"
+          },
+          "sound": { "$ref": "#/$defs/sound" }
+        }
+      },
+      "plate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["radius"],
+        "properties": {
+          "radius": {
+            "description": "The plate is linked to every gate within this many tiles (Chebyshev) on its floor. A creature or a pushable object on it presses it.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "effect": {
+      "description": "Material of the hit and break particles (livingworld/client).",
+      "enum": ["wood", "stone", "plant", "web", "clay"]
+    },
+    "sound": {
+      "description": "Id of assets/sounds.yaml.",
+      "$ref": "common.schema.json#/$defs/id"
+    }
+  }
+}

@@ -32,10 +32,9 @@ type Item struct {
 	// the default of the kind); BlocksMovement and BlocksSight apply the rule.
 	BlocksMove *bool `yaml:"blocks_movement"`
 	BlocksView *bool `yaml:"blocks_sight"`
-	// Ground is set on ground items: whether creatures can stand on them.
-	Ground *struct {
-		Walkable bool `yaml:"walkable"`
-	} `yaml:"ground"`
+	// Ground is set on ground items: whether creatures can stand on them, and what they are
+	// made of (Surface: grass, sand...; the living world's trail wear reads it).
+	Ground *Ground `yaml:"ground"`
 	// Key is the key id this item opens (keys): the door.key of the doors it unlocks.
 	Key string `yaml:"key"`
 	// Door makes a map item a door that opens and closes (docs/02 "Puertas con llave").
@@ -166,6 +165,13 @@ func (it *Item) Slots() int {
 
 // Items maps item id to its definition.
 type Items map[string]*Item
+
+// Ground is the ground block of a ground item.
+type Ground struct {
+	Walkable bool `yaml:"walkable"`
+	// Surface is what it is made of (grass, sand...; the living world's trail wear).
+	Surface string `yaml:"surface"`
+}
 
 // ByNumeric indexes items by their numeric id.
 func (is Items) ByNumeric() map[uint16]*Item {

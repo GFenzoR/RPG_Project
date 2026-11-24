@@ -94,11 +94,14 @@ func newSandbox(t *testing.T) *sandbox {
 	must(err)
 	tutorial, err := content.LoadTutorial(dir)
 	must(err)
+	living, err := session.LoadLivingWorld(dir)
+	must(err)
 	s := &sandbox{m: m, pf: world.NewPathfinder(m, 0), healers: map[*session.Player]func(){},
 		casters: map[*session.Player]func(uint32){}, seen: map[*session.Corpse]bool{}, packs: map[*session.Player]packWin{}}
 	s.harness = dataHarnessWith(t, func(cfg *session.Config) {
 		cfg.Map, cfg.StartTown = m, "pruebas"
 		cfg.NPCs, cfg.BoatRoutes, cfg.Spells, cfg.Recipes, cfg.Tutorial = npcs, routes, spells, recipes, tutorial
+		cfg.LivingWorld = living
 		cfg.Quests = realQuests(t) // dataConfig parked the reach steps (parkReachSteps)
 		s.items, s.vocations, s.spells = cfg.Items, cfg.Vocations, spells
 		save := cfg.Save
@@ -1700,6 +1703,12 @@ func TestSandboxEverythingReachable(t *testing.T) {
 	inside := func(q world.Pos) bool { return is.Rect.Contains(int(q.X), int(q.Y)) }
 	seen := map[world.Pos]bool{is.Temple: true}
 	queue := []world.Pos{is.Temple}
+	// The living world's objects (TestSandboxLivingWorld): vines break, boulders move and the
+	// portcullis opens, so a player gets past each of them.
+	living := map[world.Pos]bool{}
+	for _, o := range s.w.LivingObjects() {
+		living[o.Pos] = true
+	}
 	for len(queue) > 0 {
 		q := queue[0]
 		queue = queue[1:]
@@ -1709,7 +1718,7 @@ func TestSandboxEverythingReachable(t *testing.T) {
 		}
 		for d := range 8 {
 			n, ok := q.Step(world.Direction(d))
-			if !ok || !s.m.Walkable(n) && n != sbVault {
+			if !ok || !s.m.Walkable(n) && n != sbVault && !living[n] {
 				continue
 			}
 			next = append(next, n)
@@ -1991,3 +2000,77 @@ func TestSandboxDevOnlyOffTheSandbox(t *testing.T) {
 		t.Fatalf("training off the sandbox ran: magic %d, smithing %d", s.w.Skill(p, "magic").Level, s.w.Skill(p, "smithing").Level)
 	}
 }
+
+// The living world's corner of Thimblewick (docs/16 "Mundo vivo"): the thorny vines that
+// close the garden break with bare hands, and the two boulders pushed onto their plates
+// open the portcullis; the crater of the volcano has its shortcuts too.
+func TestSandboxLivingWorld(t *testing.T) {
+	s := newSandbox(t)
+	vines, gate := pos(2096, 2070), pos(2105, 2068)
+	if s.m.Walkable(vines) || s.m.Walkable(gate) {
+		t.Fatal("the vines and the portcullis start closed")
+	}
+	join := func(id int64, at world.Pos) *fakeClient {
+		cl, _ := s.joinChar(session.Character{ID: id, AccountID: id, Name: fmt.Sprintf("Viva%d", id),
+			Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: at})
+		s.sim.Step()
+		cl.take()
+		return cl
+	}
+	cutter := join(5301, pos(2096, 2071))
+	vinesID := s.num("thorny_vines")
+	for i := 0; i < 20 && !s.m.Walkable(vines); i++ {
+		s.input(cutter, useItem(onTile(vines), vinesID, uint32(s.w.StaticCount(vines)-1)))
+		s.sim.RunTicks(40)
+	}
+	if !s.m.Walkable(vines) {
+		t.Fatalf("the vines did not break: %+v", s.w.LivingObjects())
+	}
+	a := join(5302, pos(2100, 2070))
+	s.input(a, push(pos(2101, 2070), E))
+	s.sim.Step()
+	b := join(5303, pos(2105, 2072))
+	s.input(b, push(pos(2105, 2071), N))
+	s.sim.RunTicks(2)
+	if !s.m.Walkable(gate) {
+		t.Fatalf("both plates are held by boulders: the portcullis must be open (%+v)", s.w.LivingObjects())
+	}
+	// Someone goes into the vault; the boulders go home 180 s after the last push and the
+	// portcullis closes behind it. The teleport inside takes it out.
+	inside, vaultExit := pos(2105, 2067), pos(2104, 2071)
+	in, inP := s.joinChar(session.Character{ID: 5304, AccountID: 5304, Name: "Viva5304",
+		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside})
+	if inP.Pos() != inside {
+		t.Fatalf("joined at %v, want %v in the vault", inP.Pos(), inside)
+	}
+	s.sim.RunTicks(181 * 20)
+	if s.m.Walkable(gate) {
+		t.Fatalf("the boulders went home: the portcullis must be closed (%+v)", s.w.LivingObjects())
+	}
+	in.take()
+	s.input(in, walkPath(N))
+	s.sim.RunTicks(40)
+	if inP.Pos() != vaultExit {
+		t.Fatalf("shut in the vault at %v, want out by its teleport at %v", inP.Pos(), vaultExit)
+	}
+	// The volcano's crater: a cracked rock and a rotten barricade in its wall.
+	if s.m.Walkable(pos3(3699, 5753, 7)) || s.m.Walkable(pos3(3714, 5746, 7)) {
+		t.Fatal("the crater's shortcuts start closed")
+	}
+
+	// After a restart the portcullis is closed: a player saved in the vault logs in there
+	// and leaves by its teleport.
+	s = newSandbox(t)
+	back, backP := s.joinChar(session.Character{ID: 5305, AccountID: 5305, Name: "Viva5305",
+		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside})
+	if s.m.Walkable(gate) || backP.Pos() != inside {
+		t.Fatalf("after a restart: gate open %v, logged in at %v", s.m.Walkable(gate), backP.Pos())
+	}
+	s.input(back, walkPath(N))
+	s.sim.RunTicks(40)
+	if backP.Pos() != vaultExit {
+		t.Fatalf("shut in the vault after a restart at %v", backP.Pos())
+	}
+}
+
+func pos3(x, y int, z uint8) world.Pos { return world.Pos{X: uint16(x), Y: uint16(y), Z: z} }

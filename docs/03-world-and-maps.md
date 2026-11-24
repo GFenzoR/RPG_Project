@@ -373,6 +373,17 @@ Se calculan al compilar, uno por casilla (implementación: `server/internal/worl
 | `portal_step` | La casilla es la entrada de una escalera, un agujero o un teletransporte de `portals.yaml` (quien la pisa aparece en el otro extremo). Tampoco lo calcula la compilación: lo pone `world.NewMap` al cargar a partir de los portales (también en tests con `worldtest.WithPortals`) y borra el que traiga el archivo. `Map.MovesOnStep` lo lee para que A* y las búsquedas de casilla libre no consulten el índice de portales en cada casilla. |
 
 `community_plot` no marca ningún flag: solo le importa al editor y a los patches.
+
+**Mundo vivo** (`livingworld/README.md`): los objetos de `data/livingworld` (cajas que se
+rompen, rocas que se empujan, rastrillos) se colocan en los chunks como items comunes y
+`mapcompile` los compila como cualquier otro (bloquean según su item). Al arrancar, el
+servidor los saca de la pila del mapa (`Map.TakeItem`) y los dibuja como una capa encima de
+los items del mapa; lo que bloquea su casilla cambia con `Map.SetBlockFlags` cuando se
+rompen, se mueven o se abren (como una puerta con `Map.ReplaceItem`). Las placas de presión
+quedan en la pila. `world.bin` no cambia de formato.
+Cada lado de un rastrillo cerrado debe llegar a un templo sin pasar por él (se cierra solo
+cuando las rocas vuelven o tras un reinicio): el servidor no arranca si no y `make validate`
+lo marca. Para las salas de puertas con llave y su escape, todo objeto que bloquea es un muro.
 La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-format`:
 `make test-parity` (parte de `make test` y de la CI) compara casilla por casilla el
 veredicto de `mapcompile` con el de `packages/map-format`.
@@ -624,6 +635,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (`06-content-data.md`, "Diálogos").
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
+
+### Mundo vivo
+El validador (`checkLiving` de `packages/map-format`) rechaza un objeto del mundo vivo
+(rompible, empujable o compuerta, y las placas) en una zona de protección, dentro de una casa,
+en la casilla de una puerta o de un muro, en la entrada de un portal, sobre suelo no caminable
+o junto a otro objeto en la misma casilla. Para la alcanzabilidad, un objeto que cualquiera
+rompe sin herramienta (`melee`, `any_attack` o `fire`) es paso, como una puerta; los que
+piden pico o hacha, los empujables y las compuertas no. La paleta del editor los muestra en
+la categoría "mundo vivo" con cómo se rompen. Detalle: `livingworld/README.md`.
+
+Un empujable es un **muro temporal**: empujado dentro de un pasillo de una casilla lo corta
+hasta que vuelve a su lugar (`reset_seconds`, hasta 180 s). El chequeo de escapes del
+servidor (`checkEscapes`) solo mira las compuertas, así que al diseñar: no pongas
+empujables donde puedan cerrar el único camino de salida de una zona (un pasillo sin
+alternativa, la boca de una sala), o deja otra salida cerca, como el rincón de Thimblewick
+con `pruebas_vault_exit`.
 
 ## Islas actuales
 - `testisle` (64x64, pisos 7–8; "Pellwick"): isla de pruebas de herramientas, tests

@@ -9,6 +9,7 @@ import type { ServerBatch } from "./gen/game/v1/server_pb.ts";
 export * from "./gen/game/v1/common_pb.ts";
 export * from "./gen/game/v1/client_pb.ts";
 export * from "./gen/game/v1/server_pb.ts";
+export * from "./gen/game/v1/livingworld_pb.ts";
 export { create } from "@bufbuild/protobuf";
 export type { MessageInitShape } from "@bufbuild/protobuf";
 

@@ -165,6 +165,30 @@ describe("validateWorld", () => {
     expect(messages(r)).toEqual([]);
   });
 
+  it("keeps the living world's objects off protection zones, doors and other objects", () => {
+    const island = mini();
+    const top = must(island.chunks.get(chunkKey(7, 0, 0)));
+    pushItem(top, 22, 22, "weathered_crate"); // fine: grass, outside every zone
+    pushItem(top, 16, 15, "thorny_vines"); // in the temple's protection zone
+    pushItem(top, 24, 24, "mossy_boulder");
+    pushItem(top, 24, 24, "cracked_rock"); // two objects on one tile
+    pushItem(top, 25, 25, "forge_gate_open"); // a door's tile
+    pushItem(top, 25, 25, "spider_web");
+    const out = messages(check(island)).filter((m) => m.includes("living world object"));
+    expect(out).toEqual([
+      expect.stringContaining("16,15,7: not in a protection zone"),
+      expect.stringContaining("24,24,7: one object per tile"),
+      expect.stringContaining("25,25,7: not on a door's tile"),
+    ]);
+  });
+
+  it("walks through what anyone breaks, never through a rock that needs a pick", () => {
+    expect(content.items.get("thorny_vines")?.breaksFreely).toBe(true);
+    expect(content.items.get("cracked_rock")?.breaksFreely).toBeUndefined();
+    expect(content.items.get("mossy_boulder")?.living).toBe("pushable");
+    expect(content.items.get("barrel")?.living).toBeUndefined();
+  });
+
   it("accepts the repository world (world/islands/testisle)", () => {
     const r = validateWorld(repo, { content: { ...full, sigils: real.sigils ?? [] } });
     expect(messages(r)).toEqual([]);
@@ -1106,6 +1130,19 @@ describe("validateWorld", () => {
       expect(found[0], where).toContain(file);
       expect(found[0], where).toContain(` ${path}:`);
     }
+  });
+
+  it("refuses a living object in the wall of a locked room, not one inside it", () => {
+    const wall = "stands in the wall of the room behind a locked door";
+    const inside = gated();
+    pushItem(inside.chunk, 24, 24, "weathered_crate");
+    expect(messages(check(inside.island)).filter((m) => m.includes(wall))).toEqual([]);
+    const { island, chunk } = gated();
+    setGround(chunk, 18, 25, "dirt");
+    pushItem(chunk, 18, 25, "weathered_crate");
+    expect(messages(check(island)).filter((m) => m.includes(wall))).toEqual([
+      expect.stringContaining("living world object at 18,25,7: it stands in the wall"),
+    ]);
   });
 
   it("refuses a locked door without a room and two doors on a tile; warns of an open one", () => {

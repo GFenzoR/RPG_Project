@@ -50,8 +50,11 @@ export function isWalkable(tile: Tile | undefined, content: ContentIndex): boole
 
 /**
  * A creature can get through here once its doors are open: like isWalkable, but a door
- * that blocks movement (shut) does not count (docs/02 "Puertas con llave"). Reachability
- * uses it; standing rules (spawns, NPCs, arrivals) keep isWalkable.
+ * that blocks movement (shut) does not count (docs/02 "Puertas con llave"). The rooms
+ * behind locked doors, their escape check and the arrivals use it: they are the server's
+ * walks (session/door.go), where every living object that blocks (a crate, a rock, a
+ * boulder, a closed gate) is a wall. Standing rules (spawns, NPCs, arrivals) keep
+ * isWalkable.
  */
 export function isPassable(tile: Tile | undefined, content: ContentIndex): boolean {
   if (!tile?.ground) return false;
@@ -59,5 +62,20 @@ export function isPassable(tile: Tile | undefined, content: ContentIndex): boole
   return tile.stack.every((id) => {
     const info = content.items.get(id);
     return info?.blocksMovement !== true || info.door === true;
+  });
+}
+
+/**
+ * isPassable, also through a living object anyone breaks without a tool (thorny vines, a
+ * crate: livingworld/README.md). Only the lints of make validate that the server does not
+ * repeat use it (what a player reaches from the temple, areas nobody reaches): a player
+ * gets past such an object, but the server's room and escape walks never count on it.
+ */
+export function isPassableBreaking(tile: Tile | undefined, content: ContentIndex): boolean {
+  if (!tile?.ground) return false;
+  if (content.items.get(tile.ground)?.walkable !== true) return false;
+  return tile.stack.every((id) => {
+    const info = content.items.get(id);
+    return info?.blocksMovement !== true || info.door === true || info.breaksFreely === true;
   });
 }

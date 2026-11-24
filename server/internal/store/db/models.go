@@ -390,3 +390,9 @@ type Session struct {
 	ExpiresAt   pgtype.Timestamptz
 	LastSeenAt  pgtype.Timestamptz
 }
+
+type TrailWear struct {
+	ID      int16
+	Data    []byte
+	SavedAt pgtype.Timestamptz
+}

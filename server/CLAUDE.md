@@ -410,6 +410,14 @@ server/
   un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
   `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
 
+- **Mundo vivo** (`session/livingworld.go`, el único archivo que importa el módulo,
+  `livingworld/README.md`): sus objetos bloquean desde `initLivingWorld`, que corre antes de
+  `initDoors`, así que para las salas, las áreas y el chequeo de escape son muros (igual en
+  `doors.ts`, que usa `isPassable` sin atravesarlos). `checkEscapes` exige además que cada
+  lado de una compuerta cerrada llegue a un templo sin ella (`errGateNoEscape`). `Free` del
+  `Host` nunca da una casilla con puerta, y `closeDoor` no cierra sobre un objeto. Los
+  números que no son de un objeto van en `balance.yaml living`.
+
 - **Portales:** `world/portal.go` (`world.Portal`, `world.bin` v5, `Map.PortalAt` y
   `Map.MovesOnStep`, que `NewMap` indexa y valida como `make validate`; `MovesOnStep` lee
   el flag `FlagPortalStep` que pone `NewMap`, porque A* lo pregunta por cada casilla) +

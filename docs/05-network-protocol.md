@@ -1520,6 +1520,29 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   cuentas deshabilitadas o suspendidas, como el ranking). Cache de
   60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
 
+### Mundo vivo (`server/internal/session/livingworld.go`, `proto/game/v1/livingworld.proto`)
+Reglas y contrato en `livingworld/README.md`. El objeto es **un item más de la casilla**:
+`FullMapView`, `MapSlice` y `TileUpdate` lo mandan encima de los items del mapa y debajo de
+los sueltos, así que su `stack_index` es `1 + len(items del mapa)`. Cuando se rompe, se mueve,
+se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en un empuje).
+- **Golpear:** `UseItem{from: pos, item_id, stack_index}` sobre el objeto: un golpe con el
+  arma de la mano derecha (o a mano limpia). `UseItemOn` de un hacha o un pico con `to: pos`:
+  un golpe de herramienta. Un hechizo o runa de área de fuego golpea los que arden en su
+  área. Respuestas: `living.wrong_way`, `living.already_broken`, `inventory.too_far`, la de
+  sin línea de visión y `gather.not_ready` (el ritmo de los oficios). Usar un empujable dice
+  `living.push_hint`; un rastrillo cerrado, `living.gate_closed`.
+- **Empujar:** `PushObject{pos, dir}` (cliente → servidor): el jugador está en la casilla
+  de al lado y empuja en línea recta (norte, este, sur u oeste). Lo manda el cliente cuando
+  una tecla lo haría caminar contra un objeto con `living: pushable` en el contenido. A lo
+  sumo uno cada `balance.living.push_cooldown_ms` (400 ms; uno antes se ignora); `living.push_blocked` si la casilla de atrás no
+  está libre, `inventory.not_possible` si ya no hay nada (otro lo empujó en el mismo tick),
+  `inventory.too_far` si no está al lado.
+- **`LivingObjectEvent`** (servidor → cliente, a quien ve la casilla, en el mismo batch que
+  su `TileUpdate`): `kind` (`HIT`, `BREAK`, `RESPAWN`, `PUSH`, `GATE_OPEN`, `GATE_CLOSE`,
+  `FADE`, `RESET`), `pos`, `to` (empuje y vuelta), `item_id`, `effect` (material de las
+  partículas), `sound` (id de `assets/sounds.yaml`) y `hp_permille` (lo que le queda tras
+  un golpe).
+
 ### Puertas (`server/internal/session/door.go`)
 Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.
 - **Usar:** `UseItem{from: pos, item_id, stack_index}` sobre el item de la puerta (índice
@@ -1736,12 +1759,14 @@ dice que el servidor los manda.
 | `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) y la época de la caminata (`walk_epoch`) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
+| `TrailWear` | Desgaste de senderos (mundo vivo): las casillas en vista cuyo nivel cambió este tick ("Desgaste de senderos", abajo) |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista; `CreatureDisappear.reason` dice por qué (A9) |
 | `CreatureAttack` | Quién atacó, cómo (`MELEE`, `RANGED`, `SPELL`) y a quién o a qué área (A9) |
 | `CreatureMove` | `id`, `from`, `to`, `duration_ms`, `walk_seq` (solo el propio: el `seq` del `Walk` que ejecuta) |
 | `CreatureTurn`, `CreatureHealth`, `CreatureOutfit`, `CreatureSpeed` | |
 | `Effect` | Efecto visual en posición (`effect_id`) |
 | `Projectile` | De A a B (`projectile_id`) |
+| `LivingObjectEvent` | Qué le pasó a un objeto del mundo vivo (golpe, rotura, empuje, restos que se desvanecen...) para efectos y sonido; su aspecto llega siempre en `TileUpdate` ("Mundo vivo") |
 | `FloatingText` | Daño, curación, XP |
 | `PlayerStats` | HP, MP, nivel, XP, capacidad, velocidad, alma |
 | `PlayerSkills` | Nivel y % de cada skill |
@@ -1779,7 +1804,25 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `floors[]`: `MapFloor {z, tiles[]}` con `width × height` índices a `palette`, fila
   por fila (y, luego x). `-1` = sin tile.
 - `creatures`: criaturas paradas dentro del área.
+- `wear`: el desgaste de senderos del área en el piso del jugador (un `TrailWear`, si hay
+  alguna casilla gastada; abajo). Los pisos que se ven desde arriba no lo traen: los
+  cambios de nivel solo llegan a quien está en el piso de la casilla.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
+
+### Desgaste de senderos (`proto/game/v1/livingworld.proto`, lote 17)
+El pasto gastado por los pasos de los jugadores (docs/02 "Senderos",
+`livingworld/README.md`). `TrailWear {z, tiles[], levels}`: `tiles[i]` es `x << 16 | y` de
+una casilla del piso `z` y `levels[i]` (un byte) su nivel, 0 nada, 1 pisoteado, 2 gastado,
+3 tierra pelada. Viaja de dos formas:
+- en `MapArea.wear` de un `FullMapView` o un `MapSlice`: todas las casillas del área en el
+  piso del jugador con nivel mayor que 0. El cliente olvida antes lo que tenía dentro de esa área (lo que pasó
+  mientras no la veía llega así);
+- como `ServerMessage.trail_wear` (campo 49; el 48 es `LivingObjectEvent` de los
+  rompibles): las casillas que el jugador ve cuyo nivel cambió en el tick (0: el pasto se
+  recuperó). Solo cambios de nivel, nunca cada paso: una casilla cruza un umbral cada
+  muchos pasos o cada varios minutos de recuperación.
+El cliente no lo inventa ni lo predice: lo guarda (`client/src/state/trail-wear.ts`) y lo
+dibuja el mundo vivo (`applyWear`).
 
 Reglas del área de interés (T1.4; vista ancha desde 2026-11):
 - El área es de 33x23 casillas centrada en el jugador: la ventana de 31x21
@@ -1908,3 +1951,8 @@ El aspecto (lote 13, `07-performance-budget.md` "Aspecto y equipo visible") suma
 `Creature` humanoide unos 35–45 B (`BodyLook`; un monstruo o un NPC, además sus piezas) y
 a uno que lleva equipo unos 10–20 B (`VisibleEquipment`); solo al aparecer o al cambiar,
 nunca por paso.
+El desgaste de senderos (lote 17) suma unos 4–5 B por casilla gastada al `MapArea` (3–4 B
+de `x << 16 | y` en varint y 1 B de nivel) y nada a un área sin desgaste: una columna nueva
+con un sendero que la cruza, ~10 B. Un cambio de nivel es un `TrailWear` de ~10 B para
+cada jugador que ve la casilla, y con los números de `wear.yaml` una casilla cambia de
+nivel cada decenas de pasos o cada varios minutos: despreciable al lado de los pasos.

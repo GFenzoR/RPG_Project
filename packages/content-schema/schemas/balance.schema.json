@@ -893,6 +893,17 @@
         "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     },
+    "living": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The living world's numbers that belong to no object (livingworld/README.md); the server needs it whenever data/livingworld has objects.",
+      "required": ["fist_damage", "tool_damage", "push_cooldown_ms"],
+      "properties": {
+        "fist_damage": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "tool_damage": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "push_cooldown_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
     "trade": {
       "type": "object",
       "additionalProperties": false,

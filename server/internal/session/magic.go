@@ -398,6 +398,7 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(to), EffectId: effect}}}
 		w.eachObserver(nil, to, func(o *Player) { o.emit(msg) })
 	}
+	w.fireOnLiving(ctx, p, tiles, d) // crates, webs and vines that burn (livingworld.go)
 	w.areaTiles = tiles[:0]
 	// Collect first: a monster that dies leaves the sector being walked.
 	var hit []*Monster

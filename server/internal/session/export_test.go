@@ -392,7 +392,9 @@ var (
 	ErrDoorTie       = errDoorTie
 	ErrDoorOtherKey  = errDoorOtherKey
 	ErrDoorNoEscape  = errDoorNoEscape
+	ErrGateNoEscape  = errGateNoEscape
 	ErrDoorBypassed  = errDoorBypassed
+	ErrObjectInRoom  = errObjectInRoomWall
 )
 
 // AreaOf returns the area of p (area.go; tests only): 0 for none.
@@ -602,3 +604,7 @@ func (p *Player) AccountIDForTest() int64 { return p.accountID }
 func (w *World) MarkQuestCompletedForTest(p *Player, id string) {
 	p.storage.Set("quest."+id, 2) // quest.Completed
 }
+
+// StaticCount is staticCount: the stack index of the first loose item of pos (the living
+// world's object, if any, is the index just below it).
+func (w *World) StaticCount(pos world.Pos) int { return w.staticCount(pos) }

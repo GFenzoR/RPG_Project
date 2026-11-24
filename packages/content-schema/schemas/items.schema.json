@@ -105,7 +105,8 @@
               "description": "Terrain cost multiplier in percent (100 = normal).",
               "type": "integer",
               "minimum": 1
-            }
+            },
+            "surface": { "$ref": "common.schema.json#/$defs/surface" }
           }
         },
         "weapon": {

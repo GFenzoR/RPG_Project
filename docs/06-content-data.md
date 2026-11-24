@@ -1546,6 +1546,54 @@ más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `inne
 que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
 `i18n/<lang>/site.yaml` (claves `site.*`).
 
+## Mundo vivo (`data/livingworld/`, lote 17)
+
+Contrato completo, invariantes y cómo agregar: `livingworld/README.md` (`docs/19`). Lo que
+toca al contenido:
+
+- **`ground.surface`** en cada suelo de `data/items` (enum `surface` de
+  `common.schema.json`): `sand`, `wet_sand`, `snow`, `mud`, `grass`, `tall_grass`, `dirt`,
+  `ash`, `stone`, `wood`, `water_shallow`, `lava`. De qué está hecho el suelo para el
+  cliente (huellas, plantas, pasos con sonido); el servidor solo lo lee para el desgaste
+  de senderos (`wear.yaml`, abajo).
+  ```yaml
+  - id: sand
+    kind: ground
+    ground: { walkable: true, speed: 160, surface: sand }
+  ```
+- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`), por superficie:
+  `footprints` (ms que dura una huella sin viento; 0 o ausente: ninguna), `wind` (desgaste
+  extra por ms en una ráfaga), `dust` (polvo al correr), `ripple` (anillos en el agua),
+  `tint` (`#rrggbb` de huellas y polvo), `sound` (evento `step.self.<sound>` de
+  `assets/sounds.yaml`; por defecto el nombre de la superficie) y `critters` (`bird`,
+  `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
+  esté descrita.
+- **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
+  lista de `{ item, reaction: bend | rustle, idle?, leaves?, trample? }`; cada item una
+  vez. `trample`: sobre una casilla con desgaste de senderos se dibuja aplastada.
+- **`data/livingworld/wear.yaml`** (`livingworld-wear.schema.json`): el desgaste de
+  senderos, que lee el **servidor** (`livingworld/server/trail`, docs/02 "Senderos"):
+  `surfaces` (las superficies que se gastan), `player_step` y `monster_step` (puntos por
+  paso; 0: no desgasta), `max` (tope), `levels` (los puntos de los niveles 1, 2 y 3,
+  ascendentes y hasta `max`), `decay_every_ms` y `decay` (la recuperación) y
+  `save_every_ms` (cada cuánto se guarda). El servidor no arranca con uno inválido.
+  ```yaml
+  surfaces: [grass, tall_grass]
+  player_step: 4
+  monster_step: 0
+  max: 2400
+  levels: [400, 1000, 1800]
+  decay_every_ms: 60000
+  decay: 2
+  save_every_ms: 300000
+  ```
+- Cada `data/livingworld/<nombre>.yaml` necesita su `livingworld-<nombre>.schema.json`; un
+  archivo sin esquema es un error (así un tipo nuevo de contenido del mundo vivo trae su
+  esquema).
+- Las plantas son items comunes de `data/items/plants.yaml` (`kind: decoration`, sin
+  bloquear), con ids en `ids.lock.yaml` (`make gen-ids`) y sprites en
+  `assets/livingworld/sprites/plants/` (sprite `livingworld/plants/<id>`).
+
 ## Sonido (`assets/sounds.yaml`, T3.7)
 El manifiesto de sonido vive en `assets/` (no en `data/`) pero se valida igual
 (`sounds.schema.json` y `make validate`); el cliente lo empaqueta como `content.sounds`.
@@ -1608,6 +1656,10 @@ ambient:
   prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,
   `lufs`, `kbps`, `bytes`). El resto del archivo es a mano.
 
+Pasos por superficie (mundo vivo): el paso propio prueba `step.self.<sound>` (el `sound` de
+su superficie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
+suena como `step.self`. Hoy no hay sonidos propios por superficie (docs/14).
+
 ### Música de una quest importante (`music` en `data/quests/<id>.yaml`)
 Una quest importante puede tener música propia en un lugar: mientras el jugador está en uno
 de sus rectángulos, en uno de sus pisos, suena su pool en vez de la de la zona (un jefe a la
@@ -1625,6 +1677,24 @@ music:
 - Es por lugar, no por paso de la quest: el cliente no sabe en qué paso va el jugador. Una
   música que dependa del paso necesitaría que el servidor lo mande (docs/14, pendientes).
 - Hoy ninguna quest la usa: falta un tema propio para la que la merezca.
+
+## Mundo vivo (`data/livingworld/*.yaml`)
+Los objetos que se rompen, se empujan o se abren: una lista donde cada entrada nombra un item
+de `data/items` (los del mundo vivo están en `data/items/livingworld.yaml`, ids con
+`make gen-ids`) y exactamente un comportamiento: `breakable` (`hp`, `by`, `becomes`,
+`debris_seconds`, `respawn_seconds`, `loot`, `effect`, `sound`, `hit_sound`), `pushable`
+(`reset_seconds`), `gate` (`open`) o `plate` (`radius`). Esquema:
+`packages/content-schema/schemas/livingworld.schema.json`. `make validate` rechaza además un
+muro, una puerta o un suelo; un rompible, empujable o rastrillo cerrado que no bloquee; restos
+o un rastrillo abierto que bloqueen; un item con dos entradas; un sonido que no esté en
+`assets/sounds.yaml`; y restos que duren más que la reaparición. Formato, ejemplos y cómo
+agregar uno: `livingworld/README.md`.
+
+Los números que no son de un objeto van en `balance.yaml → living` (obligatorio si hay
+objetos): `fist_damage` (golpe a mano limpia), `tool_damage` (un uso de hacha o pico) y
+`push_cooldown_ms` (entre dos empujes de un jugador). En el mapa, cada lado de una compuerta
+cerrada debe llegar a un templo sin pasar por ella (el servidor no arranca si no; `make
+validate` lo marca).
 
 ## i18n
 ```yaml

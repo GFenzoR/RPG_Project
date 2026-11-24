@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go-server: ${{ steps.f.outputs.go-server }}
+      go-livingworld: ${{ steps.f.outputs.go-livingworld }}
       go-bots: ${{ steps.f.outputs.go-bots }}
       go-launcher: ${{ steps.f.outputs.go-launcher }}
       ts: ${{ steps.f.outputs.ts }}
@@ -32,6 +33,7 @@ jobs:
       integration: ${{ steps.f.outputs.integration }}
       bench: ${{ steps.f.outputs.bench }}
       gemini: ${{ steps.f.outputs.gemini }}
+      livingworld-boundary: ${{ steps.f.outputs.livingworld-boundary }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -58,6 +60,8 @@ jobs:
         include:
           - module: server
             run: ${{ needs.changes.outputs.go-server }}
+          - module: livingworld/server
+            run: ${{ needs.changes.outputs.go-livingworld }}
           - module: tools/bots
             run: ${{ needs.changes.outputs.go-bots }}
           - module: tools/launcher
@@ -160,6 +164,18 @@ jobs:
         run: |
           .github/scripts/check-action-pins.sh --test
           .github/scripts/check-action-pins.sh
+
+  # The living world's boundary (livingworld/README.md, "Frontera"): the module never
+  # imports server/ or client/, and outside livingworld/ only its glue files import it.
+  # The same checks as make lint-livingworld and make test-livingworld-boundary.
+  livingworld-boundary:
+    needs: changes
+    if: needs.changes.outputs.livingworld-boundary == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: boundary check and its tests
+        run: make lint-livingworld test-livingworld-boundary
 
   # tools/gemini: the dev-only Python tools around the owner's Gemini (pure parts only:
   # no browser, no network). The ffmpeg test is skipped when the runner has none.
@@ -366,7 +382,21 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, go, ts, validate, actionlint, gemini, build, desktop, e2e, integration, bench]
+    needs:
+      [
+        changes,
+        go,
+        ts,
+        validate,
+        actionlint,
+        gemini,
+        livingworld-boundary,
+        build,
+        desktop,
+        e2e,
+        integration,
+        bench,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: every job passed or was skipped

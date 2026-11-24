@@ -31,6 +31,12 @@ import { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placehold
 
 export const MANIFEST_FILE = "assets/sprites.yaml";
 export const SPRITES_DIR = "assets/sprites";
+/**
+ * The living world's original art (livingworld/README.md): assets/livingworld/sprites/<rest>
+ * is the sprite livingworld/<rest>, packed like any file of SPRITES_DIR.
+ */
+export const LIVING_SPRITES_DIR = "assets/livingworld/sprites";
+export const LIVING_SPRITE_PREFIX = "livingworld/";
 export const CREDITS_FILE = "assets/CREDITS.md";
 export const DEFAULT_OUT_DIR = "assets/atlas";
 export const DEFAULT_MAX_PAGE = 2048;
@@ -118,19 +124,23 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   const assetsDir = join(root, "assets");
   const budget = { pixels: opts.maxPixels ?? MAX_TOTAL_PIXELS };
 
-  // 1. Original art under assets/sprites/.
-  const spritesDir = join(root, SPRITES_DIR);
-  for (const abs of listFiles(spritesDir, ".png")) {
-    const rel = relative(spritesDir, abs).split("\\").join("/");
-    const where = `${SPRITES_DIR}/${rel}`;
-    const name = rel.slice(0, -".png".length);
-    if (!SPRITE_PATH.test(name)) {
-      diags.push({ severity: "error", where, message: "file name must be lowercase snake_case" });
-      continue;
+  // 1. Original art under assets/sprites/ (and the living world's, under its prefix).
+  const originals = [
+    { dir: SPRITES_DIR, prefix: "" },
+    { dir: LIVING_SPRITES_DIR, prefix: LIVING_SPRITE_PREFIX },
+  ];
+  for (const { dir, prefix } of originals)
+    for (const abs of listFiles(join(root, dir), ".png")) {
+      const rel = relative(join(root, dir), abs).split("\\").join("/");
+      const where = `${dir}/${rel}`;
+      const name = prefix + rel.slice(0, -".png".length);
+      if (!SPRITE_PATH.test(name)) {
+        diags.push({ severity: "error", where, message: "file name must be lowercase snake_case" });
+        continue;
+      }
+      const image = readPng(abs, where, diags, budget);
+      if (image && checkSize(image, where, diags)) resolved.set(name, { origin: "file", image });
     }
-    const image = readPng(abs, where, diags, budget);
-    if (image && checkSize(image, where, diags)) resolved.set(name, { origin: "file", image });
-  }
 
   // 2. Manifest entries.
   const manifestPath = join(root, MANIFEST_FILE);

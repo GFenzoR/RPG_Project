@@ -8,7 +8,7 @@ import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
-import { TileMap, isPassable, isWalkable } from "./tiles.ts";
+import { TileMap, isPassable, isPassableBreaking, isWalkable } from "./tiles.ts";
 import {
   DOOR_ROOM_ERRORS,
   ON_STEP_KINDS,
@@ -180,6 +180,7 @@ class WorldValidator {
     this.checkDoors();
     this.checkArrivals();
     this.checkSigils();
+    this.checkLiving();
     this.checkPrefabs();
   }
 
@@ -735,13 +736,16 @@ class WorldValidator {
    * restart); a room behind every locked door (doorRooms, the server's walks), shared only
    * by locked doors of the same key, and the escape check (every side of every locked door
    * reaches a temple without keys or tools; no player gets into a room without
-   * its key); and nothing of the outside in a room: no temple (where players wake up), NPC,
+   * its key; every side of every living world gate, placed closed, reaches one without
+   * it; no living world object in a room's wall); and nothing of the outside in a room: no temple (where players wake up), NPC,
    * house, portal end, boat arrival or dialog teleport. Either the outside was taken for
    * the room, or a player would land behind the door. Spawns may live in a room (a guarded
    * vault).
    */
   private checkDoors(): void {
     const locked: { pos: Position; lock: string; id: string; file: string }[] = [];
+    const gates: { pos: Position; id: string; file: string }[] = []; // living world, closed
+    const objects: { pos: Position; file: string }[] = []; // living world, any that blocks
     for (const island of this.world.islands.values()) {
       const dir = this.dirOf(island);
       const chunks = [...island.chunks.values()].sort(
@@ -750,6 +754,25 @@ class WorldValidator {
       for (const c of chunks) {
         const file = chunkFile(dir, c);
         for (const s of c.items) {
+          const gate = s.stack.find((g) => {
+            const info = this.content.items.get(g);
+            return info?.living === "gate" && info.blocksMovement === true;
+          });
+          const living = s.stack.some((g) => {
+            const l = this.content.items.get(g)?.living;
+            return l === "breakable" || l === "pushable" || l === "gate";
+          });
+          if (living)
+            objects.push({
+              pos: { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z },
+              file,
+            });
+          if (gate !== undefined)
+            gates.push({
+              pos: { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z },
+              id: gate,
+              file,
+            });
           const doors = doorsOn(s, this.content);
           const id = doors[0];
           if (id === undefined) continue;
@@ -775,8 +798,34 @@ class WorldValidator {
         }
       }
     }
-    const { behind, findings } = doorRooms(this.tiles, this.content, locked, this.escapeWorld());
+    const { behind, findings } = doorRooms(this.tiles, this.content, locked, {
+      ...this.escapeWorld(),
+      gates: gates.map((g) => g.pos),
+      objects: objects.map((o) => o.pos),
+    });
     for (const f of findings) {
+      if (f.error === "object") {
+        const o = objects.find((l) => formatPos(l.pos) === formatPos(f.door));
+        if (o)
+          this.err(
+            o.file,
+            ["items"],
+            `living world object at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS.object}`,
+            f.door,
+          );
+        continue;
+      }
+      if (f.error === "gate") {
+        const g = gates.find((l) => formatPos(l.pos) === formatPos(f.door));
+        if (g)
+          this.err(
+            g.file,
+            ["items"],
+            `gate "${g.id}" at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS.gate}${f.side ? ` (its side at ${formatPos(f.side)})` : ""}`,
+            f.door,
+          );
+        continue;
+      }
       const d = locked.find((l) => formatPos(l.pos) === formatPos(f.door));
       if (!d) continue;
       const other =
@@ -1223,6 +1272,49 @@ class WorldValidator {
       );
   }
 
+  /**
+   * The living world's objects (livingworld/README.md): never in a protection zone or a
+   * house, never on a tile with a door, a wall or a portal entrance, on walkable ground,
+   * and one object (breakable, pushable or gate) per tile. The server leaves any other one
+   * as a plain map item; this check keeps the map honest about it.
+   */
+  private checkLiving(): void {
+    const portals = this.portalMoves();
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      const owner = new Set<string>();
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) owner.add(formatPos({ x, y, z: r.z }));
+      const protects = (p: Position): boolean =>
+        island.zones.some(
+          (z) =>
+            z.type === "protection" &&
+            z.floors.includes(p.z) &&
+            z.rects.some((r) => rectContains(r, p.x, p.y)),
+        );
+      for (const { c, s, pos } of placedItems(island)) {
+        const infos = s.stack.map((id) => this.content.items.get(id));
+        const objects = infos.filter(
+          (i) => i?.living === "breakable" || i?.living === "pushable" || i?.living === "gate",
+        );
+        if (objects.length === 0 && !infos.some((i) => i?.living === "plate")) continue;
+        const file = chunkFile(dir, c);
+        const say = (what: string): void =>
+          this.err(file, ["items"], `living world object at ${formatPos(pos)}: ${what}`, pos);
+        if (protects(pos)) say("not in a protection zone (it never breaks nor moves there)");
+        if (owner.has(formatPos(pos))) say("not inside a house");
+        if (infos.some((i) => i?.door === true)) say("not on a door's tile");
+        if (infos.some((i) => i?.kind === "wall")) say("not on a wall's tile");
+        if (portals.has(formatPos(pos))) say("not on a portal's entrance");
+        if (objects.length > 1) say("one object per tile");
+        const ground = this.tiles.tileAt(pos)?.ground;
+        if (!ground || this.content.items.get(ground)?.walkable !== true)
+          say("needs walkable ground");
+      }
+    }
+  }
+
   private plateCache: PlacedPlate[] | undefined;
 
   /**
@@ -1447,8 +1539,8 @@ class WorldValidator {
    * destination (nobody walks across it), a ladder or a rope spot is a tile like any other
    * that also leads to its destination, a boat portal leads nowhere. Doors count as open
    * (isPassable): a locked door opens with its key, so the room behind it is reachable
-   * (docs/02 "Puertas con llave"). Every spawn, NPC and non-community zone must be
-   * reachable on foot.
+   * (docs/02 "Puertas con llave"), and so does a living object anyone breaks
+   * (isPassableBreaking). Every spawn, NPC and non-community zone must be reachable on foot.
    */
   private checkReachability(island: Island): void {
     const meta = island.meta;
@@ -1475,7 +1567,7 @@ class WorldValidator {
       for (const n of next) {
         const k = formatPos(n);
         if (reached.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
-        if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
+        if (!isPassableBreaking(this.tiles.tileAt(n), this.content)) continue;
         reached.add(k);
         queue.push(n);
       }
@@ -1650,7 +1742,7 @@ class WorldValidator {
                 const n = { x: p.x + dx, y: p.y + dy, z: p.z };
                 const k = formatPos(n);
                 if (seen.has(k) || !across(k) || !rectContains(meta.rect, n.x, n.y)) continue;
-                if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
+                if (!isPassableBreaking(this.tiles.tileAt(n), this.content)) continue;
                 seen.add(k);
                 queue.push(n);
               }

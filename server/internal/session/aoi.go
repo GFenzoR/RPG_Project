@@ -174,6 +174,7 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 	} else {
 		id = mo.id
 	}
+	w.livingStep(from, to) // pressure plates (livingworld.go)
 	var moved, gone, appeared *pb.ServerMessage
 	x0, x1 := int(min(from.X, to.X))-ViewHalfW, int(max(from.X, to.X))+ViewHalfW
 	y0, y1 := int(min(from.Y, to.Y))-ViewHalfH, int(max(from.Y, to.Y))+ViewHalfH
@@ -309,6 +310,9 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 					for _, id := range w.m.Stack(pos) {
 						stack = append(stack, tileEntry{id: uint32(id)})
 					}
+					if id := w.livingAt(pos); id != 0 {
+						stack = append(stack, tileEntry{id: uint32(id)})
+					}
 					for _, it := range w.ground[pos] {
 						stack = append(stack, tileEntry{id: uint32(it.def.Numeric), count: it.wireCount(), mods: it.mods})
 					}
@@ -320,6 +324,11 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 		}
 		if any {
 			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: slices.Clone(tiles)})
+			if z == p.pos.Z {
+				// Only p's own floor: TrailWear deltas reach the players on the tile's
+				// floor (flushTrail), so wear of a floor seen from above would go stale.
+				w.areaWear(area, x0, y0, x0+wd-1, y0+ht-1, z) // trailwear.go
+			}
 		}
 	}
 	w.eachInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(c *Player) {

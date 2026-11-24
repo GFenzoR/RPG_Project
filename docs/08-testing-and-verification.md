@@ -157,6 +157,7 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `ts` | ESLint + Prettier, `pnpm typecheck`, Vitest | — |
 | `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
 | `actionlint` | lint de `.github/workflows/` (actionlint fijado) y que cada `uses:` sea un commit de 40 hex (`.github/scripts/check-action-pins.sh`, con su autoprueba) | — |
+| `livingworld-boundary` | `make lint-livingworld test-livingworld-boundary`: la frontera del mundo vivo (`livingworld/README.md`) y sus tests. Corre con cambios en `livingworld/`, `server/`, `client/`, `editor/`, `packages/`, `tools/` o `apps/` | — |
 | `build` | `make build`: bundle de producción del editor y del cliente (`build/client`, con el atlas en `atlas/`) | — |
 | `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor; un reintento por test fallado y 40 min de tope (ver "E2E en la CI") | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |

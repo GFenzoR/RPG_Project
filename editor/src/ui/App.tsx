@@ -1,7 +1,7 @@
 // Editor layout: toolbar on top, palette on the left, map in the middle, tile info and
 // live validation on the right, status bar at the bottom.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { doorNote, formatDiagnosticShort } from "./format.ts";
+import { formatDiagnosticShort, itemNote } from "./format.ts";
 import { Palette } from "../palette/Palette.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
 import { HousePanel } from "./HousePanel.tsx";
@@ -61,7 +61,7 @@ export function App({
   };
   /** The name of an item of the stack, with what it is if it is a door or a key. */
   const stackName = (id: string): string => {
-    const note = doorNote(ctl.items.get(id), t);
+    const note = itemNote(ctl.items.get(id), t);
     return note ? `${itemName(id)} (${note})` : itemName(id);
   };
   const tile = s.hover ? tileAt(s.world, s.hover.x, s.hover.y, s.floor) : undefined;

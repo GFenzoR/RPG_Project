@@ -226,6 +226,8 @@ type Querier interface {
 	// sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
 	// (no foreign key) gets an account of its own: minus its character id.
 	LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error)
+	// The living world's trail wear (migration 00027): its one row.
+	LoadTrailWear(ctx context.Context) (LoadTrailWearRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).
@@ -280,6 +282,8 @@ type Querier interface {
 	// Written by the persistence goroutine from an immutable snapshot of the game loop.
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	SaveCharacterUnjustKills(ctx context.Context, arg SaveCharacterUnjustKillsParams) error
+	// Replaces the one row of the trail wear.
+	SaveTrailWear(ctx context.Context, arg SaveTrailWearParams) error
 	SetAccountLocale(ctx context.Context, arg SetAccountLocaleParams) error
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)

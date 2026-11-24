@@ -446,6 +446,14 @@ function yamlFiles(dir: string): string[] {
 /** data/items entries with the fields the palette and the renderer need. */
 export function loadPaletteItems(root: string): PaletteItem[] {
   const items: PaletteItem[] = [];
+  // The living world's plants (livingworld/README.md): the palette says which ones react.
+  const plants = new Map<string, "bend" | "rustle">();
+  const plantsFile = join(root, "data", "livingworld", "plants.yaml");
+  const plantList = existsSync(plantsFile) ? readYaml(plantsFile) : undefined;
+  if (isObj(plantList) && Array.isArray(plantList["plants"]))
+    for (const p of plantList["plants"])
+      if (isObj(p) && typeof p["item"] === "string")
+        plants.set(p["item"], p["reaction"] === "rustle" ? "rustle" : "bend");
   for (const file of yamlFiles(join(root, "data", "items"))) {
     const list = readYaml(file);
     if (!Array.isArray(list)) continue;
@@ -467,10 +475,58 @@ export function loadPaletteItems(root: string): PaletteItem[] {
       // ART-8: the canvas raises what is stacked on it, as the game does.
       if (typeof raw["elevation"] === "number" && raw["elevation"] > 0)
         item.elevation = raw["elevation"];
+      const ground = raw["ground"];
+      if (isObj(ground) && typeof ground["surface"] === "string") item.surface = ground["surface"];
+      const plant = plants.get(raw["id"]);
+      if (plant) item.plant = plant;
       items.push(item);
     }
   }
+  addLiving(root, items);
   return items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * Marks the palette items of data/livingworld (livingworld/README.md): breakables with how
+ * they break, their debris, pushables, gates and pressure plates.
+ */
+function addLiving(root: string, items: PaletteItem[]): void {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const mark = (id: unknown, living: NonNullable<PaletteItem["living"]>): void => {
+    const item = typeof id === "string" ? byId.get(id) : undefined;
+    if (item) item.living = living;
+  };
+  for (const file of yamlFiles(join(root, "data", "livingworld"))) {
+    const list = readYaml(file);
+    if (!Array.isArray(list)) continue;
+    for (const e of list) {
+      if (!isObj(e)) continue;
+      const b = e["breakable"];
+      if (isObj(b)) {
+        const by = Array.isArray(b["by"])
+          ? b["by"].filter((m): m is string => typeof m === "string")
+          : [];
+        mark(e["item"], {
+          kind: "breakable",
+          by,
+          ...(typeof b["hp"] === "number" ? { hp: b["hp"] } : {}),
+        });
+        if (b["becomes"] !== "none") mark(b["becomes"], { kind: "debris" });
+      }
+      if (isObj(e["pushable"])) mark(e["item"], { kind: "pushable" });
+      const g = e["gate"];
+      if (isObj(g)) {
+        mark(e["item"], { kind: "gate" });
+        mark(g["open"], { kind: "gate" });
+      }
+      const p = e["plate"];
+      if (isObj(p))
+        mark(e["item"], {
+          kind: "plate",
+          ...(typeof p["radius"] === "number" ? { radius: p["radius"] } : {}),
+        });
+    }
+  }
 }
 
 /** editor.*, item.* and island.* texts of every language. */

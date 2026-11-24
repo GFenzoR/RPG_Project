@@ -21,6 +21,23 @@
       "pattern": "^[a-z0-9_]+(/[a-z0-9_]+)*$"
     },
     "notes": { "description": "Internal comment, never shown to players.", "type": "string" },
+    "surface": {
+      "description": "What a ground is made of, for the living world (livingworld/README.md): footprints, plant and water reactions, step dust and footstep sounds; the server reads it only for trail wear (data/livingworld/wear.yaml).",
+      "enum": [
+        "sand",
+        "wet_sand",
+        "snow",
+        "mud",
+        "grass",
+        "tall_grass",
+        "dirt",
+        "ash",
+        "stone",
+        "wood",
+        "water_shallow",
+        "lava"
+      ]
+    },
     "hexColor": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
     "wornPiece": {
       "description": "How a piece shows on the engine humanoid (docs/06 \"Looks\"): a shape of data/looks.yaml shapes for its slot and a tint of data/looks.yaml tints.",

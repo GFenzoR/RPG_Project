@@ -10,6 +10,7 @@ import { CREATURES } from "./creatures.ts";
 import { EFFECTS, MISSILES } from "./effects.ts";
 import { GROUND } from "./ground.ts";
 import { ITEMS } from "./items.ts";
+import { LIVING } from "./living.ts";
 import { PORTALS } from "./portals.ts";
 import { PROPS } from "./props.ts";
 import { TERRAIN } from "./terrain.ts";
@@ -41,6 +42,7 @@ const CODED: RecipeBook = merge(
   EFFECTS,
   MISSILES,
   UI,
+  LIVING,
   engineRecipes(ENGINE_SPECS),
 );
 

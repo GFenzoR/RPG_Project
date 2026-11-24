@@ -626,6 +626,7 @@ describe("bootstrap", () => {
       kind: "ground",
       sprite: "ground/grass",
       name: "item.grass.name",
+      surface: "grass",
     });
     // Doors and keys carry what the palette and the tile info say of them.
     const pick = (id: string) => {
@@ -638,6 +639,18 @@ describe("bootstrap", () => {
     expect(pick("grass")).toEqual({ door: undefined, lock: undefined, key: undefined });
     // ART-8: the canvas raises what is stacked on a crate.
     expect(b.items.find((i) => i.id === "cargo_crate")?.elevation).toBe(8);
+    // The living world (livingworld/README.md): a ground's surface, a plant's reaction.
+    expect(b.items.find((i) => i.id === "sand")?.surface).toBe("sand");
+    expect(b.items.find((i) => i.id === "tall_grass")?.plant).toBe("bend");
+    expect(b.items.find((i) => i.id === "oak_tree")?.plant).toBe("rustle");
+    expect(b.items.find((i) => i.id === "boulder")?.plant).toBeUndefined();
+    // The living world's objects (livingworld/README.md): how they break, move or open.
+    const living = (id: string) => b.items.find((i) => i.id === id)?.living;
+    expect(living("cracked_rock")).toEqual({ kind: "breakable", by: ["tool:pick"], hp: 30 });
+    expect(living("rock_rubble")).toEqual({ kind: "debris" });
+    expect(living("mossy_boulder")).toEqual({ kind: "pushable" });
+    expect(living("pressure_plate")).toEqual({ kind: "plate", radius: 6 });
+    expect(living("cargo_crate")).toBeUndefined();
     for (const lang of ["es", "en"]) {
       expect(b.i18n[lang]?.["editor.door_locked"]).toContain("{key}");
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
