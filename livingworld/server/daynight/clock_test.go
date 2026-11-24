@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -200,8 +199,8 @@ func TestPhaseStart(t *testing.T) {
 		if !ok || ms < 0 || ms >= cycle.CycleMs() {
 			t.Errorf("%s: %d %v", w, ms, ok)
 		}
-		want := map[string]Phase{"dawn": Dawn, "dusk": Dusk, "night": Night, "midnight": Night}[w]
-		if strings.Contains("dawn dusk night midnight", w) && cycle.Phase(Time{CycleMs: ms}) != want {
+		want, named := map[string]Phase{"dawn": Dawn, "dusk": Dusk, "night": Night, "midnight": Night}[w]
+		if named && cycle.Phase(Time{CycleMs: ms}) != want {
 			t.Errorf("%s lands in %v", w, cycle.Phase(Time{CycleMs: ms}))
 		}
 	}

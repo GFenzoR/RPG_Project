@@ -91,16 +91,25 @@ func (c Cycle) Check() error {
 
 const minuteMs = 60_000
 
-// DayMs, NightMs, DawnMs, DuskMs and CycleMs are the cycle's lengths in milliseconds.
-func (c Cycle) DayMs() int64   { return int64(c.DayMinutes) * minuteMs }
+// DayMs is the day's length in milliseconds (dawn and dusk included).
+func (c Cycle) DayMs() int64 { return int64(c.DayMinutes) * minuteMs }
+
+// NightMs is the night's length in milliseconds.
 func (c Cycle) NightMs() int64 { return int64(c.NightMinutes) * minuteMs }
-func (c Cycle) DawnMs() int64  { return int64(c.DawnMinutes) * minuteMs }
-func (c Cycle) DuskMs() int64  { return int64(c.DuskMinutes) * minuteMs }
+
+// DawnMs is the dawn's length in milliseconds (the start of the day).
+func (c Cycle) DawnMs() int64 { return int64(c.DawnMinutes) * minuteMs }
+
+// DuskMs is the dusk's length in milliseconds (the end of the day).
+func (c Cycle) DuskMs() int64 { return int64(c.DuskMinutes) * minuteMs }
+
+// CycleMs is a whole day and night in milliseconds.
 func (c Cycle) CycleMs() int64 { return c.DayMs() + c.NightMs() }
 
 // Phase is the part of the cycle.
 type Phase uint8
 
+// The phases, in the cycle's order.
 const (
 	Dawn Phase = iota
 	Day
