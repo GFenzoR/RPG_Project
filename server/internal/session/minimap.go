@@ -26,7 +26,9 @@ import (
 // Tracked objective: TrackQuest names one active quest; its current step's place (a
 // hint_area of its YAML, or derived from the step: the NPC to talk to, the nearest spawn
 // of the monster, the reach place, the sigil plates) goes to the client as a circle around
-// a point near it (quest.FuzzHint), again whenever its quests change.
+// a point near it (quest.FuzzHint), again whenever its quests change or a relocation
+// (stairs, a teleport, a boat, waking up at the temple) may have changed which place is
+// the nearest (hintMoved).
 
 const (
 	// minimapDeltaEvery is how often the sectors that gained bits go to the client.
@@ -34,8 +36,10 @@ const (
 	// MaxMinimapRequestSectors is how many sectors one MinimapRequest may ask for.
 	MaxMinimapRequestSectors = 16
 	// minimapBudget is how many sectors a client may ask for in a burst, refilled at
-	// minimapRefill sectors a second: a sector costs up to 1024 tile reads in the tick.
-	minimapBudget = 64
+	// minimapRefill sectors a second: a sector costs up to 1024 tile reads in the tick
+	// (BenchmarkMinimapRequestBurst: the whole budget in one tick is ~0.7 ms). A minimap at
+	// its widest shows 36 sectors, asked 16 at a time as the answers arrive.
+	minimapBudget = 32
 	minimapRefill = 32
 )
 
@@ -102,17 +106,13 @@ func (w *World) minimapRequest(tick game.Tick, p *Player, m *pb.MinimapRequest) 
 	if len(ids) == 0 || len(ids) > MaxMinimapRequestSectors {
 		return
 	}
-	// Refill the budget by the ticks since the last request.
-	if tick > p.minimapBudgetAt {
-		p.minimapBudget = min(p.minimapBudget+int(tick-p.minimapBudgetAt)*minimapRefill/int(time.Second/game.TickDuration), minimapBudget)
-		p.minimapBudgetAt = tick
-	}
+	p.refillMinimapBudget(tick)
 	if p.minimapBudget < len(ids) {
 		return
 	}
 	p.minimapBudget -= len(ids)
 	z := p.pos.Z
-	out := &pb.MinimapSectors{}
+	out := &pb.MinimapSectors{Answer: true}
 	seen := make(map[explore.Key]bool, len(ids))
 	for _, id := range ids {
 		k, ok := explore.FromWire(z, id)
@@ -123,6 +123,23 @@ func (w *World) minimapRequest(tick game.Tick, p *Player, m *pb.MinimapRequest) 
 		out.Sectors = append(out.Sectors, w.minimapSector(p, k))
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_MinimapSectors{MinimapSectors: out}})
+}
+
+// refillMinimapBudget refills p's request budget by the ticks since its last refill:
+// minimapRefill sectors a second, exactly (the fraction of a sector a tick leaves is kept
+// for the next one, so requests on consecutive ticks do not round it away).
+func (p *Player) refillMinimapBudget(tick game.Tick) {
+	if tick <= p.minimapBudgetAt {
+		return
+	}
+	perSecond := int(time.Second / game.TickDuration)
+	acc := int(min(tick-p.minimapBudgetAt, game.Tick(minimapBudget*perSecond)))*minimapRefill + p.minimapBudgetRem
+	p.minimapBudgetAt = tick
+	p.minimapBudget += acc / perSecond
+	p.minimapBudgetRem = acc % perSecond
+	if p.minimapBudget >= minimapBudget {
+		p.minimapBudget, p.minimapBudgetRem = minimapBudget, 0
+	}
 }
 
 // minimapSector is sector k as p has explored it: the colour item of each explored tile.
@@ -206,9 +223,9 @@ func (w *World) flushHint(p *Player) {
 		if step == nil {
 			p.tracked = "" // done, or abandoned: nothing to track
 		} else if c, r, ok := w.stepPlace(p, step); ok {
-			fz := quest.FuzzHint(int(c.X), int(c.Y), r, quest.HintSeed(p.charID, p.tracked, step.ID))
+			fz := quest.FuzzHint(int(c.X), int(c.Y), r, quest.HintSeed(p.charID, p.tracked, step.ID, int(c.X), int(c.Y), int(c.Z)))
 			h = &pb.ObjectiveHint{QuestId: p.tracked, StepId: step.ID,
-				Center: &pb.Position{X: uint32(max(min(fz.X, 0xFFFF), 0)), Y: uint32(max(min(fz.Y, 0xFFFF), 0)), Z: uint32(c.Z)},
+				Center: &pb.Position{X: hintCoord(fz.X, int(c.X)), Y: hintCoord(fz.Y, int(c.Y)), Z: uint32(c.Z)},
 				Radius: uint32(fz.Radius)}
 		} else {
 			h = &pb.ObjectiveHint{QuestId: p.tracked, StepId: step.ID}
@@ -222,6 +239,26 @@ func (w *World) flushHint(p *Player) {
 	p.hintForce = false
 	p.hintSent = key
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ObjectiveHint{ObjectiveHint: h}})
+}
+
+// hintCoord is a fuzzed coordinate v of a target at t, kept on the map: one that fell off
+// its edge is mirrored to the other side of the target (the same distance from it, so the
+// target stays inside the circle), not clamped, which could land on the target itself.
+func hintCoord(v, t int) uint32 {
+	if v < 0 || v > 0xFFFF {
+		v = 2*t - v
+	}
+	return uint32(max(min(v, 0xFFFF), 0))
+}
+
+// hintMoved marks p's hint to compute again after a relocation: the nearest spawn of a
+// kill step and the floor of a reach zone depend on where p stands. Walking does not (a
+// scan of the map's spawns per step would be too much): on the same floor the estimate is
+// the nearest to where p last changed floor, tracked the quest or advanced it.
+func (p *Player) hintMoved() {
+	if p.tracked != "" {
+		p.hintStale = true
+	}
 }
 
 // hintKey is what an ObjectiveHint said, to send it only when it changes.
@@ -243,6 +280,7 @@ func (w *World) stepPlace(p *Player, step *content.QuestStepDef) (world.Pos, int
 	cw := step.CompleteWhen
 	switch {
 	case cw.DialogAction != nil:
+		// An NPC stands where the map placed it for good (npc.go): its place never moves.
 		for _, n := range w.npcs {
 			if n.def.ID == cw.DialogAction.NPC {
 				return n.pos, 1, true

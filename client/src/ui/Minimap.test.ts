@@ -61,6 +61,18 @@ describe("MinimapMarks", () => {
     const label = far.find((v) => v.props["data-testid"] === "minimap-distance");
     expect(label?.props.children).toBe('client.minimap.distance{"tiles":300}');
   });
+  it("the distance to an estimate on another floor is one translated text", () => {
+    const label = (z: number): unknown =>
+      nodes(
+        MinimapMarks({
+          t,
+          mm: mm({ hint: { questId: "q", stepId: "s", x: 400, y: 200, z, radius: 8 } }),
+          view,
+        }),
+      ).find((v) => v.props["data-testid"] === "minimap-distance")?.props.children;
+    expect(label(6)).toBe('client.minimap.distance_up{"tiles":300}');
+    expect(label(8)).toBe('client.minimap.distance_down{"tiles":300}');
+  });
   it("turns the marker for every facing", () => {
     expect(facingDegrees(Direction.NORTH)).toBe(0);
     expect(facingDegrees(Direction.SOUTH_WEST)).toBe(225);

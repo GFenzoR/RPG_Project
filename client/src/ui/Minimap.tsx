@@ -119,8 +119,14 @@ export function MinimapMarks(props: {
             y={hint.py - Math.sin(hint.angle) * 16 + 3}
             text-anchor="middle"
           >
-            {t("client.minimap.distance", { tiles: hint.distance }) +
-              (floorMark ? ` ${floorMark}` : "")}
+            {t(
+              hint.floor === "up"
+                ? "client.minimap.distance_up"
+                : hint.floor === "down"
+                  ? "client.minimap.distance_down"
+                  : "client.minimap.distance",
+              { tiles: hint.distance },
+            )}
           </text>
         </g>
       )}

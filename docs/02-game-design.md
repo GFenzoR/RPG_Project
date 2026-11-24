@@ -285,11 +285,13 @@ si tenemos un objetivo activo, una estimación de dónde está."
   círculo queda fuera del minimapa, una flecha en el borde apunta hacia él con la distancia
   aproximada (de a 5 casillas hasta 50, después de a 10); si está en otro piso, ▲ (arriba) o
   ▼ (abajo). El lugar es el NPC con quien hablar, el spawn más cercano del monstruo que hay
-  que cazar, el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
+  que cazar (se vuelve a elegir al cambiar de piso, teletransportarse, viajar en barco o
+  despertar en el templo; no al caminar), el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
   paso (docs/06). Un paso que se cumple en cualquier lado (llevar un item, una marca) no
   tiene círculo. La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
-  que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje y paso, así
-  que pedirla muchas veces no la afina.
+  que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje, paso y
+  lugar, así que pedirla muchas veces no la afina; cada spawn de un mismo monstruo se corre
+  distinto, así que conocer uno no ubica los demás.
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |

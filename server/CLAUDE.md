@@ -558,5 +558,6 @@ server/
   `exploreView`: un camino nuevo que cambie la casilla de un jugador sin pasar por ellos
   también. `flushMinimap` manda los deltas (uno por segundo como mucho) y
   `minimapRequest` contesta solo casillas exploradas, con presupuesto por jugador. La pista
-  del objetivo (`flushHint`) se recalcula cuando `questsChanged` y siempre pasa por
+  del objetivo (`flushHint`) se recalcula cuando `questsChanged` o `relocate` (`hintMoved`;
+  ambos solo **levantan** `hintStale`, nunca lo bajan) y siempre pasa por
   `quest.FuzzHint`: nunca mandes el lugar exacto de un paso.

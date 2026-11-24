@@ -11,6 +11,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -388,5 +389,62 @@ func BenchmarkThrowAway(b *testing.B) {
 	b.StopTimer()
 	if p := w.PlayerByCharacter(1); p == nil || w.CountItem(p, "copper_coin") != 50 {
 		b.Fatal("the coin did not come back")
+	}
+}
+
+// BenchmarkMinimapRequestBurst measures the worst tick one client can force with
+// MinimapRequest (docs/07 "Minimapa"): its whole budget at once, two requests of 16
+// sectors, every tile of them explored (32 sectors: 32 768 tile and stack reads, the
+// palettes and 32 sectors of ~1.2 KB). The 20 ticks that refill the budget are not timed.
+func BenchmarkMinimapRequestBurst(b *testing.B) {
+	w, err := session.New(session.Config{
+		Map:       worldtest.Open(b, 0, 0, 256, 256),
+		Balance:   testBalance(),
+		Vocations: testVocations,
+		Save:      func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: rand.New(rand.NewPCG(1, 2)), Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	var explored []explore.SectorState
+	full := explore.Sector{}
+	for i := range full {
+		full[i] = 0xFF
+	}
+	reqs := make([]*pb.ClientMessage, 2)
+	for i := range reqs {
+		ids := make([]uint32, 16)
+		for j := range ids {
+			sx, sy := j%8, i*2+j/8
+			ids[j] = uint32(sx)<<16 | uint32(sy)
+			explored = append(explored, explore.SectorState{Key: explore.MakeKey(7, sx, sy), Bits: full})
+		}
+		reqs[i] = &pb.ClientMessage{Message: &pb.ClientMessage_MinimapRequest{MinimapRequest: &pb.MinimapRequest{Z: 7, Sectors: ids}}}
+	}
+	cl := &discardClient{}
+	_ = loop.Enqueue(w.Join(session.Character{ID: 1, Name: "P", Vocation: "guardian", Level: 1, Health: 145,
+		HasPos: true, Pos: pos(100, 100), Explored: explored}, cl))
+	loop.Step()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		for range 20 {
+			loop.Step()
+		}
+		before := cl.events
+		for _, r := range reqs {
+			_ = loop.Enqueue(w.Input(cl, r))
+		}
+		b.StartTimer()
+		loop.Step()
+		if cl.events-before < len(reqs) {
+			b.Fatalf("%d of %d requests answered", cl.events-before, len(reqs))
+		}
 	}
 }

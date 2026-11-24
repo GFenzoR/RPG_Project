@@ -1234,40 +1234,60 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   Un sector que no está es negro entero: el cliente no lo pide.
 - `MinimapRequest{z, sectors}` (campo 40 de `ClientMessage`): hasta 16 sectores del piso
   **propio** (otro piso se ignora; más de 16, también). El servidor contesta un
-  `MinimapSectors` con un `MinimapSector` por sector pedido (un repetido, una vez):
+  `MinimapSectors` con `answer = true` y un `MinimapSector` por sector pedido (un repetido,
+  una vez):
   `explored` (vacío si no tiene nada explorado), `palette` (ids numéricos de items) y
   `tiles` (1024 bytes, uno por casilla en el mismo orden: 0 = sin explorar o sin nada; si
   no, 1 + índice de `palette`). El item de una casilla es el de más arriba que bloquea el
   paso (muro, árbol, roca), o si no su suelo; **nunca** sale una casilla sin explorar.
-  Presupuesto por jugador: 64 sectores de golpe, recarga de 32 por segundo; un pedido que
+  Presupuesto por jugador: 32 sectores de golpe, recarga de 32 por segundo exactos (1,6
+  por tick; la fracción se arrastra, también para quien pide en cada tick); un pedido que
   no entra se descarta entero, sin respuesta, igual que uno de otro piso (el jugador puede
   haber cambiado de piso mientras viajaba). El cliente da un sector por pedido recién
-  cuando le llega su respuesta: uno sin respuesta a los 2 s (`REQUEST_RETRY_MS`) lo pide
-  otra vez la próxima vez que lo tenga a la vista, aunque nada más haya cambiado.
-- **Deltas:** como mucho uno por segundo, `MinimapSectors` con los sectores que ganaron
-  bits desde el anterior, solo con `explored` (sin `palette` ni `tiles`): esas casillas
-  están en la vista del cliente, que las colorea con el mapa que ya tiene. Una casilla que
-  ya vino en una respuesta se pinta con el item de la respuesta (el servidor conoce las
-  marcas del mapa que el cliente no tiene); el mapa propio, solo si no vino. Nada mientras
-  el jugador camina por lo ya explorado. El cliente explora además su propia vista con la
-  misma regla (31x21 del piso propio), así la niebla se abre con el paso.
+  cuando le llega su respuesta (`answer`): uno sin respuesta a los 2 s (`REQUEST_RETRY_MS`)
+  lo pide otra vez la próxima vez que lo tenga a la vista, aunque nada más haya cambiado.
+  El color sale del mapa del servidor **como está ahora** (`world.Map`): una puerta lejana
+  ya explorada se ve abierta o cerrada según su estado actual. Es una pista aceptada (solo
+  casillas que el personaje ya vio, y cuesta presupuesto).
+- **Deltas:** como mucho uno por segundo, `MinimapSectors` con `answer = false` y los
+  sectores que ganaron bits desde el anterior, solo con `explored` (sin `palette` ni
+  `tiles`): esas casillas están en la vista del cliente, que las colorea con el mapa que
+  le mandaron. Un delta **no** da un sector por pedido: si el sector tenía algo explorado
+  de logins anteriores y el cliente nunca lo pidió (minimapa plegado, o el delta llegó
+  antes que la respuesta), lo pide igual. Nada mientras el jugador camina por lo ya
+  explorado. El cliente explora además su propia vista con la misma regla (31x21 del piso
+  propio), así la niebla se abre con el paso.
+- **Color en el cliente:** `MinimapState` recuerda el item de color de cada casilla que el
+  cliente recibe (`FullMapView`, `MapSlice`, `TileUpdate`: `noteTile`), porque `WorldState`
+  olvida el mapa a más de 2 chunks del jugador y entero en cada `FullMapView` (escalera,
+  teletransporte, muerte): lo explorado en esta sesión sigue coloreado hasta el próximo
+  login, que lo trae del servidor. Una casilla que vino en una respuesta se pinta con el
+  item de la respuesta (el servidor conoce las marcas del mapa que el cliente no tiene);
+  la del mapa recibido, solo si no vino.
 - `TrackQuest{quest_id}` (campo 41): sigue una quest **en curso** en el minimapa; vacío, o
   una quest que no está en curso, deja de seguir. El servidor contesta siempre un
-  `ObjectiveHint` (campo 52 de `ServerMessage`) y lo manda otra vez en el flush de cada
-  tick en que cambia el paso de esa quest (terminada: `quest_id` vacío). No se guarda: el
+  `ObjectiveHint` (campo 52 de `ServerMessage`), también al dejar de seguir y aunque otra
+  quest cambie en el mismo tick, y lo manda otra vez en el flush de cada tick en que
+  cambia el paso de esa quest (terminada: `quest_id` vacío) o en que una reubicación
+  (escalera, teletransporte, barco, despertar en el templo) cambia el lugar más cercano.
+  No se guarda: el
   cliente lo manda de nuevo después de cada `Welcome` (lo recuerda por personaje en
   `localStorage` `rpg.track`).
 - `ObjectiveHint{quest_id, step_id, center, radius}`: un círculo (radio euclídeo en
   casillas) alrededor de un punto **cercano** al lugar del paso, que puede estar en otro
   piso (`center.z`). Nunca es la casilla exacta: el centro se corre entre un cuarto y la
   mitad del radio (cuando el lugar del paso es grande y no deja ese margen, se corre 1
-  casilla y el círculo crece para contenerlo), siempre igual para el mismo personaje y paso (`quest.FuzzHint` con una
-  semilla de personaje, quest y paso: pedirlo muchas veces no lo promedia), y el lugar
-  del paso entra entero en el círculo. Con `quest_id` y sin `center`: se sigue la quest
+  casilla y el círculo crece para contenerlo), siempre igual para el mismo personaje, paso
+  y lugar (`quest.FuzzHint` con una semilla de personaje, quest, paso y centro del lugar:
+  pedirlo muchas veces no lo promedia, y conocer un spawn de un `kill` no da el corrimiento
+  de los otros), y el lugar del paso entra entero en el círculo. Un centro que caería
+  fuera del mapa se refleja al otro lado del lugar (nunca se recorta encima de él). Con `quest_id` y sin `center`: se sigue la quest
   pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).
-  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action`, el spawn
-  más cercano del monstruo de un `kill` (su piso primero), el lugar de un `reach` (una
-  zona: su rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
+  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action` (los NPCs
+  no se mueven), el spawn más cercano del monstruo de un `kill` (su piso primero; el más
+  cercano a donde el jugador empezó a seguir, avanzó la quest o se reubicó por última vez:
+  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: su
+  rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
   cliente dibuja solo el círculo o la flecha, nunca casillas sin explorar.
 - Todo agregado sin romper nada: un cliente viejo ignora los campos nuevos y un servidor
   viejo nunca los manda.

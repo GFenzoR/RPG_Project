@@ -181,6 +181,14 @@ el punto 5:
   - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
     `store/play_integration_test.go` (upsert de sectores) y el screenshot
     `96c-minimap-tracked` de `e2e/sandbox.spec.ts`.
+  - **Revisión del 2026-11-24, aplicada:** el color de lo explorado en la sesión se
+    recuerda en el cliente (antes quedaba gris al alejarse o cambiar de piso), solo una
+    respuesta (`MinimapSectors.answer`) da un sector por pedido, el untrack se contesta
+    siempre, la pista de un `kill` se recalcula al reubicarse y su corrimiento depende
+    del lugar, ráfaga de pedidos 32 (medida) con recarga exacta. No se cambió: la clave de
+    `rpg.track` es el nombre del personaje (el cliente no conoce el id del personaje; el
+    servidor valida la quest, así que un nombre reutilizado solo sigue una quest que el
+    personaje nuevo también tenga en curso).
   - **Riesgos menores anotados en la revisión:** la pista es fija por personaje y paso, así
     que con varios personajes de la misma cuenta se podría triangular el objetivo (riesgo
     bajo: es una quest, no un secreto). El upsert de `character_explored` reemplaza los

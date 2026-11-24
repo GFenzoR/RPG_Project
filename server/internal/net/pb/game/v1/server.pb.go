@@ -7494,13 +7494,16 @@ func (x *MinimapFloorIndex) GetSectors() []uint32 {
 	return nil
 }
 
-// MinimapSectors carries explored sectors: the answer to a MinimapRequest (palette and
-// tiles set) and, at most once a second while the player explores, the sectors that
-// gained explored tiles (only explored set: the client colours those tiles from the map
-// it already has, since they are in its view).
+// MinimapSectors carries explored sectors: the answer to a MinimapRequest (answer set;
+// palette and tiles for what is explored) and, at most once a second while the player
+// explores, the sectors that gained explored tiles (answer unset, only explored: the
+// client colours those tiles from the map it was sent, since they are in its view).
 type MinimapSectors struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sectors       []*MinimapSector       `protobuf:"bytes,1,rep,name=sectors,proto3" json:"sectors,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Sectors []*MinimapSector       `protobuf:"bytes,1,rep,name=sectors,proto3" json:"sectors,omitempty"`
+	// answer: these sectors answer a MinimapRequest. The client stops asking for them; a
+	// delta (false) leaves a sector it never asked for still to ask.
+	Answer        bool `protobuf:"varint,2,opt,name=answer,proto3" json:"answer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7540,6 +7543,13 @@ func (x *MinimapSectors) GetSectors() []*MinimapSector {
 		return x.Sectors
 	}
 	return nil
+}
+
+func (x *MinimapSectors) GetAnswer() bool {
+	if x != nil {
+		return x.Answer
+	}
+	return false
 }
 
 // MinimapSector is one sector (32x32 tiles) of floor z. explored is its bitset: 128 bytes,
@@ -8229,9 +8239,10 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x06floors\x18\x01 \x03(\v2\x1a.game.v1.MinimapFloorIndexR\x06floors\";\n" +
 	"\x11MinimapFloorIndex\x12\f\n" +
 	"\x01z\x18\x01 \x01(\rR\x01z\x12\x18\n" +
-	"\asectors\x18\x02 \x03(\rR\asectors\"B\n" +
+	"\asectors\x18\x02 \x03(\rR\asectors\"Z\n" +
 	"\x0eMinimapSectors\x120\n" +
-	"\asectors\x18\x01 \x03(\v2\x16.game.v1.MinimapSectorR\asectors\"\x81\x01\n" +
+	"\asectors\x18\x01 \x03(\v2\x16.game.v1.MinimapSectorR\asectors\x12\x16\n" +
+	"\x06answer\x18\x02 \x01(\bR\x06answer\"\x81\x01\n" +
 	"\rMinimapSector\x12\f\n" +
 	"\x01z\x18\x01 \x01(\rR\x01z\x12\x16\n" +
 	"\x06sector\x18\x02 \x01(\rR\x06sector\x12\x1a\n" +

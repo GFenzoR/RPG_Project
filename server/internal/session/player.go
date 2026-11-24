@@ -131,14 +131,15 @@ type Player struct {
 	// The minimap (minimap.go): what the character explored, when the next delta may go,
 	// the MinimapRequest budget, the tracked quest and the last ObjectiveHint sent (hintStale:
 	// recompute it at the flush; hintForce: send it even if unchanged, a TrackQuest answer).
-	explored        *explore.Map
-	minimapAt       game.Tick
-	minimapBudget   int
-	minimapBudgetAt game.Tick
-	tracked         string
-	hintStale       bool
-	hintForce       bool
-	hintSent        hintKey
+	explored         *explore.Map
+	minimapAt        game.Tick
+	minimapBudget    int
+	minimapBudgetAt  game.Tick
+	minimapBudgetRem int // twentieths of a sector the last refill left over
+	tracked          string
+	hintStale        bool
+	hintForce        bool
+	hintSent         hintKey
 	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
 	milestoneMarks uint64
 	// sigilMet is what it met of the milestone of the plate it stands on when last

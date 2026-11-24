@@ -13,7 +13,6 @@ import {
   pixelToTile,
   roughDistance,
   sectorId,
-  tileColourItem,
   tileToPixel,
   viewTiles,
 } from "./minimap.ts";
@@ -58,15 +57,18 @@ describe("fog", () => {
     const m = new MinimapState();
     m.applyIndex([{ z: 7, sectors: [sectorId(3, 6)] }]);
     // Sector (3,6) is tiles 96..127, 192..223: (100,200) is local (4,8).
-    m.applySectors([
-      {
-        z: 7,
-        sector: sectorId(3, 6),
-        explored: bits([4, 8]),
-        palette: [42],
-        tiles: new Uint8Array(1024).fill(1),
-      },
-    ]);
+    m.applySectors(
+      [
+        {
+          z: 7,
+          sector: sectorId(3, 6),
+          explored: bits([4, 8]),
+          palette: [42],
+          tiles: new Uint8Array(1024).fill(1),
+        },
+      ],
+      true,
+    );
     expect(m.isExplored(100, 200, 7)).toBe(true);
     expect(m.isExplored(101, 200, 7)).toBe(false);
     expect(m.isExplored(100, 200, 8)).toBe(false);
@@ -76,7 +78,7 @@ describe("fog", () => {
       view(),
       7,
       (x, y, z) => m.isExplored(x, y, z),
-      (x, y, z) => m.serverItem(x, y, z),
+      (x, y, z) => m.item(x, y, z),
       (item) => (item === 42 ? [10, 200, 30] : [255, 255, 255]),
     );
     const px = (x: number, y: number): number[] => [
@@ -99,15 +101,18 @@ describe("fog", () => {
     expect(m.isExplored(50, 61, 7)).toBe(false);
     expect(m.revealView(50, 50, 7, 31, 21)).toBe(false);
     // A delta (explored only) adds bits and keeps the local ones.
-    m.applySectors([
-      {
-        z: 7,
-        sector: sectorId(1, 1),
-        explored: bits([0, 0]),
-        palette: [],
-        tiles: new Uint8Array(),
-      },
-    ]);
+    m.applySectors(
+      [
+        {
+          z: 7,
+          sector: sectorId(1, 1),
+          explored: bits([0, 0]),
+          palette: [],
+          tiles: new Uint8Array(),
+        },
+      ],
+      false,
+    );
     expect(m.isExplored(32, 32, 7)).toBe(true);
     expect(m.isExplored(40, 40, 7)).toBe(true);
     // A new login's index forgets the old state.
@@ -139,31 +144,111 @@ describe("fog", () => {
     expect(m.wanted(7, 0, 0, 63, 31, 1000)).toHaveLength(2);
     expect(m.retryIn(1000)).toBe(REQUEST_RETRY_MS);
     // The server answers (0,0) only: it dropped the part of the request... or all of it.
-    m.applySectors([
-      {
-        z: 7,
-        sector: sectorId(0, 0),
-        explored: bits([0, 0]),
-        palette: [],
-        tiles: new Uint8Array(),
-      },
-    ]);
+    m.applySectors(
+      [
+        {
+          z: 7,
+          sector: sectorId(0, 0),
+          explored: bits([0, 0]),
+          palette: [],
+          tiles: new Uint8Array(),
+        },
+      ],
+      true,
+    );
     expect(m.wanted(7, 0, 0, 63, 31, 1000 + REQUEST_RETRY_MS - 1)).toEqual([]);
     expect(m.retryIn(1000 + REQUEST_RETRY_MS - 1)).toBe(1);
     expect(m.wanted(7, 0, 0, 63, 31, 1000 + REQUEST_RETRY_MS)).toEqual([sectorId(1, 0)]);
     // Out of view and past its wait: no timer spins for it.
     expect(m.retryIn(1000 + 3 * REQUEST_RETRY_MS)).toBeUndefined();
-    m.applySectors([
-      {
-        z: 7,
-        sector: sectorId(1, 0),
-        explored: bits([0, 0]),
-        palette: [],
-        tiles: new Uint8Array(),
-      },
-    ]);
+    m.applySectors(
+      [
+        {
+          z: 7,
+          sector: sectorId(1, 0),
+          explored: bits([0, 0]),
+          palette: [],
+          tiles: new Uint8Array(),
+        },
+      ],
+      true,
+    );
     expect(m.retryIn(0)).toBeUndefined();
     expect(m.wanted(7, 0, 0, 63, 31, 1e9)).toEqual([]);
+  });
+});
+
+describe("deltas and answers", () => {
+  const delta = (sx: number, sy: number, ...tiles: [number, number][]) => ({
+    z: 7,
+    sector: sectorId(sx, sy),
+    explored: bits(...tiles),
+    palette: [],
+    tiles: new Uint8Array(),
+  });
+  it("still asks for a sector that only came in a delta", () => {
+    const m = new MinimapState();
+    // Explored in an earlier login; the minimap is folded, so nothing was asked.
+    m.applyIndex([{ z: 7, sectors: [sectorId(0, 0)] }]);
+    // Walking sends deltas: of the indexed sector and of a new one.
+    m.applySectors([delta(0, 0, [1, 1]), delta(1, 0, [0, 0])], false);
+    expect(m.isExplored(1, 1, 7)).toBe(true);
+    // The minimap opens: both are asked for (the old tiles of (0,0) are still unknown).
+    expect(m.wanted(7, 0, 0, 63, 31, 0).sort()).toEqual([sectorId(0, 0), sectorId(1, 0)].sort());
+  });
+  it("a delta that overtakes the answer does not settle the request", () => {
+    const m = new MinimapState();
+    m.applyIndex([{ z: 7, sectors: [sectorId(0, 0)] }]);
+    expect(m.wanted(7, 0, 0, 31, 31, 0)).toEqual([sectorId(0, 0)]);
+    m.applySectors([delta(0, 0, [1, 1])], false);
+    // Still in flight: the server dropped the request, so it is asked again after the wait.
+    expect(m.wanted(7, 0, 0, 31, 31, REQUEST_RETRY_MS - 1)).toEqual([]);
+    expect(m.wanted(7, 0, 0, 31, 31, REQUEST_RETRY_MS)).toEqual([sectorId(0, 0)]);
+    m.applySectors([delta(0, 0, [1, 1])], true);
+    expect(m.wanted(7, 0, 0, 31, 31, 1e9)).toEqual([]);
+  });
+});
+
+describe("remembered colours", () => {
+  it("keeps the colour item of a tile it was sent, whatever the map holds later", () => {
+    const m = new MinimapState();
+    const v0 = m.version;
+    m.noteTile(100, 200, 7, 5);
+    expect(m.version).toBeGreaterThan(v0);
+    expect(m.item(100, 200, 7)).toBe(5);
+    expect(m.item(101, 200, 7)).toBe(0);
+    expect(m.item(100, 200, 8)).toBe(0);
+    // The same item again changes nothing (no repaint); a tile with nothing keeps the last.
+    const v1 = m.version;
+    m.noteTile(100, 200, 7, 5);
+    m.noteTile(100, 200, 7, 0);
+    expect(m.version).toBe(v1);
+    expect(m.item(100, 200, 7)).toBe(5);
+    // A door that opened: the newer stack wins.
+    m.noteTile(100, 200, 7, 6);
+    expect(m.item(100, 200, 7)).toBe(6);
+  });
+  it("the answer's item wins over the noted one, and only where it gives one", () => {
+    const m = new MinimapState();
+    m.noteTile(100, 200, 7, 5); // local (4,8) of sector (3,6)
+    m.noteTile(101, 200, 7, 5);
+    const tiles = new Uint8Array(1024);
+    tiles[8 * 32 + 4] = 2;
+    m.applySectors(
+      [{ z: 7, sector: sectorId(3, 6), explored: bits([4, 8]), palette: [41, 42], tiles }],
+      true,
+    );
+    expect(m.item(100, 200, 7)).toBe(42);
+    expect(m.item(101, 200, 7)).toBe(5); // explored after the answer's snapshot: kept
+    m.noteTile(100, 200, 7, 5);
+    m.noteTile(101, 200, 7, 7);
+    expect(m.item(100, 200, 7)).toBe(42);
+    expect(m.item(101, 200, 7)).toBe(7);
+    // A new login's index forgets what was explored, not the map's colours (the login's
+    // first view arrives before it).
+    m.applyIndex([]);
+    expect(m.isExplored(100, 200, 7)).toBe(false);
+    expect(m.item(101, 200, 7)).toBe(7);
   });
 });
 
@@ -247,17 +332,5 @@ describe("cardinal labels", () => {
       "client.minimap.south",
       "client.minimap.west",
     ]);
-  });
-});
-
-describe("tileColourItem", () => {
-  const items: Record<number, { blocks: boolean }> = { 1: { blocks: false }, 4: { blocks: false } };
-  const item = (id: number) => items[id] as never;
-  it("takes the server's colour over the client's stack, the stack without one", () => {
-    // A blocking tile whose top item is not in data/: the server colours it by that item
-    // (its map flags), the client's stack alone says ground.
-    expect(tileColourItem([1, 4], item, 4)).toBe(4);
-    expect(tileColourItem([1, 4], item, 0)).toBe(1);
-    expect(tileColourItem(undefined, item, 0)).toBe(0);
   });
 });

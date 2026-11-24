@@ -1,9 +1,12 @@
 package session_test
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -231,7 +234,7 @@ func TestMinimapRequestSendsOnlyExploredTiles(t *testing.T) {
 	if n := len(minimapSectors(cl.take())); n != 0 {
 		t.Fatalf("another floor answered %d sectors", n)
 	}
-	// Budget: 64 sectors at once; the request over it is dropped.
+	// Budget: 32 sectors at once; the request over it is dropped.
 	ids := make([]uint32, 16)
 	for i := range ids {
 		ids[i] = sectorID(i, 1)
@@ -242,8 +245,19 @@ func TestMinimapRequestSendsOnlyExploredTiles(t *testing.T) {
 	}
 	h.sim.Step()
 	answered = len(find(cl.take(), (*pb.ServerMessage).GetMinimapSectors))
-	if answered != 4 { // the budget refilled to its cap of 64 since the first request: four of 16
+	if answered != 2 { // the budget refilled to its cap of 32 since the first request: two of 16
 		t.Fatalf("answered %d requests of 16 sectors in a burst", answered)
+	}
+	// Refill: 32 sectors a second exactly, also for a client asking on every tick (1.6 a
+	// tick: the fraction is carried, not rounded away into 20 a second).
+	two := 0
+	for range 20 {
+		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_MinimapRequest{MinimapRequest: &pb.MinimapRequest{Z: 7, Sectors: ids[:2]}}})
+		h.sim.Step()
+		two += len(find(cl.take(), (*pb.ServerMessage).GetMinimapSectors))
+	}
+	if two != 16 {
+		t.Fatalf("20 ticks of 2-sector requests on an empty budget: %d answered, want 16 (32 sectors a second)", two)
 	}
 	// Too many in one request: dropped.
 	h.sim.RunTicks(200)
@@ -314,5 +328,190 @@ func checkHint(t *testing.T, h *pb.ObjectiveHint, step string, x, y, z int) {
 	}
 	if d := math.Hypot(float64(int(c.GetX())-x), float64(int(c.GetY())-y)); d > float64(h.GetRadius()) {
 		t.Fatalf("target %d,%d outside the hint %v", x, y, h)
+	}
+}
+
+// An answer says it is one (the client stops asking for its sectors); a delta does not,
+// so a sector that only came in deltas is still asked for.
+func TestMinimapAnswersAreMarkedAndDeltasAreNot(t *testing.T) {
+	h := minimapHarness(t)
+	cl, _ := h.join("Marker", at(14, 4))
+	cl.take()
+	h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_MinimapRequest{MinimapRequest: &pb.MinimapRequest{Z: 7, Sectors: []uint32{sectorID(0, 0)}}}})
+	h.sim.Step()
+	if ms := find(cl.take(), (*pb.ServerMessage).GetMinimapSectors); len(ms) != 1 || !ms[0].GetAnswer() {
+		t.Fatalf("answer: %v", ms)
+	}
+	for range 4 {
+		h.input(cl, walk(pb.Direction_DIRECTION_EAST))
+	}
+	h.sim.RunTicks(60)
+	ms := find(cl.take(), (*pb.ServerMessage).GetMinimapSectors)
+	if len(ms) == 0 {
+		t.Fatal("no delta")
+	}
+	for _, m := range ms {
+		if m.GetAnswer() {
+			t.Fatal("a delta says it answers a request")
+		}
+	}
+}
+
+// hintQuests are one-step quests for the places a hint is derived from: a zone, a
+// hint_area, a monster's spawns and a point on the map's corner.
+const hintQuests = `
+id: zone
+name: quest.zone.name
+steps:
+  - { id: go, description: quest.zone.go, complete_when: { reach: { zone: yard } } }
+rewards:
+  - { xp: 1 }
+---
+id: area
+name: quest.area.name
+steps:
+  - { id: bring, description: quest.area.bring, complete_when: { has_item: { item: rope, count: 1 } }, hint_area: { x: 9, y: 6, z: 8, radius: 2 } }
+rewards:
+  - { xp: 1 }
+---
+id: hunt
+name: quest.hunt.name
+steps:
+  - { id: cull, description: quest.hunt.cull, complete_when: { kill: { monster: dummy, count: 3 } } }
+rewards:
+  - { xp: 1 }
+---
+id: corner
+name: quest.corner.name
+steps:
+  - { id: go, description: quest.corner.go, complete_when: { reach: { x: 0, y: 0, z: 8, radius: 1 } } }
+rewards:
+  - { xp: 1 }
+---
+id: anywhere
+name: quest.anywhere.name
+steps:
+  - { id: bring, description: quest.anywhere.bring, complete_when: { has_item: { item: rope, count: 1 } } }
+rewards:
+  - { xp: 1 }
+`
+
+// hintHarness is reachHarness plus hintQuests and a harmless monster with a spawn on each
+// floor: (12,3) on 7 and (2,6) on 8, radius 1.
+func hintHarness(t *testing.T) *harness {
+	t.Helper()
+	return reachHarness(t, func(c *session.Config) {
+		for _, doc := range strings.Split(hintQuests, "\n---\n") {
+			q, err := content.ParseQuest([]byte(doc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Quests[q.ID] = q
+		}
+		c.Monsters = content.Monsters{"dummy": {ID: "dummy", Health: 50, Speed: 100, Behavior: content.MonsterBehavior{TargetDistance: 1}}}
+		c.Map.Islands()[0].Spawns = []world.Spawn{
+			{ID: "up", Center: at3(12, 3, 7), Radius: 1, RespawnSeconds: 600, Monsters: []world.SpawnMonster{{Monster: "dummy", Count: 1}}},
+			{ID: "down", Center: at3(2, 6, 8), Radius: 1, RespawnSeconds: 600, Monsters: []world.SpawnMonster{{Monster: "dummy", Count: 1}}},
+		}
+	})
+}
+
+// trackOf starts quest id for p, tracks it and returns the one hint that answers.
+func trackOf(t *testing.T, h *harness, cl *fakeClient, p *session.Player, id string) *pb.ObjectiveHint {
+	t.Helper()
+	h.sim.Command(gameFunc(func() {
+		if !h.w.StartQuestForTest(p, id) {
+			t.Errorf("quest %s did not start", id)
+		}
+	}))
+	h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_TrackQuest{TrackQuest: &pb.TrackQuest{QuestId: id}}})
+	h.sim.Step()
+	hs := objectiveHints(cl.take())
+	if len(hs) != 1 {
+		t.Fatalf("tracking %s: %d hints", id, len(hs))
+	}
+	return hs[0]
+}
+
+// checkArea checks hint h: quest and step, the floor, never centred on the target x, y and
+// the whole target area (tr tiles around it) inside the circle.
+func checkArea(t *testing.T, h *pb.ObjectiveHint, questID, step string, x, y, z, tr int) {
+	t.Helper()
+	c := h.GetCenter()
+	if h.GetQuestId() != questID || h.GetStepId() != step || c == nil || int(c.GetZ()) != z {
+		t.Fatalf("hint %v, want %s/%s on floor %d", h, questID, step, z)
+	}
+	if int(c.GetX()) == x && int(c.GetY()) == y {
+		t.Fatalf("the hint of %s is the exact target %d,%d", questID, x, y)
+	}
+	for _, k := range [][2]int{{-tr, -tr}, {tr, -tr}, {-tr, tr}, {tr, tr}} {
+		if d := math.Hypot(float64(int(c.GetX())-x-k[0]), float64(int(c.GetY())-y-k[1])); d > float64(h.GetRadius())+1e-9 {
+			t.Fatalf("%s: corner %v of the target %d,%d outside the hint %v", questID, k, x, y, h)
+		}
+	}
+}
+
+// The place of a step: a zone's bounding box, the YAML's hint_area (another floor), the
+// nearest spawn of the monster to kill; a step done anywhere has none.
+func TestHintPlaces(t *testing.T) {
+	h := hintHarness(t)
+	cl, p := h.join("Guide", at(5, 3))
+	cl.take()
+	// The zone yard is 11..12 x 4 on floor 7: centred on (11,4), 1 tile around.
+	checkArea(t, trackOf(t, h, cl, p, "zone"), "zone", "go", 11, 4, 7, 1)
+	checkArea(t, trackOf(t, h, cl, p, "area"), "area", "bring", 9, 6, 8, 2)
+	if hint := trackOf(t, h, cl, p, "anywhere"); hint.GetQuestId() != "anywhere" || hint.GetCenter() != nil {
+		t.Fatalf("a step done anywhere has a place: %v", hint)
+	}
+	// The spawn of its own floor first, though the one downstairs is nearer in x, y.
+	checkArea(t, trackOf(t, h, cl, p, "hunt"), "hunt", "cull", 12, 3, 7, 1)
+
+	// Taking the stairs down: the nearest spawn is now the one of floor 8, and the hint
+	// follows without a new TrackQuest.
+	evs := h.step(cl, N)
+	if p.Pos() != at3(5, 3, 8) {
+		t.Fatalf("did not take the stairs: %v", p.Pos())
+	}
+	hs := objectiveHints(evs)
+	if len(hs) != 1 {
+		t.Fatalf("after the stairs: %d hints", len(hs))
+	}
+	checkArea(t, hs[0], "hunt", "cull", 2, 6, 8, 1)
+	// Walking on the same floor sends nothing more.
+	if hs := objectiveHints(h.step(cl, E)); len(hs) != 0 {
+		t.Fatalf("a step on the same floor sent %d hints", len(hs))
+	}
+}
+
+// A target on the map's corner: the estimate that would fall off the map is mirrored, not
+// clamped onto the target itself, for every character.
+func TestHintOnTheMapCornerIsNeverTheTarget(t *testing.T) {
+	h := hintHarness(t)
+	for i := range 24 {
+		cl, p := h.join(fmt.Sprintf("Edge%d", i), at(1+i%12, 5+i/12))
+		cl.take()
+		checkArea(t, trackOf(t, h, cl, p, "corner"), "corner", "go", 0, 0, 8, 1)
+	}
+}
+
+// An untrack is always answered, also when a quest of the player changes in the same tick
+// (the change must not take the pending answer away).
+func TestUntrackIsAnsweredWhenAQuestChangesInTheSameTick(t *testing.T) {
+	h := hintHarness(t)
+	cl, p := h.join("Fickle", at(1, 4))
+	cl.take()
+	trackOf(t, h, cl, p, "zone")
+	h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_TrackQuest{TrackQuest: &pb.TrackQuest{}}})
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "area") }))
+	h.sim.Step()
+	hs := objectiveHints(cl.take())
+	if len(hs) != 1 || hs[0].GetQuestId() != "" {
+		t.Fatalf("untrack with a quest change in its tick: %v", hs)
+	}
+	// And nothing is left pending: the next quest change sends no hint.
+	h.sim.Command(gameFunc(func() { h.w.StartQuestForTest(p, "anywhere") }))
+	h.sim.Step()
+	if hs := objectiveHints(cl.take()); len(hs) != 0 {
+		t.Fatalf("a hint with nothing tracked: %v", hs)
 	}
 }

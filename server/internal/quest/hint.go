@@ -7,9 +7,11 @@ import (
 
 // Objective hints (docs/02 "Minimapa"): the minimap of a player tracking a quest shows an
 // estimate of where its current step happens, a circle around a point near the target,
-// never the target itself. The estimate is deterministic for a character, quest and step
-// (it does not move every time it is sent, which would let a player average it away), and
-// the target's own area always lies inside the circle.
+// never the target itself. The estimate is deterministic for a character, quest, step and
+// target (it does not move every time it is sent, which would let a player average it
+// away; another target of the same step, as the next spawn of a kill, is moved another
+// way, so knowing one does not give the others), and the target's own area always lies
+// inside the circle.
 
 // Hint limits, in tiles.
 const (
@@ -61,8 +63,9 @@ func FuzzHint(x, y, targetRadius int, seed uint64) Hint {
 	return Hint{X: x + dx, Y: y + dy, Radius: r}
 }
 
-// HintSeed is the seed of a character's hint for one step of a quest.
-func HintSeed(character int64, questID, stepID string) uint64 {
+// HintSeed is the seed of a character's hint for one step of a quest whose target is
+// centred at x, y on floor z.
+func HintSeed(character int64, questID, stepID string, x, y, z int) uint64 {
 	h := fnv.New64a()
 	var b [8]byte
 	for i := range b {
@@ -72,5 +75,6 @@ func HintSeed(character int64, questID, stepID string) uint64 {
 	_, _ = h.Write([]byte(questID))
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(stepID))
+	_, _ = h.Write([]byte{0, byte(x), byte(x >> 8), byte(y), byte(y >> 8), byte(z)})
 	return h.Sum64()
 }

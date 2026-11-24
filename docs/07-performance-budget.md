@@ -675,9 +675,14 @@ sigue al personaje a otro dispositivo y el cliente nunca recibe casillas que no 
   sectores (4,5 KB).
 - **Tick:** cada paso marca la ventana de 31x21 del piso propio (`Reveal`: un OR de 4 bytes
   por fila y sector, 21 filas de 2 o 3 sectores; sin asignar sobre lo ya explorado). Un
-  `MinimapRequest` lee hasta 1024 casillas por sector; el presupuesto (64 sectores de
+  `MinimapRequest` lee hasta 1024 casillas por sector; el presupuesto (32 sectores de
   golpe, 32 por segundo por jugador) lo acota, y solo se pide al entrar o al arrastrar el
-  minimapa.
+  minimapa. **Medido** (`BenchmarkMinimapRequestBurst`, i7-13650HX, 2026-11-24): el
+  presupuesto entero en un tick, 32 sectores con todas sus casillas exploradas (32 768
+  lecturas de casilla y pila), cuesta ~0,7 ms, 43 KB y 152 asignaciones; sostenido, lo
+  mismo por segundo. Es el peor tick que un cliente puede forzar: 7 % del tick de 10 ms
+  de presupuesto. La ráfaga era de 64 (1,4 ms) y se bajó a 32: el minimapa más ancho (zoom
+  1) muestra 36 sectores y los pide de a 16 a medida que llegan las respuestas.
 - **Red:** al entrar, el índice (4 B por sector explorado) y lo que el minimapa pide: ~1,1
   KB por sector (bitset y 1024 índices, que comprimen muy bien). Explorando, como mucho un
   delta por segundo con 128 B por sector que ganó bits (uno o dos caminando en línea recta:
@@ -688,11 +693,16 @@ sigue al personaje a otro dispositivo y el cliente nunca recibe casillas que no 
   snapshot (`World.Saved`), sus sectores dejan de escribirse hasta que vuelvan a ganar
   bits (`explore.Map.Snapshot` y `Saved`): un login largo no reescribe en cada save todo lo
   que recorrió.
-- **Pista del objetivo:** se calcula solo cuando cambia la quest seguida (`flushHint`); el
-  spawn más cercano de un `kill` recorre los spawns del mapa una vez.
+- **Pista del objetivo:** se calcula solo cuando cambia la quest seguida o el jugador se
+  reubica (`flushHint`, `hintMoved`); el spawn más cercano de un `kill` recorre los spawns
+  del mapa una vez. Nunca por paso caminado.
 - **Cliente:** el terreno es un canvas de 160x160 px que se pinta solo cuando cambia lo
   explorado, el centro o el zoom (no en cada frame). Las claves de sector son números (no
-  strings) y `revealView` busca el sector una vez por fila y sector, no por casilla.
+  strings) y `revealView` busca el sector una vez por fila y sector, no por casilla. El
+  item de color de cada casilla recibida se guarda en `MinimapState` (un `Uint16Array` de
+  2 KB por sector visto, más 128 B de los que vinieron del servidor): pintar ya no lee el
+  mapa de `WorldState` (a zoom 1 eran 25 600 `tile()` con su clave de chunk en string por
+  repintado), solo un `Map` de claves numéricas.
 
 ### Aspecto y equipo visible (lote 13, 2026-11-19)
 Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el

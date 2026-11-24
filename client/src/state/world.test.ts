@@ -8,6 +8,10 @@ import {
   TileSchema,
   ItemStackSchema,
   MarketUpdateSchema,
+  MapSliceSchema,
+  MinimapIndexSchema,
+  MinimapSectorSchema,
+  MinimapSectorsSchema,
   ActiveConditionSchema,
   PlayerConditionsSchema,
   PlayerStatsSchema,
@@ -800,5 +804,107 @@ describe("market window (T5.3)", () => {
     expect(w.market).toBeUndefined();
     w.apply(update(false, false, 0), 30); // the server closes it too
     expect(w.market).toBeUndefined();
+  });
+});
+
+describe('minimap colours (docs/02 "Minimapa")', () => {
+  const explore = (w: WorldState): void => {
+    w.minimap.revealView(100, 200, 7, w.view.width, w.view.height);
+  };
+  const coloured = (w: WorldState): void => {
+    expect(w.minimap.isExplored(101, 201, 7)).toBe(true);
+    expect(w.minimap.item(100, 200, 7)).toBe(1); // grass
+    expect(w.minimap.item(102, 200, 7)).toBe(2); // sand
+    expect(w.minimap.item(101, 201, 7)).toBe(4); // the crate over its grass
+    expect(w.minimap.item(103, 202, 7)).toBe(0); // no tile
+  };
+  it("what was explored keeps its colour after a FullMapView (stairs, a teleport, dying)", () => {
+    const w = entered();
+    explore(w);
+    coloured(w);
+    const area = create(MapAreaSchema, {
+      x: 900,
+      y: 900,
+      width: 1,
+      height: 1,
+      palette: [tile(2)],
+      floors: [create(MapFloorSchema, { z: 8, tiles: [0] })],
+      creatures: [
+        create(CreatureSchema, {
+          id: 7,
+          kind: CreatureKind.PLAYER,
+          name: "Mira",
+          pos: { x: 900, y: 900, z: 8 },
+          speed: 200,
+        }),
+      ],
+    });
+    w.apply(
+      { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area, walkEpoch: 2 } },
+      0,
+    );
+    expect(w.tile(101, 201, 7)).toBeUndefined(); // the map itself is gone
+    coloured(w);
+    expect(w.minimap.item(900, 900, 8)).toBe(2);
+  });
+  it("the login's first view keeps its colours: the MinimapIndex comes after it", () => {
+    const w = entered();
+    w.apply({ case: "minimapIndex", value: create(MinimapIndexSchema, { floors: [] }) }, 0);
+    explore(w);
+    coloured(w);
+  });
+  it("and after walking away from it (prune)", () => {
+    const w = entered();
+    explore(w);
+    // Mira is now 300 tiles east; the next slice forgets the chunks far from her.
+    const far = create(MapAreaSchema, {
+      x: 400,
+      y: 200,
+      width: 1,
+      height: 1,
+      palette: [tile(1)],
+      floors: [create(MapFloorSchema, { z: 7, tiles: [0] })],
+      creatures: [
+        create(CreatureSchema, {
+          id: 7,
+          kind: CreatureKind.PLAYER,
+          name: "Mira",
+          pos: { x: 400, y: 200, z: 7 },
+          speed: 200,
+        }),
+      ],
+    });
+    w.apply({ case: "mapSlice", value: create(MapSliceSchema, { area: far }) }, 0);
+    expect(w.self?.pos.x).toBe(400);
+    expect(w.tile(101, 201, 7)).toBeUndefined();
+    coloured(w);
+  });
+  it("a tile update in view changes the remembered colour (a door, a felled tree)", () => {
+    const w = entered();
+    w.apply(
+      {
+        case: "tileUpdate",
+        value: {
+          $typeName: "game.v1.TileUpdate",
+          pos: { $typeName: "game.v1.Position", x: 101, y: 201, z: 7 },
+          tile: tile(1),
+        },
+      },
+      0,
+    );
+    expect(w.minimap.item(101, 201, 7)).toBe(1);
+  });
+  it("only an answer stops the asking: MinimapSectors.answer reaches the state", () => {
+    const w = entered();
+    const sectors = [
+      create(MinimapSectorSchema, { z: 7, sector: 5, explored: new Uint8Array(128).fill(1) }),
+    ];
+    w.apply({ case: "minimapSectors", value: create(MinimapSectorsSchema, { sectors }) }, 0);
+    expect(w.minimap.wanted(7, 0, 160, 31, 191, 0)).toEqual([5]);
+    w.apply(
+      { case: "minimapSectors", value: create(MinimapSectorsSchema, { sectors, answer: true }) },
+      0,
+    );
+    expect(w.minimap.wanted(7, 0, 160, 31, 191, 1e9)).toEqual([]);
   });
 });

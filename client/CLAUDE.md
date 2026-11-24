@@ -2011,5 +2011,9 @@ de estados y placa del nombre").
   la versión, el centro o el zoom, y pide los sectores que le faltan (`wanted`,
   `Game.minimapRequest`). El color de un item es `atlas.json` `minimap`
   (`GameCanvas.itemColor`). Nunca pintes una casilla que `isExplored` no da.
+- El item de color de una casilla sale de `MinimapState.item`, nunca de `WorldState.tile`:
+  `WorldState.setTile` lo anota (`noteTile`) al recibir cada casilla, porque el mapa se
+  olvida lejos del jugador y en cada `FullMapView`. Solo `MinimapSectors.answer` da un
+  sector por pedido; un delta no.
 - Seguir una quest: `Game.trackQuest` (botón `quest-track` del diario), recordado por
   personaje en `localStorage` `rpg.track` y reenviado tras cada `Welcome`.

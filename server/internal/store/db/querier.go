@@ -280,6 +280,10 @@ type Querier interface {
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
 	// A snapshot upserts the sectors that gained bits during the login: a newer copy of a
 	// sector is a superset of the saved one, so it replaces it.
+	// INVARIANT: the snapshots of one character are written in the order they were taken
+	// (the persistence queue is FIFO per character and a retry takes the newest one). An
+	// older snapshot written after a newer one would drop explored bits: if that order ever
+	// stops holding, this must OR the bits instead of replacing them.
 	SaveCharacterExplored(ctx context.Context, arg SaveCharacterExploredParams) error
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
 	// Upserts every skill of a snapshot in one statement (parallel arrays).

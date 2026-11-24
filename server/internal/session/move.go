@@ -519,6 +519,7 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.sendFullView(p)
 	w.appearToObservers(p)
 	p.exploreView() // the minimap (minimap.go)
+	p.hintMoved()   // the tracked step's nearest place may be another one from here
 	w.checkReach(p) // a teleport, a portal, a boat or the temple count for a reach step
 	w.sigilStep(p)
 }

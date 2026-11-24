@@ -1142,12 +1142,15 @@ message MinimapFloorIndex {
   repeated uint32 sectors = 2;
 }
 
-// MinimapSectors carries explored sectors: the answer to a MinimapRequest (palette and
-// tiles set) and, at most once a second while the player explores, the sectors that
-// gained explored tiles (only explored set: the client colours those tiles from the map
-// it already has, since they are in its view).
+// MinimapSectors carries explored sectors: the answer to a MinimapRequest (answer set;
+// palette and tiles for what is explored) and, at most once a second while the player
+// explores, the sectors that gained explored tiles (answer unset, only explored: the
+// client colours those tiles from the map it was sent, since they are in its view).
 message MinimapSectors {
   repeated MinimapSector sectors = 1;
+  // answer: these sectors answer a MinimapRequest. The client stops asking for them; a
+  // delta (false) leaves a sector it never asked for still to ask.
+  bool answer = 2;
 }
 
 // MinimapSector is one sector (32x32 tiles) of floor z. explored is its bitset: 128 bytes,

@@ -91,7 +91,7 @@ import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 import { CLASSIC_VIEW, serverView } from "./view.ts";
 import type { ViewTiles } from "./view.ts";
-import { MinimapState } from "./minimap.ts";
+import { MinimapState, colourItem } from "./minimap.ts";
 
 export interface Walk {
   from: Pos;
@@ -564,6 +564,7 @@ export class WorldState implements TileSource {
   quests: QuestLogView | undefined;
   /** The minimap (docs/02 "Minimapa"): explored tiles, server colours and the tracked hint. */
   readonly minimap = new MinimapState();
+  private readonly itemOf = (id: number): ItemDef | undefined => this.content.items[id];
   /** The server's clock minus the client's at the Welcome (ms): a task's countdown. */
   clockOffset = 0;
   /** The player's own active conditions (T3.2), in the server's order. */
@@ -632,7 +633,7 @@ export class WorldState implements TileSource {
   }
 
   item(id: number): ItemDef | undefined {
-    return this.content.items[id];
+    return this.itemOf(id);
   }
 
   /** Item IDs of a known tile (ground first), or undefined. */
@@ -917,7 +918,7 @@ export class WorldState implements TileSource {
         this.minimap.applyIndex(msg.value.floors);
         break;
       case "minimapSectors":
-        this.minimap.applySectors(msg.value.sectors);
+        this.minimap.applySectors(msg.value.sectors, msg.value.answer);
         break;
       case "objectiveHint": {
         const h = msg.value;
@@ -1245,6 +1246,8 @@ export class WorldState implements TileSource {
 
   private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
     const items = stack?.map((s) => s.itemId);
+    // The minimap remembers the tile's colour past prune() and the next FullMapView.
+    if (items) this.minimap.noteTile(x, y, z, colourItem(items, this.itemOf));
     const cx = Math.floor(x / CHUNK_TILES);
     const cy = Math.floor(y / CHUNK_TILES);
     const key = chunkKey(z, cx, cy);

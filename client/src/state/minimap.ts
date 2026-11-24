@@ -6,8 +6,10 @@
 // answers and deltas); the client also explores its own view as it walks, with the same
 // rule as the server (the 31x21 window on its own floor), so the fog opens with the step
 // and not a second later. A tile is coloured by what a MinimapSectors answer said or else
-// by what the client has of it right now (the map it was sent), and only when explored:
-// an unexplored tile is black whatever is known of it.
+// by the map the client was sent: the colour item of every tile it receives is remembered
+// here (noteTile), because WorldState forgets the map far from the player and on every
+// floor change, and what was explored must stay coloured. Only explored tiles are drawn:
+// an unexplored one is black whatever is known of it.
 import type { ItemDef } from "../content-types.ts";
 
 /** Side of a sector in tiles (the server's explore.SectorSize, a chunk of world/). */
@@ -48,10 +50,13 @@ export interface ObjectiveHintView {
 
 export class MinimapState {
   private readonly explored = new Map<number, Uint8Array>();
-  private readonly colours = new Map<number, { palette: readonly number[]; tiles: Uint8Array }>();
+  /** The colour item of each tile of a sector (0: none known), row by row. */
+  private readonly colours = new Map<number, Uint16Array>();
+  /** The tiles of a sector whose colour item came in an answer (a bitset like explored). */
+  private readonly given = new Map<number, Uint8Array>();
   /** Sectors the server has something of, per floor (MinimapIndex and later sectors). */
   private readonly indexed = new Map<number, Set<number>>();
-  /** Sectors answered since the last index: never asked again. */
+  /** Sectors answered (MinimapSectors.answer) since the last index: never asked again. */
   private readonly asked = new Set<number>();
   /**
    * Sectors asked for and not answered yet, with when (ms) the request went. The server
@@ -66,10 +71,13 @@ export class MinimapState {
   /** The quest the server says is tracked (ObjectiveHint.quest_id; "": none). */
   tracked = "";
 
-  /** A new login's MinimapIndex: replaces what was known. */
+  /**
+   * A new login's MinimapIndex: replaces what was known of what the character explored.
+   * The remembered colour items stay: they are the map (not the character's), and the
+   * login's first FullMapView comes before the index.
+   */
   applyIndex(floors: readonly { z: number; sectors: readonly number[] }[]): void {
     this.explored.clear();
-    this.colours.clear();
     this.indexed.clear();
     this.asked.clear();
     this.inFlight.clear();
@@ -78,25 +86,66 @@ export class MinimapState {
   }
 
   /**
-   * A MinimapSectors message: answers (with palette and tiles) and deltas (explored only).
-   * Bits are ORed: what the client explored itself is never lost.
+   * A MinimapSectors message: an answer to a MinimapRequest (answer: with palette and
+   * tiles) or a delta (explored only). Bits are ORed: what the client explored itself is
+   * never lost. Only an answer settles a sector: one that came in a delta alone (the
+   * minimap was folded, or the delta overtook the request) still has what the character
+   * explored in earlier logins to ask for.
    */
-  applySectors(sectors: readonly SectorData[]): void {
+  applySectors(sectors: readonly SectorData[], answer: boolean): void {
     for (const s of sectors) {
       const sx = s.sector >>> 16;
       const sy = s.sector & 0xffff;
       const k = keyOf(s.z, sx, sy);
-      this.asked.add(k);
-      this.inFlight.delete(k);
+      if (answer) {
+        this.asked.add(k);
+        this.inFlight.delete(k);
+      }
       if (s.explored.length === SECTOR_BYTES) {
         this.orInto(k, s.explored);
         let set = this.indexed.get(s.z);
         if (!set) this.indexed.set(s.z, (set = new Set()));
         set.add(sectorId(sx, sy));
       }
-      if (s.tiles.length === SECTOR * SECTOR && s.palette.length > 0)
-        this.colours.set(k, { palette: [...s.palette], tiles: s.tiles.slice() });
+      if (s.tiles.length === SECTOR * SECTOR && s.palette.length > 0) {
+        // The server's item wins over what the client noted (it knows the map's flags).
+        const items = this.coloursOf(k);
+        let given = this.given.get(k);
+        if (!given) this.given.set(k, (given = new Uint8Array(SECTOR_BYTES)));
+        for (let i = 0; i < SECTOR * SECTOR; i++) {
+          const pi = s.tiles[i] ?? 0;
+          const item = pi === 0 ? 0 : (s.palette[pi - 1] ?? 0);
+          if (item === 0) continue;
+          items[i] = item;
+          given[i >> 3] = (given[i >> 3] ?? 0) | (1 << (i & 7));
+        }
+      }
     }
+    this.version++;
+  }
+
+  private coloursOf(k: number): Uint16Array {
+    let c = this.colours.get(k);
+    if (!c) this.colours.set(k, (c = new Uint16Array(SECTOR * SECTOR)));
+    return c;
+  }
+
+  /**
+   * Remembers the colour item of tile x, y on floor z as the client was just sent it
+   * (colourItem of its stack; WorldState calls this for every tile it receives). The
+   * minimap keeps it after WorldState forgets the tile. An item an answer gave stays: the
+   * server knows the map's flags the client lacks (a blocking tile whose items are not in
+   * data/ shows its top item).
+   */
+  noteTile(x: number, y: number, z: number, item: number): void {
+    if (item === 0 || x < 0 || y < 0) return;
+    const k = keyOf(z, Math.floor(x / SECTOR), Math.floor(y / SECTOR));
+    const i = (y % SECTOR) * SECTOR + (x % SECTOR);
+    const given = this.given.get(k);
+    if (given && ((given[i >> 3] ?? 0) & (1 << (i & 7))) !== 0) return;
+    const items = this.coloursOf(k);
+    if (items[i] === item) return;
+    items[i] = item;
     this.version++;
   }
 
@@ -157,12 +206,14 @@ export class MinimapState {
     return ((s[i >> 3] ?? 0) & (1 << (i & 7))) !== 0;
   }
 
-  /** The colour item the server gave for tile x, y on floor z (0: none or not given). */
-  serverItem(x: number, y: number, z: number): number {
+  /**
+   * The item tile x, y on floor z is coloured by (0: none known): what an answer gave, else
+   * what the client was sent of it (noteTile), whether or not it still holds that map.
+   */
+  item(x: number, y: number, z: number): number {
+    if (x < 0 || y < 0) return 0;
     const c = this.colours.get(keyOf(z, Math.floor(x / SECTOR), Math.floor(y / SECTOR)));
-    if (!c) return 0;
-    const i = c.tiles[(y % SECTOR) * SECTOR + (x % SECTOR)] ?? 0;
-    return i === 0 ? 0 : (c.palette[i - 1] ?? 0);
+    return c ? (c[(y % SECTOR) * SECTOR + (x % SECTOR)] ?? 0) : 0;
   }
 
   /**
@@ -227,20 +278,6 @@ export function colourItem(
     if (item(id)?.blocks === true) return id;
   }
   return stack[0] ?? 0;
-}
-
-/**
- * The item tile x, y is coloured by: what the server's answer gave (its minimapItem, with
- * the map's flags the client lacks: a blocking tile whose items are not in data/ shows its
- * top item), else colourItem over the stack the client holds (a tile explored after the
- * answer, or never asked for).
- */
-export function tileColourItem(
-  stack: readonly number[] | undefined,
-  item: (id: number) => ItemDef | undefined,
-  server: number,
-): number {
-  return server !== 0 ? server : colourItem(stack, item);
 }
 
 /** "#rrggbb" to [r, g, b]; a malformed value is a dull grey. */
