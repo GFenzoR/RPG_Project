@@ -1517,6 +1517,32 @@ test("chat on the local and global channels, then switch the language", async ({
   // The chat floats over the map (docs/17 UI-10): its window.
   await page.locator('.gwin[data-window="chat"]').screenshot({ path: join(shots, "16-chat.png") });
 
+  // Windows resize from their four corners (docs/17 UI-5, the owner's request of
+  // 2026-11-23): dragging the chat's top left corner up and left moves its left and top and
+  // keeps its bottom right where it was. No move button is left in any title bar.
+  const chatWindow = page.locator('.gwin[data-window="chat"]');
+  await expect(page.locator(".gwin-move")).toHaveCount(0);
+  await expect(chatWindow.locator(".gwin-resize")).toHaveCount(4);
+  const before = await chatWindow.boundingBox();
+  const grip = await chatWindow.locator('.gwin-resize[data-corner="nw"]').boundingBox();
+  if (!before || !grip) throw new Error("no chat box");
+  const gripAt = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
+  await page.mouse.move(gripAt.x, gripAt.y);
+  await page.mouse.down();
+  await page.mouse.move(gripAt.x - 40, gripAt.y - 90, { steps: 8 });
+  await page.mouse.up();
+  const after = await chatWindow.boundingBox();
+  if (!after) throw new Error("no chat box");
+  // The bottom right stays (to the px); the top left moved (the magnet may take up to
+  // SNAP_PX of it, an edge of another window or of the screen).
+  expect(Math.abs(after.x + after.width - (before.x + before.width))).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.y + after.height - (before.y + before.height))).toBeLessThanOrEqual(1);
+  expect(before.x - after.x).toBeGreaterThanOrEqual(30);
+  expect(before.y - after.y).toBeGreaterThanOrEqual(80);
+  await expect(chatWindow).toHaveAttribute("data-sized", "");
+  await expect(page.locator("body")).not.toHaveClass(/resizing-window/);
+  await shot(page, "16b-chat-resized-top-left");
+
   // Switching the language (the Options window of the toolbar) translates every screen at
   // once, the running game included.
   await openWindow(page, "options");
