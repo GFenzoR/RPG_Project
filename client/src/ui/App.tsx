@@ -16,7 +16,7 @@ import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from 
 import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
 import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
-import { loadCameraShake } from "../state/ui-prefs.ts";
+import { loadCameraShake, loadChatBubbles } from "../state/ui-prefs.ts";
 import type { GameSettings } from "./GameView.tsx";
 import { LookPickers } from "./LookPickers.tsx";
 import { LookPreview } from "./LookPreview.tsx";
@@ -442,6 +442,9 @@ function GameScreen(props: {
   controls.current = props.settings?.controlsMode;
   const shake = useRef(props.settings?.cameraShake);
   shake.current = props.settings?.cameraShake;
+  // docs/17 UI-11: the speech bubbles, read by the canvas every frame.
+  const bubbles = useRef(props.settings?.chatBubbles);
+  bubbles.current = props.settings?.chatBubbles;
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -455,6 +458,7 @@ function GameScreen(props: {
       storage,
       controls: () => controls.current ?? loadControls(storage),
       cameraShake: () => shake.current ?? loadCameraShake(storage),
+      chatBubbles: () => bubbles.current ?? loadChatBubbles(storage),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),

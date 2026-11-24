@@ -1,5 +1,6 @@
-// Options → Interface (docs/17 UI-3, UI-9, UI-10): the interface scale (the bottom bar and the
-// windows), the text size, the camera shake on heavy hits and the chat's opacity. Without
+// Options → Interface (docs/17 UI-3, UI-9, UI-10, UI-11): the interface scale (the bottom bar
+// and the windows), the text size, the camera shake on heavy hits, the chat's opacity and
+// the speech bubbles over the heads. Without
 // hooks: the choices live in main.tsx, kept per device in localStorage (state/ui-prefs.ts).
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
@@ -16,10 +17,13 @@ export function InterfaceOptions(props: {
   shake: boolean;
   /** The chat background's opacity, percent (CHAT_OPACITY). */
   chatOpacity: number;
+  /** What creatures say shows over their heads (docs/17 UI-11). */
+  bubbles: boolean;
   onUiScale(v: number): void;
   onTextScale(v: number): void;
   onShake(on: boolean): void;
   onChatOpacity(v: number): void;
+  onBubbles(on: boolean): void;
 }): JSX.Element {
   const { t } = props;
   const select = (
@@ -76,6 +80,15 @@ export function InterfaceOptions(props: {
           onInput={(e) => props.onChatOpacity(Number(e.currentTarget.value))}
         />
         <output>{t("client.options.percent", { percent: props.chatOpacity })}</output>
+      </label>
+      <label class="check" title={t("client.options.chat_bubbles_hint")}>
+        <input
+          type="checkbox"
+          data-testid="chat-bubbles"
+          checked={props.bubbles}
+          onChange={(e) => props.onBubbles(e.currentTarget.checked)}
+        />
+        {t("client.options.chat_bubbles")}
       </label>
     </div>
   );

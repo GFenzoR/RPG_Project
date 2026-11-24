@@ -9,11 +9,13 @@ import {
   loadChatOpacity,
   saveChatOpacity,
   loadCameraShake,
+  loadChatBubbles,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   nearestScale,
   saveCameraShake,
+  saveChatBubbles,
   saveReducedMotion,
   saveTextScale,
   saveUiScale,
@@ -88,6 +90,22 @@ describe("interface scale, text size and camera shake (docs/17 UI-3, UI-9)", () 
     expect(loadCameraShake(s)).toBe(false);
     saveCameraShake(true, s);
     expect(loadCameraShake(s)).toBe(true);
+  });
+
+  it("remembers the speech bubbles over the heads, on by default (docs/17 UI-11)", () => {
+    const s = memory();
+    expect(loadChatBubbles(s)).toBe(true);
+    expect(loadChatBubbles(undefined)).toBe(true);
+    saveChatBubbles(false, s);
+    expect(loadChatBubbles(s)).toBe(false);
+    saveChatBubbles(true, s);
+    expect(loadChatBubbles(s)).toBe(true);
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(loadChatBubbles(broken)).toBe(true);
   });
 
   it("puts the scales on the page, and takes them off at 100 %", () => {

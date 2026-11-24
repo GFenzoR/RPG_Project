@@ -265,6 +265,7 @@ function Preview(props: { game: Game }): JSX.Element {
     setReducedMotion: () => {},
     uiScale,
     cameraShake: true,
+    chatBubbles: true,
     interfaceOptions: (
       <InterfaceOptions
         t={t}
@@ -272,10 +273,12 @@ function Preview(props: { game: Game }): JSX.Element {
         textScale={textScale}
         shake={true}
         chatOpacity={50}
+        bubbles={true}
         onUiScale={() => {}}
         onTextScale={() => {}}
         onShake={() => {}}
         onChatOpacity={() => {}}
+        onBubbles={() => {}}
       />
     ),
   };

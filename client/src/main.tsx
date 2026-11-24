@@ -20,11 +20,13 @@ import {
   applyChatOpacity,
   applyScales,
   loadCameraShake,
+  loadChatBubbles,
   loadChatOpacity,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   saveCameraShake,
+  saveChatBubbles,
   saveChatOpacity,
   saveReducedMotion,
   saveTextScale,
@@ -126,6 +128,8 @@ function Root(): JSX.Element {
   const [uiScale, setUiScale] = useState(() => loadUiScale(storage));
   const [textScale, setTextScale] = useState(() => loadTextScale(storage));
   const [shake, setShake] = useState(() => loadCameraShake(storage));
+  // docs/17 UI-11: the speech bubbles over the heads (Options → Interface).
+  const [bubbles, setBubbles] = useState(() => loadChatBubbles(storage));
   useEffect(() => {
     applyScales(document.documentElement, uiScale, textScale);
   }, [uiScale, textScale]);
@@ -166,6 +170,7 @@ function Root(): JSX.Element {
       textScale={textScale}
       shake={shake}
       chatOpacity={chatOpacity}
+      bubbles={bubbles}
       onUiScale={(v) => {
         saveUiScale(v, storage);
         setUiScale(v);
@@ -181,6 +186,10 @@ function Root(): JSX.Element {
       onChatOpacity={(v) => {
         saveChatOpacity(v, storage);
         setChatOpacity(v);
+      }}
+      onBubbles={(on) => {
+        saveChatBubbles(on, storage);
+        setBubbles(on);
       }}
     />
   );
@@ -222,6 +231,7 @@ function Root(): JSX.Element {
         },
         uiScale,
         cameraShake: shake,
+        chatBubbles: bubbles,
         interfaceOptions: interfaceOptions(),
       }}
       audio={audio}

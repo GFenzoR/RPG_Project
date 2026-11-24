@@ -137,6 +137,8 @@ export interface GameSettings {
   uiScale?: number | undefined;
   /** The camera shakes on a heavy hit (off with reduced motion whatever this says). */
   cameraShake?: boolean | undefined;
+  /** What creatures say shows over their heads (docs/17 UI-11). */
+  chatBubbles?: boolean | undefined;
 }
 
 /** What the screen shows before the first batch of the server. */

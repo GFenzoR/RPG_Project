@@ -47,6 +47,7 @@ export function motionReduced(root: HTMLElement | undefined): boolean {
 const SCALE_KEY = "rpg.ui-scale";
 const TEXT_KEY = "rpg.text-scale";
 const SHAKE_KEY = "rpg.shake";
+const BUBBLES_KEY = "rpg.chat-bubbles";
 
 /** The interface scales Options offers (the CSS zoom of the bottom bar and the windows). */
 export const UI_SCALES: readonly number[] = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
@@ -106,6 +107,21 @@ export function loadCameraShake(storage: Pick<Storage, "getItem"> | undefined): 
 
 export const saveCameraShake = (on: boolean, storage: Pick<Storage, "setItem"> | undefined): void =>
   write(storage, SHAKE_KEY, on ? "on" : "off");
+
+/**
+ * docs/17 UI-11: what creatures say on the local channels also shows over their heads.
+ * On unless turned off.
+ */
+export function loadChatBubbles(storage: Pick<Storage, "getItem"> | undefined): boolean {
+  try {
+    return storage?.getItem(BUBBLES_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export const saveChatBubbles = (on: boolean, storage: Pick<Storage, "setItem"> | undefined): void =>
+  write(storage, BUBBLES_KEY, on ? "on" : "off");
 
 /** Sets the interface scale and the text size on the page (client.css, windows.css). */
 export function applyScales(
