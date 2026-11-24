@@ -1823,6 +1823,33 @@ su cabeza, para que la conversación se sienta natural.
   flotantes y la ancla al nombre; `WorldState.takeSpeech` guarda lo dicho (hasta
   `SPEECH_QUEUE`, 16) hasta el frame siguiente. Hook E2E `__rpgClient.bubbles()`.
 
+### Minimapa (hecho, 2026-11-23, rama `feat/minimap`)
+Pedido del dueño: un minimapa como el de Tibia (la mecánica: explorar para verlo), con los
+puntos cardinales y la estimación del objetivo seguido (reglas en docs/02 "Minimapa").
+- **Dónde:** en escritorio, arriba a la derecha del mapa, bajo las ventanas; el inventario y
+  los contenedores en su lugar de fábrica empiezan debajo (`--minimap-h` de `windows.css`,
+  con `:has(.minimap)`). En tablets y teléfonos, arriba a la izquierda del mapa (arriba a la
+  derecha va el tutorial), y empieza plegado en los teléfonos. Plegado y zoom se recuerdan
+  por dispositivo (`localStorage` `rpg.minimap`).
+- **Marco:** el hierro de las ventanas (`--ui-frame-shadow`) con N, E, S y O en Cinzel dorado
+  en sus cuatro lados, y debajo tres botones (acercar, alejar, volver a centrar; 44 px en
+  pantallas táctiles). El terreno es un canvas de 160x160 px pintado píxel por píxel
+  (`image-rendering: pixelated`), una a cuatro casillas por píxel; lo no explorado, negro.
+  Encima, un SVG: la marca propia (una flecha clara que gira con la dirección), los puntos
+  azules del grupo, y la estimación en dorado (círculo punteado translúcido, o flecha en el
+  borde con "~N" y ▲/▼).
+- **Colores:** `make sprites` (tools/spritepack `averageColor`) guarda en `atlas.json`
+  `minimap` el promedio de los píxeles opacos de cada sprite (con su alfa); el cliente
+  colorea una casilla con el de su item (`GameCanvas.itemColor`). Antes de que cargue el
+  atlas, o sin color, un tono por tipo (bloquea, agua, suelo).
+- **Código:** `client/src/state/minimap.ts` (puro, con tests: estado, niebla, proyección,
+  flecha del borde, marca de la pista, puntos cardinales), `client/src/ui/Minimap.tsx` y
+  `minimap.css`. Test ids: `minimap`, `minimap-fold`, `minimap-canvas`, `minimap-self`,
+  `minimap-hint` (`data-kind` `area` o `arrow`, `data-floor`), `minimap-distance`,
+  `minimap-top|right|bottom|left`, `minimap-zoom-in`, `minimap-zoom-out`,
+  `minimap-recenter`, y en el diario `quest-track`. Vista previa: la escena `game` de
+  `make ui-preview` lo muestra con una quest seguida fuera del minimapa (la flecha).
+
 ## 6. Assets: de dónde salen y cómo se registran (SRC)
 
 ### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)

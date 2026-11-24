@@ -173,6 +173,22 @@ el punto 5:
     `LevelGround` con `levelLooks` (`assets/README.md`).
   - El desgaste de senderos (`livingworld`) dibuja sus etapas sin el tono del suelo; con
     `TONE_DEPTH` 0,1 la diferencia es chica, pero conviene mirarla en el E2E.
+- **Minimapa (hecho, rama `feat/minimap`, lote 17; el dueño el 2026-11-23: "un minimapa
+  como el de Tibia: hay que explorar para verlo, puntos cardinales y una estimación del
+  objetivo"; docs/02 "Minimapa", docs/05 "Minimapa"):** lo explorado se guarda por
+  personaje en el servidor (`character_explored`, migración 00028), el diario sigue una
+  quest y el minimapa muestra un círculo corrido o una flecha en el borde. Queda:
+  - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
+    `store/play_integration_test.go` (upsert de sectores) y el screenshot
+    `96c-minimap-tracked` de `e2e/sandbox.spec.ts`.
+  - **Pisos de arriba:** desde la superficie se ven los pisos 0 a 7, pero solo se explora el
+    propio; decidir con el dueño si mirar un techo debe explorar ese piso.
+  - **`hint_area` en el contenido:** ninguna quest lo usa todavía; los pasos `has_item` (10
+    quests: `foreman_ore`, `tanner_chitin`, `smith_ring`, capítulos 2 y 3...) no muestran
+    estimación hasta que se les ponga uno (dónde se consigue el item).
+  - **Marcas propias** (como las de Tibia: un punto con un ícono y un texto) y un mapa grande
+    a pantalla completa: no se pidieron; el formato de sectores ya lo permitiría.
+  - **Número de migración:** 00028; si otra rama del lote suma una, renumerar al apilar.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

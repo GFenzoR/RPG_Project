@@ -549,3 +549,14 @@ server/
   commitea). `internal/store` envuelve las queries y traduce errores de Postgres a
   errores propios (`store.ErrNameTaken`...); los servicios dependen de interfaces para
   poder testearse sin Postgres (ver `internal/auth/authtest`).
+
+- **Minimapa** (`session/minimap.go`, `explore`, docs/02 y docs/05 "Minimapa"): lo explorado
+  es `Player.explored` (`explore.Map`, bits por sector de 32x32, solo crecen), cargado con
+  `Character.Explored` (y `ExploredUnsaved` de un relogueo rápido) y guardado en el snapshot
+  (`Snapshot.Explored`: los sectores que ganaron bits en el login, upsert en
+  `character_explored`). `move` (sin `through`), `relocate` y `join` llaman a
+  `exploreView`: un camino nuevo que cambie la casilla de un jugador sin pasar por ellos
+  también. `flushMinimap` manda los deltas (uno por segundo como mucho) y
+  `minimapRequest` contesta solo casillas exploradas, con presupuesto por jugador. La pista
+  del objetivo (`flushHint`) se recalcula cuando `questsChanged` y siempre pasa por
+  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso.

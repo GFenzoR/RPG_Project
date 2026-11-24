@@ -264,6 +264,33 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
   prefiere que nada aparezca a la vista.
 
+## Minimapa (pedido del dueño del 2026-11-23)
+"Un minimapa como el de Tibia: hay que explorar para verlo, muestra los puntos cardinales y,
+si tenemos un objetivo activo, una estimación de dónde está."
+- **Explorar:** una casilla queda explorada cuando entra en la vista del jugador (la ventana
+  de 31x21 de "La vista", solo el piso propio) al caminar, al cambiar de piso o al entrar.
+  Lo explorado no se olvida nunca y es del **personaje**, no del dispositivo: lo guarda el
+  servidor (docs/05 "Minimapa", docs/07 "Minimapa"). Lo no explorado es **negro**.
+- **Qué muestra:** una o más casillas por píxel (cuatro niveles de zoom), cada casilla
+  explorada del color de lo que tiene: lo de más arriba que bloquea el paso (muro, árbol,
+  roca) o si no su suelo. El color es el promedio del sprite de ese item en el atlas
+  (`make sprites`, docs/17 "Minimapa"). Solo el piso propio. El jugador va al centro con una
+  marca que apunta hacia donde mira; los miembros del grupo a la vista son puntos. N, E, S y
+  O (W en inglés) en los lados del marco: el norte siempre arriba.
+- **Moverse por el minimapa:** arrastrarlo lo corre; "volver a centrar" lo devuelve al
+  jugador. Se pliega a su barra (en los teléfonos empieza plegado).
+- **Objetivo seguido:** el diario de misiones tiene "Seguir en el mapa" en cada quest en
+  curso (una a la vez). El minimapa muestra una **estimación**, nunca la casilla: un círculo
+  alrededor de un punto cercano al lugar del paso actual, que lo contiene entero. Si el
+  círculo queda fuera del minimapa, una flecha en el borde apunta hacia él con la distancia
+  aproximada (de a 5 casillas hasta 50, después de a 10); si está en otro piso, ▲ (arriba) o
+  ▼ (abajo). El lugar es el NPC con quien hablar, el spawn más cercano del monstruo que hay
+  que cazar, el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
+  paso (docs/06). Un paso que se cumple en cualquier lado (llevar un item, una marca) no
+  tiene círculo. La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
+  que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje y paso, así
+  que pedirla muchas veces no la afina.
+
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
 |---|---|---|---|---|

@@ -666,6 +666,30 @@ cada 3 s suma ≤ 0,65 KB/s, lejos de los 4 KB/s (la base de `TestCrowdBandwidth
   día, mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo
   con `TestCrowdBandwidth` con tareas activas.
 
+### Minimapa (2026-11-23)
+Lo explorado (docs/05 "Minimapa") vive en el servidor y no en `localStorage`: así el mapa
+sigue al personaje a otro dispositivo y el cliente nunca recibe casillas que no vio.
+- **Memoria:** 128 B por sector de 32x32 de un piso con algo explorado, en el
+  `explore.Map` de cada jugador en línea; tope `explore.MaxSectors` (4096, 512 KB), muy por
+  encima del mundo de hoy (unos 200 sectores por piso). Recorrer Puerto entero son unos 36
+  sectores (4,5 KB).
+- **Tick:** cada paso marca la ventana de 31x21 del piso propio (`Reveal`: un OR de 4 bytes
+  por fila y sector, 21 filas de 2 o 3 sectores; sin asignar sobre lo ya explorado). Un
+  `MinimapRequest` lee hasta 1024 casillas por sector; el presupuesto (64 sectores de
+  golpe, 32 por segundo por jugador) lo acota, y solo se pide al entrar o al arrastrar el
+  minimapa.
+- **Red:** al entrar, el índice (4 B por sector explorado) y lo que el minimapa pide: ~1,1
+  KB por sector (bitset y 1024 índices, que comprimen muy bien). Explorando, como mucho un
+  delta por segundo con 128 B por sector que ganó bits (uno o dos caminando en línea recta:
+  ≤ 0,3 KB/s); nada sobre lo ya explorado.
+- **Base de datos:** `character_explored` (migración 00028), una fila por sector. Cada
+  snapshot hace upsert de los sectores que ganaron bits durante el login (nunca borra: los
+  bits solo crecen), 128 B por sector tocado.
+- **Pista del objetivo:** se calcula solo cuando cambia la quest seguida (`flushHint`); el
+  spawn más cercano de un `kill` recorre los spawns del mapa una vez.
+- **Cliente:** el terreno es un canvas de 160x160 px que se pinta solo cuando cambia lo
+  explorado, el centro o el zoom (no en cada frame).
+
 ### Aspecto y equipo visible (lote 13, 2026-11-19)
 Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el
 de un jugador, los ids de sus slots visibles (`VisibleEquipment`), y el de un NPC o un

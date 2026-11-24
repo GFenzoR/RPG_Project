@@ -1223,6 +1223,49 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
 
+### Minimapa (`server/internal/session/minimap.go`, pedido del dueño del 2026-11-23)
+Lo explorado vive en el servidor, por personaje (docs/02 "Minimapa"): un bit por casilla,
+en sectores de 32x32 de un piso. Un sector se nombra en el protocolo, dentro de su piso, con
+`sx << 16 | sy` (`sx = x / 32`, `sy = y / 32`). El bitset de un sector son 128 bytes, fila
+por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
+- `MinimapIndex{floors}` (campo 50 de `ServerMessage`): una vez al entrar, en el lote del
+  `Welcome`, después de `PlayerSkills` y antes del `QuestLog`. Cada `MinimapFloorIndex`
+  trae `z` y los sectores de ese piso con algo explorado (también la vista de este login).
+  Un sector que no está es negro entero: el cliente no lo pide.
+- `MinimapRequest{z, sectors}` (campo 40 de `ClientMessage`): hasta 16 sectores del piso
+  **propio** (otro piso se ignora; más de 16, también). El servidor contesta un
+  `MinimapSectors` con un `MinimapSector` por sector pedido (un repetido, una vez):
+  `explored` (vacío si no tiene nada explorado), `palette` (ids numéricos de items) y
+  `tiles` (1024 bytes, uno por casilla en el mismo orden: 0 = sin explorar o sin nada; si
+  no, 1 + índice de `palette`). El item de una casilla es el de más arriba que bloquea el
+  paso (muro, árbol, roca), o si no su suelo; **nunca** sale una casilla sin explorar.
+  Presupuesto por jugador: 64 sectores de golpe, recarga de 32 por segundo; un pedido que
+  no entra se descarta entero, sin respuesta (el cliente pide otra vez lo que le falte).
+- **Deltas:** como mucho uno por segundo, `MinimapSectors` con los sectores que ganaron
+  bits desde el anterior, solo con `explored` (sin `palette` ni `tiles`): esas casillas
+  están en la vista del cliente, que las colorea con el mapa que ya tiene. Nada mientras
+  el jugador camina por lo ya explorado. El cliente explora además su propia vista con la
+  misma regla (31x21 del piso propio), así la niebla se abre con el paso.
+- `TrackQuest{quest_id}` (campo 41): sigue una quest **en curso** en el minimapa; vacío, o
+  una quest que no está en curso, deja de seguir. El servidor contesta siempre un
+  `ObjectiveHint` (campo 52 de `ServerMessage`) y lo manda otra vez en el flush de cada
+  tick en que cambia el paso de esa quest (terminada: `quest_id` vacío). No se guarda: el
+  cliente lo manda de nuevo después de cada `Welcome` (lo recuerda por personaje en
+  `localStorage` `rpg.track`).
+- `ObjectiveHint{quest_id, step_id, center, radius}`: un círculo (radio euclídeo en
+  casillas) alrededor de un punto **cercano** al lugar del paso, que puede estar en otro
+  piso (`center.z`). Nunca es la casilla exacta: el centro se corre entre un cuarto y la
+  mitad del radio, siempre igual para el mismo personaje y paso (`quest.FuzzHint` con una
+  semilla de personaje, quest y paso: pedirlo muchas veces no lo promedia), y el lugar
+  del paso entra entero en el círculo. Con `quest_id` y sin `center`: se sigue la quest
+  pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).
+  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action`, el spawn
+  más cercano del monstruo de un `kill` (su piso primero), el lugar de un `reach` (una
+  zona: su rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
+  cliente dibuja solo el círculo o la flecha, nunca casillas sin explorar.
+- Todo agregado sin romper nada: un cliente viejo ignora los campos nuevos y un servidor
+  viejo nunca los manda.
+
 ### Diario de misiones (`server/internal/session/questlog.go`)
 - `QuestLog{entries}` es el diario completo del personaje: una `QuestLogEntry` por quest
   que empezó o terminó, en el orden de su id. Llega **entero** al entrar (en el lote del

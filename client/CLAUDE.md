@@ -2002,3 +2002,14 @@ de estados y placa del nombre").
 - **Vista previa:** escena `status` (y `game`, `danger`) de `make ui-preview`.
 - **E2E:** "T3.2: a guardian casts haste" (`22-haste`, `23-conditions-hud`) y "T5.6: at
   1280x800 a long name" (la placa).
+
+## Notas del minimapa (rama `feat/minimap`, docs/02 y docs/17 "Minimapa")
+- `WorldState.minimap` (`state/minimap.ts`, puro y con tests) guarda lo explorado del
+  servidor (`MinimapIndex`, `MinimapSectors`) y la pista (`ObjectiveHint`); `Game.publish`
+  explora la vista propia (`revealView`, la misma regla que el servidor) y publica
+  `GameUi.minimap`. `ui/Minimap.tsx` pinta el terreno con `paintTerrain` solo cuando cambia
+  la versión, el centro o el zoom, y pide los sectores que le faltan (`wanted`,
+  `Game.minimapRequest`). El color de un item es `atlas.json` `minimap`
+  (`GameCanvas.itemColor`). Nunca pintes una casilla que `isExplored` no da.
+- Seguir una quest: `Game.trackQuest` (botón `quest-track` del diario), recordado por
+  personaje en `localStorage` `rpg.track` y reenviado tras cada `Welcome`.

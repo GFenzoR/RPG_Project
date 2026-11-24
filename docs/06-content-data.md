@@ -717,6 +717,21 @@ con `give_item`/`give_gold` en opciones de diálogo condicionadas con `vocation_
 Una quest importante puede declarar `music` (una pool de `assets/sounds.yaml` que suena en
 unos rectángulos de unos pisos): ver "Música de una quest importante", en "Sonido".
 
+Un paso puede decir dónde lo estima el minimapa (docs/02 "Minimapa") con `hint_area`: un
+punto (`x`, `y`, `z`) y cuántas casillas alrededor (`radius`, Chebyshev, 0 a 32). Es
+opcional: sin él, el servidor lo saca del paso (el NPC de un `dialog_action`, el spawn más
+cercano del monstruo de un `kill`, el lugar de un `reach`, las placas de un `sigils`). Un
+`has_item` o un `flag_equals` sin `hint_area` no muestra estimación; con él, por ejemplo
+dónde se consigue el item:
+```yaml
+  - id: gather_ore
+    description: quest.foreman_ore.step_gather_ore
+    complete_when: { has_item: { item: iron_ore, count: 5 } }
+    hint_area: { x: 3120, y: 6300, z: 8, radius: 10 }
+```
+El jugador nunca ve ese punto: el servidor manda un círculo alrededor de un punto cercano
+(docs/05 "Minimapa").
+
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
   cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`. Se dan en
