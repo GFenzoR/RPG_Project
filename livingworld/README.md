@@ -316,25 +316,34 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
    una puerta o un suelo en `data/livingworld`; el validador de mapas rechaza un objeto en
    una zona de protección, una casa, la casilla de una puerta o un muro, la entrada de un
    portal, sobre suelo no caminable o dos objetos en una casilla (el servidor deja esos
-   como items comunes del mapa).
+   como items comunes del mapa). Tampoco en la pared de una sala con llave: un objeto (o
+   un grupo de objetos pegados) con una sala de un lado y otra sala o el exterior del otro
+   dejaría entrar sin llave al romperse, empujarse o abrirse; el servidor no arranca
+   (`checkLivingRooms`, `errObjectInRoomWall`) y `make validate` lo marca (`doorRooms`,
+   error `object`). Uno del todo dentro de una sala, o del todo afuera, sí vale.
 4. **Nada se duplica.** El botín se tira una vez por rotura (golpear los restos no hace
    nada) y se crea en el suelo como el de un monstruo: un item, un lugar. Lo que se levanta
    sigue el camino normal de inventario y guardado.
 5. **Nada aparece encima de algo.** Un objeto roto reaparece, y uno empujado vuelve a su
    lugar, solo cuando la casilla está libre (`Free`): sin criatura y sin items sueltos;
    si no, reintenta cada segundo. Un empuje solo entra a una casilla libre y sin otro
-   objeto (tampoco uno roto que va a reaparecer ahí). Una compuerta no se cierra sobre
-   nadie.
-8. **Una compuerta no encierra a nadie.** Se cierra sola cuando las rocas vuelven a casa,
+   objeto (tampoco uno roto que va a reaparecer ahí), que no sea la casilla de llegada de
+   un portal (escalera, escala, teleport). Una compuerta no se cierra sobre nadie.
+   Consecuencia aceptada: un item suelto que no es un cadáver (no se pudre) en la casilla
+   de un objeto roto, en el lugar de una roca o debajo de una compuerta abierta lo frena
+   hasta que alguien lo levanta: el objeto no reaparece, la roca no vuelve y la compuerta
+   no se cierra. Levantar el item lo destraba.
+6. **Una compuerta no encierra a nadie.** Se cierra sola cuando las rocas vuelven a casa,
    cuando otro jugador saca una de su placa o tras un reinicio, así que cada lado de una
    compuerta cerrada llega a un templo sin pasar por ella (a pie, saliendo de salas, por
    escaleras, escalas, agujeros y teleports): el servidor no arranca si no
    (`checkEscapes`, `errGateNoEscape`) y `make validate` lo marca (`doorRooms`, error
    `gate`). La bóveda del rastrillo de Thimblewick tiene un teleport de salida.
-6. **Estado transitorio.** Roto, empujado y abierto no se guardan: un reinicio deja todo
+7. **Estado transitorio.** Roto, empujado y abierto no se guardan: un reinicio deja todo
    como está en el mapa. Es más simple, no puede romper un guardado y los puzzles vuelven a
-   empezar solos (`reset_seconds`).
-7. **Un objeto por casilla**, siempre arriba de los items del mapa (el índice de pila que
+   empezar solos (`reset_seconds`, obligatorio y mayor que 0: una roca que no vuelve nunca
+   podría tapar un pasillo hasta el reinicio).
+8. **Un objeto por casilla**, siempre arriba de los items del mapa (el índice de pila que
    usa el cliente es `1 + len(pila del mapa)`).
 
 ### Dónde vive cada cosa (objetos)

@@ -394,6 +394,7 @@ var (
 	ErrDoorNoEscape  = errDoorNoEscape
 	ErrGateNoEscape  = errGateNoEscape
 	ErrDoorBypassed  = errDoorBypassed
+	ErrObjectInRoom  = errObjectInRoomWall
 )
 
 // AreaOf returns the area of p (area.go; tests only): 0 for none.

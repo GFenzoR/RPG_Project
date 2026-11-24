@@ -25,9 +25,14 @@ readme=livingworld/README.md
 glue=$(sed -n '/<!-- glue:start -->/,/<!-- glue:end -->/p' "$readme" | sed -n 's/^- `\([^`]*\)`.*/\1/p' || true)
 [[ -n $glue ]] || err "$readme has no glue list between <!-- glue:start --> and <!-- glue:end -->"
 
+# The code files the checks read: Go, and TypeScript or JavaScript of any module flavour.
+CODE_NAMES=(-name '*.go' -o -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs')
 code_files() { # code files under $1, without dependencies and build output
 	find "$1" \( -name node_modules -o -name build -o -name dist -o -name .wt -o -name .git -o -name gen \) -prune \
-		-o -type f \( -name '*.go' -o -name '*.ts' -o -name '*.tsx' \) -print 2>/dev/null
+		-o -type f \( "${CODE_NAMES[@]}" \) -print 2>/dev/null
+}
+root_files() { # code files at the repository's root (vitest.config.ts, eslint.config.js...)
+	find . -maxdepth 1 -type f \( "${CODE_NAMES[@]}" \) -print 2>/dev/null | sed 's#^\./##'
 }
 
 # ts_specs prints the module specifier of every import of a TS file: `from "x"` (also
@@ -60,8 +65,10 @@ while IFS= read -r f; do
 done < <(code_files livingworld)
 
 # 2. Outside livingworld/, only the glue imports the module.
-for dir in server client editor packages tools apps; do
+for dir in server client editor packages tools apps .; do
 	[[ -d $dir ]] || continue
+	lister=code_files
+	[[ $dir != . ]] || lister=root_files
 	while IFS= read -r f; do
 		[[ -n $f ]] || continue
 		uses=0
@@ -75,7 +82,7 @@ for dir in server client editor packages tools apps; do
 		if [[ $uses -eq 1 ]] && ! grep -qxF "$f" <<<"$glue"; then
 			err "$f imports the living world but is not in the glue list of $readme"
 		fi
-	done < <(code_files "$dir")
+	done < <("$lister" "$dir")
 done
 
 # The glue files exist.

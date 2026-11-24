@@ -385,8 +385,11 @@ type World struct {
 	resources map[world.Pos]*resourceTile
 	gatherFor game.Tick
 	// living is the living world (livingworld.go); nil without Config.LivingWorld.
-	living         *livingWorld
-	livingPushFor  game.Tick
+	living        *livingWorld
+	livingPushFor game.Tick
+	// livingLanding are the tiles portals arrive on: no pushed object rests there
+	// (livingHost.Free), or whoever takes the portal would find its landing taken.
+	livingLanding  map[world.Pos]bool
 	gatherAFKAfter game.Tick
 	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
 	// their recipes, for StationOpen.

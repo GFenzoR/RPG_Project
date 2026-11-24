@@ -61,4 +61,13 @@ mkdir -p "$tmp/r/livingworld/server/sub"
 printf 'import { x } from "../../server/sub/x.ts";
 ' >>"$tmp/r/livingworld/client/src/index.ts"
 expect ok "livingworld/client importing livingworld/server is no import of server/"
+repo
+printf 'import { burst } from "@rpg/living-world";\n' >"$tmp/r/client/src/state/plain.mjs"
+expect fail "a .mjs file outside the glue list imports the package"
+repo
+printf 'import { burst } from "@rpg/living-world";\n' >"$tmp/r/vitest.config.ts"
+expect fail "a root file outside the glue list imports the package"
+repo
+printf 'import { burst } from "@rpg/living-world";\n' >"$tmp/r/client/src/state/types.mts"
+expect fail "a .mts file outside the glue list imports the package"
 echo "check-boundary_test: ok"

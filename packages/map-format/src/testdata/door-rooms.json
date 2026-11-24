@@ -671,6 +671,26 @@
         }
       ],
       "rooms": {}
+    },
+    {
+      "name": "a crate in the wall of a locked room",
+      "rows": ["##########", "#T....#..#", "#.....D..#", "#.....C..#", "##########"],
+      "error": "object",
+      "door": "6,3"
+    },
+    {
+      "name": "two crates side by side in the wall of a locked room",
+      "rows": [
+        "#############",
+        "#T....##....#",
+        "#.....D.....#",
+        "#.....##....#",
+        "#.....CC....#",
+        "#.....##....#",
+        "#############"
+      ],
+      "error": "object",
+      "door": "6,4"
     }
   ]
 }

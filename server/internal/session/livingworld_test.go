@@ -527,3 +527,79 @@ func TestLivingAxeWeaponCuts(t *testing.T) {
 		t.Fatalf("axe on the vines: %v", got)
 	}
 }
+
+// No pushed object rests where a portal arrives: whoever takes it would find its landing
+// taken (review of lote 17).
+func TestLivingPushOntoAPortalLandingIsRefused(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+	)
+	opt := livingSetup(t, m, map[world.Pos]uint16{pos(2, 1): lwBoulderID})
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "tp", Kind: world.PortalTeleport, From: pos(0, 2), To: pos(3, 1)})
+	h := newHarness(t, m, opt)
+	cl, _ := armed(h, pos(1, 1), 0)
+	cl.take()
+	h.input(cl, push(pos(2, 1), E))
+	h.sim.Step()
+	if evs := cl.take(); !hasKey(evs, "living.push_blocked") || h.w.LivingObjects()[0].Pos != pos(2, 1) {
+		t.Fatalf("push onto a portal's landing: %v, %+v", systemKeys(evs), h.w.LivingObjects())
+	}
+}
+
+// An object the map puts on a door's tile or a portal's entrance stays a plain map item,
+// as the map validator wants it (checkLiving).
+func TestLivingObjectOnADoorOrPortalStaysAMapItem(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+	)
+	opt := livingSetup(t, m, nil)
+	worldtest.SetTile(t, m, pos(4, 0), worldtest.Grass, 0, plainOpenID, lwVinesID)
+	worldtest.SetTile(t, m, pos(1, 1), worldtest.Grass, 0, lwCrateID)
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "tp", Kind: world.PortalTeleport, From: pos(1, 1), To: pos(3, 1)})
+	h := newHarness(t, m, opt, func(c *session.Config) { c.Items = withDoorItems(c.Items, false) })
+	if got := h.w.LivingObjects(); len(got) != 0 {
+		t.Fatalf("objects on a door and a portal entrance: %+v", got)
+	}
+}
+
+// Whoever sees only where a pushed object lands gets its event too, once; whoever sees
+// both tiles gets it once.
+func TestLivingPushEventReachesWhoSeesTheLanding(t *testing.T) {
+	row := strings.Repeat(".", 24)
+	boulder := pos(3, 1)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7, row, row, row),
+		map[world.Pos]uint16{boulder: lwBoulderID})
+	pusher, _ := armed(h, pos(2, 1), 0)
+	far, _ := armed(h, pos(4+session.ViewHalfW, 1), 0)
+	pusher.take()
+	far.take()
+	h.input(pusher, push(boulder, E))
+	h.sim.Step()
+	if got := livingEvents(pusher.take()); len(got) != 1 {
+		t.Fatalf("pusher events: %v", got)
+	}
+	if got := livingEvents(far.take()); len(got) != 1 || got[0] != pb.LivingObjectKind_LIVING_OBJECT_KIND_PUSH {
+		t.Fatalf("who sees only the landing: %v", got)
+	}
+}
+
+// A push that finds nothing waits for the push cooldown too: one message per cooldown,
+// whatever a client sends.
+func TestLivingEmptyPushWaitsForTheCooldown(t *testing.T) {
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+	), map[world.Pos]uint16{pos(5, 0): lwBoulderID})
+	cl, _ := armed(h, pos(1, 1), 0)
+	cl.take()
+	h.input(cl, push(pos(2, 1), E))
+	h.input(cl, push(pos(2, 1), E))
+	h.input(cl, push(pos(2, 1), E))
+	h.sim.Step()
+	if n := systemKeys(cl.take())["inventory.not_possible"]; n != 1 {
+		t.Fatalf("empty pushes in one cooldown: %d messages, want 1", n)
+	}
+}

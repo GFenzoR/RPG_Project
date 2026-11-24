@@ -42,6 +42,9 @@ declare -A RULES=(
 	[e2e]='^(client|livingworld|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
 	[integration]='^(server|livingworld/server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
+	# The living world's boundary check (livingworld/README.md): any code that could import
+	# the module, or that the module could import.
+	[livingworld-boundary]='^(livingworld|server|client|editor|packages|tools|apps)/'
 	# The dev-only Python tools around the owner's Gemini: nothing else reads them. Their
 	# tests read spritegen's palette (import_art snaps to it) and measure the game's music
 	# (music_convert's loudness target is the one the shipped themes have).
@@ -57,7 +60,7 @@ declare -A RULES=(
 	# the optional /grafana/ route (check.sh parses them with half-set credentials).
 	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$|Caddyfile$|caddy-routes\.caddy$|caddy-grafana-.*\.caddy$)'
 )
-CI_JOBS=(go-server go-livingworld go-bots go-launcher ts validate actionlint build desktop e2e integration bench gemini)
+CI_JOBS=(go-server go-livingworld go-bots go-launcher ts validate actionlint build desktop e2e integration bench gemini livingworld-boundary)
 IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
 
 # decide JOB < changed-files: prints true or false.
@@ -92,6 +95,11 @@ self_test() {
 	# TestRepoConfig reads the wear numbers of data/livingworld/wear.yaml.
 	check go-livingworld true data/livingworld/wear.yaml
 	check go-livingworld false data/items/ground.yaml
+	# Its boundary check: the module, and any code outside it that could import it.
+	for f in livingworld/server/world.go livingworld/README.md server/internal/session/move.go client/src/render/living.ts editor/src/main.ts packages/renderer/src/index.ts; do
+		check livingworld-boundary true "$f"
+	done
+	check livingworld-boundary false data/items/weapons.yaml world/islands/puerto/island.yaml
 	for j in ts build e2e; do check "$j" true livingworld/client/src/index.ts; done
 	for j in go-livingworld go-server; do check "$j" false livingworld/client/src/index.ts; done
 	check go-bots true server/pkg/bot/bot.go

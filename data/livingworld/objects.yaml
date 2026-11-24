@@ -3,7 +3,7 @@
 #   breakable: { hp, by: [melee | any_attack | tool:axe | tool:pick | fire], becomes: <item>
 #                | none, debris_seconds, respawn_seconds, loot: [{ item, chance, count }],
 #                effect: wood | stone | plant | web | clay, sound, hit_sound }
-#   pushable:  { reset_seconds, effect, sound }   walk into it to push it one tile
+#   pushable:  { reset_seconds (required, > 0), effect, sound }   walk into it to push it one tile
 #   gate:      { open: <item>, sound }             open while its plates are all pressed
 #   plate:     { radius }                          links to the gates within radius tiles
 # Walls, doors and grounds can never be here (make validate and the server refuse them),

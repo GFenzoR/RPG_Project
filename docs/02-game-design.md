@@ -3349,6 +3349,7 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
 - **Placas y compuertas.** Una placa de presión se hunde con una criatura o un objeto
   empujable encima; un rastrillo se abre mientras todas sus placas (las que están a su
   radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo.
-- **Nunca** en una zona de protección, una casa, una puerta o un muro, y nunca como único
+- **Nunca** en una zona de protección, una casa, una puerta, un muro o la pared de una sala
+  con llave (romperlo, empujarlo o abrirlo dejaría entrar sin llave), y nunca como único
   camino de una quest un objeto que pide herramienta, un empujable o una compuerta.
 - **Estado transitorio:** nada de esto se guarda; un reinicio deja el mundo como el mapa.

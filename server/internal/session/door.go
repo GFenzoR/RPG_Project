@@ -80,6 +80,11 @@ var (
 	// errGateNoEscape: a side of a living world gate reaches no temple without it (the
 	// same ways as errDoorNoEscape): whoever is there when it closes would be locked in.
 	errGateNoEscape = errors.New("a side of it reaches no temple once it closes (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in")
+	// errObjectInRoomWall: living world objects (breakables, pushables, gates; a group of
+	// them next to each other counts as one) stand between the room behind a locked door
+	// and a tile outside it: whoever breaks, pushes or opens them gets in without the key
+	// (checkLivingRooms).
+	errObjectInRoomWall = errors.New("it stands in the wall of the room behind a locked door: breaking, pushing or opening it lets a player in without the key")
 	// errDoorBypassed: a player without its key gets into its room (checkEscapes): a
 	// locked door of another key opens from its own room, which such a player reaches,
 	// onto it (a cycle of locked doors of different keys).
@@ -209,6 +214,9 @@ func (w *World) initDoors() error {
 			}
 			d.room = append(d.room, id)
 		}
+	}
+	if err := w.checkLivingRooms(); err != nil {
+		return err
 	}
 	if err := w.checkRooms(); err != nil {
 		return err

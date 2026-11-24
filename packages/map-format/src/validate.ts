@@ -737,7 +737,7 @@ class WorldValidator {
    * by locked doors of the same key, and the escape check (every side of every locked door
    * reaches a temple without keys or tools; no player gets into a room without
    * its key; every side of every living world gate, placed closed, reaches one without
-   * it); and nothing of the outside in a room: no temple (where players wake up), NPC,
+   * it; no living world object in a room's wall); and nothing of the outside in a room: no temple (where players wake up), NPC,
    * house, portal end, boat arrival or dialog teleport. Either the outside was taken for
    * the room, or a player would land behind the door. Spawns may live in a room (a guarded
    * vault).
@@ -745,6 +745,7 @@ class WorldValidator {
   private checkDoors(): void {
     const locked: { pos: Position; lock: string; id: string; file: string }[] = [];
     const gates: { pos: Position; id: string; file: string }[] = []; // living world, closed
+    const objects: { pos: Position; file: string }[] = []; // living world, any that blocks
     for (const island of this.world.islands.values()) {
       const dir = this.dirOf(island);
       const chunks = [...island.chunks.values()].sort(
@@ -757,6 +758,15 @@ class WorldValidator {
             const info = this.content.items.get(g);
             return info?.living === "gate" && info.blocksMovement === true;
           });
+          const living = s.stack.some((g) => {
+            const l = this.content.items.get(g)?.living;
+            return l === "breakable" || l === "pushable" || l === "gate";
+          });
+          if (living)
+            objects.push({
+              pos: { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z },
+              file,
+            });
           if (gate !== undefined)
             gates.push({
               pos: { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z },
@@ -791,8 +801,20 @@ class WorldValidator {
     const { behind, findings } = doorRooms(this.tiles, this.content, locked, {
       ...this.escapeWorld(),
       gates: gates.map((g) => g.pos),
+      objects: objects.map((o) => o.pos),
     });
     for (const f of findings) {
+      if (f.error === "object") {
+        const o = objects.find((l) => formatPos(l.pos) === formatPos(f.door));
+        if (o)
+          this.err(
+            o.file,
+            ["items"],
+            `living world object at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS.object}`,
+            f.door,
+          );
+        continue;
+      }
       if (f.error === "gate") {
         const g = gates.find((l) => formatPos(l.pos) === formatPos(f.door));
         if (g)

@@ -95,7 +95,8 @@ func (l LootEntry) CountRange() (lo, hi int) {
 // Pushable makes an object move one tile when a player pushes it.
 type Pushable struct {
 	// ResetSeconds: that long after its last push it goes back where the map put it, once
-	// that tile is free (0 = never). Puzzles reset for the next player.
+	// that tile is free (1..MaxSeconds, required: a boulder that never went home could block a
+	// passage until a restart). Puzzles reset for the next player.
 	ResetSeconds int    `yaml:"reset_seconds"`
 	Sound        string `yaml:"sound"`
 	Effect       string `yaml:"effect"`
@@ -344,8 +345,9 @@ func checkDef(d *Def, items ItemLookup, sounds SoundLookup) error {
 		if !info.BlocksMove {
 			return errors.New("a pushable object must block movement")
 		}
-		if d.Pushable.ResetSeconds < 0 || d.Pushable.ResetSeconds > MaxSeconds {
-			return fmt.Errorf("pushable.reset_seconds must be in 0..%d", MaxSeconds)
+		if d.Pushable.ResetSeconds < 1 || d.Pushable.ResetSeconds > MaxSeconds {
+			// Never 0: a boulder that never goes home could block a passage until a restart.
+			return fmt.Errorf("pushable.reset_seconds must be in 1..%d", MaxSeconds)
 		}
 		if err := effect(d.Pushable.Effect); err != nil {
 			return err

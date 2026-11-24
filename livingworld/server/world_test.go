@@ -314,6 +314,8 @@ func TestResolveRefusesWallsDoorsAndBadData(t *testing.T) {
 		"- item: crate\n  breakable: { hp: 0, by: [melee], becomes: none }":                                                "hp",
 		"- item: crate\n  breakable: { hp: 1, by: [melee], becomes: none }\n  pushable: {}":                                "exactly one",
 		"- item: plate\n  plate: { radius: 0 }":                                                                            "radius",
+		"- item: boulder\n  pushable: { reset_seconds: 0 }":                                                                "reset_seconds",
+		"- item: boulder\n  pushable: {}":                                                                                  "reset_seconds",
 		"- item: crate_debris\n  pushable: {}":                                                                             "block movement",
 		"- item: gate\n  gate: { open: rock }":                                                                             "walkable",
 		"- item: crate\n  breakable: { hp: 1, by: [melee], becomes: none, loot: [{ item: x, chance: 1 }] }":                "loot item",

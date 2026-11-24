@@ -1132,6 +1132,19 @@ describe("validateWorld", () => {
     }
   });
 
+  it("refuses a living object in the wall of a locked room, not one inside it", () => {
+    const wall = "stands in the wall of the room behind a locked door";
+    const inside = gated();
+    pushItem(inside.chunk, 24, 24, "weathered_crate");
+    expect(messages(check(inside.island)).filter((m) => m.includes(wall))).toEqual([]);
+    const { island, chunk } = gated();
+    setGround(chunk, 18, 25, "dirt");
+    pushItem(chunk, 18, 25, "weathered_crate");
+    expect(messages(check(island)).filter((m) => m.includes(wall))).toEqual([
+      expect.stringContaining("living world object at 18,25,7: it stands in the wall"),
+    ]);
+  });
+
   it("refuses a locked door without a room and two doors on a tile; warns of an open one", () => {
     const shut = gated();
     // In the middle of the grass the gate keeps nothing apart.

@@ -79,11 +79,12 @@
       "pushable": {
         "type": "object",
         "additionalProperties": false,
+        "required": ["reset_seconds"],
         "properties": {
           "reset_seconds": {
-            "description": "That long after its last push it goes back where the map put it, once that tile is free (0 or absent: never).",
+            "description": "That long after its last push it goes back where the map put it, once that tile is free. Required and never 0: a boulder that never goes home could block a passage until a restart.",
             "type": "integer",
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 86400
           },
           "effect": { "$ref": "#/$defs/effect" },

@@ -8,7 +8,9 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 
 	lw "github.com/GFenzoR/RPG_Project/livingworld/server"
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
@@ -81,6 +83,10 @@ func (w *World) initLivingWorld() error {
 	}
 	w.living = lw.New(cat, livingHost{w})
 	w.livingPushFor = ticksFor(lb.PushCooldownMs)
+	w.livingLanding = map[world.Pos]bool{}
+	for _, pt := range w.m.Portals() {
+		w.livingLanding[pt.To] = true
+	}
 	for _, is := range w.m.Islands() {
 		for _, s := range is.Sectors() {
 			for k := 0; k < len(s.Stacks); k++ {
@@ -90,9 +96,9 @@ func (w *World) initLivingWorld() error {
 					Y: s.CY*world.SectorSize + t.Index/world.SectorSize,
 					Z: s.Z,
 				}
-				// A protection zone or a house never holds one (the map validator refuses
-				// it): there it stays a plain map item.
-				if w.m.Flags(pos)&(world.FlagProtection|world.FlagHouse) != 0 {
+				// A protection zone, a house, a door's tile or a portal's entrance never
+				// holds one (the map validator refuses it): there it stays a plain map item.
+				if w.m.Flags(pos)&(world.FlagProtection|world.FlagHouse|world.FlagPortalStep) != 0 || w.hasDoorItem(pos) {
 					continue
 				}
 				for i := 0; i < len(t.Items); i++ {
@@ -117,6 +123,16 @@ func (w *World) initLivingWorld() error {
 	}
 	w.living.Link()
 	return nil
+}
+
+// hasDoorItem reports whether an item of pos's own stack is a door.
+func (w *World) hasDoorItem(pos world.Pos) bool {
+	for _, n := range w.m.Stack(pos) {
+		if def := w.byNum[n]; def != nil && def.Door != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // livingGates returns the tiles of the living world's gates (checkEscapes).
@@ -164,20 +180,17 @@ func (w *World) staticBlock(pos world.Pos) world.Flags {
 // ---- Host ------------------------------------------------------------------------------
 
 // Free also refuses a door's tile, even open: a door would close on the object (closeDoor
-// checks it too), and a boulder in a locked door's way could shut a room.
+// checks it too), and a boulder in a locked door's way could shut a room. Nor does an
+// object rest where a portal arrives (stairs, a ladder, a teleport): whoever takes it
+// would find its landing taken.
 func (h livingHost) Free(p lw.Pos) bool {
 	w, pos := h.w, fromLW(p)
 	_, f, ok := w.m.Tile(pos)
 	if !ok || f&(world.FlagBlocksMovement|world.FlagProtection|world.FlagHouse|world.FlagPortalStep) != 0 {
 		return false
 	}
-	if w.doors[pos] != nil {
+	if w.doors[pos] != nil || w.livingLanding[pos] || w.hasDoorItem(pos) {
 		return false
-	}
-	for _, n := range w.m.Stack(pos) {
-		if def := w.byNum[n]; def != nil && def.Door != nil {
-			return false
-		}
 	}
 	return !w.occupied(pos) && len(w.ground[pos]) == 0
 }
@@ -207,7 +220,16 @@ func (h livingHost) Event(e lw.Event) {
 		m.To = posMsg(fromLW(e.To))
 	}
 	msg := &pb.ServerMessage{Message: &pb.ServerMessage_LivingObject{LivingObject: m}}
-	h.w.eachObserver(nil, fromLW(e.Pos), func(o *Player) { o.emit(msg) })
+	from := fromLW(e.Pos)
+	h.w.eachObserver(nil, from, func(o *Player) { o.emit(msg) })
+	if e.Kind == lw.EventPush || e.Kind == lw.EventReset {
+		// Whoever sees only where it lands gets the effect and the sound too (once).
+		h.w.eachObserver(nil, fromLW(e.To), func(o *Player) {
+			if !Sees(o.pos, from) {
+				o.emit(msg)
+			}
+		})
+	}
 }
 
 // DropLoot creates the rolled loot on the object's tile, like a monster's (an equipable
@@ -386,16 +408,17 @@ func (w *World) pushObject(ctx *game.TickContext, p *Player, m *pb.PushObject) {
 		return
 	}
 	if ctx.Tick < p.nextPush {
+		p.tooEarly(ctx.Tick, antibot.KindItem)
 		return // a held key asks again; the next one counts
 	}
+	// Every push that gets this far counts, found or not: one message per cooldown at most.
+	p.activePaced(ctx.Tick, antibot.KindItem, p.nextPush)
+	p.nextPush = ctx.Tick + w.livingPushFor
 	switch w.living.Push(toLW(pos), dx, dy) {
 	case lw.PushNoObject:
 		p.emit(systemMsg(msgNotPossible))
 	case lw.PushBlocked:
-		p.nextPush = ctx.Tick + w.livingPushFor
 		p.emit(systemMsg(msgLivingBlocked))
-	case lw.PushMoved:
-		p.nextPush = ctx.Tick + w.livingPushFor
 	}
 }
 
@@ -433,4 +456,58 @@ func (w *World) LivingObjects() []LivingObject {
 		out = append(out, LivingObject{Item: o.Item, Pos: fromLW(o.Pos), HP: o.HP, State: o.State})
 	}
 	return out
+}
+
+// checkLivingRooms refuses a living object in the wall of a room behind a locked door
+// (initDoors, once the rooms are known; doors.ts does the same for make validate). The
+// rooms' walks take every object for a wall, so a crate, a boulder or a gate between a
+// room and the rest of the map would let a player in without the key once it breaks,
+// moves or opens. Objects next to each other (8 directions) are one group: a group whose
+// neighbours a creature walks through (roomPassable; a locked door is neither side) lie in
+// more than one room, or in a room and outside, fails with errObjectInRoomWall on its
+// first object in map order. A group wholly inside one room, or wholly outside, passes.
+func (w *World) checkLivingRooms() error {
+	if w.living == nil || len(w.rooms) == 0 {
+		return nil
+	}
+	objs := w.living.Snapshot() // map order
+	isObj := make(map[world.Pos]bool, len(objs))
+	for _, o := range objs {
+		isObj[fromLW(o.Pos)] = true
+	}
+	seen := map[world.Pos]bool{}
+	for _, o := range objs {
+		first := fromLW(o.Pos)
+		if seen[first] {
+			continue
+		}
+		seen[first] = true
+		group := []world.Pos{first}
+		var sides []int32 // the rooms (0: outside) next to the group
+		for i := 0; i < len(group); i++ {
+			for d := world.North; d <= world.NorthWest; d++ {
+				q, ok := group[i].Step(d)
+				if !ok {
+					continue
+				}
+				if isObj[q] {
+					if !seen[q] {
+						seen[q] = true
+						group = append(group, q)
+					}
+					continue
+				}
+				if !w.roomPassable(q) {
+					continue
+				}
+				if r := w.roomOf[q]; !slices.Contains(sides, r) {
+					sides = append(sides, r)
+				}
+			}
+		}
+		if len(sides) > 1 {
+			return fmt.Errorf("session: object on %v: %w", first, errObjectInRoomWall)
+		}
+	}
+	return nil
 }

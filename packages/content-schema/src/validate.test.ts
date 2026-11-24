@@ -664,6 +664,8 @@ describe("validator diagnostics", () => {
         "  plate: { radius: 3 }",
         "- item: thick_bush",
         "  gate: { open: portcullis_closed }",
+        "- item: mossy_boulder",
+        "  pushable: { reset_seconds: 0 }",
       ].join("\n") + "\n",
     );
     const out = messages(root).filter((m) => m.includes("livingworld"));
@@ -675,6 +677,7 @@ describe("validator diagnostics", () => {
     expect(has('sound "nope" is not declared')).toBe(true);
     expect(has('the open gate "portcullis_closed" must not block movement')).toBe(true);
     expect(has("must NOT have more than 2 properties")).toBe(true); // two behaviours
+    expect(has("reset_seconds")).toBe(true); // a boulder that never goes home
     expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("livingworld"))).toEqual(
       [],
     );

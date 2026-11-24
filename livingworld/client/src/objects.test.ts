@@ -7,6 +7,7 @@ import {
   createLivingObjects,
   FADE_MS,
   ghostAt,
+  keepInPlace,
   MATERIAL_COLORS,
   materialOf,
   particleAt,
@@ -32,6 +33,18 @@ const event = (kind: LivingEvent["kind"], extra: Partial<LivingEvent> = {}): Liv
   sound: "",
   hpPermille: 0,
   ...extra,
+});
+
+describe("keepInPlace", () => {
+  it("trims the same array, in order", () => {
+    const list = [1, 2, 3, 4, 5];
+    const same = list;
+    keepInPlace(list, (v) => v % 2 === 1);
+    expect(list).toBe(same);
+    expect(list).toEqual([1, 3, 5]);
+    keepInPlace(list, () => false);
+    expect(list).toEqual([]);
+  });
 });
 
 describe("effects", () => {

@@ -37,7 +37,7 @@ export {
   SLIDE_MS,
 } from "./effects.ts";
 export type { Ghost, Material, Particle } from "./effects.ts";
-export { createLivingObjects } from "./objects.ts";
+export { createLivingObjects, keepInPlace } from "./objects.ts";
 export type {
   LivingEvent,
   LivingEventKind,

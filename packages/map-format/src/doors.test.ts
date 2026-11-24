@@ -97,11 +97,13 @@ function draw(c: Case): {
   let temple: Position | undefined;
   let first: Position | undefined;
   const gates: Position[] = [];
+  const objects: Position[] = [];
   for (const [y, row] of expand(c.rows).entries())
     for (const [x, ch] of [...row].entries()) {
       if (ch === " ") continue;
       if (ch === "T") temple ??= { x, y, z: 7 };
       if (ch === "L") gates.push({ x, y, z: 7 });
+      if (ch === "L" || ch === "C") objects.push({ x, y, z: 7 });
       if (".TdPK".includes(ch)) first ??= { x, y, z: 7 };
       const stack = STACKS[ch];
       if (!stack) throw new Error(`unknown tile ${ch}`);
@@ -138,12 +140,13 @@ function draw(c: Case): {
     portals: (c.portals ?? []).map((p) => ({ kind: p.kind, from: at(p.from), to: at(p.to) })),
     houses,
     gates,
+    objects,
   };
   return { tiles: new TileMap([island]), locked, world };
 }
 
 /** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
-const DOOR_ROOM_CASES = 43;
+const DOOR_ROOM_CASES = 45;
 
 describe("doorRooms", () => {
   it("reads the shared cases", () =>

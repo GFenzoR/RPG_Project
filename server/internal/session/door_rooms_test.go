@@ -66,7 +66,7 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 }
 
 // doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
-const doorRoomCases = 43
+const doorRoomCases = 45
 
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
@@ -88,7 +88,8 @@ func TestDoorRoomsFixture(t *testing.T) {
 	errs := map[string]error{"blocked": session.ErrDoorBlocked, "portal": session.ErrDoorOnPortal,
 		"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen, "truncated": session.ErrDoorTruncated,
 		"tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey, "escape": session.ErrDoorNoEscape,
-		"bypass": session.ErrDoorBypassed, "gate": session.ErrGateNoEscape}
+		"bypass": session.ErrDoorBypassed, "gate": session.ErrGateNoEscape,
+		"object": session.ErrObjectInRoom}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)
@@ -173,8 +174,11 @@ func TestDoorRoomsFixture(t *testing.T) {
 				}
 				// The same door as make validate: the first one refused, in map order.
 				what := "locked door on "
-				if c.Error == "gate" {
+				switch c.Error {
+				case "gate":
 					what = "gate on "
+				case "object":
+					what = "object on "
 				}
 				if at := what + c.Door + ",7:"; c.Door == "" || !strings.Contains(err.Error(), at) {
 					t.Fatalf("got %v, want the %q", err, at)

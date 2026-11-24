@@ -11,6 +11,16 @@ import type { Texture } from "pixi.js";
 import { burst, FADE_MS, ghostAt, materialOf, particleAt, SLIDE_MS } from "./effects.ts";
 import type { BurstKind, Ghost, Particle } from "./effects.ts";
 
+/**
+ * Keeps the entries of list that pass keep, in order, without a new array (the per-frame
+ * trim of the particles and ghosts: no garbage while nothing lives).
+ */
+export function keepInPlace<T>(list: T[], keep: (v: T) => boolean): void {
+  let n = 0;
+  for (const v of list) if (keep(v)) list[n++] = v;
+  list.length = n;
+}
+
 /** A tile position. */
 export interface LivingPos {
   x: number;
@@ -99,8 +109,8 @@ export function createLivingObjects(
   layer.addChild(ghostLayer, dots);
   stage.addChild(layer);
 
-  let particles: Placed<Particle>[] = [];
-  let ghosts: Placed<Ghost>[] = [];
+  const particles: Placed<Particle>[] = [];
+  const ghosts: Placed<Ghost>[] = [];
   const pool: Sprite[] = [];
   let alive = 0;
 
@@ -179,8 +189,8 @@ export function createLivingObjects(
       if (debris !== undefined) throwAt("hit", debris, to, now); // stepping crunches it
     },
     onTick(now, floor) {
-      particles = particles.filter((p) => particleAt(p.item, now) !== undefined);
-      ghosts = ghosts.filter((g) => ghostAt(g.item, now) !== undefined);
+      keepInPlace(particles, (p) => particleAt(p.item, now) !== undefined);
+      keepInPlace(ghosts, (g) => ghostAt(g.item, now) !== undefined);
       dots.clear();
       for (const { z, item } of particles) {
         if (z !== floor) continue;
