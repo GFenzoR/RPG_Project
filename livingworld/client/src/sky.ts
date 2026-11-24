@@ -45,9 +45,9 @@ export const DEFAULT_DAY_NIGHT: DayNightData = {
   nightNewMoon: 0x58648c,
   nightFullMoon: 0x8494c4,
   floor: 0.5,
-  sunShadow: 0.34,
+  sunShadow: 0.42,
   moonShadow: 0.16,
-  maxShadow: 1.6,
+  maxShadow: 1.4,
 };
 
 /** How high the sun climbs at noon (radians): a short shadow, never none. */

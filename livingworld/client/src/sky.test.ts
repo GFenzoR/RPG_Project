@@ -40,9 +40,9 @@ describe("data/livingworld/daynight.yaml", () => {
       night_new_moon: "#58648c",
       night_full_moon: "#8494c4",
       floor: 0.5,
-      sun_shadow: 0.34,
+      sun_shadow: 0.42,
       moon_shadow: 0.16,
-      max_shadow: 1.6,
+      max_shadow: 1.4,
     },
   };
 
