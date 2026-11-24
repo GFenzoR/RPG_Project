@@ -444,33 +444,85 @@ export function snapPlace(
     if (nearY) xs.push(o.x + o.width, o.x - r.width, o.x, o.x + o.width - r.width);
     if (nearX) ys.push(o.y + o.height, o.y - r.height, o.y, o.y + o.height - r.height);
   }
-  // The nearest edge on the axis (the first one listed on a tie: the screen's), if near.
-  const pick = (v: number, targets: readonly number[]): number => {
-    let best = v;
-    let gap = Number.POSITIVE_INFINITY;
-    for (const t of targets) {
-      const d = Math.abs(t - v);
-      if (d < gap) {
-        gap = d;
-        best = t;
-      }
+  return clampPlace(nearest(r.x, xs, within), nearest(r.y, ys, within), r, area);
+}
+
+/** The nearest of `targets` to `v` (the first listed on a tie), if within `within`; else v. */
+function nearest(v: number, targets: readonly number[], within: number): number {
+  let best = v;
+  let gap = Number.POSITIVE_INFINITY;
+  for (const t of targets) {
+    const d = Math.abs(t - v);
+    if (d < gap) {
+      gap = d;
+      best = t;
     }
-    return gap <= within ? best : v;
-  };
-  return clampPlace(pick(r.x, xs), pick(r.y, ys), r, area);
+  }
+  return gap <= within ? best : v;
 }
 
 /** The smallest a window gets (docs/17 UI-5: "un tamaño mínimo"), CSS px. */
 export const MIN_SIZE = { width: 160, height: 72 } as const;
 
-/** A size the player asks for, between MIN_SIZE and the area (never larger than it). */
-export function clampSize(width: number, height: number, area: Box): Box {
-  const maxW = Math.max(MIN_SIZE.width, area.width);
-  const maxH = Math.max(MIN_SIZE.height, area.height);
-  return {
-    width: Math.round(Math.min(Math.max(width, MIN_SIZE.width), maxW)),
-    height: Math.round(Math.min(Math.max(height, MIN_SIZE.height), maxH)),
-  };
+/**
+ * A window's corner (docs/17 UI-5, the owner's choice of 2026-11-23: windows resize from
+ * their four corners only, like in Ragnarok Online; the edges do not).
+ */
+export type Corner = "nw" | "ne" | "sw" | "se";
+export const CORNERS: readonly Corner[] = ["nw", "ne", "sw", "se"];
+
+/** The resize cursor of a corner: the top left and bottom right share one diagonal. */
+export const cornerCursor = (c: Corner): "nwse-resize" | "nesw-resize" =>
+  c === "nw" || c === "se" ? "nwse-resize" : "nesw-resize";
+
+/**
+ * The box of a window (`start`, CSS px from the area's top left) whose `corner` the pointer
+ * dragged `dx`, `dy` px: the two edges of that corner follow it, the opposite corner stays
+ * where it was (a top or left corner moves the window's x or y). The moving edges feel the
+ * magnet (SNAP_PX): the area's edges, the bar's top (its bottom) and the edges of the
+ * `others` beside or over it, as snapPlace. Then the box stays inside the area (never under
+ * the bar) and never smaller than MIN_SIZE: the moving edge gives way; only when the fixed
+ * one is nearer to the area's edge than that does the whole box slide in (clampPlace).
+ */
+export function resizeFrom(
+  corner: Corner,
+  start: Rect,
+  dx: number,
+  dy: number,
+  area: Box,
+  others: readonly Rect[] = [],
+  within: number = SNAP_PX,
+): Rect {
+  const west = corner === "nw" || corner === "sw";
+  const north = corner === "nw" || corner === "ne";
+  let left = Math.round(start.x);
+  let top = Math.round(start.y);
+  let right = left + Math.round(start.width);
+  let bottom = top + Math.round(start.height);
+  if (west) left += Math.round(dx);
+  else right += Math.round(dx);
+  if (north) top += Math.round(dy);
+  else bottom += Math.round(dy);
+  const xs: number[] = [0, area.width];
+  const ys: number[] = [0, area.height];
+  for (const o of others) {
+    if (top < o.y + o.height + within && bottom > o.y - within) xs.push(o.x, o.x + o.width);
+    if (left < o.x + o.width + within && right > o.x - within) ys.push(o.y, o.y + o.height);
+  }
+  if (west) left = Math.max(0, nearest(left, xs, within));
+  else right = Math.min(area.width, nearest(right, xs, within));
+  if (north) top = Math.max(0, nearest(top, ys, within));
+  else bottom = Math.min(area.height, nearest(bottom, ys, within));
+  if (right - left < MIN_SIZE.width) {
+    if (west) left = right - MIN_SIZE.width;
+    else right = left + MIN_SIZE.width;
+  }
+  if (bottom - top < MIN_SIZE.height) {
+    if (north) top = bottom - MIN_SIZE.height;
+    else bottom = top + MIN_SIZE.height;
+  }
+  const size = { width: Math.round(right - left), height: Math.round(bottom - top) };
+  return { ...clampPlace(left, top, size, area), ...size };
 }
 
 /** Sets the size of a window. */
@@ -739,57 +791,6 @@ export function tutorialCovered(s: WindowsState): boolean {
     const p = s.win[id];
     return p.open && (p.x === undefined || p.y === undefined);
   });
-}
-
-/** How far one arrow press moves or resizes a window, CSS px. */
-export const KEY_STEP = 16;
-
-/** Where a window is and what is around it, for windowNudge. */
-export interface NudgeContext {
-  /** Its box now (CSS px from the top left of the windows' area). */
-  rect: Rect;
-  /** The windows' area (the screen above the bar). */
-  area: Box;
-  /** The other open windows (the magnet aligns with them too). */
-  others?: readonly Rect[] | undefined;
-}
-
-/**
- * The keyboard on a window's move handle (docs/17 UI-1, UI-5: everything with the keyboard):
- * the arrows move it KEY_STEP px (with the magnet, inside the area), Shift+arrows resize it
- * (right and down grow; the top left corner stays). Undefined for any other key (it then does what it does
- * elsewhere); Alt is left to the browser (Alt+Left goes back).
- */
-export function windowNudge(
-  s: WindowsState,
-  id: WinKey,
-  e: { key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean },
-  ctx: NudgeContext,
-): WindowsState | undefined {
-  if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
-  const d: Record<string, [number, number]> = {
-    ArrowLeft: [-1, 0],
-    ArrowRight: [1, 0],
-    ArrowUp: [0, -1],
-    ArrowDown: [0, 1],
-  };
-  const dir = d[e.key];
-  if (!dir) return undefined;
-  const [dx, dy] = dir;
-  const { rect, area } = ctx;
-  if (e.shiftKey) {
-    const room = { width: area.width - rect.x, height: area.height - rect.y };
-    const size = clampSize(rect.width + dx * KEY_STEP, rect.height + dy * KEY_STEP, room);
-    // Pinned where it is: one at a default place that hangs from the bottom (the chat, the
-    // dialog) would otherwise grow upwards.
-    return resizeWindow(placeWindow(s, id, rect.x, rect.y), id, size.width, size.height);
-  }
-  const at = snapPlace(
-    { ...rect, x: rect.x + dx * KEY_STEP, y: rect.y + dy * KEY_STEP },
-    area,
-    ctx.others ?? [],
-  );
-  return moveWindow(s, id, at.x, at.y);
 }
 
 /**

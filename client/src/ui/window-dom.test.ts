@@ -34,6 +34,7 @@ import {
   openWindow,
   placeOf,
   placeWindow,
+  MIN_SIZE,
   resizeWindow,
 } from "./windows.ts";
 import type { AutoPlace, WinKey, WindowPlace, WindowsState } from "./windows.ts";
@@ -61,7 +62,6 @@ function rendered(
     onFocus: () => {},
     onGrab: () => {},
     onResize: () => {},
-    onMoveKey: () => false,
     children: "body",
   }) as VNode<{ style: Record<string, unknown> }>;
   const out: Partial<Record<StyleProp, string>> = {};
@@ -295,29 +295,32 @@ describe("dragging a window by its title bar", () => {
   });
 });
 
-describe("resizing a window by its grip", () => {
-  it("keeps its place: left, top and max-height are written though they did not change", () => {
+describe("resizing a window by a corner", () => {
+  const resized =
+    (s: ReturnType<typeof screen>) =>
+    (x: number, y: number, w: number, h: number): void =>
+      s.commit((st) => resizeWindow(placeWindow(st, "inventory", x, y), "inventory", w, h));
+
+  it("bottom right keeps its place: left, top and max-height are written though unchanged", () => {
     const s = screen(
       { open: true, collapsed: false, x: 300, y: 120 },
-      {
-        left: 300,
-        top: 120,
-        width: 200,
-        height: 240,
-      },
+      { left: 300, top: 120, width: 200, height: 240 },
     );
     resizeDrag(
       s.env,
       s.el,
+      "se",
       { clientX: 498, clientY: 358 },
       AREA,
+      [],
       placeOf(s.state(), "inventory"),
-      (x, y, w, h) =>
-        s.commit((st) => resizeWindow(placeWindow(st, "inventory", x, y), "inventory", w, h)),
+      resized(s),
     );
     s.pointer.fire("pointermove", 548, 408);
     expect(s.style.maxHeight).toBe("none");
     expect(s.classes.has("resizing-window")).toBe(true);
+    expect(s.classes.has("resizing-nesw")).toBe(false);
+    expect(s.el.dataset["resizing"]).toBe("se");
     s.pointer.fire("pointerup");
     expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 300, y: 120, w: 250, h: 290 });
     // Cleared for the render to set, they stayed empty: the window jumped to the top left.
@@ -326,34 +329,171 @@ describe("resizing a window by its grip", () => {
     expect(s.style.maxHeight).toBe("calc(100% - 120px)");
     expect(s.style.width).toBe("250px");
     expect(s.style.height).toBe("290px");
+    expect(s.el.dataset["resizing"]).toBeUndefined();
     expect(s.classes.size).toBe(0);
     expect(s.pointer.listening()).toBe(0);
   });
 
-  it("never past the bar: the room left under its top is the most", () => {
+  it("top left moves the window and keeps its bottom right; no jump on release", () => {
     const s = screen(
-      { open: true, collapsed: false, x: 300, y: 400 },
-      {
-        left: 300,
-        top: 400,
-        width: 200,
-        height: 150,
-      },
+      { open: true, collapsed: false, x: 300, y: 120, w: 200, h: 240 },
+      { left: 300, top: 120, width: 200, height: 240 },
     );
     resizeDrag(
       s.env,
       s.el,
+      "nw",
+      { clientX: 301, clientY: 121 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      resized(s),
+    );
+    s.pointer.fire("pointermove", 251, 61);
+    // While dragging the element follows: its left and top move with the corner.
+    expect(s.style.left).toBe("250px");
+    expect(s.style.top).toBe("60px");
+    expect(s.style.width).toBe("250px");
+    expect(s.style.height).toBe("300px");
+    s.pointer.fire("pointerup");
+    expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 250, y: 60, w: 250, h: 300 });
+    expect(s.style).toMatchObject({
+      left: "250px",
+      top: "60px",
+      right: "",
+      bottom: "",
+      width: "250px",
+      height: "300px",
+      maxHeight: "calc(100% - 60px)",
+    });
+  });
+
+  it("top right and bottom left: the other diagonal's cursor, and only x or y moves", () => {
+    const s = screen(
+      { open: true, collapsed: false, x: 300, y: 120 },
+      { left: 300, top: 120, width: 200, height: 240 },
+    );
+    resizeDrag(
+      s.env,
+      s.el,
+      "ne",
+      { clientX: 500, clientY: 120 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      resized(s),
+    );
+    s.pointer.fire("pointermove", 530, 100);
+    expect(s.classes.has("resizing-nesw")).toBe(true);
+    s.pointer.fire("pointerup");
+    expect(s.classes.size).toBe(0);
+    expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 300, y: 100, w: 230, h: 260 });
+
+    resizeDrag(
+      s.env,
+      s.el,
+      "sw",
+      { clientX: 300, clientY: 360 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      resized(s),
+    );
+    s.pointer.fire("pointermove", 280, 380);
+    s.pointer.fire("pointerup");
+    // Its box on screen was still the fake's first: x 300 - 20, its top 120 stays.
+    expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 280, y: 120, w: 220, h: 260 });
+    expect(s.style.left).toBe("280px");
+    expect(s.style.top).toBe("120px");
+  });
+
+  it("never past the bar nor under MIN_SIZE, and snaps to another window's edge", () => {
+    const s = screen(
+      { open: true, collapsed: false, x: 300, y: 400 },
+      { left: 300, top: 400, width: 200, height: 150 },
+    );
+    resizeDrag(
+      s.env,
+      s.el,
+      "se",
       { clientX: 498, clientY: 548 },
       AREA,
+      [{ x: 560, y: 380, width: 100, height: 100 }],
       placeOf(s.state(), "inventory"),
-      (x, y, w, h) =>
-        s.commit((st) => resizeWindow(placeWindow(st, "inventory", x, y), "inventory", w, h)),
+      resized(s),
     );
-    s.pointer.fire("pointermove", 498, 900);
+    s.pointer.fire("pointermove", 555, 900);
     s.pointer.fire("pointerup");
-    expect(placeOf(s.state(), "inventory")).toMatchObject({ h: 200 });
+    // The bottom stops at the bar's top (600); the right edge snaps to the other's left.
+    expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 300, y: 400, w: 260, h: 200 });
     expect(s.style.height).toBe("200px");
     expect(s.style.top).toBe("400px");
+
+    resizeDrag(
+      s.env,
+      s.el,
+      "nw",
+      { clientX: 300, clientY: 400 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      resized(s),
+    );
+    s.pointer.fire("pointermove", 900, 900);
+    s.pointer.fire("pointerup");
+    // The fake's box (300, 400, 200 x 150) keeps its bottom right at 500, 550.
+    expect(placeOf(s.state(), "inventory")).toMatchObject({
+      x: 500 - MIN_SIZE.width,
+      y: 550 - MIN_SIZE.height,
+      w: MIN_SIZE.width,
+      h: MIN_SIZE.height,
+    });
+  });
+
+  it("with the interface scale, writes its own px (screen px / zoom)", () => {
+    const s = screen(
+      { open: true, collapsed: false, x: 300, y: 120 },
+      { left: 300, top: 120, width: 200, height: 240 },
+      1.25,
+    );
+    resizeDrag(
+      s.env,
+      s.el,
+      "nw",
+      { clientX: 300, clientY: 120 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      resized(s),
+    );
+    s.pointer.fire("pointermove", 250, 70);
+    expect(s.style.left).toBe("200px");
+    expect(s.style.width).toBe("200px");
+    s.pointer.fire("pointerup");
+    expect(placeOf(s.state(), "inventory")).toMatchObject({ x: 250, y: 70, w: 250, h: 290 });
+    expect(s.style).toMatchObject({ left: "200px", top: "56px", width: "200px", height: "232px" });
+  });
+
+  it("a press released without moving changes nothing", () => {
+    const s = screen(
+      { open: true, collapsed: false, x: 300, y: 120 },
+      { left: 300, top: 120, width: 200, height: 240 },
+    );
+    let done = 0;
+    resizeDrag(
+      s.env,
+      s.el,
+      "nw",
+      { clientX: 300, clientY: 120 },
+      AREA,
+      [],
+      placeOf(s.state(), "inventory"),
+      () => done++,
+    );
+    s.pointer.fire("pointerup");
+    expect(done).toBe(0);
+    expect(s.classes.size).toBe(0);
+    expect(s.pointer.listening()).toBe(0);
   });
 });
 

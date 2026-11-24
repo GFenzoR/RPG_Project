@@ -107,11 +107,11 @@ import {
   tutorialCovered,
   windowForHighlight,
   windowKey,
-  windowNudge,
 } from "./windows.ts";
 import type {
   AutoPlace,
   ContainerKey,
+  Corner,
   LastLook,
   Rect,
   WinKey,
@@ -913,8 +913,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
           onFocus={() => win.update((s) => focusWindow(s, id))}
           onGrab={(e, el) => win.grab(id, e, el)}
-          onResize={(e, el) => win.resize(id, e, el)}
-          onMoveKey={(e, el) => win.moveKey(id, e, el)}
+          onResize={(corner, e, el) => win.resize(id, corner, e, el)}
         >
           {w.body}
         </GameWindow>
@@ -1153,10 +1152,8 @@ interface WindowsApi {
   reset(): void;
   /** The title bar: the window follows the pointer, with the magnet (snapPlace). */
   grab(id: WinKey, e: PointerEvent, el: HTMLElement): void;
-  /** The resize grip: the window's corner follows the pointer. */
-  resize(id: WinKey, e: PointerEvent, el: HTMLElement): void;
-  /** A key on the move handle (ui/windows.ts windowNudge): true when it was the window's. */
-  moveKey(id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean;
+  /** A resize corner: that corner follows the pointer, with the magnet (resizeFrom). */
+  resize(id: WinKey, corner: Corner, e: PointerEvent, el: HTMLElement): void;
   /**
    * The windows' area (.win-layer: the screen above the bar), watched while it is in the
    * page: only the desktop layout has one, and each switch back to it mounts a new one.
@@ -1418,35 +1415,22 @@ function useWindows(
     );
   };
 
-  const resize = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
+  const resize = (id: WinKey, corner: Corner, e: PointerEvent, el: HTMLElement): void => {
     const area = layer.current;
     if (e.button !== 0 || !area) return;
     e.preventDefault();
     e.stopPropagation();
+    const box = area.getBoundingClientRect();
     resizeDrag(
       dragEnv,
       el,
+      corner,
       e,
-      area.getBoundingClientRect(),
+      box,
+      otherRects(area, el, box),
       placeOf(stateRef.current, id),
       (x, y, w, h) => update((s) => resizeWindow(placeWindow(s, id, x, y), id, w, h)),
     );
-  };
-
-  const moveKey = (id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean => {
-    const area = layer.current;
-    if (!area) return false;
-    const box = area.getBoundingClientRect();
-    const next = windowNudge(stateRef.current, id, e, {
-      rect: rectIn(el.getBoundingClientRect(), box),
-      area: { width: box.width, height: box.height },
-      others: otherRects(area, el, box),
-    });
-    if (!next) return false;
-    // A move raises the window: only its z-index changes (pageOrder), so the focus stays
-    // on its handle.
-    update(() => next);
-    return true;
   };
 
   return {
@@ -1459,7 +1443,6 @@ function useWindows(
     reset,
     grab,
     resize,
-    moveKey,
     layer,
     equipment,
     containersTop: containersTop(state.win.inventory, equipmentHeight),

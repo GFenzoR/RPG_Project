@@ -114,7 +114,6 @@ describe("GameWindow", () => {
       onFocus: noop,
       onGrab: noop,
       onResize: noop,
-      onMoveKey: () => false,
       children: "body",
       ...more,
     }) as VNode<Props>;
@@ -156,7 +155,7 @@ describe("GameWindow", () => {
     const labels = nodes(frame(false, { closable: false }))
       .filter((v) => v.type === "button")
       .map((b) => b.props["data-testid"]);
-    expect(labels).toEqual(["window-move-guild", "window-fold-guild"]);
+    expect(labels).toEqual(["window-fold-guild"]);
   });
 
   it("puts more in its bar and keeps the title for screen readers (the chat's tabs)", () => {
@@ -168,31 +167,21 @@ describe("GameWindow", () => {
     expect(nodes(tree).some((v) => v.props["class"] === "chat-tabs")).toBe(true);
   });
 
-  it("its move handle hands the keys to the window and keeps them from walking", () => {
-    let asked = "";
-    const tree = frame(false, {
-      onMoveKey: (e) => {
-        asked = e.key;
-        return e.key === "ArrowLeft";
-      },
-    });
-    const move = nodes(tree).find((v) => v.props["class"] === "gwin-btn gwin-move");
-    let stopped = 0;
-    const key = (k: string): void =>
-      (move?.props["onKeyDown"] as (e: unknown) => void)({
-        key: k,
-        currentTarget: { closest: () => ({}) },
-        preventDefault: () => stopped++,
-        stopPropagation: () => stopped++,
+  it("resizes from its four corners only, never while folded (docs/17 UI-5)", () => {
+    const pressed: string[] = [];
+    const tree = frame(false, { onResize: (corner) => pressed.push(corner) });
+    const grips = nodes(tree).filter((v) => v.props["class"] === "gwin-resize");
+    expect(grips.map((g) => g.props["data-corner"])).toEqual(["nw", "ne", "sw", "se"]);
+    for (const g of grips) {
+      expect(g.props["title"]).toBe("client.window.resize");
+      (g.props["onPointerDown"] as (e: unknown) => void)({
+        currentTarget: { parentElement: {} },
       });
-    key("ArrowLeft");
-    expect(asked).toBe("ArrowLeft");
-    expect(stopped).toBe(2);
-    key("KeyW");
-    expect(stopped).toBe(2); // not the window's: it walks as before
-    expect(move?.props["title"]).toBe(
-      'client.window.move{"title":"Gremio"} · client.window.move_hint',
-    );
+    }
+    expect(pressed).toEqual(["nw", "ne", "sw", "se"]);
+    // No move button: the title bar moves it, the corners resize it.
+    expect(nodes(tree).some((v) => String(v.props["class"]).includes("gwin-move"))).toBe(false);
+    expect(nodes(frame(true)).some((v) => v.props["class"] === "gwin-resize")).toBe(false);
   });
 
   it("names its buttons after the window and hides its body when folded", () => {
@@ -201,7 +190,6 @@ describe("GameWindow", () => {
       .filter((v) => v.type === "button")
       .map((b) => b.props["aria-label"]);
     expect(labels).toEqual([
-      'client.window.move{"title":"Gremio"}',
       'client.window.expand{"title":"Gremio"}',
       'client.window.close{"title":"Gremio"}',
     ]);

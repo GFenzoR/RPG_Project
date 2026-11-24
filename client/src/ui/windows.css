@@ -653,47 +653,62 @@
 .gwin[data-sized] > .gwin-body {
   flex: 1 1 auto;
 }
-/* The move handle (docs/17 UI-1: windows move and resize from the keyboard too): quiet
-   until the bar is hovered or the handle has the focus. */
-.gwin-move {
-  opacity: 0.45;
-  cursor: grab;
-}
-.gwin-bar:hover .gwin-move,
-.gwin-move:focus-visible {
-  opacity: 1;
-}
-.gwin-move .icon {
-  width: 12px;
-  height: 12px;
-}
-/* The resize grip: the bottom right corner, over its ornament. */
+/* The resize corners (docs/17 UI-5, the owner's choice: the four corners resize, the
+   edges do not, like in Ragnarok Online): a grab zone of 12 px over each gold corner
+   ornament (.gwin::after sits 5 px out, so does the zone). Nothing new is drawn: under the
+   pointer the corner glows warm, telling it can be taken. */
 .gwin-resize {
   position: absolute;
-  right: 0;
-  bottom: 0;
   z-index: 4;
-  width: 14px;
-  height: 14px;
-  cursor: nwse-resize;
+  width: 12px;
+  height: 12px;
   touch-action: none;
-  background: linear-gradient(
-    135deg,
-    transparent 0 55%,
-    var(--ui-iron-400) 55% 62%,
-    transparent 62% 72%,
-    var(--ui-iron-400) 72% 79%,
-    transparent 79%
-  );
-  opacity: 0.6;
 }
-.gwin-resize:hover {
+.gwin-resize::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: radial-gradient(rgb(240 200 110 / 0.55), rgb(232 190 96 / 0.18) 55%, transparent 72%);
+  opacity: 0;
+  transition: opacity var(--ui-dur) ease;
+}
+.gwin-resize[data-corner="nw"] {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.gwin-resize[data-corner="ne"] {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.gwin-resize[data-corner="sw"] {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+.gwin-resize[data-corner="se"] {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+/* Lit while it is under the pointer, and the one taken while the resize lasts. */
+.gwin-resize:hover::before,
+.gwin[data-resizing="nw"] > .gwin-resize[data-corner="nw"]::before,
+.gwin[data-resizing="ne"] > .gwin-resize[data-corner="ne"]::before,
+.gwin[data-resizing="sw"] > .gwin-resize[data-corner="sw"]::before,
+.gwin[data-resizing="se"] > .gwin-resize[data-corner="se"]::before {
   opacity: 1;
 }
 body.resizing-window,
 body.resizing-window * {
   cursor: nwse-resize !important;
   user-select: none !important;
+}
+body.resizing-window.resizing-nesw,
+body.resizing-window.resizing-nesw * {
+  cursor: nesw-resize !important;
 }
 body.dragging-window,
 body.dragging-window * {
