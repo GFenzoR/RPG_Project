@@ -115,7 +115,7 @@ items:
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3150            # en gramos (capacidad en "oz" se muestra derivada)
+  weight: 1200            # en gramos por unidad; la UI lo muestra en g o kg
   stackable: false
   tradeable: true
   weapon:
@@ -200,7 +200,12 @@ items:
   `driftwood_club`, `forged_shortsword`, `thornwood_blade`, `leather_jerkin`, `hide_vest`
   y `riveted_round_shield`. Nunca se borra un item que pudo quedar en un inventario
   guardado: se retira.
-- **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
+- **Peso:** `weight` en gramos por unidad, realista para lo que es el objeto (una espada
+  1–1,5 kg, un peto de placas 12–20 kg, una moneda unos gramos; tabla en
+  `02-game-design.md` "Unidades"). La UI lo muestra en g por debajo de 1 kg y en kg con
+  hasta dos decimales (`client/src/state/units.ts`). La capacidad de
+  `data/vocations.yaml` también va en gramos. Un alcance (`weapon.range`) son casillas, y
+  una casilla es un metro.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y

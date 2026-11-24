@@ -275,6 +275,29 @@ el punto 5:
     norte y el cadáver aparece mirando al sur.
   - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death`, `14-respawn`): el cadáver
     del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
+- **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
+  2026-11-23: "todas las unidades y distancias en el sistema métrico"; docs/02
+  "Unidades" y "Cargas realistas"):** pesos en g/kg (`formatMass`), alcances en m y casas
+  en m² (1 casilla = 1 m); capacidad de 36–45 kg al nivel 1 y pesos reales en todo
+  `data/items`; `TestHuntLootFits` mide que una cacería de 60 muertes entra a los niveles
+  1, 10 y 30. Queda:
+  - **Personajes que ya existen:** la capacidad se deriva del nivel (sin migración), pero
+    quien llevaba más de lo que ahora puede cargar (un guardián de nivel 30 con 100 kg de
+    botín en la mochila) queda sobrecargado: no queda atascado, solo no levanta nada hasta
+    vender o soltar. En un servidor con jugadores, avisarlo en las noticias.
+  - **Afinar con gente real:** la cacería de 60 muertes y el 15 % de suerte son una
+    estimación; si los jugadores vuelven al pueblo demasiado seguido, subir `per_level`
+    de `data/vocations.yaml` o bajar el peso de las pieles y el mineral.
+  - **Más niveles:** el test mira 1, 10 y 30; los monstruos de 35 a 58 (delver, gólem,
+    dragoncillo) no tienen un chequeo propio (con 80–100 kg a esos niveles entran de sobra
+    en las cuentas a mano).
+  - **El atributo `speed`** sigue diciendo "+N de velocidad" (puntos, no una velocidad):
+    si se quiere mostrar en m/s hay que pasar por la fórmula del paso (docs/02
+    "Movimiento").
+  - **E2E:** mirar la barra de capacidad ("Capacidad libre: … kg / 45 kg" en un
+    guardián nuevo), la ficha de
+    un arma a distancia ("Alcance: 5 m", "Peso: 700 g") y el texto de una casa libre
+    ("(32 m²)"); lo corre el lote al final.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
@@ -1043,8 +1066,8 @@ el punto 5:
     pieza que ahora pide más (un mago con el torso pesado, la cota o la hoja antes del 50,
     el escudo de tablones antes del 5, el cuero de ciervo antes del 15) la sigue usando
     hasta que se la saca.
-  - **Pesos:** varias piezas pesan más que antes (el hacha de mano 4000 g, la cabilla 3800,
-    el cuero de ciervo): un personaje cargado puede quedar sobre su capacidad. No lo deja
+  - **Pesos:** desde `feat/metric-units` todos los pesos son reales (docs/02 "Cargas
+    realistas"); un personaje cargado puede quedar sobre su capacidad. No lo deja
     atascado; solo no puede levantar más hasta soltar algo.
   - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
     forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.

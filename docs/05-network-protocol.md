@@ -907,7 +907,7 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   que no es contenedor: un cartel, un yunque, un árbol) contesta como el suelo,
   `look.ground` sin peso (T5.5). El cliente agrega la descripción que nombra el
   `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
-  existe y muestra el peso en oz.
+  existe y muestra el peso en g o kg (`formatMass`, docs/02 "Unidades").
 - **Login:** `Inventory` lleva el equipo guardado y los bolsillos; un personaje que nunca
   jugó recibe `inventory.start_container` en el slot de mochila y el `start_kit` de su
   vocación (docs/02 "Equipo inicial"): su primer `Inventory` ya trae el arma, la ropa y,

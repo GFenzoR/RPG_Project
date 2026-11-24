@@ -817,6 +817,80 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     de cura (antídoto); que un jugador vea invisibles.
 - Zonas de protección: no se puede atacar ni ser atacado. El PvP está en "PvP (T5.2)".
 
+## Unidades (pedido del dueño, 2026-11-23)
+Todo lo que el jugador lee está en el sistema métrico. Nada de onzas, libras, pies ni
+millas (el "oz" del inventario era una herencia).
+
+- **Distancia: 1 casilla = 1 metro.** Un alcance (`weapon.range`, el de un hechizo) es de
+  metros: la ficha de un arma a distancia dice "Alcance: 5 m" (`client.unit.m`,
+  `formatLength`). Un área de casillas es de metros cuadrados: una casa de 32 casillas
+  mide 32 m² (`house.look_free`, `client.house.facts`, la tabla de `/houses` del sitio;
+  `formatArea`). En la lore vale hablar en pasos ("a dos pasos"), nunca en pies.
+- **Peso:** los datos están en gramos (`weight` de `data/items`, por unidad; la capacidad de
+  `data/vocations.yaml`; `PlayerStats.capacity` y el parámetro `weight` de los mensajes
+  `look.*`). La UI escribe g por debajo de 1 kg ("350 g", redondeado al gramo) y kg desde
+  ahí, con hasta dos decimales y sin ceros de más ("3 kg", "3,25 kg", "12,4 kg"), con el
+  separador decimal y la agrupación del idioma (`Intl.NumberFormat`: coma en español).
+  Un peso que redondea a 1000 g ya se escribe "1 kg". Es `formatMass` de
+  `client/src/state/units.ts` (puro, con tests); los símbolos son textos
+  (`client.unit.g`, `client.unit.kg`, `client.unit.m`, `client.unit.m2`).
+- **Velocidad:** queda interna (puntos de `speed`, docs/02 "Movimiento"); ningún texto
+  muestra una velocidad. El atributo `speed` dice "+N de velocidad", un bono de puntos,
+  no una velocidad: si algún día se muestra una velocidad, va en m/s.
+- **Temperatura**, si un texto la nombra: °C.
+- `packages/content-schema/src/metric-units.test.ts` falla si un catálogo de `i18n/`
+  (es o en) nombra una unidad imperial; deja pasar, texto por texto, las palabras que ahí
+  no son unidades (el slot "pies"/"feet", "al pie de la escalera", "set foot", "Yard").
+
+### Cargas realistas
+Con el sistema métrico se reescalaron los números (decisión del dueño): un personaje que
+empieza ya no carga 420 kg.
+
+| Vocación | Nivel 1 | Por nivel | Nivel 10 | Nivel 30 | Nivel 75 |
+|---|---|---|---|---|---|
+| Guardián | 45 kg | +1 kg | 54 kg | 74 kg | 119 kg |
+| Montaraz | 42 kg | +0,8 kg | 49,2 kg | 65,2 kg | 101,2 kg |
+| Druida | 37 kg | +0,65 kg | 42,9 kg | 55,9 kg | 85,1 kg |
+| Arcanista | 36 kg | +0,6 kg | 41,4 kg | 53,4 kg | 80,4 kg |
+
+La capacidad sale de la vocación y el nivel (`content.Vocation.AtLevel`): no se guarda por
+personaje, así que los personajes que ya existen no necesitan migración.
+
+Pesos de referencia (`data/items`, cada item auditado; el equipo del catálogo sigue la
+fórmula por banda de "Catálogo de equipo"): espadas 1–1,5 kg, hachas 0,9–2,15 kg, mazas
+0,7–2,45 kg, arcos 0,7–1,2 kg, ballestas de mano 3–3,75 kg, varitas 300–400 g, varas
+1,5–2 kg; escudos 3–6 kg; torsos pesados 4 kg (cuero de ciervo), 9 kg (coraza de acero de
+ascua), 14 kg (cota de escamas de dragoncillo) y 19 kg (coraza de acero de marea), túnicas
+1,4–1,9 kg; cabeza 200 g (gorro) a 2,6 kg (yelmo), piernas 0,7–4,45 kg, pies 1–2,5 kg;
+amuletos 60 g, anillos 15 g; mochila 1 kg; brebajes 300–350 g; runa 50 g; flecha 25 g, virote 35 g; moneda de cobre 3 g, de plata
+5 g, de oro 8 g; comida en gramos (galleta 100 g, pescado 300–400 g, carne 400–500 g,
+guiso 600 g); materiales pesados: troncos 2,5–3,5 kg, mineral 1,2–1,3 kg, lingote 1 kg,
+piel 1,5 kg, cornamenta 1,5 kg, núcleo de escoria 4 kg; la piedra suelta de la minería es
+un trozo de mano de 500 g (así minar no llena la capacidad en unos golpes).
+
+**Una cacería entra en la mochila.** `TestHuntLootFits` (`server/internal/sim`) arma a cada
+vocación en los niveles 1, 10 y 30 con el kit de las simulaciones de balance (`kitFor`,
+`casterKit`, `crossbowKit`), la mochila, provisiones (10 galletas; 10 brebajes de vida el
+guardián, 20 de maná los magos, 5 y 5 más 100 flechas o virotes el montaraz) y le suma el
+botín esperado de **60 muertes** (unos 30 minutos a ~30 s por muerte) de cada monstruo
+común de su nivel (objetivo entre nivel − 4 y nivel + 2, con todo lo que suelta, monedas
+incluidas), con un 15 % de margen por la suerte. Las cuentas al ajustar (botín de 60
+muertes, sin el margen, contra lo libre con kit y provisiones):
+
+| Nivel | Lo más pesado de cazar | Botín | Libre (el más justo) |
+|---|---|---|---|
+| 1 | gaviota ladrona | 0,4 kg | 23,1 kg (druida) |
+| 10 | escarabajo de mena | 21,7 kg | 26,2 kg (arcanista) |
+| 10 | ciervo de zarza | 19,9 kg | 26,2 kg (arcanista) |
+| 10 | jabalí cerdoso | 15,9 kg | 26,2 kg (arcanista) |
+| 30 | sabueso de ceniza | 21,9 kg | 32 kg (arcanista; el montaraz con coraza, escudo y ballesta, 33,1 kg) |
+
+Para que entrara se tocó el botín: el escarabajo de mena suelta mineral de hierro con 20 %
+(antes 35 %), el jabalí carne con 35 % (antes 50 %) y el sabueso de ceniza su piel con
+18 % (antes 22 %); el cobre pesa 3 g (lo que más se junta: ~1900 monedas en una cacería
+de sabuesos). Llenarse sigue pasando en una cacería larga o minando, y es parte del
+juego: se vuelve al pueblo a vender.
+
 ## Items, equipo e inventario
 Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Instancias:** cada item es una instancia que vive en un solo lugar: en el suelo (sobre
@@ -844,7 +918,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
   items equipados con su contenido y el de lo que llevan los bolsillos (abajo)
   (`weight × cantidad`). Solo lo que entra al inventario desde afuera consume capacidad.
-  La UI muestra oz = gramos / 100.
+  La UI la muestra en kg y g (ver "Unidades"; los números, en "Cargas realistas").
 - **Alcance:** tomar, soltar, abrir o usar en el suelo exige el mismo piso y distancia
   ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
@@ -1045,10 +1119,12 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
   elemento de la vocación (arcanista energía, druida hielo; las de las bandas 1 y 2
   conservan el suyo: chispa de energía, coral y madera de escarcha de hielo, retoño de
   tierra).
-- **Peso** (gramos, *i* = b − 1): espada 3000 + 150·i; hacha 4000 + 300·i; maza 3800 +
-  400·i; arco 2400 + 300·i; ballesta 3200 + 400·(b − 3); varita 1200 + 100·i; vara 1400 +
-  100·i; escudo 3500 + 600·i; torso pesado 8000 + 1000·(b − 3); túnica 2000 + 300·i; cabeza
-  800 + 400·i; piernas 1600 + 500·i; pies 1200 + 400·i; amuleto 300; anillo 100.
+- **Peso** (gramos reales, "Cargas realistas"; *i* = b − 1): espada 1000 + 100·i; hacha
+  900 + 250·i; maza 700 + 350·i; arco 700 + 100·i; ballesta 3000 + 250·(b − 3); varita
+  300 + 20·i; vara 1500 + 100·i; escudo 3000 + 600·i; torso pesado 4000 + 5000·(b − 3) (el
+  abrigo de cuero 4 kg, la coraza 9 kg, la cota de escamas 14 kg, la de placas 19 kg);
+  túnica 1400 + 100·i; cabeza 200 + 480·i; piernas 700 + 750·i; pies 1000 + 300·i; amuleto
+  60; anillo 15.
 - **Valor:** V de la banda por el factor de la línea (armas 1; ballesta 0,9; escudo 0,75;
   torso pesado 0,9; túnica 0,6; cabeza, piernas y pies 0,4; amuleto 0,8; anillo 0,6),
   redondeado a 5 debajo de 100, a 10 debajo de 1000, a 50 debajo de 5000 y a 100 arriba.
