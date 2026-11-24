@@ -77,6 +77,9 @@ var (
 	// outside), or a side joined to the world only through a house, a boat, a rope spot or
 	// across the tile of stairs or a teleport that leads elsewhere.
 	errDoorNoEscape = errors.New("a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in")
+	// errGateNoEscape: a side of a living world gate reaches no temple without it (the
+	// same ways as errDoorNoEscape): whoever is there when it closes would be locked in.
+	errGateNoEscape = errors.New("a side of it reaches no temple once it closes (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in")
 	// errDoorBypassed: a player without its key gets into its room (checkEscapes): a
 	// locked door of another key opens from its own room, which such a player reaches,
 	// onto it (a cycle of locked doors of different keys).
@@ -246,8 +249,13 @@ type doorSide struct {
 // it, into its room. Rooms in a cycle of doors of one key pass (a building with a back
 // door to a yard with its own gate); a room inside another passes whatever its key, since
 // its door opens only onto the room around it.
+//
+// The living world's gates (livingGates) close whenever their plates are let go (a
+// boulder that goes home, a restart): every side of a closed gate must reach the world the
+// same way without it, or it fails with errGateNoEscape.
 func (w *World) checkEscapes(locked []world.Pos) error {
-	if len(locked) == 0 {
+	gates := w.livingGates()
+	if len(locked) == 0 && len(gates) == 0 {
 		return nil
 	}
 	roomArea := make([]int32, len(w.rooms)) // room id - 1 → its area
@@ -319,6 +327,17 @@ func (w *World) checkEscapes(locked []world.Pos) error {
 		for _, s := range sides[i] {
 			if !escapes[s.area] {
 				return fmt.Errorf("session: locked door on %v: %w (its side on %v)", p, errDoorNoEscape, s.at)
+			}
+		}
+	}
+	for _, g := range gates {
+		for e := world.North; e <= world.NorthWest; e++ {
+			q, ok := g.Step(e)
+			if !ok {
+				continue
+			}
+			if a := w.areaOf(q); a != 0 && !escapes[a] {
+				return fmt.Errorf("session: gate on %v: %w (its side on %v)", g, errGateNoEscape, q)
 			}
 		}
 	}
@@ -601,7 +620,9 @@ func (w *World) openDoor(p *Player, pos world.Pos, i int, def *content.Item, d *
 // closeDoor closes the open door def at stack index i of pos: the tile must be free, and
 // a locked door locks again only with its key and with no player without it in its room.
 func (w *World) closeDoor(p *Player, pos world.Pos, i int, def *content.Item, d *door) {
-	if w.occupied(pos) || len(w.ground[pos]) > 0 {
+	// A living object never stands there (livingHost.Free refuses a door's tile), but a
+	// door must never close on one: swapDoor's blocking flags know only the map's stack.
+	if w.occupied(pos) || len(w.ground[pos]) > 0 || w.living != nil && w.living.Has(toLW(pos)) {
 		p.emit(systemMsg(msgDoorBlocked))
 		return
 	}

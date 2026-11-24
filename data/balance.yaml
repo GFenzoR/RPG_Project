@@ -177,6 +177,11 @@ stash:                      # docs/02 "Baúl de la cuenta": one chest per accoun
   action_burst: 8           # anti-flood: 8 moves at once, then one every 250 ms
   action_refill_ms: 250     # (each move writes the character and the stash in one transaction)
 
+living:                     # the living world (livingworld/README.md); each object's numbers live in data/livingworld
+  fist_damage: 5            # a bare-handed strike on a breakable object
+  tool_damage: 10           # one use of an axe or a pickaxe on one
+  push_cooldown_ms: 400     # between two pushes of one player
+
 forge:                      # refine +1..+10 at an anvil (docs/02-game-design.md, "Forja"). Own numbers.
   enabled: true             # false: the anvil only crafts
   station: anvil            # the map item that refines (within 1 tile, like crafting)

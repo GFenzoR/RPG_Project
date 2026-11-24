@@ -23,10 +23,20 @@ export const DOOR_ROOM_SEARCH = 4096;
  * of it reaches no temple without keys or tools: on foot, out of rooms through their
  * doors, by stairs, ladders, holes and teleports) or bypass (a player with every key but
  * its own gets into its room: a locked door of another key opens onto it from its own
- * room).
+ * room). gate: a side of a living world gate (DoorWorld.gates) reaches no temple once it
+ * closes, the same ways as escape (its finding's door is the gate).
  */
 export type DoorRoomError =
-  "blocked" | "portal" | "walled" | "open" | "truncated" | "tie" | "key" | "escape" | "bypass";
+  | "blocked"
+  | "portal"
+  | "walled"
+  | "open"
+  | "truncated"
+  | "tie"
+  | "key"
+  | "escape"
+  | "bypass"
+  | "gate";
 
 /** The room behind a locked door, one list of tiles per side that is not the outside. */
 export type DoorRoom = { rooms: Position[][] } | { error: DoorRoomError };
@@ -46,6 +56,7 @@ export const DOOR_ROOM_ERRORS: Record<DoorRoomError, string> = {
     "a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in",
   bypass:
     "a player without its key gets into its room: a locked door of another key opens onto it from a room such a player reaches",
+  gate: "a side of it reaches no temple once it closes (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in",
 };
 
 /** The 8 steps in the server's order (world.North, clockwise; y grows southwards). */
@@ -293,7 +304,10 @@ export interface DoorRoomFinding {
    * that opens onto its room from its own room.
    */
   other?: Position;
-  /** escape: the first tile next to the door (direction order) on the side that leads nowhere. */
+  /**
+   * escape and gate: the first tile next to the door or gate (direction order) on the side
+   * that leads nowhere.
+   */
   side?: Position;
 }
 
@@ -326,6 +340,12 @@ export interface DoorWorld {
    * to it) to the area of to.
    */
   portals?: readonly { kind: string; from: Position; to: Position }[];
+  /**
+   * The living world's gates, placed closed (livingworld/README.md): they close whenever
+   * their plates are let go, so every side of one must reach a temple without it (the
+   * server's checkEscapes).
+   */
+  gates?: readonly Position[];
 }
 
 /**
@@ -425,14 +445,15 @@ export function doorRooms(
       r.rooms.reduce((n, side) => n + side.length, 0),
     );
   }
-  if (out.findings.length === 0 && doors.length > 0)
+  if (out.findings.length === 0 && (doors.length > 0 || (world.gates?.length ?? 0) > 0))
     out.findings.push(...escapeCheck(tiles, content, doors, rooms, roomsOf, world));
   return out;
 }
 
 /**
  * The server's checkEscapes on the doors of doorRooms (all with their rooms): the escape
- * findings, door by door (the first side that leads nowhere), or else the bypass ones.
+ * findings, door by door (the first side that leads nowhere), or else the gate ones (the
+ * first side of a gate that leads nowhere), or else the bypass ones.
  */
 function escapeCheck(
   tiles: TileMap,
@@ -474,6 +495,18 @@ function escapeCheck(
   for (const [i, { pos }] of doors.entries()) {
     const stuck = sides[i]?.find((s) => !escapes.has(s.area));
     if (stuck) findings.push({ door: pos, error: "escape", side: stuck.at });
+  }
+  if (findings.length > 0) return findings;
+  for (const g of world.gates ?? []) {
+    for (const [dx, dy] of STEPS) {
+      const at = { x: g.x + dx, y: g.y + dy, z: g.z };
+      if (at.x < 0 || at.y < 0 || at.x > MAX || at.y > MAX) continue;
+      const a = areaOf(at);
+      if (a !== 0 && !escapes.has(a)) {
+        findings.push({ door: g, error: "gate", side: at });
+        break;
+      }
+    }
   }
   if (findings.length > 0) return findings;
 

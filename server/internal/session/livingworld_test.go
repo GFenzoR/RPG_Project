@@ -1,6 +1,8 @@
 package session_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -59,9 +61,12 @@ const livingYAML = `
   plate: { radius: 6 }
 `
 
-// livingHarness builds a world of m with the living-world items; objects puts each item
-// on its tile (blocking as mapcompile would have flagged it).
-func livingHarness(t *testing.T, m *world.Map, objects map[world.Pos]uint16) *harness {
+// livingBalance is balance.living of the tests (data/balance.yaml's numbers).
+var livingBalance = content.Living{FistDamage: 5, ToolDamage: 10, PushCooldownMs: 400}
+
+// livingSetup is the option of a world of m with the living-world items; objects puts
+// each item on its tile (blocking as mapcompile would have flagged it).
+func livingSetup(t *testing.T, m *world.Map, objects map[world.Pos]uint16) option {
 	t.Helper()
 	items := testItems()
 	for n, src := range livingItemDefs {
@@ -85,10 +90,18 @@ func livingHarness(t *testing.T, m *world.Map, objects map[world.Pos]uint16) *ha
 	if err := yaml.Unmarshal([]byte(livingYAML), &defs); err != nil {
 		t.Fatal(err)
 	}
-	return newHarness(t, m, func(c *session.Config) {
+	return func(c *session.Config) {
 		c.Items = items
 		c.LivingWorld = defs
-	})
+		c.Balance.Living = livingBalance
+	}
+}
+
+// livingHarness builds a world of m with the living-world items and objects (livingSetup),
+// then applies opts.
+func livingHarness(t *testing.T, m *world.Map, objects map[world.Pos]uint16, opts ...option) *harness {
+	t.Helper()
+	return newHarness(t, m, append([]option{livingSetup(t, m, objects)}, opts...)...)
 }
 
 func armed(h *harness, p world.Pos, item uint16) (*fakeClient, *session.Player) {
@@ -258,8 +271,9 @@ func TestLivingPushes(t *testing.T) {
 	if s := h.w.LivingObjects()[0]; s.Pos != pos(4, 2) {
 		t.Fatalf("boulder at %v, want 4,2", s.Pos)
 	}
-	if !hasKey(b.take(), "inventory.not_possible") && !h.w.Map().Walkable(boulder) {
-		t.Fatal("the second push must find nothing")
+	if evs := b.take(); !hasKey(evs, "inventory.not_possible") || len(livingEvents(evs)) != 1 {
+		// b sees a's push (one event) and is told its own found nothing.
+		t.Fatalf("the second push must find nothing: %v, events %v", systemKeys(evs), livingEvents(evs))
 	}
 	if h.w.Map().Walkable(pos(4, 2)) || !h.w.Map().Walkable(boulder) {
 		t.Fatal("the boulder's block must move with it")
@@ -268,8 +282,7 @@ func TestLivingPushes(t *testing.T) {
 	if got := livingEvents(evs); len(got) != 1 || got[0] != pb.LivingObjectKind_LIVING_OBJECT_KIND_PUSH {
 		t.Fatalf("push events: %v", got)
 	}
-	// Not next to it any more: too far. Then from 4,1 south twice: the wall at 5,4 is not
-	// in the way, the second push onto 4,4 is free, a third would leave the map's row.
+	// Not next to it any more: too far.
 	h.input(a, push(pos(4, 2), E))
 	h.sim.Step()
 	if !hasKey(a.take(), "inventory.too_far") {
@@ -341,5 +354,176 @@ func TestLivingObjectInTheView(t *testing.T) {
 	h.sim.Step()
 	if hasKey(cl.take(), "inventory.not_possible") {
 		t.Fatal("looking at the crate must work")
+	}
+}
+
+// A boulder never goes onto a door's tile, even an open one: the door would close on it,
+// and in a locked door's way it could shut a room.
+func TestLivingPushOntoADoorIsRefused(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+	)
+	door := pos(3, 1)
+	h := livingHarness(t, m, map[world.Pos]uint16{pos(2, 1): lwBoulderID},
+		func(c *session.Config) { c.Items = withDoorItems(c.Items, false) })
+	worldtest.SetTile(t, m, door, worldtest.Grass, 0, plainOpenID)
+	cl, _ := armed(h, pos(1, 1), 0)
+	cl.take()
+	h.input(cl, push(pos(2, 1), E))
+	h.sim.Step()
+	if evs := cl.take(); !hasKey(evs, "living.push_blocked") || h.w.LivingObjects()[0].Pos != pos(2, 1) {
+		t.Fatalf("push onto an open door: %v, %+v", systemKeys(evs), h.w.LivingObjects())
+	}
+}
+
+// A gate whose plate is let go stays open while someone stands in it, and closes once
+// that one walks on.
+func TestLivingGateWaitsForWhoStandsInIt(t *testing.T) {
+	gate, plate := pos(4, 1), pos(1, 1)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+	), map[world.Pos]uint16{gate: lwGateID, plate: lwPlateID})
+	m := h.w.Map()
+	holder, _ := armed(h, pos(1, 2), 0)
+	walker, wp := armed(h, pos(3, 1), 0)
+	holder.take()
+	walker.take()
+	h.input(holder, walk(N))
+	h.sim.RunTicks(40)
+	h.input(walker, walk(E))
+	h.sim.RunTicks(40)
+	if wp.Pos() != gate {
+		t.Fatalf("walker at %v, want in the open gate", wp.Pos())
+	}
+	h.input(holder, walk(S))
+	h.sim.RunTicks(40)
+	if !m.Walkable(gate) {
+		t.Fatal("the gate closed on the player standing in it")
+	}
+	h.input(walker, walk(E))
+	h.sim.RunTicks(40)
+	if m.Walkable(gate) {
+		t.Fatal("the gate must close once its tile is free")
+	}
+}
+
+// A gate that shuts a room with no other way to a temple stops the world from starting:
+// whoever is inside when its plates are let go (or after a restart) would be locked in.
+// A teleport out of the room lets it start.
+func TestLivingGateMustNotShutARoom(t *testing.T) {
+	rows := []string{
+		"#########",
+		"#T......#",
+		"#.......#",
+		"#####.###",
+		"#.......#",
+		"#########",
+	}
+	gate := pos(5, 3)
+	m := worldtest.Map(t, 0, 0, 7, rows...)
+	cfg := session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
+		Save: func(session.Snapshot) bool { return true }}
+	livingSetup(t, m, map[world.Pos]uint16{gate: lwGateID, pos(2, 2): lwPlateID})(&cfg)
+	if _, err := session.New(cfg); !errors.Is(err, session.ErrGateNoEscape) || !strings.Contains(err.Error(), "gate on 5,3,7") {
+		t.Fatalf("got %v, want %v", err, session.ErrGateNoEscape)
+	}
+
+	m = worldtest.Map(t, 0, 0, 7, rows...)
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "out", Kind: world.PortalTeleport, From: pos(7, 4), To: pos(3, 1)})
+	cfg.Map = m
+	livingSetup(t, m, map[world.Pos]uint16{gate: lwGateID, pos(2, 2): lwPlateID})(&cfg)
+	if _, err := session.New(cfg); err != nil {
+		t.Fatalf("with a teleport out: %v", err)
+	}
+}
+
+// A crate burns in a fire area spell over its tile (the crate blocks sight, but its own
+// tile is in the area); a spell of another element leaves it whole.
+func TestLivingFireAreaBurnsACrate(t *testing.T) {
+	crate := pos(4, 2)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"........",
+		"........",
+		"........",
+		"........",
+	), map[world.Pos]uint16{crate: lwCrateID}, func(c *session.Config) {
+		c.Spells = testSpells()
+		c.Balance.Skills.Base["magic"] = content.SkillBase{StartLevel: 0, BaseTries: magicTries}
+	})
+	cl, _ := arcanist(t, h, pos(2, 2))
+	evs := h.castNow(cl, cast("test_ring")) // fire, radius 2, 10 damage of 20 hp
+	if got := livingEvents(evs); len(got) != 1 || got[0] != pb.LivingObjectKind_LIVING_OBJECT_KIND_HIT {
+		t.Fatalf("fire ring on the crate: %v", got)
+	}
+	if hp := h.w.LivingObjects()[0].HP; hp != 10 {
+		t.Fatalf("crate hp %d, want 10", hp)
+	}
+}
+
+// A bow strikes a crate from afar and spends an arrow; without arrows it does nothing. A
+// wand strikes from afar with nothing to spend. Both refuse a rock that needs a pick.
+func TestLivingShotsAtObjects(t *testing.T) {
+	rows := []string{
+		"........",
+		"........",
+		"........",
+	}
+	crate, rock := pos(5, 1), pos(5, 2)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7, rows...),
+		map[world.Pos]uint16{crate: lwCrateID, rock: lwRockID})
+	nextChar++
+	c := withPack(nextChar, pos(2, 1))
+	c.Vocation = "ranger"
+	c.Inventory = append(c.Inventory, session.ItemState{ItemID: bowID, Count: 1, Slot: int(slotRight)},
+		session.ItemState{ItemID: arrowID, Count: 1, Slot: int(slotAmmo)})
+	archer, ap := h.joinChar(c)
+	archer.take()
+	if evs := strike(h, archer, crate, lwCrateID); len(livingEvents(evs)) != 1 {
+		t.Fatalf("bow shot at the crate 3 tiles away: %v (%v)", livingEvents(evs), systemKeys(evs))
+	}
+	if ap.Equipped(slotAmmo) != nil {
+		t.Fatal("the shot must spend the arrow")
+	}
+	h.sim.RunTicks(2)
+	if evs := strike(h, archer, crate, lwCrateID); !hasKey(evs, "combat.no_ammo") || len(livingEvents(evs)) != 0 {
+		t.Fatalf("bow without arrows: %v", systemKeys(evs))
+	}
+	if evs := strike(h, archer, rock, lwRockID); !hasKey(evs, "combat.no_ammo") && !hasKey(evs, "living.wrong_way") {
+		t.Fatalf("bow at the rock: %v", systemKeys(evs))
+	}
+
+	mage, _ := armed(h, pos(2, 2), energyWand)
+	mage.take()
+	if evs := strike(h, mage, crate, lwCrateID); len(livingEvents(evs)) != 1 {
+		t.Fatalf("wand at the crate: %v (%v)", livingEvents(evs), systemKeys(evs))
+	}
+	h.sim.RunTicks(2)
+	if evs := strike(h, mage, rock, lwRockID); !hasKey(evs, "living.wrong_way") {
+		t.Fatalf("wand at the rock: %v", systemKeys(evs))
+	}
+}
+
+// An axe swung as a weapon cuts vines that break by tool:axe only.
+func TestLivingAxeWeaponCuts(t *testing.T) {
+	vines := pos(3, 1)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+	), map[world.Pos]uint16{vines: lwVinesID}, func(c *session.Config) {
+		c.LivingWorld[2].Breakable.By = []string{"tool:axe"}
+	})
+	sword, _ := armed(h, pos(2, 0), swordID)
+	sword.take()
+	if evs := strike(h, sword, vines, lwVinesID); !hasKey(evs, "living.wrong_way") {
+		t.Fatalf("sword on axe-only vines: %v", systemKeys(evs))
+	}
+	axe, _ := armed(h, pos(2, 1), axeID)
+	axe.take()
+	if got := livingEvents(strike(h, axe, vines, lwVinesID)); len(got) != 1 || got[0] != pb.LivingObjectKind_LIVING_OBJECT_KIND_BREAK {
+		t.Fatalf("axe on the vines: %v", got)
 	}
 }

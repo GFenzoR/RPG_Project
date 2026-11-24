@@ -640,6 +640,37 @@
         "6,2": 9,
         "10,2": 9
       }
+    },
+    {
+      "name": "a vault whose outside reaches the field only through a crate anyone breaks",
+      "rows": ["#############", "#T...#...#..#", "#....C...D..#", "#....#...#..#", "#############"],
+      "error": "escape",
+      "door": "9,2"
+    },
+    {
+      "name": "a crate anyone breaks is no tile of the room it stands in",
+      "rows": ["##########", "#T...#...#", "#....D.C.#", "#....#...#", "##########"],
+      "rooms": {
+        "5,2": 8
+      }
+    },
+    {
+      "name": "a living gate that shuts a room with no other way out",
+      "rows": ["#########", "#T......#", "#.......#", "####L####", "#.......#", "#########"],
+      "error": "gate",
+      "door": "4,3"
+    },
+    {
+      "name": "a living gate whose room has a teleport out",
+      "rows": ["#########", "#T......#", "#.......#", "####L####", "#.......#", "#########"],
+      "portals": [
+        {
+          "kind": "teleport",
+          "from": "7,4",
+          "to": "3,1"
+        }
+      ],
+      "rooms": {}
     }
   ]
 }

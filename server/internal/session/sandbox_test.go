@@ -2035,9 +2035,41 @@ func TestSandboxLivingWorld(t *testing.T) {
 	if !s.m.Walkable(gate) {
 		t.Fatalf("both plates are held by boulders: the portcullis must be open (%+v)", s.w.LivingObjects())
 	}
+	// Someone goes into the vault; the boulders go home 180 s after the last push and the
+	// portcullis closes behind it. The teleport inside takes it out.
+	inside, vaultExit := pos(2105, 2067), pos(2104, 2071)
+	in, inP := s.joinChar(session.Character{ID: 5304, AccountID: 5304, Name: "Viva5304",
+		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside})
+	if inP.Pos() != inside {
+		t.Fatalf("joined at %v, want %v in the vault", inP.Pos(), inside)
+	}
+	s.sim.RunTicks(181 * 20)
+	if s.m.Walkable(gate) {
+		t.Fatalf("the boulders went home: the portcullis must be closed (%+v)", s.w.LivingObjects())
+	}
+	in.take()
+	s.input(in, walkPath(N))
+	s.sim.RunTicks(40)
+	if inP.Pos() != vaultExit {
+		t.Fatalf("shut in the vault at %v, want out by its teleport at %v", inP.Pos(), vaultExit)
+	}
 	// The volcano's crater: a cracked rock and a rotten barricade in its wall.
 	if s.m.Walkable(pos3(3699, 5753, 7)) || s.m.Walkable(pos3(3714, 5746, 7)) {
 		t.Fatal("the crater's shortcuts start closed")
+	}
+
+	// After a restart the portcullis is closed: a player saved in the vault logs in there
+	// and leaves by its teleport.
+	s = newSandbox(t)
+	back, backP := s.joinChar(session.Character{ID: 5305, AccountID: 5305, Name: "Viva5305",
+		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside})
+	if s.m.Walkable(gate) || backP.Pos() != inside {
+		t.Fatalf("after a restart: gate open %v, logged in at %v", s.m.Walkable(gate), backP.Pos())
+	}
+	s.input(back, walkPath(N))
+	s.sim.RunTicks(40)
+	if backP.Pos() != vaultExit {
+		t.Fatalf("shut in the vault after a restart at %v", backP.Pos())
 	}
 }
 

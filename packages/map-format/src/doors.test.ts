@@ -40,6 +40,10 @@ const content: ContentIndex = {
     item("other_gate", { blocksMovement: true, door: true, lock: "other" }),
     item("plain", { blocksMovement: true, door: true }),
     item("plain_open", { door: true, doorOpen: true }),
+    // The living world (C, L): a crate anyone breaks and a gate placed closed. Both are
+    // walls of the server's walks; isPassableBreaking alone walks through the crate.
+    item("crate", { blocksMovement: true, living: "breakable", breaksFreely: true }),
+    item("lw_gate", { blocksMovement: true, living: "gate" }),
   ]),
   monsters: new Set(),
   npcs: new Set(),
@@ -58,6 +62,8 @@ const STACKS: Record<string, string[]> = {
   P: ["plain"],
   X: ["wall", "plain"],
   B: ["wall", "gate"],
+  C: ["crate"],
+  L: ["lw_gate"],
 };
 
 /** The rows of a drawing, its repeats expanded. */
@@ -90,10 +96,12 @@ function draw(c: Case): {
   const locked: { pos: Position; lock: string }[] = [];
   let temple: Position | undefined;
   let first: Position | undefined;
+  const gates: Position[] = [];
   for (const [y, row] of expand(c.rows).entries())
     for (const [x, ch] of [...row].entries()) {
       if (ch === " ") continue;
       if (ch === "T") temple ??= { x, y, z: 7 };
+      if (ch === "L") gates.push({ x, y, z: 7 });
       if (".TdPK".includes(ch)) first ??= { x, y, z: 7 };
       const stack = STACKS[ch];
       if (!stack) throw new Error(`unknown tile ${ch}`);
@@ -129,12 +137,13 @@ function draw(c: Case): {
     temples: start ? [start] : [],
     portals: (c.portals ?? []).map((p) => ({ kind: p.kind, from: at(p.from), to: at(p.to) })),
     houses,
+    gates,
   };
   return { tiles: new TileMap([island]), locked, world };
 }
 
 /** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
-const DOOR_ROOM_CASES = 39;
+const DOOR_ROOM_CASES = 43;
 
 describe("doorRooms", () => {
   it("reads the shared cases", () =>

@@ -7,6 +7,7 @@ package session
 // and the loot, created on the ground with the economy log like a monster's.
 
 import (
+	"errors"
 	"path/filepath"
 
 	lw "github.com/GFenzoR/RPG_Project/livingworld/server"
@@ -37,14 +38,15 @@ const (
 	msgLivingGate     = "living.gate_closed"
 )
 
-// Numbers of the living world that are rules of the game rather than of an object.
-const (
-	// livingFistDamage is a bare-handed strike's damage on an object.
-	livingFistDamage = 5
-	// livingToolDamage is a tool's (an axe, a pickaxe) damage on an object per use.
-	livingToolDamage = 10
-	// livingPushMs is how often a player may push.
-	livingPushMs = 400
+// The ways of each kind of strike, shared by every strike (the module only reads them).
+var (
+	waysMelee    = []string{lw.ByMelee, lw.ByAnyAttack}
+	waysAxe      = []string{lw.ByMelee, lw.ByAnyAttack, lw.ByAxe}
+	waysShot     = []string{lw.ByAnyAttack}
+	waysFireShot = []string{lw.ByAnyAttack, lw.ByFire}
+	waysChop     = []string{lw.ByAxe}
+	waysPick     = []string{lw.ByPick}
+	waysFire     = []string{lw.ByFire}
 )
 
 // livingHost is the World as the module's Host.
@@ -73,8 +75,12 @@ func (w *World) initLivingWorld() error {
 	if err != nil {
 		return err
 	}
+	lb := w.cfg.Balance.Living
+	if lb.FistDamage <= 0 || lb.ToolDamage <= 0 || lb.PushCooldownMs <= 0 {
+		return errors.New("session: data/livingworld needs balance.living (fist_damage, tool_damage, push_cooldown_ms)")
+	}
 	w.living = lw.New(cat, livingHost{w})
-	w.livingPushFor = ticksFor(livingPushMs)
+	w.livingPushFor = ticksFor(lb.PushCooldownMs)
 	for _, is := range w.m.Islands() {
 		for _, s := range is.Sectors() {
 			for k := 0; k < len(s.Stacks); k++ {
@@ -113,6 +119,18 @@ func (w *World) initLivingWorld() error {
 	return nil
 }
 
+// livingGates returns the tiles of the living world's gates (checkEscapes).
+func (w *World) livingGates() []world.Pos {
+	if w.living == nil {
+		return nil
+	}
+	var out []world.Pos
+	for _, g := range w.living.Gates() {
+		out = append(out, fromLW(g))
+	}
+	return out
+}
+
 // livingAt is the item the object layer shows on pos (0: none).
 func (w *World) livingAt(pos world.Pos) uint16 {
 	if w.living == nil {
@@ -145,11 +163,21 @@ func (w *World) staticBlock(pos world.Pos) world.Flags {
 
 // ---- Host ------------------------------------------------------------------------------
 
+// Free also refuses a door's tile, even open: a door would close on the object (closeDoor
+// checks it too), and a boulder in a locked door's way could shut a room.
 func (h livingHost) Free(p lw.Pos) bool {
 	w, pos := h.w, fromLW(p)
 	_, f, ok := w.m.Tile(pos)
 	if !ok || f&(world.FlagBlocksMovement|world.FlagProtection|world.FlagHouse|world.FlagPortalStep) != 0 {
 		return false
+	}
+	if w.doors[pos] != nil {
+		return false
+	}
+	for _, n := range w.m.Stack(pos) {
+		if def := w.byNum[n]; def != nil && def.Door != nil {
+			return false
+		}
 	}
 	return !w.occupied(pos) && len(w.ground[pos]) == 0
 }
@@ -244,53 +272,67 @@ func (w *World) useLiving(ctx *game.TickContext, p *Player, m *pb.UseItem) bool 
 }
 
 // strikeObject is a strike of p's weapon (or bare hands) on the breakable object of pos:
-// melee from a tile next to it, a distance weapon or a wand within its range.
+// melee from a tile next to it, a distance weapon (one ammo of its kind spent, as in a
+// fight) or a wand within its range.
 func (w *World) strikeObject(ctx *game.TickContext, p *Player, pos world.Pos) {
-	methods := []string{lw.ByMelee, lw.ByAnyAttack}
-	dmg, reach := livingFistDamage, 1
+	ways, dmg, reach := waysMelee, w.cfg.Balance.Living.FistDamage, 1
+	var ammo *Item
 	if wp := p.weapon; wp != nil && wp.Weapon != nil {
 		dmg = max(wp.Weapon.Attack, 1)
 		switch {
 		case wp.Weapon.Range > 0:
-			methods, reach = []string{lw.ByAnyAttack}, wp.Weapon.Range
+			ways, reach = waysShot, wp.Weapon.Range
 			if wp.Weapon.Element == "fire" {
-				methods = append(methods, lw.ByFire)
+				ways = waysFireShot
+			}
+			if wp.Weapon.Ammo != "" {
+				ammo = p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO]
+				if ammo == nil || ammo.def.Ammo == nil || ammo.def.Ammo.Type != wp.Weapon.Ammo {
+					p.emit(systemMsg(msgNoAmmo))
+					return
+				}
+				dmg = max(wp.Weapon.Attack+ammo.def.Ammo.Attack, 1) // weapon + ammo, as in a fight
 			}
 		case wp.Weapon.Type == "axe":
-			methods = append(methods, lw.ByAxe)
+			ways = waysAxe
 		}
 	}
-	w.hitObject(ctx, p, pos, methods, dmg, reach)
+	if w.hitObject(ctx, p, pos, ways, dmg, reach) && ammo != nil {
+		w.useUp(p, ammo)
+		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
+	}
 }
 
 // hitObject runs one strike of p on the object of pos after the checks every strike
-// shares: the way, reach, sight and the pace of the trades (nextGather).
-func (w *World) hitObject(ctx *game.TickContext, p *Player, pos world.Pos, methods []string, dmg, reach int) {
+// shares: the way, reach, sight and the pace of the trades (nextGather). It reports
+// whether the strike landed.
+func (w *World) hitObject(ctx *game.TickContext, p *Player, pos world.Pos, methods []string, dmg, reach int) bool {
 	lp := toLW(pos)
 	if !w.living.Breakable(lp) {
 		p.emit(systemMsg(msgLivingBroken))
-		return
+		return false
 	}
 	if !w.living.Breaks(lp, methods) {
 		p.emit(systemMsg(msgLivingWrongWay))
-		return
+		return false
 	}
 	if chebyshev(p.pos, pos) > reach {
 		p.emit(systemMsg(msgTooFar))
-		return
+		return false
 	}
 	if !w.m.LineOfSight(p.pos, pos) {
 		p.emit(systemMsg(msgNoSight))
-		return
+		return false
 	}
 	if ctx.Tick < p.nextGather {
 		p.tooEarly(ctx.Tick, antibot.KindItem)
 		p.emit(systemMsg(msgGatherNotReady))
-		return
+		return false
 	}
 	p.activePaced(ctx.Tick, antibot.KindItem, p.nextGather)
 	p.nextGather = ctx.Tick + w.gatherFor
 	w.living.OnAttackObject(lp, lw.Hit{Methods: methods, Damage: dmg, Actor: p.charID}, ctx.Rand)
+	return true
 }
 
 // toolOnLiving runs a tool p carries used on a tile with a breakable object (an axe on
@@ -302,11 +344,11 @@ func (w *World) toolOnLiving(ctx *game.TickContext, p *Player, tool *Item, pos w
 	var methods []string
 	switch tool.def.Tool.Use {
 	case "woodcutting":
-		methods = []string{lw.ByAxe}
+		methods = waysChop
 	case "mining":
-		methods = []string{lw.ByPick}
+		methods = waysPick
 	}
-	w.hitObject(ctx, p, pos, methods, livingToolDamage, w.reach)
+	w.hitObject(ctx, p, pos, methods, w.cfg.Balance.Living.ToolDamage, w.reach)
 	return true
 }
 
@@ -318,11 +360,11 @@ func (w *World) fireOnLiving(ctx *game.TickContext, p *Player, tiles []world.Pos
 	}
 	for _, t := range tiles {
 		lp := toLW(t)
-		if !w.living.Breaks(lp, []string{lw.ByFire}) || !w.living.Breakable(lp) || !w.m.LineOfSight(p.pos, t) {
+		if !w.living.Breaks(lp, waysFire) || !w.living.Breakable(lp) || !w.m.LineOfSight(p.pos, t) {
 			continue
 		}
 		dmg := max(w.scaled(ctx, d.Scaling, p), 1)
-		w.living.OnAttackObject(lp, lw.Hit{Methods: []string{lw.ByFire}, Damage: dmg, Actor: p.charID}, ctx.Rand)
+		w.living.OnAttackObject(lp, lw.Hit{Methods: waysFire, Damage: dmg, Actor: p.charID}, ctx.Rand)
 	}
 }
 

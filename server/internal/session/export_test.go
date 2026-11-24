@@ -392,6 +392,7 @@ var (
 	ErrDoorTie       = errDoorTie
 	ErrDoorOtherKey  = errDoorOtherKey
 	ErrDoorNoEscape  = errDoorNoEscape
+	ErrGateNoEscape  = errGateNoEscape
 	ErrDoorBypassed  = errDoorBypassed
 )
 
