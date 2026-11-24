@@ -187,7 +187,7 @@ describe("the sandbox island", () => {
     ]);
   });
 
-  it("has one of each portal, each with its way back to the temple", () => {
+  it("has one of each portal (two teleports), each with its way back to the temple", () => {
     expect(pruebas.portals.map((p) => p.kind).sort()).toEqual([
       "hole",
       "ladder",
@@ -196,10 +196,14 @@ describe("the sandbox island", () => {
       "stairs",
       "stairs",
       "teleport",
+      "teleport",
     ]);
     // The teleport at the back of the cave lands on the square, in the protection zone.
-    const teleport = pruebas.portals.find((p) => p.kind === "teleport");
+    const teleport = pruebas.portals.find((p) => p.id === "pruebas_teleport");
     expect(teleport && far(teleport.to)).toBeLessThanOrEqual(10);
+    // The living world's vault behind the portcullis has its own way out (it closes alone).
+    const exit = pruebas.portals.find((p) => p.id === "pruebas_vault_exit");
+    expect(exit?.from).toEqual({ x: 2105, y: 2066, z: 7 });
   });
 
   it("has a market board, crafting stations, ore, trees and fish", () => {
