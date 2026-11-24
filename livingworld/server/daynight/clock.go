@@ -176,13 +176,9 @@ type Clock struct {
 // Unix time at start: the cycle then goes on across restarts, the same for every server).
 func New(c Cycle, tickMs int, epochMs int64) *Clock {
 	tm := int64(max(tickMs, 1))
-	return &Clock{
-		c:         c,
-		tickMs:    tm,
-		anchorMs:  epochMs,
-		rate:      1,
-		syncTicks: max(int64(c.SyncSeconds)*1000/tm, 1),
-	}
+	sync := max(int64(c.SyncSeconds)*1000/tm, 1)
+	// The first sync is one interval in: a player that joins gets the time with its login.
+	return &Clock{c: c, tickMs: tm, anchorMs: epochMs, rate: 1, syncTicks: sync, nextSync: sync}
 }
 
 // Cycle is the clock's cycle.

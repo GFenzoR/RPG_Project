@@ -125,7 +125,6 @@ func TestMoonPhases(t *testing.T) {
 
 func TestAdminSet(t *testing.T) {
 	k := New(cycle, tickMs, 3*cycle.CycleMs()+10*60_000)
-	k.SyncDue(0)
 	noon, _ := cycle.PhaseStart("noon")
 	k.Set(100, noon)
 	tm := k.At(100)
@@ -183,15 +182,15 @@ func TestAdminRate(t *testing.T) {
 
 func TestSyncEvery(t *testing.T) {
 	k := New(cycle, tickMs, 0)
-	if !k.SyncDue(0) {
-		t.Fatal("first sync")
-	}
 	every := ticks(int64(cycle.SyncSeconds) * 1000)
-	if k.SyncDue(every - 1) {
-		t.Fatal("synced early")
+	if k.SyncDue(0) || k.SyncDue(every-1) {
+		t.Fatal("synced early (logins carry their own)")
 	}
 	if !k.SyncDue(every) {
 		t.Fatal("not synced after sync_seconds")
+	}
+	if k.SyncDue(2*every-1) || !k.SyncDue(2*every) {
+		t.Fatal("second interval")
 	}
 }
 
