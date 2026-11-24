@@ -136,3 +136,23 @@ func TestStaffSetsTheTime(t *testing.T) {
 		t.Fatalf("player /time: %v", got)
 	}
 }
+
+// A fixed time (-world-time, the E2E server): the clock starts at that time of day 0,
+// stopped, whatever the epoch the app passes (the hour the suite runs at).
+func TestWorldClockFixedForTests(t *testing.T) {
+	a := newAdminHarness(t, func(c *session.Config) {
+		c.DayNight = dayNight()
+		c.DayNightEpochMs = 5*cycleMs + 200*60_000 // night of day 5
+		c.DayNightFixed = "noon"
+	})
+	cl, _ := a.joinAs("Sun", session.RolePlayer, pos(2, 2))
+	got := clocksOf(cl.take())
+	if len(got) != 1 || got[0].GetDay() != 0 || got[0].GetCycleMs() != 90*60_000 || got[0].GetRate() != 0 {
+		t.Fatalf("fixed login clock %v", got)
+	}
+	a.sim.RunTicks(400)
+	tm, phase, _ := a.w.WorldTime(a.sim.Tick())
+	if phase != "day" || tm.Day != 0 || tm.CycleMs != 90*60_000 || tm.Rate != 0 {
+		t.Fatalf("fixed clock moved: %+v %s", tm, phase)
+	}
+}

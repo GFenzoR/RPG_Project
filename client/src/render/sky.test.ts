@@ -69,6 +69,15 @@ describe("SkyView", () => {
     expect(dawn.shadowPose(dawn.update(0))).toBeUndefined();
   });
 
+  it("casts no shadows with reduced effects, at any hour", () => {
+    for (const m of [90, 200]) {
+      const v = new SkyView(d, clockAt(m)); // noon, full-moon night
+      const s = v.update(0);
+      expect(v.shadowPose(s)).toBeDefined();
+      expect(v.shadowPose(s, true)).toBeUndefined();
+    }
+  });
+
   it("fades the baked shadows of trees and buildings with the sun", () => {
     const at = (m: number): number => {
       const v = new SkyView(d, clockAt(m));

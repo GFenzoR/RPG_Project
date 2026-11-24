@@ -1,7 +1,6 @@
 package daynight
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -105,19 +104,19 @@ func TestEpochFromInjectedClock(t *testing.T) {
 }
 
 func TestMoonPhases(t *testing.T) {
-	if l := cycle.MoonLight(Time{Day: 0}); l != 0 {
-		t.Fatalf("new moon light %v", l)
+	noon, _ := cycle.PhaseStart("noon")
+	dawn, _ := cycle.PhaseStart("dawn")
+	if p := cycle.MoonPhase(Time{Day: 4, CycleMs: noon}); p != 4 {
+		t.Fatalf("phase of day 4 = %d", p)
 	}
-	if l := cycle.MoonLight(Time{Day: 4}); math.Abs(l-1) > 1e-9 {
-		t.Fatalf("full moon light %v", l)
+	// The dawn still has the moon of the night before it (the client's skyAt too).
+	if p := cycle.MoonPhase(Time{Day: 5, CycleMs: dawn}); p != 4 {
+		t.Fatalf("phase at the dawn of day 5 = %d, want the night's 4", p)
 	}
-	if a, b := cycle.MoonLight(Time{Day: 2}), cycle.MoonLight(Time{Day: 6}); math.Abs(a-b) > 1e-9 || a <= 0 || a >= 1 {
-		t.Fatalf("quarter moons %v %v", a, b)
-	}
-	if p := cycle.MoonPhase(Time{Day: 8}); p != 0 {
+	if p := cycle.MoonPhase(Time{Day: 8, CycleMs: noon}); p != 0 {
 		t.Fatalf("phase after a lunar month = %d", p)
 	}
-	if p := cycle.MoonPhase(Time{Day: -1}); p != 7 {
+	if p := cycle.MoonPhase(Time{Day: -1, CycleMs: noon}); p != 7 {
 		t.Fatalf("phase of day -1 = %d", p)
 	}
 }
@@ -206,5 +205,25 @@ func TestPhaseStart(t *testing.T) {
 	}
 	if _, ok := cycle.PhaseStart("teatime"); ok {
 		t.Fatal("unknown word accepted")
+	}
+}
+
+func TestFrozenStartsStoppedWithoutASync(t *testing.T) {
+	k := New(cycle, tickMs, 1234).Frozen()
+	if a, b := k.At(0), k.At(ticks(3_600_000)); a != b || a.Rate != 0 {
+		t.Fatalf("frozen clock moved: %+v -> %+v", a, b)
+	}
+	if k.SyncDue(1) {
+		t.Fatal("a frozen clock asked for a sync before its interval")
+	}
+}
+
+func TestSetMoonAtDawn(t *testing.T) {
+	k := New(cycle, tickMs, 0)
+	dawn, _ := cycle.PhaseStart("dawn")
+	k.Set(0, dawn)
+	k.SetMoon(0, 4)
+	if tm := k.At(0); cycle.MoonPhase(tm) != 4 || cycle.Phase(tm) != Dawn {
+		t.Fatalf("moon 4 at dawn: %+v phase %d", tm, cycle.MoonPhase(tm))
 	}
 }

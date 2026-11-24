@@ -247,6 +247,10 @@ type Config struct {
 	// on across restarts.
 	DayNight        *DayNightCycle
 	DayNightEpochMs int64
+	// DayNightFixed (tests, -world-time): a /time word (noon, night...). The clock then
+	// starts at that time of day 0, stopped, whatever the epoch, so screenshots do not
+	// depend on the hour they are taken at. Empty: the epoch, running.
+	DayNightFixed string
 	// LivingWorld is data/livingworld (LoadLivingWorld, livingworld/README.md): the map
 	// objects that break, move or open. Nil: none (every such item stays a plain map item).
 	LivingWorld LivingDefs

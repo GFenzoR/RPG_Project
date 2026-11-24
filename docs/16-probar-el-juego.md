@@ -317,11 +317,20 @@ personal"):
 - `/time speed <n>`: el mundo corre n veces más rápido (`/time speed 60`: un ciclo en 4
   minutos); `/time speed 0` lo detiene (para mirar o sacar capturas) y `/time speed 1`
   vuelve a lo normal. Un reinicio del servidor también.
+
+Los cambios del staff no se guardan: tras un reinicio el reloj vuelve a la hora real (lo
+mismo si el game loop se atrasó respecto del reloj real: la hora deriva un poco hasta el
+próximo reinicio). La luna que informa `/time` es la del cielo: en el amanecer, la de la
+noche anterior (`/time moon 4` y luego `/time dawn` dice luna 3). El servidor del E2E
+arranca con `-world-time noon` (rechazado en producción): hora detenida al mediodía; el test
+de día y noche la deja así al terminar, aunque falle.
 Todos los jugadores reciben el cambio en el acto. Qué mirar: a la mañana las sombras de los
 personajes largas hacia el oeste, al mediodía cortas bajo los pies, a la tarde hacia el
 este; de noche la superficie azul, las fogatas y faroles encendidos, luciérnagas en el pasto
 y una sombra tenue de la luna (ninguna con luna nueva); con "Animaciones reducidas", solo la
-sombra de contacto. Bajo tierra todo sigue igual.
+sombra de contacto. Un cuerpo a menos de media opacidad (tu personaje invisible, que se ve
+al 40 %, o uno que se desvanece) no proyecta sombra a propósito: le queda solo la de
+contacto. Bajo tierra todo sigue igual.
 
 ## 5. Hacerse personal (GM o admin)
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):

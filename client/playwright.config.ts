@@ -125,7 +125,9 @@ export default defineConfig({
         // -cookie-secure=false: Playwright's WebKit drops a Secure cookie on http://localhost
         // (Chromium keeps it), so the (webkit) tests could not stay logged in; production and
         // the other servers here keep the flag.
-        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -ws-loopback-exempt -cookie-secure=false -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
+        // -world-time noon: every server here keeps the day and night stopped at noon, so the
+        // screenshots do not depend on the hour the suite runs at (sandbox.spec.ts moves it).
+        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -world-time noon -auth-rate-burst 1000 -ws-loopback-exempt -cookie-secure=false -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,
@@ -147,7 +149,7 @@ export default defineConfig({
       // Its own world.bin: both servers compile the map at the same time.
       command:
         "go run ./cmd/mapcompile -root .. -out ../build/world-puerto.bin && " +
-        `go run ./cmd/gameserver -http 127.0.0.1:${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -ws-loopback-exempt -start-town puerto -metrics-addr ""`,
+        `go run ./cmd/gameserver -http 127.0.0.1:${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -world-time noon -auth-rate-burst 1000 -ws-loopback-exempt -start-town puerto -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${puertoServerURL}/healthz`,
       reuseExistingServer: false,
@@ -179,7 +181,7 @@ export default defineConfig({
       timeout: 240_000,
     },
     {
-      command: `go run ./cmd/gameserver -http 127.0.0.1:${mailServerPort} -world "" -seed 1 -auth-rate-burst 1000 -metrics-addr ""`,
+      command: `go run ./cmd/gameserver -http 127.0.0.1:${mailServerPort} -world "" -seed 1 -world-time noon -auth-rate-burst 1000 -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
       url: `http://127.0.0.1:${mailServerPort}/healthz`,
       reuseExistingServer: false,

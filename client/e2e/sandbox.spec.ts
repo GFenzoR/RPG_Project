@@ -750,29 +750,35 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
   };
   const sky = () => page.evaluate(() => window.__rpgClient?.sky());
 
-  await time("speed 0");
-  await time("noon");
-  await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
-  const noon = await sky();
-  expect(noon?.ambient).toBe(0xffffff);
-  expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
-  await say.blur();
-  await page.waitForTimeout(300);
-  await shot(page, "99b-daynight-noon");
+  // The E2E servers keep the time stopped at noon (-world-time noon in
+  // playwright.config.ts); put it back however this test ends, so the specs after it are
+  // not shot at night.
+  try {
+    await time("speed 0");
+    await time("noon");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    const noon = await sky();
+    expect(noon?.ambient).toBe(0xffffff);
+    expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99b-daynight-noon");
 
-  await time("moon 4");
-  await time("night");
-  await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("night");
-  const night = await sky();
-  expect(night?.lamps).toBe(1);
-  expect(night?.moon).toBeCloseTo(1);
-  expect(night?.ambient).not.toBe(0xffffff);
-  expect(night?.shadowAlpha).toBeGreaterThan(0);
-  await say.blur();
-  await page.waitForTimeout(300);
-  await shot(page, "99c-daynight-night");
-
-  await time("speed 1");
+    await time("moon 4");
+    await time("night");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("night");
+    const night = await sky();
+    expect(night?.lamps).toBe(1);
+    expect(night?.moon).toBeCloseTo(1);
+    expect(night?.ambient).not.toBe(0xffffff);
+    expect(night?.shadowAlpha).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99c-daynight-night");
+  } finally {
+    await time("noon");
+    await time("speed 0");
+  }
   expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
   expect(errors).toEqual([]);
 });

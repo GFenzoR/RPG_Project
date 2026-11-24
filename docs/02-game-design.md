@@ -3362,7 +3362,7 @@ Un ranking público de guerras. (Las marcas ya tienen sprites propios:
 El mundo tiene un ciclo de **180 minutos reales de día y 60 de noche** (decisión del dueño);
 el amanecer y el atardecer son los primeros y los últimos 15 minutos del día. La luna
 cambia de fase cada día, de nueva a llena y vuelta en 8 días. La hora la lleva el servidor
-(la misma para todos, sigue entre reinicios) y la manda a cada cliente.
+(la misma para todos; con la velocidad normal sigue la hora real entre reinicios) y la manda a cada cliente.
 
 **Por ahora es solo visual:** de noche la superficie se ve azul y más oscura (más clara y
 plateada con luna llena, más oscura con luna nueva, pero nunca tanto que cueste jugar),

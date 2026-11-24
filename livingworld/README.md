@@ -138,11 +138,12 @@ tick: determinista, sin `time.Now()`.
 k := daynight.New(cycle, tickMs, epochMs)
 t := k.At(tick)        // Day (ciclos desde la época) y CycleMs (0 = empieza el amanecer)
 cycle.Phase(t)         // Dawn, Day, Dusk, Night
-cycle.MoonPhase(t)     // 0 nueva .. lunar_days/2 llena; MoonLight(t) 0..1
+cycle.MoonPhase(t)     // luna del cielo: 0 nueva .. lunar_days/2 llena (en el amanecer, la de la noche anterior)
 k.Set(tick, ms)        // staff: otra hora del mismo día
 k.SetMoon(tick, fase)  // staff: el próximo día con esa fase
 k.SetRate(tick, r)     // staff: 0 lo detiene, hasta 600
 k.SyncDue(tick)        // toca mandar el WorldClock (cada sync_seconds o tras un cambio)
+k.Frozen()             // recién creado: detenido sin sync propio (-world-time del E2E)
 ```
 
 El pegamento (`server/internal/session/daynight.go`) manda `WorldClock` (`day`,

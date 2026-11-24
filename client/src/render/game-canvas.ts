@@ -1301,7 +1301,7 @@ export async function createGameCanvas(
     drawnBoxes.reset();
     const skyNow = isDark(self.pos.z) ? undefined : sky.update(now);
     view.castShadowStrength = sky.staticShadows(skyNow);
-    const casting = castShadows.begin(reducedMotion() ? undefined : sky.shadowPose(skyNow));
+    const casting = castShadows.begin(sky.shadowPose(skyNow, reducedMotion()));
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];

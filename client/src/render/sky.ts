@@ -55,9 +55,12 @@ export class SkyView {
     return this.drawn && this.sky.night;
   }
 
-  /** The creatures' cast shadows under `sky` (reused object); undefined: none. */
-  shadowPose(sky: Sky | undefined): ShadowPose | undefined {
-    if (!sky || sky.shadow.alpha <= 0) return undefined;
+  /**
+   * The creatures' cast shadows under `sky` (reused object); undefined: none. `reduced`
+   * ("Animaciones reducidas", docs/16): no cast shadows at all, only the contact ellipse.
+   */
+  shadowPose(sky: Sky | undefined, reduced = false): ShadowPose | undefined {
+    if (reduced || !sky || sky.shadow.alpha <= 0) return undefined;
     const t = shadowTransform(sky.shadow);
     this.pose.skewX = t.skewX;
     this.pose.scaleY = t.scaleY;

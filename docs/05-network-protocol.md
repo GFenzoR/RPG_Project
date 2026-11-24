@@ -1613,14 +1613,20 @@ se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en 
   un golpe).
 - **`WorldClock`** (servidor → cliente, `ServerMessage.world_clock` = 53; día y noche,
   `server/internal/session/daynight.go`, `livingworld/README.md` "Día y noche"): `day`
-  (ciclos desde la época del mundo: la fase de la luna es `day mod lunar_days`), `cycle_ms`
+  (ciclos desde la época del mundo: la luna del cielo es la de `day mod lunar_days`, salvo en
+  el amanecer, que conserva la de la noche anterior, `(day - 1) mod lunar_days`: una noche
+  pertenece al día en que cayó; el `/time` del staff informa esa misma fase), `cycle_ms`
   (cuánto va del ciclo: 0 empieza el amanecer, `day_minutes` empieza la noche) y `rate`
   (ms del mundo por ms real: 1 normal, 0 detenido por el staff). Llega justo después del
   `Welcome`, a todos cada `sync_seconds` (60) de `data/livingworld/daynight.yaml` y en el
   acto después de un `/time` (docs/16). El cliente lo lleva adelante a `rate` entre dos y
   dibuja con él la luz, las lámparas y las sombras; ninguna regla depende de la hora. Sin
   `daynight.yaml` el servidor no lo manda y el cliente dibuja el mediodía (también un
-  cliente viejo lo ignora).
+  cliente viejo lo ignora). El mensaje no lleva el largo del ciclo: el cliente lo toma de su
+  propia copia de `daynight.yaml`, empaquetada en el build junto con la del servidor; un
+  cliente y un servidor desplegados con datos distintos interpretarían mal `cycle_ms`. Los
+  servidores del E2E arrancan con `-world-time noon` (solo desarrollo y test): la hora
+  queda detenida al mediodía del día 0, para que las capturas no dependan de la hora real.
 
 ### Puertas (`server/internal/session/door.go`)
 Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.

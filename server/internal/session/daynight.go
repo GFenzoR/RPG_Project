@@ -42,7 +42,15 @@ func (w *World) initDayNight() {
 	if w.cfg.DayNight == nil {
 		return
 	}
-	w.sky.Clock = daynight.New(*w.cfg.DayNight, int(game.TickDuration.Milliseconds()), w.cfg.DayNightEpochMs)
+	epoch := w.cfg.DayNightEpochMs
+	ms, fixed := w.cfg.DayNight.PhaseStart(w.cfg.DayNightFixed)
+	if fixed {
+		epoch = ms
+	}
+	w.sky.Clock = daynight.New(*w.cfg.DayNight, int(game.TickDuration.Milliseconds()), epoch)
+	if fixed {
+		w.sky.Frozen()
+	}
 }
 
 // worldClockMsg is the WorldClock at tick.

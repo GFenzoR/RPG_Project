@@ -238,7 +238,12 @@ el punto 5:
       sigue a la luna; apuntarla lejos del fuego queda para después.
     - **Medir en el navegador:** la capa de sombras suma un sprite por capa de cada
       criatura y una pasada de filtro (docs/07); falta mirar el tiempo de frame en el E2E
-      con mucha gente de noche.
+      con mucha gente de noche, sobre todo en móvil. El `AlphaFilter` de
+      `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
+      pantalla) y de noche se suma la del mapa de luz.
+    - **Sombras que se cruzan:** las de criaturas van en `groundOverlay`, debajo de las
+      horneadas; donde se cruzan con la de un árbol o una casa se suman y queda una mancha
+      más oscura. Revisarlo en las capturas.
     - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.

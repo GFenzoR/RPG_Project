@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 
 	"go.yaml.in/yaml/v3"
@@ -155,14 +154,16 @@ func (c Cycle) Phase(t Time) Phase {
 	}
 }
 
-// MoonPhase is the moon's phase on t's day: 0 new moon, LunarDays/2 full moon.
+// MoonPhase is the phase of the moon in the sky at t: 0 new moon, LunarDays/2 full moon.
+// It is t's day's moon, except at dawn: a night belongs to the day it fell on, so the
+// dawn after it still has that day's moon (day - 1), as the client draws it
+// (livingworld/client/src/sky.ts skyAt). How bright it is, the client works out.
 func (c Cycle) MoonPhase(t Time) int {
-	return int(floorMod(t.Day, int64(c.LunarDays)))
-}
-
-// MoonLight is how bright the moon is on t's day: 0 at new moon, 1 at full moon.
-func (c Cycle) MoonLight(t Time) float64 {
-	return (1 - math.Cos(2*math.Pi*float64(c.MoonPhase(t))/float64(c.LunarDays))) / 2
+	day := t.Day
+	if c.Phase(t) == Dawn {
+		day--
+	}
+	return int(floorMod(day, int64(c.LunarDays)))
 }
 
 // MaxRate caps a staff speed-up (a day in a few seconds would only flicker).
@@ -188,6 +189,13 @@ func New(c Cycle, tickMs int, epochMs int64) *Clock {
 	sync := max(int64(c.SyncSeconds)*1000/tm, 1)
 	// The first sync is one interval in: a player that joins gets the time with its login.
 	return &Clock{c: c, tickMs: tm, anchorMs: epochMs, rate: 1, syncTicks: sync, nextSync: sync}
+}
+
+// Frozen makes a new clock start stopped (rate 0) without a sync of its own: the E2E
+// server's fixed time (-world-time). Call it before the first tick.
+func (k *Clock) Frozen() *Clock {
+	k.rate = 0
+	return k
 }
 
 // Cycle is the clock's cycle.
