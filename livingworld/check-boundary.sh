@@ -30,14 +30,33 @@ code_files() { # code files under $1, without dependencies and build output
 		-o -type f \( -name '*.go' -o -name '*.ts' -o -name '*.tsx' \) -print 2>/dev/null
 }
 
+# ts_specs prints the module specifier of every import of a TS file: `from "x"` (also
+# `export ... from`), side-effect `import "x"` and dynamic `import("x")`.
+ts_specs() {
+	grep -oE "(from|import)[[:space:]]*\(?[[:space:]]*['\"][^'\"]+['\"]" "$1" 2>/dev/null |
+		sed -E "s/.*['\"]([^'\"]+)['\"]$/\1/" || true
+}
+# lands_in <file> <spec> <dir>: whether the relative spec, from file, resolves under dir/.
+lands_in() {
+	[[ $2 == .* ]] || return 1
+	local to
+	to=$(realpath -m "$(dirname "$1")/$2")
+	[[ $to == "$root/$3" || $to == "$root/$3/"* ]]
+}
+root=$(realpath -m "$root")
+
 # 1. livingworld/ never reaches into the server or the client.
 while IFS= read -r f; do
 	[[ -n $f ]] || continue
-	if grep -nE '"github\.com/GFenzoR/RPG_Project/server' "$f" >/dev/null ||
-		grep -nE "from ['\"](@rpg/client|[./]*(\.\./)+(client|server)/)" "$f" >/dev/null ||
-		grep -nE "import\(['\"][./]*(\.\./)+(client|server)/" "$f" >/dev/null; then
-		err "$f imports from server/ or client/ (the module only talks through its Host and its API)"
-	fi
+	bad=0
+	grep -qE '"github\.com/GFenzoR/RPG_Project/server' "$f" && bad=1
+	while IFS= read -r spec; do
+		[[ -n $spec ]] || continue
+		if [[ $spec == @rpg/client* ]] || lands_in "$f" "$spec" server || lands_in "$f" "$spec" client; then
+			bad=1
+		fi
+	done < <(ts_specs "$f")
+	[[ $bad -eq 0 ]] || err "$f imports from server/ or client/ (the module only talks through its Host and its API)"
 done < <(code_files livingworld)
 
 # 2. Outside livingworld/, only the glue imports the module.
@@ -45,10 +64,16 @@ for dir in server client editor packages tools apps; do
 	[[ -d $dir ]] || continue
 	while IFS= read -r f; do
 		[[ -n $f ]] || continue
-		if grep -qE '"github\.com/GFenzoR/RPG_Project/livingworld|from ['"'"'"](@rpg/living-world|[./]+/livingworld/)' "$f"; then
-			if ! grep -qxF "$f" <<<"$glue"; then
-				err "$f imports the living world but is not in the glue list of $readme"
+		uses=0
+		grep -qE '"github\.com/GFenzoR/RPG_Project/livingworld' "$f" && uses=1
+		while IFS= read -r spec; do
+			[[ -n $spec ]] || continue
+			if [[ $spec == @rpg/living-world* ]] || lands_in "$f" "$spec" livingworld; then
+				uses=1
 			fi
+		done < <(ts_specs "$f")
+		if [[ $uses -eq 1 ]] && ! grep -qxF "$f" <<<"$glue"; then
+			err "$f imports the living world but is not in the glue list of $readme"
 		fi
 	done < <(code_files "$dir")
 done

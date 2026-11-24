@@ -44,4 +44,21 @@ expect fail "a Go file outside the glue list imports the module"
 repo
 rm "$tmp/r/client/src/render/living.ts"
 expect fail "a glue file that does not exist"
+repo
+printf 'import "@rpg/living-world";
+' >"$tmp/r/client/src/state/effects.ts"
+expect fail "a side-effect import outside the glue list"
+repo
+printf 'const m = await import("../../../livingworld/client/src/index.ts");
+' >"$tmp/r/client/src/state/lazy.ts"
+expect fail "a dynamic import of the module outside the glue list"
+repo
+printf 'const s = await import("../../../server/x.ts");
+' >>"$tmp/r/livingworld/client/src/index.ts"
+expect fail "the module imports server/ dynamically"
+repo
+mkdir -p "$tmp/r/livingworld/server/sub"
+printf 'import { x } from "../../server/sub/x.ts";
+' >>"$tmp/r/livingworld/client/src/index.ts"
+expect ok "livingworld/client importing livingworld/server is no import of server/"
 echo "check-boundary_test: ok"
