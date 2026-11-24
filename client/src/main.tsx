@@ -70,7 +70,7 @@ declare global {
     __rpgAudio?: {
       unlocked(): boolean;
       history(): string[];
-      loops(): { music: string | undefined; ambient: string | undefined };
+      loops(): { music: string | undefined; ambient: string | undefined; ambience: string[] };
       /** The music director's state: its pool and voices (audio/engine.ts MusicState). */
       music(): MusicState;
     };

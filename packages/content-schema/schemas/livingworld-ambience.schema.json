@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-ambience.schema.json",
+  "title": "Living world ambience (data/livingworld/ambience.yaml)",
+  "description": "The positional ambience under the music (livingworld/README.md \"Ambiente\"): beds weighted by the tiles around the player and point emitters on map items. make validate also checks that every sound is an ambient sound of assets/sounds.yaml, that every item exists and that no emitter reaches past the window. Cosmetic: the server never reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["beds", "emitters"],
+  "properties": {
+    "radius": {
+      "description": "Half side of the square window around the player, tiles.",
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 16
+    },
+    "fade_ms": {
+      "description": "A layer's gain goes from silent to full (or back) over this.",
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 20000
+    },
+    "voices": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "voices_lite": {
+      "description": "Most loops at once on a phone or with reduced animations (at most voices).",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "rescan_ms": { "type": "integer", "minimum": 250, "maximum": 60000 },
+    "beds": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sound"],
+        "properties": {
+          "sound": { "$ref": "common.schema.json#/$defs/id" },
+          "volume": { "$ref": "#/$defs/unit" },
+          "floors": { "enum": ["surface", "underground", "any"] },
+          "full": {
+            "description": "Share of weighted tiles in the window that gives full level.",
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "base": { "$ref": "#/$defs/unit" },
+          "surfaces": {
+            "type": "object",
+            "propertyNames": { "$ref": "common.schema.json#/$defs/surface" },
+            "additionalProperties": { "$ref": "#/$defs/weight" }
+          },
+          "items": {
+            "description": "data/items id → weight.",
+            "type": "object",
+            "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+            "additionalProperties": { "$ref": "#/$defs/weight" }
+          }
+        }
+      }
+    },
+    "emitters": {
+      "description": "data/items id → the sound it makes where it stands.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sound", "radius"],
+        "properties": {
+          "sound": { "$ref": "common.schema.json#/$defs/id" },
+          "volume": { "$ref": "#/$defs/unit" },
+          "radius": { "type": "number", "minimum": 1, "maximum": 16 },
+          "falloff": { "enum": ["smooth", "linear"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "unit": { "type": "number", "minimum": 0, "maximum": 1 },
+    "weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+  }
+}

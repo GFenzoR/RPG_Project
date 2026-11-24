@@ -39,6 +39,28 @@ describe("client content (T0.5)", () => {
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
   });
 
+  it("ships the positional ambience: beds and emitters on ambient sounds (livingworld/README.md)", () => {
+    const a = content.livingWorld?.ambience;
+    expect(a).toBeDefined();
+    const beds = Object.fromEntries((a?.beds ?? []).map((b) => [b.id, b]));
+    // The owner's list (2026-11-23): waves by the sea, wind in the sand, the forest, caves.
+    expect(beds["waves"]?.surfaces.water_shallow).toBe(1);
+    expect(beds["desert_wind"]?.surfaces.sand).toBeGreaterThan(0);
+    expect(beds["forest"]?.items["oak_tree"]).toBeGreaterThan(0);
+    expect(beds["cave"]?.floors).toBe("underground");
+    expect(a?.emitters["fountain"]).toBeDefined();
+    expect(a?.emitters["cooking_hearth"]).toBeDefined();
+    const ids = new Set(Object.values(content.items).map((d) => d.id));
+    for (const s of [
+      ...(a?.beds ?? []).map((b) => b.sound),
+      ...Object.values(a?.emitters ?? {}).map((e) => e.sound),
+    ])
+      expect(content.sounds.sounds[s]?.channel, s).toBe("ambient");
+    for (const id of Object.keys(a?.emitters ?? {})) expect(ids.has(id), id).toBe(true);
+    // The island bed is gone: the sea is heard where the sea is.
+    expect(Object.keys(content.sounds)).not.toContain("ambient");
+  });
+
   it("ships the item attributes and their card lines in both languages (docs/02)", () => {
     const attrs = content.attributes ?? {};
     expect(attrs["max_health"]?.text).toBe("attribute.max_health");

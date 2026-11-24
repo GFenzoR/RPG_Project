@@ -282,13 +282,6 @@ export interface SoundDef {
   entries?: number[] | undefined;
 }
 
-/** Which loop plays where: by island id, and under the sea floor (z > 7). */
-export interface LoopRules {
-  fadeMs: number;
-  islands: Record<string, string>;
-  underground: string | undefined;
-}
-
 /** Crossfade lengths of the music, ms, by what changed (audio/director.ts Fades). */
 export interface MusicFades {
   zone: number;
@@ -339,7 +332,6 @@ export interface SoundManifest {
   /** Event name → sound ids (one is picked at random). */
   events: Record<string, string[]>;
   music: MusicRules;
-  ambient: LoopRules;
 }
 
 /** An island's rectangle (world/world.yaml), to know where the player is. */

@@ -88,14 +88,14 @@ function Screens({
   }, []);
 
   // Outside the game the menus play the title screen's music (assets/sounds.yaml
-  // music.title, through the music director) and no ambient bed; the game sets its own
-  // scene from its first batch. Leaving the game (Game.destroy stops the ambient bed)
+  // music.title, through the music director) and no ambience; the game sets its own
+  // scene from its first batch. Leaving the game (Game.destroy fades the ambience out)
   // crossfades from the world's music back into the title's.
   const inGame = screen.name === "game";
   useEffect(() => {
     if (inGame || !audio) return;
     audio.setMusic({ kind: "title" });
-    audio.setAmbient(undefined);
+    audio.setAmbience([]);
   }, [inGame, audio]);
 
   const toCharacters = (): void => setScreen({ name: "characters" });

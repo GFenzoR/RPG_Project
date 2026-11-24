@@ -216,7 +216,6 @@ describe("assets/sounds.yaml", () => {
       const pool = m.music.pools[m.music.islands[island] ?? ""] ?? [];
       expect(pool.length, island).toBeGreaterThan(0);
       for (const id of pool) expect(m.sounds[id]?.channel, `${island} ${id}`).toBe("music");
-      expect(m.sounds[m.ambient.islands[island] ?? ""]?.channel).toBe("ambient");
     }
     expect(m.music.underground).toBe("cave");
     // The owner's picks of 2026-11-18: Puerto alternates its three takes, the caves more.

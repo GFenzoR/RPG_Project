@@ -74,7 +74,9 @@ import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
-import { cuesOf, loopFor, sceneFor } from "./audio/cues.ts";
+import { cuesOf, sceneFor } from "./audio/cues.ts";
+import { AMBIENCE_STEP_MS, ambienceAt, mountAmbience } from "./audio/ambience.ts";
+import type { Ambience } from "./audio/ambience.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
@@ -440,6 +442,9 @@ export class Game {
   private stepEvents: ((to: Pos) => string[]) | undefined;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
+  /** The positional ambience over the map (audio/ambience.ts) and its last step. */
+  private readonly ambience: Ambience | undefined;
+  private ambienceAt = Number.NEGATIVE_INFINITY;
   /** When a key into a pushable object may push again (pushAhead). */
   private pushAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
@@ -489,6 +494,7 @@ export class Game {
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
     this.stepEvents = stepSoundEvents(this.world, opts.content);
+    this.ambience = mountAmbience(this.world, opts.content);
     this.steer = new Steering({
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
@@ -1865,7 +1871,7 @@ export class Game {
   }
 
   /**
-   * The music's scene and the ambient loop for now: the zone, an important quest's area
+   * The music's scene for now: the zone, an important quest's area
    * and a boss in view (assets/sounds.yaml `music`, audio/cues.ts sceneFor; the music
    * director, audio/director.ts, decides what plays and when). An ordinary fight is not
    * part of it: the owner keeps the zone's music on (2026-11-18). After each batch and,
@@ -1880,14 +1886,24 @@ export class Game {
     const bosses = Object.keys(sounds.music.bosses).length > 0;
     const inView = bosses ? this.world.battleList().map((c) => c.contentId) : [];
     audio.setMusic(sceneFor(self.pos, islands, sounds.music, questMusic ?? [], inView));
-    audio.setAmbient(loopFor(self.pos, islands, sounds.ambient));
+  }
+
+  /**
+   * The ambience's loops for where the player stands (livingworld/README.md "Ambiente"):
+   * every AMBIENCE_STEP_MS from the frame; the engine ramps between the steps.
+   */
+  private keepAmbience(now: number): void {
+    const self = this.world.self;
+    if (!this.opts.audio || !self) return;
+    this.ambienceAt = now;
+    this.opts.audio.setAmbience(ambienceAt(this.ambience, now, self.pos));
   }
 
   destroy(): void {
     this.destroyed = true;
     clearTimeout(this.presenceTimer);
-    // The ambient bed stops; the music goes on until the menus set the title's (App.tsx).
-    this.opts.audio?.setAmbient(undefined);
+    // The ambience fades out; the music goes on until the menus set the title's (App.tsx).
+    this.opts.audio?.setAmbience([]);
     this.cancelUse();
     this.picker.cancel();
     this.watchPick(false);
@@ -2105,6 +2121,7 @@ export class Game {
     const self = this.world.self;
     if (!self) return;
     if (now - this.loopsAt >= LOOPS_EVERY_MS) this.keepLoops(now);
+    if (now - this.ambienceAt >= AMBIENCE_STEP_MS) this.keepAmbience(now);
     this.world.expirePredicted(now);
     const drawn = this.world.drawPos(self, now);
     this.trail.record(now, drawn.x, drawn.y);

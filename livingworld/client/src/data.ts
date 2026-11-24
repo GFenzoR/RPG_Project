@@ -1,7 +1,9 @@
 // The living world's content (data/livingworld/*.yaml, livingworld/README.md) as the client
 // uses it: what each ground surface does under a step, and which map items are plants that
 // react. Pure and free of Pixi: the client's Vite plugin (client/vite/content.ts, a glue
-// file) parses the YAML at build time with parseLivingWorldData.
+// file) parses the YAML at build time with parseLivingWorldData (and ambience.yaml with
+// parseAmbience, ambience.ts).
+import type { AmbienceData } from "./ambience.ts";
 
 /** What a ground is made of: data/items `ground.surface` (common.schema.json "surface"). */
 export const SURFACES = [
@@ -63,6 +65,8 @@ export interface LivingWorldData {
   surfaces: Partial<Record<Surface, SurfaceRules>>;
   /** By data/items id. */
   plants: Readonly<Record<string, PlantRule>>;
+  /** data/livingworld/ambience.yaml (ambience.ts); none: no positional ambience. */
+  ambience?: AmbienceData | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };

@@ -59,7 +59,11 @@ describe("strategyFor", () => {
     expect(strategyFor(get("/audio/sounds/music/puerto.ogg"), ORIGIN)).toBe("network");
     // The effects and the ambient loops are small: still cached.
     expect(strategyFor(get("/audio/sounds/sfx/hit.ogg"), ORIGIN)).toBe("stale-while-revalidate");
-    expect(strategyFor(get("/audio/sounds/ambient/olas.ogg"), ORIGIN)).toBe(
+    expect(strategyFor(get("/audio/sounds/ambient/volcan.ogg"), ORIGIN)).toBe(
+      "stale-while-revalidate",
+    );
+    // The living world's ambience loops too (livingworld/README.md "Ambiente").
+    expect(strategyFor(get("/audio/livingworld/sounds/ambience/waves.ogg"), ORIGIN)).toBe(
       "stale-while-revalidate",
     );
   });

@@ -12,12 +12,13 @@ pegamento, dónde viven datos, assets y protocolo, cómo agregar algo y cómo pr
 | Parte | Dónde | Estado |
 |---|---|---|
 | Efectos del cliente (huellas, plantas, ondas, polvo, hojas, bichos, pasos con sonido, desgaste dibujado) | `livingworld/client/` (paquete pnpm `@rpg/living-world`, TS strict) | hecho (lote 17) |
+| Ambiente posicional (olas, viento, árboles, fuentes, fogatas, antorchas, fraguas, cuevas, pueblo) | `livingworld/client/src/ambience.ts` (`@rpg/living-world/ambience`, puro, sin Pixi ni Web Audio) | hecho (lote 18); ver "Ambiente" |
 | Lógica y estado del servidor (rompibles, empujables, desgaste de senderos) | `livingworld/server/` (módulo Go propio `github.com/GFenzoR/RPG_Project/livingworld/server`; `server/go.mod` lo pide con `replace ../livingworld/server`) | desgaste de senderos: paquete `trail` (lote 17); rompibles y empujables: su ítem del lote |
-| Contenido | `data/livingworld/*.yaml` (esquemas `packages/content-schema/schemas/livingworld-<nombre>.schema.json`) y `ground.surface` de `data/items` | `surfaces.yaml`, `plants.yaml` (cliente), `wear.yaml` (servidor) |
+| Contenido | `data/livingworld/*.yaml` (esquemas `packages/content-schema/schemas/livingworld-<nombre>.schema.json`) y `ground.surface` de `data/items` | `surfaces.yaml`, `plants.yaml`, `ambience.yaml` (cliente), `wear.yaml` (servidor) |
 | Objetos del mapa (rompibles, empujables, placas y compuertas) | `livingworld/server` (paquete raíz), `livingworld/client/src/objects.ts`, `data/livingworld/objects.yaml` | hecho (lote 17); ver "Objetos del mapa" |
 | Items nuevos (plantas) | `data/items/plants.yaml`, ids con `make gen-ids` en `data/ids.lock.yaml` | `grass_tuft`, `tall_grass`, `wildflowers`, `reeds` |
 | Sprites | `assets/livingworld/sprites/` (los arma `tools/spritegen`, `recipes/living.ts`; `tools/spritepack` los empaqueta como `livingworld/<ruta>`) | arte propio |
-| Sonidos | `assets/livingworld/sounds/` (registrados en `assets/sounds.yaml` y `assets/CREDITS.md`) | pendiente: hoy los pasos usan `step` (abajo) |
+| Sonidos | `assets/livingworld/sounds/` (registrados en `assets/sounds.yaml` y `assets/CREDITS.md`) | los loops del ambiente en `ambience/` (`tools/soundgen`, `src/ambience.ts`); los pasos por superficie, pendientes (usan `step`) |
 | Mensajes | `proto/game/v1/livingworld.proto` (buf quiere los archivos de un paquete en su carpeta) | `TrailWear` (`ServerMessage.trail_wear` = 49 y `MapArea.wear`) |
 | Persistencia | tabla `trail_wear` (migración `server/migrations/00027_trail_wear.sql`) | una fila con el desgaste codificado |
 
@@ -135,6 +136,9 @@ s := m.Snapshot()                    // copia, en el loop; s.Encode() fuera de �
 Los únicos archivos fuera de `livingworld/` que pueden importarlo:
 
 <!-- glue:begin --><!-- glue:start -->
+- `client/src/audio/ambience.ts`: monta el ambiente posicional sobre el mapa del cliente
+  (casillas de `WorldState`, id y superficie de cada item, el tope liviano) y le da a
+  `Game` las voces que pasa a `AudioEngine.setAmbience`
 - `client/src/render/living.ts`: monta el mundo vivo sobre el `MapView` (superficie de cada
   casilla, sprites de plantas, texturas del atlas) y arma los eventos de sonido del paso propio
 - `client/vite/content.ts`: lee `data/livingworld/*.yaml` con `parseLivingWorldData`
@@ -145,7 +149,12 @@ Los únicos archivos fuera de `livingworld/` que pueden importarlo:
   los ganchos del loop
 <!-- glue:end -->
 
-Lo usan a través de `client/src/render/living.ts`: `client/src/render/game-canvas.ts`
+El ambiente lo usa `client/src/game.ts` a través de `client/src/audio/ambience.ts`
+(`mountAmbience`, `ambienceAt` cada `AMBIENCE_STEP_MS` desde `frame`); el motor
+(`client/src/audio/engine.ts`, `setAmbience`) recibe voces con un tipo propio
+(`AmbientLoop`, la misma forma que `AmbienceVoice`) y no importa el módulo.
+
+Lo demás lo usan a través de `client/src/render/living.ts`: `client/src/render/game-canvas.ts`
 (monta, pasa pasos y frames) y `client/src/game.ts` (sonido del paso, por
 `CueContext.stepEvents` de `client/src/audio/cues.ts`). El renderer compartido
 (`packages/renderer`) suma `MapView.groundOverlay`, `MapView.version` y
@@ -179,6 +188,13 @@ que usa un suelo esté descrita.
 `rustle`), `idle`, `leaves`, `trample` (aplastada sobre una casilla gastada). Cada item una
 sola vez.
 
+`data/livingworld/ambience.yaml` (cliente, "Ambiente" abajo): `radius`, `fade_ms`,
+`voices`, `voices_lite`, `rescan_ms`, `beds` (por id: `sound`, `volume`, `floors`, `full`,
+`base`, `surfaces`, `items`) y `emitters` (por id de item: `sound`, `volume`, `radius`,
+`falloff`). `make validate` exige que cada sonido sea de canal `ambient` en
+`assets/sounds.yaml`, que cada item exista, que ningún emisor pase el radio de la ventana
+y que `voices_lite` no pase `voices`.
+
 `data/livingworld/wear.yaml` (lo lee el **servidor**, `trail.LoadConfig`; `KnownFields`:
 una clave desconocida no arranca): `surfaces`, `player_step`, `monster_step`, `max`,
 `levels` (los puntos de los niveles 1, 2 y 3), `decay_every_ms`, `decay`, `save_every_ms`.
@@ -200,6 +216,14 @@ la superficie de un suelo y la reacción de una planta en la paleta.
 - **Un sonido de paso:** el archivo en `assets/livingworld/sounds/`, su fila en
   `assets/CREDITS.md` (o una receta de soundgen), el sonido en `sounds:` de
   `assets/sounds.yaml` y el evento `step.self.<sound>: <id>` en `events:`.
+- **Un emisor de sonido** (p. ej. una cascada o un molino): el item en el mapa y su fila
+  en `emitters` de `ambience.yaml` (`sound`, `volume`, `radius`). Sin código. Un sonido
+  nuevo: su receta en `tools/soundgen/src/ambience.ts` (`livingworld/ambience/<nombre>`,
+  `make sounds ONLY=livingworld/ambience/<nombre>`) o un archivo de Gemini o de un pack
+  con su fila en `assets/CREDITS.md`, y su línea `amb_<nombre>` (canal `ambient`) en
+  `assets/sounds.yaml`.
+- **Una capa de zona** (p. ej. nieve con viento helado): su entrada en `beds` con las
+  superficies o items que la hacen sonar y su `full`. Sin código.
 - **Una reacción nueva:** su simulación pura en `livingworld/client/src/<efecto>.ts` (con
   tope y sin `Math.random`), sus tests, su pool y su dibujo en `index.ts`, sus campos en
   `data.ts` y en el esquema; si necesita un dato del cliente, se pide por
@@ -228,6 +252,14 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   `server/internal/store/trailwear_integration_test.go` (la fila, con Postgres).
 - Del cliente: `client/src/state/trail-wear.test.ts` (deltas, áreas, poda).
 - `make lint` corre la frontera; `make validate` los YAML.
+- Ambiente: `livingworld/client/src/ambience.test.ts` (la composición contra un conteo
+  entero en 300 pasos al azar con saltos, las casillas que llegan tarde, el peso de las
+  capas y su paneo, atenuación, paneo y descarte de emisores, la mezcla por sonido, los
+  fundidos sin saltos, una voz que vuelve sin reiniciarse, el punto de arranque lejos del
+  anterior, el tope de voces y el liviano, y el determinismo de una caminata del mar al
+  bosque); `client/src/audio/engine.test.ts` ("the ambience": el motor sobre un contexto
+  falso); `client/vite/content.test.ts` (los datos reales); `packages/content-schema`
+  (los errores de `ambience.yaml`); `tools/soundgen` (loops sin costura, nivel y tope).
 - Fuera de la carpeta: `client/vite/content.test.ts` (superficies y datos al cliente),
   `client/src/audio/cues.test.ts` (sonido del paso), `packages/renderer/src/map-view.test.ts`
   (`groundOverlay`, `forEachItemSprite`), `packages/content-schema/src/validate.test.ts`,
@@ -355,7 +387,7 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
 | Comportamiento | `data/livingworld/*.yaml`, esquema `packages/content-schema/schemas/livingworld-objects.schema.json` |
 | Nombres y descripciones | `i18n/<idioma>/items.yaml` (`item.<id>.*`); mensajes `living.*` en `client.yaml`; paleta `editor.living_*` en `editor.yaml` |
 | Sprites | `assets/livingworld/sprites/` (`tools/spritepack` los empaqueta como `livingworld/<nombre>`), dibujados por `tools/spritegen/src/engine/specs/livingworld.ts` |
-| Sonidos | ids de `assets/sounds.yaml` (los de siempre: `hit`, `woodcutting`, `mining`...); uno nuevo iría en `assets/sounds/livingworld/` con su fila en `assets/CREDITS.md` |
+| Sonidos | ids de `assets/sounds.yaml` (los de siempre: `hit`, `woodcutting`, `mining`...); uno nuevo iría en `assets/livingworld/sounds/` con su fila en `assets/CREDITS.md` |
 | Mensajes | `proto/game/v1/livingworld.proto` (paquete `game.v1`: buf exige el archivo en el directorio de su paquete) |
 | Mapa | objetos colocados como items comunes en los chunks (`world/`) |
 
@@ -458,8 +490,67 @@ cd server && go test ./internal/session -run 'Living'   # el pegamento con el lo
   `livingworld/client/src/objects.test.ts`: eventos, empuje y efectos.
 - A mano: `docs/16-probar-el-juego.md`, "Mundo vivo".
 
+## Ambiente
+
+Pedido del dueño del 2026-11-23: "en el pueblo se escucha el mar aunque no está tan cerca".
+Antes sonaba un loop por isla (`amb_olas` en toda Velmara); ahora, bajo la música y en el
+canal `ambient`, suena lo que hay alrededor del jugador (`ambience.ts`, puro y
+determinista):
+
+- **Capas de zona** (`beds`): una ventana cuadrada de `radius` (10) casillas alrededor del
+  jugador. Cada casilla pesa, para cada capa, lo más pesado de su suelo (`surfaces`) y de
+  sus items (`items`); el nivel es la parte de las casillas conocidas sobre `full`, hasta
+  1, más `base`. Así el mar suena a 10 casillas del agua y un pueblo tierra adentro no lo
+  oye. Cada capa se panea un poco (`BED_PAN`, 0,5) hacia donde están sus casillas.
+  **Incremental:** al caminar, `Composition.moveTo` suma la fila o columna que entra y
+  resta la que sale; cada casilla de la ventana guarda en un anillo lo que sumó, así resta
+  exactamente eso (sumas enteras: el resultado es igual a contar todo de nuevo, lo prueba
+  el test). Cada `rescan_ms` (2 s) cuenta la ventana entera (casillas que cambiaron), y un
+  cambio de piso o un salto más largo que el radio también.
+- **Emisores** (`emitters`): items del mapa que suenan solos (fuente, pozo, fogón,
+  brasero, antorcha, farol, fragua), hallados en la misma ventana. Se oyen dentro de su
+  `radius` (nunca más que el de la ventana), más bajos con la distancia (`smooth`:
+  (1 − d/r)²; `linear`: 1 − d/r), paneados por su x contra la del jugador (`PAN_TILES` 6,
+  `MAX_PAN` 0,8, como los efectos) y descartados más allá. Los de un mismo sonido son una
+  sola voz (√Σg², paneada al promedio), y una capa y un emisor del mismo sonido también.
+- **Mezcla** (`AmbienceMixer`): las más fuertes primero, como mucho `voices` (6) a la vez,
+  `voices_lite` (3) en un teléfono (puntero grueso) o con "Animaciones reducidas" (que
+  también se usa en equipos lentos). Una ganancia nunca salta: se mueve como mucho una
+  escala entera por `fade_ms` (2,5 s), así una capa que se va se apaga y una que vuelve
+  mientras se apaga es la misma voz que sube, sin reiniciarse. Una voz nueva arranca su
+  loop en un punto al azar (con semilla) a por lo menos un cuarto de loop de donde arrancó
+  la vez anterior: dos loops nunca vuelven a coincidir en el mismo segundo. Si el tope
+  está lleno, la voz más baja que se apaga lo hace cuatro veces más rápido
+  (`FAST_FADE`) y la nueva entra después. El paneo se mueve en `PAN_MS` (800 ms).
+- **Motor** (pegamento): `Game` llama `ambienceAt` cada `AMBIENCE_STEP_MS` (250 ms) y pasa
+  las voces a `AudioEngine.setAmbience`; el motor las refleja en buffer sources con `loop`,
+  arrancados en su `offset`, con rampas de `AMBIENCE_RAMP_MS` (300 ms) entre pasos, y
+  apaga en `AMBIENCE_RELEASE_MS` (1,5 s) una que ya no llega (al salir del juego). Con el
+  canal de ambiente silenciado no baja ni toca nada. Deja decodificados los loops que
+  suenan y `KEEP_LOOPS` (2) de los últimos. La música sigue igual, con sus pools y sus
+  transiciones, en su propio canal.
+- **Sonidos**: nueve loops propios de 16 s (`tools/soundgen/src/ambience.ts`): olas en una
+  orilla, viento del desierto (también la brisa suave del pasto), viento en los árboles,
+  cueva con gotas, murmullo de pueblo, fuente de piedra (y pozo, más bajo), fogata
+  (fogón y brasero), antorcha (y farol) y fragua; la lava usa el `amb_volcan` de siempre.
+  Ruido con filtros y envolventes periódicas, eventos (gotas, chasquidos) que dan la
+  vuelta al final, y la cola doblada sobre la cabeza con un fundido de potencia constante
+  (`seamless`, `XF_S` 0,75 s): sin costura. Todos al mismo RMS (`TARGET_RMS`, con techo de
+  pico `PEAK`), así la mezcla es solo `ambience.yaml`. Ogg Opus mono a 24 kbps, ~42 KB
+  cada uno (docs/07 "Audio").
+- **Mapa:** fuentes en Velmara, Selvaine y Karvask; pozos en Selvaine y Karvask; fogones,
+  braseros, antorchas, faroles y fraguas en todas las islas grandes. Thimblewick tiene
+  fragua y fogón, sin fuente. No hay item de fogata suelta ni de cascada: el fogón hace de
+  fogata. Lo que suena en cada templo (medido con los mapas reales): Velmara, el murmullo
+  y algo de brisa con el fogón lejos; la isla del E2E, solo la brisa del pasto; en la
+  orilla de Velmara, olas fuertes paneadas hacia el mar.
+
+
 ## Pendiente
 - Sonidos de paso propios por superficie: sin ffmpeg no se pudieron generar; los eventos ya
   existen y caen en `step`.
 - No hay día y noche: las luciérnagas esperan uno (`night()` da siempre falso).
 - Plantas nuevas sin colocar en los mapas.
+- Ambiente: los loops son de soundgen; probar Gemini (el Chrome del dueño no estaba
+  abierto el 2026-11-24) y que el dueño los escuche; una cascada y una fogata suelta
+  necesitan su item; las paredes no tapan el sonido de un emisor.

@@ -116,7 +116,8 @@ export function islandAt(p: Pos, islands: readonly IslandRect[]): string | undef
 
 /**
  * What a set of rules plays where the player stands: the island's, or the underground's
- * below the sea floor (undefined = none). The ambient bed's loop, or the music's zone pool.
+ * below the sea floor (undefined = none): the music's zone pool. (The ambience is not by
+ * island: livingworld/client/src/ambience.ts hears the tiles around the player.)
  */
 export function loopFor(
   p: Pos,
@@ -175,5 +176,4 @@ export const NO_SOUNDS: SoundManifest = {
     resumeMs: 0,
     gapMs: [0, 0],
   },
-  ambient: { fadeMs: 0, islands: {}, underground: undefined },
 };

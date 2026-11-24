@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+import { parseAmbience } from "@rpg/living-world/ambience";
 import { parseLivingWorldData } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
@@ -39,7 +40,6 @@ import type {
   NewsPost,
   OutfitDef,
   SiteContent,
-  LoopRules,
   MusicFades,
   MusicRules,
   QuestMusic,
@@ -96,13 +96,16 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
 
-/** data/livingworld/surfaces.yaml and plants.yaml as the living world uses them. */
+/** data/livingworld/surfaces.yaml, plants.yaml and ambience.yaml as the living world uses them. */
 function loadLivingWorld(root: string): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
-  return parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"));
+  return {
+    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml")),
+    ambience: parseAmbience(read("ambience.yaml")),
+  };
 }
 
 /** Builds the content module from data/ and i18n/ under root. Throws on unreadable data. */
@@ -784,15 +787,6 @@ const stringMap = (v: unknown): Record<string, string> => {
   return out;
 };
 
-const loopRules = (v: unknown): LoopRules => {
-  const l = isObj(v) ? v : {};
-  return {
-    fadeMs: typeof l["fade_ms"] === "number" ? l["fade_ms"] : 2000,
-    islands: stringMap(l["islands"]),
-    underground: typeof l["underground"] === "string" ? l["underground"] : undefined,
-  };
-};
-
 /** The music's timings when sounds.yaml says nothing (audio/director.ts). */
 export const MUSIC_DEFAULTS = {
   fades: { zone: 5000, bossIn: 1500, bossOut: 6000, title: 3000, next: 4000 },
@@ -884,7 +878,7 @@ export function loadSounds(root: string): SoundManifest {
       );
       if (ids.length > 0) events[ev] = ids;
     }
-  return { sounds, events, music: musicRules(m["music"]), ambient: loopRules(m["ambient"]) };
+  return { sounds, events, music: musicRules(m["music"]) };
 }
 
 /**

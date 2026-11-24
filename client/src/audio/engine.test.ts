@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { SoundManifest } from "../content-types.ts";
 import {
+  AMBIENCE_RAMP_MS,
+  AMBIENCE_RELEASE_MS,
   ATTACH_MS,
   AudioEngine,
   HEAR_RANGE,
@@ -23,6 +25,7 @@ import type {
   ParamLike,
   SourceLike,
   StreamLike,
+  AmbientLoop,
 } from "./engine.ts";
 import { defaultPrefs, withMuted, withVolume } from "./prefs.ts";
 
@@ -66,10 +69,12 @@ class FakeSource extends FakeNode implements SourceLike {
   buffer: BufferLike | null = null;
   loop = false;
   started: number | undefined;
+  offset = 0;
   stopped: number | undefined;
   private ended: (() => void)[] = [];
-  start(when = 0): void {
+  start(when = 0, offset = 0): void {
     this.started = when;
+    this.offset = offset;
   }
   stop(when = 0): void {
     this.stopped = when;
@@ -199,6 +204,7 @@ const MANIFEST: SoundManifest = {
     waves: sound("audio/waves.ogg", "ambient"),
     wind: sound("audio/wind.ogg", "ambient"),
     rain: sound("audio/rain.ogg", "ambient"),
+    surf: sound("audio/surf.ogg", "ambient"),
   },
   events: {
     "effect.hit": ["hit"],
@@ -224,8 +230,16 @@ const MANIFEST: SoundManifest = {
     resumeMs: 60_000,
     gapMs: [1000, 2000],
   },
-  ambient: { fadeMs: 1000, islands: {}, underground: undefined },
 };
+
+/** One ambience voice as the living world's mixer hands it over. */
+const loop = (id: number, sound: string, gain = 1, pan = 0, offset = 0): AmbientLoop => ({
+  id,
+  sound,
+  gain,
+  pan,
+  offset,
+});
 
 function setup(prefs = defaultPrefs(), opts: { canStream?: boolean } = {}) {
   const ctx = new FakeContext();
@@ -522,7 +536,7 @@ describe("AudioEngine", () => {
   it("never asks again for a file that came but does not decode", async () => {
     const { ctx, engine, fetched, advance, at } = setup();
     ctx.undecodable = true;
-    engine.setAmbient("waves");
+    engine.setAmbience([loop(1, "waves")]);
     await unlockNow(engine);
     engine.play(["effect.hit"]);
     await flush();
@@ -532,6 +546,7 @@ describe("AudioEngine", () => {
     // Long after any wait, a play and the engine's timer ask for nothing.
     await advance(10 * STREAM_RETRY_MAX_MS);
     engine.play(["effect.hit"]);
+    engine.setAmbience([loop(1, "waves")]);
     await at(1);
     await flush();
     expect(fetched.filter((u) => u === "audio/hit.ogg")).toHaveLength(1);
@@ -540,23 +555,25 @@ describe("AudioEngine", () => {
     expect(engine.playingLoops().ambient).toBeUndefined();
   });
 
-  it("starts the ambient loop by itself once its file comes back after the wait", async () => {
-    const { engine, fetched, failing, advance, at } = setup();
+  it("starts an ambience loop once its file comes back after the wait", async () => {
+    const { engine, fetched, failing, advance } = setup();
     failing.add("audio/waves.ogg");
-    engine.setAmbient("waves");
+    engine.setAmbience([loop(1, "waves")]);
     await unlockNow(engine);
     for (const t of [500, 1500, 3500]) await advance(t);
     expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(4);
-    expect(engine.playingLoops().ambient).toBeUndefined();
+    expect(engine.playingLoops().ambience).toEqual([]);
     failing.clear();
-    // The engine's timer, before and after the wait: nothing else asks for the loop.
+    // The glue hands the same loops over a few times a second: before the wait, nothing
+    // is fetched; after it, the file is asked for again and the loop starts.
     await advance(4000);
-    await at(1);
+    engine.setAmbience([loop(1, "waves")]);
+    await flush();
     expect(fetched.filter((u) => u === "audio/waves.ogg")).toHaveLength(4);
     await advance(3500 + STREAM_RETRY_MS);
-    await at(2);
+    engine.setAmbience([loop(1, "waves")]);
     await flush();
-    expect(engine.playingLoops().ambient).toBe("waves");
+    expect(engine.playingLoops().ambience).toEqual(["waves"]);
   });
 
   it("drops a sound whose file arrives too late", async () => {
@@ -598,68 +615,131 @@ describe("spatial", () => {
   });
 });
 
-describe("the ambient bed", () => {
-  it("remembers the wanted loop while locked and fades it in on unlock", async () => {
+describe("the ambience", () => {
+  const ramp = AMBIENCE_RAMP_MS / 1000;
+  const gainOf = (src: FakeSource | undefined): FakeParam =>
+    (src?.outputs[0] as FakeGain | undefined)?.gain ?? new FakeParam();
+  const panOf = (src: FakeSource | undefined): FakeParam =>
+    ((src?.outputs[0] as FakeGain | undefined)?.outputs[0] as FakePanner | undefined)?.pan ??
+    new FakeParam();
+
+  it("remembers the loops while locked and fades them in from their offset on unlock", async () => {
     const { ctx, engine } = setup();
-    engine.setAmbient("waves");
+    engine.setAmbience([loop(1, "waves", 0.8, -0.4, 0.25)]);
     expect(ctx.sources).toHaveLength(0);
     await unlockNow(engine);
-    await flush();
+    expect(engine.playingLoops().ambience).toEqual(["waves"]);
     expect(engine.playingLoops().ambient).toBe("waves");
-    const src = ctx.sources.find((s) => s.loop && (s.buffer?.duration ?? 0) === 60);
+    const src = ctx.sources[0];
     expect(src?.loop).toBe(true);
-    const fade = (src?.outputs[0] as FakeGain).gain.events;
-    expect(fade).toEqual([
+    expect(src?.offset).toBe(15); // a quarter of the 60 s loop: never always at 0
+    expect(gainOf(src).events).toEqual([
       ["set", 0, 0],
-      ["ramp", 0.5, 1],
+      ["ramp", 0.5 * 0.8, ramp],
     ]);
+    expect(panOf(src).value).toBeCloseTo(-0.4);
   });
 
-  it("crossfades to a new loop and stops the old one after the fade", async () => {
+  it("ramps a voice that goes on to its new gain and pan, without restarting it", async () => {
     const { ctx, engine } = setup();
     await unlockNow(engine);
-    engine.setAmbient("waves");
+    engine.setAmbience([loop(1, "waves", 0.2)]);
     await flush();
-    const first = ctx.sources[0];
-    ctx.currentTime = 10;
-    engine.setAmbient("wind");
+    ctx.currentTime = 5;
+    engine.setAmbience([loop(1, "waves", 0.6, 0.5)]);
     await flush();
-    expect(first?.stopped).toBe(11);
-    expect((first?.outputs[0] as FakeGain).gain.events.at(-1)).toEqual(["ramp", 0, 11]);
-    expect(engine.playingLoops().ambient).toBe("wind");
-    engine.setAmbient("wind"); // the same loop again: nothing restarts
-    await flush();
-    expect(ctx.sources).toHaveLength(2);
-    engine.setAmbient(undefined);
-    expect(ctx.sources[1]?.stopped).toBe(11);
-    expect(engine.playingLoops().ambient).toBeUndefined();
+    expect(ctx.sources).toHaveLength(1);
+    expect(gainOf(ctx.sources[0]).events.at(-1)).toEqual(["ramp", 0.5 * 0.6, 5 + ramp]);
+    expect(panOf(ctx.sources[0]).events.at(-1)).toEqual(["ramp", 0.5, 5 + ramp]);
+    expect(ctx.sources[0]?.stopped).toBeUndefined();
   });
 
-  it("keeps the last two loops decoded and forgets older ones", async () => {
+  it("plays several loops at once, each on its own source", async () => {
+    const { ctx, engine } = setup();
+    await unlockNow(engine);
+    engine.setAmbience([loop(1, "waves", 0.3), loop(2, "wind", 0.9)]);
+    await flush();
+    expect(ctx.sources).toHaveLength(2);
+    expect(engine.playingLoops()).toMatchObject({ ambient: "wind", ambience: ["waves", "wind"] });
+  });
+
+  it("fades out a voice no longer handed over, and stops it after the fade", async () => {
+    const { ctx, engine } = setup();
+    await unlockNow(engine);
+    engine.setAmbience([loop(1, "waves"), loop(2, "wind")]);
+    await flush();
+    ctx.currentTime = 10;
+    engine.setAmbience([loop(2, "wind")]);
+    const end = 10 + AMBIENCE_RELEASE_MS / 1000;
+    expect(ctx.sources[0]?.stopped).toBe(end);
+    expect(gainOf(ctx.sources[0]).events.at(-1)).toEqual(["ramp", 0, end]);
+    expect(ctx.sources[1]?.stopped).toBeUndefined();
+    engine.setAmbience([]);
+    expect(ctx.sources[1]?.stopped).toBe(end);
+    expect(engine.playingLoops().ambience).toEqual([]);
+  });
+
+  it("a new voice of a sound that faded out starts a new source", async () => {
+    const { ctx, engine } = setup();
+    await unlockNow(engine);
+    engine.setAmbience([loop(1, "waves", 1, 0, 0.1)]);
+    await flush();
+    engine.setAmbience([]);
+    engine.setAmbience([loop(2, "waves", 1, 0, 0.6)]);
+    await flush();
+    expect(ctx.sources).toHaveLength(2);
+    expect(ctx.sources[1]?.offset).toBeCloseTo(36);
+    expect(ctx.decoded).toBe(1); // the buffer stayed decoded
+  });
+
+  it("fetches nothing with the ambient channel muted, and starts when unmuted", async () => {
+    const { ctx, engine, fetched } = setup(withMuted(defaultPrefs(), "ambient", true));
+    await unlockNow(engine);
+    engine.setAmbience([loop(1, "waves")]);
+    await flush();
+    expect(fetched).toHaveLength(0);
+    expect(ctx.sources).toHaveLength(0);
+    engine.setPrefs(defaultPrefs());
+    await flush();
+    expect(engine.playingLoops().ambience).toEqual(["waves"]);
+    engine.setPrefs(withMuted(defaultPrefs(), "ambient", true));
+    expect(ctx.sources[0]?.stopped).toBeDefined();
+  });
+
+  it("keeps the loops playing and the last two idle ones decoded, and forgets older ones", async () => {
     const { ctx, engine, fetched } = setup();
     await unlockNow(engine);
-    engine.setAmbient("waves");
+    engine.setAmbience([loop(1, "waves")]);
     await flush();
-    engine.setAmbient("wind");
+    engine.setAmbience([loop(2, "wind")]);
     await flush();
-    engine.setAmbient("waves"); // back and forth: nothing is fetched or decoded again
+    engine.setAmbience([loop(3, "waves")]); // back and forth: nothing fetched or decoded again
     await flush();
     expect(fetched.filter((u) => u.includes("waves"))).toHaveLength(1);
     expect(ctx.decoded).toBe(2);
-    engine.setAmbient("rain");
+    engine.setAmbience([loop(4, "rain")]);
+    await flush();
+    expect(engine.isCached("rain")).toBe(true);
+    expect(engine.isCached("waves")).toBe(true);
+    expect(engine.isCached("wind")).toBe(true);
+    engine.setAmbience([loop(5, "surf")]); // a third idle one: the oldest goes
     await flush();
     expect(engine.isCached("wind")).toBe(false);
     expect(engine.isCached("waves")).toBe(true);
+    expect(engine.isCached("rain")).toBe(true);
+    engine.setAmbience([loop(6, "hit")]); // not an ambient sound: ignored
+    await flush();
+    expect(ctx.sources.filter((x) => x.buffer?.duration === 1 && x.loop)).toHaveLength(2);
   });
 
   it("does not start a loop that stopped being wanted while it loaded", async () => {
     const { ctx, engine } = setup();
     await unlockNow(engine);
-    engine.setAmbient("waves");
-    engine.setAmbient("wind");
+    engine.setAmbience([loop(1, "waves")]);
+    engine.setAmbience([loop(2, "wind")]);
     await flush();
     expect(ctx.sources).toHaveLength(1);
-    expect(engine.playingLoops().ambient).toBe("wind");
+    expect(engine.playingLoops().ambience).toEqual(["wind"]);
   });
 });
 

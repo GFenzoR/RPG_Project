@@ -1,7 +1,13 @@
 // Audio engine (T3.7) over the Web Audio API: one gain per channel (sfx, ui, music,
 // ambient) under a master gain, lazily loaded and cached buffers, a cap on simultaneous
 // voices, simple positional sound (distance attenuation and stereo pan around the player),
-// a crossfading ambient bed, and the music.
+// the positional ambience's loops, and the music.
+//
+// The ambience is the living world's (livingworld/client/src/ambience.ts, through the glue
+// client/src/audio/ambience.ts): a few times a second it hands setAmbience the loops that
+// should sound, each with its gain, pan and start point; the engine mirrors them on looping
+// buffer sources in the ambient channel and ramps each gain and pan to its new value over
+// AMBIENCE_RAMP_MS (the module already moves them slowly: nothing is ever cut).
 //
 // The music is the director's (director.ts, the owner's request of 2026-11-18): the engine
 // tells it where the player is (setMusic) and pumps it every PUMP_MS on the audio clock;
@@ -85,7 +91,8 @@ export interface BufferLike {
 export interface SourceLike extends NodeLike {
   buffer: BufferLike | null;
   loop: boolean;
-  start(when?: number): void;
+  /** `offset`: where in the buffer it starts, s (a loop then wraps round to its start). */
+  start(when?: number, offset?: number): void;
   stop(when?: number): void;
   addEventListener(type: "ended", listener: () => void): void;
 }
@@ -284,10 +291,26 @@ export const MAX_PAN = 0.8;
 /** A sound whose file arrives later than this after it was asked for is dropped. */
 export const LATE_MS = 300;
 /**
- * Ambient loops kept decoded: the one playing and the one before it, so going back and
- * forth between two zones does not decode again; older ones are forgotten.
+ * Ambient loops kept decoded beyond the ones playing: the last ones that stopped, so walking
+ * back and forth along a beach does not decode again; older ones are forgotten (docs/07
+ * "Audio": a 16 s mono loop is ~3 MB decoded).
  */
 export const KEEP_LOOPS = 2;
+/** An ambience voice's gain and pan ramp to a new value over this, ms. */
+export const AMBIENCE_RAMP_MS = 300;
+/** A voice that is no longer handed over (the game closed) fades out over this, ms. */
+export const AMBIENCE_RELEASE_MS = 1500;
+
+/** A loop of the ambience (livingworld/client/src/ambience.ts AmbienceVoice). */
+export interface AmbientLoop {
+  readonly id: number;
+  readonly sound: string;
+  /** 0..1, multiplied with the sound's volume. */
+  readonly gain: number;
+  readonly pan: number;
+  /** Where in the loop it starts, as a fraction of its length. */
+  readonly offset: number;
+}
 /**
  * Music files kept fetched while unused (their compressed bytes, ~1 MB each; docs/07
  * "Audio"); the ones playing or wanted are kept on top of these. A decoded loop file is
@@ -357,11 +380,12 @@ interface OneShot {
   endsAt: number;
 }
 
-interface LoopSlot {
-  /** The sound that should play here (undefined = silence). */
-  want: string | undefined;
-  /** What actually plays, with its own fade gain. */
-  playing: { sound: string; source: SourceLike; gain: GainLike } | undefined;
+/** An ambience voice the engine mirrors: its source once its file has come. */
+interface AmbientNode {
+  sound: string;
+  playing: { source: SourceLike; gain: GainLike; panner: PannerLike } | undefined;
+  /** Its file is being fetched. */
+  loading: boolean;
 }
 
 /** A media element (or a loop file's buffer source) and its gain, playing a voice. */
@@ -419,8 +443,10 @@ export class AudioEngine {
   private readonly soundFailures = new Map<string, number>();
   private readonly decoded = new Map<string, BufferLike>();
   private voices: OneShot[] = [];
-  private readonly ambient: LoopSlot = { want: undefined, playing: undefined };
-  /** The ambient loops wanted last, oldest first (at most KEEP_LOOPS). */
+  /** The ambience's loops as last handed over, and the nodes playing them by voice id. */
+  private ambience: readonly AmbientLoop[] = [];
+  private readonly ambientNodes = new Map<number, AmbientNode>();
+  /** Ambient loops that played, least recently used first (KEEP_LOOPS stay decoded). */
   private recentLoops: string[] = [];
   private readonly director: MusicDirector;
   private scene: Scene = { kind: "silent" };
@@ -478,7 +504,7 @@ export class AudioEngine {
         this.channels.set(ch, g);
       }
       this.applyVolumes();
-      this.startAmbient();
+      this.syncAmbience();
       this.stopPump = this.ports.every(PUMP_MS, () => this.pump());
     }
     if (this.ctx.state === "suspended")
@@ -527,6 +553,7 @@ export class AudioEngine {
   setPrefs(prefs: AudioPrefs): void {
     this.prefs = prefs;
     this.applyVolumes();
+    this.syncAmbience(); // muted ambience lets go of its loops; unmuted, they come back
     this.pump(); // muted music lets go of its elements; unmuted, they come back
   }
 
@@ -709,69 +736,130 @@ export class AudioEngine {
     return this.buffers.has(id);
   }
 
-  /** Keeps `id` among the last KEEP_LOOPS ambient loops and forgets the older ones. */
-  private rememberLoop(id: string): void {
-    const recent = this.recentLoops.filter((r) => r !== id);
-    recent.push(id);
-    while (recent.length > KEEP_LOOPS) {
-      const old = recent.shift();
-      if (old === undefined) break;
-      // A source still fading out keeps its own reference to the buffer.
-      this.buffers.delete(old);
-      this.decoded.delete(old);
+  /**
+   * Keeps the decoded ambient loops that play, and the KEEP_LOOPS that played last; older
+   * ones are forgotten (a source still fading out keeps its own reference to its buffer).
+   */
+  private trimLoops(): void {
+    const live = new Set([...this.ambientNodes.values()].map((n) => n.sound));
+    const order = [...this.recentLoops.filter((r) => !live.has(r)), ...live];
+    let idle = order.length - live.size;
+    const keep: string[] = [];
+    for (const id of order) {
+      if (!live.has(id) && idle > KEEP_LOOPS) {
+        this.buffers.delete(id);
+        this.decoded.delete(id);
+        idle--;
+        continue;
+      }
+      keep.push(id);
     }
-    this.recentLoops = recent;
+    this.recentLoops = keep;
   }
 
-  // ---- the ambient bed ------------------------------------------------------------------
+  // ---- the ambience ---------------------------------------------------------------------
 
-  /** The ambient loop that should play (undefined = none); a change crossfades. */
-  setAmbient(id: string | undefined): void {
-    if (this.ambient.want === id) return;
-    this.ambient.want = id;
-    if (id !== undefined) this.rememberLoop(id);
-    this.startAmbient();
+  /**
+   * The loops the ambience wants now (livingworld/client/src/ambience.ts): a new voice
+   * starts at its offset, one that goes on ramps to its new gain and pan, and one no longer
+   * listed fades out over AMBIENCE_RELEASE_MS. Remembered while locked; with the ambient
+   * channel muted nothing is fetched or played. A file that did not come is asked again by
+   * a later call once its wait is over (load keeps the policy): the glue calls this a few
+   * times a second.
+   */
+  setAmbience(loops: readonly AmbientLoop[]): void {
+    this.ambience = loops;
+    this.syncAmbience();
   }
 
-  /** What plays now: the music's lead track and the ambient loop (tests, E2E). */
-  playingLoops(): { music: string | undefined; ambient: string | undefined } {
-    return { music: this.director.leadSound(), ambient: this.ambient.playing?.sound };
+  /** What plays now: the music's lead track, the loudest ambient loop and all of them. */
+  playingLoops(): {
+    music: string | undefined;
+    ambient: string | undefined;
+    ambience: string[];
+  } {
+    const playing = this.ambience.filter((l) => this.ambientNodes.get(l.id)?.playing);
+    let loudest: AmbientLoop | undefined;
+    for (const l of playing) if (!loudest || l.gain > loudest.gain) loudest = l;
+    return {
+      music: this.director.leadSound(),
+      ambient: loudest?.sound,
+      ambience: playing.map((l) => l.sound).sort(),
+    };
   }
 
-  private startAmbient(): void {
+  private syncAmbience(): void {
     const ctx = this.ctx;
-    const slot = this.ambient;
-    if (!ctx) return;
-    const fade = this.manifest.ambient.fadeMs / 1000;
-    const old = slot.playing;
-    if (old?.sound === slot.want) return;
-    if (old) {
-      const t = ctx.currentTime;
-      old.gain.gain.cancelScheduledValues(t);
-      old.gain.gain.setValueAtTime(old.gain.gain.value, t);
-      old.gain.gain.linearRampToValueAtTime(0, t + fade);
-      old.source.stop(t + fade);
-      slot.playing = undefined;
-    }
-    const id = slot.want;
-    const def = id === undefined ? undefined : this.manifest.sounds[id];
     const out = this.channels.get("ambient");
-    if (id === undefined || !def || def.channel !== "ambient" || !out) return;
-    void this.load(id).then((buffer) => {
-      // Still wanted, and nothing else started meanwhile?
-      if (!buffer || slot.want !== id || slot.playing) return;
-      const t = ctx.currentTime;
+    if (!ctx || !out) return;
+    const t = ctx.currentTime;
+    const audible = this.level("ambient") > 0;
+    const wanted = new Map(audible ? this.ambience.map((l) => [l.id, l] as const) : []);
+    for (const [id, node] of this.ambientNodes) {
+      if (wanted.has(id)) continue;
+      this.ambientNodes.delete(id);
+      const p = node.playing;
+      if (!p) continue;
+      const end = t + AMBIENCE_RELEASE_MS / 1000;
+      p.gain.gain.cancelScheduledValues(t);
+      p.gain.gain.setValueAtTime(p.gain.gain.value, t);
+      p.gain.gain.linearRampToValueAtTime(0, end);
+      p.source.stop(end);
+    }
+    const ramp = t + AMBIENCE_RAMP_MS / 1000;
+    for (const loop of wanted.values()) {
+      const def = this.manifest.sounds[loop.sound];
+      if (!def || def.channel !== "ambient") continue;
+      let node = this.ambientNodes.get(loop.id);
+      const p = node?.playing;
+      if (p) {
+        p.gain.gain.cancelScheduledValues(t);
+        p.gain.gain.setValueAtTime(p.gain.gain.value, t);
+        p.gain.gain.linearRampToValueAtTime(def.volume * loop.gain, ramp);
+        p.panner.pan.cancelScheduledValues(t);
+        p.panner.pan.setValueAtTime(p.panner.pan.value, t);
+        p.panner.pan.linearRampToValueAtTime(loop.pan, ramp);
+        continue;
+      }
+      if (node?.loading) continue;
+      if (!node) {
+        node = { sound: loop.sound, playing: undefined, loading: false };
+        this.ambientNodes.set(loop.id, node);
+        this.trimLoops();
+      }
+      this.startLoop(ctx, out, loop.id, node, def.volume);
+    }
+  }
+
+  private startLoop(
+    ctx: ContextLike,
+    out: GainLike,
+    id: number,
+    node: AmbientNode,
+    volume: number,
+  ): void {
+    node.loading = true;
+    void this.load(node.sound).then((buffer) => {
+      node.loading = false;
+      // Still wanted, under the same voice, and not started meanwhile?
+      if (!buffer || this.ambientNodes.get(id) !== node || node.playing) return;
+      const loop = this.ambience.find((l) => l.id === id);
+      if (!loop) return;
+      const at = ctx.currentTime;
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.loop = true;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(def.volume, t + fade);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(volume * loop.gain, at + AMBIENCE_RAMP_MS / 1000);
+      const p = ctx.createStereoPanner();
+      p.pan.setValueAtTime(loop.pan, at);
       src.connect(g);
-      g.connect(out);
-      src.start(t);
-      slot.playing = { sound: id, source: src, gain: g };
-      this.pushHistory(id);
+      g.connect(p);
+      p.connect(out);
+      src.start(at, (((loop.offset % 1) + 1) % 1) * buffer.duration);
+      node.playing = { source: src, gain: g, panner: p };
+      this.pushHistory(node.sound);
     });
   }
 
@@ -824,18 +912,6 @@ export class AudioEngine {
     this.director.update(now, this.scene, ready);
     if (audible) for (const s of this.director.wanted()) this.fetchMusic(s);
     this.syncDecks(ctx, now, audible);
-    this.retryAmbient();
-  }
-
-  /**
-   * The ambient loop wanted gave up loading (its attempts ran out): once it is due for
-   * another try, start it again (nothing else asks for it while the player stays put).
-   */
-  private retryAmbient(): void {
-    const id = this.ambient.want;
-    if (id === undefined || this.ambient.playing || this.buffers.has(id)) return;
-    const due = this.soundFailed.get(id);
-    if (due !== undefined && this.ports.now() >= due) this.startAmbient();
   }
 
   /** Whether a music file is fetched (a loop file: decoded) and can play right away. */

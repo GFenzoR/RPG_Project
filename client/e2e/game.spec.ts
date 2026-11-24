@@ -2346,7 +2346,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   expect(await starts()).toBe(0);
   expect(await musicFrom()).toEqual([]);
   // The first gesture starts the title screen's music (a track of the pool the owner picked
-  // in assets/sounds.yaml music.title, through the music director), and no ambient bed.
+  // in assets/sounds.yaml music.title, through the music director), and no ambience.
   // Polling what plays proves its file arrived. The gesture is a click on the empty page: a
   // modifier key alone is no user activation for Chromium, and the context stays suspended.
   const sounds = parse(
@@ -2366,13 +2366,16 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await enterGame(page, email, password);
   errors.length = 0;
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(true);
-  // The test island plays a track of the harbour's pool and the waves (assets/sounds.yaml).
+  // The test island plays a track of the harbour's pool, and under it the ambience of what
+  // is around the player (livingworld/README.md "Ambiente"): its temple stands in a
+  // meadow, so the soft breeze over the grass, and no sea (it is more than ten tiles off).
   await expect
     .poll(async () => {
       const l = await page.evaluate(() => window.__rpgAudio?.loops());
       return (
         l &&
-        l.ambient === "amb_olas" &&
+        l.ambience.includes("amb_desert_wind") &&
+        !l.ambience.includes("amb_waves") &&
         pool(sounds.music.islands["testisle"]).includes(l.music ?? "")
       );
     })
@@ -2400,7 +2403,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     await arrived(page, start.x, start.y);
   }
   expect(await history()).toContain("step");
-  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambient bed and a step
+  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambience and a step
 
   // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
   await page.getByTestId("options-button").click();

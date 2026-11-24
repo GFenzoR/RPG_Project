@@ -403,6 +403,7 @@ class Validator {
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
       if (src && name === "objects") this.living.push(src); // a list, not an object
       if (!src || !isObj(src.data)) continue;
+      if (name === "ambience") this.checkAmbience(src, src.data);
       if (name === "plants") {
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {
@@ -432,6 +433,57 @@ class Validator {
         }
       }
     }
+  }
+
+  /**
+   * data/livingworld/ambience.yaml (livingworld/README.md "Ambiente"): every bed and
+   * emitter names an ambient sound of assets/sounds.yaml and items that exist, no emitter
+   * is heard past the window (`radius`) and the lite cap is at most the full one.
+   */
+  private checkAmbience(src: SourceFile, data: Obj): void {
+    const items = new Set<string>();
+    for (const { item } of this.items) if (typeof item["id"] === "string") items.add(item["id"]);
+    const soundsAbs = join(this.root, "assets", "sounds.yaml");
+    const soundsSrc = existsSync(soundsAbs)
+      ? parseYaml(readFileSync(soundsAbs, "utf8"), "assets/sounds.yaml", [])
+      : undefined;
+    const sounds =
+      soundsSrc && isObj(soundsSrc.data) && isObj(soundsSrc.data["sounds"])
+        ? soundsSrc.data["sounds"]
+        : undefined;
+    const sound = (path: PathSegment[], id: unknown): void => {
+      if (typeof id !== "string" || !sounds) return;
+      const s = sounds[id];
+      if (!isObj(s)) this.error(src, path, `unknown sound "${id}" (not in the sound manifest)`);
+      else if (s["channel"] !== "ambient")
+        this.error(src, path, `sound "${id}" is on channel ${String(s["channel"])}, not ambient`);
+    };
+    const item = (path: PathSegment[], id: string): void => {
+      if (!items.has(id)) this.error(src, path, `unknown item "${id}" (data/items)`);
+    };
+    const radius = typeof data["radius"] === "number" ? data["radius"] : 10;
+    const beds = isObj(data["beds"]) ? data["beds"] : {};
+    for (const [id, b] of Object.entries(beds)) {
+      if (!isObj(b)) continue;
+      sound(["beds", id, "sound"], b["sound"]);
+      if (isObj(b["items"]))
+        for (const it of Object.keys(b["items"])) item(["beds", id, "items", it], it);
+    }
+    const emitters = isObj(data["emitters"]) ? data["emitters"] : {};
+    for (const [id, e] of Object.entries(emitters)) {
+      if (!isObj(e)) continue;
+      item(["emitters", id], id);
+      sound(["emitters", id, "sound"], e["sound"]);
+      if (typeof e["radius"] === "number" && e["radius"] > radius)
+        this.error(
+          src,
+          ["emitters", id, "radius"],
+          `radius ${e["radius"]} is past the window's (${radius}): it would cut off`,
+        );
+    }
+    const voices = typeof data["voices"] === "number" ? data["voices"] : 6;
+    if (typeof data["voices_lite"] === "number" && data["voices_lite"] > voices)
+      this.error(src, ["voices_lite"], `voices_lite ${data["voices_lite"]} > voices ${voices}`);
   }
 
   private loadDir(
@@ -2600,7 +2652,7 @@ class Validator {
       const s = sounds[id];
       return isObj(s) ? s["channel"] : undefined;
     };
-    const ref = (path: PathSegment[], id: unknown, loop?: "music" | "ambient"): void => {
+    const ref = (path: PathSegment[], id: unknown, loop?: "music"): void => {
       if (typeof id !== "string") return;
       const ch = channelOf(id);
       if (ch === undefined) this.error(src, path, `unknown sound "${id}"`);
@@ -2616,7 +2668,8 @@ class Validator {
     }
     const islands = this.worldIslands();
     // The music: pools of music sounds, and places that name a pool (the director's,
-    // client/src/audio/director.ts). The ambient bed names its loops directly.
+    // client/src/audio/director.ts). The ambience names its loops in
+    // data/livingworld/ambience.yaml (checkAmbience).
     const music = isObj(src.data["music"]) ? src.data["music"] : {};
     const pools = isObj(music["pools"]) ? music["pools"] : {};
     for (const [pool, ids] of Object.entries(pools))
@@ -2625,21 +2678,18 @@ class Validator {
       if (typeof id === "string" && !(id in pools))
         this.error(src, path, `unknown pool "${id}" (music.pools)`);
     };
-    for (const loop of ["music", "ambient"] as const) {
-      const l = src.data[loop];
-      if (!isObj(l)) continue;
-      const name = (path: PathSegment[], id: unknown): void =>
-        loop === "music" ? pool(path, id) : ref(path, id, "ambient");
-      name([loop, "underground"], l["underground"]);
+    {
+      const l = music;
+      pool(["music", "underground"], l["underground"]);
       const by = isObj(l["islands"]) ? l["islands"] : {};
       for (const [island, id] of Object.entries(by)) {
         if (islands && !islands.has(island))
           this.error(
             src,
-            [loop, "islands", island],
+            ["music", "islands", island],
             `unknown island "${island}" (world/world.yaml)`,
           );
-        name([loop, "islands", island], id);
+        pool(["music", "islands", island], id);
       }
     }
     // Over the zone's: the title screen's pool and each boss's.

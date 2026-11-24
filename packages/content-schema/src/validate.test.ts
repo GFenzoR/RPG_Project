@@ -78,6 +78,7 @@ describe("repository content", () => {
       "cosmetics",
       "sounds",
       "livingworld-objects",
+      "livingworld-ambience",
       "i18n",
       "ids-lock",
     ];
@@ -427,6 +428,51 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);
     expect(out.some((m) => m.includes("geysers.yaml") && m.includes("no schema"))).toBe(true);
+  });
+
+  it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {
+    mkdirSync(file("assets"), { recursive: true });
+    writeFileSync(
+      file("assets/sounds.yaml"),
+      [
+        "format: 1",
+        "sounds:",
+        "  amb_waves: { file: livingworld/sounds/ambience/waves.ogg, channel: ambient }",
+        "  hit: { file: sounds/sfx/hit.ogg, channel: sfx }",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      file("data/livingworld/ambience.yaml"),
+      [
+        "radius: 6",
+        "voices: 3",
+        "voices_lite: 4",
+        "beds:",
+        "  waves: { sound: amb_waves, surfaces: { water_shallow: 1 }, items: { no_such_tree: 1 } }",
+        "  bad: { sound: hit, floors: sky }",
+        "emitters:",
+        "  fountain: { sound: amb_nowhere, radius: 9 }",
+        "  no_such_well: { sound: amb_waves, radius: 2 }",
+        "",
+      ].join("\n"),
+    );
+    const out = messages(root).filter((m) => m.startsWith("error") && m.includes("ambience"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('unknown item "no_such_tree"')).toBe(true);
+    expect(has('unknown item "no_such_well"')).toBe(true);
+    expect(has('sound "hit" is on channel sfx, not ambient')).toBe(true);
+    expect(has('unknown sound "amb_nowhere"')).toBe(true);
+    expect(has("radius 9 is past the window's (6)")).toBe(true);
+    expect(has("voices_lite 4 > voices 3")).toBe(true);
+    expect(has("floors")).toBe(true); // the schema: sky is no floor
+    // The real file is clean.
+    rmSync(file("data/livingworld/ambience.yaml"));
+    cpSync(join(REPO, "data/livingworld/ambience.yaml"), file("data/livingworld/ambience.yaml"));
+    cpSync(join(REPO, "assets/sounds.yaml"), file("assets/sounds.yaml"));
+    expect(
+      messages(root).filter((m) => m.startsWith("error") && m.includes("ambience.yaml")),
+    ).toEqual([]);
   });
 
   it("wants every ground surface described in data/livingworld/surfaces.yaml", () => {
