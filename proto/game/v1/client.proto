@@ -52,6 +52,8 @@ message ClientMessage {
     SetLook set_look = 37;
     StashCommand stash_command = 38;
     PushObject push_object = 39;
+    MinimapRequest minimap_request = 40;
+    TrackQuest track_quest = 41;
   }
 }
 
@@ -560,3 +562,23 @@ message StashWithdraw {
 
 // StashClose closes the window.
 message StashClose {}
+
+// ---- minimap (docs/05 "Minimapa") ----------------------------------------------
+
+// MinimapRequest asks for what the character explored of up to 16 sectors (32x32 tiles)
+// of floor z, the player's own floor (another floor is ignored). sectors are sector ids,
+// sx << 16 | sy with sx = x / 32 and sy = y / 32. The answer is one MinimapSectors with
+// one entry per sector asked for, an empty one when nothing of it is explored. Only the
+// explored tiles come: the minimap never shows a tile the character did not see.
+message MinimapRequest {
+  uint32 z = 1;
+  repeated uint32 sectors = 2;
+}
+
+// TrackQuest tracks one active quest of the player on the minimap (docs/02 "Minimapa"):
+// the server answers with ObjectiveHint, and sends it again whenever the quest's step
+// changes. An empty quest_id (or a quest that is not active) stops tracking. The tracked
+// quest is not saved: the client sends it again after every login.
+message TrackQuest {
+  string quest_id = 1;
+}

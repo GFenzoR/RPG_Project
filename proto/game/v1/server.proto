@@ -67,6 +67,9 @@ message ServerMessage {
     StashUpdate stash_update = 47;
     LivingObjectEvent living_object = 48;
     TrailWear trail_wear = 49;
+    MinimapIndex minimap_index = 50;
+    MinimapSectors minimap_sectors = 51;
+    ObjectiveHint objective_hint = 52;
   }
 }
 
@@ -1122,4 +1125,53 @@ message StashUpdate {
   repeated ItemStack items = 3;
   StashResult result = 4;
   Position chest = 5;
+}
+
+// ---- minimap (docs/05 "Minimapa") ----------------------------------------------
+
+// MinimapIndex is sent once after Welcome: the sectors (sx << 16 | sy, MinimapRequest)
+// of every floor where the character has explored something. The client asks for the
+// ones its minimap shows with MinimapRequest; any other sector is unexplored (black).
+message MinimapIndex {
+  repeated MinimapFloorIndex floors = 1;
+}
+
+// MinimapFloorIndex is the explored sectors of one floor.
+message MinimapFloorIndex {
+  uint32 z = 1;
+  repeated uint32 sectors = 2;
+}
+
+// MinimapSectors carries explored sectors: the answer to a MinimapRequest (palette and
+// tiles set) and, at most once a second while the player explores, the sectors that
+// gained explored tiles (only explored set: the client colours those tiles from the map
+// it already has, since they are in its view).
+message MinimapSectors {
+  repeated MinimapSector sectors = 1;
+}
+
+// MinimapSector is one sector (32x32 tiles) of floor z. explored is its bitset: 128 bytes,
+// one bit per tile, row by row (bit x % 8 of byte (y * 32 + x) / 8, x and y inside the
+// sector); empty when nothing of it is explored. tiles, when set, is 1024 bytes, one per
+// tile in the same order: 0 for a tile that is unexplored or has nothing, else 1 + an
+// index into palette, the numeric item id the minimap colours that tile by (the topmost
+// item that blocks the tile, else its ground).
+message MinimapSector {
+  uint32 z = 1;
+  uint32 sector = 2;
+  bytes explored = 3;
+  repeated uint32 palette = 4;
+  bytes tiles = 5;
+}
+
+// ObjectiveHint is the estimated place of the tracked quest's current step (TrackQuest):
+// a circle of radius tiles around center, which may be on another floor. It is never the
+// exact target: the centre is moved from it (the same way for this character and step)
+// and the target lies inside the circle. An empty quest_id means nothing is tracked (or
+// the step has no place, as a step done anywhere): the minimap shows no estimate.
+message ObjectiveHint {
+  string quest_id = 1;
+  string step_id = 2;
+  Position center = 3;
+  uint32 radius = 4;
 }
