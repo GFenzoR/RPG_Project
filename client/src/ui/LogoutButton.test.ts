@@ -1,0 +1,86 @@
+// The locked "Salir del juego" (docs/02 "Bloqueo de logout en combate"): the views render as
+// plain functions (no hooks), walked like ui/Toolbar.test.ts.
+import { describe, expect, it } from "vitest";
+import type { VNode } from "preact";
+import { LogoutTextButton, lockSeconds, logoutTitle } from "./LogoutButton.tsx";
+import { Toolbar } from "./Toolbar.tsx";
+import { defaultWindows } from "./windows.ts";
+import { logoutLockMs } from "../state/status.ts";
+import type { ConditionView } from "../state/world.ts";
+
+const t = (key: string, params?: Record<string, string | number>): string =>
+  params ? `${key}${JSON.stringify(params)}` : key;
+
+type Props = Record<string, unknown> & { children?: unknown; onClick?: () => void };
+
+function nodes(n: unknown, out: VNode<Props>[] = []): VNode<Props>[] {
+  if (Array.isArray(n)) for (const c of n) nodes(c, out);
+  else if (n && typeof n === "object" && "props" in n) {
+    const v = n as VNode<Props>;
+    out.push(v);
+    nodes(v.props.children, out);
+  }
+  return out;
+}
+
+const c = (id: string, until: number | undefined): ConditionView => ({ id, until, ticks: 0 });
+
+describe("the logout lock", () => {
+  it("is the latest end of in_combat and pvp_locked, none when both ran out", () => {
+    expect(logoutLockMs([], 0)).toBeUndefined();
+    expect(logoutLockMs([c("protection_zone", undefined), c("poison", 9000)], 0)).toBeUndefined();
+    expect(logoutLockMs([c("in_combat", 12_000)], 500)).toBe(11_500);
+    expect(logoutLockMs([c("in_combat", 12_000), c("pvp_locked", 60_000)], 0)).toBe(60_000);
+    expect(logoutLockMs([c("in_combat", 12_000)], 12_000)).toBeUndefined();
+    expect(lockSeconds(11_500)).toBe(12);
+    expect(lockSeconds(200)).toBe(1);
+    expect(lockSeconds(undefined)).toBeUndefined();
+  });
+
+  it("greys the toolbar button with the seconds left and says why, and a click still asks", () => {
+    let asked = 0;
+    const props = {
+      t,
+      windows: defaultWindows(),
+      onToggle: () => {},
+      marketOpen: false,
+      onCloseMarket: () => {},
+      guildBadge: false,
+      onLogout: () => asked++,
+    };
+    const button = (seconds: number | undefined): VNode<Props> | undefined =>
+      nodes(Toolbar({ ...props, logoutSeconds: seconds })).find(
+        (v) => v.props["data-testid"] === "logout",
+      );
+    const free = button(undefined);
+    expect(free?.props["data-locked"]).toBeUndefined();
+    expect(free?.props.title).toBe("client.game.logout");
+    expect(nodes(free).some((v) => v.props["data-testid"] === "logout-countdown")).toBe(false);
+
+    const locked = button(8);
+    expect(locked?.props["data-locked"]).toBe("");
+    expect(locked?.props["aria-label"]).toBe("client.game.logout");
+    expect(locked?.props.title).toBe('client.game.logout_locked_hint{"seconds":8}');
+    const count = nodes(locked).find((v) => v.props["data-testid"] === "logout-countdown");
+    expect(count?.props.children).toBe('client.status.badge_seconds{"seconds":8}');
+    locked?.props.onClick?.();
+    expect(asked).toBe(1); // the server decides and answers combat.logout_locked
+  });
+
+  it("writes the countdown on the phone menu's text button", () => {
+    let asked = 0;
+    const free = LogoutTextButton({
+      t,
+      seconds: undefined,
+      onLogout: () => asked++,
+    }) as VNode<Props>;
+    expect(free.props.children).toBe("client.game.logout");
+    expect(free.props["data-locked"]).toBeUndefined();
+    const locked = LogoutTextButton({ t, seconds: 3, onLogout: () => asked++ }) as VNode<Props>;
+    expect(locked.props.children).toBe('client.game.logout_locked_label{"seconds":3}');
+    expect(locked.props["data-locked"]).toBe("");
+    expect(locked.props.title).toBe(logoutTitle(t, 3));
+    locked.props.onClick?.();
+    expect(asked).toBe(1);
+  });
+});

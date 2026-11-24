@@ -61,6 +61,7 @@ import { coarsePointer } from "../state/touch-prefs.ts";
 import { GameWindow } from "./GameWindow.tsx";
 import type { IconName } from "./icons.tsx";
 import { SplitPrompt } from "./SplitPrompt.tsx";
+import { LogoutLock, LogoutTextButton } from "./LogoutButton.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
@@ -400,9 +401,9 @@ export function GameView(props: GameViewProps): JSX.Element {
     </span>
   );
   const logout = (
-    <button type="button" onClick={() => game?.logout()}>
-      {t("client.game.logout")}
-    </button>
+    <LogoutLock conditions={ui.conditions}>
+      {(seconds) => <LogoutTextButton t={t} seconds={seconds} onLogout={() => game?.logout()} />}
+    </LogoutLock>
   );
   // The system log: a tab of the chat box on desktop, atop the chat tab on small screens.
   const log = (
@@ -975,15 +976,20 @@ export function GameView(props: GameViewProps): JSX.Element {
               )
             }
             toolbar={
-              <Toolbar
-                t={t}
-                windows={win.state}
-                onToggle={(id) => win.toggle(id)}
-                marketOpen={ui.market !== undefined}
-                onCloseMarket={() => game?.marketClose()}
-                guildBadge={ui.guildInvitations.length > 0}
-                onLogout={() => game?.logout()}
-              />
+              <LogoutLock conditions={ui.conditions}>
+                {(seconds) => (
+                  <Toolbar
+                    t={t}
+                    windows={win.state}
+                    onToggle={(id) => win.toggle(id)}
+                    marketOpen={ui.market !== undefined}
+                    onCloseMarket={() => game?.marketClose()}
+                    guildBadge={ui.guildInvitations.length > 0}
+                    onLogout={() => game?.logout()}
+                    logoutSeconds={seconds}
+                  />
+                )}
+              </LogoutLock>
             }
           />
           {/* The windows' area: the screen above the bar (windows never go under it). The

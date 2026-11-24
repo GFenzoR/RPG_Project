@@ -503,6 +503,32 @@
 .tool-logout .icon {
   filter: saturate(0.8);
 }
+/* In a fight (docs/02 "Bloqueo de logout en combate"): greyed, with the seconds left. */
+.tool-logout[data-locked] .icon {
+  filter: grayscale(1) brightness(0.55);
+}
+.tool-logout[data-locked] {
+  cursor: not-allowed;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-danger) 55%, transparent);
+}
+.tool-count {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--ui-danger);
+  text-shadow:
+    0 0 2px #000,
+    1px 1px 0 #000;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.logout-text[data-locked] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 /* Something waits in that window (a guild invitation). */
 .tool-badge,
 .gwin-badge,
