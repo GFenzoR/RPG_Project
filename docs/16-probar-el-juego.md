@@ -81,7 +81,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 | Puerta con llave (este) | Puerta de práctica en 2117,2101 | Bóveda 2114–2120 × 2102–2106. Se abre con la llave de latón. Cartel en 2115,2100 |
 | Sótano (piso 8) | 2110–2127 × 2088–2106 | Sala de la escalera, sala de la escalera de mano, pozo bajo el agujero con el punto de luz para subir con cuerda (2119,2094,8), cueva de murciélagos al este y el teletransporte (2113,2104,8) que vuelve a la plaza (2095,2094). Cartel en 2124,2088,8 |
 | Casa (sur) | Casa de Prueba, 2086–2091 × 2109–2113 | Puerta en 2088–2089,2114; salida en 2088,2115. Alquiler: 200 de cobre por 7 días |
-| Mundo vivo (norte) | 2084–2109 × 2063–2072, entre la costa y los corrales | Jardín de piedra 2094–2098 × 2066–2070 cerrado por una **enredadera espinosa** (2096,2070), con una caja, un barril, una vasija y una telaraña. Puzzle del **rastrillo** (2105,2068): dos rocas musgosas (2101,2070 y 2105,2071) y dos placas (2102,2070 y 2105,2070); detrás, una caja y un barril. Un cajón pesado (2108,2070) y, al oeste, una roca agrietada (2088,2071), una barricada podrida (2090,2071) y un matorral espeso (2092,2071) |
+| Mundo vivo (norte) | 2084–2109 × 2063–2072, entre la costa y los corrales | Jardín de piedra 2094–2098 × 2066–2070 cerrado por una **enredadera espinosa** (2096,2070), con una caja, un barril, una vasija y una telaraña. Puzzle del **rastrillo** (2105,2068): dos rocas musgosas (2101,2070 y 2105,2071) y dos placas (2102,2070 y 2105,2070); detrás, una caja, un barril y un teleport de salida (2105,2066 → 2104,2071). Un cajón pesado (2108,2070) y, al oeste, una roca agrietada (2088,2071), una barricada podrida (2090,2071) y un matorral espeso (2092,2071) |
 | Arena (sureste) | 2102–2112 × 2111–2119 | Zona `pvp`, entrada por el oeste (2101,2114–2116). Cartel en 2099,2113 |
 | Muelle (sur) | 2094–2096 × 2133–2138 | **Remo Vaivén**, barquero (2097,2133): viajes de ida a Puerto, al Bosque y a Karvask (20 monedas), donde llegan los barcos de verdad. Cartel en 2093,2132 |
 
@@ -297,7 +297,8 @@ Al norte del templo, entre la costa y los corrales (tabla de arriba; reglas en
    desliza a la placa de 2102,2070. Después la de 2105,2071 desde el sur (tecla ↑) hacia la
    placa de 2105,2070. Con las dos placas presionadas el rastrillo (2105,2068) se abre; si
    sacas una roca, se cierra (no sobre ti). Las rocas vuelven solas a su lugar 3 min después
-   del último empuje.
+   del último empuje. Si te quedas adentro cuando se cierra (o tras un reinicio), el
+   teleport de 2105,2066 te deja afuera, en 2104,2071.
 3. **Herramientas.** La roca agrietada solo se parte con un pico (usa el pico sobre ella);
    con la espada dice que así no se rompe. La barricada y el matorral ceden a golpes, al
    hacha o al fuego (un hechizo de área de fuego los quema).

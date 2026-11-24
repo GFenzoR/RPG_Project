@@ -1534,7 +1534,7 @@ se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en 
 - **Empujar:** `PushObject{pos, dir}` (cliente → servidor): el jugador está en la casilla
   de al lado y empuja en línea recta (norte, este, sur u oeste). Lo manda el cliente cuando
   una tecla lo haría caminar contra un objeto con `living: pushable` en el contenido. A lo
-  sumo uno cada 400 ms (uno antes se ignora); `living.push_blocked` si la casilla de atrás no
+  sumo uno cada `balance.living.push_cooldown_ms` (400 ms; uno antes se ignora); `living.push_blocked` si la casilla de atrás no
   está libre, `inventory.not_possible` si ya no hay nada (otro lo empujó en el mismo tick),
   `inventory.too_far` si no está al lado.
 - **`LivingObjectEvent`** (servidor → cliente, a quien ve la casilla, en el mismo batch que

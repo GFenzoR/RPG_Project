@@ -381,6 +381,9 @@ servidor los saca de la pila del mapa (`Map.TakeItem`) y los dibuja como una cap
 los items del mapa; lo que bloquea su casilla cambia con `Map.SetBlockFlags` cuando se
 rompen, se mueven o se abren (como una puerta con `Map.ReplaceItem`). Las placas de presión
 quedan en la pila. `world.bin` no cambia de formato.
+Cada lado de un rastrillo cerrado debe llegar a un templo sin pasar por él (se cierra solo
+cuando las rocas vuelven o tras un reinicio): el servidor no arranca si no y `make validate`
+lo marca. Para las salas de puertas con llave y su escape, todo objeto que bloquea es un muro.
 La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-format`:
 `make test-parity` (parte de `make test` y de la CI) compara casilla por casilla el
 veredicto de `mapcompile` con el de `packages/map-format`.

@@ -1690,6 +1690,12 @@ o un rastrillo abierto que bloqueen; un item con dos entradas; un sonido que no 
 `assets/sounds.yaml`; y restos que duren más que la reaparición. Formato, ejemplos y cómo
 agregar uno: `livingworld/README.md`.
 
+Los números que no son de un objeto van en `balance.yaml → living` (obligatorio si hay
+objetos): `fist_damage` (golpe a mano limpia), `tool_damage` (un uso de hacha o pico) y
+`push_cooldown_ms` (entre dos empujes de un jugador). En el mapa, cada lado de una compuerta
+cerrada debe llegar a un templo sin pasar por ella (el servidor no arranca si no; `make
+validate` lo marca).
+
 ## i18n
 ```yaml
 # i18n/es/items.yaml

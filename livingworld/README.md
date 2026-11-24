@@ -271,14 +271,15 @@ El game loop llama al módulo **solo** desde el pegamento (`server/internal/sess
 | `OnAttackObject(pos, Hit, rand)` | un golpe ya validado (alcance, línea de visión, ritmo) |
 | `Push(pos, dx, dy)` | un `PushObject` ya validado (al lado, en línea recta) |
 | `OnStep(from, to)` | cada paso de una criatura (`observeMove`): placas al instante |
-| `OnTick(tick)` | cada tick (`combatSystem`): restos que se desvanecen, reapariciones, vuelta a casa, placas |
+| `OnTick(tick)` | cada tick (`combatSystem`): los temporizadores vencidos (restos que se desvanecen, reapariciones, vuelta a casa), de una cola ordenada por tick; después las placas (un `Occupied` por placa: una criatura también deja o pisa una placa por teleport, muerte, login o logout, que el módulo no oye) |
+| `Gates()` | al arrancar (`checkEscapes`): las casillas de las compuertas |
 | `Snapshot()` | tests y herramientas de staff (`World.LivingObjects`) |
 
 El módulo pide lo demás a un `Host` que implementa el pegamento:
 
 | `Host` | Qué hace el servidor |
 |---|---|
-| `Free(pos)` | casilla caminable (mapa y objetos), sin criatura, sin items sueltos, sin zona de protección, casa ni entrada de portal |
+| `Free(pos)` | casilla caminable (mapa y objetos), sin criatura, sin items sueltos, sin zona de protección, casa, entrada de portal ni puerta (ni abierta: se cerraría sobre el objeto, y en el umbral de una puerta con llave podría encerrar una sala) |
 | `Occupied(pos)` | hay una criatura (jugador, monstruo o NPC) |
 | `SetBlock(pos, move, sight)` | combina lo que bloquea el objeto con lo que bloquean los items del mapa (`world.Map.SetBlockFlags`): A*, monstruos, línea de visión y el cliente lo ven igual |
 | `TileChanged(pos)` | manda el `TileUpdate` a quien ve la casilla |
@@ -324,6 +325,12 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
    si no, reintenta cada segundo. Un empuje solo entra a una casilla libre y sin otro
    objeto (tampoco uno roto que va a reaparecer ahí). Una compuerta no se cierra sobre
    nadie.
+8. **Una compuerta no encierra a nadie.** Se cierra sola cuando las rocas vuelven a casa,
+   cuando otro jugador saca una de su placa o tras un reinicio, así que cada lado de una
+   compuerta cerrada llega a un templo sin pasar por ella (a pie, saliendo de salas, por
+   escaleras, escalas, agujeros y teleports): el servidor no arranca si no
+   (`checkEscapes`, `errGateNoEscape`) y `make validate` lo marca (`doorRooms`, error
+   `gate`). La bóveda del rastrillo de Thimblewick tiene un teleport de salida.
 6. **Estado transitorio.** Roto, empujado y abierto no se guardan: un reinicio deja todo
    como está en el mapa. Es más simple, no puede romper un guardado y los puzzles vuelven a
    empezar solos (`reset_seconds`).
@@ -369,10 +376,10 @@ Cómo pega cada forma (reglas del juego, no datos del objeto; `livingworld.go`):
 
 | `by` | Qué cuenta | Daño |
 |---|---|---|
-| `melee` | `UseItem` sobre el objeto desde al lado, con el arma de la mano derecha o a mano limpia | ataque del arma (5 a mano limpia) |
-| `any_attack` | lo anterior, o un arma a distancia o una varita dentro de su rango y con línea de visión | ataque del arma |
-| `tool:axe` | un hacha: herramienta de `woodcutting` usada sobre él, o un arma de tipo `axe` | 10 la herramienta; el arma, su ataque |
-| `tool:pick` | una herramienta de `mining` usada sobre él | 10 |
+| `melee` | `UseItem` sobre el objeto desde al lado, con el arma de la mano derecha o a mano limpia | ataque del arma (`balance.living.fist_damage` a mano limpia) |
+| `any_attack` | lo anterior, o un arma a distancia (gasta una munición) o una varita dentro de su rango y con línea de visión | ataque del arma |
+| `tool:axe` | un hacha: herramienta de `woodcutting` usada sobre él, o un arma de tipo `axe` | `balance.living.tool_damage` la herramienta; el arma, su ataque |
+| `tool:pick` | una herramienta de `mining` usada sobre él | `balance.living.tool_damage` |
 | `fire` | un hechizo o runa de área de fuego que cubre su casilla (con línea de visión), o una varita de fuego | daño del hechizo, o ataque de la varita |
 
 Una placa la presiona una criatura o un objeto empujable encima. Una compuerta se abre
@@ -380,10 +387,25 @@ mientras **todas** sus placas están presionadas y se cierra cuando una deja de 
 hay nadie en ella). Un empuje es recto (norte, este, sur u oeste), desde la casilla de al
 lado; el jugador no se mueve.
 
-Para la alcanzabilidad del validador de mapas, un objeto que cualquiera rompe sin
-herramienta (`melee`, `any_attack` o `fire`) es paso, como una puerta; uno que pide pico o
-hacha, un empujable y una compuerta, no: nunca se pone uno de esos como único camino de una
-quest.
+Para la alcanzabilidad del validador de mapas (qué se alcanza desde el templo, áreas a las
+que nadie llega: `isPassableBreaking`), un objeto que cualquiera rompe sin herramienta
+(`melee`, `any_attack` o `fire`) es paso, como una puerta; uno que pide pico o hacha, un
+empujable y una compuerta, no: nunca se pone uno de esos como único camino de una quest.
+Las salas detrás de puertas con llave, su chequeo de escape y las llegadas, en cambio, son
+los recorridos del servidor y los repite el validador paso a paso (`isPassable`): ahí todo
+objeto que bloquea, aun el que cualquiera rompe, es un muro (caso compartido en
+`packages/map-format/src/testdata/door-rooms.json`).
+
+Los números que no son de un objeto están en `data/balance.yaml`, bloque `living`:
+`fist_damage` (golpe a mano limpia, 5), `tool_damage` (un uso de hacha o pico, 10) y
+`push_cooldown_ms` (entre dos empujes de un jugador, 400). Un arma a distancia gasta una
+munición de su tipo por golpe, como en una pelea (sin munición no golpea); una varita no
+gasta nada, como en una pelea.
+
+Las áreas del servidor (`initAreas`, que usa la búsqueda de lugar libre de un login) se
+calculan al arrancar con cada objeto entero: la casilla de un objeto es un muro para ellas.
+Quien se desconecta parado sobre los restos de un objeto que ya reapareció cuando vuelve
+cae en el templo (no hay lugar del área desde esa casilla). Es raro y no encierra a nadie.
 
 ### Cómo agregar un objeto
 
