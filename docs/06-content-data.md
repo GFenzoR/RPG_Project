@@ -885,6 +885,34 @@ rewards:
 - Un hito se empieza como cualquier quest (`start_quest`). El diario lo lista antes, con
   los requisitos (docs/05 `MilestoneInfo`).
 
+## Vocación (`data/vocations.yaml`)
+Cada vocación: `start` y `per_level` (vida, maná, capacidad en gramos y velocidad),
+`regen`, `skill_factors` (costo de entrenar cada skill de combate: más bajo, más rápido;
+docs/02 "Entrenamiento por vocación"), `weapons` (tipos de arma que usa) y, desde el
+2026-11-23, `start_kit` (docs/02 "Equipo inicial"):
+```yaml
+- id: ranger
+  # ...
+  weapons: [distance, sword, axe, club]
+  start_kit:
+    - { item: short_bow }
+    - { item: arrow, count: 60 }
+    - { item: patched_tunic }
+    - { item: ship_biscuit, count: 5 }
+```
+- `start_kit` (opcional, hasta 16 entradas): `item` (id de `data/items`) y `count`
+  (unidades, 1 si falta). El servidor lo da una sola vez, en el primer login del personaje,
+  cada pieza en su slot si está libre y la puede usar, y el resto en la mochila y los
+  bolsillos (`session/startkit.go`; fuente `start_kit` del log de economía).
+- `make validate` (`checkStartKits`) exige que cada pieza exista y no esté retirada, que
+  un equipo se pueda usar a nivel 1 por esa vocación (`requires.level` 1,
+  `requires.vocations` que la incluya, un arma de un tipo de `weapons`), `count` solo en
+  apilables y dentro de su pila (`max_stack`, 100 si falta) y que no haya un arma de dos
+  manos junto a un escudo. El servidor revisa al arrancar que cada item exista y que cada
+  entrada entre en una pila.
+- El cliente lee `start_kit` (`ClientContent.startKits`) para la línea "Empieza con: …"
+  del formulario de creación: muestra las piezas que no tienen todas las vocaciones.
+
 ## Hechizo
 ```yaml
 - id: light_heal

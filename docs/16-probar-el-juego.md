@@ -57,10 +57,24 @@ de pruebas).
 ## 2. Cuenta y personaje
 1. En `http://localhost:5173/play/`, "¿No tienes cuenta? Regístrate": cualquier email y una
    contraseña de 8 caracteres o más. Sin SMTP no se verifica nada.
-2. Entra, crea un personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de
-   pelo y barba, con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar"
-   elige todo) y pulsa "Jugar". El aspecto se cambia después gratis en la ventana
-   Apariencia (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
+2. Entra. Una cuenta nueva va directo al formulario de creación (sin "Volver"); una con
+   personajes ve primero la lista y "Crear personaje nuevo" (docs/02 "Cuentas"). Crea un
+   personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de pelo y barba,
+   con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar" elige todo).
+   Al cambiar la vocación, debajo cambian su estilo en una línea y su equipo inicial
+   ("Empieza con: …"). Al crear vuelves a la lista con el nuevo marcado en dorado y su
+   figura; pulsa "Jugar". El aspecto se cambia después gratis en la ventana Apariencia
+   (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
+   - **Equipo inicial** (docs/02 "Equipo inicial"): al entrar por primera vez el personaje
+     ya lleva el arma de su vocación (el guardián también la tapa de barril; el montaraz 60
+     flechas en el slot de munición), túnica, pantalones y botas, y en la mochila 5
+     galletas y una cataplasma. Muere (los lobos de los corrales) o sal y vuelve a entrar:
+     no se da otra vez.
+   - **Tope de personajes:** con el máximo por cuenta (10, `auth.DefaultMaxCharacters`),
+     "Crear personaje nuevo" queda deshabilitado con el motivo.
+   - **Poderes de cada vocación:** con la instructora (sube nivel gratis, sección 4) mira
+     que la barra tenga los hechizos nuevos al llegar a su nivel: guardián `cleave` (3) y
+     `sundering_blow` (26), arcanista `cinder_lance` (18), montaraz `pinning_shot` (18).
 3. Despiertas en el templo de Thimblewick (2095,2086). Aquí no hay tutorial: es
    de Puerto.
 

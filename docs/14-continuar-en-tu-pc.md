@@ -207,6 +207,26 @@ el punto 5:
   - **Marcas propias** (como las de Tibia: un punto con un ícono y un texto) y un mapa grande
     a pantalla completa: no se pidieron; el formato de sectores ya lo permitiría.
   - **Número de migración:** 00028; si otra rama del lote suma una, renumerar al apilar.
+- **Identidad de vocación (hecho, rama `feat/vocation-identity`; el dueño el 2026-11-23:
+  equipo inicial por clase, skills que suben según la clase, poderes propios; docs/02
+  "Equipo inicial", "Entrenamiento por vocación" y "Hechizos por vocación"):** cada
+  vocación recibe su `start_kit` una vez en el primer login; cuatro hechizos nuevos
+  (`cleave`, `sundering_blow`, `cinder_lance`, `pinning_shot`) dan a cada clase un
+  poder propio en cada franja de 1 a 30; la pantalla de personajes va directo al
+  formulario sin personajes y a la lista con ellos. Queda:
+  - **Arte propio de los hechizos nuevos:** usan el efecto y el sonido de su elemento,
+    como todos; si el dueño quiere un efecto distinto por hechizo, hace falta un id de
+    efecto por hechizo en el protocolo.
+  - **La jefa del puerto da monedas en vez del arma:** 30 (50 al montaraz). Si el dueño
+    prefiere otra cosa (una pieza de la banda 2, un brebaje), es dato de
+    `data/npcs/harbor_master.yaml`.
+  - **Personajes creados antes:** no reciben el kit (ya jugaron). Si el dueño quiere
+    dárselo a los existentes, sería un cambio de una vez (no hay ninguno en producción).
+  - **Figura en la lista:** solo con aspecto guardado; uno creado por la API sin `look` no
+    la muestra hasta su primer login (el juego le elige uno).
+  - **Integración y E2E** (Postgres y el navegador) los corre el lote al final: la lista
+    con `look` (`store_integration_test.go`) y los screenshots `18b-characters-list`,
+    `19-create-druid` y `account-03-first-character`.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

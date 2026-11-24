@@ -36,6 +36,23 @@ Todos los números de este documento son **valores iniciales** que viven en
     explica que se entra con el proveedor que ya usa y se vincula desde "Mi cuenta".
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
     volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
+- **Pantalla de personajes (pedido del dueño del 2026-11-23, `client/src/ui/App.tsx`
+  `Characters`, reglas puras en `client/src/state/characters.ts`):**
+  - Una cuenta **sin personajes** entra directo al formulario de creación (sin lista
+    vacía) y el formulario no tiene "Volver".
+  - Una cuenta **con personajes** ve primero su lista: nombre, vocación, nivel, la figura
+    del aspecto guardado (si lo tiene; los creados por la API sin `look` no muestran
+    figura hasta que el juego les elige uno) y "Jugar" en cada uno, más "Crear personaje
+    nuevo", que abre el formulario. Con el máximo de personajes por cuenta
+    (`max_characters` de `GET /api/characters`, docs/05) ese botón queda deshabilitado
+    con el motivo ("Tienes el máximo de N personajes por cuenta").
+  - El formulario tiene "Volver" a la lista, y muestra de cada vocación su estilo en una
+    línea (`vocation.<id>.desc`) y su equipo inicial propio ("Empieza con: …, ropa
+    sencilla, galletas y una cataplasma", "Equipo inicial").
+  - **Después de crear** se vuelve a la lista con el personaje nuevo marcado (no se entra
+    al juego): era lo que ya hacía la pantalla (crear agregaba a la lista) y deja elegir
+    con calma; un click en "Jugar" entra.
+  - "Cuenta y seguridad" (lote 17) sigue en la pantalla de la lista.
 
 ## Controles del mouse (docs/17 UI-6)
 Desde A4 el click derecho sobre un **objeto** abre su menú con la ficha (tipo, stats,
@@ -364,22 +381,69 @@ si tenemos un objetivo activo, una estimación de dónde está."
     ~40 h), a la par de los magos (arcanista ~34 h, druida ~32 h) y del montaraz (~35 h);
     sin brebajes de maná tarda ~39 h (el oro de cada uno: "Economía", brebajes de maná).
 
+  - **Identidad de cada vocación (pedido del dueño del 2026-11-23, rama
+    `feat/vocation-identity`):** cada clase empieza con su equipo, entrena rápido lo suyo
+    y lento lo ajeno, y tiene poderes propios en todo el camino del 1 al 30.
+
+#### Equipo inicial
+`start_kit` de cada vocación en `data/vocations.yaml` (docs/06 "Vocación"). Se da **una sola
+vez**, en el primer login del personaje (el mismo momento que la mochila inicial:
+`session/startkit.go`): cada pieza en su slot si está libre y el personaje la puede usar
+(nivel, vocación, manos), el resto en la mochila y después en los bolsillos. Se guarda en el
+acto y queda en el log de economía como `start_kit`. Nunca se repite: ni al morir (no hay
+mochila gratis después de la muerte, "Bolsillos") ni al volver a entrar.
+
+| Vocación | Propio | Para todos |
+|---|---|---|
+| Guardián | alfanje oxidado (`rusty_cutlass`) y tapa de barril (`barrel_lid_shield`) | túnica remendada, pantalones de lona, botas alquitranadas, 5 galletas de barco y 1 cataplasma de algas |
+| Arcanista | varita de chispa (`spark_wand`) | ídem |
+| Montaraz | arco corto (`short_bow`) y 60 flechas (puestas en el slot de munición) | ídem |
+| Druida | vara de retoño (`sapling_staff`) | ídem |
+
+Todo son items que ya existían (banda 1 del catálogo). Como el arma de clase viene en el
+kit, la jefa del puerto ya no la da al aceptar `ch1_shipwreck`: da 30 monedas (50 al
+montaraz, con las de las flechas) y la galleta de siempre. `make validate` revisa cada kit
+(que la vocación pueda usar cada pieza a nivel 1, sin items retirados, cantidades solo en
+apilables y dentro de su pila, y nunca un arma de dos manos con escudo).
+
+#### Entrenamiento por vocación
+Intentos para llevar una skill a 30 (el nivel mágico a 15) con los `skill_factors` de
+`data/vocations.yaml`, y cuántas veces los de la vocación que la entrena más rápido:
+
+| Skill | Guardián | Arcanista | Montaraz | Druida |
+|---|---|---|---|---|
+| Espada, hacha, maza (30) | **2 889 (1×)** | 11,7 M (4 041×) | 13 662 (4,7×) | 11,7 M (4 041×) |
+| Escudo (30) | **5 457 (1×)** | 990 mil (181×) | **6 124 (1,1×)** | 990 mil (181×) |
+| Distancia (30) | 120 mil (55×) | 13,4 M (6 142×) | **2 176 (1×)** | 8,3 M (3 815×) |
+| Nivel mágico (15) | 2 520 M (50 511×) | **49 888 (1×)** | 845 mil (17×) | **49 888 (1×)** |
+
+Un arcanista entrena la espada miles de veces más lento que un guardián; el montaraz, como
+híbrido, unas 4-5 veces. La auditoría del 2026-11-23 no cambió ningún número: las
+diferencias ya eran claras. Las fija `packages/content-schema/src/vocations-balance.test.ts`
+("each vocation trains its own skills, the others slowly"): cada vocación entrena lo suyo
+lo más rápido (el escudo del montaraz, hasta 1,2 veces el del guardián) y las demás
+necesitan al menos 15 veces más intentos (el montaraz en cuerpo a cuerpo, al menos 3).
+
 #### Hechizos por vocación
 Nivel / nivel mágico / maná. Las palabras son propias (nunca las de Tibia); los nombres van
-en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
+en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11; en _cursiva_, los de
+la identidad de vocación (2026-11-23).
 
 | Vocación | Hechizo | Palabras | Nivel / NM / maná | Qué hace |
 |---|---|---|---|---|
 | Todas | `swift_stride` | pede celeri | 8 / 0 / 30 | haste 25 s |
 | Todas | `purge_venom` | venenum pelle | 9 / 0 / 25 | cura el veneno |
+| Guardián | _`cleave`_ | lata caedes | 3 / 0 / 12 | físico, radio 1, escala con el arma: su primer golpe |
 | Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~7-9 % de su vida (sobre todo por nivel) |
 | Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 1 / 35 | físico, radio 1, escala con la skill del arma en la mano |
+| Guardián | _`sundering_blow`_ | gravis ictus | 26 / 1 / 40 | físico, radio 1, escala con el arma, entre los dos de al lado, cooldown 6 s |
 | Guardián | **`steel_whirl`** | turbo chalybis | 35 / 2 / 60 | el anterior más fuerte, cooldown 6 s |
 | Arcanista | `arc_bolt` | fulgur iacio | 1 / 0 / 10 | energía a 4 casillas, a veces electriza |
 | Arcanista | `conjure_arc_rune` | runa fulguris | 5 / 1 / 60 | conjura una runa de arco |
 | Arcanista | `light_heal` | vita lumen | 6 / 0 / 25 | cura |
 | Arcanista | `ember_ring` | ignis corona | 10 / 3 / 45 | fuego, radio 2, a veces quema |
 | Arcanista | `shroud` | umbra tegit | 14 / 4 / 110 | invisibilidad 40 s |
+| Arcanista | _`cinder_lance`_ | pyra iaculum | 18 / 9 / 30 | fuego a 4 casillas, a veces quema |
 | Arcanista | `tempest_ring` | tonitrus corona | 28 / 14 / 80 | energía, radio 2, a veces electriza |
 | Arcanista | **`storm_spear`** | fulmen telum | 40 / 26 / 90 | energía a 4 casillas, su golpe más fuerte |
 | Arcanista | **`dusk_maelstrom`** | vortex noctis | 48 / 30 / 160 | muerte, radio 3: el área más ancha |
@@ -396,6 +460,7 @@ en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
 | Montaraz | `ranger_mend` | cura silvae | 4 / 0 / 20 | cura |
 | Montaraz | `keen_eye` | oculus acer | 10 / 0 / 50 | +7 de distancia en combate |
 | Montaraz | `briar_arrow` | spina volans | 12 / 1 / 35 | tierra a 5 casillas, escala con distancia |
+| Montaraz | _`pinning_shot`_ | sagitta figit | 18 / 3 / 30 | físico a 5 casillas, escala con distancia, a veces frena (`slowed` 4 s) |
 | Montaraz | **`scatter_volley`** | imber sagittarum | 25 / 5 / 40 | físico, radio 2, escala con distancia |
 | Montaraz | **`heartwood_shot`** | sagitta gravis | 40 / 9 / 70 | físico a 5 casillas, su golpe más fuerte, cooldown 6 s |
 
@@ -405,6 +470,20 @@ más fuerte en cada franja de la carrera del 12 al 49, con lo que cada vocación
 lanzar ahí; el arcanista tiene el área más ancha, el montaraz el alcance más largo, los
 golpes del guardián escalan con su arma, todo cabe en las 12 teclas de la hotbar) los fija
 `packages/content-schema/src/vocations-balance.test.ts`.
+
+**Poderes propios en cada franja (2026-11-23):** cada vocación aprende al menos un hechizo
+solo suyo en cada franja de niveles 1-7, 8-15, 16-23 y 24-30, y los compartidos son solo dos
+básicos de apoyo (haste y la cura del veneno, sin daño ni cura, antes del nivel 10). Antes
+el guardián no tenía nada propio hasta el 12 ni entre el 21 y el 34, y el arcanista y el
+montaraz nada entre el 15 y el 27 y entre el 13 y el 24: `cleave` (3) y `sundering_blow` (26)
+del guardián, `cinder_lance` (18) del arcanista y `pinning_shot` (18) del montaraz los llenan.
+Efecto y sonido salen de su elemento (docs/05, `assets/sounds.yaml`), como los demás. Con
+ellos la carrera simulada sigue en las bandas de ritmo (el guardián va del 1 al 50 en
+~32 h, antes ~35; los demás entre 0,5 y 1,5 veces su tiempo por franja) y cada uno se lanza
+en las cazas de sus primeros niveles. Lo fijan `TestVocationSpellBands`
+(`server/internal/sim/balance_vocations_test.go`) y "every vocation learns a spell of its
+own in each band" (`vocations-balance.test.ts`); el tope de hechizos propios subió de 8 a
+10 (con los dos compartidos, todos siguen entrando en las 12 teclas de la hotbar).
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
