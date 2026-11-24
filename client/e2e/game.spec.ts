@@ -496,8 +496,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
 });
 
 test("walk out of town, fight a wolf from the battle list", async ({ page, playwright }) => {
-  // Leaving at the end waits out the fight's logout block (leaveAfterFight).
-  test.setTimeout(240_000);
+  // Leaving at the end waits out the fight's logout block (leaveAfterFight), after a
+  // reload in the fight and a second login.
+  test.setTimeout(330_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -620,6 +621,13 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   await expect(locked).toBeVisible();
   await expect(locked).toContainText("Estás en combate");
   await expect(page.getByRole("button", { name: "Salir del juego" })).toBeVisible();
+  // The lock is visible before any click (owner 2026-11-23): the "En combate" status with
+  // its seconds in the tray, and the toolbar's button greyed with the countdown.
+  await expect(
+    page.getByTestId("conditions").locator('[data-condition="in_combat"]'),
+  ).toBeVisible();
+  await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
+  await expect(page.getByTestId("logout-countdown")).toHaveText(/^\d+$/);
   await shot(page, "07c-logout-locked");
 
   // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
@@ -641,6 +649,30 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     "0",
   );
   await skills.screenshot({ path: join(shots, "08-skills-panel.png") });
+
+  // Reloading the page in the fight (the same as closing the tab: the connection closes)
+  // leaves the character in the world, link-dead, while the wolf keeps biting it (docs/02
+  // "Bloqueo de logout en combate"). The character list says so, and playing again takes
+  // over that same character, still in its fight: the logout is still locked.
+  await expect(
+    page.getByTestId("conditions").locator('[data-condition="in_combat"]'),
+  ).toBeVisible();
+  await page.reload();
+  const characters = page.getByTestId("characters");
+  await expect(characters.getByRole("status")).toContainText("quedó en el mundo");
+  await shot(page, "07d-stayed-in-fight");
+  await characters.getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  await expect(page.getByTestId("conditions").locator('[data-condition="in_combat"]')).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
+  // Link-dead, it dropped its target: hit the wolf again so the fight can end.
+  await battle
+    .getByRole("button", { name: /lobo/ })
+    .first()
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
 
   await leaveAfterFight(page);
   expect(errors).toEqual([]);
