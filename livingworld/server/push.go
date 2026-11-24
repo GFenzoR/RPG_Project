@@ -54,13 +54,14 @@ func (w *World) move(o *object, to Pos) {
 	w.host.TileChanged(to)
 }
 
-// resetPushable puts o back home once that tile is free (the puzzle starts over).
+// resetPushable puts o back home once no creature stands there (the puzzle starts over);
+// loose items on its home are moved aside (room).
 func (w *World) resetPushable(o *object) {
 	if o.pos == o.home {
 		o.until = 0
 		return
 	}
-	if w.objs[o.home] != nil || !w.host.Free(o.home) {
+	if w.objs[o.home] != nil || !w.room(o.home) {
 		w.schedule(o, w.tick+w.cat.retry)
 		return
 	}
@@ -93,7 +94,8 @@ func (w *World) Pressed(p Pos) bool {
 
 // updatePlates presses the plates a creature or a pushable object stands on, and opens
 // every gate whose linked plates are all pressed (closes it when one is not, unless
-// something stands in it: it closes as soon as that leaves).
+// someone stands in it: it closes as soon as that one leaves; loose items in the gateway
+// are moved aside, room).
 func (w *World) updatePlates() {
 	for p, pl := range w.plates {
 		o := w.objs[p]
@@ -111,7 +113,7 @@ func (w *World) updatePlates() {
 		case want && g.st == intact:
 			w.set(g, open)
 			w.host.Event(Event{Kind: EventGateOpen, Pos: g.pos, Item: g.k.alt, Sound: g.k.def.Gate.Sound})
-		case !want && g.st == open && !w.host.Occupied(g.pos) && w.host.Free(g.pos):
+		case !want && g.st == open && w.room(g.pos):
 			w.set(g, intact)
 			w.host.Event(Event{Kind: EventGateClose, Pos: g.pos, Item: g.k.num, Sound: g.k.def.Gate.Sound})
 		}

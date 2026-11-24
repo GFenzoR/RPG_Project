@@ -195,6 +195,57 @@ func (h livingHost) Free(p lw.Pos) bool {
 	return !w.occupied(pos) && len(w.ground[pos]) == 0
 }
 
+// ClearItems moves the loose items of p, one by one, to the closest tile within
+// travel.arrival_radius (rings, map order) that a player beside the object walks to (the
+// areas around p: an object never lies in a room's wall, checkLivingRooms), walkable, no
+// house, door, portal entrance nor other object's tile, with room for one more item. A
+// reservation of an item (heldGround) moves with it. Remains stay: they rot on their own
+// (removeCorpse knows them by their tile), and the object waits for them.
+func (h livingHost) ClearItems(p lw.Pos) bool {
+	w, pos := h.w, fromLW(p)
+	if len(w.ground[pos]) == 0 {
+		return true
+	}
+	var from searchFrom
+	from.add(w.areaOf(pos))
+	for d := world.North; d <= world.NorthWest; d++ {
+		if q, ok := pos.Step(d); ok {
+			from.add(w.areaOf(q))
+		}
+	}
+	skip := world.FlagBlocksMovement | world.FlagPortalStep | world.FlagHouse
+	fits := func(q world.Pos) bool {
+		return q != pos && !w.living.Has(toLW(q)) && w.doors[q] == nil && !w.hasDoorItem(q) &&
+			len(w.ground[q]) < maxGroundItems
+	}
+	var touched []world.Pos
+	for _, it := range slices.Clone(w.ground[pos]) {
+		if w.isCorpse(it) {
+			continue
+		}
+		q, ok := w.searchRingsIn(from, pos, max(w.arrivalRadius, 1), skip, fits)
+		if !ok {
+			break
+		}
+		held, isHeld := w.heldGround[it]
+		w.detach(it)
+		w.drop(it, q)
+		if isHeld {
+			w.heldGround[it] = held
+		}
+		if !slices.Contains(touched, q) {
+			touched = append(touched, q)
+		}
+	}
+	if len(touched) > 0 {
+		w.tileChanged(pos)
+		for _, q := range touched {
+			w.tileChanged(q)
+		}
+	}
+	return len(w.ground[pos]) == 0
+}
+
 func (h livingHost) Occupied(p lw.Pos) bool { return h.w.occupied(fromLW(p)) }
 
 func (h livingHost) SetBlock(p lw.Pos, move, sight bool) {

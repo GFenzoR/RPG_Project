@@ -645,6 +645,13 @@ rompe sin herramienta (`melee`, `any_attack` o `fire`) es paso, como una puerta;
 piden pico o hacha, los empujables y las compuertas no. La paleta del editor los muestra en
 la categoría "mundo vivo" con cómo se rompen. Detalle: `livingworld/README.md`.
 
+Un empujable es un **muro temporal**: empujado dentro de un pasillo de una casilla lo corta
+hasta que vuelve a su lugar (`reset_seconds`, hasta 180 s). El chequeo de escapes del
+servidor (`checkEscapes`) solo mira las compuertas, así que al diseñar: no pongas
+empujables donde puedan cerrar el único camino de salida de una zona (un pasillo sin
+alternativa, la boca de una sala), o deja otra salida cerca, como el rincón de Thimblewick
+con `pruebas_vault_exit`.
+
 ## Islas actuales
 - `testisle` (64x64, pisos 7–8; "Pellwick"): isla de pruebas de herramientas, tests
   y E2E. Es `dev_only` desde la auditoría de contenido m11: la imagen de producción no la

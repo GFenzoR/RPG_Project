@@ -280,6 +280,7 @@ El módulo pide lo demás a un `Host` que implementa el pegamento:
 | `Host` | Qué hace el servidor |
 |---|---|
 | `Free(pos)` | casilla caminable (mapa y objetos), sin criatura, sin items sueltos, sin zona de protección, casa, entrada de portal ni puerta (ni abierta: se cerraría sobre el objeto, y en el umbral de una puerta con llave podría encerrar una sala) |
+| `ClearItems(pos)` | corre los items sueltos de la casilla (nunca unos restos de criatura: se pudren solos) a la casilla más cercana dentro de `travel.arrival_radius` a la que llega a pie quien está junto al objeto, caminable, sin casa, puerta, entrada de portal ni otro objeto, y con lugar; la reserva de un item (`heldGround`) va con él. Dice si la casilla quedó sin items sueltos |
 | `Occupied(pos)` | hay una criatura (jugador, monstruo o NPC) |
 | `SetBlock(pos, move, sight)` | combina lo que bloquea el objeto con lo que bloquean los items del mapa (`world.Map.SetBlockFlags`): A*, monstruos, línea de visión y el cliente lo ven igual |
 | `TileChanged(pos)` | manda el `TileUpdate` a quien ve la casilla |
@@ -325,14 +326,14 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
    nada) y se crea en el suelo como el de un monstruo: un item, un lugar. Lo que se levanta
    sigue el camino normal de inventario y guardado.
 5. **Nada aparece encima de algo.** Un objeto roto reaparece, y uno empujado vuelve a su
-   lugar, solo cuando la casilla está libre (`Free`): sin criatura y sin items sueltos;
-   si no, reintenta cada segundo. Un empuje solo entra a una casilla libre y sin otro
-   objeto (tampoco uno roto que va a reaparecer ahí), que no sea la casilla de llegada de
-   un portal (escalera, escala, teleport). Una compuerta no se cierra sobre nadie.
-   Consecuencia aceptada: un item suelto que no es un cadáver (no se pudre) en la casilla
-   de un objeto roto, en el lugar de una roca o debajo de una compuerta abierta lo frena
-   hasta que alguien lo levanta: el objeto no reaparece, la roca no vuelve y la compuerta
-   no se cierra. Levantar el item lo destraba.
+   lugar, solo cuando no hay una criatura en la casilla; si no, reintenta cada segundo.
+   Los items sueltos de la casilla (el botín que nadie levantó, una moneda tirada para
+   trabarlo) se corren antes a una vecina (`ClearItems`), así que nadie traba un objeto,
+   una roca ni una compuerta abierta tirando algo encima; solo unos restos de criatura,
+   que se pudren solos, lo hacen esperar. Un empuje solo entra a una casilla libre y sin
+   otro objeto (tampoco uno roto que va a reaparecer ahí), que no sea la casilla de
+   llegada de un portal (escalera, escala, teleport). Una compuerta no se cierra sobre
+   nadie.
 6. **Una compuerta no encierra a nadie.** Se cierra sola cuando las rocas vuelven a casa,
    cuando otro jugador saca una de su placa o tras un reinicio, así que cada lado de una
    compuerta cerrada llega a un templo sin pasar por ella (a pie, saliendo de salas, por

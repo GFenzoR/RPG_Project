@@ -11,18 +11,28 @@ type fakeHost struct {
 	walls     map[Pos]bool
 	creatures map[Pos]bool
 	items     map[Pos]bool
-	block     map[Pos][2]bool
-	changed   []Pos
-	events    []Event
-	loot      [][]Drop
+	// stuck are tiles whose loose items cannot move (no room nearby, remains).
+	stuck   map[Pos]bool
+	cleared []Pos
+	block   map[Pos][2]bool
+	changed []Pos
+	events  []Event
+	loot    [][]Drop
 }
 
 func newHost() *fakeHost {
-	return &fakeHost{walls: map[Pos]bool{}, creatures: map[Pos]bool{}, items: map[Pos]bool{}, block: map[Pos][2]bool{}}
+	return &fakeHost{walls: map[Pos]bool{}, creatures: map[Pos]bool{}, items: map[Pos]bool{}, stuck: map[Pos]bool{}, block: map[Pos][2]bool{}}
 }
 
 func (h *fakeHost) Free(p Pos) bool {
 	return p.X < 20 && p.Y < 20 && !h.walls[p] && !h.block[p][0] && !h.creatures[p] && !h.items[p]
+}
+func (h *fakeHost) ClearItems(p Pos) bool {
+	if h.items[p] && !h.stuck[p] {
+		delete(h.items, p)
+		h.cleared = append(h.cleared, p)
+	}
+	return !h.items[p]
 }
 func (h *fakeHost) Occupied(p Pos) bool              { return h.creatures[p] }
 func (h *fakeHost) SetBlock(p Pos, move, sight bool) { h.block[p] = [2]bool{move, sight} }
@@ -404,5 +414,55 @@ func TestTimersQueueSkipsStaleEntries(t *testing.T) {
 	}
 	if g := w.Gates(); len(g) != 0 {
 		t.Fatalf("gates %v", g)
+	}
+}
+
+// TestLooseItemsNeverHoldAnObjectBack: the loot nobody took (or a coin dropped to jam it)
+// is moved aside so the crate stands again, the boulder goes home and the gate closes; a
+// creature still holds each of them back, and items that cannot move make them retry.
+func TestLooseItemsNeverHoldAnObjectBack(t *testing.T) {
+	w, h := setup(t)
+	rnd := rand.New(rand.NewPCG(1, 2))
+	crate := at(1, 1)
+	w.Place(crate, 10)
+	w.Place(at(10, 10), 14) // gate
+	w.Place(at(8, 10), 16)  // its plate
+	w.Place(at(8, 11), 13)  // boulder below the plate
+	w.Link()
+	w.OnTick(100)
+	w.OnAttackObject(crate, melee(10), rnd)
+	h.items[crate] = true // its loot, never picked up
+	h.stuck[crate] = true // ... and nowhere to put it yet
+	w.OnTick(100 + 2*tps) // the debris fades
+	w.OnTick(100 + 5*tps)
+	if w.ItemAt(crate) != 0 {
+		t.Fatal("respawned over items that could not move")
+	}
+	delete(h.stuck, crate)
+	w.OnTick(100 + 5*tps + tps)
+	if w.ItemAt(crate) != 10 || h.items[crate] {
+		t.Fatal("the loot nobody took must be moved aside and the crate stand again")
+	}
+
+	// The boulder on the plate opens the gate; an item in the gateway and one on the
+	// boulder's home.
+	w.Push(at(8, 11), 0, -1)
+	if w.ItemAt(at(10, 10)) != 15 {
+		t.Fatal("gate did not open")
+	}
+	h.items[at(10, 10)] = true
+	h.items[at(8, 11)] = true
+	h.creatures[at(8, 11)] = true // someone on the boulder's home: it waits
+	w.OnTick(100 + 16*tps)        // its reset is due (pushed at 100+6s, reset_seconds 10)
+	if w.ItemAt(at(8, 10)) != 13 || !h.items[at(8, 11)] {
+		t.Fatal("the boulder went home onto a creature, or its items moved under one")
+	}
+	delete(h.creatures, at(8, 11))
+	w.OnTick(100 + 17*tps)
+	if w.ItemAt(at(8, 11)) != 13 || h.items[at(8, 11)] {
+		t.Fatal("the boulder must go home once its items are moved aside")
+	}
+	if w.ItemAt(at(10, 10)) != 14 || h.items[at(10, 10)] {
+		t.Fatal("an item in the gateway must not keep the gate open")
 	}
 }

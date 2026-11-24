@@ -3338,17 +3338,23 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
   objeto (o usando la herramienta sobre él), al ritmo de los oficios. Una forma equivocada
   no gasta el golpe y dice `living.wrong_way`.
 - **Restos.** Roto, deja restos caminables que se desvanecen (`debris_seconds`) y vuelve a
-  estar `respawn_seconds` después de romperse, solo si su casilla está libre (sin
-  criaturas ni items sueltos; si no, lo intenta cada segundo).
+  estar `respawn_seconds` después de romperse, solo si no hay una criatura en su casilla
+  (si no, lo intenta cada segundo). Los items sueltos que haya ahí (el botín que nadie
+  levantó, una moneda tirada para trabarlo) se corren a una casilla vecina libre; solo
+  unos restos de criatura, que se pudren solos, lo hacen esperar.
 - **Botín.** Algunos tienen una tabla chica (monedas, una galleta, una poción, seda): se tira
   una vez por rotura y cae en la casilla, a nombre de quien la rompió para la economía.
+  Queda en el suelo sin dueño, a propósito: a diferencia de los restos de un monstruo,
+  cualquiera que esté al lado lo puede levantar (es poco, y un objeto no es una pelea).
 - **Empujar.** Una roca musgosa o un cajón pesado se empujan caminando contra ellos (en
   línea recta): se mueven una casilla si la de atrás está libre; el jugador no se mueve. Dos
   empujes en el mismo tick: el primero gana. Vuelven a su lugar `reset_seconds` después del
-  último empuje, cuando ese lugar está libre (el puzzle se arma solo para el siguiente).
+  último empuje, cuando no hay nadie en ese lugar (el puzzle se arma solo para el
+  siguiente); los items sueltos que haya ahí se corren a una casilla vecina.
 - **Placas y compuertas.** Una placa de presión se hunde con una criatura o un objeto
   empujable encima; un rastrillo se abre mientras todas sus placas (las que están a su
-  radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo.
+  radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo (un
+  item suelto debajo se corre a una casilla vecina: no la traba abierta).
 - **Nunca** en una zona de protección, una casa, una puerta, un muro o la pared de una sala
   con llave (romperlo, empujarlo o abrirlo dejaría entrar sin llave), y nunca como único
   camino de una quest un objeto que pide herramienta, un empujable o una compuerta.

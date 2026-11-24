@@ -39,6 +39,11 @@ type Host interface {
 	// that blocks (the map's own items, other objects), no creature, no loose item, not
 	// a protection zone, a house or a stairs/teleport entrance.
 	Free(p Pos) bool
+	// ClearItems moves the loose items of p (never a creature's remains: they rot on their
+	// own) to tiles nearby, for an object that stands again, goes home or closes on p: the
+	// loot nobody took, or a coin dropped to jam it, never holds it back. It reports
+	// whether p holds no loose item now (false: no room nearby, or remains still lie).
+	ClearItems(p Pos) bool
 	// Occupied reports whether a creature stands on p (a pressure plate's weight, a gate
 	// that cannot close on someone).
 	Occupied(p Pos) bool
@@ -280,6 +285,16 @@ func (w *World) set(o *object, st state) {
 	_, move, sight := o.shown()
 	w.host.SetBlock(o.pos, move, sight)
 	w.host.TileChanged(o.pos)
+}
+
+// room reports whether an object may stand on p now: p is Free, or it is once the host
+// moved its loose items away (ClearItems). A creature on p is never moved: the object
+// waits for it to leave.
+func (w *World) room(p Pos) bool {
+	if w.host.Free(p) {
+		return true
+	}
+	return !w.host.Occupied(p) && w.host.ClearItems(p) && w.host.Free(p)
 }
 
 // OnStep tells the module a creature stepped from one tile to another: a pressure plate

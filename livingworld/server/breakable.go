@@ -97,9 +97,9 @@ func (w *World) breakableTimer(o *object) {
 		// The respawn counts from the break: debris_seconds <= respawn_seconds (checked).
 		w.schedule(o, w.tick+max(o.k.respawn-o.k.debris, 1))
 	case gone:
-		// Never on a creature nor on loose items (they would end up inside the crate):
-		// try again in a second.
-		if !w.host.Free(o.pos) {
+		// Never on a creature (try again in a second); loose items (its own loot nobody
+		// took, a coin dropped on the debris) are moved aside first (room).
+		if !w.room(o.pos) {
 			w.schedule(o, w.tick+w.cat.retry)
 			return
 		}

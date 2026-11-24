@@ -923,7 +923,11 @@ func (w *World) free(q world.Pos) bool { return !w.occupied(q) }
 // none of skip, that ok accepts, and that lies in the area of p (searchFrom, areaAllows:
 // every search by rings goes through them, see freeNear).
 func (w *World) searchRings(p world.Pos, radius int, skip world.Flags, ok func(world.Pos) bool) (world.Pos, bool) {
-	from := w.searchFrom(p)
+	return w.searchRingsIn(w.searchFrom(p), p, radius, skip, ok)
+}
+
+// searchRingsIn is searchRings with the areas it may land in given (from).
+func (w *World) searchRingsIn(from searchFrom, p world.Pos, radius int, skip world.Flags, ok func(world.Pos) bool) (world.Pos, bool) {
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {

@@ -218,6 +218,75 @@ func TestLivingRockNeedsAPick(t *testing.T) {
 	}
 }
 
+// coinsAround counts the coins on the tiles within one of p, p left out.
+func coinsAround(h *harness, p world.Pos) int {
+	n := 0
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			if q := pos(int(p.X)+dx, int(p.Y)+dy); q != p {
+				n += coinsOn(h, q)
+			}
+		}
+	}
+	return n
+}
+
+// The loot nobody picks up never holds the crate back: when it stands again, the coins
+// are moved to a tile next to it (none lost, none made).
+func TestLivingCrateRespawnsOverItsUntakenLoot(t *testing.T) {
+	crate := pos(3, 2)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+		"......",
+	), map[world.Pos]uint16{crate: lwCrateID})
+	cl, _ := armed(h, pos(2, 2), swordID)
+	cl.take()
+	strike(h, cl, crate, lwCrateID)
+	h.sim.RunTicks(2)
+	strike(h, cl, crate, lwCrateID)
+	if coinsOn(h, crate) != 5 {
+		t.Fatalf("loot on the crate's tile: %d", coinsOn(h, crate))
+	}
+	h.sim.RunTicks(4*20 + 20) // respawn_seconds, and one retry to spare
+	if s := h.w.LivingObjects()[0]; s.State != "intact" || h.w.Map().Walkable(crate) {
+		t.Fatalf("the crate did not stand again over its loot: %+v", s)
+	}
+	if coinsOn(h, crate) != 0 || coinsAround(h, crate) != 5 {
+		t.Fatalf("coins on the crate %d, next to it %d, want 0 and 5", coinsOn(h, crate), coinsAround(h, crate))
+	}
+}
+
+// An item dropped in an open gateway does not keep the gate open once its plate is let
+// go: it is moved aside and the gate closes.
+func TestLivingGateClosesOverALooseItem(t *testing.T) {
+	gate, plate := pos(4, 1), pos(1, 1)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+	), map[world.Pos]uint16{gate: lwGateID, plate: lwPlateID})
+	m := h.w.Map()
+	cl, _ := armed(h, pos(1, 2), 0)
+	cl.take()
+	h.input(cl, walk(N))
+	h.sim.RunTicks(40)
+	if !m.Walkable(gate) {
+		t.Fatal("the plate is pressed: the gate must be open")
+	}
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(testItems()["copper_coin"], 7, gate) }))
+	h.sim.Step()
+	h.input(cl, walk(S))
+	h.sim.RunTicks(40)
+	if m.Walkable(gate) {
+		t.Fatal("a coin in the gateway kept the gate open")
+	}
+	if coinsOn(h, gate) != 0 || coinsAround(h, gate) != 7 {
+		t.Fatalf("coins in the gateway %d, next to it %d, want 0 and 7", coinsOn(h, gate), coinsAround(h, gate))
+	}
+}
+
 // Cut vines come back after a second, but never under a player: they wait until the
 // tile is free.
 func TestLivingRespawnWaitsForTheOccupant(t *testing.T) {
