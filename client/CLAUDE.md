@@ -1405,7 +1405,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **E2E**: `e2e/windows.ts` (`openWindow`, `closeWindow`) abre las ventanas desde la
   botonera. Test ids nuevos: `toolbar`, `toolbar-<id>` (`options-button` para Opciones,
   `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones; el chat es
-  `window-chat`), `window-close-<id>`, `window-fold-<id>`, `window-move-<id>`,
+  `window-chat`), `window-close-<id>`, `window-fold-<id>`, las esquinas
+  `.gwin-resize[data-corner=nw|ne|sw|se]` (desde `feat/window-resize`; ya no hay `window-move-<id>`),
   `[data-window-button]`, `[data-chat-tab]`, `[data-guild-tab]`, `reduced-motion`,
   `windows-reset`, `hud-bar`; la ayuda es `controls-help`. El mapa empieza en la esquina
   de arriba a la izquierda de la página, pero ahí flota la ventana de batalla: un click en
@@ -1519,12 +1520,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (`InventoryPanel` con `containers`).
 - **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView` y
   `ui/window-dom.ts`; desde la pantalla completa nada se acopla y hay imán): la barra
-  arrastra (`dragWindow`); la esquina de abajo a la derecha (`.gwin-resize`, `resizeDrag`)
-  cambia el tamaño (`resizeWindow`, `clampSize` con `MIN_SIZE`); el botón ✥ de la barra
-  (`.gwin-move`, `window-move-<id>`) toma el teclado (`windowNudge`): flechas mueven 16 px
-  y Mayús+flechas cambian el tamaño. El botón para la tecla (`preventDefault` +
-  `stopPropagation`) para que la flecha no camine; Alt no se toma (Alt+← es "atrás" del
-  navegador). La ayuda (H) lo explica (`client.help.windows`).
+  arrastra (`dragWindow`); las cuatro esquinas cambian el tamaño (desde `feat/window-resize`,
+  ver "Cambiar el tamaño desde las cuatro esquinas"). El botón ✥ y su teclado se quitaron
+  (decisión del dueño del 2026-11-23). La ayuda (H) lo explica (`client.help.windows`).
 - **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
   `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
   (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de la barra de abajo (con la hotbar
@@ -1776,7 +1774,7 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     con su propia regla de escritorio, 3,5rem más arriba (la de `.invitations` les ganaba
     por especificidad a `.guild-invitations` y las dos quedaban en el mismo lugar).
     `ui/windows-css.test.ts` lo comprueba leyendo `windows.css`.
-  - **Imán** (`snapPlace`, puro): al arrastrar (y con las flechas del ✥), cada eje va al
+  - **Imán** (`snapPlace`, puro): al arrastrar (y en los bordes que mueve una esquina), cada eje va al
     borde más cercano a menos de `SNAP_PX` (10): los de la pantalla, el techo de la barra y
     los de las otras ventanas, de lado (la izquierda de una con la derecha de la otra) o
     alineados (izquierda con izquierda), solo si las dos están cerca en el otro eje. Después
@@ -1834,8 +1832,6 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     antes, con su propio Escape, el diálogo y la estación.
   - **Abiertas juntas** (`syncWindows`): los contenedores primero, así un diálogo o una
     estación que abre con ellos queda encima.
-  - Teclado del ✥: flechas mueven 16 px (con imán), Mayús+flechas cambian el tamaño (hasta
-    el techo de la barra). Enter y Espacio ya no acoplan nada.
 - **Sobre el mapa**, encima de la barra: los avisos (`.notices`), las invitaciones (sobre
   las ventanas, las del gremio más arriba), el pad y los botones de zoom de una pantalla
   táctil; el tutorial se corre a la izquierda de la
@@ -1852,6 +1848,38 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   falla si una ventana tapa la casilla. Que el cuerpo de la tienda no se desplace se mide
   en `.gwin-body` (el marco no es un contenedor de scroll y sus esquinas góticas sobresalen
   5 px).
+
+## Cambiar el tamaño desde las cuatro esquinas (docs/17 UI-5, rama `feat/window-resize`)
+Pedido del dueño del 2026-11-23: como en Ragnarok Online. Solo escritorio.
+- **Las esquinas** (`GameWindow`): cuatro `span.gwin-resize[data-corner=nw|ne|sw|se]` de
+  12 px, 5 px fuera del marco, sobre los adornos de `.gwin::after`; no hay en una ventana
+  plegada. Los bordes no cambian el tamaño (decisión del dueño). Cursor por esquina
+  (`cornerCursor`: `nwse-resize` en nw y se, `nesw-resize` en ne y sw). Con el puntero
+  encima, un brillo dorado en su `::before` (solo `opacity`); mientras dura, la ventana
+  lleva `data-resizing="<esquina>"` y esa esquina sigue encendida, y `body` lleva
+  `resizing-window` (y `resizing-nesw` en ne y sw: el cursor en toda la página).
+- **Geometría** (`resizeFrom` de `ui/windows.ts`, pura y con tests): los dos bordes de la
+  esquina siguen al puntero (deltas redondeados), la esquina contraria queda; imán en los
+  bordes que se mueven (`SNAP_PX`: pantalla, techo de la barra y las otras ventanas, con
+  la misma regla de "cerca en el otro eje" de `snapPlace`; `nearest` es de los dos);
+  después dentro del área y nunca bajo `MIN_SIZE` (cede el borde que se mueve; si la
+  esquina fija está más cerca del borde del área que eso, `clampPlace` corre la caja).
+  `clampSize` ya no existe.
+- **DOM** (`resizeDrag(env, el, corner, press, area, others, place, done)` de
+  `ui/window-dom.ts`): mide la caja de la ventana una vez, escribe `left`, `top`, `width` y
+  `height` en sus propios px (`/ --ui-zoom`) en cada `pointermove`, y al soltar
+  `settleStyle` y `done(x, y, w, h)` (GameView: `placeWindow` + `resizeWindow`). Las otras
+  ventanas se miden una vez al empezar (`otherRects`, como al arrastrar).
+- **Qué ventanas:** todas las flotantes, el chat también; se revisó cada una y ninguna
+  tiene contenido de tamaño fijo (la figura del equipo escala, el resto se desplaza
+  adentro). Tablets y teléfonos no tienen `GameWindow`.
+- **Se quitó el ✥** (`.gwin-move`, `window-move-<id>`, `windowNudge`, `KEY_STEP`,
+  `NudgeContext`, el ícono `move` y las claves `client.window.move` y
+  `client.window.move_hint`): las ventanas ya no se mueven con el teclado.
+- **Tests:** `ui/windows.test.ts` ("resizing from the corners"), `ui/window-dom.test.ts`
+  ("resizing a window by a corner", con la regla de `style` de Preact) y
+  `ui/Toolbar.test.ts`. E2E: el test del chat de `e2e/game.spec.ts` arrastra la esquina de
+  arriba a la izquierda del chat (screenshot `16b-chat-resized-top-left`).
 
 ## Lugares de fábrica que miran las ventanas abiertas (lote 10, docs/17 UI-5)
 - **La regla** (`defaultPlace` de `ui/windows.ts`, pura y con tests): una ventana que se abre

@@ -1338,7 +1338,8 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
   `prefers-reduced-motion` y con la opción "Animaciones reducidas".
 - **Accesible y traducible:** contraste ≥ 4.5:1 en el texto, foco visible, todo con
   teclado, textos con i18n y lugar para un 25 % más de largo, ventanas con
-  `role="dialog"`.
+  `role="dialog"`. Excepción del dueño (2026-11-23): mover y cambiar el tamaño de las
+  ventanas es solo con el mouse (UI-5).
 - **Táctil:** la lógica de `ui/layout.ts` (T5.6) se mantiene. En teléfono, la botonera es
   la barra de pestañas y las ventanas son hojas.
 
@@ -1528,6 +1529,17 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
   - Recuerda posición, tamaño y si estaba plegada en `localStorage` `rpg.windows`
     (comodidad de cada jugador: si se pierde, vuelve al valor por defecto).
   - Tiene un tamaño mínimo y nunca queda fuera de la pantalla.
+  - **Cambio del dueño (2026-11-23): se cambia el tamaño desde las cuatro esquinas, como en
+    Ragnarok Online.** Solo las esquinas (una zona de agarre de unos 12 px sobre cada
+    adorno de esquina); los bordes no. Arrastrar una esquina de arriba o de la izquierda
+    mueve la `x`/`y` de la ventana y deja quieta la esquina contraria. Se respetan el
+    mínimo (160x72), el área sobre la barra y el imán (los bordes que se mueven se pegan a
+    los de la pantalla, el techo de la barra y las otras ventanas). Se quitó el botón ✥
+    (mover y cambiar el tamaño con las flechas y Mayús+flechas): al dueño le resultaba
+    confuso. Las ventanas se mueven por su barra de título y cambian de tamaño desde las
+    esquinas; con el teclado ya no se mueven (excepción a "todo con teclado" de UI-1,
+    decidida por el dueño). Hecho en la rama `feat/window-resize` (§7, "Hecho: cambiar el
+    tamaño desde las cuatro esquinas").
 - **Inventario:**
   - el equipo va sobre una **figura** (como el paperdoll de Ultima Online): cabeza arriba,
     las manos a los costados, el torso al centro, piernas y botas abajo, munición y
@@ -2259,7 +2271,8 @@ quedaba de A3, A4 y A5".
   arrastra como la barra y, con el foco (Tab), toma el teclado: las flechas mueven la
   ventana 16 px, Mayús+flechas cambian su tamaño, en una acoplada arriba y abajo la cambian
   de lugar en la columna, y Enter o Espacio la acoplan o la sueltan junto a la columna. Alt
-  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta.
+  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta. **Desde el
+  2026-11-23 ya no:** el ✥ se quitó y el tamaño cambia desde las cuatro esquinas (UI-5).
 - **Escala de la interfaz y tamaño del texto (UI-3).** Opciones → Interfaz (y el menú ☰ del
   teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock y las ventanas crecen; el
   mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x; la hotbar no se escala:
@@ -2475,8 +2488,9 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   del navegador o subir la escala, ni al abrirla de nuevo si se cerró antes de achicarla:
   una que queda aplastada a menos de su alto mínimo (72 px; desplegada contra la barra, o
   con su techo por debajo del área nueva) sube hasta verse entera, y una que todavía
-  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Las flechas
-  del ✥ también sienten el imán. Lugares de fábrica: batalla arriba a la izquierda con el
+  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Cambiar el
+  tamaño desde una esquina también siente el imán (desde el 2026-11-23; antes lo sentían
+  las flechas del ✥, que se quitó). Lugares de fábrica: batalla arriba a la izquierda con el
   grupo a su lado y las habilidades debajo; inventario arriba a la derecha con gremio y
   apariencia a su lado y los contenedores justo debajo de él (de lo que mida: con la
   figura y la mochila, unos 500 px; con el inventario cerrado o movido, desde arriba); el
@@ -2714,6 +2728,46 @@ en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vi
   tooltip del veneno abierto) en `make ui-preview`; `game` lleva la zona de protección y la
   comida, y `danger` el veneno, el combate y una aceleración que se acaba. Se revisaron a
   1920x1080, 1280x800, 960x700, teléfono vertical y horizontal y tablet.
+
+### Hecho: cambiar el tamaño desde las cuatro esquinas (2026-11-23, rama `feat/window-resize`)
+Pedido del dueño: "que las ventanas se puedan agrandar desde sus esquinas, como en Ragnarok
+Online". Solo cliente; de Ragnarok Online se toma solo la idea.
+- **Las cuatro esquinas.** Cada ventana flotante tiene una zona de agarre de 12 px sobre
+  cada adorno de esquina (sale 5 px del marco, como el adorno). Cursor `nwse-resize` en
+  arriba a la izquierda y abajo a la derecha, `nesw-resize` en las otras dos (y en toda la
+  página mientras dura). Los bordes no cambian el tamaño (decisión del dueño). Plegada, no
+  tiene esquinas: solo se ve su barra.
+- **Geometría** (`resizeFrom` de `client/src/ui/windows.ts`, pura): los dos bordes de la
+  esquina siguen al puntero y la esquina contraria queda donde estaba; una esquina de
+  arriba o de la izquierda mueve la `y` o la `x`. Los bordes que se mueven se pegan a menos
+  de 10 px a los bordes de la pantalla, al techo de la barra y a los de las otras ventanas
+  (de lado o alineados, solo si están cerca en el otro eje, como el imán al arrastrar);
+  después nunca salen del área sobre la barra, y nunca bajan de 160x72: el borde que se
+  mueve se detiene. Con la escala de la interfaz el estado guarda px de pantalla y la
+  ventana recibe sus propios px (`placeStyle`). Al soltar, `settleStyle` deja escritos los
+  largos del lugar nuevo, así Preact no deja vacía la `left` o la `top` que no cambió y la
+  ventana no salta.
+- **Se ve que se pueden tomar** sin adornos nuevos: con el puntero encima, la esquina se
+  enciende con un brillo dorado suave (solo `opacity`, UI-9), y la que se arrastra sigue
+  encendida mientras dura.
+- **Qué ventanas:** todas las flotantes del escritorio, el chat también. Se revisó cada
+  una y ninguna tiene un contenido de tamaño fijo que se rompa: la figura del equipo
+  escala con el ancho (de 1x a 2x), los contenedores, la batalla, el grupo, las
+  habilidades, las misiones, el gremio, la apariencia, las opciones, la ayuda, el libro,
+  el diálogo, la tienda (mide sus columnas), el crafteo, el mercado, la casa, el
+  intercambio y el cofre de la cuenta se desplazan adentro si quedan chicos. Tablets y
+  teléfonos siguen con sus hojas y pestañas.
+- **Se quitó el ✥** (decisión del dueño, le resultaba confuso): el botón de la barra, su
+  teclado (flechas y Mayús+flechas), sus textos (`client.window.move`,
+  `client.window.move_hint`), su ícono y su test id `window-move-<id>`. La ayuda (H)
+  cuenta ahora que la ventana se arrastra por su barra y se agranda desde las esquinas.
+- **Tests:** `client/src/ui/windows.test.ts` (cada esquina: `x`, `y`, ancho y alto nuevos,
+  el mínimo, el área, el imán, el cursor), `client/src/ui/window-dom.test.ts` (el arrastre
+  de cada esquina sobre elementos falsos con la regla de `style` de Preact, la escala de la
+  interfaz, soltar sin mover) y `client/src/ui/Toolbar.test.ts` (las cuatro esquinas, sin
+  ✥, ninguna plegada). E2E: el test del chat de `e2e/game.spec.ts` arrastra la esquina de
+  arriba a la izquierda del chat y comprueba que su esquina de abajo a la derecha no se
+  movió (screenshot `16b-chat-resized-top-left`).
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**

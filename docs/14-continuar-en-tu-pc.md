@@ -146,6 +146,17 @@ el punto 5:
   zoom 1 con "Grande" (a 1x un nombre ocuparía 2/3 de casilla de alto y se ocultarían más
   por solapes). El muro que se vuelve translúcido delante del jugador (ART-3) tiene ahora su
   E2E (`102-wall-fade-own-player`).
+- **Ventanas que cambian de tamaño desde las cuatro esquinas (hecho, rama
+  `feat/window-resize`; el dueño el 2026-11-23: "como en Ragnarok Online"; docs/17 UI-5,
+  §7 "Hecho: cambiar el tamaño desde las cuatro esquinas"):** solo las esquinas (los bordes
+  no), con mínimo, área sobre la barra e imán; el botón ✥ y mover o cambiar el tamaño con
+  el teclado se quitaron por decisión del dueño. Queda:
+  - **Mirarlo en el E2E final:** el screenshot `16b-chat-resized-top-left` (el chat
+    agrandado desde su esquina de arriba a la izquierda) y que el brillo de las esquinas no
+    se vea como un adorno de más.
+  - **Sin teclado:** con el ✥ fuera, mover o cambiar el tamaño de una ventana pide el
+    mouse. Si el dueño quiere de nuevo una forma con el teclado, que no sea un botón en la
+    barra (le resultaba confuso).
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
@@ -1188,7 +1199,8 @@ el punto 5:
   - **Lo que A3, A4 y A5 dejaron (hecho, rama `feat/ui-windows-2`, docs/17 §7 "Hecho: lo que
     quedaba de A3, A4 y A5"):** cada contenedor es su ventana; diálogo, tienda, crafteo,
     mercado, casa e intercambio son `GameWindow` (flotantes desde A14); las ventanas se mueven y
-    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥); escala de la
+    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥; desde
+    `feat/window-resize`, desde las cuatro esquinas y sin el ✥); escala de la
     interfaz y tamaño del texto (Opciones → Interfaz); íconos de slot vacío (spritegen
     `ui/slots/*`); sacudida de cámara con los golpes fuertes y destello de la hotbar (los
     dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
