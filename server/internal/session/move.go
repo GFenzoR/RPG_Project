@@ -142,7 +142,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		// connection leaves the character link-dead until the fight is over (docs/02
 		// "Bloqueo de logout en combate").
 		if key := w.logoutBlock(ctx.Tick, p); key != "" {
-			p.emit(systemMsg(key))
+			p.emit(systemMsg(key, num("seconds", w.logoutWaitSeconds(ctx.Tick, p))))
 			return
 		}
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
