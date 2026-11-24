@@ -92,13 +92,17 @@ describe("VocationInfo", () => {
       { item: "patched_tunic", count: 1 },
     ],
   };
-  it("shows the style line and the class's own starting gear", () => {
+  it("shows the style line and every piece of the starting kit", () => {
     const s = text(VocationInfo({ t, vocation: "ranger", kits }));
     expect(s).toContain("vocation.ranger.desc");
     expect(s).toContain(
-      'client.characters.kit({"items":"item.short_bow.name, 60 × item.arrow.name"})',
+      'client.characters.kit({"items":"item.short_bow.name, 60 × item.arrow.name, item.patched_tunic.name"})',
     );
-    expect(s).not.toContain("patched_tunic");
+  });
+  it("has no kit line for a vocation with an empty kit", () => {
+    const tree = VocationInfo({ t, vocation: "druid", kits: { ...kits, druid: [] } });
+    expect(nodes(tree).some((v) => v.props["data-testid"] === "vocation-kit")).toBe(false);
+    expect(text(tree)).not.toContain("client.characters.kit");
   });
   it("has no kit line without kits (fixtures)", () => {
     const tree = VocationInfo({ t, vocation: "guardian", kits: undefined });

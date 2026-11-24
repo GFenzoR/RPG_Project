@@ -5,7 +5,7 @@
 // of area damage, the ranger (T3.1) the distance hybrid and the druid (T3.1) the healer;
 // skills level at a pace a player of classic tile MMORPGs finds familiar. The pace bands
 // below are sanity limits, not exact targets: retune freely inside them.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -324,4 +324,53 @@ describe("spell roles", () => {
       expect(radius("arcanist"), v).toBeGreaterThan(radius(v));
     }
   });
+});
+
+// The tutorial's open_backpack step (i18n tutorial.step.open_backpack) is written by hand
+// and says what every new character has: its vocation's weapon in its hand, plain clothes
+// on, and biscuits and a poultice in the backpack. The kits are data: if one stops being
+// that, this fails and the text (es and en) must change with it.
+describe("start kits keep the tutorial's word", () => {
+  type Item = Record<string, unknown> & { id: string };
+  const items = new Map<string, Item>();
+  for (const f of readdirSync(join(REPO, "data/items"))) {
+    if (!f.endsWith(".yaml")) continue;
+    for (const it of parse(readFileSync(join(REPO, "data/items", f), "utf8")) as Item[])
+      items.set(it.id, it);
+  }
+  const kits = vocations as unknown as {
+    id: string;
+    weapons: string[];
+    start_kit?: { item: string; count?: number }[];
+  }[];
+  const text = (lang: string): string =>
+    (
+      parse(readFileSync(join(REPO, `i18n/${lang}/tutorial.yaml`), "utf8")) as Record<
+        string,
+        string
+      >
+    )["tutorial.step.open_backpack"] ?? "";
+
+  it("the text still names the weapon, the clothes, the biscuits and the poultice", () => {
+    expect(text("es")).toMatch(/arma.*mano.*ropa.*galletas.*cataplasma/s);
+    expect(text("en")).toMatch(/weapon.*hand.*clothes.*biscuits.*poultice/s);
+  });
+
+  for (const v of kits) {
+    it(`${v.id}: a weapon it wields first, clothes, biscuits and a poultice`, () => {
+      const kit = v.start_kit ?? [];
+      const first = items.get(kit[0]?.item ?? "");
+      const weapon = first?.["weapon"] as { type: string } | undefined;
+      expect(weapon, "the first piece is the weapon: it takes the hand").toBeDefined();
+      expect(v.weapons).toContain(weapon?.type);
+      const worn = kit.map(
+        (e) => (items.get(e.item)?.["armor"] as { slot?: string } | undefined)?.slot,
+      );
+      expect(worn).toContain("body");
+      const count = (id: string): number =>
+        kit.filter((e) => e.item === id).reduce((n, e) => n + (e.count ?? 1), 0);
+      expect(count("ship_biscuit")).toBeGreaterThan(1); // "galletas"
+      expect(count("seaweed_poultice")).toBeGreaterThanOrEqual(1);
+    });
+  }
 });

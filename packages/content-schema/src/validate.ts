@@ -2156,18 +2156,15 @@ class Validator {
   }
 
   /**
-   * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
-   * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
-   * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
-   * no quest or tutorial rewards it, no spell conjures it and no character starts with it.
-   * An NPC may still buy it (checkItemTrade lets that buyer be).
-   */
-  /**
    * The starting kit of each vocation (data/vocations.yaml start_kit, docs/02 "Equipo
    * inicial"): every piece is one a new character of that vocation can carry and, if it is
    * equipment, wear at level 1 (no retired item, no level, no other vocation, a weapon type
    * the vocation wields); a count only for a stackable, within its stack. A two-handed
-   * weapon leaves no hand for a shield. Unknown ids are checkRefs' (x-ref).
+   * weapon leaves no hand for a shield. Like the server (session/startkit.go), the first
+   * piece of each slot is worn and the rest goes to the starting backpack and the pockets:
+   * a second piece for a slot is a warning (it is carried, not worn) and a kit with more
+   * carried piles than those hold is an error (the server would leave the last ones out).
+   * Unknown ids are checkRefs' (x-ref).
    */
   private checkStartKits(): void {
     const src = this.vocations;
@@ -2178,6 +2175,8 @@ class Validator {
       const wields = asList(voc["weapons"]).map(String);
       let twoHanded = false;
       let shield = false;
+      const wornSlots = new Set<string>();
+      const carried = new Set<string>(); // piles in the backpack and pockets
       for (const [j, entry] of asList(voc["start_kit"]).entries()) {
         if (!isObj(entry)) continue;
         const path: PathSegment[] = [i, "start_kit", j];
@@ -2207,7 +2206,27 @@ class Validator {
           this.error(src, path, `${id} does not wield ${String(weapon["type"])} (${name})`);
         if (weapon && weapon["hands"] === 2) twoHanded = true;
         if (isObj(item["shield"])) shield = true;
+        const slot = kitSlot(item);
+        if (slot && !wornSlots.has(slot)) {
+          wornSlots.add(slot);
+          continue;
+        }
+        if (slot)
+          this.warn(
+            src,
+            path,
+            `${name} is a second piece for the ${slot} slot: it is carried in the backpack, not worn`,
+          );
+        // Units of one stackable share a pile (the counts are within a stack each).
+        carried.add(item["stackable"] === true ? name : `${name}#${j}`);
       }
+      const room = this.startRoom();
+      if (carried.size > room)
+        this.error(
+          src,
+          [i, "start_kit"],
+          `${carried.size} carried piles do not fit the starting backpack and the pockets (${room} cells)`,
+        );
       if (twoHanded && shield)
         this.error(
           src,
@@ -2217,6 +2236,29 @@ class Validator {
     }
   }
 
+  /**
+   * The cells a new character has for what it does not wear: the top level of
+   * balance.yaml inventory.start_container plus its pocket_slots.
+   */
+  private startRoom(): number {
+    const inv =
+      this.balance && isObj(this.balance.data) ? this.balance.data["inventory"] : undefined;
+    if (!isObj(inv)) return 0;
+    const owned = this.index.ids.item.get(String(inv["start_container"]));
+    const pack = owned ? this.itemDef(owned) : undefined;
+    const container = pack && isObj(pack["container"]) ? pack["container"] : undefined;
+    const slots = container && typeof container["slots"] === "number" ? container["slots"] : 0;
+    const pockets = typeof inv["pocket_slots"] === "number" ? inv["pocket_slots"] : 0;
+    return slots + pockets;
+  }
+
+  /**
+   * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
+   * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
+   * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
+   * no quest or tutorial rewards it, no spell conjures it and no character starts with it.
+   * An NPC may still buy it (checkItemTrade lets that buyer be).
+   */
   private checkRetiredItems(): void {
     const retired = new Set(
       this.items.filter(({ item }) => item["retired"] === true).map(({ item }) => item["id"]),
@@ -2951,4 +2993,17 @@ function placeholders(text: string): string {
   return [...new Set([...text.matchAll(/\{([a-z_][a-z0-9_]*)/gi)].map((m) => m[1]))]
     .sort()
     .join(", ");
+}
+
+/**
+ * The equipment slot a start_kit piece is worn in (the server's slotFor, session/
+ * inventory.go), or undefined for what is only carried. A container is carried: the
+ * backpack slot already holds the starting container.
+ */
+function kitSlot(item: Obj): string | undefined {
+  if (isObj(item["weapon"])) return "weapon";
+  if (isObj(item["shield"])) return "shield";
+  if (isObj(item["armor"])) return `${String(item["armor"]["slot"])} armor`;
+  if (isObj(item["ammo"])) return "ammo";
+  return undefined;
 }

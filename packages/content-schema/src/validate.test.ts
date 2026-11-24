@@ -146,6 +146,15 @@ describe("validator diagnostics", () => {
     expect(kitErrors()).toEqual(
       expect.arrayContaining([expect.stringMatching(/two-handed weapon and a shield/)]),
     );
+    // A second weapon is carried, not worn: a warning.
+    expect(
+      messages(root).filter((m) => m.startsWith("warning") && m.includes("vocations.yaml")),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/spark_wand is a second piece for the weapon slot/),
+      ]),
+    );
+    expect(kitErrors().join("\n")).not.toMatch(/do not fit the starting backpack/);
     // The schema: an unknown field and a count of 0.
     edit("data/vocations.yaml", "{ item: sapling_staff }", "{ item: sapling_staff, slot: 3 }");
     edit(
@@ -155,6 +164,28 @@ describe("validator diagnostics", () => {
     );
     expect(kitErrors().join("\n")).toMatch(/slot/);
     expect(kitErrors().join("\n")).toMatch(/count/);
+  });
+
+  it("refuses a start_kit with more carried piles than the backpack and pockets hold", () => {
+    const fit = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("do not fit"));
+    // A starting backpack of one cell: with the four pockets, five cells. Every kit
+    // carries two piles (biscuits and a poultice), so they still fit.
+    edit("data/items/tools.yaml", "container: { slots: 24 }", "container: { slots: 1 }");
+    expect(fit()).toEqual([]);
+    // Four spare wands for the arcanist: six piles. The biscuits named twice are one pile.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: spark_wand }\n",
+      "    - { item: spark_wand }\n" +
+        "    - { item: spark_wand }\n".repeat(4) +
+        "    - { item: ship_biscuit, count: 2 }\n",
+    );
+    const errs = fit();
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toMatch(
+      /6 carried piles do not fit the starting backpack and the pockets \(5 cells\)/,
+    );
   });
 
   const reachErrors = (): string[] =>
@@ -980,7 +1011,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:60:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:63:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),

@@ -887,7 +887,10 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
   existe y muestra el peso en oz.
 - **Login:** `Inventory` lleva el equipo guardado y los bolsillos; un personaje que nunca
-  jugó recibe `inventory.start_container` en el slot de mochila (y sus bolsillos vacíos).
+  jugó recibe `inventory.start_container` en el slot de mochila y el `start_kit` de su
+  vocación (docs/02 "Equipo inicial"): su primer `Inventory` ya trae el arma, la ropa y,
+  según la vocación, el escudo o la munición en sus slots, y el resto dentro de la mochila
+  (los bolsillos, vacíos salvo que la mochila no alcance). No hay mensaje aparte para el kit.
 
 ### Magia (T1.9, `server/internal/session/magic.go`)
 Reglas de juego en `02-game-design.md` ("Magia (T1.9)").

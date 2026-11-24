@@ -907,11 +907,16 @@ docs/02 "Entrenamiento por vocación"), `weapons` (tipos de arma que usa) y, des
 - `make validate` (`checkStartKits`) exige que cada pieza exista y no esté retirada, que
   un equipo se pueda usar a nivel 1 por esa vocación (`requires.level` 1,
   `requires.vocations` que la incluya, un arma de un tipo de `weapons`), `count` solo en
-  apilables y dentro de su pila (`max_stack`, 100 si falta) y que no haya un arma de dos
-  manos junto a un escudo. El servidor revisa al arrancar que cada item exista y que cada
-  entrada entre en una pila.
+  apilables y dentro de su pila (`max_stack`, 100 si falta), que no haya un arma de dos
+  manos junto a un escudo y que las pilas que no se llevan puestas entren en la mochila
+  inicial (`inventory.start_container`) más los bolsillos (`pocket_slots`); una segunda
+  pieza para el mismo slot es un aviso (va a la mochila, no puesta). El servidor revisa al
+  arrancar que cada item exista y que cada entrada entre en una pila.
 - El cliente lee `start_kit` (`ClientContent.startKits`) para la línea "Empieza con: …"
-  del formulario de creación: muestra las piezas que no tienen todas las vocaciones.
+  del formulario de creación: nombra cada pieza, en el orden de los datos (el texto no
+  describe nada a mano). El paso `open_backpack` del tutorial sí dice que el arma está en
+  la mano y que en la mochila hay galletas y una cataplasma: `vocations-balance.test.ts`
+  falla si algún kit deja de cumplirlo.
 
 ## Hechizo
 ```yaml

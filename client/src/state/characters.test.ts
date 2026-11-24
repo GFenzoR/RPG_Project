@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCreate, canGoBack, firstView, kitLabel, ownKit } from "./characters.ts";
+import { canCreate, canGoBack, firstView, kitLabel, kitLine, showsAccount } from "./characters.ts";
 
 describe("characters screen flow", () => {
   it("goes straight to the form with no characters and to the list with one or more", () => {
@@ -11,6 +11,12 @@ describe("characters screen flow", () => {
   it("offers the way back only when there is a list", () => {
     expect(canGoBack(0)).toBe(false);
     expect(canGoBack(1)).toBe(true);
+  });
+
+  it("keeps the account panel in reach: under the list and under the first form", () => {
+    expect(showsAccount("list", 2)).toBe(true);
+    expect(showsAccount("create", 0)).toBe(true); // a new account has no list to go back to
+    expect(showsAccount("create", 2)).toBe(false);
   });
 
   it("stops creating at the account's limit", () => {
@@ -34,13 +40,21 @@ describe("starting kit line", () => {
     ranger: [{ item: "short_bow", count: 1 }, { item: "arrow", count: 60 }, ...common],
   };
 
-  it("lists the vocation's own pieces, not the ones every vocation gets", () => {
-    expect(ownKit(kits, "guardian").map((e) => e.item)).toEqual([
-      "rusty_cutlass",
-      "barrel_lid_shield",
-    ]);
-    expect(ownKit(kits, "ranger").map((e) => e.item)).toEqual(["short_bow", "arrow"]);
-    expect(ownKit(kits, "druid")).toEqual([]);
+  const name = (id: string): string => `<${id}>`;
+
+  it("names every piece of the vocation's kit, in the data's order", () => {
+    expect(kitLine(kits, "ranger", name)).toBe(
+      "<short_bow>, 60 × <arrow>, <patched_tunic>, 5 × <ship_biscuit>",
+    );
+    expect(kitLine(kits, "guardian", name)).toBe(
+      "<rusty_cutlass>, <barrel_lid_shield>, <patched_tunic>, 5 × <ship_biscuit>",
+    );
+  });
+
+  it("has no line without a kit, or with an empty one", () => {
+    expect(kitLine(kits, "druid", name)).toBeUndefined();
+    expect(kitLine({ druid: [] }, "druid", name)).toBeUndefined();
+    expect(kitLine(undefined, "ranger", name)).toBeUndefined();
   });
 
   it("labels counts", () => {

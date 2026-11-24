@@ -126,7 +126,7 @@ func ParseVocations(raw []byte) (Vocations, error) {
 		}
 		for j, k := range v.StartKit {
 			if k.Item == "" || k.Count < 0 {
-				return nil, fmt.Errorf("vocation %q: start_kit #%d needs an item and a count >= 1", v.ID, j)
+				return nil, fmt.Errorf("vocation %q: start_kit #%d needs an item and a count that is not negative (none or 0: one unit)", v.ID, j)
 			}
 		}
 		for id, f := range v.SkillFactors {

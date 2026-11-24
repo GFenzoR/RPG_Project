@@ -212,6 +212,9 @@ func (w *World) DupeForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.I
 // ProjectileForTest shows a physical projectile between two tiles.
 func (w *World) ProjectileForTest(from, to world.Pos) { w.projectile(from, to, ElementPhysical) }
 
+// EarnedItemsForTest is the item units p's outlier window counts as earned.
+func (w *World) EarnedItemsForTest(p *Player) int64 { return p.earn.items }
+
 // EarningsForTest is how many characters have an outlier window in memory.
 func (w *World) EarningsForTest() int { return len(w.earnings) }
 

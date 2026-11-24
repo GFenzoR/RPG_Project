@@ -47,12 +47,15 @@ Todos los números de este documento son **valores iniciales** que viven en
     (`max_characters` de `GET /api/characters`, docs/05) ese botón queda deshabilitado
     con el motivo ("Tienes el máximo de N personajes por cuenta").
   - El formulario tiene "Volver" a la lista, y muestra de cada vocación su estilo en una
-    línea (`vocation.<id>.desc`) y su equipo inicial propio ("Empieza con: …, ropa
-    sencilla, galletas y una cataplasma", "Equipo inicial").
+    línea (`vocation.<id>.desc`) y su equipo inicial ("Empieza con: …": cada pieza del
+    `start_kit` por su nombre, tal como está en los datos; "Equipo inicial").
   - **Después de crear** se vuelve a la lista con el personaje nuevo marcado (no se entra
     al juego): era lo que ya hacía la pantalla (crear agregaba a la lista) y deja elegir
     con calma; un click en "Jugar" entra.
-  - "Cuenta y seguridad" (lote 17) sigue en la pantalla de la lista.
+  - "Cuenta y seguridad" (lote 17) sigue en la pantalla de la lista, y también bajo el
+    formulario del primer personaje: una cuenta sin personajes no tiene lista a la que
+    volver y debe poder cambiar su contraseña o cerrar sus sesiones. El formulario que se
+    abre desde la lista no lo muestra.
 
 ## Controles del mouse (docs/17 UI-6)
 Desde A4 el click derecho sobre un **objeto** abre su menú con la ficha (tipo, stats,
@@ -390,8 +393,10 @@ si tenemos un objetivo activo, una estimación de dónde está."
 vez**, en el primer login del personaje (el mismo momento que la mochila inicial:
 `session/startkit.go`): cada pieza en su slot si está libre y el personaje la puede usar
 (nivel, vocación, manos), el resto en la mochila y después en los bolsillos. Se guarda en el
-acto y queda en el log de economía como `start_kit`. Nunca se repite: ni al morir (no hay
-mochila gratis después de la muerte, "Bolsillos") ni al volver a entrar.
+acto y queda en el log de economía como `start_kit`, que no cuenta como ganancia para el
+detector de atípicos (no es botín). Nunca se repite: ni al morir (no hay mochila gratis
+después de la muerte, "Bolsillos") ni al volver a entrar. Dos entradas del mismo apilable
+se juntan en una pila; lo que no entra en la mochila ni en los bolsillos no se da.
 
 | Vocación | Propio | Para todos |
 |---|---|---|
@@ -401,10 +406,18 @@ mochila gratis después de la muerte, "Bolsillos") ni al volver a entrar.
 | Druida | vara de retoño (`sapling_staff`) | ídem |
 
 Todo son items que ya existían (banda 1 del catálogo). Como el arma de clase viene en el
-kit, la jefa del puerto ya no la da al aceptar `ch1_shipwreck`: da 30 monedas (50 al
-montaraz, con las de las flechas) y la galleta de siempre. `make validate` revisa cada kit
-(que la vocación pueda usar cada pieza a nivel 1, sin items retirados, cantidades solo en
-apilables y dentro de su pila, y nunca un arma de dos manos con escudo).
+kit, la jefa del puerto da al aceptar `ch1_shipwreck` 30 monedas (50 al montaraz, con las
+de las flechas) y la galleta de siempre. **Quien no lleva su arma de clase la recibe ahí**
+(`lacks_item` en `data/npcs/harbor_master.yaml`), además de las monedas: un personaje
+creado antes de que existiera el kit ya tiene posición guardada y no lo recibe, y nadie
+debe empezar el capítulo desarmado. Vale una sola vez por personaje (la quest solo se
+acepta una vez), así que quien suelte o guarde el arma del kit antes de hablar consigue a
+lo sumo una segunda arma inicial, de poco valor; un arma refinada no cuenta
+como llevada (`spareable`). El escudo, la ropa y las flechas del kit no se reponen: el
+armero los vende. `make validate` revisa cada kit (que la vocación pueda usar cada pieza a
+nivel 1, sin items retirados, cantidades solo en apilables y dentro de su pila, nunca un
+arma de dos manos con escudo y que lo que no se lleva puesto entre en la mochila inicial
+más los bolsillos; una segunda pieza para el mismo slot es un aviso).
 
 #### Entrenamiento por vocación
 Intentos para llevar una skill a 30 (el nivel mágico a 15) con los `skill_factors` de
@@ -814,12 +827,13 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Tienes el estómago lleno"); la
   que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
   herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
-- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
-  slot de mochila (el tutorial la abre) y con sus bolsillos vacíos. El kit de cada vocación
-  llega con los diálogos (T1.10): al aceptar el
-  capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
-  arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
-  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y la
+- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila) en el slot de
+  mochila (el tutorial la abre) y con el `start_kit` de su vocación ("Equipo inicial",
+  2026-11-23): el arma de clase, la ropa y, según la vocación, el escudo o las flechas ya
+  puestos, y las galletas y la cataplasma en la mochila; los bolsillos, vacíos. Al aceptar
+  el capítulo 1 la jefa del puerto da monedas (30; 50 al montaraz, para flechas) y una
+  galleta, y el arma de clase solo a quien no la lleve (antes del kit la daba siempre:
+  T1.10 y la auditoría de contenido m5). El armero vende arcos, flechas y la
   ropa del kit inicial (para cualquier vocación: desde el lote 11 solo el torso pesado pide
   guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
   brebaje de maná. En el Bosque las varas, las

@@ -220,8 +220,12 @@ el punto 5:
   - **La jefa del puerto da monedas en vez del arma:** 30 (50 al montaraz). Si el dueño
     prefiere otra cosa (una pieza de la banda 2, un brebaje), es dato de
     `data/npcs/harbor_master.yaml`.
-  - **Personajes creados antes:** no reciben el kit (ya jugaron). Si el dueño quiere
-    dárselo a los existentes, sería un cambio de una vez (no hay ninguno en producción).
+  - **Personajes creados antes:** no reciben el kit (ya jugaron), pero la jefa del puerto
+    le da el arma de clase a quien no la lleve al aceptar `ch1_shipwreck`, así que ninguno
+    queda desarmado. No reciben el escudo, la ropa ni las flechas (el armero los vende; el
+    montaraz recibe monedas para flechas). Si el dueño quiere el kit completo para los
+    existentes, sería un cambio de una vez; lo más simple en el hosting de pruebas
+    (docs/13) es vaciar su base. No hay personajes en producción.
   - **Figura en la lista:** solo con aspecto guardado; uno creado por la API sin `look` no
     la muestra hasta su primer login (el juego le elige uno).
   - **Integración y E2E** (Postgres y el navegador) los corre el lote al final: la lista

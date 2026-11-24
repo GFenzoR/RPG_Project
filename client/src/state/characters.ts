@@ -32,15 +32,26 @@ export function canCreate(characters: number, max: number | undefined): boolean 
 }
 
 /**
- * The pieces of vocation's kit that are its own (the class weapon, a shield, ammo): those
- * not in every vocation's kit. The common ones (clothes, food, a poultice) are said once
- * for all of them.
+ * "Cuenta y seguridad" shows under the list, and under the first character's form too: an
+ * account without characters has no list to go back to, and must still be able to change
+ * its password or close its sessions. The form opened from the list stays short.
  */
-export function ownKit(kits: Record<string, KitEntry[]>, vocation: string): KitEntry[] {
-  const all = Object.values(kits);
-  const common = (item: string): boolean =>
-    all.length > 1 && all.every((k) => k.some((e) => e.item === item));
-  return (kits[vocation] ?? []).filter((e) => !common(e.item));
+export function showsAccount(view: CharactersView, characters: number): boolean {
+  return view === "list" || characters === 0;
+}
+
+/**
+ * The line of what a vocation starts with: every piece of its start_kit by name, in the
+ * data's order (the class weapon first), so the text never says more or less than
+ * data/vocations.yaml. Undefined without a kit (or with an empty one): no line.
+ */
+export function kitLine(
+  kits: Record<string, KitEntry[]> | undefined,
+  vocation: string,
+  name: (item: string) => string,
+): string | undefined {
+  const kit = kits?.[vocation] ?? [];
+  return kit.length > 0 ? kit.map((e) => kitLabel(e, name)).join(", ") : undefined;
 }
 
 /** "name" or "count × name" for a kit entry, with the item's translated name. */

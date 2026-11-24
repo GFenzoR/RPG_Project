@@ -46,7 +46,8 @@ func (w *World) initStartKits() error {
 // join sends the whole inventory after it): each piece in its equipment slot when that is
 // free and p may wear it there (canEquip: level, vocation, hands), the rest in the backpack
 // and then the pockets, merging stacks. What does not fit is not given (logged: the kit
-// is data, make validate keeps it small). It returns the new items, for the economy log.
+// is data, make validate keeps it small). It returns the new items, for the economy log:
+// call econStartKit after the whole kit, a later entry may have grown an earlier pile.
 func (w *World) giveStartKit(p *Player) []*Item {
 	var made []*Item
 	for _, k := range w.startKits[p.vocation.ID] {
@@ -61,8 +62,9 @@ func (w *World) giveStartKit(p *Player) []*Item {
 			}
 		}
 		if merge := p.packStack(k.def); merge != nil && merge.count+k.count <= k.def.StackLimit() {
+			// A new character carries nothing but the kit, so merge is a pile of made:
+			// econStartKit reads its final count, these units included.
 			merge.count += k.count
-			made = append(made, &Item{def: k.def, count: k.count}) // the units, for the log
 			continue
 		}
 		pack := p.packWithRoom()

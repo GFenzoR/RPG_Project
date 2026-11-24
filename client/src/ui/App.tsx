@@ -11,7 +11,7 @@ import type { AudioEngine } from "../audio/engine.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, accountApi, api } from "../net/api.ts";
 import type { Character, LookJSON } from "../net/api.ts";
-import { canCreate, canGoBack, firstView, kitLabel, ownKit } from "../state/characters.ts";
+import { canCreate, canGoBack, firstView, kitLine, showsAccount } from "../state/characters.ts";
 import type { CharactersView, KitEntry } from "../state/characters.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
 import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
@@ -454,7 +454,9 @@ function Characters(props: {
           {error}
         </p>
       )}
-      {!creating && <AccountSecurity t={t} onSignedOut={props.onLoggedOut} />}
+      {list !== undefined && showsAccount(view, count) && (
+        <AccountSecurity t={t} onSignedOut={props.onLoggedOut} />
+      )}
       <button type="button" class="link" onClick={() => void logout()}>
         {t("client.characters.logout")}
       </button>
@@ -531,8 +533,7 @@ export function CharacterList(props: {
 
 /**
  * One short line of the vocation's style and one of what it starts with (docs/02
- * "Equipo inicial"): its own pieces by name; the clothes, food and poultice everyone gets
- * are said once by the text.
+ * "Equipo inicial"): every piece of its start_kit by name, straight from the data.
  */
 export function VocationInfo(props: {
   t: Translate;
@@ -540,18 +541,15 @@ export function VocationInfo(props: {
   kits: Record<string, KitEntry[]> | undefined;
 }): JSX.Element {
   const { t, vocation } = props;
-  const own = props.kits ? ownKit(props.kits, vocation) : [];
-  const name = (item: string): string => t(`item.${item}.name`);
+  const items = kitLine(props.kits, vocation, (item) => t(`item.${item}.name`));
   return (
     <div class="vocation-info" data-testid="vocation-info" data-vocation={vocation}>
       <p class="vocation-style" data-testid="vocation-style">
         {t(`vocation.${vocation}.desc`)}
       </p>
-      {props.kits?.[vocation] && (
+      {items !== undefined && (
         <p class="vocation-kit" data-testid="vocation-kit">
-          {t("client.characters.kit", {
-            items: own.map((e) => kitLabel(e, name)).join(", "),
-          })}
+          {t("client.characters.kit", { items })}
         </p>
       )}
     </div>
